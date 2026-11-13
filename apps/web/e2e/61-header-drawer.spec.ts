@@ -27,7 +27,9 @@ async function expectUploadAfterLogo(page: Page, lang: 'en' | 'ar', rtl: boolean
   if (!logo || !upload || !search) throw new Error('header controls not laid out');
   const inCluster = (await banner.locator('.ah-end [data-testid="header-upload"]').count()) > 0;
   if (inCluster) {
-    const bell = await banner.getByTestId('notification-bell').boundingBox();
+    // Signed-out visitors have no bell: never wait for it
+    const bellLoc = banner.getByTestId('notification-bell');
+    const bell = (await bellLoc.count()) > 0 ? await bellLoc.first().boundingBox() : null;
     if (rtl) {
       expect(upload.x + upload.width, 'Upload follows the search (RTL)').toBeLessThanOrEqual(search.x + 1);
       if (bell) expect(bell.x + bell.width, 'the bell follows Upload (RTL)').toBeLessThanOrEqual(upload.x + 1);

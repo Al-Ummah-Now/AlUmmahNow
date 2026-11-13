@@ -95,11 +95,16 @@ async function expectHeader(page: Page, locale: Locale, width: number): Promise<
     };
     const header = document.querySelector('header.ah') ?? document.querySelector('header');
     const end = header?.querySelector('.ah-end');
+    const upload = document.querySelector('[data-testid="header-upload"]');
+    // Upload sits in the end action cluster since the shared nav (docs/design/NAV.md): reading order
+    // menu, logo, search, Upload, then the rest; builds from before it put Upload beside the logo
+    const uploadInCluster = !!(end && upload && end.contains(upload));
     const named: Array<[string, Element | null]> = [
       ['menu', document.querySelector('[data-testid="nav-drawer-toggle"]')],
       ['logo', header?.querySelector('.ah-brand') ?? null],
-      ['upload', document.querySelector('[data-testid="header-upload"]')],
+      ...(uploadInCluster ? [] : [['upload', upload] as [string, Element | null]]),
       ['search', header?.querySelector('.ah-search-wrap .ah-search, [data-testid="header-search-open"]') ?? null],
+      ...(uploadInCluster ? [['upload', upload] as [string, Element | null]] : []),
       // The end cluster's other children (Upload sits in it since the shared nav; it is listed by name above)
       ...[...(end?.children ?? [])].filter((c) => !c.querySelector('[data-testid="header-upload"]') && c.getAttribute('data-testid') !== 'header-upload').map((c, i) => [`end-${i}`, c] as [string, Element]),
     ];
@@ -117,7 +122,8 @@ async function expectHeader(page: Page, locale: Locale, width: number): Promise<
     }
   }
 
-  // Reading order: menu, logo, upload, search, then the end group; mirrored in RTL
+  // Reading order: menu, logo, search, then the end group with Upload first (older builds: Upload
+  // after the logo); mirrored in RTL
   const xs = items.map((i) => i.box!.x + i.box!.width / 2);
   const ordered = locale === 'en' ? xs.every((x, i) => i === 0 || x > xs[i - 1]) : xs.every((x, i) => i === 0 || x < xs[i - 1]);
   expect(ordered, `${where}: items in reading order (${names.join(', ')})`).toBe(true);

@@ -55,8 +55,9 @@ async function switcherAccounts(page: Page): Promise<Array<{ email: string; acti
   if (await switcher.isVisible()) await switcher.click();
   return page.locator('[data-testid="nav-account"]:visible').evaluateAll((rows) =>
     rows.map((row) => ({
-      // innerText keeps the name, email and channel count on separate lines
-      email: (row as HTMLElement).innerText.split('\n').map((line) => line.trim()).find((line) => line.includes('@')) ?? '',
+      // The row's data-email (the menu shows a long address as its local part and "@domain"
+      // separately, so the text is not the address); older builds: the text line with the "@"
+      email: (row as HTMLElement).dataset.email || ((row as HTMLElement).innerText.split('\n').map((line) => line.trim()).find((line) => line.includes('@')) ?? ''),
       active: (row as HTMLElement).dataset.active === 'true',
     })),
   );
