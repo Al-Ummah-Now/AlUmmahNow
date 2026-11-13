@@ -6,7 +6,7 @@
  * panel per site: status, rename, limits, revoke/restore and its history. Destructive and public
  * changes ask in the in-app dialog, never a browser prompt.
  */
-import { Fragment, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   SITE_TIER_SEEDS,
@@ -367,9 +367,8 @@ export function SitesView({ sites, q, canManage, title }: { sites: SiteListItem[
                 </tr>
               </thead>
               <tbody>
-                {sites.map((s) => (
-                  <Fragment key={s.channelId}>
-                    <tr className="border-t border-border" data-testid="site-row" data-channel={s.channelId}>
+                {sites.flatMap((s) => [
+                    <tr key={s.channelId} className="border-t border-border" data-testid="site-row" data-channel={s.channelId}>
                       <td className={tdClass}>
                         <button type="button" className="underline text-start" aria-expanded={open === s.channelId} onClick={() => setOpen(open === s.channelId ? null : s.channelId)} data-testid="site-row-open">
                           {s.channel?.name ?? s.channelId}
@@ -380,16 +379,15 @@ export function SitesView({ sites, q, canManage, title }: { sites: SiteListItem[
                       <td className={tdClass}><Chip tone={STATUS_TONE[status(s.site)]}>{t(STATUS_KEY[status(s.site)])}</Chip></td>
                       <td className={tdClass}>{s.site ? t(TIER_KEY[s.site.tier]) : '—'}</td>
                       <td className={tdClass}><span dir="ltr">{s.grantedBy}</span></td>
-                    </tr>
-                    {open === s.channelId && (
-                      <tr>
+                    </tr>,
+                    open === s.channelId ? (
+                      <tr key={`${s.channelId}-panel`}>
                         <td colSpan={5} className="p-4 bg-surface-2">
                           <SitePanel channelId={s.channelId} canManage={canManage} onChanged={() => router.refresh()} />
                         </td>
                       </tr>
-                    )}
-                  </Fragment>
-                ))}
+                    ) : null,
+                  ])}
               </tbody>
             </table>
           </div>

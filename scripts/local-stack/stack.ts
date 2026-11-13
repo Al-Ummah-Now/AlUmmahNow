@@ -135,6 +135,9 @@ export const WORKERS: StackWorker[] = [
       MEDIA_PUBLIC_HOST: 'media.local-stack.test',
       // The self-hosted live edge (lib/live/edge.ts) answers on this host; nothing in the stack streams to it
       LIVE_PUBLIC_HOST: 'live.local-stack.test',
+      // White-label scholar sites: <slug>.sites.localhost hosts, revoked sites redirect to the local web app
+      SITES_ENV: 'local',
+      VIDEOS_WEB_URL: url('web'),
       // The fake Bunny CDN (fake-external.ts FAKE_CDN_HOST): workers reach it through the outbound
       // fakes, the browser through Playwright routes to PORTS['fake-cdn']
       bunny_hostname: 'vz-local-stack.b-cdn.net',
