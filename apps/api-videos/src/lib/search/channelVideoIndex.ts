@@ -37,7 +37,8 @@ export function indexOffset(cursor: string | undefined | null): number | null {
 }
 
 export interface ChannelVideoIndexOptions<T> {
-	channelId: string;
+	/** null lists every channel's videos (the catalogue-wide list). */
+	channelId: string | null;
 	cursor: string | undefined | null;
 	limit: number;
 	/** Index filter; `sort` is the SQL order (ignored when `compare` is set). */

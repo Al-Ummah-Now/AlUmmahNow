@@ -122,12 +122,10 @@ describe('GET /api/videos?channelId= (ownership index)', () => {
 		assert.deepEqual(page.ids, ['z-new', 'z-mid', 'z-old', 'z-live']);
 	});
 
-	it('leaves requests without a channel on the bucket scan', async () => {
+	it('keeps a category filter without a channel on the bucket scan (the index has no category column)', async () => {
 		const env = await indexedEnv();
 		const app = buildApp(routes, null);
-		const page = await ids(app, '/api/videos?limit=3', env);
-		assert.deepEqual(page.ids, ['a000', 'a001', 'a002']);
-		assert.notEqual(page.cursor, '');
+		const page = await ids(app, '/api/videos?limit=3&category=quran_recitation', env);
 		assert.ok(!page.cursor.startsWith('idx:'));
 	});
 });
