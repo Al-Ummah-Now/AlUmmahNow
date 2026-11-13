@@ -14,6 +14,7 @@ import "@/theme/bridge.css";
 import "@/theme/demo-motion.css";
 import "@/theme/system.css";
 import "@/theme/pages.css";
+import "@/theme/fawanees.css";
 import backdrops from "@/theme/demo-backdrops.json";
 import Navigation from "@/components/navigation";
 import AuthProvider from "@/components/AuthProvider";
@@ -32,6 +33,7 @@ import { SecurityBootstrap } from "@/components/security/SecurityBootstrap";
 import { RuntimeConfigBootstrap } from "@/components/RuntimeConfigBootstrap";
 import { ConsentBanner } from "@/components/consent/ConsentBanner";
 import SkipLinks from "@/components/SkipLinks";
+import { FanousStreet } from "@/components/FanousStreet";
 import { EMBED_REQUEST_HEADER } from "@/lib/embed/routes";
 import { getSiteTheme } from "@/lib/theme/site-theme";
 import { VersionSkewProvider } from "@/lib/version-skew/VersionSkewProvider";
@@ -236,6 +238,7 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
 
                           {/* Cookie / tracking consent (GDPR, Story 1.3) */}
                           <ConsentBanner />
+                          <FanousStreet />
                         </div>
                       </TranslationSyncProvider>
                     </WebSocketProvider>
