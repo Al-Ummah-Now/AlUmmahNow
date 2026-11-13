@@ -5,9 +5,14 @@
  *   node --experimental-strip-types scripts/release/status-smoke.ts --env qa|stage|production
  *
  * Read-only GETs on status[.<env>].alummahnow.net: /healthz (Worker + its D1), the page in
- * English and Arabic, the JSON (every component listed) and the Atom feed. A fresh custom domain
- * can take a minute to answer, so each check retries for up to ~90 s.
- * Exits 1 with every failure listed; the workflow then rolls the status Worker back.
+ * English and Arabic, the JSON (every component listed) and the Atom feed.
+ *
+ * A custom domain attached by this very deploy (the first release of an env) needs a few minutes
+ * before its DNS and certificate serve: v2026.11.13.5's stage smoke failed with `fetch failed`
+ * while status.stage was still coming up. So the smoke first waits up to ~3 min for the host to
+ * answer at all. If it never does, nothing is checked: the run ends with a warning (exit 0), since
+ * the Worker was deployed and the domain is Cloudflare's to bring up. Any HTTP answer that is
+ * wrong still fails, and the workflow then rolls the status Worker back.
  */
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
@@ -32,12 +37,40 @@ export interface SmokeResult {
 export interface SmokeDeps {
 	fetch: typeof fetch;
 	sleep: (ms: number) => Promise<void>;
+	/** Retries per check once the host answers (default 3) */
 	attempts?: number;
+	/** Tries, 9 s apart, waiting for the host to answer at all (default 20, ~3 min) */
+	reachAttempts?: number;
 }
 
-export async function statusSmoke(env: StatusSmokeEnv, deps: SmokeDeps): Promise<SmokeResult[]> {
+export interface SmokeReport {
+	/** The host never answered (DNS / certificate of a new custom domain not live yet): nothing was checked */
+	unreachable: boolean;
+	results: SmokeResult[];
+}
+
+/** Waits until the host gives any HTTP answer; false when it never does (network errors only). */
+export async function waitForHost(url: string, deps: SmokeDeps): Promise<{ reached: boolean; last: string }> {
+	const tries = deps.reachAttempts ?? 20;
+	let last = '';
+	for (let i = 0; i < tries; i++) {
+		try {
+			const res = await deps.fetch(url, { headers: { 'user-agent': 'al-ummah-now-release-smoke' }, redirect: 'manual' });
+			await res.body?.cancel();
+			return { reached: true, last: `HTTP ${res.status}` };
+		} catch (error) {
+			last = error instanceof Error ? error.message : String(error);
+		}
+		if (i < tries - 1) await deps.sleep(9_000);
+	}
+	return { reached: false, last };
+}
+
+export async function statusSmoke(env: StatusSmokeEnv, deps: SmokeDeps): Promise<SmokeReport> {
 	const base = STATUS_HOSTS[env];
-	const attempts = deps.attempts ?? 10;
+	const reach = await waitForHost(`${base}/healthz`, deps);
+	if (!reach.reached) return { unreachable: true, results: [{ name: `${base} answers`, ok: false, detail: reach.last }] };
+	const attempts = deps.attempts ?? 3;
 	const out: SmokeResult[] = [];
 	const check = async (name: string, path: string, verify: (res: Response, body: string) => string) => {
 		let last = '';
@@ -85,7 +118,7 @@ export async function statusSmoke(env: StatusSmokeEnv, deps: SmokeDeps): Promise
 		need(body.includes('<feed xmlns="http://www.w3.org/2005/Atom"'), 'not an Atom feed');
 		return 'HTTP 200';
 	});
-	return out;
+	return { unreachable: false, results: out };
 }
 
 const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
@@ -96,7 +129,12 @@ if (isMain) {
 		process.stderr.write('usage: status-smoke.ts --env qa|stage|production\n');
 		process.exit(2);
 	}
-	statusSmoke(env, { fetch, sleep: (ms) => new Promise((r) => setTimeout(r, ms)) }).then((results) => {
+	statusSmoke(env, { fetch, sleep: (ms) => new Promise((r) => setTimeout(r, ms)) }).then(({ unreachable, results }) => {
+		if (unreachable) {
+			const msg = `${STATUS_HOSTS[env]} did not answer in ~3 min (${results[0].detail}); a newly attached custom domain can take longer. The Worker is deployed; smoke skipped.`;
+			console.log(`::warning::status page smoke (${env}) skipped: ${msg}`);
+			return;
+		}
 		for (const r of results) console.log(`${r.ok ? 'ok  ' : 'FAIL'} ${r.name}: ${r.detail}`);
 		if (results.some((r) => !r.ok)) {
 			console.error(`::error::status page smoke (${env}) failed`);
