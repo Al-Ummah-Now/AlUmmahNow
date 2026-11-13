@@ -84,7 +84,8 @@ function dynamicRegions(page: Page) {
     page.locator('[data-testid="comments-section"], #comments'),
     // Home's featured hero is the newest upload: its thumbnail (a CSS background, so not an
     // img), title and channel change with every run; the tag and button stay as theme chrome
-    page.locator('.home-hero-t, .home-hero-b h2, .home-hero-b p'),
+    // the whole block: a longer or shorter title wraps to more or fewer lines and moves the rest
+    page.locator('.home-hero-t, .home-hero-b'),
     // The watch page's view count sits in the description summary, outside video-metrics
     page.locator('.watch-desc summary > span:first-child'),
   ];
