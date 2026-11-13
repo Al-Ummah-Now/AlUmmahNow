@@ -3,6 +3,9 @@ import { ANONYMOUS_STATE } from './test-utils/auth-state';
 import { ownPublicVideos } from './test-utils/own-public-video';
 
 /**
+ * The watch page's views and date read like the cards (separator, relative wording, exact date and
+ * time in the tooltip and the expanded description).
+ *
  * A channel's name follows the page's language (owner, 2026-11-13: an Arabic page showed
  * "Al Ummah Now" under «وقفة منسية مع أمهات المؤمنين»). This file's own channel has an English and
  * an Arabic name; its video's card on the home grid and its watch page show the Arabic name on
@@ -28,6 +31,16 @@ test.describe('Channel name in the page language', () => {
       await page.goto(`/${lang}/video/${own.videos()[0].id}`);
       const channelLink = page.locator(`a[href="/${lang}/channels/${own.channelId()}"]`).filter({ hasText: expected }).first();
       await expect(channelLink).toBeVisible({ timeout: 30_000 });
+
+      // The views and date line reads like the cards: views • relative time, with the exact date
+      // and time on hover and in the expanded description (owner, 2026-11-13: «6 مشاهدات   أمس»)
+      const summary = page.locator('.watch-desc summary');
+      await expect(summary).toContainText('•');
+      const time = summary.locator('time.rel-date');
+      await expect(time).toHaveAttribute('title', /\d{4}.*\d{2}:\d{2}/);
+      await expect(time).not.toHaveText(lang === 'ar' ? 'أمس' : 'yesterday');
+      await summary.click();
+      await expect(page.getByTestId('watch-published')).toContainText(lang === 'ar' ? 'نُشر في' : 'Published');
     });
   }
 });

@@ -399,6 +399,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
   },
 
   video: {
+    publishedAt: 'نُشر في {date}',
     videos: 'المرئيات',
     videoSingular: "مرئي",
     uploadVideo: 'رفع مرئي',

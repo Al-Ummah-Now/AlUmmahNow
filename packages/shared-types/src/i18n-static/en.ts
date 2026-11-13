@@ -400,6 +400,8 @@ export const EN_TRANSLATIONS: AppTranslations = {
 
   video: {
     videos: 'Videos',
+    /** The exact publish date and time on the watch page */
+    publishedAt: 'Published {date}',
     videoSingular: "Video",
     uploadVideo: 'Upload Video',
     editVideo: 'Edit Video',
