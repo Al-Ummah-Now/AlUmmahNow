@@ -81,7 +81,7 @@ export const STUDIO_EN = {
       title: 'Traffic sources',
       note: 'Counted from the day collection began. Viewers who didn\'t allow analytics are shown as Not shared.',
       externalTitle: 'Top external sites',
-      sources: { home: 'Home', search: 'Search', subscriptions: 'Subscriptions', channel: 'Channel pages', playlist: 'Playlists', up_next: 'Up next', explore: 'Explore', library: 'Library', notification: 'Notifications', embed: 'Embedded players', external: 'External sites', direct: 'Direct', unknown: 'Not shared' },
+      sources: { home: 'Home', search: 'Search', subscriptions: 'Subscriptions', channel: 'Channel pages', playlist: 'Playlists', up_next: 'Up next', explore: 'Explore', library: 'You page', notification: 'Notifications', embed: 'Embedded players', external: 'External sites', direct: 'Direct', unknown: 'Not shared' },
     },
   },
   dashboard: {
@@ -355,7 +355,7 @@ export const STUDIO_AR: StudioTranslations = {
       title: 'مصادر الزيارات',
       note: 'تُحتسب منذ يوم بدء الجمع. يظهر المشاهدون الذين لم يسمحوا بالتحليلات ضمن «غير مُشارَك».',
       externalTitle: 'أبرز المواقع الخارجية',
-      sources: { home: 'الصفحة الرئيسية', search: 'البحث', subscriptions: 'الاشتراكات', channel: 'صفحات القنوات', playlist: 'قوائم التشغيل', up_next: 'التالي', explore: 'استكشاف', library: 'المكتبة', notification: 'الإشعارات', embed: 'المشغلات المضمّنة', external: 'مواقع خارجية', direct: 'مباشر', unknown: 'غير مُشارَك' },
+      sources: { home: 'الصفحة الرئيسية', search: 'البحث', subscriptions: 'الاشتراكات', channel: 'صفحات القنوات', playlist: 'قوائم التشغيل', up_next: 'التالي', explore: 'استكشاف', library: 'صفحة «أنت»', notification: 'الإشعارات', embed: 'المشغلات المضمّنة', external: 'مواقع خارجية', direct: 'مباشر', unknown: 'غير مُشارَك' },
     },
   },
   dashboard: {

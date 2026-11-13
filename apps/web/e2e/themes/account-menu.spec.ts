@@ -99,16 +99,19 @@ test.describe('THEME-NAV structure', () => {
 });
 
 test.describe('THEME-NAV drawer', () => {
-  // Owner review rev 4: the drawer and rail heading over Library, History, Watch later and Liked
-  // videos reads "Yours" / «لك» (it was "You" / «أنت»)
-  for (const [lang, heading, old] of [['en', 'Yours', 'You'], ['ar', 'لك', 'أنت']] as const) {
-    test(`the personal section heading is "${heading}" (${lang})`, async ({ page, context, baseURL }) => {
+  // Owner, 2026-11-13: the personal section is one "You" / «أنت» link to /library (YouTube's "You ›"),
+  // replacing rev 4's "Yours" / «لك» heading with a separate "Library" item under it
+  for (const [lang, you, old] of [['en', 'You', ['Yours', 'Library']], ['ar', 'أنت', ['لك', 'المكتبة']]] as const) {
+    test(`the personal section is one "${you}" link to the hub (${lang})`, async ({ page, context, baseURL }) => {
       await signIn(context, baseURL!);
       await mockApi(page);
       await page.goto(`/${lang}`);
-      const headings = page.getByTestId('side-nav').locator('.nv-heading');
-      await expect(headings.filter({ hasText: new RegExp(`^${heading}$`) })).toHaveCount(1);
-      await expect(headings.filter({ hasText: new RegExp(`^${old}$`) })).toHaveCount(0);
+      const nav = page.getByTestId('side-nav');
+      await expect(nav.getByTestId('nav-you')).toHaveAttribute('href', `/${lang}/library`);
+      await expect(nav.getByTestId('nav-you')).toHaveText(you);
+      for (const label of old) {
+        await expect(nav.locator('.nv-heading, .nv').filter({ hasText: new RegExp(`^${label}$`) })).toHaveCount(0);
+      }
     });
   }
 });
