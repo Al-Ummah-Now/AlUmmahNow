@@ -5,7 +5,8 @@
    page style): the body becomes its own stacking layer, so the lights and garlands paint above
    the body's background and below every element. Apps that paint their page colour on a wrapper
    inside the body make it transparent under html.fanous-street in their own stylesheet.
-   No CSS animations: the module moves the lights on scroll (0.2x; still with reduced motion). */
+   No CSS animations: the module moves the lights on scroll with a transform (0.2x; still with
+   reduced motion and in Firefox). No filters or blur anywhere. */
 
 html.fanous-street body {
   isolation: isolate;
@@ -14,10 +15,15 @@ html.fanous-street body {
 /* Far: soft distant lights */
 #fanous-street-lights {
   position: fixed;
-  inset: 0;
+  left: 0;
+  right: 0;
+  top: 0;
+  /* One tile taller than the window: the module moves it up to one tile with a transform */
+  height: calc(100% + 260px);
   z-index: -2;
   pointer-events: none;
   background: var(--fanous-street-lights) 0 0 / 300px 260px repeat;
+  will-change: transform;
 }
 
 /* Near: the garlands, drawn by the module into the page's free gaps */

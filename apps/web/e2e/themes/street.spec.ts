@@ -15,7 +15,8 @@ import { applyTheme, mockApi, signIn, THEMES, type Mode } from './harness';
  */
 const MODES: Mode[] = ['light', 'dark'];
 const LANGS = ['en', 'ar'];
-const PAGES = [{ id: 'home', path: '' }, { id: 'watch', path: '/video/v1' }];
+// The watch page keeps the street off (player smoothness); see the last test
+const PAGES = [{ id: 'home', path: '' }];
 const DEPTHS = [0, 900, 1800];
 // Transitions and time-based animations off
 const STILL = '*,*::before,*::after{transition:none!important;animation-duration:0s!important;animation-delay:0s!important}';
@@ -169,13 +170,20 @@ for (const motion of ['reduce', 'no-preference'] as const) {
     await applyTheme(page, 'fawanees', 'light');
     await settle(page);
     await expect(page.locator('#fanous-street-lights')).toHaveCount(1);
-    const pos = () => page.evaluate(() => getComputedStyle(document.getElementById('fanous-street-lights')!).backgroundPositionY);
-    expect(await pos()).toBe('0px');
+    // The lights move by a transform (no repaint), within one 260px tile
+    const pos = () => page.evaluate(() => {
+      const t = getComputedStyle(document.getElementById('fanous-street-lights')!).transform;
+      return t === 'none' ? 0 : Math.round(new DOMMatrix(t).m42 * 10) / 10;
+    });
+    expect(await pos()).toBe(0);
     await page.evaluate(() => window.scrollTo(0, 700));
     // However far the page could scroll (CI's mock data may make it shorter than 700px)
     const y = await page.evaluate(() => window.scrollY);
     expect(y).toBeGreaterThan(0);
-    await expect.poll(pos).toBe(motion === 'reduce' ? '0px' : `${-Math.round(0.2 * y)}px`);
+    const want = motion === 'reduce' ? 0 : Math.round(-((0.2 * y) % 260) * 10) / 10;
+    await expect.poll(pos).toBeCloseTo(want, 0);
+    // The background itself never moves (moving it would repaint the whole window every frame)
+    expect(await page.evaluate(() => getComputedStyle(document.getElementById('fanous-street-lights')!).backgroundPositionY)).toBe('0px');
     // No CSS animations of its own: tests and pages that wait for every animation to finish must not hang
     const ours = await page.evaluate(() => document.getAnimations().filter((a) => {
       const t = (a.effect as KeyframeEffect | null)?.target as Element | null;
@@ -185,3 +193,22 @@ for (const motion of ['reduce', 'no-preference'] as const) {
     await context.close();
   });
 }
+
+test('street: off on the watch page, so the player stays smooth', async ({ page, context, baseURL }) => {
+  await signIn(context, baseURL!);
+  await mockApi(page);
+  await open(page, '/en');
+  for (const mode of MODES) {
+    await applyTheme(page, 'fawanees', mode);
+    await settle(page);
+    await expect(page.locator('html'), `home ${mode}`).toHaveClass(/fanous-street/);
+  }
+  // Watch pages (Shorts open there too) mark the page and the module removes the street at once
+  await page.goto('/en/video/v1');
+  await expect(page.locator('html')).toHaveAttribute('data-fanous-street', 'off');
+  for (const mode of MODES) {
+    await applyTheme(page, 'fawanees', mode);
+    await expect(page.locator('html'), `watch ${mode}`).not.toHaveClass(/fanous-street/);
+    await expect(page.locator('#fanous-street, #fanous-street-lights'), `watch ${mode}`).toHaveCount(0);
+  }
+});
