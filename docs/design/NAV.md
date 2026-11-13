@@ -120,21 +120,25 @@ base shape exactly (www, CMS, profile, videos admin, auth admin).
 4. **This app** (no label): the app's own entries, at most four. Videos: Write article, My
    articles (scholars), Settings. Profile: Manage sessions.
 5. **Al Ummah Now apps** (label): links to the other apps the account may open, gated by role
-   like each app's own guard. The current app is left out. Each entry starts with the app's icon
-   on its colour tile (`.aun-app-icon[data-app]`, 1.75rem, 7px radius): the same icons and
-   colours as the profile app's "Your apps" cards (owner review), a white line icon on a fixed
-   gradient. They identify the app, so they do not change with the theme. The glyphs are inline
-   SVG masks in `aun-nav.css` (no image request; the vendoring repos' sync guards allow only
-   URL-encoded SVG data URIs). The order, labels and icons are fixed:
+   like each app's own guard. The current app is left out. Each entry starts with **that app's own
+   favicon** (`.aun-app-icon[data-app]`): the owner's art as is, crop and downscale only, never a
+   drawn or generic icon, a colour tile, a badge or a recolour (owner: "use icons we choose for
+   favicons, not random ones"). It is each app's exact `favicon-48x48.png`, byte for byte the PNG
+   the app serves, shown at 24px in the menu (2x) and at 48px on the profile app's "Your apps"
+   cards (`.aun-app-icon--card`, 1x), so the menus and the cards show the same images.
+   `packages/app-icons` `src/nav-icons.ts` embeds the six PNGs in a marked block of `aun-nav.css`
+   (`pnpm --filter @al-ummah/app-icons nav-icons`; `check:nav-icons` fails when the block is
+   stale), so every app gets them with the stylesheet and no extra request; the vendoring repos'
+   sync guards allow only inline base64 PNGs. The order and labels are fixed:
 
-   | Order | English | Arabic | Icon | Tile | Who sees it |
-   |---|---|---|---|---|---|
-   | 1 | Website | الموقع | globe | teal `#14b8a6` → `#0f766e` | everyone |
-   | 2 | Videos | المرئيات | play | the theme's primary | everyone |
-   | 3 | Your profile | ملفك الشخصي | user | green `#10b981` → `#047857` | everyone |
-   | 4 | Content management | إدارة المحتوى | pen | red `#ef4444` → `#b91c1c` | super_admin, admin, moderator, scholar |
-   | 5 | Videos admin | إدارة المرئيات | shield | amber `#f59e0b` → `#b45309` | super_admin, admin, moderator |
-   | 6 | Accounts admin | إدارة الحسابات | key | violet `#8b5cf6` → `#5b21b6` | super_admin, admin |
+   | Order | English | Arabic | Favicon | Who sees it |
+   |---|---|---|---|---|
+   | 1 | Website | الموقع | www (the logo) | everyone |
+   | 2 | Videos | المرئيات | videos | everyone |
+   | 3 | Your profile | ملفك الشخصي | profile | everyone |
+   | 4 | Content management | إدارة المحتوى | cms | super_admin, admin, moderator, scholar |
+   | 5 | Videos admin | إدارة المرئيات | videos-admin | super_admin, admin, moderator |
+   | 6 | Accounts admin | إدارة الحسابات | auth-admin | super_admin, admin |
 
    The role gates mirror the profile app's catalog (AlUmmahNowAuth `apps/profile/src/apps.ts`),
    which mirrors each app's own access guard. Videos and admin-web share
@@ -206,7 +210,7 @@ it keeps the theme's menu colours (Lantern `#134a62`). The stylesheet switches w
 | Width | 21rem on every view and in every app (the channel switcher does not narrow it) |
 | Item | 2.75rem min height (touch target), 16px inline padding, 0.9375rem text |
 | Account row | 3.25rem min height (two lines), sign-out icon button at the end |
-| Leading column | 2rem (`--aun-menu-lead`): 1.25rem icons centred in it, 1.75rem app tiles, 2rem avatars, so every label starts at the same line, in both directions |
+| Leading column | 2rem (`--aun-menu-lead`): 1.25rem icons and 1.5rem (24px) app favicons centred in it, 2rem avatars, so every label starts at the same line, in both directions |
 | Section header | 0.75rem, weight 700, muted, 8px above and 4px below, never upper-cased or letter-spaced (Arabic) |
 | Separator | full width, 4px above and below (none between the who panel and the first one) |
 | Role chip (`.aun-badge`) | 11px, weight 600, pill, 1px separator border, muted text |
