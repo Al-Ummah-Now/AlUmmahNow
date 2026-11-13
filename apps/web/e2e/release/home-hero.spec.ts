@@ -66,8 +66,10 @@ async function videoById(id: string): Promise<HomeVideo | null> {
 async function serveFixtureImages(page: Page, file: string): Promise<void> {
   const body = fs.readFileSync(file);
   const web = new URL(target().web).origin;
+  // Thumbnails come from the CDN, or (server-rendered pages since AUN-SEO phase 4) from the
+  // site's own stable /thumb/<id>.jpg path
   await page.route(
-    (url) => url.origin !== web,
+    (url) => url.origin !== web || url.pathname.startsWith('/thumb/'),
     async (route) => {
       if (route.request().resourceType() !== 'image') return route.fallback();
       await route.fulfill({ status: 200, contentType: 'image/png', body, headers: { 'Cache-Control': 'no-store' } }).catch(() => undefined);

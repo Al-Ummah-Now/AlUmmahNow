@@ -52,7 +52,7 @@ describe('thumbnail check: extraction', () => {
 
 describe('thumbnail check: server-rendered HTML (#1209)', () => {
 	it('finds signed URLs in markup and in the escaped RSC payload, never printing a token', () => {
-		const html = `<img src="/thumb/${ID}.jpg?w=320"><img src="${file(1).replace(/&/g, '&amp;')}"><script>self.__next_f.push(["\\"${file(2).replace('&', '\\u0026')}\\""])</script><a href="${dir(3)}">x</a><img src="${priv(NOW)}">`;
+		const html = `<img src="/thumb/${ID}.jpg?w=320"><img src="${file(1).replace(/&/g, '&amp;')}"><script>self.__next_f.push(["\\"${file(2).replace(/&/g, '\\u0026')}\\""])</script><a href="${dir(3)}">x</a><img src="${priv(NOW)}">`;
 		const found = signedUrlsInHtml(html);
 		assert.equal(found.length, 4);
 		for (const f of found) assert.doesNotMatch(f, /token=T\b|\.SIG/);

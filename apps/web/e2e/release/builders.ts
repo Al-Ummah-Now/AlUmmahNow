@@ -464,7 +464,9 @@ export class DataScope {
    * middle of the test). Runs in its own context, closed afterwards.
    */
   async createCreator(browser: Browser, prefix: string, opts: { channels?: number; locale?: Locale } = {}): Promise<Creator> {
-    const context = await browser.newContext();
+    // Sign-up drives the header menu, so it needs JavaScript even when the calling file's test.use()
+    // turns it off (Playwright applies those options to browser.newContext() too: 79-server-rendered)
+    const context = await browser.newContext({ javaScriptEnabled: true });
     try {
       const page = await context.newPage();
       const first = await this.createUser(page, prefix, opts.locale);
