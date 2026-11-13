@@ -14,6 +14,7 @@ import { orderedPlaylist, refreshStoredOrder } from "../../lib/playlistOrder";
 import { waitUntilOf } from "../../lib/search/ownership";
 import { playlistSortOf } from "@al-ummah/shared-types";
 import { channelNameFields } from "../../lib/channelName";
+import { GONE_BODY, isPurged } from '../../lib/gone';
 
 // Upper bound on videos resolved for a single playlist page
 const MAX_EXPANDED_VIDEOS = 200;
@@ -85,6 +86,8 @@ export class PlaylistFetch extends OptionalAuthRoute {
         const visible = !!playlist && (canViewPlaylist(playlist, userId)
             || (!playlist.isDeleted && !playlist.isHidden && playlist.isPublic === false && !isSystemPlaylist(playlist) && await canManageChannelPlaylists(c.env as never, playlist.channelId, userId)));
         if (!playlist || !visible) {
+            // Purged (deleted, then removed for good): 410 (lib/gone.ts)
+            if (!playlist && await isPurged(c.env as never, 'playlist', id)) return c.json(GONE_BODY, 410);
             return c.json({ success: false, error: "Playlist not found" }, 404);
         }
 

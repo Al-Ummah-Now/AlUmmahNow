@@ -5,6 +5,7 @@ import { PublicChannelView } from "../../lib/model/view";
 import { toPublicChannels } from "../../lib/public-views";
 import R2Repository from "../../lib/r2Repo";
 import { OptionalAuthRoute, AppContext } from "../../base";
+import { GONE_BODY, isPurged } from '../../lib/gone';
 
 export class ChannelFetch extends OptionalAuthRoute {
 	schema = {
@@ -72,6 +73,8 @@ export class ChannelFetch extends OptionalAuthRoute {
 			const exists = channel !== null;
 
 			if (!exists) {
+				// Purged (deleted, then removed for good): 410 (lib/gone.ts)
+				if (await isPurged(c.env as never, 'channel', id)) return c.json(GONE_BODY, 410);
 				return c.json(
 					{
 						success: false,

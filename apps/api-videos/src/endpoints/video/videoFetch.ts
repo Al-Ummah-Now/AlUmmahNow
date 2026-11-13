@@ -8,6 +8,7 @@ import { transformVideoToView } from "../../lib/transformations";
 import R2Repository from "../../lib/r2Repo";
 import { logger } from '../../lib/logger';
 import { OptionalAuthRoute, AppContext } from '../../base';
+import { GONE_BODY, isPurged } from '../../lib/gone';
 
 export class VideoFetch extends OptionalAuthRoute {
 	schema = {
@@ -35,6 +36,14 @@ export class VideoFetch extends OptionalAuthRoute {
 			},
 			"404": {
 				description: "Video not found",
+				content: {
+					"application/json": {
+						schema: ResponseError,
+					},
+				},
+			},
+			"410": {
+				description: "Video was deleted and purged (no longer restorable)",
 				content: {
 					"application/json": {
 						schema: ResponseError,
@@ -77,6 +86,8 @@ export class VideoFetch extends OptionalAuthRoute {
 		const exists = video !== null;
 
 		if (!exists) {
+			// Purged (deleted, then removed for good): 410, so search engines drop it (lib/gone.ts)
+			if (await isPurged(c.env as never, 'video', id)) return c.json(GONE_BODY, 410);
 			return c.json(
 				{
 					success: false,
