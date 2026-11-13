@@ -45,10 +45,14 @@ class DelayQueue {
 	}
 }
 
+const LEGACY_LIBRARY = '999999';
+
 /** Bunny stub: videos by guid, TUS offsets, a library listing; records every DELETE. */
 function bunnyStub() {
 	const s = {
 		videos: new Map<string, { guid: string; title: string; status: number; dateUploaded: string }>(),
+		/** A second (legacy) library, id LEGACY_LIBRARY */
+		legacy: new Map<string, { guid: string; title: string; status: number; dateUploaded: string; storageSize?: number; length?: number }>(),
 		offset: new Map<string, number>(),
 		deleted: [] as string[],
 		failGet: 0,
@@ -61,10 +65,10 @@ function bunnyStub() {
 			const o = s.offset.get(id);
 			return o === undefined ? new Response(null, { status: 404 }) : new Response(null, { status: 200, headers: { 'Upload-Offset': String(o) } });
 		}
-		const list = url.match(/\/library\/\d+\/videos\?page=(\d+)/);
+		const list = url.match(/\/library\/(\d+)\/videos\?page=(\d+)/);
 		if (list) {
-			const all = [...s.videos.values()];
-			const page = Number(list[1]);
+			const all = [...(list[1] === LEGACY_LIBRARY ? s.legacy : s.videos).values()];
+			const page = Number(list[2]);
 			return new Response(JSON.stringify({ totalItems: all.length, items: all.slice((page - 1) * 100, page * 100) }), { status: 200 });
 		}
 		const one = url.match(/\/library\/\d+\/videos\/([0-9a-f-]{36})$/);
@@ -73,12 +77,12 @@ function bunnyStub() {
 				s.failGet--;
 				return new Response('busy', { status: 503 });
 			}
-			const v = s.videos.get(one[1]);
+			const v = (url.includes(`/library/${LEGACY_LIBRARY}/`) ? s.legacy : s.videos).get(one[1]);
 			return v ? new Response(JSON.stringify(v), { status: 200 }) : new Response(null, { status: 404 });
 		}
 		if (one && method === 'DELETE') {
 			s.deleted.push(one[1]);
-			const had = s.videos.delete(one[1]);
+			const had = (url.includes(`/library/${LEGACY_LIBRARY}/`) ? s.legacy : s.videos).delete(one[1]);
 			return new Response(null, { status: had ? 200 : 404 });
 		}
 		throw new Error(`unexpected fetch ${method} ${url}`);
@@ -232,6 +236,16 @@ describe('decideReap: orphans', () => {
 		assert.equal(decideReap(orphan({ uploadMarker: false, force: true })).action, 'delete', 'an admin Delete now still can');
 		assert.deepEqual(decideReap(orphan({ liveStreamRef: true })), { action: 'keep', reason: 'A live stream refers to it' });
 		assert.equal(decideReap(orphan({ liveStreamRef: true, force: true })).action, 'keep');
+	});
+
+	it('an empty entry (never a byte) without a marker is an orphan after 7 days (#1163)', () => {
+		const empty = (age: number, extra: Record<string, unknown> = {}) => ({ status: 0, storageSize: 0, length: 0, encodeProgress: 0, dateUploaded: ago(age), ...extra });
+		assert.equal(decideReap(orphan({ uploadMarker: false, check: 0, bunny: empty(8 * 24 * H) })).action, 'confirm');
+		assert.equal(decideReap(orphan({ uploadMarker: false, bunny: empty(8 * 24 * H) })).action, 'delete');
+		assert.equal(decideReap(orphan({ uploadMarker: false, bunny: empty(6 * 24 * H) })).action, 'keep', 'younger than 7 days');
+		assert.equal(decideReap(orphan({ uploadMarker: false, bunny: empty(8 * 24 * H, { storageSize: 1024 }) })).action, 'keep', 'it has bytes');
+		assert.equal(decideReap(orphan({ uploadMarker: false, bunny: empty(8 * 24 * H, { length: 12 }) })).action, 'keep', 'it has a length');
+		assert.equal(decideReap(orphan({ uploadMarker: false, liveStreamRef: true, bunny: empty(8 * 24 * H) })).action, 'keep', 'a live stream refers to it');
 	});
 
 	it('belongsToEnv: prefix rule', () => {
@@ -427,5 +441,15 @@ describe('sweepStaleUploads', () => {
 		const again = await sweepStaleUploads(env, { now: NOW });
 		assert.equal(again.loopsStarted, 0, 'live loops are not started twice');
 		assert.equal(bunny.deleted.length, 0, 'the sweep itself never deletes');
+	});
+
+	it('walks every library: an empty entry left in the legacy library is found (#1163)', async () => {
+		const env = { ...makeEnv(), BUNNY_LEGACY_LIBRARY_ID: LEGACY_LIBRARY, BUNNY_LEGACY_STREAM_KEY: 'legacy-key' };
+		const empty = '66666666-2222-4333-8444-555555555555';
+		bunny.legacy.set(empty, { guid: empty, title: 'Lecture 3', status: 0, storageSize: 0, length: 0, dateUploaded: ago(8 * 24 * H) });
+		const stats = await sweepStaleUploads(env, { now: NOW });
+		assert.equal(stats.orphanCandidates, 1);
+		assert.deepEqual(env.PROCESSING_CHECK_QUEUE.sent.map((m: any) => `${m.body.target}:${m.body.videoId}`), [`orphan:${empty}`]);
+		assert.equal(stats.nextBunnyPages?.[LEGACY_LIBRARY], 1, 'the legacy library has its own page');
 	});
 });

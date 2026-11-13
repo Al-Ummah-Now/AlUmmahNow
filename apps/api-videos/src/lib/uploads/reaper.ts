@@ -37,7 +37,7 @@
 
 import { logger } from '../logger';
 import R2Repository from '../r2Repo';
-import { bunnyApi, bunnyLibraries, bunnyLibraryForVideo, primaryBunnyLibrary, type BunnyLibrariesEnv, type LibraryHints } from '../bunny/libraries';
+import { bunnyApi, bunnyLibraries, bunnyLibraryForVideo, primaryBunnyLibrary, type BunnyLibrariesEnv, type BunnyLibrary, type LibraryHints } from '../bunny/libraries';
 import { generateTUSSignature } from '../bunny/tus';
 import { fetchBunnyVideo, ProcessingEnv } from '../processing/loop';
 import { releaseClaimFor } from './initiateOnce';
@@ -66,6 +66,20 @@ export const ABANDON_AFTER_MS = 24 * 3600 * 1000;
  * reaper leaves it for this long after the flag (Delete now still can).
  */
 export const FLAGGED_GRACE_MS = 7 * 24 * 3600 * 1000;
+/**
+ * A Bunny video that never received a byte (status Created, no storage, no length, no encode) and
+ * has no record is an orphan after this long even without an upload marker: deleting it loses
+ * nothing. The 2026-11-10 batch's 11 empty entries predated the marker (#1163).
+ */
+export const ORPHAN_EMPTY_MIN_AGE_MS = 7 * 24 * 3600 * 1000;
+
+/** Never received a byte and older than ORPHAN_EMPTY_MIN_AGE_MS. */
+export function isEmptyAbandoned(bunny: BunnyView, now: number): boolean {
+	const empty = bunny.status === 0 && !(bunny.storageSize ?? 0) && !(bunny.length ?? 0) && !(bunny.encodeProgress ?? 0);
+	const uploaded = Date.parse(bunny.dateUploaded || '');
+	return empty && Number.isFinite(uploaded) && now - uploaded >= ORPHAN_EMPTY_MIN_AGE_MS;
+}
+
 /** A Bunny video without a record must be at least this old to be an orphan. */
 export const ORPHAN_MIN_AGE_MS = 24 * 3600 * 1000;
 /** Delay before the confirming second check. */
@@ -233,7 +247,7 @@ export function decideReap(input: ReapInput): ReapDecision {
 		if (!bunny) return { action: 'keep', reason: 'Already gone at Bunny' };
 		if (!belongsToEnv(bunny.title, input.prefix)) return { action: 'keep', reason: 'Belongs to another environment' };
 		if (input.liveStreamRef) return { action: 'keep', reason: 'A live stream refers to it' };
-		if (!input.uploadMarker && !input.force) return { action: 'keep', reason: 'Not created by an upload (no upload marker): only an admin Delete now removes it' };
+		if (!input.uploadMarker && !input.force && !isEmptyAbandoned(bunny, now)) return { action: 'keep', reason: 'Not created by an upload (no upload marker): only an admin Delete now removes it' };
 		if (!ORPHAN_DELETABLE.has(bunny.status ?? -1)) return { action: 'keep', reason: `Bunny status ${bunny.status}: ready or encoding videos are never deleted` };
 		const age = now - (Date.parse(bunny.dateUploaded || '') || now);
 		if (!input.force && age < ORPHAN_MIN_AGE_MS) return { action: 'keep', reason: 'Younger than 24 hours' };
@@ -308,9 +322,9 @@ async function bunnySecrets(env: ReaperEnv, record?: LibraryHints | null): Promi
 	return { key: apiKey, libraryId: String(libraryId) };
 }
 
-/** One page of the primary library (where uploads go), newest first. */
-export async function listBunnyVideos(env: ReaperEnv, page: number, itemsPerPage = 100): Promise<{ items: BunnyView[]; totalItems: number }> {
-	const { key, libraryId } = await bunnySecrets(env);
+/** One page of a library (default: the primary one, where uploads go), newest first. */
+export async function listBunnyVideos(env: ReaperEnv, page: number, itemsPerPage = 100, library?: BunnyLibrary): Promise<{ items: BunnyView[]; totalItems: number }> {
+	const { key, libraryId } = library ? (({ apiKey, libraryId }) => ({ key: apiKey, libraryId: String(libraryId) }))(bunnyApi(library)) : await bunnySecrets(env);
 	const url = `${BUNNY_API}/library/${encodeURIComponent(libraryId)}/videos?page=${page}&itemsPerPage=${itemsPerPage}&orderBy=date`;
 	const response = await fetch(url, { headers: { AccessKey: key, accept: 'application/json' } });
 	if (!response.ok) throw new Error(`Bunny listVideos page ${page} failed: HTTP ${response.status}`);
@@ -684,8 +698,10 @@ export interface ReaperSweepStats {
 	loopsStarted: number;
 	skipped: number;
 	errors: number;
-	/** Next library page the orphan sweep reads (it walks the library over several runs) */
+	/** Next page the orphan sweep reads in the primary library (it walks the library over several runs) */
 	nextBunnyPage: number;
+	/** The same per library id, every library this environment's uploads went to (legacy ones too) */
+	nextBunnyPages?: Record<string, number>;
 	durationMs: number;
 }
 
@@ -771,6 +787,7 @@ export async function sweepStaleUploads(
 		skipped: 0,
 		errors: 0,
 		nextBunnyPage: previous?.nextBunnyPage ?? 1,
+		nextBunnyPages: { ...(previous?.nextBunnyPages ?? {}) },
 		durationMs: 0,
 	};
 
@@ -810,40 +827,53 @@ export async function sweepStaleUploads(
 		}
 	} while (cursor);
 
-	// Orphans: Bunny videos of this environment without a record
+	// Orphans: Bunny videos of this environment without a record, in every library its uploads went to
+	// (the primary one and legacy ones: the 2026-11-10 batch's empty entries sat in legacy 400189, #1163)
 	const prefix = env.BUNNY_NAME_PREFIX ?? '';
-	let page = stats.nextBunnyPage;
-	for (let i = 0; i < pages; i++) {
-		let listed: { items: BunnyView[]; totalItems: number };
-		try {
-			listed = await listBunnyVideos(env, page);
-		} catch (error) {
-			stats.errors++;
-			logger.error('[UploadReaper] Bunny library listing failed', { page, error: error instanceof Error ? error.message : String(error) });
-			break;
-		}
-		stats.bunnyTotal = listed.totalItems;
-		for (const video of listed.items) {
-			if (!video.guid) continue;
-			stats.bunnyScanned++;
-			if (!belongsToEnv(video.title, prefix) || !ORPHAN_DELETABLE.has(video.status ?? -1)) continue;
-			if (nowMs - (Date.parse(video.dateUploaded || '') || nowMs) < ORPHAN_MIN_AGE_MS) continue;
-			let exists: boolean;
-			try {
-				exists = !!(await env.videos.head(video.guid));
-			} catch {
-				stats.errors++;
-				continue;
-			}
-			if (exists) continue;
-			stats.orphanCandidates++;
-			await consider(video.guid, 'orphan');
-		}
-		const end = listed.items.length < 100 || page * 100 >= listed.totalItems;
-		page = end ? 1 : page + 1;
-		if (end) break;
+	let libraries: BunnyLibrary[] = [];
+	try {
+		libraries = (await bunnyLibraries(env as BunnyLibrariesEnv)).filter((library) => library.primary || library.apiKey);
+	} catch (error) {
+		stats.errors++;
+		logger.error('[UploadReaper] Bunny libraries unavailable', { error: error instanceof Error ? error.message : String(error) });
 	}
-	stats.nextBunnyPage = page;
+	stats.bunnyTotal = 0;
+	for (const library of libraries) {
+		const libraryKey = String(bunnyApi(library).libraryId);
+		let page = library.primary ? stats.nextBunnyPage : stats.nextBunnyPages?.[libraryKey] ?? 1;
+		for (let i = 0; i < pages; i++) {
+			let listed: { items: BunnyView[]; totalItems: number };
+			try {
+				listed = await listBunnyVideos(env, page, 100, library);
+			} catch (error) {
+				stats.errors++;
+				logger.error('[UploadReaper] Bunny library listing failed', { library: libraryKey, page, error: error instanceof Error ? error.message : String(error) });
+				break;
+			}
+			stats.bunnyTotal += i === 0 ? listed.totalItems : 0;
+			for (const video of listed.items) {
+				if (!video.guid) continue;
+				stats.bunnyScanned++;
+				if (!belongsToEnv(video.title, prefix) || !ORPHAN_DELETABLE.has(video.status ?? -1)) continue;
+				if (nowMs - (Date.parse(video.dateUploaded || '') || nowMs) < ORPHAN_MIN_AGE_MS) continue;
+				let exists: boolean;
+				try {
+					exists = !!(await env.videos.head(video.guid));
+				} catch {
+					stats.errors++;
+					continue;
+				}
+				if (exists) continue;
+				stats.orphanCandidates++;
+				await consider(video.guid, 'orphan');
+			}
+			const end = listed.items.length < 100 || page * 100 >= listed.totalItems;
+			page = end ? 1 : page + 1;
+			if (end) break;
+		}
+		if (library.primary) stats.nextBunnyPage = page;
+		else stats.nextBunnyPages = { ...(stats.nextBunnyPages ?? {}), [libraryKey]: page };
+	}
 	stats.durationMs = Date.now() - started;
 	try {
 		await env.global_settings.put(REAPER_SWEEP_KEY, JSON.stringify(stats), JSON_META);
