@@ -29,7 +29,7 @@ const transparent = (bg) => bg === 'transparent' || /rgba\([^)]*,\s*0\)$/.test(b
 
 /** Whether the active theme and mode switch the street on. */
 export function streetEnabled(doc = document) {
-  return getComputedStyle(doc.documentElement).getPropertyValue('--fanous-street-on').trim() === '1';
+  return doc.defaultView.getComputedStyle(doc.documentElement).getPropertyValue('--fanous-street-on').trim() === '1';
 }
 
 function regionOf(doc) {
@@ -38,13 +38,14 @@ function regionOf(doc) {
 
 /** Rectangles (viewport coordinates) of everything that must not have a lantern behind it. */
 function obstacles(region) {
+  const win = region.ownerDocument.defaultView;
   const out = [];
   for (const el of region.querySelectorAll('*')) {
     if (el.id === ID || el.closest('#' + ID)) continue;
     const r = el.getBoundingClientRect();
     if (r.width < 1 || r.height < 1) continue;
     if (el.closest('[data-fanous-street="off"]')) { out.push(r); continue; }
-    const s = getComputedStyle(el);
+    const s = win.getComputedStyle(el);
     if (s.visibility === 'hidden' || s.opacity === '0' || s.display === 'contents') continue;
     const media = /^(img|video|svg|canvas|iframe|input|select|textarea|button|picture)$/i.test(el.tagName)
       || s.backgroundImage !== 'none' || s.boxShadow !== 'none' || parseFloat(s.borderTopWidth) > 0;
@@ -67,7 +68,7 @@ export function renderStreet(doc = document) {
   if (!region) return { placed: 0, reason: 'no region' };
   // An app that paints its own opaque frame around the content covers the street: draw nothing there
   for (let el = region; el && el !== doc.body && el !== doc.documentElement; el = el.parentElement) {
-    if (!transparent(getComputedStyle(el).backgroundColor) || el.matches('[data-fanous-street="off"]')) return { placed: 0, reason: 'covered' };
+    if (!transparent(win.getComputedStyle(el).backgroundColor) || el.matches('[data-fanous-street="off"]')) return { placed: 0, reason: 'covered' };
   }
   const phone = win.innerWidth < 640;
   const root = doc.documentElement;
@@ -77,7 +78,7 @@ export function renderStreet(doc = document) {
   const RX0 = Math.max(0, rr.left + sx), RX1 = Math.min(W, rr.right + sx), RY1 = Math.min(H, rr.bottom + sy);
   // Fixed and sticky chrome (header, rail, bottom bar) is not page space
   const fixed = Array.from(doc.querySelectorAll('header, nav, aside, [data-fanous-street-chrome]'))
-    .filter((e) => { const p = getComputedStyle(e).position; return p === 'fixed' || p === 'sticky'; })
+    .filter((e) => { const p = win.getComputedStyle(e).position; return p === 'fixed' || p === 'sticky'; })
     .map((e) => e.getBoundingClientRect()).filter((r) => r.width && r.height && r.right > 0 && r.left < win.innerWidth);
   const topLimit = Math.max(rr.top + sy, ...fixed.filter((r) => r.top <= 1 && r.width > win.innerWidth * 0.6).map((r) => r.bottom + sy));
   const cols = Math.ceil(W / CELL), rows = Math.ceil(H / CELL);
@@ -198,7 +199,7 @@ export function startStreet(doc = document) {
     lastSig = sig;
     renderStreet(doc);
   };
-  const soon = (delay = 200) => { clearTimeout(timer); timer = win.setTimeout(() => { if (!frame) frame = win.requestAnimationFrame(sync); }, delay); };
+  const soon = (delay = 200) => { win.clearTimeout(timer); timer = win.setTimeout(() => { if (!frame) frame = win.requestAnimationFrame(sync); }, delay); };
   const mo = new win.MutationObserver((records) => {
     // Our own drawing changes nothing that matters
     const ours = (r) => r.target.id === ID || r.target.closest?.('#' + ID)
@@ -219,7 +220,7 @@ export function startStreet(doc = document) {
   const stop = () => {
     mo.disconnect(); htmlObs.disconnect(); ro.disconnect();
     dark.removeEventListener?.('change', onScheme);
-    clearTimeout(timer);
+    win.clearTimeout(timer);
     doc.getElementById(ID)?.remove();
     html.classList.remove('fanous-street');
     delete win.__fanousStreetStop;
