@@ -1,13 +1,16 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { Clock, EllipsisVertical, ListPlus } from 'lucide-react';
-import SaveToPlaylist from '@/components/SaveToPlaylist';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { MenuButton } from '@/components/common/MenuButton';
 import { LibraryService } from '@/services/api/library';
 import { fillTemplate } from '@/lib/i18n/translations/library-notifications';
+
+// Loaded only when "Save to playlist" is chosen: the dialog's playlist calls are
+// server actions (next/headers), which must not load with every video card
+const SaveToPlaylist = lazy(() => import('@/components/SaveToPlaylist'));
 
 interface VideoCardMenuProps {
   videoId: string;
@@ -78,7 +81,9 @@ export function VideoCardMenu({ videoId, title, className = '' }: VideoCardMenuP
         <EllipsisVertical className="h-5 w-5" aria-hidden="true" />
       </MenuButton>
       {savingToPlaylist && (
-        <SaveToPlaylist videoId={videoId} open onOpenChange={setSavingToPlaylist} className="absolute bottom-full end-0 mb-1" />
+        <Suspense fallback={null}>
+          <SaveToPlaylist videoId={videoId} open onOpenChange={setSavingToPlaylist} className="absolute bottom-full end-0 mb-1" />
+        </Suspense>
       )}
     </div>
   );
