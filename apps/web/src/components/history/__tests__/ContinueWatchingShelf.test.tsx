@@ -25,6 +25,11 @@ jest.mock('@/components/VideoThumbnail', () => ({
   default: ({ alt }: { alt: string }) => <span data-testid="thumb">{alt}</span>,
 }));
 
+const mockWarn = jest.fn();
+jest.mock('@/lib/logger-client', () => ({
+  logger: { warn: (...args: unknown[]) => mockWarn(...args), error: jest.fn(), info: jest.fn(), debug: jest.fn() },
+}));
+
 jest.mock('@/services/api/watch-history', () => ({
   WatchHistoryService: { list: jest.fn(), getPaused: jest.fn() },
 }));
@@ -98,6 +103,29 @@ describe('ContinueWatchingShelf (#242)', () => {
     const second = render(<ContinueWatchingShelf />);
     await waitFor(() => expect(service.list).toHaveBeenCalledTimes(2));
     expect(second.container).toBeEmptyDOMElement();
+  });
+
+  it('is hidden, without an unhandled rejection, when a page has no entries array', async () => {
+    const rejections: unknown[] = [];
+    const onRejection = (reason: unknown) => void rejections.push(reason);
+    process.on('unhandledRejection', onRejection);
+    try {
+      service.list.mockResolvedValue({ total: 3, hasMore: false } as never);
+      const { container } = render(<ContinueWatchingShelf />);
+      await settle();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(container).toBeEmptyDOMElement();
+      expect(rejections).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onRejection);
+    }
+  });
+
+  it('is hidden and logs a warning when loading rejects', async () => {
+    service.list.mockRejectedValue(new Error('network down'));
+    const { container } = render(<ContinueWatchingShelf />);
+    await waitFor(() => expect(mockWarn).toHaveBeenCalledWith('[ContinueWatchingShelf] Could not load continue watching', { error: 'network down' }));
+    expect(container).toBeEmptyDOMElement();
   });
 
   it('is hidden when there is nothing to continue', async () => {
