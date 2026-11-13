@@ -4,13 +4,14 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
- * The local stack's gating leftover check stays strict (#1111, #1177): it may allow only the
- * revocation records (user id only, kept to outlive the tokens). The queue-message archive
+ * The local stack's gating leftover checks stay strict (#1111, #1177): they may allow only the
+ * revocation records (user id only, kept to outlive the tokens) and search tombstones (entity + id,
+ * kept so a deleted item is not indexed again). Every suite gates (no --report-only). The queue-message archive
  * (r2 al-ummah-now-messages) is never allowed: it is pseudonymised at write time, so a run's ids
  * found there mean the pseudonymisation broke, which is a privacy bug, not noise.
  */
 const WORKFLOW = join(import.meta.dirname, '..', '..', '..', '.github', 'workflows', 'local-e2e.yml');
-const ALLOWED = ['d1:al-ummah-now-d1:user_revocations', 'kv:TOKEN_REVOCATIONS'];
+const ALLOWED = ['d1:al-ummah-now-d1:user_revocations', 'kv:TOKEN_REVOCATIONS', 'd1:al-ummah-now-search:search_tombstones'];
 
 function leftoverCommands(): string[] {
   const text = readFileSync(WORKFLOW, 'utf8');
@@ -26,11 +27,11 @@ function leftoverCommands(): string[] {
   return commands;
 }
 
-test('the gating leftover checks allow only the revocation records', () => {
+test('every leftover check gates and allows only revocations and tombstones', () => {
   const commands = leftoverCommands();
   assert.ok(commands.length >= 3, `found ${commands.length} leftover checks`);
-  const gating = commands.filter((c) => !c.includes('--report-only'));
-  assert.ok(gating.length >= 1, 'at least one leftover check gates');
+  assert.deepEqual(commands.filter((c) => c.includes('--report-only')), [], 'no leftover check is report-only');
+  const gating = commands;
   for (const command of gating) {
     const allows = [...command.matchAll(/--allow\s+(\S+)/g)].map((m) => m[1]);
     assert.deepEqual(allows.filter((a) => !ALLOWED.includes(a)), [], `unexpected --allow in: ${command.trim()}`);
