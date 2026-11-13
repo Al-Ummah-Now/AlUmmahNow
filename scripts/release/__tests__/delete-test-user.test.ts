@@ -12,6 +12,7 @@ import {
 	kvValueUserId,
 	refreshPrefix,
 	searchChannelDeleteStatements,
+	searchProfileDeleteStatements,
 } from '../prod-test-data.ts';
 
 describe('assertTestAddress', () => {
@@ -112,6 +113,17 @@ describe('channel cleanup', () => {
 		assert.ok(s[2].sql.includes('search_channels_fts'));
 		for (const x of s) assert.ok(!x.sql.includes(id));
 		assert.throws(() => searchChannelDeleteStatements("x' OR 1=1 --", 1), /refusing/);
+	});
+});
+
+describe('searchProfileDeleteStatements', () => {
+	it("drops the user's admin-directory profile row and tombstones it, by bound parameter only", () => {
+		const id = 'usr_0123456789abcdef0123456789abcdef';
+		const s = searchProfileDeleteStatements(id, 7);
+		assert.deepEqual(s.map((x) => x.params), [['own:profile', id, 7], [id]]);
+		assert.ok(s[1].sql.includes("kind = 'profile'"));
+		for (const x of s) assert.ok(!x.sql.includes(id));
+		assert.throws(() => searchProfileDeleteStatements("x' OR 1=1 --", 1), /refusing/);
 	});
 });
 

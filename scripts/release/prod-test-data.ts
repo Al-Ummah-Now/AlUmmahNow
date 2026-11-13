@@ -112,6 +112,15 @@ export function searchChannelDeleteStatements(channelId: string, now: number): {
 	];
 }
 
+/** Search D1 statements that drop a user's admin-directory profile row and tombstone it. */
+export function searchProfileDeleteStatements(userId: string, now: number): { sql: string; params: (string | number)[] }[] {
+	if (!USER_ID.test(userId)) throw new Error(`refusing profile ${JSON.stringify(userId)}: not a user id`);
+	return [
+		{ sql: 'INSERT INTO search_tombstones (entity, id, version) VALUES (?, ?, ?) ON CONFLICT(entity, id) DO UPDATE SET version = max(version, excluded.version)', params: ['own:profile', userId, now] },
+		{ sql: "DELETE FROM content_ownership WHERE kind = 'profile' AND id = ?", params: [userId] },
+	];
+}
+
 /** R2 keys of one channel (handle only when the handle entry points at this channel). */
 export function channelKeys(channel: { id: string; handle?: string }, sectionKeys: string[]): { bucket: string; key: string }[] {
 	const keys = [
@@ -287,7 +296,9 @@ export async function deleteTestAccount(
 
 	// Videos and playlists carry Bunny media: refuse rather than orphan them
 	if (userId) {
-		const owned = (await d1(cf, SEARCH_PROD.d1, "SELECT kind, count(*) AS n FROM content_ownership WHERE owner_id = ? AND kind != 'channel' GROUP BY kind", [userId])) as {
+		// Channels and the user's own profile row (the admin directory indexes every profile, id = user id)
+		// are deleted below; anything else carries media
+		const owned = (await d1(cf, SEARCH_PROD.d1, "SELECT kind, count(*) AS n FROM content_ownership WHERE owner_id = ? AND kind NOT IN ('channel', 'profile') GROUP BY kind", [userId])) as {
 			kind: string;
 			n: number;
 		}[];
@@ -335,6 +346,7 @@ export async function deleteTestAccount(
 
 	for (const { bucket, key } of r2) await r2Delete(cf, bucket, key);
 	for (const id of channelIds) for (const s of searchChannelDeleteStatements(id, now)) await d1(cf, SEARCH_PROD.d1, s.sql, s.params);
+	if (userId) for (const s of searchProfileDeleteStatements(userId, now)) await d1(cf, SEARCH_PROD.d1, s.sql, s.params);
 	if (userId) for (const s of authDeleteStatements(userId)) await d1(cf, AUTH_PROD.d1, s.sql, s.params);
 	for (const k of kvTargets) await kvDelete(cf, k);
 	if (email) {
