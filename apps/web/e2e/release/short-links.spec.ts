@@ -113,7 +113,7 @@ test.describe('short links', () => {
     const short = target().shortLinks;
     const creator = await ownData.createCreator(browser, 'sl-private');
     const privateTitle = `Private short link ${ns()}`;
-    const priv = await ownData.createVideo(creator.user, creator.channelIds[0], { title: privateTitle, isPublic: false });
+    const priv = await ownData.createVideo(creator.user, creator.channelIds[0], { title: privateTitle, isPublic: false, waitReady: false });
 
     for (const path of [`/v/${priv.id}`, '/v/does-not-exist', '/l/nope', '/p/nope', '/x/abc']) {
       const res = await page.goto(`${short}${path}`);
