@@ -118,14 +118,13 @@ export async function listCreators(env: CreatorsEnv, query: CreatorsQuery, nowMs
 			)
 			.bind(...binds)
 			.all<Row>(),
-		db
-			.prepare(
-				`SELECT
-				   (SELECT COUNT(DISTINCT user_id) FROM upload_limit_hits WHERE hit_at >= ?2) AS hits24h,
-				   (SELECT COUNT(DISTINCT user_id) FROM upload_limit_hits WHERE hit_at >= ?1) AS hits7d`,
-			)
-			.bind(weekAgo, now - 86400)
-			.first<{ hits24h: number; hits7d: number }>(),
+		// Distinct users over a week of limit hits (~212k rows on QA under suite load): reused for a minute too
+		Promise.all([
+			cachedCount(db as never, 'creators:hits24h', () =>
+				db.prepare('SELECT COUNT(DISTINCT user_id) AS n FROM upload_limit_hits WHERE hit_at >= ?').bind(now - 86400).first<{ n: number }>().then((r) => Number(r?.n) || 0), nowMs),
+			cachedCount(db as never, 'creators:hits7d', () =>
+				db.prepare('SELECT COUNT(DISTINCT user_id) AS n FROM upload_limit_hits WHERE hit_at >= ?').bind(weekAgo).first<{ n: number }>().then((r) => Number(r?.n) || 0), nowMs),
+		]).then(([hits24h, hits7d]) => ({ hits24h, hits7d })),
 		cachedCount(db as never, 'creators:needs-tier', () =>
 			db.prepare(`SELECT COUNT(*) AS n FROM (${CREATORS_SQL}) WHERE ${NEEDS_TIER}`).bind(weekAgo).first<{ n: number }>().then((r) => Number(r?.n) || 0), nowMs),
 	]);
