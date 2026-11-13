@@ -549,3 +549,28 @@ export function creatorReviewView(review: Partial<VideoReviewState> | null | und
   if (review.appealUsed) out.appealUsed = true;
   return out;
 }
+
+/** The live queue time creators see when a video is held (VR6): admin-api writes it every 5 minutes. */
+export const VIDEO_REVIEW_QUEUE_KEY = 'video-review/queue.json';
+
+let queueCache: { at: number; value: number | null } | null = null;
+
+/** Median minutes a held video waits for a person lately; null when unknown. Cached for a minute. */
+export async function readReviewQueueMinutes(bucket: ReviewSettingsBucket | undefined | null): Promise<number | null> {
+  if (queueCache && Date.now() - queueCache.at < 60_000) return queueCache.value;
+  let value: number | null = null;
+  try {
+    const object = await bucket?.get(VIDEO_REVIEW_QUEUE_KEY);
+    const parsed = object ? (JSON.parse(await object.text()) as { queueMinutes?: unknown }) : null;
+    value = typeof parsed?.queueMinutes === 'number' && Number.isFinite(parsed.queueMinutes) ? Math.max(1, Math.round(parsed.queueMinutes)) : null;
+  } catch {
+    value = null;
+  }
+  queueCache = { at: Date.now(), value };
+  return value;
+}
+
+export async function writeReviewQueueMinutes(bucket: ReviewSettingsBucket, queueMinutes: number | null, now = new Date()): Promise<void> {
+  await bucket.put(VIDEO_REVIEW_QUEUE_KEY, JSON.stringify({ queueMinutes, at: now.toISOString() }), { httpMetadata: { contentType: 'application/json' } });
+  queueCache = null;
+}

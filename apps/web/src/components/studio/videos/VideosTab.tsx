@@ -9,7 +9,7 @@ import Link from '@/components/common/AppLink';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { MoreVertical, UploadCloud } from 'lucide-react';
 import type { View } from 'react-big-calendar';
-import { VIDEO_CATEGORIES, type StudioVideoStatus } from '@al-ummah/shared-types';
+import { VIDEO_CATEGORIES, type CreatorReviewView, type StudioVideoStatus } from '@al-ummah/shared-types';
 import { BulkEditPanel, type BulkPanelVideo } from '@/components/bulkEdit/BulkEditPanel';
 import { useChannelPlaylists } from '@/hooks/useChannelPlaylists';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
@@ -28,9 +28,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/hooks/useLanguage';
 import type { BulkSummary, StudioVideo } from '@/lib/api/studio-content';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
-import { fetchContentCounts, fetchContentPage, STUDIO_LIST_STALE_MS, studioContentKey, studioCountsKey, studioListKey } from '@/lib/studio/content-client';
+import { appealVideoReview, fetchContentCounts, fetchContentPage, resubmitVideoReview, STUDIO_LIST_STALE_MS, studioContentKey, studioCountsKey, studioListKey } from '@/lib/studio/content-client';
 import { rememberListUrl } from '@/lib/studio/list-return';
 import { BulkScheduleDialog } from './BulkDialogs';
+import { AppealDialog, ReviewLine } from './ReviewStatus';
 import { DeletedVideos } from './DeletedVideos';
 import { cancelSchedule, publishNow } from '@/lib/api/scheduling';
 import { bulkDeleteVideos } from '@/lib/api/videos';
@@ -46,7 +47,7 @@ const ScheduledVideoCalendar = dynamic(
   { ssr: false },
 );
 
-const STATUSES: StudioVideoStatus[] = ['published', 'scheduled', 'drafts', 'processing', 'failed'];
+const STATUSES: StudioVideoStatus[] = ['published', 'scheduled', 'drafts', 'processing', 'in_review', 'not_approved', 'failed'];
 const PAGE = 30;
 const CALENDAR_PAGE = 100;
 const PROCESSING_REFRESH_MS = 15000;
@@ -107,6 +108,8 @@ export function VideosTab({ locale, channelId, role }: Props) {
     retry: 1,
   });
   const items: StudioVideo[] = useMemo(() => listQuery.data?.pages.flatMap((page) => page.items) ?? [], [listQuery.data]);
+  const reviewQueueMinutes = listQuery.data?.pages[0]?.reviewQueueMinutes ?? null;
+  const [appealFor, setAppealFor] = useState<string | null>(null);
   const cursor = listQuery.hasNextPage ? 'more' : null;
   const loading = listQuery.isPending && !showingDeleted;
   const failed = listQuery.isError && !listQuery.data;
@@ -258,7 +261,23 @@ export function VideosTab({ locale, channelId, role }: Props) {
       void run(() => cancelSchedule(video.id, { channelId }), text.done.scheduleCancelled);
     } else if (action === 'delete') {
       setPendingDelete({ ids: [video.id] });
+    } else if (action === 'appeal') {
+      setAppealFor(video.id);
+    } else if (action === 'resubmit') {
+      void (async () => {
+        const ok = await resubmitVideoReview(video.id).catch(() => false);
+        setNotice(ok ? text.review.resubmitted : text.review.resubmitFailed);
+        await load();
+      })();
     }
+  };
+
+  const submitAppeal = async (message: string) => {
+    if (!appealFor) return;
+    const ok = await appealVideoReview(appealFor, message).catch(() => false);
+    setNotice(ok ? text.review.appealDialog.sent : text.review.appealDialog.failed);
+    if (ok) setAppealFor(null);
+    await load();
   };
 
   const actionHref = (action: VideoRowAction, video: StudioVideo): string | null => {
@@ -449,7 +468,7 @@ export function VideosTab({ locale, channelId, role }: Props) {
             </thead>
             <tbody className="block md:table-row-group">
               {items.map((video) => {
-                const actions = rowActions(query.status, role, video.isPublic !== false, video.failureKind ?? null);
+                const actions = rowActions(query.status, role, video.isPublic !== false, video.failureKind ?? null, (video as StudioVideo & { review?: CreatorReviewView }).review?.appealUsed === true);
                 const edit = actionHref('edit', video);
                 const shown = video.scheduledPublishDate && query.status === 'scheduled' ? video.scheduledPublishDate : video.dateCreated;
                 return (
@@ -481,6 +500,7 @@ export function VideosTab({ locale, channelId, role }: Props) {
                             {video.isLive && <span className="rounded bg-muted px-1">{text.badges.live}</span>}
                             {isShortOrFlag(video as never) && <span className="rounded bg-muted px-1">{text.badges.short}</span>}
                           </span>
+                          <ReviewLine review={(video as StudioVideo & { review?: CreatorReviewView }).review} queueMinutes={reviewQueueMinutes} />
                         </div>
                       </div>
                     </td>
@@ -543,6 +563,8 @@ export function VideosTab({ locale, channelId, role }: Props) {
         videos={items.filter((video) => selected.has(video.id)).map(toPicked)}
       />
       <BulkScheduleDialog open={bulkDialog === 'schedule'} videoIds={[...selected]} onOpenChange={(open) => setBulkDialog(open ? 'schedule' : null)} onDone={finishBulk} />
+
+      <AppealDialog open={appealFor !== null} onOpenChange={(open) => { if (!open) setAppealFor(null); }} onSubmit={submitAppeal} />
 
       <ConfirmDialog
         open={pendingDelete !== null}

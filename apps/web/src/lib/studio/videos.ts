@@ -9,7 +9,7 @@ export const MAX_BULK_SELECTION = 50;
 export const MAX_BULK_EDIT_SELECTION = 500;
 
 /** 'deleted' is Recently deleted (soft deletes, restorable for 30 days). */
-const STATUSES = ['published', 'scheduled', 'drafts', 'processing', 'failed', 'deleted'] as const;
+const STATUSES = ['published', 'scheduled', 'drafts', 'processing', 'in_review', 'not_approved', 'failed', 'deleted'] as const;
 
 export type VideosStatus = StudioVideoStatus | 'deleted';
 const SORTS = ['newest', 'oldest', 'views', 'title'] as const;
@@ -61,10 +61,10 @@ export function videosQueryString(query: VideosQuery): string {
   return params.toString();
 }
 
-export type VideoRowAction = 'edit' | 'view' | 'analytics' | 'copyLink' | 'schedule' | 'reschedule' | 'publishNow' | 'cancelSchedule' | 'retryUpload' | 'retryPublish' | 'delete';
+export type VideoRowAction = 'edit' | 'view' | 'analytics' | 'copyLink' | 'schedule' | 'reschedule' | 'publishNow' | 'cancelSchedule' | 'retryUpload' | 'retryPublish' | 'appeal' | 'resubmit' | 'delete';
 
 /** Row actions in display order. The server still decides, per video. */
-export function rowActions(status: VideosStatus, role: StudioRole, isPublic = false, failure: 'upload' | 'publish' | null = null): VideoRowAction[] {
+export function rowActions(status: VideosStatus, role: StudioRole, isPublic = false, failure: 'upload' | 'publish' | null = null, appealUsed = false): VideoRowAction[] {
   const edit: VideoRowAction[] = can(role, 'video.edit') ? ['edit'] : [];
   const schedule = can(role, 'video.schedule');
   const remove: VideoRowAction[] = can(role, 'video.delete') ? ['delete'] : [];
@@ -81,6 +81,11 @@ export function rowActions(status: VideosStatus, role: StudioRole, isPublic = fa
     }
     case 'processing':
       return remove;
+    // Pre-publication review (VR10): edit while it waits; once turned down, edit and check again, or appeal once
+    case 'in_review':
+      return [...edit, ...remove];
+    case 'not_approved':
+      return [...edit, ...(can(role, 'video.edit') ? ['resubmit' as const, ...(appealUsed ? [] : ['appeal' as const])] : []), ...remove];
     case 'deleted':
       // Restore and Delete permanently live in Recently deleted's own rows
       return [];
