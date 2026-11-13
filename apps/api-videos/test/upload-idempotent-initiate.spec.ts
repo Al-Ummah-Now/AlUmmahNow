@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { claimObjectKey, fingerprintKey, initiateOnce, UploadClaimBusyError, CLAIM_LEASE_MS } from '../src/lib/uploads/initiateOnce';
 import { UploadInitiateEndpoint } from '../src/endpoints/video/uploadInitiate';
 import { UploadBatchInitiateEndpoint } from '../src/endpoints/video/uploadBatchInitiate';
+import { MessageType } from '@al-ummah/shared-types';
 import { MemoryBucket, MemoryQueue, buildApp } from './helpers';
 
 const realFetch = globalThis.fetch;
@@ -366,5 +367,80 @@ describe('uploads go into the channel collection (2026-11-12: bulk uploads lande
 		const again = await h.initiate({ fingerprint: FP });
 		const second = again.body.result?.videoId ?? again.body.videoId;
 		assert.notEqual(second, videoId);
+	});
+});
+
+describe('upload initiate sends the video_metadata moderation scan (#1239)', () => {
+	let bunny: ReturnType<typeof bunnyStub>;
+	beforeEach(() => {
+		bunny = bunnyStub();
+	});
+	afterEach(() => {
+		globalThis.fetch = realFetch;
+	});
+	const tick = () => new Promise((r) => setTimeout(r, 10));
+	const scans = (q: MemoryQueue) => q.messages.filter((m) => m.type === MessageType.ModerationScan);
+	const withModeration = (h: ReturnType<typeof harness>, queue: { send(m: unknown): Promise<unknown> }) => {
+		(h.env as Record<string, unknown>).MODERATION_QUEUE = queue;
+		return queue;
+	};
+
+	it('a single upload scans its metadata once; a replayed initiate that reuses the video does not scan again', async () => {
+		const h = harness();
+		const moderation = withModeration(h, new MemoryQueue()) as MemoryQueue;
+		const first = await h.initiate({ fingerprint: FP, description: 'Part 1', tags: 'quran, tafsir', titleLocalized: { ar: 'محاضرة' } });
+		assert.equal(first.status, 200, JSON.stringify(first.body));
+		const videoId = first.body.result.videoId;
+		await tick();
+		assert.equal(scans(moderation).length, 1);
+		assert.deepEqual(
+			{ ...scans(moderation)[0].payload, timestamp: undefined },
+			{ surface: 'video_metadata', event: 'create', subjectId: videoId, authorId: 'alice', channelId: 'ch1', text: 'Lecture محاضرة Part 1 quran tafsir', timestamp: undefined },
+		);
+
+		const replay = await h.initiate({ fingerprint: FP, description: 'Part 1', tags: 'quran, tafsir', titleLocalized: { ar: 'محاضرة' } });
+		assert.equal(replay.body.result.reused, true);
+		await tick();
+		assert.equal(scans(moderation).length, 1, 'no second scan for the replay');
+
+		// Without a fingerprint every initiate creates (and scans) a video
+		await h.initiate({});
+		await tick();
+		assert.equal(scans(moderation).length, 2);
+		assert.equal(bunny.created.length, 2);
+	});
+
+	it('a batch scans once per created video, not for duplicates in the request or re-added files', async () => {
+		const h = harness();
+		const moderation = withModeration(h, new MemoryQueue()) as MemoryQueue;
+		const other = { ...FP, name: 'second.mp4', hash: 'b'.repeat(64) };
+		const first = await h.batch([{ fingerprint: FP, title: 'One' }, { fingerprint: other, title: 'Two', tags: 'fiqh' }, { fingerprint: FP, title: 'One' }]);
+		assert.equal(first.status, 200, JSON.stringify(first.body));
+		await tick();
+		const sent = scans(moderation);
+		assert.equal(sent.length, 2);
+		assert.deepEqual(
+			sent.map((m) => [m.payload.surface, m.payload.event, m.payload.subjectId, m.payload.text]).sort((a, b) => String(a[3]).localeCompare(String(b[3]))),
+			[
+				['video_metadata', 'create', first.body.result[0].videoId, 'One'],
+				['video_metadata', 'create', first.body.result[1].videoId, 'Two fiqh'],
+			],
+		);
+
+		const again = await h.batch([{ fingerprint: FP }, { fingerprint: other }]);
+		assert.deepEqual(again.body.result.map((r: any) => r.reused), [true, true]);
+		await tick();
+		assert.equal(scans(moderation).length, 2, 'reused videos are not scanned again');
+	});
+
+	it('a failing moderation queue never fails the upload', async () => {
+		const broken = { send: async () => { throw new Error('queue down'); } };
+		const single = harness();
+		withModeration(single, broken);
+		assert.equal((await single.initiate({})).status, 200);
+		const many = harness();
+		withModeration(many, broken);
+		assert.equal((await many.batch([{}, {}])).status, 200);
+		await tick();
 	});
 });

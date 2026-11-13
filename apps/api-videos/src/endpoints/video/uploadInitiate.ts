@@ -20,6 +20,7 @@ import { markUploadCreated } from "../../lib/uploads/reaper";
 import { thumbnailProcessor, thumbnailStorage } from "../../lib/thumbnail";
 import { adoptOrRequestSuggestion } from '../../lib/categorySuggestions';
 import { logger } from '../../lib/logger';
+import { scanInBackground, videoScanText } from '../../lib/moderation-scan';
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { VIDEO_VISIBILITIES } from '@al-ummah/shared-types';
 import { uploadVisibility } from '../../lib/visibility';
@@ -272,6 +273,10 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 					mimeType,
 					timestamp: now,
 				});
+
+				// AI moderation of the metadata (queued, never fails the upload). Only a newly
+				// created record is scanned: a replayed initiate that reuses it does not get here.
+				scanInBackground(c, { surface: 'video_metadata', event: 'create', subjectId: videoId, authorId: userId, channelId, text: videoScanText(video) });
 				return videoId;
 			};
 
