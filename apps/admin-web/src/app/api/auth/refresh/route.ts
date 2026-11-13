@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
   }
 
   const response = NextResponse.redirect(new URL(next, request.url), 303);
-  response.cookies.set(SESSION_COOKIE_NAME, withRotatedTokens(cookie, result.tokens), sessionCookieOptions());
+  response.cookies.set(SESSION_COOKIE_NAME, withRotatedTokens(cookie, result.tokens), sessionCookieOptions(request.headers.get('host')));
   if (!cookie) {
     response.cookies.delete(LEGACY_ACCESS_COOKIE);
     response.cookies.delete(LEGACY_REFRESH_COOKIE);

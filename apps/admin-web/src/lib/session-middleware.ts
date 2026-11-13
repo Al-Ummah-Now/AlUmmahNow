@@ -83,7 +83,7 @@ export async function refreshSessionMiddleware(
     request.cookies.set(SESSION_COOKIE_NAME, value);
     const response = NextResponse.next({ request: { headers: request.headers } });
     // ...and hand it to the browser.
-    response.cookies.set(SESSION_COOKIE_NAME, value, sessionCookieOptions());
+    response.cookies.set(SESSION_COOKIE_NAME, value, sessionCookieOptions(request.headers.get('host')));
     if (!found.cookie) {
       // Migrated from the legacy pair into admin_session.
       response.cookies.delete(LEGACY_ACCESS_COOKIE);

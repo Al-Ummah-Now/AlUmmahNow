@@ -119,7 +119,7 @@ export async function handleCallback(request: NextRequest, deps: CallbackDeps): 
         accessToken: exchanged.tokens.access,
         refreshToken: exchanged.tokens.refresh,
       }),
-      sessionCookieOptions(),
+      sessionCookieOptions(request.headers.get('host')),
     );
     return response;
   } catch (error) {

@@ -45,6 +45,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'not signed in' }, { status: 401, headers: NO_STORE });
   }
   const response = NextResponse.json(ticket(result.tokens.accessToken), { headers: NO_STORE });
-  response.cookies.set(SESSION_COOKIE_NAME, withRotatedTokens(cookie, result.tokens), sessionCookieOptions());
+  response.cookies.set(SESSION_COOKIE_NAME, withRotatedTokens(cookie, result.tokens), sessionCookieOptions(request.headers.get('host')));
   return response;
 }

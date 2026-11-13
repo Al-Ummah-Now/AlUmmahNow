@@ -152,7 +152,7 @@ export async function setAdminSession(session: AdminSession | null): Promise<voi
     return;
   }
 
-  cookieStore.set(SESSION_COOKIE_NAME, JSON.stringify(session), sessionCookieOptions());
+  cookieStore.set(SESSION_COOKIE_NAME, JSON.stringify(session), sessionCookieOptions((await getHeaders()).get('host')));
 }
 
 /**
