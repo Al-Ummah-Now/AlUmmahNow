@@ -3,12 +3,13 @@
  *
  * The review transcript has segment times, not word times: each segment's time is spread evenly
  * over its words. Only placed spans (`confirmed`, `context`, the basmala before a confirmed surah)
- * count as Quran for the review; a mere suggestion does not, so a flagged recitation the matcher
+ * count as Quran for the review, and within them only the words equal to the Quran word after
+ * normalisation (a word slipped into a recitation, or a near-match, is checked as ordinary speech); a mere suggestion does not, so a flagged recitation the matcher
  * is unsure of still goes to a person (fail safe). With no fresh copy of the Quran text (not synced
  * yet, or over 7 days old) the matcher returns no spans, as before.
  */
 import { QURAN_CURRENT_KEY, QuranIndex, formatQuranRange, matchQuran, quranCopyFresh, quranIndexKey, type AsrWord, type QuranCurrent, type QuranIndexFile } from '@al-ummah/shared-types';
-import type { QuranMatcher } from '../review/pipeline';
+import type { QuranMatcher, QuranSpan } from '../review/pipeline';
 
 interface TextBucket {
   get(key: string): Promise<{ text(): Promise<string> } | null>;
@@ -59,8 +60,24 @@ export function createReviewQuranMatcher(bucket: TextBucket | undefined, onError
       return [];
     }
     if (!index) return [];
-    return matchQuran(index, segmentWords(segments))
-      .filter((m) => m.class !== 'review')
-      .map((m) => ({ startMs: m.startMs, endMs: m.endMs, ref: formatQuranRange(m.range) }));
+    // Only runs of words equal to the Quran word (after normalisation): a word slipped into a
+    // recitation, or a near-match the alignment tolerated, is checked as ordinary speech
+    const words = segmentWords(segments);
+    const spans: QuranSpan[] = [];
+    for (const m of matchQuran(index, words)) {
+      if (m.class === 'review') continue;
+      const ref = formatQuranRange(m.range);
+      let run: { first: number; last: number } | null = null;
+      const close = () => run && spans.push({ startMs: words[run.first]!.startMs, endMs: words[run.last]!.endMs, ref, wordStart: run.first, wordEnd: run.last + 1 });
+      for (const k of m.exactWords) {
+        if (run && k === run.last + 1) run.last = k;
+        else {
+          close();
+          run = { first: k, last: k };
+        }
+      }
+      close();
+    }
+    return spans;
   };
 }

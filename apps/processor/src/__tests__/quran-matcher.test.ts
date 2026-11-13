@@ -65,6 +65,18 @@ describe('matching recitation', () => {
     expect(m!.asrStart).toBe(2);
     expect(m!.startMs).toBe(words[2]!.startMs);
     expect(m!.endMs).toBe(words[m!.asrEnd - 1]!.endMs);
+    // «الصبر» was skipped: not aligned, so not Quran
+    expect(m!.matchedWords).not.toContain(7);
+    expect(m!.exactWords).toEqual(m!.matchedWords);
+    expect(m!.matchedWords).toHaveLength(14);
+  });
+
+  it('near-matches align but are not exact; spoken letters map back to every input word', () => {
+    const [m] = matchQuran(index, asr('قل هو الله احد الله الصمت لم يلد ولم يولد'));
+    expect(m!.matchedWords).toContain(5);
+    expect(m!.exactWords).not.toContain(5);
+    const [y] = matchQuran(index, asr('يا سين والقران الحكيم انك لمن المرسلين'));
+    expect(y!.exactWords.slice(0, 3)).toEqual([0, 1, 2]);
   });
 
   it('spoken letters fold to the written muqatta\'at («يا سين» → يس)', () => {

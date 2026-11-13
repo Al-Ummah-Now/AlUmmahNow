@@ -113,6 +113,24 @@ describe('Quran in the video review (#1271)', () => {
     expect(onlyRecitation.route).toBe('approve');
   });
 
+  it('words slipped into a recitation, or near-matches of a Quran word, are never exempt', async () => {
+    const bucket = media();
+    const words = BATTLE_VERSE.split(' ');
+    const smuggled = [...words.slice(0, 8), 'اقتلوا', 'جيرانكم', ...words.slice(8)].join(' ');
+    const nearMatch = BATTLE_VERSE.replace('فاقتلوهم', 'فاقتلوكم');
+    for (const text of [smuggled, nearMatch]) {
+      clearQuranIndexCache();
+      const spans = await createReviewQuranMatcher(bucket)([{ startMs: 0, endMs: 24_000, text }]);
+      expect(spans.length).toBeGreaterThan(0);
+      const p = provider();
+      p.transcribe = async () => [{ startMs: 0, endMs: 24_000, text }];
+      const result = await runReviewPipeline(payload, { provider: p, media: bucket }, createReviewQuranMatcher(bucket));
+      const untagged = result.findings.filter((f) => f.category === 'violent_extremism' && !f.quranRef);
+      expect(untagged.length).toBeGreaterThan(0);
+      expect(routeReview(result.findings, settings, { mode: 'enforce' }).route).not.toBe('approve');
+    }
+  });
+
   it('no copy, or a copy over 7 days old: no spans, so the flagged recitation goes to a person (fail safe)', async () => {
     for (const bucket of [media({ withCopy: false }), media({ syncedAt: new Date(Date.now() - 8 * 86_400_000).toISOString() })]) {
       clearQuranIndexCache();
