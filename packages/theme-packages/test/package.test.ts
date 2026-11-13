@@ -209,7 +209,7 @@ test('lightStyle: light-only styles compile to a :not(.dark) block after the sha
   const [shared, light] = css.trim().split('\n');
   assert.ok(shared.startsWith("html[data-theme='fawanees']{"));
   assert.ok(light.startsWith("html[data-theme='fawanees']:not(.dark){"), light);
-  assert.ok(light.includes('--m-page:var(--fanous-color-background)'));
+  assert.ok(light.includes('--m-card:linear-gradient(var(--fanous-color-surface),var(--fanous-color-surface))'));
   assert.ok(light.includes('--m-hero:linear-gradient(var(--fanous-color-surface),var(--fanous-color-surface))'));
   // The shared block still carries the glow gradients dark mode uses
   assert.match(shared, /--m-hero:radial-gradient\(/);

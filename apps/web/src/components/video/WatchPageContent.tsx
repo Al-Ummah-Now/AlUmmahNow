@@ -253,7 +253,7 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
     <main id={MAIN_CONTENT_ID} className="flex flex-1 flex-col overflow-hidden" dir={isRTL ? 'rtl' : 'ltr'} data-theatre={theatre || undefined}>
       <div className={`flex flex-col ${theatre ? '' : 'lg:flex-row'} gap-4 p-4 w-full mt-0 lg:mt-0 overflow-hidden`} data-theatre={theatre || undefined} data-testid="watch-layout">
         <div className={`flex flex-col w-full min-w-0 ${theatre ? '' : 'lg:flex-1'} overflow-hidden`} data-testid="watch-primary">
-          {!videoDetails && <div data-testid="watch-skeleton" className="w-full">{skeleton ?? <WatchDetailsSkeleton />}</div>}
+          {!videoDetails && <div data-testid="watch-skeleton" className="watch-skeleton w-full">{skeleton ?? <WatchDetailsSkeleton />}</div>}
           {videoDetails && (
             <div className="flex flex-col w-full mt-0 items-center">
               <section id={VIDEO_PLAYER_ID} className="w-full" tabIndex={-1}>

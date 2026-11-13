@@ -10,15 +10,15 @@ import { applyTheme, mockApi, signIn, THEMES, type Mode } from './harness';
  *     (lanterns under fixed or sticky things, the header, bottom bar or a sticky player, count as off
  *     screen, like the window edge);
  *   - scrolled pages still show the street (garlands in the gaps);
- * the other themes draw no street; Studio's work area stays plain; and with reduced motion the
- * distant lights stand still. Contrast in every theme is the pages spec's job.
+ * the other themes draw no street; Studio's work area stays plain; with reduced motion the distant
+ * lights stand still; and the street runs no animations (nothing may wait forever on getAnimations). Contrast in every theme is the pages spec's job.
  */
 const MODES: Mode[] = ['light', 'dark'];
 const LANGS = ['en', 'ar'];
 const PAGES = [{ id: 'home', path: '' }, { id: 'watch', path: '/video/v1' }];
 const DEPTHS = [0, 900, 1800];
-// Transitions and time-based animations off; the root's scroll-driven animation stays
-const STILL = '*:not(html),*::before,*::after{transition:none!important;animation-duration:0s!important;animation-delay:0s!important}';
+// Transitions and time-based animations off
+const STILL = '*,*::before,*::after{transition:none!important;animation-duration:0s!important;animation-delay:0s!important}';
 
 async function open(page: Page, path: string) {
   await page.goto(path);
@@ -153,7 +153,7 @@ test("street: Studio's work area stays plain", async ({ page, context, baseURL }
 });
 
 for (const motion of ['reduce', 'no-preference'] as const) {
-  test(`street: distant lights ${motion === 'reduce' ? 'stand still with reduced motion' : 'move at 0.2x the scroll'}`, async ({ browser, baseURL }, info) => {
+  test(`street: distant lights ${motion === 'reduce' ? 'stand still with reduced motion' : 'drift at 0.2x the scroll'}; no animations`, async ({ browser, baseURL }, info) => {
     test.skip(info.project.name !== 'desktop', 'one viewport is enough');
     const context = await browser.newContext({ reducedMotion: motion, viewport: { width: 1280, height: 800 } });
     const page = await context.newPage();
@@ -163,17 +163,17 @@ for (const motion of ['reduce', 'no-preference'] as const) {
     await page.waitForLoadState('networkidle').catch(() => {});
     await applyTheme(page, 'fawanees', 'light');
     await settle(page);
-    const pos = () => page.evaluate(() => getComputedStyle(document.documentElement).backgroundPositionY.split(',')[0].trim());
-    const sway = () => page.evaluate(() => { const g = document.querySelector('#fanous-street .fs-l'); return g ? getComputedStyle(g).animationName : 'none'; });
+    await expect(page.locator('#fanous-street-lights')).toHaveCount(1);
+    const pos = () => page.evaluate(() => getComputedStyle(document.getElementById('fanous-street-lights')!).backgroundPositionY);
     expect(await pos()).toBe('0px');
     await page.evaluate(() => window.scrollTo(0, 700));
-    await page.waitForTimeout(300);
-    if (motion === 'reduce') {
-      expect(await pos()).toBe('0px');
-      expect(await sway()).toBe('none');
-    } else {
-      expect(await pos()).toBe('-140px');
-    }
+    await expect.poll(pos).toBe(motion === 'reduce' ? '0px' : '-140px');
+    // No CSS animations of its own: tests and pages that wait for every animation to finish must not hang
+    const ours = await page.evaluate(() => document.getAnimations().filter((a) => {
+      const t = (a.effect as KeyframeEffect | null)?.target as Element | null;
+      return !!t && (t === document.documentElement || !!t.closest('#fanous-street, #fanous-street-lights'));
+    }).length);
+    expect(ours).toBe(0);
     await context.close();
   });
 }

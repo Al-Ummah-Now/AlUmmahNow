@@ -16,6 +16,7 @@ html[data-theme='fawanees'] main:has(input[type=file]) button[aria-pressed=false
 /* Text blocks that sat on the page become cards: the watch block (player, title, channel,
    actions, details), the comments and the related videos */
 html[data-theme='fawanees'] div:has(> #video-player),
+html[data-theme='fawanees'] .watch-skeleton,
 html[data-theme='fawanees'] #comments,
 html[data-theme='fawanees'] .related-videos {
   background: var(--fanous-color-surface) !important;
@@ -24,9 +25,12 @@ html[data-theme='fawanees'] .related-videos {
   margin-block-end: 26px;
 }
 html[data-theme='fawanees'].dark div:has(> #video-player),
+html[data-theme='fawanees'].dark .watch-skeleton,
 html[data-theme='fawanees'].dark #comments,
 html[data-theme='fawanees'].dark .related-videos { box-shadow: 0 0 0 1px color-mix(in srgb, var(--fanous-color-primary-sheen) 12%, transparent), 0 18px 40px -20px color-mix(in srgb, var(--fanous-brand-night) 85%, transparent); }
-html[data-theme='fawanees'] div:has(> #video-player) { padding-block-end: 14px; overflow: hidden; }
+/* The loading skeleton is the same card, so nothing moves when the video arrives */
+html[data-theme='fawanees'] div:has(> #video-player),
+html[data-theme='fawanees'] .watch-skeleton { padding-block-end: 14px; overflow: hidden; }
 html[data-theme='fawanees'] #video-player .watch-details { padding-inline: 14px; }
 html[data-theme='fawanees'] div:has(> #video-player) > .watch-actions { padding-inline: 14px; box-sizing: border-box; }
 html[data-theme='fawanees'] div:has(> #video-player) > .watch-desc { width: calc(100% - 28px); }
@@ -37,6 +41,7 @@ html[data-theme='fawanees'] .related-videos { padding-block: 12px; }
 html.fanous-street[data-theme='fawanees'] .home-hero { margin-bottom: 76px !important; }
 html.fanous-street[data-theme='fawanees'] .home-h + .grid { row-gap: 92px !important; }
 html.fanous-street[data-theme='fawanees'] div:has(> #video-player),
+html.fanous-street[data-theme='fawanees'] .watch-skeleton,
 html.fanous-street[data-theme='fawanees'] #comments,
 html.fanous-street[data-theme='fawanees'] .related-videos { margin-block-end: 84px !important; }
 @media (max-width: 639px) {
