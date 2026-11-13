@@ -134,6 +134,10 @@ test.describe.configure({ mode: 'serial' });
 test.beforeAll(async ({ browser }) => {
   test.setTimeout(10 * 60_000);
   mkdirSync(CLIPS, { recursive: true });
+  // Every clip is made before the first request: ffmpeg blocks the event loop for seconds, and a
+  // keep-alive socket the stack closed meanwhile failed the next POST (not retried: not idempotent),
+  // as on v2026.11.13.7 ("fetch failed: other side closed" in createVideo)
+  for (const demo of DEMOS) makeDemoMedia(demo.key, demo.art);
   creator = await data.createCreator(browser, 'help', { channels: 2 });
   [channelId] = creator.channelIds;
   const user = creator.user;
@@ -145,7 +149,6 @@ test.beforeAll(async ({ browser }) => {
   }
   // The demo videos, oldest first so "Site tour" is the newest (the home page's featured video)
   for (const demo of [...DEMOS].reverse()) {
-    makeDemoMedia(demo.key, demo.art);
     const video = await data.createVideo(user, channelId, { clip: 'landscape40', isPublic: true, title: demo.title.en, waitReady: true });
     expect((await apiFetch(user, `/api/videos/${video.id}`, json({ titleLocalized: demo.title }, channelId))).status).toBeLessThan(300);
     const guid = await cdnGuid(video.id);
