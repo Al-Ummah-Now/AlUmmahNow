@@ -3,6 +3,7 @@ import type { Page } from '@playwright/test';
 import { ANONYMOUS_STATE, AUTH_STATE } from '../test-utils/auth-state';
 import {
   VISUAL_PAGE_IDS,
+  VISUAL_THEMES,
   catalog,
   catalogFromOwnData,
   openCatalogPageInReferenceTheme,
@@ -18,12 +19,14 @@ import { ownPublicVideos } from '../test-utils/own-public-video';
  * Baselines are generated on Linux in CI (fonts/antialiasing differ per OS):
  * run Local E2E (.github/workflows/local-e2e.yml) by hand with update_visual=true; its
  * web shard that holds this file uploads e2e/visual/__screenshots__/ as an artifact to commit.
- * The pages show this file's own content on the local stack (E2E_ENV=local). The pages are pinned to the reference theme
- * (Lantern, REFERENCE_THEME in page-catalog.ts) so QA's active site theme never
- * changes the snapshots; the other themes are covered by the Theme visibility
- * contrast check (e2e/themes). Everything that changes between runs on QA
- * (thumbnails, avatars, titles of the newest uploads, counts, dates, the
- * player) is masked, so the snapshots pin layout, chrome and theming.
+ * The pages show this file's own content on the local stack (E2E_ENV=local). Two sets
+ * (VISUAL_THEMES in page-catalog.ts), each pinned to its theme so the stack's active site theme
+ * never changes them: Lantern, the stable reference (`<page>-<locale>-<scheme>.png`), and
+ * Fawanees, production's theme and the site default (`…-fawanees.png`, #1100). Regenerate the
+ * Fawanees set whenever its design changes (e.g. the Fawanees light street redesign, #1071).
+ * The other themes are covered by the Theme visibility contrast check (e2e/themes). Everything
+ * that changes between runs (thumbnails, avatars, titles of the newest uploads, counts, dates,
+ * the player) is masked, so the snapshots pin layout, chrome and theming.
  */
 
 let data: CatalogData;
@@ -102,13 +105,16 @@ for (const role of ['anon', 'single'] as const) {
     test.use({ storageState: storageFor(role), viewport: { width: 1280, height: 800 } });
 
     for (const entry of visualEntries.filter((p) => p.role === role)) {
+      for (const theme of VISUAL_THEMES) {
+      // The Lantern set keeps its original names; every other theme's set carries the theme's name
+      const suffix = theme === VISUAL_THEMES[0] ? '' : `-${theme}`;
       for (const colorScheme of ['light', 'dark'] as const) {
         for (const locale of ['en', 'ar'] as const) {
-          test(`VIS-${entry.id} ${locale} ${colorScheme}`, async ({ page }) => {
+          test(`VIS-${entry.id} ${locale} ${colorScheme}${suffix ? ` ${theme}` : ''}`, async ({ page }) => {
             await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
             const resolved = catalog(data).find((p) => p.id === entry.id && p.role === role)!;
-            // The baselines are Lantern, whatever QA's active site theme is
-            await openCatalogPageInReferenceTheme(page, locale, resolved, colorScheme);
+            // Pinned to this set's theme, whatever the stack's active site theme is
+            await openCatalogPageInReferenceTheme(page, locale, resolved, colorScheme, theme);
             await expect(page.locator('html')).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
             // Theme really applied before the snapshot (class-based dark mode)
             if (colorScheme === 'dark') await expect(page.locator('html')).toHaveClass(/dark/);
@@ -119,7 +125,7 @@ for (const role of ['anon', 'single'] as const) {
                 '[data-testid="video-grid"],[data-testid="dashboard-video-grid"],[data-testid="related-videos-list"]{min-height:100vh}',
             });
 
-            await expect(page).toHaveScreenshot(`${entry.id}-${locale}-${colorScheme}.png`, {
+            await expect(page).toHaveScreenshot(`${entry.id}-${locale}-${colorScheme}${suffix}.png`, {
               animations: 'disabled',
               caret: 'hide',
               mask: dynamicRegions(page),
@@ -127,6 +133,7 @@ for (const role of ['anon', 'single'] as const) {
             });
           });
         }
+      }
       }
     }
   });
