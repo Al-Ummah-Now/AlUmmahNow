@@ -38,3 +38,30 @@ describe('watch skeleton chapter bar', () => {
     expect(placeholder).toHaveAttribute('aria-hidden', 'true');
   });
 });
+
+describe('server-rendered watch details (wiki AUN-SEO phase 4)', () => {
+  it('should render the title as the h1, the channel link, the description and a high-priority poster', () => {
+    const { container } = render(
+      <WatchDetailsSkeleton
+        hint={{ title: 'A lecture', channelName: 'Lectures', channelHref: '/en/@lectures', description: 'About the lecture', poster: '/thumb/v1.jpg', width: 640, height: 360 }}
+      />,
+    );
+    expect(screen.getByRole('heading', { level: 1, name: 'A lecture' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Lectures' })).toHaveAttribute('href', '/en/@lectures');
+    expect(screen.getByTestId('watch-skeleton-description')).toHaveTextContent('About the lecture');
+    const poster = screen.getByTestId('watch-poster');
+    expect(poster).toHaveAttribute('src', '/thumb/v1.jpg');
+    expect(poster).toHaveAttribute('fetchpriority', 'high');
+    expect(poster).toHaveAttribute('width', '640');
+    expect(poster).toHaveAttribute('height', '360');
+    // Real content is not announced as a loading placeholder
+    expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+  });
+
+  it('should stay a busy placeholder when nothing is known', () => {
+    const { container } = render(<WatchDetailsSkeleton />);
+    expect(container.querySelector('[role="status"][aria-busy="true"]')).not.toBeNull();
+    expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
+    expect(screen.queryByTestId('watch-poster')).toBeNull();
+  });
+});

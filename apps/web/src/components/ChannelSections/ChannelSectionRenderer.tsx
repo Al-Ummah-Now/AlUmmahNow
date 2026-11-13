@@ -16,6 +16,8 @@ import { resolveSectionTitle, sectionLabelKey, type PopulatedChannelSection } fr
 interface ChannelSectionRendererProps {
   section: PopulatedChannelSection;
   channelId: string;
+  /** The first section on the page: its first thumbnails load at once (VideoShelf) */
+  leading?: boolean;
 }
 
 /** `data-section` kind: the themes style shelves by it (theme/pages.css) */
@@ -41,7 +43,7 @@ const SECTION_KIND: Record<PopulatedChannelSection['type'], string> = {
  * the channel page looks the same to everyone (owner, 2026-11-10). The
  * section manager marks empty sections and says why.
  */
-export function ChannelSectionRenderer({ section, channelId }: ChannelSectionRendererProps) {
+export function ChannelSectionRenderer({ section, channelId, leading = false }: ChannelSectionRendererProps) {
   const { t, locale } = useLanguage();
   const content = section.populatedContent ?? {};
   const tabHref = (tab: string) => `/${locale}/channels/${channelId}?tab=${tab}`;
@@ -69,15 +71,15 @@ export function ChannelSectionRenderer({ section, channelId }: ChannelSectionRen
   switch (section.type) {
     case 'featured_videos':
     case 'liked_videos':
-      body = content.videos?.length ? <VideoShelf videos={content.videos} /> : null;
+      body = content.videos?.length ? <VideoShelf videos={content.videos} leading={leading} /> : null;
       break;
     case 'recent_uploads':
     case 'popular_uploads':
-      body = content.videos?.length ? <VideoShelf videos={content.videos} /> : null;
+      body = content.videos?.length ? <VideoShelf videos={content.videos} leading={leading} /> : null;
       viewAllHref = tabHref('videos');
       break;
     case 'shorts':
-      body = content.videos?.length ? <VideoShelf videos={content.videos} shorts /> : null;
+      body = content.videos?.length ? <VideoShelf videos={content.videos} shorts leading={leading} /> : null;
       viewAllHref = tabHref('shorts');
       break;
     case 'live_streams':
@@ -85,7 +87,7 @@ export function ChannelSectionRenderer({ section, channelId }: ChannelSectionRen
       viewAllHref = tabHref('live');
       break;
     case 'single_playlist':
-      body = content.videos?.length ? <VideoShelf videos={content.videos} /> : null;
+      body = content.videos?.length ? <VideoShelf videos={content.videos} leading={leading} /> : null;
       viewAllHref = content.playlist ? `/${locale}/playlist/${content.playlist.id}` : undefined;
       break;
     case 'multiple_playlists':

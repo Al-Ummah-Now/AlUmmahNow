@@ -196,6 +196,14 @@ describe('Spotlight', () => {
 });
 
 describe('ChannelSections (Home tab)', () => {
+  it('should render the server sections from the first paint without fetching them', () => {
+    mockList.mockClear();
+    render(<ChannelSections channelId={CHANNEL} initialSections={[section('recent_uploads', FILLED.recent_uploads)]} />);
+    expect(screen.getByTestId('channel-sections')).toBeInTheDocument();
+    expect(screen.queryByTestId('channel-sections-loading')).toBeNull();
+    expect(mockList).not.toHaveBeenCalled();
+  });
+
   it('renders sections in the order the API returns', async () => {
     mockList.mockResolvedValue([section('recent_uploads', FILLED.recent_uploads), section('community_posts', FILLED.community_posts)] as never);
     const { container } = render(<ChannelSections channelId={CHANNEL} />);

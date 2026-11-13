@@ -479,6 +479,7 @@ button.group:hover span.rounded-full{filter:brightness(1.12)}
 .wsk-channel{min-height:42px;gap:12px}.wsk-avatar{width:40px!important;height:40px!important}.wsk-subscribe{display:block!important;height:36px}
 .wsk-metrics{display:none!important}.wsk-actions{margin-top:12px;padding:0;max-width:none;gap:8px}.wsk-actions>*{height:36px!important;border-radius:var(--r-pill)!important}
 .wsk-desc{display:block!important;margin-top:12px;height:40px;border-radius:var(--r-lg)}
+.wsk-desc-text{height:40px;margin-top:12px}
 [data-testid=related-videos-skeleton]{display:grid;gap:4px;margin-inline:0!important}[data-testid=related-videos-skeleton]>*{display:grid;grid-template-columns:42% minmax(0,1fr);gap:10px;margin:0!important;padding:6px}[data-testid=related-videos-skeleton]>*>:first-child{width:auto;height:auto;aspect-ratio:16/9;border-radius:var(--r-md)}
 @media(max-width:1023px){[data-testid=related-videos-skeleton]{grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}[data-testid=related-videos-skeleton]>*{grid-template-columns:1fr;padding:0 0 8px}}
 

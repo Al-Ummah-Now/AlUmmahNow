@@ -1,7 +1,9 @@
 "use client";
 import React, { useEffect, useState, type CSSProperties } from "react";
 import { resolveUrl } from "@/lib/utility";
-import { FitImage } from "./FitImage";
+import { FitImage, type ImageLoading } from "./FitImage";
+
+export type { ImageLoading } from "./FitImage";
 
 export interface VideoThumbnailProps {
   /** Thumbnail URL; empty/undefined renders the placeholder */
@@ -17,6 +19,8 @@ export interface VideoThumbnailProps {
   videoWidth?: number | null;
   videoHeight?: number | null;
   children?: React.ReactNode;
+  /** `eager` for the first row of a list, `high` for the page's largest image (FitImage) */
+  loading?: ImageLoading;
 }
 
 /** 16:9 thumbnail box. `fill` images need a sized wrapper or it collapses to height 0. */
@@ -43,6 +47,7 @@ const VideoThumbnail: React.FC<VideoThumbnailProps> = ({
   videoWidth,
   videoHeight,
   children,
+  loading,
 }) => {
   const [failed, setFailed] = useState(false);
 
@@ -63,6 +68,7 @@ const VideoThumbnail: React.FC<VideoThumbnailProps> = ({
           videoWidth={videoWidth}
           videoHeight={videoHeight}
           onError={() => setFailed(true)}
+          loading={loading}
         />
       ) : (
         <div

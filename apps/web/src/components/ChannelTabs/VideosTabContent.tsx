@@ -3,7 +3,7 @@
 import React, { useCallback } from 'react';
 import { VideoGrid } from '@/components/VideoGrid';
 import { useLanguage } from '@/hooks/useLanguage';
-import { useCursorList } from '@/hooks/useCursorList';
+import { useCursorList, type CursorPage } from '@/hooks/useCursorList';
 import { getChannelVideos } from '@/lib/api/channels';
 import { VideoObject } from '@al-ummah/shared-types';
 import { LoadMore } from './LoadMore';
@@ -12,10 +12,12 @@ const PAGE_SIZE = 24;
 
 interface VideosTabContentProps {
   channelId: string;
+  /** The first page the server already read (server-rendered tab): not fetched again */
+  initialPage?: CursorPage<VideoObject>;
 }
 
 /** Every page of the tab, loaded as the viewer scrolls (useCursorList). */
-export function VideosTabContent({ channelId }: VideosTabContentProps) {
+export function VideosTabContent({ channelId, initialPage }: VideosTabContentProps) {
   const { t } = useLanguage();
   const fetchPage = useCallback(async (cursor: string | undefined) => {
     const page = await getChannelVideos(channelId, { limit: PAGE_SIZE, cursor });
@@ -23,7 +25,7 @@ export function VideosTabContent({ channelId }: VideosTabContentProps) {
     if (!page) throw new Error('channel videos unavailable');
     return page;
   }, [channelId]);
-  const list = useCursorList<VideoObject>(channelId, fetchPage, 'channel videos');
+  const list = useCursorList<VideoObject>(channelId, fetchPage, 'channel videos', initialPage);
 
   return (
     <div role="tabpanel" id="tabpanel-videos" data-testid="tabpanel-videos" aria-labelledby="tab-videos">
@@ -40,6 +42,7 @@ export function VideosTabContent({ channelId }: VideosTabContentProps) {
             videos={list.items}
             loading={list.loading}
             emptyMessage={t.video.noVideosAvailable}
+            leading
           />
           <LoadMore hasMore={list.hasMore} loading={list.loadingMore} failed={list.moreFailed} onLoadMore={list.loadMore} />
         </>

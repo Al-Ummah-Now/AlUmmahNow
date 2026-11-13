@@ -9,6 +9,9 @@
  *
  * A failed page keeps what is already shown and offers a retry; an answer for
  * an older `key` (the user switched channel) is dropped.
+ *
+ * `initial` is the first page the server already read (server-rendered list, wiki AUN-SEO phase 4):
+ * it is shown from the first paint and not fetched again; later pages load as usual.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { logger } from '@/lib/logger-client';
@@ -36,10 +39,12 @@ export interface CursorListState<T> {
   retry: () => void;
 }
 
-export function useCursorList<T extends { id?: string }>(key: string, fetchPage: FetchCursorPage<T>, label: string): CursorListState<T> {
-  const [items, setItems] = useState<T[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+export function useCursorList<T extends { id?: string }>(key: string, fetchPage: FetchCursorPage<T>, label: string, initial?: CursorPage<T>): CursorListState<T> {
+  const [items, setItems] = useState<T[]>(() => initial?.data ?? []);
+  const [cursor, setCursor] = useState<string | null>(() => initial?.cursor || null);
+  const [loading, setLoading] = useState(!initial);
+  // The key the server's page belongs to: its first load is skipped (a retry or another key fetches)
+  const seededKey = useRef<string | null>(initial ? key : null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [failed, setFailed] = useState(false);
   const [moreFailed, setMoreFailed] = useState(false);
@@ -49,6 +54,8 @@ export function useCursorList<T extends { id?: string }>(key: string, fetchPage:
   fetchRef.current = fetchPage;
 
   useEffect(() => {
+    if (seededKey.current === key && attempt === 0) return;
+    seededKey.current = null;
     const mine = ++generation.current;
     setItems([]);
     setCursor(null);

@@ -7,7 +7,7 @@
 
 import { pickLanguage } from '@/lib/format/pick-language';
 import { playlistDescription, playlistName } from '@/lib/playlists/playlist-names';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Link from '@/components/common/AppLink';
 import { managePlaylistsHref } from '@/components/PlaylistManager';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -15,6 +15,7 @@ import { ArrowDown, ArrowUp, ListVideo, Lock, Play, Trash2 } from 'lucide-react'
 import { getLocalizedValue } from '@al-ummah/shared-types';
 import { ShareLinkButton } from '@/components/share/ShareLinkButton';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useHydrated } from '@/hooks/useHydrated';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { logger } from '@/lib/logger-client';
@@ -30,18 +31,29 @@ import {
 import { formatDuration, getPlayAllHref, getWatchHref, moveItem, storedIndexOf } from '@/lib/playlists/playlist-utils';
 import type { VideoObject } from '@/interfaces';
 import { channelLabel } from '@/lib/channel-name';
+import { LEADING_CARDS } from '@/components/VideoThumbnail/leading';
 
 interface PlaylistViewProps {
   playlistId: string;
+  /**
+   * The playlist with its videos, read on the server as the viewer (page.tsx), so the HTML carries
+   * the title and the items (wiki AUN-SEO, phase 4). Missing when the server had none in time: the
+   * playlist then loads after hydration.
+   */
+  initialPlaylist?: PlaylistWithVideos;
 }
 
-export default function PlaylistView({ playlistId }: PlaylistViewProps) {
+export default function PlaylistView({ playlistId, initialPlaylist }: PlaylistViewProps) {
   const { t, lang, isRTL } = useLanguage();
   const { confirm, dialog: confirmDialog } = useConfirm();
+  // The updated date is in UTC in the server's HTML and while hydrating, then in the viewer's zone
+  const dateZone = useHydrated() ? undefined : 'UTC';
   const { user } = useAuth();
-  const [playlist, setPlaylist] = useState<PlaylistWithVideos | null>(null);
-  const [videos, setVideos] = useState<VideoObject[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [playlist, setPlaylist] = useState<PlaylistWithVideos | null>(initialPlaylist ?? null);
+  const [videos, setVideos] = useState<VideoObject[]>(() => initialPlaylist?.videoItems || []);
+  const [loading, setLoading] = useState(!initialPlaylist);
+  // The playlist the server's copy belongs to: not fetched again on mount
+  const seeded = useRef<string | null>(initialPlaylist ? playlistId : null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -65,8 +77,9 @@ export default function PlaylistView({ playlistId }: PlaylistViewProps) {
   }, [playlistId]);
 
   useEffect(() => {
+    if (seeded.current === playlistId) return;
     load();
-  }, [load]);
+  }, [load, playlistId]);
 
   const isOwner = !!user && !!playlist && playlist.userId === user.id;
 
@@ -169,7 +182,7 @@ export default function PlaylistView({ playlistId }: PlaylistViewProps) {
         {/* Playlist info */}
         <aside className="md:w-80 flex-shrink-0">
           <div className="bg-white dark:bg-gray-900 rounded-lg shadow-md overflow-hidden md:sticky md:top-20">
-            <PlaylistCover playlist={playlist} videos={videos} alt={title} sizes="(max-width: 768px) 100vw, 320px" />
+            <PlaylistCover playlist={playlist} videos={videos} alt={title} sizes="(max-width: 768px) 100vw, 320px" loading="high" />
             <div className="p-4 space-y-3">
               <h1 className="text-xl font-bold text-gray-900 dark:text-white break-words">{title}</h1>
               {channelLabel(playlist, lang) && (
@@ -192,7 +205,7 @@ export default function PlaylistView({ playlistId }: PlaylistViewProps) {
               </div>
               {playlist.dateModified && (
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {t.playlist.updatedOn.replace('{date}', new Date(playlist.dateModified).toLocaleDateString(lang))}
+                  {t.playlist.updatedOn.replace('{date}', new Date(playlist.dateModified).toLocaleDateString(lang, { timeZone: dateZone }))}
                 </p>
               )}
               {playlist.description && (
@@ -255,7 +268,7 @@ export default function PlaylistView({ playlistId }: PlaylistViewProps) {
                     <span className="w-6 text-center text-sm text-gray-500 flex-shrink-0">{index + 1}</span>
                     <Link href={getWatchHref(lang, video.id, { id: playlist.id, index: storedIndexOf(playlist.videos, video.id, index) })} className="flex flex-1 min-w-0 items-center gap-3 group" data-testid="playlist-video-link">
                       <div className="w-32 sm:w-40 flex-shrink-0 rounded overflow-hidden">
-                        <VideoThumbnail src={video.thumbnailUrl} alt={videoTitle} sizes="160px" style={THUMBNAIL_16_9}>
+                        <VideoThumbnail src={video.thumbnailUrl} alt={videoTitle} sizes="160px" style={THUMBNAIL_16_9} loading={index < LEADING_CARDS ? 'eager' : undefined}>
                           {duration && (
                             <span className={`absolute bottom-1 ${isRTL ? 'left-1' : 'right-1'} bg-black/80 text-white text-xs px-1 rounded`}>
                               {duration}

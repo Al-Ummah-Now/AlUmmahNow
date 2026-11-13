@@ -3,6 +3,13 @@ import React, { useState } from "react";
 import Image from "next/image";
 import { aspectOf, thumbnailFit } from "@/lib/video/aspect";
 
+/**
+ * How an image loads: `lazy` (the default) waits until it nears the screen; `eager` loads at once
+ * (the first row of a list); `high` also asks for a high fetch priority (the page's largest image,
+ * its LCP element).
+ */
+export type ImageLoading = "lazy" | "eager" | "high";
+
 export interface FitImageProps {
   src: string;
   alt: string;
@@ -11,6 +18,7 @@ export interface FitImageProps {
   videoWidth?: number | null;
   videoHeight?: number | null;
   onError?: () => void;
+  loading?: ImageLoading;
 }
 
 /**
@@ -20,7 +28,7 @@ export interface FitImageProps {
  * blurred, darkened copy of itself (lib/video/aspect.ts). The box needs
  * `overflow-hidden`.
  */
-export function FitImage({ src, alt, sizes, videoWidth, videoHeight, onError }: FitImageProps) {
+export function FitImage({ src, alt, sizes, videoWidth, videoHeight, onError, loading = "lazy" }: FitImageProps) {
   // Keyed by src: a new image is measured again. (No reset effect: a cached
   // image reports onLoad during commit, before effects would run.)
   const [measured, setMeasured] = useState<{ src: string; image?: number; box?: number } | null>(null);
@@ -53,6 +61,8 @@ export function FitImage({ src, alt, sizes, videoWidth, videoHeight, onError }: 
         sizes={sizes}
         fill
         unoptimized
+        loading={loading === "lazy" ? undefined : "eager"}
+        fetchPriority={loading === "high" ? "high" : undefined}
         data-fit={fit}
         data-testid="thumbnail-image"
         className={fit === "contain" ? "object-contain" : "object-cover"}

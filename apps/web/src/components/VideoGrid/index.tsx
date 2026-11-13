@@ -4,6 +4,7 @@ import React from 'react';
 import { VideoObject } from '@al-ummah/shared-types';
 import VideoCard from '@/components/videoCard';
 import { useLanguage } from '@/hooks/useLanguage';
+import { leadingImageLoading } from '@/components/VideoThumbnail/leading';
 
 interface VideoGridProps {
   videos: VideoObject[];
@@ -14,12 +15,15 @@ interface VideoGridProps {
     tablet?: number;
     desktop?: number;
   };
+  /** The grid leads the page: its first thumbnails load at once (leadingImageLoading) */
+  leading?: boolean;
 }
 
 export function VideoGrid({
   videos,
   loading = false,
   emptyMessage,
+  leading = false,
   columns = {
     mobile: 1,
     tablet: 2,
@@ -72,8 +76,8 @@ export function VideoGrid({
 
   return (
     <div data-testid="video-grid" className={gridClasses} dir={isRTL ? 'rtl' : 'ltr'}>
-      {videos.map((video) => (
-        <VideoCard key={video.id} {...video} />
+      {videos.map((video, index) => (
+        <VideoCard key={video.id} {...video} imageLoading={leadingImageLoading(index, leading)} />
       ))}
     </div>
   );

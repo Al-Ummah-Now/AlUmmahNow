@@ -1,8 +1,7 @@
 import { loadChannelById } from '@/lib/channel-loaders';
-import { getChannelTabConfig } from '@/lib/api/channel-tabs';
 import { notFound } from 'next/navigation';
 import { ChannelTabContent } from '@/components/ChannelTabs/ChannelTabContent';
-import type { ChannelTab } from '@/components/ChannelTabs';
+import { loadChannelFirstTab } from '@/lib/channels/first-tab';
 
 interface ChannelPageProps {
   params: Promise<{
@@ -10,7 +9,7 @@ interface ChannelPageProps {
     id: string;
   }>;
   searchParams?: Promise<{
-    tab?: string;
+    tab?: string | string[];
   }>;
 }
 
@@ -20,20 +19,20 @@ interface ChannelPageProps {
  * Uses query param-based tabs (?tab=videos) with database-driven configuration.
  * Renders appropriate content based on active tab. The channel's configured
  * default tab is passed down so that, without ?tab=, the content matches the
- * tab the tab bar marks as selected.
+ * tab the tab bar marks as selected. The active tab's first data is read here,
+ * so the HTML carries its list (lib/channels/first-tab.ts).
  */
-export default async function ChannelPage({ params }: ChannelPageProps) {
-  const { id } = await params;
-  const [channel, tabConfig] = await Promise.all([
+export default async function ChannelPage({ params, searchParams }: ChannelPageProps) {
+  const [{ id }, query] = await Promise.all([params, searchParams ?? Promise.resolve({} as { tab?: string | string[] })]);
+  const tab = typeof query.tab === 'string' ? query.tab : undefined;
+  const [channel, first] = await Promise.all([
     loadChannelById(id),
-    getChannelTabConfig(id).catch(() => null),
+    loadChannelFirstTab(id, tab),
   ]);
 
   if (!channel) {
     notFound();
   }
 
-  const defaultTab = (tabConfig?.defaultTab as ChannelTab | undefined) || 'home';
-
-  return <ChannelTabContent channelId={id} defaultTab={defaultTab} />;
+  return <ChannelTabContent channelId={id} defaultTab={first.defaultTab} initial={first.initial} />;
 }
