@@ -144,8 +144,8 @@
   inset-block-start: calc(100% + var(--fanous-spacing-sm, 8px));
   z-index: 60;
   box-sizing: border-box;
-  min-width: 17rem;
-  max-width: min(22rem, calc(100vw - 2 * var(--fanous-spacing-sm, 8px)));
+  /* one width for every view and app (the channel switcher no longer narrows it) */
+  width: min(21rem, calc(100vw - 2 * var(--fanous-spacing-sm, 8px)));
   max-height: calc(100dvh - 5rem);
   overflow-y: auto;
   margin: 0;
@@ -179,8 +179,7 @@
     position: fixed;
     inset-inline: var(--fanous-spacing-sm, 8px);
     inset-block-start: calc(var(--aun-header-height, 3.5rem) + var(--fanous-spacing-xs, 4px));
-    min-width: 0;
-    max-width: none;
+    width: auto;
     max-height: calc(100dvh - var(--aun-header-height, 3.5rem) - var(--fanous-spacing-lg, 16px));
   }
 }
