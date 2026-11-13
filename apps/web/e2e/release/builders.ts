@@ -18,8 +18,9 @@
  * - Names carry ns(): run id, spec file and worker, so parallel shards and runs never share rows.
  * - A DataScope records what it created; cleanup() deletes it in reverse order and is idempotent
  *   (404 = already gone): videos permanently (DELETE /api/videos/:id/permanent: record, media, the
- *   Bunny video and their index rows), then playlists/posts/comments, channels, and last each user:
- *   the privacy erase (everything the user owns) and the auth account with its sessions.
+ *   Bunny video and their index rows), then playlists/posts/comments, channels, and last each user
+ *   (eraseUser: on QA/stage a run account's auth account, whose remaining data the api-videos
+ *   run-user sweep erases; elsewhere the privacy erase first).
  * - Teardown always runs: useOwnData(test) is a per-file afterAll; the `test` export's `ownData` /
  *   `workerData` fixtures clean up after use(), also on failure, timeout or retry. Users' ids go to
  *   E2E_RUN_USER_IDS_FILE for the end-of-job leftover check. Everything belongs to run accounts
@@ -162,9 +163,10 @@ async function refreshUser(user: WebUser, refreshToken: string | undefined): Pro
 
 /**
  * Cleanup is bounded so it can never time out a test that passed. Stage, v2026.11.12.7: the
- * teardown of a user with no content ran past the 3-minute test timeout (header-name.spec.ts);
- * the privacy erase scans every channel, video and community object of the environment, so its
- * resumable rounds grow with the environment, not with the user.
+ * teardown of a user with no content ran past the 3-minute test timeout (header-name.spec.ts):
+ * the privacy erase scanned every channel, video and community object of the environment, so its
+ * resumable rounds grew with the environment, not with the user (eraseUser no longer runs it for
+ * run accounts on QA/stage, #1073).
  * Each request has REQUEST_TIMEOUT_MS, the erase loop ERASE_BUDGET_MS, a whole cleanup
  * CLEANUP_BUDGET_MS; the fixtures get their own teardown time on top of the test's. Whatever is
  * left belongs to a run account: the run teardown (cleanup-test-content.ts --run-users, then
@@ -177,12 +179,6 @@ const CLEANUP_BUDGET_MS = 120_000;
 const FIXTURE_TIMEOUT_MS = CLEANUP_BUDGET_MS + REQUEST_TIMEOUT_MS + 30_000;
 
 /**
- * Erases a user completely: DELETE /api/privacy/data (profile, channels, videos with their Bunny
- * media, playlists, posts, history, subscriptions, likes; resumable) as the user, then the account
- * and its sessions on the auth server (QA/stage/local test route, run accounts only). 404 = gone.
- * The erase stops after ERASE_BUDGET_MS; the account is deleted either way.
- */
-/**
  * What a cleanup step gets from the cleanup running it: a signal that fires when the cleanup's
  * budget is spent (the step stops making requests) and a warn() that goes quiet once the cleanup
  * has returned. Without them an abandoned step kept calling the API and logging after its fixture
@@ -193,7 +189,23 @@ interface CleanupContext {
   warn: (message: string) => void;
 }
 
+/**
+ * Removes a user and what is left of their data (the scope already deleted what it created).
+ *
+ * A run account on QA/stage (#1073): only the auth account (soft delete + purge, sessions revoked).
+ * The api-videos run-user sweep (lib/e2e/runUserSweep.ts, every 10 minutes) then erases its
+ * profile and anything left through the ownership index (user.erase-run), and the run's leftover
+ * check reports that content as "erase pending" until it has. The privacy erase it replaces cost a
+ * request of up to 30 s per user (on stage one still timed out on 2026-11-13, after #1107), and the
+ * sweep would erase the account again anyway.
+ *
+ * Anyone else, and every account on the local stack (it runs no crons; its leftover check follows
+ * the suite at once): DELETE /api/privacy/data as the user (profile, channels, videos with their
+ * Bunny media, playlists, posts, history, subscriptions, likes; resumable, at most
+ * ERASE_BUDGET_MS), then the auth account where the test route allows it. 404 = already gone.
+ */
 async function eraseUser(user: WebUser, ctx: CleanupContext): Promise<Response | undefined> {
+  if (canDeleteAccount(user.email) && !onLocalStack()) return deleteAccount(user.email, ctx.signal);
   let resumeToken: string | undefined;
   const deadline = Date.now() + ERASE_BUDGET_MS;
   for (let round = 0; round < 20; round++) {
@@ -226,11 +238,16 @@ async function eraseUser(user: WebUser, ctx: CleanupContext): Promise<Response |
   return deleteAccount(user.email, ctx.signal);
 }
 
+/** Whether the auth test route may delete this account: a run account, its secrets, never production. */
+function canDeleteAccount(email: string): boolean {
+  return isRunUserEmail(email) && !!process.env.E2E_CODE_SINK_SECRET && !!process.env.TEST_PROMOTE_SECRET && releaseEnv() !== 'production';
+}
+
 /** The run account on the auth server (soft delete + immediate purge, sessions revoked). Run accounts only. */
 async function deleteAccount(email: string, signal?: AbortSignal): Promise<Response | undefined> {
-  const sink = process.env.E2E_CODE_SINK_SECRET;
-  const promote = process.env.TEST_PROMOTE_SECRET;
-  if (!isRunUserEmail(email) || !sink || !promote || releaseEnv() === 'production') return undefined;
+  if (!canDeleteAccount(email)) return undefined;
+  const sink = process.env.E2E_CODE_SINK_SECRET as string;
+  const promote = process.env.TEST_PROMOTE_SECRET as string;
   return fetch(`${target().auth}/test/run-users/delete/${encodeURIComponent(email)}`, {
     method: 'POST',
     signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)]) : AbortSignal.timeout(REQUEST_TIMEOUT_MS),
@@ -432,11 +449,12 @@ export class DataScope {
     return id as string;
   }
 
-  async createComment(user: WebUser, videoId: string, text = `E2E comment ${ns()}`): Promise<string> {
-    const body = (await ok(await apiFetch(user, `/api/videos/${videoId}/comments`, json({ content: text })), 'POST comment')) as { result?: { comment?: { id?: string } }; comment?: { id?: string } };
+  /** A video comment, posted as one of the user's channels (video comments always are: the routes require the channelId header). */
+  async createComment(user: WebUser, videoId: string, channelId: string, text = `E2E comment ${ns()}`): Promise<string> {
+    const body = (await ok(await apiFetch(user, `/api/videos/${videoId}/comments`, json({ content: text }, channelId)), 'POST comment')) as { result?: { comment?: { id?: string } }; comment?: { id?: string } };
     const id = body.result?.comment?.id ?? body.comment?.id;
     expect(id, 'comment create returned no id').toBeTruthy();
-    this.undo.push({ what: `comment ${id}`, run: () => apiFetch(user, `/api/videos/${videoId}/comments/${id}`, { method: 'DELETE' }) });
+    this.undo.push({ what: `comment ${id}`, run: () => apiFetch(user, `/api/videos/${videoId}/comments/${id}`, { method: 'DELETE', headers: { channelId } }) });
     return id as string;
   }
 
