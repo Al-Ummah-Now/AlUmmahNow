@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import Link from '@/components/common/AppLink';
-import VideoThumbnail from "@/components/VideoThumbnail";
+import VideoThumbnail, { type ImageLoading } from "@/components/VideoThumbnail";
 import { ProcessingBadge } from "../ProcessingBadge";
 import { VideoObject, getLocalizedValue } from "@al-ummah/shared-types";
 import { removeUnwantedChars } from "@/lib/utility";
@@ -10,7 +10,10 @@ import { VideoCardMenu } from "@/components/library/VideoCardMenu";
 import { channelLabel } from '@/lib/channel-name';
 import { VideoDate, ViewCount } from '@/components/VideoDate';
 
-const VideoCardRTL: React.FC<VideoObject> = (video) => {
+/** `imageLoading`: `eager` or `high` for the cards at the top of a list (VideoThumbnail) */
+export type VideoCardProps = VideoObject & { imageLoading?: ImageLoading };
+
+const VideoCardRTL: React.FC<VideoCardProps> = ({ imageLoading, ...video }) => {
   const { lang: locale } = useLanguage();
 
   const title = getLocalizedValue(video.titleLocalized, video.title, locale);
@@ -28,7 +31,7 @@ const VideoCardRTL: React.FC<VideoObject> = (video) => {
         >
           {/* Thumbnail */}
           <ProcessingBadge uploadStatus={video.uploadStatus} />
-          <VideoThumbnail src={video.thumbnailUrl} alt={title.replace(/⧸/g, ".")} className="h-48" videoWidth={video.width} videoHeight={video.height} />
+          <VideoThumbnail src={video.thumbnailUrl} alt={title.replace(/⧸/g, ".")} className="h-48" videoWidth={video.width} videoHeight={video.height} loading={imageLoading} />
 
           {/* Video Details */}
           <div className="p-4 pe-12">

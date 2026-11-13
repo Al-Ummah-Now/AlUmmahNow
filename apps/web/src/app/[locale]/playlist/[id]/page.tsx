@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import PlaylistView from '@/components/PlaylistView';
 import PlaylistViewRTL from '@/components/PlaylistView/rtl';
 import { getPlaylistById } from '@/lib/api/playlists';
+import { withinBudget } from '@/lib/ssr/first-data';
 
 interface PlaylistPageProps {
   params: Promise<{
@@ -23,15 +24,18 @@ export async function generateMetadata({ params }: PlaylistPageProps): Promise<M
 
 /**
  * Playlist page: /[locale]/playlist/[id]
- * Linked from PlaylistCard and the channel playlist sections.
+ * Linked from PlaylistCard and the channel playlist sections. The playlist and its videos are read
+ * here as the viewer (the call the view makes itself), so the HTML carries the title, channel and
+ * items (wiki AUN-SEO, phase 4).
  */
 export default async function PlaylistPage({ params }: PlaylistPageProps) {
   const { locale, id } = await params;
   const View = locale === 'ar' ? PlaylistViewRTL : PlaylistView;
+  const playlist = await withinBudget(() => getPlaylistById(id, undefined, { includeVideos: true }));
 
   return (
     <main className="flex-1 min-h-screen bg-gray-50 dark:bg-gray-950">
-      <View playlistId={id} />
+      <View playlistId={id} initialPlaylist={playlist} />
     </main>
   );
 }

@@ -13,26 +13,44 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { ContinueWatchingShelf } from "@/components/history/ContinueWatchingShelf";
 import { HomeHero, HomeHeroPlaceholder } from "@/components/ThemeDemo/HomeHero";
 import { pickHomeFeatured } from "@/lib/video/hero";
+import type { PaginationResponse } from "@/lib/api/types";
 
 /** Never featured on the home hero (kept from the original pick). */
 const HOME_HERO_EXCLUDED: ReadonlySet<string> = new Set(["e42e5deb-c86a-40b0-b8ec-6072fc550dba"]);
 
-const VideosPage: React.FC = () => {
+/** How many cards from the top load at once (the first rows); the rest load as they near the screen */
+const EAGER_CARDS = 3;
+
+/** The first card is the largest image only when there is no hero (the hero's image is then the LCP element) */
+function cardLoading(index: number, hasHero: boolean): "high" | "eager" | undefined {
+  if (index >= EAGER_CARDS) return undefined;
+  return index === 0 && !hasHero ? "high" : "eager";
+}
+
+interface HomePageClientProps {
+  /**
+   * The first page of videos, read on the server (page.tsx) so the HTML carries the hero and the
+   * cards. Missing when the API was slow or down: the page then fetches it after hydration.
+   */
+  initialPage?: PaginationResponse<VideoObject>;
+}
+
+const VideosPage: React.FC<HomePageClientProps> = ({ initialPage }) => {
   const { t, isRTL } = useLanguage();
   const { user: _user } = useAuth();
-  const [videos, setVideos] = useState<VideoObject[]>([]);
+  const [videos, setVideos] = useState<VideoObject[]>(() => initialPage?.data ?? []);
   const [_cursor, setCursor] = useQueryState("cursor", { shallow: true });
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  // Starts true: the first page is fetched on mount, and rendering the
+  const [nextCursor, setNextCursor] = useState<string | null>(() => (initialPage ? getNextVideosCursor(initialPage) : null));
+  // Without a server page it starts true: the first page is fetched on mount, and rendering the
   // placeholders from the first paint avoids a layout shift
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialPage);
   const [isCollapsed, _setIsCollapsed] = useState(true);
 
   // Select VideoCard component based on locale
   const VideoCard = isRTL ? VideoCardRTL : VideoCardLTR;
 
-  // Prevent duplicate initial fetch
-  const hasInitialFetch = useRef(false);
+  // Prevent duplicate initial fetch (none at all when the server sent the first page)
+  const hasInitialFetch = useRef(!!initialPage);
 
   const fetchVideos = useCallback(async (cursor: string | null) => {
     setLoading(true);
@@ -114,8 +132,8 @@ const VideosPage: React.FC = () => {
             </div>
           ) : (
             <div data-testid="video-grid" className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-5 gap-4">
-              {videos.map((video) => (
-                <VideoCard key={video.id} {...video} />
+              {videos.map((video, index) => (
+                <VideoCard key={video.id} {...video} imageLoading={cardLoading(index, !!featured)} />
               ))}
             </div>
           )}

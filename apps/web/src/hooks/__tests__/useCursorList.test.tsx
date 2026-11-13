@@ -7,6 +7,18 @@ type Item = { id: string };
 const page = (ids: string[], cursor: string | null) => ({ data: ids.map((id) => ({ id })), cursor });
 
 describe('useCursorList', () => {
+  it('should show the server page at once and not fetch it again when given an initial page', async () => {
+    const fetchPage = jest.fn(async () => page(['c'], null));
+    const { result } = renderHook(() => useCursorList<Item>('ch1', fetchPage, 'videos', page(['a', 'b'], 'c1')));
+    expect(result.current.loading).toBe(false);
+    expect(result.current.items.map((i) => i.id)).toEqual(['a', 'b']);
+    expect(result.current.hasMore).toBe(true);
+    expect(fetchPage).not.toHaveBeenCalled();
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(result.current.items).toHaveLength(3));
+    expect(fetchPage.mock.calls.map((c) => (c as unknown[])[0])).toEqual(['c1']);
+  });
+
   it('reads every page until the API stops returning a cursor', async () => {
     const fetchPage = jest.fn<ReturnType<FetchCursorPage<Item>>, [string | undefined]>(async (cursor) =>
       cursor === undefined ? page(['a', 'b'], 'c1') : cursor === 'c1' ? page(['c', 'd'], 'c2') : page(['e'], null)

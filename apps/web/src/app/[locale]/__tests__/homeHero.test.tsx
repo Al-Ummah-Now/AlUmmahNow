@@ -46,6 +46,16 @@ function frame(section: Element) {
 }
 
 describe('home featured hero', () => {
+  it('should render the server first page (hero and cards) without fetching it', () => {
+    mockFetchVideos.mockClear();
+    const { container } = render(<VideosPage initialPage={{ data: [video('v1', 'Tafsir of Al-Fatiha'), video('v2', 'Hadith')], cursor: '' } as never} />);
+    expect(screen.queryByTestId('home-hero-loading')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('video-grid-loading')).not.toBeInTheDocument();
+    expect(container.querySelector('section.home-hero')).toHaveTextContent('Tafsir of Al-Fatiha');
+    expect(screen.getAllByTestId('video-card')).toHaveLength(2);
+    expect(mockFetchVideos).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => jest.clearAllMocks());
 
   it('holds the hero frame while the first page loads, then swaps in the hero in its place', async () => {

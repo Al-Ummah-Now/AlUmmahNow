@@ -1,25 +1,26 @@
 import { notFound } from 'next/navigation';
-import { getChannelTabConfig } from '@/lib/api/channel-tabs';
 import { decodeHandleSegment, loadChannelByHandle } from '@/lib/channel-loaders';
 import { ChannelTabContent } from '@/components/ChannelTabs/ChannelTabContent';
-import type { ChannelTab } from '@/components/ChannelTabs';
+import { loadChannelFirstTab } from '@/lib/channels/first-tab';
 
 interface ChannelHandlePageProps {
   params: Promise<{
     locale: string;
     handle: string;
   }>;
+  searchParams?: Promise<{
+    tab?: string | string[];
+  }>;
 }
 
-/** Same content as /[locale]/channels/[id], resolved from the @handle. */
-export default async function ChannelHandlePage({ params }: ChannelHandlePageProps) {
-  const { handle } = await params;
+/** Same content as /[locale]/channels/[id], resolved from the @handle (its first tab data read here too). */
+export default async function ChannelHandlePage({ params, searchParams }: ChannelHandlePageProps) {
+  const [{ handle }, query] = await Promise.all([params, searchParams ?? Promise.resolve({} as { tab?: string | string[] })]);
   const channel = await loadChannelByHandle(decodeHandleSegment(handle));
   if (!channel) {
     notFound();
   }
-  const tabConfig = await getChannelTabConfig(channel.id).catch(() => null);
-  const defaultTab = (tabConfig?.defaultTab as ChannelTab | undefined) || 'home';
+  const first = await loadChannelFirstTab(channel.id, typeof query.tab === 'string' ? query.tab : undefined);
 
-  return <ChannelTabContent channelId={channel.id} defaultTab={defaultTab} />;
+  return <ChannelTabContent channelId={channel.id} defaultTab={first.defaultTab} initial={first.initial} />;
 }

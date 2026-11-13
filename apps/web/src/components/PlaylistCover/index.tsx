@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { ListVideo } from 'lucide-react';
-import VideoThumbnail, { THUMBNAIL_16_9 } from '@/components/VideoThumbnail';
+import VideoThumbnail, { THUMBNAIL_16_9, type ImageLoading } from '@/components/VideoThumbnail';
 import { getPlaylistCoverUrl, type PlaylistCoverFields } from '@/lib/playlists/playlist-utils';
 
 interface PlaylistCoverProps {
@@ -14,6 +14,8 @@ interface PlaylistCoverProps {
   className?: string;
   /** Overlays such as the video count badge */
   children?: React.ReactNode;
+  /** `high` when the cover is the page's largest image (the playlist page) */
+  loading?: ImageLoading;
 }
 
 /** Shown for empty playlists and when the cover image cannot be loaded. */
@@ -32,7 +34,7 @@ function PlaylistCoverPlaceholder() {
  * The one way to render a playlist cover. Direction-neutral: LTR and RTL
  * surfaces share it, and callers position overlays with logical utilities.
  */
-export function PlaylistCover({ playlist, videos, alt, sizes, className, children }: PlaylistCoverProps) {
+export function PlaylistCover({ playlist, videos, alt, sizes, className, children, loading }: PlaylistCoverProps) {
   return (
     <VideoThumbnail
       src={getPlaylistCoverUrl(playlist, videos)}
@@ -41,6 +43,7 @@ export function PlaylistCover({ playlist, videos, alt, sizes, className, childre
       className={className}
       style={THUMBNAIL_16_9}
       placeholder={<PlaylistCoverPlaceholder />}
+      loading={loading}
     >
       {children}
     </VideoThumbnail>

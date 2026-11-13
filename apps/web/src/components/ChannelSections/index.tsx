@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { listChannelSectionsPopulated } from '@/lib/api/channel-sections';
 import { useChannelViewer } from '@/components/Channel/ChannelViewerContext';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -10,6 +10,11 @@ import type { PopulatedChannelSection } from './sectionData';
 
 interface ChannelSectionsProps {
   channelId: string;
+  /**
+   * The populated sections the server already read (server-rendered Home tab, wiki AUN-SEO phase 4):
+   * shown from the first paint and not fetched again. Missing when the server had none in time.
+   */
+  initialSections?: PopulatedChannelSection[];
 }
 
 type LoadState =
@@ -22,13 +27,17 @@ type LoadState =
  * one populated by a single API call. If that call fails, visitors see
  * nothing; people who can edit the channel get a retry.
  */
-export function ChannelSections({ channelId }: ChannelSectionsProps) {
+export function ChannelSections({ channelId, initialSections }: ChannelSectionsProps) {
   const { t } = useLanguage();
   const { canEditLayout } = useChannelViewer();
-  const [state, setState] = useState<LoadState>({ status: 'loading' });
+  const [state, setState] = useState<LoadState>(() => (initialSections ? { status: 'ready', sections: initialSections } : { status: 'loading' }));
   const [attempt, setAttempt] = useState(0);
+  // The channel the server's sections belong to: its first load is skipped (a retry fetches)
+  const seededChannel = useRef<string | null>(initialSections ? channelId : null);
 
   useEffect(() => {
+    if (seededChannel.current === channelId && attempt === 0) return undefined;
+    seededChannel.current = null;
     let cancelled = false;
     setState({ status: 'loading' });
     listChannelSectionsPopulated(channelId)
@@ -74,8 +83,8 @@ export function ChannelSections({ channelId }: ChannelSectionsProps) {
 
   return (
     <div className="space-y-8" data-testid="channel-sections">
-      {state.sections.map((section) => (
-        <ChannelSectionRenderer key={section.id} section={section} channelId={channelId} />
+      {state.sections.map((section, index) => (
+        <ChannelSectionRenderer key={section.id} section={section} channelId={channelId} leading={index === 0} />
       ))}
     </div>
   );

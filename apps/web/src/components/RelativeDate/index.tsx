@@ -1,6 +1,7 @@
 'use client';
 
 import { useLanguage } from '@/hooks/useLanguage';
+import { useHydrated } from '@/hooks/useHydrated';
 import { formatAbsoluteDateTime, formatRelativeTime, type MetaLang } from '@/lib/format/videoMeta';
 
 /** What the date is: said in its tooltip and to screen readers, not on the line (YouTube style). */
@@ -27,10 +28,12 @@ interface RelativeDateProps {
  */
 export function RelativeDate({ value, lang, label }: RelativeDateProps) {
   const { t } = useLanguage();
+  // The exact time is in UTC on the server and while hydrating (server-rendered lists), then the viewer's zone
+  const timeZone = useHydrated() ? undefined : 'UTC';
   const relative = formatRelativeTime(value, lang);
   if (!relative) return null;
   const date = new Date(value as string | number | Date);
-  const tip = dateTooltip(t as never, label, formatAbsoluteDateTime(date, lang));
+  const tip = dateTooltip(t as never, label, formatAbsoluteDateTime(date, lang, timeZone));
   // Relative text depends on the clock, so server and browser can differ by a unit
   return (
     <time className="rel-date" dateTime={date.toISOString()} title={tip} data-tip={tip} suppressHydrationWarning>
