@@ -163,6 +163,8 @@ export const WORKERS: StackWorker[] = [
     vars: {
       ...COMMON_VARS,
       WEBSOCKET_URL: url('websocket'),
+      // No CMS on the local stack: the scholar post reference outbox is off (handlers/scholar-refs.ts)
+      CMS_INTERNAL_URL: '',
       // Never paid AI in tests: the Workers AI binding is dropped and the AI steps are off
       AI_MODERATION_ENABLED: 'false',
       AI_CATEGORIZE_ENABLED: 'false',
