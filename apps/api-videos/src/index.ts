@@ -62,6 +62,7 @@ import { createProcessingInternalRouter } from "./endpoints/video/processingInte
 import scholarsInternalRouter from "./routers/scholars-internal.router";
 import postsInternalRouter from "./routers/posts-internal.router";
 import { sitesInternalRouter, sitesRouter } from "./routers/sites.router";
+import { publishDuePosts } from "./lib/scheduled-posts";
 import { createUploadsInternalRouter } from "./endpoints/video/uploadsInternal";
 import { createVideoFormatInternalRouter } from "./endpoints/video/videoFormatInternal";
 import { createFootprintsInternalRouter } from "./endpoints/privacy/footprintsInternal";
@@ -471,6 +472,12 @@ app.get("/", async (c) => {
  */
 async function scheduled(controller: ScheduledController, rawEnv: AppBindings, ctx: ExecutionContext): Promise<void> {
 	if (controller?.cron === LIVE_SWEEP_CRON) {
+		// Every minute: scheduled community posts whose time has come go live (lib/scheduled-posts.ts, #1218)
+		ctx.waitUntil(
+			publishDuePosts(rawEnv as never)
+				.then((r) => (r.published || r.dropped ? logger.info('[ScheduledPosts] Run', r) : undefined))
+				.catch((error) => logger.error('[ScheduledPosts] Run failed', { error: error instanceof Error ? error.message : String(error) })),
+		);
 		// Every minute: end self-hosted sessions whose encoder went quiet, poll live Bunny sessions (lib/live/service.ts)
 		ctx.waitUntil(
 			sweepLiveSessions(rawEnv as unknown as LiveEnv)
