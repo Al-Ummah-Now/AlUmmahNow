@@ -46,7 +46,7 @@ export function ReviewWorkspace({ detail, media }: Props) {
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
 
   const timed = useMemo(() => findings.filter((f) => f.at_ms !== null).sort((a, b) => (a.at_ms ?? 0) - (b.at_ms ?? 0)), [findings]);
-  const frames = findings.filter((f) => (f.source === 'frame' || f.source === 'thumbnail') && f.media_key);
+  const frames = findings.filter((f) => (f.source === 'frame' || f.source === 'thumbnail' || f.source === 'image') && f.media_key);
   const transcript = findings.filter((f) => f.source === 'transcript');
   const metadata = findings.filter((f) => f.source === 'metadata');
 
@@ -152,7 +152,7 @@ export function ReviewWorkspace({ detail, media }: Props) {
                   <li key={f.id} className="space-y-1">
                     <div className="relative overflow-hidden rounded border-2 border-danger-border">
                       {/* eslint-disable-next-line @next/next/no-img-element -- streamed, never cached, not optimizable */}
-                      <img src={`/api/review-media/${encodeURIComponent(review.id)}?key=${encodeURIComponent(key)}`} alt={`${f.category} ${clock(f.at_ms)}`} className={`aspect-video w-full object-cover ${shown ? '' : 'blur-xl'}`} />
+                      <img src={key.startsWith('https://') ? key : `/api/review-media/${encodeURIComponent(review.id)}?key=${encodeURIComponent(key)}`} referrerPolicy="no-referrer" alt={`${f.category} ${clock(f.at_ms)}`} className={`aspect-video w-full object-cover ${shown ? '' : 'blur-xl'}`} />
                       {!shown && (
                         <button type="button" onClick={() => void reveal(key, `frame@${f.at_ms ?? 'thumb'}`)} className="absolute inset-0 m-auto h-fit w-fit rounded bg-surface px-3 py-1 text-sm text-fg" data-testid="review-reveal">
                           {t('review.reveal')}

@@ -574,3 +574,74 @@ export async function writeReviewQueueMinutes(bucket: ReviewSettingsBucket, queu
   await bucket.put(VIDEO_REVIEW_QUEUE_KEY, JSON.stringify({ queueMinutes, at: now.toISOString() }), { httpMetadata: { contentType: 'application/json' } });
   queueCache = null;
 }
+
+// ---------------------------------------------------------------------------
+// Images (VR16): community post images, channel avatars and banners, profile pictures
+// ---------------------------------------------------------------------------
+
+/**
+ * - post: the WHOLE post is held until a reviewer decides on an NSFW hit (VR16)
+ * - avatar / banner (channel) and profile_picture / profile_banner (profile): there is no post to
+ *   hold; the new image is kept pending and everyone else sees the previous (or default) image
+ *   until it is clean
+ */
+export type ImageReviewSubject = 'post' | 'avatar' | 'banner' | 'profile_picture' | 'profile_banner';
+
+/** A pending image on a channel or profile (`pendingImages[field]`), swapped in once approved. */
+export interface PendingImage {
+  url: string;
+  reviewId: string;
+  since: string;
+  status: 'checking' | 'in_review' | 'rejected';
+}
+
+/** Which stored field an image subject writes. */
+export const IMAGE_SUBJECT_FIELD: Record<Exclude<ImageReviewSubject, 'post'>, 'avatarUrl' | 'coverUrl'> = {
+  avatar: 'avatarUrl',
+  banner: 'coverUrl',
+  profile_picture: 'avatarUrl',
+  profile_banner: 'coverUrl',
+};
+
+/** api-videos → processor (MODERATION_QUEUE, MessageType.ImageReviewScan). */
+export interface ImageReviewScanPayload {
+  subject: ImageReviewSubject;
+  /** post: `<channelId>/<postId>`; channel images: the channel id; profile images: the user id */
+  subjectId: string;
+  reviewId: string;
+  ownerId?: string;
+  channelId?: string;
+  mode: Exclude<VideoReviewMode, 'off'>;
+  /** https URLs on the platform image host */
+  images: string[];
+  /** post text, for the text policy (posts only) */
+  text?: string;
+  settings: VideoReviewSettings;
+  queuedAt: string;
+}
+
+/** processor → api-videos `POST /internal/review/images/outcome`; admin-api → `/internal/review/images/decision`. */
+export interface ImageReviewResultRequest {
+  subject: ImageReviewSubject;
+  subjectId: string;
+  reviewId: string;
+  /** outcome: approve | hold; decision: approve | reject */
+  result: 'approve' | 'hold' | 'reject';
+  reviewerId?: string;
+  reasonCode?: VideoReviewReasonCode;
+}
+
+/**
+ * Images route on NSFW and escalations only (VR16: "an NSFW hit holds"; other image risk is
+ * flag-only). A check that could not run holds a post or keeps the image pending (fail safe).
+ */
+export function routeImageReview(findings: readonly ReviewFinding[], settings: Pick<VideoReviewSettings, 'thresholds'>, ctx: { checkFailed?: boolean; budgetStopped?: boolean }): ReviewRouting {
+  const r = routeReview(findings, settings, { mode: 'enforce_nsfw', checkFailed: ctx.checkFailed, budgetStopped: ctx.budgetStopped });
+  return r;
+}
+
+/** Whether a post is withheld from everyone but its author by review (checking, held, rejected). */
+export function isPostHeldByReview(post: { review?: { status?: string } | null }): boolean {
+  const s = post.review?.status;
+  return s === 'checking' || s === 'in_review' || s === 'rejected' || s === 'appealed';
+}

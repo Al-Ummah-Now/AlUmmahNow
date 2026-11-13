@@ -1,3 +1,4 @@
+import { isPostHeldByReview } from '@al-ummah/shared-types';
 import { isChannelDeleted } from '../../lib/community-posts';
 import { recordPostView, withPostViews } from '../../lib/post-views';
 import { z } from 'zod';
@@ -56,7 +57,7 @@ export class GetCommunityPost extends OptionalAuthRoute {
 
       // Don't show deleted posts, nor the posts of a deleted channel
       // A scheduled post waits for its time; only its author sees it before then (#1218)
-      if (post.status === PostStatus.DELETED || (isUpcoming(post) && post.userId !== this.getUserId(c)) || (await isChannelDeleted(c.env.channels, postChannelId))) {
+      if (post.status === PostStatus.DELETED || ((isUpcoming(post) || isPostHeldByReview(post as never)) && post.userId !== this.getUserId(c)) || (await isChannelDeleted(c.env.channels, postChannelId))) {
         return c.json({ error: 'Post not found' }, 404);
       }
 

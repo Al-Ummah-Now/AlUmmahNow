@@ -5,7 +5,7 @@
  */
 import { createLogger } from '@al-ummah/logger';
 import { DEFAULT_VIDEO_REVIEW_SETTINGS, MessageType, normaliseVideoReviewSettings, type VideoReviewScanPayload } from '@al-ummah/shared-types';
-import { handleVideoReviewAppeal, handleVideoReviewScan, type ReviewConsumerEnv } from '../review/consumer';
+import { handleImageReviewScan, handleVideoReviewAppeal, handleVideoReviewScan, type ReviewConsumerEnv } from '../review/consumer';
 import { WorkersAiModerationProvider, assertRealAiAllowed } from '../review/provider';
 import { createSqliteD1, REPORTS_MIGRATIONS_DIR } from './sqlite-d1';
 
@@ -205,5 +205,42 @@ describe('no AI spend in tests', () => {
     expect(() => assertRealAiAllowed({ CI: 'true' }, {})).toThrow();
     expect(() => assertRealAiAllowed({ E2E_ENV: 'local' }, {})).toThrow();
     expect(() => assertRealAiAllowed({}, {})).not.toThrow();
+  });
+});
+
+describe('image review (VR16)', () => {
+  const imagePayload = (images: string[], extra: Record<string, unknown> = {}) => ({
+    subject: 'post' as const, subjectId: 'ch1/p1', reviewId: 'ir1', ownerId: 'u1', channelId: 'ch1', mode: 'enforce' as const,
+    images, text: 'A post', settings: normaliseVideoReviewSettings({ mode: 'enforce' }), queuedAt: 'x', ...extra,
+  });
+  const imageRow = (t: ReturnType<typeof setup>) => t.db.raw.prepare('SELECT * FROM content_reviews WHERE id = ?').get('ir1') as Record<string, any>;
+
+  it('a clean post image is approved; the outcome goes to the images route', async () => {
+    const t = setup();
+    const r = await handleImageReviewScan(imagePayload(['https://images.alummahnow.net/a.jpg']), t.env, logger, { lastAttempt: false, now: NOW });
+    expect(r.route).toBe('approve');
+    expect(t.outcomes[0].url).toContain('/internal/review/images/outcome');
+    expect(t.outcomes[0].body).toMatchObject({ subject: 'post', subjectId: 'ch1/p1', result: 'approve' });
+    expect(imageRow(t).subject_type).toBe('post');
+  });
+
+  it('an NSFW image holds the whole post for a person, and reviewers are alerted', async () => {
+    const t = setup();
+    t.db.raw.prepare('INSERT INTO review_alert_subscribers (user_id, senior, created_at, updated_at) VALUES (?, ?, ?, ?)').run('rev1', 0, 'x', 'x');
+    const r = await handleImageReviewScan(imagePayload(['https://images.alummahnow.net/nsfw.jpg']), t.env, logger, { lastAttempt: false, now: NOW });
+    expect(r.route).toBe('hold');
+    expect(imageRow(t).nsfw).toBe(1);
+    expect(t.outcomes[0].body.result).toBe('hold');
+    expect(t.sent.filter((m) => m.type === MessageType.NotificationCreate)).toHaveLength(1);
+    const f = t.db.raw.prepare("SELECT * FROM content_review_findings WHERE review_id = 'ir1'").all() as Array<Record<string, any>>;
+    expect(f[0].media_key).toBe('https://images.alummahnow.net/nsfw.jpg');
+  });
+
+  it('an avatar uses its own subject type; shadow records only', async () => {
+    const t = setup();
+    await handleImageReviewScan(imagePayload(['https://images.alummahnow.net/nsfw.jpg'], { subject: 'avatar', subjectId: 'ch1', mode: 'shadow', text: undefined }), t.env, logger, { lastAttempt: false, now: NOW });
+    expect(imageRow(t).subject_type).toBe('avatar');
+    expect(imageRow(t).status).toBe('shadow');
+    expect(t.outcomes).toHaveLength(0);
   });
 });

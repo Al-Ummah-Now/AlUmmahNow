@@ -1,3 +1,4 @@
+import { imageGate, newImagePatch, queueImageScan } from '../../lib/review/images';
 import { Hono } from "hono";
 import type { AppContext } from "../../base/types";
 import BunnyStorageClient from "../../lib/bunny/storage";
@@ -62,9 +63,17 @@ const handleCoverUpdate = async (c: AppContext) => {
         //Update the profile's cover URL
         // Conditional write on the fresh profile (SCALABILITY-AUDIT AV-6)
         const coverUrl = `https://images.alummahnow.net${path}`;
+        // Pre-publication review (VR16): the new image waits in pendingImages until it is clean
+        const gate = await imageGate(c.env as never);
+        let reviewId: string | null = null;
         const saved = await repository.updateObject(userId, (fresh) => {
-            fresh.coverUrl = coverUrl;
+            const reviewed = newImagePatch(gate, 'profile_banner', coverUrl, (fresh as { pendingImages?: never }).pendingImages);
+            reviewId = reviewed.reviewId;
+            Object.assign(fresh, reviewed.patch);
         });
+        if (saved && reviewId) {
+            await queueImageScan(c.env as never, gate, { subject: 'profile_banner', subjectId: userId, reviewId, ownerId: userId, images: [coverUrl] });
+        }
         if (!saved) {
             return c.json({ success: false, error: "Profile not found" }, 404);
         }

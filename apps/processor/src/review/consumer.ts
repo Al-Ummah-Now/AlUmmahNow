@@ -10,8 +10,10 @@ import type { Logger } from '@al-ummah/logger';
 import {
   MessageType,
   publishAdminLive,
+  routeImageReview,
   routeReview,
   type D1Database,
+  type ImageReviewScanPayload,
   type ReviewOutcomeRequest,
   type ReviewRouting,
   type VideoReviewAppealPayload,
@@ -221,4 +223,107 @@ export async function handleVideoReviewAppeal(a: VideoReviewAppealPayload, env: 
   await openAppealRow(env.REPORTS_DB, a);
   await publishAdminLive(env as never, 'moderation', { kind: 'review_needed', key: `review:${a.appealReviewId}`, reviewId: a.appealReviewId, videoId: a.videoId, appeal: true }).catch(() => false);
   logger.info('[Review] Appeal opened', { videoId: a.videoId, reviewId: a.reviewId, appealReviewId: a.appealReviewId });
+}
+
+// ---------------------------------------------------------------------------
+// Images (VR16): posts, avatars, banners, profile pictures
+// ---------------------------------------------------------------------------
+
+export function isImageReviewPayload(value: unknown): value is ImageReviewScanPayload {
+  const p = value as ImageReviewScanPayload | null;
+  return !!p && typeof p.subjectId === 'string' && typeof p.reviewId === 'string' && Array.isArray(p.images) && !!p.settings && typeof p.subject === 'string';
+}
+
+async function fetchImage(fetchImpl: typeof fetch, url: string) {
+  const res = await fetchImpl(url, { headers: { Accept: 'image/*' } });
+  if (!res.ok) return null;
+  const contentType = (res.headers.get('content-type') ?? 'image/jpeg').split(';')[0] ?? 'image/jpeg';
+  if (!/^image\/(jpeg|png|webp)$/.test(contentType)) return null;
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return { contentType, base64: btoa(binary) };
+}
+
+/** Same rules as a video: fixtures in tests, fail safe, budget, alerts. Routes on NSFW only (VR16). */
+export async function handleImageReviewScan(
+  p: ImageReviewScanPayload,
+  env: ReviewConsumerEnv,
+  logger: Logger,
+  opts: { lastAttempt: boolean; now?: number; fetchImpl?: typeof fetch } = { lastAttempt: true },
+): Promise<ReviewScanOutcome> {
+  const db = env.REPORTS_DB;
+  const now = opts.now ?? Date.now();
+  if (env.VIDEO_REVIEW_ALLOWED !== 'true' && env.REVIEW_PROVIDER !== 'fixture') return { status: 'done' };
+  // The shared row helpers take the video payload shape; an image subject maps onto it
+  const asVideo: VideoReviewScanPayload = { videoId: p.subjectId, reviewId: p.reviewId, ...(p.channelId ? { channelId: p.channelId } : {}), ...(p.ownerId ? { ownerId: p.ownerId } : {}), timing: 'pre', mode: p.mode, metadataText: p.text ?? '', trigger: 'thumbnail', settings: p.settings, queuedAt: p.queuedAt };
+  await startReviewRow(db, asVideo, new Date(now).toISOString(), p.subject);
+  const existing = await getReviewRow(db, p.reviewId);
+  const sendImageOutcome = async (route: 'approve' | 'hold') => {
+    if (!env.VIDEOS) throw new ProviderError('VIDEOS service binding missing', true);
+    const res = await env.VIDEOS.fetch('https://videos.internal/internal/review/images/outcome', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'X-API-Key': await secret(env.INTERNAL_API_KEY) },
+      body: JSON.stringify({ subject: p.subject, subjectId: p.subjectId, reviewId: p.reviewId, result: route }),
+    });
+    if (!res.ok && res.status !== 409) throw new ProviderError(`image outcome not applied (${res.status})`, true);
+  };
+  if (existing?.checked_at && existing.route) {
+    if (p.mode !== 'shadow') {
+      try {
+        await sendImageOutcome(existing.route as 'approve' | 'hold');
+      } catch (error) {
+        return { status: 'retry', error: error instanceof Error ? error.message : String(error) };
+      }
+    }
+    return { status: 'done', route: existing.route };
+  }
+  const m = p.settings.models;
+  const estimate = neuronsFor(m.imageReview, p.images.length * 1500, p.images.length * 120) + neuronsFor(m.textPolicy, (p.text?.length ?? 0) / 2, 300);
+  const reserved = await reserveBudget(db, p.settings.dailyBudgetUsd / USD_PER_NEURON, estimate, now, REVIEW_FEATURE);
+  const usage: Usage[] = [];
+  const findings: Awaited<ReturnType<typeof runReviewPipeline>>['findings'] = [];
+  let routing: ReviewRouting;
+  if (!reserved) {
+    routing = routeImageReview([], p.settings, { budgetStopped: true });
+  } else {
+    try {
+      const provider = providerFor(env, { ...asVideo, metadataText: `${p.text ?? ''} ${p.images.join(' ')}` });
+      for (const url of p.images.slice(0, 10)) {
+        const image = provider.kind === 'fixture' ? { contentType: 'image/jpeg', base64: url.includes('nsfw') ? 'HIT' : 'clean' } : await fetchImage(opts.fetchImpl ?? fetch, url);
+        if (!image) throw new ProviderError(`image unreadable: ${url}`, false);
+        const verdict = await provider.reviewImage(image, usage);
+        if (verdict.category !== 'none') findings.push({ source: 'image', category: verdict.category, score: verdict.score, mediaKey: url, model: m.imageReview, rationale: verdict.rationale });
+        if (verdict.minorPresent > p.settings.thresholds.escalate) findings.push({ source: 'image', category: 'minor_present', score: verdict.minorPresent, mediaKey: url, model: m.imageReview });
+      }
+      if (p.text?.trim()) {
+        const policy = await provider.policyText(p.text, usage);
+        for (const [category, score] of Object.entries(policy.scores)) if (score >= 0.05) findings.push({ source: 'metadata', category, score, text: p.text.slice(0, 500), model: m.textPolicy, rationale: policy.rationale });
+      }
+      routing = routeImageReview(findings, p.settings, {});
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const retryable = !(error instanceof ProviderError) || error.retryable;
+      if (retryable && !opts.lastAttempt) {
+        const settled = await settle(db, logger, usage, now);
+        await settleBudget(db, estimate, settled.neurons, now, REVIEW_FEATURE);
+        return { status: 'retry', error: message };
+      }
+      logger.error('[Review] Image check failed for good; held for a person', { subject: p.subject, subjectId: p.subjectId, error: message });
+      findings.length = 0;
+      routing = routeImageReview([], p.settings, { checkFailed: true });
+    }
+  }
+  const settled = await settle(db, logger, usage, now);
+  if (reserved) await settleBudget(db, estimate, settled.neurons, now, REVIEW_FEATURE);
+  await finishReviewRow(db, asVideo, { routing, findings, partial: false, models: settled.models, costUsd: usdFor(settled.neurons), mediaRetentionDays: p.settings.mediaRetentionDays }, new Date(now));
+  logger.info('[Review] Image checked', { subject: p.subject, subjectId: p.subjectId, route: routing.route, nsfw: routing.nsfw, mode: p.mode });
+  if (p.mode === 'shadow') return { status: 'done', route: routing.route };
+  try {
+    await sendImageOutcome(routing.route);
+  } catch (error) {
+    return { status: 'retry', error: error instanceof Error ? error.message : String(error) };
+  }
+  if (routing.route === 'hold') await alertReviewers(env, asVideo, routing, (p.text ?? p.subject).slice(0, 120), logger);
+  return { status: 'done', route: routing.route };
 }

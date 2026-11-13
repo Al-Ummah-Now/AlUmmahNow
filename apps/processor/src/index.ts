@@ -7,7 +7,7 @@ import { MessageProcessor } from './messageProcessor';
 import type { createLogger } from '@al-ummah/logger';
 import { loggerFor } from './lib/logger';
 import { purgeExpiredNotifications } from './lib/notifications-store';
-import { handleVideoReviewAppeal, handleVideoReviewScan, isReviewAppealPayload, isReviewScanPayload, type ReviewConsumerEnv } from './review/consumer';
+import { handleImageReviewScan, handleVideoReviewAppeal, handleVideoReviewScan, isImageReviewPayload, isReviewAppealPayload, isReviewScanPayload, type ReviewConsumerEnv } from './review/consumer';
 import { handleModerationScan, isScanPayload } from './moderation/consumer';
 import { purgeExpiredModerationData } from './moderation/store';
 import { isDeadLetterQueue, processDeadLetterBatch } from './dlq/consumer';
@@ -48,7 +48,7 @@ export async function processModerationBatch(
   for (const message of batch.messages) {
     const payload = message.body?.payload;
     // Pre-publication review (docs/specs/VIDEO-REVIEW.md §4) shares the moderation queue
-    if (message.body?.type === MessageType.VideoReviewScan || message.body?.type === MessageType.VideoReviewAppeal) {
+    if (message.body?.type === MessageType.VideoReviewScan || message.body?.type === MessageType.VideoReviewAppeal || message.body?.type === MessageType.ImageReviewScan) {
       await processReviewMessage(message, env as unknown as ReviewConsumerEnv, logger);
       continue;
     }
@@ -82,6 +82,18 @@ async function processReviewMessage(message: QueueMessage<AlUmmahMessage>, env: 
       }
       await handleVideoReviewAppeal(payload, env, logger);
       message.ack();
+      return;
+    }
+    if (message.body?.type === MessageType.ImageReviewScan) {
+      if (!isImageReviewPayload(payload)) {
+        logger.warn('[Review] Invalid image scan dropped', { id: message.body?.id });
+        message.ack();
+        return;
+      }
+      const lastAttempt = (message.attempts ?? 1) > MODERATION_MAX_RETRIES;
+      const outcome = await handleImageReviewScan(payload, env, logger, { lastAttempt });
+      if (outcome.status === 'retry') message.retry();
+      else message.ack();
       return;
     }
     if (!isReviewScanPayload(payload)) {

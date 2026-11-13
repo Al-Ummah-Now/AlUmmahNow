@@ -5334,6 +5334,8 @@
                 "scheduled",
                 "drafts",
                 "processing",
+                "in_review",
+                "not_approved",
                 "failed"
               ],
               "default": "published"
