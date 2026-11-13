@@ -1,0 +1,70 @@
+name: Street perf probe (temporary)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/street-perf-probe.yml'
+      - 'scripts/perf/street-probe.mjs'
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      CI: true
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: pnpm/action-setup@eae0cfeb286e66ffb5155f1a79b90583a127a68b # v2
+        with:
+          version: 9.15.4
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build shared packages
+        run: |
+          pnpm --filter @al-ummah/shared-types build
+          pnpm --filter @al-ummah/logger build
+          pnpm --filter @al-ummah/theme-packages build
+      - name: Browsers
+        working-directory: apps/web
+        run: pnpm exec playwright install --with-deps chromium firefox
+      - name: Probe before (8e2e1651, street on watch) and after (main)
+        run: |
+          set -e
+          ENVV="API_URL=http://127.0.0.1:3158 NEXT_PUBLIC_API_URL=http://127.0.0.1:3158 WWW_URL=https://www.example.test AUTH_PROFILE_URL=https://profile.auth.example.test WEBSOCKET_URL=ws://127.0.0.1:3158/ws NEXT_PUBLIC_WEBSOCKET_URL=ws://127.0.0.1:3158/ws"
+          (cd apps/web && MOCK_API_PORT=3158 THEMES_ORIGIN=http://localhost:3157 node e2e/themes/mock-server.mjs > /tmp/mock.log 2>&1 &)
+          run() {
+            label=$1
+            (cd apps/web && env $ENVV pnpm exec next dev -p 3157 --webpack > /tmp/dev-$label.log 2>&1 &)
+            for u in /en /en/video/v1 /ar/community-guidelines; do
+              for i in $(seq 1 60); do c=$(curl -s -o /dev/null -w "%{http_code}" --max-time 180 http://localhost:3157$u || true); [ "$c" = 200 ] && break; sleep 5; done
+              echo "$label warm $u $c"
+            done
+            for t in fawanees lantern; do for b in firefox chromium; do for n in 1 2; do
+              THEME=$t node scripts/perf/street-probe.mjs http://localhost:3157 $b $label /en/video/v1 /en /ar/community-guidelines 2>/dev/null | grep '^{' | tee -a /tmp/probe.jsonl || true
+            done; done; done
+            pkill -f "next dev -p 3157" || true; sleep 2
+          }
+          git checkout 8e2e1651f6403fa7968027f63546629760986a05 -- packages/fanous-tokens/street apps/web/src/components/FanousStreet.tsx
+          run before
+          git checkout HEAD -- packages/fanous-tokens/street apps/web/src/components/FanousStreet.tsx
+          run after
+          echo '## Street perf probe' >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY; cat /tmp/probe.jsonl >> $GITHUB_STEP_SUMMARY; echo '```' >> $GITHUB_STEP_SUMMARY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: street-probe
+          path: /tmp/*.jsonl
