@@ -191,6 +191,7 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
           baseData.link = {
             url: link.url.trim(),
             title: link.title.trim() || null,
+            siteName: link.siteName.trim() || null,
             description: link.description.trim() || null,
             image: link.image
           };

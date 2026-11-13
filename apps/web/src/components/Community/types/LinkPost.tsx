@@ -11,7 +11,7 @@ const hostOf = (url: string) => {
   }
 };
 
-/** A link post: the creator's comment and a card for the outside page (opens in a new tab, nofollow). */
+/** A link post: the creator's comment and a preview card for the outside page (image, title, site name or host) (opens in a new tab, nofollow). */
 export default function LinkPost({ post }: { post: CommunityPost }) {
   const { t } = useLanguage();
   const l = post.link;
@@ -31,7 +31,7 @@ export default function LinkPost({ post }: { post: CommunityPost }) {
           <img src={l.image.url} alt="" loading="lazy" decoding="async" className="w-28 h-28 object-cover shrink-0 bg-[var(--fanous-color-surface-raised)]" />
         ) : null}
         <span className="p-3 space-y-1 min-w-0 text-start">
-          <span className="block text-xs text-[var(--fanous-color-text-muted)]" dir="ltr">{hostOf(l.url)}</span>
+          <span className="block text-xs text-[var(--fanous-color-text-muted)]" dir={l.siteName ? "auto" : "ltr"} data-testid="community-link-site">{l.siteName || hostOf(l.url)}</span>
           <span className="block font-semibold text-[var(--fanous-color-text-primary)] break-words">{l.title || l.url}</span>
           {l.description ? <span className="block text-sm text-[var(--fanous-color-text-secondary)] line-clamp-2 break-words">{l.description}</span> : null}
           <span className="sr-only">({t.community.opensOutside})</span>

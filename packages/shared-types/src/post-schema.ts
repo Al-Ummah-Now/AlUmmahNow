@@ -18,7 +18,7 @@
 
 export const POST_SCHEMA_VERSION = 2 as const;
 /** Bumped when postSummary's output changes shape or content (the CMS re-summarises older refs). */
-export const POST_SCHEMA_REVISION = 1 as const;
+export const POST_SCHEMA_REVISION = 2 as const;
 
 /** Every post kind, everywhere. `gif` is kept and `link` added (SS14, the spec's recommendation). */
 export const POST_KINDS = ['text', 'image', 'poll', 'quiz', 'video', 'gif', 'link', 'article', 'cards'] as const;
@@ -43,6 +43,7 @@ export const POST_LIMITS = {
   images: 10,
   linkTitle: 200,
   linkDescription: 300,
+  linkSiteName: 80,
   url: 2048,
   slug: 120,
   translationKey: 64,
@@ -80,12 +81,18 @@ export interface PostArticle {
   externalId?: string;
 }
 
-/** A `link` post: an outside page with an optional preview. */
+/**
+ * A `link` post: an outside page with a preview card (image, title, site name) and the creator's
+ * optional comment (the post's `content`). Studio fills the card from the page (api-videos link
+ * preview); the image is re-hosted on the platform's image host.
+ */
 export interface PostLink {
   url: string;
   title: string | null;
   description: string | null;
   image: PostMedia | null;
+  /** The page's site name (og:site_name), else readers show its host. Absent on older posts. */
+  siteName?: string | null;
 }
 
 /** Where www shows the post (written back by the reference sync). */
@@ -300,6 +307,7 @@ export function parsePostFields(kind: unknown, raw: unknown, opts: PostValidateO
         title: text(l.title, POST_LIMITS.linkTitle, 'link.title', false) || null,
         description: text(l.description, POST_LIMITS.linkDescription, 'link.description', false, true) || null,
         image: l.image === undefined || l.image === null ? null : media(l.image, 'link.image', opts, false),
+        siteName: text(l.siteName, POST_LIMITS.linkSiteName, 'link.siteName', false) || null,
       };
       if (b.title !== undefined && b.title !== null && b.title !== '') out.title = text(b.title, POST_LIMITS.title, 'title', false);
     }
@@ -497,7 +505,7 @@ export function postSummary(p: PostLike): PostSummaryV2 {
     images: images.slice(0, 4),
     image_count: images.length,
     video_id: typeof p.videoId === 'string' && p.videoId ? p.videoId : null,
-    link: p.link && httpsUrl(p.link.url, true) ? { url: p.link.url, title: p.link.title ?? null, description: p.link.description ?? null, image: p.link.image ?? null } : null,
+    link: p.link && httpsUrl(p.link.url, true) ? { url: p.link.url, title: p.link.title ?? null, description: p.link.description ?? null, image: p.link.image ?? null, siteName: p.link.siteName ?? null } : null,
     poll: p.poll ? { question: plainText(p.poll.question).slice(0, 300), options: opts(p.poll.options) } : null,
     quiz: p.quiz ? { question: plainText(p.quiz.question).slice(0, 300), options: opts(p.quiz.options) } : null,
     gif: p.gif ? asMedia(p.gif.url, null, p.gif.width, p.gif.height) : null,
@@ -534,7 +542,7 @@ export const POST_FIXTURES: Readonly<Record<PostKind, PostLike>> = {
   quiz: { ...base('quiz', 'fx-quiz'), content: 'A question', quiz: { question: 'How many daily prayers are there?', options: [{ id: 'quiz-option-0', text: 'Three' }, { id: 'quiz-option-1', text: 'Five' }] } },
   video: { ...base('video', 'fx-video'), content: 'Watch this', videoId: 'fixture-video' },
   gif: { ...base('gif', 'fx-gif'), gif: { url: 'https://images.alummahnow.net/fixtures/a.gif', width: 480, height: 270 } },
-  link: { ...base('link', 'fx-link'), content: 'Worth a read', link: { url: 'https://example.org/page', title: 'An outside page', description: 'Its description', image: null } },
+  link: { ...base('link', 'fx-link'), content: 'Worth a read', link: { url: 'https://example.org/page', title: 'An outside page', description: 'Its description', image: null, siteName: 'Example' } },
   article: {
     ...base('article', 'fx-article'),
     content: 'On patience',

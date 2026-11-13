@@ -9,6 +9,7 @@ import {
   LikePostResponse,
   CreateCommunityPostRequest,
   UpdateCommunityPostRequest,
+  type PostMedia,
 } from "@al-ummah/shared-types";
 import { apiRequestServer, buildApiUrl, buildQueryParams } from "./api-client";
 import { getServerAuthContext } from "./server-auth";
@@ -240,6 +241,43 @@ export async function uploadCommunityImages(
     return Array.isArray(body.images) ? body.images : null;
   } catch (error) {
     logger.error('[uploadCommunityImages] upload failed', { channelId, error });
+    return null;
+  }
+}
+
+/** A link post preview (POST /api/community/media/link-preview, SS14). */
+export interface LinkPreview {
+  url: string;
+  title: string | null;
+  description: string | null;
+  siteName: string | null;
+  image: PostMedia | null;
+}
+
+/**
+ * Reads an outside page's title, site name, description and preview image for the link post
+ * composer (the image is copied to our storage). Null when the page could not be previewed.
+ */
+export async function fetchLinkPreview(channelId: string, url: string): Promise<LinkPreview | null> {
+  const authContext = await getServerAuthContext();
+  try {
+    const response = await fetch(buildApiUrl('/api/community/media/link-preview'), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${authContext?.accessToken || ''}`,
+        channelId,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ url }),
+    });
+    if (!response.ok) {
+      logger.debug('[fetchLinkPreview] no preview', { channelId, status: response.status });
+      return null;
+    }
+    const body = (await response.json()) as { preview?: LinkPreview };
+    return body.preview ?? null;
+  } catch (error) {
+    logger.error('[fetchLinkPreview] request failed', { channelId, error });
     return null;
   }
 }
