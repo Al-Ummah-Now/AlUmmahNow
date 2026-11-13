@@ -55,8 +55,16 @@
 			"binding": "subtitles",
 			"bucket_name": "subtitles",
 			"remote": true
+		},
+		{
+			// Pre-publication review (docs/specs/VIDEO-REVIEW.md §4): frames, audio, manifests under review/
+			"binding": "REVIEW_MEDIA",
+			"bucket_name": "al-ummah-now-media-private",
+			"remote": true
 		}
 	],
+	// Pre-publication review: the automated outcome goes to api-videos /internal/review/*
+	"services": [{ "binding": "VIDEOS", "service": "videos" }],
 
 	// Queue configuration
 	"queues": {
@@ -166,8 +174,13 @@
 				{
 					"binding": "subtitles",
 					"bucket_name": "subtitles-stage"
+				},
+				{
+					"binding": "REVIEW_MEDIA",
+					"bucket_name": "al-ummah-now-media-private-stage"
 				}
 			],
+			"services": [{ "binding": "VIDEOS", "service": "videos-stage" }],
 			"queues": {
 				"producers": [{ "queue": "al-ummah-now-videos-stage", "binding": "MESSAGE_QUEUE" }, { "queue": "al-ummah-now-dlq-stage", "binding": "DLQ" }],
 				"consumers": [

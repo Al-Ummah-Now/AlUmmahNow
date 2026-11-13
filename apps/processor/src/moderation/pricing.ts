@@ -17,6 +17,11 @@ const NEURONS_PER_M: Record<string, [number, number]> = {
   '@cf/meta/llama-guard-3-8b': [44003, 2730],
   '@cf/meta/llama-4-scout-17b-16e-instruct': [24545, 77273],
   '@cf/mistralai/mistral-small-3.1-24b-instruct': [31876, 50488],
+  // Pre-publication review (docs/specs/VIDEO-REVIEW.md; catalog prices read 2026-11-13)
+  '@cf/cloudflare/clef-flash': [3455, 0], // $0.038 / M input
+  '@cf/google/gemma-4-26b-a4b-it': [9091, 27273], // $0.10 / $0.30 per M
+  // Speech to text is priced per audio minute ($0.000513); usage counts seconds as "input tokens"
+  '@cf/openai/whisper-large-v3-turbo': [777273, 0],
 };
 
 /** Unknown models are priced like the most expensive known input/output rates (never under-count). */

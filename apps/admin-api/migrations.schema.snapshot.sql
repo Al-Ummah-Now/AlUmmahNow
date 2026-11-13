@@ -23,6 +23,7 @@
 --   apps/admin-api/migrations/0022_scholar_sites.sql
 --   apps/admin-api/migrations/0023_site_domain_checks.sql
 --   apps/admin-api/migrations/0024_content_reviews.sql
+--   apps/admin-api/migrations/0025_review_alert_subscribers.sql
 
 CREATE TABLE admin_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, actor_email TEXT, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, metadata TEXT, created_at TEXT NOT NULL);
 CREATE TABLE ai_budget_daily (day TEXT NOT NULL, feature TEXT NOT NULL, reserved REAL NOT NULL DEFAULT 0, PRIMARY KEY (day, feature));
@@ -53,6 +54,7 @@ CREATE TABLE plan_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, action
 CREATE TABLE plan_entitlements (plan_id TEXT NOT NULL REFERENCES plans(id), plan_version INTEGER NOT NULL, key TEXT NOT NULL, value_json TEXT NOT NULL, PRIMARY KEY (plan_id, plan_version, key));
 CREATE TABLE plans (id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, name_en TEXT NOT NULL, name_ar TEXT NOT NULL, description_en TEXT, description_ar TEXT, audience TEXT NOT NULL CHECK (audience IN ('creator', 'organisation', 'viewer', 'everyone')), status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'archived')), is_public INTEGER NOT NULL DEFAULT 0, is_default INTEGER NOT NULL DEFAULT 0, sort_order INTEGER NOT NULL DEFAULT 0, version INTEGER NOT NULL DEFAULT 1, created_by TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')));
 CREATE TABLE "reports" (id TEXT PRIMARY KEY, entity_type TEXT NOT NULL CHECK (entity_type IN ('video', 'comment', 'channel', 'livestream', 'playlist', 'post')), entity_id TEXT NOT NULL, reporter_id TEXT NOT NULL, reason TEXT NOT NULL CHECK (reason IN ('inappropriate', 'spam', 'harassment', 'copyright', 'misinformation', 'other')), description TEXT, status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'reviewing', 'resolved', 'dismissed')), moderator_id TEXT, action TEXT CHECK (action IN ('warning', 'removed', 'banned', 'deleted', 'dismissed')), moderator_notes TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT, resolved_at TEXT, entity_title TEXT, entity_parent_id TEXT, channel_id TEXT, channel_name TEXT, owner_id TEXT, owner_name TEXT, reporter_name TEXT, moderator_name TEXT, meta_synced_at TEXT, banned_user_id TEXT);
+CREATE TABLE review_alert_subscribers (user_id TEXT PRIMARY KEY, senior INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE site_domain_checks (host TEXT PRIMARY KEY, channel_id TEXT NOT NULL, cf_id TEXT, added_at TEXT NOT NULL, next_check_at INTEGER NOT NULL);
 CREATE TABLE site_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE site_settings_log (id TEXT PRIMARY KEY, key TEXT NOT NULL, old_value TEXT, new_value TEXT NOT NULL, actor_id TEXT NOT NULL, created_at TEXT NOT NULL);
