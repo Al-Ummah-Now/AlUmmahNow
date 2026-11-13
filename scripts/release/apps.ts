@@ -58,10 +58,10 @@ export const APPS: AppRule[] = [
 				WEBSOCKET_URL: 'wss://realtime.alummahnow.net/ws',
 			},
 			// INTERNAL_API_KEY: the Contact us route calls admin-api /internal/contact
-			requiredBindings: [{ kind: 'r2_buckets', name: 'videos' }, INTERNAL_API_KEY],
+			requiredBindings: [{ kind: 'r2_buckets', name: 'videos' }, INTERNAL_API_KEY, { kind: 'analytics_engine_datasets', name: 'RUM' }],
 			...PROD_GUARDS,
 		},
-		stage: stageRule({ name: 'al-ummah-now-stage', requireRoutes: true, vars: { Issuer: STAGE_AUTH, OPENAUTH_ISSUER: STAGE_AUTH, API_URL: STAGE_API, WEBSOCKET_URL: 'wss://realtime.stage.alummahnow.net/ws' }, requiredBindings: [{ kind: 'r2_buckets', name: 'videos' }, INTERNAL_API_KEY] }),
+		stage: stageRule({ name: 'al-ummah-now-stage', requireRoutes: true, vars: { Issuer: STAGE_AUTH, OPENAUTH_ISSUER: STAGE_AUTH, API_URL: STAGE_API, WEBSOCKET_URL: 'wss://realtime.stage.alummahnow.net/ws' }, requiredBindings: [{ kind: 'r2_buckets', name: 'videos' }, INTERNAL_API_KEY, { kind: 'analytics_engine_datasets', name: 'RUM' }] }),
 	},
 	{
 		app: 'admin-web',
