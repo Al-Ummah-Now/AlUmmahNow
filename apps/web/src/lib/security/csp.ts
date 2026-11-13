@@ -104,7 +104,7 @@ export function buildContentSecurityPolicy({ isDevelopment, insecureOrigin = fal
   ].filter(Boolean);
 
   // challenges.cloudflare.com: Turnstile (lib/turnstile, docs/features/bot-protection.md)
-  const scriptHosts = ['https://vjs.zencdn.net', 'https://assets.mediadelivery.net', 'https://challenges.cloudflare.com'];
+  const scriptHosts = ['https://vjs.zencdn.net', 'https://challenges.cloudflare.com'];
   const scriptSrc = isDevelopment
     ? ["'self'", "'unsafe-eval'", "'unsafe-inline'", ...scriptHosts]
     : nonce
@@ -116,11 +116,11 @@ export function buildContentSecurityPolicy({ isDevelopment, insecureOrigin = fal
     `script-src ${scriptSrc.join(' ')}`,
     // Inline event-handler attributes are never needed: React attaches handlers via addEventListener.
     "script-src-attr 'none'",
-    "style-src 'self' 'unsafe-inline' https://vjs.zencdn.net https://cdnjs.cloudflare.com",
+    "style-src 'self' 'unsafe-inline' https://vjs.zencdn.net",
     `media-src 'self' https://cdn.bunny.net https://bunny-cdn.b-cdn.net https://*.b-cdn.net ${MEDIA_HOSTS.join(' ')} ${LIVE_EDGE_ORIGINS.join(' ')} blob:`,
     `connect-src ${Array.from(new Set(connectSrc)).join(' ')}`,
     "img-src 'self' data: https: blob:",
-    "font-src 'self' data: https://cdnjs.cloudflare.com",
+    "font-src 'self' data:",
     "frame-src 'self' https://iframe.mediadelivery.net https://challenges.cloudflare.com",
     "worker-src 'self' blob:",
     "object-src 'none'",
