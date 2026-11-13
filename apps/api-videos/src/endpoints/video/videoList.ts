@@ -13,10 +13,10 @@ import { waitUntilOf } from "../../lib/search/ownership";
 import { channelVideosFromIndex } from "../../lib/search/channelVideoIndex";
 import { scanFill } from "../../lib/listFill";
 import { edgeCacheUrl, readEdgeCache, writeEdgeCache } from "../../lib/edge-cache";
+import { FIRST_PAGE_TTL_SECONDS, videoListGeneration } from "../../lib/videoListCache";
 import { PUBLIC_DISLIKES_COUNT } from "../../lib/reactions";
 
 /** Seconds the anonymous first page of the general feed is reused. */
-const LIST_FIRST_PAGE_TTL = 30;
 
 type VideoSort = "date" | "views" | "title" | "likes";
 type VideoFilter = "all" | "public" | "private" | "live";
@@ -113,8 +113,9 @@ export class VideosList extends OptionalAuthRoute {
 
 		// The anonymous first page is the same for every visitor and costs an R2
 		// read per video, so it is reused briefly. Pages and channel views are not.
+		// Keyed by the list's generation: a delete, edit or hide drops every cached variant (lib/videoListCache.ts)
 		const firstPageCacheUrl = !userId && !filterChannelId && !cursor && !format && !titleQuery
-			? edgeCacheUrl(c.req.url, `videos/v1/first-page/${limit}/${sort}/${filter}/${category || "_"}`)
+			? edgeCacheUrl(c.req.url, `videos/v1/first-page/${await videoListGeneration(c.req.url)}/${limit}/${sort}/${filter}/${category || "_"}`)
 			: null;
 		if (firstPageCacheUrl) {
 			const cached = await readEdgeCache<PaginationResponse<Record<string, unknown>>>(firstPageCacheUrl);
@@ -287,7 +288,7 @@ export class VideosList extends OptionalAuthRoute {
 			data: filteredVideos.map(transformToView),
 		};
 
-		if (firstPageCacheUrl) writeEdgeCache(firstPageCacheUrl, response, LIST_FIRST_PAGE_TTL, waitUntilOf(c as never));
+		if (firstPageCacheUrl) writeEdgeCache(firstPageCacheUrl, response, FIRST_PAGE_TTL_SECONDS, waitUntilOf(c as never));
 
 		return response;
 	}

@@ -32,6 +32,7 @@ import { sweepLiveSessions } from "./lib/live/service";
 import { markStreamLive, registerLiveStreamHooks, type StreamsEnv } from "./lib/live/streams";
 import { pruneLiveData } from "./lib/live/qoe";
 import { loggingMiddleware } from "./middleware/logging";
+import { videoListInvalidation } from './lib/videoListCache';
 import { withLogging } from "@al-ummah/logger";
 import { errorHandler } from "./middleware/error-handler";
 import { pruneRateLimits, rateLimitMiddleware } from "./middleware/rate-limit";
@@ -115,6 +116,8 @@ for (const p of INTERNAL_PATHS) {
 
 // Add comprehensive logging middleware for ALL routes
 app.use('*', loggingMiddleware);
+// A delete, edit or hide drops the cached anonymous first page of the list (#1131)
+app.use('*', videoListInvalidation);
 
 // Public API contract (Epic 9.3), served as /api/v1/openapi.json. Registered
 // before the /api/* auth and URL-signing middleware: it is static and public.
