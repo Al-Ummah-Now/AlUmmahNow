@@ -41,6 +41,8 @@ export interface EmbedVideo {
   width?: number;
   height?: number;
   isShort?: boolean;
+  /** Unlisted (D-SEO-5): playable by link, shared with a card, but never indexed */
+  isUnlisted?: boolean;
   /** Inside a playlist: the item's place in the stored list (the watch URL's `index`) */
   listIndex?: number;
 }
@@ -69,6 +71,7 @@ interface ApiVideo {
   channelNameLocalized?: Record<string, string>;
   channelHandle?: string | null;
   isPublic?: boolean;
+  isUnlisted?: boolean;
   isDeleted?: boolean;
   isHidden?: boolean;
   uploadStatus?: string;
@@ -106,7 +109,8 @@ export { videoAspect } from './aspect';
 
 export function toEmbedVideo(video: ApiVideo | null | undefined): EmbedVideo | null {
   if (!video || !video.id || !video.playUrl) return null;
-  if (video.isPublic === false || video.isDeleted === true || video.isHidden === true) return null;
+  // Private videos never play here; unlisted ones do for anyone with the link (D-SEO-5)
+  if ((video.isPublic === false && video.isUnlisted !== true) || video.isDeleted === true || video.isHidden === true) return null;
   if (video.uploadStatus && NOT_PLAYABLE_STATUSES.has(video.uploadStatus)) return null;
   const duration = Number(video.duration);
   const thumbnailSource = posterFor(video.playUrl, video.thumbnailUrl);
@@ -127,6 +131,7 @@ export function toEmbedVideo(video: ApiVideo | null | undefined): EmbedVideo | n
     hasChapters: video.hasChapters === true || undefined,
     ...(positiveSize(video.width) && positiveSize(video.height) ? { width: Number(video.width), height: Number(video.height) } : {}),
     ...(video.isShort === true ? { isShort: true } : {}),
+    ...(video.isPublic === false && video.isUnlisted === true ? { isUnlisted: true } : {}),
     ...(video.delivery?.source === 'r2' || video.delivery?.source === 'bunny' ? { delivery: { source: video.delivery.source } } : {}),
   };
 }

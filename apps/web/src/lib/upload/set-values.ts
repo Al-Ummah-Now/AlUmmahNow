@@ -28,6 +28,8 @@ export interface RowValues {
   descriptionAr: string;
   language?: ContentLanguage;
   isPublic?: boolean;
+  /** Unlisted (D-SEO-5): only with isPublic false */
+  isUnlisted?: boolean;
   tags?: string[];
   commentSettings?: CommentSetting;
   /** ISO time; set → the video is private until then */
@@ -123,10 +125,10 @@ export function applySetValues(
       if (form.description.ar.enabled) put(id, 'descriptionAr', { descriptionAr: form.description.ar.text });
     }
     if (ready.has('language')) put(id, 'language', { language: form.language });
-    if (ready.has('visibility')) put(id, 'visibility', { isPublic: form.visibility === 'public' });
+    if (ready.has('visibility')) put(id, 'visibility', { isPublic: form.visibility === 'public', isUnlisted: form.visibility === 'unlisted' });
     if (ready.has('comments')) put(id, 'comments', { commentSettings: form.comments });
     if (ready.has('tags')) put(id, 'tags', { tags: parseTagList(form.tags) });
-    if (request.publishAt[id]) put(id, 'publishAt', { publishAt: request.publishAt[id], isPublic: false });
+    if (request.publishAt[id]) put(id, 'publishAt', { publishAt: request.publishAt[id], isPublic: false, isUnlisted: false });
   }
   return { rows: next, changed: Array.from(changed), skipped };
 }
@@ -161,6 +163,7 @@ export function initiateFields(values: RowValues, fileName: string) {
     ...(values.language ? { language: values.language } : {}),
     ...(values.commentSettings ? { commentSettings: values.commentSettings } : {}),
     ...(values.isPublic !== undefined ? { isPublic: values.isPublic } : {}),
+    ...(values.isPublic === false && values.isUnlisted ? { visibility: 'unlisted' as const } : {}),
     ...(values.tags?.length ? { tags: values.tags.join(',') } : {}),
     fileName,
   };
@@ -178,7 +181,10 @@ export function updateFor(saved: RowValues, row: RowValues): Record<string, unkn
     update.description = row.descriptionEn || row.descriptionAr;
   }
   if (row.language !== saved.language && row.language) update.language = row.language;
-  if (row.isPublic !== saved.isPublic && row.isPublic !== undefined) update.isPublic = row.isPublic;
+  if ((row.isPublic !== saved.isPublic && row.isPublic !== undefined) || !!row.isUnlisted !== !!saved.isUnlisted) {
+    if (row.isPublic !== undefined) update.isPublic = row.isPublic;
+    update.visibility = row.isPublic !== false ? 'public' : row.isUnlisted ? 'unlisted' : 'private';
+  }
   if (JSON.stringify(row.tags ?? []) !== JSON.stringify(saved.tags ?? []) && row.tags) update.tags = row.tags;
   if (row.commentSettings !== saved.commentSettings && row.commentSettings) update.commentSettings = row.commentSettings;
   return Object.keys(update).length ? update : null;

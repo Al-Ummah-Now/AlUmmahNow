@@ -97,6 +97,7 @@ export interface BulkFieldTranslations {
   visibility: string;
   public: string;
   private: string;
+  unlisted: string;
   playlists: string;
   addToPlaylists: string;
   removeFromPlaylists: string;
@@ -128,6 +129,7 @@ export interface BulkEditTranslations {
   noChange: string;
   public: string;
   private: string;
+  unlisted: string;
   clearCategory: string;
   addTags: string;
   removeTags: string;
@@ -372,6 +374,7 @@ const FIELDS_EN: BulkFieldTranslations = {
   visibility: 'Visibility',
   public: 'Public',
   private: 'Private',
+  unlisted: 'Unlisted',
   playlists: 'Playlists',
   addToPlaylists: 'Add to playlists',
   removeFromPlaylists: 'Remove from playlists',
@@ -410,6 +413,7 @@ const FIELDS_AR: BulkFieldTranslations = {
   visibility: 'الظهور',
   public: 'عام',
   private: 'خاص',
+  unlisted: 'غير مدرج',
   playlists: 'قوائم التشغيل',
   addToPlaylists: 'إضافة إلى قوائم التشغيل',
   removeFromPlaylists: 'إزالة من قوائم التشغيل',
@@ -441,6 +445,7 @@ export const BULK_EDIT_EN: BulkEditTranslations = {
   noChange: 'No change',
   public: 'Public',
   private: 'Private',
+  unlisted: 'Unlisted',
   clearCategory: 'Remove category',
   addTags: 'Add tags',
   removeTags: 'Remove tags',
@@ -541,6 +546,7 @@ export const BULK_EDIT_AR: BulkEditTranslations = {
   noChange: 'بدون تغيير',
   public: 'عام',
   private: 'خاص',
+  unlisted: 'غير مدرج',
   clearCategory: 'إزالة التصنيف',
   addTags: 'إضافة وسوم',
   removeTags: 'إزالة وسوم',

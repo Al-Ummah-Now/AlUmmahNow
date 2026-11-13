@@ -42,6 +42,8 @@ export interface VideoObject {
     dislikesCount: number;
     commentsCount: number;
     isPublic?: boolean; // Added from API spec
+  /** Not public but open to anyone with the link (D-SEO-5) */
+  isUnlisted?: boolean;
     isLive?: boolean;   // Added from API spec
     tags?: string[];
     category?: VideoCategory;

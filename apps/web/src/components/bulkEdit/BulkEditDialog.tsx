@@ -90,6 +90,7 @@ export function BulkEditDialog({ open, count, onOpenChange, onApply, selectedTag
               <ThemedSelectField className={fieldClass} value={form.visibility} onChange={(e) => set('visibility', e.target.value as BulkEditForm['visibility'])} data-testid="bulk-edit-visibility">
                 <option value="">{b.noChange}</option>
                 <option value="public">{b.public}</option>
+                <option value="unlisted">{b.unlisted}</option>
                 <option value="private">{b.private}</option>
               </ThemedSelectField>
             </label>

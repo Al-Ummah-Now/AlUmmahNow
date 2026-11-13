@@ -95,6 +95,8 @@ export interface InitiateMetadata {
   description?: string;
   descriptionLocalized?: Record<string, string>;
   isPublic?: boolean;
+  /** public | unlisted | private (D-SEO-5); wins over isPublic */
+  visibility?: 'public' | 'unlisted' | 'private';
   tags?: string;
   category?: string;
   /** Upload as Short / as video; 'auto' detects it */

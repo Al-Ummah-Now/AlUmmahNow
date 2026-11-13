@@ -164,7 +164,7 @@ export function BulkFieldsForm({ variant, form, onChange, subjects, fields, play
       case 'visibility':
         return (
           <div className="flex flex-wrap gap-4" role="radiogroup" aria-label={f.visibility}>
-            {(['public', 'private'] as const).map((v) => (
+            {(['public', 'unlisted', 'private'] as const).map((v) => (
               <label key={v} className="inline-flex min-h-11 items-center gap-2 text-sm text-[var(--fanous-color-text-primary)]">
                 <input type="radio" name={`bulk-${variant}-visibility`} checked={form.visibility === v} onChange={() => set('visibility', v)}
                   className="h-4 w-4 accent-[var(--fanous-color-primary)]" data-testid={`bulk-${variant}-visibility-${v}`} />

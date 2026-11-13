@@ -14,11 +14,12 @@ describe('bulk edit helpers (Epic 5.3)', () => {
   it('maps every field to the API shape', () => {
     expect(buildBulkChanges({ visibility: 'private', category: CLEAR_CATEGORY, addTags: 'a', removeTags: 'b, c' })).toEqual({
       isPublic: false,
+      visibility: 'private',
       category: null,
       addTags: ['a'],
       removeTags: ['b', 'c'],
     });
-    expect(buildBulkChanges({ ...EMPTY_BULK_EDIT, visibility: 'public', category: 'education' })).toEqual({ isPublic: true, category: 'education' });
+    expect(buildBulkChanges({ ...EMPTY_BULK_EDIT, visibility: 'public', category: 'education' })).toEqual({ isPublic: true, visibility: 'public', category: 'education' });
   });
 
   it('applies changes to the local copy without duplicating tags', () => {
@@ -30,5 +31,14 @@ describe('bulk edit helpers (Epic 5.3)', () => {
       tags: ['Fiqh', 'new'],
     });
     expect(video.tags).toEqual(['Fiqh', 'old']);
+  });
+});
+
+describe('unlisted (D-SEO-5)', () => {
+  it('sends unlisted as not public plus the visibility', () => {
+    expect(buildBulkChanges({ ...EMPTY_BULK_EDIT, visibility: 'unlisted' })).toEqual({ isPublic: false, visibility: 'unlisted' });
+  });
+  it('applies unlisted locally', () => {
+    expect(applyChangesLocally({ id: 'v1', isPublic: true }, { isPublic: false, visibility: 'unlisted' })).toMatchObject({ isPublic: false, isUnlisted: true });
   });
 });

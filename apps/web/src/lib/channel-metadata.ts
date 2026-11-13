@@ -34,7 +34,8 @@ export async function buildChannelMetadata(channel: Channel | null, locale: stri
     alternates: origin
       ? {
           canonical: `${origin}${path}`,
-          languages: { [locale]: `${origin}${path}`, [otherLocale]: `${origin}${channelPath(otherLocale, channel)}` },
+          // Each language is its own canonical; x-default is English (D-SEO-1)
+          languages: { [locale]: `${origin}${path}`, [otherLocale]: `${origin}${channelPath(otherLocale, channel)}`, 'x-default': `${origin}${channelPath('en', channel)}` },
         }
       : undefined,
   };

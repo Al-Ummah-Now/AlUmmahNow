@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
+import { originFromHost } from '@/lib/embed/request-origin';
 import { isValidContentId } from '@/lib/embed/params';
 import { ContentUnavailableError } from '@/lib/seo/availability';
 import { playlistAvailability } from '@/lib/seo/availability-server';
@@ -11,11 +13,20 @@ interface PlaylistLayoutProps {
 
 /** A playlist only the signed-in viewer can see (private) is never indexed. */
 export async function generateMetadata({ params }: Pick<PlaylistLayoutProps, 'params'>): Promise<Metadata> {
-  const { id } = await params;
+  const { locale, id } = await params;
   if (!isValidContentId(id) || (await playlistAvailability(id)) !== 'public') {
     return { robots: { index: false, follow: false } };
   }
-  return {};
+  const host = (await headers()).get('host');
+  if (!host) return {};
+  // Each language is its own canonical; x-default is English (D-SEO-1)
+  const url = (lang: string) => `${originFromHost(host)}/${lang}/playlist/${encodeURIComponent(id)}`;
+  return {
+    alternates: {
+      canonical: url(locale === 'ar' ? 'ar' : 'en'),
+      languages: { en: url('en'), ar: url('ar'), 'x-default': url('en') },
+    },
+  };
 }
 
 /** Real status codes for the (client) playlist page: 404 when nobody here may see it, 503 when the API is down. */

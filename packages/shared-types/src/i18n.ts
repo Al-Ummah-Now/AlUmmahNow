@@ -761,6 +761,9 @@ export interface AppTranslations {
     videoPrivacy?: string;
     publicVideo?: string;
     privateVideo?: string;
+    /** Unlisted (D-SEO-5) */
+    unlisted?: string;
+    unlistedVideo?: string;
     saveChanges?: string;
     saving?: string;
     discardChanges?: string;
@@ -935,6 +938,8 @@ export interface AppTranslations {
     processingVideo: string;
     preparing: string;
     makePublic: string;
+    /** Shown when not public: open to anyone with the link (D-SEO-5) */
+    makeUnlisted?: string;
     cancelUpload: string;
     dropHere: string;
     supports: string;
