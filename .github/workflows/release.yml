@@ -254,6 +254,13 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm release:queue-consumers --config apps/admin-api/wrangler.jsonc --env stage
 
+      # The processor's review-alerts consumer (#1265) is new to an existing Worker: register it too
+      - name: Queue consumers, processor (stage)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm release:queue-consumers --config apps/processor/wrangler.jsonc --env stage
+
       # Platform analytics collector (apps/cost-monitor, docs/admin/LIVE_OPS.md): crons only, no
       # route, so no smoke; its D1 was migrated with the others (d1-migrate.ts).
       - name: Deploy cost monitor (stage)
@@ -634,6 +641,13 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm release:queue-consumers --config apps/admin-api/wrangler.jsonc
+
+      # The processor's review-alerts consumer (#1265) is new to an existing Worker: register it too
+      - name: Queue consumers, processor (production)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm release:queue-consumers --config apps/processor/wrangler.jsonc
 
       # Platform analytics collector (apps/cost-monitor, docs/admin/LIVE_OPS.md): crons only, no
       # route, so no smoke; its D1 was migrated with the others (d1-migrate.ts).

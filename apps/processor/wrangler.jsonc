@@ -69,7 +69,7 @@
 	// Queue configuration
 	"queues": {
 		// Epic 9.4: the processor enqueues PushDispatch messages to its own queue
-		"producers": [{ "queue": "al-ummah-now-videos", "binding": "MESSAGE_QUEUE" }, { "queue": "al-ummah-now-dlq", "binding": "DLQ" }],
+		"producers": [{ "queue": "al-ummah-now-videos", "binding": "MESSAGE_QUEUE" }, { "queue": "al-ummah-now-dlq", "binding": "DLQ" }, { "queue": "al-ummah-now-review-alerts", "binding": "REVIEW_ALERTS_QUEUE" }],
 		"consumers": [
 			{
 				"queue": "al-ummah-now-videos",
@@ -82,6 +82,15 @@
 				"queue": "al-ummah-now-moderation",
 				"max_batch_size": 5,
 				"max_batch_timeout": 10,
+				"max_retries": 3,
+				"dead_letter_queue": "al-ummah-now-dlq"
+			},
+			{
+				// Review alerts for the Admin app (#1265): one message per batch, sent within 1 s.
+				// Escalations are delayed messages to the same queue. Review runs in production only.
+				"queue": "al-ummah-now-review-alerts",
+				"max_batch_size": 1,
+				"max_batch_timeout": 1,
 				"max_retries": 3,
 				"dead_letter_queue": "al-ummah-now-dlq"
 			},
@@ -196,7 +205,7 @@
 			],
 			"services": [{ "binding": "VIDEOS", "service": "videos-stage" }],
 			"queues": {
-				"producers": [{ "queue": "al-ummah-now-videos-stage", "binding": "MESSAGE_QUEUE" }, { "queue": "al-ummah-now-dlq-stage", "binding": "DLQ" }],
+				"producers": [{ "queue": "al-ummah-now-videos-stage", "binding": "MESSAGE_QUEUE" }, { "queue": "al-ummah-now-dlq-stage", "binding": "DLQ" }, { "queue": "al-ummah-now-review-alerts-stage", "binding": "REVIEW_ALERTS_QUEUE" }],
 				"consumers": [
 					{
 						"queue": "al-ummah-now-videos-stage",
@@ -209,6 +218,15 @@
 						"queue": "al-ummah-now-moderation-stage",
 						"max_batch_size": 5,
 						"max_batch_timeout": 10,
+						"max_retries": 3,
+						"dead_letter_queue": "al-ummah-now-dlq-stage"
+					},
+					{
+						// Review alerts for the Admin app (#1265): one message per batch, sent within 1 s.
+						// Escalations are delayed messages to the same queue. Review runs in production only.
+						"queue": "al-ummah-now-review-alerts-stage",
+						"max_batch_size": 1,
+						"max_batch_timeout": 1,
 						"max_retries": 3,
 						"dead_letter_queue": "al-ummah-now-dlq-stage"
 					},
