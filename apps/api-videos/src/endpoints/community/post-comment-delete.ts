@@ -20,7 +20,7 @@ const deleteCommentSchema = {
       commentId: Str({ description: 'Comment ID' }),
     }),
     headers: z.object({
-      channelId: z.string().optional().describe('Actor channel ID (for authorization check)'),
+      channelId: z.string().optional().nullable().describe('Actor channel ID (for authorization check); none: the comment author deletes their own comment'),
     }),
   },
   responses: {
@@ -68,7 +68,8 @@ export class DeletePostComment extends AuthenticatedRoute {
 
     const { channelId: postChannelId, postId, commentId } = c.req.param();
     const request: any = await this.getValidatedData<typeof this.schema>();
-    const userChannelId = request.headers?.channelId;
+    // A missing header reaches the schema as null
+    const userChannelId = request.headers?.channelId ?? undefined;
 
     const bucket = c.env.community_posts;
 

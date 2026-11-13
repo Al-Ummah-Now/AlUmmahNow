@@ -10987,11 +10987,14 @@
           },
           {
             "schema": {
-              "type": "string",
-              "description": "Actor channel ID"
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Actor channel ID; none: the comment author edits their own comment"
             },
             "required": false,
-            "description": "Actor channel ID",
+            "description": "Actor channel ID; none: the comment author edits their own comment",
             "name": "channelId",
             "in": "header"
           }
@@ -11141,11 +11144,14 @@
           },
           {
             "schema": {
-              "type": "string",
-              "description": "Actor channel ID (for authorization check)"
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Actor channel ID (for authorization check); none: the comment author deletes their own comment"
             },
             "required": false,
-            "description": "Actor channel ID (for authorization check)",
+            "description": "Actor channel ID (for authorization check); none: the comment author deletes their own comment",
             "name": "channelId",
             "in": "header"
           }
