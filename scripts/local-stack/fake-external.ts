@@ -299,7 +299,7 @@ export function setStackR2(fn: StackR2): void {
 
 /** Leftover scan and scheduled-handler trigger (boot.ts sets them once Miniflare is up). */
 export interface StackHooks {
-  leftovers?: (marker: string, userIds: string[]) => Promise<unknown>;
+  leftovers?: (marker: string, userIds: string[], limit?: number) => Promise<unknown>;
   scheduled?: (app: string, cron: string, time: Date) => Promise<unknown>;
 }
 const hooks: StackHooks = {};
@@ -370,7 +370,8 @@ async function control(req: IncomingMessage, url: URL): Promise<Response> {
     if (marker.length < 6 || !hooks.leftovers) return json({ error: 'marker (>= 6 characters) required, once the stack is up' }, 400);
     // ids= : run users' ids recorded during the run (their auth rows may already be deleted)
     const ids = (url.searchParams.get('ids') ?? '').split(',').map((id) => id.trim()).filter((id) => /^[A-Za-z0-9_:-]{6,128}$/.test(id));
-    return json(await hooks.leftovers(marker, ids));
+    const limit = Number(url.searchParams.get('limit')) || undefined;
+    return json(await hooks.leftovers(marker, ids, limit));
   }
   if (url.pathname.startsWith('/__stack/scheduled/')) {
     if (req.method !== 'POST' || !hooks.scheduled) return json({ error: 'POST once the stack is up' }, 405);

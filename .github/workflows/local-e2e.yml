@@ -180,6 +180,16 @@ jobs:
         if: always()
         run: node --experimental-strip-types --no-warnings scripts/local-stack/leftovers.ts --marker "$E2E_RUN_ID" --report-only
 
+      # Every hit, allowed or not, with the row it is (leftovers.ts --out): to trace what wrote it
+      - name: Upload leftovers
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-release-leftovers-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/leftovers.json
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Stack log
         if: always()
         run: |
@@ -279,6 +289,16 @@ jobs:
         run: >-
           node --experimental-strip-types --no-warnings scripts/local-stack/leftovers.ts --marker "$E2E_RUN_ID"
           --allow d1:al-ummah-now-d1:user_revocations --allow kv:TOKEN_REVOCATIONS
+
+      # Every hit, allowed or not, with the row it is (leftovers.ts --out): to trace what wrote it
+      - name: Upload leftovers
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-admin-leftovers-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/leftovers.json
+          if-no-files-found: ignore
+          retention-days: 14
 
       # Teardown, pass or fail (owner rule: test sets clean up every resource they use): the run
       # accounts' content goes (videos with their media, then the GDPR erase of profile, channels,
@@ -443,6 +463,16 @@ jobs:
       - name: Leftovers
         if: always()
         run: node --experimental-strip-types --no-warnings scripts/local-stack/leftovers.ts --marker "$E2E_RUN_ID" --report-only
+
+      # Every hit, allowed or not, with the row it is (leftovers.ts --out): to trace what wrote it
+      - name: Upload leftovers
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-web-leftovers-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/leftovers.json
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Stack log
         if: always()

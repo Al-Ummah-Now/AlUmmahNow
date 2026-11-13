@@ -356,11 +356,13 @@ interface Hit { store: string; location: string; sample: string }
  * auth user whose email starts with e2e+<marker>): every D1 table, every R2 object (bodies up to
  * 256 KB), every KV key and value, the fake Bunny and image store. The seed never matches.
  */
-async function scanLeftovers(mf: MiniflareInstance, prepared: Prepared[], marker: string, recordedIds: string[] = []): Promise<{ marker: string; runUserIds: string[]; hits: Hit[]; truncated: boolean }> {
+async function scanLeftovers(mf: MiniflareInstance, prepared: Prepared[], marker: string, recordedIds: string[] = [], limit = 300): Promise<{ marker: string; runUserIds: string[]; hits: Hit[]; truncated: boolean }> {
   const hits: Hit[] = [];
-  const MAX = 300;
+  const MAX = Math.min(Math.max(limit, 1), 20_000);
+  // A full dump (limit > 300) keeps more of each hit, to tell what the row holds
+  const keep = MAX > 300 ? 2000 : 200;
   const add = (hit: Hit) => {
-    if (hits.length < MAX) hits.push({ ...hit, sample: hit.sample.slice(0, 200) });
+    if (hits.length < MAX) hits.push({ ...hit, sample: hit.sample.slice(0, keep) });
   };
   const auth = prepared.find((p) => p.worker.app === 'auth');
   const runUserIds: string[] = [...recordedIds];
@@ -509,7 +511,7 @@ async function main(): Promise<void> {
     return object ? { status: 200, body: await object.text() } : { status: 404 };
   });
   setStackHooks({
-    leftovers: (marker, ids) => scanLeftovers(mf, prepared, marker, ids),
+    leftovers: (marker, ids, limit) => scanLeftovers(mf, prepared, marker, ids, limit),
     scheduled: async (app, cron, time) => {
       const p = prepared.find((x) => x.worker.app === app || x.name === app);
       if (!p) throw new Error(`no worker ${app} (${prepared.map((x) => x.worker.app).join(', ')})`);

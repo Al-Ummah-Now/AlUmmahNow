@@ -2,7 +2,7 @@
  * End-of-job check: nothing a run created is left in the local stack (owner rule: test sets clean
  * up every resource they use, even when a test fails).
  *
- *   node --experimental-strip-types --no-warnings scripts/local-stack/leftovers.ts --marker "$E2E_RUN_ID" [--user-ids-file <path> ...] [--report-only] [--allow d1:<db>:<table>|r2:<bucket>|kv:<binding>|fake-bunny ...]
+ *   node --experimental-strip-types --no-warnings scripts/local-stack/leftovers.ts --marker "$E2E_RUN_ID" [--user-ids-file <path> ...] [--report-only] [--allow d1:<db>:<table>|r2:<bucket>|kv:<binding>|fake-bunny ...] [--out <file>]
  *
  * --user-ids-file (and E2E_RUN_USER_IDS_FILE): the run users' ids, one per line, recorded while
  * they existed (builders.ts appends every user it creates): the run accounts are deleted before
@@ -12,9 +12,11 @@
  * Bunny video and fake image that still holds the marker (the run id: run accounts are
  * e2e+<run id>-…, builders' names start with it) or the id of a run user. Prints them and exits 1,
  * unless --report-only (a batch whose specs do not clean up fully yet) or every hit is allowed.
- * Writes the result to $GITHUB_STEP_SUMMARY when set.
+ * Writes the result to $GITHUB_STEP_SUMMARY when set, and every hit (allowed or not, with up to 2 KB
+ * of each row) as JSON to --out (default $RUNNER_TEMP/leftovers.json on CI) for the job's artifact.
  */
-import { appendFileSync, existsSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 const args = process.argv.slice(2);
 const values = (name: string) => args.flatMap((a, i) => (a === name && args[i + 1] ? [args[i + 1]] : []));
@@ -33,7 +35,7 @@ interface Hit { store: string; location: string; sample: string }
 // deleted before this check, so rows keyed only by user id need them
 const idFiles = [...values('--user-ids-file'), ...(process.env.E2E_RUN_USER_IDS_FILE ? [process.env.E2E_RUN_USER_IDS_FILE] : [])];
 const ids = [...new Set(idFiles.filter((f) => existsSync(f)).flatMap((f) => readFileSync(f, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean)))];
-const res = await fetch(`${control}/__stack/leftovers?marker=${encodeURIComponent(marker)}${ids.length ? `&ids=${encodeURIComponent(ids.join(','))}` : ''}`);
+const res = await fetch(`${control}/__stack/leftovers?limit=20000&marker=${encodeURIComponent(marker)}${ids.length ? `&ids=${encodeURIComponent(ids.join(','))}` : ''}`);
 if (!res.ok) {
   process.stderr.write(`leftovers: the stack answered ${res.status}: ${await res.text()}\n`);
   process.exit(2);
@@ -41,6 +43,8 @@ if (!res.ok) {
 const result = (await res.json()) as { runUserIds: string[]; hits: Hit[]; truncated: boolean };
 const allowed = (hit: Hit) => allow.some((a) => `${hit.store}:${hit.location}`.startsWith(a) || hit.store === a);
 const left = result.hits.filter((h) => !allowed(h));
+const out = values('--out')[0] ?? (process.env.RUNNER_TEMP ? join(process.env.RUNNER_TEMP, 'leftovers.json') : '');
+if (out) writeFileSync(out, JSON.stringify({ ...result, hits: result.hits.map((h) => ({ ...h, allowed: allowed(h) })) }, null, 1));
 
 const byStore = new Map<string, number>();
 for (const hit of left) byStore.set(`${hit.store} ${hit.location.split('/')[0]}`, (byStore.get(`${hit.store} ${hit.location.split('/')[0]}`) ?? 0) + 1);
