@@ -82,6 +82,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/22-notifications.spec.ts': { placement: 'local', reason: 'bell/inbox UI; subscribe→processor notification uses local queues' },
   'apps/web/e2e/22-video-comments.spec.ts': { placement: 'local', reason: 'replies, sort, live updates, held comments on disposable video' },
   'apps/web/e2e/30-watch-page.spec.ts': { placement: 'local', reason: 'watch page metadata, reactions, report, save to playlist' },
+  'apps/web/e2e/78-shorts.spec.ts': { placement: 'local', reason: 'Shorts page (D-SEO-10): /video→/shorts 308, ?list= stays, non-Short back to /video, next/previous by button, keys and swipe' },
   'apps/web/e2e/31-video-player.spec.ts': { placement: 'local', reason: 'player controls/error screen; needs H.264 HLS fixture with renditions, captions, chapters' },
   'apps/web/e2e/32-comments.spec.ts': { placement: 'local', reason: 'comment post/delete and sign-in redirect on a lecture' },
   'apps/web/e2e/33-watch-history.spec.ts': { placement: 'local', reason: 'watch history records and lists via API' },
