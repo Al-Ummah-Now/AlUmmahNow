@@ -96,8 +96,6 @@
   "apps/web/src/components/VideoSections/TrendingVideosSection.tsx": 13,
   "apps/web/src/components/VideoSections/VideoSection.tsx": 30,
   "apps/web/src/components/VideoThumbnail/index.tsx": 4,
-  "apps/web/src/components/accountNavigation/index.tsx": 9,
-  "apps/web/src/components/accountNavigation/rtl/index.tsx": 9,
   "apps/web/src/components/analytics/AnalyticsCard/index.tsx": 15,
   "apps/web/src/components/analytics/AnalyticsCard/rtl/index.tsx": 15,
   "apps/web/src/components/analytics/AnalyticsDashboard/index.tsx": 42,
