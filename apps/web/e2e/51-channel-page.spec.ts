@@ -185,15 +185,27 @@ test.describe('Subscribe button - signed in', () => {
 test.describe('Subscribe button - account without a channel', () => {
   test.use({ storageState: AUTH_STATE.none });
 
-  test('CHTAB-007 explains that a channel is needed and links to create one', async ({ page }) => {
+  // Members subscribe as themselves (#1152): no "create a channel" prompt. The subscribe call is
+  // answered here so this shared account keeps no subscription (66-feed-subscriptions expects
+  // none); the real round trip is release/subscribe-no-channel.spec.ts with its own viewer.
+  test('CHTAB-007 subscribes without a channel: no channel prompt, no channelId header', async ({ page }) => {
+    const sent: Array<{ method: string; channelId: string | undefined }> = [];
+    await page.route(`**/api/channels/${lectures.id}/subscriptions`, async (route) => {
+      const request = route.request();
+      sent.push({ method: request.method(), channelId: request.headers()['channelid'] });
+      const isSubscribed = request.method() === 'POST';
+      await route.fulfill({ status: isSubscribed ? 201 : 200, contentType: 'application/json', body: JSON.stringify({ success: true, result: { channelId: lectures.id, isSubscribed, subscriberCount: isSubscribed ? 1 : 0 } }) });
+    });
     await openChannel(page, 'en', lectures.id);
     const button = page.getByTestId('channel-subscribe-button');
     await expect(button).toHaveText('Subscribe');
+    await expect(button).toBeEnabled();
     await button.click();
-    const alert = page.getByTestId('channel-header').getByRole('alert');
-    await expect(alert).toContainText(/No active channel selected|Select a channel first/);
-    await expect(alert.getByRole('link')).toHaveAttribute('href', '/en/profile');
-    await expect(button).toHaveText('Subscribe');
+    await expect(button).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('channel-header').getByRole('alert')).toHaveCount(0);
+    await button.click();
+    await expect(button).toHaveAttribute('aria-pressed', 'false');
+    expect(sent).toEqual([{ method: 'POST', channelId: undefined }, { method: 'DELETE', channelId: undefined }]);
   });
 });
 
