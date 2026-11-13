@@ -58,11 +58,13 @@ export function streetRow(k, phone) {
   const y0 = r(4, 22);
   const swags = [];
   const lanterns = [];
+  // One continuous string per row: each swag starts at the hang point where the last one ended
   let x = -r(0, 260);
+  let ya = y0 + r(-6, 6);
   while (x < STRIP) {
     const len = r(phone ? 200 : 240, phone ? 340 : 440);
     const sag = r(8, 26);
-    const ya = y0 + r(-6, 6), yb = y0 + r(-6, 6);
+    const yb = y0 + r(-6, 6);
     swags.push({ xa: x, ya, xb: x + len, yb, sag });
     // 1 to 3 lanterns along this swag, never closer than a lantern's width to each other
     const n = 1 + Math.floor(rnd() * 3);
@@ -79,6 +81,7 @@ export function streetRow(k, phone) {
       lanterns.push({ x: lx, top: ly, y: ly + cord, h });
     }
     x += len;
+    ya = yb;
   }
   return { swags, lanterns };
 }
@@ -99,16 +102,19 @@ function drawRows(svg, win, cache) {
     const { swags, lanterns } = streetRow(k, phone);
     const top = k * pitch;
     let strings = '', bulbs = '', lamps = '';
+    let d = '';
     for (const s of swags) {
       if (s.xb < -10 || s.xa > w + 10) continue;
       const mx = (s.xa + s.xb) / 2, my = (s.ya + s.yb) / 2 + s.sag * 2;
-      strings += `<path d="M${s.xa.toFixed(1)} ${(top + s.ya).toFixed(1)}Q${mx.toFixed(1)} ${(top + my).toFixed(1)} ${s.xb.toFixed(1)} ${(top + s.yb).toFixed(1)}"/>`;
+      if (!d) d = `M${s.xa.toFixed(1)} ${(top + s.ya).toFixed(1)}`;
+      d += `Q${mx.toFixed(1)} ${(top + my).toFixed(1)} ${s.xb.toFixed(1)} ${(top + s.yb).toFixed(1)}`;
       for (let x = s.xa + 12; x < s.xb - 8; x += phone ? 18 : 22) {
         if (x < 2 || x > w - 2) continue;
         const t = (x - s.xa) / (s.xb - s.xa);
         bulbs += `<circle cx="${x.toFixed(1)}" cy="${(top + s.ya + (s.yb - s.ya) * t + s.sag * 4 * t * (1 - t) + 2.5).toFixed(1)}" r="1.6"/>`;
       }
     }
+    if (d) strings = `<path d="${d}"/>`;
     for (const l of lanterns) {
       const sc = l.h / 100, half = 24 * sc;
       // Whole lanterns only: none cut by the window's side
