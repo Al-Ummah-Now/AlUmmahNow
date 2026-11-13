@@ -338,6 +338,7 @@ const en = {
     },
     settings: {
       title: 'Review settings',
+      readOnly: 'Only admins change these settings. You can see them here.',
       notHere: 'Review never runs in this environment (QA and stage). The settings below apply in production.',
       mode: 'Mode',
       modes: { off: 'Off', shadow: 'Shadow (check and log only)', enforce_nsfw: 'Hold NSFW only', enforce: 'Full review' },

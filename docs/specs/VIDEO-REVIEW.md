@@ -90,6 +90,7 @@ JSON only, cursor paging, the same auth as the other admin routes. It is built f
 | `POST /api/review/devices` | register a reviewer's push device (native), or reuse the existing push registration |
 
 - **Roles:** `content_reviewer` (reviews `status in (in_review, appealed)`, never escalations) and `senior_reviewer` (everything, including minors and escalations, and appeals of their own team). The owner is the first senior reviewer (VR7).
+  - **Where they work:** both roles are assigned in AlUmmahNowAuth (role catalogue, migration `0037_reviewer_roles`) and carried in tokens. admin-api lets them reach `/api/review/*` only. In admin-web they get a review-only shell (#1284): the nav shows only Moderation → Videos in review, the landing pages (`/`, `/dashboard`) open the queue, every other page is access-denied (the middleware routes every request, client navigations included), the command palette searches pages only, and the review settings are read-only (admins change them; moderators also see them read-only).
 - **Retention cron:** purges review media and finding text after `media_purge_after`; aggregates rows older than 12 months.
 
 ## 7. admin-web

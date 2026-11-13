@@ -19,6 +19,20 @@ export type SystemRole = typeof SYSTEM_ROLES[number];
 export const ADMIN_ROLES: SystemRole[] = ['super_admin', 'admin', 'moderator'];
 
 /**
+ * Video review roles (wiki AUN-VIDEO-REVIEW, VR7). They sign in to a review-only shell: Moderation →
+ * Videos in review and its settings (read-only). admin-api lets them reach /api/review/* only.
+ * Highest first: a senior reviewer also decides escalations and appeals.
+ */
+export const REVIEWER_ROLES = ['senior_reviewer', 'content_reviewer'] as const;
+export type ReviewerRole = typeof REVIEWER_ROLES[number];
+
+/** A role that opens admin-web: a full admin role or a review-only one. */
+export type PanelRole = SystemRole | ReviewerRole;
+
+/** The only pages a review-only account opens (and everything below them). */
+export const REVIEW_ONLY_HOME = '/moderation/review';
+
+/**
  * Normalize a role name from the auth server to the internal form.
  * The auth server emits RBAC role display names ("Super Admin", "Admin",
  * "Moderator"); internally we use snake_case ids ("super_admin", ...).
@@ -35,12 +49,40 @@ export function hasAdminAccess(role?: string): boolean {
 }
 
 /**
- * Pick the highest-privilege admin role from the auth server's role list
- * (display names or ids). Returns undefined when the user has none.
+ * Pick the highest-privilege role that opens admin-web from the auth server's role list
+ * (display names or ids): any admin role outranks the review roles. Returns undefined when the
+ * user has none.
  */
-export function highestAdminRole(roles?: readonly string[]): SystemRole | undefined {
+export function highestAdminRole(roles?: readonly string[]): PanelRole | undefined {
   const normalized = (roles ?? []).map((r) => normalizeRole(r));
-  return ADMIN_ROLES.find((role) => normalized.includes(role));
+  return ADMIN_ROLES.find((role) => normalized.includes(role)) ?? REVIEWER_ROLES.find((role) => normalized.includes(role));
+}
+
+/** Signs in to admin-web at all: an admin role or a review role. */
+export function hasPanelAccess(role?: string): boolean {
+  return hasAdminAccess(role) || isReviewOnly(role);
+}
+
+/** A content or senior reviewer with no admin role: the review-only shell. */
+export function isReviewOnly(role?: string): boolean {
+  return (REVIEWER_ROLES as readonly string[]).includes(normalizeRole(role));
+}
+
+/**
+ * Where a review-only account goes instead of `path`, or null when it may open it. The landing
+ * pages (/, /dashboard) go to the review queue; every other page outside it is access-denied.
+ */
+export function reviewOnlyRedirect(path: string | null | undefined): string | null {
+  const pathname = (path ?? '/').split(/[?#]/)[0] || '/';
+  if (pathname === REVIEW_ONLY_HOME || pathname.startsWith(`${REVIEW_ONLY_HOME}/`)) return null;
+  if (pathname === '/' || pathname === '/dashboard') return REVIEW_ONLY_HOME;
+  return '/access-denied';
+}
+
+/** Review settings: mirrors admin-api's PUT /api/review/settings (admins and super admins). */
+export function canManageReviewSettings(role?: string): boolean {
+  const r = normalizeRole(role);
+  return r === 'admin' || r === 'super_admin';
 }
 
 /**

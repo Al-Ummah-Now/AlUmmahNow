@@ -4,7 +4,7 @@ import { AdminShell } from '@/components/shell/AdminShell';
 import { NAV_COOKIE } from '@/components/shell/nav-model';
 import { getContactCounts, getErrorCounts } from '@/lib/api/admin';
 import { getUser } from '@/lib/api/content';
-import { canReadErrors, canUseContactInbox, canUseProcessing, canManageVideosUsers, canUseStaleUploads, canManageMedia, canReadOps } from '@/lib/roles';
+import { canReadErrors, canUseContactInbox, canUseProcessing, canManageVideosUsers, canUseStaleUploads, canManageMedia, canReadOps, isReviewOnly } from '@/lib/roles';
 import { ErrorReportingIdentity } from '@/lib/errors/ErrorReportingProvider';
 import { errorsBadgeCount } from './errors/filters';
 import { logger } from '@/lib/logger';
@@ -73,6 +73,7 @@ export default async function ProtectedLayout({
           staleUploads: canUseStaleUploads(role),
           media: canManageMedia(role),
           ops: canReadOps(role),
+          reviewOnly: isReviewOnly(role),
         }}
         badges={{ contact: contactNew, errors: errorsBadge }}
       >

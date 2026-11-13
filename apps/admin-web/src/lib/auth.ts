@@ -10,7 +10,7 @@ import { cookies as getCookies, headers as getHeaders } from 'next/headers';
 import { createClient } from '@al-ummah-now/openauth/client';
 import { redirect } from 'next/navigation';
 import { subjects } from '@/interfaces/subjects';
-import { hasAdminAccess, type SystemRole } from './roles';
+import { hasPanelAccess, isReviewOnly, reviewOnlyRedirect, type PanelRole } from './roles';
 import { logger } from './logger';
 import { verifySessionTokens } from './session-state';
 import {
@@ -27,7 +27,7 @@ export { SESSION_COOKIE_NAME };
 export interface AdminUser {
   id: string;
   email: string;
-  role?: SystemRole;
+  role?: PanelRole;
   displayName?: string;
 }
 
@@ -174,7 +174,9 @@ export async function isAuthenticated(): Promise<boolean> {
 }
 
 /**
- * Require admin role - redirect to login / access-denied if not authorized
+ * Require a role that opens admin-web - redirect to login / access-denied if not authorized.
+ * A content or senior reviewer (VR7) gets the review-only shell: the review queue and its
+ * settings; the landing pages go to the queue and every other page is access-denied.
  */
 export async function requireAdminRole(): Promise<AdminSession> {
   const { session, expired } = await getAdminSessionState();
@@ -191,8 +193,13 @@ export async function requireAdminRole(): Promise<AdminSession> {
     redirect(loginPath(path));
   }
 
-  if (!hasAdminAccess(session.user.role)) {
+  if (!hasPanelAccess(session.user.role)) {
     redirect('/access-denied');
+  }
+
+  if (isReviewOnly(session.user.role)) {
+    const target = reviewOnlyRedirect((await getHeaders()).get(PATH_HEADER));
+    if (target) redirect(target);
   }
 
   return session;

@@ -19,6 +19,7 @@ import {
   type NavItem,
   NAV_COOKIE,
 } from './nav-model';
+import { REVIEW_ONLY_HOME } from '@/lib/roles';
 
 interface AdminShellProps {
   userEmail?: string;
@@ -166,7 +167,7 @@ export function AdminShell({ userEmail, userName, userRoles, authIssuer, access,
       >
         <div className="flex items-center gap-2 px-3 pb-2 pt-3">
           <Link
-            href="/dashboard"
+            href={access.reviewOnly ? REVIEW_ONLY_HOME : '/dashboard'}
             className={`flex min-w-0 flex-1 items-center gap-2.5 rounded-lg p-1.5 text-drawer-text ${focusRing} ${rail ? 'md:justify-center' : ''}`}
           >
             <span className="shell-primary grid size-9 shrink-0 place-items-center rounded-[10px]">
@@ -283,7 +284,7 @@ export function AdminShell({ userEmail, userName, userRoles, authIssuer, access,
         aria-label={t('nav.quick')}
         className="shell-header fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-nav-border pb-[env(safe-area-inset-bottom)] text-nav-text md:hidden"
       >
-        {[items.find((i) => i.href === '/dashboard'), items.find((i) => i.href === '/moderation')].filter(Boolean).map((item) => {
+        {(access.reviewOnly ? [items.find((i) => i.href === REVIEW_ONLY_HOME)] : [items.find((i) => i.href === '/dashboard'), items.find((i) => i.href === '/moderation')]).filter(Boolean).map((item) => {
           const active = item === current;
           return (
             <Link

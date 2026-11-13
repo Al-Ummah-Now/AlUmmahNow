@@ -23,7 +23,8 @@ import {
   withRotatedTokens,
   type SessionTokens,
 } from './session-cookie';
-import { REFRESH_SKEW_SECONDS, refreshTokens, shouldRefresh } from './token-refresh';
+import { REFRESH_SKEW_SECONDS, refreshTokens, shouldRefresh, unverifiedTokenRoles } from './token-refresh';
+import { highestAdminRole, isReviewOnly, reviewOnlyRedirect } from './roles';
 import { PATH_HEADER, loginPath } from './login-flow';
 
 const LOG_PREFIX = '[admin-web:session-refresh]';
@@ -64,6 +65,16 @@ export async function refreshSessionMiddleware(
     // account in silently or shows the form. /login is outside the matcher.
     const status = request.method === 'GET' || request.method === 'HEAD' ? 307 : 303;
     return NextResponse.redirect(new URL(loginPath(path), request.url), status);
+  }
+  // Review-only accounts (VR7) stay in the review shell on every request, client-side navigations
+  // included (the protected layout is not re-rendered between its pages). Routing only: the roles
+  // are frozen at sign-in, so the refreshed token carries the same ones.
+  if (isReviewOnly(highestAdminRole(unverifiedTokenRoles(found.tokens.accessToken)))) {
+    const target = reviewOnlyRedirect(request.nextUrl.pathname);
+    if (target) {
+      const status = request.method === 'GET' || request.method === 'HEAD' ? 307 : 303;
+      return NextResponse.redirect(new URL(target, request.url), status);
+    }
   }
   if (!deps.issuer) {
     // Misconfigured: leave it to the page's own verification.

@@ -18,6 +18,8 @@ export type PaletteOption =
 
 /** Kinds this admin may search, in the order they are shown. */
 export function paletteKinds(access: NavAccess): AdminSuggestKind[] {
+  // The review-only shell (VR7) searches pages only: users, channels and the rest are admin pages
+  if (access.reviewOnly) return [];
   const kinds: AdminSuggestKind[] = ['user', 'channel', 'video', 'playlist', 'report'];
   if (access.contact) kinds.push('contact');
   if (access.errors) kinds.push('error');
