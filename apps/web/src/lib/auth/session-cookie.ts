@@ -10,10 +10,26 @@ export const SESSION_COOKIE_NAME = 'al_ummah_session';
 /** 30 days in seconds. The refresh token inside lives longer; see token-refresh.ts. */
 export const SESSION_MAX_AGE = 30 * 24 * 60 * 60;
 
-export function sessionCookieOptions() {
+/**
+ * Whether the request's Host header names a local development host
+ * (localhost, 127.0.0.1, [::1], any port).
+ */
+export function isLocalHost(host?: string | null): boolean {
+  if (!host) return false;
+  const name = host.startsWith('[') ? host.slice(0, host.indexOf(']') + 1) : host.split(':')[0];
+  return ['localhost', '127.0.0.1', '[::1]'].includes(name.toLowerCase());
+}
+
+/**
+ * `Secure` in production builds, except when the request came to a local host:
+ * WebKit drops Secure cookies set over http://localhost (Chromium keeps them),
+ * so the local E2E stack (a production build on localhost) lost the session in
+ * WebKit (#1020). Deployed hosts are unchanged. Pass the request's Host header.
+ */
+export function sessionCookieOptions(host?: string | null) {
   return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: process.env.NODE_ENV === 'production' && !isLocalHost(host),
     sameSite: 'lax' as const,
     maxAge: SESSION_MAX_AGE,
     path: '/',
@@ -119,13 +135,13 @@ interface BareCookieWriter {
  * be appended to a shorter session and corrupt it). `options` false writes
  * bare cookies, for the middleware's forwarded request. Returns the names written.
  */
-export function writeSessionValue(cookies: CookieWriter, value: string, present: string[], options?: SessionCookieOptions): string[];
+export function writeSessionValue(cookies: CookieWriter, value: string, present: string[], options: SessionCookieOptions): string[];
 export function writeSessionValue(cookies: BareCookieWriter, value: string, present: string[], options: false): string[];
 export function writeSessionValue(
   cookies: CookieWriter | BareCookieWriter,
   value: string,
   present: string[],
-  options: SessionCookieOptions | false = sessionCookieOptions(),
+  options: SessionCookieOptions | false,
 ): string[] {
   const names = splitSessionValue(value).map((chunk, i) => {
     const name = sessionChunkName(i);

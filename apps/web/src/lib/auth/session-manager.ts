@@ -9,7 +9,7 @@
  * Tokens are protected by HTTPS in transit and HttpOnly prevents XSS access.
  */
 
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import type { AccessibleChannel, User } from '@al-ummah/shared-types';
 import { getOpenAuthClient } from "./openauth-client";
 import { subjects } from '../auth';
@@ -23,6 +23,15 @@ import {
   splitSessionValue,
   writeSessionValue,
 } from './session-cookie';
+
+/** This request's Host header (null outside a request: the cookie then stays Secure in production). */
+async function requestHost(): Promise<string | null> {
+  try {
+    return (await headers()).get('host');
+  } catch {
+    return null;
+  }
+}
 import {
   applyKnownRotations,
   computeExpiresAt,
@@ -187,7 +196,7 @@ export class SessionManager {
     // Split across al_ummah_session(.N) cookies: one cookie holds about one
     // account, and browsers silently drop a cookie over 4 KB (the switcher
     // then showed one of two signed-in accounts)
-    writeSessionValue(cookieStore, jsonValue, present);
+    writeSessionValue(cookieStore, jsonValue, present, sessionCookieOptions(await requestHost()));
   }
 
   private static parseSessionCookie(value: string | undefined): SessionData | null {
@@ -215,7 +224,7 @@ export class SessionManager {
       const cookieStore = await cookies();
       const current = cookieStore.get(SESSION_COOKIE_NAME)?.value;
       if (current === undefined) return false;
-      cookieStore.set(SESSION_COOKIE_NAME, current, sessionCookieOptions());
+      cookieStore.set(SESSION_COOKIE_NAME, current, sessionCookieOptions(await requestHost()));
       return true;
     } catch {
       return false;
