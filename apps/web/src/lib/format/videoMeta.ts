@@ -24,6 +24,26 @@ export function formatViews(count: number | string | null | undefined, lang: Met
   return n === 1 ? '1 view' : `${compact(n, lang)} views`;
 }
 
+/**
+ * The exact count, for tooltips and the expanded description: "1,234 views", «1,234 مشاهدة»
+ * (cards show the compact "1.2K views").
+ */
+export function formatViewsExact(count: number | string | null | undefined, lang: MetaLang): string {
+  const n = Math.max(0, Math.floor(Number(count) || 0));
+  const full = new Intl.NumberFormat(lang).format(n);
+  if (lang === 'ar') {
+    if (n === 0) return 'لا توجد مشاهدات';
+    switch (new Intl.PluralRules('ar').select(n)) {
+      case 'one': return 'مشاهدة واحدة';
+      case 'two': return 'مشاهدتان';
+      case 'few': return `${full} مشاهدات`;
+      default: return `${full} مشاهدة`;
+    }
+  }
+  if (n === 0) return 'No views';
+  return n === 1 ? '1 view' : `${full} views`;
+}
+
 /** "No subscribers", "1 subscriber", "1.2K subscribers", or the Arabic equivalent. */
 export function formatSubscribers(count: number | string | null | undefined, lang: MetaLang): string {
   const n = Math.max(0, Math.floor(Number(count) || 0));

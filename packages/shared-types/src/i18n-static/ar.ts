@@ -401,10 +401,11 @@ export const AR_TRANSLATIONS: AppTranslations = {
   video: {
     publishedAt: 'نُشر في {date}',
     dateLabel: {
-      published: 'نُشر {time}',
-      updated: 'حُدّث {time}',
-      started: 'بدأ {time}',
-      ended: 'انتهى {time}',
+      published: 'نُشر في {date}',
+      premiered: 'عُرض لأول مرة في {date}',
+      updated: 'حُدّث في {date}',
+      started: 'بدأ في {date}',
+      ended: 'انتهى في {date}',
       scheduled: 'مجدول في {date}',
       liveNow: 'يُبث مباشرة الآن',
     },
