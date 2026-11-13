@@ -93,6 +93,8 @@ export const SECRETS_MANIFEST: WorkerSecrets[] = [
 			AUTH_MODERATION_CLIENT_SECRET,
 			// Contact us (endpoints/contact/ContactSubmit.ts)
 			TURNSTILE_SECRET,
+			// Scholar sites own domains (lib/sites/saas.ts, #1212)
+			{ name: 'SITES_SAAS_TOKEN', purpose: 'Secrets Store sites-saas-token (all envs); Zone SSL and Certificates Edit on alummahnow.org: Cloudflare for SaaS custom hostnames' },
 		],
 		// Checked when set: the var arrives with the deploy of the code that reads it
 		clientIdVars: [...CLIENT_OPTIONAL, { name: 'AUTH_MODERATION_CLIENT_ID', required: false }],

@@ -233,6 +233,8 @@ export interface SiteSettings {
   about: Partial<Record<SiteLocale, string>>;
   hosts: SiteHost[];
   redirectHosts: SiteRedirectHost[];
+  /** Own domains being set up or live (§4.2). A domain joins `hosts` (kind custom) once it is live. */
+  domains?: SiteDomain[];
   /** Bumped on every save: part of the sites Worker's cache key. */
   configVersion: number;
   /** Set while `revoked`: when it happened (restore window SITE_RESTORE_DAYS). */
@@ -362,3 +364,67 @@ export interface PublicSite {
 export function primarySiteHost(settings: Pick<SiteSettings, 'hosts' | 'slug'>, env: SiteEnvironment): SiteHost {
   return settings.hosts.find((h) => h.primary) ?? { host: siteSubdomainHost(settings.slug, env), kind: 'subdomain', primary: true };
 }
+
+// ---------------------------------------------------------------------------------------------
+// Own domains (§4.2, #1212): Cloudflare for SaaS custom hostnames on the alummahnow.org zone.
+// admin-api talks to Cloudflare (token `sites-saas-token`); api-videos keeps the state in the
+// site's settings and the host index.
+// ---------------------------------------------------------------------------------------------
+
+/** waiting_dns → issuing → live; failed when Cloudflare gives up (the owner can check again). */
+export type SiteDomainStatus = 'waiting_dns' | 'issuing' | 'live' | 'failed';
+export const SITE_DOMAIN_STATUSES: readonly SiteDomainStatus[] = ['waiting_dns', 'issuing', 'live', 'failed'];
+
+/** A DNS record the owner adds at their DNS provider. */
+export interface SiteDnsRecord {
+  type: 'CNAME' | 'TXT';
+  name: string;
+  value: string;
+  /** traffic: points the domain at the sites; ownership / certificate: Cloudflare's checks. */
+  purpose: 'traffic' | 'ownership' | 'certificate';
+}
+
+export interface SiteDomain {
+  host: string;
+  /** The Cloudflare custom hostname id; null while it is being created. */
+  cfId: string | null;
+  status: SiteDomainStatus;
+  records: SiteDnsRecord[];
+  addedAt: string;
+  addedBy: string;
+  checkedAt: string | null;
+  /** Cloudflare's reason when it could not verify or issue (shown to the owner). */
+  error: string | null;
+}
+
+/** Status checks: every 10 minutes for 72 hours after adding, then daily (§4.2). */
+export const SITE_DOMAIN_FAST_CHECK_MS = 10 * 60 * 1000;
+export const SITE_DOMAIN_FAST_WINDOW_MS = 72 * 60 * 60 * 1000;
+export const SITE_DOMAIN_SLOW_CHECK_MS = 24 * 60 * 60 * 1000;
+
+export function nextDomainCheck(addedAt: string, now: number): number {
+  const age = now - Date.parse(addedAt);
+  return now + (Number.isFinite(age) && age < SITE_DOMAIN_FAST_WINDOW_MS ? SITE_DOMAIN_FAST_CHECK_MS : SITE_DOMAIN_SLOW_CHECK_MS);
+}
+
+export type SiteDomainProblem = 'domain_invalid' | 'domain_platform' | 'domain_limit' | 'domain_exists';
+
+/** Whether `host` may be added as an own domain of this site; the host index still refuses a host another site holds. */
+export function checkNewSiteDomain(rawHost: string, settings: Pick<SiteSettings, 'domains' | 'hosts' | 'limits'>): { host: string } | { problem: SiteDomainProblem } {
+  // People paste addresses: drop a scheme, a path and a trailing dot
+  let typed = String(rawHost ?? '').trim().toLowerCase();
+  const scheme = typed.indexOf('://');
+  if (scheme !== -1) typed = typed.slice(scheme + 3);
+  const slash = typed.indexOf('/');
+  if (slash !== -1) typed = typed.slice(0, slash);
+  const host = normalizeSiteHost(typed);
+  if (!host || !host.includes('.')) return { problem: 'domain_invalid' };
+  if (isPlatformHost(host) || host === 'alummahnow.org' || host.endsWith('.alummahnow.org')) return { problem: 'domain_platform' };
+  const domains = settings.domains ?? [];
+  if (domains.some((d) => d.host === host) || settings.hosts.some((h) => h.host === host)) return { problem: 'domain_exists' };
+  if (domains.length >= settings.limits.customDomainsMax) return { problem: 'domain_limit' };
+  return { host };
+}
+
+/** The traffic record shown before Cloudflare answers (the CNAME every own domain needs). */
+export const siteTrafficRecord = (host: string): SiteDnsRecord => ({ type: 'CNAME', name: host, value: SITE_SAAS_TARGET, purpose: 'traffic' });

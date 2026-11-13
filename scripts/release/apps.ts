@@ -360,6 +360,8 @@ export const APPS: AppRule[] = [
 				{ kind: 'queue_consumer', name: 'al-ummah-now-errors-dlq' },
 				{ kind: 'services', name: 'PROCESSOR' }, { kind: 'services', name: 'SCHEDULER' },
 				{ kind: 'r2_buckets', name: 'SOURCEMAPS' },
+				// Scholar sites own domains (lib/sites/saas.ts, #1212)
+				{ kind: 'secrets_store_secrets', name: 'SITES_SAAS_TOKEN' },
 				{ kind: 'r2_buckets', name: 'theme_packages' },
 				{ kind: 'services', name: 'VIDEOS' },
 				{ kind: 'queue_producer', name: 'CONTACT_MAIL_QUEUE' },
