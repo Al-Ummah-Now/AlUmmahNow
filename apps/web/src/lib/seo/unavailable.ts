@@ -1,4 +1,7 @@
 /**
+ * Shared by web and admin-web (worker.ts is identical in both apps; admin pages have no locale
+ * prefix, so this only acts on the videos site).
+ *
  * A page that fails to render (most often because the videos API is down: a watch or playlist
  * page throws ContentUnavailableError rather than answering "not found") is answered 503 with
  * Retry-After, so crawlers come back later instead of dropping or soft-404ing the URL. Only GET
