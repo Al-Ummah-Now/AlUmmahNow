@@ -5,8 +5,9 @@
  * production, admin-api lib/errors-alerts.ts): a component that reaches a
  * partial or major outage opens `status:<component>`, and it is resolved
  * when the component is back. No alert during a maintenance window. When the
- * admin component itself is out, the Errors ingest may be down too, so the
- * alert is also mailed directly through Resend (production only).
+ * admin API (the Errors ingest) itself is out, the alert is also mailed
+ * directly through Resend (production only). Internal components alert the
+ * same way; only the public page leaves them out.
  */
 import { reportNeedsAction, resolveNeedsAction, STATUS_PAGE_URLS, type ErrorReporterEnv, type ExecutionContextLike } from '@al-ummah/shared-types';
 import { runChecks, type CheckDeps, type ComponentResult, type StatusEnvName } from './checks';
@@ -18,7 +19,7 @@ import { isActive, loadIncidents, loadStates, recordRun, type RunWrite } from '.
 export interface StatusEnv extends ErrorReporterEnv {
   STATUS_DB: D1Database;
   ENVIRONMENT: string;
-  /** Direct alert mail when the admin component is out (production) */
+  /** Direct alert mail when the admin API (the Errors ingest) is out (production) */
   RESEND_API_KEY?: string | { get(): Promise<string> };
   ALERT_EMAIL_TO?: string;
   ALERT_EMAIL_FROM?: string;
@@ -86,7 +87,7 @@ export async function runOnce(env: StatusEnv, ctx: ExecutionContextLike | undefi
   await recordRun(env.STATUS_DB, writes, at);
 
   const page = STATUS_PAGE_URLS[envName];
-  const adminOut = writes.some((w) => w.result.component === 'admin' && isOutage(w.next.state));
+  const adminOut = writes.some((w) => w.result.component === 'admin-api' && isOutage(w.next.state));
   for (const id of opened) {
     const w = writes.find((x) => x.result.component === id)!;
     const title = `Status: ${componentName('en', id)} ${w.next.state === 'major' ? 'is down' : 'has a partial outage'}`;

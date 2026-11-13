@@ -5,25 +5,39 @@
  * the videos admin's Status page.
  */
 
-/** Monitored components, in the order the public page lists them. */
+/**
+ * Monitored components, in the order the pages list them. `public`: shown on the public status
+ * page, its JSON and feeds. The rest are internal (staff tools, back ends, providers): checked and
+ * alerted on the same way, shown only on the videos admin's Status page (owner, 2026-11-13: "You
+ * shouldn't show admin status unless this page is only for admins").
+ */
 export const STATUS_COMPONENTS = [
-  { id: 'www', en: 'Website', ar: 'الموقع' },
-  { id: 'videos', en: 'Videos site', ar: 'موقع المرئيات' },
-  { id: 'api', en: 'Videos API', ar: 'واجهة المرئيات البرمجية' },
-  { id: 'signin', en: 'Sign-in', ar: 'تسجيل الدخول' },
-  { id: 'profile', en: 'Profile', ar: 'الملف الشخصي' },
-  { id: 'cms', en: 'CMS', ar: 'نظام إدارة المحتوى' },
-  { id: 'admin', en: 'Admin', ar: 'لوحة الإدارة' },
-  { id: 'uploads', en: 'Uploads', ar: 'رفع المرئيات' },
-  { id: 'playback', en: 'Playback', ar: 'تشغيل المرئيات' },
-  { id: 'live', en: 'Live streaming', ar: 'البث المباشر' },
-  { id: 'realtime', en: 'Notifications & realtime', ar: 'الإشعارات والتحديثات الفورية' },
-  { id: 'search', en: 'Search', ar: 'البحث' },
-  { id: 'email', en: 'Email', ar: 'البريد الإلكتروني' },
+  { id: 'www', en: 'Website', ar: 'الموقع', public: true },
+  { id: 'videos', en: 'Videos site', ar: 'موقع المرئيات', public: true },
+  { id: 'signin', en: 'Sign-in', ar: 'تسجيل الدخول', public: true },
+  { id: 'profile', en: 'Profile', ar: 'الملف الشخصي', public: true },
+  { id: 'uploads', en: 'Uploads', ar: 'رفع المرئيات', public: true },
+  { id: 'playback', en: 'Playback', ar: 'تشغيل المرئيات', public: true },
+  { id: 'live', en: 'Live streaming', ar: 'البث المباشر', public: true },
+  { id: 'realtime', en: 'Notifications & realtime', ar: 'الإشعارات والتحديثات الفورية', public: true },
+  { id: 'search', en: 'Search', ar: 'البحث', public: true },
+  { id: 'api', en: 'Videos API', ar: 'واجهة المرئيات البرمجية', public: false },
+  { id: 'cms', en: 'CMS', ar: 'نظام إدارة المحتوى', public: false },
+  { id: 'admin', en: 'Videos admin', ar: 'إدارة المرئيات', public: false },
+  { id: 'admin-api', en: 'Admin API', ar: 'واجهة الإدارة البرمجية', public: false },
+  { id: 'auth-admin', en: 'Accounts admin', ar: 'إدارة الحسابات', public: false },
+  { id: 'email', en: 'Email', ar: 'البريد الإلكتروني', public: false },
 ] as const;
 
 export type StatusComponentId = (typeof STATUS_COMPONENTS)[number]['id'];
 export const STATUS_COMPONENT_IDS: readonly StatusComponentId[] = STATUS_COMPONENTS.map((c) => c.id);
+
+/** Components the public page, JSON and feeds show. */
+export const PUBLIC_STATUS_COMPONENT_IDS: readonly StatusComponentId[] = STATUS_COMPONENTS.filter((c) => c.public).map((c) => c.id);
+
+export function isPublicStatusComponent(id: string): boolean {
+  return (PUBLIC_STATUS_COMPONENT_IDS as readonly string[]).includes(id);
+}
 
 export function isStatusComponentId(v: unknown): v is StatusComponentId {
   return typeof v === 'string' && (STATUS_COMPONENT_IDS as readonly string[]).includes(v);

@@ -35,5 +35,9 @@ describe('status admin page', () => {
       assert.ok(ar.statusPage.impacts[i], i);
     }
     assert.equal(ar.itemSource.status, 'صفحة الحالة');
+    for (const k of ['public', 'publicNote', 'internal', 'internalNote', 'uptime'] as const) {
+      assert.ok(en.statusPage.checks[k] && ar.statusPage.checks[k], k);
+    }
+    assert.ok(en.statusPage.adminOnly && ar.statusPage.adminOnly);
   });
 });

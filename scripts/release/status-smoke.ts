@@ -16,6 +16,7 @@
  */
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
+import { PUBLIC_STATUS_COMPONENT_IDS, STATUS_COMPONENT_IDS } from '../../packages/shared-types/src/status-page.ts';
 
 export type StatusSmokeEnv = 'qa' | 'stage' | 'production';
 
@@ -25,8 +26,10 @@ export const STATUS_HOSTS: Record<StatusSmokeEnv, string> = {
 	qa: 'https://status.qa.alummahnow.net',
 };
 export const STATUS_WORKERS: Record<'stage' | 'production', string> = { production: 'al-ummah-status', stage: 'al-ummah-status-stage' };
-/** Components the page must list (packages/shared-types status-page.ts STATUS_COMPONENTS). */
-export const COMPONENT_COUNT = 13;
+/** Components the public page lists (the public ones of packages/shared-types status-page.ts). */
+export const COMPONENT_COUNT = PUBLIC_STATUS_COMPONENT_IDS.length;
+/** Internal components (staff tools, back ends): never on the public page or JSON. */
+export const INTERNAL_IDS = STATUS_COMPONENT_IDS.filter((id) => !PUBLIC_STATUS_COMPONENT_IDS.includes(id));
 
 export interface SmokeResult {
 	name: string;
@@ -100,6 +103,8 @@ export async function statusSmoke(env: StatusSmokeEnv, deps: SmokeDeps): Promise
 		need(res.status === 200, `HTTP ${res.status}`);
 		need(body.includes('<html lang="en" dir="ltr">'), 'not the English page');
 		need((body.match(/data-component="/g) ?? []).length === COMPONENT_COUNT, 'components missing');
+		const leaked = INTERNAL_IDS.filter((id) => body.includes(`data-component="${id}"`));
+		need(!leaked.length, `internal components shown: ${leaked.join(', ')}`);
 		return 'HTTP 200';
 	});
 	await check('page (ar, rtl)', '/ar', (res, body) => {
@@ -109,8 +114,10 @@ export async function statusSmoke(env: StatusSmokeEnv, deps: SmokeDeps): Promise
 	});
 	await check('JSON', '/api/status.json', (res, body) => {
 		need(res.status === 200, `HTTP ${res.status}`);
-		const j = JSON.parse(body) as { components?: unknown[]; overall?: string };
+		const j = JSON.parse(body) as { components?: { id?: string }[]; overall?: string };
 		need(j.components?.length === COMPONENT_COUNT, `components ${j.components?.length}`);
+		const leaked = (j.components ?? []).map((c) => c.id ?? '').filter((id) => INTERNAL_IDS.includes(id as never));
+		need(!leaked.length, `internal components in JSON: ${leaked.join(', ')}`);
 		return `overall ${j.overall}`;
 	});
 	await check('Atom feed', '/feed.atom', (res, body) => {

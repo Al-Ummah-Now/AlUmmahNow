@@ -47,6 +47,9 @@ test.describe('status page', () => {
     await page.goto('/status');
     await expect(page.getByRole('heading', { level: 1, name: 'Status' })).toBeVisible();
     await expect(page.getByTestId('status-public-link')).toHaveAttribute('href', 'http://localhost:3095');
+    // The admin lists every component; internal ones (staff tools, back ends) only here
+    await expect(page.getByTestId('status-checks-internal').locator('[data-component="cms"]')).toHaveAttribute('data-public', 'false');
+    await expect(page.getByTestId('status-checks-public').locator('[data-component="playback"]')).toHaveAttribute('data-public', 'true');
 
     const form = page.getByTestId('status-new-form');
     await form.getByTestId('status-title-en').fill(TITLE_EN);
@@ -68,6 +71,8 @@ test.describe('status page', () => {
     await expect(pub.getByRole('link', { name: TITLE_EN })).toBeVisible();
     await expect(pub.locator('[data-component="playback"]')).toHaveAttribute('data-state', 'partial');
     await expect(pub.getByRole('heading', { level: 1 })).toHaveText('Some systems are having problems');
+    // No internal component on the public page (owner, 2026-11-13)
+    for (const id of ['api', 'cms', 'admin', 'admin-api', 'auth-admin', 'email']) await expect(pub.locator(`[data-component="${id}"]`)).toHaveCount(0);
 
     // Arabic, right to left
     await pub.goto(fresh('/ar'));
@@ -98,6 +103,27 @@ test.describe('status page', () => {
     await expect(page.getByTestId('status-deleted-row').filter({ hasText: TITLE_EN })).toBeVisible();
     await pub.goto(fresh('/'));
     await expect(pub.getByRole('link', { name: TITLE_EN })).toHaveCount(0);
+    await pub.close();
+  });
+
+  test('STATUS-03 an incident on internal components only stays in the admin', async ({ page }) => {
+    const created = await adminApi<Incident>('/api/status/incidents', {
+      method: 'POST',
+      body: JSON.stringify({ kind: 'incident', titleEn: TITLE_EN, titleAr: TITLE_AR, impact: 'major', components: ['cms', 'admin-api'], bodyEn: 'Staff tools are down.', bodyAr: 'أدوات الفريق متوقفة.' }),
+    });
+    expect(created.status).toBe(201);
+    await page.goto('/status');
+    await expect(page.getByTestId('status-open').getByTestId('status-incident').filter({ hasText: TITLE_EN })).toBeVisible();
+
+    const pub = await page.context().newPage();
+    await pub.goto(fresh('/'));
+    await expect(pub.getByText(TITLE_EN)).toHaveCount(0);
+    await expect(pub.getByRole('heading', { name: 'Active incidents' })).toHaveCount(0);
+    const json = await (await pub.request.get(fresh('/api/status.json'))).json();
+    expect(JSON.stringify(json)).not.toContain(TITLE_EN);
+    expect((await pub.request.get(fresh(`/incidents/${created.body.result!.id}`))).status()).toBe(404);
+    const feed = await (await pub.request.get(fresh('/feed.atom'))).text();
+    expect(feed).not.toContain(TITLE_EN);
     await pub.close();
   });
 });

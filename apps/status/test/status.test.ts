@@ -6,14 +6,14 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { STATUS_COMPONENT_IDS } from '@al-ummah/shared-types';
+import { PUBLIC_STATUS_COMPONENT_IDS, STATUS_COMPONENT_IDS } from '@al-ummah/shared-types';
 import { classify, componentChecks, host, httpProbe, playbackProbes, statuspageProbe, wsProbe, type ProbeResult } from '../src/checks';
 import { advance, dayLevel, effectiveState, formatUptime, lastDays, overallState, uptime, type StoredState } from '../src/state';
 import { runOnce, type StatusEnv } from '../src/run';
 import { buildSummary, toJson } from '../src/model';
 import { renderIncidentPage, renderStatusPage } from '../src/render';
 import { atomFeed, rssFeed } from '../src/feed';
-import { loadIncident, prune } from '../src/store';
+import { loadFeedIncidents, loadIncident, prune, publicIncident, publicIncidents } from '../src/store';
 import { sqliteD1 } from './d1-sqlite';
 
 const AT = (m: number) => new Date(Date.UTC(2026, 10, 13, 12, m)).toISOString();
@@ -224,6 +224,7 @@ function platform(down: string[] = []): typeof fetch {
     if (isDown(url)) return new Response('down', { status: 503 });
     if (url.includes('/ws')) return new Response('need upgrade', { status: 426 });
     if (url.endsWith('/api/videos/tus')) return new Response('', { status: 401 });
+    if (url.includes('admin.auth')) return new Response(null, { status: 302, headers: { location: '/login?redirect=%2F' } });
     if (url.includes('profile.auth')) return new Response(null, { status: 302, headers: { location: 'https://auth.qa.alummahnow.net/authorize?x' } });
     if (url.includes('admin.qa') && url.endsWith('/login')) return new Response(null, { status: 307, headers: { location: '/api/auth/start' } });
     if (url.includes('status.json')) return json({ status: { indicator: 'none' } });
@@ -319,8 +320,37 @@ async function seeded() {
   await db.prepare(`INSERT INTO incident_updates VALUES ('u1', 'i1', 'identified', 'A slow CDN region.', 'منطقة بطيئة.', ?, 'u')`).bind(AT(10)).run();
   await db.prepare(`INSERT INTO incidents (id, kind, title_en, title_ar, status, impact, components, starts_at, created_at, created_by, updated_at, updated_by, deleted_at, deleted_by)
     VALUES ('gone', 'incident', 'Deleted', 'محذوفة', 'investigating', 'major', '["api"]', ?, ?, 'u', ?, 'u', '2026-10-01T00:00:00Z', 'u')`).bind(AT(0), AT(0), AT(0)).run();
+  // Internal only (staff tools): never public. Mixed: public with its internal component dropped.
+  await db.prepare(`INSERT INTO incidents (id, kind, title_en, title_ar, status, impact, components, starts_at, created_at, created_by, updated_at, updated_by)
+    VALUES ('int', 'incident', 'CMS down', 'تعطل نظام المحتوى', 'investigating', 'major', '["cms","admin"]', ?, ?, 'u', ?, 'u')`).bind(AT(1), AT(1), AT(11)).run();
+  await db.prepare(`INSERT INTO incidents (id, kind, title_en, title_ar, status, impact, components, starts_at, created_at, created_by, updated_at, updated_by)
+    VALUES ('mix', 'incident', 'Search and API slow', 'بطء البحث', 'investigating', 'degraded', '["search","api"]', ?, ?, 'u', ?, 'u')`).bind(AT(2), AT(2), AT(12)).run();
+  await db.prepare(`INSERT INTO component_state VALUES ('cms', 'major', 'major', 3, ?, ?, 300, 'https://cms.qa.alummahnow.net/healthz HTTP 500', 1)`).bind(AT(0), AT(58)).run();
   return { db, now };
 }
+
+describe('internal components stay off the public page', () => {
+  it('splits the catalog: user-facing public, staff tools and back ends internal', () => {
+    assert.deepEqual([...PUBLIC_STATUS_COMPONENT_IDS].sort(), ['live', 'playback', 'profile', 'realtime', 'search', 'signin', 'uploads', 'videos', 'www']);
+    for (const id of ['api', 'cms', 'admin', 'admin-api', 'auth-admin', 'email']) assert.ok(STATUS_COMPONENT_IDS.includes(id as never), id);
+  });
+
+  it('JSON, page, feeds and incident pages show no internal component, incident or host', async () => {
+    const { db, now } = await seeded();
+    const s = await buildSummary(db, now, 'production');
+    assert.deepEqual(s.components.map((c) => c.id), [...PUBLIC_STATUS_COMPONENT_IDS]);
+    assert.equal(s.overall, 'partial', 'the CMS major outage does not reach the headline');
+    const mix = s.active.find((i) => i.id === 'mix')!;
+    assert.deepEqual(mix.components, ['search']);
+    const json = JSON.stringify(toJson(s));
+    const html = renderStatusPage(s, { locale: 'en', path: '', assetVersion: 'v', environment: 'production' });
+    for (const text of [json, html, atomFeed('en', 'https://status.alummahnow.net', publicIncidents(await loadFeedIncidents(db)), now)]) {
+      assert.doesNotMatch(text, /CMS down|"cms"|"admin"|"api"|data-component="(cms|admin|api|email)|Videos admin|Admin API|cms\.qa|admin\.api|admin\.auth/);
+    }
+    assert.equal(publicIncident(await loadIncident(db, 'int')), null);
+    assert.deepEqual(publicIncident(await loadIncident(db, 'mix'))!.components, ['search']);
+  });
+});
 
 describe('public model, page and feeds', () => {
   it('applies open incidents to components; deleted incidents are hidden', async () => {
@@ -332,11 +362,12 @@ describe('public model, page and feeds', () => {
     assert.equal(playback.uptime90, '90.00');
     assert.equal(playback.days.length, 90);
     assert.equal(s.overall, 'partial');
-    assert.deepEqual(s.active.map((i) => i.id), ['i1']);
-    assert.equal(s.components.find((c) => c.id === 'api')!.state, 'operational');
+    assert.deepEqual(s.active.map((i) => i.id).sort(), ['i1', 'mix']);
+    assert.equal(s.components.find((c) => c.id === 'api'), undefined, 'the videos API is internal');
+    assert.equal(s.components.find((c) => c.id === 'search')!.state, 'degraded', 'the mixed incident still marks its public component');
     const j = toJson(s);
-    assert.equal(j.components.length, STATUS_COMPONENT_IDS.length);
-    assert.equal(j.incidents.active[0].title.ar, 'مرئيات بطيئة');
+    assert.equal(j.components.length, PUBLIC_STATUS_COMPONENT_IDS.length);
+    assert.equal(j.incidents.active.find((i) => i.id === 'i1')!.title.ar, 'مرئيات بطيئة');
   });
 
   it('renders en (ltr) and ar (rtl), escapes incident text', async () => {

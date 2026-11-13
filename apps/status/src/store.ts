@@ -2,7 +2,7 @@
  * STATUS_DB access (migrations/0001_status.sql). The cron writes
  * component_state and daily; admin-api writes incidents and incident_updates.
  */
-import { isClosedStatus, type IncidentImpact, type IncidentKind, type IncidentStatus, type StatusComponentId } from '@al-ummah/shared-types';
+import { isClosedStatus, isPublicStatusComponent, type IncidentImpact, type IncidentKind, type IncidentStatus, type StatusComponentId } from '@al-ummah/shared-types';
 import type { ComponentResult, RawState } from './checks';
 import type { CheckedState, DayCounts, StoredState } from './state';
 
@@ -138,6 +138,20 @@ export async function loadIncident(db: D1Database, id: string): Promise<Incident
 export async function loadFeedIncidents(db: D1Database, limit = 30): Promise<Incident[]> {
   const rows = (await db.prepare(`SELECT ${COLS} FROM incidents WHERE deleted_at IS NULL ORDER BY updated_at DESC LIMIT ?`).bind(limit).all<IncidentRow>()).results ?? [];
   return withUpdates(db, rows);
+}
+
+/**
+ * The public view of an incident: only its public components, or null when it affects only
+ * internal ones (staff tools, back ends), which stay off the public page, JSON and feeds.
+ */
+export function publicIncident(i: Incident | null): Incident | null {
+  if (!i) return null;
+  const components = i.components.filter(isPublicStatusComponent);
+  return components.length ? { ...i, components } : null;
+}
+
+export function publicIncidents(list: Incident[]): Incident[] {
+  return list.map(publicIncident).filter((i): i is Incident => i !== null);
 }
 
 /** Open incident, or maintenance running now. */
