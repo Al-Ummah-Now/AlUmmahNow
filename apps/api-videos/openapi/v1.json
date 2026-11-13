@@ -34245,7 +34245,7 @@
           "Comments"
         ],
         "summary": "List comments for a video",
-        "description": "Returns a page of top-level comments (pinned first, then by `sort`: newest first, or top = most likes) with author display name and avatar. Replies are listed by GET /api/videos/:id/comments/:cid/replies. When the request is authenticated with a channelId header, isLiked reflects that channel's like (isDisliked is always false: comment dislikes are hidden since 2026-11-12). Held-for-review comments are included for their author and the video owner only. When comments are off the list is empty and commentSettings is `off`.",
+        "description": "Returns a page of top-level comments (pinned first, then by `sort`: newest first, or top = most likes) with author display name and avatar. Replies are listed by GET /api/videos/:id/comments/:cid/replies. When the request is authenticated, isLiked reflects the like of the channel in the channelId header or, without one, the member's own (isDisliked is always false: comment dislikes are hidden since 2026-11-12). Held-for-review comments are included for their author and the video owner only. When comments are off the list is empty and commentSettings is `off`.",
         "operationId": "get_CommentList",
         "parameters": [
           {
@@ -34319,7 +34319,11 @@
                                 "type": "string"
                               },
                               "channelId": {
-                                "type": "string"
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "description": "The channel the comment was posted as; null when the member commented as themselves"
                               },
                               "videoId": {
                                 "type": "string"
@@ -34376,7 +34380,11 @@
                                     "type": "string"
                                   },
                                   "channelId": {
-                                    "type": "string"
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ],
+                                    "description": "null: posted by the member themselves, without a channel"
                                   },
                                   "displayName": {
                                     "type": "string"
@@ -34488,7 +34496,7 @@
           "Comments"
         ],
         "summary": "Create a comment or a reply on a video",
-        "description": "Posts a top-level comment, or a reply when `parentCommentId` is set. Replies are one level deep: replying to a reply attaches to its top-level comment. Returns 403 `comments_disabled` when the video's comment settings are off; when they are `held` the comment is stored for the owner's review (`isHeld: true`) and not broadcast until approved.",
+        "description": "Posts a top-level comment, or a reply when `parentCommentId` is set, as the channel in the channelId header or, without one, as the member themselves (`channelId: null`, author from the profile). Replies are one level deep: replying to a reply attaches to its top-level comment. Returns 403 `comments_disabled` when the video's comment settings are off; when they are `held` the comment is stored for the owner's review (`isHeld: true`) and not broadcast until approved.",
         "operationId": "post_CommentCreate",
         "parameters": [
           {
@@ -34503,11 +34511,14 @@
           },
           {
             "schema": {
-              "type": "string",
-              "description": "Channel ID"
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The caller's active channel to comment as; omit to comment as yourself (your display name and avatar)"
             },
-            "required": true,
-            "description": "Channel ID",
+            "required": false,
+            "description": "The caller's active channel to comment as; omit to comment as yourself (your display name and avatar)",
             "name": "channelId",
             "in": "header"
           }
@@ -34557,7 +34568,11 @@
                               "type": "string"
                             },
                             "channelId": {
-                              "type": "string"
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "description": "The channel the comment was posted as; null when the member commented as themselves"
                             },
                             "videoId": {
                               "type": "string"
@@ -34614,7 +34629,11 @@
                                   "type": "string"
                                 },
                                 "channelId": {
-                                  "type": "string"
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ],
+                                  "description": "null: posted by the member themselves, without a channel"
                                 },
                                 "displayName": {
                                   "type": "string"
@@ -34773,11 +34792,14 @@
           },
           {
             "schema": {
-              "type": "string",
-              "description": "Channel ID"
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The caller's active channel; optional (only the comment's author may edit it)"
             },
-            "required": true,
-            "description": "Channel ID",
+            "required": false,
+            "description": "The caller's active channel; optional (only the comment's author may edit it)",
             "name": "channelId",
             "in": "header"
           }
@@ -34927,11 +34949,14 @@
           },
           {
             "schema": {
-              "type": "string",
-              "description": "Channel ID"
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The caller's active channel; optional (the author, or a moderator of the video's channel, may delete)"
             },
-            "required": true,
-            "description": "Channel ID",
+            "required": false,
+            "description": "The caller's active channel; optional (the author, or a moderator of the video's channel, may delete)",
             "name": "channelId",
             "in": "header"
           }
@@ -35628,7 +35653,11 @@
                                 "type": "string"
                               },
                               "channelId": {
-                                "type": "string"
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "description": "The channel the comment was posted as; null when the member commented as themselves"
                               },
                               "videoId": {
                                 "type": "string"
@@ -35685,7 +35714,11 @@
                                     "type": "string"
                                   },
                                   "channelId": {
-                                    "type": "string"
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ],
+                                    "description": "null: posted by the member themselves, without a channel"
                                   },
                                   "displayName": {
                                     "type": "string"

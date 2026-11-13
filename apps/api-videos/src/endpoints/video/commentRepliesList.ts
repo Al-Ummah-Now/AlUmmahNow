@@ -16,6 +16,7 @@ import {
 	StoredComment,
 } from "../../lib/comments";
 import { toCommentListItems } from "../../lib/commentAuthors";
+import { reactorId } from "../../lib/reactions";
 import { CommentListItemSchema } from "./commentList";
 
 /**
@@ -66,7 +67,8 @@ export class CommentRepliesList extends OptionalAuthRoute {
 		const { id, cid } = request.params;
 		const { limit, cursor } = request.query;
 		const userId = this.getUserId(c);
-		const viewerChannelId = userId ? c.req.header('channelId') : undefined;
+		// The viewer's current identity: the channel, or the member themselves without one
+		const viewerChannelId = userId ? reactorId(c.req.header('channelId'), userId) : undefined;
 
 		type VideoType = z.infer<typeof Video>;
 		const video = await new R2Repository<VideoType>(c.env.videos).getObject(id);
