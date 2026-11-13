@@ -34,7 +34,7 @@ import { parseEmbedLang } from '@/lib/embed/params';
 import { NONCE_HEADER } from '@/lib/security/nonce-header';
 import { handleRewritePath } from '@/lib/channel-url';
 import { refreshSessionCookie } from '@/lib/auth/middleware-refresh';
-import { presentSessionCookieNames, writeSessionValue } from '@/lib/auth/session-cookie';
+import { presentSessionCookieNames, sessionCookieOptions, writeSessionValue } from '@/lib/auth/session-cookie';
 
 /**
  * Build the CSP for this request. In production a fresh nonce is generated per
@@ -111,7 +111,7 @@ export async function middleware(request: NextRequest) {
   const refreshedSession = await refreshSessionCookie(request);
   const response = routeRequest(request);
   if (refreshedSession) {
-    writeSessionValue(response.cookies, refreshedSession, browserSessionCookies);
+    writeSessionValue(response.cookies, refreshedSession, browserSessionCookies, sessionCookieOptions(request.headers.get('host')));
   }
   return response;
 }
