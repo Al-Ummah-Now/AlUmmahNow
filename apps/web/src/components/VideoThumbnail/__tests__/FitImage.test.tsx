@@ -43,6 +43,8 @@ describe('FitImage', () => {
     expect(backdrop.closest('[aria-hidden="true"]')).not.toBeNull();
     expect(backdrop).toHaveAttribute('alt', '');
     expect(backdrop).toHaveAttribute('src', 'https://cdn/v.jpg');
+    expect(backdrop).toHaveAttribute('loading', 'lazy');
+    expect(backdrop).toHaveAttribute('decoding', 'async');
   });
 
   it("letterboxes from the first paint when Bunny's stored size says vertical", () => {
