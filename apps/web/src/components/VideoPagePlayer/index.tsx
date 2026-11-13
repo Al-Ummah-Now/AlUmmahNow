@@ -32,7 +32,7 @@ const VideoPlayer: React.FC<WatchPlayerProps> = ({ options, startTime, onPlayerR
 
   const title = getLocalizedValue(options.titleLocalized, options.title, locale);
   const channelHref = playerChannelHref(locale, options);
-  const channelName = playerChannelName(options);
+  const channelName = playerChannelName(options, locale);
 
   // Bunny or R2, fallback and QoE: shared with the RTL player
   const { videoSources, posterUrl, handlePlayerReady } = useDeliveryPlayback(options, onPlayerReady);

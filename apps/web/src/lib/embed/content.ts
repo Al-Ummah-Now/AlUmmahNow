@@ -30,6 +30,8 @@ export interface EmbedVideo {
   duration?: number;
   channelId?: string | null;
   channelName?: string;
+  /** The channel's name per language (lib/channel-name.ts) */
+  channelNameLocalized?: Record<string, string>;
   channelHandle?: string | null;
   /** The API's flag: the video has chapters */
   hasChapters?: boolean;
@@ -64,6 +66,7 @@ interface ApiVideo {
   duration?: number | string;
   channelId?: string | null;
   channelName?: string;
+  channelNameLocalized?: Record<string, string>;
   channelHandle?: string | null;
   isPublic?: boolean;
   isDeleted?: boolean;
@@ -119,6 +122,7 @@ export function toEmbedVideo(video: ApiVideo | null | undefined): EmbedVideo | n
     duration: Number.isFinite(duration) && duration > 0 ? duration : undefined,
     channelId: video.channelId ?? null,
     channelName: video.channelName,
+    ...(video.channelNameLocalized ? { channelNameLocalized: video.channelNameLocalized } : {}),
     channelHandle: video.channelHandle ?? null,
     hasChapters: video.hasChapters === true || undefined,
     ...(positiveSize(video.width) && positiveSize(video.height) ? { width: Number(video.width), height: Number(video.height) } : {}),

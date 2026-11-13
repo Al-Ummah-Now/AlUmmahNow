@@ -38,6 +38,7 @@ import { watchHref as listWatchHref } from '@/lib/playlists/playback';
 import { useEmbedMessaging } from './useEmbedMessaging';
 // Black backdrop and a player that fills the host's frame, in every theme and mode
 import './embed-frame.css';
+import { channelLabel } from '@/lib/channel-name';
 
 export interface EmbedPlayerProps {
   videos: EmbedVideo[];
@@ -166,7 +167,7 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
       upNext: nextVideo
         ? {
             title: titleOf(nextVideo, lang),
-            channel: nextVideo.channelName ? removeUnwantedChars(nextVideo.channelName) : '',
+            channel: removeUnwantedChars(channelLabel(nextVideo, lang)),
             thumbnail: nextVideo.poster,
             badge: `${(index + 2).toLocaleString(lang)} / ${videos.length.toLocaleString(lang)}`,
             go: goToNext,
@@ -331,8 +332,8 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
                 >
                   {title}
                 </a>
-                {video.channelName && (
-                  <p className="truncate text-xs text-gray-300">{removeUnwantedChars(video.channelName)}</p>
+                {channelLabel(video, lang) && (
+                  <p className="truncate text-xs text-gray-300">{removeUnwantedChars(channelLabel(video, lang))}</p>
                 )}
               </div>
             </div>

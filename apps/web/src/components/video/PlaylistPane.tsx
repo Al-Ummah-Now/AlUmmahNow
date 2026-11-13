@@ -17,6 +17,7 @@ import { removeUnwantedChars } from '@/lib/utility';
 import { formatDuration, getPlaylistHref } from '@/lib/playlists/playlist-utils';
 import type { QueueItem } from '@/lib/api/playlist-queue';
 import type { PlaylistQueueState } from '@/hooks/usePlaylistQueue';
+import { channelLabel } from '@/lib/channel-name';
 
 export interface PlaylistPaneProps {
   queue: PlaylistQueueState;
@@ -74,7 +75,7 @@ export function PlaylistPane(props: PlaylistPaneProps) {
       : summary.kind === 'liked'
         ? `/${lang}/library/liked`
         : getPlaylistHref(lang, summary.id);
-  const owner = summary?.kind === 'playlist' ? summary.channelName : tp.you;
+  const owner = summary?.kind === 'playlist' ? channelLabel(summary, lang) : tp.you;
   const ownerHref = summary?.kind === 'playlist' && summary.channelId
     ? (summary.channelHandle ? `/${lang}/@${encodeURIComponent(summary.channelHandle)}` : `/${lang}/channels/${encodeURIComponent(summary.channelId)}`)
     : null;
@@ -226,7 +227,7 @@ export function PlaylistPane(props: PlaylistPaneProps) {
                       <span className="min-w-0 flex-1">
                         <span className={`line-clamp-2 text-sm ${current ? 'font-semibold' : 'font-medium'} text-[var(--fanous-color-text-primary)]`}>{itemTitle}</span>
                         {item.channelName && summary?.kind !== 'playlist' && (
-                          <span className="block truncate text-xs text-[var(--fanous-color-text-secondary)]">{item.channelName}</span>
+                          <span className="block truncate text-xs text-[var(--fanous-color-text-secondary)]">{channelLabel(item, lang)}</span>
                         )}
                       </span>
                     </a>

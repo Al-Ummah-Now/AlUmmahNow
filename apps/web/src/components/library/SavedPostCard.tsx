@@ -4,6 +4,7 @@ import React from 'react';
 import Link from '@/components/common/AppLink';
 import { useLanguage } from '@/hooks/useLanguage';
 import type { SavedPost } from '@/services/api/library';
+import { channelLabel } from '@/lib/channel-name';
 
 function stripHtml(html: string | undefined): string {
   return (html || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
@@ -18,7 +19,7 @@ export function SavedPostCard({ post }: { post: SavedPost }) {
       data-testid="library-saved-post"
       data-post-id={post.id}
     >
-      {post.channelName && <p className="text-xs font-medium text-gray-500 dark:text-gray-400">{post.channelName}</p>}
+      {channelLabel(post, lang) && <p className="text-xs font-medium text-gray-500 dark:text-gray-400">{channelLabel(post, lang)}</p>}
       <p className="line-clamp-3 text-sm text-gray-900 dark:text-gray-100">{stripHtml(post.content)}</p>
     </Link>
   );

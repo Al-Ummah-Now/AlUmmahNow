@@ -13,6 +13,7 @@ import VideoPost from './types/VideoPost';
 import GifPost from './types/GifPost';
 import ArticlePost from './types/ArticlePost';
 import Image from 'next/image';
+import { channelLabel } from '@/lib/channel-name';
 
 interface PostCardProps {
   post: CommunityPost;
@@ -108,13 +109,13 @@ export default function PostCard({
           {post.channelAvatar ? (
             <Image
               src={post.channelAvatar}
-              alt={post.channelName}
+              alt={channelLabel(post, locale)}
               fill
               className="rounded-full object-cover"
             />
           ) : (
             <div className="w-full h-full rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold">
-              {post.channelName.charAt(0).toUpperCase()}
+              {channelLabel(post, locale).charAt(0).toUpperCase()}
             </div>
           )}
           {post.channelVerified && (
@@ -133,7 +134,7 @@ export default function PostCard({
         <div className={cn('flex-1 min-w-0', isRTL && 'text-right')}>
           <div className={cn('flex items-center gap-2')}>
             <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate">
-              {post.channelName}
+              {channelLabel(post, locale)}
             </h3>
             {post.pinned && (
               <svg className="w-4 h-4 text-gray-500 dark:text-gray-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">

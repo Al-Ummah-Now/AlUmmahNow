@@ -13,6 +13,7 @@ import { resolveUrl } from '@/lib/utility';
 import type { WatchHistoryItem } from '@/services/api/watch-history';
 import type { AppTranslations } from '@/lib/i18n/types';
 import { formatAbsoluteDate, formatRelativeTime } from '@/lib/format/videoMeta';
+import { channelLabel } from '@/lib/channel-name';
 
 export interface WatchHistoryEntryProps {
   entry: WatchHistoryItem;
@@ -41,12 +42,12 @@ export function WatchHistoryEntry({ entry, lang, t, onRemove }: WatchHistoryEntr
         </Link>
         {entry.channelName && entry.channelId && (
           <Link href={`/${lang}/channels/${entry.channelId}`} className="block text-sm text-gray-600 dark:text-gray-400 hover:underline">
-            {entry.channelName}
+            {channelLabel(entry, lang)}
           </Link>
         )}
         {/* Legacy videos have a channel name but no channel page */}
         {entry.channelName && !entry.channelId && (
-          <span className="block text-sm text-gray-600 dark:text-gray-400">{entry.channelName}</span>
+          <span className="block text-sm text-gray-600 dark:text-gray-400">{channelLabel(entry, lang)}</span>
         )}
         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
           <span title={watchedDate}>{t.watchHistory.lastWatched.replace('{date}', watchedOn)}</span>

@@ -16,6 +16,7 @@ export function searchVideoToVideoObject(video: SearchVideoPayload, channelName?
     channelId: video.channelId,
     channel: channelName ?? video.channelName ?? '',
     channelName: channelName ?? video.channelName ?? '',
+    ...(video.channelNameLocalized ? { channelNameLocalized: video.channelNameLocalized } : {}),
     channelAvatarUrl: video.channelAvatarUrl ?? '',
     duration: video.duration,
     views: video.views,

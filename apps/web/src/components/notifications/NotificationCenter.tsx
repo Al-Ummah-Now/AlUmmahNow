@@ -104,7 +104,7 @@ export function NotificationCenter() {
       logger.debug('[NotificationCenter] No toast: already on screen', { kind, path });
       return;
     }
-    const { title, message } = resolveNotificationText(event, tNow);
+    const { title, message } = resolveNotificationText(event, tNow, langNow);
     const at = Date.now();
     const id = event.notificationId || contentKey({ kind, href, message });
     setQueue((q) => enqueueToast(q, { id, kind, title, message, href, at }));

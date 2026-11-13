@@ -20,6 +20,7 @@ export interface QueueSummary {
   titleLocalized?: Record<string, string>;
   channelId?: string | null;
   channelName?: string;
+  channelNameLocalized?: Record<string, string>;
   channelHandle?: string | null;
   isPublic: boolean;
   sortMode?: 'manual' | 'auto';
@@ -37,6 +38,7 @@ export interface QueueItem {
   duration?: number | null;
   channelId?: string;
   channelName?: string;
+  channelNameLocalized?: Record<string, string>;
   isShort: boolean;
   /** The URL the API chose to play (R2 or Bunny); used to preload the next item's manifest */
   playUrl?: string;

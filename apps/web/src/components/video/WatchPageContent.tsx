@@ -41,6 +41,7 @@ import { clearAutoplayIntent, hasAutoplayIntent, isAutoAdvance, requestAutoplay 
 import { pickUpNext, recordWatched, watchedThisSession } from "@/lib/video/up-next";
 import { useAutoplaySetting } from "@/hooks/useAutoplaySetting";
 import { navigateOrLoad } from "@/lib/navigation/navigate-or-load";
+import { channelLabel } from '@/lib/channel-name';
 
 /** The list a share link carries: public playlists only, never the viewer's WL / LL (spec 2.4) */
 function shareListOf(list: string | null, index: number | null): { id: string; index: number | null } | null {
@@ -128,7 +129,7 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
   useEffect(() => enableWatchPageFeatures(), []);
   const nextId = next?.id;
   const nextTitle = next?.title;
-  const nextChannel = next?.channelName || '';
+  const nextChannel = channelLabel(next, lang);
   const nextThumbnail = next?.thumbnail;
   // Playlist playback (docs/specs/PLAYLIST-PLAYBACK.md): with a list in the URL, up next is the
   // list's next item and the related video never follows the list
@@ -163,7 +164,7 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
             go: (opts) => goTo(nextId, opts?.auto === true),
           }
         : null,
-      suggestions: suggestions.map((v) => ({ id: v.id, title: getLocalizedValue(v.titleLocalized, v.title, lang), channel: v.channelName || '', thumbnail: v.thumbnail, go: () => goTo(v.id) })),
+      suggestions: suggestions.map((v) => ({ id: v.id, title: getLocalizedValue(v.titleLocalized, v.title, lang), channel: channelLabel(v, lang), thumbnail: v.thumbnail, go: () => goTo(v.id) })),
     });
     // suggestionKey stands for the suggestions (a new array each render)
     // eslint-disable-next-line react-hooks/exhaustive-deps
