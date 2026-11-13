@@ -37,6 +37,25 @@ describe('status smoke', () => {
 	});
 });
 
+describe('status smoke: public components only', () => {
+	it('fails when an internal component reaches the page', async () => {
+		const report = await statusSmoke('stage', {
+			attempts: 1,
+			sleep: async () => {},
+			fetch: (async (u: string) => (u.endsWith('.net/') ? new Response(`<html lang="en" dir="ltr">${comps.replace('data-component="c0"', 'data-component="cms"')}`) : healthy(u))) as unknown as typeof fetch,
+		});
+		assert.deepEqual(report.results.filter((x) => !x.ok).map((x) => x.detail), ['internal components shown: cms']);
+	});
+	it('fails when an internal component is in the JSON', async () => {
+		const report = await statusSmoke('stage', {
+			attempts: 1,
+			sleep: async () => {},
+			fetch: (async (u: string) => (u.endsWith('/api/status.json') ? Response.json({ overall: 'operational', components: [{ id: 'admin-api' }, ...Array(COMPONENT_COUNT - 1).fill({ id: 'www' })] }) : healthy(u))) as unknown as typeof fetch,
+		});
+		assert.deepEqual(report.results.filter((x) => !x.ok).map((x) => x.detail), ['internal components in JSON: admin-api']);
+	});
+});
+
 describe('status smoke on a new custom domain', () => {
 	it('waits for DNS/TLS, then checks (the v2026.11.13.5 stage case)', async () => {
 		let calls = 0;
