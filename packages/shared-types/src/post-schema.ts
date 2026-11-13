@@ -336,12 +336,50 @@ function stripTags(s: string): string {
   return out;
 }
 
+/**
+ * Markdown links and images in one linear pass: `[text](url)` keeps its text, `![alt](url)` goes.
+ * The next `]` and `)` positions are cached, so no input makes it quadratic.
+ */
+function stripLinks(s: string): string {
+  let out = '';
+  let close = -1;
+  let paren = -1;
+  let i = 0;
+  while (i < s.length) {
+    const image = s[i] === '!' && s[i + 1] === '[';
+    if (s[i] !== '[' && !image) {
+      out += s[i];
+      i++;
+      continue;
+    }
+    const open = image ? i + 1 : i;
+    if (close < open) close = s.indexOf(']', open);
+    if (close < 0) {
+      out += s.slice(i);
+      break;
+    }
+    const label = s.slice(open + 1, close);
+    if (s[close + 1] !== '(' || label.includes('\n') || label.includes('[')) {
+      out += s[i];
+      i++;
+      continue;
+    }
+    if (paren < close + 1) paren = s.indexOf(')', close + 1);
+    if (paren < 0 || s.slice(close + 2, paren).includes('\n')) {
+      out += s[i];
+      i++;
+      continue;
+    }
+    out += image ? ' ' : label;
+    i = paren + 1;
+  }
+  return out;
+}
+
 /** Markdown (or the sanitised HTML of a text post) as plain text, for excerpts and titles. */
 export function plainText(s: unknown): string {
   if (typeof s !== 'string') return '';
-  return stripTags(s)
-    .replace(/!\[[^\]\n]*\]\([^)\n]*\)/g, ' ')
-    .replace(/\[([^\]\n]*)\]\([^)\n]*\)/g, '$1')
+  return stripLinks(stripTags(s))
     .replace(/^[ \t]{0,3}(?:#{1,6}|>|[-*+]|\d{1,9}\.)[ \t]/gm, '')
     .replace(/[*_`~]/g, '')
     .replace(/&nbsp;/g, ' ')
