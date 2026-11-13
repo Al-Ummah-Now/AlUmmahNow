@@ -81,7 +81,7 @@ export async function getTurnstileToken(opts: TurnstileOptions): Promise<string 
   panel.tabIndex = -1;
   // Hidden until Cloudflare needs a click (before-interactive-callback)
   panel.style.cssText =
-    'position:fixed;inset-inline:0;bottom:1rem;margin-inline:auto;width:max-content;max-width:calc(100vw - 2rem);z-index:2147483000;display:none;padding:.5rem;border-radius:.75rem;background:var(--color-surface,#fff);box-shadow:0 8px 24px rgba(0,0,0,.25)';
+    'position:fixed;inset-inline:0;bottom:1rem;margin-inline:auto;width:max-content;max-width:calc(100vw - 2rem);z-index:2147483000;display:none;padding:.5rem;border-radius:.75rem;background:var(--fanous-color-surface-raised);border:1px solid var(--m-card-edge)';
   document.body.appendChild(panel);
 
   return new Promise<string | null>((resolve) => {
