@@ -11,12 +11,15 @@
  *   `{ videoId, userId, bunnyUploadUrl, ... }`, alive for 7 days, indexed as `tus:user:<userId>:upload:<key>`.
  * - TUS_SESSIONS `bulk-edit-undo:<userId>:…` (lib/bulkEditUndo.ts): bulk edit undo records (the
  *   videos' fields before and after), alive for 24 hours. Deleted by prefix.
+ * - HUMAN_VERIFIED `h:<userId>` (middleware/bot-protection.ts): the account passed the bot check,
+ *   kept for 180 days. Deleted.
  *
  * Idempotent; called after every erasure pass by both callers (DELETE /api/privacy/data and the
  * admin erasure job).
  */
 import { UPLOAD_MARKER_PREFIX } from '../uploads/reaper';
 import { undoUserPrefix } from '../bulkEditUndo';
+import { humanVerifiedKey } from '../../middleware/bot-protection';
 import { getTusSessionKey, tusUserIndexPrefix, TUS_UPLOAD_INDEX_MARK } from '../bunny/tus';
 
 interface KvLike {
@@ -30,6 +33,7 @@ interface BucketLike {
 export interface UploadTracesEnv {
 	global_settings?: BucketLike;
 	TUS_SESSIONS?: KvLike;
+	HUMAN_VERIFIED?: Pick<KvLike, 'delete'>;
 }
 
 export async function eraseUploadTraces(env: UploadTracesEnv, userId: string, deletedVideoIds: string[]): Promise<{ markers: number; sessions: number }> {
@@ -68,5 +72,6 @@ export async function eraseUploadTraces(env: UploadTracesEnv, userId: string, de
 		} while (cursor);
 		for (const name of undo) await env.TUS_SESSIONS.delete(name);
 	}
+	if (env.HUMAN_VERIFIED && userId) await env.HUMAN_VERIFIED.delete(humanVerifiedKey(userId));
 	return { markers, sessions };
 }
