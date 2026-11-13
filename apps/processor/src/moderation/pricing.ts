@@ -6,9 +6,11 @@
 export const USD_PER_NEURON = 0.011 / 1000;
 
 export const MODELS = {
-  translate: '@cf/meta/m2m100-1.2b',
+  // Owner decision VR3 (2026-11-13, #813): m2m100 is retired (unusable for Arabic, AUN-CAPTIONS
+  // measurements); Gemma 4 translates Arabic for Llama Guard and scores the platform categories
+  translate: '@cf/google/gemma-4-26b-a4b-it',
   guard: '@cf/meta/llama-guard-3-8b',
-  extensions: '@cf/meta/llama-4-scout-17b-16e-instruct',
+  extensions: '@cf/google/gemma-4-26b-a4b-it',
 } as const;
 
 /** Neurons per million tokens: [input, output]. */

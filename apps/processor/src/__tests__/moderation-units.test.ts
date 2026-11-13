@@ -62,6 +62,8 @@ describe('pricing', () => {
   it('converts tokens to neurons with the model rate', () => {
     expect(neuronsFor('@cf/meta/llama-guard-3-8b', 1_000_000, 0)).toBeCloseTo(44003);
     expect(neuronsFor('@cf/meta/m2m100-1.2b', 100, 100)).toBeCloseTo(6.21);
+    // VR3 (#813): Gemma 4 replaces m2m100; $0.10 / $0.30 per M
+    expect(neuronsFor('@cf/google/gemma-4-26b-a4b-it', 1_000_000, 0)).toBeCloseTo(9091);
   });
   it('never under-counts an unknown model', () => {
     expect(neuronsFor('@cf/unknown/model', 1_000_000, 0)).toBeGreaterThanOrEqual(44003);
