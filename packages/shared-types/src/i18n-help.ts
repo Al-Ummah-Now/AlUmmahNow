@@ -362,7 +362,7 @@ export const HELP_EN: HelpTranslations = {
           heading: 'Posts and polls',
           blocks: [
             { type: 'p', text: 'Channels share updates, pictures and polls on their **Community** tab. Only the channel’s owner writes posts there.' },
-            { type: 'figure', picture: 'community-tab', alt: 'A channel’s Community tab with a post and its comments', markers: ['A post', 'Commenting as …'] },
+            { type: 'figure', picture: 'community-tab', alt: 'A post on a channel’s Community tab, with the comment box saying who you comment as', markers: ['Commenting as …'] },
           ],
         },
         {
@@ -698,7 +698,7 @@ export const HELP_AR: HelpTranslations = {
           heading: 'المنشورات واستطلاعات الرأي',
           blocks: [
             { type: 'p', text: 'تنشر القنوات أخبارها وصورها واستطلاعاتها في تبويب **المجتمع**، ولا يكتب المنشورات فيه إلا مالك القناة.' },
-            { type: 'figure', picture: 'community-tab', alt: 'تبويب المجتمع في قناة وفيه منشور وتعليقاته', markers: ['منشور', 'تعلّق باسم …'] },
+            { type: 'figure', picture: 'community-tab', alt: 'منشور في تبويب المجتمع في قناة، وصندوق التعليق يُظهر الاسم الذي ستعلّق به', markers: ['تعلّق باسم …'] },
           ],
         },
         {
