@@ -124,7 +124,6 @@
   "apps/web/src/components/common/InfiniteScrollTrigger.tsx": 12,
   "apps/web/src/components/common/SignInPrompt.tsx": 9,
   "apps/web/src/components/communityGuidelines/index.tsx": 10,
-  "apps/web/src/components/consent/ConsentBanner/ConsentBannerView.tsx": 30,
   "apps/web/src/components/consent/ConsentPreferences.tsx": 14,
   "apps/web/src/components/embed/CommentsFrame.tsx": 19,
   "apps/web/src/components/embed/EmbedPlayer.tsx": 24,

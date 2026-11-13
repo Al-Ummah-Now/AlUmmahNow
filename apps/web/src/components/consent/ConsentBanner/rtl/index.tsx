@@ -8,8 +8,8 @@
 import React from 'react';
 import { ConsentBannerView } from '../ConsentBannerView';
 
-export function ConsentBannerRTL() {
-  return <ConsentBannerView dir="rtl" />;
+export function ConsentBannerRTL({ initialVisible }: { initialVisible?: boolean }) {
+  return <ConsentBannerView dir="rtl" initialVisible={initialVisible} />;
 }
 
 export default ConsentBannerRTL;

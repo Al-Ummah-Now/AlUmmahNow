@@ -3,7 +3,7 @@ import { NuqsAdapter } from 'nuqs/adapters/next/app'
 import { ThemeProvider } from "@/components/themeProvider";
 import { authenticated } from "../lib/actions"
 import type { Metadata, Viewport } from 'next'
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { DEFAULT_LOCALE, LOCALE_REQUEST_HEADER } from "@/lib/i18n/locales";
 import { getTextDirection, isLocaleSupported } from "@/lib/i18n/utils";
 import "./globals.css";
@@ -32,6 +32,7 @@ import { deriveCmsUrl, deriveWwwUrl } from "@/lib/scholars/sites";
 import { SecurityBootstrap } from "@/components/security/SecurityBootstrap";
 import { RuntimeConfigBootstrap } from "@/components/RuntimeConfigBootstrap";
 import { ConsentBanner } from "@/components/consent/ConsentBanner";
+import { CONSENT_COOKIE, parseConsent } from "@/lib/consent/consent-cookie";
 import SkipLinks from "@/components/SkipLinks";
 import { FanousStreet } from "@/components/FanousStreet";
 import { EMBED_REQUEST_HEADER } from "@/lib/embed/routes";
@@ -217,6 +218,8 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
   const subject = await authenticated()
   const user = subject ? subject.properties : null;
   const reporting = await errorReportingContext();
+  // A first visit (no valid choice stored) gets the consent bar in the server HTML, not after hydration (#1205)
+  const consentPending = parseConsent((await cookies()).get(CONSENT_COOKIE)?.value) === null;
 
   return (
     <html lang={locale} dir={getTextDirection(locale)} data-theme={theme} suppressHydrationWarning>
@@ -276,7 +279,7 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
                           <NotificationCenter />
 
                           {/* Cookie / tracking consent (GDPR, Story 1.3) */}
-                          <ConsentBanner />
+                          <ConsentBanner initialVisible={consentPending} />
                           <FanousStreet />
                         </div>
                       </TranslationSyncProvider>

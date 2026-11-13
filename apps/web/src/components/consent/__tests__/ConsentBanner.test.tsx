@@ -3,6 +3,7 @@
  * accept/reject, granular choices, reopenable.
  */
 import React from 'react';
+import { renderToString } from 'react-dom/server';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { EN_TRANSLATIONS } from '@/lib/i18n/translations/en';
 import { AR_TRANSLATIONS } from '@/lib/i18n/translations/ar';
@@ -85,6 +86,31 @@ describe('ConsentBanner', () => {
     act(() => ConsentManager.openPreferences());
     expect(screen.getByTestId('consent-banner')).toBeInTheDocument();
     expect(screen.getByText(EN_TRANSLATIONS.privacy.preferencesTitle)).toBeInTheDocument();
+  });
+
+  it('is in the server HTML on a first visit, as a labelled region whose buttons wait for hydration (#1205)', () => {
+    const html = renderToString(<ConsentBanner initialVisible />);
+    expect(html).toContain('data-testid="consent-banner"');
+    expect(html).toContain('role="region"');
+    expect(html).toContain('aria-labelledby="consent-banner-title"');
+    expect(html).toContain(EN_TRANSLATIONS.privacy.bannerTitle);
+    expect(html.match(/aria-disabled="true"/g)).toHaveLength(3);
+  });
+
+  it('is not in the server HTML when the request had a valid choice', () => {
+    expect(renderToString(<ConsentBanner initialVisible={false} />)).not.toContain('consent-banner');
+  });
+
+  it('enables the buttons once hydrated', () => {
+    render(<ConsentBanner initialVisible />);
+    for (const button of screen.getAllByRole('button')) expect(button).not.toHaveAttribute('aria-disabled');
+  });
+
+  it('hides a server-shown banner when the browser already has a choice', () => {
+    ConsentManager.rejectAll();
+    ConsentManager.resetCache();
+    render(<ConsentBanner initialVisible />);
+    expect(screen.queryByTestId('consent-banner')).toBeNull();
   });
 
   it('every privacy string exists in both English and Arabic', () => {

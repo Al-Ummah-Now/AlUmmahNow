@@ -8,6 +8,13 @@
  * - "Reject all" is as prominent and as easy as "Accept all" (one click each).
  * - Granular per-category choices, reachable from the banner.
  * - Reopenable later (ConsentManager.openPreferences) to change or withdraw consent.
+ *
+ * First paint (#1205): the root layout reads the consent cookie and passes
+ * `initialVisible`, so a first visit gets the bar in the server HTML. A bar that
+ * only appeared after hydration became the page's Largest Contentful Paint on
+ * light pages. It is a compact fixed bar (never pushes content, so no layout
+ * shift), and its buttons report aria-disabled until hydrated, since they only
+ * work once React is running (the settings link works at once).
  */
 
 import React, { useEffect, useState } from 'react';
@@ -18,19 +25,23 @@ import { ConsentPreferences } from '../ConsentPreferences';
 
 export interface ConsentBannerViewProps {
   dir: 'ltr' | 'rtl';
+  /** Server decision from the request's consent cookie: true when no valid choice is stored. */
+  initialVisible?: boolean;
 }
 
 const NONE: ConsentChoices = { analytics: false, experiments: false, performance: false };
 
-export function ConsentBannerView({ dir }: ConsentBannerViewProps) {
+export function ConsentBannerView({ dir, initialVisible = false }: ConsentBannerViewProps) {
   const { t, lang } = useLanguage();
   const p = t.privacy;
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(initialVisible);
+  const [hydrated, setHydrated] = useState(false);
   const [customizing, setCustomizing] = useState(false);
   const [choices, setChoices] = useState<ConsentChoices>(NONE);
 
   useEffect(() => {
-    // The decision lives in a cookie, so only decide visibility on the client.
+    setHydrated(true);
+    // The browser's cookie is the source of truth (the server's initial guess can be stale)
     setVisible(!ConsentManager.hasDecided());
     return ConsentManager.onOpenPreferences(() => {
       const current = ConsentManager.getConsent();
@@ -42,29 +53,31 @@ export function ConsentBannerView({ dir }: ConsentBannerViewProps) {
 
   if (!visible) return null;
 
+  // Until hydrated the buttons have no handlers: say so, so nothing (and no test) clicks a dead button
+  const inert = hydrated ? undefined : true;
+
   const close = () => {
     setVisible(false);
     setCustomizing(false);
   };
 
   return (
-    <div
+    <section
       dir={dir}
-      role="dialog"
-      aria-modal="false"
+      role="region"
       aria-labelledby="consent-banner-title"
       aria-describedby="consent-banner-description"
       data-testid="consent-banner"
       className="fixed inset-x-0 bottom-0 z-[60] p-4 sm:p-6"
     >
-      <div className="mx-auto max-w-3xl rounded-lg border border-gray-200 bg-white p-4 shadow-2xl dark:border-gray-700 dark:bg-gray-800 sm:p-6">
-        <h2 id="consent-banner-title" className="text-start text-base font-semibold text-gray-900 dark:text-gray-100">
+      <div className="mx-auto max-w-3xl rounded-lg border border-[var(--fanous-c-dialog-border)] bg-[var(--fanous-c-dialog-bg)] p-4 shadow-2xl sm:p-6">
+        <h2 id="consent-banner-title" className="text-start text-base font-semibold text-[var(--fanous-c-dialog-text)]">
           {customizing ? p.preferencesTitle : p.bannerTitle}
         </h2>
-        <p id="consent-banner-description" className="mt-2 text-start text-sm text-gray-600 dark:text-gray-300">
+        <p id="consent-banner-description" className="mt-2 text-start text-sm text-[var(--fanous-c-dialog-muted)]">
           {p.bannerDescription}{' '}
           {p.bannerChoiceHint}{' '}
-          <Link href={`/${lang}/settings/privacy`} className="font-medium text-blue-700 underline hover:no-underline dark:text-blue-300">
+          <Link href={`/${lang}/settings/privacy`} className="font-medium text-[var(--fanous-color-link)] underline hover:no-underline">
             {p.bannerSettingsLink}
           </Link>
         </p>
@@ -80,7 +93,8 @@ export function ConsentBannerView({ dir }: ConsentBannerViewProps) {
             <button
               type="button"
               onClick={() => setCustomizing(true)}
-              className="rounded-md px-4 py-2 text-sm font-medium text-gray-700 underline-offset-2 hover:underline dark:text-gray-200"
+              aria-disabled={inert}
+              className="b b-ghost"
             >
               {p.customize}
             </button>
@@ -92,7 +106,8 @@ export function ConsentBannerView({ dir }: ConsentBannerViewProps) {
                 ConsentManager.setConsent(choices, 'banner-custom');
                 close();
               }}
-              className="rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-700"
+              aria-disabled={inert}
+              className="b b-secondary"
             >
               {p.savePreferences}
             </button>
@@ -103,7 +118,8 @@ export function ConsentBannerView({ dir }: ConsentBannerViewProps) {
               ConsentManager.rejectAll('banner');
               close();
             }}
-            className="rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-300"
+            aria-disabled={inert}
+            className="b b-primary"
           >
             {p.rejectAll}
           </button>
@@ -113,13 +129,14 @@ export function ConsentBannerView({ dir }: ConsentBannerViewProps) {
               ConsentManager.acceptAll('banner');
               close();
             }}
-            className="rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-300"
+            aria-disabled={inert}
+            className="b b-primary"
           >
             {p.acceptAll}
           </button>
         </div>
       </div>
-    </div>
+    </section>
   );
 }
 
