@@ -41,6 +41,7 @@ import { VersionSkewProvider } from "@/lib/version-skew/VersionSkewProvider";
 import { ErrorReportingProvider } from "@/lib/errors/ErrorReportingProvider";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { appIcons } from "@/lib/favicon";
+import { WebVitalsBeacon } from "@/components/analytics/WebVitalsBeacon";
 
 /** Worker version id and environment for client error reports (admin Errors page). */
 async function errorReportingContext(): Promise<{ workerVersion?: string; environment?: string }> {
@@ -239,6 +240,8 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
         <ErrorReportingProvider userId={user?.id} workerVersion={reporting.workerVersion} environment={reporting.environment} />
         {/* A deploy while this page is open: notice + reload, never mid-upload */}
         <VersionSkewProvider />
+        {/* Sampled, cookieless field Core Web Vitals (D-SEO-9, #1207) */}
+        <WebVitalsBeacon />
         <RuntimeConfigBootstrap config={serverRuntimeConfig()} />
         {/* No <Suspense> around the app: with one, the shell (and a 200 status)
             streamed before a page or layout could call notFound(), so unknown
