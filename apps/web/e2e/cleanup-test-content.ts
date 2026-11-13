@@ -167,6 +167,8 @@ export async function eraseRunUsers(log: (message: string) => void = () => undef
     try {
       await withTimeout(ensureFreshSession(AUTH_STATE[user]), 90_000, `refreshing ${user}'s session`);
       const u = userApi(user);
+      // The id, for the end-of-job leftover check: rows keyed only by user id (the account is gone by then)
+      if (process.env.E2E_RUN_USER_IDS_FILE && u.userId) fs.appendFileSync(process.env.E2E_RUN_USER_IDS_FILE, `${u.userId}\n`);
       let resumeToken: string | undefined;
       for (let round = 0; round < 20; round++) {
         if (Date.now() > deadline) throw new Error('out of time');

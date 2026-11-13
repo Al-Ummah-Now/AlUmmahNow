@@ -1,7 +1,7 @@
 /**
  * Release regression: Contact us. Visitors send messages from the videos site
  * signed out and signed in, in English and Arabic; an admin finds them in the
- * admin-web inbox, replies by email and deletes them again (self-cleaning).
+ * admin-web inbox, replies by email and deletes them again, permanently (self-cleaning).
  *
  * Mail goes through admin-api's contact mail queue. Every sender is an
  * @e2e.alummahnow.net sink address: outside production the queue consumer
@@ -155,11 +155,28 @@ test.describe('Release: Contact us', () => {
         await confirmInApp(page, adminConfirm('contact-delete-confirm'));
         await expect(page).toHaveURL(new RegExp(`${target().adminWeb}/contact(\\?|$)`), { timeout: 30000 });
       }
+      // A delete keeps the message restorable for 30 days: these are test messages, so delete them
+      // permanently (Recently deleted), which queues them for the next hourly cleanup
+      await purgeDeleted(page, ids);
     }
     await page.goto(inbox);
     await expect(page.getByTestId('contact-empty')).toBeVisible();
   });
 });
+
+/** "Delete permanently now" on each deleted message (Recently deleted → Contact messages). */
+async function purgeDeleted(page: Page, ids: string[]): Promise<void> {
+  await page.goto(`${target().adminWeb}/recently-deleted/contact-message`);
+  for (const id of ids) {
+    const row = page.locator(`[data-testid="trash-row"][data-id="${id}"]`);
+    await expect(row).toBeVisible({ timeout: 30000 });
+    if ((await row.getAttribute('data-queued')) === 'true') continue;
+    await row.getByTestId(`trash-purge-${id}`).click();
+    await page.getByTestId(`trash-purge-${id}-typed`).fill(id);
+    await page.getByTestId(`trash-purge-${id}-confirm`).click();
+    await expect(row).toHaveAttribute('data-queued', 'true', { timeout: 30000 });
+  }
+}
 
 /** Deletes old "Release rc…" messages from E2E sink senders (at most 20 per run). */
 async function sweepLeftovers(page: Page): Promise<void> {
@@ -180,6 +197,7 @@ async function sweepLeftovers(page: Page): Promise<void> {
     await confirmInApp(page, adminConfirm('contact-delete-confirm'));
     await expect(page).toHaveURL(new RegExp(`${target().adminWeb}/contact(\\?|$)`), { timeout: 30000 });
   }
+  if (stale.length) await purgeDeleted(page, stale.slice(0, 20));
 }
 
 async function signInAsAdmin(page: Page, context: import('@playwright/test').BrowserContext): Promise<void> {
