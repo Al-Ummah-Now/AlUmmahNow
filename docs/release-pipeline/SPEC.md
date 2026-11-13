@@ -26,7 +26,7 @@ Two more facts shape this design:
 
 ## 2. Goals
 
-1. **Every fix ships with a test that runs in CI.** Unit tests on every PR. E2E against QA on every PR. E2E against stage on every release.
+1. **Every fix ships with a test that runs in CI.** Unit tests and Local E2E (local stack) on every PR. E2E against stage on every release. Nothing tests the deployed QA on a PR, a push or a schedule (owner 2026-11-13): the legacy QA suite runs once after each release tag.
 2. **Data changes ship with a migration or a check.** CI fails if a schema or stored-record shape changes without one. Before promote, a check runs against the target environment's real data.
 3. **Prod has a stage slot.** A release is built once, deployed to stage, fully tested there, and only then promoted. Rollback is one command (or one click in GitHub Actions).
 4. **Nothing reaches prod without passing stage.** No manual `wrangler deploy` to prod workers. The pipeline is the only path, except for the documented break-glass procedure.

@@ -2,21 +2,17 @@ name: Release regressions
 
 # The release E2E suite (apps/web/e2e/release, playwright.release.config.ts):
 # web/profile/admin-web sign-in, callback errors, playback, watch history and
-# uploads, each spec with its own new sink user. Runs against QA on every PR
-# into main, and against stage from the release workflow (workflow_call with
-# env: stage). Independent of the legacy E2E suite (e2e-tests.yml).
+# uploads, each spec with its own new sink user. Runs against stage from the
+# release workflow (workflow_call with env: stage), and by hand. Independent of
+# the legacy E2E suite (e2e-tests.yml).
 #
 # It needs only @playwright/test, so it does not install the monorepo (no
 # GitHub Packages token, no build). Only the test step sees secrets.
 
+# No pull_request, push or schedule trigger (owner 2026-11-13: tests run against QA only on numbered
+# releases; QA's D1 read volume). Pull requests rely on the local stack (local-e2e.yml). The release
+# workflow calls this against stage as its gate; workflow_dispatch runs it by hand on qa or stage.
 on:
-  pull_request:
-    branches: [main]
-    # Docs-only changes do not change the product: no run (each run sends ~20
-    # uploads to the Bunny library QA and stage share)
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
   workflow_dispatch:
     inputs:
       env:
@@ -69,8 +65,6 @@ jobs:
   # teardown, leftover check, upload budget and artifacts. A release waits for the slower part.
   release-e2e:
     name: Release regressions (${{ inputs.env || 'qa' }})${{ matrix.part == 'encode' && ' - encode' || '' }}
-    # skip-qa-e2e on a PR: no QA traffic (see e2e-tests.yml)
-    if: ${{ github.event_name != 'pull_request' || !contains(github.event.pull_request.labels.*.name, 'skip-qa-e2e') }}
     runs-on: ubuntu-24.04
     # 163 tests on 4 workers took ~25 min with slow Bunny encodes (v2026.11.10.11);
     # plus up to 40 min waiting for the shared-state lock and 60 for an encode slot.

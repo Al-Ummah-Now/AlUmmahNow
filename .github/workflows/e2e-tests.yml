@@ -1,6 +1,9 @@
 name: E2E Tests
 
-# Legacy multi-browser suite against QA: nightly and by hand, never per PR.
+# Legacy multi-browser suite against QA: once after each numbered release and by hand. Owner
+# (2026-11-13): tests run against QA only on numbered releases, never on PRs, pushes to main or a
+# schedule (QA's D1 read volume). workflow_run starts it when a release tag's Release run ends; it
+# is its own run, so a red here never turns the release red, and nothing gates on it.
 # Only the web specs still placed on QA run here: playwright.config.ts leaves out every spec moved to
 # the local stack (e2e/test-utils/local-web-specs.ts, run by Local E2E on every PR, every push to
 # main, nightly and in every release), so this run shrinks as each batch moves. Owner (2026-11-12):
@@ -8,8 +11,9 @@ name: E2E Tests
 # night is a report to act on. 07-performance (@load) runs in the chromium job's non-blocking load
 # step, permanently. workflow_dispatch also serves update_snapshots (the visual baselines PR).
 on:
-  schedule:
-    - cron: '30 2 * * *'
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
   workflow_dispatch:
     inputs:
       update_snapshots:
@@ -51,10 +55,9 @@ jobs:
   # (scripts/ci/qa-lock.ts), which waits its turn instead of replacing anyone.
   e2e:
     name: E2E - ${{ matrix.project }}
-    # A PR labelled skip-qa-e2e (spec-only fixes while main's E2E is being made green) sends no
-    # traffic to QA: those specs are proven by the verification run on main
+    # Only after a release tag's Release run (not a by-hand stage-only Release on main), or by hand.
     # A snapshot update (workflow_dispatch update_snapshots) runs only the update job below
-    if: ${{ (github.event_name != 'pull_request' || !contains(github.event.pull_request.labels.*.name, 'skip-qa-e2e')) && !inputs.update_snapshots }}
+    if: ${{ (github.event_name != 'workflow_run' || (github.event.workflow_run.event == 'push' && startsWith(github.event.workflow_run.head_branch, 'v') && github.event.workflow_run.conclusion != 'cancelled')) && !inputs.update_snapshots }}
     runs-on: ubuntu-24.04
     # specs (100) + shared-state (up to 85 waiting + 40) + teardown (15); the
     # teardown steps must always get their turn
@@ -365,7 +368,7 @@ jobs:
   # qa-global lock (nightly / after a Release only, never on pull requests).
   dedicated:
     name: E2E - ${{ matrix.project }}
-    if: ${{ github.event_name != 'pull_request' && !inputs.update_snapshots }}
+    if: ${{ (github.event_name != 'workflow_run' || (github.event.workflow_run.event == 'push' && startsWith(github.event.workflow_run.head_branch, 'v') && github.event.workflow_run.conclusion != 'cancelled')) && !inputs.update_snapshots }}
     runs-on: ubuntu-24.04
     timeout-minutes: 160
     permissions:
@@ -592,7 +595,7 @@ jobs:
   # Non-blocking for now: assertions are warnings and the job may fail.
   lighthouse:
     name: Lighthouse (QA)
-    if: ${{ github.event_name != 'pull_request' && !inputs.update_snapshots }}
+    if: ${{ (github.event_name != 'workflow_run' || (github.event.workflow_run.event == 'push' && startsWith(github.event.workflow_run.head_branch, 'v') && github.event.workflow_run.conclusion != 'cancelled')) && !inputs.update_snapshots }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     continue-on-error: true
