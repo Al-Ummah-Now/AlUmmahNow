@@ -228,6 +228,18 @@ describe('who sees a held recording', () => {
 		assert.equal(record(clean).liveAgainSessionId, undefined);
 	});
 
+	it('the live-again session\'s own recording gets its own hold (the exemption ends with the new review)', async () => {
+		const e = env({ ...held('rejected'), status: 'ended', sessionId: 'sess-2', reviewSessionId: 'sess-1' });
+		await markStreamLive(e as never, SID);
+		assert.equal(liveRecordingWithheld(record(e)), false, 'sess-2 is live again');
+		await startLiveVodReview(e as never, SID, { id: 'sess-2', vod_url: VOD });
+		assert.equal(record(e).liveAgainSessionId, undefined, 'the marker belonged to the old review');
+		const reviewId = record(e).review.reviewId;
+		await post(e, `/livestream/${SID}/decision`, { reviewId, reviewerId: 'rev1', decision: 'reject', reasonCode: 'hate' });
+		assert.equal(record(e).review.status, 'rejected');
+		assert.equal(liveRecordingWithheld(record(e)), true, 'sess-2\'s rejected recording is withheld');
+	});
+
 	it('the owner setting the status (scheduled, live) never reopens a held stream or its recording', async () => {
 		for (const status of ['scheduled', 'live', 'cancelled']) {
 			const e = env({ ...held('rejected', { reasonCode: 'hate' }), status, sessionId: 'sess-1', reviewSessionId: 'sess-1', vodUrl: VOD });

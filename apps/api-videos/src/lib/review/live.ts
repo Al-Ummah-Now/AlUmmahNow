@@ -83,6 +83,8 @@ export async function startLiveVodReview(env: LiveReviewEnv, streamId: string, s
 			} else {
 				// A new recording replaces the previous recording's review
 				stream.review = { status: 'post_review', reviewId, timing: 'post', since: now.toISOString() };
+				// The live-again exemption belonged to the previous review; this session's recording has its own
+				delete (stream as { liveAgainSessionId?: string }).liveAgainSessionId;
 			}
 			stream.dateModified = now.toISOString();
 			return true;
