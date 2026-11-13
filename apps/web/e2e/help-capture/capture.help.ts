@@ -397,14 +397,14 @@ const SCENES: Scene[] = [
   },
   {
     id: 'community-tab',
-    markers: 'above',
     run: async (page, lang) => {
       await settle(page, `/channels/${channelId}?tab=community`, lang);
       const post = page.locator('article').filter({ hasText: NAMES.post.en }).first();
       await post.getByRole('button', { name: /comment|تعليق/i }).first().click();
       const line = post.getByTestId('comment-identity').first();
       await line.scrollIntoViewIfNeeded();
-      return [[post.getByText(NAMES.post.en).first(), line], [post.getByText(NAMES.post.en).first(), line, post.getByTestId('comment-identity').locator('xpath=../..').first()]];
+      await post.scrollIntoViewIfNeeded();
+      return [[line], [post]];
     },
   },
   {
