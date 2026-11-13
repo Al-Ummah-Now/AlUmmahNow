@@ -73,6 +73,37 @@ export interface WatchProgress {
  */
 const STORAGE_KEY = 'watchProgress';
 
+let warnedMalformedPage = false;
+
+/**
+ * A history page whose `entries` is not an array (an older API, a proxy error
+ * body, a test mock) is read as an empty page instead of crashing every
+ * caller that maps over it. Warned once per page load, not on every call.
+ */
+export function toWatchHistoryPage(body: unknown): WatchHistoryPage {
+  const page = (body && typeof body === 'object' ? body : {}) as Partial<WatchHistoryPage>;
+  if (!Array.isArray(page.entries)) {
+    if (!warnedMalformedPage) {
+      warnedMalformedPage = true;
+      logger.warn('[WatchHistoryService] History page without an entries array; showing none', {
+        entriesType: page.entries === null ? 'null' : typeof page.entries,
+      });
+    }
+    return { entries: [], total: 0, hasMore: false };
+  }
+  return {
+    ...page,
+    entries: page.entries,
+    total: typeof page.total === 'number' ? page.total : page.entries.length,
+    hasMore: page.hasMore === true,
+  } as WatchHistoryPage;
+}
+
+/** Test hook: lets the once-per-load warning fire again. */
+export function resetWatchHistoryPageWarning(): void {
+  warnedMalformedPage = false;
+}
+
 /** Retention for on-device watch progress (see docs/compliance/GDPR.md). */
 export const LOCAL_PROGRESS_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
 /** Upper bound on videos remembered on the device. */
@@ -392,7 +423,7 @@ export class WatchHistoryService {
         logger.warn('[WatchHistoryService] List failed', { status: response.status });
         return null;
       }
-      return (await response.json()) as WatchHistoryPage;
+      return toWatchHistoryPage(await response.json());
     } catch (error) {
       logger.error('[WatchHistoryService] Failed to list history:', error);
       return null;

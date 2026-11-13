@@ -14,6 +14,7 @@ import { PlayCircle } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { WatchHistoryService } from '@/services/api/watch-history';
+import { logger } from '@/lib/logger-client';
 import { LibraryVideoTile, type LibraryTileVideo } from '@/components/library/LibraryVideoTile';
 
 export const CONTINUE_WATCHING_LIMIT = 10;
@@ -33,7 +34,8 @@ export function ContinueWatchingShelf() {
         WatchHistoryService.getPaused(),
         WatchHistoryService.list({ limit: CONTINUE_WATCHING_LIMIT, completed: false }),
       ]);
-      if (cancelled || paused !== false || !page) return;
+      // The service reads a malformed page as empty; this guards any other caller's shape too
+      if (cancelled || paused !== false || !page || !Array.isArray(page.entries)) return;
       setItems(
         page.entries.map((e) => ({
           id: e.videoId,
@@ -44,7 +46,10 @@ export function ContinueWatchingShelf() {
           percentWatched: e.percentageWatched,
         }))
       );
-    })();
+    })().catch((error) => {
+      // An optional shelf: a failed load shows nothing, never an unhandled rejection
+      logger.warn('[ContinueWatchingShelf] Could not load continue watching', { error: error instanceof Error ? error.message : String(error) });
+    });
     return () => {
       cancelled = true;
     };

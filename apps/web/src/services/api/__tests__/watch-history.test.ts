@@ -15,7 +15,8 @@ jest.mock('@/lib/logger-client', () => ({
   logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
 }));
 
-import { WatchHistoryService } from '../watch-history';
+import { WatchHistoryService, resetWatchHistoryPageWarning } from '../watch-history';
+import { logger } from '@/lib/logger-client';
 
 type FetchMock = jest.Mock<Promise<Partial<Response>>, [string, RequestInit?]>;
 
@@ -79,6 +80,20 @@ describe('WatchHistoryService', () => {
     const progress = await WatchHistoryService.getProgress('v1', 'token');
     expect(fetchMock.mock.calls[0][0]).toBe('https://api.test/api/watch-history/v1/progress');
     expect(progress).toEqual({ videoId: 'v1', currentTime: 30, duration: 60, completed: false, timestamp: '2026-01-02T00:00:00Z' });
+  });
+
+  it('reads a page without an entries array as empty, warning once', async () => {
+    resetWatchHistoryPageWarning();
+    (logger.warn as jest.Mock).mockClear();
+    fetchMock
+      .mockResolvedValueOnce(mockResponse(200, { total: 3 }))
+      .mockResolvedValueOnce(mockResponse(200, { entries: null }))
+      .mockResolvedValueOnce(mockResponse(200, { entries: [{ videoId: 'v1' }], total: 1, hasMore: true, cursor: '1' }));
+    expect(await WatchHistoryService.list()).toEqual({ entries: [], total: 0, hasMore: false });
+    expect(await WatchHistoryService.list()).toEqual({ entries: [], total: 0, hasMore: false });
+    const malformed = (logger.warn as jest.Mock).mock.calls.filter(([msg]) => String(msg).includes('without an entries array'));
+    expect(malformed).toHaveLength(1);
+    expect(await WatchHistoryService.list()).toEqual({ entries: [{ videoId: 'v1' }], total: 1, hasMore: true, cursor: '1' });
   });
 
   it('filters the list by completion (Continue watching)', async () => {
