@@ -193,8 +193,10 @@ export function setupPublicDisposable(user: AuthUser, label: string, opts: { rea
     create: async () => {
       // Public pages (watch, comments, channel sections) need a real, encoding video
       video = await createDisposableVideo(user, label, { isPublic: true, encode: true });
-      // Listings (channel sections, Studio's Published list, search) show a video only once it is ready
-      if (opts.ready) video = await waitForReady(user, video);
+      // Anyone but the owner sees a public video only once it is ready: listings (channel sections,
+      // Studio's Published list, search) and, since #1241, the watch page, playback and embeds too
+      // (404 while it processes). So wait for it unless a spec asks for the processing state.
+      if (opts.ready !== false) video = await waitForReady(user, video);
       return video;
     },
     remove: async () => {
