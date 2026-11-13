@@ -11,6 +11,7 @@
  * `visible = false` so its videos, playlists and posts are filtered out too.
  */
 
+import { isVideoPubliclyVisible, type VideoVisibilityFields } from '../video-visibility';
 import { VIDEO_CATEGORIES } from '../upload-defaults';
 import { isShort, type VideoFormatInput } from '../video-format';
 import { buildIndexText, detectTextLanguage } from './normalize';
@@ -216,15 +217,10 @@ function isRemoved(obj: Raw): boolean {
   return obj.isDeleted === true || obj.isHidden === true || obj.markedForDeletion === true;
 }
 
-/** Same rules as api-videos `isDiscoverable` (lib/discovery.ts). */
+/** The shared public listing rule (video-visibility.ts), plus a title; same as api-videos `isDiscoverable`. */
 export function isVideoSearchable(obj: Raw): boolean {
-  const id = str(obj.id);
-  if (!id || id.startsWith('index:') || id.startsWith('livestream:') || id.startsWith('metadata:')) return false;
-  if (typeof obj.title !== 'string') return false;
-  if (obj.isPublic === false || isRemoved(obj)) return false;
-  if (typeof obj.uploadStatus === 'string' && obj.uploadStatus !== 'ready') return false;
-  if (obj.scheduledPublishStatus === 'scheduled' || obj.scheduledPublishStatus === 'publishing') return false;
-  return true;
+  if (!str(obj.id) || typeof obj.title !== 'string') return false;
+  return isVideoPubliclyVisible(obj as VideoVisibilityFields);
 }
 
 export function projectVideo(raw: unknown): SearchRow<'video'> | null {

@@ -19,3 +19,22 @@ describe('toEmbedVideo and visibility (D-SEO-5)', () => {
     expect(toEmbedVideo({ ...base, isPublic: true, isUnlisted: true })?.isUnlisted).toBeUndefined();
   });
 });
+
+describe('toEmbedVideo follows the shared visibility rule (#1241)', () => {
+  it.each([
+    ['still processing', { uploadStatus: 'processing' }],
+    ['failed', { uploadStatus: 'failed' }],
+    ['scheduled', { scheduledPublishStatus: 'scheduled' }],
+    ['being published', { scheduledPublishStatus: 'publishing' }],
+    ['a draft', { isDraft: true }],
+    ['hidden', { isHidden: true }],
+    ['deleted', { isDeleted: true }],
+    ['unlisted and processing', { isPublic: false, isUnlisted: true, uploadStatus: 'processing' }],
+  ])('never plays a video that is %s', (_name, fields) => {
+    expect(toEmbedVideo({ ...base, ...fields })).toBeNull();
+  });
+  it('plays a ready public video and one the scheduler released', () => {
+    expect(toEmbedVideo({ ...base, uploadStatus: 'ready' })).not.toBeNull();
+    expect(toEmbedVideo({ ...base, uploadStatus: 'ready', scheduledPublishStatus: 'published' })).not.toBeNull();
+  });
+});

@@ -65,9 +65,8 @@ export function buildSubscriptionFeed<T extends FeedVideo>(
 			if (!v || seen.has(v.id)) return false;
 			seen.add(v.id);
 			if (!channelSet.has(v.channelId)) return false;
-			if (!isVideoPubliclyVisible(v)) return false;
-			if (v.scheduledPublishStatus === 'scheduled' || v.scheduledPublishStatus === 'publishing') return false;
-			return true;
+			// The shared rule already leaves out scheduled, draft and processing videos
+			return isVideoPubliclyVisible(v);
 		})
 		.sort((a, b) => new Date(b.dateCreated || 0).getTime() - new Date(a.dateCreated || 0).getTime());
 

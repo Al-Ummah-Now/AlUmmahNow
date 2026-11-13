@@ -36,11 +36,9 @@ interface EventsEnv extends NotificationsEnv {
 	channels: R2Bucket;
 }
 
-/** Ready, public, not waiting for a schedule: subscribers may be told about it. */
+/** Publicly visible (the shared rule: public, ready, released, not removed) with a channel: subscribers may be told about it. */
 export function isAnnounceable(video: PublishableVideo | null | undefined): boolean {
-	if (!video?.channelId || !isVideoPubliclyVisible(video)) return false;
-	if (video.uploadStatus && video.uploadStatus !== 'ready') return false;
-	return video.scheduledPublishStatus !== 'scheduled' && video.scheduledPublishStatus !== 'publishing';
+	return !!video?.channelId && isVideoPubliclyVisible(video);
 }
 
 /** Long-form uploads are highlights; Shorts (Lamahat, shared rule) only reach bell = all. */

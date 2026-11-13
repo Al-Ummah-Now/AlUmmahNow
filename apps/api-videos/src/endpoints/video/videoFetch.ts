@@ -9,7 +9,7 @@ import R2Repository from "../../lib/r2Repo";
 import { logger } from '../../lib/logger';
 import { OptionalAuthRoute, AppContext } from '../../base';
 import { GONE_BODY, isPurged } from '../../lib/gone';
-import { isRestrictedVideo } from '../../lib/visibility';
+import { isRestrictedVideo, isVideoOpenToAnyone, isVideoRemoved } from '../../lib/visibility';
 
 export class VideoFetch extends OptionalAuthRoute {
 	schema = {
@@ -110,8 +110,8 @@ export class VideoFetch extends OptionalAuthRoute {
 			);
 		}
 
-		// Check if video is hidden (moderation) - blocks everyone
-		if (video.isHidden) {
+		// Hidden by moderation, in a deleted channel, or an internal record: blocks everyone
+		if (isVideoRemoved(video)) {
 			logger.debug('[VideoFetch] Video is hidden', { videoId: id });
 			return c.json(
 				{
@@ -123,8 +123,10 @@ export class VideoFetch extends OptionalAuthRoute {
 		}
 
 		// Check privacy permissions
-		// Private videos: the owner, or a channel member allowed to see them (lib/channelAccess.ts)
-		if (isRestrictedVideo(video) && !(await canOnVideo(c.env as never, video, userId, 'video.view_private'))) {
+		// Anyone else may open it only when it is open to anyone (shared rule, #1241): public or
+		// unlisted, released and ready. Private, draft, scheduled and still-processing videos: the
+		// owner, or a channel member allowed to see private videos (lib/channelAccess.ts).
+		if ((isRestrictedVideo(video) || !isVideoOpenToAnyone(video)) && !(await canOnVideo(c.env as never, video, userId, 'video.view_private'))) {
 			return c.json(
 				{
 					success: false,

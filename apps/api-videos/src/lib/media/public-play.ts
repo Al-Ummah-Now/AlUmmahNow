@@ -123,14 +123,13 @@ export function isChannelHidden(channel: PlayChannel | null | undefined): boolea
 }
 
 /**
- * Whether a stored video may be served publicly (pure): the public listing rule
- * (lib/visibility.ts) plus no drafts, no live streams and no moderation mark.
+ * Whether a stored video may be served publicly (pure): the shared public listing rule
+ * (shared-types video-visibility.ts: drafts, markedForDeletion and readiness included), and
+ * no live streams.
  */
 export function isPubliclyPlayable(video: PlayVideo | null | undefined): video is PlayVideo {
 	if (!video || typeof video.id !== 'string' || typeof video.title !== 'string') return false;
-	if (!isVideoPubliclyVisible(video)) return false;
-	if (video.isDraft === true || video.isLive === true || video.markedForDeletion === true) return false;
-	return true;
+	return isVideoPubliclyVisible(video) && video.isLive !== true;
 }
 
 /**

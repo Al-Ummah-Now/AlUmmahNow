@@ -68,9 +68,9 @@ export interface SectionRulesEnv {
   channels: R2Bucket;
 }
 
-/** Public, ready and not removed: may be shown to anyone */
+/** The shared public listing rule (public, released, ready, not removed): may be shown to anyone */
 export function isListableVideo(video: StoredVideo | null | undefined): video is StoredVideo {
-  return !!video && isVideoPubliclyVisible(video) && (!video.uploadStatus || video.uploadStatus === 'ready');
+  return !!video && isVideoPubliclyVisible(video);
 }
 
 export function isListablePlaylist(playlist: StoredPlaylist | null | undefined): playlist is StoredPlaylist {
