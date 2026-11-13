@@ -33,6 +33,10 @@ for (const lang of LANGS) {
         });
         expect(fade).toEqual({ opacity: '1', fades: false });
 
+        // Hold the toast open while it is measured (toasts expire after 8 s; screenshots, retries and
+        // axe on a busy runner took longer, and the action was gone before it was measured). React's
+        // onMouseEnter pauses the timer; the pointer itself stays off the toast, so no hover colours.
+        await page.getByTestId('realtime-toasts').dispatchEvent('mouseover', { relatedTarget: null });
         await page.mouse.move(0, 0);
         await page.waitForTimeout(300);
         await page.screenshot({ path: info.outputPath(`toast-${theme}-${mode}-${lang}.png`) });
