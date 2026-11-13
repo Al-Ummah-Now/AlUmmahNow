@@ -179,7 +179,7 @@ jobs:
       - name: Run teardown
         if: always()
         timeout-minutes: 6
-        run: node --experimental-strip-types --no-warnings scripts/local-stack/run-teardown.ts --marker "$E2E_RUN_ID"
+        run: pnpm exec tsx scripts/local-stack/run-teardown.ts --marker "$E2E_RUN_ID"
 
       # Nothing the run created may be left (owner rule). Report-only until every spec of the batch
       # cleans up fully; then this gates.
@@ -470,7 +470,7 @@ jobs:
       - name: Run teardown
         if: always()
         timeout-minutes: 6
-        run: node --experimental-strip-types --no-warnings scripts/local-stack/run-teardown.ts --marker "$E2E_RUN_ID"
+        run: pnpm exec tsx scripts/local-stack/run-teardown.ts --marker "$E2E_RUN_ID"
 
       # Nothing the run created may be left (owner rule). Report-only until every moved spec cleans
       # up fully; then this gates.

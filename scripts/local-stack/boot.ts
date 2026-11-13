@@ -93,6 +93,7 @@ interface MiniflareInstance {
     get(key: string): Promise<string | null>;
   }>;
   getWorker(name?: string): Promise<{ scheduled(o: { cron: string; scheduledTime?: Date }): Promise<{ outcome: string; noRetry: boolean }> }>;
+  getQueueProducer(binding: string, worker?: string): Promise<{ send(body: unknown): Promise<void> }>;
   dispose(): Promise<void>;
   getD1Database(binding: string, worker?: string): Promise<D1>;
   getR2Bucket(binding: string, worker?: string): Promise<R2>;
@@ -528,6 +529,11 @@ async function main(): Promise<void> {
   });
   setStackHooks({
     leftovers: (marker, ids, limit) => scanLeftovers(mf, prepared, marker, ids, limit),
+    queue: async (app, binding, body) => {
+      const p = prepared.find((x) => x.worker.app === app || x.name === app);
+      if (!p) throw new Error(`no worker ${app} (${prepared.map((x) => x.worker.app).join(', ')})`);
+      await (await mf.getQueueProducer(binding, p.name)).send(body);
+    },
     scheduled: async (app, cron, time) => {
       const p = prepared.find((x) => x.worker.app === app || x.name === app);
       if (!p) throw new Error(`no worker ${app} (${prepared.map((x) => x.worker.app).join(', ')})`);

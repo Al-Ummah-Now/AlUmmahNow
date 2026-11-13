@@ -300,6 +300,8 @@ export function setStackR2(fn: StackR2): void {
 /** Leftover scan and scheduled-handler trigger (boot.ts sets them once Miniflare is up). */
 export interface StackHooks {
   leftovers?: (marker: string, userIds: string[], limit?: number) => Promise<unknown>;
+  /** Sends one message through a worker's queue producer binding (teardowns re-run a queued step). */
+  queue?: (app: string, binding: string, body: unknown) => Promise<void>;
   scheduled?: (app: string, cron: string, time: Date) => Promise<unknown>;
 }
 const hooks: StackHooks = {};
@@ -332,6 +334,8 @@ async function readBody(req: IncomingMessage): Promise<string> {
  * - GET /__stack/r2/<bucket name>?prefix=<p>[&cursor=<c>]: { keys, cursor } (teardowns find what a run wrote)
  * - GET /__stack/leftovers?marker=<run id>: every row, object, key or fake video that still holds the
  *   marker or the id of a run user (leftovers.ts)
+ * - POST /__stack/queue/<app>/<binding> with a JSON message: sends it through that worker's queue
+ *   producer (run-teardown.ts re-runs the erasure's last step for the run's users)
  * - POST /__stack/scheduled/<app>?cron=<expr>[&time=<ISO>]: runs that worker's scheduled handler now,
  *   with that scheduled time (default now; e.g. the top of an hour for hourly-tick work), for purges
  *   the APIs only queue for the cron
@@ -372,6 +376,16 @@ async function control(req: IncomingMessage, url: URL): Promise<Response> {
     const ids = (url.searchParams.get('ids') ?? '').split(',').map((id) => id.trim()).filter((id) => /^[A-Za-z0-9_:-]{6,128}$/.test(id));
     const limit = Number(url.searchParams.get('limit')) || undefined;
     return json(await hooks.leftovers(marker, ids, limit));
+  }
+  if (url.pathname.startsWith('/__stack/queue/')) {
+    const [app, binding] = url.pathname.slice('/__stack/queue/'.length).split('/').map(decodeURIComponent);
+    if (req.method !== 'POST' || !hooks.queue || !app || !binding) return json({ error: 'POST /__stack/queue/<app>/<binding> once the stack is up' }, 405);
+    try {
+      await hooks.queue(app, binding, JSON.parse(await readBody(req)));
+      return json({ sent: true });
+    } catch (error) {
+      return json({ error: (error as Error).message }, 400);
+    }
   }
   if (url.pathname.startsWith('/__stack/scheduled/')) {
     if (req.method !== 'POST' || !hooks.scheduled) return json({ error: 'POST once the stack is up' }, 405);

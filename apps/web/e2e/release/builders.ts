@@ -290,8 +290,7 @@ export class DataScope {
       /* not JSON: cleanup keeps the original token */
     }
     this.sessions.set(user, refreshToken);
-    // The id, for the end-of-job leftover check (rows keyed only by user id; the account is gone by then)
-    if (process.env.E2E_RUN_USER_IDS_FILE) appendFileSync(process.env.E2E_RUN_USER_IDS_FILE, `${user.userId}\n`);
+    // (signUpOnWeb records the id for the end-of-job teardown and leftover check)
     // Runs last (cleanup is newest first): the user's data, then the account and its sessions
     this.undo.push({ what: `user ${user.email}`, run: () => eraseUser(user, this.ctx) });
     await createProfile(user);
