@@ -58,6 +58,8 @@ import { createProcessingInternalRouter } from "./endpoints/video/processingInte
 import scholarsInternalRouter from "./routers/scholars-internal.router";
 import { createUploadsInternalRouter } from "./endpoints/video/uploadsInternal";
 import { createVideoFormatInternalRouter } from "./endpoints/video/videoFormatInternal";
+import { createFootprintsInternalRouter } from "./endpoints/privacy/footprintsInternal";
+import { handleFootprintBackfillMessage, isFootprintBackfillMessage, maintainFootprintPasses } from "./lib/privacy/footprints";
 import { handleVideoFormatMessage, startDailyVideoFormatRun } from "./lib/video-format/job";
 import { startDailyThumbnailCheck } from "./lib/thumbnail/repair";
 import { VIDEO_FORMAT_JOB_KIND } from "@al-ummah/shared-types";
@@ -241,6 +243,8 @@ app.route('/internal/processing', createProcessingInternalRouter() as never);
 app.route('/internal/uploads', createUploadsInternalRouter() as never);
 // Short/video format backfill (ops; admins go through admin-api)
 app.route('/internal/video-format', createVideoFormatInternalRouter() as never);
+// Privacy footprint backfill (#1073): lets account erasure find a user's data without bucket scans
+app.route('/internal/privacy/footprints', createFootprintsInternalRouter() as never);
 // New uploads → playlists: the admin Errors page's Retry on a failed add
 app.route('/internal/playlist-adds', createPlaylistAddsInternalRouter() as never);
 // Scholars (the CMS): their channels and their articles on the Community tab
@@ -456,8 +460,8 @@ app.get("/", async (c) => {
 // ==========================================
 
 /**
- * Crons (wrangler `triggers.crons`): hourly, the subscription import and the
- * stalled-upload sweep;
+ * Crons (wrangler `triggers.crons`): hourly, the subscription import, the
+ * stalled-upload sweep and the privacy footprint pass upkeep;
  * daily, enforce data retention (Story 1.3, AC 5).
  * See src/lib/privacy/retention.ts and docs/compliance/GDPR.md.
  */
@@ -502,6 +506,16 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 		// Hourly, QA / stage only: purge the test library's leaked Bunny videos (no record,
 		// or a record soft-deleted 30+ min ago; lib/uploads/testLibraryPurge.ts)
 		ctx.waitUntil(startScheduledPurge(rawEnv as never).then(() => undefined));
+		// Hourly: privacy footprint passes ops started keep going, and a bucket whose footprints
+		// lost a write gets a new pass (lib/privacy/footprints.ts)
+		ctx.waitUntil(
+			maintainFootprintPasses(rawEnv as never)
+				.then((result) => (result.resumed.length || result.restarted.length ? logger.info('[PrivacyFootprints] Passes maintained', result) : undefined))
+				.catch((error) => {
+					logger.error('[PrivacyFootprints] Pass upkeep failed', { error: error instanceof Error ? error.message : String(error) });
+					reportJobFailure(rawEnv, ctx, 'privacy-footprints', error);
+				}),
+		);
 		// Hourly: move legacy channel subscriptions into D1 (SCALABILITY-AUDIT AV-4)
 		ctx.waitUntil(
 			importPendingSubscriptions(rawEnv as never)
@@ -647,7 +661,8 @@ async function handleFetch(request: Request, env: AppBindings, ctx: ExecutionCon
  *   new uploads' playlist adds (kind "playlist-add"), Bunny deletes after an
  *   owner delete (kind "bunny-delete"), the QA/stage test-library purge
  *   (kind "test-library-purge") and the channel collection backfill (kind
- *   "bunny-collection-backfill").
+ *   "bunny-collection-backfill") and the privacy footprint backfill (kind
+ *   "privacy-footprint-backfill").
  * R2 writes go through the search-sync wrapper so changes reach the search
  * index and ownership rows like any API write.
  */
@@ -665,7 +680,9 @@ async function queue(batch: MessageBatch<unknown>, env: AppBindings, ctx: Execut
 		// Channel collection backfill (lib/bunny/collectionBackfill.ts)
 		const isCollectionBackfill = (m: { body: unknown }) => isCollectionBackfillMessage(m.body);
 		for (const msg of batch.messages.filter(isCollectionBackfill)) await handleCollectionBackfillMessage(synced, msg);
-		const rest = batch.messages.filter((m) => !isFormat(m) && !isCollectionBackfill(m));
+		// Privacy footprint backfill (lib/privacy/footprints.ts), one bucket page per message
+		for (const msg of batch.messages.filter((m) => isFootprintBackfillMessage(m.body))) await handleFootprintBackfillMessage(env as never, msg.body as never);
+		const rest = batch.messages.filter((m) => !isFormat(m) && !isCollectionBackfill(m) && !isFootprintBackfillMessage(m.body));
 		// New uploads → playlists (lib/playlistUploadAdds.ts)
 		const playlistAdds = rest.filter((m) => isPlaylistAddMessage(m.body));
 		const reaper = rest.filter((m) => isReaperMessage(m.body));

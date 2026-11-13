@@ -415,9 +415,10 @@ describe('search index sync on R2 writes', () => {
 		const before = db.queries;
 		await env.videos.put('v1', JSON.stringify(videoFixture({ title: 'Aqeedah 101', dateModified: '2026-02-02T00:00:00.000Z' })));
 		await flush();
-		// The ownership upsert, the search lookup, recording the newer version (PR-8) and the
-		// admin comment signature read (comments unchanged): no index rewrite
-		assert.equal(db.queries - before, 4, 'no search row, full-text or comment rewrite');
+		// The ownership upsert, the search lookup, recording the newer version (PR-8), the
+		// admin comment signature read and the privacy footprint signature read (comments and
+		// reactions unchanged): no index rewrite
+		assert.equal(db.queries - before, 5, 'no search row, full-text, comment or footprint rewrite');
 	});
 
 	it('returns env untouched without SEARCH_DB', () => {

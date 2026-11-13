@@ -132,9 +132,25 @@ UI: `/{en|ar}/settings/privacy` (`apps/web/src/components/privacySettings`, LTR 
 | Restriction / objection (Art. 18, 21) | Consent withdrawal, watch-history clear/remove, comment and post deletion. |
 
 Each request is bounded by an operation budget (`PRIVACY_OP_BUDGET`, default 900 R2
-operations, under the Workers subrequest limit) and scans R2 list pages of 100 objects.
+operations, under the Workers subrequest limit). Export scans R2 list pages of 100 objects.
 Interrupted pages are redone on resume. Export rolls back partial pages, so merged exports
 contain no duplicates.
+
+Erasure finds the user's records through indexes, so its cost follows the user, not the
+environment (#1073):
+
+| Data | Found through |
+|---|---|
+| Owned channels, owned videos (trashed included, and members' uploads on owned channels) | D1 `content_ownership` |
+| Sections, tabs, posts of owned channels, watch history, upload templates, subtitles | key prefixes |
+| Reactions and comments on other videos, legacy subscriptions on other channels, posts written on other channels, comments/likes/votes/comment likes on other posts, playlists, reports and report claims | D1 `privacy_footprints` (`apps/api-videos/src/lib/privacy/footprints.ts`) |
+| Live stream records | `livestream:` prefix listing (no owner index) |
+
+Every api-videos write to those buckets records who it names in `privacy_footprints`. A
+one-time backfill pass per bucket records older data (`POST /internal/privacy/footprints/backfill`,
+dry run by default). A bucket's footprints are trusted only after a complete pass and while no
+footprint write has failed since. Until then that bucket is scanned as before, so nothing is
+skipped. The erased user's footprint rows are deleted with the profile.
 
 Known follow-ups:
 - Cached post like counters and poll results are recomputed the next time someone likes or votes on that post.

@@ -10,8 +10,10 @@
  * The sign-in account (email, password, sessions) lives in the separate
  * AlUmmahNowAuth service and is not touched here.
  *
- * Most buckets have no per-user index, so both operations scan whole buckets.
- * They run as a fixed sequence of phases over R2 list pages and stop when the
+ * The export scans whole buckets. The erase finds the user's records through
+ * the ownership index and the privacy footprints (./footprints.ts, #1073) when
+ * those are complete, and scans a bucket only when its index is not.
+ * Both run as a fixed sequence of phases over R2 list pages and stop when the
  * per-request operation budget is spent, returning a `resumeToken`; calling
  * again with that token continues from the same phase and page. Work inside a
  * page is idempotent, so re-running an interrupted page is safe.
@@ -33,7 +35,11 @@ import { eraseUserSubscriptions, exportUserSubscriptions } from '../subscription
 import { defaultPointerPrefix } from '../uploadDefaultPointer';
 import { sectionOrderKey } from '../channelSectionOrder';
 import { BucketLike, BudgetExhausted, OperationBudget, asBucket, deleteKeys, readJson, updateJson, writeJson } from './scan';
-import { isReportClaimOf } from '../report-claims';
+import { isReportClaimOf, reportClaimKey } from '../report-claims';
+import { isOwnershipComplete } from '../search/ownership';
+import { logger } from '../logger';
+import type { SearchDb } from '@al-ummah/shared-types';
+import { footprintTargets, footprintsComplete, forgetFootprints } from './footprints';
 
 /** Tombstone written in place of a user id on content kept after erasure. */
 export const DELETED_USER_ID = 'deleted-user';
@@ -58,6 +64,8 @@ export interface PrivacyBuckets {
 	subtitles?: unknown;
 	/** Channel subscriptions (lib/subscription-store.ts) */
 	NOTIFICATIONS_DB?: D1Database;
+	/** Ownership index and privacy footprints: the erase reads them instead of scanning (#1073) */
+	SEARCH_DB?: unknown;
 }
 
 type Json = Record<string, any>;
@@ -73,6 +81,8 @@ interface Reaction {
 // ---------------------------------------------------------------------------
 
 interface Checkpoint {
+	/** Format: 1 (export), 2 (erase since #1073). A token of another format starts over. */
+	v?: number;
 	/** Index of the phase to (re)start. */
 	p: number;
 	/** R2 list cursor of the page to (re)start within that phase. */
@@ -81,24 +91,36 @@ interface Checkpoint {
 	o: string[];
 	/** Keys of owned channels, deleted after their videos and posts. */
 	k: string[];
+	/** Index-driven phases: the last item finished (items run in sorted order). */
+	x?: string;
+	/** Index-driven phases: the item `c` belongs to (an item's own list pages). */
+	y?: string;
+	/** How the current phase finds its records: 'i' indexes, 's' bucket scan. */
+	m?: 'i' | 's';
 }
 
 export function encodeResumeToken(checkpoint: Checkpoint): string {
 	return btoa(JSON.stringify(checkpoint)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-export function decodeResumeToken(token: string | undefined | null): Checkpoint {
-	const fresh: Checkpoint = { p: 0, o: [], k: [] };
+export function decodeResumeToken(token: string | undefined | null, version = 1): Checkpoint {
+	const fresh: Checkpoint = { p: 0, o: [], k: [], ...(version !== 1 ? { v: version } : {}) };
 	if (!token) return fresh;
 	try {
 		const padded = token.replace(/-/g, '+').replace(/_/g, '/');
 		const parsed = JSON.parse(atob(padded + '='.repeat((4 - (padded.length % 4)) % 4))) as Partial<Checkpoint>;
 		if (typeof parsed.p !== 'number' || parsed.p < 0) return fresh;
+		// A token from an older phase list (a deploy mid-erase) starts over: every phase is idempotent
+		if ((parsed.v ?? 1) !== version) return fresh;
 		return {
+			...(version !== 1 ? { v: version } : {}),
 			p: Math.floor(parsed.p),
 			c: typeof parsed.c === 'string' ? parsed.c : undefined,
 			o: Array.isArray(parsed.o) ? parsed.o.filter((v): v is string => typeof v === 'string').slice(0, 1000) : [],
 			k: Array.isArray(parsed.k) ? parsed.k.filter((v): v is string => typeof v === 'string').slice(0, 1000) : [],
+			x: typeof parsed.x === 'string' ? parsed.x : undefined,
+			y: typeof parsed.y === 'string' ? parsed.y : undefined,
+			m: parsed.m === 'i' || parsed.m === 's' ? parsed.m : undefined,
 		};
 	} catch {
 		return fresh;
@@ -149,14 +171,18 @@ async function runPhases(
 	budget: OperationBudget,
 	resumeToken: string | undefined,
 	pageSize: number,
+	version = 1,
 ): Promise<{ complete: boolean; resumeToken?: string }> {
-	const checkpoint = decodeResumeToken(resumeToken);
+	const checkpoint = decodeResumeToken(resumeToken, version);
 	const ctx: PhaseContext = { budget, checkpoint, pageSize };
 	try {
 		while (checkpoint.p < phases.length) {
 			await phases[checkpoint.p](ctx);
 			checkpoint.p++;
 			checkpoint.c = undefined;
+			checkpoint.x = undefined;
+			checkpoint.y = undefined;
+			checkpoint.m = undefined;
 		}
 		return { complete: true };
 	} catch (error) {
@@ -477,10 +503,85 @@ function anonymizeVideoComments(comments: unknown, userId: string, summary: Eras
 	return changed;
 }
 
+/** Format of erase resume tokens: 2 since the index-driven phases (#1073). */
+const ERASE_TOKEN_VERSION = 2;
+
+/** Bound parameters per IN (...) list (D1 allows 100). */
+const IN_CHUNK = 90;
+
+/** Which buckets the erase may find the user's data in through indexes instead of scans. */
+export interface EraseIndexes {
+	/** Owned channels (content_ownership) and legacy subscriptions on other channels (footprints) */
+	channels: boolean;
+	/** Owned videos (content_ownership) and reactions/comments on other videos (footprints) */
+	videos: boolean;
+	/** Posts written on other channels, comments, likes, votes and comment likes (footprints) */
+	community: boolean;
+	playlists: boolean;
+	reports: boolean;
+}
+
+const NO_INDEXES: EraseIndexes = { channels: false, videos: false, community: false, playlists: false, reports: false };
+
+/** One read per index; any failure means "scan", never "skip". */
+export async function eraseIndexes(db: SearchDb | undefined): Promise<EraseIndexes> {
+	if (!db) return NO_INDEXES;
+	try {
+		const [channel, video, fVideos, fChannels, fCommunity, fPlaylists, fReports] = await Promise.all([
+			isOwnershipComplete(db, 'channel'),
+			isOwnershipComplete(db, 'video'),
+			footprintsComplete(db, 'videos'),
+			footprintsComplete(db, 'channels'),
+			footprintsComplete(db, 'community_posts'),
+			footprintsComplete(db, 'playlists'),
+			footprintsComplete(db, 'reports'),
+		]);
+		return { channels: channel && fChannels, videos: video && fVideos, community: fCommunity, playlists: fPlaylists, reports: fReports };
+	} catch (error) {
+		logger.warn('[Privacy] Could not read the erase indexes; scanning the buckets', { error: error instanceof Error ? error.message : String(error) });
+		return NO_INDEXES;
+	}
+}
+
+/**
+ * Run `work` for each item in sorted order, recording the last finished item
+ * (`x`) so a resumed call continues after it; `c` (an item's own list cursor)
+ * is only reused for the item it was recorded for (`y`).
+ */
+async function eachItem(ctx: PhaseContext, items: Iterable<string>, work: (item: string) => Promise<void>): Promise<void> {
+	const cp = ctx.checkpoint;
+	for (const item of [...new Set(items)].sort()) {
+		if (cp.x !== undefined && item <= cp.x) continue;
+		if (cp.y !== item) {
+			cp.y = item;
+			cp.c = undefined;
+		}
+		await work(item);
+		cp.x = item;
+		cp.y = undefined;
+		cp.c = undefined;
+	}
+}
+
+async function selectColumn(ctx: PhaseContext, db: SearchDb, sql: string, binds: unknown[]): Promise<string[]> {
+	ctx.budget.spend();
+	const { results } = await db.prepare(sql).bind(...binds).all<{ id: string }>();
+	return (results ?? []).map((r) => r.id);
+}
+
 /**
  * Erase / anonymise everything stored about `userId` (one bounded pass).
  * Idempotent and resumable: call again with `resumeToken` until `complete`.
  * The profile is deleted last.
+ *
+ * What the user owns or touched is found through indexes when they are
+ * complete (#1073): content_ownership for owned channels and videos (deleted
+ * ones included), privacy_footprints (lib/privacy/footprints.ts) for their
+ * data inside other people's records, key prefixes for the rest. A bucket
+ * whose index is not complete is scanned as before. Every phase picks its
+ * method on its own and changes the same records either way. Two lookups stay
+ * prefix scans: live stream records (`livestream:` in the videos bucket) and
+ * each touched post's comment and comment-like trees.
  */
 export async function eraseUserData(
 	env: PrivacyBuckets,
@@ -491,24 +592,194 @@ export async function eraseUserData(
 ): Promise<ErasureSummary> {
 	const summary: ErasureSummary = { userId, complete: true, deleted: {}, anonymized: {}, deletedVideoIds: [], affectedPosts: [] };
 	const community = asBucket(env.community_posts);
+	const channels = asBucket(env.channels);
+	const videos = asBucket(env.videos);
+	const playlists = asBucket(env.playlists);
+	const reports = asBucket(env.reports);
 	const userSuffix = `/${userId}.json`;
+	const db = env.SEARCH_DB as SearchDb | undefined;
+
+	let indexes: Promise<EraseIndexes> | undefined;
+	const indexed = async (ctx: PhaseContext, pick: (ix: EraseIndexes) => boolean): Promise<boolean> => {
+		if (!db) return false;
+		if (!indexes) {
+			ctx.budget.spend(7);
+			indexes = eraseIndexes(db);
+		}
+		return pick(await indexes);
+	};
+
+	/** A phase with an index-driven and a scanning method; a resumed phase that changed method starts over. */
+	const either = (pick: (ix: EraseIndexes) => boolean, byIndex: Phase, byScan: Phase): Phase => async (ctx) => {
+		const mode = (await indexed(ctx, pick)) ? 'i' : 's';
+		const cp = ctx.checkpoint;
+		if (cp.m !== undefined && cp.m !== mode) {
+			cp.c = undefined;
+			cp.x = undefined;
+			cp.y = undefined;
+		}
+		cp.m = mode;
+		await (mode === 'i' ? byIndex : byScan)(ctx);
+	};
 
 	const deletePrefixPages = (bucket: BucketLike, prefix: string, label: string): Phase => (ctx) =>
 		scanPages(bucket, prefix, ctx, async (objects) => {
 			bump(summary.deleted, label, await deleteKeys(bucket, objects.map((o) => o.key), ctx.budget));
 		});
 
+	/** Delete the user's own records among `keys` (likes/, votes/, comment-likes/ trees). */
+	const deleteMine = async (keys: string[], label: string, ctx: PhaseContext) => {
+		const mine = keys.filter((key) => key.endsWith(userSuffix));
+		if (label !== 'communityCommentLikes') {
+			for (const key of mine) {
+				const postId = key.split('/')[1];
+				if (postId && !summary.affectedPosts.includes(postId)) summary.affectedPosts.push(postId);
+			}
+		}
+		bump(summary.deleted, label, await deleteKeys(community, mine, ctx.budget));
+	};
+
 	const deleteUserRecords = (prefix: string, label: string): Phase => (ctx) =>
-		scanPages(community, prefix, ctx, async (objects) => {
-			const mine = objects.map((o) => o.key).filter((key) => key.endsWith(userSuffix));
-			if (label !== 'communityCommentLikes') {
-				for (const key of mine) {
-					const postId = key.split('/')[1];
-					if (postId && !summary.affectedPosts.includes(postId)) summary.affectedPosts.push(postId);
+		scanPages(community, prefix, ctx, (objects) => deleteMine(objects.map((o) => o.key), label, ctx));
+
+	// --- Per-record work, the same whichever way the record was found ---
+
+	/** An owned channel is remembered (deleted later) and its @handle freed; another channel loses the user's subscriptions. */
+	const eraseInChannel = async (ctx: PhaseContext, key: string, channel: Json) => {
+		if (channel.userId === userId) {
+			const channelId = channel.id ?? key;
+			if (!ctx.checkpoint.o.includes(channelId)) ctx.checkpoint.o.push(channelId);
+			if (!ctx.checkpoint.k.includes(key)) ctx.checkpoint.k.push(key);
+			// Free the channel's @handle (index entry in channel_tabs, see lib/channelHandles.ts)
+			// only if the entry is this channel's (a stale field must not free another channel's handle)
+			if (typeof channel.handle === 'string' && channel.handle) {
+				const handleKey = `channel-handles/${channel.handle.toLowerCase()}`;
+				const entry = await readJson<Json>(asBucket(env.channel_tabs), handleKey, ctx.budget);
+				if (entry?.channelId === channelId) await deleteKeys(asBucket(env.channel_tabs), [handleKey], ctx.budget);
+			}
+			return;
+		}
+		if (stripUserReactions(channel.subscriptions, userId).removed === 0) return;
+		// Conditional rewrite of the fresh channel (SCALABILITY-AUDIT AV-23)
+		let removed = 0;
+		await updateJson<Json>(channels, key, (fresh) => {
+			const stripped = stripUserReactions(fresh.subscriptions, userId);
+			removed = stripped.removed;
+			if (removed === 0) return false;
+			fresh.subscriptions = stripped.list;
+			return true;
+		}, ctx.budget);
+		if (removed > 0) bump(summary.deleted, 'subscriptions', removed);
+	};
+
+	/** An owned video is deleted (subtitles, media, record); another loses the user's reactions and comments. */
+	const eraseInVideo = async (ctx: PhaseContext, key: string, video: Json) => {
+		const videoId = video.id ?? key;
+		if (video.userId === userId || ctx.checkpoint.o.includes(video.channelId)) {
+			if (env.subtitles) {
+				const subtitles = asBucket(env.subtitles);
+				bump(summary.deleted, 'subtitles', await deleteKeys(subtitles, await allKeys(subtitles, `${videoId}/`, ctx.budget), ctx.budget));
+			}
+			if (hooks.onVideoDeleted) await hooks.onVideoDeleted(videoId, video as never);
+			await deleteKeys(videos, [key], ctx.budget);
+			summary.deletedVideoIds.push(videoId);
+			bump(summary.deleted, 'videos');
+			return;
+		}
+		// Strip and anonymise on the fresh video with a conditional write
+		// (SCALABILITY-AUDIT AV-23), counting only the attempt that landed
+		const needsChange = (['likes', 'dislikes'] as const).some((kind) => stripUserReactions(video[kind], userId).removed > 0)
+			|| anonymizeVideoComments(structuredClone(video.comments), userId, newErasureSummary());
+		if (!needsChange) return;
+		let attempt = newErasureSummary();
+		await updateJson<Json>(videos, key, (fresh) => {
+			attempt = newErasureSummary();
+			let changed = false;
+			for (const kind of ['likes', 'dislikes'] as const) {
+				const { list, removed } = stripUserReactions(fresh[kind], userId);
+				if (removed > 0) {
+					fresh[kind] = list;
+					bump(attempt.deleted, 'videoReactions', removed);
+					changed = true;
 				}
 			}
-			bump(summary.deleted, label, await deleteKeys(community, mine, ctx.budget));
-		});
+			if (anonymizeVideoComments(fresh.comments, userId, attempt)) changed = true;
+			return changed;
+		}, ctx.budget);
+		mergeErasureSummary(summary, attempt);
+	};
+
+	/** A post of an owned channel, or written by the user: its subtrees first, then the post. */
+	const eraseCommunityPostKey = async (ctx: PhaseContext, key: string) => {
+		const [, channelId, file] = key.split('/');
+		if (!file) return;
+		const owned = ctx.checkpoint.o.includes(channelId);
+		if (file === 'index.json') {
+			if (owned) await deleteKeys(community, [key], ctx.budget);
+			return;
+		}
+		let postId = file.replace(/\.json$/, '');
+		if (!owned) {
+			const post = await readJson<Json>(community, key, ctx.budget);
+			if (!post || post.userId !== userId) return;
+			postId = post.id ?? postId;
+		}
+		for (const prefix of [`comments/${postId}/`, `likes/${postId}/`, `votes/${postId}/`, `comment-likes/${postId}/`]) {
+			await deleteKeys(community, await allKeys(community, prefix, ctx.budget), ctx.budget);
+		}
+		await deleteKeys(community, [key], ctx.budget);
+		bump(summary.deleted, 'communityPosts');
+	};
+
+	/** The user's comment on someone else's post: anonymised, thread kept. */
+	const anonymizeCommunityCommentKey = async (ctx: PhaseContext, key: string) => {
+		// Index documents, the pinned pointer and reply-parent pointers hold no user data
+		if (key.endsWith('/index.json') || key.endsWith('/pinned.json') || key.includes('/reply-parents/')) return;
+		// Conditional rewrite (SCALABILITY-AUDIT AV-23): a concurrent like or
+		// edit cannot bring the author back
+		let anonymized = false;
+		await updateJson<Json>(community, key, (comment) => {
+			anonymized = false;
+			if (comment.userId !== userId) return false;
+			comment.userId = DELETED_USER_ID;
+			comment.channelId = DELETED_CHANNEL_ID;
+			comment.content = '';
+			comment.userDisplayName = '';
+			delete comment.userAvatarUrl;
+			comment.deletedAt = comment.deletedAt ?? new Date().toISOString();
+			anonymized = true;
+			return true;
+		}, ctx.budget);
+		if (anonymized) bump(summary.anonymized, 'communityComments');
+	};
+
+	/** Reports filed: kept for moderation history, reporter identity removed; the user's claims deleted. */
+	const eraseReportKey = async (ctx: PhaseContext, key: string) => {
+		// The one-report-per-entity claims (lib/report-claims.ts) name the user: delete them
+		if (isReportClaimOf(key, userId)) {
+			await deleteKeys(reports, [key], ctx.budget);
+			return;
+		}
+		if (!key.endsWith(`:${userId}`)) return;
+		const report = await readJson<Json>(reports, key, ctx.budget);
+		if (report) {
+			report.reporterId = DELETED_USER_ID;
+			await writeJson(reports, key.slice(0, key.length - userId.length) + DELETED_USER_ID, report, ctx.budget);
+		}
+		await deleteKeys(reports, [key], ctx.budget);
+		bump(summary.anonymized, 'reportsFiled');
+	};
+
+	const erasePlaylistKey = async (ctx: PhaseContext, key: string, mine: string[]) => {
+		const playlist = await readJson<Json>(playlists, key, ctx.budget);
+		if (playlist && playlist.userId === userId) mine.push(key);
+	};
+
+	/** The touched posts (comments, likes, votes, comment likes) from the footprints. */
+	const touchedPosts = (ctx: PhaseContext) => {
+		ctx.budget.spend();
+		return footprintTargets(db!, userId, 'post');
+	};
 
 	const phases: Phase[] = [
 		deletePrefixPages(asBucket(env.watch_history), `${userId}:`, 'watchHistory'),
@@ -520,39 +791,25 @@ export async function eraseUserData(
 		},
 
 		// Channels: remember owned ones (deleted later), remove the user's subscriptions from others
-		(ctx) => {
-			const channels = asBucket(env.channels);
-			return scanPages(channels, undefined, ctx, async (objects) => {
-				for (const { key } of objects) {
+		either(
+			(ix) => ix.channels,
+			async (ctx) => {
+				const owned = await selectColumn(ctx, db!, `SELECT id FROM content_ownership WHERE kind = 'channel' AND owner_id = ?`, [userId]);
+				ctx.budget.spend();
+				const subscribed = await footprintTargets(db!, userId, 'channel');
+				await eachItem(ctx, [...owned, ...subscribed], async (key) => {
 					const channel = await readJson<Json>(channels, key, ctx.budget);
-					if (!channel) continue;
-					if (channel.userId === userId) {
-						const channelId = channel.id ?? key;
-						if (!ctx.checkpoint.o.includes(channelId)) ctx.checkpoint.o.push(channelId);
-						if (!ctx.checkpoint.k.includes(key)) ctx.checkpoint.k.push(key);
-						// Free the channel's @handle (index entry in channel_tabs, see lib/channelHandles.ts)
-						// only if the entry is this channel's (a stale field must not free another channel's handle)
-						if (typeof channel.handle === 'string' && channel.handle) {
-							const handleKey = `channel-handles/${channel.handle.toLowerCase()}`;
-							const entry = await readJson<Json>(asBucket(env.channel_tabs), handleKey, ctx.budget);
-							if (entry?.channelId === channelId) await deleteKeys(asBucket(env.channel_tabs), [handleKey], ctx.budget);
-						}
-						continue;
+					if (channel) await eraseInChannel(ctx, key, channel);
+				});
+			},
+			(ctx) =>
+				scanPages(channels, undefined, ctx, async (objects) => {
+					for (const { key } of objects) {
+						const channel = await readJson<Json>(channels, key, ctx.budget);
+						if (channel) await eraseInChannel(ctx, key, channel);
 					}
-					if (stripUserReactions(channel.subscriptions, userId).removed === 0) continue;
-					// Conditional rewrite of the fresh channel (SCALABILITY-AUDIT AV-23)
-					let removed = 0;
-					await updateJson<Json>(channels, key, (fresh) => {
-						const stripped = stripUserReactions(fresh.subscriptions, userId);
-						removed = stripped.removed;
-						if (removed === 0) return false;
-						fresh.subscriptions = stripped.list;
-						return true;
-					}, ctx.budget);
-					if (removed > 0) bump(summary.deleted, 'subscriptions', removed);
-				}
-			});
-		},
+				}),
+		),
 
 		// Sections and tabs of owned channels
 		async (ctx) => {
@@ -565,107 +822,103 @@ export async function eraseUserData(
 		},
 
 		// Videos: delete owned (with subtitles and media), strip reactions and anonymise comments elsewhere
-		(ctx) => {
-			const videos = asBucket(env.videos);
-			return scanPages(videos, undefined, ctx, async (objects) => {
-				for (const { key } of objects) {
-					if (!isVideoKey(key)) continue;
-					const video = await readJson<Json>(videos, key, ctx.budget);
-					if (!video) continue;
-					const videoId = video.id ?? key;
-					if (video.userId === userId || ctx.checkpoint.o.includes(video.channelId)) {
-						if (env.subtitles) {
-							const subtitles = asBucket(env.subtitles);
-							bump(summary.deleted, 'subtitles', await deleteKeys(subtitles, await allKeys(subtitles, `${videoId}/`, ctx.budget), ctx.budget));
-						}
-						if (hooks.onVideoDeleted) await hooks.onVideoDeleted(videoId, video as never);
-						await deleteKeys(videos, [key], ctx.budget);
-						summary.deletedVideoIds.push(videoId);
-						bump(summary.deleted, 'videos');
-						continue;
-					}
-					// Strip and anonymise on the fresh video with a conditional write
-					// (SCALABILITY-AUDIT AV-23), counting only the attempt that landed
-					const needsChange = (['likes', 'dislikes'] as const).some((kind) => stripUserReactions(video[kind], userId).removed > 0)
-						|| anonymizeVideoComments(structuredClone(video.comments), userId, newErasureSummary());
-					if (!needsChange) continue;
-					let attempt = newErasureSummary();
-					await updateJson<Json>(videos, key, (fresh) => {
-						attempt = newErasureSummary();
-						let changed = false;
-						for (const kind of ['likes', 'dislikes'] as const) {
-							const { list, removed } = stripUserReactions(fresh[kind], userId);
-							if (removed > 0) {
-								fresh[kind] = list;
-								bump(attempt.deleted, 'videoReactions', removed);
-								changed = true;
-							}
-						}
-						if (anonymizeVideoComments(fresh.comments, userId, attempt)) changed = true;
-						return changed;
-					}, ctx.budget);
-					mergeErasureSummary(summary, attempt);
+		either(
+			(ix) => ix.videos,
+			async (ctx) => {
+				// Owned by the user or on an owned channel, soft-deleted ones included
+				const ids = await selectColumn(ctx, db!, `SELECT id FROM content_ownership WHERE kind = 'video' AND owner_id = ?`, [userId]);
+				for (let i = 0; i < ctx.checkpoint.o.length; i += IN_CHUNK) {
+					const chunk = ctx.checkpoint.o.slice(i, i + IN_CHUNK);
+					ids.push(...(await selectColumn(ctx, db!, `SELECT id FROM content_ownership WHERE kind = 'video' AND channel_id IN (${chunk.map(() => '?').join(', ')})`, chunk)));
 				}
-			});
-		},
+				ctx.budget.spend();
+				ids.push(...(await footprintTargets(db!, userId, 'video')));
+				await eachItem(ctx, ids.filter(isVideoKey), async (key) => {
+					const video = await readJson<Json>(videos, key, ctx.budget);
+					if (video) await eraseInVideo(ctx, key, video);
+				});
+			},
+			(ctx) =>
+				scanPages(videos, undefined, ctx, async (objects) => {
+					for (const { key } of objects) {
+						if (!isVideoKey(key)) continue;
+						const video = await readJson<Json>(videos, key, ctx.budget);
+						if (video) await eraseInVideo(ctx, key, video);
+					}
+				}),
+		),
+
+		// Live stream records (videos bucket, `livestream:<id>`): no index names their owner, so
+		// their prefix is listed whichever way the videos were found (a repeat after a scan is a no-op)
+		(ctx) =>
+			scanPages(videos, 'livestream:', ctx, async (objects) => {
+				for (const { key } of objects) {
+					const record = await readJson<Json>(videos, key, ctx.budget);
+					if (record) await eraseInVideo(ctx, key, record);
+				}
+			}),
 
 		// Community posts of owned channels or authored by the user: subtrees first, then the post
-		(ctx) =>
-			scanPages(community, 'posts/', ctx, async (objects) => {
-				for (const { key } of objects) {
-					const [, channelId, file] = key.split('/');
-					if (!file) continue;
-					const owned = ctx.checkpoint.o.includes(channelId);
-					if (file === 'index.json') {
-						if (owned) await deleteKeys(community, [key], ctx.budget);
-						continue;
-					}
-					let postId = file.replace(/\.json$/, '');
-					if (!owned) {
-						const post = await readJson<Json>(community, key, ctx.budget);
-						if (!post || post.userId !== userId) continue;
-						postId = post.id ?? postId;
-					}
-					for (const prefix of [`comments/${postId}/`, `likes/${postId}/`, `votes/${postId}/`, `comment-likes/${postId}/`]) {
-						await deleteKeys(community, await allKeys(community, prefix, ctx.budget), ctx.budget);
-					}
-					await deleteKeys(community, [key], ctx.budget);
-					bump(summary.deleted, 'communityPosts');
-				}
-			}),
+		either(
+			(ix) => ix.community,
+			async (ctx) => {
+				ctx.budget.spend();
+				const authored = await footprintTargets(db!, userId, 'post-author');
+				const items = [...ctx.checkpoint.o.map((channelId) => `c:${channelId}`), ...authored.map((key) => `a:${key}`)];
+				await eachItem(ctx, items, async (item) => {
+					if (item.startsWith('a:')) return eraseCommunityPostKey(ctx, item.slice(2));
+					await scanPages(community, `posts/${item.slice(2)}/`, ctx, async (objects) => {
+						for (const { key } of objects) await eraseCommunityPostKey(ctx, key);
+					});
+				});
+			},
+			(ctx) =>
+				scanPages(community, 'posts/', ctx, async (objects) => {
+					for (const { key } of objects) await eraseCommunityPostKey(ctx, key);
+				}),
+		),
 
 		// The user's comments on other posts: anonymise
-		(ctx) =>
-			scanPages(community, 'comments/', ctx, async (objects) => {
-				for (const { key } of objects) {
-					// Index documents, the pinned pointer and reply-parent pointers hold no user data
-					if (key.endsWith('/index.json') || key.endsWith('/pinned.json') || key.includes('/reply-parents/')) continue;
-					// Conditional rewrite (SCALABILITY-AUDIT AV-23): a concurrent like or
-					// edit cannot bring the author back
-					let anonymized = false;
-					await updateJson<Json>(community, key, (comment) => {
-						anonymized = false;
-						if (comment.userId !== userId) return false;
-						comment.userId = DELETED_USER_ID;
-						comment.channelId = DELETED_CHANNEL_ID;
-						comment.content = '';
-						comment.userDisplayName = '';
-						delete comment.userAvatarUrl;
-						comment.deletedAt = comment.deletedAt ?? new Date().toISOString();
-						anonymized = true;
-						return true;
-					}, ctx.budget);
-					if (anonymized) bump(summary.anonymized, 'communityComments');
-				}
-			}),
+		either(
+			(ix) => ix.community,
+			async (ctx) =>
+				eachItem(ctx, await touchedPosts(ctx), (postId) =>
+					scanPages(community, `comments/${postId}/`, ctx, async (objects) => {
+						for (const { key } of objects) await anonymizeCommunityCommentKey(ctx, key);
+					}),
+				),
+			(ctx) =>
+				scanPages(community, 'comments/', ctx, async (objects) => {
+					for (const { key } of objects) await anonymizeCommunityCommentKey(ctx, key);
+				}),
+		),
 
-		deleteUserRecords('likes/', 'communityLikes'),
-		deleteUserRecords('votes/', 'pollVotes'),
-		deleteUserRecords('comment-likes/', 'communityCommentLikes'),
+		// Post likes and poll votes: one key per post and user
+		...([['likes', 'communityLikes'], ['votes', 'pollVotes']] as const).map(([tree, label]) =>
+			either(
+				(ix) => ix.community,
+				async (ctx) =>
+					eachItem(ctx, await touchedPosts(ctx), async (postId) => {
+						const key = `${tree}/${postId}${userSuffix}`;
+						ctx.budget.spend();
+						const page = await community.list({ prefix: key, limit: 10 });
+						await deleteMine(page.objects.map((o) => o.key).filter((k) => k === key), label, ctx);
+					}),
+				deleteUserRecords(`${tree}/`, label),
+			),
+		),
+		// Comment likes: under each touched post's comment-likes tree
+		either(
+			(ix) => ix.community,
+			async (ctx) =>
+				eachItem(ctx, await touchedPosts(ctx), (postId) =>
+					scanPages(community, `comment-likes/${postId}/`, ctx, (objects) => deleteMine(objects.map((o) => o.key), 'communityCommentLikes', ctx)),
+				),
+			deleteUserRecords('comment-likes/', 'communityCommentLikes'),
+		),
 
 		// Owned channels themselves (after their videos and posts), each after its hook
 		async (ctx) => {
-			const channels = asBucket(env.channels);
 			for (const key of ctx.checkpoint.k) {
 				const channel = await readJson<Json>(channels, key, ctx.budget);
 				// Gone already: a resumed pass deleted it (and ran its hook) before
@@ -676,46 +929,52 @@ export async function eraseUserData(
 		},
 
 		// Playlists
-		(ctx) => {
-			const playlists = asBucket(env.playlists);
-			return scanPages(playlists, undefined, ctx, async (objects) => {
-				const mine: string[] = [];
-				for (const { key } of objects) {
-					const playlist = await readJson<Json>(playlists, key, ctx.budget);
-					if (playlist && playlist.userId === userId) mine.push(key);
-				}
-				bump(summary.deleted, 'playlists', await deleteKeys(playlists, mine, ctx.budget));
-			});
-		},
+		either(
+			(ix) => ix.playlists,
+			async (ctx) => {
+				ctx.budget.spend();
+				await eachItem(ctx, await footprintTargets(db!, userId, 'playlist'), async (key) => {
+					const mine: string[] = [];
+					await erasePlaylistKey(ctx, key, mine);
+					bump(summary.deleted, 'playlists', await deleteKeys(playlists, mine, ctx.budget));
+				});
+			},
+			(ctx) =>
+				scanPages(playlists, undefined, ctx, async (objects) => {
+					const mine: string[] = [];
+					for (const { key } of objects) await erasePlaylistKey(ctx, key, mine);
+					bump(summary.deleted, 'playlists', await deleteKeys(playlists, mine, ctx.budget));
+				}),
+		),
 
 		// Reports filed: keep for moderation history, remove the reporter's identity
-		(ctx) => {
-			const reports = asBucket(env.reports);
-			return scanPages(reports, undefined, ctx, async (objects) => {
-				for (const { key } of objects) {
-					// The one-report-per-entity claims (lib/report-claims.ts) name the user: delete them
-					if (isReportClaimOf(key, userId)) {
-						await deleteKeys(reports, [key], ctx.budget);
-						continue;
-					}
-					if (!key.endsWith(`:${userId}`)) continue;
-					const report = await readJson<Json>(reports, key, ctx.budget);
-					if (report) {
-						report.reporterId = DELETED_USER_ID;
-						await writeJson(reports, key.slice(0, key.length - userId.length) + DELETED_USER_ID, report, ctx.budget);
-					}
-					await deleteKeys(reports, [key], ctx.budget);
-					bump(summary.anonymized, 'reportsFiled');
-				}
-			});
-		},
+		either(
+			(ix) => ix.reports,
+			async (ctx) => {
+				ctx.budget.spend();
+				await eachItem(ctx, await footprintTargets(db!, userId, 'report'), async (entityId) => {
+					await scanPages(reports, `report:${entityId}:`, ctx, async (objects) => {
+						for (const { key } of objects) await eraseReportKey(ctx, key);
+					});
+					await deleteKeys(reports, [reportClaimKey(entityId, userId)], ctx.budget);
+				});
+			},
+			(ctx) =>
+				scanPages(reports, undefined, ctx, async (objects) => {
+					for (const { key } of objects) await eraseReportKey(ctx, key);
+				}),
+		),
 
-		// Subscriptions in D1 (SCALABILITY-AUDIT AV-4), then the profile last
+		// Subscriptions in D1 (SCALABILITY-AUDIT AV-4), the footprints, then the profile last
 		async (ctx) => {
 			if (env.NOTIFICATIONS_DB) {
 				ctx.budget.spend();
 				const removed = await eraseUserSubscriptions(env.NOTIFICATIONS_DB, userId);
 				if (removed > 0) bump(summary.deleted, 'subscriptions', removed);
+			}
+			if (db) {
+				ctx.budget.spend();
+				await forgetFootprints(db, userId);
 			}
 			const profiles = asBucket(env.profiles);
 			ctx.budget.spend();
@@ -728,7 +987,7 @@ export async function eraseUserData(
 		},
 	];
 
-	const result = await runPhases(phases, budget, options.resumeToken, options.pageSize ?? DEFAULT_PAGE_SIZE);
+	const result = await runPhases(phases, budget, options.resumeToken, options.pageSize ?? DEFAULT_PAGE_SIZE, ERASE_TOKEN_VERSION);
 	summary.complete = result.complete;
 	if (result.resumeToken) summary.resumeToken = result.resumeToken;
 	return summary;
