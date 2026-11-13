@@ -589,6 +589,8 @@ export interface AppTranslations {
    */
   video: {
     videos: string;
+    /** "Published {date}": the exact publish date and time on the watch page */
+    publishedAt: string;
     videoSingular: string;
     uploadVideo: string;
     editVideo: string;

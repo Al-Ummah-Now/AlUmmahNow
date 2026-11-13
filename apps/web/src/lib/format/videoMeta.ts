@@ -61,15 +61,31 @@ export function formatRelativeTime(value: Date | string | number | null | undefi
   const date = toDate(value);
   if (!date) return '';
   const seconds = Math.round((date.getTime() - now) / 1000);
-  const format = new Intl.RelativeTimeFormat(lang, { numeric: 'auto' });
+  // Always a number with its unit ("1 day ago", «قبل يوم واحد»), like "17 hours ago": 'auto'
+  // switched to "yesterday"/«أمس» at one day, so cards and the watch page read differently
+  // within the same hour (owner, 2026-11-13)
+  const format = new Intl.RelativeTimeFormat(lang, { numeric: 'always' });
   for (const [unit, size] of UNITS) {
     if (Math.abs(seconds) >= size) return format.format(Math.trunc(seconds / size), unit);
   }
-  return format.format(0, 'second');
+  // Under a minute: "now" / «الآن», not "0 seconds ago"
+  return new Intl.RelativeTimeFormat(lang, { numeric: 'auto' }).format(0, 'second');
 }
 
 /** The full date, for tooltips. */
 export function formatAbsoluteDate(value: Date | string | number | null | undefined, lang: MetaLang): string {
   const date = toDate(value);
   return date ? new Intl.DateTimeFormat(lang, { dateStyle: 'long' }).format(date) : '';
+}
+
+/**
+ * The full date and time, in the viewer's time zone: «12 نوفمبر 2026، 06:32 م» /
+ * "November 12, 2026, 06:32 PM". For the relative time's tooltip and the watch page's description.
+ */
+export function formatAbsoluteDateTime(value: Date | string | number | null | undefined, lang: MetaLang, timeZone?: string): string {
+  const date = toDate(value);
+  if (!date) return '';
+  const day = new Intl.DateTimeFormat(lang, { dateStyle: 'long', timeZone }).format(date);
+  const time = new Intl.DateTimeFormat(lang, { hour: '2-digit', minute: '2-digit', timeZone }).format(date);
+  return `${day}${lang === 'ar' ? '، ' : ', '}${time}`;
 }

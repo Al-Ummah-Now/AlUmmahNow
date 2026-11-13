@@ -1,6 +1,6 @@
 'use client';
 
-import { formatViews } from '@/lib/format/videoMeta';
+import { formatAbsoluteDateTime, formatViews } from '@/lib/format/videoMeta';
 import { RelativeDate } from '@/components/RelativeDate';
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -387,7 +387,13 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
                 />
               )}
               <details className="watch-desc" open={false}>
-                <summary><span>{formatViews(videoDetails.views, lang)}</span> <RelativeDate value={videoDetails.dateCreated} lang={lang} /></summary>
+                {/* Like the cards: views • relative time (its exact date and time in the tooltip) */}
+                <summary><span>{formatViews(videoDetails.views, lang)}</span><span aria-hidden="true">•</span><RelativeDate value={videoDetails.dateCreated} lang={lang} /></summary>
+                {videoDetails.dateCreated && (
+                  <p className="watch-desc-date" data-testid="watch-published">
+                    {t.video.publishedAt.replace('{date}', formatAbsoluteDateTime(videoDetails.dateCreated, lang))}
+                  </p>
+                )}
                 {videoDetails.description && <p>{videoDetails.description}</p>}
               </details>
             </div>

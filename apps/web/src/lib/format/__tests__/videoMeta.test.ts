@@ -1,4 +1,4 @@
-import { formatAbsoluteDate, formatRelativeTime, formatViews, formatSubscribers } from '../videoMeta';
+import { formatAbsoluteDate, formatAbsoluteDateTime, formatRelativeTime, formatViews, formatSubscribers } from '../videoMeta';
 
 describe('formatViews', () => {
   it('uses English singular, plural and zero', () => {
@@ -32,9 +32,10 @@ describe('formatRelativeTime', () => {
     expect(formatRelativeTime(ago(10), 'en', now)).toBe('now');
     expect(formatRelativeTime(ago(120), 'en', now)).toBe('2 minutes ago');
     expect(formatRelativeTime(ago(7200), 'en', now)).toBe('2 hours ago');
-    expect(formatRelativeTime(ago(86400), 'en', now)).toBe('yesterday');
+    // Always a number with its unit, never "yesterday" (cards and the watch page read alike)
+    expect(formatRelativeTime(ago(86400), 'en', now)).toBe('1 day ago');
     expect(formatRelativeTime(ago(86400 * 14), 'en', now)).toBe('2 weeks ago');
-    expect(formatRelativeTime(ago(86400 * 400), 'en', now)).toBe('last year');
+    expect(formatRelativeTime(ago(86400 * 400), 'en', now)).toBe('1 year ago');
   });
 
   it('handles future dates', () => {
@@ -43,6 +44,10 @@ describe('formatRelativeTime', () => {
 
   it('localizes to Arabic', () => {
     expect(formatRelativeTime(ago(7200), 'ar', now)).toContain('ساعتين');
+    expect(formatRelativeTime(ago(3600 * 17), 'ar', now)).toBe('قبل 17 ساعة');
+    // «قبل يوم واحد», never «أمس» (owner, 2026-11-13)
+    expect(formatRelativeTime(ago(86400), 'ar', now)).toBe('قبل يوم واحد');
+    expect(formatRelativeTime(ago(10), 'ar', now)).toBe('الآن');
   });
 
   it('accepts ISO strings and returns nothing for bad input', () => {
@@ -56,6 +61,16 @@ describe('formatAbsoluteDate', () => {
   it('writes the full date and tolerates bad input', () => {
     expect(formatAbsoluteDate(Date.UTC(2026, 10, 9, 12), 'en')).toBe('November 9, 2026');
     expect(formatAbsoluteDate('nope', 'en')).toBe('');
+  });
+});
+
+describe('formatAbsoluteDateTime', () => {
+  const date = new Date('2026-11-12T18:32:00Z');
+
+  it('writes the date and the time, in each language', () => {
+    expect(formatAbsoluteDateTime(date, 'ar', 'UTC')).toBe('12 نوفمبر 2026، 06:32 م');
+    expect(formatAbsoluteDateTime(date, 'en', 'UTC')).toBe('November 12, 2026, 06:32 PM');
+    expect(formatAbsoluteDateTime('nope', 'en')).toBe('');
   });
 });
 
