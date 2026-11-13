@@ -377,7 +377,12 @@ export class DataScope {
 
   /** Waits until the video is ready (encoded). QA/stage: a slow third-party encode skips with #929. */
   async waitReady(id: string, title = id): Promise<void> {
-    const status = async () => ((await (await fetch(`${target().api}/api/videos/${id}`, { cache: 'no-store' })).json().catch(() => ({}))) as { uploadStatus?: string }).uploadStatus;
+    // A reset socket (Node reusing a keep-alive connection the server already closed) is "not known yet":
+    // the poll asks again; only a video that never becomes ready fails
+    const status = async () => {
+      const res = await fetch(`${target().api}/api/videos/${id}`, { cache: 'no-store' }).catch(() => null);
+      return ((await res?.json().catch(() => ({}))) as { uploadStatus?: string } | undefined)?.uploadStatus;
+    };
     const ready = () => expect.poll(status, { message: `"${title}" never became ready`, timeout: onLocalStack() ? 60000 : 9 * 60000, intervals: [1000, 2000, 5000] }).toBe('ready');
     if (onLocalStack()) await ready();
     else await untilEncoded(`"${title}"`, ready, async () => encoding(await status()));
