@@ -59,6 +59,9 @@ export class ApiClient {
     const url = pathname.startsWith('http') ? pathname : `${this.baseUrl}${pathname}`;
     const headers: Record<string, string> = { ...(opts.headers || {}) };
     if (opts.token) headers.Authorization = `Bearer ${opts.token}`;
+    // Cloudflare's documented Turnstile test token: QA and stage use the always-pass test secret,
+    // production and the local stack ignore it (docs/features/bot-protection.md)
+    headers['X-Turnstile-Token'] = 'XXXX.DUMMY.TOKEN.XXXX';
     if (opts.channelId) headers.channelId = opts.channelId;
     let body = opts.body;
     if (opts.json !== undefined) {

@@ -129,6 +129,11 @@
 
   "vars": {
     "ENVIRONMENT": "qa",
+    // Bot protection (lib/bot-guard.ts): Turnstile on Contact us; off | monitor | enforce
+    "TURNSTILE_MODE": "enforce",
+    "TURNSTILE_SITE_KEY": "1x00000000000000000000AA",
+    // Abuse panel (/api/abuse): Analytics Engine SQL API account
+    "CLOUDFLARE_ACCOUNT_ID": "0e4b6e7f9faf280c3c9bf95995edc64f",
     // Logging policy (docs/operations/logging.md): warn on production, stage and QA (only warnings, errors, slow requests); debug locally
     "LOG_LEVEL": "warn",
     "WEBSOCKET_URL": "https://realtime.qa.alummahnow.net",
@@ -143,7 +148,17 @@
     "ADMIN_WEB_URL": "https://admin.qa.alummahnow.net"
   },
 
+  // Abuse counters (Turnstile outcomes on Contact us, rate-limit hits; no personal data)
+
+  "analytics_engine_datasets": [{ "binding": "ABUSE_EVENTS", "dataset": "al_ummah_now_abuse_qa" }],
+
   "secrets_store_secrets": [
+
+    { "binding": "TURNSTILE_SECRET", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "turnstile-secret-test" },
+
+    // Account Analytics Read (shared with apps/cost-monitor): the Abuse panel reads Analytics Engine
+
+    { "binding": "CF_ANALYTICS_TOKEN", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "media-cdn-api-token" },
     {
       "binding": "INTERNAL_API_KEY",
       "store_id": "f8eddc9944d041919ed8dc7d08d32308",

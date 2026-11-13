@@ -58,6 +58,13 @@ describe('POST /api/contact', () => {
     expect(await POST(request({}))).toEqual({ status: 502, body: { error: 'failed' } });
   });
 
+  it('passes a Turnstile request through with the site key', async () => {
+    session.mockResolvedValue(null);
+    fetchMock.mockResolvedValue(upstream(403, { success: false, error: 'human_check_required', siteKey: '1x00000000000000000000AA' }));
+    const res = (await POST(request({ name: 'A' }))) as unknown as { status: number; body: unknown };
+    expect(res).toEqual({ status: 403, body: { error: 'human_check_required', siteKey: '1x00000000000000000000AA' } });
+  });
+
   it('refuses cross-site posts, bad JSON and oversized bodies without calling admin-api', async () => {
     expect(((await POST(request({}, { 'sec-fetch-site': 'cross-site' }))) as unknown as { status: number }).status).toBe(403);
     expect(((await POST(request('{nope'))) as unknown as { status: number }).status).toBe(400);

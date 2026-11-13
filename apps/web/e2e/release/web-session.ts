@@ -236,6 +236,9 @@ export async function signInAgain(page: Page, email: string, locale: Locale = 'e
 export async function apiFetch(user: Pick<WebUser, 'accessToken'>, path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
   headers.set('Authorization', `Bearer ${user.accessToken}`);
+  // Cloudflare's documented Turnstile test token: QA and stage use the always-pass test secret,
+  // production and the local stack ignore it (docs/features/bot-protection.md)
+  if (!headers.has('X-Turnstile-Token')) headers.set('X-Turnstile-Token', 'XXXX.DUMMY.TOKEN.XXXX');
   // A dropped connection is retried for requests that are safe to repeat (net.ts)
   return fetchRetry(`${target().api}${path}`, { ...init, headers });
 }

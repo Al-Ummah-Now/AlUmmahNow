@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { createPostComment } from '@/lib/api/post-comments';
 import { PostComment } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useHumanCheck } from '@/hooks/useHumanCheck';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { requestAccountMenu } from '@/lib/navigation/account-menu-events';
 
@@ -39,6 +40,7 @@ export default function CommentForm({
   autoFocus = false,
 }: CommentFormProps) {
   const { t } = useLanguage();
+  const { ensureHuman } = useHumanCheck();
   const { user: account } = useMultiAccount();
   const hasChannels = (account?.channels?.length ?? 0) > 0;
   const [content, setContent] = useState('');
@@ -83,11 +85,18 @@ export default function CommentForm({
     setLoading(true);
 
     try {
+      // An account's first comment needs the Turnstile check (normally invisible)
+      const human = await ensureHuman('comment');
+      if (!human.ok) {
+        setError(t.humanCheck.failed);
+        return;
+      }
       const result = await createPostComment(
         postChannelId,
         postId,
         { content: content.trim() },
-        { channelId }
+        { channelId },
+        human.token
       );
 
       if (result?.success && result.comment) {

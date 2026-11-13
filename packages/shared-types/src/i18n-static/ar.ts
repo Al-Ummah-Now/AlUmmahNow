@@ -14,6 +14,7 @@ import { STUDIO_AR } from '../i18n-studio';
 import { LIVE_WATCH_AR } from '../i18n-live';
 import { COMMUNITY_GUIDELINES_AR } from '../i18n-community-guidelines';
 import { CONTACT_AR } from '../i18n-contact';
+import { HUMAN_CHECK_AR } from '../i18n-human-check';
 import { HELP_AR } from '../i18n-help';
 import { UPLOAD_STATUS_AR } from '../i18n-upload-status';
 import { CHANNEL_ROLES_AR } from '../i18n-channel-roles';
@@ -37,6 +38,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
   bulkEdit: BULK_EDIT_AR,
   communityGuidelines: COMMUNITY_GUIDELINES_AR,
   contact: CONTACT_AR,
+  humanCheck: HUMAN_CHECK_AR,
   help: HELP_AR,
   uploadStatus: UPLOAD_STATUS_AR,
   channelRoles: CHANNEL_ROLES_AR,

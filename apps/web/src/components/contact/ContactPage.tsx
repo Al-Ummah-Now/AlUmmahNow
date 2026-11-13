@@ -4,10 +4,12 @@
  * starts as the account's name. The page the
  * visitor came from is attached and can be removed. Spam protection: a hidden
  * honeypot field and the time taken to fill the form (checked by admin-api),
- * plus per-IP and per-account rate limits there.
+ * plus per-IP and per-account rate limits there, and Cloudflare Turnstile when
+ * admin-api asks for it (403 human_check_required: check, then send again).
  */
 'use client';
 
+import { useHumanCheck } from '@/hooks/useHumanCheck';
 import '@/theme/contact.css';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import Link from '@/components/common/AppLink';
@@ -94,6 +96,7 @@ export function ContactPage() {
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
   const [pageUrl, setPageUrl] = useState('');
   const [honeypot, setHoneypot] = useState('');
+  const { ensureHuman, messages: humanMessages } = useHumanCheck();
 
   // The account can change under the page (account switcher)
   useEffect(() => {
@@ -171,11 +174,12 @@ export function ContactPage() {
     setShowSummary(false);
     setStatus({ kind: 'sending' });
     try {
-      const res = await fetch('/api/contact', {
+      const send = (turnstileToken?: string) => fetch('/api/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
         body: JSON.stringify({
+          ...(turnstileToken ? { turnstileToken } : {}),
           name: values.name.trim(),
           email: values.email.trim(),
           topic: values.topic,
@@ -186,6 +190,19 @@ export function ContactPage() {
           elapsedMs: Date.now() - startedAt.current,
         }),
       });
+      let res = await send();
+      // Bot protection: the server asks for the Turnstile check (normally invisible), then we send again
+      if (res.status === 403) {
+        const asked = (await res.clone().json().catch(() => ({}))) as { error?: string; siteKey?: string };
+        if (asked.error === 'human_check_required' && asked.siteKey) {
+          const human = await ensureHuman('contact', asked.siteKey);
+          if (!human.ok) {
+            setStatus({ kind: 'error', message: humanMessages.failed });
+            return;
+          }
+          res = await send(human.token);
+        }
+      }
       if (res.status === 201) {
         setStatus({ kind: 'sent', email: values.email.trim() });
         return;

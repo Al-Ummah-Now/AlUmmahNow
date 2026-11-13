@@ -8,6 +8,7 @@ import Link from '@/components/common/AppLink';
 import { Button } from '@/components/ui/button';
 import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useHumanCheck } from '@/hooks/useHumanCheck';
 import { Card } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
@@ -36,6 +37,7 @@ interface NewPostFormProps {
 export default function NewPostForm({ locale, id, channelName, channelHandle }: NewPostFormProps) {
   const router = useRouter();
   const { t } = useLanguage();
+  const { ensureHuman } = useHumanCheck();
   const isRTL = locale === 'ar';
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
@@ -228,9 +230,15 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
           break;
       }
 
+      // An account's first post needs the Turnstile check (normally invisible)
+      const human = await ensureHuman('post');
+      if (!human.ok) {
+        setError(t.humanCheck.failed);
+        return;
+      }
       const result = await createCommunityPost(id, baseData as unknown as CreateCommunityPostRequest, {
         channelId: id
-      });
+      }, human.token);
 
       if (result?.success) {
         router.push(`/${locale}/settings/channel/${id}/community`);

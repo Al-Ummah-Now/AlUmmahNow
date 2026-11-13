@@ -30,7 +30,7 @@ export interface ReplyPageResult {
 
 export type CreateCommentResult =
   | { ok: true; comment: Comments }
-  | { ok: false; error: 'comments_disabled' | 'not_found' | 'failed' };
+  | { ok: false; error: 'comments_disabled' | 'not_found' | 'failed' | 'human_check' | 'rate_limited' };
 
 async function viewerAuth() {
   const auth = await getServerAuthContext();
@@ -87,6 +87,8 @@ export async function createComment(
   text: string,
   channelId: string,
   parentCommentId?: string,
+  /** Turnstile token (hooks/useHumanCheck) when the account's first comment needs one */
+  turnstileToken?: string,
 ): Promise<CreateCommentResult> {
   const auth = await getServerAuthContext();
   if (!auth?.accessToken) return { ok: false, error: 'failed' };
@@ -98,15 +100,19 @@ export async function createComment(
         Authorization: `Bearer ${auth.accessToken}`,
         // No channel: no header, the member comments as themselves
         ...((auth.channelId || channelId) ? { channelId: auth.channelId || channelId } : {}),
+        ...(turnstileToken ? { 'X-Turnstile-Token': turnstileToken } : {}),
       },
       body: JSON.stringify({ text, ...(parentCommentId ? { parentCommentId } : {}) }),
     });
-    const json = (await response.json().catch(() => ({}))) as { success?: boolean; error?: string; result?: { comment?: Comments } };
+    const json = (await response.json().catch(() => ({}))) as { success?: boolean; error?: string; code?: string; result?: { comment?: Comments } };
     if (response.ok && json.result?.comment) {
       return { ok: true, comment: json.result.comment };
     }
     logger.warn('[createComment] Rejected', { videoId, status: response.status, error: json.error });
     if (response.status === 403 && json.error === 'comments_disabled') return { ok: false, error: 'comments_disabled' };
+    // Bot protection (api-videos middleware/bot-protection.ts)
+    if (response.status === 403 && json.code === 'human_check_required') return { ok: false, error: 'human_check' };
+    if (response.status === 429 && json.code === 'rate_limited') return { ok: false, error: 'rate_limited' };
     if (response.status === 404) return { ok: false, error: 'not_found' };
     return { ok: false, error: 'failed' };
   } catch (error) {

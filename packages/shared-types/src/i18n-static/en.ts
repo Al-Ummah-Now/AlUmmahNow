@@ -14,6 +14,7 @@ import { STUDIO_EN } from '../i18n-studio';
 import { LIVE_WATCH_EN } from '../i18n-live';
 import { COMMUNITY_GUIDELINES_EN } from '../i18n-community-guidelines';
 import { CONTACT_EN } from '../i18n-contact';
+import { HUMAN_CHECK_EN } from '../i18n-human-check';
 import { HELP_EN } from '../i18n-help';
 import { UPLOAD_STATUS_EN } from '../i18n-upload-status';
 import { CHANNEL_ROLES_EN } from '../i18n-channel-roles';
@@ -37,6 +38,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
   bulkEdit: BULK_EDIT_EN,
   communityGuidelines: COMMUNITY_GUIDELINES_EN,
   contact: CONTACT_EN,
+  humanCheck: HUMAN_CHECK_EN,
   help: HELP_EN,
   uploadStatus: UPLOAD_STATUS_EN,
   channelRoles: CHANNEL_ROLES_EN,

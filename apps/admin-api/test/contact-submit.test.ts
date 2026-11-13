@@ -5,7 +5,7 @@ import { contactSubmit } from '../src/endpoints/contact/ContactSubmit';
 import { getContactMessage, listContactMessages } from '../src/lib/contact-store';
 import { sqliteD1 } from './d1-sqlite';
 
-function setup(environment = 'qa') {
+function setup(environment = 'qa', extra: Record<string, unknown> = {}) {
   const db = sqliteD1();
   const queued: unknown[] = [];
   const reports: unknown[] = [];
@@ -17,6 +17,7 @@ function setup(environment = 'qa') {
     CONTACT_INBOX: 'support@alummahnow.net',
     CONTACT_MAIL_QUEUE: { sendBatch: async (batch: { body: unknown }[]) => { if (queue.failing) throw new Error('queue down'); queued.push(...batch.map((b) => b.body)); } },
     ERRORS_DLQ: { send: async (body: unknown) => { reports.push(body); } },
+    ...extra,
   };
   const app = new Hono();
   app.post('/internal/contact', (c) => contactSubmit(c as never));
@@ -88,5 +89,31 @@ describe('POST /internal/contact', () => {
     const statuses: number[] = [];
     for (let i = 0; i < 6; i++) statuses.push((await post({ ...form, email: `p${i}@example.org` })).status);
     assert.deepEqual(statuses, [201, 201, 201, 201, 201, 429]);
+  });
+});
+
+describe('POST /internal/contact: Turnstile', () => {
+  const turnstile = { TURNSTILE_MODE: 'enforce', TURNSTILE_SITE_KEY: '1x00000000000000000000AA', TURNSTILE_SECRET: '1x0000000000000000000000000000000AA' };
+
+  it('enforce: refused without a token (nothing stored), accepted with the test token', async () => {
+    const { db, post, queued } = setup('qa', turnstile);
+    const refused = await post(form);
+    assert.equal(refused.status, 403);
+    const body = (await refused.json()) as { error: string; siteKey: string };
+    assert.equal(body.error, 'human_check_required');
+    assert.equal(body.siteKey, '1x00000000000000000000AA');
+    assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM contact_messages').first<{ n: number }>())?.n, 0);
+    assert.equal(queued.length, 0);
+    assert.equal((await post({ ...form, turnstileToken: 'XXXX.DUMMY.TOKEN.XXXX' })).status, 201);
+  });
+
+  it('off (production until the owner flips it): no token needed', async () => {
+    const { post } = setup('production', { TURNSTILE_MODE: 'off' });
+    assert.equal((await post(form)).status, 201);
+  });
+
+  it('the honeypot still answers like a success before any Turnstile check', async () => {
+    const { post } = setup('qa', turnstile);
+    assert.equal((await post({ ...form, website: 'http://spam.example' })).status, 201);
   });
 });

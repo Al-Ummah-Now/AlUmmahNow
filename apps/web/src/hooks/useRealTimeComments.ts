@@ -8,6 +8,7 @@
  * - Per-video comment settings (on / held / off) reported by the list API
  */
 
+import { useHumanCheck } from './useHumanCheck';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Comments } from '@/interfaces';
 import { useWebSocketSubscription } from '@/lib/websocket/WebSocketProvider';
@@ -41,7 +42,7 @@ export interface ReplyThread {
   loaded: boolean;
 }
 
-export type AddCommentResult = { ok: true; held: boolean } | { ok: false; error: 'comments_disabled' | 'not_found' | 'failed' };
+export type AddCommentResult = { ok: true; held: boolean } | { ok: false; error: 'comments_disabled' | 'not_found' | 'failed' | 'human_check' | 'rate_limited' };
 
 export interface UseRealTimeCommentsOptions {
   videoId: string;
@@ -60,6 +61,8 @@ export interface UseRealTimeCommentsReturn {
   setSort: (sort: CommentSort) => void;
   commentSettings: CommentSettings;
   addComment: (text: string) => Promise<AddCommentResult>;
+  /** The Turnstile check before a first comment is running */
+  humanChecking: boolean;
   addReply: (parentId: string, text: string) => Promise<AddCommentResult>;
   updateComment: (commentId: string, text: string) => Promise<boolean>;
   deleteComment: (commentId: string) => Promise<boolean>;
@@ -102,6 +105,7 @@ export function useRealTimeComments(options: UseRealTimeCommentsOptions): UseRea
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [sort, setSortState] = useState<CommentSort>('newest');
   const [commentSettings, setCommentSettings] = useState<CommentSettings>('on');
+  const { ensureHuman, checking: humanChecking } = useHumanCheck();
   const [isLoading, setIsLoading] = useState<boolean>(loadFromApi);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [loadError, setLoadError] = useState(false);
@@ -306,7 +310,10 @@ export function useRealTimeComments(options: UseRealTimeCommentsOptions): UseRea
   }, [fetchReplies]);
 
   const addComment = useCallback(async (text: string): Promise<AddCommentResult> => {
-    const result = await createComment(videoId, text, channelId);
+    // An account's first comment needs the Turnstile check (normally invisible)
+    const human = await ensureHuman('comment');
+    if (!human.ok) return { ok: false, error: 'human_check' };
+    const result = await createComment(videoId, text, channelId, undefined, human.token);
     if (result.ok === false) {
       if (result.error === 'comments_disabled') setCommentSettings('off');
       return result;
@@ -321,10 +328,12 @@ export function useRealTimeComments(options: UseRealTimeCommentsOptions): UseRea
     if (!commentsRef.current.some((c) => c.id === saved.id)) setTotal((n) => n + 1);
     logger.debug('[useRealTimeComments] Comment added', { videoId, commentId: saved.id, held: !!saved.isHeld });
     return { ok: true, held: !!saved.isHeld };
-  }, [videoId, channelId]);
+  }, [videoId, channelId, ensureHuman]);
 
   const addReply = useCallback(async (parentId: string, text: string): Promise<AddCommentResult> => {
-    const result = await createComment(videoId, text, channelId, parentId);
+    const human = await ensureHuman('comment');
+    if (!human.ok) return { ok: false, error: 'human_check' };
+    const result = await createComment(videoId, text, channelId, parentId, human.token);
     if (result.ok === false) {
       if (result.error === 'comments_disabled') setCommentSettings('off');
       return result;
@@ -346,7 +355,7 @@ export function useRealTimeComments(options: UseRealTimeCommentsOptions): UseRea
       setReplies((prev) => ({ ...prev, [parentId]: { ...(prev[parentId] || EMPTY_THREAD), open: true } }));
     }
     return { ok: true, held: !!result.comment.isHeld };
-  }, [videoId, channelId, fetchReplies, insertReply]);
+  }, [videoId, channelId, fetchReplies, insertReply, ensureHuman]);
 
   const findComment = useCallback((commentId: string): Comments | undefined => {
     const top = commentsRef.current.find((c) => c.id === commentId);
@@ -440,5 +449,6 @@ export function useRealTimeComments(options: UseRealTimeCommentsOptions): UseRea
     loadError,
     isConnected,
     commentsCount: Math.max(total, comments.length),
+    humanChecking,
   };
 }

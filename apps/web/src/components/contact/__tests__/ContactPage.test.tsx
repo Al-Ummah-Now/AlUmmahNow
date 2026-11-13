@@ -25,6 +25,10 @@ jest.mock('@/lib/api/profiles-client', () => ({
   }),
 }));
 jest.mock('@/theme/contact.css', () => ({}), { virtual: true });
+const ensureHuman = jest.fn();
+jest.mock('@/hooks/useHumanCheck', () => ({
+  useHumanCheck: () => ({ ensureHuman, checking: false, messages: jest.requireActual('@al-ummah/shared-types').HUMAN_CHECK_EN }),
+}));
 
 describe('Contact us page', () => {
   const fetchMock = jest.fn();
@@ -117,6 +121,38 @@ describe('Contact us page', () => {
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(body).toMatchObject({ name: 'Amina', email: 'amina@example.org', topic: 'account', locale: 'en', website: '' });
     expect(typeof body.elapsedMs).toBe('number');
+  });
+
+  it('runs the Turnstile check when admin-api asks, then sends again with the token', async () => {
+    const asked = { status: 403, json: async () => ({ error: 'human_check_required', siteKey: '1x00000000000000000000AA' }) };
+    fetchMock
+      .mockResolvedValueOnce({ ...asked, clone: () => asked })
+      .mockResolvedValueOnce({ status: 201, json: async () => ({ ok: true }) });
+    ensureHuman.mockReset().mockResolvedValue({ ok: true, token: 'tok-9' });
+    render(<ContactPage />);
+    fireEvent.change(screen.getByTestId('contact-name'), { target: { value: 'A' } });
+    fireEvent.change(screen.getByTestId('contact-email'), { target: { value: 'a@example.org' } });
+    fireEvent.click(screen.getByTestId('contact-topic-general'));
+    fireEvent.change(screen.getByTestId('contact-message'), { target: { value: 'Hello there, a question.' } });
+    fireEvent.click(screen.getByTestId('contact-submit'));
+    expect(await screen.findByTestId('contact-success')).toBeInTheDocument();
+    expect(ensureHuman).toHaveBeenCalledWith('contact', '1x00000000000000000000AA');
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).turnstileToken).toBeUndefined();
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).turnstileToken).toBe('tok-9');
+  });
+
+  it('a failed Turnstile check explains itself and sends nothing more', async () => {
+    const asked = { status: 403, json: async () => ({ error: 'human_check_required', siteKey: '1x00000000000000000000AA' }) };
+    fetchMock.mockResolvedValueOnce({ ...asked, clone: () => asked });
+    ensureHuman.mockReset().mockResolvedValue({ ok: false });
+    render(<ContactPage />);
+    fireEvent.change(screen.getByTestId('contact-name'), { target: { value: 'A' } });
+    fireEvent.change(screen.getByTestId('contact-email'), { target: { value: 'a@example.org' } });
+    fireEvent.click(screen.getByTestId('contact-topic-general'));
+    fireEvent.change(screen.getByTestId('contact-message'), { target: { value: 'Hello there, a question.' } });
+    fireEvent.click(screen.getByTestId('contact-submit'));
+    await waitFor(() => expect(screen.getByTestId('contact-send-error')).toHaveTextContent('not a robot'));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('explains the rate limit', async () => {

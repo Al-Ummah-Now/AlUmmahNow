@@ -104,7 +104,12 @@ export async function createReport(options: CreateReportOptions = {}): Promise<A
   const entityId = `${E2E_ENTITY_PREFIX}${options.label ?? 'r'}-${crypto.randomUUID()}`;
   const response = await fetch(`${VIDEOS_API_URL}/api/moderation/reports`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${readTokens().reporter}` },
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${readTokens().reporter}`,
+      // Cloudflare's documented Turnstile test token (QA/stage test secret; docs/features/bot-protection.md)
+      'x-turnstile-token': 'XXXX.DUMMY.TOKEN.XXXX',
+    },
     body: JSON.stringify({
       entityType: options.entityType ?? 'comment',
       entityId,

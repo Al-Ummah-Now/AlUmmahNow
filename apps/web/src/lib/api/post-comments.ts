@@ -82,13 +82,16 @@ export async function createPostComment(
   channelId: string,
   postId: string,
   data: PostCommentCreateRequest,
-  headers: Pick<ApiHeaders, 'channelId'>
+  headers: Pick<ApiHeaders, 'channelId'>,
+  /** Turnstile token (hooks/useHumanCheck) when the account's first comment needs one */
+  turnstileToken?: string
 ): Promise<PostCommentCreateResponse | null> {
   return apiRequestServer<PostCommentCreateResponse>(
     {
       method: 'POST',
       url: buildApiUrl(`/api/community/channels/${channelId}/posts/${postId}/comments`),
       body: data,
+      ...(turnstileToken ? { headers: { 'X-Turnstile-Token': turnstileToken } } : {}),
       functionName: 'createPostComment',
     },
     async () => ({
