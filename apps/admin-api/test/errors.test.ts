@@ -94,6 +94,8 @@ describe('scrubbing', () => {
 
   it('validates events: unknown app/kind, bad reference or empty message are refused', () => {
     assert.equal(scrubEvent({ app: 'cms', kind: 'unhandled', ref: newErrorRef(), message: 'x' }), null);
+    // The sign-in server (AlUmmahNowAuth#341) reports as 'auth'
+    assert.equal(scrubEvent({ app: 'auth', kind: 'unhandled', ref: newErrorRef(), message: 'x' })?.app, 'auth');
     assert.equal(scrubEvent({ app: 'web', kind: 'nope', ref: newErrorRef(), message: 'x' }), null);
     assert.equal(scrubEvent({ app: 'web', kind: 'unhandled', ref: 'ERR-1', message: 'x' }), null);
     assert.equal(scrubEvent({ app: 'web', kind: 'unhandled', ref: newErrorRef(), message: '' }), null);

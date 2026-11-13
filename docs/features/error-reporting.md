@@ -14,7 +14,8 @@ If your feature can fail in a way someone has to look at, report it here
 
 ```
 browser (web, admin-web)        Workers (api-videos, processor, scheduler,
-  createErrorReporter             websocket, web/admin-web SSR, admin-api)
+  createErrorReporter             websocket, web/admin-web SSR, admin-api;
+                                  Auth (AlUmmahNowAuth) with its own copy, app 'auth')
   batched, deduped, sampled       reportServerError / withErrorReporting
   → same-origin POST /api/errors  reportNeedsAction / resolveNeedsAction
   (sendBeacon on page hide)            │
