@@ -13,6 +13,9 @@
       "fast-xml-parser": ">=5.9.3",
       "handlebars": ">=4.7.9",
       "@types/react-big-calendar>@types/react": "18.2.19"
+    },
+    "patchedDependencies": {
+      "next@16.2.10": "patches/next@16.2.10.patch"
     }
   },
   "scripts": {

@@ -14,6 +14,11 @@ overrides:
   handlebars: '>=4.7.9'
   '@types/react-big-calendar>@types/react': 18.2.19
 
+patchedDependencies:
+  next@16.2.10:
+    hash: 6cqqppn57ogay27cgdjsgyri74
+    path: patches/next@16.2.10.patch
+
 importers:
 
   .:
@@ -93,13 +98,13 @@ importers:
         version: link:../../packages/theme-packages
       '@opennextjs/cloudflare':
         specifier: ^1.20.1
-        version: 1.20.1(next@16.2.10(@playwright/test@1.56.1)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(rclone.js@0.6.6)(wrangler@4.108.0)
+        version: 1.20.1(next@16.2.10(patch_hash=6cqqppn57ogay27cgdjsgyri74)(@playwright/test@1.56.1)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(rclone.js@0.6.6)(wrangler@4.108.0)
       '@tanstack/react-query':
         specifier: ^5.90.11
         version: 5.90.11(react@19.2.0)
       next:
         specifier: '>=16.2.10'
-        version: 16.2.10(@playwright/test@1.56.1)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+        version: 16.2.10(patch_hash=6cqqppn57ogay27cgdjsgyri74)(@playwright/test@1.56.1)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       react:
         specifier: ^19.0.0
         version: 19.2.0
@@ -445,13 +450,13 @@ importers:
         version: 2.30.1
       next:
         specifier: '>=16.2.10'
-        version: 16.2.10(@babel/core@7.28.5)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        version: 16.2.10(patch_hash=6cqqppn57ogay27cgdjsgyri74)(@babel/core@7.28.5)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       nuqs:
         specifier: ^2.7.2
-        version: 2.7.3(next@16.2.10(@babel/core@7.28.5)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1)
+        version: 2.7.3(next@16.2.10(patch_hash=6cqqppn57ogay27cgdjsgyri74)(@babel/core@7.28.5)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1)
       react:
         specifier: 18.3.1
         version: 18.3.1
@@ -500,7 +505,7 @@ importers:
         version: 3.8.5
       '@opennextjs/cloudflare':
         specifier: ^1.20.1
-        version: 1.20.1(next@16.2.10(@babel/core@7.28.5)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(rclone.js@0.6.6)(wrangler@4.108.0)
+        version: 1.20.1(next@16.2.10(patch_hash=6cqqppn57ogay27cgdjsgyri74)(@babel/core@7.28.5)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(rclone.js@0.6.6)(wrangler@4.108.0)
       '@playwright/test':
         specifier: ^1.56.1
         version: 1.56.1
@@ -10016,7 +10021,7 @@ snapshots:
       - aws-crt
       - supports-color
 
-  '@opennextjs/aws@4.0.2(next@16.2.10(@babel/core@7.28.5)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))':
+  '@opennextjs/aws@4.0.2(next@16.2.10(patch_hash=6cqqppn57ogay27cgdjsgyri74)(@babel/core@7.28.5)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))':
     dependencies:
       '@ast-grep/napi': 0.40.5
       '@aws-sdk/client-cloudfront': 3.984.0
@@ -10039,7 +10044,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@opennextjs/aws@4.0.2(next@16.2.10(@playwright/test@1.56.1)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))':
+  '@opennextjs/aws@4.0.2(next@16.2.10(patch_hash=6cqqppn57ogay27cgdjsgyri74)(@playwright/test@1.56.1)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))':
     dependencies:
       '@ast-grep/napi': 0.40.5
       '@aws-sdk/client-cloudfront': 3.984.0
@@ -10062,11 +10067,11 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@opennextjs/cloudflare@1.20.1(next@16.2.10(@babel/core@7.28.5)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(rclone.js@0.6.6)(wrangler@4.108.0)':
+  '@opennextjs/cloudflare@1.20.1(next@16.2.10(patch_hash=6cqqppn57ogay27cgdjsgyri74)(@babel/core@7.28.5)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(rclone.js@0.6.6)(wrangler@4.108.0)':
     dependencies:
       '@ast-grep/napi': 0.40.5
       '@dotenvx/dotenvx': 1.31.0
-      '@opennextjs/aws': 4.0.2(next@16.2.10(@babel/core@7.28.5)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+      '@opennextjs/aws': 4.0.2(next@16.2.10(patch_hash=6cqqppn57ogay27cgdjsgyri74)(@babel/core@7.28.5)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
       ci-info: 4.3.1
       cloudflare: 4.5.0
       comment-json: 4.6.2
@@ -10082,11 +10087,11 @@ snapshots:
       - encoding
       - supports-color
 
-  '@opennextjs/cloudflare@1.20.1(next@16.2.10(@playwright/test@1.56.1)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(rclone.js@0.6.6)(wrangler@4.108.0)':
+  '@opennextjs/cloudflare@1.20.1(next@16.2.10(patch_hash=6cqqppn57ogay27cgdjsgyri74)(@playwright/test@1.56.1)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(rclone.js@0.6.6)(wrangler@4.108.0)':
     dependencies:
       '@ast-grep/napi': 0.40.5
       '@dotenvx/dotenvx': 1.31.0
-      '@opennextjs/aws': 4.0.2(next@16.2.10(@playwright/test@1.56.1)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))
+      '@opennextjs/aws': 4.0.2(next@16.2.10(patch_hash=6cqqppn57ogay27cgdjsgyri74)(@playwright/test@1.56.1)(react-dom@19.2.0(react@19.2.0))(react@19.2.0))
       ci-info: 4.3.1
       cloudflare: 4.5.0
       comment-json: 4.6.2
@@ -14346,7 +14351,7 @@ snapshots:
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
 
-  next@16.2.10(@babel/core@7.28.5)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
+  next@16.2.10(patch_hash=6cqqppn57ogay27cgdjsgyri74)(@babel/core@7.28.5)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
     dependencies:
       '@next/env': 16.2.10
       '@swc/helpers': 0.5.15
@@ -14371,7 +14376,7 @@ snapshots:
       - '@babel/core'
       - babel-plugin-macros
 
-  next@16.2.10(@playwright/test@1.56.1)(react-dom@19.2.0(react@19.2.0))(react@19.2.0):
+  next@16.2.10(patch_hash=6cqqppn57ogay27cgdjsgyri74)(@playwright/test@1.56.1)(react-dom@19.2.0(react@19.2.0))(react@19.2.0):
     dependencies:
       '@next/env': 16.2.10
       '@swc/helpers': 0.5.15
@@ -14412,7 +14417,7 @@ snapshots:
     dependencies:
       path-key: 3.1.1
 
-  nuqs@2.7.3(next@16.2.10(@babel/core@7.28.5)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1):
+  nuqs@2.7.3(next@16.2.10(patch_hash=6cqqppn57ogay27cgdjsgyri74)(@babel/core@7.28.5)(@playwright/test@1.56.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1):
     dependencies:
       '@standard-schema/spec': 1.0.0
       react: 18.3.1
