@@ -1,6 +1,6 @@
 import { Num, Str } from "chanfana";
 import { z } from "zod";
-import { can, channelRoleOf, STUDIO_VIDEO_STATUSES, studioFailureKind, studioVideoStatus, type StudioVideoStatus } from "@al-ummah/shared-types";
+import { can, channelRoleOf, readReviewQueueMinutes, STUDIO_VIDEO_STATUSES, studioFailureKind, studioVideoStatus, type StudioVideoStatus } from "@al-ummah/shared-types";
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { Channel as BusinessChannel, ResponseError, Video as BusinessVideo } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
@@ -131,9 +131,13 @@ export class ChannelContentList extends AuthenticatedRoute {
 			.filter((video): video is VideoType => !!video && !video.isDeleted)
 			.map((video) => ({ ...transformVideoToView(video), isDraft: video.isDraft === true, uploadStatus: video.uploadStatus, studioStatus: studioVideoStatus(video), failureKind: studioFailureKind(video) }));
 
+		// Held videos show the live queue time (VR6); read once per list, only when one is held
+		const held = items.some((item) => item.studioStatus === "in_review" && (item as { review?: { status?: string } }).review?.status !== "checking");
+		const reviewQueueMinutes = held ? await readReviewQueueMinutes(c.env.global_settings as never) : null;
+
 		logger.info("[ChannelContent] Listed", { channelId: params.id, status: query.status, count: items.length });
 		timer.apply(c);
-		return c.json({ success: true, result: { items, cursor: ids.length > limit ? String(offset + limit) : null, indexComplete } });
+		return c.json({ success: true, result: { items, cursor: ids.length > limit ? String(offset + limit) : null, indexComplete, reviewQueueMinutes } });
 	}
 }
 

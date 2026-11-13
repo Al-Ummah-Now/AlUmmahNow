@@ -37,6 +37,34 @@ async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
 export interface ContentPage {
   items: StudioVideo[];
   cursor: string | null;
+  /** Live queue time for held videos (pre-publication review, VR6); null when unknown */
+  reviewQueueMinutes?: number | null;
+}
+
+/** POST with the viewer's token (the same retry on an expired token as getJson). */
+async function postJson(path: string, body?: unknown): Promise<boolean> {
+  const call = async (force: boolean) => {
+    const { accessToken } = await fetchClientAuthInfo(force);
+    if (!accessToken) throw new StudioFetchError(401);
+    return fetch(`${getApiUrl().replace(/\/$/, '')}${path}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      cache: 'no-store',
+    });
+  };
+  let res = await call(false);
+  if (res.status === 401) res = await call(true);
+  return res.ok;
+}
+
+/** Pre-publication review: appeal a rejection once (VR10), or ask for a new check after editing. */
+export function appealVideoReview(videoId: string, message: string): Promise<boolean> {
+  return postJson(`/api/videos/${encodeURIComponent(videoId)}/review/appeal`, { message });
+}
+
+export function resubmitVideoReview(videoId: string): Promise<boolean> {
+  return postJson(`/api/videos/${encodeURIComponent(videoId)}/review/resubmit`);
 }
 
 export function fetchContentPage(channelId: string, params: Record<string, string | number | undefined>, signal?: AbortSignal): Promise<ContentPage> {

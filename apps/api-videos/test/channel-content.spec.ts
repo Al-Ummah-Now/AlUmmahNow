@@ -201,6 +201,6 @@ describe('GET /api/channels/:id/content/summary', () => {
 	it('counts each status, with zeros', async () => {
 		const res = await buildApp(routes, OWNER).request('/api/channels/c1/content/summary', {}, (await setup(SAMPLE.slice(0, 3))) as never);
 		assert.equal(res.status, 200, await res.clone().text());
-		assert.deepEqual(((await res.json()) as any).result.counts, { published: 2, scheduled: 0, drafts: 1, processing: 0, failed: 0 });
+		assert.deepEqual(((await res.json()) as any).result.counts, { published: 2, scheduled: 0, drafts: 1, processing: 0, in_review: 0, not_approved: 0, failed: 0 });
 	});
 });

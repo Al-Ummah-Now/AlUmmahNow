@@ -13,7 +13,8 @@ import contentRouter from './routers/content.router';
 import suggestRouter from './routers/suggest.router';
 import reportQueueRouter from './routers/reportQueue.router';
 import reviewRouter from './routers/review.router';
-import { purgeReviewMedia } from './lib/review/queue';
+import { purgeReviewMedia, reviewStats } from './lib/review/queue';
+import { writeReviewQueueMinutes } from '@al-ummah/shared-types';
 import { scheduledReportMetaSync } from './lib/moderation/reportMeta';
 import invitesRouter from './routers/invites.router';
 import sitesRouter from './routers/sites.router';
@@ -265,6 +266,12 @@ async function scheduled(controller: ScheduledController, env: AdminBindings, ct
     );
   }
   ctx.waitUntil(scheduledReportMetaSync(env as never));
+  // Pre-publication review: the live queue time creators see when a video is held (VR6)
+  if ((env as { VIDEO_REVIEW_ALLOWED?: string }).VIDEO_REVIEW_ALLOWED === 'true') ctx.waitUntil(
+    reviewStats(env.REPORTS_DB as never)
+      .then((stats) => (env.global_settings ? writeReviewQueueMinutes(env.global_settings as never, stats.queueMinutes) : undefined))
+      .catch((error) => logger.warn('[Review] Queue time not published', { error: String(error) })),
+  );
   ctx.waitUntil(scheduleInviteSyncs(env as never).catch((error) => logger.error('[Invites] scheduled status reads failed', { error: String(error) })));
   // Own domains of scholar sites (#1212): only the due checks (indexed), every 10 min then daily
   ctx.waitUntil(runDomainChecks(env as never, controller.scheduledTime).then(() => undefined).catch((error) => logger.error('[SiteDomains] scheduled checks failed', { error: String(error) })));
