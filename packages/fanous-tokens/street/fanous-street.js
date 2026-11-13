@@ -28,7 +28,7 @@ const LANTERN = '<circle cx="0" cy="4" r="3"/><path d="M0 7V12"/><path d="M-14 3
 const transparent = (bg) => bg === 'transparent' || /rgba\([^)]*,\s*0\)$/.test(bg) || /\/\s*0\)$/.test(bg);
 
 /** Whether the active theme and mode switch the street on. */
-export function streetEnabled(doc = document) {
+export function streetEnabled(doc = globalThis.document) {
   return doc.defaultView.getComputedStyle(doc.documentElement).getPropertyValue('--fanous-street-on').trim() === '1';
 }
 
@@ -60,7 +60,7 @@ function obstacles(region) {
  * Measures the page and draws the garlands. Returns what it did (for tests): the lanterns placed,
  * the gaps used, or why it drew nothing.
  */
-export function renderStreet(doc = document) {
+export function renderStreet(doc = globalThis.document) {
   const win = doc.defaultView;
   doc.getElementById(ID)?.remove();
   if (!streetEnabled(doc)) return { placed: 0, reason: 'off' };
@@ -185,7 +185,7 @@ export function renderStreet(doc = document) {
  * Starts the street on this page and keeps it in step with the layout, theme and mode.
  * Safe to call more than once; returns a function that stops it and removes the drawing.
  */
-export function startStreet(doc = document) {
+export function startStreet(doc = globalThis.document) {
   const win = doc.defaultView;
   if (win.__fanousStreetStop) return win.__fanousStreetStop;
   let timer = 0, frame = 0, lastSig = '';
