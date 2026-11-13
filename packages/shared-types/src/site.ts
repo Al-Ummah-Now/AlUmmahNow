@@ -115,15 +115,20 @@ export function validateSiteSlug(slug: string): SiteSlugProblem | null {
 
 /** A best-effort slug from a name or handle (the admin can always type another). */
 export function suggestSiteSlug(input: string): string {
-  return String(input ?? '')
+  const words = String(input ?? '')
+    .slice(0, 200)
     .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/\p{M}/gu, '')
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/-{2,}/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, SITE_SLUG_MAX)
-    .replace(/-+$/g, '');
+    .split(/[^a-z0-9]/)
+    .filter(Boolean);
+  let slug = '';
+  for (const w of words) {
+    const next = slug ? `${slug}-${w}` : w;
+    if (next.length > SITE_SLUG_MAX) break;
+    slug = next;
+  }
+  return slug;
 }
 
 export function siteSubdomainHost(slug: string, env: SiteEnvironment): string {
