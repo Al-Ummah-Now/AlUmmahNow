@@ -53,6 +53,8 @@ describe('site rules (shared-types)', () => {
 		for (const word of ['www', 'sites', 'stage', 'app', 'auth', 'videos', 'quran']) assert.equal(validateSiteSlug(word), 'reserved', word);
 		assert.ok(SITE_RESERVED_SLUGS.size >= 35);
 		assert.equal(suggestSiteSlug('  Mustafa  Elbadry! '), 'mustafa-elbadry');
+		assert.equal(suggestSiteSlug('Élbadry Ömer'), 'elbadry-omer');
+		assert.equal(suggestSiteSlug(`${'a'.repeat(30)} ${'b'.repeat(30)}`), 'a'.repeat(30));
 	});
 
 	it('offers exactly the built-in themes at their current versions', () => {
