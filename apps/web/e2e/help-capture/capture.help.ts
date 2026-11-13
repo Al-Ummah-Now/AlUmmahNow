@@ -85,6 +85,9 @@ test.beforeAll(async ({ browser }) => {
 async function open(browser: Browser, lang: Lang, device: Device, mode: Mode, opts: { signedIn?: boolean; record?: string } = {}): Promise<{ context: BrowserContext; page: Page }> {
   const v = VIEWPORT[device];
   const context = await browser.newContext({
+    // New contexts do not inherit the config's `use`: the stack's proxy for the faked CDN (video, images)
+    proxy: { server: 'http://127.0.0.1:3191', bypass: 'localhost,127.0.0.1' },
+    ignoreHTTPSErrors: true,
     storageState: opts.signedIn === false ? { cookies: [], origins: [] } : creator.state,
     viewport: { width: v.width, height: v.height },
     deviceScaleFactor: v.scale,
