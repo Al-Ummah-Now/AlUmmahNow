@@ -174,6 +174,8 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
       if (node.textContent && /e2e\.alummahnow\.net|^e2e\+/.test(node.textContent)) {
         node.textContent = node.textContent.replace(/e2e\+[^@\s]*/g, 'amina').replace(/@?e2e\.alummahnow\.net/g, '@example.com');
       }
+      // Run-tagged handles (@E2Ehelp<run>…) read as noise too
+      if (node.textContent && /@E2E[\w-]+/i.test(node.textContent)) node.textContent = node.textContent.replace(/@E2E[\w-]+/gi, '@communitycorner');
     }
     document.querySelectorAll<HTMLElement>('[title*="e2e.alummahnow.net"]').forEach((el) => { el.title = 'amina@example.com'; });
   });
@@ -227,7 +229,8 @@ const SCENES: Scene[] = [
       await settle(page, `/video/${videoId}`, lang);
       const like = page.getByTestId('video-like-button').first();
       const later = page.getByTestId('watch-later-button').first();
-      const save = page.locator('.watch-actions button[aria-haspopup="dialog"]').first();
+      // The playlist button (#1183 gives it a test id; before, its ListPlus icon tells it apart from Share)
+      const save = page.getByTestId('save-to-playlist-button').or(page.locator('.watch-actions button:has(svg.lucide-list-plus)')).first();
       await like.scrollIntoViewIfNeeded();
       return [[like, later, save], [page.locator('.watch-actions').first(), page.getByTestId('watch-channel').first()]];
     },
@@ -281,7 +284,8 @@ const SCENES: Scene[] = [
     run: async (page, lang) => {
       await settle(page, `/upload?channel=${channelId}`, lang);
       const drop = page.locator('[data-testid="batch-dropzone"], [data-testid="upload-dropzone"]').first();
-      const picker = page.getByRole('combobox').first();
+      // The page's channel picker, not the header's search
+      const picker = page.getByRole('main').getByRole('combobox').first();
       return [[picker, drop], []];
     },
   },
