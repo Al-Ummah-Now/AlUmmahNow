@@ -7,6 +7,7 @@ import { MessageProcessor } from './messageProcessor';
 import type { createLogger } from '@al-ummah/logger';
 import { loggerFor } from './lib/logger';
 import { purgeExpiredNotifications } from './lib/notifications-store';
+import { handleVideoReviewAppeal, handleVideoReviewScan, isReviewAppealPayload, isReviewScanPayload, type ReviewConsumerEnv } from './review/consumer';
 import { handleModerationScan, isScanPayload } from './moderation/consumer';
 import { purgeExpiredModerationData } from './moderation/store';
 import { isDeadLetterQueue, processDeadLetterBatch } from './dlq/consumer';
@@ -46,6 +47,11 @@ export async function processModerationBatch(
 ): Promise<void> {
   for (const message of batch.messages) {
     const payload = message.body?.payload;
+    // Pre-publication review (docs/specs/VIDEO-REVIEW.md §4) shares the moderation queue
+    if (message.body?.type === MessageType.VideoReviewScan || message.body?.type === MessageType.VideoReviewAppeal) {
+      await processReviewMessage(message, env as unknown as ReviewConsumerEnv, logger);
+      continue;
+    }
     if (!isScanPayload(payload)) {
       logger.warn('[Moderation] Invalid scan message dropped', { id: message.body?.id });
       message.ack();
@@ -61,6 +67,36 @@ export async function processModerationBatch(
       logger.error('[Moderation] Scan failed', { id: message.body?.id, error: error instanceof Error ? error.message : String(error) });
       message.retry();
     }
+  }
+}
+
+/** One review message: a scan (models) or an appeal (a D1 row). Retries like a moderation scan. */
+async function processReviewMessage(message: QueueMessage<AlUmmahMessage>, env: ReviewConsumerEnv, logger: ReturnType<typeof createLogger>): Promise<void> {
+  const payload = message.body?.payload;
+  try {
+    if (message.body?.type === MessageType.VideoReviewAppeal) {
+      if (!isReviewAppealPayload(payload)) {
+        logger.warn('[Review] Invalid appeal message dropped', { id: message.body?.id });
+        message.ack();
+        return;
+      }
+      await handleVideoReviewAppeal(payload, env, logger);
+      message.ack();
+      return;
+    }
+    if (!isReviewScanPayload(payload)) {
+      logger.warn('[Review] Invalid scan message dropped', { id: message.body?.id });
+      message.ack();
+      return;
+    }
+    const lastAttempt = (message.attempts ?? 1) > MODERATION_MAX_RETRIES;
+    const outcome = await handleVideoReviewScan(payload, env, logger, { lastAttempt });
+    if (outcome.status === 'retry') message.retry();
+    else message.ack();
+  } catch (error) {
+    // D1 failure: the queue retries, then the DLQ alerts. The video stays held (fail safe).
+    logger.error('[Review] Message failed', { id: message.body?.id, error: error instanceof Error ? error.message : String(error) });
+    message.retry();
   }
 }
 

@@ -264,20 +264,20 @@ export interface ReviewFinding {
   category: string;
   score: number;
   /** frame / transcript: position in the video (ms) */
-  atMs?: number;
+  atMs?: number | undefined;
   /** transcript: end of the span (ms) */
-  endMs?: number;
+  endMs?: number | undefined;
   /** frame / thumbnail / image: the R2 key of the image (MEDIA_PRIVATE review/…) */
-  mediaKey?: string;
+  mediaKey?: string | undefined;
   /** transcript / metadata: the flagged text (kept with the review, deleted with the media) */
-  text?: string;
+  text?: string | undefined;
   /** Quran span found by the captions matcher: excluded from violence and hate scoring */
-  quranRef?: string;
+  quranRef?: string | undefined;
   model: string;
   /** Stage 2 rationale, one short sentence */
-  rationale?: string;
+  rationale?: string | undefined;
   /** Severity weight applied in the risk score */
-  weight?: number;
+  weight?: number | undefined;
 }
 
 export type ReviewRoute = 'approve' | 'hold';
@@ -287,7 +287,7 @@ export interface ReviewRouting {
   risk: number;
   nsfw: boolean;
   escalate: boolean;
-  holdCause?: VideoReviewHoldCause;
+  holdCause?: VideoReviewHoldCause | undefined;
   /** The findings that decided it, highest first */
   reasons: ReviewFinding[];
 }

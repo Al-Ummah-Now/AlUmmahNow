@@ -49,8 +49,14 @@
     {
       "binding": "subtitles",
       "bucket_name": "subtitles-qa"
+    },
+    {
+      // Pre-publication review (never runs on QA; bound so the config matches production)
+      "binding": "REVIEW_MEDIA",
+      "bucket_name": "al-ummah-now-media-private-qa"
     }
   ],
+  "services": [{ "binding": "VIDEOS", "service": "videos-qa" }],
 
   "queues": {
     // Epic 9.4: the processor enqueues PushDispatch messages to its own queue
