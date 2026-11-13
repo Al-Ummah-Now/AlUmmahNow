@@ -53,17 +53,18 @@ async function errorReportingContext(): Promise<{ workerVersion?: string; enviro
   }
 }
 
-/** Default title and description per language (pages override them). Tone: wiki Copy-Tone-Guide. */
+/** Default title and description per language (pages override them): the site tagline's long line
+ * (owner pick 2026-11-13, matches www). Tone: wiki Copy-Tone-Guide. */
 const SITE_COPY = {
   en: {
     title: 'Al Ummah Now',
-    description: 'Watch and share videos, Shorts and live streams from the Al Ummah Now community, in Arabic and English.',
+    description: 'Upload videos, go live and post to your channel, and see what the community is sharing, in Arabic and English.',
     keywords: 'Al Ummah Now, Islamic, videos, Shorts, live, channels, community',
     imageAlt: 'Al Ummah Now Videos',
   },
   ar: {
     title: 'الأمة الآن',
-    description: 'شاهد وشارك المرئيات والمقاطع القصيرة والبث المباشر من مجتمع الأمة الآن، بالعربية والإنجليزية.',
+    description: 'ارفع المرئيات وابدأ البث المباشر وانشر في قناتك، وتابع ما يشاركه المجتمع، بالعربية والإنجليزية.',
     keywords: 'الأمة الآن، إسلامي، مرئيات، مقاطع قصيرة، بث مباشر، قنوات، مجتمع',
     imageAlt: 'مرئيات الأمة الآن',
   },
