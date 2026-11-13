@@ -6,7 +6,7 @@ it on (theme package `street` section; Fawanees). Design record: `docs/design/FA
 | File | What |
 |---|---|
 | `fanous-street.js` | Plain JavaScript, no dependencies. `startStreet()` starts it and keeps it in step with the layout, theme and mode; returns a stop function. `renderStreet()` draws once (tests). |
-| `fanous-street.css` | The far lights (on `html`, 0.2× the scroll), the transparent body, the garlands' colours from the theme tokens, sway, reduced motion, print. |
+| `fanous-street.css` | The far-lights layer (moved 0.2× the scroll by the module; still with reduced motion), body isolation, the garlands' colours from the theme tokens, print. No CSS animations. |
 | `fanous-street.d.ts` | Types for TypeScript importers. |
 
 ## Include it
