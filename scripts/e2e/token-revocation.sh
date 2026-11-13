@@ -9,6 +9,11 @@
 #   B. sign out of all devices     -> same; a fresh sign-in works again (then deleted)
 # The access-token rejection is polled every 10 s up to BOUND_S (default 180).
 # Prints timings only, never tokens. Exits non-zero on any failed expectation.
+#
+# Bot protection (docs/features/bot-protection.md): requests name this script in the
+# User-Agent (curl's own is refused on sign-in posts when production enforces Turnstile).
+# Sign-up needs a Turnstile token: QA takes Cloudflare's documented test token; production
+# has no bypass, so with TURNSTILE_MODE=enforce there the script stops at sign-up and says so.
 set -euo pipefail
 ENVNAME=${1:-qa}
 case $ENVNAME in
@@ -39,6 +44,12 @@ if [ $ENVNAME = prod ]; then
     || { echo "prod needs CLOUDFLARE_API_TOKEN or a wrangler login to delete its test accounts afterwards"; exit 2; }
   trap cleanup_prod EXIT
 fi
+UA="al-ummah-now-token-revocation/1 (scripts/e2e/token-revocation.sh)"
+curl() { command curl -A "$UA" "$@"; }
+case $ENVNAME in
+  qa)   TURNSTILE_TOKEN=XXXX.DUMMY.TOKEN.XXXX ;;  # always-pass test secret on QA
+  prod) TURNSTILE_TOKEN=${TURNSTILE_TOKEN:-} ;;    # none: real Turnstile only answers a browser
+esac
 enc() { python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1],safe=""))' "$1"; }
 field() { python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get(sys.argv[2],""))' "$1" "$2"; }
 check() { if [ "$2" = "$3" ]; then echo "  ok   $1 ($2)"; else echo "  FAIL $1: got $2, want $3"; fail=1; fi; }
@@ -67,8 +78,14 @@ register() {
   openssl rand -base64 18 | tr -d '\n/+=' > $d.pw
   start_flow $1; local flow=$(cat $d.flow)
   curl -s -c $d.jar -b $d.jar -o /dev/null "$ISS/password/register?auth_flow=$flow"
-  curl -s -c $d.jar -b $d.jar -o /dev/null -X POST "$ISS/password/register?auth_flow=$flow" \
-    --data-urlencode action=register --data-urlencode "email=$email" --data-urlencode password@$d.pw --data-urlencode repeat@$d.pw
+  local st=$(curl -s -c $d.jar -b $d.jar -o $d.reg -w '%{http_code}' -X POST "$ISS/password/register?auth_flow=$flow" \
+    --data-urlencode action=register --data-urlencode "email=$email" --data-urlencode password@$d.pw --data-urlencode repeat@$d.pw \
+    --data-urlencode "cf-turnstile-response=$TURNSTILE_TOKEN")
+  if [ "$st" = 400 ] && grep -q 'not a robot' $d.reg; then
+    echo "  STOP sign-up needs a Turnstile check here ($ENVNAME enforces it; production has no test bypass)."
+    echo "       Run this script against qa, or while production Auth is in TURNSTILE_MODE=monitor."
+    exit 2
+  fi
   local code="" id
   for i in {1..10}; do
     sleep 6

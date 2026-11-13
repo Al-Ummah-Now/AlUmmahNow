@@ -88,6 +88,7 @@ and caches each answer 5 minutes. No D1 reads or writes.
 2. Production `monitor` in every Worker; watch the Abuse page for a few days.
 3. Production `enforce`. Undo: set `off` again.
 
-Secrets manifest: `TURNSTILE_SECRET` is not listed as required in
-`scripts/release/secrets-manifest.ts` yet, because the release checks live production before the
-new version is deployed; add it after the first release that carries the binding.
+Secrets manifest: `TURNSTILE_SECRET` is a required secret of api-videos and admin-api in
+`scripts/release/secrets-manifest.ts`. Before a Worker's first release with the binding,
+`check:secrets` passes it as "not deployed yet; this release binds Secrets Store …" when the store
+entry exists.
