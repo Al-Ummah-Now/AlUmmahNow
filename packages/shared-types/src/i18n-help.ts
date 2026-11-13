@@ -172,8 +172,8 @@ export const HELP_EN: HelpTranslations = {
           id: 'mini-player',
           heading: 'Keep watching while you browse',
           blocks: [
-            { type: 'p', text: 'Leave the watch page while a video plays and it carries on in a small player in the corner. Select it to go back to the full page, or close it.' },
-            { type: 'clip', clip: 'watching-mini-player', label: 'Clip: the mini player', caption: 'A video keeps playing in the corner after leaving the watch page.' },
+            { type: 'p', text: 'Scroll down the watch page while a video plays, to read the comments for example, and it carries on in a small player in the corner. Select it to go back up to the video, or close it. On a phone the player stays at the top of the screen instead.' },
+            { type: 'clip', clip: 'watching-mini-player', label: 'Clip: the mini player', caption: 'Scrolling down to the comments: the video keeps playing in the corner.' },
           ],
         },
         {
@@ -489,8 +489,8 @@ export const HELP_AR: HelpTranslations = {
           id: 'mini-player',
           heading: 'تابع المشاهدة أثناء التصفّح',
           blocks: [
-            { type: 'p', text: 'إذا غادرت صفحة المشاهدة والمرئي يعمل، يستمرّ في مشغّل صغير في زاوية الشاشة. اختره للعودة إلى الصفحة كاملة، أو أغلقه.' },
-            { type: 'clip', clip: 'watching-mini-player', label: 'مقطع: المشغّل المصغّر', caption: 'يستمرّ المرئي في الزاوية بعد مغادرة صفحة المشاهدة.' },
+            { type: 'p', text: 'إذا مرّرت صفحة المشاهدة إلى الأسفل والمرئي يعمل، لقراءة التعليقات مثلًا، يستمرّ في مشغّل صغير في زاوية الشاشة. اختره للعودة إلى المرئي، أو أغلقه. وعلى الهاتف يبقى المشغّل في أعلى الشاشة بدلًا من ذلك.' },
+            { type: 'clip', clip: 'watching-mini-player', label: 'مقطع: المشغّل المصغّر', caption: 'التمرير إلى التعليقات: يستمرّ المرئي في الزاوية.' },
           ],
         },
         {
