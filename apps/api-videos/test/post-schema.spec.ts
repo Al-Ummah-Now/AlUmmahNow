@@ -109,3 +109,25 @@ describe('converting CMS scholar posts', () => {
 		assert.throws(() => parseConvert({ channelId: 'c1', kind: 'article', article: { title: 'x', body: 'y' }, www: { ...www, url: 'http://x' } }), (err) => err instanceof ArticleError);
 	});
 });
+
+describe('the reference digest (/internal/posts/:channelId, #1217)', () => {
+	it('lists the newest posts with whether each may have a www reference', async () => {
+		const { default: router } = await import('../src/routers/posts-internal.router');
+		const e = env();
+		await e.channels.put('cd', JSON.stringify({ id: 'cd', userId: 'u1' }));
+		const put = (id: string, extra: Record<string, unknown>) => e.community_posts.put(`posts/cd/${id}.json`, JSON.stringify({ id, channelId: 'cd', type: 'text', status: 'published', visibility: 'public', updatedAt: '2026-11-13T10:00:00.000Z', ...extra }));
+		await put('a', {});
+		await put('b', { visibility: 'members' });
+		await put('c', { status: 'scheduled' });
+		await put('d', { isHidden: true });
+		await e.community_posts.put('posts/cd/index.json', JSON.stringify({ postIds: ['a', 'b', 'c', 'd', 'gone'] }));
+		const res = await router.request('/cd', {}, e as never);
+		const body = (await res.json()) as { posts: { id: string; live: boolean }[]; complete: boolean };
+		assert.deepEqual(body.posts.map((p) => [p.id, p.live]), [['a', true], ['b', false], ['c', false], ['d', false], ['gone', false]]);
+		assert.equal(body.complete, true);
+		const small = (await (await router.request('/cd?limit=2', {}, e as never)).json()) as { posts: unknown[]; complete: boolean };
+		assert.equal(small.posts.length, 2);
+		assert.equal(small.complete, false);
+		assert.equal((await router.request('/nochannel', {}, e as never)).status, 404);
+	});
+});

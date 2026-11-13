@@ -69,6 +69,7 @@ back onto the post (`www`, `article.url`) with a conditional write and no queue 
 | Call | Use |
 |---|---|
 | `GET /internal/posts/:channelId/:postId` | www post pages (through the CMS): the post with live counts; never counts a view; 404 unless published and public |
+| `GET /internal/posts/:channelId?limit=200` | The CMS's nightly reference check (#1217): the channel's newest ≤ 200 posts as `{ id, live, updatedAt }` (live = may have a www reference) and `complete` |
 | `PUT /internal/scholars/:userId/posts/:externalId` | The conversion (§6): `{ channelId, kind, locale, translationKey, title, article \| slides, www: { url, slug, locale }, status, publishedAt }`. A link-only mirror is upgraded **in place** (same id, likes, comments); otherwise a new post. Idempotent on `cms-<id>`. Sends no queue message |
 | `GET /internal/scholars/:userId/posts/:externalId` | The conversion check reads what was written |
 
