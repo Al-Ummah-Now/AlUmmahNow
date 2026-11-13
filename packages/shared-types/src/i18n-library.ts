@@ -156,7 +156,7 @@ export interface NotificationCenterTranslations {
 }
 
 export const LIBRARY_EN: LibraryTranslations = {
-  title: 'Library',
+  title: 'You',
   description: 'Your history, saved videos, likes, playlists and saved posts',
   signInPrompt: 'Sign in to see your library',
   signIn: 'Sign in',
@@ -195,7 +195,7 @@ export const LIBRARY_EN: LibraryTranslations = {
 };
 
 export const LIBRARY_AR: LibraryTranslations = {
-  title: 'المكتبة',
+  title: 'أنت',
   description: 'سجل المشاهدة والمرئيات المحفوظة والإعجابات وقوائم التشغيل والمنشورات المحفوظة',
   signInPrompt: 'سجّل الدخول لعرض مكتبتك',
   signIn: 'تسجيل الدخول',

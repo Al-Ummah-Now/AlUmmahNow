@@ -143,7 +143,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     search: 'بحث',
     upload: 'رفع مرئي',
     subscriptions: 'الاشتراكات',
-    library: 'المكتبة',
+    library: 'أنت',
     explore: 'استكشف',
   },
 

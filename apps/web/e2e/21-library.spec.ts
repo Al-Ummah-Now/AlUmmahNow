@@ -85,10 +85,10 @@ test.describe('Library (signed in)', () => {
     if (seeded) await seedHub(request, cleanup, unlike);
     await page.goto('/en');
     await page.getByTestId('nav-drawer-toggle').click();
-    await page.getByTestId('side-nav').getByRole('link', { name: 'Library' }).click();
+    await page.getByTestId('side-nav').getByRole('link', { name: 'You', exact: true }).click();
     await expect(page).toHaveURL(/\/en\/library$/);
 
-    await expect(page.getByRole('heading', { level: 1, name: 'Library' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'You', exact: true })).toBeVisible();
     for (const id of HUB_SECTIONS) {
       await expect(page.getByTestId(`library-section-${id}`)).toBeVisible();
       await expectSeeAllMatchesContent(page, id);
@@ -108,7 +108,7 @@ test.describe('Library (signed in)', () => {
     if (seeded) await seedHub(request, cleanup, unlike);
     await page.goto('/ar/library');
     await expect(page.getByTestId('library-page')).toHaveAttribute('dir', 'rtl');
-    await expect(page.getByRole('heading', { level: 1, name: 'المكتبة' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'أنت', exact: true })).toBeVisible();
     await expectSeeAllMatchesContent(page, 'watch-later');
     if (seeded) await expect(page.getByTestId('library-see-all-watch-later')).toHaveAttribute('href', '/ar/library/watch-later');
   });

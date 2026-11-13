@@ -143,7 +143,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     search: 'Search',
     upload: 'Upload',
     subscriptions: 'Subscriptions',
-    library: 'Library',
+    library: 'You',
     explore: 'Explore',
   },
 

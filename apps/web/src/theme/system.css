@@ -543,3 +543,9 @@ html[lang=ar] .opt-heading,[dir=rtl] .opt-heading{font-size:13px;letter-spacing:
 html:not(.dark) .nv-panel{border-inline-end:1px solid var(--fanous-color-divider)}
 html:not(.dark) [data-testid=side-nav],html:not(.dark) [data-testid=side-nav] ul{background:var(--fanous-color-background)!important}
 html:not(.dark) .nv-panel[data-open=true]{box-shadow:var(--fanous-elevation-medium)}
+/* "You" (AppShell `hub` item, owner 2026-11-13): an icon item in the collapsed rail; in the open rail and the
+   drawer it reads as the heading link "You ›" over History, Watch later and Liked videos. */
+.nv-hub .nv-chev{display:none}
+html[data-rail=open] .nv-hub,.nv-panel[data-open=true] .nv-hub{font-weight:600;font-size:16px}
+html[data-rail=open] .nv-hub>svg:first-child,.nv-panel[data-open=true] .nv-hub>svg:first-child{display:none}
+html[data-rail=open] .nv-hub .nv-chev,.nv-panel[data-open=true] .nv-hub .nv-chev{display:block;width:18px;height:18px;margin-inline-start:-8px}

@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import Link from '@/components/common/AppLink';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { Bookmark, Clock, Compass, Heart, History, Home, Languages, Menu, Moon, ShieldCheck, Sun, Tv, BookOpen, Mail, X, type LucideIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CircleUserRound, Clock, Compass, Heart, History, Home, Languages, Menu, Moon, ShieldCheck, Sun, Tv, BookOpen, Mail, X, type LucideIcon } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { saveLanguagePreference } from '@/lib/i18n/utils';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
@@ -16,11 +16,13 @@ import { BrandLogo } from '@/components/brand/BrandLogo';
 import { useRailMotion } from './rail-breakpoint';
 
 const L = {
-  en: { browse: 'Browse', you: 'Yours', create: 'Create', more: 'More', history: 'History', watchLater: 'Watch later', liked: 'Liked videos', settings: 'Settings', search: 'Search videos', lightMode: 'Switch to light mode', darkMode: 'Switch to dark mode', other: 'العربية', otherLabel: 'التبديل إلى العربية', menu: 'Menu', close: 'Close menu' },
-  ar: { browse: 'تصفّح', you: 'لك', create: 'إنشاء', more: 'المزيد', history: 'السجل', watchLater: 'المشاهدة لاحقًا', liked: 'مرئيات أعجبتك', settings: 'الإعدادات', search: 'ابحث عن مقاطع', lightMode: 'التبديل إلى الوضع الفاتح', darkMode: 'التبديل إلى الوضع الداكن', other: 'English', otherLabel: 'Switch to English', menu: 'القائمة', close: 'إغلاق القائمة' },
+  en: { browse: 'Browse', create: 'Create', more: 'More', history: 'History', watchLater: 'Watch later', liked: 'Liked videos', settings: 'Settings', search: 'Search videos', lightMode: 'Switch to light mode', darkMode: 'Switch to dark mode', other: 'العربية', otherLabel: 'التبديل إلى العربية', menu: 'Menu', close: 'Close menu' },
+  ar: { browse: 'تصفّح', create: 'إنشاء', more: 'المزيد', history: 'السجل', watchLater: 'المشاهدة لاحقًا', liked: 'المرئيات التي أعجبتك', settings: 'الإعدادات', search: 'ابحث عن مرئيات', lightMode: 'التبديل إلى الوضع الفاتح', darkMode: 'التبديل إلى الوضع الداكن', other: 'English', otherLabel: 'Switch to English', menu: 'القائمة', close: 'إغلاق القائمة' },
 };
 
-interface Item { label: string; href: string; icon: LucideIcon; tab?: boolean }
+/** `hub`: the "You" entry. In the collapsed rail it is an icon item; in the open rail and the drawer it reads as
+ * the section's heading link ("You ›") over History, Watch later and Liked videos (owner, 2026-11-13). */
+interface Item { label: string; href: string; icon: LucideIcon; tab?: boolean; hub?: boolean }
 
 export function AppShell() {
   const { t, lang, oppositeLanguage } = useLanguage();
@@ -51,8 +53,8 @@ export function AppShell() {
       { label: t.navigation.explore, href: `${base}/explore`, icon: Compass, tab: true },
       { label: t.navigation.subscriptions, href: `${base}/subscriptions`, icon: Tv, tab: true },
     ] },
-    { title: c.you, items: [
-      { label: t.navigation.library, href: `${base}/library`, icon: Bookmark, tab: true },
+    { items: [
+      { label: t.navigation.library, href: `${base}/library`, icon: CircleUserRound, tab: true, hub: true },
       { label: c.history, href: `${base}/history`, icon: History },
       { label: c.watchLater, href: `${base}/library/watch-later`, icon: Clock },
       { label: c.liked, href: `${base}/library/liked`, icon: Heart },
@@ -105,8 +107,9 @@ export function AppShell() {
             <div className="nv-group" key={g.title ?? i}>
               {g.title && <div className="nv-heading">{g.title}</div>}
               {g.items.map((it) => (
-                <Link key={it.href} href={it.href} className="nv" aria-current={isCurrent(it.href) ? 'page' : undefined} title={it.label}>
+                <Link key={it.href} href={it.href} className={it.hub ? 'nv nv-hub' : 'nv'} data-testid={it.hub ? 'nav-you' : undefined} aria-current={isCurrent(it.href) ? 'page' : undefined} title={it.label}>
                   <it.icon aria-hidden="true" /><span>{it.label}</span>
+                  {it.hub && (rtl ? <ChevronLeft className="nv-chev" aria-hidden="true" /> : <ChevronRight className="nv-chev" aria-hidden="true" />)}
                 </Link>
               ))}
             </div>
