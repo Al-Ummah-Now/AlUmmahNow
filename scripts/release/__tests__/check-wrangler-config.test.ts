@@ -18,8 +18,8 @@ describe('repository config', () => {
 		assert.deepEqual(runCheck(ROOT).errors, []);
 	});
 
-	it('covers the ten deployed apps', () => {
-		assert.deepEqual(APPS.map((a) => a.app).sort(), ['admin-api', 'admin-web', 'api-videos', 'cost-monitor', 'media', 'processor', 'scheduler', 'short-links', 'web', 'websocket-server']);
+	it('covers the eleven deployed apps', () => {
+		assert.deepEqual(APPS.map((a) => a.app).sort(), ['admin-api', 'admin-web', 'api-videos', 'cost-monitor', 'media', 'processor', 'scheduler', 'short-links', 'status', 'web', 'websocket-server']);
 	});
 
 	it('every app config passes on its own (apart from accepted findings)', () => {

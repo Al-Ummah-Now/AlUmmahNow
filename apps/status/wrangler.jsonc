@@ -1,0 +1,58 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	// Public status page (docs/status-page/README.md). Production at the top level, stage under
+	// env.stage; QA: wrangler.qa.jsonc. Its own Worker and D1 so it stays up when the services it
+	// watches are down. Released by release.yml with `wrangler deploy` after the promote, then smoke-tested.
+	"name": "al-ummah-status",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-10-01",
+	"compatibility_flags": ["nodejs_compat"],
+	"workers_dev": false,
+	"routes": [{ "pattern": "status.alummahnow.net", "custom_domain": true }],
+	"assets": { "directory": "./public", "binding": "ASSETS" },
+	"version_metadata": { "binding": "CF_VERSION_METADATA" },
+	"observability": { "enabled": true, "head_sampling_rate": 1, "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": false } },
+	// Checks every 2 minutes (debounce: 2 runs, so ~4 min to mark an outage); daily prune
+	"triggers": { "crons": ["*/2 * * * *", "40 3 * * *"] },
+	"d1_databases": [
+		{ "binding": "STATUS_DB", "database_name": "al-ummah-now-status", "database_id": "46186741-c3d2-44c0-ad11-9ade9e797df9", "migrations_dir": "migrations" }
+	],
+	"secrets_store_secrets": [
+		{ "binding": "INTERNAL_API_KEY", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "internal-api-key" },
+		// Direct alert mail when the admin itself is down (src/run.ts)
+		{ "binding": "RESEND_API_KEY", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "RESEND_API_KEY" }
+	],
+	"vars": {
+		"ENVIRONMENT": "production",
+		"LOG_LEVEL": "warn",
+		// Outage alerts become needs-action items on the admin Errors page (emailed in production)
+		"ERRORS_INGEST_URL": "https://admin.api.alummahnow.net/internal/errors",
+		"ALERT_EMAIL_TO": "support@alummahnow.net"
+	},
+
+	"env": {
+		"stage": {
+			"name": "al-ummah-status-stage",
+			"workers_dev": false,
+			"routes": [{ "pattern": "status.stage.alummahnow.net", "custom_domain": true }],
+			"assets": { "directory": "./public", "binding": "ASSETS" },
+			"version_metadata": { "binding": "CF_VERSION_METADATA" },
+			"observability": { "enabled": true, "head_sampling_rate": 1, "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": false } },
+			// Every 5 minutes off production (cost)
+			"triggers": { "crons": ["*/5 * * * *", "40 3 * * *"] },
+			"d1_databases": [
+				{ "binding": "STATUS_DB", "database_name": "al-ummah-now-status-stage", "database_id": "270a4c91-5cbb-4489-bfd0-0e7f5f66ee36", "migrations_dir": "migrations" }
+			],
+			"secrets_store_secrets": [
+				{ "binding": "INTERNAL_API_KEY", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "internal-api-key-stage" },
+				{ "binding": "RESEND_API_KEY", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "RESEND_API_KEY" }
+			],
+			"vars": {
+				"ENVIRONMENT": "stage",
+				"LOG_LEVEL": "warn",
+				"ERRORS_INGEST_URL": "https://admin.api.stage.alummahnow.net/internal/errors",
+				"ALERT_EMAIL_TO": "support@alummahnow.net"
+			}
+		}
+	}
+}

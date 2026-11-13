@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Al Ummah Now** is an Islamic content platform monorepo with 11 applications across `apps/` and 3 shared packages in `packages/`.
+**Al Ummah Now** is an Islamic content platform monorepo with 12 applications across `apps/` and 3 shared packages in `packages/`.
 
-**Applications (10):**
+**Applications (12):**
 1. **web** - Next.js 16 user-facing frontend with bilingual support (English/Arabic, RTL)
 2. **api-videos** - Hono API backend with OpenAPI 3.1 (chanfana)
 3. **processor** - Queue consumer for message processing and analytics
@@ -17,7 +17,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 8. **cost-monitor** - Cron worker that collects platform analytics for the admin Operations page
 9. **media** - R2 video delivery: transcoder (Containers) and private-rendition edge
 10. **short-links** - Short share links on alummahnow.link: redirects to the real pages
-11. **log-service** - Local-development-only HTTP log aggregator (not deployed)
+11. **status** - Public status page (status.alummahnow.net): synthetic checks, uptime, incidents
+12. **log-service** - Local-development-only HTTP log aggregator (not deployed)
 
 **Packages (3):**
 - `@al-ummah/shared-types` - Shared TypeScript types used by all apps
@@ -378,6 +379,7 @@ al-ummah-now/
 │   ├── cost-monitor/     Cron worker collecting platform analytics (Cloudflare Workers + D1)
 │   ├── media/            R2 video delivery: transcoder + private edge (Workers + Containers)
 │   ├── short-links/      Short share links on alummahnow.link (redirects, click counters)
+│   ├── status/           Public status page: checks, uptime, incidents (Workers + D1)
 │   └── log-service/      Local-dev HTTP log aggregator (NOT deployed)
 ├── packages/
 │   ├── shared-types/     Shared TypeScript types (@al-ummah/shared-types)
@@ -542,6 +544,12 @@ cd apps/processor && pnpm lint:fix
 - Every share button copies the short link (`shareLink()` in `apps/web/src/lib/share/short-link.ts`); OG/canonical stay on the real pages
 - Deployed to QA by `deploy-qa` (`qa.alummahnow.link`); released by `release.yml` with `wrangler deploy` after the promote, then smoke-tested (`scripts/release/short-links-smoke.ts`) with auto-rollback. Hosts are Workers Custom Domains on the `alummahnow.link` zone
 - See: `apps/short-links/README.md`
+
+**apps/status** - Public status page (`status[.qa|.stage].alummahnow.net`)
+- Its own Worker and D1 (`al-ummah-now-status[-qa|-stage]`) so it stays up when the services it watches are down; a cron checks 13 components (2 min production, 5 min QA/stage), debounced over two runs; outages become Errors page needs-action items
+- Incidents and maintenance (en + ar) are posted from the videos admin **Status** page (admin-api `/api/status`, `STATUS_DB`)
+- Deployed to QA by `deploy-qa`; released by `release.yml` with `wrangler deploy` after the promote, smoke-tested (`scripts/release/status-smoke.ts`) with auto-rollback
+- See: `docs/status-page/README.md`
 
 **apps/log-service** - Local development log aggregator
 - Node.js HTTP server (Hono + @hono/node-server) that receives structured logs from all apps

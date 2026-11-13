@@ -53,6 +53,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/admin-web/e2e/17-live-streaming.spec.ts': { placement: 'local', reason: 'Live streaming page: mode and undo, channel override via the picker, provider off/on through the in-app dialog; restores the settings (shared state)' },
   'apps/admin-web/e2e/18-account-menu.spec.ts': { placement: 'local', reason: 'Header account menu: opaque surface and lines in light and dark, the admin named by the platform rule (2026-11-13 report)' },
   'apps/admin-web/e2e/19-menus-in-viewport.spec.ts': { placement: 'local', reason: 'menus and pickers stay inside the viewport at phone widths and landscape, en and ar (2026-11-13 owner decision)' },
+  'apps/admin-web/e2e/20-status-page.spec.ts': { placement: 'local', reason: 'admin posts, resolves and deletes an incident; the local status Worker (shared D1) shows it in en and ar and its JSON' },
   'apps/web/e2e/01-homepage.spec.ts': { placement: 'local', reason: 'anonymous home page layout and content' },
   'apps/web/e2e/02-video-player.spec.ts': { placement: 'local', reason: 'player loads a seed video; any playable HLS will do' },
   'apps/web/e2e/03-profile.spec.ts': { placement: 'local', reason: 'profile page and profile guard with stored sessions' },

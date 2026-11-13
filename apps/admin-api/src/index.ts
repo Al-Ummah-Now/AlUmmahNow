@@ -19,6 +19,7 @@ import processingRouter from './routers/processing.router';
 import mediaRouter from './routers/media.router';
 import notificationSettingsRouter from './routers/notificationSettings.router';
 import opsRouter from './routers/ops.router';
+import statusRouter from './routers/status.router';
 import staleUploadsRouter from './routers/staleUploads.router';
 import trashRouter from './routers/trash.router';
 import { isHourlyTick, runTrashCleanup } from './lib/trash';
@@ -191,6 +192,9 @@ app.route('/api/notification-settings', notificationSettingsRouter);
 
 // Platform analytics (Operations page, docs/admin/LIVE_OPS.md): reads apps/cost-monitor's rollups; ops:read / ops:manage
 app.route('/api/ops', opsRouter);
+
+// Public status page incidents and maintenance (docs/status-page/README.md): writes apps/status's D1; status:manage
+app.route('/api/status', statusRouter);
 
 // Stale uploads (abandoned placeholders, Bunny orphans): permission-checked, audited proxy to api-videos
 app.route('/api/uploads/stale', staleUploadsRouter as never);

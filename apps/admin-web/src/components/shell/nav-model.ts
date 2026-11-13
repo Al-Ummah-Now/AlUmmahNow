@@ -93,6 +93,8 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/delivery', label: 'nav.delivery', icon: 'film', group: 'operations', requires: (a) => a.media },
   // Live providers (D3): routing, providers, overrides, sessions, comparison; every admin reads, live:manage changes
   { href: '/live-streaming', label: 'nav.liveStreaming', icon: 'activity', group: 'operations' },
+  // Public status page: incidents and maintenance (docs/status-page/README.md); admins (status:manage)
+  { href: '/status', label: 'nav.status', icon: 'alert', group: 'operations', requires: (a) => a.ops },
 
   { href: '/site-theme', label: 'nav.siteTheme', icon: 'palette', group: 'site' },
   { href: '/platform-settings', label: 'nav.platformSettings', icon: 'sliders', group: 'site' },

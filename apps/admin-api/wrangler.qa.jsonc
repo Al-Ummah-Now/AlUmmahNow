@@ -22,6 +22,12 @@
       "binding": "COSTS_DB",
       "database_name": "al-ummah-now-costs-qa",
       "database_id": "a83d0ca5-6186-43df-8bc0-90b36561f42d"
+    },
+    {
+      // Public status page incidents (migrations in apps/status)
+      "binding": "STATUS_DB",
+      "database_name": "al-ummah-now-status-qa",
+      "database_id": "c8ff2997-91a2-4ec8-bd0a-d9b729d17573"
     }
   ],
 
