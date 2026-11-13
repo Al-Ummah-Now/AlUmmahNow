@@ -75,6 +75,27 @@ function expectTheatre(g: Layout): void {
   }
 }
 
+/**
+ * Nothing in the shell animates when the layout crosses a breakpoint (a fold or an unfold): the
+ * page padding and the rail slid for 220 ms on WebKit, and a tap measured before the slide landed
+ * on the rail instead of the player (#1130). They animate only while the menu is toggled.
+ */
+async function expectShellStill(page: Page, width: number): Promise<void> {
+  const running = await page.evaluate(
+    () =>
+      new Promise<string[]>((resolve) =>
+        requestAnimationFrame(() =>
+          resolve(
+            [document.getElementById('page-content'), document.querySelector('.nv-panel')]
+              .flatMap((el) => el?.getAnimations() ?? [])
+              .map((a) => (a as CSSTransition).transitionProperty ?? a.constructor.name),
+          ),
+        ),
+      ),
+  );
+  expect(running, `shell transitions running after resizing to ${width}px`).toEqual([]);
+}
+
 async function readyPaused(page: Page, player: Locator): Promise<void> {
   const big = await player.locator('.vjs-big-play-button').boundingBox();
   await page.touchscreen.tap(big!.x + big!.width / 2, big!.y + big!.height / 2);
@@ -115,6 +136,7 @@ test('folding and unfolding re-applies the layout live; theatre stays as chosen'
   await readyPaused(page, player);
   for (const size of [PRESETS['galaxy-z-fold-5 unfolded'], PRESETS['galaxy-z-fold-5 folded'], PRESETS['galaxy-z-fold-5 unfolded landscape']]) {
     await page.setViewportSize(size);
+    await expectShellStill(page, size.width);
     await expect.poll(async () => { try { expectNormal(await layout(page)); return true; } catch { return false; } }, { message: `normal at ${size.width}px` }).toBe(true);
   }
   await tapTheatre(page, player);
