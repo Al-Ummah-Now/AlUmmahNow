@@ -243,7 +243,7 @@ test.describe('Header search', () => {
     await expect(input).toHaveAttribute('aria-activedescendant', /opt-0$/);
     // Choosing a suggestion opens that item (a category runs a category search)
     await input.press('Enter');
-    await expect(page).toHaveURL(/\/en\/(video\?vid=|playlist\/|@|channels\/|c\/|search\?.*category=)/);
+    await expect(page).toHaveURL(/\/en\/(video\/|playlist\/|@|channels\/|c\/|search\?.*category=)/);
 
     await page.goto('/en/explore');
     await input.click();

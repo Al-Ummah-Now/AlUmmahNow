@@ -90,7 +90,7 @@ test.describe('Accessibility - Keyboard Navigation', () => {
     // Retried: the grid can re-render (client data load, other runs adding
     // videos) between focus and Enter, so the href is re-read on every attempt
     await expect(async () => {
-      if (!/\/en\/video\?vid=/.test(page.url())) {
+      if (!/\/en\/video\/[\w-]+$/.test(page.url())) {
         const href = await card.getAttribute('href');
         await card.focus();
         await expect(card).toBeFocused({ timeout: 3000 });
