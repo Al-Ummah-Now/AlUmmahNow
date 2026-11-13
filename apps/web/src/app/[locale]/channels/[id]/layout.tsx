@@ -5,7 +5,8 @@ import { notFound } from 'next/navigation';
 import { isLocaleSupported } from '@/lib/i18n/utils';
 import { getCurrentUserId } from '@/lib/channel-utils';
 import { ChannelPageShell } from '@/components/Channel/ChannelPageShell';
-import { buildChannelMetadata } from '@/lib/channel-metadata';
+import { buildChannelJsonLd, buildChannelMetadata } from '@/lib/channel-metadata';
+import { JsonLd } from '@/components/seo/JsonLd';
 
 interface ChannelLayoutProps {
   children: React.ReactNode;
@@ -45,6 +46,7 @@ export default async function ChannelLayout({
 
   return (
     <ChannelPageShell channel={channel} locale={locale} isOwner={!!userId && channel.userId === userId}>
+      <JsonLd data={await buildChannelJsonLd(channel, locale)} />
       {children}
     </ChannelPageShell>
   );

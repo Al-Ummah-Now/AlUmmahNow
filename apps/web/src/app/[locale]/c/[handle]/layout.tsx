@@ -5,7 +5,8 @@ import { isLocaleSupported } from '@/lib/i18n/utils';
 import { getCurrentUserId } from '@/lib/channel-utils';
 import { decodeHandleSegment, loadChannelByHandle } from '@/lib/channel-loaders';
 import { ChannelPageShell } from '@/components/Channel/ChannelPageShell';
-import { buildChannelMetadata } from '@/lib/channel-metadata';
+import { buildChannelJsonLd, buildChannelMetadata } from '@/lib/channel-metadata';
+import { JsonLd } from '@/components/seo/JsonLd';
 
 interface HandleLayoutProps {
   children: React.ReactNode;
@@ -39,6 +40,7 @@ export default async function ChannelHandleLayout({ children, params }: HandleLa
 
   return (
     <ChannelPageShell channel={channel} locale={locale} isOwner={!!userId && channel.userId === userId}>
+      <JsonLd data={await buildChannelJsonLd(channel, locale)} />
       {children}
     </ChannelPageShell>
   );

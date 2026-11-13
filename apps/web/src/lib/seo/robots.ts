@@ -43,10 +43,22 @@ export function robotsHeaderFor(pathname: string, production: boolean): string |
   return null;
 }
 
-/** robots.txt body. Production has no Sitemap line until the sitemaps exist. */
-export function robotsTxt(production: boolean): string {
+/**
+ * Training-only AI crawlers, blocked on every public host (owner decision D-SEO-8, same list as
+ * www). AI search and answer bots that link back (OAI-SearchBot, ChatGPT-User, PerplexityBot,
+ * Claude-SearchBot, Claude-User, DuckAssistBot, Applebot...) stay on the general rules.
+ */
+export const AI_TRAINING_CRAWLERS = [
+  'Google-Extended', 'GPTBot', 'CCBot', 'ClaudeBot', 'anthropic-ai', 'Applebot-Extended', 'Bytespider',
+  'meta-externalagent', 'FacebookBot', 'cohere-training-data-crawler', 'Diffbot', 'Omgilibot',
+  'img2dataset', 'PanguBot', 'Timpibot',
+] as const;
+
+/** robots.txt body; production names its sitemap index (lib/seo/sitemaps.ts). */
+export function robotsTxt(production: boolean, origin?: string): string {
   if (!production) return 'User-agent: *\nDisallow: /\n';
-  return ['User-agent: *', 'Allow: /', 'Disallow: /api/', ''].join('\n');
+  const blocked = AI_TRAINING_CRAWLERS.map((bot) => `User-agent: ${bot}\nDisallow: /\n`).join('\n');
+  return ['User-agent: *', 'Allow: /', 'Disallow: /api/', '', blocked, ...(origin ? [`Sitemap: ${origin}/sitemap.xml`, ''] : [])].join('\n');
 }
 
 /**

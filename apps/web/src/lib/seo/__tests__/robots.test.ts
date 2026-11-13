@@ -40,10 +40,15 @@ describe('robotsTxt', () => {
     expect(robotsTxt(false)).toBe('User-agent: *\nDisallow: /\n');
   });
   it('allows pages on production and keeps the noindexed pages crawlable', () => {
-    const body = robotsTxt(true);
+    const body = robotsTxt(true, 'https://videos.alummahnow.net');
+    expect(body).toContain('Sitemap: https://videos.alummahnow.net/sitemap.xml');
+    expect(body).toContain('User-agent: GPTBot\nDisallow: /\n');
+    expect(body).toContain('User-agent: Google-Extended\nDisallow: /\n');
+    expect(body).not.toContain('User-agent: OAI-SearchBot');
     expect(body).toContain('Allow: /');
     expect(body).toContain('Disallow: /api/');
-    expect(body).not.toMatch(/Disallow: \/\n/);
+    // The general rules never disallow the site (only the training crawlers below them)
+    expect(body.startsWith('User-agent: *\nAllow: /\nDisallow: /api/\n')).toBe(true);
     expect(body).not.toContain('history');
   });
 });

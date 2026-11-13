@@ -6,6 +6,7 @@ import {
   TrendingVideosSection,
   RecommendedVideosSection,
 } from '@/components/VideoSections';
+import { listPageMetadata } from '@/lib/seo/structured-data';
 import { getTranslations } from '@/lib/i18n/utils/getTranslations';
 
 /**
@@ -20,17 +21,8 @@ interface SectionsPageProps {
 export async function generateMetadata({ params }: SectionsPageProps): Promise<Metadata> {
   const { locale } = await params;
   const t = getTranslations(locale === 'ar' ? 'ar' : 'en');
-  const title = `${t.sections?.pageTitle} | ${t.common.appName}`;
-  const description = t.sections?.pageDescription;
-
-  return {
-    title,
-    description,
-    openGraph: { title, description },
-    alternates: {
-      languages: { en: '/en/sections', ar: '/ar/sections' },
-    },
-  };
+  // Each language its own canonical, x-default English (D-SEO-1; wiki AUN-SEO)
+  return listPageMetadata(locale, '/sections', t.sections?.pageTitle ?? '', t.sections?.pageDescription);
 }
 
 export default async function SectionsPage({ params }: SectionsPageProps) {

@@ -4,7 +4,7 @@
  */
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
-import VideosPage from '../page';
+import VideosPage from '../HomePageClient';
 import { fetchVideosWithPagination } from '@/lib/api/videos';
 
 jest.mock('@/hooks/useLanguage', () => ({

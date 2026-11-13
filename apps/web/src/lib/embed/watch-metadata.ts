@@ -8,6 +8,7 @@ import type { Metadata } from 'next';
 import { videoAspect, type EmbedVideo } from './content';
 import { embedUrl, oembedEndpointUrl, watchPageUrl } from './snippets';
 import { shareImageUrl } from './share-image';
+import { watchFallbackDescription } from '@/lib/seo/structured-data';
 
 const PLAYER_WIDTH = 1280;
 const PLAYER_HEIGHT = 720;
@@ -34,7 +35,8 @@ export function buildWatchMetadata(video: EmbedVideo | null, locale: string, ori
   const lang = locale === 'ar' ? 'ar' : 'en';
   const title = video.titleLocalized?.[lang] || video.title;
   const rawDescription = video.descriptionLocalized?.[lang] || video.description || '';
-  const description = rawDescription ? truncate(rawDescription, DESCRIPTION_MAX) : undefined;
+  // A video without a description gets one naming it and its channel, never the site's default text
+  const description = truncate(rawDescription || watchFallbackDescription(lang, title, video.channelName), DESCRIPTION_MAX);
   const pageUrl = watchPageUrl(origin, lang, video.id);
   const player = embedUrl(origin, 'video', video.id, { lang });
   const size = declaredPlayerSize(video);

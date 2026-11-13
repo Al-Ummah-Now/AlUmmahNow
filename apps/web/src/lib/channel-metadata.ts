@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import type { Channel } from '@al-ummah/shared-types';
 import { channelPath } from '@/lib/channel-url';
+import { channelFallbackDescription, channelLd, siteName } from '@/lib/seo/structured-data';
 
 /** Absolute origin of the current request (canonical links need absolute URLs). */
 async function requestOrigin(): Promise<string | null> {
@@ -24,10 +25,12 @@ async function requestOrigin(): Promise<string | null> {
 export async function buildChannelMetadata(channel: Channel | null, locale: string): Promise<Metadata> {
   if (!channel) return {};
   const title = channel.nameLocalized?.[locale] || channel.name;
-  const description = channel.descriptionLocalized?.[locale] || channel.description || undefined;
+  // A channel without a description gets one naming it, never the site's default text
+  const description = (channel.descriptionLocalized?.[locale] || channel.description || '').trim() || channelFallbackDescription(locale, title);
   const origin = await requestOrigin();
   const path = channelPath(locale, channel);
   const otherLocale = locale === 'ar' ? 'en' : 'ar';
+  const image = channel.avatarUrl || undefined;
   return {
     title,
     description,
@@ -38,5 +41,30 @@ export async function buildChannelMetadata(channel: Channel | null, locale: stri
           languages: { [locale]: `${origin}${path}`, [otherLocale]: `${origin}${channelPath(otherLocale, channel)}`, 'x-default': `${origin}${channelPath('en', channel)}` },
         }
       : undefined,
+    // The channel's own card (it used to inherit the site's, with og:url = the site root)
+    openGraph: {
+      type: 'profile',
+      title,
+      description,
+      siteName: siteName(locale),
+      ...(origin ? { url: `${origin}${path}` } : {}),
+      ...(image ? { images: [{ url: image, alt: title }] } : {}),
+    },
+    twitter: { card: 'summary', title, description, ...(image ? { images: [image] } : {}) },
   };
+}
+
+/** The channel page's JSON-LD (ProfilePage about the channel), or null without an origin. */
+export async function buildChannelJsonLd(channel: Channel | null, locale: string, sameAs: string[] = []) {
+  if (!channel) return null;
+  const origin = await requestOrigin();
+  if (!origin) return null;
+  const name = channel.nameLocalized?.[locale] || channel.name;
+  return channelLd({
+    name,
+    description: (channel.descriptionLocalized?.[locale] || channel.description || '').trim() || undefined,
+    avatarUrl: channel.avatarUrl || undefined,
+    url: `${origin}${channelPath(locale, channel)}`,
+    sameAs,
+  }, locale);
 }
