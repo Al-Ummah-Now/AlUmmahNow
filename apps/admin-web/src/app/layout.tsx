@@ -8,6 +8,7 @@ import { ErrorReportingProvider } from '@/lib/errors/ErrorReportingProvider';
 import { appIcons } from '@/lib/favicon';
 import { getSiteTheme } from '@/lib/site-theme';
 import { MODE_SCRIPT } from '@/lib/color-mode';
+import { FanousStreet } from '@/components/FanousStreet';
 
 export async function generateMetadata(): Promise<Metadata> {
   const { t } = await getI18n();
@@ -55,6 +56,8 @@ export default async function RootLayout({
         <I18nProvider locale={locale} theme={theme}>
           <QueryProvider>{children}</QueryProvider>
         </I18nProvider>
+        {/* The site theme's lantern street (Fawanees): packages/fanous-tokens/street */}
+        <FanousStreet />
       </body>
     </html>
   );

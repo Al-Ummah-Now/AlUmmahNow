@@ -1,0 +1,56 @@
+/* Fawanees on the videos site (owner-approved round 4, 2026-11-13): every control and text block
+   sits on a solid surface, so nothing ever shows through it, and the lantern street (the shared
+   module, packages/fanous-tokens/street) gets room for whole garlands between rows and sections.
+   Fawanees only; the other themes are unchanged. */
+
+/* Controls that were see-through ink (7–9% text colour): opaque, with a hairline */
+html[data-theme='fawanees']:not(.dark) .watch-actions { --wa-bg: var(--fanous-color-background); --wa-bg-hover: var(--fanous-color-hero-start); }
+html[data-theme='fawanees'].dark .watch-actions { --wa-bg: var(--fanous-color-surface-raised); --wa-bg-hover: var(--fanous-color-hero-start); }
+html[data-theme='fawanees'] .watch-actions :is(a, button) { box-shadow: 0 0 0 1px var(--fanous-color-divider), 0 1px 2px rgb(80 60 30 / .1); }
+html[data-theme='fawanees']:not(.dark) .watch-desc { background: var(--fanous-color-hero-start); box-shadow: inset 0 0 0 1px var(--fanous-color-divider); }
+html[data-theme='fawanees'].dark .watch-desc { background: var(--fanous-color-surface-raised); }
+html[data-theme='fawanees']:not(.dark) .tsf-trigger { background: var(--fanous-color-background) !important; box-shadow: 0 0 0 1px var(--fanous-color-divider), 0 1px 2px rgb(80 60 30 / .1); }
+html[data-theme='fawanees'].dark .tsf-trigger { background: var(--fanous-color-surface-raised) !important; }
+html[data-theme='fawanees'] main:has(input[type=file]) button[aria-pressed=false] { background: var(--fanous-color-surface-raised) !important; }
+
+/* Text blocks that sat on the page become cards: the watch block (player, title, channel,
+   actions, details), the comments and the related videos */
+html[data-theme='fawanees'] div:has(> #video-player),
+html[data-theme='fawanees'] #comments,
+html[data-theme='fawanees'] .related-videos {
+  background: var(--fanous-color-surface) !important;
+  border-radius: var(--r-xl);
+  box-shadow: var(--m-card-edge);
+  margin-block-end: 26px;
+}
+html[data-theme='fawanees'].dark div:has(> #video-player),
+html[data-theme='fawanees'].dark #comments,
+html[data-theme='fawanees'].dark .related-videos { box-shadow: 0 0 0 1px rgb(245 207 146 / .12), 0 18px 40px -20px rgb(0 0 0 / .65); }
+html[data-theme='fawanees'] div:has(> #video-player) { padding-block-end: 14px; overflow: hidden; }
+html[data-theme='fawanees'] #video-player .watch-details { padding-inline: 14px; }
+html[data-theme='fawanees'] div:has(> #video-player) > .watch-actions { padding-inline: 14px; box-sizing: border-box; }
+html[data-theme='fawanees'] div:has(> #video-player) > .watch-desc { width: calc(100% - 28px); }
+html[data-theme='fawanees'] #comments { padding-block: 16px; }
+html[data-theme='fawanees'] .related-videos { padding-block: 12px; }
+
+/* Room for the street's garlands (only while the street is on) */
+html.fanous-street[data-theme='fawanees'] .home-hero { margin-bottom: 76px !important; }
+html.fanous-street[data-theme='fawanees'] .home-h + .grid { row-gap: 92px !important; }
+html.fanous-street[data-theme='fawanees'] div:has(> #video-player),
+html.fanous-street[data-theme='fawanees'] #comments,
+html.fanous-street[data-theme='fawanees'] .related-videos { margin-block-end: 84px !important; }
+@media (max-width: 639px) {
+  html.fanous-street[data-theme='fawanees'] .home-h + .grid { row-gap: 76px !important; }
+  html.fanous-street[data-theme='fawanees'] .home-hero { margin-bottom: 68px !important; }
+}
+/* On narrow screens the related videos stack under the comments: one card each, garlands between */
+@media (max-width: 1023px) {
+  html.fanous-street[data-theme='fawanees'] .related-videos { background: transparent !important; box-shadow: none !important; padding: 0 !important; }
+  html.fanous-street[data-theme='fawanees'] .related-videos .rv {
+    background: var(--fanous-color-surface) !important;
+    border-radius: var(--r-xl);
+    box-shadow: var(--m-card-edge);
+    overflow: hidden;
+    margin-block-end: 76px !important;
+  }
+}
