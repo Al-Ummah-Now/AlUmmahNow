@@ -111,14 +111,10 @@ describe('Channel Tab Event Handler', () => {
         })
       );
 
-      // Verify user behavior metrics were saved
-      expect(mockEnv.MESSAGES_BUCKET.put).toHaveBeenCalledWith(
-        expect.stringContaining('analytics/tabs/user-behavior/'),
-        expect.stringContaining('"sessionDuration":120'),
-        expect.objectContaining({
-          httpMetadata: { contentType: 'application/json' },
-        })
-      );
+      // No per-user copy, and no viewer id in the metrics (#1177)
+      const puts = (mockEnv.MESSAGES_BUCKET.put as jest.Mock).mock.calls;
+      expect(puts.some((call) => String(call[0]).includes('analytics/tabs/user-behavior/'))).toBe(false);
+      expect(puts.some((call) => String(call[1]).includes('user-789'))).toBe(false);
 
       // Verify session duration metrics were saved
       expect(mockEnv.MESSAGES_BUCKET.put).toHaveBeenCalledWith(
@@ -286,8 +282,8 @@ describe('Channel Tab Event Handler', () => {
       // Verify multiple analytics paths were used
       const calls = (mockEnv.MESSAGES_BUCKET.put as jest.Mock).mock.calls;
 
-      // Should have analytics, popularity, user behavior, and session metrics
-      expect(calls.length).toBeGreaterThanOrEqual(4);
+      // Should have analytics, popularity and session metrics (no per-user copy, #1177)
+      expect(calls.length).toBeGreaterThanOrEqual(3);
 
       // Check for different metric types
       const hasPopularityMetric = calls.some(call =>
@@ -301,7 +297,7 @@ describe('Channel Tab Event Handler', () => {
       );
 
       expect(hasPopularityMetric).toBe(true);
-      expect(hasUserBehaviorMetric).toBe(true);
+      expect(hasUserBehaviorMetric).toBe(false);
       expect(hasSessionMetric).toBe(true);
     });
   });
