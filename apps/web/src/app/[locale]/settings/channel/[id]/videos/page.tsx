@@ -25,6 +25,7 @@ import { toPicked, type PickedVideo } from '@/components/playlists/VideoPicker';
 import { fill } from '@/components/playlists/text';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import '@/theme/playlist-tools.css';
+import { publishedDateOf } from '@/lib/format/videoMeta';
 
 type FilterStatus = 'all' | 'ready' | 'processing' | 'uploading' | 'failed';
 type FilterPrivacy = 'all' | 'public' | 'private';
@@ -157,7 +158,7 @@ export default function ChannelVideosPage() {
     filtered.sort((a, b) => {
       switch (sortBy) {
         case 'date':
-          return new Date(b.dateCreated).getTime() - new Date(a.dateCreated).getTime();
+          return new Date(publishedDateOf(b) ?? 0).getTime() - new Date(publishedDateOf(a) ?? 0).getTime();
         case 'views':
           return (b.views || 0) - (a.views || 0);
         case 'title':

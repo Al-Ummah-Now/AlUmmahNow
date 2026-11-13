@@ -1,8 +1,12 @@
+import { publishedDateOf } from '@/lib/format/videoMeta';
+
 export type DashboardSort = 'date' | 'views' | 'title';
 
 interface SortableVideo {
   title: string;
   dateCreated: string;
+  /** When it was first published; newest-first uses it, else the upload date */
+  publishedAt?: string;
   views?: number;
 }
 
@@ -15,6 +19,7 @@ export function compareDashboardVideos(a: SortableVideo, b: SortableVideo, sortB
       return a.title.localeCompare(b.title);
     case 'date':
     default:
-      return new Date(b.dateCreated).getTime() - new Date(a.dateCreated).getTime();
+      // The "Published on" date the cards show (publishedAt, else the upload)
+      return new Date(publishedDateOf(b) ?? 0).getTime() - new Date(publishedDateOf(a) ?? 0).getTime();
   }
 }

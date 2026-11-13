@@ -65,6 +65,7 @@ import {
 	adminR2Detail,
 } from './directory';
 import { resolveDisplayName, type NameFields } from '@al-ummah/shared-types';
+import { markPublished, type PublishableState } from '../published';
 
 type Row = Record<string, any>;
 
@@ -792,10 +793,13 @@ export const ADMIN_UNPUBLISH_HOLD = 'admin:unpublished';
 /** Unpublish hides the video for everyone (the owner cannot undo it); republish lifts it. */
 export async function setVideoPublished(env: AdminServiceEnv, id: string, published: boolean): Promise<Row> {
 	const saved = await repo(env.videos).updateObject(id, (fresh) => {
+		const before = { ...fresh };
 		const changed = published
 			? liftSuspensionHold(fresh as SuspendableRecord, ADMIN_UNPUBLISH_HOLD)
 			: applySuspensionHold(fresh as SuspendableRecord, ADMIN_UNPUBLISH_HOLD);
 		if (changed) fresh.dateModified = now();
+		// Republished and visible again: a video never published before is published now (lib/published.ts)
+		if (changed && published) markPublished(before as PublishableState, fresh as PublishableState, now());
 		return changed;
 	});
 	if (!saved) throw new AdminError(404, 'video_not_found');
@@ -863,6 +867,7 @@ export async function restoreVideo(env: AdminServiceEnv, id: string): Promise<Ro
 	const saved = await repo(env.videos).updateObject(id, (fresh) => {
 		// An admin restores admin deletes and creator deletes (lib/videoTrash.ts) alike
 		if (!fresh.adminDeletion && !fresh.ownerDeletion) return false;
+		const before = { ...fresh };
 		fresh.isDeleted = false;
 		delete fresh.deletedAt;
 		delete fresh.deletedBy;
@@ -871,6 +876,8 @@ export async function restoreVideo(env: AdminServiceEnv, id: string): Promise<Ro
 		liftSuspensionHold(fresh as SuspendableRecord, ADMIN_DELETED_HOLD);
 		liftSuspensionHold(fresh as SuspendableRecord, OWNER_DELETED_HOLD);
 		fresh.dateModified = now();
+		// Restored and visible: a video never published before is published now (lib/published.ts)
+		markPublished(before as PublishableState, fresh as PublishableState, now());
 		return true;
 	});
 	if (!saved) throw new AdminError(404, 'video_not_found');

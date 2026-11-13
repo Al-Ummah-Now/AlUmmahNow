@@ -17,6 +17,7 @@ import { announceNewVideo } from "../../lib/notification-events";
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { scanInBackground, videoScanText } from '../../lib/moderation-scan';
 import { recordOwnerCategory, requestVideoSuggestion } from '../../lib/categorySuggestions';
+import { markPublished } from "../../lib/published";
 
 export class VideoUpdate extends AuthenticatedRoute {
 	schema = {
@@ -221,6 +222,8 @@ export class VideoUpdate extends AuthenticatedRoute {
 			Object.assign(fresh, next);
 			// A draft made public is no longer a draft
 			if (previous.isDraft && fresh.isPublic !== false) fresh.isDraft = false;
+			// Made public (and ready): published now, once (lib/published.ts)
+			markPublished(previous, fresh, new Date().toISOString());
 			return true;
 		});
 		if (!updatedVideo) {

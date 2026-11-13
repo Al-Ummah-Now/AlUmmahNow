@@ -191,7 +191,9 @@ export function projectOwnership(kind: OwnershipKind, id: string, raw: unknown):
     isHidden: Boolean(obj.isHidden),
     isDeleted: Boolean(obj.isDeleted),
     views: Math.max(0, Math.floor(finite(obj.views) ?? 0)),
-    createdAt: time(obj.dateCreated),
+    // Videos: the publish date (publishedAt, else the upload), so "newest" follows the "Published on"
+    // date the pages show, as search already does (documents.ts)
+    createdAt: time(kind === 'video' ? (obj.publishedAt ?? obj.dateCreated) : obj.dateCreated),
     updatedAt: time(obj.dateModified),
   };
   if (kind === 'profile') {

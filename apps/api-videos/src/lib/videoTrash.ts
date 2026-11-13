@@ -41,6 +41,7 @@ import { getDeletion, pendingDeletion, purgeDeletionNow, recordDeletion, removeD
 import { purgeDeletion, type AdminServiceEnv } from './admin/service';
 import { publicVideoFields } from './transformations';
 import { OWNER_DELETE_REASON, OWNER_DELETED_HOLD, type OwnerDeletionMark } from './videoTrashMarks';
+import { markPublished, type PublishableState } from './published';
 
 export { OWNER_DELETE_REASON, OWNER_DELETED_HOLD };
 
@@ -211,6 +212,7 @@ export async function restoreDeletedVideo(env: TrashEnv, video: Row, actorId: st
 	const at = new Date(now).toISOString();
 	const saved = await repo(env).updateObject(video.id, (fresh) => {
 		if (fresh.isDeleted !== true) return false;
+		const before = { ...fresh };
 		fresh.isDeleted = false;
 		delete fresh.deletedAt;
 		delete fresh.deletedBy;
@@ -219,6 +221,8 @@ export async function restoreDeletedVideo(env: TrashEnv, video: Row, actorId: st
 		liftSuspensionHold(fresh as SuspendableRecord, OWNER_DELETED_HOLD);
 		liftSuspensionHold(fresh as SuspendableRecord, ADMIN_DELETED_HOLD);
 		fresh.dateModified = at;
+		// Restored and visible: a video never published before is published now (lib/published.ts)
+		markPublished(before as PublishableState, fresh as PublishableState, at);
 		return true;
 	});
 	if (!saved) throw new TrashError('video_not_found');
