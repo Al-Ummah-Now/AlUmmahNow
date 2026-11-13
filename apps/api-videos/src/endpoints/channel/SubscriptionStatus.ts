@@ -10,7 +10,7 @@ export class SubscriptionStatus extends OptionalAuthRoute {
 	schema = {
 		tags: ["Subscriptions"],
 		summary: "Get the current viewer's subscription status for a channel",
-		description: "Returns isSubscribed for the authenticated user (scoped to the channelId header when present) and the channel's subscriber count. Unauthenticated requests get isSubscribed=false.",
+		description: "Returns isSubscribed for the caller's current identity: the channel in the channelId header when one is active, otherwise the member's own (channel-less) subscription. subscriberCount counts every subscriber identity once (members and channels). Unauthenticated requests get isSubscribed=false.",
 		request: {
 			params: z.object({
 				id: Str({ description: "Target channel ID" }),

@@ -113,16 +113,30 @@ describe('VideoDetails channel row', () => {
     expect(fetchMock).toHaveBeenLastCalledWith('https://api.test/api/channels/ch1/subscriptions', expect.objectContaining({ method: 'DELETE' }));
   });
 
-  it('signed in without a channel: explains that subscribing needs one', async () => {
+  it('signed in without a channel: subscribes as themselves (no channel header, no prompt)', async () => {
     account = { user: { id: 'usr_viewer' }, loading: false };
     authHeaders = { Authorization: 'Bearer t' };
-    fetchMock.mockResolvedValue(status(false, 0));
+    fetchMock
+      .mockResolvedValueOnce(status(false, 0))
+      .mockResolvedValueOnce(status(true, 1))
+      .mockResolvedValueOnce(status(false, 0));
     renderRow();
     const button = await screen.findByRole('button', { name: 'Subscribe' });
     await waitFor(() => expect(button).toBeEnabled());
     expect(screen.getByTestId('watch-subscriber-count')).toHaveTextContent('No subscribers');
+
     fireEvent.click(button);
-    expect(await screen.findByRole('alert')).toHaveTextContent(/channel/i);
+    await waitFor(() => expect(button).toHaveAttribute('aria-pressed', 'true'));
+    expect(screen.getByTestId('watch-subscriber-count')).toHaveTextContent('1 subscriber');
+    expect(screen.queryByRole('alert')).toBeNull();
+    const [url, init] = fetchMock.mock.calls[1];
+    expect(url).toBe('https://api.test/api/channels/ch1/subscriptions');
+    expect(init).toMatchObject({ method: 'POST' });
+    expect(init.headers).not.toHaveProperty('channelId');
+
+    fireEvent.click(button);
+    await waitFor(() => expect(button).toHaveAttribute('aria-pressed', 'false'));
+    expect(fetchMock).toHaveBeenLastCalledWith('https://api.test/api/channels/ch1/subscriptions', expect.objectContaining({ method: 'DELETE' }));
   });
 
   it('the owner sees the count but no Subscribe', async () => {

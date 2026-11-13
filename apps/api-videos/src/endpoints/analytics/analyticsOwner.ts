@@ -7,6 +7,8 @@ import { addAuthToSchema } from "../../lib/openapi-auth";
 import { logger } from "../../lib/logger";
 import { waitUntilOf } from "../../lib/search/ownership";
 import {
+  attachSubscriberStats,
+  type DateRange,
   AnalyticsChannel,
   AnalyticsVideo,
   buildDailySeries,
@@ -89,7 +91,7 @@ interface Scope {
  * Resolve the channels (and their videos) the user may see analytics for.
  * With `channelId`, the user must own that channel; otherwise all owned channels.
  */
-async function loadScope(c: AppContext, userId: string, channelId?: string): Promise<Scope> {
+async function loadScope(c: AppContext, userId: string, channelId?: string, range: DateRange = parseRange()): Promise<Scope> {
   const lookup: OwnershipLookup = { env: c.env as never, waitUntil: waitUntilOf(c as never) };
   const owned = await loadOwnedChannels(c.env.channels, userId, lookup);
   let channels = owned;
@@ -118,7 +120,8 @@ async function loadScope(c: AppContext, userId: string, channelId?: string): Pro
   // (QA 2026-11-11: 1 of 7 videos, 1,987 of 6,379 views). Answer like Top content does, so clients retry.
   // Without an index at all (local dev, previews) the bounded scan is the designed behaviour
   if (incomplete && (c.env as { SEARCH_DB?: unknown }).SEARCH_DB) return { ok: false, status: 503, error: "index_rebuilding", channels: [], videos: [] };
-  return { ok: true, channels, videos };
+  // Subscribers (members and channels) from the subscription store, per day in range + current totals
+  return { ok: true, channels: await attachSubscriberStats(c.env as never, channels, range), videos };
 }
 
 /**
@@ -212,9 +215,9 @@ export class AnalyticsChannelGet extends AuthenticatedRoute {
     const { params, query } = await this.getValidatedData<typeof this.schema>();
     const userId = this.getUserId(c);
     try {
-      const scope = await loadScope(c, userId, params.channelId);
-      if (!scope.ok) return c.json({ success: false, error: scope.error }, scope.status);
       const range = parseRange(query.dateFrom, query.dateTo);
+      const scope = await loadScope(c, userId, params.channelId, range);
+      if (!scope.ok) return c.json({ success: false, error: scope.error }, scope.status);
       const rollups = await loadRollups(c.env, "channel", [params.channelId], range);
       const summary = buildSummary(scope.videos, scope.channels);
       return c.json({
@@ -354,9 +357,9 @@ export class AnalyticsMetricsGet extends AuthenticatedRoute {
     const { query } = await this.getValidatedData<typeof this.schema>();
     const userId = this.getUserId(c);
     try {
-      const scope = await loadScope(c, userId, query.channelId);
-      if (!scope.ok) return c.json({ success: false, error: scope.error }, scope.status);
       const range = parseRange(query.dateFrom, query.dateTo);
+      const scope = await loadScope(c, userId, query.channelId, range);
+      if (!scope.ok) return c.json({ success: false, error: scope.error }, scope.status);
       const rollups = await loadRollups(c.env, "channel", scope.channels.map(ch => ch.id), range);
       let series = buildDailySeries(range, scope.videos, scope.channels, rollups);
       if (query.limit && query.limit > 0) series = series.slice(-Math.floor(query.limit));

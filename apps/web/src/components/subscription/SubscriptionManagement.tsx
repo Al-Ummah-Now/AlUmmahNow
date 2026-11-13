@@ -57,11 +57,9 @@ export const SubscriptionManagement: React.FC = () => {
     setIsLoading(true);
     setUnsubscribeError(false);
     try {
-      const headers = {
-        channelId: profile.channels?.[0] || '',
-      };
-
-      const result = await unsubscribeFromChannel(channelId, headers);
+      // The list is the member's (as themselves and as any of their channels):
+      // unsubscribing here removes every one of those subscriptions
+      const result = await unsubscribeFromChannel(channelId, undefined, 'all');
 
       if (result?.success) {
         setSubscriptions(prev => prev.filter(sub => sub.id !== channelId));

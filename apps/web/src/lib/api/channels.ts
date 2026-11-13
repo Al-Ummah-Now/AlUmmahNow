@@ -217,11 +217,13 @@ export async function subscribeToChannel(
  */
 export async function unsubscribeFromChannel(
   channelId: string,
-  headers?: Pick<ApiHeaders, 'channelId'>
+  headers?: Pick<ApiHeaders, 'channelId'>,
+  /** 'all': every subscription the member has to the channel (as themselves and as their channels) */
+  scope: 'identity' | 'all' = 'identity'
 ): Promise<SubscriptionStatusResponse | null> {
   return apiRequestServer<SubscriptionStatusResponse>({
     method: 'DELETE',
-    url: buildApiUrl(`/api/channels/${channelId}/subscriptions`),
+    url: buildApiUrl(`/api/channels/${channelId}/subscriptions${scope === 'all' ? '?scope=all' : ''}`),
     functionName: 'unsubscribeFromChannel'
   }, () => subscriberAuthContext(headers?.channelId), true);
 }

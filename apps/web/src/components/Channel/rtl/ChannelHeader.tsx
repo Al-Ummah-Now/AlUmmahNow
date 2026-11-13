@@ -8,7 +8,6 @@ import { useChannelSubscription } from '@/hooks/useChannelSubscription';
 import { cn } from '@/lib/utils';
 import { logger } from '@/lib/logger-client';
 import { getTranslations } from '@/lib/i18n';
-import Link from '@/components/common/AppLink';
 import { ChannelBellMenu } from '@/components/notifications/ChannelBellMenu';
 import { ChannelOwnerActions } from '@/components/Channel/ChannelOwnerActions';
 import { formatHandle } from '@/lib/channel-url';
@@ -161,17 +160,7 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
               <p className="text-sm text-red-600 dark:text-red-400 mb-2" role="alert">
                 {subscriptionError === 'auth'
                   ? t.errors.loginRequired
-                  : subscriptionError === 'channel'
-                    ? t.errors.channelRequired
-                    : t.errors.failedToUpdate}
-                {subscriptionError === 'channel' && (
-                  <>
-                    {' '}
-                    <Link href={`/${locale}/profile`} className="underline font-medium">
-                      {t.navigation.createChannel}
-                    </Link>
-                  </>
-                )}
+                  : t.errors.failedToUpdate}
               </p>
             )}
 

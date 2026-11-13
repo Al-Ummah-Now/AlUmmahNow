@@ -4,7 +4,10 @@
  * Sources:
  * - Video objects (videos bucket): lifetime `views` counter, `likes[]`,
  *   `dislikes[]` and `comments[]` records (each with `dateCreated`).
- * - Channel objects (channels bucket): `subscribers[]` records with `dateCreated`.
+ * - Channel subscriptions (NOTIFICATIONS_DB channel_subscriptions, or the legacy
+ *   R2 `subscriptions[]` of channels not imported yet): one per subscriber
+ *   identity, a member subscribing as themselves or as one of their channels
+ *   (attachSubscriberStats). `subscribers[]` records are the older test shape.
  * - Daily view/watch-time rollups written by the processor for every tracked view
  *   (analytics bucket, `analytics/rollups/{video|channel}/<id>/<YYYY-MM>.json`).
  *
@@ -16,6 +19,7 @@ import { logger } from './logger';
 import { OwnershipEnv, ownerContentIds, scheduleOwnershipHeal } from './search/ownership';
 import { FALLBACK_SCAN_OBJECTS } from './scanBudget';
 import { RETENTION_BUCKET_COUNT } from '@al-ummah/shared-types';
+import { subscriberDailyStats } from './subscription-store';
 
 export interface AnalyticsVideo {
   id: string;
@@ -37,6 +41,12 @@ export interface AnalyticsChannel {
   name?: string;
   userId?: string;
   subscribers?: Array<{ dateCreated?: string }>;
+  /** Legacy R2 subscriptions (channels not imported into D1 yet) */
+  subscriptions?: Array<{ channelId?: string; userId?: string; dateCreated?: string }> | null;
+  /** New subscribers per UTC day, from the subscription store (attachSubscriberStats) */
+  subscribersByDay?: Record<string, number>;
+  /** Current subscriber count, from the subscription store (attachSubscriberStats) */
+  subscriberTotal?: number;
   isDeleted?: boolean;
 }
 
@@ -142,7 +152,16 @@ export function buildDailySeries(
     countByDay(series, video.likes, 'likes');
     countByDay(series, video.comments, 'comments');
   }
-  for (const channel of channels) countByDay(series, channel.subscribers, 'subscribers');
+  for (const channel of channels) {
+    if (channel.subscribersByDay) {
+      for (const [date, n] of Object.entries(channel.subscribersByDay)) {
+        const entry = series.get(date);
+        if (entry) entry.subscribers += n;
+      }
+    } else {
+      countByDay(series, channel.subscribers, 'subscribers');
+    }
+  }
   for (const rollup of rollups) {
     for (const [date, entry] of Object.entries(rollup?.days || {})) {
       const target = series.get(date);
@@ -258,7 +277,7 @@ export function buildSummary(videos: AnalyticsVideo[], channels: AnalyticsChanne
   const totalViews = videos.reduce((n, v) => n + (v.views || 0), 0);
   const totalLikes = videos.reduce((n, v) => n + (v.likes?.length || 0), 0);
   const totalComments = videos.reduce((n, v) => n + activeComments(v), 0);
-  const totalSubscribers = channels.reduce((n, c) => n + (c.subscribers?.length || 0), 0);
+  const totalSubscribers = channels.reduce((n, c) => n + (c.subscriberTotal ?? c.subscribers?.length ?? 0), 0);
   const top = rankTopVideos(videos, 1);
   return {
     totalViews,
@@ -562,4 +581,29 @@ export function buildTraffic(rollups: MonthlyRollup[], range: DateRange): Traffi
     .sort((a, b) => b.views - a.views || a.host.localeCompare(b.host))
     .slice(0, MAX_EXTERNAL_HOSTS_SHOWN);
   return { totalViews, sources, externalHosts };
+}
+
+/**
+ * Fills each channel's subscriber counts from the subscription store: new
+ * subscribers per day in `range` and the current total. Members who subscribe
+ * as themselves and channels both count, each identity once.
+ */
+export async function attachSubscriberStats(
+  env: { NOTIFICATIONS_DB?: D1Database },
+  channels: AnalyticsChannel[],
+  range: DateRange,
+): Promise<AnalyticsChannel[]> {
+  if (channels.length === 0) return channels;
+  const from = Date.UTC(range.from.getUTCFullYear(), range.from.getUTCMonth(), range.from.getUTCDate());
+  const to = Date.UTC(range.to.getUTCFullYear(), range.to.getUTCMonth(), range.to.getUTCDate()) + DAY_MS - 1;
+  try {
+    const stats = await subscriberDailyStats(env.NOTIFICATIONS_DB, channels as never, from, to);
+    return channels.map(channel => {
+      const entry = stats.get(channel.id);
+      return entry ? { ...channel, subscribersByDay: entry.byDay, subscriberTotal: entry.total } : channel;
+    });
+  } catch (error) {
+    logger.warn('[Analytics] Subscriber stats unavailable', { channels: channels.length, error: error instanceof Error ? error.message : String(error) });
+    return channels;
+  }
 }

@@ -8544,7 +8544,8 @@
         "tags": [
           "Subscriptions"
         ],
-        "summary": "Subscripe to a channel",
+        "summary": "Subscribe to a channel",
+        "description": "Subscribes the caller's current identity: the channel in the channelId header when one is active, otherwise the member themselves (no channel needed). Idempotent: 200 when already subscribed, 201 when created.",
         "operationId": "post_SubscriptionCreate",
         "parameters": [
           {
@@ -8559,11 +8560,14 @@
           },
           {
             "schema": {
-              "type": "string",
-              "description": "Channel ID"
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The caller's active channel to subscribe as; omit to subscribe as yourself (no channel needed)"
             },
-            "required": true,
-            "description": "Channel ID",
+            "required": false,
+            "description": "The caller's active channel to subscribe as; omit to subscribe as yourself (no channel needed)",
             "name": "channelId",
             "in": "header"
           }
@@ -8713,7 +8717,8 @@
         "tags": [
           "Subscriptions"
         ],
-        "summary": "Unsubscripe from a channel",
+        "summary": "Unsubscribe from a channel",
+        "description": "Removes the caller's current identity's subscription: the channel in the channelId header when one is active, otherwise the member's own. With `scope=all` (the subscriptions page) removes every subscription the member has to the channel, as themselves and as any of their channels. Idempotent.",
         "operationId": "delete_SubscriptionDelete",
         "parameters": [
           {
@@ -8729,10 +8734,27 @@
           {
             "schema": {
               "type": "string",
-              "description": "Channel ID"
+              "enum": [
+                "identity",
+                "all"
+              ],
+              "description": "identity (default): the current identity only; all: every identity of the member"
             },
-            "required": true,
-            "description": "Channel ID",
+            "required": false,
+            "description": "identity (default): the current identity only; all: every identity of the member",
+            "name": "scope",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The caller's active channel to unsubscribe as; omit to unsubscribe as yourself"
+            },
+            "required": false,
+            "description": "The caller's active channel to unsubscribe as; omit to unsubscribe as yourself",
             "name": "channelId",
             "in": "header"
           }
@@ -8860,7 +8882,7 @@
           "Subscriptions"
         ],
         "summary": "Get the current viewer's subscription status for a channel",
-        "description": "Returns isSubscribed for the authenticated user (scoped to the channelId header when present) and the channel's subscriber count. Unauthenticated requests get isSubscribed=false.",
+        "description": "Returns isSubscribed for the caller's current identity: the channel in the channelId header when one is active, otherwise the member's own (channel-less) subscription. subscriberCount counts every subscriber identity once (members and channels). Unauthenticated requests get isSubscribed=false.",
         "operationId": "get_SubscriptionStatus",
         "parameters": [
           {

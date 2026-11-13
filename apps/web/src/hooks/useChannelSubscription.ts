@@ -103,13 +103,9 @@ export function useChannelSubscription({
         setError('auth');
         return false;
       }
-      if (!headers['channelId']) {
-        // Subscriptions are made by a channel; accounts without one must create it first
-        logger.warn('[useChannelSubscription] No active channel for subscriber', { channelId });
-        setError('channel');
-        return false;
-      }
-      logger.debug('[useChannelSubscription] Updating subscription', { channelId, method });
+      // With a channel active the API subscribes as that channel (the channelId
+      // header); without one, as the signed-in member themselves
+      logger.debug('[useChannelSubscription] Updating subscription', { channelId, method, as: headers['channelId'] ? 'channel' : 'member' });
       const response = await fetch(`${getApiUrl()}/api/channels/${channelId}/subscriptions`, {
         method,
         headers: { 'Content-Type': 'application/json', ...headers },

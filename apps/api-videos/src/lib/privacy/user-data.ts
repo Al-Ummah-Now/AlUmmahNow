@@ -31,7 +31,7 @@
  *   reports/report:{entityId}:{reportId}:{reporterId}  reports filed by the user
  */
 
-import { eraseUserSubscriptions, exportUserSubscriptions } from '../subscription-store';
+import { eraseUserSubscriptions, exportUserSubscriptions, subscriberChannelOf } from '../subscription-store';
 import { defaultPointerPrefix } from '../uploadDefaultPointer';
 import { sectionOrderKey } from '../channelSectionOrder';
 import { BucketLike, BudgetExhausted, OperationBudget, asBucket, deleteKeys, readJson, updateJson, writeJson } from './scan';
@@ -362,7 +362,8 @@ export async function collectUserData(
 					out.channels.push({ ...rest, subscribersCount: Array.isArray(subscriptions) ? subscriptions.length : 0 });
 				}
 				for (const sub of (channel.subscriptions as Reaction[] | undefined) ?? []) {
-					if (sub?.userId === userId) out.subscriptions.push({ ...sub, subscribedToChannelId: channelId });
+					// A member's own subscription is stored under a `user:` key, not a channel id
+					if (sub?.userId === userId) out.subscriptions.push({ ...sub, channelId: subscriberChannelOf(sub.channelId as string | undefined), subscribedToChannelId: channelId });
 				}
 			})(ctx),
 		(ctx) =>
