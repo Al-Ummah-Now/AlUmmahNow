@@ -115,7 +115,7 @@ test.describe('notification badge clears when the menu opens', () => {
 
       // Mode read: new notifications bring the badge back; opening marks the shown ones read
       await setMenuOpen('read');
-      await seed(user, second, Date.now() + 1000);
+      await seed(user, second, Date.now());
       await gotoSettled(page, `${target().web}/${locale}`);
       await expect(badge(page)).toHaveText(/^[2٢]$/);
       await page.getByTestId('notification-bell').click();
