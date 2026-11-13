@@ -160,8 +160,7 @@ test.describe('Playlist tools', () => {
     }
   });
 
-  // quarantined: #1098 @meywd (red on the local stack)
-  test.fixme('PLT-001 creates a playlist named in English and Arabic, its picked videos put in order before saving', async ({ page }) => {
+  test('PLT-001 creates a playlist named in English and Arabic, its picked videos put in order before saving', async ({ page }) => {
     const title = `${tag()} Create`;
     const arabic = `قائمة ${title.slice(-6)}`;
     await page.goto(`/en/settings/channel/${channelId}/playlists`);
@@ -195,7 +194,8 @@ test.describe('Playlist tools', () => {
     await page.getByTestId('create-playlist-submit').click();
 
     // Lands on the new playlist's editor with the videos in that order, saved
-    const editorUrl = new RegExp(`/en/settings/channel/${channelId}/playlists/([\\w-]+)$`);
+    // Not /playlists/new: the form's own URL matches [\w-]+ too, before the redirect
+    const editorUrl = new RegExp(`/en/settings/channel/${channelId}/playlists/(?!new$)([\\w-]+)$`);
     await expect(page).toHaveURL(editorUrl, { timeout: 30000 });
     const id = editorUrl.exec(page.url())![1];
     adopt(id);

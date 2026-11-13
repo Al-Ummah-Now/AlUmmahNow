@@ -67,8 +67,7 @@ test.beforeAll(async ({ browser, creators }) => {
 test.describe('Watch later is per user', () => {
   test.use({ storageState: async ({ creators }, use) => use(creators.owner.state) });
 
-  // quarantined: #1098 @meywd (red on the local stack)
-  test.fixme('same list whichever channel is active, and never among a channel’s playlists', async ({ page }, testInfo) => {
+  test('same list whichever channel is active, and never among a channel’s playlists', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('Mobile'), 'API + desktop page check; covered by the desktop projects');
     test.skip(!(await perUserWatchLaterDeployed()), 'Per-user Watch later is not deployed on the target yet (it lands with the PR that adds it, #847)');
     const [one, two] = owner.channelIds;
@@ -102,11 +101,13 @@ test.describe('Watch later is per user', () => {
     }
 
     // The channel page's Playlists tab (owner view) does not show it
-    const listed = page.waitForResponse((r) => r.url().includes(`/api/channels/${one}/playlists`) && r.request().method() === 'GET');
+    // The tab loads its playlists through the web server, not from the browser: wait for the
+    // panel itself to finish (skeletons gone, and its list or its empty message shown)
     await page.goto(`/en/channels/${one}?tab=playlists`);
-    await listed;
     const panel = page.getByTestId('tabpanel-playlists');
     await expect(panel).toBeVisible();
+    await expect(panel.locator('.animate-pulse')).toHaveCount(0, { timeout: 30000 });
+    await expect(panel.getByRole('link').or(panel.getByText('No playlists available at this time')).first()).toBeVisible();
     await expect(panel.locator('a[href*="watch-later-"]')).toHaveCount(0);
     await expect(panel.getByText('Watch later', { exact: true })).toHaveCount(0);
 
