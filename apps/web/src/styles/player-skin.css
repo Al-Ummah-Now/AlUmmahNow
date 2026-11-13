@@ -254,9 +254,29 @@
 
 /* Autoplay switch (YouTube-style): a track with a knob; the knob moves to the end when on.
    Logical properties, so it mirrors in RTL. No underline: the switch itself shows the state. */
-.video-js.vjs-fanous .vjs-control-bar .vjs-fanous-autoplay {
+/* Outranks the button rule's fixed square: the switch and its label set the width */
+.video-js.vjs-fanous .vjs-control-bar .vjs-control.vjs-button.vjs-fanous-autoplay {
   width: auto;
-  padding: 0 6px;
+  padding: 0 10px 0 6px;
+  gap: 8px;
+  grid-auto-flow: column;
+  align-items: center;
+}
+
+/* "Autoplay" beside the switch, on players wide enough for it (below: the container query) */
+.video-js.vjs-fanous .vjs-fanous-autoplay-label {
+  display: none;
+  color: var(--fanous-player-icon);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+@container fanous-player (min-width: 760px) {
+  .video-js.vjs-fanous .vjs-fanous-autoplay-label {
+    display: inline;
+  }
 }
 
 .video-js.vjs-fanous .vjs-control-bar .vjs-fanous-autoplay.vjs-fanous-on::after {
@@ -281,8 +301,27 @@
   height: 18px;
   border-radius: 50%;
   background: var(--fanous-player-icon);
+  display: grid;
+  place-items: center;
   transform: translateY(-50%);
   transition: inset-inline-start 150ms ease, background-color 150ms ease;
+}
+
+/* Play in the thumb when on, pause when off (YouTube's cue), in the tip's ink: dark against the
+   light thumb in every theme (big-icon is light in Zujaj, where the thumb is light too) */
+.video-js.vjs-fanous .vjs-fanous-switch-glyph {
+  width: 10px;
+  height: 10px;
+  fill: var(--fanous-player-tip-text);
+}
+
+.video-js.vjs-fanous .vjs-fanous-autoplay .vjs-fanous-glyph-play,
+.video-js.vjs-fanous .vjs-fanous-autoplay.vjs-fanous-on .vjs-fanous-glyph-pause {
+  display: none;
+}
+
+.video-js.vjs-fanous .vjs-fanous-autoplay.vjs-fanous-on .vjs-fanous-glyph-play {
+  display: block;
 }
 
 .video-js.vjs-fanous .vjs-fanous-autoplay.vjs-fanous-on .vjs-fanous-switch {

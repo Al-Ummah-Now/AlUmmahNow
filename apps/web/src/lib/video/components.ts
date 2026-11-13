@@ -169,30 +169,101 @@ export function registerFanousComponents(): void {
   /**
    * YouTube-style autoplay switch (docs/specs/PLAYLIST-PLAYBACK.md, "auto play like youtube"): on
    * the watch page only. A real switch for assistive tech (role="switch", aria-checked) named
-   * "Autoplay"; the tooltip says "Autoplay is on/off". Saved on this device and, signed in, on the
-   * account (hooks/useAutoplaySetting.ts).
+   * "Autoplay". So sighted viewers can tell what it is (owner, 2026-11-13: "no label, or icon"):
+   * the thumb carries a play glyph when on and a pause glyph when off, the word "Autoplay" sits
+   * beside it where the bar has room (player-skin.css hides it on narrow players and embeds), and
+   * hover or keyboard focus shows a themed tip, "Autoplay is on/off", portalled to the player
+   * layer like the progress tip. Saved on this device and, signed in, on the account
+   * (hooks/useAutoplaySetting.ts).
    */
   class FanousAutoplayToggle extends Button {
     constructor(player: Player, options?: Record<string, unknown>) {
       super(player, options);
       const el = this.el();
+      const doc = el.ownerDocument;
       el.setAttribute('role', 'switch');
       el.setAttribute('data-testid', 'player-autoplay-toggle');
-      const track = document.createElement('span');
+      const svgNs = 'http://www.w3.org/2000/svg';
+      const glyph = (cls: string, d: string) => {
+        const svg = doc.createElementNS(svgNs, 'svg');
+        svg.setAttribute('class', `vjs-fanous-switch-glyph ${cls}`);
+        svg.setAttribute('viewBox', '0 0 12 12');
+        svg.setAttribute('aria-hidden', 'true');
+        svg.setAttribute('focusable', 'false');
+        const path = doc.createElementNS(svgNs, 'path');
+        path.setAttribute('d', d);
+        svg.appendChild(path);
+        return svg;
+      };
+      const track = doc.createElement('span');
       track.className = 'vjs-fanous-switch';
       track.setAttribute('aria-hidden', 'true');
-      const knob = document.createElement('span');
+      const knob = doc.createElement('span');
       knob.className = 'vjs-fanous-switch-knob';
+      // Media glyphs keep their direction in Arabic (rtl-media-icons.test.ts)
+      knob.append(glyph('vjs-fanous-glyph-play', 'M4 2.6v6.8L9.4 6z'), glyph('vjs-fanous-glyph-pause', 'M3.4 2.8h1.9v6.4H3.4zM6.7 2.8h1.9v6.4H6.7z'));
       track.appendChild(knob);
-      el.querySelector('.vjs-icon-placeholder')?.replaceWith(track);
+      // The name comes from the control text; the visible word is for the eye only
+      const label = doc.createElement('span');
+      label.className = 'vjs-fanous-autoplay-label';
+      label.setAttribute('aria-hidden', 'true');
+      label.textContent = copy(this).autoplay;
+      el.querySelector('.vjs-icon-placeholder')?.replaceWith(track, label);
       this.controlText(copy(this).autoplay);
+
+      let tip: HTMLElement | null = null;
+      const tipText = () => (getPlayerUi().autoplayNext ? copy(this).autoplayOn : copy(this).autoplayOff);
+      const placeTip = () => {
+        if (!tip) return;
+        tip.textContent = tipText();
+        const host = layerHostFor(player.el(), doc);
+        if (tip.parentNode !== host) host.appendChild(tip);
+        const r = el.getBoundingClientRect();
+        const w = tip.offsetWidth;
+        const left = Math.max(4, Math.min(r.left + r.width / 2 - w / 2, doc.documentElement.clientWidth - w - 4));
+        tip.style.left = `${left}px`;
+        tip.style.top = `${r.top - tip.offsetHeight - 8}px`;
+      };
+      const showTip = () => {
+        if (!tip) {
+          tip = doc.createElement('div');
+          tip.className = 'vjs-fanous-layer vjs-fanous-tip vjs-fanous-autoplay-tip';
+          tip.setAttribute(PLAYER_LAYER_ATTR, '');
+          tip.setAttribute('aria-hidden', 'true');
+          tip.setAttribute('data-testid', 'player-autoplay-tip');
+        }
+        placeTip();
+      };
+      const hideTip = () => {
+        tip?.remove();
+        tip = null;
+      };
+      this.on('mouseenter', showTip);
+      this.on('mouseleave', () => {
+        if (doc.activeElement !== el || !el.matches(':focus-visible')) hideTip();
+      });
+      this.on('focus', () => {
+        if (el.matches(':focus-visible')) showTip();
+      });
+      // Keyboard use: a key on the focused switch shows the tip (and Space/Enter updates it)
+      this.on('keyup', showTip);
+      this.on('blur', hideTip);
+      // The bar hides with the pointer idle; the tip goes with it
+      player.on('userinactive', hideTip);
+      this.on('dispose', hideTip);
+
       followUi(this, () => {
         const ui = getPlayerUi();
         if (ui.theatreAvailable) this.show();
-        else this.hide();
+        else {
+          this.hide();
+          hideTip();
+        }
         el.setAttribute('aria-checked', String(ui.autoplayNext));
-        el.setAttribute('title', ui.autoplayNext ? copy(this).autoplayOn : copy(this).autoplayOff);
+        // The state for assistive tech is aria-checked; the tip says it for the eye
+        el.removeAttribute('title');
         this.toggleClass('vjs-fanous-on', ui.autoplayNext);
+        placeTip();
       });
     }
     buildCSSClass() {
