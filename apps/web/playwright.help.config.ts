@@ -18,6 +18,10 @@ export default defineConfig({
   reporter: [['list']],
   outputDir: './test-results/help-capture',
   use: {
+    // The stack's proxy answers the faked third-party HTTPS hosts (Bunny CDN, image host), as in
+    // playwright.release.config.ts: without it the player cannot load the video
+    proxy: { server: 'http://127.0.0.1:3191', bypass: 'localhost,127.0.0.1' },
+    ignoreHTTPSErrors: true,
     baseURL: target().web,
     channel: 'chrome',
     trace: 'retain-on-failure',
