@@ -209,14 +209,23 @@ function media(v: unknown, field: string, opts: PostValidateOptions, altRequired
 /** www-style slug: lowercase ASCII words joined by "-", or '' when nothing is left (e.g. Arabic only). */
 export function slugify(v: unknown, max: number = POST_LIMITS.slug): string {
   if (typeof v !== 'string') return '';
-  return v
+  const words = v
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, max)
-    .replace(/-+$/g, '');
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+  // Joined by hand (no trimming regex: linear on any input)
+  let out = '';
+  for (const w of words) {
+    const next = out ? `${out}-${w}` : w;
+    if (next.length > max) {
+      if (!out) out = w.slice(0, max);
+      break;
+    }
+    out = next;
+  }
+  return out;
 }
 
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -313,26 +322,45 @@ export function guessLocale(s: string): PostLocale {
   return ar > en ? 'ar' : 'en';
 }
 
+/** Drops HTML tags in one pass (no backtracking regex). */
+function stripTags(s: string): string {
+  let out = '';
+  let inTag = false;
+  for (const ch of s) {
+    if (ch === '<') inTag = true;
+    else if (ch === '>' && inTag) {
+      inTag = false;
+      out += ' ';
+    } else if (!inTag) out += ch;
+  }
+  return out;
+}
+
 /** Markdown (or the sanitised HTML of a text post) as plain text, for excerpts and titles. */
 export function plainText(s: unknown): string {
   if (typeof s !== 'string') return '';
-  return s
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/^\s{0,3}(#{1,6}|>|[-*+]|\d+\.)\s+/gm, '')
-    .replace(/[*_`~]+/g, '')
+  return stripTags(s)
+    .replace(/!\[[^\]\n]*\]\([^)\n]*\)/g, ' ')
+    .replace(/\[([^\]\n]*)\]\([^)\n]*\)/g, '$1')
+    .replace(/^[ \t]{0,3}(?:#{1,6}|>|[-*+]|\d{1,9}\.)[ \t]/gm, '')
+    .replace(/[*_`~]/g, '')
     .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
+    // &amp; last, so "&amp;lt;" stays "&lt;" (never unescaped twice)
+    .replace(/&amp;/g, '&')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
-const cut = (s: string, max: number) => (s.length <= max ? s : `${s.slice(0, max - 1).replace(/\s+\S*$/, '')}\u2026`);
+const cut = (s: string, max: number) => {
+  if (s.length <= max) return s;
+  const head = s.slice(0, max - 1);
+  const space = head.lastIndexOf(' ');
+  return `${(space > max / 2 ? head.slice(0, space) : head).trimEnd()}\u2026`;
+};
 
 export function postKind(p: PostLike): PostKind {
   return isPostKind(p.type) ? p.type : 'text';
