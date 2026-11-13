@@ -30,6 +30,11 @@ import {
 export const RATE_LIMIT_RETRY_SECONDS = 60;
 export const HUMAN_VERIFIED_TTL_SECONDS = 180 * 24 * 60 * 60;
 
+/** KV HUMAN_VERIFIED key of an account that passed the check (deleted by the account erasure). */
+export function humanVerifiedKey(userId: string): string {
+	return `h:${userId}`;
+}
+
 export type LimiterName =
 	| 'COMMENT_LIMITER'
 	| 'POST_LIMITER'
@@ -144,7 +149,7 @@ export function requireHuman(endpoint: string, policy: 'always' | 'first') {
 		const user = signedInUser(c);
 		if (policy === 'first') {
 			if (!user) return next(); // the endpoint answers 401
-			if (env.HUMAN_VERIFIED && (await env.HUMAN_VERIFIED.get(`h:${user}`).catch(() => null))) return next();
+			if (env.HUMAN_VERIFIED && (await env.HUMAN_VERIFIED.get(humanVerifiedKey(user)).catch(() => null))) return next();
 		}
 		const ip = clientIp(c);
 		const check = await checkHuman(env, c.req.raw, c.req.header(TURNSTILE_HEADER), endpoint, {
@@ -164,7 +169,7 @@ export function requireHuman(endpoint: string, policy: 'always' | 'first') {
 		}
 		await next();
 		if (policy === 'first' && user && env.HUMAN_VERIFIED && (check.outcome === 'pass' || check.outcome === 'bypass') && c.res.status < 300) {
-			const put = env.HUMAN_VERIFIED.put(`h:${user}`, '1', { expirationTtl: HUMAN_VERIFIED_TTL_SECONDS }).catch((error: unknown) =>
+			const put = env.HUMAN_VERIFIED.put(humanVerifiedKey(user), '1', { expirationTtl: HUMAN_VERIFIED_TTL_SECONDS }).catch((error: unknown) =>
 				logger.warn('Could not remember a verified account', { error: error instanceof Error ? error.message : String(error) })
 			);
 			try {
@@ -188,7 +193,7 @@ export async function humanCheckStatus(c: Context): Promise<Response> {
 	let required = mode !== 'off' && !isNativeClient(c, env);
 	if (required && kind !== 'report') {
 		const user = signedInUser(c);
-		if (user && env.HUMAN_VERIFIED && (await env.HUMAN_VERIFIED.get(`h:${user}`).catch(() => null))) required = false;
+		if (user && env.HUMAN_VERIFIED && (await env.HUMAN_VERIFIED.get(humanVerifiedKey(user)).catch(() => null))) required = false;
 	}
 	return c.json(
 		{ success: true, result: { required, siteKey: required ? env.TURNSTILE_SITE_KEY : null } },

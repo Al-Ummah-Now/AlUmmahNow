@@ -84,6 +84,14 @@ describe('account erasure: upload markers and TUS sessions (#1059)', () => {
 		assert.deepEqual([...kv.store.keys()], ['bulk-edit-undo:usr_ab:op1:v1']);
 	});
 
+	it("deletes the erased user's bot-check pass (HUMAN_VERIFIED h:<userId>), nobody else's", async () => {
+		const kv = fakeKv();
+		await kv.put('h:usr_a', '1');
+		await kv.put('h:usr_b', '1');
+		await eraseUploadTraces({ HUMAN_VERIFIED: kv as never }, 'usr_a', []);
+		assert.deepEqual([...kv.store.keys()], ['h:usr_b']);
+	});
+
 	it('works without the bindings (an env that has neither)', async () => {
 		assert.deepEqual(await eraseUploadTraces({}, 'usr_a', ['v1']), { markers: 0, sessions: 0 });
 	});
