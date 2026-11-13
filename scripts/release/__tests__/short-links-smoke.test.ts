@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { shortLinksSmoke } from '../short-links-smoke.ts';
+import { shortLinksReport, shortLinksSmoke } from '../short-links-smoke.ts';
 
 const VID = '5edb5575-2ed0-4d92-a82a-9b7cf8186470';
 
@@ -29,5 +29,29 @@ describe('short links smoke', () => {
 	it('fails every check when the host is down', async () => {
 		const r = await shortLinksSmoke('stage', { fetch: fakeFetch({ broken: true }) });
 		assert.deepEqual(r.map((x) => x.ok), [false, false, false, false]);
+	});
+});
+
+describe('short links smoke on a new custom domain', () => {
+	it('waits for DNS/TLS, then checks (the v2026.11.13.6 stage case)', async () => {
+		let calls = 0;
+		const ok = fakeFetch();
+		const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
+			if (new URL(String(input)).hostname.endsWith('.link') && ++calls <= 5) throw new TypeError('fetch failed');
+			return ok(input, init);
+		}) as typeof fetch;
+		const report = await shortLinksReport('stage', { fetch: fetchImpl, sleep: async () => {} });
+		assert.equal(report.unreachable, false);
+		assert.ok(report.results.every((x) => x.ok), JSON.stringify(report.results));
+	});
+	it('a host that never answers is reported unreachable, nothing checked', async () => {
+		const report = await shortLinksReport('production', { fetch: (async () => { throw new TypeError('fetch failed'); }) as unknown as typeof fetch, sleep: async () => {}, reachAttempts: 4 });
+		assert.equal(report.unreachable, true);
+		assert.equal(report.results.length, 1);
+	});
+	it('a wrong answer still fails once the host is up', async () => {
+		const report = await shortLinksReport('stage', { fetch: fakeFetch({ broken: true }), sleep: async () => {} });
+		assert.equal(report.unreachable, false);
+		assert.ok(report.results.some((x) => !x.ok));
 	});
 });

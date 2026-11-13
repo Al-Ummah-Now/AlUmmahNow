@@ -364,10 +364,21 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        # The first release of an env has no earlier version: nothing to roll back (the smoke failure
+        # still fails the job). Any other rollback error fails the step.
         run: |
           cd apps/short-links
-          pnpm wrangler rollback -c wrangler.jsonc --env stage --message "release ${GITHUB_SHA::7}: short links smoke failed" -y
-          echo "### Rolled back: short links smoke failed (stage)" >> "$GITHUB_STEP_SUMMARY"
+          if out=$(pnpm wrangler rollback -c wrangler.jsonc --env stage --message "release ${GITHUB_SHA::7}: short links smoke failed" -y 2>&1); then
+            echo "$out"
+            echo "### Rolled back: short links smoke failed (stage)" >> "$GITHUB_STEP_SUMMARY"
+          elif grep -q "Could not find stable Worker Version" <<<"$out"; then
+            echo "$out"
+            echo "::warning::short links (stage): no earlier version to roll back to (first deploy)"
+            echo "### Short links smoke failed (stage); first deploy, nothing to roll back" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "$out"
+            exit 1
+          fi
 
       # Fills columns added by a migration, once the new worker writes them. Fails the deploy if any row is left.
       - name: Backfill and verify Studio columns (stage)
@@ -732,10 +743,21 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        # The first release of an env has no earlier version: nothing to roll back (the smoke failure
+        # still fails the job). Any other rollback error fails the step.
         run: |
           cd apps/short-links
-          pnpm wrangler rollback -c wrangler.jsonc --message "release ${GITHUB_SHA::7}: short links smoke failed" -y
-          echo "### Rolled back: short links smoke failed (production)" >> "$GITHUB_STEP_SUMMARY"
+          if out=$(pnpm wrangler rollback -c wrangler.jsonc --message "release ${GITHUB_SHA::7}: short links smoke failed" -y 2>&1); then
+            echo "$out"
+            echo "### Rolled back: short links smoke failed (production)" >> "$GITHUB_STEP_SUMMARY"
+          elif grep -q "Could not find stable Worker Version" <<<"$out"; then
+            echo "$out"
+            echo "::warning::short links (production): no earlier version to roll back to (first deploy)"
+            echo "### Short links smoke failed (production); first deploy, nothing to roll back" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "$out"
+            exit 1
+          fi
 
       # Fills columns added by a migration, once the new worker writes them. Fails the deploy if any row is left.
       - name: Backfill and verify Studio columns (production)
