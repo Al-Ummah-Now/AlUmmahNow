@@ -6,14 +6,12 @@
 import { sanitizeEventPayload, sanitizeText } from '@/lib/security/InputSanitizer';
 import type { ConsentCategory } from '@/lib/consent/consent-cookie';
 
-export type ClientEventKind = 'ab_test' | 'performance' | 'visit';
+export type ClientEventKind = 'ab_test' | 'performance';
 
 /** Consent category each beacon kind requires (Story 1.3, AC 4). */
 export const CONSENT_FOR_KIND: Readonly<Record<ClientEventKind, ConsentCategory>> = {
   ab_test: 'experiments',
   performance: 'performance',
-  // A visit's landing page and source: analytics consent, like views' traffic sources
-  visit: 'analytics',
 };
 
 /** Fields never forwarded: identifiers the beacon has no need for (data minimisation). */

@@ -14,7 +14,8 @@
  */
 
 import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
+import type { NextFetchEvent, NextRequest } from 'next/server';
+import { recordServerVisit } from '@/lib/analytics/site-visit';
 import {
   getValidLocale,
   getTextDirection,
@@ -106,7 +107,9 @@ function getLanguagePreferenceFromCookie(request: NextRequest): string | null {
  * refreshSessionCookie, before routeRequest copies the request headers) so this
  * render uses the new token, and on the response so the browser keeps it.
  */
-export async function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest, event?: NextFetchEvent) {
+  // Where a visit starts and where it came from, counted here (cookieless, D-SEO-9; lib/analytics/site-visit.ts)
+  if (event) recordServerVisit(request, (p) => event.waitUntil(p));
   // The browser's session cookies, before the refresh rewrites the request's
   const browserSessionCookies = presentSessionCookieNames(request.cookies);
   const refreshedSession = await refreshSessionCookie(request);
