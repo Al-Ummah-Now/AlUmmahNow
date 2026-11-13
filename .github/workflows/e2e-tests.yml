@@ -170,7 +170,9 @@ jobs:
       - name: Run E2E specs
         if: steps.superseded.outputs.skip != 'true'
         working-directory: apps/web
-        run: pnpm exec playwright test --project="${{ matrix.project }}"
+        # Most specs have moved to the local stack: a project with none left passes instead of
+        # failing with "No tests found" (it is not a test failure)
+        run: pnpm exec playwright test --project="${{ matrix.project }}" --pass-with-no-tests
         env:
           CI: true
           # Pull requests: the upload transport/UI specs are covered by the release
@@ -199,7 +201,7 @@ jobs:
         if: steps.lock.outputs.holder != '' && !cancelled()
         working-directory: apps/web
         timeout-minutes: 40
-        run: pnpm exec playwright test --project=shared-state
+        run: pnpm exec playwright test --project=shared-state --pass-with-no-tests
         env:
           CI: true
           SKIP_AUTH_SETUP: 'true'
@@ -430,7 +432,7 @@ jobs:
       - name: Run ${{ matrix.project }} project
         timeout-minutes: 45
         working-directory: apps/web
-        run: pnpm exec playwright test --project=${{ matrix.project }}
+        run: pnpm exec playwright test --project=${{ matrix.project }} --pass-with-no-tests
         env:
           CI: true
           E2E_MAX_FAILURES: '0'
