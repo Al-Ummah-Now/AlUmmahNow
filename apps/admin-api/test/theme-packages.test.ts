@@ -180,7 +180,7 @@ describe('theme builder API', () => {
     const row = sqlite.prepare("SELECT deleted_by, delete_reason FROM theme_packages WHERE id = 'eid-lights'").get();
     assert.deepEqual({ ...row }, { deleted_by: 'admin-1', delete_reason: 'Eid is over' });
     const log = sqlite.prepare("SELECT new_value FROM site_settings_log WHERE key = 'theme.package' ORDER BY rowid").all().map((r) => r.new_value);
-    assert.deepEqual(log, ['create eid-lights from fawanees@1.1.0', 'publish eid-lights@1.0.0', 'publish eid-lights@1.1.0', 'delete eid-lights']);
+    assert.deepEqual(log, [`create eid-lights from fawanees@${fawanees().theme.version}`, 'publish eid-lights@1.0.0', 'publish eid-lights@1.1.0', 'delete eid-lights']);
     const trash = sqlite.prepare("SELECT new_value FROM site_settings_log WHERE key = 'trash:theme:eid-lights'").all().map((r) => r.new_value);
     assert.deepEqual(trash, [JSON.stringify({ action: 'delete', reason: 'Eid is over' })]);
   });
