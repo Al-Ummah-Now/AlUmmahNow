@@ -186,6 +186,9 @@ app.get('/audit', async (c) => {
   return ok(c, { entries: await readAudit(c.env.REPORTS_DB, { kind, id, limit }) });
 });
 
+// Site visits of the videos site (D-SEO-9): landing pages and sources, last ?days= (1-365)
+app.get('/analytics/visits', async (c) => ok(c, await videos(c, '/analytics/visits', { query: { days: c.req.query('days') ?? '30' } })));
+
 // ---------------------------------------------------------------------------
 // Channels
 // ---------------------------------------------------------------------------

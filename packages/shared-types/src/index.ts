@@ -12,6 +12,7 @@ export * from './playlist-title';
 export * from './comment';
 export * from './analytics';
 export * from './analytics-collection';
+export * from './site-visits';
 export * from './common';
 export * from './watch-history';
 export * from './community-post';
