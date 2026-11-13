@@ -24262,6 +24262,176 @@
         }
       }
     },
+    "/api/v1/sitemap": {
+      "get": {
+        "tags": [
+          "Sitemap"
+        ],
+        "summary": "Sitemap index data",
+        "description": "🌐 **Public**: counts and pages (2000 items each) of the public videos, channels and playlists search engines may list. Unlisted, private, scheduled and removed items are never counted.",
+        "operationId": "get_SitemapSummaryGet",
+        "responses": {
+          "200": {
+            "description": "Counts per kind",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "pageSize": {
+                      "type": "number"
+                    },
+                    "kinds": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "count": {
+                            "type": "number"
+                          },
+                          "pages": {
+                            "type": "number"
+                          },
+                          "lastModified": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "count",
+                          "pages",
+                          "lastModified"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "pageSize",
+                    "kinds"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The search index is not available",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sitemap/{kind}": {
+      "get": {
+        "tags": [
+          "Sitemap"
+        ],
+        "summary": "One sitemap page",
+        "description": "🌐 **Public**: up to 2000 public videos, channels or playlists (oldest first) for the videos site's sitemaps.",
+        "operationId": "get_SitemapPageGet",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "videos",
+                "channels",
+                "playlists"
+              ]
+            },
+            "required": true,
+            "name": "kind",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 10000,
+              "description": "0-based page"
+            },
+            "required": false,
+            "description": "0-based page",
+            "name": "page",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": {}
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The search index is not available",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/trending": {
       "get": {
         "tags": [
