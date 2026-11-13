@@ -19,7 +19,7 @@ export default tseslint.config(
   {
     // The container's job server runs on Node 22 (container/Dockerfile)
     files: ['container/**/*.mjs'],
-    languageOptions: { globals: { process: 'readonly', Buffer: 'readonly', setTimeout: 'readonly', fetch: 'readonly' } },
+    languageOptions: { globals: { process: 'readonly', Buffer: 'readonly', setTimeout: 'readonly', fetch: 'readonly', URL: 'readonly' } },
     rules: { 'no-console': 'off' },
   },
   {
