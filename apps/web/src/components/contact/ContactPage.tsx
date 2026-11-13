@@ -1,6 +1,7 @@
 /**
  * Contact us (/[locale]/contact). Signed in, the email is the account's and
- * cannot be edited (admin-api uses the account email anyway). The page the
+ * cannot be edited (admin-api uses the account email anyway) and the name
+ * starts as the account's name. The page the
  * visitor came from is attached and can be removed. Spam protection: a hidden
  * honeypot field and the time taken to fill the form (checked by admin-api),
  * plus per-IP and per-account rate limits there.
@@ -35,6 +36,8 @@ import { useAuth } from '@/components/AuthProvider/authContext';
 import { MAIN_CONTENT_ID } from '@/components/SkipLinks';
 import { SettingsBreadcrumb } from '@/components/settings/SettingsBreadcrumb';
 import { logger } from '@/lib/logger-client';
+import { fetchProfile } from '@/lib/api/profiles-client';
+import { userDisplayName } from '@/lib/display-name';
 import {
   CONTACT_LIMITS,
   CONTACT_TOPICS,
@@ -71,8 +74,13 @@ export function ContactPage() {
   const successRef = useRef<HTMLHeadingElement>(null);
 
   const accountEmail = user?.email || '';
+  const userId = user?.id;
+  // The token's name only when it is a name (never the email)
+  const tokenName = user?.name?.trim() && user.name.trim() !== accountEmail ? user.name.trim() : '';
+  // Set once the visitor types a name; the account's name never overwrites theirs
+  const nameEdited = useRef(false);
   const [values, setValues] = useState<ContactFormValues>({
-    name: user?.name || '',
+    name: tokenName,
     email: accountEmail,
     topic: topicFromParam(params?.get('topic')),
     // From an error screen: the reference, so support finds what happened
@@ -91,6 +99,22 @@ export function ContactPage() {
   useEffect(() => {
     if (accountEmail) setValues((v) => ({ ...v, email: accountEmail }));
   }, [accountEmail]);
+
+  // Signed in: the account's name (display name, else first + last; never the
+  // email), still editable. Loaded from the profile, as the header does.
+  useEffect(() => {
+    if (!userId) return;
+    let live = true;
+    fetchProfile({ id: userId, email: accountEmail }, (profile) => {
+      const name = userDisplayName(profile, lang);
+      if (live && name && !nameEdited.current) setValues((v) => ({ ...v, name }));
+    }).catch((error: unknown) => {
+      logger.warn('[contact] Profile not loaded', { error: error instanceof Error ? error.message : String(error) });
+    });
+    return () => {
+      live = false;
+    };
+  }, [userId, accountEmail, lang]);
 
   useEffect(() => {
     setPageUrl(capturePageUrl(params?.get('from'), document.referrer, window.location.origin));
@@ -275,7 +299,10 @@ export function ContactPage() {
                     autoComplete="name"
                     maxLength={CONTACT_LIMITS.nameMax + 20}
                     value={values.name}
-                    onChange={(e) => set('name', e.target.value)}
+                    onChange={(e) => {
+                      nameEdited.current = true;
+                      set('name', e.target.value);
+                    }}
                     aria-invalid={!!errors.name || undefined}
                     aria-describedby={describedBy('name')}
                     required
@@ -288,7 +315,10 @@ export function ContactPage() {
                   <label className="ct-label" htmlFor={id('email')}>
                     {c.fields.email}
                   </label>
-                  <div className="ct-input-wrap">
+                  {/* The address is LTR in both languages: the wrapper is LTR too, so the
+                      lock (inset-inline-end) sits on the side the readonly
+                      padding (padding-inline-end) reserves, in en and ar */}
+                  <div className="ct-input-wrap" dir="ltr">
                     <input
                       id={id('email')}
                       name="email"

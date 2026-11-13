@@ -4,7 +4,8 @@ import { CONTACT_AR, CONTACT_EN } from '@al-ummah/shared-types';
 import { ContactPage } from '..';
 
 let mockLang: 'en' | 'ar' = 'en';
-let mockUser: { email: string; name?: string } | null = null;
+let mockUser: { id?: string; email: string; name?: string } | null = null;
+let mockProfile: Record<string, unknown> | null = null;
 let mockParams = new URLSearchParams();
 jest.mock('@/hooks/useLanguage', () => ({
   useLanguage: () => ({
@@ -16,6 +17,13 @@ jest.mock('@/hooks/useLanguage', () => ({
 jest.mock('@/components/AuthProvider/authContext', () => ({ useAuth: () => ({ user: mockUser }) }));
 jest.mock('next/navigation', () => ({ useSearchParams: () => mockParams, usePathname: () => `/${mockLang}/contact` }));
 jest.mock('@/lib/logger-client', () => ({ logger: { debug: jest.fn(), warn: jest.fn(), info: jest.fn(), error: jest.fn() } }));
+jest.mock('@/lib/api/profiles-client', () => ({
+  fetchProfile: jest.fn(async (_user: unknown, setProfile: (p: unknown) => void) => {
+    if (!mockProfile) return false;
+    setProfile(mockProfile);
+    return true;
+  }),
+}));
 jest.mock('@/theme/contact.css', () => ({}), { virtual: true });
 
 describe('Contact us page', () => {
@@ -23,6 +31,7 @@ describe('Contact us page', () => {
   beforeEach(() => {
     mockLang = 'en';
     mockUser = null;
+    mockProfile = null;
     mockParams = new URLSearchParams();
     fetchMock.mockReset();
     global.fetch = fetchMock as unknown as typeof fetch;
@@ -55,6 +64,45 @@ describe('Contact us page', () => {
     expect(screen.getByTestId('contact-email')).toHaveAttribute('readonly');
     expect(screen.getByText(CONTACT_EN.fields.emailLocked)).toBeInTheDocument();
     expect(screen.getByTestId('contact-topic-problem')).toBeChecked();
+  });
+
+  it('prefills the name with the account display name, still editable', async () => {
+    mockUser = { id: 'u1', email: 'me@account.org' };
+    mockProfile = { displayName: 'Amina Yusuf', firstName: 'A', lastName: 'Y' };
+    render(<ContactPage />);
+    await waitFor(() => expect(screen.getByTestId('contact-name')).toHaveValue('Amina Yusuf'));
+    expect(screen.getByTestId('contact-name')).not.toHaveAttribute('readonly');
+    fireEvent.change(screen.getByTestId('contact-name'), { target: { value: 'Amina' } });
+    expect(screen.getByTestId('contact-name')).toHaveValue('Amina');
+  });
+
+  it('falls back to first + last, and never to the email', async () => {
+    mockUser = { id: 'u1', email: 'me@account.org' };
+    mockProfile = { displayName: '', firstName: 'Amina', lastName: 'Yusuf', email: 'me@account.org' };
+    const { unmount } = render(<ContactPage />);
+    await waitFor(() => expect(screen.getByTestId('contact-name')).toHaveValue('Amina Yusuf'));
+    unmount();
+    mockProfile = { displayName: '', firstName: '', lastName: '', email: 'me@account.org' };
+    mockUser = { id: 'u2', email: 'me@account.org', name: 'me@account.org' };
+    render(<ContactPage />);
+    await waitFor(() => expect(jest.requireMock('@/lib/api/profiles-client').fetchProfile).toHaveBeenCalled());
+    expect(screen.getByTestId('contact-name')).toHaveValue('');
+  });
+
+  it('keeps the lock icon and the email on the same (LTR) side in Arabic', () => {
+    mockLang = 'ar';
+    mockUser = { email: 'me@account.org' };
+    render(<ContactPage />);
+    const input = screen.getByTestId('contact-email');
+    expect(input).toHaveAttribute('dir', 'ltr');
+    expect(input.parentElement).toHaveAttribute('dir', 'ltr');
+    expect(input.parentElement?.querySelector('.ct-input-icon')).not.toBeNull();
+  });
+
+  it('does not promise a reply in the writer’s language', () => {
+    for (const c of [CONTACT_EN, CONTACT_AR]) expect(c.aside.reply).not.toMatch(/language|اللغة/);
+    expect(CONTACT_EN.aside.reply).toContain('two working days');
+    expect(CONTACT_AR.aside.reply).toContain('يومي عمل');
   });
 
   it('sends the message with the spam fields and shows the success state', async () => {
