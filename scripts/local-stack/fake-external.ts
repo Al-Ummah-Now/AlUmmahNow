@@ -8,7 +8,7 @@
  * - Encoding on demand: an upload that completes is "processing"; it becomes encoded (status 4,
  *   with the duration/size read from the uploaded MP4) after FAKE_BUNNY_ENCODE_MS (default 2000),
  *   or never with FAKE_BUNNY_ENCODE=manual. Tests drive it through the control API:
- *   POST /__fake/bunny/videos/<guid>/encode | /fail | /hold, GET /__fake/bunny/videos.
+ *   POST /__fake/bunny/videos/<guid>/encode | /fail | /hold | /tus-head-404[?count=n], GET /__fake/bunny/videos.
  * - Bunny CDN (FAKE_CDN_HOST): HLS (the player fixtures: landscape, or the short one for vertical
  *   videos), thumbnail.jpg / thumbnail_N.jpg / preview.webp, play_<res>p.mp4, original.
  * - Bunny Storage (storage.bunnycdn.com) + the image host (images.alummahnow.net): PUT stores, GET serves.
@@ -56,7 +56,12 @@ interface FakeUpload {
   chunks: Buffer[];
 }
 
-export const bunny = { videos: new Map<string, FakeVideo>(), uploads: new Map<string, FakeUpload>() };
+export const bunny = {
+  videos: new Map<string, FakeVideo>(),
+  uploads: new Map<string, FakeUpload>(),
+  /** Per video guid: how many more TUS HEADs answer 404 although the upload is there (a Bunny blip) */
+  headMisses: new Map<string, number>(),
+};
 export const storage = new Map<string, { body: Buffer; type: string }>();
 export const emails: unknown[] = [];
 
@@ -137,7 +142,14 @@ async function bunnyStream(request: Request, url: URL): Promise<Response> {
     }
     const upload = bunny.uploads.get(parts[1] ?? '');
     if (!upload) return new Response('upload not found', { status: 404, headers });
-    if (request.method === 'HEAD') return new Response(null, { status: 200, headers: { ...headers, 'Upload-Offset': String(upload.offset), 'Upload-Length': String(upload.length), 'Cache-Control': 'no-store' } });
+    if (request.method === 'HEAD') {
+      const misses = bunny.headMisses.get(upload.guid) ?? 0;
+      if (misses > 0) {
+        bunny.headMisses.set(upload.guid, misses - 1);
+        return new Response(null, { status: 404, headers });
+      }
+      return new Response(null, { status: 200, headers: { ...headers, 'Upload-Offset': String(upload.offset), 'Upload-Length': String(upload.length), 'Cache-Control': 'no-store' } });
+    }
     if (request.method === 'DELETE') {
       bunny.uploads.delete(upload.id);
       return new Response(null, { status: 204, headers });
@@ -313,7 +325,7 @@ async function readBody(req: IncomingMessage): Promise<string> {
 
 /**
  * Control API (loopback only):
- * - GET /__fake/bunny/videos[/<guid>], POST /__fake/bunny/videos/<guid>/encode|fail|hold
+ * - GET /__fake/bunny/videos[/<guid>], POST /__fake/bunny/videos/<guid>/encode|fail|hold|tus-head-404[?count=n]
  * - GET /__fake/resend/emails
  * - POST /__stack/d1/<database name> with SQL as the body: { results } (seed, fast-path fixtures)
  * - GET | PUT | DELETE /__stack/r2/<bucket name>/<key>: one object (fixtures a spec seeds in R2)
@@ -379,6 +391,8 @@ async function control(req: IncomingMessage, url: URL): Promise<Response> {
   if (req.method === 'POST' && action === 'encode') encode(video);
   else if (req.method === 'POST' && action === 'fail') Object.assign(video, { status: 5, hold: true });
   else if (req.method === 'POST' && action === 'hold') video.hold = true;
+  // The next ?count= (default 1) TUS HEADs of this video's upload answer 404 while Bunny keeps its bytes
+  else if (req.method === 'POST' && action === 'tus-head-404') bunny.headMisses.set(guid, Math.max(1, Number(url.searchParams.get('count') ?? 1)));
   return json(publicVideo(video));
 }
 

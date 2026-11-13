@@ -10,6 +10,7 @@ import type { HttpRequest, HttpResponse, HttpStack, UrlStorage, PreviousUpload }
 import {
   BASE_RETRY_DELAYS_MS,
   ResilientHttpStack,
+  HEAD_GONE_CONFIRMATIONS,
   ResilientUpload,
   classifyTusFailure,
   grantedUploadUrl,
@@ -268,6 +269,19 @@ describe('ResilientHttpStack', () => {
     expect((await stack.createRequest('HEAD', `${ENDPOINT}/x`).send(null)).getStatus()).toBe(423);
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
   });
+
+  it('a HEAD 404/410 is asked again HEAD_GONE_CONFIRMATIONS times (as 423) before it counts, and is reported then', async () => {
+    const server = new FakeTusServer(ENDPOINT);
+    const lost = jest.fn();
+    const stack = new ResilientHttpStack(server, undefined, lost);
+    const url = `${ENDPOINT}/gone.v1`;
+    const statuses: number[] = [];
+    for (let i = 0; i <= HEAD_GONE_CONFIRMATIONS; i++) statuses.push((await stack.createRequest('HEAD', url).send(null)).getStatus());
+    expect(statuses).toEqual([...Array(HEAD_GONE_CONFIRMATIONS).fill(423), 404]);
+    expect(lost).toHaveBeenCalledWith(url, 404);
+    // A PATCH 404 is never masked (the session is re-authorised instead)
+    expect((await stack.createRequest('PATCH', url).send(null)).getStatus()).toBe(404);
+  });
 });
 
 describe('ResilientUpload against a failing proxy', () => {
@@ -366,6 +380,35 @@ describe('ResilientUpload against a failing proxy', () => {
     expect(await done).toEqual({ ok: true });
     expect(posts(server)).toBe(1);
     expect(progress[progress.length - 1]).toBe(6 * CHUNK);
+  });
+
+  it('a resumed upload whose HEAD answers 404 for a moment (a Bunny blip) resumes at its offset, no second upload', async () => {
+    const server = new FakeTusServer(ENDPOINT);
+    server.sessions.set('s1', 'v1');
+    const storage = new MemoryUrlStorage();
+    const first = run({ server, storage });
+    let patches = 0;
+    const original = server.createRequest.bind(server);
+    server.createRequest = (method, url) => {
+      if (method === 'PATCH' && ++patches === 3) void first.upload.abort(); // interrupted after two chunks
+      return original(method, url);
+    };
+    await first.upload.start();
+    await new Promise((r) => setTimeout(r, 20));
+    server.createRequest = original;
+    const [earlier] = [...server.uploads.entries()];
+    const offsetBefore = earlier[1].offset;
+    expect(offsetBefore).toBeGreaterThan(0);
+
+    // A fresh browser (nothing stored): the server hands back the earlier upload; Bunny's HEAD says 404 twice
+    server.fail({ method: 'HEAD', status: 404 }, { method: 'HEAD', status: 404 });
+    const second = run({ server, uploadUrl: `${ENDPOINT}/${earlier[0]}` });
+    await second.upload.start();
+    expect(await second.done).toEqual({ ok: true });
+    expect(posts(server)).toBe(1); // only the first attempt's
+    const after = patchOffsets(server).slice(patchOffsets(server).indexOf(offsetBefore));
+    expect(after[0]).toBe(offsetBefore);
+    expect(nonDecreasing(after)).toBe(true);
   });
 
   it('a finished upload found on re-authorisation counts as success', async () => {

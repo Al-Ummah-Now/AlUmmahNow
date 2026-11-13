@@ -14,10 +14,16 @@
  * - every request carries a fresh access token (long uploads outlive tokens);
  * - a 404/410 (session or upload gone) re-authorises the SAME video through
  *   uploadResume instead of failing or creating a new video;
+ * - a HEAD 404/410 is asked again a few times (as 423) before it counts:
+ *   Bunny's TUS HEAD can answer 404 for a moment for an upload it still holds,
+ *   and tus-js-client would otherwise start a second upload from byte 0 at once
+ *   (v2026.11.13.3 stage, upload-reuse). A HEAD that keeps saying 404/410 still
+ *   starts a new upload (the bytes really are gone), and that is reported;
  * - uploads are fingerprinted per video, so a reload resumes the stored URL;
  * - progress never goes backwards while reconnecting.
  */
 import * as tus from 'tus-js-client';
+import { logger } from '@/lib/logger-client';
 
 /** Chunk size: see apps/web/src/lib/upload/README.md "Chunk size" for the QA measurements. */
 export const DEFAULT_TUS_CHUNK_SIZE = 50 * 1024 * 1024;
@@ -86,6 +92,16 @@ export function shouldMaskHeadStatus(method: string, status: number): boolean {
   return status === 0 || status >= 500 || status === 408 || status === 429 || status === 401;
 }
 
+/**
+ * HEAD 404/410 answers per upload URL masked as 423 before one is believed: about 7 s with the base
+ * retry schedule (0, 1, 2, 4 s). A 2xx HEAD resets the count.
+ */
+export const HEAD_GONE_CONFIRMATIONS = 4;
+
+export function isGoneStatus(status: number): boolean {
+  return status === 404 || status === 410;
+}
+
 export function failureStatus(error: unknown): number | undefined {
   const res = (error as tus.DetailedError | undefined)?.originalResponse;
   return res ? res.getStatus() : undefined;
@@ -96,11 +112,19 @@ export function uploadFingerprint(file: Pick<File, 'name' | 'size' | 'lastModifi
   return `aun-tus:${videoId}:${file.name}:${file.size}:${file.lastModified}`;
 }
 
-/** Wraps the default stack: masks transient HEAD failures as 423, reports 401s. */
+/**
+ * Wraps the default stack: masks transient HEAD failures as 423, reports 401s, and asks a HEAD
+ * 404/410 again HEAD_GONE_CONFIRMATIONS times before letting tus-js-client start a new upload.
+ */
 export class ResilientHttpStack implements tus.HttpStack {
+  /** HEAD 404/410 answers masked so far, per upload URL */
+  private readonly goneHeads = new Map<string, number>();
+
   constructor(
     private readonly inner: tus.HttpStack = new tus.DefaultHttpStack({}),
     private readonly onUnauthorized?: () => void,
+    /** A HEAD kept answering 404/410: tus-js-client now starts a new upload from byte 0 */
+    private readonly onUploadLost?: (url: string, status: number) => void,
   ) {}
 
   getName(): string {
@@ -110,6 +134,8 @@ export class ResilientHttpStack implements tus.HttpStack {
   createRequest(method: string, url: string): tus.HttpRequest {
     const req = this.inner.createRequest(method, url);
     const onUnauthorized = this.onUnauthorized;
+    const goneHeads = this.goneHeads;
+    const onUploadLost = this.onUploadLost;
     return {
       getMethod: () => req.getMethod(),
       getURL: () => req.getURL(),
@@ -122,7 +148,20 @@ export class ResilientHttpStack implements tus.HttpStack {
         const res = await req.send(body);
         const status = res.getStatus();
         if (status === 401) onUnauthorized?.();
-        if (!shouldMaskHeadStatus(req.getMethod(), status)) return res;
+        const head = req.getMethod().toUpperCase() === 'HEAD';
+        let mask = shouldMaskHeadStatus(req.getMethod(), status);
+        if (head && status >= 200 && status < 300) goneHeads.delete(url);
+        if (head && isGoneStatus(status)) {
+          const seen = goneHeads.get(url) ?? 0;
+          if (seen < HEAD_GONE_CONFIRMATIONS) {
+            goneHeads.set(url, seen + 1);
+            mask = true;
+          } else {
+            goneHeads.delete(url);
+            onUploadLost?.(url, status);
+          }
+        }
+        if (!mask) return res;
         return {
           getStatus: () => 423,
           getHeader: (h: string) => res.getHeader(h),
@@ -335,9 +374,14 @@ export class ResilientUpload {
       removeFingerprintOnSuccess: true,
       fingerprint: async (f: File) => uploadFingerprint(f, videoId),
       ...(this.opts.urlStorage ? { urlStorage: this.opts.urlStorage } : {}),
-      httpStack: new ResilientHttpStack(this.opts.httpStack, () => {
-        this.authStale = true;
-      }),
+      httpStack: new ResilientHttpStack(
+        this.opts.httpStack,
+        () => {
+          this.authStale = true;
+        },
+        // Bunny no longer holds this upload: the file starts again from byte 0 (same video)
+        (url, status) => logger.error('[ResilientUpload] Earlier upload gone at Bunny; starting a new upload', { videoId, status, url }),
+      ),
       metadata: {
         filename: file.name,
         filetype: file.type,
