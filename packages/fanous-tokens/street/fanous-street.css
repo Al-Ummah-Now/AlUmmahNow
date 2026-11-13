@@ -1,9 +1,9 @@
 /* Fanous lantern street: styles for the shared street module (fanous-street.js), which adds
-   html.fanous-street, a fixed #fanous-street-lights layer and the #fanous-street garlands when the
+   html.fanous-street, a fixed #fanous-street-lights layer and the #fanous-street rows when the
    active theme switches the street on (--fanous-street-on: 1). Colours and art come from the theme
-   tokens, so light and dark need nothing here. The page keeps its own background (the theme's
-   page style): the body becomes its own stacking layer, so the lights and garlands paint above
-   the body's background and below every element. Apps that paint their page colour on a wrapper
+   tokens, so light and dark need nothing here. The street is the page background: the body
+   becomes its own stacking layer, so the lights and lanterns paint above the body's background
+   and below every element. Apps that paint their page colour on a wrapper
    inside the body make it transparent under html.fanous-street in their own stylesheet.
    No CSS animations: the module moves the lights on scroll with a transform (0.2x; still with
    reduced motion and in Firefox). No filters or blur anywhere. */
@@ -26,15 +26,13 @@ html.fanous-street body {
   will-change: transform;
 }
 
-/* Near: the garlands, drawn by the module into the page's free gaps */
+/* Near: rows of lanterns down the whole page (the module draws the rows on screen, in page
+   coordinates, and moves them with the scroll) */
 #fanous-street {
-  position: absolute;
-  left: 0;
-  top: 0;
-  /* Never wider than the viewport: after the window narrows, the old drawing must not make the
-     page scroll sideways before the module re-measures */
+  position: fixed;
+  inset: 0;
   width: 100%;
-  max-width: 100%;
+  height: 100%;
   z-index: -1;
   pointer-events: none;
   overflow: hidden;
@@ -47,8 +45,6 @@ html.fanous-street body {
   stroke-linejoin: round;
 }
 
-#fanous-street .fs-s0 { stop-color: var(--fanous-street-line); stop-opacity: 0; }
-#fanous-street .fs-s1 { stop-color: var(--fanous-street-line); }
 #fanous-street .fs-w { fill: var(--fanous-street-window); }
 #fanous-street .fs-g0 { stop-color: var(--fanous-color-primary); }
 #fanous-street .fs-g1 { stop-color: var(--fanous-color-primary); stop-opacity: 0; }
