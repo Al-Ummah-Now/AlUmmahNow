@@ -63,6 +63,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/site-visits', label: 'nav.siteVisits', icon: 'activity', group: 'overview' },
 
   { href: '/moderation', label: 'nav.moderation', icon: 'flag', group: 'moderation' },
+  { href: '/moderation/review', label: 'nav.videoReview', icon: 'flag', group: 'moderation' },
   { href: '/moderation/ai', label: 'nav.aiModeration', icon: 'spark', group: 'moderation' },
   { href: '/comments', label: 'nav.comments', icon: 'chat', group: 'moderation' },
   { href: '/community', label: 'nav.community', icon: 'people', group: 'moderation' },
