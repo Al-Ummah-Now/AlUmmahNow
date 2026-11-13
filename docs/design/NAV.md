@@ -88,9 +88,10 @@ the **context slot**. Sections, top to bottom, with `.aun-menu-sep` separators b
 An app with nothing to put in the slot leaves it out, separator included. Its menu then has the
 base shape exactly (www, CMS, profile, videos admin, auth admin).
 
-1. **Who** (`.aun-menu-who`): the current account as a **panel across the menu's full width** at
-   the top, on the hover tint, edge to edge: a 2.5rem avatar, the name (1rem, weight 600) and the
-   email muted under it. An app may add one muted line here (the CMS role). Who never shows the
+1. **Who** (`.aun-menu-who`): the current account at the top, on the **menu's own background**
+   like every other row (no tinted panel: owner review, "why is the name in a different colour?"),
+   separated from the rest only by the normal divider: a 2.5rem avatar, the name (1rem, weight 600)
+   and the email muted under it. An app may add one muted line here (the CMS role). Who never shows the
    channel; that is the slot's job. Who **is** the current account: it is not listed again below
    (the Google account pattern, owner choice in revision 5).
 2. **Context slot** (`<div class="aun-menu-context" role="group" aria-labelledby>` with a
@@ -121,15 +122,19 @@ base shape exactly (www, CMS, profile, videos admin, auth admin).
    articles (scholars), Settings. Profile: Manage sessions.
 5. **Al Ummah Now apps** (label): links to the other apps the account may open, gated by role
    like each app's own guard. The current app is left out. Each entry starts with **that app's own
-   favicon** (`.aun-app-icon[data-app]`): the owner's art as is, crop and downscale only, never a
-   drawn or generic icon, a colour tile, a badge or a recolour (owner: "use icons we choose for
-   favicons, not random ones"). It is each app's exact `favicon-48x48.png`, byte for byte the PNG
-   the app serves, shown at 24px in the menu (2x) and at 48px on the profile app's "Your apps"
-   cards (`.aun-app-icon--card`, 1x), so the menus and the cards show the same images.
-   `packages/app-icons` `src/nav-icons.ts` embeds the six PNGs in a marked block of `aun-nav.css`
-   (`pnpm --filter @al-ummah/app-icons nav-icons`; `check:nav-icons` fails when the block is
-   stale), so every app gets them with the stylesheet and no extra request; the vendoring repos'
-   sync guards allow only inline base64 PNGs. The order and labels are fixed:
+   favicon**, whole, in a circle (`.aun-app-icon[data-app]`): the owner's art as is, never a drawn
+   or generic icon, a colour tile, a badge or a recolour (owner: "use icons we choose for favicons,
+   not random ones"; "use the full favicons, cropped to a circle").
+   - Source: the app's highest-resolution favicon asset, the 512px crop it serves as
+     `icon-512.png` (byte-identical to the pipeline's output), downscaled only (Lanczos) to 96px
+     and embedded as lossless WebP (every visible pixel equal to the PNG).
+   - Shape and size: the whole square scaled into a circle the size of the account avatars (2rem)
+     in the menu, and 3rem on the profile app's "Your apps" cards (`.aun-app-icon--card`), so
+     menus and cards show the same images, consistently for every app.
+   - `packages/app-icons` `src/nav-icons.ts` writes them into a marked block of `aun-nav.css`
+     (`pnpm --filter @al-ummah/app-icons nav-icons`); `check:nav-icons` regenerates the block from
+     the same crop and fails when it is stale. The vendoring repos' sync guards allow only inline
+     base64 WebP. The order and labels are fixed:
 
    | Order | English | Arabic | Favicon | Who sees it |
    |---|---|---|---|---|
@@ -210,7 +215,7 @@ it keeps the theme's menu colours (Lantern `#134a62`). The stylesheet switches w
 | Width | 21rem on every view and in every app (the channel switcher does not narrow it) |
 | Item | 2.75rem min height (touch target), 16px inline padding, 0.9375rem text |
 | Account row | 3.25rem min height (two lines), sign-out icon button at the end |
-| Leading column | 2rem (`--aun-menu-lead`): 1.25rem icons and 1.5rem (24px) app favicons centred in it, 2rem avatars, so every label starts at the same line, in both directions |
+| Leading column | 2rem (`--aun-menu-lead`): 1.25rem icons centred in it, 2rem round app favicons and 2rem avatars, so every label starts at the same line, in both directions |
 | Section header | 0.75rem, weight 700, muted, 8px above and 4px below, never upper-cased or letter-spaced (Arabic) |
 | Separator | full width, 4px above and below (none between the who panel and the first one) |
 | Role chip (`.aun-badge`) | 11px, weight 600, pill, 1px separator border, muted text |
