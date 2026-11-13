@@ -80,7 +80,7 @@ the **context slot**. Sections, top to bottom, with `.aun-menu-sep` separators b
 |---|---|---|---|---|
 | 1 | Who | base | yes | yes |
 | 2 | **Context slot** | slot | empty | the **channel layer** (below) |
-| 3 | More accounts + Add another account | base | yes | yes |
+| 3 | More accounts + Sign in to another account | base | yes | yes |
 | 4 | This app | base | the app's own entries (≤ 4) | Write article / My articles (scholars), Settings |
 | 5 | Al Ummah Now apps | base | yes | yes |
 | 6 | Sign out | base | yes | yes |
@@ -88,51 +88,61 @@ the **context slot**. Sections, top to bottom, with `.aun-menu-sep` separators b
 An app with nothing to put in the slot leaves it out, separator included. Its menu then has the
 base shape exactly (www, CMS, profile, videos admin, auth admin).
 
-1. **Who** (`.aun-menu-who`): a large avatar, the name, and the email muted under it. An app may
-   add one muted line here (the CMS role). Who never shows the channel; that is the slot's job.
-   Who **is** the current account: it is not listed again below (the Google account pattern,
-   owner choice in revision 5).
+1. **Who** (`.aun-menu-who`): the current account as a **panel across the menu's full width** at
+   the top, on the hover tint, edge to edge: a 2.5rem avatar, the name (1rem, weight 600) and the
+   email muted under it. An app may add one muted line here (the CMS role). Who never shows the
+   channel; that is the slot's job. Who **is** the current account: it is not listed again below
+   (the Google account pattern, owner choice in revision 5).
 2. **Context slot** (`<div class="aun-menu-context" role="group" aria-labelledby>` with a
    `.aun-menu-label`): one app-specific layer, see [Context slot](#context-slot-the-videos-channel-layer).
 3. **More accounts** / «حسابات أخرى» (`.aun-menu-label`), shown when the browser has other
    signed-in accounts. It lists only the **other** accounts, never the current one (that is Who).
    Each row is `.aun-acct-row`:
-   - the entry is a button, "Switch to {name}": avatar, name and email muted under it. The
-     **whole row** takes the hover / focus fill, the sign-out button included, so it reads as one
-     target;
+   - the entry is a button, "Switch to {name}": avatar, name and email muted under it. Rows run
+     **edge to edge**: the hover / focus fill covers the menu's full width, the sign-out button
+     included, so the row reads as one target;
    - each row ends with a `.aun-acct-signout` **icon button** (the sign-out arrow, `.aun-flip` in
-     Arabic, 44px target), accessible name "Sign out of {name}"; it confirms first in the in-app
-     dialog.
+     Arabic, round 44px target), never the words "Sign out" beside the row. Its accessible name
+     and tooltip (`title`) are "Sign out of {name}" / «تسجيل الخروج من {name}»; it confirms first
+     in the in-app dialog.
 
-   **Add another account** follows, with the sign-in icon (an arrow into a door, `.aun-flip` in
-   Arabic). It is shown even with one account. The CMS has no in-menu switch (its session is
-   per app): its "More accounts ›" row opens the accounts page (`/sso/accounts`) instead of
-   listing them.
+   **Sign in to another account** / «تسجيل الدخول بحساب آخر» follows (it was "Add another
+   account"; the new words say what happens: the sign-in form, then that account is added), with
+   the sign-in icon (an arrow into a door, `.aun-flip` in Arabic). It is shown even with one
+   account. The CMS has no in-menu switch (its session is per app): its "More accounts ›" row
+   opens the accounts page (`/sso/accounts`) instead of listing them.
+
+   **Emails** keep their domain when they do not fit: `.aun-email` splits the address into the
+   local part, which shrinks with an ellipsis, and "@domain", which stays whole
+   (`omar.abd…@alummahnow-community.org`); the full address is the tooltip. A name in the other
+   script (a Latin name in an Arabic menu) keeps its own direction but lines up with the menu's
+   start.
 4. **This app** (no label): the app's own entries, at most four. Videos: Write article, My
    articles (scholars), Settings. Profile: Manage sessions.
 5. **Al Ummah Now apps** (label): links to the other apps the account may open, gated by role
-   like each app's own guard. The current app is left out. Each entry starts with that app's own
-   favicon (`.aun-app-icon[data-app]`, 1.25rem, the owner's art as supplied, cropped and resized
-   only). The icons are 40px lossless WebP data URIs generated from `packages/app-icons/assets/crops`
-   into a marked block of `aun-nav.css` (`pnpm --filter @al-ummah/app-icons nav-icons`;
-   `check:nav-icons` fails when the block is stale), so every vendoring repo gets them with the
-   stylesheet and no extra request. The order and labels are fixed:
+   like each app's own guard. The current app is left out. Each entry starts with the app's icon
+   on its colour tile (`.aun-app-icon[data-app]`, 1.75rem, 7px radius): the same icons and
+   colours as the profile app's "Your apps" cards (owner review), a white line icon on a fixed
+   gradient. They identify the app, so they do not change with the theme. The glyphs are inline
+   SVG masks in `aun-nav.css` (no image request; the vendoring repos' sync guards allow only
+   URL-encoded SVG data URIs). The order, labels and icons are fixed:
 
-   | Order | English | Arabic | Who sees it |
-   |---|---|---|---|
-   | 1 | Website | الموقع | everyone |
-   | 2 | Videos | المرئيات | everyone |
-   | 3 | Your profile | ملفك الشخصي | everyone |
-   | 4 | Content management | إدارة المحتوى | super_admin, admin, moderator, scholar |
-   | 5 | Videos admin | إدارة المرئيات | super_admin, admin, moderator |
-   | 6 | Accounts admin | إدارة الحسابات | super_admin, admin |
+   | Order | English | Arabic | Icon | Tile | Who sees it |
+   |---|---|---|---|---|---|
+   | 1 | Website | الموقع | globe | teal `#14b8a6` → `#0f766e` | everyone |
+   | 2 | Videos | المرئيات | play | the theme's primary | everyone |
+   | 3 | Your profile | ملفك الشخصي | user | green `#10b981` → `#047857` | everyone |
+   | 4 | Content management | إدارة المحتوى | pen | red `#ef4444` → `#b91c1c` | super_admin, admin, moderator, scholar |
+   | 5 | Videos admin | إدارة المرئيات | shield | amber `#f59e0b` → `#b45309` | super_admin, admin, moderator |
+   | 6 | Accounts admin | إدارة الحسابات | key | violet `#8b5cf6` → `#5b21b6` | super_admin, admin |
 
    The role gates mirror the profile app's catalog (AlUmmahNowAuth `apps/profile/src/apps.ts`),
    which mirrors each app's own access guard. Videos and admin-web share
    `packages/shared-types/src/app-links.ts`.
 
-6. **Sign out**: "Sign out" signs this account out. With two or more accounts, "Sign out of all
-   accounts" (`.aun-menu-item--danger`) follows it and asks first in the in-app dialog.
+6. **Sign out**: "Sign out" signs this account out (with other accounts, the next one takes
+   over). With two or more accounts, "Sign out of all accounts" (`.aun-menu-item--danger`)
+   follows it and asks first in the in-app dialog. Every app has both, the videos admin included.
 
 ## Context slot: the videos channel layer
 
@@ -186,34 +196,39 @@ it keeps the theme's menu colours (Lantern `#134a62`). The stylesheet switches w
 | Text / muted | `--fanous-color-text-primary` / `--fanous-color-text-secondary` | `--fanous-c-menu-text` / `--fanous-c-menu-muted` |
 | Hover / pressed / current row | `--fanous-c-menu-hover` mixed 50% into the background (a light tint) | `--fanous-c-menu-hover` |
 | Border | 1px `--fanous-color-outline` | 1px `--fanous-c-menu-border` |
-| Separators, role-chip border | `--fanous-color-text-primary` mixed 35% into `--fanous-color-background` | `--fanous-c-menu-text` mixed 35% into `--fanous-c-menu-bg` |
+| Separators, role-chip border | `--fanous-color-text-primary` mixed 45% into `--fanous-color-background` | `--fanous-c-menu-text` mixed 45% into `--fanous-c-menu-bg` |
 | Shadow | `--fanous-elevation-medium` | `--fanous-elevation-medium` |
 
 | Property | Value (both modes) |
 |---|---|
-| Radius | `--fanous-radius-md` (8px). Items use `--fanous-radius-sm` (4px) |
-| Padding | `--fanous-spacing-xs` (4px) |
-| Width | 16rem min, 20rem max |
-| Item | 2.75rem min height (touch target), `--fanous-spacing-md` inline padding, 0.9375rem text, 1.125rem icon in muted |
-| Section label | 0.75rem, weight 600, muted, never upper-cased (Arabic) |
+| Radius | `--fanous-radius-md` (8px). Rows are square: they run edge to edge |
+| Padding | 4px at the bottom only; the who panel starts at the top edge |
+| Width | 21rem on every view and in every app (the channel switcher does not narrow it) |
+| Item | 2.75rem min height (touch target), 16px inline padding, 0.9375rem text |
+| Account row | 3.25rem min height (two lines), sign-out icon button at the end |
+| Leading column | 2rem (`--aun-menu-lead`): 1.25rem icons centred in it, 1.75rem app tiles, 2rem avatars, so every label starts at the same line, in both directions |
+| Section header | 0.75rem, weight 700, muted, 8px above and 4px below, never upper-cased or letter-spaced (Arabic) |
+| Separator | full width, 4px above and below (none between the who panel and the first one) |
 | Role chip (`.aun-badge`) | 11px, weight 600, pill, 1px separator border, muted text |
-| Note (`.aun-menu-note`) | 13px, muted, item padding; why an action is missing |
+| Note (`.aun-menu-note`) | 13px, muted, the rows' 16px inline padding; why an action is missing |
 | Focus | 2px `--fanous-color-focus-ring` outline, inset 2px |
 | Current / checked | the hover fill, weight 600, `.aun-menu-check` (`--fanous-color-link`) at the end |
 | Danger | `--fanous-color-error-text` |
 | Phone (≤ 30rem) | a sheet under the header: full width less 8px each side, scrolls inside |
+| Selectors | never "a :is(b)" (a space before a pseudo-class function): the CMS minifier drops the space; a test rejects it |
 
 Contrast (computed from the tokens, every theme): light mode, text, muted, danger and the check on
 the background and the hover tint are 5.10:1 or more; dark mode (the menu tokens) 4.69:1 or more.
 
-Lines must show, in every app's menu (owner review rev 4, "in dark you can't see the lines between
-rows", then the same report for the CMS menu in dark teal and brown). The separator is one shared
-rule, `--aun-menu-line`: the menu's text mixed 35% into the menu's surface, in both modes. The
-themes' divider tokens are 1.0–1.8:1 on the menus, too faint, so no app uses them for menu lines.
+Lines must show, in every app's menu (owner reviews: "in dark you can't see the lines between
+rows", the CMS menu in dark teal and brown, then www and profile: "the dividers are too faint").
+The separator is one shared rule, `--aun-menu-line`: the menu's text mixed 45% into the menu's
+surface, in both modes. The themes' divider tokens are 1.0–1.8:1 on the menus, too faint, so no
+app uses them for menu lines.
 
 | Line | Light mode | Dark mode | Floor (checked) |
 |---|---|---|---|
-| Separators between sections | 1.97–2.10:1 (Lantern 2.02, Fawanees 2.10, Zujaj 1.97, Nahas 2.09) | 2.13–2.89:1 (Lantern 2.40, Fawanees 2.53, Zujaj 2.13, Nahas 2.89) | 1.9:1 both modes |
+| Separators between sections | 2.47–2.73:1 (Lantern 2.55, Fawanees 2.73, Zujaj 2.47, Nahas 2.69) | 2.60–3.81:1 (Lantern 3.03, Fawanees 3.21, Zujaj 2.60, Nahas 3.81) | 2.4:1 both modes |
 | Outer border | 3.57–5.12:1 on the background | 3.24–4.40:1 on the menu | 3:1 |
 
 Checks:
