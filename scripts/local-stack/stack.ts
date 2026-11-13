@@ -33,6 +33,8 @@ export const PORTS = {
   'admin-web': 3091,
   /** Short share links (apps/short-links, alummahnow.link on the deployed tiers) */
   'short-links': 3092,
+  /** Public status page (apps/status): its D1 is shared with admin-api's STATUS_DB */
+  status: 3095,
   auth: 3301,
   profile: 3302,
   'auth-admin': 3303,
@@ -156,6 +158,14 @@ export const WORKERS: StackWorker[] = [
       ADMIN_WEB_URL: url('admin-web'),
       VIDEOS_API_URL: url('api-videos'),
     },
+  },
+  {
+    // Public status page: no cron here (triggers are dropped), so it shows what the admin posts
+    app: 'status',
+    repo: 'videos',
+    dir: 'apps/status',
+    config: 'wrangler.jsonc',
+    vars: { ...COMMON_VARS },
   },
   {
     app: 'processor',

@@ -35,6 +35,12 @@
 			"binding": "COSTS_DB",
 			"database_name": "al-ummah-now-costs",
 			"database_id": "af54e39e-6faa-4923-bba3-8dd7b3e58cf7"
+		},
+		{
+			// Public status page incidents (migrations in apps/status)
+			"binding": "STATUS_DB",
+			"database_name": "al-ummah-now-status",
+			"database_id": "46186741-c3d2-44c0-ad11-9ade9e797df9"
 		}
 	],
 
@@ -216,6 +222,12 @@
 					"binding": "COSTS_DB",
 					"database_name": "al-ummah-now-costs-stage",
 					"database_id": "d4c4d007-c691-4f92-a728-b2ecd706a3ae"
+				},
+				{
+					// Public status page incidents (migrations in apps/status)
+					"binding": "STATUS_DB",
+					"database_name": "al-ummah-now-status-stage",
+					"database_id": "270a4c91-5cbb-4489-bfd0-0e7f5f66ee36"
 				}
 			],
 			// Token revocation list written by the auth worker (#437)

@@ -265,6 +265,32 @@ jobs:
           cd apps/cost-monitor
           pnpm wrangler deploy -c wrangler.jsonc --env stage --message "release $RELEASE_LABEL"
 
+      # Public status page (apps/status, docs/status-page/README.md): its own Worker, D1 (migrated
+      # above with d1-migrate.ts) and custom domain. `wrangler deploy` attaches the domain from the
+      # config; smoke-tested, rolled back if the smoke fails.
+      - name: Deploy status page (stage)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          RELEASE_LABEL: ${{ needs.resolve.outputs.label }}
+        run: |
+          cd apps/status
+          pnpm wrangler deploy -c wrangler.jsonc --env stage --message "release $RELEASE_LABEL"
+
+      - name: Status page smoke (stage)
+        id: status_smoke
+        run: node --experimental-strip-types --no-warnings scripts/release/status-smoke.ts --env stage
+
+      - name: Roll back status page (smoke failed)
+        if: failure() && steps.status_smoke.outcome == 'failure'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          cd apps/status
+          pnpm wrangler rollback -c wrangler.jsonc --env stage --message "release ${GITHUB_SHA::7}: status smoke failed" -y
+          echo "### Rolled back: status page smoke failed (stage)" >> "$GITHUB_STEP_SUMMARY"
+
       # R2 video delivery (apps/media, epic #687). Containers take no versions upload, so the
       # media worker (and its transcoder image, built here with Docker and pushed to Cloudflare's
       # registry) is deployed with `wrangler deploy` once the promote above passed its smoke,
@@ -595,6 +621,32 @@ jobs:
         run: |
           cd apps/cost-monitor
           pnpm wrangler deploy -c wrangler.jsonc --message "release $RELEASE_LABEL"
+
+      # Public status page (apps/status, docs/status-page/README.md): its own Worker, D1 (migrated
+      # above with d1-migrate.ts) and custom domain. `wrangler deploy` attaches the domain from the
+      # config; smoke-tested, rolled back if the smoke fails.
+      - name: Deploy status page (production)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          RELEASE_LABEL: ${{ needs.resolve.outputs.label }}
+        run: |
+          cd apps/status
+          pnpm wrangler deploy -c wrangler.jsonc --message "release $RELEASE_LABEL"
+
+      - name: Status page smoke (production)
+        id: status_smoke
+        run: node --experimental-strip-types --no-warnings scripts/release/status-smoke.ts --env production
+
+      - name: Roll back status page (smoke failed)
+        if: failure() && steps.status_smoke.outcome == 'failure'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          cd apps/status
+          pnpm wrangler rollback -c wrangler.jsonc --message "release ${GITHUB_SHA::7}: status smoke failed" -y
+          echo "### Rolled back: status page smoke failed (production)" >> "$GITHUB_STEP_SUMMARY"
 
       # R2 video delivery (apps/media, epic #687). Containers take no versions upload, so the
       # media worker (and its transcoder image, built here with Docker and pushed to Cloudflare's

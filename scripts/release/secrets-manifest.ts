@@ -110,6 +110,11 @@ export const SECRETS_MANIFEST: WorkerSecrets[] = [
 			{ name: 'CF_ANALYTICS_TOKEN', purpose: 'Secrets Store media-cdn-api-token (all envs); Account Analytics Read for the hourly GraphQL query' },
 		],
 	}),
+	// Public status page (docs/status-page/README.md): outage alerts become Errors page items.
+	// RESEND_API_KEY (production and stage only) mails an alert directly when the admin itself is down.
+	...envs('status', 'al-ummah-status-qa', {
+		required: [{ ...INTERNAL_API_KEY, purpose: 'Secrets Store internal-api-key[-qa|-stage]; X-API-Key of outage alerts to admin-api /internal/errors' }],
+	}),
 ];
 
 export interface BuildSecret {

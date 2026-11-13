@@ -58,6 +58,8 @@ export const PERMISSIONS = {
   'ops:read': ADMIN_ROLE_IDS,
   /** Change the Operations alert thresholds. */
   'ops:manage': ['super_admin'],
+  /** Status page (docs/status-page/README.md): see checks and incidents; post, update, resolve and delete incidents and maintenance. */
+  'status:manage': ADMIN_ROLE_IDS,
 } as const satisfies Record<string, readonly string[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

@@ -313,6 +313,29 @@ export const APPS: AppRule[] = [
 		}),
 	},
 	{
+		// Public status page (docs/status-page/README.md): its own Worker and D1, custom domain
+		// status[.stage].alummahnow.net. Released with `wrangler deploy` after the promote, then smoke-tested.
+		app: 'status',
+		configPath: 'apps/status/wrangler.jsonc',
+		qaConfigPath: 'apps/status/wrangler.qa.jsonc',
+		dir: 'apps/status',
+		deployFlags: 'any',
+		production: {
+			env: null,
+			name: 'al-ummah-status',
+			requireRoutes: true,
+			vars: { ENVIRONMENT: 'production', ERRORS_INGEST_URL: 'https://admin.api.alummahnow.net/internal/errors' },
+			requiredBindings: [INTERNAL_API_KEY, RESEND_API_KEY, { kind: 'd1_databases', name: 'STATUS_DB' }],
+			...PROD_GUARDS,
+		},
+		stage: stageRule({
+			name: 'al-ummah-status-stage',
+			requireRoutes: true,
+			vars: { ENVIRONMENT: 'stage' },
+			requiredBindings: [INTERNAL_API_KEY, { kind: 'd1_databases', name: 'STATUS_DB' }],
+		}),
+	},
+	{
 		app: 'admin-api',
 		configPath: 'apps/admin-api/wrangler.jsonc',
 		qaConfigPath: 'apps/admin-api/wrangler.qa.jsonc',

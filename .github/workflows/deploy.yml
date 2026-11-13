@@ -1123,6 +1123,18 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
+      # Public status page (docs/status-page/README.md): its D1 is migrated before admin-api,
+      # which writes incidents to it (STATUS_DB); then a read-only smoke of status.qa
+      - name: Deploy Status Page to QA
+        run: |
+          cd apps/status
+          pnpm wrangler d1 migrations apply al-ummah-now-status-qa --remote --config wrangler.qa.jsonc
+          pnpm wrangler deploy --config wrangler.qa.jsonc
+          node --experimental-strip-types --no-warnings ../../scripts/release/status-smoke.ts --env qa
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
       - name: Deploy Admin API to QA
         run: |
           cd apps/admin-api
@@ -1186,8 +1198,9 @@ jobs:
           echo "  • al-ummah-admin-web-qa → admin.qa.alummahnow.net"
           echo "  • al-ummah-cost-monitor-qa (cron)"
           echo "  • al-ummah-now-short-links-qa → qa.alummahnow.link"
+          echo "  • al-ummah-status-qa → status.qa.alummahnow.net"
           echo ""
-          echo "All 9 QA workers are live!"
+          echo "All 10 QA workers are live!"
 
   # R2 video delivery beside Bunny (epic #687): the media Worker and its FFmpeg
   # container (wrangler builds the image with Docker and pushes it to Cloudflare's

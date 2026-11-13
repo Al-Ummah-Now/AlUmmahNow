@@ -408,6 +408,37 @@ importers:
         specifier: ^4.108.0
         version: 4.108.0(@cloudflare/workers-types@4.20251115.0)
 
+  apps/status:
+    dependencies:
+      '@al-ummah/logger':
+        specifier: workspace:*
+        version: link:../../packages/logger
+      '@al-ummah/shared-types':
+        specifier: workspace:*
+        version: link:../../packages/shared-types
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: ^4.20251106.1
+        version: 4.20251115.0
+      '@eslint/js':
+        specifier: ^9.39.1
+        version: 9.39.1
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.25
+      eslint:
+        specifier: 9.39.1
+        version: 9.39.1(jiti@2.6.1)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      typescript-eslint:
+        specifier: ^8.46.4
+        version: 8.46.4(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3)
+      wrangler:
+        specifier: ^4.108.0
+        version: 4.108.0(@cloudflare/workers-types@4.20251115.0)
+
   apps/web:
     dependencies:
       '@al-ummah-now/openauth':

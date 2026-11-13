@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import Link from '@/components/common/AppLink';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { ChevronLeft, ChevronRight, CircleUserRound, Clock, Compass, Heart, History, Home, Languages, Menu, Moon, ShieldCheck, Sun, Tv, BookOpen, Mail, X, type LucideIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CircleUserRound, Clock, Compass, Heart, History, Home, Languages, Menu, Moon, ShieldCheck, Sun, Tv, BookOpen, Mail, Activity, X, type LucideIcon } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { saveLanguagePreference } from '@/lib/i18n/utils';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
@@ -14,15 +14,16 @@ import { UnifiedNavigationRTL } from '@/components/UnifiedNavigation/rtl';
 import { UploadAction } from '@/components/Header/UploadAction';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { useRailMotion } from './rail-breakpoint';
+import { statusPageUrl } from '@/lib/navigation/destinations';
 
 const L = {
-  en: { browse: 'Browse', create: 'Create', more: 'More', history: 'History', watchLater: 'Watch later', liked: 'Liked videos', settings: 'Settings', search: 'Search videos', lightMode: 'Switch to light mode', darkMode: 'Switch to dark mode', other: 'العربية', otherLabel: 'التبديل إلى العربية', menu: 'Menu', close: 'Close menu' },
-  ar: { browse: 'تصفّح', create: 'إنشاء', more: 'المزيد', history: 'السجل', watchLater: 'المشاهدة لاحقًا', liked: 'المرئيات التي أعجبتك', settings: 'الإعدادات', search: 'ابحث عن مرئيات', lightMode: 'التبديل إلى الوضع الفاتح', darkMode: 'التبديل إلى الوضع الداكن', other: 'English', otherLabel: 'Switch to English', menu: 'القائمة', close: 'إغلاق القائمة' },
+  en: { status: 'Status', browse: 'Browse', create: 'Create', more: 'More', history: 'History', watchLater: 'Watch later', liked: 'Liked videos', settings: 'Settings', search: 'Search videos', lightMode: 'Switch to light mode', darkMode: 'Switch to dark mode', other: 'العربية', otherLabel: 'التبديل إلى العربية', menu: 'Menu', close: 'Close menu' },
+  ar: { status: 'حالة الخدمات', browse: 'تصفّح', create: 'إنشاء', more: 'المزيد', history: 'السجل', watchLater: 'المشاهدة لاحقًا', liked: 'المرئيات التي أعجبتك', settings: 'الإعدادات', search: 'ابحث عن مرئيات', lightMode: 'التبديل إلى الوضع الفاتح', darkMode: 'التبديل إلى الوضع الداكن', other: 'English', otherLabel: 'Switch to English', menu: 'القائمة', close: 'إغلاق القائمة' },
 };
 
 /** `hub`: the "You" entry. In the collapsed rail it is an icon item; in the open rail and the drawer it reads as
  * the section's heading link ("You ›") over History, Watch later and Liked videos (owner, 2026-11-13). */
-interface Item { label: string; href: string; icon: LucideIcon; tab?: boolean; hub?: boolean }
+interface Item { label: string; href: string; icon: LucideIcon; tab?: boolean; hub?: boolean; external?: boolean }
 
 export function AppShell() {
   const { t, lang, oppositeLanguage } = useLanguage();
@@ -36,7 +37,9 @@ export function AppShell() {
   const base = `/${lang}`;
   const rtl = lang === 'ar';
 
-  useEffect(() => { setMounted(true); }, []);
+  // One build serves stage and production: the env's status host is known only in the browser
+  const [statusHref, setStatusHref] = useState(() => statusPageUrl('', lang));
+  useEffect(() => { setMounted(true); setStatusHref(statusPageUrl(window.location.hostname, lang)); }, [lang]);
   useRailMotion(open);
   useEffect(() => { setOpen(false); }, [pathname]);
   useEffect(() => { document.documentElement.dataset.rail = open ? 'open' : 'closed'; }, [open]);
@@ -63,6 +66,8 @@ export function AppShell() {
       { label: t.navigation.privacyAndCookies, href: `${base}/settings/privacy`, icon: ShieldCheck },
       { label: t.communityGuidelines.navLabel, href: `${base}/community-guidelines`, icon: BookOpen },
       { label: t.contact.navLabel, href: `${base}/contact`, icon: Mail },
+      // The public status page (apps/status): its own host, so it opens even when this site is down
+      { label: c.status, href: statusHref, icon: Activity, external: true },
     ] },
   ];
 
@@ -106,7 +111,11 @@ export function AppShell() {
           {groups.map((g, i) => (
             <div className="nv-group" key={g.title ?? i}>
               {g.title && <div className="nv-heading">{g.title}</div>}
-              {g.items.map((it) => (
+              {g.items.map((it) => it.external ? (
+                <a key={it.label} href={it.href} className="nv" data-testid="nav-status" title={it.label}>
+                  <it.icon aria-hidden="true" /><span>{it.label}</span>
+                </a>
+              ) : (
                 <Link key={it.href} href={it.href} className={it.hub ? 'nv nv-hub' : 'nv'} data-testid={it.hub ? 'nav-you' : undefined} aria-current={isCurrent(it.href) ? 'page' : undefined} title={it.label}>
                   <it.icon aria-hidden="true" /><span>{it.label}</span>
                   {it.hub && (rtl ? <ChevronLeft className="nv-chev" aria-hidden="true" /> : <ChevronRight className="nv-chev" aria-hidden="true" />)}

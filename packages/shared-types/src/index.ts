@@ -112,3 +112,4 @@ export * from './live-providers';
 // The account menu's "Al Ummah Now apps" links, same order and role gates in every app (docs/design/NAV.md)
 export * from './app-links';
 export * from './archive-privacy';
+export * from './status-page';

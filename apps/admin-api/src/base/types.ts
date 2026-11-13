@@ -19,6 +19,8 @@ export interface AdminBindings {
   REPORTS_DB: D1Database;
   /** Platform analytics rollups written by apps/cost-monitor (docs/admin/LIVE_OPS.md); absent in local dev. */
   COSTS_DB?: D1Database;
+  /** Public status page's D1 (apps/status): incidents written here, checks read; absent in local dev. */
+  STATUS_DB?: D1Database;
   /** Search index (api-videos owns it); the section index rebuild reads it (AA-4). */
   SEARCH_DB?: D1Database;
 
