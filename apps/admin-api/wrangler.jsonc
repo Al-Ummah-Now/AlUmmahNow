@@ -79,6 +79,12 @@
 			"remote": true
 		},
 		{
+			// Pre-publication review (docs/specs/VIDEO-REVIEW.md §6): frames for the reviewer, purged after retention
+			"binding": "REVIEW_MEDIA",
+			"bucket_name": "al-ummah-now-media-private",
+			"remote": true
+		},
+		{
 			// Read by AI moderation review (Epic 28) to show post text
 			"binding": "community_posts",
 			"bucket_name": "community-posts",
@@ -265,6 +271,10 @@
 				{
 					"binding": "global_settings",
 					"bucket_name": "global-settings-stage"
+				},
+				{
+					"binding": "REVIEW_MEDIA",
+					"bucket_name": "al-ummah-now-media-private-stage"
 				},
 				{
 					"binding": "community_posts",

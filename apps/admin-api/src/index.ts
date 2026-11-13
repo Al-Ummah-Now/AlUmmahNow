@@ -12,6 +12,8 @@ import themesRouter, { publicThemes } from './routers/themes.router';
 import contentRouter from './routers/content.router';
 import suggestRouter from './routers/suggest.router';
 import reportQueueRouter from './routers/reportQueue.router';
+import reviewRouter from './routers/review.router';
+import { purgeReviewMedia } from './lib/review/queue';
 import { scheduledReportMetaSync } from './lib/moderation/reportMeta';
 import invitesRouter from './routers/invites.router';
 import sitesRouter from './routers/sites.router';
@@ -181,6 +183,8 @@ app.route('/api/content', contentRouter);
 
 // Reports queue: Action needed (grouped per item) and History, with search (shared-types report-queue.ts)
 app.route('/api/moderation/queue', reportQueueRouter as never);
+// Pre-publication video review: the queue for people, web and native (docs/specs/VIDEO-REVIEW.md §6)
+app.route('/api/review', reviewRouter as never);
 
 // Admin autocomplete: suggestions for every search and lookup box in admin-web
 app.route('/api/suggest', suggestRouter);
@@ -243,6 +247,12 @@ app.get('/health', (c) => {
 async function scheduled(controller: ScheduledController, env: AdminBindings, ctx: ExecutionContext): Promise<void> {
   if (controller.cron === '17 3 * * *') {
     ctx.waitUntil(runErrorRetention(env as never));
+    // Pre-publication review retention (VR12): media 30 days after the decision, findings 12 months
+    ctx.waitUntil(
+      purgeReviewMedia(env as never)
+        .then(({ purged }) => { if (purged > 0) logger.info('[Review] Purged review media', { purged }); })
+        .catch((error) => logger.error('[Review] Review media purge failed', { error: String(error) })),
+    );
     return;
   }
   ctx.waitUntil(scheduleSyncs(env).catch((error) => logger.error('[AuthRequests] scheduled status reads failed', { error: String(error) })));

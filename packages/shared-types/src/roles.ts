@@ -62,3 +62,7 @@ export const isStaff = (roles: unknown): boolean => hasAnyRole(roles, STAFF_ROLE
 
 /** Senior reviewer or Super Admin: may see escalations and minor-present items. */
 export const isSeniorReviewer = (roles: unknown): boolean => hasAnyRole(roles, [ROLE_IDS.superAdmin, ROLE_IDS.seniorReviewer]);
+
+/** May work the video review queue (wiki AUN-VIDEO-REVIEW, VR7): reviewers, moderators and admins. */
+export const isReviewer = (roles: unknown): boolean =>
+  hasAnyRole(roles, [ROLE_IDS.superAdmin, ROLE_IDS.admin, ROLE_IDS.moderator, ROLE_IDS.contentReviewer, ROLE_IDS.seniorReviewer]);
