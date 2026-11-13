@@ -135,7 +135,10 @@ test.describe('Release: uploads', () => {
     // Keep it out of public listings
     await page.getByTestId('upload-is-public').uncheck();
 
-    const tus = page.waitForResponse((r) => /\/api\/videos\/tus\//.test(r.url()) && r.request().method() === 'PATCH');
+    // The first chunk follows initiate, the TUS create and a resume HEAD (#1188 retries it): on a busy
+    // stage that took longer than the default 15 s (v2026.11.13.8 encode part). Uploads run with no
+    // retries (Bunny cap), so give it the time the upload has (success waits 150 s)
+    const tus = page.waitForResponse((r) => /\/api\/videos\/tus\//.test(r.url()) && r.request().method() === 'PATCH', { timeout: 90_000 });
     await page.getByTestId('upload-submit').click();
     expect((await tus).status(), 'TUS chunk upload').toBeLessThan(300);
     await expect(page.getByTestId('upload-success')).toBeVisible({ timeout: 150000 });

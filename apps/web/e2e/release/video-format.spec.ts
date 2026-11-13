@@ -61,7 +61,7 @@ async function uploadOnPage(page: Page, user: WebUser, channelId: string, file: 
   await expect(page.getByTestId('video-upload-format-short')).toBeVisible();
   await expect(page.getByTestId('video-upload-format-video')).toBeVisible();
 
-  const tus = page.waitForResponse((r) => /\/api\/videos\/tus\//.test(r.url()) && r.request().method() === 'PATCH');
+  const tus = page.waitForResponse((r) => /\/api\/videos\/tus\//.test(r.url()) && r.request().method() === 'PATCH', { timeout: 90_000 });
   await page.getByTestId('upload-submit').click();
   expect((await tus).status(), 'TUS chunk upload').toBeLessThan(300);
   await expect(page.getByTestId('upload-success')).toBeVisible({ timeout: 150000 });
