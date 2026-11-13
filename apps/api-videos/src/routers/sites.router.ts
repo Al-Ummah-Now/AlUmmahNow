@@ -8,7 +8,12 @@
  *   PATCH  /internal/sites/:channelId              { status?, tier?, limits?, slug? } → { before, site }
  *   DELETE /internal/sites/:channelId              → { site }   (revoke; restorable for 30 days)
  *   POST   /internal/sites/:channelId/restore      → { site }
- *   The acting admin is X-Admin-Actor.
+ *   GET    /internal/sites/:channelId/editor?userId= → { canEdit }   (channel.edit, for admin-api's Studio domain calls)
+ *   POST   /internal/sites/:channelId/domains       { host } → 201 { site, domain }   (reserve: checks, host index)
+ *   PATCH  /internal/sites/:channelId/domains/:host { cfId?, status?, records?, error? } → { site, domain }
+ *   DELETE /internal/sites/:channelId/domains/:host → { site, removed }
+ *   PUT    /internal/sites/:channelId/primary       { host } → { site }
+ *   The acting admin (or Studio user) is X-Admin-Actor.
  *
  * Public, for the sites Worker:
  *   GET /api/sites/by-host/:host[?preview=<token>]  → PublicSite | 301-style { redirectTo } | 404
@@ -24,6 +29,7 @@ import { logger } from '../lib/logger';
 import { rethrowBusy } from '../lib/r2Repo';
 import { roleOnChannel } from '../lib/channelAccess';
 import { CHANNEL_ID, SiteError, readSettings, siteEnvironment, writePreview, type SitesEnv } from '../lib/sites/store';
+import { removeDomain, reserveDomain, setPrimaryHost, updateDomain } from '../lib/sites/domains';
 import { adminUpdateSite, grantSite, pickUpdate, publicSiteForHost, restoreSite, revokeSite, slugAvailability, updateSiteSettings } from '../lib/sites/service';
 
 type Env = { Bindings: SitesEnv & { VIDEOS_WEB_URL?: string }; Variables: { userId?: string } };
@@ -100,6 +106,55 @@ sitesInternalRouter.patch('/:channelId', async (c) => {
 sitesInternalRouter.delete('/:channelId', async (c) => {
 	try {
 		return c.json({ site: await revokeSite(c.env, c.req.param('channelId'), actorOf(c)) });
+	} catch (error) {
+		return fail(c, error);
+	}
+});
+
+sitesInternalRouter.get('/:channelId/editor', async (c) => {
+	try {
+		const channelId = c.req.param('channelId');
+		const userId = c.req.query('userId') ?? '';
+		if (!CHANNEL_ID.test(channelId) || !userId) return c.json({ canEdit: false });
+		return c.json({ canEdit: can(await roleOnChannel(c.env as never, channelId, userId), 'channel.edit') });
+	} catch (error) {
+		return fail(c, error);
+	}
+});
+
+sitesInternalRouter.post('/:channelId/domains', async (c) => {
+	try {
+		const body = (await c.req.json().catch(() => null)) as { host?: unknown } | null;
+		if (!body || typeof body.host !== 'string') return c.json({ error: 'bad_request' }, 400);
+		return c.json(await reserveDomain(c.env, c.req.param('channelId'), body.host, actorOf(c)), 201);
+	} catch (error) {
+		return fail(c, error);
+	}
+});
+
+sitesInternalRouter.patch('/:channelId/domains/:host', async (c) => {
+	try {
+		const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+		if (!body) return c.json({ error: 'bad_request' }, 400);
+		return c.json(await updateDomain(c.env, c.req.param('channelId'), c.req.param('host'), body as never, actorOf(c)));
+	} catch (error) {
+		return fail(c, error);
+	}
+});
+
+sitesInternalRouter.delete('/:channelId/domains/:host', async (c) => {
+	try {
+		return c.json(await removeDomain(c.env, c.req.param('channelId'), c.req.param('host'), actorOf(c)));
+	} catch (error) {
+		return fail(c, error);
+	}
+});
+
+sitesInternalRouter.put('/:channelId/primary', async (c) => {
+	try {
+		const body = (await c.req.json().catch(() => null)) as { host?: unknown } | null;
+		if (!body || typeof body.host !== 'string') return c.json({ error: 'bad_request' }, 400);
+		return c.json({ site: await setPrimaryHost(c.env, c.req.param('channelId'), body.host, actorOf(c)) });
 	} catch (error) {
 		return fail(c, error);
 	}

@@ -3,7 +3,7 @@
 /**
  * Admin → Scholar sites (wiki AUN-SCHOLAR-SITES §8). Grant form (channel autocomplete, tier,
  * subdomain with a live availability check, languages, limits), the sites list with search, and a
- * panel per site: status, rename, limits, revoke/restore and its history. Destructive and public
+ * panel per site: status, rename, limits, own domains (#1212), revoke/restore and its history. Destructive and public
  * changes ask in the in-app dialog, never a browser prompt.
  */
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
@@ -23,6 +23,7 @@ import { useLanguage } from '@/i18n/I18nProvider';
 import type { MessageKey } from '@/i18n/translate';
 import { Autocomplete } from '@/components/search/Autocomplete';
 import { TierChangeDialog } from '@/components/creators/TierChangeDialog';
+import { SiteDomainsPanel } from './SiteDomainsPanel';
 import { Chip, EmptyState, Notice, PageHeader, SectionCard, smallButtonClass, tableWrapClass, tdClass, thClass } from '@/components/content/parts';
 import { fieldClass, primaryButtonClass } from '@/components/ui';
 import { checkSiteSlug, getSite, grantSite, restoreSite, revokeSite, updateSite, type SiteDetail, type SiteListItem } from '@/lib/api/sites';
@@ -305,6 +306,7 @@ function SitePanel({ channelId, canManage, onChanged }: { channelId: string; can
       ) : (
         <p className="text-sm text-fg-muted">{t('scholarSites.noPermission')}</p>
       )}
+      {site.status !== 'revoked' && <SiteDomainsPanel channelId={channelId} canManage={canManage} />}
       <div>
         <h3 className="text-sm font-medium mb-2">{t('scholarSites.history')}</h3>
         <ul className="text-sm space-y-1" data-testid="site-history">

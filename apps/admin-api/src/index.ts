@@ -15,6 +15,8 @@ import reportQueueRouter from './routers/reportQueue.router';
 import { scheduledReportMetaSync } from './lib/moderation/reportMeta';
 import invitesRouter from './routers/invites.router';
 import sitesRouter from './routers/sites.router';
+import { staffSiteDomainsRouter, studioSiteDomainsRouter } from './routers/siteDomains.router';
+import { runDomainChecks } from './lib/sites/domains';
 import { scheduleInviteSyncs } from './lib/invites';
 import processingRouter from './routers/processing.router';
 import mediaRouter from './routers/media.router';
@@ -135,6 +137,8 @@ app.post('/internal/contact', (c) => contactSubmit(c as never));
 app.route('/public/themes', publicThemes as never);
 // Error events from every app (X-API-Key; endpoints/errors/ErrorsIngest.ts)
 app.post('/internal/errors', (c) => errorsIngest(c as never));
+// Studio → Site → Domains from the videos site's server (X-API-Key + the user's token; channel.edit)
+app.route('/internal/site-domains', studioSiteDomainsRouter as never);
 
 // Apply auth + admin middleware to all API routes
 app.use('/api/*', authMiddleware);
@@ -183,6 +187,7 @@ app.route('/api/suggest', suggestRouter);
 // Invite creators: pre-provisioned accounts, plan and channels before first sign-in (docs/admin/INVITES.md)
 app.route('/api/invites', invitesRouter);
 // White-label scholar sites: grant, change, revoke, restore (wiki AUN-SCHOLAR-SITES §8)
+app.route('/api/sites', staffSiteDomainsRouter as never);
 app.route('/api/sites', sitesRouter);
 
 // Upload processing health (sync from Bunny, retry, mark failed): permission-checked, audited proxy to api-videos
@@ -251,6 +256,8 @@ async function scheduled(controller: ScheduledController, env: AdminBindings, ct
   }
   ctx.waitUntil(scheduledReportMetaSync(env as never));
   ctx.waitUntil(scheduleInviteSyncs(env as never).catch((error) => logger.error('[Invites] scheduled status reads failed', { error: String(error) })));
+  // Own domains of scholar sites (#1212): only the due checks (indexed), every 10 min then daily
+  ctx.waitUntil(runDomainChecks(env as never, controller.scheduledTime).then(() => undefined).catch((error) => logger.error('[SiteDomains] scheduled checks failed', { error: String(error) })));
 }
 
 /**

@@ -159,6 +159,7 @@
     // Account Analytics Read (shared with apps/cost-monitor): the Abuse panel reads Analytics Engine
 
     { "binding": "CF_ANALYTICS_TOKEN", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "media-cdn-api-token" },
+    { "binding": "SITES_SAAS_TOKEN", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "sites-saas-token" },
     {
       "binding": "INTERNAL_API_KEY",
       "store_id": "f8eddc9944d041919ed8dc7d08d32308",

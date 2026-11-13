@@ -70,3 +70,31 @@ export async function revokeSite(channelId: string): Promise<ActionResult<{ site
 export async function restoreSite(channelId: string): Promise<ActionResult<{ site: SiteSettings }>> {
   return mutate(`/api/sites/${enc(channelId)}/restore`, 'POST', {});
 }
+
+/** Own domains (#1212, admin-api /api/sites/:channelId/domains). `code` saas_unavailable while Cloudflare for SaaS is off. */
+export interface SiteDomainsView {
+  domains: NonNullable<SiteSettings['domains']>;
+  hosts: SiteSettings['hosts'];
+  primaryHost: string | null;
+  limit: number;
+}
+
+export async function getSiteDomains(channelId: string): Promise<ActionResult<SiteDomainsView>> {
+  return mutate(`/api/sites/${enc(channelId)}/domains`, 'GET');
+}
+
+export async function addSiteDomain(channelId: string, host: string): Promise<ActionResult<{ domain: SiteDomainsView['domains'][number] }>> {
+  return mutate(`/api/sites/${enc(channelId)}/domains`, 'POST', { host });
+}
+
+export async function refreshSiteDomain(channelId: string, host: string): Promise<ActionResult<{ domain: SiteDomainsView['domains'][number] }>> {
+  return mutate(`/api/sites/${enc(channelId)}/domains/${enc(host)}/refresh`, 'POST', {});
+}
+
+export async function removeSiteDomain(channelId: string, host: string): Promise<ActionResult<SiteDomainsView>> {
+  return mutate(`/api/sites/${enc(channelId)}/domains/${enc(host)}`, 'DELETE');
+}
+
+export async function setSitePrimaryHost(channelId: string, host: string): Promise<ActionResult<SiteDomainsView>> {
+  return mutate(`/api/sites/${enc(channelId)}/primary`, 'PUT', { host });
+}
