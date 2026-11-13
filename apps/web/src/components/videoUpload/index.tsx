@@ -6,6 +6,8 @@ import React, { useState, useRef, useCallback, useEffect, useMemo } from "react"
 import { ResilientUpload, grantedUploadUrl, reportUploadFailure, requestUploadResume, tusEndpointFor, type ReauthoriseResult } from "@/lib/upload/resilient-tus";
 import { findRememberedUpload, forgetUpload, rememberUpload } from "@/lib/upload/resume-store";
 import { tryFileFingerprint } from "@/lib/upload/fingerprint";
+import { checkPickedFile } from "@/lib/upload/picked-file";
+import { AlreadyUploadedPanel } from "./AlreadyUploadedPanel";
 import { fetchClientAuthToken, getClientAuthHeaders } from "@/lib/auth/client-token";
 import { VideoObject } from "@/interfaces";
 import { useAuth } from "@/components/AuthProvider/authContext";
@@ -123,6 +125,12 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
   });
   const [saveAsDraft, setSaveAsDraft] = useState(false);
   const [showMetadataForm, setShowMetadataForm] = useState(false);
+  // The picked file was already uploaded from this browser (finished): shown instead of the form,
+  // with a link to it; a second video only when the user asks for one ("Upload again as a new video")
+  const [alreadyUploaded, setAlreadyUploaded] = useState<{ videoId: string } | null>(null);
+  const uploadAgainRef = useRef(false);
+  // The file the pick-time check belongs to (a later pick makes its answer stale)
+  const pickedFileRef = useRef<File | null>(null);
   const [activeTab, setActiveTab] = useState<'en' | 'ar'>('en');
   const [selectedThumbnail, setSelectedThumbnail] = useState<ThumbnailData | null>(null);
   const [scheduleData, setScheduleData] = useState<ScheduleData | null>(null);
@@ -211,6 +219,19 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
     }
 
     setSelectedFile(file);
+    pickedFileRef.current = file;
+    uploadAgainRef.current = false;
+    setAlreadyUploaded(null);
+    // The same file uploaded before (this browser, this channel): say so instead of uploading it twice.
+    // A studio Re-upload targets its own video and is never "already uploaded" here.
+    if (!resumeVideoId && activeChannel) {
+      const channelForCheck = activeChannel.id;
+      void checkPickedFile(file, channelForCheck, {
+        resume: async (videoId) => requestUploadResume(getApiUrl(), videoId, await getClientAuthHeaders()),
+      }).then((picked) => {
+        if (picked.kind === 'uploaded' && pickedFileRef.current === file) setAlreadyUploaded({ videoId: picked.videoId });
+      });
+    }
     // A re-upload keeps its video's title; a new upload starts from the file name
     const defaultTitle = resumeTitle || file.name.replace(/\.[^/.]+$/, "");
     setMetadata(prev => ({
@@ -220,7 +241,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
       titleAr: ''
     }));
     setShowMetadataForm(true);
-  }, [onError, t, resumeTitle]);
+  }, [onError, t, resumeTitle, resumeVideoId, activeChannel]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -350,6 +371,12 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
           // The user asked for this video: say why, never create another one.
           if (resumed?.kind === 'completed') throw new Error(t.upload.reuploadAlreadyDone);
           throw new Error(resumed?.kind === 'gone' ? resumed.message : (lastError instanceof Error ? lastError.message : VIDEO_UPLOAD_ERRORS.UPLOAD_FAILED));
+        } else if (resumed?.kind === 'completed' && !uploadAgainRef.current) {
+          // Already uploaded (the pick-time check had not answered yet): no second video unless asked
+          setUploadProgress(null);
+          onProgress(0);
+          setAlreadyUploaded({ videoId: targetVideoId });
+          return;
         } else {
           forgetUpload(selectedFile, channelId);
         }
@@ -502,8 +529,8 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
         },
         // tus-js-client does not await onSuccess, so every failure in here
         // must be caught and reported or the form stays in "processing".
+        // The file stays remembered (resume-store.ts): picking it again says "Already uploaded"
         onSuccess: () => {
-          forgetUpload(selectedFile, channelId);
           finishUpload().catch((error: unknown) => {
             reportFailure(error);
           });
@@ -660,6 +687,9 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
 
   const resetForm = () => {
     setSelectedFile(null);
+    pickedFileRef.current = null;
+    uploadAgainRef.current = false;
+    setAlreadyUploaded(null);
     setShowMetadataForm(false);
     setUploadProgress(null);
     // Clear the page-level progress banner as well
@@ -707,6 +737,25 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
       setCategoryState(pickCategory(category));
     }
   }, []);
+
+  // The user chose to upload the same file again: a new video (initiate creates one, as the old one is finished)
+  const uploadAgainAsNew = () => {
+    uploadAgainRef.current = true;
+    if (selectedFile && activeChannel) forgetUpload(selectedFile, activeChannel.id);
+    setAlreadyUploaded(null);
+  };
+
+  if (alreadyUploaded && selectedFile) {
+    return (
+      <AlreadyUploadedPanel
+        fileName={selectedFile.name}
+        videoId={alreadyUploaded.videoId}
+        className={className}
+        onUploadAgain={uploadAgainAsNew}
+        onChooseAnother={resetForm}
+      />
+    );
+  }
 
   if (showMetadataForm && selectedFile) {
     return (
