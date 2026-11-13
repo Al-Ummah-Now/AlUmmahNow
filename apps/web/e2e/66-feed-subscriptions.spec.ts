@@ -134,7 +134,7 @@ test.describe('Feed and subscriptions - with a subscription', () => {
     await page.goto('/en/subscriptions');
     const card = page.getByTestId('video-card').filter({ hasText: channel.videoTitle });
     await expect(card.first()).toBeVisible({ timeout: 60000 });
-    await expect(card.first()).toHaveAttribute('href', /^\/en\/video\?vid=/);
+    await expect(card.first()).toHaveAttribute('href', /^\/en\/video\/[\w-]+$/);
     await expect(page.getByText(/^Showing \d+ videos/)).toBeVisible();
   });
 
@@ -151,7 +151,7 @@ test.describe('Feed and subscriptions - with a subscription', () => {
     await page.goto('/ar/subscriptions');
     const card = page.getByTestId('video-card').first();
     await expect(card).toBeVisible({ timeout: 60000 });
-    await expect(card).toHaveAttribute('href', /^\/ar\/video\?vid=/);
+    await expect(card).toHaveAttribute('href', /^\/ar\/video\/[\w-]+$/);
   });
 
   test('SUBS-010 lists the subscribed channel and unsubscribes from it', async ({ page }) => {

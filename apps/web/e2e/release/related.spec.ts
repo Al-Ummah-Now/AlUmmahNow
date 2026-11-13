@@ -32,10 +32,10 @@ test.describe('Release: related videos on the watch page', () => {
 
       await page.goto(watchUrl(video!.id, locale));
       const list = page.locator('[data-testid="related-videos-list"]:visible').first();
-      const links = list.locator(`a[href*="/${locale}/video?vid="]`);
+      const links = list.locator(`a[href*="/${locale}/video/"]`);
       await expect(links.first()).toBeVisible({ timeout: 30000 });
 
-      const shown = (await links.evaluateAll((as) => as.map((a) => new URL((a as HTMLAnchorElement).href).searchParams.get('vid'))))
+      const shown = (await links.evaluateAll((as) => as.map((a) => decodeURIComponent(new URL((a as HTMLAnchorElement).href).pathname.split('/video/')[1] || ''))))
         .filter((id): id is string => !!id);
       expect(shown, 'the current video is not related to itself').not.toContain(video!.id);
       expect(recommended, `first related video ${shown[0]} is a recommendation`).toContain(shown[0]);
@@ -49,7 +49,7 @@ test.describe('Release: related videos on the watch page', () => {
       // The seed has other public videos on the same channel, so a shelf exists to show
 
       await page.goto(watchUrl(video!.id, locale));
-      const links = page.locator(`[data-testid="related-videos-list"]:visible a[href*="/${locale}/video?vid="]`);
+      const links = page.locator(`[data-testid="related-videos-list"]:visible a[href*="/${locale}/video/"]`);
       await expect(links.first(), 'the related shelf lists at least one video').toBeVisible({ timeout: 30000 });
       expect(await links.count()).toBeGreaterThanOrEqual(1);
     });

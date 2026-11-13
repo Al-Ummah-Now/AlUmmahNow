@@ -14,7 +14,7 @@ const RelatedVideoRTL: React.FC<VideoInfo> = (info) => {
 
   const duration = formatDuration(info.duration);
   return (
-    <Link href={`/${lang}/video?vid=${info.id}`} data-testid="related-video" className="rv">
+    <Link href={`/${lang}/video/${encodeURIComponent(info.id)}`} data-testid="related-video" className="rv">
       <div className="rv-t">
         {info.thumbnail && <FitImage src={resolveUrl(info.thumbnail)} alt="" sizes="(min-width: 1024px) 200px, 50vw" videoWidth={info.width} videoHeight={info.height} />}
         {duration && <span className="rv-d">{duration}</span>}

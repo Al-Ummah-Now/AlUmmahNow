@@ -454,7 +454,7 @@ export default function ChannelVideosPage() {
 
                   {/* Actions */}
                   <div className="flex gap-2">
-                    <Link href={`/${locale}/video?vid=${video.id}`} className="b b-secondary b-sm flex-1">
+                    <Link href={`/${locale}/video/${encodeURIComponent(video.id)}`} className="b b-secondary b-sm flex-1">
                       <Eye size={16} aria-hidden="true" />
                       {t.common.view}
                     </Link>

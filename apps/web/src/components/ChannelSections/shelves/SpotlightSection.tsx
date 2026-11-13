@@ -67,7 +67,7 @@ export function SpotlightSection({ channelId, trailer, returning }: SpotlightPro
   const { video, kind } = picked;
   const title = removeUnwantedChars(getLocalizedValue(video.titleLocalized, video.title, lang));
   const description = getLocalizedValue(video.descriptionLocalized, video.description ?? '', lang);
-  const href = `/${lang}/video?vid=${video.id}`;
+  const href = `/${lang}/video/${encodeURIComponent(video.id)}`;
   const r = t.channelSections.render;
 
   return (

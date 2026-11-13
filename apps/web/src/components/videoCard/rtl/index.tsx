@@ -20,7 +20,7 @@ const VideoCardRTL: React.FC<VideoObject> = (video) => {
   return (
     <div className="relative" dir="rtl">
         <Link
-          href={`/ar/video?vid=${video.id}`}
+          href={`/ar/video/${encodeURIComponent(video.id)}`}
           data-testid="video-card"
           data-video-id={video.id}
           className="video-card cursor-pointer bg-white dark:bg-gray-900 text-black dark:text-white flex flex-col rounded-lg shadow-md overflow-hidden"

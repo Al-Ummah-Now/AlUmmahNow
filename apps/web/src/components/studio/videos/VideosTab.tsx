@@ -244,7 +244,7 @@ export function VideosTab({ locale, channelId, role }: Props) {
   };
 
   const base = `/${locale}/studio/${encodeURIComponent(channelId)}/content/videos`;
-  const watchHref = (id: string) => `/${locale}/video?vid=${encodeURIComponent(id)}`;
+  const watchHref = (id: string) => `/${locale}/video/${encodeURIComponent(id)}`;
 
   const onAction = (action: VideoRowAction, video: StudioVideo) => {
     if (action === 'copyLink') {

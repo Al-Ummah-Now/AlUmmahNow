@@ -69,30 +69,28 @@ test.describe('watch page - anonymous', () => {
     });
   }
 
-  test('WATCH-003 legacy route without a video id shows the select-a-video prompt (en + ar)', async ({ page }) => {
-    await page.goto('/en/video');
-    await expect(page.getByRole('heading', { level: 1, name: 'No Video Selected' })).toBeVisible();
+  test('WATCH-003 /video without a video id is a 404 (en + ar)', async ({ page }) => {
+    expect((await page.goto('/en/video'))?.status()).toBe(404);
     await expect(page.locator('video')).toHaveCount(0);
 
-    await page.goto('/ar/video');
-    await expect(page.getByRole('heading', { level: 1, name: 'لم يتم اختيار مرئي' })).toBeVisible();
-    await expect(page.locator('main')).toHaveAttribute('dir', 'rtl');
+    expect((await page.goto('/ar/video'))?.status()).toBe(404);
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   });
 
   for (const [locale, heading, description] of [
     ['en', 'Video not found', /does not exist/],
     ['ar', 'المرئي غير موجود', /غير موجود/],
   ] as const) {
-    test(`WATCH-004 unknown video id shows a "video not found" state (${locale})`, async ({ page }) => {
-      await page.goto(`/${locale}/video/00000000-0000-4000-8000-000000000000`);
-      const notFound = page.getByTestId('video-not-found');
+    test(`WATCH-004 unknown video id is a real 404 page (${locale})`, async ({ page }) => {
+      const response = await page.goto(`/${locale}/video/00000000-0000-4000-8000-000000000000`);
+      expect(response?.status()).toBe(404);
+      const notFound = page.getByTestId('not-found-page');
       await expect(notFound).toBeVisible();
-      await expect(notFound.getByRole('heading', { level: 1, name: heading })).toBeVisible();
-      await expect(notFound.getByRole('alert')).toContainText(description);
-      await expect(notFound).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
+      await expect(page.locator('html')).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
       await expect(page.getByTestId('video-metrics')).toHaveCount(0);
       await expect(page.locator('video')).toHaveCount(0);
-      await expect(notFound.getByRole('link')).toHaveAttribute('href', `/${locale}`);
+      void heading;
+      void description;
     });
   }
 
@@ -118,7 +116,7 @@ test.describe('watch page - anonymous', () => {
     await expect(related.first()).toBeVisible();
     const hrefs = await related.evaluateAll((links) => links.map((a) => a.getAttribute('href')));
     expect(hrefs.length).toBeGreaterThan(0);
-    expect(hrefs, 'current video is not listed as related').not.toContain(`/en/video?vid=${video.id}`);
+    expect(hrefs, 'current video is not listed as related').not.toContain(`/en/video/${video.id}`);
 
     const box = await related.first().boundingBox();
     const player = await page.locator('#video-player').boundingBox();
@@ -133,8 +131,8 @@ test.describe('watch page - anonymous', () => {
     const ownTitles = new RegExp(`^(${own.videos().map((v) => v.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})$`);
     const link = related.filter({ has: page.getByRole('heading', { level: 3, name: ownTitles }) }).first();
     const title = (await link.getByRole('heading', { level: 3 }).innerText()).trim();
-    const id = (await link.getAttribute('href'))!.split('vid=')[1];
-    await clickAndWaitForURL(page, link, new RegExp(`/en/video\\?vid=${id}$`));
+    const id = (await link.getAttribute('href'))!.split('/video/')[1];
+    await clickAndWaitForURL(page, link, new RegExp(`/en/video/${id}$`));
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(title);
     await expect(page.getByTestId('video-metrics')).toBeVisible();
   });

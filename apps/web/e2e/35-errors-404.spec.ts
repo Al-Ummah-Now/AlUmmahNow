@@ -79,8 +79,35 @@ test('ERR-006 a path without a locale is moved under /en and 404s with a real 40
   await expect(main.getByRole('link', { name: 'Go Home' })).toHaveAttribute('href', '/en');
 });
 
-test('ERR-007 an unprefixed page URL keeps working under /en (query string preserved)', async ({ page }) => {
-  await page.goto('/video?vid=00000000-0000-4000-8000-000000000000');
-  await expect(page).toHaveURL(/\/en\/video\?vid=00000000-0000-4000-8000-000000000000$/);
-  await expect(page.getByTestId('video-not-found')).toBeVisible();
+test('ERR-007 the old unprefixed /video?vid= URL lands on /en/video/<id>', async ({ page }) => {
+  const response = await page.goto('/video?vid=00000000-0000-4000-8000-000000000000');
+  await expect(page).toHaveURL(/\/en\/video\/00000000-0000-4000-8000-000000000000$/);
+  // An unknown video is a real 404, not a 200 "not found" message
+  expect(response?.status()).toBe(404);
+});
+
+for (const [locale, path] of [
+  ['en', '/en/video/00000000-0000-4000-8000-000000000000'],
+  ['ar', '/ar/video/00000000-0000-4000-8000-000000000000'],
+  ['en', '/en/playlist/00000000-0000-4000-8000-000000000000'],
+  ['ar', '/ar/playlist/00000000-0000-4000-8000-000000000000'],
+] as const) {
+  test(`ERR-008 an unknown video or playlist answers 404 with noindex (${path})`, async ({ page }) => {
+    const response = await page.goto(path);
+    expect(response?.status()).toBe(404);
+    await expect(page.getByTestId('not-found-page')).toBeVisible();
+    await expect(page.locator('html')).toHaveAttribute('lang', locale);
+    await expect(page.locator('meta[name="robots"][content*="noindex"]').first()).toBeAttached();
+  });
+}
+
+test('ERR-009 the old /<locale>/video?vid= URL is a 301 to /<locale>/video/<id>, query kept', async ({ request }) => {
+  const response = await request.get('/ar/video?vid=abc123&t=30', { maxRedirects: 0 });
+  expect(response.status()).toBe(301);
+  expect(new URL(response.headers()['location'], 'http://x').pathname + new URL(response.headers()['location'], 'http://x').search).toBe('/ar/video/abc123?t=30');
+});
+
+test('ERR-010 /<locale>/video with no id is a 404', async ({ page }) => {
+  const response = await page.goto('/en/video');
+  expect(response?.status()).toBe(404);
 });

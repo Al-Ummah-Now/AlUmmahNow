@@ -97,7 +97,7 @@ export function HomeHero({ video }: { video: VideoObject }) {
   const { lang } = useLanguage();
   const title = getLocalizedValue(video.titleLocalized, video.title, lang);
   const copy = heroCopy(lang);
-  const href = `/${lang}/video?vid=${video.id}`;
+  const href = `/${lang}/video/${encodeURIComponent(video.id)}`;
   return (
     <section className="home-hero">
       <HeroThumb video={video} href={href} alt={title} />

@@ -16,7 +16,7 @@ const own = ownPublicVideos(test, 'player');
 
 async function openOwnVideo(page: Page, _request: APIRequestContext, locale: 'en' | 'ar' = 'en') {
   const video = own.videos()[0];
-  await page.goto(`/${locale}/video?vid=${video.id}`);
+  await page.goto(`/${locale}/video/${video.id}`);
   return video;
 }
 
@@ -35,7 +35,7 @@ test.describe('Video Player', () => {
     await expect(card).toBeVisible();
     const id = await card.getAttribute('data-video-id');
 
-    await clickAndWaitForURL(page, card, new RegExp(`/en/video\\?vid=${id}$`));
+    await clickAndWaitForURL(page, card, new RegExp(`/en/video/${id}$`));
   });
 
   test('shows the title and player for a video', async ({ page, request }) => {
