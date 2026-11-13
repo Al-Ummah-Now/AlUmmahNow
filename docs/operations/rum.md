@@ -29,6 +29,10 @@ Data point: `index1` = metric, `blob1..5` = metric, page kind, device, locale, e
 
 ## Reading the numbers
 
+**Admin page:** videos admin → Operations → **Web vitals** (`/web-vitals`, `ops:read`). It shows the whole site's p75 LCP, CLS and INP, then one row per page kind × device, busiest first. Each value is rated Good, Needs improvement or Poor at the web.dev limits, and values from fewer than 50 sampled loads are marked. Filters: environment, last 1, 7 or 28 days, and site language (all, en, ar). admin-api `GET /api/vitals/summary` (`apps/admin-api/src/routers/vitals.router.ts`) runs the two Analytics Engine SQL queries with `CF_ANALYTICS_TOKEN`, the same Account Analytics Read token as the Abuse panel, and caches the answer for 5 minutes. A dataset nobody has written to yet shows as "no data".
+
+From a terminal:
+
 ```bash
 CLOUDFLARE_ACCOUNT_ID=… CLOUDFLARE_API_TOKEN=… \
   node --experimental-strip-types --no-warnings scripts/ops/rum-report.ts --env production --days 7

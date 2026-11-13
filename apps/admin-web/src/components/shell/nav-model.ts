@@ -104,6 +104,8 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/status', label: 'nav.status', icon: 'alert', group: 'operations', requires: (a) => a.ops },
   // Bot protection: Turnstile outcomes and rate-limit hits per endpoint (docs/features/bot-protection.md); ops:read
   { href: '/abuse', label: 'nav.abuse', icon: 'alert', group: 'operations', requires: (a) => a.ops },
+  // Field Core Web Vitals of the videos site (docs/operations/rum.md, AUN-SEO phase 4); ops:read
+  { href: '/web-vitals', label: 'nav.vitals', icon: 'activity', group: 'operations', requires: (a) => a.ops },
 
   { href: '/site-theme', label: 'nav.siteTheme', icon: 'palette', group: 'site' },
   { href: '/platform-settings', label: 'nav.platformSettings', icon: 'sliders', group: 'site' },

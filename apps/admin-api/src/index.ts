@@ -26,6 +26,7 @@ import mediaRouter from './routers/media.router';
 import notificationSettingsRouter from './routers/notificationSettings.router';
 import opsRouter from './routers/ops.router';
 import abuseRouter from './routers/abuse.router';
+import vitalsRouter from './routers/vitals.router';
 import statusRouter from './routers/status.router';
 import staleUploadsRouter from './routers/staleUploads.router';
 import trashRouter from './routers/trash.router';
@@ -208,6 +209,7 @@ app.route('/api/notification-settings', notificationSettingsRouter);
 app.route('/api/ops', opsRouter);
 // Abuse panel: Turnstile and rate-limit counters from Analytics Engine (routers/abuse.router.ts); ops:read
 app.route('/api/abuse', abuseRouter);
+app.route('/api/vitals', vitalsRouter);
 
 // Public status page incidents and maintenance (docs/status-page/README.md): writes apps/status's D1; status:manage
 app.route('/api/status', statusRouter);
