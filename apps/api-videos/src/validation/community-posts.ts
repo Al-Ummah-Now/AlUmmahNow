@@ -113,6 +113,15 @@ export async function validateCreatePost(data: any, user: any) {
       }
       break;
 
+    // PostV2 kinds: their content is checked by parsePostFields (post-schema.ts) in the endpoint.
+    case PostType.ARTICLE:
+    case PostType.CARDS:
+    case PostType.LINK:
+      if (data.content && data.content.length > 5000) {
+        errors.push('Text content cannot exceed 5000 characters');
+      }
+      break;
+
     default:
       errors.push(`Invalid post type: ${data.type}`);
   }
@@ -128,8 +137,9 @@ export async function validateCreatePost(data: any, user: any) {
 }
 
 export async function validateUpdatePost(data: any, existingPost: any, user: any) {
-  // A scholar's article is written in the CMS and synced from there (lib/scholar-articles.ts).
-  if (existingPost.type === PostType.ARTICLE) {
+  // A link-only mirror of a CMS article (written before PostV2, no body) is managed by the CMS until
+  // it is converted (lib/scholar-articles.ts); a full article is edited in Studio like any post.
+  if (existingPost.type === PostType.ARTICLE && typeof existingPost.article?.body !== 'string') {
     return { valid: false, error: 'article_managed_in_cms' };
   }
   // Check ownership

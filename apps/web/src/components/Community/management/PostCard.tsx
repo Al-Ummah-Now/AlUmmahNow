@@ -51,7 +51,9 @@ const POST_TYPE_LABELS = {
   [PostType.QUIZ]: { en: 'Quiz', ar: 'اختبار' },
   [PostType.VIDEO]: { en: 'Video', ar: 'مرئي' },
   [PostType.GIF]: { en: 'GIF', ar: 'GIF' },
-  [PostType.ARTICLE]: { en: 'Article', ar: 'مقال' }
+  [PostType.ARTICLE]: { en: 'Article', ar: 'مقال' },
+  [PostType.CARDS]: { en: 'Cards', ar: 'بطاقات' },
+  [PostType.LINK]: { en: 'Link', ar: 'رابط' }
 };
 
 const STATUS_LABELS = {

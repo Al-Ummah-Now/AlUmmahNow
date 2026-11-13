@@ -105,9 +105,24 @@ export function scanInBackground(c: ScanContext, request: ScanRequest): void {
 }
 
 /** Post text, poll question/options and quiz questions/answers. */
-export function communityPostScanText(post: { content?: string | null; poll?: unknown; quiz?: unknown }): string {
+export function communityPostScanText(post: {
+	content?: string | null;
+	poll?: unknown;
+	quiz?: unknown;
+	title?: string;
+	article?: { title?: string; excerpt?: string | null; body?: string };
+	slides?: { heading?: string | null; body?: string | null; image?: { alt?: string | null } }[];
+	link?: { url?: string; title?: string | null; description?: string | null };
+}): string {
 	const parts: string[] = [];
 	if (post.content) parts.push(post.content);
+	// PostV2 (post-schema.ts): titles, the article body, card texts and the link
+	for (const v of [post.title, post.article?.title, post.article?.excerpt, post.article?.body?.slice(0, 20_000), post.link?.title, post.link?.description, post.link?.url]) {
+		if (typeof v === 'string' && v) parts.push(v);
+	}
+	for (const s of post.slides ?? []) {
+		for (const v of [s?.heading, s?.body, s?.image?.alt]) if (typeof v === 'string' && v) parts.push(v);
+	}
 	const collect = (value: unknown, depth = 0): void => {
 		if (depth > 4 || value == null) return;
 		if (Array.isArray(value)) value.forEach((v) => collect(v, depth + 1));

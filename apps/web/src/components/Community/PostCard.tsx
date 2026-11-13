@@ -12,6 +12,8 @@ import QuizPost from './types/QuizPost';
 import VideoPost from './types/VideoPost';
 import GifPost from './types/GifPost';
 import ArticlePost from './types/ArticlePost';
+import CardsPost from './types/CardsPost';
+import LinkPost from './types/LinkPost';
 import Image from 'next/image';
 import { channelLabel } from '@/lib/channel-name';
 
@@ -92,6 +94,10 @@ export default function PostCard({
         return <GifPost post={post} isRTL={isRTL} />;
       case PostType.ARTICLE:
         return <ArticlePost post={post} />;
+      case PostType.CARDS:
+        return <CardsPost post={post} />;
+      case PostType.LINK:
+        return <LinkPost post={post} />;
       default:
         return null;
     }

@@ -14,6 +14,18 @@ import { withPostCounts } from '../../lib/post-counters';
 import { logger } from '../../lib/logger';
 import Queue, { MessageType } from '../../lib/queue';
 import { scanInBackground, communityPostScanText } from '../../lib/moderation-scan';
+import { parsePostFields, type PostV2Fields } from '@al-ummah/shared-types';
+import { platformMediaHost, postFieldsMessage } from '../../lib/post-v2';
+
+const mediaSchema = z.object({
+  url: z.string().max(2048),
+  alt: z.string().max(300).nullable().optional(),
+  width: z.number().nullable().optional(),
+  height: z.number().nullable().optional(),
+});
+
+/** The PostV2 fields an edit may send (replaced whole); checked by parsePostFields for the post's kind. */
+const V2_KEYS = ['locale', 'translationKey', 'slug', 'title', 'article', 'slides', 'link'] as const;
 
 const updatePostSchema = z.object({
   content: z.string().max(5000).optional(),
@@ -21,6 +33,29 @@ const updatePostSchema = z.object({
   commentsEnabled: z.boolean().optional(),
   scheduledAt: z.string().datetime().optional(),
   pinned: z.boolean().optional(),
+  locale: z.enum(['en', 'ar']).optional(),
+  translationKey: z.string().max(64).optional(),
+  slug: z.string().max(120).optional(),
+  title: z.string().max(200).optional(),
+  article: z.object({
+    title: z.string().max(200),
+    excerpt: z.string().max(300).nullable().optional(),
+    body: z.string().max(100_000),
+    cover: mediaSchema.nullable().optional(),
+  }).optional(),
+  slides: z.array(z.object({
+    id: z.string().max(40).optional(),
+    image: mediaSchema,
+    heading: z.string().max(140).nullable().optional(),
+    body: z.string().max(400).nullable().optional(),
+    position: z.enum(['top', 'middle', 'bottom']).optional(),
+  })).max(40).optional(),
+  link: z.object({
+    url: z.string().max(2048),
+    title: z.string().max(200).nullable().optional(),
+    description: z.string().max(300).nullable().optional(),
+    image: mediaSchema.nullable().optional(),
+  }).optional(),
 });
 
 export class UpdateCommunityPost extends AuthenticatedRoute {
@@ -132,6 +167,25 @@ export class UpdateCommunityPost extends AuthenticatedRoute {
       // Apply the allowed fields to the fresh post with a conditional write
       // (SCALABILITY-AUDIT AV-9): a concurrent comment, like or poll count is
       // kept, and a post deleted meanwhile is not brought back
+      // PostV2 edits: the post's kind decides which fields count; unsent ones keep their value.
+      let v2: PostV2Fields | null = null;
+      if (V2_KEYS.some((k) => body[k] !== undefined)) {
+        const merged: Record<string, unknown> = {
+          locale: body.locale ?? post.locale,
+          translationKey: body.translationKey ?? post.translationKey,
+          slug: body.slug ?? post.slug,
+          title: body.title ?? post.title,
+          article: body.article ?? post.article,
+          slides: body.slides ?? post.slides,
+          link: body.link ?? post.link,
+        };
+        const parsed = parsePostFields(post.type, merged, { mediaHost: platformMediaHost(c.env) });
+        if ('error' in parsed) {
+          return c.json({ error: postFieldsMessage(parsed), code: parsed.error, field: parsed.field }, 400);
+        }
+        v2 = parsed.value;
+      }
+
       const { data: saved, rejected } = await new R2Repository<CommunityPost>(c.env.community_posts).updateObjectOrReject<'deleted'>(postKey, (fresh) => {
         if (fresh.status === PostStatus.DELETED) return { reject: 'deleted' };
         if (body.content !== undefined) {
@@ -148,6 +202,12 @@ export class UpdateCommunityPost extends AuthenticatedRoute {
         }
         if (body.pinned !== undefined) {
           fresh.pinned = body.pinned;
+        }
+        if (v2) {
+          // The www address and the CMS key are not the author's to change.
+          const keep = fresh.article ? { url: fresh.article.url, externalId: fresh.article.externalId } : {};
+          Object.assign(fresh, v2);
+          if (fresh.article) Object.assign(fresh.article, Object.fromEntries(Object.entries(keep).filter(([, v]) => v !== undefined)));
         }
         fresh.updatedAt = new Date().toISOString();
         return true;
@@ -170,7 +230,7 @@ export class UpdateCommunityPost extends AuthenticatedRoute {
         timestamp: post.updatedAt,
       });
 
-      if (body.content !== undefined) {
+      if (body.content !== undefined || v2) {
         scanInBackground(c, { surface: 'community_post', event: 'edit', subjectId: postId, authorId: userId, channelId: postChannelId, text: communityPostScanText(post) });
       }
 

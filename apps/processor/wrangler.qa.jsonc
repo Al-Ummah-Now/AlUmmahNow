@@ -90,6 +90,7 @@
     // Logging policy (docs/operations/logging.md): warn on production, stage and QA (only warnings, errors, slow requests); debug locally
     "LOG_LEVEL": "warn",
     "WEBSOCKET_URL": "https://realtime.qa.alummahnow.net",
+    "CMS_INTERNAL_URL": "https://cms.qa.alummahnow.net",
     "AI_MODERATION_ENABLED": "true",
     "AI_MODERATION_DAILY_NEURON_CAP": "10000",
     "AI_CATEGORIZE_ENABLED": "true",

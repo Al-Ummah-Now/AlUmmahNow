@@ -1,8 +1,13 @@
 // Community Posts Types - YouTube-style channel community tab
 
 import { SoftDelete, Moderation } from './common';
+import type { PostV2Fields, PostMedia } from './post-schema';
 
-export interface CommunityPost extends SoftDelete, Moderation {
+/**
+ * A community post. Its PostV2 fields (locale, slug, translationKey, title, slides, link, a full
+ * article, www) are in post-schema.ts, the one post format shared with the CMS and www.
+ */
+export interface CommunityPost extends SoftDelete, Moderation, Omit<PostV2Fields, 'article'> {
   id: string;                        // UUID
   channelId: string;                 // Channel that created the post
   userId: string;                    // User ID of the post creator
@@ -14,7 +19,7 @@ export interface CommunityPost extends SoftDelete, Moderation {
   videoId?: string;                  // For video link posts
   gif?: PostGif;                     // For GIF posts
 
-  /** ARTICLE posts: the article it stands for (written by the CMS, never by the API's users). */
+  /** ARTICLE posts: the article (written in Studio, or a CMS mirror from before PostV2). */
   article?: CommunityArticle;
 
   // Poll/Quiz specific
@@ -51,17 +56,23 @@ export interface CommunityPost extends SoftDelete, Moderation {
   viewerPollVote?: string[];          // Option IDs the viewer voted for
 }
 
-/** A scholar's www article, posted to their channel's Community tab by the CMS. */
+/**
+ * An article post (post-schema.ts PostArticle). Older posts are link-only mirrors of a www article
+ * (no `body`); PostV2 articles carry their markdown body and are shown in full.
+ */
 export interface CommunityArticle {
   title: string;
   excerpt: string | null;
-  /** https image (the article's cover on the CMS media host), or null. */
+  /** Markdown (PostV2). HTML is never rendered. */
+  body?: string;
+  cover?: PostMedia | null;
+  /** https image (the cover), or null. */
   coverUrl: string | null;
-  /** The article on www (https). */
-  url: string;
+  /** The article on www (https), once www has it. */
+  url?: string;
   locale: 'en' | 'ar';
-  /** The CMS's key for the article (`cms-<id>`): the same article is always the same post. */
-  externalId: string;
+  /** The CMS's key for an article it wrote (`cms-<id>`): the same article is always the same post. */
+  externalId?: string;
 }
 
 export interface PostImage {
@@ -119,8 +130,12 @@ export enum PostType {
   QUIZ = 'quiz',
   VIDEO = 'video',
   GIF = 'gif',
-  /** A scholar's article from the CMS, linking to www (docs/scholars.md). */
-  ARTICLE = 'article'
+  /** An article: title, cover and a markdown body (post-schema.ts). */
+  ARTICLE = 'article',
+  /** Cards: up to 40 images with overlay text (post-schema.ts). */
+  CARDS = 'cards',
+  /** A link to an outside page with an optional preview (post-schema.ts). */
+  LINK = 'link'
 }
 
 export enum PostStatus {
@@ -162,7 +177,20 @@ export interface VoteResults {
 export interface CreateCommunityPostRequest {
   type: PostType;
   content?: string;                   // Text content (max 5000 chars)
-  images?: Omit<PostImage, 'url'>[];  // Images to upload
+  /** Uploaded first (POST /api/community/media/upload/images); `url` is the upload's answer. */
+  images?: (Omit<PostImage, 'url'> & { url?: string })[];
+  /** PostV2 (post-schema.ts): every kind */
+  locale?: 'en' | 'ar';
+  translationKey?: string;
+  slug?: string;
+  /** cards (required), link (optional) */
+  title?: string;
+  /** article: title, excerpt, markdown body, cover */
+  article?: { title: string; excerpt?: string | null; body: string; cover?: PostMedia | null };
+  /** cards: 1–40 cards, each with an uploaded image and its alt text */
+  slides?: { id?: string; image: PostMedia; heading?: string | null; body?: string | null; position?: 'top' | 'middle' | 'bottom' }[];
+  /** link */
+  link?: { url: string; title?: string | null; description?: string | null; image?: PostMedia | null };
   videoId?: string;
   gif?: Omit<PostGif, 'url'>;
   poll?: {
@@ -190,6 +218,14 @@ export interface CreateCommunityPostRequest {
 
 export interface UpdateCommunityPostRequest {
   content?: string;
+  /** PostV2 edits (article, cards and link posts): the same fields as on create, replaced whole. */
+  locale?: 'en' | 'ar';
+  translationKey?: string;
+  slug?: string;
+  title?: string;
+  article?: CreateCommunityPostRequest['article'];
+  slides?: CreateCommunityPostRequest['slides'];
+  link?: CreateCommunityPostRequest['link'];
   visibility?: PostVisibility;
   commentsEnabled?: boolean;
   scheduledAt?: string;

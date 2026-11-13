@@ -98,6 +98,8 @@
 		// Logging policy (docs/operations/logging.md): warn on production, stage and QA (only warnings, errors, slow requests); debug locally
 		"LOG_LEVEL": "warn",
 		"WEBSOCKET_URL": "https://realtime.alummahnow.net",
+		// Scholar post reference outbox (src/handlers/scholar-refs.ts): the CMS's /internal/refs
+		"CMS_INTERNAL_URL": "https://cms.alummahnow.net",
 		// Epic 28: env kill switch ("false" = no AI calls) and default daily cap; D1 moderation_config
 		// must ALSO enable it (off until an Admin turns it on in admin-web).
 		"AI_MODERATION_ENABLED": "true",
@@ -200,6 +202,7 @@
 				// Logging policy (docs/operations/logging.md): warn on production, stage and QA (only warnings, errors, slow requests); debug locally
 				"LOG_LEVEL": "warn",
 				"WEBSOCKET_URL": "https://realtime.stage.alummahnow.net",
+				"CMS_INTERNAL_URL": "https://cms.stage.alummahnow.net",
 				"AI_MODERATION_ENABLED": "true",
 				"AI_MODERATION_DAILY_NEURON_CAP": "10000",
 				"AI_CATEGORIZE_ENABLED": "true",

@@ -7,6 +7,10 @@
  *   PUT    /internal/scholars/:userId/articles/:externalId     { channelId, title, excerpt, coverUrl, url, locale, publishedAt }
  *                                                            → { postId, channelId, created }
  *   DELETE /internal/scholars/:userId/articles/:externalId     → { hidden: true } (404 when it was never posted)
+ *   PUT    /internal/scholars/:userId/posts/:externalId        conversion (wiki AUN-SCHOLAR-SITES §6.6):
+ *          { channelId, kind, locale, translationKey, title, article | slides, www: { url, slug, locale }, status, publishedAt }
+ *                                                            → { postId, channelId, created, upgraded, post }
+ *   GET    /internal/scholars/:userId/posts/:externalId        → { postId, channelId, post } (the conversion check)
  */
 import { Hono, type Context } from 'hono';
 import type { Channel } from '@al-ummah/shared-types';
@@ -14,7 +18,8 @@ import { logger } from '../lib/logger';
 import Queue, { MessageType } from '../lib/queue';
 import R2Repository, { rethrowBusy } from '../lib/r2Repo';
 import { ownedChannelIds } from '../lib/search/ownership';
-import { ArticleError, hideArticle, parseArticle, upsertArticle, type ArticleEnv } from '../lib/scholar-articles';
+import { ArticleError, convertScholarPost, hideArticle, parseArticle, parseConvert, scholarPostMapping, upsertArticle, type ArticleEnv } from '../lib/scholar-articles';
+import { platformMediaHost } from '../lib/post-v2';
 
 type Env = { Bindings: ArticleEnv & { queue?: unknown } & Record<string, unknown> };
 const USER_ID = /^[A-Za-z0-9_:.@-]{1,128}$/;
@@ -69,6 +74,32 @@ app.delete('/:userId/articles/:externalId', async (c) => {
 		const m = await hideArticle(c.env, userId, c.req.param('externalId'));
 		if (!m) return c.json({ error: 'not_found' }, 404);
 		return c.json({ hidden: true, postId: m.postId });
+	} catch (error) {
+		return fail(c, error);
+	}
+});
+
+app.put('/:userId/posts/:externalId', async (c) => {
+	const userId = c.req.param('userId');
+	if (!USER_ID.test(userId)) return c.json({ error: 'bad_request' }, 400);
+	try {
+		const input = parseConvert(await c.req.json().catch(() => null), platformMediaHost(c.env));
+		const { post, created, upgraded } = await convertScholarPost(c.env, userId, c.req.param('externalId'), input);
+		return c.json({ postId: post.id, channelId: post.channelId, created, upgraded, post }, created ? 201 : 200);
+	} catch (error) {
+		return fail(c, error);
+	}
+});
+
+app.get('/:userId/posts/:externalId', async (c) => {
+	const userId = c.req.param('userId');
+	if (!USER_ID.test(userId)) return c.json({ error: 'bad_request' }, 400);
+	try {
+		const m = await scholarPostMapping(c.env, c.req.param('externalId'));
+		if (!m || m.userId !== userId) return c.json({ error: 'not_found' }, 404);
+		const post = await new R2Repository<Record<string, unknown>>(c.env.community_posts).getObject(`posts/${m.channelId}/${m.postId}.json`);
+		if (!post) return c.json({ error: 'not_found' }, 404);
+		return c.json({ postId: m.postId, channelId: m.channelId, post });
 	} catch (error) {
 		return fail(c, error);
 	}

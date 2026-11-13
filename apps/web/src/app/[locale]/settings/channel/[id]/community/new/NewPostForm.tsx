@@ -18,6 +18,10 @@ import { PollPostForm, PollFormData } from '@/components/Community/management/fo
 import { QuizPostForm, QuizFormData } from '@/components/Community/management/forms/QuizPostForm';
 import { VideoPostForm } from '@/components/Community/management/forms/VideoPostForm';
 import { GifPostForm, GifData } from '@/components/Community/management/forms/GifPostForm';
+import { ArticlePostForm, ArticleFormData, emptyArticle } from '@/components/Community/management/forms/ArticlePostForm';
+import { CardsPostForm, CardsFormData, emptyCards } from '@/components/Community/management/forms/CardsPostForm';
+import { LinkPostForm, LinkFormData, emptyLink } from '@/components/Community/management/forms/LinkPostForm';
+import { uploadPostImage } from '@/components/Community/management/forms/PostImageField';
 import { createCommunityPost } from '@/lib/api/community-posts';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 
@@ -58,6 +62,11 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
   const [videoId, setVideoId] = useState('');
   const [videoContent, setVideoContent] = useState('');
   const [gif, setGif] = useState<GifData | null>(null);
+  // PostV2 (post-schema.ts): every post has a language; articles, cards and links have their own fields
+  const [postLocale, setPostLocale] = useState<'en' | 'ar'>(locale === 'ar' ? 'ar' : 'en');
+  const [article, setArticle] = useState<ArticleFormData>(emptyArticle);
+  const [cards, setCards] = useState<CardsFormData>(emptyCards);
+  const [link, setLink] = useState<LinkFormData>(emptyLink);
 
   const validatePost = (): string | null => {
     if (!selectedType) return isRTL ? 'اختر نوع المنشور' : 'Select a post type';
@@ -97,6 +106,21 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
       case PostType.GIF:
         if (!gif) return isRTL ? 'GIF مطلوب' : 'GIF is required';
         break;
+
+      case PostType.ARTICLE:
+        if (!article.title.trim()) return t.community.errorTitle;
+        if (!article.body.trim()) return t.community.errorBody;
+        break;
+
+      case PostType.CARDS:
+        if (!cards.title.trim()) return t.community.errorTitle;
+        if (!cards.cards.some((c) => c.image)) return t.community.errorCards;
+        if (cards.cards.some((c) => c.image && !c.image.alt?.trim())) return t.community.errorAlt;
+        break;
+
+      case PostType.LINK:
+        if (!/^https?:\/\/\S+$/i.test(link.url.trim())) return t.community.errorLink;
+        break;
     }
 
     return null;
@@ -116,7 +140,8 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
       const baseData: Record<string, unknown> = {
         type: selectedType!,
         visibility,
-        commentsEnabled
+        commentsEnabled,
+        locale: postLocale
       };
 
       switch (selectedType) {
@@ -124,14 +149,49 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
           baseData.content = textContent;
           break;
 
-        case PostType.IMAGE:
-          baseData.images = images.map(img => ({
-            width: img.width,
-            height: img.height,
+        case PostType.IMAGE: {
+          // Upload first: the post stores the uploads' URLs (never the browser's preview URLs)
+          const uploaded = await Promise.all(images.map((img) => (img.file ? uploadPostImage(id, img.file, img.caption || null) : null)));
+          if (uploaded.some((u) => !u)) {
+            setError(t.community.errorUpload);
+            return;
+          }
+          baseData.images = images.map((img, i) => ({
+            url: uploaded[i]!.url,
+            width: uploaded[i]!.width ?? img.width,
+            height: uploaded[i]!.height ?? img.height,
             caption: img.caption,
             mimeType: img.mimeType,
             size: img.size
           }));
+          break;
+        }
+
+        case PostType.ARTICLE:
+          baseData.content = article.excerpt.trim() || undefined;
+          baseData.article = {
+            title: article.title.trim(),
+            excerpt: article.excerpt.trim() || null,
+            body: article.body,
+            cover: article.cover
+          };
+          break;
+
+        case PostType.CARDS:
+          baseData.title = cards.title.trim();
+          baseData.slides = cards.cards
+            .filter((c) => c.image)
+            .map((c) => ({ id: c.id, image: c.image, heading: c.heading.trim() || null, body: c.body.trim() || null, position: c.position }));
+          break;
+
+        case PostType.LINK:
+          baseData.content = link.comment.trim() || undefined;
+          baseData.link = {
+            url: link.url.trim(),
+            title: link.title.trim() || null,
+            description: link.description.trim() || null,
+            image: link.image
+          };
           break;
 
         case PostType.POLL:
@@ -324,6 +384,22 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
                     error={error}
                   />
                 )}
+
+                {selectedType === PostType.ARTICLE && (
+                  <ArticlePostForm channelId={id} data={article} onChange={setArticle} postLocale={postLocale} error={error} />
+                )}
+
+                {selectedType === PostType.CARDS && (
+                  <CardsPostForm channelId={id} data={cards} onChange={setCards} postLocale={postLocale} />
+                )}
+
+                {selectedType === PostType.LINK && (
+                  <LinkPostForm channelId={id} data={link} onChange={setLink} postLocale={postLocale} />
+                )}
+
+                {error && [PostType.ARTICLE, PostType.CARDS, PostType.LINK].includes(selectedType) && (
+                  <p role="alert" className="mt-4 text-sm text-destructive" data-testid="new-post-error">{error}</p>
+                )}
               </Card>
             )}
           </div>
@@ -335,6 +411,22 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
               </h3>
 
               <div className="space-y-4">
+                <div>
+                  <Label htmlFor="community-post-language" className="text-sm md:text-base">
+                    {t.community.postLanguage}
+                  </Label>
+                  <Select value={postLocale} onValueChange={(v) => setPostLocale(v === 'ar' ? 'ar' : 'en')}>
+                    <SelectTrigger id="community-post-language" className="mt-2" aria-describedby="community-post-language-hint">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="en">English</SelectItem>
+                      <SelectItem value="ar">العربية</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p id="community-post-language-hint" className="mt-1 text-xs text-muted-foreground">{t.community.postLanguageHint}</p>
+                </div>
+
                 <div>
                   <Label htmlFor="community-post-visibility" className="text-sm md:text-base">
                     {isRTL ? 'الرؤية' : 'Visibility'}

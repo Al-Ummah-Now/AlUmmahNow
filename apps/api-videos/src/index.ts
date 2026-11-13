@@ -58,6 +58,7 @@ import { sweepStalledUploads } from "./lib/uploads/lifecycle";
 import { createTusRouter } from "./endpoints/video/tus";
 import { createProcessingInternalRouter } from "./endpoints/video/processingInternal";
 import scholarsInternalRouter from "./routers/scholars-internal.router";
+import postsInternalRouter from "./routers/posts-internal.router";
 import { createUploadsInternalRouter } from "./endpoints/video/uploadsInternal";
 import { createVideoFormatInternalRouter } from "./endpoints/video/videoFormatInternal";
 import { createFootprintsInternalRouter } from "./endpoints/privacy/footprintsInternal";
@@ -242,6 +243,8 @@ app.route('/internal/privacy/footprints', createFootprintsInternalRouter() as ne
 app.route('/internal/playlist-adds', createPlaylistAddsInternalRouter() as never);
 // Scholars (the CMS): their channels and their articles on the Community tab
 app.route('/internal/scholars', scholarsInternalRouter as never);
+// Community posts for the CMS (www scholar post pages; wiki AUN-SCHOLAR-SITES §6.3)
+app.route('/internal/posts', postsInternalRouter as never);
 // R2 delivery beside Bunny (epic #687): apps/media's callbacks, admin retry / jobs / settings
 app.route('/internal/media', createMediaInternalRouter() as never);
 

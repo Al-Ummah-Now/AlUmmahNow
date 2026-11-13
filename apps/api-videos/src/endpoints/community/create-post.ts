@@ -18,6 +18,8 @@ import { getChannelObject } from './post-comment-helpers';
 import { scanInBackground, communityPostScanText } from '../../lib/moderation-scan';
 import { CHANNEL_SUSPENDED_CODE } from '../../middleware/auth';
 import { channelNameFields } from '../../lib/channelName';
+import { parsePostFields } from '@al-ummah/shared-types';
+import { platformMediaHost, postFieldsMessage } from '../../lib/post-v2';
 
 // Sanitization configuration for community posts
 // Allows basic formatting while preventing XSS attacks
@@ -30,13 +32,23 @@ const sanitizeOptions = {
   disallowedTagsMode: 'discard' as const
 };
 
-// ARTICLE posts are written by the CMS only (internal API, lib/scholar-articles.ts).
-const USER_POST_TYPES = [PostType.TEXT, PostType.IMAGE, PostType.POLL, PostType.QUIZ, PostType.VIDEO, PostType.GIF] as const;
+// Every PostV2 kind (packages/shared-types/src/post-schema.ts). Article, cards and link content is
+// checked by parsePostFields, the one validator shared with the CMS and www.
+const USER_POST_TYPES = [PostType.TEXT, PostType.IMAGE, PostType.POLL, PostType.QUIZ, PostType.VIDEO, PostType.GIF, PostType.ARTICLE, PostType.CARDS, PostType.LINK] as const;
+
+const mediaSchema = z.object({
+  url: z.string().max(2048),
+  alt: z.string().max(300).nullable().optional(),
+  width: z.number().nullable().optional(),
+  height: z.number().nullable().optional(),
+});
 
 const createPostSchema = z.object({
   type: z.enum(USER_POST_TYPES),
   content: z.string().max(5000).optional(),
   images: z.array(z.object({
+    // The upload's URL (POST /api/community/media/upload/images); must be on a platform media host.
+    url: z.string().max(2048).optional(),
     width: z.number(),
     height: z.number(),
     caption: z.string().max(36).optional(),
@@ -73,7 +85,31 @@ const createPostSchema = z.object({
   }).optional(),
   visibility: z.nativeEnum(PostVisibility).default(PostVisibility.PUBLIC),
   commentsEnabled: z.boolean().default(true),
-  scheduledAt: z.string().datetime().optional()
+  scheduledAt: z.string().datetime().optional(),
+  // PostV2 fields (post-schema.ts)
+  locale: z.enum(['en', 'ar']).optional(),
+  translationKey: z.string().max(64).optional(),
+  slug: z.string().max(120).optional(),
+  title: z.string().max(200).optional(),
+  article: z.object({
+    title: z.string().max(200),
+    excerpt: z.string().max(300).nullable().optional(),
+    body: z.string().max(100_000),
+    cover: mediaSchema.nullable().optional(),
+  }).optional(),
+  slides: z.array(z.object({
+    id: z.string().max(40).optional(),
+    image: mediaSchema,
+    heading: z.string().max(140).nullable().optional(),
+    body: z.string().max(400).nullable().optional(),
+    position: z.enum(['top', 'middle', 'bottom']).optional(),
+  })).max(40).optional(),
+  link: z.object({
+    url: z.string().max(2048),
+    title: z.string().max(200).nullable().optional(),
+    description: z.string().max(300).nullable().optional(),
+    image: mediaSchema.nullable().optional(),
+  }).optional(),
 });
 
 const Str = (opts: { description: string }) => z.string().openapi(opts);
@@ -146,6 +182,17 @@ export class CreateCommunityPost extends AuthenticatedRoute {
       return c.json({ error: validation.error }, 400);
     }
 
+    // The PostV2 fields (language, slug, translation key; article, cards and link content)
+    const v2 = parsePostFields(body.type, body, { mediaHost: platformMediaHost(c.env) });
+    if ('error' in v2) {
+      return c.json({ error: postFieldsMessage(v2), code: v2.error, field: v2.field }, 400);
+    }
+    const imageHost = platformMediaHost(c.env);
+    const badImage = (body.images ?? []).find((img: { url?: string }) => img.url !== undefined && !isPlatformImage(img.url, imageHost));
+    if (badImage) {
+      return c.json({ error: 'Images must be uploaded first', code: 'bad_media', field: 'images' }, 400);
+    }
+
     try {
       // Get channel info for denormalized fields
       const channelData = await getChannelObject(c.env.channels, channelId);
@@ -172,6 +219,7 @@ export class CreateCommunityPost extends AuthenticatedRoute {
         channelId: channelId,
         userId: userId,
         type: body.type,
+        ...v2.value,
         content: body.content ? sanitizeHtml(body.content, sanitizeOptions) : undefined,
         images: body.images, // Images should be pre-uploaded via /api/community/media/upload/images
         videoId: body.videoId,
@@ -259,5 +307,13 @@ export class CreateCommunityPost extends AuthenticatedRoute {
       },
       { initial: () => ({ postIds: [], lastUpdated: new Date().toISOString() }) },
     );
+  }
+}
+function isPlatformImage(url: string, host: ((h: string) => boolean) | undefined): boolean {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'https:' && (!host || host(u.hostname));
+  } catch {
+    return false;
   }
 }

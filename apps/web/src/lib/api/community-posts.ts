@@ -12,6 +12,7 @@ import {
 } from "@al-ummah/shared-types";
 import { apiRequestServer, buildApiUrl, buildQueryParams } from "./api-client";
 import { getServerAuthContext } from "./server-auth";
+import { logger } from "@/lib/logger-server";
 import { ApiHeaders } from "./types";
 
 /**
@@ -199,4 +200,43 @@ export async function getPollResults(
     channelId: headers?.channelId,
     accessToken: (await getServerAuthContext())?.accessToken || '',
   }), false);
+}
+
+/** One uploaded community image (POST /api/community/media/upload/images). */
+export interface UploadedCommunityImage {
+  url: string;
+  width: number;
+  height: number;
+  size: number;
+  mimeType: string;
+}
+
+/**
+ * Upload images for a post (covers, cards, image posts). `formData` carries the files under
+ * `images`. Resolves to their URLs, or null when the upload failed (the caller shows its own text).
+ */
+export async function uploadCommunityImages(
+  channelId: string,
+  formData: FormData
+): Promise<UploadedCommunityImage[] | null> {
+  const authContext = await getServerAuthContext();
+  try {
+    const response = await fetch(buildApiUrl('/api/community/media/upload/images'), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${authContext?.accessToken || ''}`,
+        channelId,
+      },
+      body: formData,
+    });
+    if (!response.ok) {
+      logger.warn('[uploadCommunityImages] upload refused', { channelId, status: response.status });
+      return null;
+    }
+    const body = (await response.json()) as { images?: UploadedCommunityImage[] };
+    return Array.isArray(body.images) ? body.images : null;
+  } catch (error) {
+    logger.error('[uploadCommunityImages] upload failed', { channelId, error });
+    return null;
+  }
 }
