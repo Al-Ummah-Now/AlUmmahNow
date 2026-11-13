@@ -6,7 +6,9 @@
  *   const { ensureHuman, checking } = useHumanCheck();
  *   const check = await ensureHuman('comment');
  *   if (!check.ok) → show t.humanCheck.failed
- *   else submit with check.token (undefined when no check is needed)
+ *   else submit with check.token (undefined when no check is needed, or when the widget could
+ *   not run: blocked script, error, timeout; the server then decides: monitor lets it through,
+ *   enforce answers human_check_required)
  *
  * `checking` is true while the (normally invisible) check runs, for a status line.
  */
@@ -38,7 +40,7 @@ export function useHumanCheck() {
           locale: lang === 'ar' ? 'ar' : 'en',
           dialogLabel: t.humanCheck.dialogLabel,
         });
-        return token ? { ok: true, token } : { ok: false };
+        return token ? { ok: true, token } : { ok: true };
       } finally {
         setChecking(false);
       }

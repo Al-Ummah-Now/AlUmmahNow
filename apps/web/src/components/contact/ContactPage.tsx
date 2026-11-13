@@ -201,6 +201,11 @@ export function ContactPage() {
             return;
           }
           res = await send(human.token);
+          // Still refused (the widget could not run and the check is enforced)
+          if (res.status === 403) {
+            setStatus({ kind: 'error', message: humanMessages.failed });
+            return;
+          }
         }
       }
       if (res.status === 201) {
