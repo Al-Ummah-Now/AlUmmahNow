@@ -49,6 +49,7 @@ import { useEffect, useLayoutEffect, useRef, useState, useCallback, useSyncExter
 import { createVideoPlayer, disposeVideoPlayer } from '@/lib/video/videojs-setup';
 import { isSameMediaUrl } from '@/lib/video/media-url';
 import { isLivePlayback } from '@/lib/video/live-state';
+import { recoverStuckSeeks } from '@/lib/video/seek-recovery';
 import { playerAnalyticsContext } from '@/lib/analytics/traffic-source';
 import { VideoAnalytics } from '@/services/analytics/video-analytics';
 import {
@@ -626,6 +627,15 @@ export default function CustomVideoPlayer({
 
         // Phase 2.5: Initialize volume controls
         volumeControlsCleanupRef.current = initializeVolumeControls(player, lang);
+        // A seek that never finishes (Firefox/VHS, paused) is tried again (lib/video/seek-recovery.ts).
+        // Cleared on the player's dispose.
+        recoverStuckSeeks(player as never, {
+          progress: () => {
+            const tech = (player as unknown as { tech?: (o: unknown) => { vhs?: { stats?: { mediaBytesTransferred?: number } } } }).tech?.({ IWillNotUseThisInPlugins: true });
+            return tech?.vhs?.stats?.mediaBytesTransferred ?? NaN;
+          },
+          onRetry: (target, attempt) => logger.warn('[CustomVideoPlayer] Seek did not finish; seeking again', { videoId, target, attempt }),
+        });
         // Muted start wins over the remembered volume (browsers only autoplay muted)
         if (muted) {
           markAutoMuted(player, true);
