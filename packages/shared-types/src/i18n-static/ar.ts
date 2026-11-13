@@ -1356,6 +1356,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
     loadFailed: 'تعذر تحميل التعليقات. يرجى المحاولة مرة أخرى.',
     actionFailed: 'حدث خطأ ما. يرجى المحاولة مرة أخرى.',
     yourAvatar: 'صورتك الرمزية',
+    commentingAs: 'تعلّق باسم {name}',
     authorAvatar: 'الصورة الرمزية لـ {name}',
     sortBy: 'ترتيب التعليقات',
     sortTop: 'أبرز التعليقات',

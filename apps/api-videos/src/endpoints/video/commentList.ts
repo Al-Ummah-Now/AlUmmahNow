@@ -16,10 +16,11 @@ import {
 	StoredComment,
 } from "../../lib/comments";
 import { toCommentListItems } from "../../lib/commentAuthors";
+import { reactorId } from "../../lib/reactions";
 
 const CommentAuthorSchema = z.object({
 	userId: z.string(),
-	channelId: z.string(),
+	channelId: z.string().nullable().describe("null: posted by the member themselves, without a channel"),
 	displayName: z.string(),
 	avatarUrl: z.string().optional(),
 });
@@ -27,7 +28,7 @@ const CommentAuthorSchema = z.object({
 export const CommentListItemSchema = z.object({
 	id: z.string(),
 	userId: z.string(),
-	channelId: z.string(),
+	channelId: z.string().nullable().describe("The channel the comment was posted as; null when the member commented as themselves"),
 	videoId: z.string(),
 	text: z.string(),
 	dateCreated: z.string(),
@@ -49,7 +50,7 @@ export class CommentList extends OptionalAuthRoute {
 	schema = {
 		tags: ["Comments"],
 		summary: "List comments for a video",
-		description: "Returns a page of top-level comments (pinned first, then by `sort`: newest first, or top = most likes) with author display name and avatar. Replies are listed by GET /api/videos/:id/comments/:cid/replies. When the request is authenticated with a channelId header, isLiked reflects that channel's like (isDisliked is always false: comment dislikes are hidden since 2026-11-12). Held-for-review comments are included for their author and the video owner only. When comments are off the list is empty and commentSettings is `off`.",
+		description: "Returns a page of top-level comments (pinned first, then by `sort`: newest first, or top = most likes) with author display name and avatar. Replies are listed by GET /api/videos/:id/comments/:cid/replies. When the request is authenticated, isLiked reflects the like of the channel in the channelId header or, without one, the member's own (isDisliked is always false: comment dislikes are hidden since 2026-11-12). Held-for-review comments are included for their author and the video owner only. When comments are off the list is empty and commentSettings is `off`.",
 		request: {
 			params: z.object({
 				id: Str({ description: "Video id" }),
@@ -96,7 +97,8 @@ export class CommentList extends OptionalAuthRoute {
 		const sort = parseCommentSort(request.query.sort);
 		const userId = this.getUserId(c);
 		// channelIdMiddleware has already verified the header belongs to the user
-		const viewerChannelId = userId ? c.req.header('channelId') : undefined;
+		// isLiked is the viewer's current identity: the channel, or the member themselves without one
+		const viewerChannelId = userId ? reactorId(c.req.header('channelId'), userId) : undefined;
 
 		type VideoType = z.infer<typeof Video>;
 		const repository = new R2Repository<VideoType>(c.env.videos);

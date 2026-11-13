@@ -18,19 +18,21 @@ import {
 import { toCommentListItems } from "../../lib/commentAuthors";
 import { CommentListItemSchema } from "./commentList";
 import { scanInBackground } from '../../lib/moderation-scan';
+import { reactorId } from "../../lib/reactions";
 
 
 export class CommentCreate extends AuthenticatedRoute {
 	schema = {
 		tags: ["Comments"],
 		summary: "Create a comment or a reply on a video",
-		description: "Posts a top-level comment, or a reply when `parentCommentId` is set. Replies are one level deep: replying to a reply attaches to its top-level comment. Returns 403 `comments_disabled` when the video's comment settings are off; when they are `held` the comment is stored for the owner's review (`isHeld: true`) and not broadcast until approved.",
+		description: "Posts a top-level comment, or a reply when `parentCommentId` is set, as the channel in the channelId header or, without one, as the member themselves (`channelId: null`, author from the profile). Replies are one level deep: replying to a reply attaches to its top-level comment. Returns 403 `comments_disabled` when the video's comment settings are off; when they are `held` the comment is stored for the owner's review (`isHeld: true`) and not broadcast until approved.",
 		request: {
 			params: z.object({
 				id: Str({ description: "Video id" }),
 			}),
 			headers: z.object({
-				channelId: Str({ description: "Channel ID" }),
+				// A missing header reaches the schema as null (#1139): no channel means as yourself
+				channelId: Str({ description: "The caller's active channel to comment as; omit to comment as yourself (your display name and avatar)" }).optional().nullable(),
 			}),
 			body: {
 				content: {
@@ -79,7 +81,8 @@ export class CommentCreate extends AuthenticatedRoute {
 
 		const { id } = request.params;
 		const userId = this.getUserId(c);
-		const { channelId } = request.headers;
+		// No channel active: the comment is the member's own (author = profile name and avatar, #1151)
+		const channelId = request.headers.channelId || null;
 		const requestedParentId = request.body?.parentCommentId?.trim() || undefined;
 
 		const text = normalizeCommentText(request.body);
@@ -174,15 +177,15 @@ export class CommentCreate extends AuthenticatedRoute {
 			commentId: comment.id,
 			videoId: id,
 			userId,
-			channelId,
+			...(channelId ? { channelId } : {}),
 			parentCommentId: parent?.id,
 			held,
 			timestamp: now,
 		});
 
-		scanInBackground(c, { surface: 'video_comment', event: 'create', subjectId: comment.id, parentId: id, authorId: userId, channelId, text });
+		scanInBackground(c, { surface: 'video_comment', event: 'create', subjectId: comment.id, parentId: id, authorId: userId, channelId: channelId ?? undefined, text });
 
-		const [item] = await toCommentListItems(c.env, [comment], channelId, { userId, isVideoOwner }, { videoId: id });
+		const [item] = await toCommentListItems(c.env, [comment], reactorId(channelId, userId), { userId, isVideoOwner }, { videoId: id });
 
 		logger.debug('[CommentCreate] Comment created', { videoId: id, commentId: comment.id, channelId, parentCommentId: parent?.id, held });
 

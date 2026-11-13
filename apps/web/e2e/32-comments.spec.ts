@@ -81,17 +81,21 @@ test.describe('comments - anonymous', () => {
 test.describe('comments - signed in without a channel', () => {
   test.use({ storageState: AUTH_STATE.none });
 
-  for (const [locale, create] of [
-    ['en', 'Create Channel'],
-    ['ar', 'إنشاء قناة'],
+  // #1151: they comment as themselves (the round trip is release/video-comments-no-channel.spec.ts,
+  // with its own viewer; this shared account posts nothing here)
+  for (const [locale, commentingAs] of [
+    ['en', 'Commenting as'],
+    ['ar', 'تعلّق باسم'],
   ] as const) {
-    test(`CMT-002 accounts without a channel are asked to create one (${locale})`, async ({ page }) => {
+    test(`CMT-002 accounts without a channel get the composer, as themselves (${locale})`, async ({ page }) => {
       const video = ownLecture(1);
       const section = await openComments(page, video, locale);
 
-      await expect(section.getByRole('textbox')).toHaveCount(0);
-      const link = section.getByRole('link').filter({ hasText: create });
-      await expect(link).toHaveAttribute('href', `/${locale}/profile`);
+      await expect(section.getByTestId('comment-input')).toBeVisible();
+      const identity = section.getByTestId('comment-identity');
+      await expect(identity).toContainText(commentingAs);
+      await expect(identity).toHaveAttribute('data-as', 'member');
+      await expect(section.getByRole('link').filter({ hasText: locale === 'en' ? 'Create Channel' : 'إنشاء قناة' })).toHaveCount(0);
     });
   }
 });

@@ -96,7 +96,8 @@ export async function createComment(
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${auth.accessToken}`,
-        channelId: auth.channelId || channelId,
+        // No channel: no header, the member comments as themselves
+        ...((auth.channelId || channelId) ? { channelId: auth.channelId || channelId } : {}),
       },
       body: JSON.stringify({ text, ...(parentCommentId ? { parentCommentId } : {}) }),
     });

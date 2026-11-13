@@ -18,7 +18,8 @@ export class CommentDelete extends AuthenticatedRoute {
 				cid: Str({ description: "Comment id" }),
 			}),
 			headers: z.object({
-				channelId: Str({ description: "Channel ID" }),
+				// A missing header reaches the schema as null (#1139): no channel means as yourself
+				channelId: Str({ description: "The caller's active channel; optional (the author, or a moderator of the video's channel, may delete)" }).optional().nullable(),
 			}),
 		},
 		responses: {
@@ -56,7 +57,7 @@ export class CommentDelete extends AuthenticatedRoute {
 
 		const { id, cid } = request.params;
 		const userId = this.getUserId(c);
-		const { channelId } = request.headers;
+		const channelId = request.headers.channelId || null;
 
 		// Get the video and find the comment
 		const bucket = c.env.videos;
@@ -119,7 +120,7 @@ export class CommentDelete extends AuthenticatedRoute {
 			commentId: cid,
 			videoId: id,
 			userId: userId,
-			channelId: channelId,
+			...(channelId ? { channelId } : {}),
 			timestamp: new Date().toISOString(),
 		});
 

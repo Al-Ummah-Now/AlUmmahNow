@@ -3,7 +3,6 @@ import { ListFilter } from 'lucide-react';
 import { ThemedSelect } from '@/components/ui/ThemedSelect';
 import { logger } from '@/lib/logger-client';
 import React, { useId, useState } from "react";
-import Link from '@/components/common/AppLink';
 import CommentLTR, { CommentProps } from "@/components/comment";
 import CommentRTL from "@/components/comment/rtl";
 import ReportContentButton from "@/components/moderation/ReportContentButton";
@@ -51,10 +50,11 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
 
   const Comment = isRTL ? CommentRTL : CommentLTR;
 
-  // Comments and likes are made by the active channel
+  // With a channel active, comments and likes are that channel's; without one
+  // the member comments and likes as themselves (profile name and avatar, #1151)
   const activeChannel = account?.channel || null;
   const channelId = activeChannel?.id || '';
-  const canInteract = !!user && !!channelId;
+  const canInteract = !!user;
   const isVideoOwner = !!user && !!videoOwnerId && videoOwnerId === user.id;
 
   const {
@@ -198,6 +198,9 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
   };
 
   const composerAvatar = activeChannel?.avatarUrl || profile?.avatarUrl || DEFAULT_AVATAR;
+  // Who the comment will be posted as: the active channel, or the member themselves
+  // (their own email only as the last resort: this line is shown to them alone)
+  const composerName = activeChannel?.name?.trim() || userDisplayName(profile, lang, user?.email);
 
   const renderThread = (comment: Comments) => {
     const thread = replies[comment.id];
@@ -304,6 +307,11 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
               className="w-8 h-8 rounded-full"
             />
             <div className="flex-1">
+              {composerName && (
+                <p className="mb-1 text-xs text-gray-600 dark:text-gray-400" data-testid="comment-identity" data-as={activeChannel ? 'channel' : 'member'}>
+                  {t.comments.commentingAs.replace('{name}', composerName)}
+                </p>
+              )}
               <label htmlFor={composerId} className="sr-only">{t.comments.addComment}</label>
               <Textarea
                 id={composerId}
@@ -334,16 +342,6 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
               {isSubmitting ? t.comments.commenting : t.comments.comment}
             </Button>
           </div>
-        </div>
-      ) : user ? (
-        // Signed in but no channel: comments and reactions are posted as a channel
-        <div className="p-4 border rounded-lg bg-gray-50 dark:bg-gray-800 text-center">
-          <p className="text-gray-600 dark:text-gray-400 mb-3">
-            {t.errors.channelRequired}
-          </p>
-          <Link href={`/${lang}/profile`}>
-            <Button size="sm">{t.navigation.createChannel}</Button>
-          </Link>
         </div>
       ) : (
         <div className="p-4 border rounded-lg bg-gray-50 dark:bg-gray-800 text-center">

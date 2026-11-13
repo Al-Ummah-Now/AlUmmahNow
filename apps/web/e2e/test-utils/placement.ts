@@ -192,6 +192,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/release/upload-resume.spec.ts': { placement: 'local', reason: 'tus client resume across proxy failures (route interception)' },
   'apps/web/e2e/release/upload-reuse.spec.ts': { placement: 'deployed', reason: 'bunny: retry resumes real partial Bunny TUS upload, no second Bunny video' },
   'apps/web/e2e/release/uploads.spec.ts': { placement: 'deployed', reason: 'bunny: real TUS via proxy to Bunny; images stored on Bunny image CDN' },
+  'apps/web/e2e/release/video-comments-no-channel.spec.ts': { placement: 'local', reason: 'a viewer without a channel comments, replies, likes, edits and deletes on a video (en/ar); own creator/video/comment/viewer' },
   'apps/web/e2e/release/video-format.spec.ts': { placement: 'local', reason: 'Short rule and channel tabs; fake encode must report width/height/duration' },
   'apps/web/e2e/release/watch-actions.spec.ts': { placement: 'local', reason: 'watch action row styling across themes/widths' },
   'apps/web/e2e/release/watch-channel.spec.ts': { placement: 'local', reason: 'channel row layout, subscribe toggle' },

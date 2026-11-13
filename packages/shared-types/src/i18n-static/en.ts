@@ -1356,6 +1356,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     loadFailed: 'Could not load comments. Please try again.',
     actionFailed: 'Something went wrong. Please try again.',
     yourAvatar: 'Your avatar',
+    commentingAs: 'Commenting as {name}',
     authorAvatar: 'Avatar of {name}',
     sortBy: 'Sort comments',
     sortTop: 'Top comments',

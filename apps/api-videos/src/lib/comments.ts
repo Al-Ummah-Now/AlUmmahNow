@@ -17,7 +17,8 @@ export interface StoredReaction {
 export interface StoredComment {
 	id: string;
 	userId: string;
-	channelId: string;
+	/** The channel it was posted as; null when the member commented as themselves (#1151) */
+	channelId: string | null;
 	videoId: string;
 	text: string;
 	dateCreated: string;
@@ -62,7 +63,7 @@ export interface CommentViewer {
 
 export interface CommentAuthor {
 	userId: string;
-	channelId: string;
+	channelId: string | null;
 	displayName: string;
 	avatarUrl?: string;
 }
@@ -70,7 +71,7 @@ export interface CommentAuthor {
 export interface CommentListItem {
 	id: string;
 	userId: string;
-	channelId: string;
+	channelId: string | null;
 	videoId: string;
 	text: string;
 	dateCreated: string;
@@ -220,7 +221,7 @@ export function resolveCommentAuthor(
 
 	return {
 		userId: comment.userId,
-		channelId: comment.channelId,
+		channelId: comment.channelId ?? null,
 		displayName: channel?.name?.trim() || profileName || '',
 		avatarUrl: channel?.avatarUrl || profile?.avatarUrl || undefined,
 	};
@@ -250,7 +251,7 @@ export function toCommentListItem(
 	return {
 		id: comment.id,
 		userId: comment.userId,
-		channelId: comment.channelId,
+		channelId: comment.channelId ?? null,
 		videoId: comment.videoId,
 		text: comment.text,
 		dateCreated: comment.dateCreated,

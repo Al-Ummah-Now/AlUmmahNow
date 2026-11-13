@@ -19,7 +19,8 @@ export class CommentUpdate extends AuthenticatedRoute {
 				cid: Str({ description: "Comment id" }),
 			}),
 			headers: z.object({
-				channelId: Str({ description: "Channel ID" }),
+				// A missing header reaches the schema as null (#1139): no channel means as yourself
+				channelId: Str({ description: "The caller's active channel; optional (only the comment's author may edit it)" }).optional().nullable(),
 			}),
 			body: {
 				content: {
@@ -75,7 +76,7 @@ export class CommentUpdate extends AuthenticatedRoute {
 
 		const { id, cid } = request.params;
 		const userId = this.getUserId(c);
-		const { channelId } = request.headers;
+		const channelId = request.headers.channelId || null;
 
 		// Get the video and find the comment
 		const bucket = c.env.videos;
@@ -152,12 +153,12 @@ export class CommentUpdate extends AuthenticatedRoute {
 			commentId: cid,
 			videoId: id,
 			userId: userId,
-			channelId: channelId,
+			...(channelId ? { channelId } : {}),
 			timestamp: new Date().toISOString(),
 		});
 
 		if (changed) {
-			scanInBackground(c, { surface: 'video_comment', event: 'edit', subjectId: cid, parentId: id, authorId: userId, channelId, text });
+			scanInBackground(c, { surface: 'video_comment', event: 'edit', subjectId: cid, parentId: id, authorId: userId, channelId: channelId ?? undefined, text });
 		}
 
 		if (updatedComment.status !== 'held') {
