@@ -25,10 +25,16 @@ export interface SessionTokens {
   refreshToken: string;
 }
 
-export function sessionCookieOptions() {
+/**
+ * The session cookie's options. Secure in production builds, except when the app is served over
+ * plain http on localhost (the local E2E stack), the same rule /api/auth/start applies to its state
+ * cookie: WebKit and Firefox drop a Secure cookie set over http://localhost, so the session never
+ * stuck there. Deployed hosts are https, so they keep Secure.
+ */
+export function sessionCookieOptions(host?: string | null) {
   return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: process.env.NODE_ENV === 'production' && !(host ?? '').includes('localhost'),
     sameSite: 'lax' as const,
     maxAge: SESSION_MAX_AGE,
     path: '/',
