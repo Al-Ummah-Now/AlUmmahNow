@@ -47,7 +47,7 @@ export function ShareLinkButton({ target, fallbackPath, title, className = '', t
         data-share-kind={target.kind}
         aria-label={texts.copyLink}
         title={title ? `${texts.share}: ${title}` : texts.share}
-        className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition-colors hover:bg-gray-50 dark:border-gray-600 dark:text-white dark:hover:bg-gray-800 ${className}`}
+        className={`inline-flex items-center gap-2 rounded-full border border-[var(--fanous-color-outline)] bg-[var(--fanous-color-surface)] px-4 py-2 text-sm text-[var(--fanous-color-text-primary)] transition-colors hover:bg-[var(--fanous-color-surface-raised)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fanous-color-focus-ring)] ${className}`}
       >
         {status === 'copied' ? <Check size={18} aria-hidden="true" /> : <Share2 size={18} aria-hidden="true" />}
         <span>{status === 'copied' ? texts.linkCopied : texts.share}</span>
