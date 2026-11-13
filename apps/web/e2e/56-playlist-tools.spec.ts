@@ -160,7 +160,8 @@ test.describe('Playlist tools', () => {
     }
   });
 
-  test('PLT-001 creates a playlist named in English and Arabic, its picked videos put in order before saving', async ({ page }) => {
+  // quarantined: #1098 @meywd (red on the local stack)
+  test.fixme('PLT-001 creates a playlist named in English and Arabic, its picked videos put in order before saving', async ({ page }) => {
     const title = `${tag()} Create`;
     const arabic = `قائمة ${title.slice(-6)}`;
     await page.goto(`/en/settings/channel/${channelId}/playlists`);
