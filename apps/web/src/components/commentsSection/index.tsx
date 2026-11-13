@@ -202,7 +202,9 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
   const composerAvatar = activeChannel?.avatarUrl || profile?.avatarUrl || DEFAULT_AVATAR;
   // Who the comment will be posted as: the active channel, or the member themselves
   // (their own email only as the last resort: this line is shown to them alone)
-  const composerName = activeChannel?.name?.trim() || userDisplayName(profile, lang, user?.email);
+  // The channel's name in the page's language, as the account menu shows it
+  const composerName = activeChannel?.nameLocalized?.[lang]?.trim() || activeChannel?.name?.trim() || userDisplayName(profile, lang, user?.email);
+  const [commentingBefore, commentingAfter = ''] = t.comments.commentingAs.split('{name}');
 
   const renderThread = (comment: Comments) => {
     const thread = replies[comment.id];
@@ -311,7 +313,8 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
             <div className="flex-1">
               {composerName && (
                 <p className="mb-1 text-sm font-medium" data-testid="comment-identity" data-as={activeChannel ? 'channel' : 'member'}>
-                  {t.comments.commentingAs.replace('{name}', composerName)}
+                  {/* The name in its own direction: an English channel name inside Arabic text stays in order */}
+                  {commentingBefore}<bdi>{composerName}</bdi>{commentingAfter}
                   {/* With channels to choose from, change who you comment as right here (the account menu's channel list) */}
                   {hasChannels && (
                     <>
