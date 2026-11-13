@@ -1,8 +1,10 @@
 /**
  * Timed QA upload (issue #929): the QA creator seed account uploads one short
  * clip through QA's normal API (upload initiate → TUS through the api-videos
- * proxy → complete), then the upload status is polled until the video is
- * ready, and the time is reported. The video is deleted afterwards.
+ * proxy → complete), then the upload status is polled until Bunny reports the
+ * encode finished (status 4: encodingStatus.isProcessing false), and both times
+ * are reported: the API's "ready" (playable at the first resolution, earlier)
+ * and Bunny's finished. The video is deleted afterwards.
  *
  * QA only (the seed account, QA hosts). Run by .github/workflows/bunny-qa-status.yml:
  *   QA_SEED_PASSWORD=… npx tsx e2e/seed/timed-upload.ts
@@ -64,10 +66,12 @@ async function main(): Promise<void> {
 
   let status = 'unknown';
   let progress: number | undefined;
+  let playableSeconds: number | undefined;
+  let finished = false;
   const timeline: string[] = [];
   try {
     while (Date.now() - uploaded < WAIT_MS) {
-      const res = await api.get<{ result?: { status?: string; progress?: number } }>(`/api/videos/${videoId}/upload-status`, {
+      const res = await api.get<{ result?: { status?: string; progress?: number; encodingStatus?: { isProcessing?: boolean } } }>(`/api/videos/${videoId}/upload-status`, {
         token: session.accessToken,
         channelId: channel.id,
       });
@@ -76,7 +80,11 @@ async function main(): Promise<void> {
       if (next !== status || nextProgress !== progress) timeline.push(`+${Math.round((Date.now() - uploaded) / 1000)}s ${next} ${nextProgress ?? ''}`.trim());
       status = next;
       progress = nextProgress;
-      if (status === 'ready' || status === 'failed' || status === 'error') break;
+      if (status === 'ready' && playableSeconds === undefined) playableSeconds = Math.round((Date.now() - uploaded) / 1000);
+      // "ready" comes at the first playable resolution (Bunny status 1-3);
+      // Bunny's finished (status 4) is the only state not processing
+      finished = status === 'ready' && res.data.result?.encodingStatus?.isProcessing === false;
+      if (finished || status === 'failed' || status === 'error') break;
       await sleep(10_000);
     }
   } finally {
@@ -85,7 +93,8 @@ async function main(): Promise<void> {
       '### Timed QA upload',
       `- video: \`${videoId}\` (${CLIP_SECONDS} s clip, ${fileSize} bytes, channel ${channel.id})`,
       `- upload (initiate → complete): ${Math.round((uploaded - t0) / 1000)} s`,
-      `- result: **${status}** after **${encodeSeconds} s** from upload complete`,
+      `- API ready (playable): ${playableSeconds === undefined ? 'never' : `${playableSeconds} s`} from upload complete`,
+      `- result: **${finished ? 'Bunny finished' : status}** after **${encodeSeconds} s** from upload complete`,
       '- timeline:',
       ...timeline.map((l) => `  - ${l}`),
     ];
@@ -93,7 +102,7 @@ async function main(): Promise<void> {
     if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n') + '\n');
     await api.request(`/api/videos/${videoId}/permanent`, { method: 'DELETE', token: session.accessToken, channelId: channel.id, allowStatus: [404] }).catch((e) => log.warn('Delete failed', { videoId, error: String(e) }));
   }
-  if (status !== 'ready') process.exitCode = 1;
+  if (!finished) process.exitCode = 1;
 }
 
 main().catch((error) => {
