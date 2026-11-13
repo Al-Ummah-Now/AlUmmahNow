@@ -38,6 +38,10 @@ export function FitImage({ src, alt, sizes, videoWidth, videoHeight, onError }: 
           <img
             src={src}
             alt=""
+            // Lazy like the thumbnail itself (next/image is lazy by default): a feed of letterboxed
+            // cards must not fetch every backdrop up front (#1224)
+            loading="lazy"
+            decoding="async"
             data-testid="thumbnail-backdrop"
             className="h-full w-full scale-150 object-cover blur-xl brightness-50"
           />
