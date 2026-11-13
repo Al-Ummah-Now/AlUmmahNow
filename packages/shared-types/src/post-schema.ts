@@ -211,7 +211,7 @@ export function slugify(v: unknown, max: number = POST_LIMITS.slug): string {
   if (typeof v !== 'string') return '';
   return v
     .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
@@ -303,7 +303,7 @@ export function parsePostFields(kind: unknown, raw: unknown, opts: PostValidateO
 
 /* ── Reading any post (older ones included) ───────────────────────────────────────────────────── */
 
-const ARABIC = /[؀-ۿݐ-ݿﭐ-﷿ﹰ-﻿]/g;
+const ARABIC = /[\u0600-\u06ff\u0750-\u077f\ufb50-\ufdff\ufe70-\ufeff]/g;
 const LATIN = /[A-Za-z]/g;
 
 /** 'ar' when Arabic letters outnumber Latin ones, else 'en'. */
@@ -332,7 +332,7 @@ export function plainText(s: unknown): string {
     .trim();
 }
 
-const cut = (s: string, max: number) => (s.length <= max ? s : `${s.slice(0, max - 1).replace(/\s+\S*$/, '')}…`);
+const cut = (s: string, max: number) => (s.length <= max ? s : `${s.slice(0, max - 1).replace(/\s+\S*$/, '')}\u2026`);
 
 export function postKind(p: PostLike): PostKind {
   return isPostKind(p.type) ? p.type : 'text';
