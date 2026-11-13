@@ -33,6 +33,7 @@ import {
 } from '@al-ummah/shared-types';
 import { logger } from '../logger';
 import { syncCommentIndex } from '../admin/commentIndex';
+import { FOOTPRINT_BUCKETS, withFootprints } from '../privacy/footprints';
 
 /** R2 binding name → indexed entity type. */
 export const SEARCH_BUCKETS: Readonly<Record<string, SearchEntityType>> = {
@@ -264,13 +265,20 @@ function wrapProfiles(bucket: R2Bucket, db: SearchDb): R2Bucket {
 
 /**
  * Return a copy of the Worker env whose content buckets update the search index
- * after writes. Returns env unchanged when SEARCH_DB is not bound.
+ * after writes, and whose videos, channels, community, playlists and reports
+ * buckets record privacy footprints (lib/privacy/footprints.ts) before a put
+ * resolves. Returns env unchanged when SEARCH_DB is not bound.
  */
 export function withSearchSync<E extends object>(env: E, ctx: Pick<ExecutionContext, 'waitUntil'>): E {
   const db = (env as { SEARCH_DB?: SearchDb }).SEARCH_DB;
   if (!db || !ctx?.waitUntil) return env;
   const queue = new SearchSyncQueue(db, promise => ctx.waitUntil(promise));
   const wrapped: Record<string, unknown> = { ...(env as Record<string, unknown>) };
+  // Privacy footprints (lib/privacy/footprints.ts): who each write names, so erasure needs no bucket scan
+  for (const binding of FOOTPRINT_BUCKETS) {
+    const bucket = wrapped[binding] as R2Bucket | undefined;
+    if (bucket && typeof bucket.put === 'function') wrapped[binding] = withFootprints(bucket, binding, db);
+  }
   for (const [binding, type] of Object.entries(SEARCH_BUCKETS)) {
     const bucket = wrapped[binding] as R2Bucket | undefined;
     if (bucket && typeof bucket.put === 'function') {
