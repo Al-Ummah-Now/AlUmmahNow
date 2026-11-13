@@ -130,7 +130,9 @@ describe('the play item', () => {
 		const dir = `https://${BUNNY_HOST}/bcdn_token=${token}&expires=${expires}&token_path=%2F${ID}%2F/${ID}`;
 		assert.deepEqual(item.mp4, { url: `${dir}/play_480p.mp4`, width: null, height: null });
 		assert.equal(item.hls, `${dir}/playlist.m3u8`);
-		assert.match(item.poster!, new RegExp(`^https://${BUNNY_HOST}/${ID}/thumbnail\\.jpg\\?token=[A-Za-z0-9_-]+&expires=${expires}$`));
+		const posterPrefix = `https://${BUNNY_HOST}/${ID}/thumbnail.jpg?token=`;
+		assert.ok(item.poster!.startsWith(posterPrefix), item.poster!);
+		assert.match(item.poster!.slice(posterPrefix.length), new RegExp(`^[A-Za-z0-9_-]+&expires=${expires}$`));
 		assert.equal(item.expiresAt, new Date(expires * 1000).toISOString());
 		assert.deepEqual(
 			{ ...item, mp4: undefined, hls: undefined, poster: undefined, expiresAt: undefined },
