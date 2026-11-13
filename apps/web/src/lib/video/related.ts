@@ -28,10 +28,13 @@ export function toVideoInfo(video: ApiVideo): VideoInfo {
   return {
     id: video.id,
     title: video.title ?? '',
+    // The title and channel name in every language: an Arabic page shows Arabic ones (Up next showed English)
+    ...(video.titleLocalized ? { titleLocalized: video.titleLocalized } : {}),
     description: video.description ?? null,
     channel: (video as { channel?: string }).channel ?? '',
     channelId: video.channelId ?? null,
     channelName: video.channelName ?? '',
+    ...(video.channelNameLocalized ? { channelNameLocalized: video.channelNameLocalized } : {}),
     thumbnail: video.thumbnailUrl ?? '',
     video: video.videoUrl ?? video.playUrl ?? '',
     views: `${video.views || 0}`,

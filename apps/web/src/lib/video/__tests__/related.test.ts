@@ -13,6 +13,12 @@ describe('related shelf (Epic 7.3)', () => {
     expect(card.dateCreated.toISOString()).toBe('2026-11-01T00:00:00.000Z');
   });
 
+  it('keeps the title and channel name in every language (an Arabic page shows Arabic ones)', () => {
+    const info = toVideoInfo({ id: 'v', title: 'Weak Hadith 2', titleLocalized: { en: 'Weak Hadith 2', ar: 'سلسلة الحديث الضعيف ٢' }, channelName: 'Al Ummah Now', channelNameLocalized: { ar: 'الأمة الآن' } } as never);
+    expect(info.titleLocalized).toEqual({ en: 'Weak Hadith 2', ar: 'سلسلة الحديث الضعيف ٢' });
+    expect(info.channelNameLocalized).toEqual({ ar: 'الأمة الآن' });
+  });
+
   it('puts recommendations first, tops up from the feed, skips duplicates and the current video', () => {
     const merged = mergeRelated('cur', [info('r1'), info('cur'), info('r2')], [info('r2'), info('f1'), info('cur'), info('f2')]);
     expect(merged.map((v: VideoInfo) => v.id)).toEqual(['r1', 'r2', 'f1', 'f2']);

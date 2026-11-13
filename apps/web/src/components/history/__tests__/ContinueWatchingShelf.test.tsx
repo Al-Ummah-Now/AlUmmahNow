@@ -77,6 +77,25 @@ describe('ContinueWatchingShelf (#242)', () => {
     expect(screen.getAllByTestId('continue-watching-video')[0]).toHaveAttribute('href', '/ar/video/a');
   });
 
+  it("shows each video's title in the page language (an Arabic page, the Arabic title)", async () => {
+    service.list.mockResolvedValue({
+      entries: [{ ...entry('a', 42), videoTitle: 'Weak Hadith 1', videoTitleLocalized: { en: 'Weak Hadith 1', ar: 'سلسلة الحديث الضعيف ١' } }, entry('b', 10)],
+      total: 2,
+      hasMore: false,
+    });
+    mockLang = 'ar';
+    const { unmount } = render(<ContinueWatchingShelf />);
+    const tiles = await screen.findAllByTestId('continue-watching-video');
+    expect(tiles[0]).toHaveTextContent('سلسلة الحديث الضعيف ١');
+    expect(tiles[0]).not.toHaveTextContent('Weak Hadith 1');
+    // No Arabic title: the stored one
+    expect(tiles[1]).toHaveTextContent('Lecture b');
+    unmount();
+    mockLang = 'en';
+    render(<ContinueWatchingShelf />);
+    expect((await screen.findAllByTestId('continue-watching-video'))[0]).toHaveTextContent('Weak Hadith 1');
+  });
+
   it('renders nothing for a signed-out visitor and never calls the API', () => {
     mockUser = null;
     const { container } = render(<ContinueWatchingShelf />);
