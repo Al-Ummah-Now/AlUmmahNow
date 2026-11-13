@@ -158,7 +158,7 @@ export const HELP_EN: HelpTranslations = {
     },
     watching: {
       title: 'Watching',
-      summary: 'The player, captions, quality, the mini player, your playlists, Shorts, Watch later and History.',
+      summary: 'The player, captions, the mini player, your playlists, notifications, Shorts, Watch later and History.',
       sections: [
         {
           id: 'player',
@@ -190,6 +190,15 @@ export const HELP_EN: HelpTranslations = {
             ] },
             { type: 'figure', picture: 'watching-playlists', alt: 'Your playlists, with New playlist', markers: ['Your playlist', 'New playlist'] },
             { type: 'p', text: 'Play a playlist and the next video starts when one ends. Turn off **Autoplay next** in the settings menu to stop after each video. Your choice is kept on your account.' },
+          ],
+        },
+        {
+          id: 'notifications',
+          heading: 'Notifications',
+          blocks: [
+            { type: 'p', text: 'The bell in the header shows how many notifications arrived since you last opened it (up to **9+**). Opening it clears that number on all your tabs and devices.' },
+            { type: 'p', text: 'A notification stays unread until you open it or choose **Mark as read**; **Mark all as read** does them all, and **Mark as unread** brings one back. Depending on how the site is set up, opening the bell may also mark what it shows as read.' },
+            { type: 'p', text: 'You get notifications on your account, whichever channel you are acting as.' },
           ],
         },
         {
@@ -485,7 +494,7 @@ export const HELP_AR: HelpTranslations = {
     },
     watching: {
       title: 'المشاهدة',
-      summary: 'المشغّل والترجمة والجودة والمشغّل المصغّر وقوائم التشغيل والمقاطع القصيرة والمشاهدة لاحقًا والسجل.',
+      summary: 'المشغّل والترجمة والمشغّل المصغّر وقوائم التشغيل والإشعارات والمقاطع القصيرة والمشاهدة لاحقًا والسجل.',
       sections: [
         {
           id: 'player',
@@ -517,6 +526,15 @@ export const HELP_AR: HelpTranslations = {
             ] },
             { type: 'figure', picture: 'watching-playlists', alt: 'قوائم تشغيلك، ومعها «قائمة تشغيل جديدة»', markers: ['قائمتك', 'قائمة تشغيل جديدة'] },
             { type: 'p', text: 'شغّل قائمة تشغيل، وحين ينتهي مرئي يبدأ الذي يليه. أوقف **التشغيل التلقائي للتالي** من قائمة الإعدادات إن أردت التوقف بعد كل مرئي، ويُحفظ اختيارك في حسابك.' },
+          ],
+        },
+        {
+          id: 'notifications',
+          heading: 'الإشعارات',
+          blocks: [
+            { type: 'p', text: 'يُظهر الجرس في الشريط العلوي عدد الإشعارات التي وصلت منذ آخر مرة فتحته فيها (حتى **9+**). وفتحه يمسح هذا العدد في كل نوافذك وأجهزتك.' },
+            { type: 'p', text: 'يبقى الإشعار غير مقروء حتى تفتحه أو تختار **تحديد كمقروء**؛ و**تحديد الكل كمقروء** يشملها كلها، و**تحديد كغير مقروء** يعيد إشعارًا إلى غير المقروء. وبحسب إعدادات الموقع، قد يجعل فتح الجرس ما يعرضه مقروءًا أيضًا.' },
+            { type: 'p', text: 'تصلك الإشعارات على حسابك أيًّا كانت القناة التي تتصرّف باسمها.' },
           ],
         },
         {
