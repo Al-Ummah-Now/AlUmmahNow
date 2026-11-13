@@ -40,6 +40,7 @@ export function ContinueWatchingShelf() {
           title: e.videoTitle,
           thumbnailUrl: e.videoThumbnail,
           channelName: e.channelName,
+          channelNameLocalized: e.channelNameLocalized,
           duration: e.videoDuration,
           percentWatched: e.percentageWatched,
         }))

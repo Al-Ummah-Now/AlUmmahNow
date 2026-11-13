@@ -28,6 +28,7 @@ import { requestAutoplay } from '@/lib/video/autoplay-intent';
 import { navigateOrLoad } from '@/lib/navigation/navigate-or-load';
 import { removeUnwantedChars } from '@/lib/utility';
 import type { UpNext } from '@/lib/video/player-ui';
+import { channelLabel } from '@/lib/channel-name';
 
 export interface PlaylistPlayback {
   /** A list is in the URL and usable (loading or ready) */
@@ -137,7 +138,7 @@ export function usePlaylistPlayback(videoId: string, lang: string, options: Play
     if (!nextItem) return null;
     return {
       title: removeUnwantedChars(getLocalizedValue(nextItem.titleLocalized, nextItem.title, lang)),
-      channel: nextItem.channelName ?? '',
+      channel: channelLabel(nextItem, lang),
       thumbnail: nextItem.thumbnailUrl,
       badge: `${(nextItem.position + 1).toLocaleString(lang)} / ${total.toLocaleString(lang)}`,
       go: (opts) => play(nextItem, opts),

@@ -64,7 +64,7 @@ const VideoPlayerRTL: React.FC<WatchPlayerProps> = ({ options, startTime, onPlay
           />
         </div>
       </div>
-      <VideoDetails title={title} channelName={playerChannelName(options)} channelHref={playerChannelHref('ar', options)} options={options} avatarAlt={t.a11y.channelAvatar.replace('{channel}', removeUnwantedChars(playerChannelName(options)))} />
+      <VideoDetails title={title} channelName={playerChannelName(options, 'ar')} channelHref={playerChannelHref('ar', options)} options={options} avatarAlt={t.a11y.channelAvatar.replace('{channel}', removeUnwantedChars(playerChannelName(options, 'ar')))} />
     </>
   );
 };

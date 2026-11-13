@@ -19,15 +19,31 @@ function interpolate(template: string, params: Record<string, string | number> =
 }
 
 /**
+ * Params in the viewer's language: a `<name>_<lang>` param (e.g. `channelName_ar`, api-videos
+ * lib/channelName.ts) replaces `<name>`, so a channel's Arabic name shows on Arabic pages.
+ */
+export function localizeParams(params: Record<string, string | number> | undefined, lang?: string): Record<string, string | number> {
+  if (!params || !lang) return params ?? {};
+  const out: Record<string, string | number> = { ...params };
+  const suffix = `_${lang}`;
+  for (const [key, value] of Object.entries(params)) {
+    if (key.endsWith(suffix) && value !== '' && value !== undefined) out[key.slice(0, -suffix.length)] = value;
+  }
+  return out;
+}
+
+/**
  * Render a server-pushed notification in the viewer's language.
  * Servers send `notificationKey` + `params`; legacy events with pre-rendered
  * `title`/`message` are passed through, and unknown keys fall back to the
  * generic per-type labels.
  */
 export function resolveNotificationText(
-  event: NotificationEvent,
-  t: AppTranslations
+  input: NotificationEvent,
+  t: AppTranslations,
+  lang?: string
 ): { title: string; message: string } {
+  const event: NotificationEvent = { ...input, params: localizeParams(input.params as Record<string, string | number> | undefined, lang) as NotificationEvent['params'] };
   // Upload results read the current copy (uploadStatus.notification): stored
   // translation files keep older values for the realtime.* keys
   const upload = t.uploadStatus?.notification;

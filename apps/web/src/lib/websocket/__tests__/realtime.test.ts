@@ -32,6 +32,17 @@ describe('resolveNotificationText', () => {
     expect(text.message).toContain('قناة');
   });
 
+  it("names the channel in the viewer's language (channelName_<lang>), else the default name", () => {
+    const params = { channelName: 'Al Ummah Now', channelName_en: 'Al Ummah Now', channelName_ar: 'الأمة الآن', videoTitle: 'V' };
+    const event = { ...base, notificationType: 'upload' as const, notificationKey: 'newVideo' as const, params };
+    expect(resolveNotificationText(event, AR_TRANSLATIONS, 'ar').message).toContain('الأمة الآن');
+    expect(resolveNotificationText(event, AR_TRANSLATIONS, 'ar').message).not.toContain('Al Ummah Now');
+    expect(resolveNotificationText(event, EN_TRANSLATIONS, 'en').message).toContain('Al Ummah Now');
+    // An older notification without per-language names keeps its name
+    const old = { ...event, params: { channelName: 'Al Ummah Now', videoTitle: 'V' } };
+    expect(resolveNotificationText(old, AR_TRANSLATIONS, 'ar').message).toContain('Al Ummah Now');
+  });
+
   it('falls back to legacy text or the per-type label', () => {
     expect(resolveNotificationText({ ...base, title: 'T', message: 'M' }, EN_TRANSLATIONS)).toEqual({ title: 'T', message: 'M' });
     expect(resolveNotificationText({ ...base, notificationType: 'upload' }, EN_TRANSLATIONS).title)

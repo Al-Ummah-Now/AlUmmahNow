@@ -7,6 +7,8 @@ export interface PlayerOptions {
   titleLocalized?: Record<string, string>;
   channel: string;
   channelName: string;
+  /** The channel's name per language (lib/channel-name.ts) */
+  channelNameLocalized?: Record<string, string>;
   channelAvatar: string;
   /** Channel has the scholar/institution badge (Epic 6.1) */
   channelVerified?: boolean;

@@ -983,6 +983,7 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
             description: video.description || '',
             channel: video.channel,
             channelName: video.channelName,
+            channelNameLocalized: video.channelNameLocalized,
             channelAvatar: video.channelAvatarUrl,
             channelVerified: video.channelIsVerified === true,
             channelCover: video.channelCoverUrl,

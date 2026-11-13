@@ -53,7 +53,7 @@ interface NotificationRowProps {
  */
 export function NotificationRow({ item, onOpen, onMarkRead, onDelete, compact = false }: NotificationRowProps) {
   const { t, lang } = useLanguage();
-  const { title, message } = renderNotification(item, t);
+  const { title, message } = renderNotification(item, t, lang);
   const href = localizeActionUrl(item.actionUrl, lang);
   const texts = t.notificationCenter;
 

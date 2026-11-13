@@ -37,6 +37,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { channelLabel } from '@/lib/channel-name';
 
 type FilterStatus = 'all' | 'ready' | 'processing' | 'uploading' | 'failed';
 type FilterPrivacy = 'all' | 'public' | 'private';
@@ -612,7 +613,7 @@ export default function VideoDashboardPage() {
                   <h3 data-testid="dashboard-video-title" className="text-lg truncate font-[Tahoma]">
                     {video.title}
                   </h3>
-                  <p className="text-sm truncate">{video.channelName || video.channel}</p>
+                  <p className="text-sm truncate">{channelLabel(video, lang)}</p>
                   <p className="text-sm" data-testid="dashboard-video-meta">
                     {formatViews(video.views, lang)} • <RelativeDate value={video.dateCreated} lang={lang} />
                   </p>

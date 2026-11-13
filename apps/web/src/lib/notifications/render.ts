@@ -25,7 +25,7 @@ export function isCenterKey(key: unknown): key is RealtimeNotificationKey {
   return typeof key === 'string' && (NOTIFICATION_CENTER_KEYS as readonly string[]).includes(key);
 }
 
-export function renderNotification(item: Pick<NotificationItem, 'notificationKey' | 'notificationType' | 'params'>, t: AppTranslations) {
+export function renderNotification(item: Pick<NotificationItem, 'notificationKey' | 'notificationType' | 'params'>, t: AppTranslations, lang?: string) {
   const event: NotificationEvent = {
     type: 'notification',
     notificationId: '',
@@ -34,7 +34,7 @@ export function renderNotification(item: Pick<NotificationItem, 'notificationKey
     notificationType: item.notificationType,
     params: item.params,
   };
-  return resolveNotificationText(event, t);
+  return resolveNotificationText(event, t, lang);
 }
 
 /** Short relative time ("5 min ago") in the viewer's language. */

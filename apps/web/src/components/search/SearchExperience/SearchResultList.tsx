@@ -19,6 +19,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { resolveUrl } from '@/lib/utility';
 import { formatCount } from './labels';
 import { RelativeDate } from '@/components/RelativeDate';
+import { channelLabel } from '@/lib/channel-name';
 
 function PostResultCard({ post }: { post: SearchPostPayload }) {
   const { t, lang } = useLanguage();
@@ -35,7 +36,7 @@ function PostResultCard({ post }: { post: SearchPostPayload }) {
         </div>
         <div className="min-w-0">
           <p className="flex items-center gap-1 text-sm font-semibold text-gray-900 dark:text-white">
-            <span className="truncate" dir="auto">{post.channelName}</span>
+            <span className="truncate" dir="auto">{channelLabel(post, lang)}</span>
             {post.channelVerified && <BadgeCheck className="h-4 w-4 shrink-0 text-blue-500" aria-label={t.search.verified} />}
           </p>
           <p className="text-xs text-gray-500 dark:text-gray-400">

@@ -41,11 +41,13 @@ export function useRealTimeNotifications(
 ): UseRealTimeNotificationsReturn {
   const {  maxNotifications = 50, autoRemoveAfter } = options;
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const translationsRef = useRef(t);
+  const langRef = useRef(lang);
   useEffect(() => {
     translationsRef.current = t;
-  }, [t]);
+    langRef.current = lang;
+  }, [t, lang]);
 
   // Remove specific notification
   const removeNotification = useCallback((notificationId: string) => {
@@ -88,7 +90,7 @@ export function useRealTimeNotifications(
     logger.debug('📥 Real-time notification:', event);
 
     if (event.type === 'notification') {
-      const { title, message } = resolveNotificationText(event, translationsRef.current);
+      const { title, message } = resolveNotificationText(event, translationsRef.current, langRef.current);
       const notification: Notification = {
         id: event.notificationId,
         title,

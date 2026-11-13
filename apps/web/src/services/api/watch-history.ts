@@ -39,6 +39,8 @@ export interface WatchHistoryItem {
   videoDuration: number;
   channelId: string;
   channelName: string;
+  /** The channel's name per language (lib/channel-name.ts) */
+  channelNameLocalized?: Record<string, string>;
   firstWatchedAt: string;
   lastWatchedAt: string;
   watchCount: number;

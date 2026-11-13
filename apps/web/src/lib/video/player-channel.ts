@@ -1,4 +1,5 @@
 import type { PlayerOptions } from '@/components/VideoPagePlayer/interface';
+import { channelLabel } from '@/lib/channel-name';
 
 /**
  * Channel of a watch-page video. `channel` is a legacy field: older videos
@@ -10,9 +11,9 @@ export function playerChannelId(options: Pick<PlayerOptions, 'channelId'>): stri
   return options.channelId || undefined;
 }
 
-/** Display name: `channelName`, else the legacy `channel` name. */
-export function playerChannelName(options: Pick<PlayerOptions, 'channelName' | 'channel'>): string {
-  return options.channelName || options.channel || '';
+/** Display name in the page's language (lib/channel-name.ts), else `channelName`, else the legacy `channel` name. */
+export function playerChannelName(options: Pick<PlayerOptions, 'channelName' | 'channel' | 'channelNameLocalized'>, lang = ''): string {
+  return channelLabel(options, lang);
 }
 
 /** Public channel page of the video, or undefined when the video has no channel id. */

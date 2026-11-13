@@ -9,6 +9,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { resolveUrl } from '@/lib/utility';
 import { aspectOf } from '@/lib/video/aspect';
 import { heroSrcSet, heroThumbFit, type HeroThumbnailSizes, type HeroVideo } from '@/lib/video/hero';
+import { channelLabel } from '@/lib/channel-name';
 
 const heroCopy = (lang: string) => (lang === 'ar' ? { tag: 'مختارات', watch: 'شاهد الآن' } : { tag: 'Featured', watch: 'Watch now' });
 
@@ -103,7 +104,7 @@ export function HomeHero({ video }: { video: VideoObject }) {
       <div className="home-hero-b">
         <span className="home-hero-tag">{copy.tag}</span>
         <h2>{title}</h2>
-        <p>{video.channelName || video.channel}</p>
+        <p>{channelLabel(video, lang)}</p>
         <Link href={href} className="b b-primary"><Play aria-hidden="true" />{copy.watch}</Link>
       </div>
     </section>

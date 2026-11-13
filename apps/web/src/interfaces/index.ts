@@ -21,6 +21,8 @@ export interface VideoObject {
     channelIsVerified?: boolean;
     channelCoverUrl?: string; // Channel cover/banner image
     channelName: string;
+    /** The channel's name per language (lib/channel-name.ts) */
+    channelNameLocalized?: Record<string, string>;
     dateCreated: string;
     dateModified: string;
     createdAt: string; // For compatibility with shared-types
@@ -79,6 +81,8 @@ export interface VideoInfo {
     channel: string;
     channelId: string | null;
     channelName: string;
+    /** The channel's name per language (lib/channel-name.ts) */
+    channelNameLocalized?: Record<string, string>;
     thumbnail: string;
     video: string;
     views: string;
@@ -130,6 +134,8 @@ export interface User {
     roles?: string[]; // User roles from auth token (e.g., ['user'], ['admin', 'moderator'])
     channel?: Partial<Channel> | null; // Optional channel reference (Partial for ChannelInfo compatibility)
     channelName?: string; // Channel display name
+    /** The channel's name per language (lib/channel-name.ts) */
+    channelNameLocalized?: Record<string, string>;
     name?: string; // User display name
 }
 
@@ -146,6 +152,8 @@ export interface Playlist {
     userId: string; // Made required to match API spec
     channelId: string; // Made required to match API spec
     channelName?: string; // Added from API spec
+    /** The channel's name per language (lib/channel-name.ts) */
+    channelNameLocalized?: Record<string, string>;
     dateCreated: string;
     dateModified: string;
     createdAt: string; // Required for compatibility with shared-types (from Timestamps)
@@ -231,6 +239,8 @@ export interface LiveStream {
     userId: string;
     channelId: string;
     channelName?: string;
+    /** The channel's name per language (lib/channel-name.ts) */
+    channelNameLocalized?: Record<string, string>;
     channelAvatarUrl?: string;
     dateCreated: string;
     dateModified: string;

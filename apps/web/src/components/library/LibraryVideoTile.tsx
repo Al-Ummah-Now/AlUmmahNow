@@ -6,6 +6,7 @@ import VideoThumbnail, { THUMBNAIL_16_9 } from '@/components/VideoThumbnail';
 import { getLocalizedValue } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { removeUnwantedChars } from '@/lib/utility';
+import { channelLabel } from '@/lib/channel-name';
 
 export interface LibraryTileVideo {
   id: string;
@@ -13,6 +14,7 @@ export interface LibraryTileVideo {
   titleLocalized?: Record<string, string>;
   thumbnailUrl?: string | null;
   channelName?: string;
+  channelNameLocalized?: Record<string, string>;
   channel?: string;
   duration?: number;
   /** Share watched, 0-100: shows a progress bar under the thumbnail */
@@ -66,8 +68,8 @@ export function LibraryVideoTile({ video, subtitle, testId = 'library-video', hr
         )}
       </div>
       <p className="mt-2 line-clamp-2 text-sm font-medium text-gray-900 group-hover:underline dark:text-white">{title}</p>
-      {(video.channelName || video.channel) && (
-        <p className="truncate text-xs text-gray-600 dark:text-gray-400">{video.channelName || video.channel}</p>
+      {channelLabel(video, lang) && (
+        <p className="truncate text-xs text-gray-600 dark:text-gray-400">{channelLabel(video, lang)}</p>
       )}
       {subtitle && <p className="text-xs text-gray-500 dark:text-gray-400">{subtitle}</p>}
     </Link>

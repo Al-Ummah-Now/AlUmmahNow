@@ -115,6 +115,7 @@ export function LibraryHubView({ dir }: { dir: 'ltr' | 'rtl' }) {
           title: e.videoTitle,
           thumbnailUrl: e.videoThumbnail,
           channelName: e.channelName,
+          channelNameLocalized: e.channelNameLocalized,
           duration: e.videoDuration,
         })),
       };

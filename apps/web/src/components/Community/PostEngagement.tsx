@@ -6,6 +6,7 @@ import LikeButton from './LikeButton';
 import CommentButton from './CommentButton';
 import { SavePostButton } from '@/components/library/SavePostButton';
 import { useState } from 'react';
+import { channelLabel } from '@/lib/channel-name';
 
 interface PostEngagementProps {
   post: CommunityPost;
@@ -45,9 +46,10 @@ export default function PostEngagement({
 
   const handleShare = async () => {
     const shareUrl = getShareUrl();
+    const channel = channelLabel(post, locale);
     const shareText = isRTL
-      ? `شاهد هذا المنشور من ${post.channelName}`
-      : `Check out this post from ${post.channelName}`;
+      ? `شاهد هذا المنشور من ${channel}`
+      : `Check out this post from ${channel}`;
 
     if (navigator.share) {
       try {

@@ -27,6 +27,7 @@ import {
 } from '@/lib/api/playlists';
 import { formatDuration, getPlayAllHref, getWatchHref, moveItem, storedIndexOf } from '@/lib/playlists/playlist-utils';
 import type { VideoObject } from '@/interfaces';
+import { channelLabel } from '@/lib/channel-name';
 
 interface PlaylistViewProps {
   playlistId: string;
@@ -169,12 +170,12 @@ export default function PlaylistView({ playlistId }: PlaylistViewProps) {
             <PlaylistCover playlist={playlist} videos={videos} alt={title} sizes="(max-width: 768px) 100vw, 320px" />
             <div className="p-4 space-y-3">
               <h1 className="text-xl font-bold text-gray-900 dark:text-white break-words">{title}</h1>
-              {playlist.channelName && (
+              {channelLabel(playlist, lang) && (
                 <Link
                   href={`/${lang}/channels/${playlist.channelId}`}
                   className="block text-sm text-gray-700 dark:text-gray-300 hover:underline"
                 >
-                  {playlist.channelName}
+                  {channelLabel(playlist, lang)}
                 </Link>
               )}
               <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
@@ -243,7 +244,7 @@ export default function PlaylistView({ playlistId }: PlaylistViewProps) {
                           {videoTitle}
                         </h2>
                         {video.channelName && (
-                          <p className="text-xs text-gray-600 dark:text-gray-400 truncate">{video.channelName}</p>
+                          <p className="text-xs text-gray-600 dark:text-gray-400 truncate">{channelLabel(video, lang)}</p>
                         )}
                       </div>
                     </Link>
