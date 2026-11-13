@@ -48,6 +48,8 @@ export interface PlaylistPlayback {
   hrefFor: (item: QueueItem) => string;
   /** What the player's Next button, `N` and the end screen play (null at the end of the list) */
   upNext: UpNext | null;
+  /** The next item's id and playback URL, for preloading (null at the end of the list) */
+  nextVideo: { id: string; playUrl?: string } | null;
   /** End of the list with loop off: start again from the first video */
   replayList: (() => void) | null;
 }
@@ -198,6 +200,7 @@ export function usePlaylistPlayback(videoId: string, lang: string, options: Play
     play,
     hrefFor,
     upNext,
+    nextVideo: nextItem ? { id: nextItem.id, playUrl: nextItem.playUrl } : null,
     replayList,
   };
 }

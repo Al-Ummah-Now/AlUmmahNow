@@ -32,3 +32,16 @@ describe('nextMini', () => {
     expect(nextMini({ ...base, mini: true, ratio: 0, viewportWidth: MINI_MIN_VIEWPORT - 1 })).toBe(false);
   });
 });
+
+describe('nextPinned (phones keep the player at the top)', () => {
+  const { nextPinned } = jest.requireActual('../mini-player') as typeof import('../mini-player');
+  it('pins once the frame scrolls under the top', () => {
+    expect(nextPinned({ frameTop: 10, inset: 0, phone: true, fullscreen: false })).toBe(false);
+    expect(nextPinned({ frameTop: -1, inset: 0, phone: true, fullscreen: false })).toBe(true);
+    expect(nextPinned({ frameTop: 40, inset: 56, phone: true, fullscreen: false })).toBe(true);
+  });
+  it('never pins on wider screens, in landscape (phone=false) or in fullscreen', () => {
+    expect(nextPinned({ frameTop: -400, inset: 0, phone: false, fullscreen: false })).toBe(false);
+    expect(nextPinned({ frameTop: -400, inset: 0, phone: true, fullscreen: true })).toBe(false);
+  });
+});

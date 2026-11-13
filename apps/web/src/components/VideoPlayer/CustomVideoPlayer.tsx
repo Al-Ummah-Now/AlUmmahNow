@@ -77,7 +77,7 @@ import { ProgressTooltip } from './ProgressTooltip';
 import { AUTO_ADVANCE_SECONDS, EndScreen, MiniPlayerButtons } from './PlayerOverlays';
 import { getPlayerUi, subscribePlayerUi } from '@/lib/video/player-ui';
 import { keepFrameInView, stickyTopInset } from '@/lib/video/theatre-scroll';
-import { MINI_ENTER_BELOW, MINI_LEAVE_ABOVE, nextMini } from '@/lib/video/mini-player';
+import { MINI_ENTER_BELOW, MINI_LEAVE_ABOVE, PIN_MEDIA_QUERY, nextMini, nextPinned } from '@/lib/video/mini-player';
 import { applyBuiltInIcons } from '@/lib/video/components';
 import { ViewerCount } from './ViewerCount';
 import { KeyboardHelpModal } from './KeyboardHelpModal';
@@ -199,6 +199,8 @@ export default function CustomVideoPlayer({
   const [isRetrying, setIsRetrying] = useState(false);
   const [ended, setEnded] = useState(false);
   const [mini, setMini] = useState(false);
+  // Phones: the player stays pinned to the top while the page scrolls (lib/video/mini-player.ts)
+  const [pinned, setPinned] = useState(false);
   const [portrait, setPortrait] = useState(initialPortrait);
   const miniDismissedRef = useRef(false);
   const frameRef = useRef<HTMLDivElement | null>(null);
@@ -208,6 +210,10 @@ export default function CustomVideoPlayer({
   // Autoplay's muted fallback is on: the "Tap to unmute" button shows
   const [mutedAutoplay, setMutedAutoplay] = useState(false);
   const autoplayIntentRef = useRef(autoplayIntent);
+  autoplayIntentRef.current = autoplayIntent;
+  // Starts playback the page asked for (set once the player is ready); the source swap of the next
+  // video calls it again, since the player is not created anew
+  const startAutoplayRef = useRef<(player: ExtendedPlayer) => void>(() => undefined);
   const touchFeedbackCleanupRef = useRef<(() => void) | null>(null);
 
   // Phase 3: Advanced analytics state tracking
@@ -626,8 +632,7 @@ export default function CustomVideoPlayer({
 
         // The page asked for playback (a playlist, an in-app advance): unmuted first, as the
         // viewer's earlier gesture in this document allows; muted when the browser refuses
-        if (autoplayIntentRef.current) {
-          const extended = player as ExtendedPlayer;
+        startAutoplayRef.current = (extended: ExtendedPlayer) => {
           const attempt = () => Promise.resolve(extended.play());
           let retried = false;
           const start = () => {
@@ -660,7 +665,8 @@ export default function CustomVideoPlayer({
           // Once the source is ready (docs/specs/PLAYLIST-PLAYBACK.md section 4.1)
           if ((extended.readyState?.() ?? 0) >= 1) start();
           else extended.one('loadedmetadata', start);
-        }
+        };
+        if (autoplayIntentRef.current) startAutoplayRef.current(player as ExtendedPlayer);
 
         // Start position: applied once the duration is known (seeking earlier is ignored)
         if (startTime && startTime > 0) {
@@ -942,7 +948,7 @@ export default function CustomVideoPlayer({
     const newSrc = sources[0]?.src;
 
     // Only update if the source actually changed
-    if (currentSrc && newSrc && !isSameMediaUrl(currentSrc, newSrc)) {
+    if (newSrc && (!currentSrc || !isSameMediaUrl(currentSrc, newSrc))) {
       logger.debug(`[CustomVideoPlayer] Video ID changed, updating source to ${videoId}`);
 
       // Reset quartiles for new video
@@ -966,6 +972,15 @@ export default function CustomVideoPlayer({
 
       // Load the new video
       player.load();
+
+      // Seamless next (the page keeps this player): what belonged to the last video goes, the
+      // frame takes the new video's shape before its metadata, and playback starts when asked
+      setEnded(false);
+      setCurrentError(null);
+      setShowStartOver(false);
+      setResumeOffer(null);
+      setPortrait(initialPortrait);
+      if (autoplayIntentRef.current) startAutoplayRef.current(player);
     }
   // analyticsContext is fixed for the life of an embed frame
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1127,6 +1142,49 @@ export default function CustomVideoPlayer({
   useEffect(() => evaluateMiniRef.current(), [isPlaying]);
 
   /**
+   * Phones keep the player pinned to the top of the watch page while the details, comments and
+   * related videos scroll beneath it (where the mini player never floats). The frame keeps its
+   * place in the page, so nothing below it moves; the pinned player keeps the frame's own left
+   * edge and width, so the switch does not jump. The rule is nextPinned (lib/video/mini-player.ts).
+   */
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame || !playerUi.miniPlayerAvailable || typeof window.matchMedia !== 'function') {
+      setPinned(false);
+      return undefined;
+    }
+    const phone = window.matchMedia(PIN_MEDIA_QUERY);
+    let raf = 0;
+    const evaluate = () => {
+      raf = 0;
+      const rect = frame.getBoundingClientRect();
+      const fullscreen = !!(document.fullscreenElement || (document as Document & { webkitFullscreenElement?: Element | null }).webkitFullscreenElement);
+      const next = nextPinned({ frameTop: rect.top, inset: stickyTopInset(document), phone: phone.matches, fullscreen });
+      if (next) {
+        frame.style.setProperty('--fanous-pin-left', `${Math.round(rect.left)}px`);
+        frame.style.setProperty('--fanous-pin-width', `${Math.round(rect.width)}px`);
+        frame.style.setProperty('--fanous-pin-top', `${Math.round(stickyTopInset(document))}px`);
+      }
+      setPinned(next);
+    };
+    const schedule = () => {
+      if (!raf) raf = window.requestAnimationFrame(evaluate);
+    };
+    evaluate();
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    phone.addEventListener?.('change', schedule);
+    for (const name of ['fullscreenchange', 'webkitfullscreenchange']) document.addEventListener(name, schedule);
+    return () => {
+      if (raf) window.cancelAnimationFrame(raf);
+      window.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+      phone.removeEventListener?.('change', schedule);
+      for (const name of ['fullscreenchange', 'webkitfullscreenchange']) document.removeEventListener(name, schedule);
+    };
+  }, [playerUi.miniPlayerAvailable]);
+
+  /**
    * Theatre on or off keeps the frame's top in view (lib/video/theatre-scroll.ts). It runs in the
    * same commit as the page's theatre layout, before paint, so the frame never shows off screen.
    * The floating mini player is already in view.
@@ -1184,6 +1242,7 @@ export default function CustomVideoPlayer({
       data-portrait={portrait || undefined}
       data-short={isShort || undefined}
       data-mini={mini || undefined}
+      data-pinned={pinned || undefined}
       data-ended={ended || undefined}
     >
       {/* Accessibility: Hidden live region for screen reader announcements */}

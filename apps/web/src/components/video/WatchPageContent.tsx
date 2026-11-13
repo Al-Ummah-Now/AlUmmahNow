@@ -48,6 +48,22 @@ function shareListOf(list: string | null, index: number | null): { id: string; i
   return id ? { id, index } : null;
 }
 
+/**
+ * Details of a video about to play (the next item, up next), fetched ahead so a seamless next
+ * swaps the source as soon as it is pressed. Taken once: a later visit fetches fresh details.
+ */
+const preloaded = new Map<string, Promise<PlayerOptions | undefined>>();
+function preloadVideo(id: string): void {
+  if (!preloaded.has(id)) preloaded.set(id, fetchVideoById(id).catch(() => undefined));
+}
+function loadVideo(id: string): Promise<PlayerOptions | undefined> {
+  const ahead = preloaded.get(id);
+  preloaded.delete(id);
+  return ahead ? ahead.then((v) => v ?? fetchVideoById(id)) : fetchVideoById(id);
+}
+/** How long a video plays before the next one's details are fetched */
+const PRELOAD_AFTER_MS = 5_000;
+
 type VideoState =
   | { status: 'loading' }
   | { status: 'ready'; video: PlayerOptions }
@@ -157,6 +173,29 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
       reportProblem: () => setReportOpen(true),
     });
   }, []);
+  // Preload what plays next: its details (so the swap starts at once) and, in a playlist, its
+  // stream manifest (the URL the API chose for it), once this video has played a few seconds
+  const preloadId = playback.active ? playback.nextVideo?.id ?? null : nextId ?? null;
+  const preloadManifest = playback.active ? playback.nextVideo?.playUrl ?? null : null;
+  useEffect(() => {
+    if (!preloadId) return undefined;
+    let link: HTMLLinkElement | null = null;
+    const timer = window.setTimeout(() => {
+      preloadVideo(preloadId);
+      if (preloadManifest) {
+        link = document.createElement('link');
+        link.rel = 'prefetch';
+        link.as = 'fetch';
+        link.crossOrigin = 'anonymous';
+        link.href = preloadManifest;
+        document.head.appendChild(link);
+      }
+    }, PRELOAD_AFTER_MS);
+    return () => {
+      window.clearTimeout(timer);
+      link?.remove();
+    };
+  }, [preloadId, preloadManifest]);
   // One pane, placed by width: the side column from lg (the related column), else under the player
   const wide = useMediaQuery('(min-width: 1024px)');
   const renderPane = (slot: 'side' | 'below') =>
@@ -185,8 +224,11 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
 
   useEffect(() => {
     let cancelled = false;
-    setState({ status: 'loading' });
-    fetchVideoById(videoId).then((details) => {
+    // Seamless next (the watch layout keeps this page and its player): the last video stays on
+    // screen until the next one's details arrive, then the player swaps its source in place.
+    // Only a first load (or after "not found") shows the skeleton.
+    setState((prev) => (prev.status === 'ready' ? prev : { status: 'loading' }));
+    loadVideo(videoId).then((details) => {
       if (cancelled) return;
       if (!details) logger.warn('[WatchPage] Video not found or not viewable', { videoId });
       setState(details ? { status: 'ready', video: details } : { status: 'notFound' });
@@ -219,6 +261,20 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
   }, [videoId, relatedAttempt]);
 
   const videoDetails = state.status === 'ready' ? state.video : null;
+  // The tab title follows the video shown. /video/[id] sets it from the server's metadata too; the
+  // legacy /video?vid= route has none, and either way it must not lag behind a seamless next.
+  const shownTitle = videoDetails && videoDetails.id === videoId ? getLocalizedValue(videoDetails.titleLocalized, videoDetails.title, lang) : null;
+  useEffect(() => {
+    if (!shownTitle) return undefined;
+    document.title = shownTitle;
+    // The router applies a route's metadata after its own commit, which can land after this
+    // effect (the legacy route's default title): put the video's title back when that happens
+    const keep = new MutationObserver(() => {
+      if (document.title !== shownTitle) document.title = shownTitle;
+    });
+    keep.observe(document.head, { childList: true, subtree: true, characterData: true });
+    return () => keep.disconnect();
+  }, [shownTitle]);
   // A processing video swaps in the player once its check sees it ready
   const handleProcessed = useCallback((fresh: PlayerOptions) => setState({ status: 'ready', video: fresh }), []);
   const isOwnVideo = !!user && !!videoDetails?.userId && videoDetails.userId === user.id;
@@ -261,7 +317,6 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
                   <VideoProcessingState video={videoDetails} isOwner={isOwnVideo} onReady={handleProcessed} />
                 ) : (
                   <Player
-                    key={videoDetails.id}
                     options={videoDetails}
                     startTime={startTime}
                     onPlayerReady={handlePlayerReady}
@@ -275,7 +330,7 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
               <div className="watch-actions" ref={actionsRef} data-testid="watch-actions">
                 <VideoMetricsDisplay
                   key={videoDetails.id}
-                  videoId={videoId}
+                  videoId={videoDetails.id}
                   channelId={videoDetails.channelId || undefined}
                   initialViewCount={parseInt(videoDetails.views?.replace(/[^\d]/g, '') || '0')}
                   initialLikesCount={videoDetails.likesCount || 0}
@@ -286,17 +341,17 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
                   }}
                 />
                   <ShareDialog
-                    videoId={videoId}
+                    videoId={videoDetails.id}
                     title={getLocalizedValue(videoDetails.titleLocalized, videoDetails.title, lang)}
                     lang={lang === 'ar' ? 'ar' : 'en'}
                     getCurrentTime={getCurrentTime}
                     list={playback.active ? shareListOf(playback.list, playback.queue.items.find((i) => i.position === playback.queue.position)?.index ?? null) : null}
                   />
-                  {user && <WatchLaterButton videoId={videoId} />}
-                  {user && <SaveToPlaylistControl videoId={videoId} />}
+                  {user && <WatchLaterButton videoId={videoDetails.id} />}
+                  {user && <SaveToPlaylistControl videoId={videoDetails.id} />}
                   {isOwnVideo && (
                     <Link
-                      href={`/${lang}/studio/video/${videoId}/edit`}
+                      href={`/${lang}/studio/video/${videoDetails.id}/edit`}
                       data-testid="video-owner-edit-link"
                       title={t.video.editVideo}
                     >
@@ -326,7 +381,7 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
                   open={reportOpen}
                   onOpenChange={setReportOpen}
                   contentType="video"
-                  contentId={videoId}
+                  contentId={videoDetails.id}
                   contentTitle={getLocalizedValue(videoDetails.titleLocalized, videoDetails.title, lang)}
                 />
               )}
@@ -344,8 +399,8 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
             <div id={COMMENTS_ID} tabIndex={-1} className="w-full max-w-4xl mx-auto px-4">
               {videoDetails ? (
               <Comments
-                key={videoId}
-                videoId={videoId}
+                key={videoDetails.id}
+                videoId={videoDetails.id}
                 videoOwnerId={videoDetails?.userId}
                 user={user}
               />

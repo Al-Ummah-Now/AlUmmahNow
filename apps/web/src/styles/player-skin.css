@@ -1829,6 +1829,32 @@
   }
 }
 
+/*
+  Phones: the player pinned to the top of the watch page (CustomVideoPlayer, nextPinned in
+  lib/video/mini-player.ts). At the frame's own left edge and width, so pinning does not jump;
+  the frame keeps its height in the page. A vertical video pins in a shorter box (the frame colour at
+  the sides) so the details and comments keep most of the screen. Fullscreen is left alone.
+*/
+@media (max-width: 639px) and (orientation: portrait) {
+  .custom-video-player[data-pinned] .video-js.vjs-fanous:not(.vjs-fullscreen) {
+    position: fixed !important;
+    top: var(--fanous-pin-top, 0px) !important;
+    bottom: auto !important;
+    left: var(--fanous-pin-left, 0px) !important;
+    right: auto !important;
+    width: var(--fanous-pin-width, 100vw) !important;
+    height: auto !important;
+    aspect-ratio: 16 / 9;
+    z-index: 45;
+    box-shadow: var(--fanous-player-menu-edge);
+  }
+
+  .custom-video-player[data-pinned][data-portrait] .video-js.vjs-fanous:not(.vjs-fullscreen) {
+    aspect-ratio: auto;
+    height: 45svh !important;
+  }
+}
+
 .video-js.vjs-fanous .vjs-fanous-mini-actions {
   position: absolute;
   z-index: 6;
