@@ -12,6 +12,8 @@ export type { ScheduledVideoMetadata, PublishEvent };
 export interface Env {
   VIDEOS: R2Bucket;
   SCHEDULED_VIDEOS: R2Bucket;
+  /** Read only: the channel's name for the subscribers' "new video" notification (#1240) */
+  CHANNELS?: R2Bucket;
   QUEUE: Queue;
   SCHEDULER_LOCKS: KVNamespace;
   SCHEDULER_METRICS: KVNamespace;
