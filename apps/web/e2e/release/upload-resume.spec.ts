@@ -414,3 +414,62 @@ test.describe('Release: uploads resume', () => {
     }
   });
 });
+
+test.describe('Release: a finished file picked again', () => {
+  test.describe.configure({ timeout: 300000 });
+
+  for (const locale of ['en', 'ar'] as const) {
+    test(`says "Already uploaded" with a link to its video, and uploads it again only when asked (${locale})`, async ({ page }, testInfo) => {
+      const u = await uploader(page, `rel-again-${locale}`);
+      const file = paddedVideo(testInfo.outputPath(), `again-${locale}-${Date.now().toString(36)}.mp4`, 400000);
+      const ui = locale === 'ar'
+        ? { heading: 'تم رفعه من قبل', view: 'مشاهدة الفيديو', again: 'ارفعه مرة أخرى كفيديو جديد', another: 'اختر ملفًا آخر' }
+        : { heading: 'Already uploaded', view: 'View video', again: 'Upload again as a new video', another: 'Choose another file' };
+      // Every video this test creates (initiate answers), for the checks and the clean-up
+      const created: string[] = [];
+      page.on('response', async (res) => {
+        if (res.request().method() !== 'POST' || !/\/api\/videos\/upload\/initiate$/.test(new URL(res.url()).pathname)) return;
+        const body = (await res.json().catch(() => ({}))) as { result?: { videoId?: string } };
+        if (body.result?.videoId) created.push(body.result.videoId);
+      });
+      const pick = async () => {
+        await page.goto(`${target().web}/${locale}/upload`);
+        await expect(page.getByTestId('upload-dropzone')).toBeVisible({ timeout: 30000 });
+        await page.getByTestId('upload-file-input').setInputFiles(file);
+      };
+      const send = async (title: string) => {
+        await expect(page.getByTestId('upload-details')).toBeVisible();
+        await page.getByTestId('upload-title-en').fill(title);
+        await page.getByTestId('upload-is-public').uncheck();
+        await page.getByTestId('upload-submit').click();
+        await expect(page.getByTestId('upload-success')).toBeVisible({ timeout: 120000 });
+      };
+
+      try {
+        await pick();
+        await send(`Release E2E again ${locale} ${Date.now().toString(36)}`);
+        await expect.poll(() => created.length).toBe(1);
+        const first = created[0];
+
+        // The same file again: not uploaded, not a second video; its video is linked
+        await pick();
+        const panel = page.getByTestId('upload-already-uploaded');
+        await expect(panel).toBeVisible({ timeout: 30000 });
+        await expect(panel.getByRole('heading', { name: ui.heading })).toBeVisible();
+        await expect(panel.getByRole('link', { name: ui.view })).toHaveAttribute('href', `/${locale}/video/${first}`);
+        await expect(panel.getByRole('button', { name: ui.another })).toBeVisible();
+        expect(created, 'picking a finished file again created a video').toEqual([first]);
+
+        // Asked for: a new video
+        await panel.getByRole('button', { name: ui.again }).click();
+        await send(`Release E2E again ${locale} copy ${Date.now().toString(36)}`);
+        await expect.poll(() => created.length).toBe(2);
+        expect(created[1]).not.toBe(first);
+      } finally {
+        for (const id of new Set(created)) {
+          await apiFetch(u.user, `/api/videos/${id}/permanent`, { method: 'DELETE', headers: { channelId: u.channelId } });
+        }
+      }
+    });
+  }
+});
