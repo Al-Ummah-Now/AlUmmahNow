@@ -37,6 +37,12 @@ const nextConfig: NextConfig = {
     return config;
   },
 
+  // The admin site is never for search engines (wiki: AUN-SEO): every response says noindex,
+  // and src/app/robots.txt disallows everything
+  async headers() {
+    return [{ source: '/:path*', headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }] }];
+  },
+
   images: {
     remotePatterns: [
       {
