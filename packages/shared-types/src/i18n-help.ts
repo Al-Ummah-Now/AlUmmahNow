@@ -440,7 +440,7 @@ export const HELP_EN: HelpTranslations = {
       actingAs: { title: 'Who you are acting as', body: 'Comments, likes and subscriptions you make now carry this name and picture: a channel, or yourself.' },
       switch: { title: 'Switch any time', body: 'Pick a channel you own or manage, or “Use without a channel” to act as yourself. You stay in the same account.' },
       upload: { title: 'Uploads go to the active channel', body: 'No channel? You can still watch, comment, like, subscribe and make playlists as yourself. Channels are by invitation.' },
-      help: { title: 'Find this again in Help', body: 'Help is in the account menu and the side menu, with “Take the tour”. Enjoy watching.' },
+      help: { title: 'Find this again in Help', body: 'Help is in the side menu, with “Take the tour”. Enjoy watching.' },
     },
   },
 };
@@ -776,7 +776,7 @@ export const HELP_AR: HelpTranslations = {
       actingAs: { title: 'باسم من تتصرّف', body: 'التعليقات والإعجابات والاشتراكات التي تقوم بها الآن تحمل هذا الاسم وهذه الصورة: قناة، أو اسمك أنت.' },
       switch: { title: 'بدّل متى شئت', body: 'اختر قناة تملكها أو تديرها، أو «الاستخدام بدون قناة» لتتصرّف باسمك. وتبقى في الحساب نفسه.' },
       upload: { title: 'الرفع يذهب إلى القناة النشطة', body: 'ليست لديك قناة؟ ما زال بإمكانك المشاهدة والتعليق والإعجاب والاشتراك وإنشاء قوائم التشغيل باسمك. وإنشاء القنوات بدعوة.' },
-      help: { title: 'تجد الجولة في المساعدة', body: 'المساعدة في قائمة الحساب والقائمة الجانبية، ومنها «ابدأ الجولة». مشاهدة طيبة.' },
+      help: { title: 'تجد الجولة في المساعدة', body: 'المساعدة في القائمة الجانبية، ومنها «ابدأ الجولة». مشاهدة طيبة.' },
     },
   },
 };

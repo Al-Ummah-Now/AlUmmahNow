@@ -79,7 +79,9 @@ test.describe('identity tour', () => {
         await card(page).getByTestId('tour-next').click();
       }
       await expect(card(page)).toHaveAttribute('data-step', 'help');
-      await expect(page.getByTestId('nav-menu').getByTestId('nav-menu-help')).toBeVisible();
+      // Help is in the side menu (one place per destination, NAV-060); the menu is closed again
+      await expect(page.getByTestId('side-nav').locator('a[href$="/help"]')).toBeVisible();
+      await expect(page.getByTestId('nav-menu')).toHaveCount(0);
       await expect(card(page).getByTestId('tour-skip')).toHaveCount(0);
       await card(page).getByTestId('tour-next').click();
 
@@ -219,13 +221,14 @@ test.describe('identity tour', () => {
 });
 
 test.describe('Help pages', () => {
-  test('are linked from the account menu and the side menu, and search finds a section', async ({ browser, baseURL, creators }) => {
+  test('are linked from the side menu, and search finds a section', async ({ browser, baseURL, creators }) => {
     const { context, page } = await signedIn(browser, baseURL!, creators.viewer);
     try {
       await page.goto('/en/explore');
       if (await card(page).isVisible({ timeout: 3000 }).catch(() => false)) await card(page).getByTestId('tour-later').click();
-      await page.getByTestId('nav-menu-trigger').click();
-      await page.getByTestId('nav-menu-help').click();
+      const drawer = page.getByTestId('side-nav');
+      if (!(await drawer.locator('a[href$="/help"]').isVisible())) await page.getByTestId('nav-drawer-toggle').click();
+      await drawer.locator('a[href$="/help"]').click();
       await expect(page).toHaveURL(/\/en\/help$/);
       await expect(page.getByRole('heading', { level: 1, name: HELP_EN.title })).toBeVisible();
 
