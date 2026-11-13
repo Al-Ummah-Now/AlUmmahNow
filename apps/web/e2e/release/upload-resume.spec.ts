@@ -59,7 +59,7 @@ async function uploader(page: Page, prefix: string): Promise<Uploader> {
   const password = process.env.E2E_UPLOAD_PASSWORD;
   if (email && password && !process.env.E2E_CODE_SINK_SECRET) {
     await page.goto(`${target().web}/en`);
-    await page.locator('button[aria-haspopup="menu"]').first().click();
+    await page.locator('[data-testid="nav-menu-trigger"]:visible').first().click(); // the header's account menu, not a card's "more" menu
     await page.locator('[role="menu"] form button[type="submit"]').first().click();
     await expect(page).toHaveURL(new RegExp(`^${target().auth}`), { timeout: 30000 });
     await submitPasswordSignIn(page, email, password);

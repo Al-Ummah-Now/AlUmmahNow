@@ -10,7 +10,7 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { sinkEmail, target } from './targets';
-import { completeRegistration, createProfile, expectNoErrorHop, signUpOnWeb } from './web-session';
+import { completeRegistration, createProfile, expectNoErrorHop, openMenuUntil, signUpOnWeb } from './web-session';
 import { expectProfileSignedOut, signInToProfileSilently } from './profile-app';
 
 // This file signs users in through the auth server: its traces would hold the
@@ -101,8 +101,11 @@ async function expectWebSignsInSilently(page: Page): Promise<void> {
 /** The web app's own Sign In (menu → Sign In), whatever happens next. */
 async function clickWebSignIn(page: Page): Promise<void> {
   await page.goto(`${target().web}/en`);
-  await page.locator('button[aria-haspopup="menu"]').first().click();
-  await page.locator('[role="menu"] form button[type="submit"]').first().click();
+  // The header's account menu, not just the first menu button: a video card's "more" menu
+  // (aria-haspopup="menu") now comes first on the home page and opened "Copy link" (v2026.11.13.7)
+  const signIn = page.locator('[role="menu"] form button[type="submit"]').first();
+  await openMenuUntil(page, signIn);
+  await signIn.click();
 }
 
 test.describe('Release: single sign-out', () => {
