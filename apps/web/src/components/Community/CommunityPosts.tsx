@@ -28,8 +28,8 @@ export default function CommunityPosts({ channelId, isRTL = false, locale = 'en'
   const { profile } = useProfile(user ?? null);
   // The active channel's name in the page's language (the account menu's name for it)
   const { user: account } = useMultiAccount();
-  const channelName = account?.channel?.nameLocalized?.[lang]?.trim() || activeChannel?.name?.trim();
   const { activeChannel } = useActiveChannel();
+  const channelName = account?.channel?.nameLocalized?.[lang]?.trim() || activeChannel?.name?.trim();
   const viewerUserId = user?.id;
   const viewerChannelId = activeChannel?.channelId;
 
