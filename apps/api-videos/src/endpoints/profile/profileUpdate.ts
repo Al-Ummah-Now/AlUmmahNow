@@ -1,6 +1,7 @@
 import { nameLocale } from "../../lib/name-locale";
 import { renameCollectionsForUser, userCollectionName } from "../../lib/channelCollection";
 import { inBackground } from "../../lib/websocket-notify";
+import { bearerOf, namesChanged, syncNamesToAuth } from "../../lib/auth-name-sync";
 import { Bool } from "chanfana";
 import { z } from "zod";
 import { Profile as BusinessProfile, ResponseError } from "../../lib/types";
@@ -98,6 +99,12 @@ export class ProfileUpdate extends AuthenticatedRoute {
         // The user's Bunny collections follow the display name / handle (lib/channelCollection.ts)
         if (userCollectionName(updatedProfile as never, userId) !== userCollectionName(existingProfile as never, userId)) {
             inBackground(c, 'user-collection-rename', () => renameCollectionsForUser(c.env as never, userId, updatedProfile as never));
+        }
+
+        // Every Auth-backed app names the account from Auth: send the names there when they change
+        if (namesChanged(existingProfile as never, updatedProfile as never)) {
+            const token = bearerOf(c.req.header("Authorization"));
+            inBackground(c, 'auth-name-sync', () => syncNamesToAuth(c.env.Issuer, token, updatedProfile as never));
         }
 
         // Send queue message for profile update

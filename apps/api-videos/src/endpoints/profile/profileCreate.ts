@@ -8,6 +8,8 @@ import { transformProfileToView, createEntityDefaults } from "../../lib/transfor
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from "../../base";
+import { inBackground } from "../../lib/websocket-notify";
+import { bearerOf, syncNamesToAuth } from "../../lib/auth-name-sync";
 
 export class ProfileCreate extends AuthenticatedRoute {
 	schema = {
@@ -89,6 +91,10 @@ export class ProfileCreate extends AuthenticatedRoute {
 			Object.assign(fresh, profileInput, { id: userId, dateModified: new Date().toISOString() });
 			return true;
 		}, { initial: () => businessProfile as ProfileType });
+
+		// The names reach Auth too (only the ones set: a new, empty profile never wipes an Auth name)
+		const token = bearerOf(c.req.header("Authorization"));
+		inBackground(c, 'auth-name-sync', () => syncNamesToAuth(c.env.Issuer, token, (stored ?? businessProfile) as never, { clear: false }));
 
 		// Send queue message for profile creation
 		const queue = new Queue(c.env.queue);
