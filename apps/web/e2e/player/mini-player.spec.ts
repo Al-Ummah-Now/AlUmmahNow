@@ -6,7 +6,7 @@
  * centre and its control bar are the topmost element there) and painting a moving picture.
  */
 import { expect, test, type Page } from '@playwright/test';
-import { layoutBox, openHarness, pixels, startPlayback } from './harness';
+import { openHarness, pixels, startPlayback } from './harness';
 
 /** What the browser hit-tests at a point belongs to the player */
 const playerOnTop = (page: Page, x: number, y: number) =>
@@ -25,9 +25,12 @@ for (const src of ['bright', 'short'] as const) {
         document.body.appendChild(spacer);
       });
       await startPlayback(page, player);
-      const aside = await layoutBox(page.getByTestId('harness-aside'));
-      await page.mouse.move(aside.cx, Math.max(aside.y, 0) + 20);
-      for (let i = 0; i < 12; i++) await page.mouse.wheel(0, 150);
+      // Scrolled in steps (the side column is below the fold at tablet widths, and Firefox drops
+      // wheel events sent to a point outside the viewport)
+      for (let i = 0; i < 12; i++) {
+        await page.evaluate(() => window.scrollBy(0, 150));
+        await page.waitForTimeout(40);
+      }
       const wrapper = page.locator('.custom-video-player').first();
       await expect(wrapper).toHaveAttribute('data-mini');
       if (src === 'short') await expect(wrapper).toHaveAttribute('data-portrait');
