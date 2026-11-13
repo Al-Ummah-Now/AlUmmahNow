@@ -389,10 +389,10 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
         <p className="text-sm text-brand-ink dark:text-brand-ink" role="status" data-testid="comment-held-notice">{t.comments.heldNotice}</p>
       )}
       {humanChecking && (
-        <p className="text-sm text-gray-600 dark:text-gray-400" role="status" data-testid="comment-human-check">{t.humanCheck.checking}</p>
+        <p className="text-sm text-muted-foreground" role="status" data-testid="comment-human-check">{t.humanCheck.checking}</p>
       )}
       {botNotice && (
-        <p className="text-sm text-red-600 dark:text-red-400" role="alert" data-testid="comment-bot-notice">
+        <p className="text-sm text-destructive" role="alert" data-testid="comment-bot-notice">
           {botNotice === 'rate_limited' ? t.humanCheck.rateLimited : t.humanCheck.failed}
         </p>
       )}
