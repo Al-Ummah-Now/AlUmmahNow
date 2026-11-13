@@ -146,3 +146,20 @@ export function onProgressEvent(
 		last: { at: now, states: rungStatesKey(job.rungs) },
 	};
 }
+
+/** Remux-only jobs (the public MP4 backfill) give up after this many failed deliveries. */
+export const MP4_MAX_ATTEMPTS = 3;
+
+/**
+ * What the queue consumer does with a remux-only job's outcome: ack it, or retry later (busy: a
+ * transcode of the video runs; failed: a transient error). `giveUp`: the last failure, reported.
+ */
+export function mp4QueueAction(
+	result: { outcome: 'ready' | 'busy' | 'failed'; fatal?: boolean },
+	attempts: number,
+): { ack: true; giveUp: boolean } | { ack: false; delaySeconds: number } {
+	if (result.outcome === 'ready') return { ack: true, giveUp: false };
+	if (result.outcome === 'busy') return { ack: false, delaySeconds: 600 };
+	if (result.fatal || attempts >= MP4_MAX_ATTEMPTS) return { ack: true, giveUp: true };
+	return { ack: false, delaySeconds: Math.min(900, 120 * 2 ** Math.max(0, attempts - 1)) };
+}

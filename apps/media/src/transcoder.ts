@@ -6,11 +6,12 @@
  * start to this job's video, prefix and id.
  */
 import { Container, type OutboundHandlerContext } from '@cloudflare/containers';
-import { failRungs, mediaCacheControl, mediaContentType, sanitizeFailure, sanitizeRungs, type R2RungProgress, type TranscodeFailure, type TranscodeJobEvent, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
+import { failRungs, MEDIA_MP4, mediaPrefix, sanitizeFailure, sanitizeMp4, type Mp4JobMessage, sanitizeRungs, type R2RungProgress, type TranscodeFailure, type TranscodeJobEvent, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
 import { bucketFor, errorText, log, type Env } from './env';
 import { containerSeconds, keyAllowed, newJob, onFailure, onMessage, onProgressEvent, watchdogVerdict, WATCHDOG_SECONDS, type JobState } from './jobs';
-import { reportEvent, sourceCandidates } from './videos-api';
+import { reportEvent, reportMp4Event, sourceCandidates } from './videos-api';
 import { serveOriginal } from './originals';
+import { storeUpload } from './uploads';
 
 /** Source URL that answered, per video (isolate memory; a miss just re-probes). */
 const chosenSource = new Map<string, string>();
@@ -23,6 +24,9 @@ type ContainerEvent =
 
 /** What finishFailed adds to the container's own report (attempt, timing, instance). */
 type FailureParts = Partial<TranscodeFailure>;
+
+/** What a remux-only job did (the queue consumer acks, retries or gives up on it). */
+export type Mp4Outcome = { outcome: 'ready' | 'busy' } | { outcome: 'failed'; error: string; fatal: boolean };
 
 /** Delete every object under a prefix (a failed attempt's leftovers). */
 export async function deletePrefix(bucket: R2Bucket, prefix: string): Promise<number> {
@@ -93,8 +97,24 @@ export class Transcoder extends Container<Env> {
 			const key = decodeURIComponent(new URL(req.url).pathname.slice(1));
 			if (req.method !== 'PUT') return new Response('method', { status: 405 });
 			if (!keyAllowed(ctx.params.prefix, key)) return new Response('key outside the job', { status: 403 });
-			const body = await req.arrayBuffer();
-			await bucketFor(env, key).put(key, body, { httpMetadata: { contentType: mediaContentType(key), cacheControl: mediaCacheControl(key) } });
+			await storeUpload(bucketFor(env, key), key, req);
+			return new Response(null, { status: 201 });
+		},
+		/** GET http://rendition.internal/<rel> → an object of this job's ready rendition (remux-only jobs; read only) */
+		async rendition(req: Request, env: Env, ctx: OutboundHandlerContext<{ prefix: string }>): Promise<Response> {
+			if (req.method !== 'GET') return new Response('method', { status: 405 });
+			const key = `${ctx.params.prefix}/${decodeURIComponent(new URL(req.url).pathname.slice(1))}`;
+			if (!keyAllowed(ctx.params.prefix, key)) return new Response('key outside the job', { status: 403 });
+			const obj = await bucketFor(env, key).get(key);
+			if (!obj) return new Response('missing', { status: 404 });
+			return new Response(obj.body, { headers: { 'content-length': String(obj.size) } });
+		},
+		/** PUT http://mp4.internal/<prefix>/video.mp4 → R2: the one object a remux-only job may write */
+		async mp4(req: Request, env: Env, ctx: OutboundHandlerContext<{ prefix: string }>): Promise<Response> {
+			const key = decodeURIComponent(new URL(req.url).pathname.slice(1));
+			if (req.method !== 'PUT') return new Response('method', { status: 405 });
+			if (key !== `${ctx.params.prefix}/${MEDIA_MP4}`) return new Response('key outside the job', { status: 403 });
+			await storeUpload(bucketFor(env, key), key, req);
 			return new Response(null, { status: 201 });
 		},
 		/** POST http://control.internal/event → this job's Durable Object */
@@ -289,6 +309,44 @@ export class Transcoder extends Container<Env> {
 	override onError(error: unknown): unknown {
 		log.error('[Transcoder] Container error', { error: errorText(error) });
 		throw error;
+	}
+
+	/**
+	 * Remux-only job (the public MP4 backfill, #1182): the progressive MP4 of a ready rendition,
+	 * written beside its segments. Never touches the transcode job's state; waits ('busy') while a
+	 * transcode of this video runs. The result goes to api-videos, which records it only when the
+	 * rendition is still the same rev and access.
+	 */
+	async remuxMp4(msg: Mp4JobMessage): Promise<Mp4Outcome> {
+		const current = await this.job();
+		if (current && (current.status === 'running' || current.status === 'stopping' || current.status === 'waiting_retry')) return { outcome: 'busy' };
+		const prefix = mediaPrefix(msg.access, msg.videoId, msg.rev);
+		const startedAt = Date.now();
+		const base = { videoId: msg.videoId, jobId: msg.jobId, rev: msg.rev, access: msg.access };
+		let result: Mp4Outcome;
+		try {
+			await this.setOutboundByHosts({
+				'rendition.internal': { method: 'rendition', params: { prefix } },
+				'mp4.internal': { method: 'mp4', params: { prefix } },
+			});
+			await this.startAndWaitForPorts();
+			const res = await this.containerFetch('http://container/remux', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ jobId: msg.jobId, prefix, rungs: msg.rungs }),
+			});
+			const body = (await res.json().catch(() => ({}))) as { mp4?: unknown; error?: string; fatal?: boolean };
+			if (res.status === 409) return { outcome: 'busy' };
+			const mp4 = sanitizeMp4(body.mp4);
+			if (!res.ok || !mp4) throw Object.assign(new Error(body.error || `remux HTTP ${res.status}`), { fatal: !!body.fatal });
+			await reportMp4Event(this.env, { ...base, type: 'ready', at: new Date().toISOString(), mp4, containerSeconds: Math.round((Date.now() - startedAt) / 1000) });
+			result = { outcome: 'ready' };
+		} catch (error) {
+			result = { outcome: 'failed', error: errorText(error).slice(0, 300), fatal: !!(error as { fatal?: boolean })?.fatal };
+		} finally {
+			await this.stop().catch(() => undefined);
+		}
+		return result;
 	}
 
 	/** Admin/diagnostics: the job as stored. */

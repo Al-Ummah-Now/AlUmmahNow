@@ -11,7 +11,10 @@ import type { ManifestIndex } from './manifest';
 
 export const GRAPHQL_URL = 'https://api.cloudflare.com/client/v4/graphql';
 
-export const OPS_QUERY = `query Ops($a: String!, $s: Time!, $e: Time!, $w: [String!], $b: [String!], $d: [String!], $q: [String!]) {
+/** Objects of the MP4 slice (manifest SLICES): the progressive MP4 (#1182); a plain %.mp4 would also count every HLS rung's init.mp4. */
+export const MP4_OBJECTS = '%/video.mp4';
+
+export const OPS_QUERY = `query Ops($a: String!, $s: Time!, $e: Time!, $w: [String!], $b: [String!], $m: [String!], $d: [String!], $q: [String!]) {
   viewer { accounts(filter: { accountTag: $a }) {
     workers: workersInvocationsAdaptive(limit: 5000, filter: { datetime_geq: $s, datetime_lt: $e, scriptName_in: $w }) {
       dimensions { scriptName datetimeHour status }
@@ -28,6 +31,10 @@ export const OPS_QUERY = `query Ops($a: String!, $s: Time!, $e: Time!, $w: [Stri
       max { databaseSizeBytes }
     }
     r2: r2OperationsAdaptiveGroups(limit: 5000, filter: { datetime_geq: $s, datetime_lt: $e, bucketName_in: $b }) {
+      dimensions { bucketName datetimeHour actionType }
+      sum { requests responseObjectSize }
+    }
+    r2Mp4: r2OperationsAdaptiveGroups(limit: 2000, filter: { datetime_geq: $s, datetime_lt: $e, bucketName_in: $m, objectName_like: "${MP4_OBJECTS}" }) {
       dimensions { bucketName datetimeHour actionType }
       sum { requests responseObjectSize }
     }
@@ -51,6 +58,8 @@ export interface OpsResponse {
   d1?: { dimensions: { databaseId: string; datetimeHour: string }; sum: { readQueries: number; writeQueries: number; rowsRead: number; rowsWritten: number }; quantiles: { queryBatchTimeMsP50: number; queryBatchTimeMsP99: number } }[];
   d1Storage?: { dimensions: { databaseId: string; datetimeHour: string }; max: { databaseSizeBytes: number } }[];
   r2?: { dimensions: { bucketName: string; datetimeHour: string; actionType: string }; sum: { requests: number; responseObjectSize: number } }[];
+  /** The media buckets' *.mp4 operations (the MP4 slice line) */
+  r2Mp4?: { dimensions: { bucketName: string; datetimeHour: string; actionType: string }; sum: { requests: number; responseObjectSize: number } }[];
   r2Storage?: { dimensions: { bucketName: string; datetimeHour: string }; max: { payloadSize: number; objectCount: number } }[];
   queueBacklog?: { dimensions: { queueId: string; datetimeFifteenMinutes: string }; avg: { messages: number } }[];
   queueOps?: { count: number; dimensions: { queueId: string; datetimeHour: string; actionType: string } }[];
@@ -69,6 +78,7 @@ export function queryVariables(accountId: string, index: ManifestIndex, start: D
     e: end.toISOString(),
     w: index.keys('worker'),
     b: index.keys('r2'),
+    m: index.sliceBuckets(MP4_OBJECTS),
     d: index.keys('d1'),
     q: index.keys('queue'),
   };

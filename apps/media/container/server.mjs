@@ -9,10 +9,11 @@
 // API (from the Worker): POST /jobs { jobId, prefix, attempt }, GET /status, GET /health.
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
-import { createWriteStream } from 'node:fs';
-import { mkdir, readdir, readFile, rm, stat } from 'node:fs/promises';
+import { createReadStream, createWriteStream } from 'node:fs';
+import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
-import { bandwidthOf, displaySize, ffmpegArgs, ladderFor, MP4_FILE, mp4Args, mp4Rung, progressSeconds, stillsArgs } from './ladder.mjs';
+import { Readable } from 'node:stream';
+import { bandwidthOf, displaySize, ffmpegArgs, ladderFor, MP4_FILE, mp4Args, mp4Rung, playlistFiles, progressSeconds, stillsArgs } from './ladder.mjs';
 import { RungTracker, uploadByPlan, uploadPlan } from './rungs.mjs';
 
 const PORT = 8080;
@@ -142,13 +143,52 @@ async function walk(dir) {
 	return out;
 }
 
-async function put(key, file) {
-	const body = await readFile(file);
+/** Files above this go up as a stream (the progressive MP4 of a long video is hundreds of MB). */
+const STREAM_ABOVE = 32 * 1024 * 1024;
+
+async function put(key, file, host = 'media.internal') {
+	const size = (await stat(file)).size;
 	await retrying(`put ${key}`, async () => {
-		const res = await fetch(`http://media.internal/${key}`, { method: 'PUT', body, headers: { 'content-length': String(body.length) } });
+		const stream = size > STREAM_ABOVE;
+		const body = stream ? Readable.toWeb(createReadStream(file)) : await readFile(file);
+		const res = await fetch(`http://${host}/${key}`, { method: 'PUT', body, headers: { 'content-length': String(size) }, ...(stream ? { duplex: 'half' } : {}) });
 		if (!res.ok) throw new Error(`put ${key} HTTP ${res.status}`);
 	});
-	return body.length;
+	return size;
+}
+
+/** GET one object of the ready rendition (rendition.internal, read only, this job's prefix) into a file. */
+async function fetchRendition(rel, dest) {
+	await retrying(`get ${rel}`, async () => {
+		const res = await fetch(`http://rendition.internal/${rel}`);
+		if (res.status === 404) throw Object.assign(new Error(`rendition_missing ${rel}`), { fatal: true });
+		if (!res.ok) throw new Error(`get ${rel} HTTP ${res.status}`);
+		await writeFile(dest, Buffer.from(await res.arrayBuffer()));
+	});
+}
+
+/**
+ * Remux-only job (the public MP4 backfill, #1182): the progressive MP4 of a rendition that is
+ * already ready, from its own rung's init and segments in R2. Same rung choice and same stream
+ * copy as a transcode (ladder.mjs), so no encode. Returns the result's `mp4`.
+ */
+async function runRemux(job) {
+	const out = join(WORK, 'remux');
+	await rm(WORK, { recursive: true, force: true });
+	const rung = mp4Rung(job.rungs);
+	if (!rung) throw Object.assign(new Error('no_rung'), { fatal: true });
+	const dir = join(out, rung.name);
+	await mkdir(dir, { recursive: true });
+	await fetchRendition(`${rung.name}/index.m3u8`, join(dir, 'index.m3u8'));
+	const files = playlistFiles(await readFile(join(dir, 'index.m3u8'), 'utf8'));
+	if (!files) throw Object.assign(new Error('bad_playlist'), { fatal: true });
+	for (let i = 0; i < files.length; i += UPLOAD_CONCURRENCY) {
+		await Promise.all(files.slice(i, i + UPLOAD_CONCURRENCY).map((f) => fetchRendition(`${rung.name}/${f}`, join(dir, f))));
+	}
+	await run('ffmpeg', mp4Args({ out, rung: rung.name }));
+	const bytes = await put(`${job.prefix}/${MP4_FILE}`, join(out, MP4_FILE), 'mp4.internal');
+	await rm(WORK, { recursive: true, force: true });
+	return { file: MP4_FILE, rung: rung.name, width: rung.width, height: rung.height, bytes };
 }
 
 async function runJob(job) {
@@ -307,6 +347,23 @@ const server = createServer(async (req, res) => {
 			},
 		);
 		return;
+	}
+	if (req.url === '/remux' && req.method === 'POST') {
+		let raw = '';
+		for await (const c of req) raw += c;
+		const job = JSON.parse(raw || '{}');
+		if (!job.jobId || !/^(pub|priv)\/[A-Za-z0-9-]+\/[a-z0-9]+$/.test(job.prefix || '') || !Array.isArray(job.rungs)) return send(400, { error: 'bad job' });
+		if (current && ['starting', 'downloading', 'transcoding', 'uploading'].includes(current.status)) return send(409, { error: 'busy' });
+		const t0 = Date.now();
+		try {
+			const mp4 = await runRemux(job);
+			log('remuxed', { jobId: job.jobId, rung: mp4.rung, bytes: mp4.bytes, ms: Date.now() - t0 });
+			return send(200, { mp4 });
+		} catch (error) {
+			log('remux failed', { jobId: job.jobId, error: String(error?.message || error) });
+			await rm(WORK, { recursive: true, force: true }).catch(() => undefined);
+			return send(500, { error: String(error?.message || error).slice(0, 300), fatal: !!error?.fatal, ...(Array.isArray(error?.stderrTail) ? { stderrTail: error.stderrTail } : {}) });
+		}
 	}
 	send(404, { error: 'not found' });
 });

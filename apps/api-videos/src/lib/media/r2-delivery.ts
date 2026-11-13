@@ -29,6 +29,8 @@ import {
 	type ErrorReporterEnv,
 	type ExecutionContextLike,
 	type MediaAccess,
+	type Mp4JobEvent,
+	sanitizeMp4,
 	type TranscodeFailure,
 	type TranscodeJobEvent,
 	type TranscodeJobMessage,
@@ -508,6 +510,41 @@ export function publicMp4Url(env: Pick<MediaEnv, 'MEDIA_PUBLIC_HOST'>, video: Pi
 	if (video.isPublic === false || video.isDeleted === true || video.isHidden === true) return null;
 	if (!/^[A-Za-z0-9._-]+$/.test(r2.result.mp4.file)) return null;
 	return `https://${env.MEDIA_PUBLIC_HOST}/pub/${video.id}/${r2.rev}/${r2.result.mp4.file}`;
+}
+
+/**
+ * A remux-only job's end (apps/media, the public MP4 backfill #1182). The MP4 is recorded only on
+ * the rendition it was made from: still ready, same rev and same access (a re-transcode or a move
+ * meanwhile makes it stale), and never over an MP4 the record already has.
+ */
+export async function applyMp4Event(env: Pick<MediaEnv, 'videos'>, ev: Mp4JobEvent): Promise<{ applied: boolean; why?: string }> {
+	if (ev.type === 'failed') {
+		logger.warn('[Media] MP4 remux failed', { videoId: ev.videoId, jobId: ev.jobId, rev: ev.rev, error: scrubMediaText(ev.error ?? 'failed', 300) });
+		return { applied: false, why: 'failed' };
+	}
+	const mp4 = sanitizeMp4(ev.mp4);
+	if (!mp4) return { applied: false, why: 'bad result' };
+	let why: string | undefined;
+	const saved = await repo(env as MediaEnv).updateObject(ev.videoId, (video) => {
+		why = undefined;
+		const r2 = video.r2;
+		if (!r2 || r2.status !== 'ready' || !r2.result) {
+			why = 'not ready';
+			return false;
+		}
+		if (r2.rev !== ev.rev || r2.access !== ev.access) {
+			why = 'stale rendition';
+			return false;
+		}
+		if (r2.result.mp4) {
+			why = 'already has an MP4';
+			return false;
+		}
+		r2.result.mp4 = mp4;
+		return true;
+	});
+	if (!saved) return { applied: false, why: 'video not found' };
+	return why ? { applied: false, why } : { applied: true };
 }
 
 /**

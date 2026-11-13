@@ -5,6 +5,7 @@
  *
  *   GET  /internal/media/source/:videoId   { url, candidates }  Bunny original, then MP4 fallbacks (signed)
  *   POST /internal/media/events            TranscodeJobEvent → the video record
+ *   POST /internal/media/mp4               Mp4JobEvent (remux-only job, #1182) → the video record's result.mp4
  *   POST /internal/media/retry             { ids: string[] } → transcode again
  *   GET  /internal/media/jobs?status=&limit=  recent jobs (media_jobs)
  *   GET  /internal/media/summary?days=     time to playable and cost inputs per source, plus `live`
@@ -16,12 +17,12 @@
  *   PUT  /internal/media/settings          { mode, r2Percent, assign, transcode, actorId }
  */
 import { Hono } from 'hono';
-import { isMediaVideoId, type DeliverySettings, type TranscodeJobEvent } from '@al-ummah/shared-types';
+import { isMediaRev, isMediaVideoId, type DeliverySettings, type Mp4JobEvent, type TranscodeJobEvent } from '@al-ummah/shared-types';
 import R2Repository from '../../lib/r2Repo';
 import { pushMediaLive, type MediaVideo } from '../../lib/media/r2-delivery';
 import { readQoeLive } from '../../lib/media/qoe-live';
 import type { LibraryHints } from '../../lib/bunny/libraries';
-import { applyJobEvent, enqueueTranscode, readDeliverySettings, sourceCandidates, writeDeliverySettings, type MediaEnv } from '../../lib/media/r2-delivery';
+import { applyJobEvent, applyMp4Event, enqueueTranscode, readDeliverySettings, sourceCandidates, writeDeliverySettings, type MediaEnv } from '../../lib/media/r2-delivery';
 
 const MAX_IDS = 50;
 
@@ -78,6 +79,14 @@ function isEvent(body: unknown): body is TranscodeJobEvent {
 	return !!b && typeof b.videoId === 'string' && isMediaVideoId(b.videoId) && typeof b.jobId === 'string' && ['started', 'progress', 'ready', 'failed'].includes(b.type as string);
 }
 
+function isMp4Event(body: unknown): body is Mp4JobEvent {
+	const b = body as Partial<Mp4JobEvent> | null;
+	return (
+		!!b && typeof b.videoId === 'string' && isMediaVideoId(b.videoId) && typeof b.jobId === 'string' && typeof b.rev === 'string' && isMediaRev(b.rev) &&
+		(b.access === 'pub' || b.access === 'priv') && (b.type === 'ready' || b.type === 'failed')
+	);
+}
+
 export function createMediaInternalRouter() {
 	const app = new Hono<{ Bindings: Env }>();
 
@@ -99,6 +108,13 @@ export function createMediaInternalRouter() {
 		const result = await applyJobEvent(c.env as never, c.executionCtx as never, body);
 		// A stale or duplicate event is not an error for the sender (it stops resending)
 		return c.json({ success: true, result });
+	});
+
+	app.post('/mp4', async (c) => {
+		const body = await c.req.json().catch(() => null);
+		if (!isMp4Event(body)) return c.json({ success: false, error: 'bad event' }, 400);
+		// Stale or duplicate: not an error for the sender
+		return c.json({ success: true, result: await applyMp4Event(c.env, body) });
 	});
 
 	app.post('/retry', async (c) => {

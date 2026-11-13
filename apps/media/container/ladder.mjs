@@ -116,6 +116,26 @@ export function mp4Args(o) {
 	return ['-hide_banner', '-nostdin', '-y', '-allowed_extensions', 'ALL', '-i', `${o.out}/${o.rung}/index.m3u8`, '-map', '0', '-c', 'copy', '-movflags', '+faststart', `${o.out}/${MP4_FILE}`];
 }
 
+/**
+ * Files a rung's media playlist needs beside it (the EXT-X-MAP init, then every segment), or null
+ * when the playlist is not one of ours: any name outside [A-Za-z0-9._-] (a path, a URL) is refused.
+ * @param {string} playlist
+ * @returns {string[] | null}
+ */
+export function playlistFiles(playlist) {
+	const files = [];
+	for (const raw of playlist.split(/\r?\n/)) {
+		const line = raw.trim();
+		if (!line) continue;
+		const map = /^#EXT-X-MAP:.*URI="([^"]+)"/.exec(line);
+		const name = map ? map[1] : line.startsWith('#') ? null : line;
+		if (name === null) continue;
+		if (!/^[A-Za-z0-9._-]{1,64}$/.test(name) || name === '.' || name === '..') return null;
+		if (!files.includes(name)) files.push(name);
+	}
+	return files.length > 1 ? files : null;
+}
+
 /** Where the poster frame is taken: 10% in, at most 30 s, at least 0. */
 export function posterTime(durationSeconds) {
 	if (!(durationSeconds > 0)) return 0;

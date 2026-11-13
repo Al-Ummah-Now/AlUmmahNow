@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { cacheRule, mediaBucket, mediaHost, planCors, ruleDiffers } from '../apply.ts';
+import { cacheRule, mediaBucket, mediaHost, MP4_RATE_LIMIT, planCors, planRateLimit, ruleDiffers } from '../apply.ts';
+import { CfApiError } from '../../release/cf-api.ts';
 import type { CfClient } from '../../release/cf-api.ts';
 
 describe('media-cdn', () => {
@@ -31,5 +32,29 @@ describe('media-cdn', () => {
 	it('plans CORS only when it differs', async () => {
 		const cf = { accountId: 'a', request: async () => ({ rules: [] }) } as unknown as CfClient;
 		assert.equal((await planCors(cf, 'qa')).length, 1);
+	});
+	it('limits only the public MP4, per IP, within the Free plan (10 per 10 s, block)', () => {
+		assert.equal(MP4_RATE_LIMIT.expression, '(http.request.uri.path wildcard "/pub/*/video.mp4")');
+		assert.equal(MP4_RATE_LIMIT.action, 'block');
+		assert.deepEqual(MP4_RATE_LIMIT.ratelimit, { characteristics: ['ip.src', 'cf.colo.id'], period: 10, requests_per_period: 10, mitigation_timeout: 10 });
+		// A changed limit is drift
+		assert.equal(ruleDiffers({ ...MP4_RATE_LIMIT, id: 'x', ratelimit: { ...MP4_RATE_LIMIT.ratelimit, requests_per_period: 100 } }, MP4_RATE_LIMIT), true);
+		assert.equal(ruleDiffers({ ...MP4_RATE_LIMIT, id: 'x' }, MP4_RATE_LIMIT), false);
+	});
+	it('plans the rate-limit rule: create the phase, add beside other rules, or nothing when it matches', async () => {
+		const calls: string[] = [];
+		const zone = (entry: unknown) =>
+			(async (method: string, path: string) => {
+				calls.push(`${method} ${path}`);
+				if (entry instanceof Error) throw entry;
+				return entry;
+			}) as never;
+		assert.match((await planRateLimit(zone(new CfApiError(404, 'none'))))[0].what, /create/);
+		const other = { id: 'o', ref: 'someone-else', expression: 'x', action: 'block' };
+		const add = await planRateLimit(zone({ id: 'rs', rules: [other] }));
+		assert.match(add[0].what, /add/);
+		assert.deepEqual(await planRateLimit(zone({ id: 'rs', rules: [other, { ...MP4_RATE_LIMIT, id: 'r1' }] })), []);
+		await assert.rejects(planRateLimit(zone(new CfApiError(403, 'Authentication error'))));
+		assert.ok(calls.every((c) => c === 'GET /rulesets/phases/http_ratelimit/entrypoint'));
 	});
 });
