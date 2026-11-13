@@ -4,17 +4,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Al Ummah Now** is an Islamic content platform monorepo with 8 applications across `apps/` and 3 shared packages in `packages/`.
+**Al Ummah Now** is an Islamic content platform monorepo with 10 applications across `apps/` and 3 shared packages in `packages/`.
 
-**Applications (8):**
+**Applications (10):**
 1. **web** - Next.js 16 user-facing frontend with bilingual support (English/Arabic, RTL)
 2. **api-videos** - Hono API backend with OpenAPI 3.1 (chanfana)
 3. **processor** - Queue consumer for message processing and analytics
 4. **websocket-server** - Real-time WebSocket server with Durable Objects
 5. **admin-api** - Hono admin API backend (content moderation, D1 database)
 6. **admin-web** - Next.js 16 admin frontend (OpenNext on Cloudflare Workers)
-7. **scheduler** - Cron worker for automated scheduled video publishing (not in CI)
-8. **log-service** - Local-development-only HTTP log aggregator (not deployed)
+7. **scheduler** - Cron worker for automated scheduled video publishing
+8. **cost-monitor** - Cron worker that collects platform analytics for the admin Operations page
+9. **media** - R2 video delivery: transcoder (Containers) and private-rendition edge
+10. **log-service** - Local-development-only HTTP log aggregator (not deployed)
 
 **Packages (3):**
 - `@al-ummah/shared-types` - Shared TypeScript types used by all apps
@@ -367,6 +369,8 @@ al-ummah-now/
 │   ├── processor/        Queue consumer (Cloudflare Workers + R2)
 │   ├── websocket-server/ WebSocket server (Cloudflare Durable Objects + KV)
 │   ├── scheduler/        Cron worker for scheduled video publishing (Cloudflare Workers)
+│   ├── cost-monitor/     Cron worker collecting platform analytics (Cloudflare Workers + D1)
+│   ├── media/            R2 video delivery: transcoder + private edge (Workers + Containers)
 │   └── log-service/      Local-dev HTTP log aggregator (NOT deployed)
 ├── packages/
 │   ├── shared-types/     Shared TypeScript types (@al-ummah/shared-types)
@@ -453,14 +457,14 @@ cd apps/processor && pnpm lint:fix
 | **Authentication** | OpenAuth (JWT/OAuth2) via auth.alummahnow.net |
 | **Storage** | Cloudflare R2 (object storage), D1 (admin DB), KV (key-value) |
 | **CDN** | Bunny.net (video streaming + image storage) |
-| **Deployment** | Cloudflare Workers (6 apps; scheduler + log-service excluded from CI) |
+| **Deployment** | Cloudflare Workers (9 apps; log-service is local-only) |
 | **Package Manager** | pnpm v9.15.4 with workspaces |
 | **Build System** | Turborepo v2 with caching |
 
 ### App Responsibilities
 
 **apps/web** - User-facing frontend
-- Next.js 15 with App Router deployed via @opennextjs/cloudflare
+- Next.js 16 with App Router deployed via @opennextjs/cloudflare
 - Bilingual routes: `/en/*` (LTR) and `/ar/*` (RTL)
 - OpenAuth authentication with JWT tokens
 - Video.js player with quality selection
@@ -513,8 +517,18 @@ cd apps/processor && pnpm lint:fix
 - Reads scheduling metadata from R2 (`SCHEDULED_VIDEOS`), updates video status in `VIDEOS`
 - Distributed locking via KV (`SCHEDULER_LOCKS`), metrics in KV (`SCHEDULER_METRICS`)
 - Retry logic (exponential backoff, up to 4 attempts); queue-based event logging
-- NOT included in CI/CD pipeline — deploy manually via `cd apps/scheduler && pnpm deploy`
+- Type-checked and tested in the `test` job; deployed to QA by `deploy-qa` (`wrangler.qa.jsonc`); released to stage and production by `release.yml` (one of the seven promoted workers, `scripts/release/apps.ts`). No PR preview.
 - See: `apps/scheduler/README.md`
+
+**apps/cost-monitor** - Platform analytics collector
+- Cron-only Worker (no route): collects Cloudflare analytics hourly into D1 `al-ummah-now-costs[-qa|-stage]`, read by admin-api `/api/ops/*` for the admin Operations page; crossed thresholds become admin needs-action items
+- Deployed to QA by `deploy-qa`; released by `release.yml` with `wrangler deploy` after the promote (no smoke)
+- See: `apps/cost-monitor/README.md`, `docs/admin/LIVE_OPS.md`
+
+**apps/media** - R2 video delivery (epic #687)
+- Transcoder Container (FFmpeg) fed by the transcode queue, plus the Worker serving private renditions on `media.<env>.alummahnow.net/priv/*` (token checked); public renditions are served by the R2 custom domain
+- Deployed to QA by `deploy-qa-media`; released by `release.yml` with `wrangler deploy` (Containers take no versions upload) after the promote, then smoke-tested with auto-rollback
+- See: `docs/media-delivery/`
 
 **apps/log-service** - Local development log aggregator
 - Node.js HTTP server (Hono + @hono/node-server) that receives structured logs from all apps
@@ -557,7 +571,7 @@ cd apps/processor && pnpm lint:fix
    - `validate-admin-api`: Type check + dry-run deployment
    - `build-admin-web`: Build Next.js admin app
 
-Note: **scheduler** and **log-service** have no CI validation or deployment jobs.
+Note: **scheduler**, **cost-monitor** and **media** have no dedicated validate job; their type check and tests run in `test`. **log-service** is local-only and is never deployed.
 
 **Pull Request Previews** (opt-in only):
 - **Disabled by default** - preview deployments only run when requested
@@ -574,12 +588,12 @@ Note: **scheduler** and **log-service** have no CI validation or deployment jobs
 - **Rationale**: Reduces unnecessary deployments, saves Cloudflare Workers quota
 
 **QA Deployment** (`deploy-qa` job): runs on every push to `main` (and by `workflow_dispatch` on `main`).
-- All 6 apps deployed in a single `deploy-qa` job after validation
+- web, api-videos, processor, websocket-server, cost-monitor, admin-api, admin-web and scheduler deployed in a single `deploy-qa` job after validation; media in its own `deploy-qa-media` job (skipped with a notice if the token lacks Containers access)
 - QA URLs: `qa.alummahnow.net`, `videos.qa.api.alummahnow.net`, `ws.qa.alummahnow.net`, `admin.qa.alummahnow.net`, `admin.qa.api.alummahnow.net`
 - Web and admin-web use `wrangler.qa.jsonc`; others use per-app `wrangler.qa.jsonc`
 
 **Production Deployment** (`.github/workflows/release.yml`, triggered by pushing a `v*` tag on `main`; see [Deploy Rules](#deploy-rules)):
-- build once → stage (migrate, deploy, smoke, seed) → release E2E on stage + live secrets check of stage and production (`secrets-check.yml`, `pnpm check:secrets`; names only, never values; manifest `scripts/release/secrets-manifest.ts`) → production (migrate, candidates at 0%, smoke through the version override, 100%, smoke, auto-rollback) → rollback dry run
+- build once → stage (migrate, promote the seven workers web, admin-web, api-videos, processor, websocket-server, admin-api and scheduler; deploy cost-monitor and media; smoke, seed) → release E2E on stage + live secrets check of stage and production (`secrets-check.yml`, `pnpm check:secrets`; names only, never values; manifest `scripts/release/secrets-manifest.ts`) → production (migrate, candidates at 0%, smoke through the version override, 100%, smoke, auto-rollback) → rollback dry run
 - The production job checks that the tagged commit is on `main`. Later merges to `main` do not affect a running release, because the release deploys the tag.
 - Rollback: `.github/workflows/rollback.yml` (start with `dry_run`) or `pnpm release:rollback --env production`. Code only; D1 migrations are expand-only.
 - `deploy.yml`'s old `deploy-production` job is superseded by the release workflow and is not used.
@@ -1103,7 +1117,7 @@ These system agents are optimized for Al Ummah Now's specific tech stack and sho
 
 #### Frontend Development
 - **frontend-mobile-development:frontend-developer** ⭐
-  - Next.js 15, React 19, Tailwind CSS
+  - Next.js 16, React 19, Tailwind CSS
   - Bilingual support (EN/AR with RTL)
   - OpenNext on Cloudflare Workers
   - Use for: Component development, routing, state management
@@ -1212,7 +1226,7 @@ Agent: documentation-generation:api-documenter
 - You need deep expertise in specific technologies
 - Implementing complex features
 - Performing specialized tasks (security audits, performance optimization)
-- Working with cutting-edge frameworks (Next.js 15, React 19)
+- Working with cutting-edge frameworks (Next.js 16, React 19)
 
 **Best Practice:** Combine both! Use custom agents for project-specific tasks and system agents for specialized deep work.
 
