@@ -181,11 +181,16 @@ jobs:
         timeout-minutes: 6
         run: pnpm exec tsx scripts/local-stack/run-teardown.ts --marker "$E2E_RUN_ID"
 
-      # Nothing the run created may be left (owner rule). Report-only until every spec of the batch
-      # cleans up fully; then this gates.
+      # Owner rule: nothing the job created may be left on its stack. This gates. Allowed, none of them
+      # personal: revocations (auth user_revocations, TOKEN_REVOCATIONS u:<id>), kept on purpose to
+      # outlive the tokens, user id only, never the email (AlUmmahNowAuth#326); search tombstones
+      # (entity + id + version), kept so a late index write cannot bring a deleted item back.
       - name: Leftovers
         if: always()
-        run: node --experimental-strip-types --no-warnings scripts/local-stack/leftovers.ts --marker "$E2E_RUN_ID" --report-only
+        run: >-
+          node --experimental-strip-types --no-warnings scripts/local-stack/leftovers.ts --marker "$E2E_RUN_ID"
+          --allow d1:al-ummah-now-d1:user_revocations --allow kv:TOKEN_REVOCATIONS
+          --allow d1:al-ummah-now-search:search_tombstones
 
       # Every hit, allowed or not, with the row it is (leftovers.ts --out): to trace what wrote it
       - name: Upload leftovers
@@ -472,11 +477,16 @@ jobs:
         timeout-minutes: 6
         run: pnpm exec tsx scripts/local-stack/run-teardown.ts --marker "$E2E_RUN_ID"
 
-      # Nothing the run created may be left (owner rule). Report-only until every moved spec cleans
-      # up fully; then this gates.
+      # Owner rule: nothing the job created may be left on its stack. This gates. Allowed, none of them
+      # personal: revocations (auth user_revocations, TOKEN_REVOCATIONS u:<id>), kept on purpose to
+      # outlive the tokens, user id only, never the email (AlUmmahNowAuth#326); search tombstones
+      # (entity + id + version), kept so a late index write cannot bring a deleted item back.
       - name: Leftovers
         if: always()
-        run: node --experimental-strip-types --no-warnings scripts/local-stack/leftovers.ts --marker "$E2E_RUN_ID" --report-only
+        run: >-
+          node --experimental-strip-types --no-warnings scripts/local-stack/leftovers.ts --marker "$E2E_RUN_ID"
+          --allow d1:al-ummah-now-d1:user_revocations --allow kv:TOKEN_REVOCATIONS
+          --allow d1:al-ummah-now-search:search_tombstones
 
       # Every hit, allowed or not, with the row it is (leftovers.ts --out): to trace what wrote it
       - name: Upload leftovers

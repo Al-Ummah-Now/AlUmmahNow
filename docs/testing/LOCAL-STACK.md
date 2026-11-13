@@ -89,9 +89,22 @@ on its own port:
   - `POST /__stack/scheduled/<app>?cron=<expr>[&time=<ISO>]`, which runs that worker's scheduled handler now,
     with that scheduled time (default now; hourly-tick work needs the top of an hour). Teardowns
     use it for purges that the APIs only queue for the hourly cron.
+  - `POST /__stack/queue/<app>/<binding>` with a JSON message, which sends it through that worker's
+    queue producer (the teardown re-runs the erasure's last step with it).
+- **Teardown.** The admin suite tears down in its global teardown (`apps/admin-web/e2e/support/cleanup.ts`);
+  the web and release jobs run `scripts/local-stack/run-teardown.ts` after deleting the run accounts. It
+  runs the crons the deployed environments run on their own (api-videos' run-account sweep, which erases
+  accounts that signed up on the web page, and the deletion and trash purges), waits until the
+  erasures' queued steps are done, sends the processor's erasure step (`UserDataErased`) once more for
+  every run user id, then deletes this run's rows from the stores kept as history (admin jobs and
+  deletions, admin logs, the queue-message archive).
 - **Leftover check.** `scripts/local-stack/leftovers.ts --marker "$E2E_RUN_ID"` runs at the end of every
-  local job, after the run accounts are deleted, and fails when anything the run created is still there.
-  It runs with `--report-only` while a batch's specs don't yet clean up fully.
+  local job (admin, web and release), after the teardown, and fails the job when anything the run
+  created is still there. It writes every hit to `$RUNNER_TEMP/leftovers.json`, uploaded as the job's
+  `local-<suite>-leftovers-<n>` artifact. The only allowances, none personal: revocations
+  (`user_revocations`, `TOKEN_REVOCATIONS`, user id only) and search tombstones (entity + id).
+  Personal or user-linked data is never allowed: a hit there is a cleanup or erasure bug to fix
+  (`scripts/local-stack/__tests__/leftovers-strict.test.ts` keeps the list closed).
 - **The browser's proxy** (`scripts/local-stack/browser-proxy.ts`, `http://127.0.0.1:3191`): Playwright
   runs on the local stack with `proxy` set to it and with `ignoreHTTPSErrors`. HTTPS to a faked host is
   terminated there with a throwaway self-signed certificate and answered by the same fakes. Localhost

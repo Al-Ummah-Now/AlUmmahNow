@@ -653,6 +653,10 @@ on a spec missing from it.
 | Release → `stage-e2e` (`release-e2e.yml`) | every release | stage, deployed specs only |
 | Legacy E2E (`e2e-tests.yml`) | once after every release tag's Release run (`workflow_run`), by hand | QA, specs not yet on the local stack; never gates |
 
+Every Local E2E job (admin, web, release) ends with a gating leftover check: anything the run
+created that is still on its stack fails the job, apart from revocations and search tombstones
+(`scripts/local-stack/leftovers.ts`, teardown in `scripts/local-stack/run-teardown.ts`).
+
 A release promotes production only when both Local E2E and the stage run pass. How the stack
 works, how to run it and its specs, the own-data and cleanup rules and the quarantine format are in
 `docs/testing/LOCAL-STACK.md`.
