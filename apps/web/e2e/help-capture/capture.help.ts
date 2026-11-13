@@ -56,6 +56,8 @@ const NAMES = {
  * time; nothing drawn on it). Only here: the general test fixtures stay as they are.
  */
 const ART = join(__dirname, '../../../../packages/app-icons/assets/crops');
+/** The local stack's fake Bunny CDN (scripts/local-stack/fake-external.ts FAKE_CDN_HOST): exactly this host */
+const FAKE_CDN_HOST = 'vz-local-stack.b-cdn.net';
 const DEMOS = [
   { key: 'tour', art: 'videos.webp', title: NAMES.video },
   // Full-bleed crops only (www.webp is round, with black corners)
@@ -182,7 +184,7 @@ async function open(browser: Browser, lang: Lang, device: Device, mode: Mode, op
   // No consent banner over the pictures (optional tracking declined); the tour stays away by
   // itself in an automated browser
   await context.addCookies([{ name: 'aun_consent', value: `v1.a0.e0.p0.${Date.now()}`, url: target().web, sameSite: 'Lax' }]);
-  await context.route((url) => url.hostname.endsWith('b-cdn.net') || url.hostname.startsWith('media.'), serveDemo);
+  await context.route((url) => url.hostname === FAKE_CDN_HOST, serveDemo);
   // Video cards and Up next show only the demo videos: the stack's seed videos carry test titles
   await context.addInitScript((ids: string[]) => {
     const idOf = (el: Element) => el.getAttribute('data-video-id') || decodeURIComponent((el.getAttribute('href') ?? el.querySelector('a[href*="/video/"]')?.getAttribute('href') ?? '').split('/video/')[1]?.split(/[?#/]/)[0] ?? '');
