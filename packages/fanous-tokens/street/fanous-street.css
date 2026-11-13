@@ -25,9 +25,13 @@ html.fanous-street body {
   position: absolute;
   left: 0;
   top: 0;
+  /* Never wider than the viewport: after the window narrows, the old drawing must not make the
+     page scroll sideways before the module re-measures */
+  width: 100%;
+  max-width: 100%;
   z-index: -1;
   pointer-events: none;
-  overflow: visible;
+  overflow: hidden;
 }
 
 #fanous-street .fs-lines {

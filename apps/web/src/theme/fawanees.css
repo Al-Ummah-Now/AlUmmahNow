@@ -28,9 +28,11 @@ html[data-theme='fawanees'].dark div:has(> #video-player),
 html[data-theme='fawanees'].dark .watch-skeleton,
 html[data-theme='fawanees'].dark #comments,
 html[data-theme='fawanees'].dark .related-videos { box-shadow: 0 0 0 1px color-mix(in srgb, var(--fanous-color-primary-sheen) 12%, transparent), 0 18px 40px -20px color-mix(in srgb, var(--fanous-brand-night) 85%, transparent); }
-/* The loading skeleton is the same card, so nothing moves when the video arrives */
+/* The loading skeleton is the same card, so nothing moves when the video arrives. No overflow
+   clipping: the player keeps its own rounded frame (a rounded clip around the video would cut the
+   player's corners and put it on its own compositing layer) */
 html[data-theme='fawanees'] div:has(> #video-player),
-html[data-theme='fawanees'] .watch-skeleton { padding-block-end: 14px; overflow: hidden; }
+html[data-theme='fawanees'] .watch-skeleton { padding-block-end: 14px; }
 html[data-theme='fawanees'] #video-player .watch-details { padding-inline: 14px; }
 html[data-theme='fawanees'] div:has(> #video-player) > .watch-actions { padding-inline: 14px; box-sizing: border-box; }
 html[data-theme='fawanees'] div:has(> #video-player) > .watch-desc { width: calc(100% - 28px); }
