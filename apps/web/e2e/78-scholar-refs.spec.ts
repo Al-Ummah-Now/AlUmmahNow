@@ -121,7 +121,8 @@ test.describe('Scholar post → www reference', () => {
     const www = await page.context().newPage();
     await www.goto(`${WWW}/en/articles/${slug}/`);
     await expect(www.getByRole('heading', { level: 1 })).toHaveText(title);
-    await expect(www.getByText(body)).toBeVisible();
+    // The body (the summary repeats it in the lede: look in the post's text)
+    await expect(www.locator('.prose p', { hasText: body })).toBeVisible();
     const join = www.getByRole('link', { name: 'Join the discussion' });
     await expect(join).toHaveAttribute('href', new RegExp(`/channels/${channelId()}\\?tab=community`));
     await www.close();
@@ -140,7 +141,8 @@ test.describe('Scholar post → www reference', () => {
     const www = await page.context().newPage();
     await www.goto(`${WWW}/ar/articles/${slug}/`);
     await expect(www.locator('html')).toHaveAttribute('dir', 'rtl');
-    await expect(www.getByText(text)).toBeVisible();
+    // The post's text (its first line is also the page title: look in the post's text)
+    await expect(www.locator('.prose p', { hasText: text })).toBeVisible();
     await expect(www.getByRole('link', { name: 'شارك في النقاش' })).toBeVisible();
     await www.close();
   });
