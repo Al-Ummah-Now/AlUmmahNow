@@ -18,8 +18,8 @@
  *   - stable share image broken: /thumb/<id>.jpg of a public video is not an image, or an
  *     unknown id is not 404;
  *   - unreachable: a sampled thumbnail answers 403/404.
- * Signed thumbnails that www or the CMS store (KV feed, D1 snapshots) are a warning until
- * those repos serve /thumb; --strict-stored (or THUMB_CHECK_STRICT_STORED=1) makes them fail.
+ * Signed thumbnails that www or the CMS store (KV feed, D1 snapshots) fail with --strict-stored
+ * (or THUMB_CHECK_STRICT_STORED=1), which the release uses; without it they are warnings.
  */
 import { pathToFileURL } from 'node:url';
 
