@@ -172,7 +172,10 @@ for (const motion of ['reduce', 'no-preference'] as const) {
     const pos = () => page.evaluate(() => getComputedStyle(document.getElementById('fanous-street-lights')!).backgroundPositionY);
     expect(await pos()).toBe('0px');
     await page.evaluate(() => window.scrollTo(0, 700));
-    await expect.poll(pos).toBe(motion === 'reduce' ? '0px' : '-140px');
+    // However far the page could scroll (CI's mock data may make it shorter than 700px)
+    const y = await page.evaluate(() => window.scrollY);
+    expect(y).toBeGreaterThan(0);
+    await expect.poll(pos).toBe(motion === 'reduce' ? '0px' : `${-Math.round(0.2 * y)}px`);
     // No CSS animations of its own: tests and pages that wait for every animation to finish must not hang
     const ours = await page.evaluate(() => document.getAnimations().filter((a) => {
       const t = (a.effect as KeyframeEffect | null)?.target as Element | null;

@@ -244,7 +244,12 @@ export function startStreet(doc = globalThis.document) {
     soon();
   });
   mo.observe(doc.body, { childList: true, subtree: true });
-  const htmlObs = new win.MutationObserver(() => soon(0, true));
+  // A theme or mode change: switching the street off is immediate (before the next frame), so a
+  // page that changes theme never shows the old theme's street; switching it on can wait for idle
+  const htmlObs = new win.MutationObserver(() => {
+    if (!streetEnabled(doc) && (html.classList.contains('fanous-street') || lights())) sync(true);
+    else soon(0, true);
+  });
   htmlObs.observe(html, { attributes: true, attributeFilter: ['class', 'data-theme', 'data-mode'] });
   const ro = new win.ResizeObserver(() => soon(200));
   ro.observe(doc.body);
