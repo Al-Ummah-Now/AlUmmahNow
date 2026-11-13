@@ -8,6 +8,6 @@ import { loadWatchHint } from '@/lib/video/watch-hint';
  * the details are in the first HTML, not in a streamed chunk that only JavaScript would swap in. The
  * hint stays bounded (lib/video/watch-hint.ts), so a slow API can't hold the page.
  */
-export async function WatchSkeletonSlot({ id, locale }: { id?: string; locale: string }) {
-  return <WatchDetailsSkeleton hint={await loadWatchHint(id, locale)} />;
+export async function WatchSkeletonSlot({ id, locale, short = false }: { id?: string; locale: string; short?: boolean }) {
+  return <WatchDetailsSkeleton hint={await loadWatchHint(id, locale)} short={short} />;
 }

@@ -1235,7 +1235,8 @@ export default function CustomVideoPlayer({
    */
   if (currentError) {
     return (
-      <div ref={frameRef} className={`custom-video-player ${className}`}>
+      // The error keeps the player's frame (a vertical video stays 9:16), so the page does not move (#1208)
+      <div ref={frameRef} className={`custom-video-player ${className}`} data-portrait={portrait || undefined}>
         <ErrorDisplay
           onReport={playerUi.reportProblem ?? undefined}
           error={currentError}

@@ -56,3 +56,12 @@ export interface VideoReaction {
   userId?: string;
   channelId?: string;
 }
+
+/**
+ * The player frame starts portrait for a vertical video (its encoded size) and, while the size is
+ * unknown, for a Short, so the frame does not flip from 16:9 at loadedmetadata (#1208).
+ */
+export function startsPortrait(options: Pick<PlayerOptions, 'width' | 'height' | 'isShort'>): boolean {
+  if (options.width && options.height) return options.height > options.width;
+  return options.isShort === true;
+}

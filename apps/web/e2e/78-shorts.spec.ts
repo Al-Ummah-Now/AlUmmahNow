@@ -12,6 +12,9 @@ import { target } from './release/targets';
  * On /shorts the player plays, and next/previous work by button, ↓/↑ and a vertical swipe on a phone,
  * in English and Arabic.
  *
+ * The page holds still while it loads (#1208): the player's vertical box is in the first HTML and
+ * the layout shift (CLS) on a phone stays under 0.1.
+ *
  * Own data (release/builders.ts): a creator with a channel, three vertical Shorts, one landscape
  * video and a playlist, made in beforeAll and deleted in afterAll (useOwnData), pass or fail.
  */
@@ -153,6 +156,41 @@ for (const locale of ['en', 'ar'] as const) {
       await page.keyboard.press('ArrowUp');
       await expect(page).toHaveURL(shortPath(locale, first));
       await expect(page.getByTestId('shorts-viewer')).toBeVisible();
+    });
+
+    test(`SHORTS-006 the vertical player box is in the first HTML and the page does not shift on a phone (${locale})`, async ({ browser, page, baseURL }) => {
+      // Without JavaScript: the server's placeholder already has the 9:16 frame
+      const noJs = await browser.newContext({ baseURL, javaScriptEnabled: false, viewport: { width: 412, height: 823 }, storageState: ANONYMOUS_STATE });
+      try {
+        const html = await noJs.newPage();
+        await html.goto(`/${locale}/shorts/${first}`);
+        const box = await html.getByTestId('watch-skeleton-player').boundingBox();
+        expect(box, 'the player placeholder is in the server HTML').not.toBeNull();
+        expect(box!.height / box!.width, 'the placeholder is 9:16').toBeCloseTo(16 / 9, 1);
+      } finally {
+        await noJs.close();
+      }
+
+      // With JavaScript, on a phone: everything from the first paint until the player is up
+      await page.setViewportSize({ width: 412, height: 823 });
+      await page.addInitScript(() => {
+        const w = window as unknown as { __cls: number };
+        w.__cls = 0;
+        new PerformanceObserver((list) => {
+          for (const entry of list.getEntries() as unknown as { value: number; hadRecentInput: boolean }[]) {
+            if (!entry.hadRecentInput) w.__cls += entry.value;
+          }
+        }).observe({ type: 'layout-shift', buffered: true });
+      });
+      await page.goto(`/${locale}/shorts/${first}`);
+      // Playable or the codec error screen (bundled Chromium): either way the player has replaced the placeholder
+      await waitForPlayer(page);
+      await expect(page.getByTestId('watch-skeleton')).toHaveCount(0);
+      await page.waitForTimeout(1500);
+      const frame = await page.locator('.custom-video-player').boundingBox();
+      expect(frame!.height / frame!.width, 'the player is the same 9:16 frame').toBeCloseTo(16 / 9, 1);
+      const cls = await page.evaluate(() => (window as unknown as { __cls: number }).__cls);
+      expect(cls, 'cumulative layout shift while the Short loads').toBeLessThan(0.1);
     });
 
     test(`SHORTS-005 a swipe up and down moves between Shorts on a phone (${locale})`, async ({ page }) => {

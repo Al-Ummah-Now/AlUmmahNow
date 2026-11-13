@@ -25,6 +25,16 @@ export interface WatchHint {
 const BLOCK = 'wsk-b animate-pulse rounded bg-muted';
 
 /**
+ * The player frame the loaded page will show: portrait (9:16, the player's data-portrait frame) for a
+ * vertical video, by its encoded size or, when the size is unknown, because the page is a Short's.
+ * The skeleton takes that box from the first paint, so the player replacing it moves nothing (#1208).
+ */
+export function skeletonPortrait(hint: WatchHint | undefined, short = false): boolean {
+  if (hint?.width && hint?.height) return hint.height > hint.width;
+  return short;
+}
+
+/**
  * Player, title, channel, actions and description placeholders, at their final sizes. The details use the real
  * watch-details/watch-title/watch-channel classes so their spacing cannot drift from VideoDetails.
  *
@@ -32,13 +42,14 @@ const BLOCK = 'wsk-b animate-pulse rounded bg-muted';
  * page's h1, the channel name linking to the channel, the description, and the poster as a real image with a high
  * fetch priority (the page's LCP element) and its intrinsic size.
  */
-export function WatchDetailsSkeleton({ hint }: { hint?: WatchHint }) {
+export function WatchDetailsSkeleton({ hint, short = false }: { hint?: WatchHint; short?: boolean }) {
   const known = !!hint?.title;
+  const portrait = skeletonPortrait(hint, short);
   return (
     <div {...(known ? {} : { role: 'status', 'aria-busy': true })} className="flex flex-col w-full mt-0 items-center">
       {/* The player and, for a video with chapters, the chapter bar under it, as the loaded page's player block */}
       <div className="wsk-player-frame w-full">
-        <div className="wsk-player relative w-full aspect-video overflow-hidden rounded-lg bg-muted">
+        <div className="wsk-player relative w-full aspect-video overflow-hidden rounded-lg bg-muted" data-portrait={portrait || undefined} data-testid="watch-skeleton-player">
           {hint?.poster && (
             // contain, not cover: a vertical or square poster is letterboxed like the player shows it, not cropped.
             // A plain img: the stable same-origin /thumb route serves it, there is nothing to optimise.
