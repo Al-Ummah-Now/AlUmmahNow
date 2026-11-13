@@ -105,3 +105,17 @@ describe('progress reports to api-videos', () => {
 		assert.deepEqual(onProgressEvent(job, { progress: 0.5 }, undefined, 1).report, { type: 'progress', progress: 0.5 });
 	});
 });
+
+describe('review media (docs/specs/VIDEO-REVIEW.md §5)', () => {
+	const base = { kind: 'transcode' as const, videoId: 'v1', jobId: 'j1', rev: 'abcdefgh12345678', access: 'priv' as const, queuedAt: 'x', reason: 'upload' as const };
+	it('a job that asks for review media gets its own review/<videoId>/<rev>/ prefix', () => {
+		const job = newJob({ ...base, review: { frameIntervalSeconds: 2, sceneThreshold: 0.3, maxFrames: 1200 } }, 0);
+		assert.equal(job.reviewPrefix, 'review/v1/abcdefgh12345678/');
+		assert.deepEqual(job.review, { frameIntervalSeconds: 2, sceneThreshold: 0.3, maxFrames: 1200 });
+	});
+	it('a job without it extracts nothing', () => {
+		const job = newJob(base, 0);
+		assert.equal(job.reviewPrefix, undefined);
+		assert.equal(job.review, undefined);
+	});
+});

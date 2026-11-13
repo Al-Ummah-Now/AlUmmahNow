@@ -419,8 +419,9 @@ export async function applyJobEvent(
 		// Pre-publication review: the job extracted the review media (or tried to); a gated video is
 		// always checked, partially when there is no manifest (it then waits for a person)
 		const gated = (saved as { review?: { status?: string; scanQueuedAt?: string } }).review;
-		if (ev.reviewManifestKey || ev.reviewExtractionFailed || (gated?.status === 'checking' && !gated.scanQueuedAt)) {
-			await queueReviewScan(env as never, ev.videoId, { trigger: 'upload', manifestKey: ev.reviewManifestKey });
+		const reviewMedia = ev.result?.review;
+		if (reviewMedia || (gated?.status === 'checking' && !gated.scanQueuedAt)) {
+			await queueReviewScan(env as never, ev.videoId, { trigger: 'upload', manifestKey: reviewMedia?.manifestKey });
 		}
 	}
 	if (ev.type === 'failed' && ev.final) {

@@ -5,6 +5,7 @@
 //   GET  http://source.internal/src        the original upload (Range requests)
 //   PUT  http://media.internal/<key>       one object into R2
 //   POST http://control.internal/event     progress / ready / failed
+//   PUT  http://review.internal/<key>      review media (frames, audio, manifest) under review/<videoId>/<rev>/
 //
 // API (from the Worker): POST /jobs { jobId, prefix, attempt }, GET /status, GET /health.
 import { createServer } from 'node:http';
@@ -15,6 +16,7 @@ import { join, relative } from 'node:path';
 import { Readable } from 'node:stream';
 import { bandwidthOf, displaySize, ffmpegArgs, ladderFor, MP4_FILE, mp4Args, mp4Rung, playlistFiles, progressSeconds, stillsArgs } from './ladder.mjs';
 import { RungTracker, uploadByPlan, uploadPlan } from './rungs.mjs';
+import { audioArgs, frameInterval, frameTimes, framesArgs, manifestFor, thinFrames } from './review.mjs';
 
 const PORT = 8080;
 const WORK = '/tmp/work';
@@ -115,6 +117,62 @@ function run(cmd, args, onLine) {
 				: reject(Object.assign(new Error(`${cmd} exited ${code}`), { stderrTail: tail.split('\n').filter((l) => l.trim()).slice(-20), exitCode: code })),
 		);
 	});
+}
+
+/** ffmpeg with every stderr line kept (showinfo prints frame times there). */
+function runCollectingStderr(cmd, args) {
+	return new Promise((resolve, reject) => {
+		const p = spawn(cmd, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+		const lines = [];
+		let partial = '';
+		p.stderr.on('data', (d) => {
+			const parts = (partial + d.toString()).split('\n');
+			partial = parts.pop() ?? '';
+			for (const l of parts) if (l.includes('showinfo')) lines.push(l);
+		});
+		p.on('error', reject);
+		p.on('close', (code) => (code === 0 ? resolve(lines) : reject(Object.assign(new Error(`${cmd} exited ${code}`), { exitCode: code }))));
+	});
+}
+
+/**
+ * Pre-publication review (docs/specs/VIDEO-REVIEW.md §5): frames every `interval` seconds plus scene
+ * cuts (near-duplicates dropped), and 16 kHz audio chunks, uploaded under the job's review prefix,
+ * the manifest last. Never fails the transcode: returns { manifestKey } or { failed: true }.
+ */
+async function extractReview(job, src, info) {
+	const dir = join(WORK, 'review');
+	try {
+		await rm(dir, { recursive: true, force: true });
+		await mkdir(join(dir, 'frames'), { recursive: true });
+		await mkdir(join(dir, 'audio'), { recursive: true });
+		const { interval, capped } = frameInterval(info.durationSeconds, job.review);
+		const times = frameTimes(await runCollectingStderr('ffmpeg', framesArgs({ input: src, out: join(dir, 'frames'), interval, sceneThreshold: job.review.sceneThreshold })));
+		const files = (await readdir(join(dir, 'frames'))).filter((f) => f.endsWith('.jpg')).sort();
+		const frames = thinFrames(files.map((file, i) => ({ file, atMs: times[i] ?? Math.round(i * interval * 1000) })), job.review.maxFrames);
+		let audioCount = 0;
+		if (info.hasAudio) {
+			await run('ffmpeg', audioArgs({ input: src, out: join(dir, 'audio') }));
+			audioCount = (await readdir(join(dir, 'audio'))).filter((f) => f.endsWith('.mp3')).length;
+		}
+		for (let i = 0; i < frames.length; i += UPLOAD_CONCURRENCY) {
+			await Promise.all(frames.slice(i, i + UPLOAD_CONCURRENCY).map((f) => put(`${job.reviewPrefix}frames/${f.file}`, join(dir, 'frames', f.file), 'review.internal')));
+		}
+		for (let i = 0; i < audioCount; i++) {
+			const name = `${String(i).padStart(3, '0')}.mp3`;
+			await put(`${job.reviewPrefix}audio/${name}`, join(dir, 'audio', name), 'review.internal');
+		}
+		const manifest = manifestFor({ videoId: job.videoId, rev: job.rev, prefix: job.reviewPrefix, durationSeconds: info.durationSeconds, frames, audioCount, capped: capped || files.length > frames.length, now: new Date().toISOString() });
+		await writeFile(join(dir, 'manifest.json'), JSON.stringify(manifest));
+		await put(`${job.reviewPrefix}manifest.json`, join(dir, 'manifest.json'), 'review.internal');
+		log('review media', { frames: frames.length, audio: audioCount, capped: manifest.capped });
+		return { manifestKey: `${job.reviewPrefix}manifest.json` };
+	} catch (error) {
+		log('review media failed', { error: String(error?.message || error) });
+		return { failed: true };
+	} finally {
+		await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+	}
 }
 
 async function probe(file) {
@@ -251,6 +309,8 @@ async function runJob(job) {
 			await rm(join(out, MP4_FILE), { force: true });
 		}
 	}
+	// Review media from the same source, before it is deleted (only when the job asks for it)
+	const review = job.review && job.reviewPrefix ? await extractReview(job, src, info) : undefined;
 	await rm(src, { force: true });
 	const tTranscode = Date.now();
 
@@ -288,6 +348,7 @@ async function runJob(job) {
 		thumbnail: 'thumb.jpg',
 		...(preview ? { preview } : {}),
 		...(mp4 ? { mp4 } : {}),
+		...(review ? { review } : {}),
 	};
 	result.bytes = bytes;
 	await rm(WORK, { recursive: true, force: true });

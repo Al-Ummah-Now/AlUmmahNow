@@ -99,6 +99,8 @@ export interface TranscodeResult {
 	preview?: string;
 	/** One progressive MP4 remuxed from a rung (D-SEO-11: public videos' contentUrl) */
 	mp4?: { file: string; rung: string; width: number; height: number; bytes: number };
+	/** Pre-publication review media (video-review.ts ReviewMediaManifest), when the job asked for it */
+	review?: { manifestKey?: string; failed?: boolean };
 }
 
 /** Where a transcode attempt was when it failed. */
@@ -214,10 +216,6 @@ export interface TranscodeJobEvent {
 	final?: boolean;
 	/** failed only: where and why */
 	failure?: TranscodeFailure;
-	/** ready only: the review media manifest (MEDIA_PRIVATE), when the job extracted it */
-	reviewManifestKey?: string;
-	/** ready only: true when review extraction was asked for but failed (the review is partial) */
-	reviewExtractionFailed?: boolean;
 }
 
 /**
