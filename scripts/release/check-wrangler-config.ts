@@ -7,6 +7,7 @@
  */
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { APPS } from './apps.ts';
 import { parseJsonc } from './jsonc.ts';
 import { applyAccepted, checkApp, checkLogPolicy, resolveEnv, type AppRule, type WranglerConfig } from './wrangler-config.ts';
@@ -57,7 +58,7 @@ export function runCheck(root: string, apps: AppRule[] = APPS): CheckResult {
 	return { errors, accepted };
 }
 
-const isMain = process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname);
+const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
 	const root = resolve(process.argv[2] ?? process.cwd());
 	const { errors, accepted } = runCheck(root);

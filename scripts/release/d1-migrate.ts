@@ -8,6 +8,7 @@
  */
 import { execFileSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { ReleaseEnv } from './promote.ts';
 
 /** Each database is migrated from the one app whose config sets its migrations_dir. */
@@ -26,7 +27,7 @@ export function migrateCommands(env: ReleaseEnv): { app: string; argv: string[] 
 	}));
 }
 
-const isMain = process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname);
+const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
 	const argv = process.argv.slice(2);
 	const env = argv[argv.indexOf('--env') + 1];
@@ -34,7 +35,7 @@ if (isMain) {
 		process.stderr.write('usage: d1-migrate.ts --env stage|production [--dry-run]\n');
 		process.exit(2);
 	}
-	const root = resolve(new URL('../..', import.meta.url).pathname);
+	const root = fileURLToPath(new URL('../..', import.meta.url));
 	for (const { app, argv: args } of migrateCommands(env)) {
 		process.stdout.write(`\n== ${app}: wrangler ${args.join(' ')}\n`);
 		if (argv.includes('--dry-run')) continue;

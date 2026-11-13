@@ -26,6 +26,7 @@
  * without it, prints a warning and exits 0.
  */
 import { readFileSync, writeFileSync, appendFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { createCfClient, d1Query, type CfClient } from './cf-api.ts';
 
@@ -181,7 +182,7 @@ async function main(): Promise<void> {
 	}
 }
 
-const isMain = process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname);
+const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
 	main().catch((error) => {
 		console.log(`::warning::upload budget failed: ${error instanceof Error ? error.message : String(error)}`);

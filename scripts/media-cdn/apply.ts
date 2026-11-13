@@ -21,6 +21,7 @@
  * when set, overrides it for the zone calls. Locally the wrangler login works for
  * the account calls only.
  */
+import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { cfToken, CfApiError, createCfClient, type CfClient } from '../release/cf-api.ts';
 
@@ -239,7 +240,7 @@ export async function storeTokenSecret(cf: CfClient, token: string): Promise<str
 	return `created Secrets Store ${TOKEN_SECRET_NAME}`;
 }
 
-const isMain = process.argv[1] && resolve(process.argv[1]) === resolve(decodeURIComponent(new URL(import.meta.url).pathname));
+const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
 	const arg = (name: string) => {
 		const i = process.argv.indexOf(name);

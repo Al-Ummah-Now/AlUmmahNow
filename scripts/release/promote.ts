@@ -23,6 +23,7 @@
 import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createCfClient } from './cf-api.ts';
 import { ensureCustomDomains, expectedDomains } from './custom-domains.ts';
 import { runSmoke, HOSTS, VERSIONED_HEALTH, WORKERS, type CheckResult, type SmokeEnv } from './smoke.ts';
@@ -322,7 +323,7 @@ export async function skewArgsFor(a: ReleaseApp, previous: string | null, log: (
 	return mappingVarArgs(mapping);
 }
 
-const isMain = process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname);
+const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
 	const argv = process.argv.slice(2);
 	const env = (argv[argv.indexOf('--env') + 1] ?? '') as ReleaseEnv;
@@ -332,7 +333,7 @@ if (isMain) {
 	}
 	const message = argv.includes('--message') ? argv[argv.indexOf('--message') + 1] : `release ${process.env.GITHUB_SHA?.slice(0, 7) ?? 'local'}`;
 	const only = argv.includes('--only') ? argv[argv.indexOf('--only') + 1].split(',') : null;
-	const root = resolve(new URL('../..', import.meta.url).pathname);
+	const root = fileURLToPath(new URL('../..', import.meta.url));
 	const log = (line: string) => process.stdout.write(`${line}\n`);
 	const writeResult = (result: object) => writeFileSync(join(root, 'release-result.json'), JSON.stringify(result, null, 2));
 	const apps = releaseApps(root, env).filter((a) => !only || only.includes(a.app));

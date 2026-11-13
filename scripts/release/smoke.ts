@@ -11,6 +11,7 @@
  * checks of api-videos, websocket-server and admin-api assert which version
  * answered (`deployment` in their /health).
  */
+import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 
 export type SmokeEnv = 'qa' | 'stage' | 'production';
@@ -178,7 +179,7 @@ function parseArgs(argv: string[]): SmokeOptions {
 	return opts;
 }
 
-const isMain = process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname);
+const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
 	const opts = parseArgs(process.argv.slice(2));
 	const results = await runSmoke(opts);
