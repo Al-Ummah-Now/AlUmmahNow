@@ -22,6 +22,7 @@
 --   apps/api-videos/migrations/search/0026_suggest_initial.sql
 --   apps/api-videos/migrations/search/0027_live_providers.sql
 --   apps/api-videos/migrations/search/0028_privacy_footprints.sql
+--   apps/api-videos/migrations/search/0029_catsug_lookup.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -89,6 +90,7 @@ CREATE INDEX idx_admin_deletions_requested ON admin_deletions (purged_at, purge_
 CREATE INDEX idx_admin_jobs_status ON admin_jobs (status, updated_at);
 CREATE INDEX idx_admin_jobs_target ON admin_jobs (target_kind, target_id, created_at);
 CREATE INDEX idx_catsug_hash ON category_suggestions (input_hash);
+CREATE INDEX idx_catsug_hash_done ON category_suggestions (input_hash, prompt_version, status, updated_at);
 CREATE INDEX idx_catsug_review ON category_suggestions (subject_type, outcome, confidence);
 CREATE INDEX idx_catsug_status ON category_suggestions (status, updated_at);
 CREATE INDEX idx_catsug_user ON category_suggestions (user_id, created_at);
