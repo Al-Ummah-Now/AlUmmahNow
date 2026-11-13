@@ -286,10 +286,21 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        # The first release of an env has no earlier version: nothing to roll back (the smoke failure
+        # still fails the job). Any other rollback error fails the step.
         run: |
           cd apps/status
-          pnpm wrangler rollback -c wrangler.jsonc --env stage --message "release ${GITHUB_SHA::7}: status smoke failed" -y
-          echo "### Rolled back: status page smoke failed (stage)" >> "$GITHUB_STEP_SUMMARY"
+          if out=$(pnpm wrangler rollback -c wrangler.jsonc --env stage --message "release ${GITHUB_SHA::7}: status smoke failed" -y 2>&1); then
+            echo "$out"
+            echo "### Rolled back: status page smoke failed (stage)" >> "$GITHUB_STEP_SUMMARY"
+          elif grep -q "Could not find stable Worker Version" <<<"$out"; then
+            echo "$out"
+            echo "::warning::status page (stage): no earlier version to roll back to (first deploy)"
+            echo "### Status page smoke failed (stage); first deploy, nothing to roll back" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "$out"
+            exit 1
+          fi
 
       # R2 video delivery (apps/media, epic #687). Containers take no versions upload, so the
       # media worker (and its transcoder image, built here with Docker and pushed to Cloudflare's
@@ -643,10 +654,21 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        # The first release of an env has no earlier version: nothing to roll back (the smoke failure
+        # still fails the job). Any other rollback error fails the step.
         run: |
           cd apps/status
-          pnpm wrangler rollback -c wrangler.jsonc --message "release ${GITHUB_SHA::7}: status smoke failed" -y
-          echo "### Rolled back: status page smoke failed (production)" >> "$GITHUB_STEP_SUMMARY"
+          if out=$(pnpm wrangler rollback -c wrangler.jsonc --message "release ${GITHUB_SHA::7}: status smoke failed" -y 2>&1); then
+            echo "$out"
+            echo "### Rolled back: status page smoke failed (production)" >> "$GITHUB_STEP_SUMMARY"
+          elif grep -q "Could not find stable Worker Version" <<<"$out"; then
+            echo "$out"
+            echo "::warning::status page (production): no earlier version to roll back to (first deploy)"
+            echo "### Status page smoke failed (production); first deploy, nothing to roll back" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "$out"
+            exit 1
+          fi
 
       # R2 video delivery (apps/media, epic #687). Containers take no versions upload, so the
       # media worker (and its transcoder image, built here with Docker and pushed to Cloudflare's

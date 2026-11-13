@@ -94,6 +94,11 @@ on the device (`localStorage aun_status_mode`, no "System" option). Colours are 
   to it), deploys `wrangler.qa.jsonc` and runs `scripts/release/status-smoke.ts --env qa`.
 - **Stage and production**: `release.yml` migrates the D1 with the others (`d1-migrate.ts`), deploys
   with `wrangler deploy` after the promote, runs the smoke and rolls back if it fails.
+- **New custom domain**: the first deploy of an env attaches `status.<env>` and its DNS and
+  certificate take a few minutes. The smoke waits up to ~3 minutes for the host to answer at all;
+  if it never does, it skips with a warning (the Worker is deployed). A wrong answer always fails.
+  A first deploy has no earlier version, so a failed smoke there has nothing to roll back to and
+  the rollback step only warns (v2026.11.13.5 stage hit both).
 - The custom domains are declared in the wrangler configs (`routes` with `custom_domain: true`);
   `wrangler deploy` attaches them and creates their DNS records.
 - Cost: one cron run (~20 small subrequests, one D1 batch of 26 writes) every 2 minutes in

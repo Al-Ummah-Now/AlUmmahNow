@@ -14,13 +14,14 @@ const healthy = (url: string) => {
 describe('status smoke', () => {
 	it('passes a healthy page on the env host', async () => {
 		const urls: string[] = [];
-		const r = await statusSmoke('stage', { fetch: (async (u: string) => (urls.push(u), healthy(u))) as unknown as typeof fetch, sleep: async () => {} });
+		const { unreachable, results: r } = await statusSmoke('stage', { fetch: (async (u: string) => (urls.push(u), healthy(u))) as unknown as typeof fetch, sleep: async () => {} });
+		assert.equal(unreachable, false);
 		assert.ok(r.every((x) => x.ok), JSON.stringify(r));
 		assert.ok(urls.every((u) => u.startsWith('https://status.stage.alummahnow.net/')));
 	});
 	it('retries, then fails with the reason', async () => {
 		let n = 0;
-		const r = await statusSmoke('production', {
+		const { results: r } = await statusSmoke('production', {
 			attempts: 3,
 			sleep: async () => {},
 			fetch: (async (u: string) => {
@@ -31,7 +32,31 @@ describe('status smoke', () => {
 				return healthy(u);
 			}) as unknown as typeof fetch,
 		});
-		assert.equal(n, 3);
+		assert.equal(n, 4, 'one reachability probe, then 3 attempts');
 		assert.deepEqual(r.filter((x) => !x.ok).map((x) => [x.name, x.detail]), [['healthz (Worker + D1)', 'HTTP 503']]);
+	});
+});
+
+describe('status smoke on a new custom domain', () => {
+	it('waits for DNS/TLS, then checks (the v2026.11.13.5 stage case)', async () => {
+		let calls = 0;
+		const fetchImpl = (async (u: string) => {
+			calls++;
+			if (calls <= 12) throw new TypeError('fetch failed');
+			return healthy(u);
+		}) as unknown as typeof fetch;
+		const report = await statusSmoke('stage', { fetch: fetchImpl, sleep: async () => {} });
+		assert.equal(report.unreachable, false);
+		assert.ok(report.results.every((x) => x.ok), JSON.stringify(report.results));
+	});
+	it('a host that never answers is reported unreachable, not failed checks', async () => {
+		const report = await statusSmoke('production', { fetch: (async () => { throw new TypeError('fetch failed'); }) as unknown as typeof fetch, sleep: async () => {}, reachAttempts: 5 });
+		assert.equal(report.unreachable, true);
+		assert.equal(report.results.length, 1);
+	});
+	it('a wrong answer still fails once the host is up', async () => {
+		const report = await statusSmoke('stage', { attempts: 2, sleep: async () => {}, fetch: (async (u: string) => (u.endsWith('/api/status.json') ? Response.json({ components: [] }) : healthy(u))) as unknown as typeof fetch });
+		assert.equal(report.unreachable, false);
+		assert.deepEqual(report.results.filter((x) => !x.ok).map((x) => x.name), ['JSON']);
 	});
 });
