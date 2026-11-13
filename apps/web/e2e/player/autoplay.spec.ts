@@ -161,6 +161,21 @@ test.describe('autoplay at the end of a video', () => {
     await expect.poll(() => mediaTime(page), { timeout: 30_000 }).toBeGreaterThan(0.5);
   });
 
+  test('on: when the move to the next video does not commit, the page loads and it still plays', async ({ page }) => {
+    // The next page's client-side request never answers (seen in Firefox): navigateOrLoad loads the
+    // page instead, and the in-app request must survive that load (#1137)
+    await page.route(/\/dev\/player\?src=bright/, async (route) => {
+      if (route.request().headers()['rsc'] === '1') return; // left pending: the client move never commits
+      await route.continue();
+    });
+    await openHarness(page, { src: 'dark' });
+    const end = await reachEnd(page);
+    await expect(end.getByTestId('player-next-ring')).toBeVisible();
+    await expect(page).toHaveURL(/src=bright/, { timeout: 20_000 });
+    // Muted when the browser refuses sound on the loaded page, but playing
+    await expect.poll(() => mediaTime(page), { timeout: 30_000 }).toBeGreaterThan(0.5);
+  });
+
   test('Cancel keeps the end screen: Play now, Watch again and more videos', async ({ page }) => {
     await openHarness(page, { src: 'dark' });
     const end = await reachEnd(page);
