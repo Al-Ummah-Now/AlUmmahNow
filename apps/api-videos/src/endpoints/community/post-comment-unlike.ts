@@ -18,7 +18,7 @@ const unlikeCommentSchema = {
       commentId: Str({ description: 'Comment ID' }),
     }),
     headers: z.object({
-      channelId: z.string().optional().describe('Actor channel ID (the channel removing the like)'),
+      channelId: z.string().optional().nullable().describe('Actor channel ID (the channel removing the like)'),
     }),
   },
   responses: {
@@ -56,7 +56,7 @@ export class UnlikePostComment extends AuthenticatedRoute {
 
     const { channelId: postChannelId, postId, commentId } = c.req.param();
     const request: any = await this.getValidatedData<typeof this.schema>();
-    const userChannelId = request.headers?.channelId;
+    const userChannelId = request.headers?.channelId ?? undefined;
 
     const bucket = c.env.community_posts;
 

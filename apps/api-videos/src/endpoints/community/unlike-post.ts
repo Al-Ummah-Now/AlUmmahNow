@@ -16,7 +16,7 @@ export class UnlikeCommunityPost extends AuthenticatedRoute {
         postId: z.string().describe('Post ID to unlike'),
       }),
       headers: z.object({
-        channelId: z.string().optional().describe('Actor channel ID (the channel removing the like)'),
+        channelId: z.string().optional().nullable().describe('Actor channel ID (the channel removing the like)'),
       }),
     },
     responses: {
@@ -49,7 +49,7 @@ export class UnlikeCommunityPost extends AuthenticatedRoute {
     const userId = this.getUserId(c);
     const { channelId: postChannelId, postId } = c.req.param();
     const request: any = await this.getValidatedData<typeof this.schema>();
-    const userChannelId = request.headers?.channelId;
+    const userChannelId = request.headers?.channelId ?? undefined;
 
     try {
       // Direct key lookup (O(1))

@@ -26,7 +26,7 @@ export class VoteOnPoll extends AuthenticatedRoute {
         postId: z.string().describe('Post ID to vote on'),
       }),
       headers: z.object({
-        channelId: z.string().optional().describe('Actor channel ID (the channel voting)'),
+        channelId: z.string().optional().nullable().describe('Actor channel ID (the channel voting)'),
       }),
       body: {
         content: {
@@ -83,7 +83,7 @@ export class VoteOnPoll extends AuthenticatedRoute {
     const userId = this.getUserId(c);
     const { channelId: postChannelId, postId } = c.req.param();
     const request: any = await this.getValidatedData<typeof this.schema>();
-    const userChannelId = request.headers?.channelId;
+    const userChannelId = request.headers?.channelId ?? undefined;
     const body: any = request.body;
 
     if (!body) {
