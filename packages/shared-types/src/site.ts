@@ -625,9 +625,15 @@ export function sitePageTitle(pageTitle: string, siteName: string, template?: st
   return pageTitle && siteName && pageTitle !== siteName ? `${pageTitle} · ${siteName}` : pageTitle || siteName;
 }
 
+/** `/a/b//` → `/a/b`; `/` stays `/` (a linear scan, no regex over the input). */
+export function trimTrailingSlashes(p: string): string {
+  let end = p.length;
+  while (end > 1 && p.charCodeAt(end - 1) === 47) end--;
+  return p.slice(0, end);
+}
+
 /** Where a path redirects, or null. Exact match on the path (no trailing slash difference). */
 export function siteRedirectFor(redirects: SiteRedirect[] | undefined, path: string): string | null {
-  const norm = (p: string) => (p.length > 1 ? p.replace(/\/+$/, '') : p);
-  const hit = (redirects ?? []).find((r) => norm(r.from) === norm(path));
+  const hit = (redirects ?? []).find((r) => trimTrailingSlashes(r.from) === trimTrailingSlashes(path));
   return hit ? hit.to : null;
 }
