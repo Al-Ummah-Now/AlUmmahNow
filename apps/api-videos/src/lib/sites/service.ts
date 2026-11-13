@@ -264,6 +264,9 @@ export async function updateSiteSettings(env: SitesEnv, channelId: string, updat
 	const clean = pickUpdate(update);
 	const problem = validateSiteSettingsUpdate(clean, current.settings.limits);
 	if (problem) throw new SiteError(400, problem);
+	const pageIds = new Set((current.settings.pages ?? []).map((p) => p.id));
+	if (clean.navigation?.some((n) => n.kind === 'page' && !pageIds.has(n.pageId ?? ''))) throw new SiteError(400, 'navigation_invalid');
+	if (clean.home?.pageId && !pageIds.has(clean.home.pageId)) throw new SiteError(400, 'home_invalid');
 	const settings: SiteSettings = {
 		...current.settings,
 		...clean,
@@ -286,6 +289,17 @@ export function pickUpdate(update: SiteSettingsUpdate | null | undefined): SiteS
 	if (u.locales !== undefined) out.locales = u.locales;
 	if (u.navigation !== undefined) out.navigation = u.navigation;
 	if (u.about !== undefined) out.about = trimLocales(u.about);
+	if (u.home !== undefined) out.home = { pageId: (u.home as { pageId?: string | null } | null)?.pageId ?? null };
+	if (u.seo !== undefined) {
+		const seo = (u.seo ?? {}) as NonNullable<SiteSettingsUpdate['seo']>;
+		out.seo = {
+			titleTemplate: typeof seo.titleTemplate === 'string' && seo.titleTemplate.trim() ? seo.titleTemplate.trim() : null,
+			description: trimLocales(seo.description),
+			googleVerification: typeof seo.googleVerification === 'string' && seo.googleVerification.trim() ? seo.googleVerification.trim() : null,
+			bingVerification: typeof seo.bingVerification === 'string' && seo.bingVerification.trim() ? seo.bingVerification.trim() : null,
+		};
+	}
+	if (u.redirects !== undefined) out.redirects = Array.isArray(u.redirects) ? u.redirects.map((r) => ({ from: String(r?.from ?? '').trim(), to: String(r?.to ?? '').trim() })) : (u.redirects as never);
 	return out;
 }
 
@@ -368,6 +382,10 @@ export async function publicSiteForHost(env: SitesEnv & { VIDEOS_WEB_URL?: strin
 				locales: merged.locales,
 				navigation: merged.navigation,
 				about: merged.about,
+				pages: (s.pages ?? []).filter((p) => p.status === 'published' || !!preview),
+				home: merged.home ?? { pageId: null },
+				seo: merged.seo ?? {},
+				redirects: merged.redirects ?? [],
 				platformMark: s.limits.platformMark,
 				primaryHost: primary.host,
 				primaryKind: primary.kind,
