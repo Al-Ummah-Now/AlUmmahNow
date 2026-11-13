@@ -29,6 +29,10 @@ const data = useOwnData(fixturesTest);
 let owner: Creator;
 let other: Creator;
 
+// One worker runs this file's tests in order: its afterAll deletes the creators' channels, so a
+// worker must not come back to this file afterwards with the (worker-scoped) creators still set
+fixturesTest.describe.configure({ mode: 'default' });
+
 /**
  * The file's creators, made in a worker fixture rather than beforeAll: Playwright resolves a context
  * option such as storageState before beforeAll runs, so a creator made there was undefined in
