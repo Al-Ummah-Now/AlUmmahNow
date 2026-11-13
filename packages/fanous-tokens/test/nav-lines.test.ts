@@ -80,3 +80,10 @@ test('no descendant combinator directly before a pseudo-class function', () => {
   const bad = css.split('\n').filter((line) => /[^,{;(\s]\s+:(is|where|has|not)\(/.test(line) && !line.trim().startsWith('/*') && !line.trim().startsWith('*'));
   assert.deepEqual(bad, []);
 });
+
+// Every page loads this stylesheet before it renders: the app icons are separate files
+// (nav/icons/<id>.webp, served at /aun-nav/icons/), never inlined, and nothing else is fetched
+test('the stylesheet inlines no images and fetches nothing', () => {
+  assert.doesNotMatch(css, /url\(|@import|data:/);
+  assert.ok(css.length < 32_000, `aun-nav.css is ${css.length} bytes`);
+});
