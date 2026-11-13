@@ -145,6 +145,11 @@ export enum MessageType {
   // Admin content job (api-videos lib/admin/jobs.ts), on the admin-jobs queue. Payload: { jobId }.
   AdminJob = 240,
 
+  // Review alerts for the native Admin app (wiki AUN-ADMIN-NATIVE, #1265): held, escalate,
+  // opened, claimed, decided (payload: ReviewAlertPayload, review-alerts.ts). Its own queue
+  // al-ummah-now-review-alerts (batch size 1, 1 s), consumed by the processor. Range 260-269.
+  ReviewAlert = 260,
+
   // Account erasure, Contact us step (processor contact/erase.ts). Queued by the processor's
   // UserDataErased handler on its own queue so it retries and dead-letters on its own.
   // Payload: ContactDataErasePayload. Explicit value in its own reserved range (250-259).

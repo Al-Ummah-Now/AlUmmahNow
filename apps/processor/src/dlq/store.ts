@@ -31,8 +31,11 @@ export interface DeadLetterRecord {
   message_id: string | null;
   message_type: number | null;
   type_name: string;
-  /** 'admin-jobs' dead letters are retried from admin (the job's Retry), never replayed here. */
-  source: 'videos' | 'moderation' | 'admin-jobs';
+  /**
+   * 'admin-jobs' dead letters are retried from admin (the job's Retry), never replayed here.
+   * 'review-alerts' are never replayed: a late review alert is noise (the item is in the queue).
+   */
+  source: 'videos' | 'moderation' | 'admin-jobs' | 'review-alerts';
   dlq: string;
   attempts: number;
   failure_reason: string | null;
@@ -79,7 +82,7 @@ export function toDeadLetterRecord(input: DeadLetterInput, now: number): DeadLet
     message_id: typeof message.id === 'string' ? message.id : null,
     message_type: type,
     type_name: type !== null ? (MessageType[type] ?? String(type)) : typeof message.type === 'string' ? message.type : 'unknown',
-    source: type === MessageType.ModerationScan ? 'moderation' : type === MessageType.AdminJob ? 'admin-jobs' : 'videos',
+    source: type === MessageType.ModerationScan ? 'moderation' : type === MessageType.AdminJob ? 'admin-jobs' : type === MessageType.ReviewAlert ? 'review-alerts' : 'videos',
     dlq: input.dlq,
     attempts: input.attempts,
     failure_reason: typeof message.failureReason === 'string' ? message.failureReason.slice(0, 1000) : null,

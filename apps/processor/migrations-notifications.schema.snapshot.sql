@@ -15,6 +15,7 @@
 --   apps/processor/migrations-notifications/0013_push_devices_app.sql
 --   apps/processor/migrations-notifications/0014_archive_title_refs.sql
 --   apps/processor/migrations-notifications/0015_dead_letter_hashed_ids.sql
+--   apps/processor/migrations-notifications/0016_review_alerts.sql
 
 CREATE TABLE analytics_daily (entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, day TEXT NOT NULL, metric TEXT NOT NULL, dim TEXT NOT NULL DEFAULT '', value REAL NOT NULL DEFAULT 0, PRIMARY KEY (entity_type, entity_id, day, metric, dim)) WITHOUT ROWID;
 CREATE TABLE analytics_rollup_imports (r2_key TEXT PRIMARY KEY, imported_at TEXT NOT NULL) WITHOUT ROWID;
@@ -35,6 +36,7 @@ CREATE TABLE poll_votes (post_id TEXT NOT NULL, user_id TEXT NOT NULL, option_id
 CREATE TABLE post_counter_imports (post_id TEXT NOT NULL, kind TEXT NOT NULL, cursor TEXT, done INTEGER NOT NULL DEFAULT 0, lease_owner TEXT, lease_until INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL, PRIMARY KEY (post_id, kind)) WITHOUT ROWID;
 CREATE TABLE post_likes (post_id TEXT NOT NULL, user_id TEXT NOT NULL, liked INTEGER NOT NULL, day TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (post_id, user_id)) WITHOUT ROWID;
 CREATE TABLE push_devices (install_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, platform TEXT NOT NULL, provider TEXT NOT NULL CHECK (provider IN ('apns', 'fcm', 'wns', 'webpush')), token TEXT NOT NULL, locale TEXT, app_version TEXT, categories TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, app TEXT NOT NULL DEFAULT 'viewer' CHECK (app IN ('viewer', 'studio', 'admin')));
+CREATE TABLE review_alerts (review_id TEXT PRIMARY KEY, video_id TEXT, reason TEXT NOT NULL, senior_only INTEGER NOT NULL DEFAULT 0, deadline_at INTEGER, held_at INTEGER NOT NULL, alerted_at INTEGER, escalated_at INTEGER, seniors_at INTEGER, opened_at INTEGER, opened_by TEXT, claimed_at INTEGER, claimed_by TEXT, decided_at INTEGER, alerted_users TEXT NOT NULL DEFAULT '[]');
 CREATE TABLE saved_posts (user_id TEXT NOT NULL, post_id TEXT NOT NULL, channel_id TEXT, saved_at INTEGER NOT NULL, PRIMARY KEY (user_id, post_id));
 CREATE INDEX idx_archive_title_refs_created ON archive_title_refs (created_at);
 CREATE INDEX idx_channel_subscribers_user ON channel_subscribers(user_id);
@@ -54,4 +56,5 @@ CREATE INDEX idx_poll_votes_user ON poll_votes(user_id);
 CREATE INDEX idx_post_likes_user ON post_likes(user_id);
 CREATE UNIQUE INDEX idx_push_devices_token ON push_devices(provider, token);
 CREATE INDEX idx_push_devices_user ON push_devices(user_id, updated_at DESC);
+CREATE INDEX idx_review_alerts_held ON review_alerts(held_at);
 CREATE INDEX idx_saved_posts_user ON saved_posts(user_id, saved_at DESC, post_id);

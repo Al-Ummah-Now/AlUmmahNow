@@ -43,9 +43,29 @@ export type PushResult =
   /** invalidToken: the provider says the token is gone (410 / Unregistered); the device row is deleted. */
   | { ok: false; invalidToken: boolean; error: string };
 
+/**
+ * A review alert for the staff Admin app (src/review-alerts). Rendered text only: "Video held
+ * for review · <reason> · <n> min left". Never a title, channel, thumbnail or media URL.
+ * - alert: a visible, time-sensitive notification (APNs interruption-level time-sensitive,
+ *   FCM high priority on the `review_queue` channel, a WNS toast in the review group)
+ * - clear: silent; the app removes the alert for `reviewId` (claimed or decided elsewhere)
+ */
+export interface AlertPush {
+  kind: 'alert' | 'clear';
+  /** The review item: deep link, collapse id / tag, and what a clear removes. */
+  reviewId: string;
+  title?: string;
+  body?: string;
+  /** Opened by the notification's Open action. */
+  actionUrl?: string;
+  /** How long the push is worth delivering (s): a late alert is noise. */
+  ttlSeconds: number;
+}
+
 export interface PushProvider {
   readonly name: string;
   send(target: PushTarget, message: PushMessage): Promise<PushResult>;
+  sendAlert(target: PushTarget, alert: AlertPush): Promise<PushResult>;
 }
 
 /** Stand-in until a provider's credentials are configured: records what would be sent. */
@@ -58,6 +78,16 @@ export class LogOnlyPushProvider implements PushProvider {
       installId: target.installId,
       notificationId: message.notificationId,
       key: message.notificationKey,
+    });
+    return { ok: true };
+  }
+  async sendAlert(target: PushTarget, alert: AlertPush): Promise<PushResult> {
+    logger.debug('Review alert push (log-only)', {
+      provider: target.provider,
+      app: target.app,
+      installId: target.installId,
+      reviewId: alert.reviewId,
+      kind: alert.kind,
     });
     return { ok: true };
   }

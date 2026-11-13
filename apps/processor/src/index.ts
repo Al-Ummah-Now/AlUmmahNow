@@ -23,6 +23,10 @@ import { isCategorizeMessage, processCategorizeMessages, sweepCategorySuggestion
 import type { CategorizeEnv } from './categorize/job';
 import { isQuranSyncMessage, processQuranSyncMessages, quranSyncMessage, runQuranDaily, type QuranQueueMessage, type QuranSyncEnv } from './quran/sync';
 import type { SearchDb } from '@al-ummah/shared-types';
+import { processReviewAlertBatch } from './review-alerts/consumer';
+import { handleReviewAlertsInternal } from './review-alerts/internal';
+import { purgeExpiredReviewAlerts } from './review-alerts/store';
+import { resolvePushProviders } from './push/provider';
 
 interface QueueMessage<T> {
   /** Queue message id (Cloudflare Queues). */
@@ -299,6 +303,12 @@ export async function runScheduled(env: QueueEnvironment, now = Date.now()): Pro
     logger.error('[Retention] Archive title ref retention failed', error);
   }
   try {
+    const purged = await purgeExpiredReviewAlerts(env.NOTIFICATIONS_DB, now);
+    if (purged > 0) logger.info('[Retention] Expired review alert timings deleted', { purged });
+  } catch (error) {
+    logger.error('[Retention] Review alert retention failed', error);
+  }
+  try {
     const deleted = await purgeExpiredNotifications(env.NOTIFICATIONS_DB, now);
     logger.info('[Retention] Expired notifications deleted', { deleted });
     return deleted;
@@ -359,6 +369,11 @@ async function handleQueue(batch: MessageBatch<AlUmmahMessage>, env: QueueEnviro
   }
   if (batch.queue?.includes('moderation')) {
     await processModerationBatch(batch, env, logger);
+    return;
+  }
+  // Review alerts for the Admin app (#1265): their own queue, one message per batch
+  if (batch.queue?.includes('review-alerts')) {
+    await processReviewAlertBatch(batch, env, resolvePushProviders(), logger);
     return;
   }
 
@@ -449,6 +464,12 @@ async function handleFetch(request: Request, env: QueueEnvironment, ctx?: Execut
   // Quran Content Sync now (the Errors page's "Sync now"): queued, never run in the request
   if (url.pathname === '/internal/quran/sync') {
     return handleQuranSyncRequest(request, env, logger);
+  }
+
+  // Admin devices and review timings for admin-api (src/review-alerts/internal.ts)
+  if (url.pathname.startsWith('/internal/review-alerts/') || url.pathname.startsWith('/internal/push-devices')) {
+    if (!(await isInternalCaller(request, env))) return json({ error: 'Unauthorized' }, 401);
+    return handleReviewAlertsInternal(request, url, env, logger);
   }
 
   // Health check endpoint

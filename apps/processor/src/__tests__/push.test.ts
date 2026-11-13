@@ -19,6 +19,9 @@ class RecordingProvider implements PushProvider {
     this.sent.push({ target, message });
     return this.answer(target);
   }
+  async sendAlert(): Promise<PushResult> {
+    throw new Error('ordinary notifications never send review alerts');
+  }
 }
 
 const all = (p: PushProvider): PushProviders => ({ apns: p, fcm: p, wns: p, webpush: p });
@@ -112,7 +115,7 @@ describe('push fan-out', () => {
     device('i-flaky', 'a');
     device('i-boom', 'b', { provider: 'wns' });
     const apns = new RecordingProvider(() => ({ ok: false, invalidToken: false, error: '503' }));
-    const wns: PushProvider = { name: 'wns', send: async () => { throw new Error('network'); } };
+    const wns: PushProvider = { name: 'wns', send: async () => { throw new Error('network'); }, sendAlert: async () => ({ ok: true }) };
     const summary = await dispatchPush(db, payload(['a', 'b']), { ...all(apns), wns });
     expect(summary).toMatchObject({ failed: 2, pruned: 0 });
     expect(installs()).toEqual(['i-boom', 'i-flaky']);

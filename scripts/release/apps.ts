@@ -178,6 +178,8 @@ export const APPS: AppRule[] = [
 				{ kind: 'd1_databases', name: 'SEARCH_DB' },
 				{ kind: 'queue_consumer', name: 'al-ummah-now-videos' },
 				{ kind: 'queue_consumer', name: 'al-ummah-now-moderation' },
+				// Review alerts for the Admin app (#1265)
+				{ kind: 'queue_consumer', name: 'al-ummah-now-review-alerts' },
 				// Dead-letter visibility: the processor stores every DLQ message (src/dlq).
 				{ kind: 'queue_consumer', name: 'al-ummah-now-dlq' },
 				{ kind: 'ai', name: 'AI' },
@@ -185,7 +187,7 @@ export const APPS: AppRule[] = [
 			],
 			...PROD_GUARDS,
 		},
-		stage: stageRule({ name: 'al-ummah-now-processor-stage', vars: { ENVIRONMENT: 'stage', WEBSOCKET_URL: STAGE_REALTIME, CMS_INTERNAL_URL: 'https://cms.stage.alummahnow.net', AI_MODERATION_ENABLED: 'false', VIDEO_REVIEW_ALLOWED: 'false', ...QF_HOSTS }, requiredBindings: [INTERNAL_API_KEY, ...QURAN_SYNC, { kind: 'r2_buckets', name: 'videos' }, { kind: 'queue_consumer', name: 'al-ummah-now-videos-stage' }, { kind: 'queue_consumer', name: 'al-ummah-now-moderation-stage' }, { kind: 'queue_consumer', name: 'al-ummah-now-dlq-stage' }, { kind: 'ai', name: 'AI' }] }),
+		stage: stageRule({ name: 'al-ummah-now-processor-stage', vars: { ENVIRONMENT: 'stage', WEBSOCKET_URL: STAGE_REALTIME, CMS_INTERNAL_URL: 'https://cms.stage.alummahnow.net', AI_MODERATION_ENABLED: 'false', VIDEO_REVIEW_ALLOWED: 'false', ...QF_HOSTS }, requiredBindings: [INTERNAL_API_KEY, ...QURAN_SYNC, { kind: 'r2_buckets', name: 'videos' }, { kind: 'queue_consumer', name: 'al-ummah-now-videos-stage' }, { kind: 'queue_consumer', name: 'al-ummah-now-moderation-stage' }, { kind: 'queue_consumer', name: 'al-ummah-now-review-alerts-stage' }, { kind: 'queue_consumer', name: 'al-ummah-now-dlq-stage' }, { kind: 'ai', name: 'AI' }] }),
 	},
 	{
 		app: 'websocket-server',

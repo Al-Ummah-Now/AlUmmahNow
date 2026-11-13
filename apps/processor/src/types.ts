@@ -78,6 +78,10 @@ export interface QueueEnvironment {
     /** Up to 100 messages (256 KB) in one subrequest (SCALABILITY-AUDIT PR-7). */
     sendBatch?: (messages: Array<{ body: AlUmmahMessage }>) => Promise<void>;
   };
+  /** Review alerts (#1265): the consumer schedules escalations as delayed messages to its own queue. */
+  REVIEW_ALERTS_QUEUE?: {
+    send: (message: AlUmmahMessage, options?: { delaySeconds?: number }) => Promise<void>;
+  };
   DLQ?: { // Optional - might not be configured in all environments
     send: (message: AlUmmahMessage) => Promise<void>;
   };
