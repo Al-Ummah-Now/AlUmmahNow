@@ -64,7 +64,11 @@ function KindIcon({ kind }: { kind: string }) {
     case 'like':
       return <Heart {...props} />;
     case 'accountWarning':
+    case 'reviewRejected':
+    case 'reviewNeeded':
       return <ShieldAlert {...props} />;
+    case 'reviewApproved':
+      return <Video {...props} />;
     default:
       return <Bell {...props} />;
   }

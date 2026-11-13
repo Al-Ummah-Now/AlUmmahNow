@@ -50,6 +50,7 @@ import { VideoScheduleDelete } from '../endpoints/video/scheduleDelete';
 import { VideoScheduleFetch } from '../endpoints/video/scheduleFetch';
 import { VideoScheduleList } from '../endpoints/video/scheduleList';
 import { VideoSchedulePublishNow } from '../endpoints/video/schedulePublishNow';
+import { VideoReviewAppeal, VideoReviewResubmit } from '../endpoints/review/reviewOwner';
 
 // Video comment endpoints
 import { CommentCreate } from '../endpoints/video/commentCreate';
@@ -193,6 +194,9 @@ videoRouter.delete('/:id/schedule', VideoScheduleDelete);
 
 // Publish video immediately (authenticated)
 videoRouter.post('/:id/publish-now', VideoSchedulePublishNow);
+// Pre-publication review: the creator's appeal and resubmit (docs/specs/VIDEO-REVIEW.md)
+videoRouter.post('/:id/review/appeal', VideoReviewAppeal);
+videoRouter.post('/:id/review/resubmit', VideoReviewResubmit);
 
 // ==========================================
 // VIDEO REACTIONS (LIKES/DISLIKES)

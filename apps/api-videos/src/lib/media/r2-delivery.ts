@@ -38,6 +38,7 @@ import {
 	type VideoR2State,
 	type VideoVisibilityFields,
 } from '@al-ummah/shared-types';
+import { queueReviewScan, reviewExtractionFor } from '../review/scan';
 import { getSecret } from '../env-helpers';
 import { fetchBunnyVideo } from '../processing/loop';
 import { deleteOriginal } from './originals';
@@ -228,6 +229,8 @@ export async function enqueueTranscode(
 		if (!settings.transcode && reason !== 'retry') return { queued: false, why: 'transcoding is off' };
 		if (reason === 'upload' && opts.uploaderId && (await isE2eUploader(env, opts.uploaderId))) return { queued: false, why: 'E2E run account' };
 		const now = opts.now ?? new Date();
+		// Pre-publication review (docs/specs/VIDEO-REVIEW.md §5): the same pass extracts frames and audio
+		const review = reason === 'upload' ? await reviewExtractionFor(env as never) : undefined;
 		let message: TranscodeJobMessage | null = null;
 		let why: string | undefined;
 		await repo(env).updateObject(videoId, (video) => {
@@ -246,6 +249,7 @@ export async function enqueueTranscode(
 				access: desiredAccess(video),
 				queuedAt: now.toISOString(),
 				reason,
+				...(review ? { review } : {}),
 			};
 			video.r2 = {
 				status: 'queued',
@@ -412,6 +416,16 @@ export async function applyJobEvent(
 		// Visibility changed while it transcoded: move it now
 		const drift = accessDrift(saved);
 		if (drift) await queueMediaMove(env, ev.videoId, drift);
+		// Pre-publication review: the job extracted the review media (or tried to); a gated video is
+		// always checked, partially when there is no manifest (it then waits for a person)
+		const gated = (saved as { review?: { status?: string; scanQueuedAt?: string } }).review;
+		if (ev.reviewManifestKey || ev.reviewExtractionFailed || (gated?.status === 'checking' && !gated.scanQueuedAt)) {
+			await queueReviewScan(env as never, ev.videoId, { trigger: 'upload', manifestKey: ev.reviewManifestKey });
+		}
+	}
+	if (ev.type === 'failed' && ev.final) {
+		const gated = (saved as { review?: { status?: string; scanQueuedAt?: string } }).review;
+		if (gated?.status === 'checking' && !gated.scanQueuedAt) await queueReviewScan(env as never, ev.videoId, { trigger: 'upload' });
 	}
 	if (ev.type === 'failed' && ev.final) {
 		const failure = ev.failure ? sanitizeFailure(ev.failure) : undefined;

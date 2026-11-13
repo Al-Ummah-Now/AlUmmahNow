@@ -4,7 +4,7 @@
 import { z } from "zod";
 import { Video as BusinessVideo, Channel as BusinessChannel, Profile as BusinessProfile, Playlist as BusinessPlaylist, Comment as BusinessComment } from "./types";
 import { VideoView, ChannelView, ProfileView, PlaylistView, CommentView } from "./model/view";
-import { can, channelRoleOf, isShort, resolveDisplayName, type ChannelRoleSource } from "@al-ummah/shared-types";
+import { can, channelRoleOf, creatorReviewView, isShort, resolveDisplayName, type ChannelRoleSource } from "@al-ummah/shared-types";
 import { isVideoReady } from './visibility';
 import { getCommentSettings, isCommentVisible, StoredComment, withoutDislikes } from './comments';
 import { PUBLIC_DISLIKES_COUNT } from './reactions';
@@ -21,13 +21,17 @@ import { PUBLIC_DISLIKES_COUNT } from './reactions';
  * same way (comment dislikes hidden 2026-11-12).
  */
 export function publicVideoFields<T extends Record<string, any>>(video: T): Omit<T, 'processingCheck' | 'processingIssue' | 'thumbnailPending'> & { processingIssueKind?: 'encode_failed' | 'needs_reupload' | 'stalled' } {
-    const { processingCheck: _check, processingIssue, thumbnailPending, ...rest } = video as Record<string, any>;
+    // Review internals (hold cause, ids, the shadow marker) never leave the server; the creator-safe
+    // part goes out (docs/specs/VIDEO-REVIEW.md §3): status, ETA, reason, appeal
+    const { processingCheck: _check, processingIssue, thumbnailPending, review: storedReview, reviewShadow: _shadow, ...rest } = video as Record<string, any>;
+    const review = creatorReviewView(storedReview);
     const hideThumbnail = (thumbnailPending || !isVideoReady(video)) && video.thumbnailType !== 'custom';
     return {
         ...rest,
         ...(Array.isArray(rest.dislikes) ? { dislikes: [] } : {}),
         ...(Array.isArray(rest.comments) ? { comments: (rest.comments as StoredComment[]).map(withoutDislikes) } : {}),
         ...(processingIssue ? { processingIssueKind: processingIssue.kind } : {}),
+        ...(review ? { review } : {}),
         ...(hideThumbnail ? { thumbnailUrl: undefined, thumbnailSizes: undefined } : {}),
     } as never;
 }

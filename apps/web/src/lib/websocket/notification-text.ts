@@ -12,6 +12,9 @@ const KEY_TO_TEXT: Record<Exclude<RealtimeNotificationKey, 'accountWarning'>, { 
   newVideo: { title: 'newVideoTitle', message: 'newVideoMessage' },
   liveStarted: { title: 'liveStartedTitle', message: 'liveStartedMessage' },
   commentReply: { title: 'commentReplyTitle', message: 'commentReplyMessage' },
+  reviewApproved: { title: 'reviewApprovedTitle', message: 'reviewApprovedMessage' },
+  reviewRejected: { title: 'reviewRejectedTitle', message: 'reviewRejectedMessage' },
+  reviewNeeded: { title: 'reviewNeededTitle', message: 'reviewNeededMessage' },
 };
 
 function interpolate(template: string, params: Record<string, string | number> = {}): string {

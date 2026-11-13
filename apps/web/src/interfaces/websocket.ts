@@ -79,7 +79,10 @@ export type RealtimeNotificationKey =
   | 'newVideo'
   | 'liveStarted'
   | 'commentReply'
-  | 'accountWarning';
+  | 'accountWarning'
+  | 'reviewApproved'
+  | 'reviewRejected'
+  | 'reviewNeeded';
 
 export interface NotificationEvent {
   type: 'notification';

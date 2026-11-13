@@ -1615,6 +1615,12 @@ export interface AppTranslations {
       newSubscriberTitle: string;
       newSubscriberMessage: string;
       uploadReadyTitle: string;
+      reviewApprovedTitle: string;
+      reviewApprovedMessage: string;
+      reviewRejectedTitle: string;
+      reviewRejectedMessage: string;
+      reviewNeededTitle: string;
+      reviewNeededMessage: string;
       uploadReadyMessage: string;
       uploadFailedTitle: string;
       uploadFailedMessage: string;

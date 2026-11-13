@@ -33,7 +33,11 @@ function Icon({ item }: { item: NotificationItem }) {
     case 'uploadFailed':
       return <AlertCircle className={cls} aria-hidden="true" />;
     case 'accountWarning':
+    case 'reviewRejected':
+    case 'reviewNeeded':
       return <ShieldAlert className={cls} aria-hidden="true" />;
+    case 'reviewApproved':
+      return <Video className={cls} aria-hidden="true" />;
     default:
       return <Bell className={cls} aria-hidden="true" />;
   }
