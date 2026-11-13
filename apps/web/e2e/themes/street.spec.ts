@@ -66,7 +66,8 @@ async function lanterns(page: Page) {
   }
   const boxes = await page.evaluate(() => {
     // Fixed and sticky things (header, bottom bar, a sticky player) slide over the page like the window edge
-    const chrome = Array.from(document.querySelectorAll('body *')).filter((e) => !e.closest('#fanous-street') && ['fixed', 'sticky'].includes(getComputedStyle(e).position))
+    const paints = (e: Element) => { const st = getComputedStyle(e); return !((st.backgroundColor === 'transparent' || /rgba\([^)]*,\s*0\)$/.test(st.backgroundColor)) && st.backgroundImage === 'none'); };
+    const chrome = Array.from(document.querySelectorAll('body *')).filter((e) => !e.closest('#fanous-street, #fanous-street-lights') && ['fixed', 'sticky'].includes(getComputedStyle(e).position) && paints(e))
       .map((e) => e.getBoundingClientRect()).filter((r) => r.width && r.height && r.right > 0 && r.left < innerWidth && r.bottom > 0 && r.top < innerHeight);
     const hit = (b: { x: number; y: number; w: number; h: number }) => chrome.some((r) => b.x < r.right && b.x + b.w > r.left && b.y < r.bottom && b.y + b.h > r.top);
     return Array.from(document.querySelectorAll('#fanous-street .fs-l use')).map((u) => { const r = u.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })
@@ -108,17 +109,21 @@ for (const pg of PAGES) {
         await applyTheme(page, 'fawanees', mode);
         await settle(page);
         await expect(page.locator('html')).toHaveClass(/fanous-street/);
+        let checked = 0;
         const maxY = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
         for (const depth of DEPTHS.filter((d) => d <= maxY)) {
           await page.evaluate((y) => window.scrollTo(0, y), depth);
           await page.waitForTimeout(300);
           for (const s of await seeThrough(page)) problems.push(`${mode} @${depth}px see-through: ${s}`);
           const l = await lanterns(page);
+          checked += l.inView;
           for (const c of l.cut) problems.push(`${mode} @${depth}px ${c}`);
         }
         await page.evaluate(() => window.scrollTo(0, 0));
         // Garlands hang in the page's gaps (somewhere on the page, not necessarily at these depths)
         expect(await page.locator('#fanous-street .fs-l').count(), `${mode}: lanterns on the page`).toBeGreaterThan(0);
+        // The whole-lantern check must have looked at real lanterns (home has garlands on every screen)
+        if (pg.id === 'home') expect(checked, `${mode}: lanterns checked on screen`).toBeGreaterThan(0);
       }
       expect(problems, problems.join('\n')).toEqual([]);
     });
