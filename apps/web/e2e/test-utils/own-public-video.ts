@@ -110,6 +110,19 @@ export function ownPublicVideos(test: AnyTest, label: string, specs: OwnVideoSpe
           })
           .toBe('ready');
       }
+      // A filler upload last: the home page's hero takes the newest public video out of the grid, so
+      // without it this file's newest video could be in the hero instead of the grid (#1029). Not for
+      // fixed-name content (visual snapshots count the channel's videos).
+      if (!channel.exactNames) {
+        const filler = await data.createVideo(owner, channelId, { clip: 'landscape40', isPublic: true, title: `E2E filler ${ns()}`, waitReady: false });
+        await expect
+          .poll(async () => ((await (await fetch(`${target().api}/api/videos/${filler.id}`, { cache: 'no-store' })).json().catch(() => ({}))) as { uploadStatus?: string }).uploadStatus, {
+            message: 'the filler video never became ready',
+            timeout: 180_000,
+            intervals: [1000, 2000, 5000],
+          })
+          .toBe('ready');
+      }
       if (channel.playlist) playlistId = await data.createPlaylist(owner, channelId, { title: `E2E playlist ${channelName}`, videoIds: videos.map((v) => v.id) });
       for (let i = 0; i < (channel.posts ?? 0); i++) postIds.push(await data.createPost(owner, channelId, { text: `E2E post ${i + 1} of ${channelName}` }));
       if (channel.nameAr || channel.description || channel.descriptionAr) {
@@ -162,6 +175,8 @@ export function ownPublicVideos(test: AnyTest, label: string, specs: OwnVideoSpe
       const cards = page.getByTestId('video-card');
       const more = page.getByRole('main').getByRole('button', { name: /^(Load More|تحميل المزيد|View All)$/ });
       // Retried as a whole: the grid can still be loading (no button yet) when a pass looks
+      const id = videos[videos.length - 1]?.id ?? 'not-created';
+      try {
       await expect(async () => {
         if (await card.isVisible()) return;
         await expect(cards.first()).toBeVisible({ timeout: 10_000 });
@@ -173,6 +188,17 @@ export function ownPublicVideos(test: AnyTest, label: string, specs: OwnVideoSpe
         }
         await expect(card).toBeVisible({ timeout: 2_000 });
       }, 'this file\'s own video card in the listing').toPass({ timeout: 90_000, intervals: [500, 1000, 2000] });
+      } catch (error) {
+        // What the API's anonymous first page and the page show right now (#1029: which one is behind)
+        const api = (((await (await fetch(`${target().api}/api/videos?limit=15`, { cache: 'no-store' })).json().catch(() => ({}))) as { data?: { id: string }[]; cursor?: string }));
+        const apiIds = (api.data ?? []).map((v) => v.id);
+        const grid = await cards.evaluateAll((els) => els.map((e) => e.getAttribute('data-video-id')));
+        const hero = await page.getByTestId('hero-thumb').getAttribute('href').catch(() => null);
+        throw new Error(
+          `${(error as Error).message}\n#1029 diagnostics for ${id}: API first page has it=${apiIds.includes(id)} (n=${apiIds.length}, cursor=${!!api.cursor}); ` +
+          `grid has it=${grid.includes(id)} (n=${grid.length}); hero=${hero}; url=${page.url()}`,
+        );
+      }
       return card;
     },
     data,

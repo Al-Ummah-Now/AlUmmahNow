@@ -55,8 +55,7 @@ test.describe('Consent banner - first visit', () => {
     expect(await reject.getAttribute('class')).toBe(await accept.getAttribute('class'));
   });
 
-  // quarantined: #1029 @meywd (home grid on a busy local stack)
-  test.fixme('CONS-002 Reject all stores a deny-all decision and hides the banner for good', async ({ page, context }) => {
+  test('CONS-002 Reject all stores a deny-all decision and hides the banner for good', async ({ page, context }) => {
     await page.goto('/en');
     await banner(page).getByRole('button', { name: 'Reject all' }).click();
     await expect(banner(page)).toBeHidden();
