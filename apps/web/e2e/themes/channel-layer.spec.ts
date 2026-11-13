@@ -119,7 +119,7 @@ test('two accounts with several channels: the channel layer sits in the shared s
   await expect(more).toContainText('Omar Khalid');
   await expect(more.getByTestId('nav-account-sign-out')).toHaveAccessibleName('Sign out of Omar Khalid');
   // Each other app shows its own icon
-  await expect(menu.locator('[data-testid="nav-apps"] .aun-app-icon').first()).toHaveCSS('background-image', /linear-gradient/);
+  await expect(menu.locator('[data-testid="nav-apps"] .aun-app-icon').first()).toHaveCSS('background-image', /data:image\/png;base64/);
 });
 
 test('an account that may create channels gets Create in the switcher', async ({ page, context, baseURL }) => {
