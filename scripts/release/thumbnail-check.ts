@@ -79,7 +79,8 @@ export function jsonImageUrls(node: unknown, out: string[] = [], key = ''): stri
 	return out;
 }
 
-const unescapeHtml = (s: string) => s.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#x27;|&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+// &amp; last, so "&amp;lt;" stays "&lt;" (decoded once)
+const unescapeHtml = (s: string) => s.replace(/&quot;/g, '"').replace(/&#x27;|&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 
 /** og:image / twitter:image values */
 export function metaImages(html: string): string[] {
@@ -249,7 +250,15 @@ export async function thumbnailCheck(env: CheckEnv, deps: Deps, opts: { strictSt
 	for (const path of ['/timeline?locale=en', '/home?locale=en']) await json(`cms ${path.split('?')[0]}`, `${h.cms}${path}`, 'stored');
 
 	// A sample of thumbnails must load (Bunny 403 on a fresh token would be a real bug)
-	const sample = [...new Set(apiUrls)].filter((u) => tokenOf(u).form || /b-cdn\.net|media\.|images\./.test(u)).slice(0, 10);
+	const hostOf = (u: string) => {
+		try {
+			return new URL(u).hostname;
+		} catch {
+			return '';
+		}
+	};
+	const ourImageHost = (host: string) => host.endsWith('.b-cdn.net') || /^(media|images)(\.[a-z]+)?\.alummahnow\.net$/.test(host);
+	const sample = [...new Set(apiUrls)].filter((u) => tokenOf(u).form || ourImageHost(hostOf(u))).slice(0, 10);
 	for (const u of sample) {
 		const r = await deps.fetch(u, { headers: { Range: 'bytes=0-1023', 'User-Agent': 'aun-release-thumbnail-check' } }).catch(() => null);
 		if (!r || r.status === 403 || r.status === 404) findings.push({ level: 'fail', rule: 'thumbnail unreachable', surface: 'api sample', detail: `HTTP ${r?.status ?? 0}: ${u.replace(/(bcdn_token=|token=)[^&]+/g, '$1…').slice(0, 120)}` });

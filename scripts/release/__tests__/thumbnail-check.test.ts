@@ -55,7 +55,10 @@ describe('thumbnail check: end to end with a fake site', () => {
 	const site = (overrides: Record<string, () => Response> = {}) =>
 		(async (input: string | URL | Request) => {
 			const url = String(input);
-			for (const [k, make] of Object.entries(overrides)) if (url.includes(k)) return make();
+			// Override keys are a host ("b-cdn.net" matches *.b-cdn.net) or a host/path prefix
+			const { hostname } = new URL(url);
+			const hostPath = hostname + new URL(url).pathname;
+			for (const [k, make] of Object.entries(overrides)) if (k.startsWith('/') ? new URL(url).pathname.startsWith(k) : hostname === k || hostname.endsWith(`.${k}`) || hostPath.startsWith(k)) return make();
 			const j = (b: unknown) => new Response(JSON.stringify(b), { status: 200, headers: { 'content-type': 'application/json' } });
 			if (url.includes('/thumb/00000000')) return new Response('nf', { status: 404 });
 			if (url.includes('/thumb/')) return new Response('img', { status: 200, headers: { 'content-type': 'image/jpeg' } });
@@ -65,7 +68,7 @@ describe('thumbnail check: end to end with a fake site', () => {
 			if (url.includes('/video/')) return new Response(`<meta property="og:image" content="${stable}">`, { status: 200 });
 			if (url.includes('/embed/')) return new Response(`<img src="${stable}">`, { status: 200 });
 			if (url.includes('cms.')) return j({ items: [] });
-			if (url.includes('b-cdn.net')) return new Response('x', { status: 206 });
+			if (new URL(url).hostname.endsWith('.b-cdn.net')) return new Response('x', { status: 206 });
 			return new Response('<html></html>', { status: 200 });
 		}) as typeof fetch;
 
