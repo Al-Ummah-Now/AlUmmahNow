@@ -7,9 +7,8 @@ import { VideoObject, getLocalizedValue } from "@al-ummah/shared-types";
 import { removeUnwantedChars } from "@/lib/utility";
 import { useLanguage } from "@/hooks/useLanguage";
 import { VideoCardMenu } from "@/components/library/VideoCardMenu";
-import { formatViews } from '@/lib/format/videoMeta';
 import { channelLabel } from '@/lib/channel-name';
-import { VideoDate } from '@/components/VideoDate';
+import { VideoDate, ViewCount } from '@/components/VideoDate';
 
 const VideoCardRTL: React.FC<VideoObject> = (video) => {
   const { lang: locale } = useLanguage();
@@ -38,7 +37,7 @@ const VideoCardRTL: React.FC<VideoObject> = (video) => {
             </h3>
             <p className="text-sm truncate">{channelLabel(video, locale)}</p>
             <p className="text-sm">
-              {formatViews(video.views, locale)} • <VideoDate video={video} lang={locale} />
+              <ViewCount count={video.views} lang={locale} /> • <VideoDate video={video} lang={locale} />
             </p>
           </div>
         </Link>

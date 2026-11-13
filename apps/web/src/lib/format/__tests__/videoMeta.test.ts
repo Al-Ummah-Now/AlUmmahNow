@@ -1,4 +1,4 @@
-import { formatAbsoluteDate, formatAbsoluteDateTime, formatRelativeTime, formatViews, formatSubscribers } from '../videoMeta';
+import { formatAbsoluteDate, formatAbsoluteDateTime, formatRelativeTime, formatViews, formatViewsExact, formatSubscribers } from '../videoMeta';
 
 describe('formatViews', () => {
   it('uses English singular, plural and zero', () => {
@@ -61,6 +61,15 @@ describe('formatAbsoluteDate', () => {
   it('writes the full date and tolerates bad input', () => {
     expect(formatAbsoluteDate(Date.UTC(2026, 10, 9, 12), 'en')).toBe('November 9, 2026');
     expect(formatAbsoluteDate('nope', 'en')).toBe('');
+  });
+});
+
+describe('formatViewsExact', () => {
+  it('writes the full count with its plural', () => {
+    expect(formatViewsExact(1234, 'en')).toBe('1,234 views');
+    expect(formatViewsExact(1234, 'ar')).toBe('1,234 مشاهدة');
+    expect(formatViewsExact(6, 'ar')).toBe('6 مشاهدات');
+    expect(formatViewsExact(1, 'en')).toBe('1 view');
   });
 });
 

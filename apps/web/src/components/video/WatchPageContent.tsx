@@ -1,6 +1,5 @@
 'use client';
 
-import { formatAbsoluteDateTime, formatViews } from '@/lib/format/videoMeta';
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Player } from "video.js";
@@ -41,7 +40,7 @@ import { pickUpNext, recordWatched, watchedThisSession } from "@/lib/video/up-ne
 import { useAutoplaySetting } from "@/hooks/useAutoplaySetting";
 import { navigateOrLoad } from "@/lib/navigation/navigate-or-load";
 import { channelLabel } from '@/lib/channel-name';
-import { VideoDate } from '@/components/VideoDate';
+import { WatchMetaDetail, WatchMetaSummary } from '@/components/VideoDate';
 
 /** The list a share link carries: public playlists only, never the viewer's WL / LL (spec 2.4) */
 function shareListOf(list: string | null, index: number | null): { id: string; index: number | null } | null {
@@ -387,13 +386,10 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
                 />
               )}
               <details className="watch-desc" open={false}>
-                {/* Like the cards: views • relative time (its exact date and time in the tooltip) */}
-                <summary><span>{formatViews(videoDetails.views, lang)}</span><span aria-hidden="true">•</span><VideoDate video={videoDetails} lang={lang} /></summary>
-                {videoDetails.dateCreated && (
-                  <p className="watch-desc-date" data-testid="watch-published">
-                    {t.video.publishedAt.replace('{date}', formatAbsoluteDateTime(videoDetails.dateCreated, lang))}
-                  </p>
-                )}
+                {/* Like the cards (YouTube style): views • relative time; the exact count and what the date
+                    is on hover or focus, and in full when expanded */}
+                <WatchMetaSummary video={videoDetails} views={videoDetails.views} lang={lang} describedById="watch-meta-tip" />
+                <WatchMetaDetail video={videoDetails} views={videoDetails.views} lang={lang} />
                 {videoDetails.description && <p>{videoDetails.description}</p>}
               </details>
             </div>

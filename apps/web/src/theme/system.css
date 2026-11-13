@@ -322,8 +322,8 @@ html[dir=rtl] [data-testid=consent-banner]{right:auto!important;left:0!important
 .watch-actions[data-fit=tight] [data-testid=video-like-button]:not(#_){padding-inline:10px}
 .watch-desc{width:100%;margin-block-start:12px;padding:10px 12px;border-radius:var(--r-lg);background:color-mix(in srgb,var(--fanous-color-text-primary) 7%,transparent);font-size:14px;line-height:20px;color:var(--fanous-color-text-primary)}
 .watch-desc summary{cursor:pointer;font-weight:600;display:flex;gap:6px;position:relative}.watch-desc-date{color:var(--fanous-color-text-secondary)}
-/* The relative time's exact date and time while its control has keyboard focus (hover shows the title) */
-.watch-desc summary:focus-visible .rel-date::after{content:attr(data-tip);position:absolute;inset-block-end:calc(100% + 6px);inset-inline-start:0;z-index:5;padding:4px 8px;border-radius:var(--r-md);background:var(--fanous-color-surface-raised);color:var(--fanous-color-text-primary);box-shadow:0 0 0 1px var(--fanous-color-divider);font-weight:400;white-space:nowrap}.watch-desc p{margin:8px 0 0;white-space:pre-line}
+/* The exact count and what the date is, while the summary has keyboard focus (hover shows its title) */
+.watch-desc summary[data-tip]:focus-visible::after{content:attr(data-tip);position:absolute;inset-block-end:calc(100% + 6px);inset-inline-start:0;z-index:5;padding:4px 8px;border-radius:var(--r-md);background:var(--fanous-color-surface-raised);color:var(--fanous-color-text-primary);box-shadow:0 0 0 1px var(--fanous-color-divider);font-weight:400;white-space:nowrap}.watch-desc p{margin:8px 0 0;white-space:pre-line}
 [data-slot=button]{min-height:36px;gap:8px;font-size:14px;line-height:20px}[data-slot=button] svg{width:18px;height:18px}
 [data-testid=comments-section] button[class*="px-"]:not(.ts-trigger){min-height:36px;padding-block:0;font-size:14px;border-radius:var(--r-pill)}
 

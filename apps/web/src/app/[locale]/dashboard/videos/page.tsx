@@ -11,7 +11,6 @@ import { useRouter } from 'next/navigation';
 import { UploadCloud, Trash2, Eye, Edit, X, BarChart3, Pencil, RotateCcw, ListPlus } from 'lucide-react';
 import AddToPlaylistDialog from '@/components/playlists/AddToPlaylistDialog';
 import { toPicked, type PickedVideo } from '@/components/playlists/VideoPicker';
-import { formatViews } from '@/lib/format/videoMeta';
 import { useLanguage } from '@/hooks/useLanguage';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useAuth } from '@/components/AuthProvider/authContext';
@@ -37,7 +36,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { channelLabel } from '@/lib/channel-name';
-import { VideoDate } from '@/components/VideoDate';
+import { VideoDate, ViewCount } from '@/components/VideoDate';
 
 type FilterStatus = 'all' | 'ready' | 'processing' | 'uploading' | 'failed';
 type FilterPrivacy = 'all' | 'public' | 'private';
@@ -615,7 +614,7 @@ export default function VideoDashboardPage() {
                   </h3>
                   <p className="text-sm truncate">{channelLabel(video, lang)}</p>
                   <p className="text-sm" data-testid="dashboard-video-meta">
-                    {formatViews(video.views, lang)} • <VideoDate video={video} lang={lang} />
+                    <ViewCount count={video.views} lang={lang} /> • <VideoDate video={video} lang={lang} />
                   </p>
 
                   {/* Privacy + status badges */}
