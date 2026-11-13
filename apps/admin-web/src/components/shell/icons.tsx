@@ -33,7 +33,7 @@ const PATHS = {
   chevron: 'M9 6l6 6-6 6',
   close: 'M6 6l12 12M18 6L6 18',
   sidebar: 'M3 4h18v16H3zM9 4v16',
-  logout: 'M15 4h4v16h-4M10 8l-4 4 4 4M6 12h11',
+  logout: 'M9 4H5v16h4M14 8l4 4-4 4M18 12H8',
   enter: 'M20 5v7a3 3 0 0 1-3 3H5m0 0l4-4m-4 4l4 4',
   plus: 'M12 5v14M5 12h14',
   login: 'M15 4h4v16h-4M10 8l4 4-4 4M14 12H3',
