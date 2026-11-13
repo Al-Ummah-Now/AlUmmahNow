@@ -71,6 +71,8 @@ export function videoObjectLd(video: EmbedVideo, locale: string, origin: string)
     ...(video.poster ? { thumbnailUrl: [shareImageUrl(origin, video.id)] } : {}),
     ...(video.uploadDate ? { uploadDate: video.uploadDate } : {}),
     ...(duration ? { duration } : {}),
+    // The stable public MP4 (D-SEO-11): only public R2 videos have one, never unlisted or private
+    ...(video.contentUrl && !video.isUnlisted ? { contentUrl: video.contentUrl } : {}),
     embedUrl: embedUrl(origin, 'video', video.id),
     url: page,
     inLanguage: lang,

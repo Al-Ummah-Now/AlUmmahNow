@@ -49,6 +49,11 @@ export interface EmbedVideo {
   isLive?: boolean;
   /** Inside a playlist: the item's place in the stored list (the watch URL's `index`) */
   listIndex?: number;
+  /**
+   * Stable public MP4 (480p) for search engines' VideoObject (D-SEO-11). The API names it only for
+   * public R2 videos; never set for unlisted or private ones.
+   */
+  contentUrl?: string;
 }
 
 export interface EmbedPlaylist {
@@ -88,6 +93,7 @@ interface ApiVideo {
   width?: number;
   height?: number;
   isShort?: boolean;
+  contentUrl?: string;
 }
 
 function apiBase(): string {
@@ -144,7 +150,13 @@ export function toEmbedVideo(video: ApiVideo | null | undefined): EmbedVideo | n
     ...(typeof video.views === 'number' && video.views >= 0 ? { views: video.views } : {}),
     ...(video.isLive === true ? { isLive: true } : {}),
     ...(video.delivery?.source === 'r2' || video.delivery?.source === 'bunny' ? { delivery: { source: video.delivery.source } } : {}),
+    ...(video.isPublic !== false && isPublicMp4(video.contentUrl) ? { contentUrl: video.contentUrl } : {}),
   };
+}
+
+/** An absolute https URL (the API's public R2 MP4); anything else is not given to search engines. */
+function isPublicMp4(url: unknown): url is string {
+  return typeof url === 'string' && /^https:\/\/[^\s"<>]+$/.test(url);
 }
 
 /**
