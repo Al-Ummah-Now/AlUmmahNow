@@ -1025,11 +1025,11 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
                   id="isUnlisted"
                   checked={!!metadata.isUnlisted}
                   onChange={(e) => setMetadata(prev => ({ ...prev, isUnlisted: e.target.checked }))}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded disabled:opacity-50"
+                  className="h-4 w-4 rounded border-[var(--fanous-color-outline)] accent-[var(--fanous-color-primary)] focus:ring-[var(--fanous-color-focus-ring)] disabled:opacity-50"
                   disabled={uploadProgress?.state === 'uploading' || saveAsDraft}
                   data-testid="upload-is-unlisted"
                 />
-                <label htmlFor="isUnlisted" className="ms-2 block text-sm text-gray-700 dark:text-gray-300">
+                <label htmlFor="isUnlisted" className="ms-2 block text-sm text-[var(--fanous-color-text-secondary)]">
                   {t.upload.makeUnlisted}
                 </label>
               </div>
