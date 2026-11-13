@@ -54,6 +54,9 @@ export function EndScreen({ upNext, onReplay, onReplayList, suggestions = [], t,
     if (autoAdvanceSeconds <= 0) setStopped(true);
   }, [autoAdvanceSeconds]);
   const more = suggestions.slice(0, 2);
+  // Shown once the countdown stops. Positioned over the bottom of the screen (player-skin.css), so
+  // appearing never moves the card: a press on the screen stops the countdown, and a shifted
+  // layout would move the button under the pointer before the click lands
   const moreRow = !counting && more.length > 0 ? (
     <div className="vjs-fanous-end-more" data-testid="player-end-suggestions">
       <p className="vjs-fanous-next-kicker">{t.chrome.moreVideos}</p>

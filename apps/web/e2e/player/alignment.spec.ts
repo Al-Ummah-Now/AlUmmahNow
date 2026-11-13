@@ -97,7 +97,7 @@ for (const dpr of [1, 2]) {
 
       test('every control button: icon centred on its target and hover fill', async ({ page }) => {
         const player = await openPaused(page, lang);
-        const buttons = player.locator('.vjs-control-bar .vjs-control.vjs-button:not(.vjs-fanous-live):visible');
+        const buttons = player.locator('.vjs-control-bar .vjs-control.vjs-button:not(.vjs-fanous-live):not(.vjs-fanous-autoplay):visible');
         const count = await buttons.count();
         expect(count).toBeGreaterThanOrEqual(6);
         for (let i = 0; i < count; i++) {

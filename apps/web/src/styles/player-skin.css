@@ -1359,8 +1359,11 @@
 */
 /* End screen suggestions (autoplay off or cancelled): two more videos under the card */
 .video-js.vjs-fanous .vjs-fanous-end-more {
-  width: min(640px, 100%);
-  margin-top: 12px;
+  position: absolute;
+  inset-inline: 0;
+  bottom: clamp(12px, 3cqi, 32px);
+  width: min(640px, calc(100% - 24px));
+  margin-inline: auto;
 }
 
 .video-js.vjs-fanous .vjs-fanous-end-more-row {
@@ -1411,7 +1414,7 @@
 }
 
 /* Too small a frame for more than the card: the suggestions stay in the page's Up next list */
-@container fanous-end (max-width: 560px) or (max-height: 380px) {
+@container fanous-end (max-width: 560px) or (max-height: 400px) {
   .video-js.vjs-fanous .vjs-fanous-end-more {
     display: none;
   }
