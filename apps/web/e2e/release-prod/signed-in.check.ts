@@ -82,7 +82,7 @@ test('production: sign-up, sign-in on web, profile sign-in, admin refuses', asyn
 
   // Web: register through the real sign-in menu
   await page.goto(`${H.web}/en`);
-  await page.locator('button[aria-haspopup="menu"]').first().click();
+  await page.locator('[data-testid="nav-menu-trigger"]:visible').first().click(); // the header's account menu, not a card's "more" menu
   await page.locator('[role="menu"] form button[type="submit"]').first().click();
   await expect(page).toHaveURL(new RegExp(`^${H.auth}`), { timeout: 30000 });
   await page.click('a:has-text("Register")');
@@ -101,7 +101,7 @@ test('production: sign-up, sign-in on web, profile sign-in, admin refuses', asyn
   // Web: sign in again from a fresh session (password)
   await context.clearCookies();
   await page.goto(`${H.web}/en`);
-  await page.locator('button[aria-haspopup="menu"]').first().click();
+  await page.locator('[data-testid="nav-menu-trigger"]:visible').first().click(); // the header's account menu, not a card's "more" menu
   await page.locator('[role="menu"] form button[type="submit"]').first().click();
   await expect(page).toHaveURL(new RegExp(`^${H.auth}`), { timeout: 30000 });
   await password(page);
