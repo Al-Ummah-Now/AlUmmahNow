@@ -1,5 +1,5 @@
 /* Fanous lantern street: styles for the shared street module (fanous-street.js), which adds
-   html.fanous-street, a fixed #fanous-street-lights layer and the #fanous-street rows when the
+   html.fanous-street, a fixed #fanous-street-lights layer and the #fanous-street drawing when the
    active theme switches the street on (--fanous-street-on: 1). Colours and art come from the theme
    tokens, so light and dark need nothing here. The street is the page background: the body
    becomes its own stacking layer, so the lights and lanterns paint above the body's background
@@ -9,6 +9,8 @@
    reduced motion and in Firefox). No filters or blur anywhere. */
 
 html.fanous-street body {
+  /* The street's own layer: the drawing below spans the whole body, under every element */
+  position: relative;
   isolation: isolate;
 }
 
@@ -26,11 +28,11 @@ html.fanous-street body {
   will-change: transform;
 }
 
-/* Near: rows of lanterns down the whole page (the module draws the rows on screen, in page
-   coordinates, and moves them with the scroll) */
+/* Near: the street itself, one static drawing as tall as the page (it scrolls with the page) */
 #fanous-street {
-  position: fixed;
-  inset: 0;
+  position: absolute;
+  left: 0;
+  top: 0;
   width: 100%;
   height: 100%;
   z-index: -1;
@@ -46,9 +48,6 @@ html.fanous-street body {
 }
 
 #fanous-street .fs-w { fill: var(--fanous-street-window); }
-#fanous-street .fs-g0 { stop-color: var(--fanous-color-primary); }
-#fanous-street .fs-g1 { stop-color: var(--fanous-color-primary); stop-opacity: 0; }
-#fanous-street .fs-glow { opacity: var(--fanous-street-glow); }
 
 @media print {
   #fanous-street,
