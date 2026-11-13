@@ -12,6 +12,7 @@
  */
 
 import type { VideoVisibility } from './upload-defaults';
+import { isReviewCleared, type VideoReviewState } from './video-review';
 
 /** Every visibility (the type is upload-defaults' VideoVisibility). */
 export const VIDEO_VISIBILITIES = ['public', 'unlisted', 'private'] as const satisfies readonly VideoVisibility[];
@@ -67,6 +68,8 @@ export interface VideoVisibilityFields extends VisibilityFlags {
   /** Absent on older videos, which count as ready */
   uploadStatus?: string;
   scheduledPublishStatus?: string;
+  /** Pre-publication review (video-review.ts); absent = never reviewed */
+  review?: { status?: VideoReviewState['status'] | string } | null;
 }
 
 /**
@@ -85,9 +88,15 @@ export function isVideoRemoved(video: VideoVisibilityFields | null | undefined):
   return video.isDeleted === true || video.isHidden === true || video.markedForDeletion === true;
 }
 
-/** Playable: no upload status (older videos) or ready (from the first encoded resolution). */
+/**
+ * Ready for everyone but its owner: no upload status (older videos) or ready (from the first
+ * encoded resolution), and cleared by pre-publication review (never reviewed, approved, or a
+ * trusted channel's post-hoc review; wiki AUN-VIDEO-REVIEW). A video being checked, held for a
+ * person, rejected or appealed is "not ready" on every surface, like one still processing.
+ */
 export function isVideoReady(video: VideoVisibilityFields | null | undefined): boolean {
-  return !!video && (!video.uploadStatus || video.uploadStatus === 'ready');
+  if (!video || (video.uploadStatus && video.uploadStatus !== 'ready')) return false;
+  return isReviewCleared(video.review);
 }
 
 /** Released by its owner: not a draft and not waiting for (or in the middle of) a scheduled publish. */
@@ -126,5 +135,9 @@ export function isVideoOpenToAnyone(video: VideoVisibilityFields | null | undefi
  */
 export function isVideoMediaPublic(video: VideoVisibilityFields | null | undefined): boolean {
   if (!video || isVideoRemoved(video) || video.isPublic === false) return false;
+  // Held by review (in review, rejected, appealed): renditions move under the private prefix, so a
+  // published video pulled back (VR2) stops being served from cached public URLs. A video still
+  // in its first automated check stays where it is, like one still processing.
+  if (video.review && video.review.status !== 'checking' && !isReviewCleared(video.review)) return false;
   return isVideoReleased(video);
 }

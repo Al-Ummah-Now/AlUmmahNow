@@ -25,6 +25,7 @@ import { startProcessingLoop, type ProcessingEnv } from '../processing/loop';
 import { refundUploadSession } from '../../middleware/upload-limits';
 import { enqueueTranscode, type MediaEnv } from '../media/r2-delivery';
 import { completeOriginal } from '../media/originals';
+import { reviewGateFor, type ReviewGateEnv } from '../review/gate';
 
 export interface VideoTusUpload {
   sessionId: string;
@@ -54,6 +55,8 @@ export interface UploadLifecycleEnv {
   SEARCH_DB?: D1Database;
   'bunny-stream-key': SecretLike | string;
   bunny_stream_library_id: SecretLike | string;
+  global_settings?: unknown;
+  VIDEO_REVIEW_ALLOWED?: string;
 }
 
 const UNFINISHED = new Set(['initiated', 'uploading', 'failed', undefined]);
@@ -79,6 +82,10 @@ export async function markUploadComplete(
   try {
     const repository = new R2Repository<UploadVideo>(env.videos);
     let changed = false;
+    // Pre-publication review (wiki AUN-VIDEO-REVIEW): decided before the video can turn ready, so
+    // a gated upload is never visible to others, not even for a moment. Null with mode off/shadow.
+    const current = await repository.getObject(upload.videoId);
+    const gate = current ? await reviewGateFor(env as ReviewGateEnv, current as { channelId?: string | null }) : null;
     // Conditional write on the fresh video (SCALABILITY-AUDIT AV-3); a video
     // that processing already marked ready stays ready.
     await repository.updateObject(upload.videoId, (video) => {
@@ -90,6 +97,7 @@ export async function markUploadComplete(
         return true;
       }
       video.uploadStatus = 'processing';
+      if (gate?.state && !(video as { review?: unknown }).review) (video as { review?: unknown }).review = gate.state;
       // Both sources' time to playable start here (epic #687)
       (video as { uploadCompletedAt?: string }).uploadCompletedAt = new Date().toISOString();
       delete video.tusUpload;

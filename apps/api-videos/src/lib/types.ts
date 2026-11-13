@@ -149,6 +149,19 @@ export const Video = z.object({
         previousThumbnailUrl: z.string().optional(),
     }).optional(),
     processingStatus: z.enum(['pending', 'processing', 'transcoding', 'completed', 'failed', 'archived']).optional(),
+    // Pre-publication review (shared-types video-review.ts VideoReviewState; wiki AUN-VIDEO-REVIEW).
+    // Written only through /internal/review/* and the upload gate (lib/review/gate.ts).
+    review: z.object({
+        status: z.enum(['checking', 'in_review', 'approved', 'rejected', 'appealed', 'post_review']),
+        reviewId: z.string(),
+        timing: z.enum(['pre', 'post']),
+        since: z.string(),
+        etaAt: z.string().optional(),
+        holdCause: z.enum(['nsfw', 'risk', 'escalation', 'check_failed', 'budget', 'appeal']).optional(),
+        reasonCode: z.string().optional(),
+        decidedAt: z.string().optional(),
+        appealUsed: z.boolean().optional(),
+    }).optional(),
     isDraft: z.boolean().optional(),
     tags: z.array(z.string()).default([]),
     category: z.nativeEnum(VideoCategory).optional(),

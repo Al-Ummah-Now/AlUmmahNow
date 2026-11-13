@@ -22,6 +22,7 @@
 --   apps/admin-api/migrations/0021_erase_lookup_indexes.sql
 --   apps/admin-api/migrations/0022_scholar_sites.sql
 --   apps/admin-api/migrations/0023_site_domain_checks.sql
+--   apps/admin-api/migrations/0024_content_reviews.sql
 
 CREATE TABLE admin_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, actor_email TEXT, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, metadata TEXT, created_at TEXT NOT NULL);
 CREATE TABLE ai_budget_daily (day TEXT NOT NULL, feature TEXT NOT NULL, reserved REAL NOT NULL DEFAULT 0, PRIMARY KEY (day, feature));
@@ -30,6 +31,8 @@ CREATE TABLE auth_moderation_requests (id TEXT PRIMARY KEY, auth_request_id TEXT
 CREATE TABLE channel_verification_log (id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, verified INTEGER NOT NULL, note TEXT, actor_id TEXT NOT NULL, created_at TEXT NOT NULL);
 CREATE TABLE contact_messages (id TEXT PRIMARY KEY, status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'open', 'replied', 'closed', 'spam')), topic TEXT NOT NULL CHECK (topic IN ('general', 'account', 'problem', 'content', 'partnership')), name TEXT NOT NULL, email TEXT NOT NULL, message TEXT NOT NULL, user_id TEXT, locale TEXT NOT NULL DEFAULT 'en' CHECK (locale IN ('en', 'ar')), page_url TEXT, user_agent TEXT, ip_hash TEXT NOT NULL, assignee_id TEXT, assignee_email TEXT, notify_status TEXT, ack_status TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, send_failed_at TEXT, delivery_error TEXT, deleted_at TEXT, deleted_by TEXT, delete_reason TEXT, purge_requested_at TEXT, purge_requested_by TEXT, handled_by_id TEXT, handled_by_email TEXT, handled_at TEXT);
 CREATE TABLE contact_notes (id TEXT PRIMARY KEY, message_id TEXT NOT NULL REFERENCES contact_messages(id) ON DELETE CASCADE, kind TEXT NOT NULL CHECK (kind IN ('note', 'reply')), body TEXT NOT NULL, author_id TEXT NOT NULL, author_email TEXT, email_to TEXT, email_subject TEXT, email_status TEXT, email_id TEXT, created_at TEXT NOT NULL, email_error TEXT);
+CREATE TABLE content_review_findings (id TEXT PRIMARY KEY, review_id TEXT NOT NULL, source TEXT NOT NULL, category TEXT NOT NULL, score REAL NOT NULL, at_ms INTEGER, end_ms INTEGER, media_key TEXT, text TEXT, quran_ref TEXT, model TEXT NOT NULL, rationale TEXT, created_at TEXT NOT NULL);
+CREATE TABLE content_reviews (id TEXT PRIMARY KEY, subject_type TEXT NOT NULL, subject_id TEXT NOT NULL, channel_id TEXT, owner_id TEXT, status TEXT NOT NULL, mode TEXT NOT NULL, timing TEXT NOT NULL DEFAULT 'pre', trigger TEXT, route TEXT, risk REAL, nsfw INTEGER NOT NULL DEFAULT 0, escalate INTEGER NOT NULL DEFAULT 0, hold_cause TEXT, top_category TEXT, findings_count INTEGER NOT NULL DEFAULT 0, partial INTEGER NOT NULL DEFAULT 0, models TEXT, prompt_version TEXT, cost_usd REAL NOT NULL DEFAULT 0, created_at TEXT NOT NULL, checked_at TEXT, sla_due_at TEXT, assigned_to TEXT, decided_at TEXT, decided_by TEXT, decision TEXT, reason_code TEXT, note TEXT, undo_until TEXT, appeal_of TEXT, appeal_message TEXT, media_purge_after TEXT, updated_at TEXT NOT NULL);
 CREATE TABLE creator_invites (id TEXT PRIMARY KEY, user_id TEXT NOT NULL UNIQUE, email TEXT NOT NULL, name TEXT, locale TEXT NOT NULL DEFAULT 'en', note TEXT, role TEXT NOT NULL DEFAULT 'creator', tier_id TEXT, auth_roles TEXT NOT NULL DEFAULT '[]', channels TEXT NOT NULL DEFAULT '[]', expires_in_days INTEGER NOT NULL DEFAULT 14, continue_url TEXT, delivery_status TEXT NOT NULL, delivery_attempts INTEGER NOT NULL DEFAULT 0, delivery_error TEXT, email_sent INTEGER NOT NULL DEFAULT 0, status TEXT, expires_at TEXT, accepted_at TEXT, last_sent_at TEXT, send_count INTEGER NOT NULL DEFAULT 0, pending_op TEXT, op_error TEXT, sync_requested_at TEXT, synced_at TEXT, created_by TEXT NOT NULL, created_by_email TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, deleted_at TEXT, deleted_by TEXT, deleted_reason TEXT, purge_requested_at TEXT);
 CREATE TABLE entitlement_overrides (id TEXT PRIMARY KEY, subject_type TEXT NOT NULL CHECK (subject_type IN ('channel', 'organisation', 'user')), subject_id TEXT NOT NULL, key TEXT NOT NULL, value_json TEXT NOT NULL, expires_at TEXT, reason TEXT NOT NULL, created_by TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), UNIQUE (subject_type, subject_id, key));
 CREATE TABLE error_actions (id TEXT PRIMARY KEY, group_id TEXT NOT NULL REFERENCES error_groups(id) ON DELETE CASCADE, environment TEXT NOT NULL, item_key TEXT NOT NULL, app TEXT NOT NULL, source TEXT NOT NULL, title TEXT NOT NULL, detail TEXT, item_type TEXT, item_id TEXT, item_url TEXT, retry_json TEXT, retry_label TEXT, status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'retrying', 'resolved', 'dismissed')), occurrences INTEGER NOT NULL DEFAULT 1, attempts INTEGER NOT NULL DEFAULT 0, last_attempt_at TEXT, last_attempt_result TEXT, last_attempt_by TEXT, last_ref TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, resolved_at TEXT, UNIQUE (environment, item_key));
@@ -72,6 +75,13 @@ CREATE INDEX idx_contact_messages_send_failed ON contact_messages (send_failed_a
 CREATE INDEX idx_contact_messages_status ON contact_messages (status, created_at DESC);
 CREATE INDEX idx_contact_messages_user ON contact_messages (user_id, created_at);
 CREATE INDEX idx_contact_notes_message ON contact_notes (message_id, created_at);
+CREATE INDEX idx_content_review_findings_review ON content_review_findings(review_id, score DESC);
+CREATE INDEX idx_content_reviews_created ON content_reviews(created_at);
+CREATE INDEX idx_content_reviews_decided ON content_reviews(decided_at DESC);
+CREATE INDEX idx_content_reviews_owner ON content_reviews(owner_id, created_at DESC);
+CREATE INDEX idx_content_reviews_purge ON content_reviews(media_purge_after);
+CREATE INDEX idx_content_reviews_queue ON content_reviews(status, escalate DESC, sla_due_at);
+CREATE INDEX idx_content_reviews_subject ON content_reviews(subject_type, subject_id, created_at DESC);
 CREATE INDEX idx_creator_invites_created ON creator_invites(created_at);
 CREATE INDEX idx_creator_invites_email ON creator_invites(email);
 CREATE INDEX idx_creator_invites_status ON creator_invites(status, created_at);
