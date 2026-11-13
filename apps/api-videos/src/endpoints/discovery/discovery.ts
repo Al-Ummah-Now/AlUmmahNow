@@ -50,6 +50,7 @@ const INITIAL_MAX_OFFSET = 500;
 const DiscoveryVideoSchema = z.object({
   id: z.string(),
   title: z.string(),
+  titleLocalized: z.record(z.string()).optional().describe("Title per language (e.g. { en, ar }): show the page language's, else title"),
   channelId: z.string(),
   channelName: z.string().optional(),
   views: z.number(),

@@ -35,6 +35,8 @@ export interface WatchHistoryItem {
   userId: string;
   videoId: string;
   videoTitle: string;
+  /** The video's current title per language (the list API reads it from the video); show it before videoTitle */
+  videoTitleLocalized?: Record<string, string>;
   videoThumbnail?: string;
   videoDuration: number;
   channelId: string;
@@ -534,4 +536,9 @@ export class WatchHistoryService {
     const COMPLETION_THRESHOLD = 0.9; // 90%
     return currentTime / duration >= COMPLETION_THRESHOLD;
   }
+}
+
+/** The entry's title in the page language: the video's localized title, else the stored one. */
+export function entryTitle(entry: Pick<WatchHistoryItem, 'videoTitle' | 'videoTitleLocalized'>, lang: string): string {
+  return entry.videoTitleLocalized?.[lang] || entry.videoTitle;
 }

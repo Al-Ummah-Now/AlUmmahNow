@@ -20,6 +20,9 @@ import { channelNameFields } from './channelName';
 export interface DiscoveryVideo {
   id: string;
   title?: string;
+  titleLocalized?: Record<string, string>;
+  descriptionLocalized?: Record<string, string>;
+  publishedAt?: string;
   description?: string;
   userId?: string;
   channelId?: string;
@@ -439,7 +442,10 @@ export function toVideoResponse(video: DiscoveryVideo, channels: Map<string, Dis
   return {
     id: video.id,
     title: video.title || '',
+    // Per-language title and description: an Arabic page shows the Arabic title (Up next showed English)
+    ...(video.titleLocalized ? { titleLocalized: video.titleLocalized } : {}),
     description: video.description,
+    ...(video.descriptionLocalized ? { descriptionLocalized: video.descriptionLocalized } : {}),
     thumbnailUrl: video.thumbnailUrl,
     videoUrl: video.videoUrl,
     playUrl: video.playUrl,
@@ -449,6 +455,7 @@ export function toVideoResponse(video: DiscoveryVideo, channels: Map<string, Dis
     ...channelNameFields(channel, video.channelName || ''),
     channelAvatarUrl: channel?.avatarUrl || video.channelAvatarUrl,
     dateCreated: video.dateCreated,
+    ...(video.publishedAt ? { publishedAt: video.publishedAt } : {}),
     dateModified: video.dateModified,
     createdAt: video.dateCreated,
     updatedAt: video.dateModified,

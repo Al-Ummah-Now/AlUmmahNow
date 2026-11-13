@@ -15,6 +15,7 @@ const VideoResponseSchema = z.object({
   id: z.string(),
   title: z.string(),
   description: z.string().optional(),
+  titleLocalized: z.record(z.string()).optional().describe("Title per language (e.g. { en, ar }): show the page language's, else title"),
   thumbnailUrl: z.string().optional(),
   videoUrl: z.string().optional(),
   channelId: z.string(),
@@ -358,7 +359,10 @@ function transformVideoForResponse(video: VideoObject) {
   return {
     id: video.id,
     title: video.title || '',
+    // Per-language title and description, as every other list (an Arabic page shows the Arabic title)
+    ...(video.titleLocalized ? { titleLocalized: video.titleLocalized } : {}),
     description: video.description,
+    ...(video.descriptionLocalized ? { descriptionLocalized: video.descriptionLocalized } : {}),
     thumbnailUrl: video.thumbnailUrl,
     videoUrl: video.videoUrl,
     channelId: video.channelId || '',
@@ -366,6 +370,7 @@ function transformVideoForResponse(video: VideoObject) {
     channelNameLocalized: video.channelNameLocalized,
     channelAvatarUrl: video.channelAvatarUrl,
     dateCreated: video.dateCreated || new Date().toISOString(),
+    ...(video.publishedAt ? { publishedAt: video.publishedAt } : {}),
     views: video.views || 0,
     likesCount: video.likesCount || 0,
     dislikesCount: PUBLIC_DISLIKES_COUNT,

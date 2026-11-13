@@ -23429,6 +23429,13 @@
                           "title": {
                             "type": "string"
                           },
+                          "titleLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            },
+                            "description": "Title per language (e.g. { en, ar }): show the page language's, else title"
+                          },
                           "channelId": {
                             "type": "string"
                           },
@@ -23469,6 +23476,13 @@
                           },
                           "title": {
                             "type": "string"
+                          },
+                          "titleLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            },
+                            "description": "Title per language (e.g. { en, ar }): show the page language's, else title"
                           },
                           "channelId": {
                             "type": "string"
@@ -24484,6 +24498,13 @@
                           "title": {
                             "type": "string"
                           },
+                          "titleLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            },
+                            "description": "Title per language (e.g. { en, ar }): show the page language's, else title"
+                          },
                           "channelId": {
                             "type": "string"
                           },
@@ -24524,6 +24545,13 @@
                           },
                           "title": {
                             "type": "string"
+                          },
+                          "titleLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            },
+                            "description": "Title per language (e.g. { en, ar }): show the page language's, else title"
                           },
                           "channelId": {
                             "type": "string"
@@ -30558,6 +30586,13 @@
                           },
                           "description": {
                             "type": "string"
+                          },
+                          "titleLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            },
+                            "description": "Title per language (e.g. { en, ar }): show the page language's, else title"
                           },
                           "thumbnailUrl": {
                             "type": "string"
@@ -40302,6 +40337,13 @@
                           },
                           "videoTitle": {
                             "type": "string"
+                          },
+                          "videoTitleLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            },
+                            "description": "The video's current title per language (e.g. { en, ar }); show the page language's, else videoTitle"
                           },
                           "videoThumbnail": {
                             "type": "string"

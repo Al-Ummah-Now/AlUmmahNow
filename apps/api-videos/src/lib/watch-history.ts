@@ -118,25 +118,34 @@ export async function withChannelNames<T extends { channelId?: string; channelNa
 }
 
 /**
- * Show each entry with its video's current thumbnail. The stored
- * `videoThumbnail` is a snapshot from the first watch: empty when the video was
- * not encoded yet, stale once the thumbnail changes. It stays as the fallback
- * for a video that is gone or no longer viewable. Entries are not rewritten,
- * and signing stays in the response middleware, so a URL is signed once.
+ * Show each entry with its video's current thumbnail and title. The stored `videoThumbnail` and
+ * `videoTitle` are snapshots from the first watch: the thumbnail empty when the video was not
+ * encoded yet, both stale once the video changes, and the title only in the uploader's default
+ * language. The live record adds `videoTitleLocalized`, so an Arabic page shows the Arabic title
+ * (the home page's Continue watching showed English titles on /ar). The snapshots stay as the
+ * fallback for a video that is gone or no longer viewable. Entries are not rewritten, and signing
+ * stays in the response middleware, so a URL is signed once. The page reads each video once
+ * (as it did for the thumbnail): no extra reads.
  */
-export async function withLiveThumbnails<T extends { videoId: string; videoThumbnail?: string }>(
+export async function withLiveVideoFields<T extends { videoId: string; videoThumbnail?: string; videoTitle?: string }>(
   videos: R2Bucket | undefined,
   userId: string,
   entries: T[],
-): Promise<T[]> {
+): Promise<Array<T & { videoTitleLocalized?: Record<string, string> }>> {
   if (!videos) return entries;
   const repo = new R2Repository<VideoType>(videos);
   return Promise.all(
     entries.map(async (entry) => {
-      const video = (await repo.getObject(entry.videoId).catch(() => null)) as (VideoType & { thumbnail?: string }) | null;
+      const video = (await repo.getObject(entry.videoId).catch(() => null)) as (VideoType & { thumbnail?: string; titleLocalized?: Record<string, string> }) | null;
       if (!video || !canViewVideo(video, userId)) return entry;
       const live = video.thumbnailUrl || video.thumbnail;
-      return live ? { ...entry, videoThumbnail: live } : entry;
+      const localized = video.titleLocalized && Object.values(video.titleLocalized).some(Boolean) ? video.titleLocalized : undefined;
+      return {
+        ...entry,
+        ...(live ? { videoThumbnail: live } : {}),
+        ...(video.title ? { videoTitle: video.title } : {}),
+        ...(localized ? { videoTitleLocalized: localized } : {}),
+      };
     }),
   );
 }

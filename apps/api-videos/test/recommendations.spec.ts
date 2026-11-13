@@ -73,6 +73,18 @@ describe('GET /api/recommendations', () => {
 		assert.deepEqual(body.basedOn, ['video']);
 	});
 
+	it('carries each video\'s title per language and its publish date (an Arabic page shows the Arabic title)', async () => {
+		const env = await setup([
+			video('seed', { tags: ['seerah'] }),
+			video('near', { tags: ['seerah'], title: 'Weak Hadith 2', titleLocalized: { en: 'Weak Hadith 2', ar: 'سلسلة الحديث الضعيف ٢' }, descriptionLocalized: { ar: 'وصف' }, publishedAt: '2026-11-01T00:00:00.000Z' }),
+		]);
+		const body = (await (await get(env, 'videoId=seed&limit=15')).json()) as { data: Array<Record<string, unknown>> };
+		const near = body.data.find((v) => v.id === 'near')!;
+		assert.deepEqual(near.titleLocalized, { en: 'Weak Hadith 2', ar: 'سلسلة الحديث الضعيف ٢' });
+		assert.deepEqual(near.descriptionLocalized, { ar: 'وصف' });
+		assert.equal(near.publishedAt, '2026-11-01T00:00:00.000Z');
+	});
+
 	it('respects the limit', async () => {
 		const env = await setup(Array.from({ length: 30 }, (_, i) => video(`v${i}`)));
 		const body = (await (await get(env, 'videoId=v0&limit=7')).json()) as Body;

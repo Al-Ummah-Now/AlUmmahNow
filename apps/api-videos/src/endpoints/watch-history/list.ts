@@ -14,7 +14,7 @@ import type {
   WatchHistoryListRequest
 } from "@al-ummah/shared-types";
 import { logger } from '../../lib/logger';
-import { withChannelNames, withLiveThumbnails } from "../../lib/watch-history";
+import { withChannelNames, withLiveVideoFields } from "../../lib/watch-history";
 
 // Request query parameters schema
 const ListWatchHistoryQuery = z.object({
@@ -44,6 +44,7 @@ const WatchHistoryEntrySchema = z.object({
   userId: z.string(),
   videoId: z.string(),
   videoTitle: z.string(),
+  videoTitleLocalized: z.record(z.string()).optional().describe("The video's current title per language (e.g. { en, ar }); show the page language's, else videoTitle"),
   videoThumbnail: z.string().optional(),
   videoDuration: z.number(),
   channelId: z.string(),
@@ -149,7 +150,7 @@ export class ListWatchHistory extends AuthenticatedRoute {
       // Apply pagination
       const startIndex = cursor ? parseInt(cursor, 10) : 0;
       const endIndex = startIndex + limit;
-      const paginatedEntries = await withLiveThumbnails(
+      const paginatedEntries = await withLiveVideoFields(
         c.env.videos,
         userId,
         await withChannelNames(c.env.channels, userEntries.slice(startIndex, endIndex)),

@@ -249,6 +249,16 @@ describe('watch history thumbnails', () => {
 		assert.equal(thumbnailOf(await listed({ thumbnailUrl: plain, isPublic: false, userId: 'someone-else' }, snapshot)), snapshot);
 	});
 
+	it('carries the live title in every language, so an Arabic page shows the Arabic title', async () => {
+		const first = JSON.parse(await listed({ thumbnailUrl: plain, title: 'Weak Hadith 1', titleLocalized: { en: 'Weak Hadith 1', ar: 'الحديث الضعيف ١' } }, plain)).entries[0];
+		assert.equal(first.videoTitle, 'Weak Hadith 1');
+		assert.deepEqual(first.videoTitleLocalized, { en: 'Weak Hadith 1', ar: 'الحديث الضعيف ١' });
+		// Gone or hidden: the stored title only, nothing localized
+		const gone = JSON.parse(await listed(null, plain)).entries[0];
+		assert.equal(gone.videoTitle, 'Lecture');
+		assert.equal(gone.videoTitleLocalized, undefined);
+	});
+
 	it('is signed exactly once, even when the snapshot held an expired token', async () => {
 		const expired = `${plain}?token=old&expires=1`;
 		const signed = await signBunnyUrlsInText(await listed({ thumbnailUrl: plain }, expired), host, 'key');

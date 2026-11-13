@@ -40,6 +40,7 @@ export function ContinueWatchingShelf() {
         page.entries.map((e) => ({
           id: e.videoId,
           title: e.videoTitle,
+          titleLocalized: e.videoTitleLocalized,
           thumbnailUrl: e.videoThumbnail,
           channelName: e.channelName,
           channelNameLocalized: e.channelNameLocalized,
