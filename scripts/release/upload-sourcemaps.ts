@@ -15,6 +15,7 @@
  */
 import { readdirSync, readFileSync, statSync, unlinkSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { cfToken, DEFAULT_ACCOUNT_ID } from './cf-api.ts';
 import { resourcesFor, type ResourceEnv } from './ensure-resources.ts';
 
@@ -100,7 +101,7 @@ export async function uploadSourceMaps(opts: { env: ResourceEnv; app: string; re
 	return { uploaded: files.length, removed: files.length, bucket };
 }
 
-const isMain = process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname);
+const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
 	try {
 		const opts = parseArgs(process.argv.slice(2));

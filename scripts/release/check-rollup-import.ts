@@ -16,7 +16,8 @@
  * Read-only. Needs CLOUDFLARE_API_TOKEN (R2 read + D1 read) or `wrangler login`.
  */
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createCfClient, d1Query, type CfClient } from './cf-api.ts';
 import { parseJsonc } from './jsonc.ts';
 
@@ -107,7 +108,7 @@ async function main() {
 	if (!report.ok) process.exit(1);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
 	main().catch((error) => {
 		console.error(String(error instanceof Error ? error.message : error));
 		process.exit(2);

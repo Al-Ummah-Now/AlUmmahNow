@@ -7,6 +7,7 @@
  * Idempotent: existing queues and buckets are left alone. Add a resource here
  * in the same PR that first binds it.
  */
+import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { CfApiError, createCfClient, type CfClient } from './cf-api.ts';
 
@@ -58,7 +59,7 @@ export async function ensureResources(cf: CfClient, wanted: Resources, log: (lin
 	return { created };
 }
 
-const isMain = process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname);
+const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
 	const i = process.argv.indexOf('--env');
 	const env = (i >= 0 ? process.argv[i + 1] : '') as ResourceEnv;

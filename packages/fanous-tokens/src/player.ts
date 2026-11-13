@@ -3,7 +3,7 @@
 // The videos site now compiles player chrome from its theme packages (packages/theme-packages), which a test
 // keeps equal to these files; these remain the source for the player harness and native apps.
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const PLAYER_TOKENS = [
@@ -69,7 +69,7 @@ export function generatePlayer(themes: Record<string, PlayerTheme>): { files: Re
   return { files, errors };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const { files, errors } = generatePlayer(loadPlayerThemes());
   for (const e of errors) console.error(`PLAYER TOKEN ${e}`);
   if (errors.length) process.exit(1);

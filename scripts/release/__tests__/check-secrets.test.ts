@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { fileURLToPath } from 'node:url';
 import { checkWorker, declaredInConfig, type Deps } from '../check-secrets.ts';
 import type { WorkerBinding } from '../cf-api.ts';
 import { SECRETS_MANIFEST, type WorkerSecrets } from '../secrets-manifest.ts';
@@ -129,7 +130,7 @@ describe('a worker not deployed yet', () => {
 
 describe('declaredInConfig', () => {
 	it('reads the Secrets Store binding from the production and stage configs', () => {
-		const root = new URL('../../..', import.meta.url).pathname;
+		const root = fileURLToPath(new URL('../../..', import.meta.url));
 		const web = (env: 'production' | 'stage' | 'qa') => SECRETS_MANIFEST.find((e) => e.app === 'web' && e.env === env)!;
 		assert.deepEqual(declaredInConfig(web('production'), 'INTERNAL_API_KEY', root)?.secret_name, 'internal-api-key');
 		assert.deepEqual(declaredInConfig(web('stage'), 'INTERNAL_API_KEY', root)?.secret_name, 'internal-api-key-stage');

@@ -7,6 +7,7 @@
  */
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 
 /**
@@ -109,7 +110,7 @@ export function checkMigrations(
 	return errors;
 }
 
-const isMain = process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname);
+const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
 	const base = process.argv[2];
 	if (!base) {

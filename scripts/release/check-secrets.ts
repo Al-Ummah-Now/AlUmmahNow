@@ -20,6 +20,7 @@
  * only secrets-manifest.ts differs.
  */
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { APPS } from './apps.ts';
 import { parseJsonc } from './jsonc.ts';
@@ -49,7 +50,7 @@ export interface Deps {
 	declared?(entry: WorkerSecrets, name: string): Promise<{ store_id: string; secret_name: string } | null>;
 }
 
-const ROOT = resolve(new URL('../..', import.meta.url).pathname);
+const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 
 /**
  * Secrets Store binding `name` in the config this commit deploys: apps.ts configPath
@@ -174,7 +175,7 @@ function parse(argv: string[]): { env?: EnvName; json: boolean } {
 	return out;
 }
 
-const isMain = process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname);
+const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
 	try {
 		const args = parse(process.argv.slice(2));

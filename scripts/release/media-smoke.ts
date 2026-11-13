@@ -10,6 +10,7 @@
  *   - the transcoder Containers application exists and is not failed
  * Exits 1 with every failure listed; the workflow then rolls the media Worker back.
  */
+import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { createCfClient, type CfClient } from './cf-api.ts';
 
@@ -59,7 +60,7 @@ export async function mediaSmoke(env: MediaEnv, deps: { fetch: typeof fetch; cf:
 	return out;
 }
 
-const isMain = process.argv[1] && resolve(process.argv[1]) === resolve(decodeURIComponent(new URL(import.meta.url).pathname));
+const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
 	const i = process.argv.indexOf('--env');
 	const env = (i >= 0 ? process.argv[i + 1] : '') as MediaEnv;

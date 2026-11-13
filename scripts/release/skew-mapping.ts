@@ -19,6 +19,7 @@
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { CfApiError, createCfClient, type CfClient } from './cf-api.ts';
 
 export const MAPPING_VAR = 'CF_DEPLOYMENT_MAPPING';
@@ -135,7 +136,7 @@ export function mappingVarArgs(mapping: Mapping): string[] {
 	return ['--var', `${MAPPING_VAR}:${JSON.stringify(mapping)}`];
 }
 
-const isMain = process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname);
+const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
 	const argv = process.argv.slice(2);
 	const value = (flag: string) => (argv.includes(flag) ? argv[argv.indexOf(flag) + 1] : undefined);

@@ -15,6 +15,7 @@
  * the `wrangler login` OAuth token). Without that permission it prints a
  * warning and exits 0: the check is informational until CI's token has it.
  */
+import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { CfApiError, cfToken, createCfClient, type CfClient } from './cf-api.ts';
 
@@ -98,7 +99,7 @@ async function writes(token: string, accountId: string, id: string, from: Date, 
 	return (json.data?.viewer?.accounts?.[0]?.queueMessageOperationsAdaptiveGroups ?? []).reduce((sum, g) => sum + g.count, 0);
 }
 
-const isMain = process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname);
+const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
 	const args = parseArgs(process.argv.slice(2));
 	const names = queueNames(args.env);

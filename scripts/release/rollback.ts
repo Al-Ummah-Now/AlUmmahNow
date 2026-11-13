@@ -16,6 +16,7 @@
  * Also run by .github/workflows/rollback.yml (the one-click version).
  */
 import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { releaseApps, RELEASE_ORDER, type ReleaseEnv } from './promote.ts';
 import { runSmoke } from './smoke.ts';
@@ -86,10 +87,10 @@ export function rollbackCommands(root: string, args: RollbackArgs): { worker: st
 		}));
 }
 
-const isMain = process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname);
+const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
 	const args = parseRollbackArgs(process.argv.slice(2));
-	const root = resolve(new URL('../..', import.meta.url).pathname);
+	const root = fileURLToPath(new URL('../..', import.meta.url));
 	const wrangler = (cwd: string, argv: string[]) =>
 		execFileSync('npx', ['wrangler', ...argv], { cwd, encoding: 'utf8', env: { ...process.env, CI: 'true' }, stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 32 * 1024 * 1024 });
 	let failed = false;

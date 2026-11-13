@@ -1,5 +1,8 @@
 // Release check: the site-theme endpoint answers with a theme that exists, and the site renders it.
 // Usage: check-site-theme.ts <admin-api-url> <web-url>
+import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
+
 export const THEMES = ['lantern', 'zujaj', 'nahas', 'fawanees'];
 
 type Fetch = (url: string) => Promise<Pick<Response, 'ok' | 'status' | 'json' | 'text'>>;
@@ -25,7 +28,7 @@ export async function checkSiteTheme(adminApi: string, web: string, fetchFn: Fet
 	return `Site theme ${theme}${pkg ? `@${pkg.version}` : ''}; the site renders ${rendered} (they can differ for up to a minute after a change).`;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
 	const [adminApi, web] = process.argv.slice(2);
 	if (!adminApi || !web) throw new Error('Usage: check-site-theme.ts <admin-api-url> <web-url>');
 	console.log(await checkSiteTheme(adminApi, web));

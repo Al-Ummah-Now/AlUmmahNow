@@ -9,6 +9,8 @@
  * failed and flaky ones. With --list it also prints every test as "status<TAB>file:line<TAB>title".
  */
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 
 interface Annotation { type: string; description?: string }
 interface Result { status: string }
@@ -50,7 +52,7 @@ export function markdown(list: Outcome[], heading: string): string {
   return lines.join('\n');
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2).filter((a) => a !== '--list');
   const [file, heading = 'Test outcomes'] = args;
   if (!file) {
