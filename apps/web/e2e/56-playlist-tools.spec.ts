@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures';
+import { test as fixturesTest, expect } from './fixtures';
 import type { Locator, Page } from '@playwright/test';
 import { expectRtl, fillStable, keyboardMoveDown, playlistToolsDeployed, pointerDrag } from './test-utils/channel-content';
 import { ns, useOwnData, type CreatedVideo, type Creator } from './release/builders';
@@ -33,8 +33,23 @@ import { apiFetch, expectHydrated } from './release/web-session';
  * so the waits on those lists are longer than the default.
  */
 
-const data = useOwnData(test);
+const data = useOwnData(fixturesTest);
 let owner: Creator;
+
+/**
+ * The file's creators, made in a worker fixture rather than beforeAll: Playwright resolves a context
+ * option such as storageState before beforeAll runs, so a creator made there was undefined in
+ * test.use (every signed-in test failed with "reading 'state'"). Deleted by the file's DataScope.
+ */
+const test = fixturesTest.extend<object, { creators: { owner: Creator } }>({
+  creators: [
+    async ({ browser }, use) => {
+      owner = await data.createCreator(browser, 'plt');
+      await use({ owner });
+    },
+    { scope: 'worker', timeout: 300_000 },
+  ],
+});
 let channelId: string;
 let videos: CreatedVideo[] = [];
 /** A unique title prefix (the three videos end in A, B and C, their order by title) */
@@ -120,13 +135,14 @@ async function playlistOption(dialog: Locator, title: string) {
 const itemOrder = (page: Page) => page.getByTestId('playlist-item').evaluateAll((rows) => rows.map((r) => r.getAttribute('data-video-id')));
 
 test.describe('Playlist tools', () => {
-  test.use({ storageState: async ({}, use) => use(owner.state) });
+  test.use({ storageState: async ({ creators }, use) => use(creators.owner.state) });
   test.describe.configure({ mode: 'serial' });
 
-  test.beforeAll(async ({ browser }) => {
+  test.beforeAll(async ({ browser, creators }) => {
+    void browser;
+    void creators;
     test.skip(!(await playlistToolsDeployed()), 'The playlist tools are not deployed on the target yet (they land with the PR that adds them)');
     test.setTimeout(300000);
-    owner = await data.createCreator(browser, 'plt');
     channelId = owner.channelIds[0];
     // Every playlist of this channel is the spec's: swept at cleanup, before the channel goes
     data.onCleanup(`playlists of channel ${channelId}`, async () => {

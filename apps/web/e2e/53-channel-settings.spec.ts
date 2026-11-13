@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures';
+import { test as fixturesTest, expect } from './fixtures';
 import type { Page } from '@playwright/test';
 import { ANONYMOUS_STATE } from './test-utils/auth-state';
 import {
@@ -25,9 +25,25 @@ import { apiFetch, expectHydrated } from './release/web-session';
  * owner's channel and put its tab configuration back afterwards.
  */
 
-const data = useOwnData(test);
+const data = useOwnData(fixturesTest);
 let owner: Creator;
 let other: Creator;
+
+/**
+ * The file's creators, made in a worker fixture rather than beforeAll: Playwright resolves a context
+ * option such as storageState before beforeAll runs, so a creator made there was undefined in
+ * test.use (every signed-in test failed with "reading 'state'"). Deleted by the file's DataScope.
+ */
+const test = fixturesTest.extend<object, { creators: { owner: Creator; other: Creator } }>({
+  creators: [
+    async ({ browser }, use) => {
+      owner = await data.createCreator(browser, 'chset-owner');
+      other = await data.createCreator(browser, 'chset-other');
+      await use({ owner, other });
+    },
+    { scope: 'worker', timeout: 300_000 },
+  ],
+});
 let videos: CreatedVideo[] = [];
 const channel = () => ({ id: owner.channelIds[0] });
 
@@ -60,15 +76,15 @@ async function putTabConfig(id: string, config: TabConfig) {
   expect(res.status, 'restore tab config').toBeLessThan(300);
 }
 
-test.beforeAll(async ({ browser }) => {
+test.beforeAll(async ({ browser, creators }) => {
+    void browser;
+    void creators;
   test.setTimeout(300000);
-  owner = await data.createCreator(browser, 'chset-owner');
   // Not waited on: Studio lists a video while it processes too
   videos = [
     await data.createVideo(owner.user, owner.channelIds[0], { clip: 'landscape40', title: `E2E CHSET public ${Date.now().toString(36)}`, isPublic: true, waitReady: false }),
     await data.createVideo(owner.user, owner.channelIds[0], { clip: 'landscape40', title: `E2E CHSET private ${Date.now().toString(36)}`, isPublic: false, waitReady: false }),
   ];
-  other = await data.createCreator(browser, 'chset-other');
 });
 
 const SETTINGS_PAGES = ['', '/edit', '/tabs', '/sections', '/playlists', '/community', '/community/new'];
@@ -76,7 +92,7 @@ const SETTINGS_PAGES = ['', '/edit', '/tabs', '/sections', '/playlists', '/commu
 const studioVideos = (locale: string, id: string) => `/${locale}/studio/${id}/content/videos`;
 
 test.describe('Settings overview', () => {
-  test.use({ storageState: async ({}, use) => use(owner.state) });
+  test.use({ storageState: async ({ creators }, use) => use(creators.owner.state) });
 
   test('CHSET-001 lists every settings area with working links (en)', async ({ page }) => {
     const main = channel();
@@ -137,7 +153,7 @@ test.describe('Ownership guard', () => {
   });
 
   test.describe("another user's channel", () => {
-    test.use({ storageState: async ({}, use) => use(other.state) });
+    test.use({ storageState: async ({ creators }, use) => use(creators.other.state) });
 
     for (const locale of ['en', 'ar'] as const) {
       test(`CHSET-011 settings pages of a channel you do not own redirect (${locale})`, async ({ page }) => {
@@ -159,7 +175,7 @@ test.describe('Ownership guard', () => {
 });
 
 test.describe('Edit channel', () => {
-  test.use({ storageState: async ({}, use) => use(owner.state) });
+  test.use({ storageState: async ({ creators }, use) => use(creators.owner.state) });
 
   test('CHSET-020 updates the Arabic description and restores it', async ({ page }) => {
     const target = channel();
@@ -231,7 +247,7 @@ async function processing(video: CreatedVideo): Promise<boolean> {
 // Video management is Studio's Content > Videos now (19-studio-videos-ownership
 // covers the list itself); the old settings URL keeps working for the owner
 test.describe('Channel videos', () => {
-  test.use({ storageState: async ({}, use) => use(owner.state) });
+  test.use({ storageState: async ({ creators }, use) => use(creators.owner.state) });
 
   test('CHSET-030 the old videos page opens Studio with the channel videos, private ones included (en)', async ({ page }) => {
     const main = channel();
@@ -263,7 +279,7 @@ test.describe('Channel videos', () => {
 });
 
 test.describe('Tab management', () => {
-  test.use({ storageState: async ({}, use) => use(owner.state) });
+  test.use({ storageState: async ({ creators }, use) => use(creators.owner.state) });
 
   const target = channel;
 
