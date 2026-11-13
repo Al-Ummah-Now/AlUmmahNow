@@ -1,4 +1,4 @@
-import type { BrowserContext, Page } from '@playwright/test';
+import { expect, type BrowserContext, type Page } from '@playwright/test';
 import { consentCookie } from '../test-utils/consent';
 
 /** Built-in site themes (packages/shared-types SITE_THEMES) and the modes each ships. */
@@ -58,8 +58,26 @@ export async function mockApi(page: Page) {
   await page.route(/^wss?:/, (route) => route.abort());
 }
 
-/** Applies a site theme and colour mode the way the server and next-themes do. */
+/**
+ * The page is usable: React has hydrated it (a click before that is lost: the notifications bell
+ * was clicked, focused and never opened) and the header's account area has loaded the session (a
+ * pulsing placeholder until then: the account menu trigger and the realtime socket come after).
+ * On the CI dev server that takes several seconds, longer while the other worker compiles, and
+ * different specs failed with "0 elements" each time (#1141).
+ */
+export async function waitForApp(page: Page, timeout = 60_000) {
+  await expect
+    .poll(() => page.evaluate(() => [...document.querySelectorAll('button')].some((b) => Object.keys(b).some((k) => k.startsWith('__reactProps$')))), {
+      message: 'the page never hydrated',
+      timeout,
+    })
+    .toBe(true);
+  await expect(page.locator('span.aun-acct-btn[aria-hidden="true"]'), 'the header never loaded the session').toHaveCount(0, { timeout });
+}
+
+/** Applies a site theme and colour mode the way the server and next-themes do (once the page is usable). */
 export async function applyTheme(page: Page, theme: string, mode: Mode) {
+  await waitForApp(page);
   await page.evaluate(([t, m]) => {
     try { localStorage.setItem('theme', m); } catch { /* storage blocked */ }
     const html = document.documentElement;
