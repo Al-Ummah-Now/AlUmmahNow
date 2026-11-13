@@ -21,6 +21,7 @@ import { fromHono } from "chanfana";
 import { bunnySigningMiddleware } from './middleware/bunny-signing';
 import { Hono } from "hono";
 import { cors } from 'hono/cors'
+import { isAllowedOrigin } from './lib/cors';
 import { authMiddleware, optionalAuthMiddleware, channelIdMiddleware } from "./middleware/auth";
 import { videosBanMiddleware } from "./middleware/videos-ban";
 import { videosPendingDeletionMiddleware } from "./middleware/videos-pending-deletion";
@@ -80,28 +81,14 @@ app.onError(errorHandler);
 // GLOBAL MIDDLEWARE
 // ==========================================
 
-// Default allowed origins for development
-const DEFAULT_CORS_ORIGINS = [
-	'http://localhost:3000',
-	'http://localhost:3001',
-	'http://localhost:3090',
-	'http://127.0.0.1:3000',
-	'http://127.0.0.1:3001',
-	'http://127.0.0.1:3086',
-	'http://127.0.0.1:3090',
-];
-
-// CORS origin validation - uses CORS_ORIGINS env var if set, otherwise defaults
-const isAllowedOrigin = (origin: string, corsOrigins?: string): boolean => {
-	const envOrigins = corsOrigins?.split(',').map(o => o.trim()) || [];
-	const allowedOrigins = envOrigins.length > 0 ? envOrigins : DEFAULT_CORS_ORIGINS;
-	return allowedOrigins.includes(origin);
-};
+// Allowed origins (CORS_ORIGINS, local defaults, www dev servers on the public play routes): lib/cors.ts
+const allowOrigin = (origin: string, c: { env: AppBindings; req: { path: string; method: string } }): string =>
+	isAllowedOrigin(origin, c.env as never, { path: c.req.path, method: c.req.method }) ? origin : '';
 
 // Setup CORS for all routes
 app.use('*', cors({
 	// origin callback receives (origin, context) - context has env access
-	origin: (origin, c) => isAllowedOrigin(origin, c.env.CORS_ORIGINS) ? origin : '',
+	origin: (origin, c) => allowOrigin(origin, c as never),
 	allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
 	allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'channelId', 'userId', 'Tus-Resumable', 'Upload-Length', 'Upload-Metadata', 'Upload-Offset', 'Upload-Defer-Length', 'Upload-Concat'],
 	exposeHeaders: ['Content-Length', 'X-Kuma-Revision', 'Allow', 'Location', 'Tus-Resumable', 'Tus-Version', 'Tus-Max-Size', 'Tus-Extension', 'Upload-Offset', 'Upload-Length', 'Upload-Metadata', 'X-API-Version', 'Deprecation', 'Sunset', 'Retry-After', 'Date'],
@@ -141,7 +128,7 @@ app.get('/api/openapi.json', async (c) => {
 // Explicit OPTIONS handler for profile endpoints
 app.options('/api/profile*', (c) => {
 	const origin = c.req.header('Origin') || '';
-	const allowedOrigin = isAllowedOrigin(origin, c.env.CORS_ORIGINS) ? origin : '';
+	const allowedOrigin = allowOrigin(origin, c as never);
 	if (allowedOrigin) {
 		c.header('Access-Control-Allow-Origin', allowedOrigin);
 	}
@@ -155,7 +142,7 @@ app.options('/api/profile*', (c) => {
 // Explicit OPTIONS handler for all API endpoints
 app.options('/api/*', (c) => {
 	const origin = c.req.header('Origin') || '';
-	const allowedOrigin = isAllowedOrigin(origin, c.env.CORS_ORIGINS) ? origin : '';
+	const allowedOrigin = allowOrigin(origin, c as never);
 	if (allowedOrigin) {
 		c.header('Access-Control-Allow-Origin', allowedOrigin);
 	}
