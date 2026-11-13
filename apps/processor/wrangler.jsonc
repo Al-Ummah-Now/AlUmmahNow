@@ -118,7 +118,10 @@
 		"AI_CATEGORIZE_ENABLED": "true",
 		"AI_CATEGORIZE_DAILY_NEURON_CAP": "20000",
 		// QA/stage release E2E hook; must stay "false" here (pinned by pnpm check:config)
-		"CATEGORY_AI_TEST_HOOK": "false"
+		"CATEGORY_AI_TEST_HOOK": "false",
+		// Quran Foundation Content Sync (AUN-CAPTIONS): production QF hosts in every env
+		"QF_OAUTH_HOST": "https://oauth2.quran.foundation",
+		"QF_API_HOST": "https://apis.quran.foundation"
 	},
 
 	// Workers AI (Epic 28 moderation)
@@ -130,6 +133,17 @@
 			"binding": "INTERNAL_API_KEY",
 			"store_id": "f8eddc9944d041919ed8dc7d08d32308",
 			"secret_name": "internal-api-key"
+		},
+		{
+			// Quran Foundation Content API (AUN-CAPTIONS Content Sync): the production client in every env (owner 2026-11-13)
+			"binding": "QF_CLIENT_ID",
+			"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+			"secret_name": "quran-foundation-prod-client-id"
+		},
+		{
+			"binding": "QF_CLIENT_SECRET",
+			"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+			"secret_name": "quran-foundation-prod-client-secret"
 		}
 	],
 
@@ -225,7 +239,10 @@
 				"AI_CATEGORIZE_ENABLED": "true",
 				"AI_CATEGORIZE_DAILY_NEURON_CAP": "20000",
 				// Release E2E: [e2e-category:<value>] in a title is answered without a model call. Never in production.
-				"CATEGORY_AI_TEST_HOOK": "true"
+				"CATEGORY_AI_TEST_HOOK": "true",
+				// Quran Foundation Content Sync (AUN-CAPTIONS): production QF hosts in every env
+				"QF_OAUTH_HOST": "https://oauth2.quran.foundation",
+				"QF_API_HOST": "https://apis.quran.foundation"
 			},
 			"ai": { "binding": "AI" },
 			"secrets_store_secrets": [
@@ -233,6 +250,17 @@
 					"binding": "INTERNAL_API_KEY",
 					"store_id": "f8eddc9944d041919ed8dc7d08d32308",
 					"secret_name": "internal-api-key-stage"
+				},
+				{
+					// Quran Foundation Content API (AUN-CAPTIONS Content Sync): the production client in every env (owner 2026-11-13)
+					"binding": "QF_CLIENT_ID",
+					"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+					"secret_name": "quran-foundation-prod-client-id"
+				},
+				{
+					"binding": "QF_CLIENT_SECRET",
+					"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+					"secret_name": "quran-foundation-prod-client-secret"
 				}
 			]
 		},

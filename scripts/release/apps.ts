@@ -37,6 +37,13 @@ const stageRule = (rule: Omit<EnvRule, 'env' | 'allowedHosts'>): EnvRule => ({ e
 const AUTH_MODERATION_CLIENT = 'd7464de8-363d-4fc1-b1af-7c71653f0afc';
 
 const INTERNAL_API_KEY: Binding = { kind: 'secrets_store_secrets', name: 'INTERNAL_API_KEY' };
+// Quran Foundation Content Sync (AUN-CAPTIONS): processor src/quran, the private media bucket holds the copy
+const QURAN_SYNC: Binding[] = [
+	{ kind: 'secrets_store_secrets', name: 'QF_CLIENT_ID' },
+	{ kind: 'secrets_store_secrets', name: 'QF_CLIENT_SECRET' },
+	{ kind: 'r2_buckets', name: 'REVIEW_MEDIA' },
+];
+const QF_HOSTS = { QF_OAUTH_HOST: 'https://oauth2.quran.foundation', QF_API_HOST: 'https://apis.quran.foundation' };
 const RESEND_API_KEY: Binding = { kind: 'secrets_store_secrets', name: 'RESEND_API_KEY' };
 
 export const APPS: AppRule[] = [
@@ -162,7 +169,7 @@ export const APPS: AppRule[] = [
 			env: null,
 			name: 'al-ummah-now-processor',
 			// The category-suggestion test hook answers E2E titles without the model: never in production
-			vars: { ENVIRONMENT: 'production', WEBSOCKET_URL: 'https://realtime.alummahnow.net', CATEGORY_AI_TEST_HOOK: 'false', CMS_INTERNAL_URL: 'https://cms.alummahnow.net', VIDEO_REVIEW_ALLOWED: 'true' },
+			vars: { ENVIRONMENT: 'production', WEBSOCKET_URL: 'https://realtime.alummahnow.net', CATEGORY_AI_TEST_HOOK: 'false', CMS_INTERNAL_URL: 'https://cms.alummahnow.net', VIDEO_REVIEW_ALLOWED: 'true', ...QF_HOSTS },
 			requiredBindings: [
 				INTERNAL_API_KEY,
 				{ kind: 'd1_databases', name: 'REPORTS_DB' },
@@ -174,10 +181,11 @@ export const APPS: AppRule[] = [
 				// Dead-letter visibility: the processor stores every DLQ message (src/dlq).
 				{ kind: 'queue_consumer', name: 'al-ummah-now-dlq' },
 				{ kind: 'ai', name: 'AI' },
+				...QURAN_SYNC,
 			],
 			...PROD_GUARDS,
 		},
-		stage: stageRule({ name: 'al-ummah-now-processor-stage', vars: { ENVIRONMENT: 'stage', WEBSOCKET_URL: STAGE_REALTIME, CMS_INTERNAL_URL: 'https://cms.stage.alummahnow.net', AI_MODERATION_ENABLED: 'false', VIDEO_REVIEW_ALLOWED: 'false' }, requiredBindings: [INTERNAL_API_KEY, { kind: 'r2_buckets', name: 'videos' }, { kind: 'queue_consumer', name: 'al-ummah-now-videos-stage' }, { kind: 'queue_consumer', name: 'al-ummah-now-moderation-stage' }, { kind: 'queue_consumer', name: 'al-ummah-now-dlq-stage' }, { kind: 'ai', name: 'AI' }] }),
+		stage: stageRule({ name: 'al-ummah-now-processor-stage', vars: { ENVIRONMENT: 'stage', WEBSOCKET_URL: STAGE_REALTIME, CMS_INTERNAL_URL: 'https://cms.stage.alummahnow.net', AI_MODERATION_ENABLED: 'false', VIDEO_REVIEW_ALLOWED: 'false', ...QF_HOSTS }, requiredBindings: [INTERNAL_API_KEY, ...QURAN_SYNC, { kind: 'r2_buckets', name: 'videos' }, { kind: 'queue_consumer', name: 'al-ummah-now-videos-stage' }, { kind: 'queue_consumer', name: 'al-ummah-now-moderation-stage' }, { kind: 'queue_consumer', name: 'al-ummah-now-dlq-stage' }, { kind: 'ai', name: 'AI' }] }),
 	},
 	{
 		app: 'websocket-server',
