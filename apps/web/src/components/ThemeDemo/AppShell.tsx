@@ -13,7 +13,7 @@ import { UnifiedNavigation } from '@/components/UnifiedNavigation';
 import { UnifiedNavigationRTL } from '@/components/UnifiedNavigation/rtl';
 import { UploadAction } from '@/components/Header/UploadAction';
 import { BrandLogo } from '@/components/brand/BrandLogo';
-import { useRailBreakpointStill } from './rail-breakpoint';
+import { useRailMotion } from './rail-breakpoint';
 
 const L = {
   en: { browse: 'Browse', you: 'Yours', create: 'Create', more: 'More', history: 'History', watchLater: 'Watch later', liked: 'Liked videos', settings: 'Settings', search: 'Search videos', lightMode: 'Switch to light mode', darkMode: 'Switch to dark mode', other: 'العربية', otherLabel: 'التبديل إلى العربية', menu: 'Menu', close: 'Close menu' },
@@ -35,7 +35,7 @@ export function AppShell() {
   const rtl = lang === 'ar';
 
   useEffect(() => { setMounted(true); }, []);
-  useRailBreakpointStill();
+  useRailMotion(open);
   useEffect(() => { setOpen(false); }, [pathname]);
   useEffect(() => { document.documentElement.dataset.rail = open ? 'open' : 'closed'; }, [open]);
   useEffect(() => {

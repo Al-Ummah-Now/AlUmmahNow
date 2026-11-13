@@ -1,39 +1,43 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 
 /** Where the shell switches between the phone drawer and the desktop rail (system.css). */
 export const RAIL_DESKTOP_QUERY = '(min-width: 1024px)';
 
+/** Longest rail/drawer/padding transition in system.css (240 ms drawer), plus a margin. */
+export const RAIL_MOTION_MS = 320;
+
 /**
- * Crossing the breakpoint changes the side panel's width (300 px drawer ↔ rail)
- * and the page's start padding at once. Their CSS transitions are meant for the
- * menu toggle; on a breakpoint change they would sweep the panel over the page
- * for a moment (longer while the page is busy, e.g. during a batch upload).
- * `html[data-rail-still]` turns those transitions off for the frames the layout
- * changes in, then the toggle animates again.
+ * The side panel (rail width, phone drawer slide) and the page's start padding
+ * animate only while the menu is toggled: `html[data-rail-moving]` turns their
+ * CSS transitions on for one transition's length (system.css).
+ *
+ * They used to be on all the time and turned off on a breakpoint change (a
+ * rotation, a foldable unfolding) from the media query's change event. WebKit
+ * can report that event after the new layout already started its transition,
+ * so the page slid sideways under the viewer's finger, and a tap meant for
+ * the player landed on the rail (player E2E, theatre on a Galaxy Z Fold, #1130).
+ * Opting in on the toggle never animates a breakpoint change, whatever order
+ * the browser reports it in.
  */
-export function useRailBreakpointStill(): void {
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
-    const query = window.matchMedia(RAIL_DESKTOP_QUERY);
+export function useRailMotion(open: boolean): void {
+  const first = useRef(true);
+  // Before paint: the drawer's data-open changes in the same commit, and its transition must already apply
+  useLayoutEffect(() => {
+    // The first render is the page's own layout, not a toggle
+    if (first.current) {
+      first.current = false;
+      return;
+    }
     const root = document.documentElement;
-    let frame = 0;
-    const onChange = () => {
-      root.dataset.railStill = '';
-      cancelAnimationFrame(frame);
-      // Two frames: the new layout is painted before transitions come back
-      frame = requestAnimationFrame(() => {
-        frame = requestAnimationFrame(() => {
-          delete root.dataset.railStill;
-        });
-      });
-    };
-    query.addEventListener('change', onChange);
+    root.dataset.railMoving = '';
+    const timer = window.setTimeout(() => {
+      delete root.dataset.railMoving;
+    }, RAIL_MOTION_MS);
     return () => {
-      query.removeEventListener('change', onChange);
-      cancelAnimationFrame(frame);
-      delete root.dataset.railStill;
+      window.clearTimeout(timer);
+      delete root.dataset.railMoving;
     };
-  }, []);
+  }, [open]);
 }
