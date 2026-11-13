@@ -222,4 +222,27 @@ describe('a user without a channel comments as themselves', () => {
 		assert.equal(body.comment.channelId, 'solo');
 		assert.ok(!text.includes('solo@example.org'));
 	});
+
+	it('no channelId header: the author edits and deletes their own comment (builders\' cleanup answered 400, #1073)', async () => {
+		const e = { ...env(), profiles: new MemoryBucket({ solo: { id: 'solo', email: 'solo@example.org', displayName: 'Solo' } }) };
+		const json = { 'Content-Type': 'application/json' };
+		const created = await as('solo').request(BASE, { method: 'POST', headers: json, body: JSON.stringify({ content: 'Salam' }) }, e);
+		assert.equal(created.status, 201, await created.clone().text());
+		const id = ((await created.json()) as { comment: { id: string } }).comment.id;
+
+		const edited = await as('solo').request(`${BASE}/${id}`, { method: 'PUT', headers: json, body: JSON.stringify({ content: 'Salam alaykum' }) }, e);
+		assert.equal(edited.status, 200, await edited.text());
+		assert.equal(stored(e, id).content, 'Salam alaykum');
+
+		// Someone else, also without a channel, may not delete it
+		const other = await as('other').request(`${BASE}/${id}`, { method: 'DELETE' }, e);
+		assert.equal(other.status, 403, await other.text());
+
+		const deleted = await as('solo').request(`${BASE}/${id}`, { method: 'DELETE' }, e);
+		assert.equal(deleted.status, 200, await deleted.text());
+		assert.ok(stored(e, id).deletedAt);
+		const event = e.queue.messages.find((m: any) => m.type === MessageType.PostCommentDeleted) as any;
+		assert.ok(event, 'delete event queued');
+		assert.equal(JSON.stringify(event).includes('null'), false, 'no null actor channel in the event');
+	});
 });

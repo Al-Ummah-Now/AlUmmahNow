@@ -27,7 +27,7 @@ const updateCommentSchema = {
       commentId: Str({ description: 'Comment ID' }),
     }),
     headers: z.object({
-      channelId: z.string().optional().describe('Actor channel ID'),
+      channelId: z.string().optional().nullable().describe('Actor channel ID; none: the comment author edits their own comment'),
     }),
     body: {
       content: {
@@ -82,7 +82,8 @@ export class UpdatePostComment extends AuthenticatedRoute {
 
     const { channelId: postChannelId, postId, commentId } = c.req.param();
     const data: any = await this.getValidatedData<z.infer<typeof updateCommentRequestSchema>>();
-    const userChannelId = data.headers?.channelId;
+    // A missing header reaches the schema as null
+    const userChannelId = data.headers?.channelId ?? undefined;
 
     if (!data.body) {
       return c.json({ success: false, error: 'Request body is required' }, 400);
