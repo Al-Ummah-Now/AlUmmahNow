@@ -1,3 +1,5 @@
+import type { PushSenderEnv } from './push/provider';
+
 // Import shared types from @al-ummah/shared-types
 import {
   MessageType,
@@ -71,7 +73,8 @@ export interface R2Bucket {
 
 // D1 types are imported from @al-ummah/shared-types above
 
-export interface QueueEnvironment {
+/** Push sender secrets (Secrets Store, #414): see src/push/senders. */
+export interface QueueEnvironment extends PushSenderEnv {
   /** Producer to the processor's own queue (PushDispatch, Epic 9.4). Optional: push is skipped when unbound. */
   MESSAGE_QUEUE?: {
     send: (message: AlUmmahMessage) => Promise<void>;

@@ -95,7 +95,7 @@ describe('rota rules (shared-types)', () => {
   });
 
   it('push text is the reason and time left only, in en and ar', () => {
-    expect(reviewAlertText('nsfw', 4, 'en')).toEqual({ title: 'Review queue', body: 'Video held for review · NSFW · 4 min left' });
+    expect(reviewAlertText('nsfw', 4, 'en')).toEqual({ title: 'Review queue', body: 'Video held for review · NSFW · 4 min left', openLabel: 'Open', claimLabel: 'Claim' });
     expect(reviewAlertText('minor', 2, 'ar-SA').body).toBe('مرئي محجوز للمراجعة · وجود قاصر · بقي 2 د');
   });
 });
@@ -157,7 +157,7 @@ describe('review alerts consumer', () => {
     const p = new Recorder();
     await handleReviewAlert(env, all(p), held(), logger, MONDAY_10_UTC + 60000);
     const alert = p.alerts[0].alert;
-    expect(alert).toEqual({ kind: 'alert', reviewId: 'rev-1', title: 'Review queue', body: 'Video held for review · NSFW · 4 min left', actionUrl: '/moderation/review/rev-1', ttlSeconds: 600 });
+    expect(alert).toEqual({ kind: 'alert', reviewId: 'rev-1', title: 'Review queue', body: 'Video held for review · NSFW · 4 min left', openLabel: 'Open', claimLabel: 'Claim', actionUrl: '/moderation/review/rev-1', ttlSeconds: 600 });
     expect(JSON.stringify(p.alerts)).not.toContain('vid-secret-1');
   });
 

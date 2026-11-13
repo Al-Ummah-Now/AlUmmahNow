@@ -141,7 +141,16 @@
       "binding": "QF_CLIENT_SECRET",
       "store_id": "f8eddc9944d041919ed8dc7d08d32308",
       "secret_name": "quran-foundation-prod-client-secret"
-    }
+    },
+    // Push senders (#414, src/push/senders): a placeholder value keeps that provider log-only
+    { "binding": "APNS_KEY_P8", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "apns-key-p8-qa" },
+    { "binding": "APNS_KEY_ID", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "apns-key-id-qa" },
+    { "binding": "APPLE_TEAM_ID", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "apple-team-id-qa" },
+    { "binding": "APNS_BUNDLE_IDS", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "apns-bundle-ids-qa" },
+    { "binding": "FCM_SERVICE_ACCOUNT", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "fcm-service-account-qa" },
+    { "binding": "FCM_PROJECT_ID", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "fcm-project-id-qa" },
+    { "binding": "WNS_PACKAGE_SID", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "wns-package-sid-qa" },
+    { "binding": "WNS_CLIENT_SECRET", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "wns-client-secret-qa" }
   ],
 
   "observability": {

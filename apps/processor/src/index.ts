@@ -373,7 +373,7 @@ async function handleQueue(batch: MessageBatch<AlUmmahMessage>, env: QueueEnviro
   // Review alerts for the Admin app (#1265): their own queue, one message per batch. Routed by
   // queue before any routing by message type, so a type that shares a value cannot take them
   if (batch.queue?.includes('review-alerts')) {
-    await processReviewAlertBatch(batch, env, resolvePushProviders(), logger);
+    await processReviewAlertBatch(batch, env, resolvePushProviders(env), logger);
     return;
   }
   // AI category suggestions ride on both the moderation queue (api-videos) and the
