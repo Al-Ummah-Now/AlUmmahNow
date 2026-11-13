@@ -134,7 +134,8 @@ export function contrastIssues(pkg: ThemePackage, builtIn = false): Issue[] {
  * there makes the whole declaration invalid and the surface see-through (#937). Write a flat
  * colour as `linear-gradient(<colour>,<colour>)`.
  */
-export const LAYERED_BACKGROUNDS = ['components.card.style.background', 'components.menu.style.background', 'components.hero.style.background'];
+export const LAYERED_BACKGROUNDS = ['components.card.style.background', 'components.menu.style.background', 'components.hero.style.background',
+  'components.card.lightStyle.background', 'components.menu.lightStyle.background', 'components.hero.lightStyle.background'];
 
 /** Top-level comma-separated layers of a CSS value. */
 export function cssLayers(value: string): string[] {

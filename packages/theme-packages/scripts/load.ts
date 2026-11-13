@@ -19,3 +19,12 @@ export function loadPackageDir(dir: string): PackageFiles {
   for (const file of files) assets[relative(dir, file).split('\\').join('/')] = new Uint8Array(readFileSync(file));
   return { theme, assets };
 }
+
+/** Inlines a package's SVG asset as a data: URL (built-in stylesheets are copied to other sites, so they carry their art). */
+export function inlineSvg(files: PackageFiles): (path: string) => string | undefined {
+  return (path) => {
+    const bytes = files.assets[path];
+    if (!bytes || !path.endsWith('.svg')) return undefined;
+    return `data:image/svg+xml,${encodeURIComponent(new TextDecoder().decode(bytes).trim())}`;
+  };
+}

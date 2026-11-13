@@ -106,15 +106,15 @@ public enum Fanous {
     )
 
     public static let light = FanousColors(
-        background: Color(.sRGB, red: 1, green: 0.9451, blue: 0.7686, opacity: 1),
-        surface: Color(.sRGB, red: 0.9647, green: 0.8392, blue: 0.498, opacity: 1),
-        surfaceRaised: Color(.sRGB, red: 0.9765, green: 0.8745, blue: 0.5922, opacity: 1),
-        heroStart: Color(.sRGB, red: 0.9373, green: 0.7765, blue: 0.3725, opacity: 1),
-        heroEnd: Color(.sRGB, red: 1, green: 0.9451, blue: 0.7686, opacity: 1),
-        textPrimary: Color(.sRGB, red: 0.0431, green: 0.1451, blue: 0.2039, opacity: 1),
-        textSecondary: Color(.sRGB, red: 0.0784, green: 0.2275, blue: 0.298, opacity: 1),
-        textMuted: Color(.sRGB, red: 0.1412, green: 0.3137, blue: 0.3725, opacity: 1),
-        link: Color(.sRGB, red: 0.4157, green: 0.2588, blue: 0, opacity: 1),
+        background: Color(.sRGB, red: 0.9529, green: 0.9333, blue: 0.898, opacity: 1),
+        surface: Color(.sRGB, red: 1, green: 0.9922, blue: 0.9765, opacity: 1),
+        surfaceRaised: Color(.sRGB, red: 1, green: 1, blue: 1, opacity: 1),
+        heroStart: Color(.sRGB, red: 0.9216, green: 0.8941, blue: 0.8392, opacity: 1),
+        heroEnd: Color(.sRGB, red: 0.9529, green: 0.9333, blue: 0.898, opacity: 1),
+        textPrimary: Color(.sRGB, red: 0.0863, green: 0.1373, blue: 0.1686, opacity: 1),
+        textSecondary: Color(.sRGB, red: 0.2078, green: 0.2627, blue: 0.2941, opacity: 1),
+        textMuted: Color(.sRGB, red: 0.2941, green: 0.3451, blue: 0.3765, opacity: 1),
+        link: Color(.sRGB, red: 0.4784, green: 0.2627, blue: 0, opacity: 1),
         successText: Color(.sRGB, red: 0.0588, green: 0.3529, blue: 0.1725, opacity: 1),
         errorText: Color(.sRGB, red: 0.6902, green: 0, blue: 0.1255, opacity: 1),
         primary: Color(.sRGB, red: 0.9569, green: 0.6824, blue: 0.2275, opacity: 1),
@@ -123,11 +123,11 @@ public enum Fanous {
         onPrimaryHover: Color(.sRGB, red: 0.0353, green: 0.0824, blue: 0.1176, opacity: 1),
         primaryPressed: Color(.sRGB, red: 0.8784, green: 0.5882, blue: 0.1647, opacity: 1),
         onPrimaryPressed: Color(.sRGB, red: 0.0353, green: 0.0824, blue: 0.1176, opacity: 1),
-        primaryDisabled: Color(.sRGB, red: 0.9373, green: 0.7765, blue: 0.3725, opacity: 1),
-        onPrimaryDisabled: Color(.sRGB, red: 0.2353, green: 0.1882, blue: 0.0314, opacity: 1),
+        primaryDisabled: Color(.sRGB, red: 0.9216, green: 0.902, blue: 0.8627, opacity: 1),
+        onPrimaryDisabled: Color(.sRGB, red: 0.2941, green: 0.3451, blue: 0.3765, opacity: 1),
         primaryEdge: Color(.sRGB, red: 0.5412, green: 0.3529, blue: 0.0706, opacity: 1),
         primarySheen: Color(.sRGB, red: 1, green: 0.902, blue: 0.6588, opacity: 1),
-        motif: Color(.sRGB, red: 0.5412, green: 0.3529, blue: 0.0706, opacity: 1),
+        motif: Color(.sRGB, red: 0.7255, green: 0.549, blue: 0.3216, opacity: 1),
         secondary: Color(.sRGB, red: 0.5569, green: 0.4235, blue: 0.3255, opacity: 1),
         onSecondary: Color(.sRGB, red: 1, green: 1, blue: 1, opacity: 1),
         verifiedFill: Color(.sRGB, red: 0.0863, green: 0.3961, blue: 0.2039, opacity: 1),
@@ -136,12 +136,12 @@ public enum Fanous {
         onErrorFill: Color(.sRGB, red: 1, green: 1, blue: 1, opacity: 1),
         live: Color(.sRGB, red: 0.9843, green: 0.7765, blue: 0.3804, opacity: 1),
         onLive: Color(.sRGB, red: 0.0353, green: 0.0824, blue: 0.1176, opacity: 1),
-        accent: Color(.sRGB, red: 0.6588, green: 0.3373, blue: 0, opacity: 1),
-        focusRing: Color(.sRGB, red: 0.5765, green: 0.3804, blue: 0.1647, opacity: 1),
+        accent: Color(.sRGB, red: 0.6039, green: 0.3216, blue: 0, opacity: 1),
+        focusRing: Color(.sRGB, red: 0.5412, green: 0.3529, blue: 0.0706, opacity: 1),
         focusGlow: Color(.sRGB, red: 0.6588, green: 0.3373, blue: 0, opacity: 1),
         verifiedIcon: Color(.sRGB, red: 0.0588, green: 0.3529, blue: 0.1725, opacity: 1),
-        outline: Color(.sRGB, red: 0.4784, green: 0.3882, blue: 0.149, opacity: 1),
-        divider: Color(.sRGB, red: 0.851, green: 0.702, blue: 0.3373, opacity: 1)
+        outline: Color(.sRGB, red: 0.4784, green: 0.4549, blue: 0.4078, opacity: 1),
+        divider: Color(.sRGB, red: 0.8941, green: 0.8706, blue: 0.8275, opacity: 1)
     )
 
     public enum Brand {

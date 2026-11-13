@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { compilePackage } from '../src/compile.ts';
-import { BUILT_IN, THEMES_DIR, loadPackageDir } from '../scripts/load.ts';
+import { BUILT_IN, THEMES_DIR, inlineSvg, loadPackageDir } from '../scripts/load.ts';
 import { OPTIONAL_MATERIAL_VARS } from '../src/components.ts';
 
 const baseline = (f: string) => readFileSync(new URL(`./parity-baseline/${f}`, import.meta.url), 'utf8');
@@ -39,7 +39,7 @@ export function declarationMap(css: string): Map<string, Map<string, string>> {
 }
 
 const plain = (m: Map<string, Map<string, string>>) => Object.fromEntries([...m].map(([s, d]) => [s, Object.fromEntries(d)]));
-const compiled = BUILT_IN.ids.map((id) => ({ id, out: compilePackage(loadPackageDir(`${THEMES_DIR}/${id}`).theme, { isDefault: id === BUILT_IN.default, rootFallback: true }) }));
+const compiled = BUILT_IN.ids.map((id) => { const files = loadPackageDir(`${THEMES_DIR}/${id}`); return { id, out: compilePackage(files.theme, { isDefault: id === BUILT_IN.default, rootFallback: true, inlineAsset: inlineSvg(files) }) }; });
 
 test('design tokens are byte-identical to the pre-package stylesheet (comments aside)', () => {
   const now = compiled.map((c) => c.out.tokens).join('\n');
