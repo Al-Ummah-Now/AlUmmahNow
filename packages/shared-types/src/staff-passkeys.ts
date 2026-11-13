@@ -19,10 +19,14 @@
  *
  * Pure functions, no platform imports: unit tested in apps/admin-api.
  */
-import { normalizeRoles } from './roles';
+import { normalizeRoles, STAFF_ROLE_IDS } from './roles';
 
-/** Roles that are staff (Auth RBAC names, normalised: lower-case, spaces as `_`). */
-export const STAFF_ROLE_IDS = ['super_admin', 'admin', 'moderator', 'writer', 'content_reviewer', 'senior_reviewer'] as const;
+/**
+ * Roles the staff passkey rule covers (Auth RBAC names, normalised): every staff role
+ * plus `writer` (the CMS editor role, staff in Auth but not an Admin-app role).
+ * Matches Auth's STAFF_ROLES (packages/ui/src/passkey-policy.ts).
+ */
+export const PASSKEY_STAFF_ROLE_IDS = [...STAFF_ROLE_IDS, 'writer'] as const;
 
 /** Freshness a high-risk action needs (seconds), sent as `max_age` when asking for a new sign-in. */
 export const STEP_UP_MAX_AGE_S = 900;
@@ -58,7 +62,7 @@ export type StepUpVerdict =
   | { ok: false; reason: 'passkey' };
 
 export function isStaffRole(roles: unknown): boolean {
-  return normalizeRoles(roles).some((role) => (STAFF_ROLE_IDS as readonly string[]).includes(role));
+  return normalizeRoles(roles).some((role) => (PASSKEY_STAFF_ROLE_IDS as readonly string[]).includes(role));
 }
 
 /** True when `amr` says the sign-in used a passkey. A missing or malformed `amr` is no passkey. */
