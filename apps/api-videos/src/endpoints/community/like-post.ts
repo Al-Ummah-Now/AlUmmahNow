@@ -17,7 +17,7 @@ export class LikeCommunityPost extends AuthenticatedRoute {
         postId: z.string().describe('Post ID to like'),
       }),
       headers: z.object({
-        channelId: z.string().optional().describe('Actor channel ID (the channel performing the like)'),
+        channelId: z.string().optional().nullable().describe('Actor channel ID (the channel performing the like)'),
       }),
     },
     responses: {
@@ -50,7 +50,7 @@ export class LikeCommunityPost extends AuthenticatedRoute {
     const userId = this.getUserId(c);
     const { channelId: postChannelId, postId } = c.req.param();
     const request: any = await this.getValidatedData<typeof this.schema>();
-    const userChannelId = request.headers?.channelId;
+    const userChannelId = request.headers?.channelId ?? undefined;
 
     try {
       // Direct key lookup (O(1))

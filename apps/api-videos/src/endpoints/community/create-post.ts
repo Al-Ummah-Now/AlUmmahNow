@@ -86,7 +86,7 @@ export class CreateCommunityPost extends AuthenticatedRoute {
         channelId: Str({ description: 'Channel ID that will own the post' }),
       }),
       headers: z.object({
-        channelId: z.string().optional().openapi({ description: 'User channel ID (for verification)' }),
+        channelId: z.string().optional().nullable().openapi({ description: 'User channel ID (for verification)' }),
       }),
       body: {
         content: {
@@ -127,7 +127,7 @@ export class CreateCommunityPost extends AuthenticatedRoute {
     const request: any = await this.getValidatedData<typeof this.schema>();
     const body: any = request.body;
     const { channelId: postChannelId } = c.req.param();
-    const userChannelId = request.headers?.channelId;
+    const userChannelId = request.headers?.channelId ?? undefined;
 
     if (!body) {
       return c.json({ error: 'Request body is required' }, 400);
