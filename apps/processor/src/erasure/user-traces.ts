@@ -11,6 +11,7 @@
  * - SEARCH_DB upload_rate_windows / upload_rate_leases: the user's upload and channel-create rate
  *   counters and in-flight slots (api-videos middleware/rate-limit.ts, lib/creatorTiers.ts), keyed by
  *   the user id. Deleted: the account is gone, so nothing is left to limit.
+ * - SEARCH_DB creator_tier_assignments: the user's creator tier (who assigned it, when). Deleted.
  *
  * Idempotent: a second run changes nothing. Runs inside the UserDataErased step, so a failure retries
  * and finally dead-letters like the rest of the erasure.
@@ -26,6 +27,7 @@ export interface UserTracesResult {
   errorEvents: number;
   categorySuggestions: number;
   rateLimits: number;
+  creatorTier: number;
 }
 
 /** RETURNING rows count what changed (D1 and the test stand-in alike), as contact/erase.ts does. */
@@ -49,11 +51,12 @@ export async function eraseUserTraces(
       )
       .bind(erasedMarker, userId),
   ]);
-  const [suggestions, windows, leases] = search
+  const [suggestions, windows, leases, tier] = search
     ? await search.batch([
         search.prepare('DELETE FROM category_suggestions WHERE user_id = ? RETURNING subject_id').bind(userId),
         search.prepare('DELETE FROM upload_rate_windows WHERE user_id = ? RETURNING operation').bind(userId),
         search.prepare('DELETE FROM upload_rate_leases WHERE user_id = ? RETURNING operation').bind(userId),
+        search.prepare('DELETE FROM creator_tier_assignments WHERE user_id = ? RETURNING tier_id').bind(userId),
       ])
     : [];
   return {
@@ -62,5 +65,6 @@ export async function eraseUserTraces(
     errorEvents: count(errorEvents),
     categorySuggestions: count(suggestions),
     rateLimits: count(windows) + count(leases),
+    creatorTier: count(tier),
   };
 }

@@ -110,6 +110,23 @@ describe('Channel Section Event Handler', () => {
   });
 
   describe('ChannelSectionReorder', () => {
+    it('accepts the reorder api-videos sends (no sectionId: the whole channel is reordered)', async () => {
+      const message: AlUmmahMessage = {
+        id: 'test-section-reorder',
+        type: MessageType.ChannelSectionReorder,
+        timestamp: Date.now(),
+        payload: { channelId: 'channel-123', userId: 'user-789', sectionCount: 2 },
+      };
+
+      await handleChannelSectionEvent(message, mockEnv, mockLogger);
+
+      expect(mockEnv.MESSAGES_BUCKET.put).toHaveBeenCalledWith(
+        expect.stringContaining('analytics/sections/reorders/channel-123/'),
+        expect.stringContaining('"event":"sections_reordered"'),
+        expect.anything()
+      );
+    });
+
     it('should track section reorder events', async () => {
       const message: AlUmmahMessage = {
         id: 'test-section-4',
