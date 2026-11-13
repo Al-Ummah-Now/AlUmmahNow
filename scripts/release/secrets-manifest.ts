@@ -99,6 +99,10 @@ export const SECRETS_MANIFEST: WorkerSecrets[] = [
 			{ name: 'MEDIA_SIGN_KEY', purpose: 'Secrets Store media-sign-key[-qa|-stage]; checks /priv/ path tokens' },
 		],
 	}),
+	// Short links (wiki AUN-SHORT-LINKS): failures reach the Errors page
+	...envs('short-links', 'al-ummah-now-short-links-qa', {
+		required: [{ ...INTERNAL_API_KEY, purpose: 'Secrets Store internal-api-key[-qa|-stage]; X-API-Key of error reports to admin-api /internal/errors' }],
+	}),
 	// Platform analytics collector (docs/admin/LIVE_OPS.md): Cloudflare GraphQL reads, Errors page items
 	...envs('cost-monitor', 'al-ummah-cost-monitor-qa', {
 		required: [

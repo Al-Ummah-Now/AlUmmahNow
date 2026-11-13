@@ -306,6 +306,32 @@ jobs:
         run: |
           node --experimental-strip-types --no-warnings scripts/media-cdn/apply.ts --env stage --apply \
             || echo "::warning title=Media CDN settings::scripts/media-cdn/apply.ts --env stage did not finish; see the log above"
+      # Short share links (apps/short-links, wiki AUN-SHORT-LINKS): stage.alummahnow.link, a
+      # Workers Custom Domain on the alummahnow.link zone (the deploy keeps its DNS record and certificate).
+      # Deployed after the promote, then smoke-tested; a failed smoke rolls it back.
+      - name: Deploy short links (stage)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          RELEASE_LABEL: ${{ needs.resolve.outputs.label }}
+        run: |
+          cd apps/short-links
+          pnpm wrangler deploy -c wrangler.jsonc --env stage --message "release $RELEASE_LABEL"
+
+      - name: Short links smoke (stage)
+        id: short_links_smoke
+        run: node --experimental-strip-types --no-warnings scripts/release/short-links-smoke.ts --env stage
+
+      - name: Roll back short links (smoke failed)
+        if: failure() && steps.short_links_smoke.outcome == 'failure'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          cd apps/short-links
+          pnpm wrangler rollback -c wrangler.jsonc --env stage --message "release ${GITHUB_SHA::7}: short links smoke failed" -y
+          echo "### Rolled back: short links smoke failed (stage)" >> "$GITHUB_STEP_SUMMARY"
+
       # Fills columns added by a migration, once the new worker writes them. Fails the deploy if any row is left.
       - name: Backfill and verify Studio columns (stage)
         env:
@@ -611,6 +637,32 @@ jobs:
         run: |
           node --experimental-strip-types --no-warnings scripts/media-cdn/apply.ts --env production --apply \
             || echo "::warning title=Media CDN settings::scripts/media-cdn/apply.ts --env production did not finish; see the log above"
+      # Short share links (apps/short-links, wiki AUN-SHORT-LINKS): alummahnow.link, a
+      # Workers Custom Domain on the alummahnow.link zone (the deploy keeps its DNS record and certificate).
+      # Deployed after the promote, then smoke-tested; a failed smoke rolls it back.
+      - name: Deploy short links (production)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          RELEASE_LABEL: ${{ needs.resolve.outputs.label }}
+        run: |
+          cd apps/short-links
+          pnpm wrangler deploy -c wrangler.jsonc --message "release $RELEASE_LABEL"
+
+      - name: Short links smoke (production)
+        id: short_links_smoke
+        run: node --experimental-strip-types --no-warnings scripts/release/short-links-smoke.ts --env production
+
+      - name: Roll back short links (smoke failed)
+        if: failure() && steps.short_links_smoke.outcome == 'failure'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          cd apps/short-links
+          pnpm wrangler rollback -c wrangler.jsonc --message "release ${GITHUB_SHA::7}: short links smoke failed" -y
+          echo "### Rolled back: short links smoke failed (production)" >> "$GITHUB_STEP_SUMMARY"
+
       # Fills columns added by a migration, once the new worker writes them. Fails the deploy if any row is left.
       - name: Backfill and verify Studio columns (production)
         env:

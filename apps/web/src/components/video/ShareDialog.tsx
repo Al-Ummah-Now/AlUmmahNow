@@ -2,7 +2,7 @@
 
 /**
  * Watch page share dialog (spec 25.1, docs/embeds/README.md §4):
- * copy link, optionally at the current time, social targets / device share
+ * copy the short link (alummahnow.link, wiki AUN-SHORT-LINKS), optionally at the current time, social targets / device share
  * sheet, and the embed code in the standard sizes or responsive.
  */
 
@@ -16,7 +16,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { logger } from '@/lib/logger-client';
+import { copyText } from '@/lib/share/copy';
+import { shareLink } from '@/lib/share/short-link';
 import { embedStrings, fill } from '@/lib/embed/strings';
 import {
   EMBED_SIZES,
@@ -40,32 +41,6 @@ export interface ShareDialogProps {
 
 type SizeChoice = number | 'responsive';
 
-async function copyText(text: string): Promise<boolean> {
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  } catch (error) {
-    logger.debug('[ShareDialog] Clipboard API failed, using fallback', { error });
-  }
-  try {
-    const area = document.createElement('textarea');
-    area.value = text;
-    area.setAttribute('readonly', '');
-    area.style.position = 'fixed';
-    area.style.opacity = '0';
-    document.body.appendChild(area);
-    area.select();
-    const ok = document.execCommand('copy');
-    document.body.removeChild(area);
-    return ok;
-  } catch (error) {
-    logger.warn('[ShareDialog] Copy failed', { error });
-    return false;
-  }
-}
-
 export default function ShareDialog({ videoId, title, lang, getCurrentTime, list }: ShareDialogProps) {
   const s = embedStrings(lang);
   const [open, setOpen] = useState(false);
@@ -76,7 +51,8 @@ export default function ShareDialog({ videoId, title, lang, getCurrentTime, list
 
   const origin = typeof window === 'undefined' ? '' : window.location.origin;
   const start = atTime && time >= 1 ? Math.floor(time) : 0;
-  const link = origin ? watchPageUrl(origin, lang, videoId, start, list) : '';
+  // The short link (alummahnow.link/v/<id>) where this environment has one; the page's own URL otherwise
+  const link = origin ? shareLink({ kind: 'video', id: videoId }, watchPageUrl(origin, lang, videoId, start, list), { t: start, list, locale: lang }) : '';
   const snippet = useMemo(() => {
     if (!origin) return '';
     const src = embedUrl(origin, 'video', videoId, { start, lang });

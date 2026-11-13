@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Al Ummah Now** is an Islamic content platform monorepo with 10 applications across `apps/` and 3 shared packages in `packages/`.
+**Al Ummah Now** is an Islamic content platform monorepo with 11 applications across `apps/` and 3 shared packages in `packages/`.
 
 **Applications (10):**
 1. **web** - Next.js 16 user-facing frontend with bilingual support (English/Arabic, RTL)
@@ -16,7 +16,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 7. **scheduler** - Cron worker for automated scheduled video publishing
 8. **cost-monitor** - Cron worker that collects platform analytics for the admin Operations page
 9. **media** - R2 video delivery: transcoder (Containers) and private-rendition edge
-10. **log-service** - Local-development-only HTTP log aggregator (not deployed)
+10. **short-links** - Short share links on alummahnow.link: redirects to the real pages
+11. **log-service** - Local-development-only HTTP log aggregator (not deployed)
 
 **Packages (3):**
 - `@al-ummah/shared-types` - Shared TypeScript types used by all apps
@@ -376,6 +377,7 @@ al-ummah-now/
 │   ├── scheduler/        Cron worker for scheduled video publishing (Cloudflare Workers)
 │   ├── cost-monitor/     Cron worker collecting platform analytics (Cloudflare Workers + D1)
 │   ├── media/            R2 video delivery: transcoder + private edge (Workers + Containers)
+│   ├── short-links/      Short share links on alummahnow.link (redirects, click counters)
 │   └── log-service/      Local-dev HTTP log aggregator (NOT deployed)
 ├── packages/
 │   ├── shared-types/     Shared TypeScript types (@al-ummah/shared-types)
@@ -462,7 +464,7 @@ cd apps/processor && pnpm lint:fix
 | **Authentication** | OpenAuth (JWT/OAuth2) via auth.alummahnow.net |
 | **Storage** | Cloudflare R2 (object storage), D1 (admin DB), KV (key-value) |
 | **CDN** | Bunny.net (video streaming + image storage) |
-| **Deployment** | Cloudflare Workers (9 apps; log-service is local-only) |
+| **Deployment** | Cloudflare Workers (10 apps; log-service is local-only) |
 | **Package Manager** | pnpm v9.15.4 with workspaces |
 | **Build System** | Turborepo v2 with caching |
 
@@ -535,6 +537,12 @@ cd apps/processor && pnpm lint:fix
 - Deployed to QA by `deploy-qa-media`; released by `release.yml` with `wrangler deploy` (Containers take no versions upload) after the promote, then smoke-tested with auto-rollback
 - See: `docs/media-delivery/`
 
+**apps/short-links** - Short share links (wiki AUN-SHORT-LINKS)
+- `alummahnow.link/v|s|c|p|l/<id>` and `/@<handle>` 301 to the real page (`?lang=`, `t`, `list`, `utm_*` kept); unknown/private ids get a bilingual 404; everything noindex; aggregate click counters (no ids)
+- Every share button copies the short link (`shareLink()` in `apps/web/src/lib/share/short-link.ts`); OG/canonical stay on the real pages
+- Deployed to QA by `deploy-qa` (`qa.alummahnow.link`); released by `release.yml` with `wrangler deploy` after the promote, then smoke-tested (`scripts/release/short-links-smoke.ts`) with auto-rollback. Hosts are Workers Custom Domains on the `alummahnow.link` zone
+- See: `apps/short-links/README.md`
+
 **apps/log-service** - Local development log aggregator
 - Node.js HTTP server (Hono + @hono/node-server) that receives structured logs from all apps
 - Writes logs to per-app files; exposes SSE streaming and snapshot query endpoints
@@ -593,12 +601,12 @@ Note: **scheduler**, **cost-monitor** and **media** have no dedicated validate j
 - **Rationale**: Reduces unnecessary deployments, saves Cloudflare Workers quota
 
 **QA Deployment** (`deploy-qa` job): runs on every push to `main` (and by `workflow_dispatch` on `main`).
-- web, api-videos, processor, websocket-server, cost-monitor, admin-api, admin-web and scheduler deployed in a single `deploy-qa` job after validation; media in its own `deploy-qa-media` job (skipped with a notice if the token lacks Containers access)
+- web, api-videos, processor, websocket-server, cost-monitor, admin-api, admin-web, scheduler and short-links deployed in a single `deploy-qa` job after validation; media in its own `deploy-qa-media` job (skipped with a notice if the token lacks Containers access)
 - QA URLs: `qa.alummahnow.net`, `videos.qa.api.alummahnow.net`, `ws.qa.alummahnow.net`, `admin.qa.alummahnow.net`, `admin.qa.api.alummahnow.net`
 - Web and admin-web use `wrangler.qa.jsonc`; others use per-app `wrangler.qa.jsonc`
 
 **Production Deployment** (`.github/workflows/release.yml`, triggered by pushing a `v*` tag on `main`; see [Deploy Rules](#deploy-rules)):
-- build once → stage (migrate, promote the seven workers web, admin-web, api-videos, processor, websocket-server, admin-api and scheduler; deploy cost-monitor and media; smoke, seed) → release E2E on stage + live secrets check of stage and production (`secrets-check.yml`, `pnpm check:secrets`; names only, never values; manifest `scripts/release/secrets-manifest.ts`) → production (migrate, candidates at 0%, smoke through the version override, 100%, smoke, auto-rollback) → rollback dry run
+- build once → stage (migrate, promote the seven workers web, admin-web, api-videos, processor, websocket-server, admin-api and scheduler; deploy cost-monitor, media and short-links; smoke, seed) → release E2E on stage + live secrets check of stage and production (`secrets-check.yml`, `pnpm check:secrets`; names only, never values; manifest `scripts/release/secrets-manifest.ts`) → production (migrate, candidates at 0%, smoke through the version override, 100%, smoke, auto-rollback) → rollback dry run
 - The production job checks that the tagged commit is on `main`. Later merges to `main` do not affect a running release, because the release deploys the tag.
 - Rollback: `.github/workflows/rollback.yml` (start with `dry_run`) or `pnpm release:rollback --env production`. Code only; D1 migrations are expand-only.
 - `deploy.yml`'s old `deploy-production` job is superseded by the release workflow and is not used.

@@ -28,7 +28,7 @@ import type { NotificationCreatePayload, NotificationFanoutPayload, PushDispatch
 import { publishAdminLive } from '@al-ummah/shared-types';
 import { dispatchPush, enqueuePush } from './push/dispatch';
 import { resolvePushProviders, type PushProviders } from './push/provider';
-import { visitIncrements } from './lib/site-visits';
+import { shortLinkIncrements, visitIncrements } from './lib/site-visits';
 
 /** Tombstone replacing a user id after GDPR erasure (matches api-videos lib/privacy/user-data.ts). */
 export const DELETED_USER_ID = 'deleted-user';
@@ -273,6 +273,11 @@ export class MessageProcessor {
         if ((message.payload as { kind?: string }).kind === 'visit') {
           const payload = message.payload as { events?: unknown[]; receivedAt?: string };
           for (const inc of visitIncrements(Array.isArray(payload.events) ? payload.events : [], String(payload.receivedAt ?? message.timestamp ?? ''))) this.counters.add(inc);
+        }
+        // Short link clicks (alummahnow.link): link type and source as daily site counters
+        if ((message.payload as { kind?: string }).kind === 'short_link') {
+          const payload = message.payload as { events?: unknown[]; receivedAt?: string };
+          for (const inc of shortLinkIncrements(Array.isArray(payload.events) ? payload.events : [], String(payload.receivedAt ?? message.timestamp ?? ''))) this.counters.add(inc);
         }
         this.logger.debug('Client analytics batch stored', {
           kind: (message.payload as { kind?: string }).kind,

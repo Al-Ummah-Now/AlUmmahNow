@@ -1150,6 +1150,18 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
+      # Short share links (apps/short-links, wiki AUN-SHORT-LINKS): qa.alummahnow.link, a Workers
+      # Custom Domain (the deploy keeps its DNS record and certificate), then its smoke
+      - name: Deploy Short Links to QA
+        run: |
+          cd apps/short-links
+          pnpm wrangler deploy --config wrangler.qa.jsonc
+          cd ../..
+          node --experimental-strip-types --no-warnings scripts/release/short-links-smoke.ts --env qa
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
       # Fills columns added by a migration, once every new worker writes them. Fails the deploy if any row is left.
       - name: Backfill and verify Studio columns (qa)
         env:
@@ -1173,8 +1185,9 @@ jobs:
           echo "  • al-ummah-scheduler-qa (cron)"
           echo "  • al-ummah-admin-web-qa → admin.qa.alummahnow.net"
           echo "  • al-ummah-cost-monitor-qa (cron)"
+          echo "  • al-ummah-now-short-links-qa → qa.alummahnow.link"
           echo ""
-          echo "All 8 QA workers are live!"
+          echo "All 9 QA workers are live!"
 
   # R2 video delivery beside Bunny (epic #687): the media Worker and its FFmpeg
   # container (wrangler builds the image with Docker and pushes it to Cloudflare's

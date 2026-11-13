@@ -1,12 +1,14 @@
 'use client';
 
 import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
-import { Clock, EllipsisVertical, ListPlus } from 'lucide-react';
+import { Clock, EllipsisVertical, Link2, ListPlus } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { MenuButton } from '@/components/common/MenuButton';
 import { LibraryService } from '@/services/api/library';
 import { fillTemplate } from '@/lib/i18n/translations/library-notifications';
+import { copyText } from '@/lib/share/copy';
+import { shareLink } from '@/lib/share/short-link';
 
 // Loaded only when "Save to playlist" is chosen: the dialog's playlist calls are
 // server actions (next/headers), which must not load with every video card
@@ -21,11 +23,12 @@ interface VideoCardMenuProps {
 /**
  * Overflow menu on video cards (Story 29.6): "Save to Watch later" and "Save
  * to playlist" (the active channel's playlists, or the user's own without a
- * channel). Keyboard accessible (menu button pattern); signed-in users only.
+ * channel), for signed-in users; "Copy link" (the short link, wiki AUN-SHORT-LINKS) for
+ * everyone. Keyboard accessible (menu button pattern).
  */
 export function VideoCardMenu({ videoId, title, className = '' }: VideoCardMenuProps) {
   const { user } = useAuth();
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const texts = t.library;
   const [status, setStatus] = useState<string | null>(null);
   const [savingToPlaylist, setSavingToPlaylist] = useState(false);
@@ -35,12 +38,15 @@ export function VideoCardMenu({ videoId, title, className = '' }: VideoCardMenuP
     if (timer.current) clearTimeout(timer.current);
   }, []);
 
-  if (!user) return null;
-
   const flash = (message: string) => {
     setStatus(message);
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => setStatus(null), 2500);
+  };
+
+  const copyLink = async () => {
+    const link = shareLink({ kind: 'video', id: videoId }, `${window.location.origin}/${locale}/video/${encodeURIComponent(videoId)}`, { locale });
+    flash((await copyText(link)) ? texts.linkCopied : texts.copyFailed);
   };
 
   const save = async () => {
@@ -62,19 +68,30 @@ export function VideoCardMenu({ videoId, title, className = '' }: VideoCardMenuP
         testId="video-card-menu"
         buttonClassName="rounded-full p-1.5 text-gray-600 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         items={[
+          ...(user
+            ? [
+                {
+                  id: 'watch-later',
+                  label: texts.saveToWatchLater,
+                  icon: <Clock className="h-4 w-4" />,
+                  testId: 'video-card-save-watch-later',
+                  onSelect: save,
+                },
+                {
+                  id: 'save-to-playlist',
+                  label: t.playlist.saveToPlaylistTitle,
+                  icon: <ListPlus className="h-4 w-4" />,
+                  testId: 'video-card-save-to-playlist',
+                  onSelect: () => setSavingToPlaylist(true),
+                },
+              ]
+            : []),
           {
-            id: 'watch-later',
-            label: texts.saveToWatchLater,
-            icon: <Clock className="h-4 w-4" />,
-            testId: 'video-card-save-watch-later',
-            onSelect: save,
-          },
-          {
-            id: 'save-to-playlist',
-            label: t.playlist.saveToPlaylistTitle,
-            icon: <ListPlus className="h-4 w-4" />,
-            testId: 'video-card-save-to-playlist',
-            onSelect: () => setSavingToPlaylist(true),
+            id: 'copy-link',
+            label: texts.copyLink,
+            icon: <Link2 className="h-4 w-4" />,
+            testId: 'video-card-copy-link',
+            onSelect: copyLink,
           },
         ]}
       >

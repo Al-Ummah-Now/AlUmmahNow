@@ -4,6 +4,7 @@ import { fromHono } from 'chanfana';
 // Community Posts - Core Operations
 import { ListCommunityPosts } from '../endpoints/community/list-posts';
 import { GetCommunityPost } from '../endpoints/community/get-post';
+import { LocateCommunityPost } from '../endpoints/community/locate-post';
 import { CreateCommunityPost } from '../endpoints/community/create-post';
 import { UpdateCommunityPost } from '../endpoints/community/update-post';
 import { DeleteCommunityPost } from '../endpoints/community/delete-post';
@@ -36,6 +37,8 @@ export const communityRouter = fromHono(app, { base: '/api/community' });
 // Posts - List and Get (public)
 communityRouter.get('/channels/:channelId/posts', ListCommunityPosts);
 communityRouter.get('/channels/:channelId/posts/:postId', GetCommunityPost);
+// A post's channel by its id alone (short links alummahnow.link/p/<id>)
+communityRouter.get('/posts/:postId', LocateCommunityPost);
 
 // Posts - Create, Update, Delete (auth required)
 communityRouter.post('/channels/:channelId/posts', CreateCommunityPost);

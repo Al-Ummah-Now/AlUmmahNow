@@ -38,7 +38,7 @@ import { readStream, streamEnd, type LiveStreamRecord } from '../lib/live/stream
 import { bulkAssignTier, limitHitsSince, listCreators, tierCounts } from '../lib/admin/creators';
 import { createChannelFor, lookupAccount, provisionProfile } from '../lib/admin/invites';
 import { assignTier, CreatorTierError, deleteTier, purgeTiers, readAssignment, readDeletedTiers, readTiers, requestTierPurge, restoreTier, saveTier } from '../lib/creatorTiers';
-import { siteVisitsReport } from '../lib/site-visits';
+import { shortLinkClicksReport, siteVisitsReport } from '../lib/site-visits';
 
 type Env = { Bindings: admin.AdminServiceEnv & Record<string, unknown> };
 
@@ -183,7 +183,13 @@ app.post('/lookup', async (c) => ok(c, await lookup(c.env, cleanLookup(await bod
 
 // Channels
 // Site visits (D-SEO-9): landing pages and sources of the videos site, last ?days= (1-365, default 30)
-app.get('/analytics/visits', async (c) => ok(c, await siteVisitsReport((c.env as { NOTIFICATIONS_DB?: D1Database }).NOTIFICATIONS_DB, Number(c.req.query('days') ?? 30))));
+// with the short link clicks of the same days (alummahnow.link, wiki AUN-SHORT-LINKS) as shortLinks
+app.get('/analytics/visits', async (c) => {
+	const db = (c.env as { NOTIFICATIONS_DB?: D1Database }).NOTIFICATIONS_DB;
+	const days = Number(c.req.query('days') ?? 30);
+	const [visits, shortLinks] = await Promise.all([siteVisitsReport(db, days), shortLinkClicksReport(db, days)]);
+	return ok(c, { ...visits, shortLinks });
+});
 app.get('/channels', async (c) => ok(c, await listChannels(c.env, parse(ChannelQuery, c.req.query()) as never, waitUntilOf(c))));
 app.get('/channels/:id', async (c) => ok(c, await admin.channelDetail(c.env, c.req.param('id'))));
 app.patch('/channels/:id', async (c) => ok(c, await admin.updateChannel(c.env, c.req.param('id'), parse(ChannelEdit, await body(c)))));

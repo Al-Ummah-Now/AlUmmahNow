@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Short share links, QA (wiki AUN-SHORT-LINKS): qa.alummahnow.link → the QA sites
+  "name": "al-ummah-now-short-links-qa",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "version_metadata": { "binding": "CF_VERSION_METADATA" },
+  "observability": { "enabled": true, "head_sampling_rate": 1, "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": false } },
+  "routes": [{ "pattern": "qa.alummahnow.link", "custom_domain": true }],
+  "secrets_store_secrets": [
+    { "binding": "INTERNAL_API_KEY", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "internal-api-key-qa" }
+  ],
+  "vars": {
+    "ENVIRONMENT": "qa",
+    "LOG_LEVEL": "warn",
+    "SITE_ORIGIN": "https://videos.qa.alummahnow.net",
+    "WWW_ORIGIN": "https://www.qa.alummahnow.net",
+    "API_ORIGIN": "https://videos.api.qa.alummahnow.net",
+    "SHORTS_PATH": "video",
+    "ERRORS_INGEST_URL": "https://admin.api.qa.alummahnow.net/internal/errors"
+  }
+}

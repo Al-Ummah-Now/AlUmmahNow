@@ -4,7 +4,7 @@ import { logger } from '@/lib/logger-client';
 
 import { useState, useEffect, useCallback } from 'react';
 import { CommunityPost } from '@al-ummah/shared-types';
-import { listCommunityPosts } from '@/lib/api/community-posts';
+import { getCommunityPost, listCommunityPosts } from '@/lib/api/community-posts';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useActiveChannel } from '@/contexts/ActiveChannelContext';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -69,6 +69,27 @@ export default function CommunityPosts({ channelId, isRTL = false, locale = 'en'
   useEffect(() => {
     loadPosts(1);
   }, [loadPosts]);
+
+  // A shared post (?post=<id>, short link alummahnow.link/p/<id>): shown first when it is older
+  // than the first page, then scrolled to once
+  const [sharedId] = useState(() => (typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('post')));
+  const [sharedDone, setSharedDone] = useState(false);
+  useEffect(() => {
+    if (!sharedId || sharedDone || loading) return;
+    if (posts.some((p) => p.id === sharedId)) {
+      setSharedDone(true);
+      requestAnimationFrame(() => document.getElementById(`post-${sharedId}`)?.scrollIntoView({ block: 'start' }));
+      return;
+    }
+    setSharedDone(true);
+    getCommunityPost(channelId, sharedId)
+      .then((shared) => {
+        if (!shared?.id) return;
+        setPosts((prev) => (prev.some((p) => p.id === shared.id) ? prev : [shared, ...prev]));
+        requestAnimationFrame(() => document.getElementById(`post-${shared.id}`)?.scrollIntoView({ block: 'start' }));
+      })
+      .catch((err) => logger.debug('[CommunityPosts] Shared post not loaded', { channelId, error: err }));
+  }, [sharedId, sharedDone, loading, posts, channelId]);
 
   const handleLoadMore = () => {
     if (!loadingMore && hasMore) {

@@ -5,6 +5,7 @@
  * This allows environment-specific values without rebuilding.
  */
 
+import { shortLinkOriginFor } from '@al-ummah/shared-types';
 import { deriveCmsUrl, deriveWwwUrl } from './scholars/sites';
 
 export interface RuntimeConfig {
@@ -16,6 +17,19 @@ export interface RuntimeConfig {
   /** The CMS (scholars write articles there) and www (scholar pages). '' = links hidden. */
   CMS_URL?: string;
   WWW_URL?: string;
+  /** Short share links host (alummahnow.link, wiki AUN-SHORT-LINKS). '' = share the page's own URL. */
+  SHORT_LINK_URL?: string;
+}
+
+/**
+ * The short link host: SHORT_LINK_URL when set ('off' turns short links off), else the one of this
+ * environment, from the API host (videos.api.qa.alummahnow.net → https://qa.alummahnow.link).
+ * '' where there is none (localhost, previews): sharing then uses the page's own URL.
+ */
+export function deriveShortLinkUrl(apiUrl: string | undefined, explicit?: string): string {
+  if (explicit === 'off') return '';
+  if (explicit) return explicit.replace(/\/+$/, '');
+  return shortLinkOriginFor(apiUrl) ?? '';
 }
 
 declare global {
@@ -63,6 +77,7 @@ export function getRuntimeConfig(): RuntimeConfig {
       AUTH_URL: authOrigin(process.env.OPENAUTH_ISSUER || process.env.Issuer),
       CMS_URL: deriveCmsUrl(process.env.OPENAUTH_ISSUER || process.env.Issuer, process.env.CMS_URL),
       WWW_URL: deriveWwwUrl(process.env.OPENAUTH_ISSUER || process.env.Issuer, process.env.WWW_URL),
+      SHORT_LINK_URL: deriveShortLinkUrl(process.env.API_URL || process.env.NEXT_PUBLIC_API_URL, process.env.SHORT_LINK_URL),
     };
   }
 
@@ -80,6 +95,10 @@ export function getApiUrl(): string {
 
 export function getCmsUrl(): string {
   return getRuntimeConfig().CMS_URL || '';
+}
+
+export function getShortLinkUrl(): string {
+  return getRuntimeConfig().SHORT_LINK_URL || '';
 }
 
 export function getWwwUrl(): string {

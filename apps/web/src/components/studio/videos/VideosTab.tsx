@@ -1,5 +1,7 @@
 'use client';
 
+import { copyText } from '@/lib/share/copy';
+import { shareLink } from '@/lib/share/short-link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
@@ -248,7 +250,8 @@ export function VideosTab({ locale, channelId, role }: Props) {
 
   const onAction = (action: VideoRowAction, video: StudioVideo) => {
     if (action === 'copyLink') {
-      void navigator.clipboard.writeText(`${window.location.origin}${watchHref(video.id)}`).then(() => setNotice(text.done.copied));
+      // The short link (alummahnow.link/v/<id>) where this environment has one
+      void copyText(shareLink({ kind: 'video', id: video.id }, `${window.location.origin}${watchHref(video.id)}`, { locale })).then((ok) => { if (ok) setNotice(text.done.copied); });
     } else if (action === 'publishNow' || action === 'retryPublish') {
       void run(() => publishNow(video.id, { channelId }), text.done.published);
     } else if (action === 'cancelSchedule') {

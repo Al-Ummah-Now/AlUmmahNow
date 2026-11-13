@@ -24,6 +24,8 @@ export interface Target {
   /** Public website (AlUmmahNowUI). */
   www: string;
   cms: string;
+  /** Short share links (apps/short-links, wiki AUN-SHORT-LINKS) */
+  shortLinks: string;
 }
 
 const TARGETS: Record<ReleaseEnv, Target> = {
@@ -37,6 +39,7 @@ const TARGETS: Record<ReleaseEnv, Target> = {
     authAdmin: 'https://admin.auth.qa.alummahnow.net',
     www: 'https://www.qa.alummahnow.net',
     cms: 'https://cms.qa.alummahnow.net',
+    shortLinks: 'https://qa.alummahnow.link',
   },
   stage: {
     web: 'https://videos.stage.alummahnow.net',
@@ -48,6 +51,7 @@ const TARGETS: Record<ReleaseEnv, Target> = {
     authAdmin: 'https://admin.auth.stage.alummahnow.net',
     www: 'https://www.stage.alummahnow.net',
     cms: 'https://cms.stage.alummahnow.net',
+    shortLinks: 'https://stage.alummahnow.link',
   },
   // The local E2E stack (scripts/local-stack, docs/testing/LOCAL-STACK.md): this PR's code, the
   // Auth repo at its last release, everything on localhost; www and the CMS only where booted
@@ -61,6 +65,7 @@ const TARGETS: Record<ReleaseEnv, Target> = {
     authAdmin: 'http://localhost:3303',
     www: 'http://localhost:3401',
     cms: 'http://localhost:3402',
+    shortLinks: 'http://localhost:3092',
   },
   production: {
     web: 'https://videos.alummahnow.net',
@@ -72,6 +77,7 @@ const TARGETS: Record<ReleaseEnv, Target> = {
     authAdmin: 'https://admin.auth.alummahnow.net',
     www: 'https://www.alummahnow.net',
     cms: 'https://cms.alummahnow.net',
+    shortLinks: 'https://alummahnow.link',
   },
 };
 

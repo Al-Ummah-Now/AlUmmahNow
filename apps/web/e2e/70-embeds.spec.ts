@@ -31,6 +31,14 @@ if (process.env.A11Y_CHROME_CHANNEL) {
  */
 const HOST_PAGE = process.env.EMBED_HOST_PAGE || 'https://embed-host.e2e.test/page';
 const LOCAL = process.env.E2E_ENV === 'local';
+
+/** Share buttons and "Watch on" use short links (wiki AUN-SHORT-LINKS): the short link host of the site under test. */
+function shortOrigin(origin: string): string {
+  if (LOCAL || /localhost|127\.0\.0\.1/.test(origin)) return 'http://localhost:3092';
+  if (origin.includes('.qa.')) return 'https://qa.alummahnow.link';
+  if (origin.includes('.stage.')) return 'https://stage.alummahnow.link';
+  return 'https://alummahnow.link';
+}
 let loopbackHost: Server | undefined;
 /** Host page bodies by path, for the loopback server */
 const hostBodies = new Map<string, string>();
@@ -135,7 +143,7 @@ test.describe('embed player', () => {
 
     const frame = page.frameLocator('#aun');
     await expect(frame.getByTestId('embed-facade')).toBeVisible({ timeout: 30000 });
-    await expect(frame.getByTestId('embed-watch-link')).toHaveAttribute('href', `/en/video/${video.id}?t=5`);
+    await expect(frame.getByTestId('embed-watch-link')).toHaveAttribute('href', `${shortOrigin(origin)}/v/${video.id}?t=5`);
     await expect.poll(async () => (await messages(page)).some((m) => m.data.event === 'ready' && m.origin === origin)).toBe(true);
 
     await frame.getByTestId('embed-facade').click();
@@ -266,7 +274,7 @@ test.describe('share dialog', () => {
     await dialog.getByTestId('share-copy-link').click();
     await dialog.getByTestId('share-copy-embed').click();
     const copied = await page.evaluate(() => (window as unknown as { __copied: string[] }).__copied);
-    expect(copied[0]).toBe(`${origin}/en/video/${video.id}`);
+    expect(copied[0]).toBe(`${shortOrigin(origin)}/v/${video.id}`);
     expect(copied[1]).toBe(
       `<iframe src="${origin}/embed/v/${video.id}" width="560" height="315" title="${video.title.replace(/"/g, '&quot;')}" ` +
       'frameborder="0" loading="lazy" allow="autoplay; fullscreen; picture-in-picture; encrypted-media" allowfullscreen ' +
