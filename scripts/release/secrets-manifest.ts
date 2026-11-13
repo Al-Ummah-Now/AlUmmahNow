@@ -100,7 +100,14 @@ export const SECRETS_MANIFEST: WorkerSecrets[] = [
 		clientIdVars: [...CLIENT_OPTIONAL, { name: 'AUTH_MODERATION_CLIENT_ID', required: false }],
 	}),
 	...envs('websocket-server', 'al-ummah-now-comms-qa', { required: [INTERNAL_API_KEY], clientIdVars: CLIENT_OPTIONAL }),
-	...envs('processor', 'al-ummah-now-processor-qa', { required: [INTERNAL_API_KEY] }),
+	...envs('processor', 'al-ummah-now-processor-qa', {
+		required: [
+			INTERNAL_API_KEY,
+			// Quran Foundation Content Sync (AUN-CAPTIONS, src/quran): the production QF client in every env (owner 2026-11-13)
+			{ name: 'QF_CLIENT_ID', purpose: 'Secrets Store quran-foundation-prod-client-id (all envs); QF OAuth client, scope content.sync.read' },
+			{ name: 'QF_CLIENT_SECRET', purpose: 'Secrets Store quran-foundation-prod-client-secret (all envs); QF OAuth client secret' },
+		],
+	}),
 	...envs('scheduler', 'al-ummah-scheduler-qa', { required: [INTERNAL_API_KEY] }),
 	// R2 delivery (epic #687): api-videos callbacks and private-rendition path tokens
 	...envs('media', 'al-ummah-now-media-qa', {
