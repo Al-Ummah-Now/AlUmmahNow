@@ -21,12 +21,12 @@ describe('admin list totals are cached (#891)', () => {
 
 	it('never stores the filter itself: a search for an email leaves only a hash', async () => {
 		const db = new SqliteD1();
-		const email = 'someone+tag@example.com';
+		const email = 'someone+tag@mail.test';
 		assert.equal(await cachedCount(db as never, `users::${email}`, async () => 1, 1_800_000_000_000), 1);
 		const rows = db.db.prepare('SELECT key, value FROM search_meta').all() as Array<{ key: string; value: string }>;
 		assert.equal(rows.length, 1);
 		assert.match(rows[0].key, /^admin-count:[0-9a-f]{24}$/);
-		assert.ok(!JSON.stringify(rows).includes('example.com'), JSON.stringify(rows));
+		assert.ok(!JSON.stringify(rows).includes('someone+tag'), JSON.stringify(rows));
 		assert.equal(await cachedCount(db as never, `users::${email}`, async () => 2, 1_800_000_000_001), 1, 'the same filter finds its total');
 	});
 });
