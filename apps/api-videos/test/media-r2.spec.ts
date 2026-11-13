@@ -3,7 +3,7 @@
  */
 import { beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import type { TranscodeJobEvent, TranscodeJobMessage, TranscodeResult } from '@al-ummah/shared-types';
+import { MessageType, VIDEO_REVIEW_SETTINGS_KEY, clearVideoReviewSettingsCache, type TranscodeJobEvent, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
 import {
 	accessDrift,
 	applyJobEvent,
@@ -512,5 +512,47 @@ describe('live admin updates (admin:media)', () => {
 		let called = false;
 		pushMediaLive({ videos: {} } as never, { waitUntil: () => { called = true; } }, { id: ID });
 		assert.equal(called, false);
+	});
+});
+
+describe('pre-publication review media (docs/specs/VIDEO-REVIEW.md §5)', () => {
+	const reviewOn = (raw: Record<string, any>, mode = 'enforce') => {
+		raw.global_settings.store.set(VIDEO_REVIEW_SETTINGS_KEY, JSON.stringify({ mode }));
+		raw.VIDEO_REVIEW_ALLOWED = 'true';
+		raw.MODERATION_QUEUE = new MemoryQueue();
+	};
+	beforeEach(() => clearVideoReviewSettingsCache());
+
+	it('an upload transcode asks for review media only where review runs', async () => {
+		const off = setup();
+		await enqueueTranscode(off.env, ID, 'upload');
+		assert.equal((off.raw.TRANSCODE_QUEUE.messages[0] as TranscodeJobMessage).review, undefined, 'mode off: no extraction');
+		clearVideoReviewSettingsCache();
+		const on = setup();
+		reviewOn(on.raw);
+		await enqueueTranscode(on.env, ID, 'upload');
+		assert.deepEqual((on.raw.TRANSCODE_QUEUE.messages[0] as TranscodeJobMessage).review, { frameIntervalSeconds: 2, sceneThreshold: 0.3, maxFrames: 1200 });
+	});
+
+	it('the ready event with the manifest queues the scan for the checking video', async () => {
+		const { env, raw } = setup({ review: { status: 'checking', reviewId: 'r1', timing: 'pre', since: 'x' } });
+		reviewOn(raw);
+		await enqueueTranscode(env, ID, 'upload');
+		const job = raw.TRANSCODE_QUEUE.messages[0] as TranscodeJobMessage;
+		await applyJobEvent(env, undefined, ev(job, { type: 'ready', result: { ...RESULT, review: { manifestKey: `review/${ID}/${job.rev}/manifest.json` } } }));
+		const scans = raw.MODERATION_QUEUE.messages.filter((m: any) => m.type === MessageType.VideoReviewScan);
+		assert.equal(scans.length, 1);
+		assert.equal(scans[0].payload.manifestKey, `review/${ID}/${job.rev}/manifest.json`);
+	});
+
+	it('a final transcode failure still checks a gated video (partial: held for a person)', async () => {
+		const { env, raw } = setup({ review: { status: 'checking', reviewId: 'r1', timing: 'pre', since: 'x' } });
+		reviewOn(raw);
+		await enqueueTranscode(env, ID, 'upload');
+		const job = raw.TRANSCODE_QUEUE.messages[0] as TranscodeJobMessage;
+		await applyJobEvent(env, undefined, ev(job, { type: 'failed', final: true, error: 'boom' }));
+		const scans = raw.MODERATION_QUEUE.messages.filter((m: any) => m.type === MessageType.VideoReviewScan);
+		assert.equal(scans.length, 1);
+		assert.equal(scans[0].payload.manifestKey, undefined);
 	});
 });

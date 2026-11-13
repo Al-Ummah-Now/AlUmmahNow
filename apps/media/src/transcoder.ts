@@ -100,6 +100,14 @@ export class Transcoder extends Container<Env> {
 			await storeUpload(bucketFor(env, key), key, req);
 			return new Response(null, { status: 201 });
 		},
+		/** PUT http://review.internal/<key> → MEDIA_PRIVATE, only under this job's review/<videoId>/<rev>/ prefix */
+		async review(req: Request, env: Env, ctx: OutboundHandlerContext<{ prefix: string }>): Promise<Response> {
+			const key = decodeURIComponent(new URL(req.url).pathname.slice(1));
+			if (req.method !== 'PUT') return new Response('method', { status: 405 });
+			if (!ctx.params.prefix || !key.startsWith(ctx.params.prefix) || key.includes('..')) return new Response('key outside the job', { status: 403 });
+			await storeUpload(env.MEDIA_PRIVATE, key, req);
+			return new Response(null, { status: 201 });
+		},
 		/** GET http://rendition.internal/<rel> → an object of this job's ready rendition (remux-only jobs; read only) */
 		async rendition(req: Request, env: Env, ctx: OutboundHandlerContext<{ prefix: string }>): Promise<Response> {
 			if (req.method !== 'GET') return new Response('method', { status: 405 });
@@ -164,12 +172,13 @@ export class Transcoder extends Container<Env> {
 			'source.internal': { method: 'source', params: { videoId: job.videoId } },
 			'media.internal': { method: 'media', params: { prefix: job.prefix } },
 			'control.internal': { method: 'control', params: { videoId: job.videoId, jobId: job.jobId } },
+			...(job.reviewPrefix ? { 'review.internal': { method: 'review', params: { prefix: job.reviewPrefix } } } : {}),
 		});
 		await this.startAndWaitForPorts();
 		const res = await this.containerFetch('http://container/jobs', {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ jobId: job.jobId, prefix: job.prefix, attempt: job.attempt }),
+			body: JSON.stringify({ jobId: job.jobId, prefix: job.prefix, attempt: job.attempt, videoId: job.videoId, rev: job.rev, ...(job.review ? { review: job.review, reviewPrefix: job.reviewPrefix } : {}) }),
 		});
 		if (res.status !== 202 && res.status !== 200) throw new Error(`container refused the job: HTTP ${res.status} ${await res.text()}`);
 		await this.schedule(WATCHDOG_SECONDS, 'watchdog');
@@ -235,6 +244,7 @@ export class Transcoder extends Container<Env> {
 		job.status = 'stopping';
 		await this.save(job);
 		await deletePrefix(bucketFor(this.env, job.prefix), `${job.prefix}/`).catch((e) => log.warn('[Transcoder] Cleanup failed', { videoId: job.videoId, error: errorText(e) }));
+		if (job.reviewPrefix) await deletePrefix(this.env.MEDIA_PRIVATE, job.reviewPrefix).catch(() => undefined);
 		await this.destroy().catch(() => undefined);
 		const next = onFailure(job, error, fatal);
 		if (next.retry) {

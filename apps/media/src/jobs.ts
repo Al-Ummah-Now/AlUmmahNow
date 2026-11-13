@@ -2,6 +2,7 @@
  * Transcode job state and decisions (pure; tested in test/jobs.test.ts). The
  * Transcoder Durable Object (transcoder.ts) keeps one JobState per video.
  */
+import { reviewMediaPrefix, type ReviewExtractionOptions } from '@al-ummah/shared-types';
 import { mediaPrefix, sanitizeRungs, type MediaAccess, type R2RungProgress, type TranscodeFailure, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
 
 export const MAX_ATTEMPTS = 3;
@@ -37,6 +38,9 @@ export interface JobState {
 	/** The latest failed attempt, as reported */
 	failure?: TranscodeFailure;
 	finishedAt?: number;
+	/** Pre-publication review: also extract frames and audio under `reviewPrefix` (MEDIA_PRIVATE) */
+	review?: ReviewExtractionOptions;
+	reviewPrefix?: string;
 }
 
 export function newJob(msg: TranscodeJobMessage, now: number): JobState {
@@ -54,6 +58,7 @@ export function newJob(msg: TranscodeJobMessage, now: number): JobState {
 		lastSeenAt: now,
 		progress: 0,
 		priorSeconds: 0,
+		...(msg.review ? { review: msg.review, reviewPrefix: reviewMediaPrefix(msg.videoId, msg.rev) } : {}),
 	};
 }
 
