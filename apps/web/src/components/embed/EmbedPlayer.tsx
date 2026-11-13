@@ -94,6 +94,8 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
   const [listOpen, setListOpen] = useState(false);
   /** Playing muted because of an autoplay rule: the "Tap to unmute" control shows */
   const [needsUnmute, setNeedsUnmute] = useState(false);
+  /** The video has ended: the end screen (replay, up next) is up, and "Tap to unmute" would cover its buttons */
+  const [ended, setEnded] = useState(false);
   /** The first video of a gesture start is started here, with sound (see handlePlayerReady) */
   const startWithSoundRef = useRef(params.autoplay && params.gesture);
   /** "Watch on" shows its icon alone where its label would cover the picture (see useCompactLink) */
@@ -186,7 +188,13 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
     player.on('play', () => emit('play'));
     player.on('pause', () => emit('pause'));
     // The next item follows through the end screen's countdown (upNext above)
-    player.on('ended', () => emit('ended'));
+    player.on('ended', () => {
+      setEnded(true);
+      emit('ended');
+    });
+    // Replay, a seek back or the next item: the end screen is gone
+    player.on('play', () => setEnded(false));
+    player.on('seeking', () => setEnded(false));
     player.on('error', () => emit('error', { code: 'media', message: player.error()?.message }));
     // Unmuted by any means (the control bar, a host command): the unmute control goes
     player.on('volumechange', () => {
@@ -339,7 +347,7 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
             </div>
           )}
 
-          {needsUnmute && (
+          {needsUnmute && !ended && (
             <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
               <button
                 type="button"

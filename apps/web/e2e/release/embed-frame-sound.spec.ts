@@ -189,6 +189,23 @@ test.describe('Release: the embed fills its frame on the night colour', () => {
         if (ON_PR && (await frame.locator('main[data-testid="embed-player"] > .embed-box').count()) === 0) {
           skipOnPr('the frame-wide embed controls (components/embed/embed-frame.css)');
         }
+        // The 4 s vertical clip can end before the first look, and the end screen replaces the
+        // control bar by design (stage, WebKit, v2026.11.13.3: the bar measured 0x0). Replay it if
+        // it ended, then hold it paused: a paused player keeps its bar up, so the layout is measured
+        // on the bar itself
+        await expect
+          .poll(async () => frame.evaluate(() => {
+            const v = document.querySelector<HTMLVideoElement>('.video-js video');
+            if (!v) return false;
+            if (document.querySelector('.video-js.vjs-ended')) {
+              document.querySelector<HTMLElement>('[data-testid="player-replay"], [data-testid="player-watch-again"]')?.click();
+              return false;
+            }
+            if (!document.querySelector('.video-js.vjs-has-started')) return false;
+            v.pause();
+            return v.paused && !document.querySelector('.video-js.vjs-ended');
+          }), { message: 'the player did not start (or replay) and pause', timeout: 30000 })
+          .toBe(true);
         // Wake the controls (they fade while playing)
         await page.locator('#aun').hover({ position: { x: width / 2, y: height / 2 } });
         await page.locator('#aun').hover({ position: { x: width / 2 + 5, y: height / 2 + 5 } });

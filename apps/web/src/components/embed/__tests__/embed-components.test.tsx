@@ -38,6 +38,15 @@ jest.mock('@/components/VideoPagePlayer/VideoPlayerWithChapters', () => ({
   },
 }));
 
+const realFetch = globalThis.fetch;
+/** jsdom has no fetch: a no-op one for tests whose player flushes beacons */
+function stubFetch() {
+  globalThis.fetch = jest.fn(() => Promise.resolve({ ok: true })) as unknown as typeof fetch;
+}
+afterEach(() => {
+  globalThis.fetch = realFetch;
+});
+
 /** A minimal Video.js player: play() resolves, or rejects with `refuse` (e.g. NotAllowedError) while unmuted. */
 function fakePlayer(refuse?: string) {
   const handlers: Record<string, Array<() => void>> = {};
@@ -176,6 +185,21 @@ describe('EmbedPlayer', () => {
     await act(async () => player.fire('playing'));
     expect(screen.getByTestId('embed-unmute')).toHaveTextContent('Tap to unmute');
     expect(player.calls).toEqual([]);
+  });
+
+  it('hides "Tap to unmute" while the end screen is up, so it never covers Replay; it returns on replay (2026-11-13 stage)', async () => {
+    const player = fakePlayer();
+    (globalThis as { __fakePlayer?: unknown }).__fakePlayer = player;
+    // 'ended' (and the unmount after the test) flush the QoE beacon; restored in afterEach
+    stubFetch();
+    render(<EmbedPlayer videos={[video('v1')]} params={parseEmbedParams({ autoplay: '1' })} />);
+    player.muted(true);
+    await act(async () => player.fire('playing'));
+    expect(screen.getByTestId('embed-unmute')).toBeInTheDocument();
+    await act(async () => player.fire('ended'));
+    expect(screen.queryByTestId('embed-unmute')).toBeNull();
+    await act(async () => player.fire('play'));
+    expect(screen.getByTestId('embed-unmute')).toBeInTheDocument();
   });
 
   it('renders Arabic right to left with the Arabic title', () => {
