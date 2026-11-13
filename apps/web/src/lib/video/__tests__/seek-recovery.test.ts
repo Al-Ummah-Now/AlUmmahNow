@@ -1,4 +1,4 @@
-import { isBuffered, recoverStuckSeeks, SEEK_MAX_RETRIES, SEEK_STUCK_AFTER_MS } from '../seek-recovery';
+import { isBuffered, recoverStuckSeeks, SEEK_MAX_RETRIES, SEEK_STUCK_AFTER_MS, type SeekablePlayer } from '../seek-recovery';
 
 function ranges(...spans: Array<[number, number]>): TimeRanges {
   return { length: spans.length, start: (i: number) => spans[i][0], end: (i: number) => spans[i][1] } as TimeRanges;
@@ -22,8 +22,8 @@ function fakePlayer() {
       state.seeks.push(t);
       emit('seeking');
       return undefined;
-    }) as never,
-  };
+    }) as SeekablePlayer['currentTime'],
+  } as unknown as SeekablePlayer;
   return { player, state, finishSeek: () => { state.seeking = false; emit('seeked'); }, emit };
 }
 
