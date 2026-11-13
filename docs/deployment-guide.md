@@ -1,6 +1,6 @@
 # Al Ummah Now - Deployment Guide
 
-> **Production is released only by pushing a release tag (`vYYYY.MM.DD`) on `main`, which runs `.github/workflows/release.yml` (stage → E2E → production). Never deploy production by hand.** See "Deploy Rules" in `CLAUDE.md`. The manual `wrangler deploy` steps below are background on how each worker is built, not a production procedure.
+> **Production is released only by pushing a release tag (`vYYYY.MM.DD`, the US Eastern date; `pnpm release:tag next` prints the next one) on `main`, which runs `.github/workflows/release.yml` (stage → E2E → production). Never deploy production by hand.** See "Deploy Rules" in `CLAUDE.md`. The manual `wrangler deploy` steps below are background on how each worker is built, not a production procedure.
 
 ## Overview
 
