@@ -1,0 +1,42 @@
+name: Sites zone
+
+# The one-time alummahnow.org setup for the scholar sites Worker, run with THIS repo's release token
+# (the org-level CLOUDFLARE_API_TOKEN that AlUmmahNowUI falls back to lacks DNS/SSL on .org).
+# The script itself lives in AlUmmahNowUI (public): apps/sites/scripts/sites-zone.ts, docs in apps/sites/docs/DOMAINS.md.
+#   check: read-only probes plus one TXT record created and deleted at once (DNS Edit)
+#   apply: proxied AAAA 100:: records, Always Use HTTPS, the Cloudflare for SaaS fallback origin
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: check or apply
+        type: choice
+        options: [check, apply]
+        default: check
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sites-zone
+  cancel-in-progress: false
+
+jobs:
+  zone:
+    name: ${{ inputs.mode }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: Al-Ummah-Now/AlUmmahNowUI
+          ref: main
+          sparse-checkout: apps/sites/scripts
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: ${{ inputs.mode }}
+        working-directory: apps/sites
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: node --experimental-strip-types --no-warnings scripts/sites-zone.ts --${{ inputs.mode }} | tee -a "$GITHUB_STEP_SUMMARY"
