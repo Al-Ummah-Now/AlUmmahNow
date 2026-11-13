@@ -297,3 +297,15 @@ describe('notification center (processor)', () => {
     expect(await runScheduled(env({ NOTIFICATIONS_DB: undefined }), now)).toBe(0);
   });
 });
+
+describe('eraseUserNotifications', () => {
+  it('erases the menu-seen time and email preferences with the rest', async () => {
+    const { eraseUserNotifications } = await import('../lib/notifications-store');
+    const db = createSqliteD1();
+    db.raw.prepare("INSERT INTO notification_seen (user_id, seen_at) VALUES ('gone', 1), ('kept', 2)").run();
+    db.raw.prepare("INSERT INTO notification_email_prefs (user_id, account_email, updated_at) VALUES ('gone', 0, 1), ('kept', 1, 1)").run();
+    await eraseUserNotifications(db as unknown as D1Database, 'gone');
+    expect(db.raw.prepare('SELECT user_id FROM notification_seen').all()).toEqual([{ user_id: 'kept' }]);
+    expect(db.raw.prepare('SELECT user_id FROM notification_email_prefs').all()).toEqual([{ user_id: 'kept' }]);
+  });
+});

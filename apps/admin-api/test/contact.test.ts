@@ -122,7 +122,7 @@ describe('contact permissions (RBAC)', () => {
       assert.equal(hasPermission(roles, 'contact:read'), false, String(roles));
       assert.equal(hasPermission(roles, 'contact:manage'), false, String(roles));
     }
-    assert.deepEqual(permissionsFor(['Admin']).filter((p) => !p.startsWith('auth_requests:')), ['contact:manage', 'contact:read', 'errors:manage', 'errors:read', 'media:manage', 'ops:read', 'videos:format', 'videos:processing', 'videos:uploads']);
+    assert.deepEqual(permissionsFor(['Admin']).filter((p) => !p.startsWith('auth_requests:')), ['contact:manage', 'contact:read', 'errors:manage', 'errors:read', 'media:manage', 'ops:read', 'settings:manage', 'videos:format', 'videos:processing', 'videos:uploads']);
     assert.deepEqual(permissionsFor(['Moderator']), ['auth_requests:read']);
   });
 });

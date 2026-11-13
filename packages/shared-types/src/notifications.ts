@@ -158,7 +158,77 @@ export interface NotificationListResponse {
     items: NotificationItem[];
     nextCursor: string | null;
     unreadCount: number;
+    /** Unread notifications newer than the user last opened the menu: the bell's badge. */
+    unseenCount: number;
+    /** What opening the notification menu does (platform setting). */
+    menuOpen: NotificationMenuOpenMode;
   };
+}
+
+/**
+ * What opening the notification menu does, a platform setting (videos admin → Platform settings):
+ * - `seen`: clears the bell's badge only; notifications stay unread until the user marks them
+ *   read (row button, "Mark all as read") or opens one.
+ * - `read`: also marks the notifications the menu shows as read.
+ */
+export const NOTIFICATION_MENU_OPEN_MODES = ['seen', 'read'] as const;
+export type NotificationMenuOpenMode = (typeof NOTIFICATION_MENU_OPEN_MODES)[number];
+export const DEFAULT_NOTIFICATION_MENU_OPEN: NotificationMenuOpenMode = 'seen';
+
+export function isNotificationMenuOpenMode(value: unknown): value is NotificationMenuOpenMode {
+  return typeof value === 'string' && (NOTIFICATION_MENU_OPEN_MODES as readonly string[]).includes(value);
+}
+
+/** Platform notification settings (api-videos global_settings `ops/notifications.json`). */
+export interface NotificationPlatformSettings {
+  menuOpen: NotificationMenuOpenMode;
+  updatedAt: string | null;
+  updatedBy: string | null;
+}
+
+export const DEFAULT_NOTIFICATION_PLATFORM_SETTINGS: NotificationPlatformSettings = {
+  menuOpen: DEFAULT_NOTIFICATION_MENU_OPEN,
+  updatedAt: null,
+  updatedBy: null,
+};
+
+/** Any stored value → a valid settings object (unknown or missing fields take the default). */
+export function normaliseNotificationPlatformSettings(input: unknown): NotificationPlatformSettings {
+  const raw = (input && typeof input === 'object' ? input : {}) as Partial<Record<keyof NotificationPlatformSettings, unknown>>;
+  return {
+    menuOpen: isNotificationMenuOpenMode(raw.menuOpen) ? raw.menuOpen : DEFAULT_NOTIFICATION_MENU_OPEN,
+    updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : null,
+    updatedBy: typeof raw.updatedBy === 'string' ? raw.updatedBy : null,
+  };
+}
+
+/** Bell badge and inbox counters (GET /api/notifications/unread-count and every read-state change). */
+export interface NotificationCounts {
+  unreadCount: number;
+  unseenCount: number;
+}
+
+/** POST /api/notifications/seen result. */
+export interface NotificationSeenResult extends NotificationCounts {
+  /** When the user last opened the menu (ISO). */
+  seenAt: string;
+  menuOpen: NotificationMenuOpenMode;
+  /** Ids this call marked read (`read` mode only). */
+  readIds: string[];
+}
+
+/**
+ * Realtime `notifications_state` event on `user:<userId>`: another tab or device opened the menu
+ * or changed read state; every open bell and inbox applies it.
+ */
+export interface NotificationStateEvent extends NotificationCounts {
+  type: 'notifications_state';
+  /** Ids now read / unread; `allRead` = every notification is read. */
+  readIds?: string[];
+  unreadIds?: string[];
+  allRead?: boolean;
+  deletedId?: string;
+  seenAt?: string;
 }
 
 export type NotificationSettings = Record<NotificationCategory, boolean>;

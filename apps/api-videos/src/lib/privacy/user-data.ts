@@ -32,6 +32,7 @@
  */
 
 import { eraseUserSubscriptions, exportUserSubscriptions, subscriberChannelOf } from '../subscription-store';
+import { getEmailSettings, getSeenAt, getSettings } from '../notifications';
 import { defaultPointerPrefix } from '../uploadDefaultPointer';
 import { sectionOrderKey } from '../channelSectionOrder';
 import { BucketLike, BudgetExhausted, OperationBudget, asBucket, deleteKeys, readJson, updateJson, writeJson } from './scan';
@@ -242,6 +243,8 @@ export interface UserDataExport {
 	playlists: Json[];
 	uploadDefaults: Json[];
 	reportsFiled: Json[];
+	/** Notification preferences and when the notification menu was last opened (NOTIFICATIONS_DB). */
+	notificationState: Json[];
 }
 
 /** Array sections of the export; partial exports are merged by concatenating these. */
@@ -264,6 +267,7 @@ export const EXPORT_LIST_FIELDS = [
 	'playlists',
 	'uploadDefaults',
 	'reportsFiled',
+	'notificationState',
 ] as const;
 
 const EXPORT_NOTES = [
@@ -421,6 +425,15 @@ export async function collectUserData(
 				if (!env.NOTIFICATIONS_DB) return;
 				ctx.budget.spend();
 				out.subscriptions.push(...(await exportUserSubscriptions(env.NOTIFICATIONS_DB, userId)));
+			}),
+		// Notification preferences and the menu-seen time (D1, one row each)
+		(ctx) =>
+			atomically(async () => {
+				const ndb = env.NOTIFICATIONS_DB;
+				if (!ndb) return;
+				ctx.budget.spend();
+				const [seenAt, settings, email] = await Promise.all([getSeenAt(ndb, userId), getSettings(ndb, userId), getEmailSettings(ndb, userId)]);
+				out.notificationState.push({ menuSeenAt: seenAt === null ? null : new Date(seenAt).toISOString(), categories: settings, email });
 			}),
 	];
 

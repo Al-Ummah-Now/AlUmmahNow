@@ -95,6 +95,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/live-streaming', label: 'nav.liveStreaming', icon: 'activity', group: 'operations' },
 
   { href: '/site-theme', label: 'nav.siteTheme', icon: 'palette', group: 'site' },
+  { href: '/platform-settings', label: 'nav.platformSettings', icon: 'sliders', group: 'site' },
   { href: '/deleted', label: 'nav.deleted', icon: 'trash', group: 'site' },
 ];
 

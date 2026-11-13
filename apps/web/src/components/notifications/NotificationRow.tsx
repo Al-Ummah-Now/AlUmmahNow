@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from '@/components/common/AppLink';
-import { Bell, MessageCircle, Radio, Trash2, UserPlus, Video, AlertCircle, Check, ShieldAlert } from 'lucide-react';
+import { Bell, MessageCircle, Radio, Trash2, UserPlus, Video, AlertCircle, Check, Mail, ShieldAlert } from 'lucide-react';
 import type { NotificationItem } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { localizeActionUrl, relativeTime, renderNotification } from '@/lib/notifications/render';
@@ -43,6 +43,7 @@ interface NotificationRowProps {
   item: NotificationItem;
   onOpen?: (item: NotificationItem) => void;
   onMarkRead?: (item: NotificationItem) => void;
+  onMarkUnread?: (item: NotificationItem) => void;
   onDelete?: (item: NotificationItem) => void;
   compact?: boolean;
 }
@@ -51,7 +52,7 @@ interface NotificationRowProps {
  * One notification, rendered in the viewer's language. Uses logical
  * (start/end) spacing so the same markup works in LTR and RTL.
  */
-export function NotificationRow({ item, onOpen, onMarkRead, onDelete, compact = false }: NotificationRowProps) {
+export function NotificationRow({ item, onOpen, onMarkRead, onMarkUnread, onDelete, compact = false }: NotificationRowProps) {
   const { t, lang } = useLanguage();
   const { title, message } = renderNotification(item, t, lang);
   const href = localizeActionUrl(item.actionUrl, lang);
@@ -87,7 +88,7 @@ export function NotificationRow({ item, onOpen, onMarkRead, onDelete, compact = 
       ) : (
         body
       )}
-      {(onMarkRead || onDelete) && (
+      {(onMarkRead || onMarkUnread || onDelete) && (
         <div className="flex flex-shrink-0 items-center gap-1">
           {onMarkRead && !item.isRead && (
             <button
@@ -99,6 +100,18 @@ export function NotificationRow({ item, onOpen, onMarkRead, onDelete, compact = 
               data-testid="notification-mark-read"
             >
               <Check className="h-4 w-4" aria-hidden="true" />
+            </button>
+          )}
+          {onMarkUnread && item.isRead && (
+            <button
+              type="button"
+              onClick={() => onMarkUnread(item)}
+              className={`rounded p-1.5 ${MUTED} hover:bg-[var(--m-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fanous-c-form-focus-ring)]`}
+              aria-label={texts.markUnread}
+              title={texts.markUnread}
+              data-testid="notification-mark-unread"
+            >
+              <Mail className="h-4 w-4" aria-hidden="true" />
             </button>
           )}
           {onDelete && (

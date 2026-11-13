@@ -54,7 +54,7 @@ export async function mockApi(page: Page) {
   // The local mock (mock-server.mjs) answers the API; nothing else may leave the machine
   await page.route(/^https?:\/\/(?!localhost|127\.0\.0\.1)/, (route) => route.abort());
   await page.route(/^https?:\/\/127\.0\.0\.1:\d+\/api\/notifications(\?.*)?$/, (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, result: { items: NOTIFICATIONS, nextCursor: null, unreadCount: 2 } }) }));
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, result: { items: NOTIFICATIONS, nextCursor: null, unreadCount: 2, unseenCount: 2, menuOpen: 'seen' } }) }));
   await page.route(/^wss?:/, (route) => route.abort());
 }
 

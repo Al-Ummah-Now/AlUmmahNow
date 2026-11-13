@@ -17,14 +17,16 @@ interface NotificationBellProps {
 }
 
 /**
- * Header bell (Story 29.10): unread badge with realtime increments and a
- * dropdown of the latest notifications. Signed-in users only.
+ * Header bell (Story 29.10): a badge of what is new since the menu was last opened, realtime
+ * across tabs and devices, and a dropdown of the latest notifications. Opening it clears the
+ * badge; whether it also marks the shown notifications read is a platform setting (menuOpen).
+ * Rows keep their own read state with Mark as read / unread. Signed-in users only.
  */
 export function NotificationBell({ dir = 'ltr' }: NotificationBellProps) {
   const { user } = useAuth();
   const { t, lang } = useLanguage();
   const texts = t.notificationCenter;
-  const { unreadCount, latest, isLoading, error, loadLatest, markRead, markAllRead } = useNotificationBell(user?.id);
+  const { unseenCount, unreadCount, latest, isLoading, error, menuOpened, markRead, markUnread, markAllRead } = useNotificationBell(user?.id);
   const [open, setOpen] = useState(false);
   // Never past the screen's edge or bottom (docs/design/NAV.md)
   const panelRef = useFitToViewport<HTMLDivElement>(open);
@@ -39,7 +41,7 @@ export function NotificationBell({ dir = 'ltr' }: NotificationBellProps) {
 
   useEffect(() => {
     if (!open) return;
-    void loadLatest();
+    void menuOpened();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') close(true);
     };
@@ -52,14 +54,16 @@ export function NotificationBell({ dir = 'ltr' }: NotificationBellProps) {
       document.removeEventListener('keydown', onKey);
       document.removeEventListener('mousedown', onClick);
     };
-  }, [open, loadLatest, close]);
+    // menuOpened changes with the user only; re-running on it would record a second open
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, close]);
 
   if (!user) return null;
 
-  const badge = unreadBadge(unreadCount, lang);
-  // The name carries the badge exactly as shown ("99+", Arabic-Indic digits) so it
+  const badge = unreadBadge(unseenCount, lang);
+  // The name carries the badge exactly as shown ("9+", Arabic-Indic digits) so it
   // contains the visible text (WCAG 2.5.3 label-in-name)
-  const label = unreadCount > 0 ? fillTemplate(texts.bellLabelUnread, { count: badge }) : texts.bellLabel;
+  const label = unseenCount > 0 ? fillTemplate(texts.bellLabelNew, { count: badge }) : texts.bellLabel;
 
   return (
     <div className="relative" ref={containerRef} dir={dir}>
@@ -75,7 +79,7 @@ export function NotificationBell({ dir = 'ltr' }: NotificationBellProps) {
         data-testid="notification-bell"
       >
         <Bell className="h-5 w-5" aria-hidden="true" />
-        {unreadCount > 0 && (
+        {unseenCount > 0 && (
           <span
             data-testid="notification-badge"
             className="absolute top-0.5 end-0 min-w-[1.1rem] h-[1.1rem] rounded-full bg-[var(--fanous-c-button-destructive-bg)] px-1 text-[0.65rem] font-bold leading-[1.1rem] !text-[var(--fanous-c-button-destructive-text)] text-center"
@@ -141,6 +145,8 @@ export function NotificationBell({ dir = 'ltr' }: NotificationBellProps) {
                       if (!n.isRead) void markRead(n.id);
                       close();
                     }}
+                    onMarkRead={(n) => void markRead(n.id)}
+                    onMarkUnread={(n) => void markUnread(n.id)}
                   />
                 ))}
               </ul>

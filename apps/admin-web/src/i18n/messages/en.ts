@@ -54,6 +54,7 @@ const en = {
     creators: 'Creators',
     liveStreaming: 'Live streaming',
     deleted: 'Recently deleted',
+    platformSettings: 'Platform settings',
     groupOverview: 'Overview',
     groupModeration: 'Moderation',
     groupContent: 'Content',
@@ -2717,6 +2718,29 @@ const en = {
       previous: 'Was',
     },
   },
+  platformSettings: {
+    title: 'Platform settings',
+    subtitle: 'Site-wide behaviour for every user of the videos site and apps.',
+    notificationsTitle: 'Notifications',
+    menuOpenLegend: 'When the notification menu is opened',
+    menuOpenSeen: 'Clear the badge only',
+    menuOpenSeenHint: 'The bell stops counting what the user has seen. Notifications stay unread until the user clicks "Mark as read" or "Mark all as read", or opens the notification.',
+    menuOpenRead: 'Mark the shown notifications as read',
+    menuOpenReadHint: 'Clears the badge and marks every notification the menu shows as read.',
+    menuOpenDefault: 'Default',
+    save: 'Save',
+    saving: 'Saving…',
+    saved: 'Saved. Open bells pick it up within a minute.',
+    saveFailed: 'The setting could not be saved. Try again.',
+    loadFailed: 'The notification settings could not be loaded.',
+    readOnly: 'Only admins can change platform settings.',
+    lastChanged: 'Last changed {date} by {actor}',
+    neverChanged: 'Never changed: the default applies.',
+    historyTitle: 'Recent changes',
+    historyEmpty: 'No changes yet.',
+    historyEntry: '{date}: {from} → {to} by {actor}',
+  },
+
 };
 
 type DeepStringRecord<T> = { [K in keyof T]: T[K] extends string ? string : DeepStringRecord<T[K]> };

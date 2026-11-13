@@ -9,6 +9,7 @@ import { handleMediaMoveBatch, isMediaMoveMessage, sweepMediaJobs } from './lib/
 import { collectDeliveryCosts } from './lib/media/costs';
 import { sweepOriginals } from './lib/media/originals';
 import { createMediaInternalRouter } from './endpoints/media/mediaInternal';
+import { createNotificationsInternalRouter } from './endpoints/notifications/notificationsInternal';
 import { sweepRunUsers } from './lib/e2e/runUserSweep';
 import { handlePlaylistAddBatch, isPlaylistAddMessage } from './lib/playlistUploadAdds';
 import { createPlaylistAddsInternalRouter } from './endpoints/playlist/playlistAddsInternal';
@@ -244,6 +245,8 @@ app.route('/internal/playlist-adds', createPlaylistAddsInternalRouter() as never
 app.route('/internal/scholars', scholarsInternalRouter as never);
 // R2 delivery beside Bunny (epic #687): apps/media's callbacks, admin retry / jobs / settings
 app.route('/internal/media', createMediaInternalRouter() as never);
+// Platform notification settings (admin-api proxies with the admin role + audit)
+app.route('/internal/notifications', createNotificationsInternalRouter() as never);
 
 // ==========================================
 // PROFILE/CHANNEL IMAGE UPLOADS

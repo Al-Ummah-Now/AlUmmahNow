@@ -1,28 +1,49 @@
 'use client';
 
 /**
- * Header bell state (Story 29.10): unread count from the API, incremented in
- * realtime by `notification` events on the user's `user:<id>` websocket
- * channel, plus the latest notifications for the dropdown.
+ * Header bell state (Story 29.10; seen vs read 2026-11-13).
+ *
+ * - The badge is the unseen count: unread notifications newer than the last time the user
+ *   opened the menu. Opening the menu (`menuOpened`) clears it on the server, for every tab
+ *   and device.
+ * - Read state stays per notification. What opening the menu does is a platform setting
+ *   (`menuOpen`): `seen` clears the badge only; `read` also marks the shown notifications read.
+ * - Realtime on `user:<id>`: `notification` adds one; `notifications_state` (another tab or
+ *   device opened the menu or changed read state) applies the new counts and read flags.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { NotificationItem } from '@al-ummah/shared-types';
+import type { NotificationItem, NotificationMenuOpenMode, NotificationStateEvent } from '@al-ummah/shared-types';
 import { useWebSocketSubscription } from '@/lib/websocket/WebSocketProvider';
-import { NotificationsService } from '@/services/api/notifications';
+import { NotificationsService, type NotificationPage } from '@/services/api/notifications';
 import { isCenterKey, publishUnreadCount, UNREAD_EVENT } from '@/lib/notifications/render';
+import {
+  applyMenuOpened,
+  applyNewNotification,
+  applyStateEvent,
+  EMPTY_BELL,
+  idsToReadOnOpen,
+  needsSeenCall,
+  type BellState,
+} from '@/lib/notifications/bell-state';
 import type { NotificationEvent } from '@/interfaces/websocket';
 import { logger } from '@/lib/logger-client';
 
 export const BELL_DROPDOWN_SIZE = 8;
 
 export interface UseNotificationBellResult {
+  /** The badge: new since the menu was last opened */
+  unseenCount: number;
   unreadCount: number;
+  menuOpen: NotificationMenuOpenMode;
   latest: NotificationItem[];
   isLoading: boolean;
   error: boolean;
-  loadLatest: () => Promise<void>;
+  /** Load the latest notifications, then record the open (clears the badge; `read` mode marks them read). */
+  menuOpened: () => Promise<void>;
+  loadLatest: () => Promise<NotificationPage | null>;
   markRead: (id: string) => Promise<void>;
+  markUnread: (id: string) => Promise<void>;
   markAllRead: () => Promise<void>;
 }
 
@@ -42,83 +63,135 @@ export function eventToItem(event: NotificationEvent): NotificationItem | null {
   };
 }
 
+/** An API from before the seen state (deploy skew) has no unseenCount: the badge is then the unread count. */
+export function unseenOf(counts: { unreadCount: number; unseenCount?: number }): number {
+  return typeof counts.unseenCount === 'number' ? counts.unseenCount : counts.unreadCount;
+}
+
 export function useNotificationBell(userId: string | undefined): UseNotificationBellResult {
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [latest, setLatest] = useState<NotificationItem[]>([]);
+  const [state, setState] = useState<BellState>(EMPTY_BELL);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(false);
-  const seen = useRef<Set<string>>(new Set());
+  const known = useRef<Set<string>>(new Set());
+  // Read from async callbacks without re-subscribing
+  const stateRef = useRef(state);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   useEffect(() => {
+    known.current = new Set();
     if (!userId) {
-      setUnreadCount(0);
-      setLatest([]);
+      setState(EMPTY_BELL);
       return;
     }
     let cancelled = false;
-    void NotificationsService.unreadCount().then((count) => {
-      if (!cancelled && count !== null) setUnreadCount(count);
+    void NotificationsService.counts().then((counts) => {
+      if (!cancelled && counts) setState((s) => ({ ...s, unreadCount: counts.unreadCount, unseenCount: unseenOf(counts), menuOpen: counts.menuOpen ?? s.menuOpen }));
     });
     return () => {
       cancelled = true;
     };
   }, [userId]);
 
-  // Badge follows read/delete actions taken elsewhere in the tab (notifications page)
+  // Counts follow read/delete actions taken elsewhere in the tab (notifications page)
   useEffect(() => {
     const onUnread = (e: Event) => {
-      const count = (e as CustomEvent<{ count: number }>).detail?.count;
-      if (typeof count === 'number') setUnreadCount(count);
+      const detail = (e as CustomEvent<{ count: number; unseen?: number }>).detail;
+      if (typeof detail?.count !== 'number') return;
+      setState((s) => ({ ...s, unreadCount: detail.count, unseenCount: typeof detail.unseen === 'number' ? detail.unseen : Math.min(s.unseenCount, detail.count) }));
     };
     window.addEventListener(UNREAD_EVENT, onUnread);
     return () => window.removeEventListener(UNREAD_EVENT, onUnread);
   }, []);
 
   const onRealtime = useCallback((data: unknown) => {
-    const event = data as NotificationEvent;
-    if (!event || event.type !== 'notification') return;
-    const item = eventToItem(event);
-    if (!item || seen.current.has(item.id)) return;
-    seen.current.add(item.id);
+    const event = data as { type?: string } | null;
+    if (!event) return;
+    if (event.type === 'notifications_state') {
+      logger.debug('[useNotificationBell] State from another tab or device');
+      setState((s) => applyStateEvent(s, event as NotificationStateEvent));
+      return;
+    }
+    if (event.type !== 'notification') return;
+    const item = eventToItem(event as NotificationEvent);
+    if (!item || known.current.has(item.id)) return;
+    known.current.add(item.id);
     logger.debug('[useNotificationBell] Realtime notification', { key: item.notificationKey });
-    setUnreadCount((n) => n + 1);
-    setLatest((prev) => (prev.some((p) => p.id === item.id) ? prev : [item, ...prev].slice(0, BELL_DROPDOWN_SIZE)));
+    setState((s) => applyNewNotification(s, item, BELL_DROPDOWN_SIZE));
   }, []);
 
   useWebSocketSubscription(userId ? `user:${userId}` : '', onRealtime, [userId]);
 
-  const loadLatest = useCallback(async () => {
-    if (!userId) return;
+  const loadLatest = useCallback(async (): Promise<NotificationPage | null> => {
+    if (!userId) return null;
     setIsLoading(true);
     setError(false);
     const page = await NotificationsService.list({ limit: BELL_DROPDOWN_SIZE });
-    if (page) {
-      setLatest(page.items);
-      setUnreadCount(page.unreadCount);
-      page.items.forEach((i) => seen.current.add(i.id));
-    } else {
-      setError(true);
-    }
     setIsLoading(false);
+    if (!page) {
+      setError(true);
+      return null;
+    }
+    page.items.forEach((i) => known.current.add(i.id));
+    setState((s) => ({ ...s, latest: page.items, unreadCount: page.unreadCount, unseenCount: unseenOf(page), menuOpen: page.menuOpen ?? s.menuOpen }));
+    return page;
   }, [userId]);
 
+  const menuOpened = useCallback(async () => {
+    const page = await loadLatest();
+    if (!page) return;
+    const shown = page.items;
+    // The counts and mode of the page just loaded (state updates land on the next render)
+    const current: BellState = { latest: shown, unreadCount: page.unreadCount, unseenCount: unseenOf(page), menuOpen: page.menuOpen ?? stateRef.current.menuOpen };
+    if (!needsSeenCall(current, shown)) return;
+    const ids = idsToReadOnOpen(current.menuOpen, shown);
+    setState((s) => applyMenuOpened(s, shown));
+    const result = await NotificationsService.markSeen(ids);
+    if (result) {
+      setState((s) => applyStateEvent({ ...s, menuOpen: result.menuOpen }, { unreadCount: result.unreadCount, unseenCount: result.unseenCount, readIds: result.readIds }));
+      publishUnreadCount(result.unreadCount, result.unseenCount);
+    }
+  }, [loadLatest]);
+
   const markRead = useCallback(async (id: string) => {
-    setLatest((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
+    setState((s) => applyStateEvent(s, { readIds: [id] }));
     const result = await NotificationsService.markRead([id]);
     if (result) {
-      setUnreadCount(result.unreadCount);
-      publishUnreadCount(result.unreadCount);
+      setState((s) => applyStateEvent(s, { unreadCount: result.unreadCount, unseenCount: result.unseenCount }));
+      publishUnreadCount(result.unreadCount, result.unseenCount);
+    }
+  }, []);
+
+  const markUnread = useCallback(async (id: string) => {
+    setState((s) => applyStateEvent(s, { unreadIds: [id] }));
+    const result = await NotificationsService.markUnread([id]);
+    if (result) {
+      setState((s) => applyStateEvent(s, { unreadCount: result.unreadCount, unseenCount: result.unseenCount }));
+      publishUnreadCount(result.unreadCount, result.unseenCount);
     }
   }, []);
 
   const markAllRead = useCallback(async () => {
-    setLatest((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    setState((s) => applyStateEvent(s, { allRead: true }));
     const result = await NotificationsService.markAllRead();
     if (result) {
-      setUnreadCount(0);
-      publishUnreadCount(0);
+      setState((s) => applyStateEvent(s, { unreadCount: 0, unseenCount: 0 }));
+      publishUnreadCount(0, 0);
     }
   }, []);
 
-  return { unreadCount, latest, isLoading, error, loadLatest, markRead, markAllRead };
+  return {
+    unseenCount: state.unseenCount,
+    unreadCount: state.unreadCount,
+    menuOpen: state.menuOpen,
+    latest: state.latest,
+    isLoading,
+    error,
+    menuOpened,
+    loadLatest,
+    markRead,
+    markUnread,
+    markAllRead,
+  };
 }

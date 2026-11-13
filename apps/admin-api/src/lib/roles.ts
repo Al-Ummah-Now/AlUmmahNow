@@ -52,6 +52,8 @@ export const PERMISSIONS = {
   'videos:format': ADMIN_ROLE_IDS,
   /** Delivery comparison (epic #687): the Bunny/R2 switch, transcode jobs and retry, QoE and cost. */
   'media:manage': ADMIN_ROLE_IDS,
+  /** Platform settings: change what opening the notification menu does (and other site-wide behaviour). */
+  'settings:manage': ADMIN_ROLE_IDS,
   /** Operations page (docs/admin/LIVE_OPS.md): platform usage, latency, backlog and estimated cost. */
   'ops:read': ADMIN_ROLE_IDS,
   /** Change the Operations alert thresholds. */

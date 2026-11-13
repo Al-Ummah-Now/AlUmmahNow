@@ -17269,6 +17269,79 @@
         }
       }
     },
+    "/api/v1/notifications/seen": {
+      "post": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "The notification menu was opened",
+        "description": "Clears the bell's badge (stores when the user last looked; idempotent, one row per user). When the platform setting menuOpen is `read`, the given ids (the notifications the menu shows) are also marked read. Other tabs and devices get a realtime `notifications_state` event.",
+        "operationId": "post_NotificationsMarkSeen",
+        "parameters": [
+          {
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Active channel ID"
+            },
+            "required": false,
+            "description": "Active channel ID",
+            "name": "channelId",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 100
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "{ seenAt, menuOpen, readIds, unreadCount, unseenCount }"
+          },
+          "503": {
+            "description": "Notifications not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/notifications/settings": {
       "get": {
         "tags": [
@@ -17426,12 +17499,90 @@
         }
       }
     },
+    "/api/v1/notifications/unread": {
+      "post": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Mark notifications unread",
+        "description": "They show as unread in the list again; they do not come back on the bell's badge.",
+        "operationId": "post_NotificationsMarkUnread",
+        "parameters": [
+          {
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Active channel ID"
+            },
+            "required": false,
+            "description": "Active channel ID",
+            "name": "channelId",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 1,
+                    "maxItems": 100
+                  }
+                },
+                "required": [
+                  "ids"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated count and new counts"
+          },
+          "503": {
+            "description": "Notifications not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/notifications/unread-count": {
       "get": {
         "tags": [
           "Notifications"
         ],
-        "summary": "Unread notification count",
+        "summary": "Unread and unseen notification counts",
+        "description": "unseenCount (the bell's badge) counts unread notifications newer than the last time the user opened the menu. menuOpen is the platform setting for what opening the menu does.",
         "operationId": "get_NotificationsUnreadCount",
         "parameters": [
           {
@@ -17450,7 +17601,7 @@
         ],
         "responses": {
           "200": {
-            "description": "{ unreadCount }"
+            "description": "{ unreadCount, unseenCount, menuOpen }"
           },
           "503": {
             "description": "Notifications not configured",
