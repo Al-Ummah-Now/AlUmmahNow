@@ -80,8 +80,30 @@ The same rules apply to the copies it keeps under `channel-sections/` and `chann
 then on their archived pseudonyms cannot be tied back to them by anyone, including us. Any later
 message about the account archives `deleted-user` instead of a new pseudonym. Erasure messages
 (`UserDataErased`, `ContactDataErase`) are archived with `deleted-user` in place of the id they
-erase. The archive needs no per-user index or rewrite at erasure time: what is left about the
-person is unlinkable. The 13-month retention period still removes the entries themselves.
+erase. The 13-month retention period still removes the entries themselves.
+
+**Titles (#1254).** The archive keeps public titles and channel names (`title`, `videoTitle`,
+`streamTitle`, `channelName_<lang>`, …). An erased creator's become placeholders:
+- Each titled entry is indexed under its owners (owner/creator/author/actor/recipient keys and the
+  payload's own `userId`, never viewers) in notifications D1 `archive_title_refs`: the owner's
+  `archive_subjects` hash and the R2 key, no raw id. Rows expire with the archive (400 days).
+- `UserDataErased` queues `ArchiveTitlesErase` (payload: the subject hash). Each delivery rewrites
+  50 entries with `erased video` / `erased channel` / `erased playlist` and deletes their rows.
+- An owner erased before a message arrives gets the placeholders at write time.
+- Entries from before the index: `archive-privacy-rewrite.ts start --titles` links each titled
+  entry to the current owner of the content it names, or writes placeholders when the content is gone.
+
+**Admin history (#1253).** `admin_deletions` and `admin_jobs` (search D1) are kept **2 years**
+(processor daily cron). Erasure keeps the records and scrubs the account: its content's titles
+become `erased <kind>`, its account row's title `erased user`, and every id naming it
+(owner, deleted by, purge requested by, job actor, finished-job target, params, result)
+`deleted-user`. Jobs list the accounts they name in `admin_job_users`, so the erasure never scans.
+
+**Dead letters and late writes (#1255).** Processor `dead_letters` keep hashed user ids
+(`uh_` + SHA-256) in the body and failure reason and expire after 30 days; hashed rows cannot be
+replayed. Erasure steps keep the raw id so a failed erasure can still finish. The erasure writes a
+30-day tombstone (reports D1 `erased_users`, SHA-256 of the id): error reports that arrive later are
+stored as `deleted-user` without identifying extra keys.
 
 **Entries written before pseudonymisation** were rewritten once by api-videos
 `lib/archivePrivacyRewrite.ts` (`scripts/release/archive-privacy-rewrite.ts`: dry run, then
