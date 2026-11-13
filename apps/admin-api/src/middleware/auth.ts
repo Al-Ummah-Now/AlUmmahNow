@@ -3,6 +3,7 @@ import { AUTH_CONFIG, getAuthConfig } from './auth-config';
 import { getClient } from '../lib/openauth-client';
 import { logger } from '../lib/logger';
 import { normalizeRoles, hasAdminRole, hasModeratorRole } from '../lib/roles';
+import { isReviewer } from '@al-ummah/shared-types';
 import { decodeVerifiedClaims, isLegacyLongLivedToken, isTokenRevoked } from '../lib/token-revocation';
 
 interface AuthPayload {
@@ -137,7 +138,9 @@ export async function adminMiddleware(c: Context, next: Next) {
       isModerator
     });
 
-    if (!isAdmin && !isModerator) {
+    // Pre-publication review (VR7): content and senior reviewers reach the review queue only
+    const reviewQueueOnly = !isAdmin && !isModerator && (c.req.path === '/api/review' || c.req.path.startsWith('/api/review/')) && isReviewer(roles);
+    if (!isAdmin && !isModerator && !reviewQueueOnly) {
       logger.warn(`User ${auth.userId} attempted admin access without proper role`, {
         roles,
         email: maskEmail(auth.email),

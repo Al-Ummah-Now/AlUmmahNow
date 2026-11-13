@@ -55,6 +55,10 @@
       "bucket_name": "global-settings-qa"
     },
     {
+      "binding": "REVIEW_MEDIA",
+      "bucket_name": "al-ummah-now-media-private-qa"
+    },
+    {
       "binding": "community_posts",
       "bucket_name": "community-posts-qa"
     },
