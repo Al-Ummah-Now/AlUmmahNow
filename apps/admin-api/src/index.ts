@@ -31,6 +31,7 @@ import opsRouter from './routers/ops.router';
 import abuseRouter from './routers/abuse.router';
 import vitalsRouter from './routers/vitals.router';
 import statusRouter from './routers/status.router';
+import reviewAlertsRouter from './routers/reviewAlerts.router';
 import staleUploadsRouter from './routers/staleUploads.router';
 import trashRouter from './routers/trash.router';
 import csamRouter from './routers/csam.router';
@@ -227,6 +228,8 @@ app.route('/api/vitals', vitalsRouter);
 
 // Public status page incidents and maintenance (docs/status-page/README.md): writes apps/status's D1; status:manage
 app.route('/api/status', statusRouter);
+// Review alerts for the native Admin app: rota, escalation, staff devices, timings
+app.route('/api/review-alerts', reviewAlertsRouter);
 
 // Stale uploads (abandoned placeholders, Bunny orphans): permission-checked, audited proxy to api-videos
 app.route('/api/uploads/stale', staleUploadsRouter as never);

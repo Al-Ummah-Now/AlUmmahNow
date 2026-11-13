@@ -1,0 +1,433 @@
+'use client';
+
+import { useCallback, useId, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import type { ReviewAlertSettings, ReviewRotaShift } from '@al-ummah/shared-types';
+import {
+  listStaffDevices,
+  saveReviewAlertSettings,
+  signOutStaffDevice,
+  type ReviewAlertsView,
+  type ReviewTimingDayView,
+  type StaffDeviceView,
+} from '@/lib/api/admin';
+import { useLanguage } from '@/i18n/I18nProvider';
+import { formatDate, type MessageKey } from '@/i18n/translate';
+import { Autocomplete } from '@/components/search/Autocomplete';
+import { ConfirmButton } from '@/components/content/actions';
+import { useUndoableAction } from '@/components/undo/UndoToast';
+import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
+import { logger } from '@/lib/logger-client';
+import {
+  DEFAULT_SHIFT,
+  addOwner,
+  addReviewer,
+  canSave,
+  crossesMidnight,
+  formatSeconds,
+  removeOwner,
+  removeReviewer,
+  timeZones,
+  toMinutes,
+  toSeconds,
+  toggleDay,
+  updateReviewer,
+} from './model';
+
+const check = 'mt-1 h-4 w-4 shrink-0 accent-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-focus';
+
+export function ReviewAlertsAdmin({ view, timings }: { view: ReviewAlertsView; timings: ReviewTimingDayView[] | null }) {
+  return (
+    <div className="space-y-6">
+      <RotaSettings view={view} />
+      <Timings timings={timings} />
+      <StaffDevices />
+    </div>
+  );
+}
+
+function RotaSettings({ view }: { view: ReviewAlertsView }) {
+  const { t, locale } = useLanguage();
+  const router = useRouter();
+  const ids = useId();
+  const { run } = useUndoableAction();
+  const [saved, setSaved] = useState<ReviewAlertSettings>(view.settings);
+  const [draft, setDraft] = useState<ReviewAlertSettings>(view.settings);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pickerKey, setPickerKey] = useState(0);
+  const editable = view.canManage && !busy;
+  const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
+  const days = t('reviewAlerts.dayNames').split(',');
+  const zones = useMemo(() => timeZones(), []);
+
+  const put = useCallback(
+    async (settings: ReviewAlertSettings) => {
+      const result = await saveReviewAlertSettings(settings);
+      if (!result.ok) throw Object.assign(new Error(result.error), { status: result.status });
+      return result.data;
+    },
+    [],
+  );
+
+  async function save(event: React.FormEvent) {
+    event.preventDefault();
+    if (!view.canManage || !dirty) return;
+    if (!canSave(draft)) {
+      setError(t('reviewAlerts.invalid'));
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      // Takes effect at once; Undo puts the previous settings back
+      await run({
+        action: () => put(draft),
+        undo: async (res) => {
+          await put(res.previous);
+          setSaved(res.previous);
+          setDraft(res.previous);
+          router.refresh();
+        },
+        message: t('reviewAlerts.saved'),
+        undoneMessage: t('reviewAlerts.undone'),
+      });
+      setSaved(draft);
+      router.refresh();
+    } catch (e) {
+      logger.warn('[review-alerts] Save failed', { error: e instanceof Error ? e.message : String(e) });
+      setError((e as { status?: number }).status === 401 ? t('errors.notAuthenticated') : t('reviewAlerts.saveFailed'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const setShift = (userId: string, index: number, shift: ReviewRotaShift | null) => {
+    const entry = draft.rota.find((e) => e.userId === userId);
+    if (!entry) return;
+    const shifts = shift ? entry.shifts.map((s, i) => (i === index ? shift : s)) : entry.shifts.filter((_, i) => i !== index);
+    setDraft(updateReviewer(draft, userId, { shifts }));
+  };
+
+  return (
+    <section className={cardClass} aria-labelledby={`${ids}-title`} data-testid="review-alerts-settings">
+      <h2 id={`${ids}-title`} className="sr-only">{t('reviewAlerts.title')}</h2>
+      <form onSubmit={save} className="space-y-6" noValidate>
+        <fieldset disabled={!editable} className="space-y-6">
+          <label className="flex items-start gap-2">
+            <input type="checkbox" className={check} checked={draft.enabled} onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })} aria-describedby={`${ids}-enabled-hint`} data-testid="review-alerts-enabled" />
+            <span>
+              <span className="block font-medium text-fg">{t('reviewAlerts.enabled')}</span>
+              <span id={`${ids}-enabled-hint`} className="block text-sm text-fg-muted">{t('reviewAlerts.enabledHint')}</span>
+            </span>
+          </label>
+
+          <div>
+            <h3 className="text-lg font-semibold text-fg mb-3">{t('reviewAlerts.escalationTitle')}</h3>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <MinutesField id={`${ids}-all`} label={t('reviewAlerts.escalateAll')} hint={t('reviewAlerts.escalateAllHint')} seconds={draft.escalateAllAfterSeconds} onChange={(s) => setDraft({ ...draft, escalateAllAfterSeconds: s })} testId="review-alerts-escalate-all" />
+              <MinutesField id={`${ids}-seniors`} label={t('reviewAlerts.escalateSeniors')} hint={t('reviewAlerts.escalateSeniorsHint')} seconds={draft.escalateSeniorsAfterSeconds} onChange={(s) => setDraft({ ...draft, escalateSeniorsAfterSeconds: s })} testId="review-alerts-escalate-seniors" />
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-lg font-semibold text-fg">{t('reviewAlerts.ownersTitle')}</h3>
+            <p className="text-sm text-fg-muted mb-2">{t('reviewAlerts.ownersHint')}</p>
+            <ul className="space-y-2 mb-3" data-testid="review-alerts-owners">
+              {draft.owners.map((userId) => (
+                <li key={userId} className="flex flex-wrap items-end gap-2" data-user-id={userId}>
+                  <Autocomplete kind="user" mode="pick" label={t('reviewAlerts.ownersTitle')} defaultValue={userId} disabled className="min-w-64" />
+                  <button type="button" className={secondaryButtonClass} onClick={() => setDraft(removeOwner(draft, userId))} data-testid="review-alerts-owner-remove">
+                    {t('reviewAlerts.removeOwner')}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {editable && (
+              <Autocomplete
+                key={`owner-${pickerKey}`}
+                kind="user"
+                mode="pick"
+                label={t('reviewAlerts.addOwner')}
+                onChange={(id) => {
+                  if (!id) return;
+                  setDraft((d) => addOwner(d, id));
+                  setPickerKey((k) => k + 1);
+                }}
+                testId="review-alerts-owner-add"
+              />
+            )}
+          </div>
+
+          <div>
+            <h3 className="text-lg font-semibold text-fg">{t('reviewAlerts.rotaTitle')}</h3>
+            <p className="text-sm text-fg-muted mb-3">{t('reviewAlerts.rotaHint')}</p>
+            {draft.rota.length === 0 && <p className="text-sm text-fg-muted mb-3" data-testid="review-alerts-rota-empty">{t('reviewAlerts.rotaEmpty')}</p>}
+            <ul className="space-y-4" data-testid="review-alerts-rota">
+              {draft.rota.map((entry) => (
+                <li key={entry.userId} className="rounded border border-border p-4 space-y-3" data-testid="review-alerts-rota-entry" data-user-id={entry.userId}>
+                  <div className="flex flex-wrap items-end gap-3">
+                    <Autocomplete kind="user" mode="pick" label={t('reviewAlerts.addReviewer')} defaultValue={entry.userId} disabled className="min-w-64" />
+                    <label className="flex flex-col text-sm">
+                      <span className="text-fg mb-1">{t('reviewAlerts.timeZone')}</span>
+                      <select className={fieldClass} value={entry.timeZone} onChange={(e) => setDraft(updateReviewer(draft, entry.userId, { timeZone: e.target.value }))} data-testid="review-alerts-time-zone">
+                        {(zones.includes(entry.timeZone) ? zones : [entry.timeZone, ...zones]).map((z) => (
+                          <option key={z} value={z}>{z}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <div className="flex flex-wrap gap-4">
+                    <label className="flex items-start gap-2">
+                      <input type="checkbox" className={check} checked={entry.senior} onChange={(e) => setDraft(updateReviewer(draft, entry.userId, { senior: e.target.checked }))} data-testid="review-alerts-senior" />
+                      <span>
+                        <span className="block text-fg">{t('reviewAlerts.senior')}</span>
+                        <span className="block text-sm text-fg-muted">{t('reviewAlerts.seniorHint')}</span>
+                      </span>
+                    </label>
+                    <label className="flex items-start gap-2">
+                      <input type="checkbox" className={check} checked={!!entry.paused} onChange={(e) => setDraft(updateReviewer(draft, entry.userId, { paused: e.target.checked || undefined }))} data-testid="review-alerts-paused" />
+                      <span className="text-fg">{t('reviewAlerts.paused')}</span>
+                    </label>
+                  </div>
+                  <fieldset className="space-y-2">
+                    <legend className="text-sm font-medium text-fg">{t('reviewAlerts.shifts')}</legend>
+                    {entry.shifts.length === 0 && <p className="text-sm text-fg-muted">{t('reviewAlerts.noShifts')}</p>}
+                    {entry.shifts.map((shift, i) => (
+                      <div key={i} className="flex flex-wrap items-end gap-3 rounded bg-surface-2 p-2" data-testid="review-alerts-shift">
+                        <fieldset>
+                          <legend className="text-xs text-fg-muted mb-1">{t('reviewAlerts.shiftDays')}</legend>
+                          <div className="flex flex-wrap gap-2">
+                            {days.map((name, d) => (
+                              <label key={d} className="flex items-center gap-1 text-sm">
+                                <input type="checkbox" className={check} checked={shift.days.includes(d)} onChange={() => setShift(entry.userId, i, toggleDay(shift, d))} />
+                                {name}
+                              </label>
+                            ))}
+                          </div>
+                        </fieldset>
+                        <label className="flex flex-col text-sm">
+                          <span className="text-xs text-fg-muted mb-1">{t('reviewAlerts.shiftStart')}</span>
+                          <input type="time" className={fieldClass} value={shift.start} onChange={(e) => setShift(entry.userId, i, { ...shift, start: e.target.value })} />
+                        </label>
+                        <label className="flex flex-col text-sm">
+                          <span className="text-xs text-fg-muted mb-1">{t('reviewAlerts.shiftEnd')}</span>
+                          <input type="time" className={fieldClass} value={shift.end === '24:00' ? '00:00' : shift.end} onChange={(e) => setShift(entry.userId, i, { ...shift, end: e.target.value === '00:00' ? '24:00' : e.target.value })} />
+                        </label>
+                        {crossesMidnight(shift) && <span className="text-xs text-fg-muted">{t('reviewAlerts.crossesMidnight')}</span>}
+                        <button type="button" className={secondaryButtonClass} onClick={() => setShift(entry.userId, i, null)}>{t('reviewAlerts.removeShift')}</button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      className={secondaryButtonClass}
+                      onClick={() => setDraft(updateReviewer(draft, entry.userId, { shifts: [...entry.shifts, { ...DEFAULT_SHIFT, days: [...DEFAULT_SHIFT.days] }] }))}
+                      data-testid="review-alerts-add-shift"
+                    >
+                      {t('reviewAlerts.addShift')}
+                    </button>
+                  </fieldset>
+                  <button type="button" className={secondaryButtonClass} onClick={() => setDraft(removeReviewer(draft, entry.userId))} data-testid="review-alerts-remove">
+                    {t('reviewAlerts.remove')}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {editable && (
+              <div className="mt-3">
+                <Autocomplete
+                  key={`reviewer-${pickerKey}`}
+                  kind="user"
+                  mode="pick"
+                  label={t('reviewAlerts.addReviewer')}
+                  onChange={(id) => {
+                    if (!id) return;
+                    setDraft((d) => addReviewer(d, id));
+                    setPickerKey((k) => k + 1);
+                  }}
+                  testId="review-alerts-reviewer-add"
+                />
+              </div>
+            )}
+          </div>
+        </fieldset>
+
+        <p className="text-sm text-fg-muted" data-testid="review-alerts-last-changed">
+          {view.updatedAt ? t('reviewAlerts.lastChanged', { date: formatDate(view.updatedAt, locale, true), actor: view.updatedBy ?? '—' }) : t('reviewAlerts.neverChanged')}
+        </p>
+        {view.canManage ? (
+          <button type="submit" className={primaryButtonClass} disabled={busy || !dirty} data-testid="review-alerts-save">
+            {busy ? t('reviewAlerts.saving') : t('reviewAlerts.save')}
+          </button>
+        ) : (
+          <p className="text-sm text-fg-muted" data-testid="review-alerts-read-only">{t('reviewAlerts.readOnly')}</p>
+        )}
+        {error && <ErrorAlert testId="review-alerts-save-error">{error}</ErrorAlert>}
+      </form>
+    </section>
+  );
+}
+
+function MinutesField({ id, label, hint, seconds, onChange, testId }: { id: string; label: string; hint: string; seconds: number; onChange: (seconds: number) => void; testId: string }) {
+  return (
+    <label htmlFor={id} className="flex flex-col text-sm">
+      <span className="text-fg font-medium mb-1">{label}</span>
+      <input
+        id={id}
+        type="number"
+        inputMode="decimal"
+        min={0.5}
+        max={60}
+        step={0.5}
+        className={fieldClass}
+        value={toMinutes(seconds)}
+        onChange={(e) => onChange(toSeconds(Number(e.target.value) || 0))}
+        aria-describedby={`${id}-hint`}
+        data-testid={testId}
+      />
+      <span id={`${id}-hint`} className="text-fg-muted mt-1">{hint}</span>
+    </label>
+  );
+}
+
+function Timings({ timings }: { timings: ReviewTimingDayView[] | null }) {
+  const { t } = useLanguage();
+  const ids = useId();
+  const fmt = (v: { p50: number | null; p90: number | null }) => `${formatSeconds(v.p50, { s: (n) => t('reviewAlerts.seconds', { n }) })} / ${formatSeconds(v.p90, { s: (n) => t('reviewAlerts.seconds', { n }) })}`;
+  const cols: { key: 'toAlert' | 'toOpen' | 'toClaim' | 'toDecision'; label: MessageKey }[] = [
+    { key: 'toAlert', label: 'reviewAlerts.toAlert' },
+    { key: 'toOpen', label: 'reviewAlerts.toOpen' },
+    { key: 'toClaim', label: 'reviewAlerts.toClaim' },
+    { key: 'toDecision', label: 'reviewAlerts.toDecision' },
+  ];
+  return (
+    <section className={cardClass} aria-labelledby={`${ids}-title`} data-testid="review-alerts-timings">
+      <h2 id={`${ids}-title`} className="text-lg font-semibold text-fg">{t('reviewAlerts.timingsTitle')}</h2>
+      <p className="text-sm text-fg-muted mb-3">{t('reviewAlerts.timingsHint')}</p>
+      {timings === null ? (
+        <ErrorAlert testId="review-alerts-timings-error">{t('reviewAlerts.timingsFailed')}</ErrorAlert>
+      ) : timings.length === 0 ? (
+        <p className="text-sm text-fg-muted">{t('reviewAlerts.timingsEmpty')}</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="text-start text-fg-muted">
+                <th scope="col" className="text-start p-2">{t('reviewAlerts.day')}</th>
+                <th scope="col" className="text-end p-2">{t('reviewAlerts.held')}</th>
+                <th scope="col" className="text-end p-2">{t('reviewAlerts.decided')}</th>
+                {cols.map((c) => (
+                  <th key={c.key} scope="col" className="text-end p-2">{t(c.label)}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {timings.map((d) => (
+                <tr key={d.day} className="border-t border-border">
+                  <th scope="row" className="text-start p-2 font-normal" dir="ltr">{d.day}</th>
+                  <td className="text-end p-2">{d.held}</td>
+                  <td className="text-end p-2">{d.decided}</td>
+                  {cols.map((c) => (
+                    <td key={c.key} className="text-end p-2" dir="ltr">{fmt(d[c.key])}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+const APP_LABEL: Record<StaffDeviceView['app'], MessageKey> = { viewer: 'reviewAlerts.appViewer', studio: 'reviewAlerts.appStudio', admin: 'reviewAlerts.appAdmin' };
+
+function StaffDevices() {
+  const { t, locale } = useLanguage();
+  const ids = useId();
+  const [userId, setUserId] = useState('');
+  const [devices, setDevices] = useState<StaffDeviceView[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const load = useCallback(
+    async (id: string) => {
+      setUserId(id);
+      setDevices(null);
+      setError(null);
+      setNotice(null);
+      if (!id) return;
+      const result = await listStaffDevices(id);
+      if (result.ok) setDevices(result.data.devices);
+      else {
+        logger.warn('[review-alerts] Devices not loaded', { status: result.status });
+        setError(t('reviewAlerts.devicesFailed'));
+      }
+    },
+    [t],
+  );
+
+  async function signOut(installId: string) {
+    setBusy(installId);
+    setError(null);
+    setNotice(null);
+    const result = await signOutStaffDevice(userId, installId);
+    setBusy(null);
+    if (!result.ok) {
+      logger.warn('[review-alerts] Device sign-out failed', { status: result.status });
+      setError(t('reviewAlerts.signOutFailed'));
+      return;
+    }
+    setDevices((list) => (list ?? []).filter((d) => d.installId !== installId));
+    setNotice(t('reviewAlerts.signedOut'));
+  }
+
+  return (
+    <section className={cardClass} aria-labelledby={`${ids}-title`} data-testid="review-alerts-devices">
+      <h2 id={`${ids}-title`} className="text-lg font-semibold text-fg">{t('reviewAlerts.devicesTitle')}</h2>
+      <p className="text-sm text-fg-muted mb-3">{t('reviewAlerts.devicesHint')}</p>
+      <Autocomplete kind="user" mode="pick" label={t('reviewAlerts.devicesPick')} onChange={(id) => void load(id)} testId="review-alerts-devices-user" />
+      {error && <ErrorAlert testId="review-alerts-devices-error">{error}</ErrorAlert>}
+      <p role="status" className="text-sm text-fg mt-2" data-testid="review-alerts-devices-status">{notice}</p>
+      {devices && devices.length === 0 && <p className="text-sm text-fg-muted mt-2">{t('reviewAlerts.devicesEmpty')}</p>}
+      {devices && devices.length > 0 && (
+        <div className="overflow-x-auto mt-3">
+          <table className="min-w-full text-sm" data-testid="review-alerts-device-list">
+            <thead>
+              <tr className="text-fg-muted">
+                <th scope="col" className="text-start p-2">{t('reviewAlerts.deviceApp')}</th>
+                <th scope="col" className="text-start p-2">{t('reviewAlerts.devicePlatform')}</th>
+                <th scope="col" className="text-start p-2">{t('reviewAlerts.deviceToken')}</th>
+                <th scope="col" className="text-start p-2">{t('reviewAlerts.deviceUpdated')}</th>
+                <th scope="col" className="text-start p-2">{t('reviewAlerts.deviceActions')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {devices.map((d) => (
+                <tr key={d.installId} className="border-t border-border" data-install-id={d.installId}>
+                  <td className="p-2">{t(APP_LABEL[d.app] ?? 'reviewAlerts.appViewer')}</td>
+                  <td className="p-2" dir="ltr">{d.platform}{d.appVersion ? ` · ${d.appVersion}` : ''}</td>
+                  <td className="p-2 font-mono" dir="ltr">{d.tokenHint}</td>
+                  <td className="p-2">{formatDate(new Date(d.updatedAt), locale, true)}</td>
+                  <td className="p-2">
+                    <ConfirmButton
+                      label={t('reviewAlerts.signOut')}
+                      busy={busy === d.installId}
+                      title={t('reviewAlerts.signOutTitle')}
+                      body={t('reviewAlerts.signOutBody')}
+                      confirmLabel={t('reviewAlerts.signOut')}
+                      danger
+                      testId="review-alerts-device-sign-out"
+                      onConfirm={() => signOut(d.installId)}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
