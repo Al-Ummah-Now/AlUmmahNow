@@ -7,7 +7,7 @@
  * the same entity is harmless.
  */
 
-import { isShort, MessageType, type VideoFormatInput } from '@al-ummah/shared-types';
+import { isShort, MessageType, newVideoFanout, type VideoFormatInput } from '@al-ummah/shared-types';
 import R2Repository from './r2Repo';
 import { logger } from './logger';
 import { enqueueFanout, NotificationsEnv } from './notifications';
@@ -59,15 +59,8 @@ async function channelNameParamsOf(env: EventsEnv, channelId: string): Promise<R
 /** Tell subscribers about a newly published video (no-op unless announceable). */
 export async function announceNewVideo(env: EventsEnv, video: PublishableVideo): Promise<boolean> {
 	if (!isAnnounceable(video)) return false;
-	return enqueueFanout(env, {
-		kind: 'new_video',
-		channelId: video.channelId as string,
-		entityId: video.id,
-		isHighlight: isHighlightVideo(video),
-		params: { ...(await channelNameParamsOf(env, video.channelId as string)), videoTitle: video.title || '' },
-		actionUrl: `/video/${video.id}`,
-		actorUserId: video.userId,
-	});
+	const channelId = video.channelId as string;
+	return enqueueFanout(env, newVideoFanout({ ...video, channelId }, await channelNameParamsOf(env, channelId)));
 }
 
 /** Tell subscribers a live stream started. */

@@ -123,7 +123,7 @@ async function processBatch(
         const publishStartTime = Date.now();
 
         // Publish the video (idempotent, conditional on the copy it read: SC-1)
-        const outcome = await publishVideo(env.VIDEOS, video, env.QUEUE);
+        const outcome = await publishVideo(env.VIDEOS, video, env.QUEUE, undefined, env.CHANNELS);
         if (outcome === 'cancelled' || outcome === 'rescheduled' || outcome === 'missing') {
           // Not a failure to retry: the entry is obsolete (SC-3)
           logger.debug(`Schedule entry for video ${video.videoId} is obsolete (${outcome}); removed`);

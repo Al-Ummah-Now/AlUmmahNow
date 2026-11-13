@@ -220,6 +220,7 @@ export const APPS: AppRule[] = [
 				{ kind: 'queue_producer', name: 'QUEUE' },
 				{ kind: 'r2_buckets', name: 'VIDEOS' },
 				{ kind: 'r2_buckets', name: 'SCHEDULED_VIDEOS' },
+				{ kind: 'r2_buckets', name: 'CHANNELS' },
 				{ kind: 'kv_namespaces', name: 'SCHEDULER_LOCKS' },
 				{ kind: 'durable_objects', name: 'SCHEDULER_LOCK' },
 			],

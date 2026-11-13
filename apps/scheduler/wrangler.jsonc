@@ -30,6 +30,13 @@
 			"bucket_name": "scheduled-videos",
 			"preview_bucket_name": "scheduled-videos-preview",
 			"remote": true
+		},
+		{
+			// Read only: the channel's name in the subscribers' "new video" notification (#1240)
+			"binding": "CHANNELS",
+			"bucket_name": "channels",
+			"preview_bucket_name": "channels-preview",
+			"remote": true
 		}
 	],
 
@@ -117,6 +124,10 @@
 				{
 					"binding": "SCHEDULED_VIDEOS",
 					"bucket_name": "scheduled-videos-stage"
+				},
+				{
+					"binding": "CHANNELS",
+					"bucket_name": "channels-stage"
 				}
 			],
 			"queues": {

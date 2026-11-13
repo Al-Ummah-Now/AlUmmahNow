@@ -1,5 +1,5 @@
-import { MessageType } from '@al-ummah/shared-types';
-import type { ScheduledVideoMetadata, SearchIndexSyncPayload, VideoObject } from '@al-ummah/shared-types';
+import { channelNameParams, isVideoPubliclyVisible, isVideoReady, MessageType, newVideoFanout } from '@al-ummah/shared-types';
+import type { NamedChannel, ScheduledVideoMetadata, SearchIndexSyncPayload, VideoObject } from '@al-ummah/shared-types';
 import { logger } from './lib/logger';
 import { isTransientStorageError, withStorageRetry } from './lib/storage-retry';
 
@@ -38,13 +38,16 @@ const MAX_ATTEMPTS = 8;
  * read again and every check runs again, so a cancel or reschedule made a
  * moment before is honoured and nobody's edit is overwritten.
  *
- * @param queue Optional event queue; when given, the processor adds the newly public video to the search index
+ * @param queue Optional event queue; when given, the processor adds the newly public video to the
+ *   search index and, when it is ready, tells the channel's subscribers (#1240)
+ * @param channels Optional channels bucket: the channel's name for the subscribers' notification
  */
 export async function publishVideo(
   videoBucket: R2Bucket,
   metadata: ScheduledVideoMetadata,
   queue?: Queue,
-  now: () => Date = () => new Date()
+  now: () => Date = () => new Date(),
+  channels?: R2Bucket
 ): Promise<PublishOutcome> {
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const videoObject = await videoBucket.get(metadata.videoId);
@@ -65,7 +68,10 @@ export async function publishVideo(
     const at = now().toISOString();
     videoData.isPublic = true;
     videoData.isDraft = false;
-    videoData.publishedAt = at;
+    // publishedAt is when everyone could first see it (api-videos lib/published.ts). A video still
+    // processing gets it from the processing loop when it turns ready, which then also tells the
+    // subscribers, now that the schedule no longer holds it back (#1240).
+    if (isVideoReady(videoData) && !videoData.publishedAt) videoData.publishedAt = at;
     videoData.publishedViaSchedule = true;
     videoData.scheduledPublishStatus = 'published';
     videoData.dateModified = at;
@@ -91,10 +97,42 @@ export async function publishVideo(
       } catch (error) {
         logger.warn(`Failed to queue search index sync for video ${metadata.videoId}`, error);
       }
+      await announceReleased(queue, videoData, channels);
     }
     return 'published';
   }
   throw new Error(`Video ${metadata.videoId} kept changing while publishing; will retry`);
+}
+
+/** The channel's name params for the notification; empty name when the channel cannot be read. */
+async function channelParams(channels: R2Bucket | undefined, channelId: string): Promise<Record<string, string>> {
+  if (!channels) return { channelName: '' };
+  try {
+    const object = await channels.get(channelId);
+    return channelNameParams(object ? ((await object.json()) as NamedChannel) : null);
+  } catch (error) {
+    logger.warn(`Channel ${channelId} could not be read for the publish notification`, error);
+    return { channelName: '' };
+  }
+}
+
+/**
+ * Tell the channel's subscribers about a video the scheduler just released (#1240). Before, nobody
+ * did: the processing loop skips a video still scheduled when it turns ready, and the scheduler only
+ * updated the search index. Only a video everyone can see now is announced (the shared rule); one
+ * still processing is announced by the processing loop when it turns ready. The processor
+ * de-duplicates per video, so a repeat is harmless. Never throws: the publish already happened.
+ */
+export async function announceReleased(queue: Queue, video: VideoObject, channels?: R2Bucket): Promise<boolean> {
+  if (!video.channelId || !isVideoPubliclyVisible(video)) return false;
+  try {
+    const payload = newVideoFanout({ ...video, channelId: video.channelId }, await channelParams(channels, video.channelId));
+    await queue.send({ id: crypto.randomUUID(), type: MessageType.NotificationFanout, payload, timestamp: Date.now() });
+    return true;
+  } catch (error) {
+    logger.warn(`Failed to queue the subscribers' notification for video ${video.id}`, error);
+    return false;
+  }
 }
 
 export interface DueScan {

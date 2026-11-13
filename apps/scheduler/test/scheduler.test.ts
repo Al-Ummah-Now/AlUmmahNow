@@ -8,7 +8,7 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import type { ScheduledVideoMetadata } from '@al-ummah/shared-types';
+import { MessageType, type ScheduledVideoMetadata } from '@al-ummah/shared-types';
 import { buildScheduleKey, FAILED_PREFIX, listDueSchedules, markAsFailed, publishVideo } from '../src/publisher';
 import { scheduleRetries } from '../src/retry';
 import { dailyMetricsKey, recordRunMetrics } from '../src/monitoring';
@@ -394,5 +394,62 @@ describe('transient R2 errors (2026-11-11 "list: We encountered an internal erro
     await run();
     assert.equal(kv.has(OUTAGE_KEY), false);
     assert.equal(reports.length, 1);
+  });
+});
+
+describe('#1240: a released video reaches the subscribers', () => {
+  const now = new Date('2026-11-13T12:00:00Z');
+  const scheduled = (extra: Record<string, unknown> = {}) => ({
+    id: 'v', title: 'Lesson 1', userId: 'u', channelId: 'ch', isPublic: false, isDraft: false,
+    scheduledPublishStatus: 'scheduled', scheduledPublishDate: now.toISOString(), uploadStatus: 'ready', ...extra,
+  });
+  const setup = (video: Record<string, unknown>) => {
+    const videos = new FakeR2(0);
+    videos.set('v', video);
+    const channels = new FakeR2(0);
+    channels.set('ch', { id: 'ch', name: 'Al Ummah', nameLocalized: { ar: 'الأمة' } });
+    const sent: Array<{ type: number; payload: any }> = [];
+    const queue = { send: async (m: { type: number; payload: unknown }) => { sent.push(m as never); } };
+    return { videos, channels, sent, queue };
+  };
+
+  it('ready at release: published with publishedAt, search sync and one "new video" fan-out with the channel name', async () => {
+    const { videos, channels, sent, queue } = setup(scheduled());
+    assert.equal(await publishVideo(videos as never, meta('v', now), queue as never, () => now, channels as never), 'published');
+    const v = videos.read('v');
+    assert.equal(v.isPublic, true);
+    assert.equal(v.publishedAt, now.toISOString());
+    assert.deepEqual(sent.map((m) => m.type), [MessageType.SearchIndexSync, MessageType.NotificationFanout]);
+    const fanout = sent.find((m) => m.payload?.kind === 'new_video');
+    assert.ok(fanout, 'a new_video fan-out was queued');
+    assert.deepEqual(fanout.payload, {
+      kind: 'new_video', channelId: 'ch', entityId: 'v', isHighlight: true,
+      params: { channelName: 'Al Ummah', channelName_ar: 'الأمة', videoTitle: 'Lesson 1' },
+      actionUrl: '/video/v', actorUserId: 'u',
+    });
+  });
+
+  it('still processing at release: public, but no publishedAt and no fan-out (the processing loop announces it when ready)', async () => {
+    const { videos, channels, sent, queue } = setup(scheduled({ uploadStatus: 'processing' }));
+    assert.equal(await publishVideo(videos as never, meta('v', now), queue as never, () => now, channels as never), 'published');
+    const v = videos.read('v');
+    assert.equal(v.isPublic, true);
+    assert.equal(v.scheduledPublishStatus, 'published');
+    assert.equal(v.publishedAt, undefined);
+    assert.equal(sent.some((m) => m.payload?.kind === 'new_video'), false);
+  });
+
+  it('a Short is announced without the highlight flag; a channel that cannot be read still announces', async () => {
+    const { videos, sent, queue } = setup(scheduled({ format: 'short' }));
+    await publishVideo(videos as never, meta('v', now), queue as never, () => now, undefined);
+    const fanout = sent.find((m) => m.payload?.kind === 'new_video');
+    assert.equal(fanout?.payload.isHighlight, false);
+    assert.deepEqual(fanout?.payload.params, { channelName: '', videoTitle: 'Lesson 1' });
+  });
+
+  it('a video hidden by moderation meanwhile is released but never announced', async () => {
+    const { videos, channels, sent, queue } = setup(scheduled({ isHidden: true }));
+    await publishVideo(videos as never, meta('v', now), queue as never, () => now, channels as never);
+    assert.equal(sent.some((m) => m.payload?.kind === 'new_video'), false);
   });
 });

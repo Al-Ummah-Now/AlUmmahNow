@@ -6,6 +6,8 @@
  * them in the viewer's language.
  */
 
+import { isShort, type VideoFormatInput } from './video-format';
+
 /** Settings categories a user can turn on/off. */
 export const OPTIONAL_NOTIFICATION_CATEGORIES = [
   'new_videos',
@@ -262,4 +264,31 @@ export interface NotificationSettingsResult {
 export interface NotificationSettingsUpdateRequest {
   settings?: Partial<Record<OptionalNotificationCategory, boolean>>;
   email?: Partial<NotificationEmailSettings>;
+}
+
+/** The fields of a stored video the "new video" fan-out reads. */
+export interface NewVideoFanoutVideo extends VideoFormatInput {
+  id: string;
+  channelId?: string;
+  userId?: string;
+  title?: string;
+}
+
+/**
+ * The subscriber fan-out for a newly published video. One builder for every producer (api-videos
+ * when an upload turns ready or "Publish now", the scheduler when it releases a scheduled video,
+ * #1240), so the message is the same whoever sends it; the processor de-duplicates on kind and
+ * entity id. Long-form uploads are highlights; Shorts only reach bell = all. `channelParams` are
+ * the channel's name params (channel-name.ts channelNameParams).
+ */
+export function newVideoFanout(video: NewVideoFanoutVideo & { channelId: string }, channelParams: Record<string, string>): NotificationFanoutPayload {
+  return {
+    kind: 'new_video',
+    channelId: video.channelId,
+    entityId: video.id,
+    isHighlight: !isShort(video),
+    params: { ...channelParams, videoTitle: video.title || '' },
+    actionUrl: `/video/${video.id}`,
+    actorUserId: video.userId,
+  };
 }
