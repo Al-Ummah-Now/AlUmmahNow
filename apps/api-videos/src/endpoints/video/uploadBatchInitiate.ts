@@ -17,6 +17,7 @@ import { markUploadCreated } from "../../lib/uploads/reaper";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import { requestVideoSuggestion } from '../../lib/categorySuggestions';
 import { logger } from '../../lib/logger';
+import { scanInBackground, videoScanText } from '../../lib/moderation-scan';
 import { VIDEO_VISIBILITIES } from '@al-ummah/shared-types';
 import { uploadVisibility } from '../../lib/visibility';
 
@@ -255,6 +256,10 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 						timestamp: now,
 						batchUpload: true,
 					});
+
+					// AI moderation of the metadata (queued, never fails the upload); once per
+					// created record, never for a reused one (initiateOnce does not call create)
+					scanInBackground(c, { surface: 'video_metadata', event: 'create', subjectId: videoId, authorId: userId, channelId, text: videoScanText(video) });
 					return videoId;
 				};
 
