@@ -7,7 +7,7 @@ const PAGES = ['/en', '/ar', '/en/explore', '/en/search?q=mosque'];
 const LOADING = 'main .animate-pulse [class*="aspect-video"]';
 
 const findProblems = ()=>{const bad: string[][]=[];const vis=(e: Element)=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>12&&r.height>12&&s.visibility!=='hidden'&&s.display!=='none'};
-document.querySelectorAll<HTMLImageElement>('main img, header img').forEach(i=>{if(vis(i)&&(!i.complete||i.naturalWidth===0))bad.push(['broken image',(i.currentSrc||i.src||'').slice(-70)])});
+document.querySelectorAll<HTMLImageElement>('main img, header img').forEach(i=>{if(vis(i)&&(!i.complete||i.naturalWidth===0))bad.push(['broken image',i.currentSrc||i.src||'',i.closest('[data-video-id]')?.getAttribute('data-video-id')||(i.closest('header')?'header':''),i.alt])});
 document.querySelectorAll('main [class*="aspect-video"], main .rv-t, main .vc-t, main .video-card > :first-child, main [class*="rounded-full"][class*="overflow-hidden"]').forEach(e=>{if(!vis(e)||e.closest('.custom-video-player,.wsk-player,[data-testid=watch-skeleton]'))return;const filled=e.querySelector('img,svg,video,canvas,[data-testid*="placeholder"]')||getComputedStyle(e).backgroundImage!=='none'||[...e.querySelectorAll('*')].some(c=>getComputedStyle(c).backgroundImage!=='none')||(e.textContent||'').trim().length>0;if(!filled)bad.push(['empty media box',e.className.toString().slice(0,60)])});return bad};
 
 test.describe('Media is never an empty box', () => {

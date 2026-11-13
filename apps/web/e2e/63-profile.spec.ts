@@ -104,7 +104,8 @@ test.describe('Profile - view', () => {
     await expect(page.locator('.cover-photo')).toBeVisible();
     await expect(page.locator('.profile-photo')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'My Channels' })).toBeVisible();
-    await expect(page.getByText(readAccount('single').channels[0].name!).first()).toBeVisible();
+    // Visible ones only: the header's account card has the same name in a hidden menu
+    await expect(page.getByText(readAccount('single').channels[0].name!).filter({ visible: true }).first()).toBeVisible();
   });
 
   test('PROF-011 Edit opens the edit form', async ({ page }) => {
@@ -167,8 +168,10 @@ test.describe('Profile - edit', () => {
     await page.getByRole('button', { name: /^(Arabic|العربية)$/ }).click();
     await page.locator('input[name="displayNameAr"]').fill(`اسم مؤقت ${suffix}`);
     await expect(page.locator('textarea[name="bioAr"]')).toHaveAttribute('dir', 'rtl');
-    // The profile form's own Save (the header search is a form with a submit button too)
-    const save = page.locator('form').filter({ has: page.locator('input[name="displayNameEn"]') }).locator('button[type="submit"]');
+    // The profile form's own Save (the header search is a form with a submit button too). The form
+    // shows one language at a time, so the English input is not mounted on the Arabic tab: match the
+    // display-name field both tabs share
+    const save = page.locator('form').filter({ has: page.locator('#profile-displayName') }).locator('button[type="submit"]');
     await save.click();
     await expect(save).toHaveText(/Saved!/);
 
