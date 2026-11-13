@@ -1,6 +1,6 @@
 # Fawanees: light palette and the lantern street
 
-Status: approved by the owner on 2026-11-13 ("go ahead with Fawanees"), after four review rounds.
+Status: approved by the owner on 2026-11-12 ("go ahead with Fawanees"), after four review rounds.
 Review page with the renders: https://claude.ai/artifact/LHegZefDiNbujfz7N5PCYh (private, owner's).
 
 ## Owner decisions
@@ -39,12 +39,12 @@ Two layers:
   measures the page (cards, images, controls, text) and hangs a garland in each real free gap:
   between rows and sections that span most of the content width, and down wide side margins.
   Lanterns are sized to fit, so nothing can sit in front of one. They scroll with the page.
-- **Far: soft distant lights.** A tile of blurred warm lights in the page background, moved at
-  0.2× the scroll by a scroll-driven animation. Soft dots have no edge to cut, and they keep even
-  the 16 px phone gutters alive.
+- **Far: soft distant lights.** A tile of blurred warm lights in a fixed layer behind the page,
+  moved at 0.2× the scroll by the module's passive scroll listener. Soft dots have no edge to cut,
+  and they keep even the 16 px phone gutters alive.
 
-Reduced motion: the lights stand still and the lanterns stop swaying. Browsers without
-scroll-driven animations show the lights still.
+There are no CSS animations (the lanterns hang still). Reduced motion: the lights stand still too.
+The page keeps its own background; the body is isolated so both layers sit just above it.
 
 Where it does not draw: inside cards, menus and controls, and where an app paints its own opaque
 frame around the content (Studio's work area, which stays plain as a work tool).
