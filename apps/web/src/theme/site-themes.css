@@ -308,6 +308,7 @@ html[data-theme='lantern'].dark {
   --fanous-c-empty-title: #f7f1e8;
   --fanous-c-empty-body: #c9d6dc;
   --fanous-c-empty-icon: #a8bac3;
+  --fanous-street-on: 0;
 }
 
 html[data-theme='lantern']:not(.dark) {
@@ -485,6 +486,7 @@ html[data-theme='lantern']:not(.dark) {
   --fanous-c-empty-title: #0e2b3d;
   --fanous-c-empty-body: #2a4654;
   --fanous-c-empty-icon: #3f5a68;
+  --fanous-street-on: 0;
 }
 
 /* Theme package zujaj@1.0.0. Generated, do not edit. */
@@ -796,6 +798,7 @@ html[data-theme='zujaj'].dark {
   --fanous-c-empty-title: #eff8f7;
   --fanous-c-empty-body: #d4ebeb;
   --fanous-c-empty-icon: #d0e8e8;
+  --fanous-street-on: 0;
 }
 
 html[data-theme='zujaj']:not(.dark) {
@@ -973,6 +976,7 @@ html[data-theme='zujaj']:not(.dark) {
   --fanous-c-empty-title: #07303b;
   --fanous-c-empty-body: #0f4552;
   --fanous-c-empty-icon: #1d5a68;
+  --fanous-street-on: 0;
 }
 
 /* Theme package nahas@1.0.0. Generated, do not edit. */
@@ -1284,6 +1288,7 @@ html[data-theme='nahas'].dark {
   --fanous-c-empty-title: #fbf1e4;
   --fanous-c-empty-body: #e6d2bc;
   --fanous-c-empty-icon: #cdb49b;
+  --fanous-street-on: 0;
 }
 
 html[data-theme='nahas']:not(.dark) {
@@ -1461,6 +1466,7 @@ html[data-theme='nahas']:not(.dark) {
   --fanous-c-empty-title: #2e1206;
   --fanous-c-empty-body: #4f260f;
   --fanous-c-empty-icon: #663a1f;
+  --fanous-street-on: 0;
 }
 
 /* Theme package fawanees@1.2.0. Generated, do not edit. */
