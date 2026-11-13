@@ -4,6 +4,7 @@ import { cors } from 'hono/cors';
 import { authMiddleware, adminMiddleware } from "./middleware/auth";
 import { loggingMiddleware, markErrorLogged } from "./middleware/logging";
 import { withLogging } from "@al-ummah/logger";
+import { robotsTxtResponse, withNoIndex } from "./lib/crawlers";
 import { logger } from './lib/logger';
 import { registerAllRouters } from './routers';
 import { publicSiteTheme } from './lib/siteSettings';
@@ -252,5 +253,9 @@ async function queue(batch: { queue: string; messages: readonly QueueMessageLike
   for (const m of batch.messages) m.retry();
 }
 
-export default withLogging({ fetch: app.fetch, scheduled, queue });
+/** Nothing on the admin API host is for search engines (lib/crawlers.ts) */
+const fetchHandler: typeof app.fetch = async (request, env, ctx) =>
+  robotsTxtResponse(request) ?? withNoIndex(await app.fetch(request, env, ctx));
+
+export default withLogging({ fetch: fetchHandler, scheduled, queue });
 export { app };

@@ -11,6 +11,7 @@ import { logger } from './lib/logger';
 import { coalescerName } from './admin-coalescer';
 import { isAdminLiveChannel } from '@al-ummah/shared-types';
 import { reportServerError, requestIdOf, type ErrorReporterEnv, type ExecutionContextLike } from '@al-ummah/shared-types';
+import { robotsTxtResponse, withNoIndex } from './lib/crawlers';
 
 // Export the Durable Object
 export { WebSocketDurableObject };
@@ -27,6 +28,15 @@ interface ShardStats {
 }
 
 const app = new Hono<{ Bindings: Env }>();
+
+// Nothing on the realtime host is for search engines (lib/crawlers.ts); WebSocket upgrades keep their headers
+app.use('*', async (c, next) => {
+  const robots = robotsTxtResponse(c.req.raw);
+  if (robots) return robots;
+  await next();
+  c.res = withNoIndex(c.res);
+  return undefined;
+});
 
 function ctxOf(c: { executionCtx: ExecutionContextLike }): ExecutionContextLike | undefined {
   try {

@@ -14,6 +14,7 @@ import openNext from './.open-next/worker.js';
 import { configureLogging, type LoggingEnv } from '@al-ummah/logger';
 import { withPublicHost } from './src/lib/version-skew/skew-host';
 import { logger } from './src/lib/logger-server';
+import { robotsTxtResponse, withNoIndex } from './src/lib/crawlers';
 
 interface Handler {
   fetch(request: Request, env: unknown, ctx: unknown): Promise<Response>;
@@ -29,10 +30,13 @@ const worker: Handler = {
     const route = new URL(request.url).pathname;
     const summarise = !STATIC_PATH.test(route);
     const base = { method: request.method, route, ray: request.headers.get('cf-ray') || undefined };
+    // The admin site is never for search engines (src/lib/crawlers.ts)
+    const robots = robotsTxtResponse(request);
+    if (robots) return robots;
     try {
       const response = await (openNext as Handler).fetch(withPublicHost(request), env, ctx);
       if (summarise) logger.request({ ...base, status: response.status, durationMs: Date.now() - startedAt });
-      return response;
+      return withNoIndex(response);
     } catch (error) {
       logger.request({ ...base, status: 500, durationMs: Date.now() - startedAt, error });
       throw error;

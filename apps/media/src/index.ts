@@ -10,6 +10,7 @@ import type { TranscodeJobMessage } from '@al-ummah/shared-types';
 import { isMediaRev, isMediaVideoId } from '@al-ummah/shared-types';
 import { handlePrivate } from './edge';
 import { errorText, log, secret, type Env } from './env';
+import { withNoIndex } from './crawlers';
 
 export { ContainerProxy } from '@cloudflare/containers';
 export { Transcoder } from './transcoder';
@@ -28,21 +29,26 @@ function isJob(body: unknown): body is TranscodeJobMessage {
 	);
 }
 
+async function handleFetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+	const url = new URL(request.url);
+	if (url.pathname.startsWith('/priv/')) return handlePrivate(request, env, ctx);
+	if (url.pathname === '/health') return Response.json({ ok: true });
+	const m = /^\/internal\/jobs\/([^/]+)$/.exec(url.pathname);
+	if (m && request.method === 'GET') {
+		const expected = await secret(env.INTERNAL_API_KEY, 'INTERNAL_API_KEY');
+		if (request.headers.get('X-API-Key') !== expected) return new Response('Unauthorized', { status: 401 });
+		const videoId = decodeURIComponent(m[1]!);
+		if (!isMediaVideoId(videoId)) return new Response('Bad id', { status: 400 });
+		const state = await env.TRANSCODER.get(env.TRANSCODER.idFromName(videoId)).jobState();
+		return Response.json({ job: state });
+	}
+	return new Response('Not found', { status: 404 });
+}
+
 export default {
+	// Private media and internal routes are never for search engines (crawlers.ts)
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-		const url = new URL(request.url);
-		if (url.pathname.startsWith('/priv/')) return handlePrivate(request, env, ctx);
-		if (url.pathname === '/health') return Response.json({ ok: true });
-		const m = /^\/internal\/jobs\/([^/]+)$/.exec(url.pathname);
-		if (m && request.method === 'GET') {
-			const expected = await secret(env.INTERNAL_API_KEY, 'INTERNAL_API_KEY');
-			if (request.headers.get('X-API-Key') !== expected) return new Response('Unauthorized', { status: 401 });
-			const videoId = decodeURIComponent(m[1]!);
-			if (!isMediaVideoId(videoId)) return new Response('Bad id', { status: 400 });
-			const state = await env.TRANSCODER.get(env.TRANSCODER.idFromName(videoId)).jobState();
-			return Response.json({ job: state });
-		}
-		return new Response('Not found', { status: 404 });
+		return withNoIndex(await handleFetch(request, env, ctx));
 	},
 
 	async queue(batch: MessageBatch<unknown>, env: Env): Promise<void> {
