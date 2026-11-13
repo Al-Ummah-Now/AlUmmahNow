@@ -1,7 +1,8 @@
 /**
  * Autoplay like YouTube (the owner's 2026-11-11 request; docs/specs/PLAYLIST-PLAYBACK.md phase 1b):
- * the control bar's autoplay switch (on by default, a real switch for assistive tech, tooltip
- * "Autoplay is on/off", keyboard, en/ar), saved on the device and synced with the account when
+ * the control bar's autoplay switch (on by default, a real switch for assistive tech, a play/pause
+ * glyph in its thumb and "Autoplay" beside it where the bar has room, a themed tip "Autoplay is
+ * on/off" on hover and keyboard focus, en/ar), saved on the device and synced with the account when
  * signed in; the end of a video → 3 s countdown → the next video plays on its own; Cancel keeps the
  * end screen with Watch again and more videos; autoplay off shows that screen with no countdown.
  * The account endpoints are served here: no backend, no paid service.
@@ -10,6 +11,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { openHarness, pauseAt, startPlayback } from './harness';
 
 const toggle = (page: Page) => page.getByTestId('player-autoplay-toggle');
+const tip = (page: Page) => page.getByTestId('player-autoplay-tip');
 
 /** The bar shows once playback has started; paused, it stays up */
 async function showControls(page: Page) {
@@ -69,10 +71,14 @@ test.describe('autoplay switch', () => {
     await expect(sw).toHaveAttribute('role', 'switch');
     await expect(sw).toHaveAttribute('aria-checked', 'true');
     await expect(sw).toHaveAccessibleName('Autoplay');
-    await expect(sw).toHaveAttribute('title', 'Autoplay is on');
+    // Hover shows the themed tip with the state; it follows a click
+    await sw.hover();
+    await expect(tip(page)).toHaveText('Autoplay is on');
     await sw.click();
     await expect(sw).toHaveAttribute('aria-checked', 'false');
-    await expect(sw).toHaveAttribute('title', 'Autoplay is off');
+    await expect(tip(page)).toHaveText('Autoplay is off');
+    await page.mouse.move(1, 1);
+    await expect(tip(page)).toHaveCount(0);
     await page.reload();
     await expect(toggle(page)).toHaveAttribute('aria-checked', 'false');
   });
@@ -87,13 +93,43 @@ test.describe('autoplay switch', () => {
     await expect(sw).toHaveAttribute('aria-checked', 'false');
     await page.keyboard.press('Enter');
     await expect(sw).toHaveAttribute('aria-checked', 'true');
+    // Keyboard users get the tip too
+    await expect(tip(page)).toHaveText('Autoplay is on');
+  });
+
+  test('says what it is: a play/pause glyph in the thumb, and "Autoplay" beside it where the bar has room', async ({ page }) => {
+    await openHarness(page, { src: 'dark' });
+    await showControls(page);
+    const sw = toggle(page);
+    const play = sw.locator('.vjs-fanous-glyph-play');
+    const pause = sw.locator('.vjs-fanous-glyph-pause');
+    await expect(play).toBeVisible();
+    await expect(pause).toBeHidden();
+    // The word is for the eye: the name stays "Autoplay", not "Autoplay Autoplay"
+    await expect(sw.locator('.vjs-fanous-autoplay-label')).toBeVisible();
+    await expect(sw.locator('.vjs-fanous-autoplay-label')).toHaveText('Autoplay');
+    await expect(sw).toHaveAccessibleName('Autoplay');
+    await sw.click();
+    await expect(pause).toBeVisible();
+    await expect(play).toBeHidden();
+  });
+
+  test('narrow players keep the glyph and drop the word', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openHarness(page, { src: 'dark' });
+    await showControls(page);
+    const sw = toggle(page);
+    await expect(sw.locator('.vjs-fanous-glyph-play')).toBeVisible();
+    await expect(sw.locator('.vjs-fanous-autoplay-label')).toBeHidden();
   });
 
   test('Arabic: named and described in Arabic', async ({ page }) => {
     await openHarness(page, { lang: 'ar', src: 'dark' });
     await showControls(page);
     await expect(toggle(page)).toHaveAccessibleName('التشغيل التلقائي');
-    await expect(toggle(page)).toHaveAttribute('title', 'التشغيل التلقائي مفعّل');
+    await expect(toggle(page).locator('.vjs-fanous-autoplay-label')).toHaveText('التشغيل التلقائي');
+    await toggle(page).hover();
+    await expect(tip(page)).toHaveText('التشغيل التلقائي مفعّل');
   });
 
   test('not on embed-like surfaces (no up next)', async ({ page }) => {
