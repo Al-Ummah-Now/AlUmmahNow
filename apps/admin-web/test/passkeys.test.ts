@@ -27,6 +27,10 @@ import ar from '../src/i18n/messages/ar';
 
 (globalThis as unknown as { React: unknown }).React = React;
 
+// Typed as plain function components (the linked @types/react differ between JSX and createElement)
+const Needed = PasskeyNeeded as unknown as React.FC<Parameters<typeof PasskeyNeeded>[0]>;
+const Banner = PasskeyGraceBanner as unknown as React.FC<Parameters<typeof PasskeyGraceBanner>[0]>;
+
 const NOW = 1_800_000_000;
 
 function token(payload: Record<string, unknown>): string {
@@ -120,7 +124,7 @@ describe('"Passkey needed" page and grace banner', () => {
   };
 
   it('offers Add a passkey and Sign in with a passkey as links, and sign out as a form', () => {
-    const html = renderToStaticMarkup(React.createElement(PasskeyNeeded, props));
+    const html = renderToStaticMarkup(React.createElement(Needed, props));
     assert.match(html, /href="https:\/\/auth\.qa\.alummahnow\.net\/passkeys\/setup\?return_to=x"[^>]*data-testid="passkey-add">Add a passkey</);
     assert.match(html, /Sign in with a passkey/);
     assert.match(html, /href="\/login\?prompt=login"/);
@@ -130,7 +134,7 @@ describe('"Passkey needed" page and grace banner', () => {
   });
 
   it('shows Back for a step-up and hides Add without an issuer', () => {
-    const html = renderToStaticMarkup(React.createElement(PasskeyNeeded, { ...props, setupUrl: null, backPath: '/reports' }));
+    const html = renderToStaticMarkup(React.createElement(Needed, { ...props, setupUrl: null, backPath: '/reports' }));
     assert.match(html, /data-testid="passkey-back"/);
     assert.doesNotMatch(html, /passkey-add/);
   });
@@ -144,11 +148,11 @@ describe('"Passkey needed" page and grace banner', () => {
 
   it('renders the banner in English and Arabic with the deadline', () => {
     const deadline = Date.UTC(2026, 10, 20, 12) / 1000;
-    const html = withI18n('en', React.createElement(PasskeyGraceBanner, { deadline, setupUrl: 'https://auth/x' }));
+    const html = withI18n('en', React.createElement(Banner, { deadline, setupUrl: 'https://auth/x' }));
     assert.match(html, /Add a passkey by .*2026/);
     assert.match(html, /role="status"/);
     assert.match(html, /Dismiss/);
-    const arHtml = withI18n('ar', React.createElement(PasskeyGraceBanner, { deadline, setupUrl: null }));
+    const arHtml = withI18n('ar', React.createElement(Banner, { deadline, setupUrl: null }));
     assert.match(arHtml, /أضف مفتاح مرور قبل/);
     assert.match(arHtml, /إخفاء/);
     assert.doesNotMatch(arHtml, /passkey-grace-add/);
