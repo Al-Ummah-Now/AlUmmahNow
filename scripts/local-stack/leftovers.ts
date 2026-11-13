@@ -5,7 +5,7 @@
  *   node --experimental-strip-types --no-warnings scripts/local-stack/leftovers.ts --marker "$E2E_RUN_ID" [--user-ids-file <path> ...] [--report-only] [--allow d1:<db>:<table>|r2:<bucket>|kv:<binding>|fake-bunny ...] [--out <file>]
  *
  * --user-ids-file (and E2E_RUN_USER_IDS_FILE): the run users' ids, one per line, recorded while
- * they existed (builders.ts appends every user it creates): the run accounts are deleted before
+ * they existed (signUpOnWeb and the web teardown append every run user): the run accounts are deleted before
  * this check, so rows keyed only by a user id are found through these.
  *
  * Asks the running stack (GET /__stack/leftovers) for every D1 row, R2 object, KV entry, fake

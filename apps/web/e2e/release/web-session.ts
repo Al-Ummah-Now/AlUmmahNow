@@ -2,6 +2,7 @@
  * Web app session helpers for the release suite. Every spec registers its own
  * sink user through the real UI and OAuth round trip; nothing is seeded.
  */
+import { appendFileSync } from 'node:fs';
 import { expect, type Locator, type Page } from '@playwright/test';
 import { fillSecret } from './secret-fill';
 import { fetchRetry } from './net';
@@ -220,7 +221,10 @@ export async function signUpOnWeb(page: Page, prefix: string, locale: Locale = '
   await startSignIn(page, locale);
   await completeRegistration(page, email);
   await expectSignedIn(page, locale);
-  return { email, ...(await webAccessToken(page)) };
+  const session = await webAccessToken(page);
+  // The id, for the run's teardown and leftover check (rows keyed only by user id; the account is gone by then)
+  if (process.env.E2E_RUN_USER_IDS_FILE && session.userId) appendFileSync(process.env.E2E_RUN_USER_IDS_FILE, `${session.userId}\n`);
+  return { email, ...session };
 }
 
 /** Drops every cookie and signs the user in again (a fresh web session). */
