@@ -2,6 +2,8 @@ import { fromHono } from "chanfana";
 import { Hono } from "hono";
 import { cors } from 'hono/cors';
 import { authMiddleware, adminMiddleware } from "./middleware/auth";
+import { passkeyMiddleware } from "./middleware/passkeys";
+import { registerStepUpRoutes } from "./middleware/step-up-routes";
 import { loggingMiddleware, markErrorLogged } from "./middleware/logging";
 import { withLogging } from "@al-ummah/logger";
 import { robotsTxtResponse, withNoIndex } from "./lib/crawlers";
@@ -147,6 +149,10 @@ app.route('/internal/site-domains', studioSiteDomainsRouter as never);
 // Apply auth + admin middleware to all API routes
 app.use('/api/*', authMiddleware);
 app.use('/api/*', adminMiddleware);
+// Staff passkeys (wiki AUTH-PASSKEYS): 403 passkey_required after the deadline without a passkey sign-in
+app.use('/api/*', passkeyMiddleware);
+// High-risk actions need a sign-in under 15 minutes old (401 step_up_required); list in middleware/step-up-routes.ts
+registerStepUpRoutes(app);
 
 // ==========================================
 // OPENAPI SETUP

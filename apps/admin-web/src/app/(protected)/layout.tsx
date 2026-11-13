@@ -1,5 +1,5 @@
 import { requireAdminRole } from '@/lib/auth';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { AdminShell } from '@/components/shell/AdminShell';
 import { NAV_COOKIE } from '@/components/shell/nav-model';
 import { getContactCounts, getErrorCounts } from '@/lib/api/admin';
@@ -9,6 +9,9 @@ import { ErrorReportingIdentity } from '@/lib/errors/ErrorReportingProvider';
 import { errorsBadgeCount } from './errors/filters';
 import { logger } from '@/lib/logger';
 import { UndoToastProvider } from '@/components/undo/UndoToast';
+import { PasskeyGraceBanner } from '@/components/PasskeyGraceBanner';
+import { adminSetupUrl } from '@/lib/passkeys';
+import { PATH_HEADER } from '@/lib/login-flow';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,6 +59,16 @@ export default async function ProtectedLayout({
   const role = session.user.role;
   const navCookie = (await cookies()).get(NAV_COOKIE)?.value;
 
+  // Staff passkeys, grace period: "Add a passkey by <date>" above every page (lib/passkeys.ts)
+  let graceBanner: React.ReactNode = null;
+  if (session.passkey.state === 'grace') {
+    const h = await headers();
+    const host = h.get('host') ?? 'localhost';
+    const origin = `${host.includes('localhost') ? 'http' : 'https'}://${host}`;
+    const setupUrl = process.env.Issuer ? adminSetupUrl(process.env.Issuer, origin, h.get(PATH_HEADER)) : null;
+    graceBanner = <PasskeyGraceBanner deadline={session.passkey.deadline} setupUrl={setupUrl} />;
+  }
+
   return (
     <UndoToastProvider>
       <ErrorReportingIdentity userId={session.user.id} />
@@ -77,6 +90,7 @@ export default async function ProtectedLayout({
         }}
         badges={{ contact: contactNew, errors: errorsBadge }}
       >
+        {graceBanner}
         {children}
       </AdminShell>
     </UndoToastProvider>

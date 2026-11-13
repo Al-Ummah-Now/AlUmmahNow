@@ -2,7 +2,7 @@
 
 import type { AdminJob, AdminJobStatus, ErrorStatus, LegacyRestorePlan, Report, ReportStats } from '@al-ummah/shared-types';
 import { AdminApiError, type ActionResult } from './errors';
-import { fetchAdmin, requestAdmin } from './request';
+import { fetchAdmin, requestAdmin, navigateForPasskey } from './request';
 import type {
   ListReportsParams,
   ListReportsResponse,
@@ -72,6 +72,7 @@ export async function takeAction(reportId: string, params: TakeActionParams): Pr
     });
     return { ok: true, data };
   } catch (error) {
+    await navigateForPasskey(error);
     if (error instanceof AdminApiError) {
       return { ok: false, status: error.status, error: error.message };
     }
@@ -119,6 +120,7 @@ async function mutate<T>(endpoint: string, method: string, body: unknown): Promi
     const data = await fetchAdmin<T>(endpoint, { method, body: JSON.stringify(body) });
     return { ok: true, data };
   } catch (error) {
+    await navigateForPasskey(error);
     if (error instanceof AdminApiError) return { ok: false, status: error.status, error: error.message };
     return { ok: false, status: 500, error: error instanceof Error ? error.message : 'Unknown error' };
   }
@@ -270,6 +272,7 @@ export async function deleteContactMessage(id: string, reason = ''): Promise<Act
     const data = await fetchAdmin<{ deleted: string }>(`/api/contact/messages/${encodeURIComponent(id)}`, { method: 'DELETE', body: JSON.stringify({ reason }) });
     return { ok: true, data };
   } catch (error) {
+    await navigateForPasskey(error);
     if (error instanceof AdminApiError) return { ok: false, status: error.status, error: error.message };
     return { ok: false, status: 500, error: error instanceof Error ? error.message : 'Unknown error' };
   }
@@ -321,6 +324,7 @@ export async function getMediaQoeLive(): Promise<ActionResult<QoeLiveData | null
     const data = await fetchAdmin<QoeLiveData>('/api/media/qoe-live?minutes=60');
     return { ok: true, data: data ?? null };
   } catch (error) {
+    await navigateForPasskey(error);
     if (error instanceof AdminApiError) return { ok: false, status: error.status, error: error.message };
     return { ok: false, status: 500, error: error instanceof Error ? error.message : 'Unknown error' };
   }
@@ -331,6 +335,7 @@ export async function getMediaLive(): Promise<ActionResult<MediaLive | null>> {
     const data = await fetchAdmin<{ live?: MediaLive }>('/api/media/summary?only=live');
     return { ok: true, data: data.live ?? null };
   } catch (error) {
+    await navigateForPasskey(error);
     if (error instanceof AdminApiError) return { ok: false, status: error.status, error: error.message };
     return { ok: false, status: 500, error: error instanceof Error ? error.message : 'Unknown error' };
   }
@@ -503,6 +508,7 @@ export async function deleteTestErrorGroup(ref: string): Promise<ActionResult<{ 
     const data = await fetchAdmin<{ deleted: number }>(`/api/errors/test-groups/${encodeURIComponent(ref)}`, { method: 'DELETE' });
     return { ok: true, data };
   } catch (error) {
+    await navigateForPasskey(error);
     if (error instanceof AdminApiError) return { ok: false, status: error.status, error: error.message };
     return { ok: false, status: 500, error: error instanceof Error ? error.message : 'Unknown error' };
   }

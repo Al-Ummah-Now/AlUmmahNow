@@ -12,6 +12,7 @@ This Cloudflare Worker exposes an admin-only REST API built with Hono v4 and cha
 - Moderation report storage in Cloudflare D1 (`al-ummah-now-reports`)
 - R2 read/write access for content management
 - JWT authentication + admin-role middleware (OpenAuth)
+- Staff passkeys: `403 passkey_required` after the staff deadline without a passkey sign-in, and `401 step_up_required` (sign-in older than 15 minutes) on high-risk actions ([docs/admin/STAFF_PASSKEYS.md](../../docs/admin/STAFF_PASSKEYS.md))
 - Interactive Swagger UI at the root URL
 - OpenAPI 3.1 schema via chanfana
 
@@ -101,7 +102,9 @@ CI/CD deploys this app automatically:
 
 ### Environment Variables
 
-- `Issuer` — OpenAuth issuer URL (e.g. `https://auth.alummahnow.net`)
+- `Issuer` — OpenAuth issuer URL (e.g. `https://auth.alummahnow.net`); also the base of the `passkey_required` answer's `setup_url`
+- `ADMIN_WEB_URL` — admin-web origin (evidence links; the `setup_url` comes back here)
+- `STEP_UP_MAX_AGE_S` — local stack only: a longer step-up window for the admin E2E run; ignored on production and stage, never set in a deployed config
 - `CORS_ORIGINS` — Allowed CORS origins
 
 ## Project Structure

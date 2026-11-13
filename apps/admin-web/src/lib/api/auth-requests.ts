@@ -8,13 +8,14 @@
  * auth-moderation-requests queue with retries.
  */
 import { AdminApiError, type ActionResult } from './errors';
-import { requestAdmin } from './request';
+import { requestAdmin, navigateForPasskey } from './request';
 import type { AuthRequestEvidence, AuthRequestList, AuthRequestSubmission, AuthRequestView } from './auth-request-types';
 
 async function result<T>(run: () => Promise<T>): Promise<ActionResult<T>> {
   try {
     return { ok: true, data: await run() };
   } catch (error) {
+    await navigateForPasskey(error);
     if (error instanceof AdminApiError) return { ok: false, status: error.status, error: error.message };
     return { ok: false, status: 500, error: error instanceof Error ? error.message : 'Unknown error' };
   }

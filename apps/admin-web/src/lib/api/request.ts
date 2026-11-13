@@ -3,8 +3,11 @@
  * calls admin-api with the session's bearer token. Not a 'use server' module,
  * so these helpers are never exposed as client-callable actions.
  */
+import { headers as getHeaders } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { getAdminSession } from '@/lib/auth';
 import { logger } from '@/lib/logger';
+import { pathOfPageUrl, passkeyRedirectFor } from '@/lib/passkeys';
 import { AdminApiError, type ActionResult } from './errors';
 
 const ADMIN_API_URL = process.env.ADMIN_API_URL || 'http://127.0.0.1:3090';
@@ -88,11 +91,37 @@ export async function fetchAdmin<T>(endpoint: string, options: RequestInit = {})
 }
 
 
+/**
+ * Staff passkeys (lib/passkeys.ts): admin-api's `403 passkey_required` opens the
+ * "Passkey needed" page and `401 step_up_required` a fresh sign-in
+ * (prompt=login&max_age=900), both coming back to the page the action ran on
+ * (the server action's Referer). Called first in every mutation wrapper's catch:
+ * redirect() throws, so the server action navigates the browser instead of
+ * returning an error. Any other error returns and is handled as before.
+ */
+export async function navigateForPasskey(error: unknown): Promise<void> {
+  if (!(error instanceof AdminApiError)) return;
+  let returnPath: string | null = null;
+  try {
+    const h = await getHeaders();
+    const host = h.get('host');
+    const origin = host ? `${host.includes('localhost') ? 'http' : 'https'}://${host}` : null;
+    returnPath = pathOfPageUrl(h.get('referer'), origin);
+  } catch {
+    // outside a request (tests): no page to come back to
+  }
+  const target = passkeyRedirectFor(error, returnPath);
+  if (!target) return;
+  logger.debug('[API] Passkey answer from admin-api; navigating', { code: error.code, target });
+  redirect(target);
+}
+
 /** Runs a mutation and returns a result object (production builds redact thrown server-action errors). */
 export async function toResult<T>(run: () => Promise<T>): Promise<ActionResult<T>> {
   try {
     return { ok: true, data: await run() };
   } catch (error) {
+    await navigateForPasskey(error);
     if (error instanceof AdminApiError) return { ok: false, status: error.status, error: error.message, ...(error.code ? { code: error.code } : {}) };
     return { ok: false, status: 500, error: error instanceof Error ? error.message : 'Unknown error' };
   }

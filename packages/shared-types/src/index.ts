@@ -105,6 +105,8 @@ export * from './playlist-bulk';
 export * from './creator-tiers';
 export * from './thumbnail-crop';
 export * from './roles';
+// Staff passkey rule and step-up (wiki AUTH-PASSKEYS): admin-api and admin-web read Auth tokens the same way
+export * from './staff-passkeys';
 // Live updates in the videos admin (docs/admin/LIVE_OPS.md)
 export * from './admin-live';
 // Soft delete of admin-managed configuration (contact messages, themes, creator tiers)
