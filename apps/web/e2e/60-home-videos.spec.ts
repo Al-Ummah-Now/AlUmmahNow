@@ -37,7 +37,13 @@ async function loadNextPage(page: Page) {
   const box = page.getByTestId('home-load-more');
   await loadMoreButton(page).click();
   await expect
-    .poll(async () => (await box.count()) === 0 || /^(Load More|تحميل المزيد)$/.test((await box.innerText()).trim()), { timeout: 30000 })
+    // The box can unmount between count() and innerText() (the last page arrived): read it with a
+    // short timeout and treat "gone" as done, or innerText waits its 15 s and the poll throws
+    .poll(async () => {
+      if ((await box.count()) === 0) return true;
+      const text = await box.innerText({ timeout: 1000 }).catch(() => null);
+      return text === null || /^(Load More|تحميل المزيد)$/.test(text.trim());
+    }, { timeout: 30000 })
     .toBe(true);
 }
 
