@@ -8,7 +8,7 @@
  */
 
 /** Apps that report errors (admin "App" filter). */
-export const ERROR_APPS = ['web', 'admin-web', 'api-videos', 'admin-api', 'processor', 'scheduler', 'websocket', 'cost-monitor'] as const;
+export const ERROR_APPS = ['web', 'admin-web', 'api-videos', 'admin-api', 'processor', 'scheduler', 'websocket', 'cost-monitor', 'auth'] as const;
 export type ErrorApp = (typeof ERROR_APPS)[number];
 
 /**
