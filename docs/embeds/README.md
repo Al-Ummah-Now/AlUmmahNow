@@ -53,6 +53,17 @@ Unknown params are ignored. Invalid values fall back to the default.
   HLS from Bunny, quality menu, captions, chapters, keyboard shortcuts, click-only menus) loads when the viewer
   presses play, or at once with `autoplay=1`. A "Watch on Al Ummah Now" link opens the full watch page in a new tab,
   at the current time.
+- **Any frame size:** the player fills the frame and the video is fitted inside it at its own ratio, on the night
+  colour (a Short in a wide card, such as X's, is pillarboxed). The control bar (one row) and the progress bar sit
+  at the bottom of the frame across its full width, as on YouTube for vertical videos, so a narrow Short still gets
+  full-size controls; the least important controls (picture in picture, the volume slider, the duration) go only
+  when the frame itself is narrow. The "Watch on" link sits in the frame's top corner, outside the video when there
+  is room beside it, and shows its icon alone (its label kept as the link's name) in frames under 480px wide and
+  wherever the full label would cover the picture.
+- **Social cards:** the watch page declares the video's own ratio to link-preview bots (`og:video:width/height`,
+  `twitter:player:width/height`, oEmbed `width/height`; a Short is 405x720), for sites that size their
+  player from it. X draws its player card in a landscape box whatever the declared size (checked 2026-11-12: a Short
+  declared 413x720 shows in a ~16:9 card), so on X a Short is pillarboxed inside the card.
 - **Unavailable video:** a clean "This video is unavailable" frame with a link to Al Ummah Now. The same frame is
   shown for private, scheduled (not yet published), deleted, moderation-hidden, still-processing and non-existent
   videos, so the frame never reveals which one it is. The HTTP status is 200 either way (so the host page shows the

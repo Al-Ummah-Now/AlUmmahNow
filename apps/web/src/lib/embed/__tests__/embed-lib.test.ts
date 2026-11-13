@@ -351,6 +351,17 @@ describe('buildWatchMetadata', () => {
     expect(declaredPlayerSize({ width: 427, height: 240 })).toEqual({ width: 1280, height: 719 });
     expect(declaredPlayerSize({})).toEqual({ width: 1280, height: 720 });
   });
+
+  it('declares the encoded size, not a fixed 9:16: production Short 720x1256 → 413x720, oEmbed 367x640 (2026-11-12 Twitterbot fetch)', () => {
+    const short = toEmbedVideo({ id: 's2', title: 'Short', playUrl: 'https://vz/t/s2/playlist.m3u8', isPublic: true, width: 720, height: 1256, isShort: true });
+    const meta = buildWatchMetadata(short, 'ar', HOST);
+    expect(meta.twitter).toMatchObject({ players: [{ width: 413, height: 720 }] });
+    expect(meta.openGraph).toMatchObject({ videos: [{ width: 413, height: 720 }], images: [{ width: 413, height: 720 }] });
+    expect(fitSize(null, null, 720 / 1256)).toEqual({ width: 367, height: 640 });
+    // a landscape video keeps a 16:9 card
+    const wide = toEmbedVideo({ id: 'w1', title: 'Wide', playUrl: 'https://vz/t/w1/playlist.m3u8', isPublic: true, width: 1920, height: 1080 });
+    expect(buildWatchMetadata(wide, 'en', HOST).twitter).toMatchObject({ players: [{ width: 1280, height: 720 }] });
+  });
 });
 
 describe('player box ratio', () => {

@@ -2,7 +2,9 @@
  * Release regression: the embed player in someone else's frame (owner reports, 2026-11-12, live on
  * www and X):
  *
- * 1. It fills the host's frame on the theme's night colour. Before: the theme's parchment page
+ * 1. It fills the host's frame on the theme's night colour, the picture fitted inside it, with the
+ *    controls across the frame: one row, the progress bar at the bottom, "Watch on" beside the
+ *    picture when there is room (else icon-only). Before: the theme's parchment page
  *    background showed as bands, and the watch page's `max-height: 100dvh - 148px` squashed the
  *    player to a strip (345x46 in a 345x194 frame); a 16:9 box in a square or vertical frame added
  *    a second set of bars. Landscape, Short and square, light and dark.
@@ -84,9 +86,15 @@ const media = (frame: Frame) =>
     return v ? { muted: v.muted || v.volume === 0, time: v.currentTime } : null;
   });
 
-/** The player's box, and whether html/body/main are the theme's (dark) night colour. */
+/** Lowest the progress track may sit above the frame's bottom edge: the control row (48px) and the bar's padding */
+const PROGRESS_BOTTOM_PX = 80;
+
+/**
+ * The player's box, the picture inside it, the controls and the "Watch on" link, and whether
+ * html/body/main are the theme's (dark) night colour.
+ */
 const look = (frame: Frame) =>
-  frame.evaluate(() => {
+  frame.evaluate((progressBottomPx) => {
     const bg = (el: Element | null) => (el ? getComputedStyle(el).backgroundColor : '');
     const probe = document.createElement('i');
     probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--fanous-c-nav-bg').trim();
@@ -97,29 +105,56 @@ const look = (frame: Frame) =>
     const dark = 0.2126 * r! + 0.7152 * g! + 0.0722 * b! < 80;
     const box = document.querySelector('.custom-video-player')?.getBoundingClientRect();
     const link = document.querySelector('[data-testid="embed-watch-link"]')?.getBoundingClientRect();
+    // The picture: the video element is the whole player, its frames fitted inside (object-fit: contain)
+    const v = document.querySelector<HTMLVideoElement>('.video-js video');
+    const vr = v?.getBoundingClientRect();
+    const pic = (() => {
+      if (!v || !vr || !v.videoWidth || !v.videoHeight) return null;
+      const scale = Math.min(vr.width / v.videoWidth, vr.height / v.videoHeight);
+      const w = v.videoWidth * scale;
+      const h = v.videoHeight * scale;
+      return { left: vr.left + (vr.width - w) / 2, top: vr.top + (vr.height - h) / 2, w, h };
+    })();
+    const bar = document.querySelector('.vjs-control-bar');
+    const shown = bar
+      ? [...bar.children]
+        .map((c) => ({ progress: c.classList.contains('vjs-progress-control'), r: c.getBoundingClientRect() }))
+        .filter(({ r: cr }) => cr.width > 0 && cr.height > 0)
+      : [];
+    const holder = document.querySelector('.vjs-progress-holder')?.getBoundingClientRect();
+    const sideRoom = pic ? (innerWidth - pic.w) / 2 : 0;
     return {
       backdrop: dark && [bg(document.documentElement), bg(document.body), bg(document.querySelector('main'))].every((c) => c === night),
       w: box ? Math.round(box.width) : 0,
       h: box ? Math.round(box.height) : 0,
-      // the player's left edge, and whether the "Watch on" link sits on the player (not the page)
-      x: box ? Math.round(box.left) : -1,
-      linkOnPlayer: !!box && !!link && link.left >= box.left - 1 && link.right <= box.right + 1 && link.top >= box.top - 1,
-      // the control bar: every visible control inside the player, and the buttons on one row (compact
-      // when narrow). The progress bar has a row of its own by design, so it is left out of the row
-      // check; the buttons' vertical centres agree within 6 px (their tops differ by a few sub-pixels
-      // with the buttons' heights, which flipped a top-bucketed check between runs).
+      // the picture's size and position (as large as the frame allows, at the video's ratio, centred)
+      pic: pic ? { w: Math.round(pic.w), h: Math.round(pic.h), x: Math.round(pic.left), y: Math.round(pic.top) } : null,
+      // the control bar: every visible control inside the frame, and the buttons on ONE row (their
+      // vertical centres agree within 6 px; tops differ by sub-pixels with the buttons' heights)
       controlsOneRow: (() => {
-        const bar = document.querySelector('.vjs-control-bar');
         if (!bar || !box) return false;
-        const shown = [...bar.children]
-          .map((c) => ({ progress: c.classList.contains('vjs-progress-control'), r: c.getBoundingClientRect() }))
-          .filter(({ r }) => r.width > 0 && r.height > 0);
-        const centres = shown.filter(({ progress, r }) => !progress && r.height <= 60).map(({ r }) => r.top + r.height / 2);
+        const centres = shown.filter(({ progress, r: cr }) => !progress && cr.height <= 60).map(({ r: cr }) => cr.top + cr.height / 2);
         const oneRow = centres.length === 0 || Math.max(...centres) - Math.min(...centres) <= 6;
-        return shown.every(({ r }) => r.left >= box.left - 1 && r.right <= box.right + 1) && oneRow;
+        return shown.every(({ r: cr }) => cr.left >= -1 && cr.right <= innerWidth + 1) && oneRow;
       })(),
+      // the progress track: at the bottom of the frame (not lifted into the picture by a wrapped
+      // bar), above the buttons, thin
+      progress: holder
+        ? { fromBottom: Math.round(innerHeight - holder.bottom), height: Math.round(holder.height), aboveButtons: shown.filter(({ progress }) => !progress).every(({ r: cr }) => cr.top >= holder.bottom - 1) }
+        : null,
+      // "Watch on": in the frame; covering none of the picture (a Short's title and a channel logo
+      // burned into its corner stay visible) unless it is icon-only, or the picture fills a wide frame
+      link: link ? { w: Math.round(link.width), inFrame: link.left >= -1 && link.right <= innerWidth + 1 && link.top >= -1 } : null,
+      linkClear: (() => {
+        if (!link || !pic) return false;
+        const overlaps = link.right > pic.left + 1 && link.left < pic.left + pic.w - 1 && link.bottom > pic.top + 1 && link.top < pic.top + pic.h - 1;
+        if (!overlaps || link.width <= 40) return true;
+        // only a landscape picture filling a wide frame may carry the full label
+        return sideRoom <= 4 && innerWidth >= 480;
+      })(),
+      progressBottomPx,
     };
-  });
+  }, PROGRESS_BOTTOM_PX);
 
 function skipOnPr(why: string): void {
   test.info().annotations.push({ type: 'skip', description: `the target predates ${why}` });
@@ -127,14 +162,19 @@ function skipOnPr(why: string): void {
 }
 
 test.describe('Release: the embed fills its frame on the night colour', () => {
-  // `player`: the expected player box (the video's ratio fitted in the frame, centred). The clips:
-  // landscape 16:9, vertical 240x426, square 1:1. 780x440 is X's player card for a Short.
-  for (const { clip, width, height, player } of [
-    { clip: 'landscape40', width: 345, height: 194, player: { w: 345, h: 194 } },
-    { clip: 'landscape40', width: 800, height: 450, player: { w: 800, h: 450 } },
-    { clip: 'vertical', width: 216, height: 384, player: { w: 216, h: 383 } },
-    { clip: 'vertical', width: 780, height: 440, player: { w: 248, h: 440 } },
-    { clip: 'square', width: 345, height: 345, player: { w: 345, h: 345 } },
+  // The player fills the frame; `pic` is the expected picture (the video's ratio fitted in the frame,
+  // centred). The clips: landscape 16:9, vertical 240x426, square 1:1. 780x440 and 504x283 are X's
+  // card on desktop and on a phone, whatever the video's ratio (owner's screenshot, 2026-11-12: the
+  // Short's controls wrapped onto two rows inside its ~245px picture, the progress bar sat mid-video
+  // and "Watch on" covered its title).
+  for (const { clip, width, height, pic } of [
+    { clip: 'landscape40', width: 345, height: 194, pic: { w: 345, h: 194 } },
+    { clip: 'landscape40', width: 800, height: 450, pic: { w: 800, h: 450 } },
+    { clip: 'landscape40', width: 300, height: 533, pic: { w: 300, h: 169 } },
+    { clip: 'vertical', width: 216, height: 384, pic: { w: 216, h: 383 } },
+    { clip: 'vertical', width: 780, height: 440, pic: { w: 248, h: 440 } },
+    { clip: 'vertical', width: 504, height: 283, pic: { w: 159, h: 283 } },
+    { clip: 'square', width: 345, height: 345, pic: { w: 345, h: 345 } },
   ] as const) {
     for (const scheme of ['dark', 'light'] as const) {
       test(`${clip} in a ${width}x${height} frame (${scheme})`, async ({ page }) => {
@@ -143,18 +183,34 @@ test.describe('Release: the embed fills its frame on the night colour', () => {
         const frame = await embedFrame(page);
         await expect(frame.locator('.custom-video-player')).toBeVisible({ timeout: 45000 });
         if (ON_PR && !(await look(frame)).backdrop) skipOnPr('the embed frame fill (components/embed/embed-frame.css)');
+        // A target that still sizes the player to the picture predates the frame-wide controls
+        if (ON_PR && (await look(frame)).w < width - 2) skipOnPr('the frame-wide embed controls (components/embed/embed-frame.css)');
+        // Wake the controls (they fade while playing)
+        await page.locator('#aun').hover({ position: { x: width / 2, y: height / 2 } });
+        await page.locator('#aun').hover({ position: { x: width / 2 + 5, y: height / 2 + 5 } });
         // The poll returns the failing parts by name, so a red run says which one
         await expect
           .poll(async () => {
             const l = await look(frame);
             const failing: string[] = [];
             if (!l.backdrop) failing.push('backdrop not the night colour');
-            if (Math.abs(l.w - player.w) > 2 || Math.abs(l.h - player.h) > 2) failing.push(`player ${l.w}x${l.h}`);
-            if (Math.abs(l.x - (width - l.w) / 2) > 2) failing.push(`not centred (left ${l.x})`);
-            if (!l.linkOnPlayer) failing.push('"Watch on" not on the player');
-            if (!l.controlsOneRow) failing.push('controls not on one row inside the player');
+            if (Math.abs(l.w - width) > 2 || Math.abs(l.h - height) > 2) failing.push(`player ${l.w}x${l.h}, not the frame`);
+            if (!l.pic) failing.push('no picture');
+            else {
+              if (Math.abs(l.pic.w - pic.w) > 2 || Math.abs(l.pic.h - pic.h) > 2) failing.push(`picture ${l.pic.w}x${l.pic.h}`);
+              if (Math.abs(l.pic.x - (width - l.pic.w) / 2) > 2) failing.push(`picture not centred (left ${l.pic.x})`);
+            }
+            if (!l.controlsOneRow) failing.push('controls not on one row inside the frame');
+            if (!l.progress) failing.push('no progress bar');
+            else {
+              if (l.progress.fromBottom > l.progressBottomPx) failing.push(`progress bar ${l.progress.fromBottom}px above the frame's bottom`);
+              if (!l.progress.aboveButtons) failing.push('progress bar not above the buttons');
+              if (l.progress.height > 10) failing.push(`progress track ${l.progress.height}px tall`);
+            }
+            if (!l.link?.inFrame) failing.push('"Watch on" not in the frame');
+            if (!l.linkClear) failing.push(`"Watch on" (${l.link?.w}px) covers the picture and is not icon-only`);
             return failing;
-          }, { message: `player ${player.w}x${player.h}, centred, on the night colour, "Watch on" and the controls on the player`, timeout: 15000 })
+          }, { message: 'player fills the frame; picture fitted; one-row controls and the progress bar at the bottom; "Watch on" clear of the picture', timeout: 15000 })
           .toEqual([]);
       });
     }
