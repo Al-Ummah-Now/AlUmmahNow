@@ -70,6 +70,8 @@
 }
 .aun-acct-name {
   min-width: 0;
+  /* a long name (or the email, when there is no name) never pushes the header apart */
+  max-width: 12rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
