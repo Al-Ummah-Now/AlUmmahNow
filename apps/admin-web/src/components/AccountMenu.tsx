@@ -19,6 +19,12 @@ interface AccountMenuProps {
   issuer: string;
   /** The account this panel is signed in as, if any (shown until the list loads). */
   currentEmail?: string;
+  /**
+   * That account's name by the platform rule (display name, else first + last; admin-api's videos
+   * profile view). The auth server's list often has no name for it, and the email is only the last
+   * resort (docs/design/NAV.md).
+   */
+  currentName?: string;
   /** This account's roles: the "Al Ummah Now apps" links are gated like each app's guard. */
   roles?: readonly string[];
 }
@@ -28,7 +34,7 @@ interface AccountMenuProps {
  * switch (silent sign-in as that account), add one (sign-in form), sign out
  * of one, or sign out of all (single sign-out).
  */
-export function AccountMenu({ issuer, currentEmail, roles }: AccountMenuProps) {
+export function AccountMenu({ issuer, currentEmail, currentName, roles }: AccountMenuProps) {
   const { t, locale } = useLanguage();
   const { confirm, dialog: confirmDialog } = useConfirm();
   const [open, setOpen] = useState(false);
@@ -97,7 +103,9 @@ export function AccountMenu({ issuer, currentEmail, roles }: AccountMenuProps) {
   const active = rows.find((a) => a.isActive) ?? rows[0];
   const others = rows.filter((a) => a !== active);
   // The name auth has for the account (platform display-name rule); the email only without one
-  const nameOf = (a: AuthAccount | undefined) => a?.name || a?.email || currentEmail || '';
+  const isSignedInHere = (a: AuthAccount | undefined) => !!a && !!currentEmail && a.email.toLowerCase() === currentEmail.toLowerCase();
+  const nameOf = (a: AuthAccount | undefined) =>
+    a?.name || (isSignedInHere(a) || !a ? currentName : '') || a?.email || currentEmail || '';
   const name = nameOf(active);
   const initial = (name[0] ?? '?').toUpperCase();
   const otherApps = appLinks({ current: 'admin', roles, lang: locale, urls: appUrlsFromIssuer(issuer) });

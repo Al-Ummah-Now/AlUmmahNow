@@ -22,6 +22,8 @@ import {
 
 interface AdminShellProps {
   userEmail?: string;
+  /** The signed-in account's name by the platform rule (display name, else first + last). */
+  userName?: string;
   /** The signed-in account's roles (the account menu's app links). */
   userRoles?: readonly string[];
   /** Auth server origin, for the account menu */
@@ -40,7 +42,7 @@ const focusRing = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-fo
  * beside a top bar with breadcrumbs, search (⌘K) and the account. Tablets: the rail. Phones: the
  * top bar, a bottom bar, and the sidebar as a drawer.
  */
-export function AdminShell({ userEmail, userRoles, authIssuer, access, badges, initialRail, children }: AdminShellProps) {
+export function AdminShell({ userEmail, userName, userRoles, authIssuer, access, badges, initialRail, children }: AdminShellProps) {
   const { t } = useLanguage();
   const pathname = usePathname();
   const [rail, setRail] = useState(initialRail);
@@ -267,7 +269,7 @@ export function AdminShell({ userEmail, userRoles, authIssuer, access, badges, i
           {/* The account button and menu (docs/design/NAV.md): avatar + name; sign-out lives in the menu */}
           {userEmail && authIssuer && (
             <div className="flex items-center md:ps-2">
-              <AccountMenu issuer={authIssuer} currentEmail={userEmail} roles={userRoles} />
+              <AccountMenu issuer={authIssuer} currentEmail={userEmail} currentName={userName} roles={userRoles} />
             </div>
           )}
         </header>
