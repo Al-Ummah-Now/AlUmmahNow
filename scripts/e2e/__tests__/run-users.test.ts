@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { isRunUserEmail, parseRunUsers, runId, runUserAddress, runUserEmail, runUserName } from '../../../apps/web/e2e/test-utils/run-users.ts';
-import { assertAuthUrl, deleteRunUser, parseArgs, run, STALE_PAGE } from '../teardown-run-users.ts';
+import { assertAuthUrl, CONCURRENCY, deleteRunUser, inPool, MIN_STEP_MINUTES, parseArgs, run, STALE_PAGE, stepMinutes } from '../teardown-run-users.ts';
 
 const ENV = { E2E_RUN_ID: '42887909300-2' } as NodeJS.ProcessEnv;
 const SECRETS = { E2E_CODE_SINK_SECRET: 'sink-secret-value', TEST_PROMOTE_SECRET: 'promote-secret-value' } as NodeJS.ProcessEnv;
@@ -128,5 +128,88 @@ describe('teardown-run-users', () => {
 		// 2 listings, 203 deletes; the short second listing ends the run
 		assert.equal(calls.filter((c) => c.url.includes('/stale')).length, 2);
 		assert.equal(calls.length, STALE_PAGE + 3 + 2);
+	});
+
+	it('deletes CONCURRENCY accounts at a time, every one once', async () => {
+		const dir = mkdtempSync(join(tmpdir(), 'teardown-'));
+		try {
+			const file = join(dir, 'users.txt');
+			const emails = Array.from({ length: 11 }, (_, i) => `e2e+1-1-p${i}@e2e.alummahnow.net`);
+			writeFileSync(file, `${emails.join('\n')}\n`);
+			let inFlight = 0;
+			let most = 0;
+			const seen: string[] = [];
+			const deps = {
+				fetch: (async (url: string) => {
+					seen.push(decodeURIComponent(url.split('/').pop() as string));
+					inFlight++;
+					most = Math.max(most, inFlight);
+					await new Promise((r) => setTimeout(r, 5));
+					inFlight--;
+					return new Response(JSON.stringify({ found: 1 }), { status: 200 });
+				}) as typeof fetch,
+				sleep: async () => undefined,
+				log: () => undefined,
+			};
+			const counts = await run(parseArgs(['--auth-url', 'https://auth.stage.alummahnow.net', '--file', file]), SECRETS, deps);
+			assert.equal(counts.deleted, 11);
+			assert.equal(most, CONCURRENCY);
+			assert.deepEqual([...seen].sort(), [...emails].sort());
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	it('the pool never runs more than its limit, and runs everything with fewer items than lanes', async () => {
+		let inFlight = 0;
+		let most = 0;
+		const done: number[] = [];
+		await inPool([1, 2, 3, 4, 5, 6, 7], 3, async (n) => {
+			inFlight++;
+			most = Math.max(most, inFlight);
+			await new Promise((r) => setTimeout(r, 1 + (n % 3)));
+			inFlight--;
+			done.push(n);
+		});
+		assert.equal(most, 3);
+		assert.deepEqual(done.sort(), [1, 2, 3, 4, 5, 6, 7]);
+		const few: number[] = [];
+		await inPool([1], 4, async (n) => void few.push(n));
+		assert.deepEqual(few, [1]);
+		await inPool([], 4, async () => assert.fail('no work'));
+	});
+
+	it('gives up on a request that hangs past its timeout, retries it, then reports it failed', async () => {
+		let calls = 0;
+		const lines: string[] = [];
+		const deps = {
+			// Never answers: only the request's timeout ends it
+			fetch: ((_url: string, init?: RequestInit) => {
+				calls++;
+				return new Promise<Response>((_, reject) => init?.signal?.addEventListener('abort', () => reject(init.signal?.reason)));
+			}) as typeof fetch,
+			sleep: async () => undefined,
+			log: (line: string) => lines.push(line),
+			requestTimeoutMs: 20,
+		};
+		const started = Date.now();
+		assert.equal(await deleteRunUser('https://auth.stage.alummahnow.net', 'e2e+1-1-a@e2e.alummahnow.net', SECRETS, deps), 'failed');
+		assert.equal(calls, 5);
+		assert.ok(Date.now() - started < 5000, 'bounded by the per-request timeout');
+		assert.ok(lines.some((l) => l.includes('attempt 5')));
+	});
+
+	it('sizes the step timeout to the accounts: 5 minutes at least, 15 s per account per lane', () => {
+		assert.equal(stepMinutes(0), MIN_STEP_MINUTES);
+		assert.equal(stepMinutes(12), MIN_STEP_MINUTES);
+		// 100 accounts, 4 lanes: 25 x 15 s = 6.25 min, + 2
+		assert.equal(stepMinutes(100), 9);
+		assert.equal(stepMinutes(400), 2 + Math.ceil((100 * 15) / 60));
+		assert.ok(stepMinutes(100, 1) > stepMinutes(100));
+	});
+
+	it('--step-minutes needs the files and counts each recorded run account once', () => {
+		assert.throws(() => parseArgs(['--auth-url', 'https://auth.qa.alummahnow.net', '--stale-hours', '24', '--step-minutes']));
+		assert.equal(parseArgs(['--auth-url', 'https://auth.qa.alummahnow.net', '--file', 'x', '--step-minutes']).stepMinutes, true);
 	});
 });

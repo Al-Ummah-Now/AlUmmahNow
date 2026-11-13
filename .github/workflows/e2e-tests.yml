@@ -260,10 +260,20 @@ jobs:
           E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_QA }}
           E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
 
+      # The step's timeout grows with the job's accounts (deleted 4 at a time, #1073)
+      - name: Size the account deletion
+        id: teardown-size
+        if: always()
+        continue-on-error: true
+        run: |
+          m=$(node --experimental-strip-types --no-warnings scripts/e2e/teardown-run-users.ts --auth-url "$OPENAUTH_URL" --file "$E2E_RUN_USERS_FILE" --step-minutes 2>/dev/null) || m=15
+          case "$m" in ''|*[!0-9]*) m=15 ;; esac
+          echo "minutes=$m" >> "$GITHUB_OUTPUT"
+
       - name: Delete the run accounts
         if: always()
         continue-on-error: true
-        timeout-minutes: 5
+        timeout-minutes: ${{ fromJSON(steps.teardown-size.outputs.minutes || '15') }}
         run: >-
           node --experimental-strip-types --no-warnings scripts/e2e/teardown-run-users.ts
           --auth-url "$OPENAUTH_URL" --file "$E2E_RUN_USERS_FILE"
@@ -443,10 +453,20 @@ jobs:
           E2E_CODE_SINK_SECRET: ${{ secrets.E2E_CODE_SINK_SECRET_QA }}
           E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
 
+      # The step's timeout grows with the job's accounts (deleted 4 at a time, #1073)
+      - name: Size the account deletion
+        id: teardown-size
+        if: always()
+        continue-on-error: true
+        run: |
+          m=$(node --experimental-strip-types --no-warnings scripts/e2e/teardown-run-users.ts --auth-url "$OPENAUTH_URL" --file "$E2E_RUN_USERS_FILE" --step-minutes 2>/dev/null) || m=15
+          case "$m" in ''|*[!0-9]*) m=15 ;; esac
+          echo "minutes=$m" >> "$GITHUB_OUTPUT"
+
       - name: Delete the run accounts
         if: always()
         continue-on-error: true
-        timeout-minutes: 5
+        timeout-minutes: ${{ fromJSON(steps.teardown-size.outputs.minutes || '15') }}
         run: >-
           node --experimental-strip-types --no-warnings scripts/e2e/teardown-run-users.ts
           --auth-url "$OPENAUTH_URL" --file "$E2E_RUN_USERS_FILE"
