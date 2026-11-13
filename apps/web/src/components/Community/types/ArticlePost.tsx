@@ -16,7 +16,7 @@ const linkClass = 'inline-flex items-center gap-1 text-sm font-medium text-[var(
  * the article on www.
  */
 export default function ArticlePost({ post }: ArticlePostProps) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const a = post.article;
   if (!a) return null;
   const cover = a.cover?.url ?? a.coverUrl;
@@ -39,7 +39,7 @@ export default function ArticlePost({ post }: ArticlePostProps) {
               <span aria-hidden="true" className="group-open:rotate-90 rtl:rotate-180 rtl:group-open:rotate-90 transition-transform">→</span>
             </summary>
             <div className="pt-3">
-              <PostMarkdown source={a.body} />
+              <PostMarkdown source={a.body} locale={locale} watchLabel={t.community.video} />
             </div>
           </details>
           {wwwUrl ? (

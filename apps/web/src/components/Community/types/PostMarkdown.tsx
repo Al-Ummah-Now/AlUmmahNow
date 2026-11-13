@@ -39,7 +39,10 @@ function inline(text: string, key: string): ReactNode[] {
   return out;
 }
 
-export default function PostMarkdown({ source }: { source: string }) {
+/** `::video[ID]` lines (CMS article bodies) become a link to the watch page. */
+const VIDEO_LINE = /^::video\[([A-Za-z0-9_-]{1,64})\]$/;
+
+export default function PostMarkdown({ source, locale = 'en', watchLabel = 'Watch' }: { source: string; locale?: string; watchLabel?: string }) {
   const blocks = source.replace(/\r\n?/g, '\n').split(/\n{2,}/);
   return (
     <div className="space-y-3 text-[var(--fanous-color-text-primary)] break-words">
@@ -53,6 +56,14 @@ export default function PostMarkdown({ source }: { source: string }) {
           const level = Math.min(6, heading[1].length + 3);
           const Tag = `h${level}` as 'h4' | 'h5' | 'h6';
           return <Tag key={key} className="font-semibold text-base">{inline(heading[2], key)}</Tag>;
+        }
+        const video = VIDEO_LINE.exec(block);
+        if (video) {
+          return (
+            <p key={key}>
+              <a href={`/${locale === 'ar' ? 'ar' : 'en'}/video/${video[1]}`} className="text-[var(--fanous-color-link)] underline underline-offset-2">{watchLabel}</a>
+            </p>
+          );
         }
         const image = /^!\[([^\]\n]*)\]\(\s*<?([^\s)>]+)>?\s*\)$/.exec(block);
         if (image) {
