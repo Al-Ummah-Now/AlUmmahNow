@@ -1,0 +1,15 @@
+import { notFound } from 'next/navigation';
+import { StudioNoAccess } from '@/components/studio/StudioNoAccess';
+import { SiteSettingsEditor } from '@/components/studio/site/SiteSettingsEditor';
+import { requireStudioPage } from '@/lib/studio/server';
+import { getStudioSite } from '@/lib/studio/site';
+
+/** Studio → Site (wiki AUN-SCHOLAR-SITES §7.1, phase 2): theme, name, logo, favicon, languages, menu, About, preview. */
+export default async function StudioSitePage({ params }: { params: Promise<{ locale: string; channelId: string }> }) {
+  const { locale, channelId } = await params;
+  const access = await requireStudioPage(channelId, ['site']);
+  if (!access) return <StudioNoAccess locale={locale} channelId={channelId} />;
+  const site = await getStudioSite(channelId);
+  if (!site) notFound();
+  return <SiteSettingsEditor locale={locale} channelId={channelId} initial={site} channelName={access.channel.nameLocalized?.[locale] || access.channel.name} />;
+}

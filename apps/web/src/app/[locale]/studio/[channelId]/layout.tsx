@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation';
 import { StudioFrame } from '@/components/studio/StudioFrame';
 import { StudioSignIn } from '@/components/studio/StudioSignIn';
 import { getStudioAccess } from '@/lib/studio/server';
+import { getStudioSite } from '@/lib/studio/site';
+import { can } from '@/lib/studio/permissions';
 
 export const metadata = { robots: { index: false, follow: false } };
 
@@ -21,10 +23,13 @@ export default async function StudioChannelLayout({ children, params }: Props) {
   if (access.status === 'none') notFound();
 
   const { channel, role } = access;
+  // The Site item (white-label scholar sites): only owners and channel admins look it up
+  const hasSite = can(role, 'channel.edit') ? !!(await getStudioSite(channelId)) : false;
   return (
     <StudioFrame
       locale={locale}
       role={role}
+      features={{ site: hasSite }}
       channel={{
         id: channel.id,
         name: channel.nameLocalized?.[locale] || channel.name,

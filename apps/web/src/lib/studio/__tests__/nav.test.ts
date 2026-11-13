@@ -120,3 +120,21 @@ describe('permissions', () => {
     expect(roleForChannel(null, 'u1')).toBeNull();
   });
 });
+
+describe('Site item (white-label scholar sites)', () => {
+  it('shows only for owners and channel admins of a channel that has a site', () => {
+    const ids = (role: Parameters<typeof visibleNav>[0], site: boolean) => visibleNav(role, { site }).map((i) => i.id);
+    expect(ids('owner', true)).toContain('site');
+    expect(ids('admin', true)).toContain('site');
+    expect(ids('editor', true)).not.toContain('site');
+    expect(ids('moderator', true)).not.toContain('site');
+    expect(ids('owner', false)).not.toContain('site');
+    expect(visibleNav('owner').map((i) => i.id)).not.toContain('site');
+  });
+
+  it('opens for channel.edit roles only', () => {
+    expect(checkPath('owner', ['site'])).toEqual({ status: 'ok' });
+    expect(checkPath('admin', ['site'])).toEqual({ status: 'ok' });
+    expect(checkPath('editor', ['site'])).toEqual({ status: 'forbidden' });
+  });
+});

@@ -306,6 +306,9 @@
 	"vars": {
 		// Self-hosted live edge host (custom domain on this worker, attached with the Workers domains API like videos.api)
 		"LIVE_PUBLIC_HOST": "live.alummahnow.net",
+		// White-label scholar sites (wiki AUN-SCHOLAR-SITES): host suffix <slug>.{alummahnow.org | stage. | qa.}; revoked sites redirect to the channel here
+		"SITES_ENV": "production",
+		"VIDEOS_WEB_URL": "https://videos.alummahnow.net",
 		// Error reports to the admin Errors page (docs/features/error-reporting.md)
 		"ERRORS_INGEST_URL": "https://admin.api.alummahnow.net/internal/errors",
 		// R2 delivery host (public renditions direct from R2, private ones via apps/media). The
@@ -594,6 +597,9 @@
 			],
 			"vars": {
 				"LIVE_PUBLIC_HOST": "live.stage.alummahnow.net",
+				// White-label scholar sites (wiki AUN-SCHOLAR-SITES): host suffix <slug>.{alummahnow.org | stage. | qa.}; revoked sites redirect to the channel here
+				"SITES_ENV": "stage",
+				"VIDEOS_WEB_URL": "https://videos.stage.alummahnow.net",
 				// Error reports to the admin Errors page (docs/features/error-reporting.md)
 				"ERRORS_INGEST_URL": "https://admin.api.stage.alummahnow.net/internal/errors",
 				"MEDIA_PUBLIC_HOST": "media.stage.alummahnow.net",

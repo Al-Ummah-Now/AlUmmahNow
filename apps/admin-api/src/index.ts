@@ -14,6 +14,7 @@ import suggestRouter from './routers/suggest.router';
 import reportQueueRouter from './routers/reportQueue.router';
 import { scheduledReportMetaSync } from './lib/moderation/reportMeta';
 import invitesRouter from './routers/invites.router';
+import sitesRouter from './routers/sites.router';
 import { scheduleInviteSyncs } from './lib/invites';
 import processingRouter from './routers/processing.router';
 import mediaRouter from './routers/media.router';
@@ -180,6 +181,8 @@ app.route('/api/moderation/queue', reportQueueRouter as never);
 app.route('/api/suggest', suggestRouter);
 // Invite creators: pre-provisioned accounts, plan and channels before first sign-in (docs/admin/INVITES.md)
 app.route('/api/invites', invitesRouter);
+// White-label scholar sites: grant, change, revoke, restore (wiki AUN-SCHOLAR-SITES §8)
+app.route('/api/sites', sitesRouter);
 
 // Upload processing health (sync from Bunny, retry, mark failed): permission-checked, audited proxy to api-videos
 app.route('/api/processing', processingRouter);

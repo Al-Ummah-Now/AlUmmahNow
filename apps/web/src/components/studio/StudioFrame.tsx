@@ -34,6 +34,8 @@ interface Props {
   locale: string;
   role: StudioRole;
   channel: StudioChannel;
+  /** Add-ons this channel has (the Site item shows only with a white-label site) */
+  features?: { site?: boolean };
   children: ReactNode;
 }
 
@@ -101,10 +103,10 @@ function ChannelSwitcher({ locale, channel, segments }: { locale: string; channe
   );
 }
 
-function NavLinks({ locale, role, channelId, active, onNavigate }: { locale: string; role: StudioRole; channelId: string; active?: string; onNavigate?: () => void }) {
+function NavLinks({ locale, role, channelId, active, features, onNavigate }: { locale: string; role: StudioRole; channelId: string; active?: string; features?: { site?: boolean }; onNavigate?: () => void }) {
   const { t } = useLanguage();
-  const settings = visibleNav(role).filter((item) => item.id === 'settings');
-  const main = visibleNav(role).filter((item) => item.id !== 'settings');
+  const settings = visibleNav(role, features).filter((item) => item.id === 'settings');
+  const main = visibleNav(role, features).filter((item) => item.id !== 'settings');
   const link = (item: (typeof STUDIO_NAV)[number]) => {
     const current = item.id === active;
     return (
@@ -131,7 +133,7 @@ function NavLinks({ locale, role, channelId, active, onNavigate }: { locale: str
   );
 }
 
-function Rail({ locale, role, channel, segments, onNavigate }: { locale: string; role: StudioRole; channel: StudioChannel; segments: string[]; onNavigate?: () => void }) {
+function Rail({ locale, role, channel, segments, features, onNavigate }: { locale: string; role: StudioRole; channel: StudioChannel; segments: string[]; features?: { site?: boolean }; onNavigate?: () => void }) {
   const { t } = useLanguage();
   return (
     <div className="flex h-full flex-col gap-3 p-3">
@@ -144,13 +146,13 @@ function Rail({ locale, role, channel, segments, onNavigate }: { locale: string;
           </Link>
         </Button>
       )}
-      <NavLinks locale={locale} role={role} channelId={channel.id} active={segments[0]} onNavigate={onNavigate} />
+      <NavLinks locale={locale} role={role} channelId={channel.id} active={segments[0]} features={features} onNavigate={onNavigate} />
     </div>
   );
 }
 
 /** The Studio shell: left rail, phone drawer, tabs of the current page. */
-export function StudioFrame({ locale, role, channel, children }: Props) {
+export function StudioFrame({ locale, role, channel, features, children }: Props) {
   const { t } = useLanguage();
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -168,7 +170,7 @@ export function StudioFrame({ locale, role, channel, children }: Props) {
   return (
     <div className="min-h-[calc(100vh-3.5rem)] bg-background text-foreground md:flex" data-testid="studio-frame">
       <aside className="sticky top-0 hidden h-[calc(100vh-3.5rem)] w-60 shrink-0 border-e border-border md:block">
-        <Rail locale={locale} role={role} channel={channel} segments={segments} />
+        <Rail locale={locale} role={role} channel={channel} segments={segments} features={features} />
       </aside>
 
       <div className="flex items-center gap-2 border-b border-border p-2 md:hidden">
@@ -180,7 +182,7 @@ export function StudioFrame({ locale, role, channel, children }: Props) {
       <Dialog open={drawerOpen} onOpenChange={setDrawerOpen}>
         <DialogContent data-slot="sheet-content" className="top-0 h-full max-w-xs translate-x-0 translate-y-0 rounded-none border-e p-0 ltr:left-0 rtl:left-auto rtl:right-0">
           <DialogTitle className="sr-only">{t.studio.title}</DialogTitle>
-          <Rail locale={locale} role={role} channel={channel} segments={segments} onNavigate={() => setDrawerOpen(false)} />
+          <Rail locale={locale} role={role} channel={channel} segments={segments} features={features} onNavigate={() => setDrawerOpen(false)} />
         </DialogContent>
       </Dialog>
 

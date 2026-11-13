@@ -24,7 +24,9 @@ export type ContentKind =
   /** A stream's next session moved to a provider (id = stream id). */
   | 'live-stream'
   /** A live session ended by an admin (id = session id). */
-  | 'live-session';
+  | 'live-session'
+  /** A white-label scholar site (id = channel id; wiki AUN-SCHOLAR-SITES). */
+  | 'site';
 
 /** Every live streaming audit key starts with this ('content:live-'); the range ends before 'content:live.'. */
 export const LIVE_AUDIT_PREFIX = `content:live-`;

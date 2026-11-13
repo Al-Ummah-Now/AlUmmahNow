@@ -245,6 +245,9 @@
   "vars": {
     // Self-hosted live edge host (custom domain on this worker, attached with the Workers domains API like videos.api.qa)
     "LIVE_PUBLIC_HOST": "live.qa.alummahnow.net",
+    // White-label scholar sites (wiki AUN-SCHOLAR-SITES): host suffix <slug>.{alummahnow.org | stage. | qa.}; revoked sites redirect to the channel here
+    "SITES_ENV": "qa",
+    "VIDEOS_WEB_URL": "https://videos.qa.alummahnow.net",
     // Error reports to the admin Errors page (docs/features/error-reporting.md)
     "ERRORS_INGEST_URL": "https://admin.api.qa.alummahnow.net/internal/errors",
     // R2 delivery host (public renditions direct from R2, private ones via apps/media)

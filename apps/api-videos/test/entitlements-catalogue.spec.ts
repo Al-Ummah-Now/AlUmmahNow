@@ -40,7 +40,9 @@ describe('plan migrations', () => {
 
 	it('leaves paid plans as non-public drafts with valid values', () => {
 		const raw = db();
-		assert.deepEqual((raw.prepare("SELECT slug FROM plans WHERE status <> 'draft' OR is_public = 1").all() as any[]).map((r) => r.slug), ['free']);
+		// Only Free is public; the white-label site add-ons (AUN-SCHOLAR-SITES SS1) are active but admin-granted, never public
+		assert.deepEqual((raw.prepare("SELECT slug FROM plans WHERE is_public = 1").all() as any[]).map((r) => r.slug), ['free']);
+		assert.deepEqual((raw.prepare("SELECT slug FROM plans WHERE status <> 'draft' ORDER BY sort_order").all() as any[]).map((r) => r.slug), ['free', 'addon-white-label', 'addon-white-label-domain']);
 		for (const r of raw.prepare("SELECT key, value_json FROM plan_entitlements WHERE plan_id <> 'plan_free'").all() as any[]) {
 			assert.equal(validateEntitlementValue(r.key, JSON.parse(r.value_json)), null);
 		}
