@@ -98,6 +98,8 @@ export const NAV_ITEMS: NavItem[] = [
 
   { href: '/site-theme', label: 'nav.siteTheme', icon: 'palette', group: 'site' },
   { href: '/platform-settings', label: 'nav.platformSettings', icon: 'sliders', group: 'site' },
+  // White-label scholar sites (wiki AUN-SCHOLAR-SITES §8): every admin reads, creators:manage changes
+  { href: '/sites', label: 'nav.scholarSites', icon: 'globe', group: 'site' },
   { href: '/deleted', label: 'nav.deleted', icon: 'trash', group: 'site' },
 ];
 

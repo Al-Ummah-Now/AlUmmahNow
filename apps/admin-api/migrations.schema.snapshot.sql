@@ -20,6 +20,7 @@
 --   apps/admin-api/migrations/0019_admin_queues.sql
 --   apps/admin-api/migrations/0020_reports_queue.sql
 --   apps/admin-api/migrations/0021_erase_lookup_indexes.sql
+--   apps/admin-api/migrations/0022_scholar_sites.sql
 
 CREATE TABLE admin_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, actor_email TEXT, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, metadata TEXT, created_at TEXT NOT NULL);
 CREATE TABLE ai_budget_daily (day TEXT NOT NULL, feature TEXT NOT NULL, reserved REAL NOT NULL DEFAULT 0, PRIMARY KEY (day, feature));
@@ -72,6 +73,7 @@ CREATE INDEX idx_contact_notes_message ON contact_notes (message_id, created_at)
 CREATE INDEX idx_creator_invites_created ON creator_invites(created_at);
 CREATE INDEX idx_creator_invites_email ON creator_invites(email);
 CREATE INDEX idx_creator_invites_status ON creator_invites(status, created_at);
+CREATE INDEX idx_entitlement_overrides_key ON entitlement_overrides(key, subject_type, created_at);
 CREATE INDEX idx_error_actions_group ON error_actions (group_id, status, updated_at DESC);
 CREATE INDEX idx_error_actions_status ON error_actions (status, updated_at DESC);
 CREATE INDEX idx_error_events_group ON error_events (group_id, occurred_at DESC);

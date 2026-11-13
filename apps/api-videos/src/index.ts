@@ -61,6 +61,7 @@ import { createTusRouter } from "./endpoints/video/tus";
 import { createProcessingInternalRouter } from "./endpoints/video/processingInternal";
 import scholarsInternalRouter from "./routers/scholars-internal.router";
 import postsInternalRouter from "./routers/posts-internal.router";
+import { sitesInternalRouter, sitesRouter } from "./routers/sites.router";
 import { createUploadsInternalRouter } from "./endpoints/video/uploadsInternal";
 import { createVideoFormatInternalRouter } from "./endpoints/video/videoFormatInternal";
 import { createFootprintsInternalRouter } from "./endpoints/privacy/footprintsInternal";
@@ -247,6 +248,9 @@ app.route('/internal/playlist-adds', createPlaylistAddsInternalRouter() as never
 app.route('/internal/scholars', scholarsInternalRouter as never);
 // Community posts for the CMS (www scholar post pages; wiki AUN-SCHOLAR-SITES §6.3)
 app.route('/internal/posts', postsInternalRouter as never);
+// White-label scholar sites (wiki AUN-SCHOLAR-SITES): admin-api grants; the sites Worker and Studio read and edit
+app.route('/internal/sites', sitesInternalRouter as never);
+app.route('/api/sites', sitesRouter as never);
 // R2 delivery beside Bunny (epic #687): apps/media's callbacks, admin retry / jobs / settings
 app.route('/internal/media', createMediaInternalRouter() as never);
 // Platform notification settings (admin-api proxies with the admin role + audit)

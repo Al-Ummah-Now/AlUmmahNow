@@ -13,7 +13,9 @@ export interface StudioTab {
 }
 
 export interface StudioNavItem {
-  id: 'dashboard' | 'content' | 'analytics' | 'comments' | 'playlists' | 'customisation' | 'settings';
+  id: 'dashboard' | 'content' | 'analytics' | 'comments' | 'playlists' | 'customisation' | 'site' | 'settings';
+  /** Shown only for a channel with this add-on (StudioFrame `features`) */
+  feature?: 'site';
   requires: Requires;
   /** Hidden until the work behind it ships */
   available?: boolean;
@@ -65,6 +67,8 @@ export const STUDIO_NAV: readonly StudioNavItem[] = [
       { id: 'layout', requires: ['channel.edit'] },
     ],
   },
+  // White-label scholar site (wiki AUN-SCHOLAR-SITES §7.1): owner and channel admins, only when the channel has a site
+  { id: 'site', requires: ['channel.edit'], feature: 'site' },
   {
     id: 'settings',
     requires: ['channel.view_private'],
@@ -84,8 +88,10 @@ export function visibleTabs(role: StudioRole, item: StudioNavItem): StudioTab[] 
 }
 
 /** The items this role sees. An item with tabs needs at least one tab it can open. */
-export function visibleNav(role: StudioRole): StudioNavItem[] {
-  return STUDIO_NAV.filter((item) => item.available !== false && meets(role, item.requires) && (!item.tabs || visibleTabs(role, item).length > 0));
+export function visibleNav(role: StudioRole, features: { site?: boolean } = {}): StudioNavItem[] {
+  return STUDIO_NAV.filter(
+    (item) => item.available !== false && (!item.feature || !!features[item.feature]) && meets(role, item.requires) && (!item.tabs || visibleTabs(role, item).length > 0),
+  );
 }
 
 /** Path below the channel that opens this item: its first tab the role can use. */
