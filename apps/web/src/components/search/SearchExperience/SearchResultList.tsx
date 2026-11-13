@@ -41,7 +41,7 @@ function PostResultCard({ post }: { post: SearchPostPayload }) {
           </p>
           <p className="text-xs text-gray-500 dark:text-gray-400">
             {t.search.communityPost}
-            {date && !Number.isNaN(date.getTime()) && <> · <RelativeDate value={date} lang={lang} /></>}
+            {date && !Number.isNaN(date.getTime()) && <> · <RelativeDate value={date} lang={lang} label="published" /></>}
           </p>
         </div>
       </div>

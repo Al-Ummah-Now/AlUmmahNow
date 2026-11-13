@@ -400,6 +400,14 @@ export const AR_TRANSLATIONS: AppTranslations = {
 
   video: {
     publishedAt: 'نُشر في {date}',
+    dateLabel: {
+      published: 'نُشر {time}',
+      updated: 'حُدّث {time}',
+      started: 'بدأ {time}',
+      ended: 'انتهى {time}',
+      scheduled: 'مجدول في {date}',
+      liveNow: 'يُبث مباشرة الآن',
+    },
     videos: 'المرئيات',
     videoSingular: "مرئي",
     uploadVideo: 'رفع مرئي',

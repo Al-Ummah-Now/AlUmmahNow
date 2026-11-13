@@ -8,8 +8,8 @@ import { removeUnwantedChars } from "@/lib/utility";
 import { useLanguage } from "@/hooks/useLanguage";
 import { VideoCardMenu } from "@/components/library/VideoCardMenu";
 import { formatViews } from '@/lib/format/videoMeta';
-import { RelativeDate } from '@/components/RelativeDate';
 import { channelLabel } from '@/lib/channel-name';
+import { VideoDate } from '@/components/VideoDate';
 
 const VideoCard: React.FC<VideoObject> = (video) => {
     const { lang } = useLanguage();
@@ -38,7 +38,7 @@ const VideoCard: React.FC<VideoObject> = (video) => {
                     </h3>
                     <p className="text-sm truncate">{channelLabel(video, lang)}</p>
                     <p className="text-sm">
-                        {formatViews(video.views, lang)} • <RelativeDate value={video.dateCreated} lang={lang} />
+                        {formatViews(video.views, lang)} • <VideoDate video={video} lang={lang} />
                     </p>
                 </div>
             </Link>

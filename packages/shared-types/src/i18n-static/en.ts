@@ -402,6 +402,15 @@ export const EN_TRANSLATIONS: AppTranslations = {
     videos: 'Videos',
     /** The exact publish date and time on the watch page */
     publishedAt: 'Published {date}',
+    /** A relative or exact date with what it is, never bare beside the views */
+    dateLabel: {
+      published: 'Published {time}',
+      updated: 'Updated {time}',
+      started: 'Started {time}',
+      ended: 'Ended {time}',
+      scheduled: 'Scheduled for {date}',
+      liveNow: 'Live now',
+    },
     videoSingular: "Video",
     uploadVideo: 'Upload Video',
     editVideo: 'Edit Video',

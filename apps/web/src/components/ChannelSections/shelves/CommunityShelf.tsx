@@ -44,7 +44,7 @@ export function CommunityShelf({ posts, channelId }: { posts: SectionPostSummary
                     {r.pinned}
                   </span>
                 )}
-                <RelativeDate value={post.createdAt} lang={lang} />
+                <RelativeDate value={post.createdAt} lang={lang} label="published" />
               </div>
               {post.content && (
                 <p className="line-clamp-4 whitespace-pre-line text-sm text-foreground" dir="auto">
