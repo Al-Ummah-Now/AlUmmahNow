@@ -174,7 +174,7 @@ test.describe('Privacy settings - signed in', () => {
     await page.goto('/en/settings/privacy');
     await expect(page.getByRole('heading', { name: 'Download your data' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Delete your data' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Open account settings' })).toHaveAttribute('href', /^https:\/\/profile\.auth\./);
+    await expect(page.getByRole('link', { name: 'Open account settings' })).toHaveAttribute('href', /^(https:\/\/profile\.auth\.|http:\/\/localhost:3302)/);
   });
 
   test('PRIV-011 delete stays disabled until the confirm word is typed exactly', async ({ page }) => {

@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures';
+import { test as fixturesTest, expect } from './fixtures';
 import type { Locator, Page } from '@playwright/test';
 import { ANONYMOUS_STATE } from './test-utils/auth-state';
 import { centerX, clickUntil, expectRtl, fillStable, tempName } from './test-utils/channel-content';
@@ -20,9 +20,25 @@ import { apiFetch, expectHydrated } from './release/web-session';
  * channel never gets a post (the empty state).
  */
 
-const data = useOwnData(test);
+const data = useOwnData(fixturesTest);
 let owner: Creator;
 let viewer: Creator;
+
+/**
+ * The file's creators, made in a worker fixture rather than beforeAll: Playwright resolves a context
+ * option such as storageState before beforeAll runs, so a creator made there was undefined in
+ * test.use (every signed-in test failed with "reading 'state'"). Deleted by the file's DataScope.
+ */
+const test = fixturesTest.extend<object, { creators: { owner: Creator; viewer: Creator } }>({
+  creators: [
+    async ({ browser }, use) => {
+      owner = await data.createCreator(browser, 'comm-owner');
+      viewer = await data.createCreator(browser, 'comm-viewer');
+      await use({ owner, viewer });
+    },
+    { scope: 'worker', timeout: 300_000 },
+  ],
+});
 const channelId = () => owner.channelIds[0];
 
 interface PostRow {
@@ -97,18 +113,18 @@ async function selectType(page: Page, type: string) {
   await clickUntil(option, async () => expect(option).toHaveAttribute('aria-checked', 'true', { timeout: 3000 }));
 }
 
-test.beforeAll(async ({ browser }) => {
+test.beforeAll(async ({ browser, creators }) => {
+    void browser;
+    void creators;
   test.setTimeout(300000);
-  owner = await data.createCreator(browser, 'comm-owner');
   // Every post of the owner's channel is the spec's: swept at cleanup, before the channel goes
   data.onCleanup(`posts of channel ${channelId()}`, async () => {
     for (const post of await listPosts(owner, channelId(), channelId())) await deletePost(post.id);
   });
-  viewer = await data.createCreator(browser, 'comm-viewer');
 });
 
 test.describe('Post manager', () => {
-  test.use({ storageState: async ({}, use) => use(owner.state) });
+  test.use({ storageState: async ({ creators }, use) => use(creators.owner.state) });
 
   test('COMM-001 lists published posts with search and type filter (en)', async ({ page }) => {
     const marker = tempName('Listed');
@@ -253,7 +269,7 @@ test.describe('Post manager', () => {
 });
 
 test.describe('Community tab - engagement', () => {
-  test.use({ storageState: async ({}, use) => use(viewer.state) });
+  test.use({ storageState: async ({ creators }, use) => use(creators.viewer.state) });
 
   test('COMM-010 a signed-in viewer likes and unlikes a post', async ({ page }) => {
     const marker = tempName('Like');

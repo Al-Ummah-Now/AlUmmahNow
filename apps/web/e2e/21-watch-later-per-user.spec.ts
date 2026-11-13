@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures';
+import { test as fixturesTest, expect } from './fixtures';
 import { useOwnData, type Creator, type CreatedVideo } from './release/builders';
 import { apiFetch } from './release/web-session';
 import { target } from './release/targets';
@@ -12,8 +12,23 @@ import { target } from './release/targets';
  * privacy erase takes its Watch later with it).
  */
 
-const data = useOwnData(test);
+const data = useOwnData(fixturesTest);
 let owner: Creator;
+
+/**
+ * The file's creators, made in a worker fixture rather than beforeAll: Playwright resolves a context
+ * option such as storageState before beforeAll runs, so a creator made there was undefined in
+ * test.use (every signed-in test failed with "reading 'state'"). Deleted by the file's DataScope.
+ */
+const test = fixturesTest.extend<object, { creators: { owner: Creator } }>({
+  creators: [
+    async ({ browser }, use) => {
+      owner = await data.createCreator(browser, 'watch-later', { channels: 2 });
+      await use({ owner });
+    },
+    { scope: 'worker', timeout: 300_000 },
+  ],
+});
 let video: CreatedVideo;
 
 /**
@@ -38,14 +53,15 @@ async function playlistIds(path: string, channelId: string): Promise<string[]> {
   return (((await res.json()) as { data?: Array<{ id: string }> }).data ?? []).map((p) => p.id);
 }
 
-test.beforeAll(async ({ browser }) => {
+test.beforeAll(async ({ browser, creators }) => {
+    void browser;
+    void creators;
   test.setTimeout(300000);
-  owner = await data.createCreator(browser, 'watch-later', { channels: 2 });
   video = await data.createVideo(owner.user, owner.channelIds[0], { isPublic: false, waitReady: false });
 });
 
 test.describe('Watch later is per user', () => {
-  test.use({ storageState: async ({}, use) => use(owner.state) });
+  test.use({ storageState: async ({ creators }, use) => use(creators.owner.state) });
 
   test('same list whichever channel is active, and never among a channel’s playlists', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('Mobile'), 'API + desktop page check; covered by the desktop projects');

@@ -105,6 +105,8 @@ test.describe('Header - channel owner', () => {
     await page.goto('/ar');
     await expect(page.getByRole('banner').getByTestId('header-upload')).toHaveAttribute('data-state', 'ready');
     await expectUploadAfterLogo(page, 'ar', true);
+    // Back to English: `upload` is found by its English name
+    await page.goto('/en');
     if (isMobile) {
       // A 44px icon button; the label is visually hidden but stays its accessible name
       await expect(upload).toHaveAccessibleName('Upload Video');
