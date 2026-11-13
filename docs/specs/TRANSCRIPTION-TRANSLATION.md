@@ -1,7 +1,7 @@
 # Transcription, translation and inline metadata translation (Quran-aware)
 
 **Status:** Draft v1 for review
-**Date:** 2026-11-11 (v2 the same day: zero-mistake Quran design, QF Content Sync as the Quran source, measured DeepL, full price comparison)
+**Date:** 2026-11-11 (v2 the same day: zero-mistake Quran design, QF Content Sync as the Quran source, measured DeepL, full price comparison); v3 2026-11-13: owner go for the build with mode A, Arabic text from our Content Sync copy (§5.5.1)
 **Epic:** new, proposed as `AUN-CAPTIONS` (relates to Epic 8 video content features, Epic 18/19 native Studio, Epic 27 entitlements, Epic 28 moderation, wiki decision D10)
 **Research and measurements:** [docs/research/TRANSCRIPTION-TRANSLATION-RESEARCH.md](../research/TRANSCRIPTION-TRANSLATION-RESEARCH.md). Section numbers written `R§n` refer to it.
 **Related:** subtitles API (`apps/api-videos/src/endpoints/video/subtitles*.ts`), Epic 27 plan (`EPIC-27-PLAN.md`), CMS AI provider layer (AlUmmahNowCMS `src/lib/ai/`, `docs/AI_ASSIST_SPEC.md`), AI moderation (`AI-MODERATION.md`)
@@ -26,8 +26,8 @@ The owner asked for:
 | Dubbing (later) | DeepL speech-to-speech is technically viable (a 52 s clip became a 59 s English voice track) | It spoke a machine translation of the ayat. Quran spans must keep the original audio and are never synthesised (principle 3). |
 | Never | m2m100 (unusable: invented hadith, repetition loops), gpt-oss (answers instead of translating) | R§3.1, CMS §1.5 |
 | Quran display | **Official text only, never ASR**: a span shows the stored official text for an exact word range after creator confirmation, or a reference with no text | Measured 0 wrong ayat and 0 extra words on 20 clips (R§8) |
-| Quran source | **quran.com (Quran Foundation API) only**. Captions store references; the player fetches the text and translation live (edge cache ≤ 7 days); QF down → reference plus a quran.com link | Owner rule. Per-passage caching ≤ 1 week is within the Developer Terms (§9.4) |
-| Quran identification | **Mode B now** (QF Search + Content fetch + our verification, no stored index); **mode A** (local index from Content Sync) once granted | Measured mode B: 22/55 auto, 0 wrong, 0/20 false. A full-Quran index built from regular API responses isn't allowed (§5.5) |
+| Quran source | **quran.com (Quran Foundation) only**. Captions store references. **The Arabic text comes from our Content Sync copy** (owner 2026-11-13, §5.5.1); translations are fetched live (edge cache ≤ 7 days). No fresh copy → reference plus a quran.com link | Owner rule. Content Sync is the permitted path for an offline copy (§9.4) |
+| Quran identification | **Mode A** (local index from the Content Sync copy; owner go 2026-11-13). Mode B is not used: the `search` scope is not granted | Measured: mode A 27/55 auto, 0 wrong, 0/20 false. A full-Quran index built from regular API responses isn't allowed (§5.5) |
 | Quran translations | QF `translations` by id, fetched live. **Each channel picks its edition per language** from the QF list; platform default Saheeh International (en), changeable by admins; edition name shown (O7) | quran.com only |
 | Metering | One "caption minute" per video-minute per language produced; plan allowance plus add-on packs plus admin grants | §6 |
 | Inline title translation | **Free on every tier with a daily fair-use limit** (decided O5); the $20/month budget is the backstop | 100,000 title translations cost about $2–7 (§6.4) |
@@ -304,6 +304,19 @@ The terms decide which mode is allowed. A local match index is a "Derived Materi
 - **whisper-timestamped:** AGPL.
 
 **Cost:** Worker CPU for matching, plus one `silencedetect` pass in the audio container already running for extraction: about $0.001 per hour of audio. The second opinion is optional and only covers Quran minutes.
+
+### 5.5.1 As built (2026-11-13, PR "Quran foundations")
+
+Owner decisions 2026-11-13: build with **mode A**; the **Arabic text is served from our daily Content Sync copy**; translations stay live; captions store references only; QA and stage sync from **production QF** with the production client, each into its own bucket; tests use fixtures only.
+
+- **Resource:** `quran_core:1` only. The ayah text is the verse row's `text_uthmani`, verbatim. Word-level text (for partial ayat) is that same text split on spaces, a token with no letter (pause or section mark) staying with its neighbour; a verse whose token count differs from its `word` rows fails the build. `mushafs:4` is not used (its documented `text` is a font glyph in the QF example).
+- **Word numbers** in references are the order among the verse's `word` rows (markers excluded), the same on the index and the text side.
+- **Job:** processor `src/quran/` — `QuranContentSync` message (type 260) on the videos queue, queued by the daily cron (`41 3 * * *`) and by the Errors page's **Sync now** (`POST /internal/quran/sync`, X-API-Key). It reads QF's change feed for `quran_core:1` (bootstrap the first time or on `resync_required`), and on any change other than `RESOURCE_UPDATE` (or no copy yet) streams the snapshot record by record, builds the text and index, and switches `quran/current.json` to the new version last. The sync token moves only after the copy is written. Two versions are kept.
+- **Storage:** private media bucket (`al-ummah-now-media-private[-stage|-qa]`, processor `REVIEW_MEDIA`, api-videos `MEDIA_PRIVATE`): `quran/current.json`, `quran/state.json`, `quran/text/<version>/<surah>.json`, `quran/index/<version>.json`.
+- **Failures:** 429/5xx/network back off on the queue (≥ Retry-After, 1 → 30 min) and then go to the DLQ (stored, flagged with Replay). A failure no retry fixes (not configured, a verse failing the check, `RESOURCE_DELETE`) flags the admin at once (`quran-sync`, Sync now). A copy not synced for 7 days is deleted by the daily check and flagged (`quran-stale`); nothing serves a stale copy.
+- **Secrets:** `QF_CLIENT_ID` / `QF_CLIENT_SECRET` from Secrets Store `quran-foundation-prod-client-{id,secret}` in production, stage and QA; vars `QF_OAUTH_HOST`, `QF_API_HOST`. Tests inject a fake QF; the client refuses the real network under test, CI or E2E.
+- **Matcher:** `packages/shared-types/src/quran.ts`, a port of `quran_zero.py` (detect2, resolve, classify2) with two stricter rules: extension keeps the longest prefix that clears the 0.75 bar (a noisy tail never sinks a clean span), and a span never crosses a surah boundary. Output is references with a class (`confirmed`, `context`, `basmala`, `review`) and times.
+- **Passage API:** `GET /api/v1/quran/passage?range=67:1:1-67:5:12` → whole ayat verbatim, partial ayat by word, label, quran.com link, attribution; 503 with no fresh copy.
 
 ### 5.6 Storage and data model
 
@@ -626,7 +639,7 @@ Source: [Getting Started with Content Sync](https://api-docs.quran.foundation/do
   - the watch page's Subtitles info;
   - the editor footer;
   - the description of any export or social-media post.
-- **Sync job** (mode A, once granted): runs **daily**, which beats the "at least every 7 days" rule, and rebuilds the matching index. If syncing stops for more than 7 days, the index is deleted and identification falls back to mode B.
+- **Sync job** (mode A, §5.5.1): runs **daily**, which beats the "at least every 7 days" rule, and rebuilds the text and the matching index after a change. If syncing stops for more than 7 days, the copy is deleted, the admin is flagged, and captions show references with a quran.com link until a sync succeeds.
 - **Edge cache for displayed passages:** `s-maxage` of at most 6 days, never written to R2 or D1.
 - **QF timing data** is never stored in captions (§5.5).
 - **Developer Console:** keep an active account (O12).
