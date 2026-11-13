@@ -214,7 +214,71 @@ export interface TranscodeJobEvent {
 	failure?: TranscodeFailure;
 }
 
-export const MEDIA_ACCESS_FOR = (visibility: { isPublic?: boolean; visibility?: string } | null | undefined): MediaAccess => {
+/**
+ * Remux-only job on the transcode queue (the public MP4 backfill, #1182): makes the progressive MP4
+ * of a rendition that is already ready, from its own rung's segments. No encode, no new rev, and
+ * playback never notices. The container picks the rung the way a transcode does (480p, else 360p).
+ */
+export interface Mp4JobMessage {
+	kind: 'mp4';
+	videoId: string;
+	jobId: string;
+	/** The ready rendition's rev and access: the MP4 goes beside its segments */
+	rev: string;
+	access: MediaAccess;
+	rungs: { name: string; width: number; height: number }[];
+	queuedAt: string;
+	/** The backfill run that sent it */
+	runId?: string;
+}
+
+export function isMp4JobMessage(body: unknown): body is Mp4JobMessage {
+	const b = body as Partial<Mp4JobMessage> | null;
+	return (
+		!!b &&
+		b.kind === 'mp4' &&
+		typeof b.videoId === 'string' &&
+		SAFE_ID.test(b.videoId) &&
+		typeof b.rev === 'string' &&
+		SAFE_REV.test(b.rev) &&
+		typeof b.jobId === 'string' &&
+		(b.access === 'pub' || b.access === 'priv') &&
+		Array.isArray(b.rungs) &&
+		b.rungs.length > 0 &&
+		b.rungs.length <= MAX_RUNGS &&
+		b.rungs.every((r) => !!r && SAFE_FILE.test(String(r.name)) && Number.isFinite(r.width) && Number.isFinite(r.height))
+	);
+}
+
+/** What apps/media reports when a remux-only job ends (POST /internal/media/mp4). */
+export interface Mp4JobEvent {
+	videoId: string;
+	jobId: string;
+	rev: string;
+	access: MediaAccess;
+	type: 'ready' | 'failed';
+	at: string;
+	mp4?: TranscodeResult['mp4'];
+	error?: string;
+	containerSeconds?: number;
+}
+
+const SAFE_FILE = /^[A-Za-z0-9._-]{1,64}$/;
+
+/** The MP4 part of a result, or undefined when anything about it is off. */
+export function sanitizeMp4(input: unknown): TranscodeResult['mp4'] | undefined {
+	const m = input as Partial<NonNullable<TranscodeResult['mp4']>> | null;
+	if (!m || typeof m.file !== 'string' || !SAFE_FILE.test(m.file) || !m.file.endsWith('.mp4')) return undefined;
+	if (typeof m.rung !== 'string' || !SAFE_FILE.test(m.rung)) return undefined;
+	const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.round(v) : null);
+	const width = n(m.width);
+	const height = n(m.height);
+	const bytes = n(m.bytes);
+	if (width === null || height === null || bytes === null || bytes === 0) return undefined;
+	return { file: m.file, rung: m.rung, width, height, bytes };
+}
+
+export const MEDIA_ACCESS_FOR =(visibility: { isPublic?: boolean; visibility?: string } | null | undefined): MediaAccess => {
 	if (!visibility) return 'priv';
 	if (visibility.visibility) return visibility.visibility === 'public' ? 'pub' : 'priv';
 	return visibility.isPublic === false ? 'priv' : 'pub';

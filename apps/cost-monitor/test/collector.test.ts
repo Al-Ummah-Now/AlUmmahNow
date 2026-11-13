@@ -27,9 +27,11 @@ describe('manifest', () => {
       for (const r of list) {
         assert.equal(r.env, env);
         assert.match(r.name, /^(al-ummah|videos|channels|profiles|playlists|community-posts|subtitles|watch-history|scheduled-videos|admin-backups)/);
-        if (env === 'qa' && !['al-ummah-web-qa'].includes(r.name)) assert.match(r.name, /-qa$/);
-        if (env === 'stage' && r.name !== 'al-ummah-now-stage') assert.match(r.name, /-stage$/);
-        if (env === 'production') assert.doesNotMatch(r.name, /-(qa|stage)$/);
+        // A bucket slice is named after its bucket, which follows the rule
+        const named = r.slice?.bucket ?? r.name;
+        if (env === 'qa' && !['al-ummah-web-qa'].includes(named)) assert.match(named, /-qa$/);
+        if (env === 'stage' && named !== 'al-ummah-now-stage') assert.match(named, /-stage$/);
+        if (env === 'production') assert.doesNotMatch(named, /-(qa|stage)$/);
         if (r.kind === 'd1' || r.kind === 'queue') assert.match(r.cfId ?? '', /^[0-9a-f-]{32,36}$/);
       }
     }
@@ -48,11 +50,15 @@ describe('query', () => {
   it('filters every dataset to the manifest with _in', () => {
     for (const field of ['scriptName_in: $w', 'databaseId_in: $d', 'bucketName_in: $b', 'queueId_in: $q']) assert.ok(OPS_QUERY.includes(field), field);
     const datasets = OPS_QUERY.match(/\w+: \w+AdaptiveGroups?\(|\w+: workersInvocationsAdaptive\(/g) ?? [];
-    assert.equal(datasets.length, 7);
-    assert.equal((OPS_QUERY.match(/filter: \{ datetime_geq/g) ?? []).length, 7);
+    assert.equal(datasets.length, 8);
+    assert.equal((OPS_QUERY.match(/filter: \{ datetime_geq/g) ?? []).length, 8);
     const v = queryVariables('acct', qaIndex(), new Date('2026-11-12T10:00:00Z'), new Date('2026-11-12T13:00:00Z'));
     assert.ok(v.w.includes('videos-qa') && !v.w.includes('videos'));
     assert.ok(v.q.includes('0c2bd068d6a7447aadcce2f4622ed706'));
+    // The MP4 line reads only the media bucket's progressive MP4s (not the HLS rungs' init.mp4)
+    assert.ok(OPS_QUERY.includes('bucketName_in: $m, objectName_like: "%/video.mp4"'));
+    assert.deepEqual(v.m, ['al-ummah-now-media-qa']);
+    assert.ok(!v.b.some((b) => b.includes('video.mp4')));
   });
 });
 
@@ -90,6 +96,21 @@ describe('normalize', () => {
     const { rows } = normalize({ r2: [g('PutObject', 3), g('GetObject', 10), g('DeleteObject', 4)] }, qaIndex());
     assert.equal(rows[0].hour, hourOf(at));
     assert.deepEqual([rows[0].values.writes, rows[0].values.reads, rows[0].values.requests], [3, 10, 17]);
+  });
+
+  it('shows the public MP4 Class B reads as their own line, taken out of the media bucket row', () => {
+    const at = '2026-11-12T10:00:00Z';
+    const g = (actionType: string, requests: number, bytes = 0) => ({ dimensions: { bucketName: 'al-ummah-now-media-qa', datetimeHour: at, actionType }, sum: { requests, responseObjectSize: bytes } });
+    const { rows, dropped } = normalize({ r2: [g('GetObject', 100, 5000), g('PutObject', 4)], r2Mp4: [g('GetObject', 30, 3000), g('HeadObject', 2), g('PutObject', 1)] }, qaIndex());
+    assert.equal(dropped, 0);
+    const bucket = rows.find((r) => r.resource.id === 'r2:al-ummah-now-media-qa')!;
+    const mp4 = rows.find((r) => r.resource.id === 'r2:al-ummah-now-media-qa/video.mp4')!;
+    assert.equal(mp4.resource.kind, 'r2');
+    assert.equal(mp4.resource.name, 'al-ummah-now-media-qa video.mp4');
+    assert.deepEqual([mp4.values.reads, mp4.values.requests, mp4.values.bytes, mp4.values.writes], [32, 32, 3000, undefined]);
+    // Totals unchanged: reads 100 = 68 + 32, writes stay with the bucket
+    assert.deepEqual([bucket.values.reads, bucket.values.requests, bucket.values.bytes, bucket.values.writes], [68, 72, 2000, 4]);
+    assert.equal(dayCost('r2', mp4.values) + dayCost('r2', bucket.values), dayCost('r2', { reads: 100, writes: 4 }));
   });
 });
 

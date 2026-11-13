@@ -23,6 +23,12 @@ export interface Resource {
   cfId?: string;
   /** Dead-letter queue: any message in it is an alert. */
   dlq?: boolean;
+  /**
+   * A slice of a bucket's operations: the R2 bucket it belongs to and the objects it counts
+   * (GraphQL objectName_like). Its numbers are taken out of the bucket's own row, so totals
+   * and costs never count them twice.
+   */
+  slice?: { bucket: string; objectLike: string };
 }
 
 const SUFFIX: Record<OpsEnv, string> = { production: '', stage: '-stage', qa: '-qa' };
@@ -59,6 +65,12 @@ const BUCKET_BASES = [
   'al-ummah-now-sourcemaps',
   'al-ummah-now-messages',
 ];
+
+/**
+ * Bucket slices shown as their own line: the public MP4 of public videos (#1182, D-SEO-11), search
+ * engines' contentUrl and the one public download, whose Class B reads are the hotlinking cost.
+ */
+const SLICES = [{ bucket: 'al-ummah-now-media', objectLike: '%/video.mp4', label: 'video.mp4' }];
 
 const D1: Record<OpsEnv, Record<string, string>> = {
   production: {
@@ -129,6 +141,10 @@ export function manifestFor(envs: readonly OpsEnv[]): Resource[] {
     const s = SUFFIX[env];
     for (const name of [...WORKERS[env], ...WORKER_BASES.map((b) => b + s)]) out.push({ id: `worker:${name}`, kind: 'worker', env, name });
     for (const name of BUCKET_BASES.map((b) => b + s)) out.push({ id: `r2:${name}`, kind: 'r2', env, name });
+    for (const slice of SLICES) {
+      const bucket = slice.bucket + s;
+      out.push({ id: `r2:${bucket}/${slice.label}`, kind: 'r2', env, name: `${bucket} ${slice.label}`, slice: { bucket, objectLike: slice.objectLike } });
+    }
     for (const [name, cfId] of Object.entries(D1[env])) out.push({ id: `d1:${name}`, kind: 'd1', env, name, cfId });
     for (const [name, cfId] of Object.entries(QUEUES[env])) out.push({ id: `queue:${name}`, kind: 'queue', env, name, cfId, dlq: isDlqName(name) });
   }
@@ -148,7 +164,22 @@ export class ManifestIndex {
 
   constructor(resources: Resource[]) {
     this.resources = resources;
-    for (const r of resources) this.byKey.set(`${r.kind}|${r.cfId ?? r.name}`, r);
+    for (const r of resources) {
+      if (r.slice) this.slices.set(`${r.slice.bucket}|${r.slice.objectLike}`, r);
+      else this.byKey.set(`${r.kind}|${r.cfId ?? r.name}`, r);
+    }
+  }
+
+  private slices = new Map<string, Resource>();
+
+  /** The slice line of a bucket's objects (e.g. the media bucket's *.mp4), or undefined. */
+  findSlice(bucket: string, objectLike: string): Resource | undefined {
+    return this.slices.get(`${bucket}|${objectLike}`);
+  }
+
+  /** Buckets with a slice for these objects (the GraphQL filter of that dataset). */
+  sliceBuckets(objectLike: string): string[] {
+    return this.resources.filter((r) => r.slice?.objectLike === objectLike).map((r) => r.slice!.bucket);
   }
 
   /** The manifest resource, or undefined: such a row is never stored. */
@@ -157,6 +188,6 @@ export class ManifestIndex {
   }
 
   keys(kind: ResourceKind): string[] {
-    return this.resources.filter((r) => r.kind === kind).map((r) => r.cfId ?? r.name);
+    return this.resources.filter((r) => r.kind === kind && !r.slice).map((r) => r.cfId ?? r.name);
   }
 }

@@ -2,7 +2,7 @@
  * The media host's Cloudflare settings as code (epic #687, docs/media-delivery/RUNBOOK.md):
  *
  *   node --experimental-strip-types scripts/media-cdn/apply.ts --env qa|stage|production [--apply]
- *        [--only domain,cors,cache,tiered,purge,analytics] [--store-secret]
+ *        [--only domain,cors,cache,tiered,ratelimit,purge,analytics] [--store-secret]
  *
  * Without --apply it reads the current state and prints what it would change
  * (and the exact Cache Rule, for pasting in the dashboard). With --apply it
@@ -11,13 +11,15 @@
  *   - one Cache Rule per env in the zone's cache-settings phase, found by its ref
  *     (other rules in that phase are left exactly as they are)
  *   - Tiered Cache: Smart topology on (zone-wide; free, lowers R2 reads)
+ *   - one rate-limit rule in the zone's http_ratelimit phase, found by its ref: public MP4
+ *     downloads (#1182, D-SEO-11) per IP; zone-wide, so the same rule for every env
  * and checks (never changes anything) that the token can purge the media host's
  * cache and read Account Analytics, which api-videos needs at runtime. With
  * --store-secret (and --apply) it also stores the token in Secrets Store as
  * media-cdn-api-token, the binding api-videos purges and reads analytics with.
  *
  * Token: CLOUDFLARE_API_TOKEN for everything (account R2 calls and the zone's
- * Cache Settings, Cache Purge, DNS; Account Analytics Read). MEDIA_CDN_API_TOKEN,
+ * Cache Settings, Cache Purge, DNS, and Zone WAF Edit for the rate-limit rule; Account Analytics Read). MEDIA_CDN_API_TOKEN,
  * when set, overrides it for the zone calls. Locally the wrangler login works for
  * the account calls only.
  */
@@ -70,12 +72,29 @@ export function cacheRule(env: MediaEnv) {
 	};
 }
 
+/**
+ * Rate limit of the public MP4 (#1182): /pub/<id>/<rev>/video.mp4 is search engines' contentUrl,
+ * served by the R2 custom domain with no Worker in front, so only a zone rule can limit it. HLS
+ * segments and playlists are not matched. The zone is on the Free plan, which allows one rule,
+ * a 10 s period and timeout, block only and the URI path alone: 10 requests per 10 s per IP
+ * (about 60 a minute). Cached responses count too, so hotlinking is limited at the edge.
+ */
+export const MP4_RATE_LIMIT = {
+	ref: 'al-ummah-media-mp4-ratelimit',
+	description: 'Al Ummah Now media: public MP4 downloads, 10 per 10 s per IP (#1182)',
+	expression: '(http.request.uri.path wildcard "/pub/*/video.mp4")',
+	action: 'block',
+	ratelimit: { characteristics: ['ip.src', 'cf.colo.id'], period: 10, requests_per_period: 10, mitigation_timeout: 10 },
+	enabled: true,
+};
+
 interface Rule {
 	id?: string;
 	ref?: string;
 	expression: string;
 	action: string;
 	action_parameters?: unknown;
+	ratelimit?: unknown;
 	description?: string;
 	enabled?: boolean;
 }
@@ -96,7 +115,7 @@ function contains(live: unknown, want: unknown): boolean {
 export function ruleDiffers(live: Rule | undefined, want: Rule): boolean {
 	if (!live) return true;
 	if (live.expression !== want.expression || live.action !== want.action || (live.enabled !== false) !== (want.enabled !== false) || live.description !== want.description) return true;
-	return !contains(live.action_parameters, want.action_parameters);
+	return !contains(live.action_parameters, want.action_parameters) || !contains(live.ratelimit, want.ratelimit);
 }
 
 function zoneClient(token: string) {
@@ -171,6 +190,31 @@ export async function planCache(zone: ReturnType<typeof zoneClient>, env: MediaE
 		return [{ what: `cache   update    rule ${want.ref}`, apply: () => zone('PATCH', `/rulesets/${entry!.id}/rules/${live.id}`, want) }];
 	}
 	return [{ what: `cache   add       rule ${want.ref} (other rules in the phase untouched)`, apply: () => zone('POST', `/rulesets/${entry!.id}/rules`, want) }];
+}
+
+export async function planRateLimit(zone: ReturnType<typeof zoneClient>): Promise<Change[]> {
+	const want = MP4_RATE_LIMIT;
+	let entry: { id: string; rules?: Rule[] } | null = null;
+	try {
+		entry = await zone('GET', '/rulesets/phases/http_ratelimit/entrypoint');
+	} catch (error) {
+		if (!(error instanceof CfApiError && error.status === 404)) throw error;
+	}
+	if (!entry) {
+		return [
+			{
+				what: `rate    create    phase entrypoint with rule ${want.ref}`,
+				apply: () => zone('POST', '/rulesets', { name: 'default', kind: 'zone', phase: 'http_ratelimit', rules: [want] }),
+			},
+		];
+	}
+	const live = entry.rules?.find((r) => r.ref === want.ref);
+	if (!ruleDiffers(live, want)) {
+		console.log(`rate    ok        rule ${want.ref}`);
+		return [];
+	}
+	if (live?.id) return [{ what: `rate    update    rule ${want.ref}`, apply: () => zone('PATCH', `/rulesets/${entry!.id}/rules/${live.id}`, want) }];
+	return [{ what: `rate    add       rule ${want.ref} (other rules in the phase untouched)`, apply: () => zone('POST', `/rulesets/${entry!.id}/rules`, want) }];
 }
 
 export async function planTiered(zone: ReturnType<typeof zoneClient>): Promise<Change[]> {
@@ -248,10 +292,10 @@ if (isMain) {
 	};
 	const env = arg('--env') as MediaEnv;
 	const apply = process.argv.includes('--apply');
-	const only = new Set((arg('--only') ?? 'domain,cors,cache,tiered,purge,analytics').split(','));
+	const only = new Set((arg('--only') ?? 'domain,cors,cache,tiered,ratelimit,purge,analytics').split(','));
 	const storeSecret = process.argv.includes('--store-secret');
 	if (!['qa', 'stage', 'production'].includes(env)) {
-		process.stderr.write('usage: apply.ts --env qa|stage|production [--apply] [--only domain,cors,cache,tiered,purge,analytics] [--store-secret]\n');
+		process.stderr.write('usage: apply.ts --env qa|stage|production [--apply] [--only domain,cors,cache,tiered,ratelimit,purge,analytics] [--store-secret]\n');
 		process.exit(2);
 	}
 	const main = async () => {
@@ -264,6 +308,7 @@ if (isMain) {
 			['cors', () => planCors(cf, env)],
 			['cache', () => planCache(zone, env)],
 			['tiered', () => planTiered(zone)],
+			['ratelimit', () => planRateLimit(zone)],
 			['purge', () => checkPurge(zone, env)],
 			['analytics', () => checkAnalytics(zoneToken!, cf.accountId)],
 		];
@@ -280,6 +325,10 @@ if (isMain) {
 					console.log('        → the token needs Zone: Cache Settings Edit (or apply by hand in the dashboard):');
 					if (name === 'cache') console.log(JSON.stringify(cacheRule(env), null, 2).replace(/^/gm, '          '));
 					else console.log('          Caching → Tiered Cache → Smart Tiered Caching Topology: on');
+				}
+				if (denied && name === 'ratelimit') {
+					console.log('        → the token needs Zone: Zone WAF Edit on alummahnow.net (or add it by hand: Security → WAF → Rate limiting rules):');
+					console.log(JSON.stringify(MP4_RATE_LIMIT, null, 2).replace(/^/gm, '          '));
 				}
 			}
 		}

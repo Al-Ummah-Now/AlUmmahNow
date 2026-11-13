@@ -69,6 +69,7 @@ import { createFootprintsInternalRouter } from "./endpoints/privacy/footprintsIn
 import { handleFootprintBackfillMessage, isFootprintBackfillMessage, maintainFootprintPasses } from "./lib/privacy/footprints";
 import { handleVideoFormatMessage, startDailyVideoFormatRun } from "./lib/video-format/job";
 import { handlePublishedAtBackfillMessage, isPublishedAtBackfillMessage } from "./lib/publishedAtBackfill";
+import { handleMp4BackfillMessage, isMp4BackfillMessage } from "./lib/media/mp4-backfill";
 import { handleArchivePrivacyMessage, isArchivePrivacyMessage } from "./lib/archivePrivacyRewrite";
 import { startDailyThumbnailCheck } from "./lib/thumbnail/repair";
 import { VIDEO_FORMAT_JOB_KIND } from "@al-ummah/shared-types";
@@ -680,7 +681,7 @@ async function handleFetch(request: Request, env: AppBindings, ctx: ExecutionCon
  *   owner delete (kind "bunny-delete"), the QA/stage test-library purge
  *   (kind "test-library-purge") and the channel collection backfill (kind
  *   "bunny-collection-backfill") and the privacy footprint backfill (kind
- *   "privacy-footprint-backfill").
+ *   "privacy-footprint-backfill") and the public MP4 backfill (kind "mp4-backfill").
  * R2 writes go through the search-sync wrapper so changes reach the search
  * index and ownership rows like any API write.
  */
@@ -702,9 +703,11 @@ async function queue(batch: MessageBatch<unknown>, env: AppBindings, ctx: Execut
 		for (const msg of batch.messages.filter((m) => isPublishedAtBackfillMessage(m.body))) await handlePublishedAtBackfillMessage(synced, msg);
 		// Queue-message archive pseudonymisation of older entries (lib/archivePrivacyRewrite.ts, #1177), dry run by default
 		for (const msg of batch.messages.filter((m) => isArchivePrivacyMessage(m.body))) await handleArchivePrivacyMessage(env as never, msg);
+		// Public MP4 backfill (lib/media/mp4-backfill.ts, #1182), one media_jobs page per message, dry run by default
+		for (const msg of batch.messages.filter((m) => isMp4BackfillMessage(m.body))) await handleMp4BackfillMessage(env as never, msg);
 		// Privacy footprint backfill (lib/privacy/footprints.ts), one bucket page per message
 		for (const msg of batch.messages.filter((m) => isFootprintBackfillMessage(m.body))) await handleFootprintBackfillMessage(env as never, msg.body as never);
-		const rest = batch.messages.filter((m) => !isFormat(m) && !isCollectionBackfill(m) && !isFootprintBackfillMessage(m.body) && !isPublishedAtBackfillMessage(m.body) && !isArchivePrivacyMessage(m.body));
+		const rest = batch.messages.filter((m) => !isFormat(m) && !isCollectionBackfill(m) && !isFootprintBackfillMessage(m.body) && !isPublishedAtBackfillMessage(m.body) && !isArchivePrivacyMessage(m.body) && !isMp4BackfillMessage(m.body));
 		// New uploads → playlists (lib/playlistUploadAdds.ts)
 		const playlistAdds = rest.filter((m) => isPlaylistAddMessage(m.body));
 		const reaper = rest.filter((m) => isReaperMessage(m.body));

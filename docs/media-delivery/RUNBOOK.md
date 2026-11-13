@@ -123,6 +123,34 @@ from R2 on every request, at Class B cost and with no edge cache.
   and pushes it on deploy. Old images count toward the 50 GB image storage. Prune with
   `wrangler containers images list` / `delete`.
 
+## Public MP4 (search engines' contentUrl)
+
+Every transcode also writes one progressive MP4, `<prefix>/video.mp4`: a stream copy of the 480p
+rung (360p for a smaller source), never a second encode (#1181, D-SEO-11). For a public video the
+API gives it as `contentUrl` (`publicMp4Url`), and the watch page's VideoObject carries it (#1201).
+Private and unlisted videos have it too, under `priv/`, and never expose it.
+
+- **Backfill** (#1182): renditions made before #1181 get it with a remux-only job (`kind: 'mp4'`
+  on the transcode queue → `Transcoder.remuxMp4`: the container reads the rung's init and segments
+  from R2, remuxes, writes `video.mp4`; api-videos records `r2.result.mp4` only if the rendition is
+  still the same rev and access). No new rev; playback never notices.
+  ```bash
+  node --experimental-strip-types scripts/release/mp4-backfill.ts start --env qa            # dry run: one line per video
+  node --experimental-strip-types scripts/release/mp4-backfill.ts status --env qa --run <id>
+  node --experimental-strip-types scripts/release/mp4-backfill.ts start --env qa --apply    # queue the jobs
+  ```
+  Candidates come from `media_jobs` (one primary-key page per message), jobs start 30 s apart.
+- **Uploads:** a container upload with a Content-Length is streamed into R2 (`src/uploads.ts`); the
+  MP4 of a long video is larger than a Worker's 128 MB.
+- **Rate limit:** `/pub/*` is served by the R2 custom domain with no Worker, so the limit is a zone
+  rate-limit rule (`scripts/media-cdn/apply.ts`, step `ratelimit`): path `/pub/*/video.mp4`, 10
+  requests per 10 s per IP, block (the Free plan allows one rule, 10 s periods and block only). It
+  needs **Zone WAF Edit** on the token; without it the step prints the rule to add by hand.
+- **Cache:** the Free plan caches files up to 512 MB, so the MP4 of a video longer than about an hour
+  is served from R2 on every request (Class B reads; the rate limit bounds them).
+- **Cost:** the Operations page's R2 tab has its own line, `al-ummah-now-media[-env] video.mp4`
+  (cost-monitor: the bucket's `%/video.mp4` reads, taken out of the bucket's own row).
+
 ## Rollback
 
 - **Viewers:** set the delivery switch (admin, per env) to `bunny`. That is immediate, and nothing

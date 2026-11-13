@@ -3,8 +3,9 @@
  *
  *   GET  /internal/media/source/:videoId   → { url }  the original upload (Bunny "original", signed)
  *   POST /internal/media/events            TranscodeJobEvent → the video record
+ *   POST /internal/media/mp4               Mp4JobEvent (remux-only job) → the video record
  */
-import type { TranscodeJobEvent } from '@al-ummah/shared-types';
+import type { Mp4JobEvent, TranscodeJobEvent } from '@al-ummah/shared-types';
 import { secret, type Env } from './env';
 
 const ORIGIN = 'https://videos.internal';
@@ -41,4 +42,14 @@ export async function reportEvent(env: Env, event: TranscodeJobEvent): Promise<v
 		body: JSON.stringify(event),
 	});
 	if (!res.ok) throw new Error(`api-videos event ${event.type} for ${event.videoId}: HTTP ${res.status}`);
+}
+
+/** Report a remux-only job's end; throws when api-videos did not take it. */
+export async function reportMp4Event(env: Env, event: Mp4JobEvent): Promise<void> {
+	const res = await call(env, '/internal/media/mp4', {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify(event),
+	});
+	if (!res.ok) throw new Error(`api-videos mp4 event ${event.type} for ${event.videoId}: HTTP ${res.status}`);
 }

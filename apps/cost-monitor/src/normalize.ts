@@ -4,7 +4,7 @@
  * memory, before anything is written (docs/cost-monitoring/README.md §3.2).
  */
 import type { ManifestIndex, Resource } from './manifest';
-import type { OpsResponse } from './graphql';
+import { MP4_OBJECTS, type OpsResponse } from './graphql';
 
 export const METRICS = [
   'requests',
@@ -111,6 +111,21 @@ export function normalize(data: OpsResponse, index: ManifestIndex): NormalizeRes
     add(r, 'bytes', g.sum.responseObjectSize);
     if (R2_CLASS_A.has(g.dimensions.actionType)) add(r, 'writes', g.sum.requests);
     else if (!R2_FREE.has(g.dimensions.actionType)) add(r, 'reads', g.sum.requests);
+  }
+  // The MP4 slice (manifest SLICES): its Class B reads move from the bucket's row to their own line
+  for (const g of data.r2Mp4 ?? []) {
+    const action = g.dimensions.actionType;
+    if (R2_CLASS_A.has(action) || R2_FREE.has(action)) continue;
+    const r = row(index.findSlice(g.dimensions.bucketName, MP4_OBJECTS), g.dimensions.datetimeHour);
+    if (!r) continue;
+    add(r, 'requests', g.sum.requests);
+    add(r, 'reads', g.sum.requests);
+    add(r, 'bytes', g.sum.responseObjectSize);
+    const bucket = rows.get(`${r.hour}|r2:${g.dimensions.bucketName}`);
+    if (!bucket) continue;
+    for (const [m, v] of [['requests', g.sum.requests], ['reads', g.sum.requests], ['bytes', g.sum.responseObjectSize]] as const) {
+      if (typeof v === 'number' && Number.isFinite(v) && typeof bucket.values[m] === 'number') bucket.values[m] = Math.max(0, bucket.values[m]! - v);
+    }
   }
   for (const g of data.r2Storage ?? []) {
     const r = row(index.find('r2', g.dimensions.bucketName), g.dimensions.datetimeHour);
