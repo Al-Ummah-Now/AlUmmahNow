@@ -3,6 +3,7 @@ import PlaylistView from '@/components/PlaylistView';
 import PlaylistViewRTL from '@/components/PlaylistView/rtl';
 import { getPlaylistById } from '@/lib/api/playlists';
 import { withinBudget } from '@/lib/ssr/first-data';
+import { stableImages } from '@/lib/ssr/stable-images';
 
 interface PlaylistPageProps {
   params: Promise<{
@@ -31,11 +32,13 @@ export async function generateMetadata({ params }: PlaylistPageProps): Promise<M
 export default async function PlaylistPage({ params }: PlaylistPageProps) {
   const { locale, id } = await params;
   const View = locale === 'ar' ? PlaylistViewRTL : PlaylistView;
-  const playlist = await withinBudget(() => getPlaylistById(id, undefined, { includeVideos: true }));
+  const read = await withinBudget(() => getPlaylistById(id, undefined, { includeVideos: true }));
+  // Stable /thumb images only in the HTML (lib/ssr/stable-images.ts)
+  const stable = read ? stableImages(read) : undefined;
 
   return (
     <main className="flex-1 min-h-screen bg-gray-50 dark:bg-gray-950">
-      <View playlistId={id} initialPlaylist={playlist} />
+      <View playlistId={id} initialPlaylist={stable?.value} initialPartial={stable?.partial} />
     </main>
   );
 }

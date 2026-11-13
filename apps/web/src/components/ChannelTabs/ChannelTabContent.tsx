@@ -39,7 +39,7 @@ export function ChannelTabContent({
       <TabManageLink channelId={channelId} tab={activeTab} />
 
       {/* Home Tab */}
-      {activeTab === 'home' && <HomeTabContent channelId={channelId} initialSections={seed?.sections} />}
+      {activeTab === 'home' && <HomeTabContent channelId={channelId} initialSections={seed?.sections} initialFallback={seed?.fallback} initialPartial={seed?.partial} />}
 
       {/* Videos Tab */}
       {activeTab === 'videos' && <VideosTabContent channelId={channelId} initialPage={seed?.page} />}

@@ -12,7 +12,7 @@ import { pickSpotlightVideo } from '../shelves/SpotlightSection';
 import { resolveSectionTitle, sectionLabelKey, type PopulatedChannelSection, type SectionContent } from '../sectionData';
 import { EN_TRANSLATIONS } from '@/lib/i18n/translations/en';
 import { listChannelSectionsPopulated } from '@/lib/api/channel-sections';
-import { getChannelSubscriptionStatus } from '@/lib/api/channels';
+import { getChannelPlaylists, getChannelShorts, getChannelSubscriptionStatus, getChannelVideos } from '@/lib/api/channels';
 import { ChannelViewerProvider } from '@/components/Channel/ChannelViewerContext';
 
 jest.mock('@/hooks/useLanguage', () => ({
@@ -27,7 +27,7 @@ jest.mock('@/hooks/useLanguage', () => ({
 const mockUser = { current: null as null | { id: string } };
 jest.mock('@/components/AuthProvider/authContext', () => ({ useAuth: () => ({ user: mockUser.current }) }));
 jest.mock('@/hooks/useMultiAccount', () => ({ useOptionalMultiAccount: () => null }));
-jest.mock('@/lib/api/channels', () => ({ getChannelSubscriptionStatus: jest.fn() }));
+jest.mock('@/lib/api/channels', () => ({ getChannelSubscriptionStatus: jest.fn(), getChannelVideos: jest.fn(), getChannelShorts: jest.fn(), getChannelPlaylists: jest.fn() }));
 jest.mock('@/lib/api/channel-sections', () => ({ listChannelSectionsPopulated: jest.fn() }));
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 jest.mock('@/components/videoCard', () => ({
@@ -192,6 +192,42 @@ describe('Spotlight', () => {
     expect(mockStatus).not.toHaveBeenCalled();
     expect(screen.getByRole('heading', { name: 'Welcome' })).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /Watch/ })[0]).toHaveAttribute('href', '/en/video/t1');
+  });
+});
+
+describe('ChannelSections Home tab without sections (#1206)', () => {
+  it('should show the server fallback of latest uploads, Shorts and playlists without fetching', () => {
+    mockList.mockClear();
+    const { container } = render(
+      <ChannelSections
+        channelId={CHANNEL}
+        initialSections={[]}
+        initialFallback={{ videos: [video('v1')], shorts: [video('s1')], playlists: [{ id: 'p1', name: 'List', videosCount: 2 }] }}
+      />,
+    );
+    expect(screen.getByTestId('channel-sections')).toHaveAttribute('data-fallback', 'uploads');
+    expect([...container.querySelectorAll('section[data-section-type]')].map((el) => el.getAttribute('data-section-type'))).toEqual(['recent_uploads', 'shorts', 'created_playlists']);
+    expect(screen.getAllByTestId('video-card').map((el) => el.textContent)).toEqual(['v1:Video v1', 's1:Video s1']);
+    expect(mockList).not.toHaveBeenCalled();
+  });
+
+  it('should load the uploads when the sections have nothing to show', async () => {
+    mockList.mockResolvedValue([section('featured_videos', {})] as never);
+    (getChannelVideos as jest.Mock).mockResolvedValue({ data: [video('v9')] });
+    (getChannelShorts as jest.Mock).mockResolvedValue({ data: [] });
+    (getChannelPlaylists as jest.Mock).mockResolvedValue({ data: [{ id: 'p9', name: 'Private', isPublic: false }] });
+    const { container } = render(<ChannelSections channelId={CHANNEL} />);
+    await screen.findByTestId('channel-sections');
+    expect([...container.querySelectorAll('section[data-section-type]')].map((el) => el.getAttribute('data-section-type'))).toEqual(['recent_uploads']);
+    expect(screen.getByTestId('video-card')).toHaveTextContent('v9');
+  });
+
+  it('should draw nothing for a channel without uploads', async () => {
+    mockList.mockResolvedValue([] as never);
+    for (const fn of [getChannelVideos, getChannelShorts, getChannelPlaylists]) (fn as jest.Mock).mockResolvedValue({ data: [] });
+    const { container } = render(<ChannelSections channelId={CHANNEL} />);
+    await waitFor(() => expect(screen.queryByTestId('channel-sections-loading')).toBeNull());
+    expect(container).toBeEmptyDOMElement();
   });
 });
 

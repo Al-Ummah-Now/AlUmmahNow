@@ -14,6 +14,7 @@ import { ContinueWatchingShelf } from "@/components/history/ContinueWatchingShel
 import { HomeHero, HomeHeroPlaceholder } from "@/components/ThemeDemo/HomeHero";
 import { pickHomeFeatured } from "@/lib/video/hero";
 import type { PaginationResponse } from "@/lib/api/types";
+import { mergeFresh } from "@/lib/ssr/merge-fresh";
 
 /** Never featured on the home hero (kept from the original pick). */
 const HOME_HERO_EXCLUDED: ReadonlySet<string> = new Set(["e42e5deb-c86a-40b0-b8ec-6072fc550dba"]);
@@ -33,9 +34,11 @@ interface HomePageClientProps {
    * cards. Missing when the API was slow or down: the page then fetches it after hydration.
    */
   initialPage?: PaginationResponse<VideoObject>;
+  /** The server dropped an image only the viewer may see: reload the first page after hydration */
+  initialPartial?: boolean;
 }
 
-const VideosPage: React.FC<HomePageClientProps> = ({ initialPage }) => {
+const VideosPage: React.FC<HomePageClientProps> = ({ initialPage, initialPartial = false }) => {
   const { t, isRTL } = useLanguage();
   const { user: _user } = useAuth();
   const [videos, setVideos] = useState<VideoObject[]>(() => initialPage?.data ?? []);
@@ -76,6 +79,18 @@ const VideosPage: React.FC<HomePageClientProps> = ({ initialPage }) => {
       setLoading(false);
     }
   }, []);
+
+  // Fresh copies (signed images included) of the server's first page, when it had to drop some
+  const refreshed = useRef(false);
+  useEffect(() => {
+    if (!initialPartial || refreshed.current) return;
+    refreshed.current = true;
+    fetchVideosWithPagination(null)
+      .then((page) => {
+        if (page?.data) setVideos((shown) => mergeFresh(shown, page.data));
+      })
+      .catch((error) => logger.warn('VideosPage: refreshing the first page failed', { error }));
+  }, [initialPartial]);
 
   useEffect(() => {
     // Prevent duplicate initial fetch

@@ -180,3 +180,46 @@ export function toLiveStreamCardModel(stream: ApiLiveStream, channelName = ''): 
     duration: stream.duration,
   };
 }
+
+/**
+ * The section has something to draw for its type (ChannelSectionRenderer draws nothing otherwise).
+ * When no section of a channel has, its Home tab falls back to its uploads (channelHomeFallback).
+ */
+export function sectionHasContent(section: PopulatedChannelSection): boolean {
+  const c = section.populatedContent;
+  if (!c) return false;
+  switch (section.type) {
+    case 'channel_spotlight':
+      return !!(c.spotlight?.trailer || c.spotlight?.returning);
+    case 'multiple_playlists':
+    case 'created_playlists':
+      return !!c.playlists?.length;
+    case 'featured_channels':
+    case 'subscribed_channels':
+      return !!c.channels?.length;
+    case 'live_streams':
+      return !!c.streams?.length;
+    case 'community_posts':
+      return !!c.posts?.length;
+    default:
+      return !!c.videos?.length;
+  }
+}
+
+/** A channel's Home tab when it has no section to show (YouTube style, #1206): its latest uploads */
+export interface ChannelHomeFallback {
+  videos: VideoObject[];
+  shorts: VideoObject[];
+  /** Missing when the server had them too late: the client loads them */
+  playlists?: SectionPlaylist[];
+}
+
+/** The fallback as sections the renderer already draws (titles, "View all" links and shelves) */
+export function fallbackSections(channelId: string, fallback: ChannelHomeFallback): PopulatedChannelSection[] {
+  const base = { channelId, userId: '', title: '', style: 'horizontal_row', itemCount: 12, showTimestamp: true, showChannelName: false, dateCreated: '' } as Partial<PopulatedChannelSection>;
+  const sections: Array<Partial<PopulatedChannelSection>> = [];
+  if (fallback.videos.length) sections.push({ ...base, id: 'fallback-videos', type: 'recent_uploads', position: 0, populatedContent: { videos: fallback.videos } });
+  if (fallback.shorts.length) sections.push({ ...base, id: 'fallback-shorts', type: 'shorts', position: 1, populatedContent: { videos: fallback.shorts } });
+  if (fallback.playlists?.length) sections.push({ ...base, id: 'fallback-playlists', type: 'created_playlists', position: 2, populatedContent: { playlists: fallback.playlists } });
+  return sections as PopulatedChannelSection[];
+}

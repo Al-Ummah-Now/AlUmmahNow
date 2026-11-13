@@ -62,7 +62,8 @@ const VideoThumbnail: React.FC<VideoThumbnailProps> = ({
     <div className={`relative w-full overflow-hidden bg-gray-200 dark:bg-black ${className}`} style={style}>
       {showImage ? (
         <FitImage
-          src={resolveUrl(src as string)}
+          // A same-origin path stays relative: the server has no origin to resolve it against (hydration)
+          src={(src as string).startsWith("/") ? (src as string) : resolveUrl(src as string)}
           alt={alt}
           sizes={sizes}
           videoWidth={videoWidth}

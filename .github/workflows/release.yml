@@ -393,6 +393,8 @@ jobs:
       # hides unknown ids (scripts/release/thumbnail-check.ts; 2026-11-12/13 incidents). Signed
       # URLs that www/CMS store fail too (--strict-stored): since www v2026.11.13.4 and CMS
       # v2026.11.13.3 both serve /thumb, and the stored copies were repaired on 2026-11-13.
+      # Server-rendered pages (home, watch, channel, playlist) must carry no signed media URL and
+      # never be shared-cacheable (#1209).
       - name: Thumbnail check (stage)
         run: node --experimental-strip-types --no-warnings scripts/release/thumbnail-check.ts --env stage --strict-stored
 
@@ -772,6 +774,8 @@ jobs:
       # hides unknown ids (scripts/release/thumbnail-check.ts; 2026-11-12/13 incidents). Signed
       # URLs that www/CMS store fail too (--strict-stored): since www v2026.11.13.4 and CMS
       # v2026.11.13.3 both serve /thumb, and the stored copies were repaired on 2026-11-13.
+      # Server-rendered pages (home, watch, channel, playlist) must carry no signed media URL and
+      # never be shared-cacheable (#1209).
       - name: Thumbnail check (production)
         run: node --experimental-strip-types --no-warnings scripts/release/thumbnail-check.ts --env production --strict-stored
 

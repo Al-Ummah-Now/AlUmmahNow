@@ -7,6 +7,16 @@ type Item = { id: string };
 const page = (ids: string[], cursor: string | null) => ({ data: ids.map((id) => ({ id })), cursor });
 
 describe('useCursorList', () => {
+  it('should quietly reload a partial server page and take the fresh items in place', async () => {
+    const fetchPage = jest.fn(async () => ({ data: [{ id: 'a', v: 'fresh' }, { id: 'b', v: 'fresh' }], cursor: 'c1' }));
+    const initial = { data: [{ id: 'a', v: 'server' }, { id: 'b', v: 'server' }], cursor: 'c1', partial: true };
+    const { result } = renderHook(() => useCursorList<{ id: string; v: string }>('ch1', fetchPage, 'videos', initial));
+    expect(result.current.loading).toBe(false);
+    await waitFor(() => expect(result.current.items.map((i) => i.v)).toEqual(['fresh', 'fresh']));
+    expect(result.current.loading).toBe(false);
+    expect(fetchPage).toHaveBeenCalledTimes(1);
+  });
+
   it('should show the server page at once and not fetch it again when given an initial page', async () => {
     const fetchPage = jest.fn(async () => page(['c'], null));
     const { result } = renderHook(() => useCursorList<Item>('ch1', fetchPage, 'videos', page(['a', 'b'], 'c1')));
