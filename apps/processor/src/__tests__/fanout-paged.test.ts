@@ -110,7 +110,7 @@ describe('paged fan-out', () => {
     expect(pushed.size).toBe(SUBSCRIBERS);
     expect(live.size).toBe(SUBSCRIBERS);
     expect(live.has('user:owner')).toBe(false);
-  });
+  }, 30_000); // real work for 4500 subscribers: Jest's 5 s default flaked on CI runners (#1237)
 
   it('a page costs a fixed number of calls however big the channel is', async () => {
     const t = setup(FANOUT_PAGE * 3);
