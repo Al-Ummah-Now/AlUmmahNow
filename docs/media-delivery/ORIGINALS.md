@@ -104,7 +104,7 @@ D1: `media_originals (video_id PK, upload_id, bytes, parts, completed_at, delete
 1. This note.
 2. **One PR** with the bucket (`ensure-resources`, configs for QA, stage and production), the tee in
    the TUS proxy and multipart upload, completion, the source handler, retention, the cost metric and
-   tests. Labelled `skip-qa-e2e`, merged on green code checks.
+   tests. Merged on green code checks.
 3. **QA check:** one upload. The R2 job must start within seconds of the upload completing and read
    `source.file = original`, at the source's full resolution, before Bunny is ready.
 4. Production with the next videos release, after reporting to the owner.

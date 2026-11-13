@@ -1,16 +1,15 @@
 name: Release regressions nightly (3x)
 
-# The flake hunt: every night the release E2E suite runs against QA with every
+# The flake hunt (by hand): the release E2E suite runs against QA with every
 # test repeated 3 times and no retries (release-e2e.yml, repeat: 3). Any test that
 # is not 3/3 is listed in one issue (label e2e-flaky-nightly), created or updated
-# by scripts/ci/nightly-flaky-issue.ts; a night where everything is 3/3 closes it.
+# by scripts/ci/nightly-flaky-issue.ts; a run where everything is 3/3 closes it.
 # A flaky test is a defect: fix it, or quarantine it with an issue and an owner
 # (scripts/ci/check-quarantine.ts). Retries in the gate stay at one.
 
+# By hand only: the schedule is gone (owner 2026-11-13: tests run against QA only on numbered
+# releases). Retried tests in the release gate are still listed as flaky in its job summary.
 on:
-  schedule:
-    # 02:30 UTC, outside the working day's PR traffic on QA
-    - cron: '30 2 * * *'
   workflow_dispatch:
 
 permissions:

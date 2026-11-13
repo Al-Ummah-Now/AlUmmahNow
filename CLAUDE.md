@@ -623,15 +623,17 @@ Required checks on every PR (`deploy.yml` jobs `test` and `release-checks`). Scr
 Most E2E specs run on a **local stack** that each CI job boots for itself (every worker in one
 Miniflare, the real Auth issuer from its released bundle, fake Bunny and Resend, mocked AI). They
 never touch QA, so they run in parallel and shard. Only the specs that need a real deployment stay
-**deployed** (QA on PRs, stage in releases): real Bunny encodes, R2/media delivery, real domains and
-cookies. `apps/web/e2e/test-utils/placement.ts` lists every spec with its placement, and a test fails
+**deployed** (stage in every release): real Bunny encodes, R2/media delivery, real domains and
+cookies. **Nothing tests the deployed QA on a pull request, a push to `main` or a schedule** (owner
+2026-11-13: tests run against QA only on numbered releases; QA's D1 read volume). QA is still
+deployed on every push to `main`. `apps/web/e2e/test-utils/placement.ts` lists every spec with its placement, and a test fails
 on a spec missing from it.
 
 | Check | Runs | Target |
 |---|---|---|
 | **Local E2E** (`local-e2e.yml`) | every PR, every push to `main`, nightly, every release | local stack (`E2E_ENV=local`) |
-| **Release regressions (qa)** (`release-e2e.yml`) | every PR | QA, deployed specs only |
-| Release → `stage-e2e` | every release | stage, deployed specs only |
+| Release → `stage-e2e` (`release-e2e.yml`) | every release | stage, deployed specs only |
+| Legacy E2E (`e2e-tests.yml`) | once after every release tag's Release run (`workflow_run`), by hand | QA, specs not yet on the local stack; never gates |
 
 A release promotes production only when both Local E2E and the stage run pass. How the stack
 works, how to run it and its specs, the own-data and cleanup rules and the quarantine format are in
@@ -644,9 +646,11 @@ The release E2E suite is the gate: `apps/web/e2e/release/` with
 
 | Where | When | Target | Secrets |
 |---|---|---|---|
-| PR check `Release regressions (qa)` | every PR into `main` | QA (`E2E_ENV=qa`) | `E2E_CODE_SINK_SECRET_QA`, `TEST_PROMOTE_SECRET_QA` |
 | `workflow_call` from the release workflow | every release | stage (`env: stage`) | caller passes `E2E_CODE_SINK_SECRET` and `TEST_PROMOTE_SECRET` (stage values) |
 | `workflow_dispatch` | by hand | `qa` or `stage` | `*_QA` / `*_STAGE` repo secrets |
+
+It has no pull request, push or schedule trigger: pull requests rely on Local E2E, and the release
+does not run it against QA too (stage runs the same specs on the same code).
 
 Never production: the specs create accounts, channels and videos. Each spec
 registers its own user with an `@e2e.alummahnow.net` address (the auth
@@ -716,14 +720,14 @@ H.264 HLS streams.
 - **Functional gates, load does not.** Specs that assert speed, latency budgets or behaviour under
   parallel load carry the tag `@load` (studio-list-speed, load-hot-paths, the recommendations
   budget, 07-performance). Every run leaves them out (`grepInvert`); `E2E_LOAD=only` runs just them
-  in a non-blocking step (`continue-on-error`, job summary) nightly, by hand and in releases, never
+  in a non-blocking step (`continue-on-error`, job summary) by hand and in releases, never
   on PRs. A spec whose only failure mode is a slow third-party encode skips with #929 instead of
   failing (`untilEncoded` in `e2e/release/encode.ts`, `skipSlowEncode` in the legacy helpers);
   wrong behaviour once the encode finished still fails.
 - **Retries stay at one.** A test that needed its retry is listed as flaky in the job
   summary and as a warning (`e2e/release/outcome-reporter.ts`). `release-e2e-nightly.yml`
-  runs the suite 3x with no retries and keeps one issue (label `e2e-flaky-nightly`) listing
-  every test that was not 3/3. Quarantine (`test.fixme`) needs
+  (by hand only since 2026-11-13) runs the suite 3x on QA with no retries and keeps one issue
+  (label `e2e-flaky-nightly`) listing every test that was not 3/3. Quarantine (`test.fixme`) needs
   `quarantined: #<issue> @<owner>` in the call (`scripts/ci/check-quarantine.ts`, run by
   the job).
 
@@ -762,11 +766,12 @@ channels, uploads or other content on production from a probe script.
 
 #### Legacy E2E suite
 
-`.github/workflows/e2e-tests.yml` (`apps/web/playwright.config.ts`) runs against QA **nightly and
-by hand only**, never per PR or after a release, and only for the web specs still placed on QA: the
+`.github/workflows/e2e-tests.yml` (`apps/web/playwright.config.ts`) runs against QA **once after
+each release tag's Release run** (`workflow_run`, a run of its own, so it never turns the release
+red) **and by hand**, never per PR, per push or on a schedule, and only for the web specs still placed on QA: the
 config leaves out every spec moved to the local stack (`e2e/test-utils/local-web-specs.ts`), which
 Local E2E runs on every PR, push to main, nightly and in every release. No spec may stop running:
-a spec leaves this run only by moving to the local list. Nothing gates on it; a red night is a
+a spec leaves this run only by moving to the local list. Nothing gates on it; a red run is a
 report to act on. `07-performance` (`@load`) stays here as a non-blocking load step. Use
 `workflow_dispatch` for a one-off QA run or to update the visual baselines (`update_snapshots`).
 Each job registers its own run accounts in global setup (`auth.setup.ts`, code-sink addresses,
@@ -791,8 +796,6 @@ concurrency group, which used to cancel most PR runs before they started):
   `shared-state` project per suite. It runs once per run under the `qa-global` lock
   (`scripts/ci/qa-lock.ts`, a compare-and-swap git ref), which waits its turn rather
   than replacing queued runs. Add a spec there only if it writes or asserts global state.
-- **Superseded heads.** A newer push to a PR cancels only that PR's older run
-  (concurrency group per `head_ref`); its teardown still runs.
 
 
 ## Development Workflow
