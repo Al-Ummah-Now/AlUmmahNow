@@ -91,14 +91,14 @@ describe('own domains', () => {
 
 	it('a live domain that stops verifying leaves the hosts and gives the primary back', async () => {
 		const e = await granted();
-		await reserveDomain(e, CH, 'example.net', 'usr_owner');
-		await updateDomain(e, CH, 'example.net', { status: 'live' }, 'admin-api');
-		await setPrimaryHost(e, CH, 'example.net', 'usr_owner');
-		const failed = await updateDomain(e, CH, 'example.net', { status: 'failed', error: 'DNS record not found' }, 'admin-api');
-		assert.ok(!failed.site.hosts.some((h) => h.host === 'example.net'));
+		await reserveDomain(e, CH, 'example-net.qa-sites.alummahnow.com', 'usr_owner');
+		await updateDomain(e, CH, 'example-net.qa-sites.alummahnow.com', { status: 'live' }, 'admin-api');
+		await setPrimaryHost(e, CH, 'example-net.qa-sites.alummahnow.com', 'usr_owner');
+		const failed = await updateDomain(e, CH, 'example-net.qa-sites.alummahnow.com', { status: 'failed', error: 'DNS record not found' }, 'admin-api');
+		assert.ok(!failed.site.hosts.some((h) => h.host === 'example-net.qa-sites.alummahnow.com'));
 		assert.equal(failed.site.hosts.find((h) => h.primary)?.host, 'scholar-site.qa.alummahnow.org');
 		assert.equal(failed.domain.error, 'DNS record not found');
-		await assert.rejects(updateDomain(e, CH, 'example.net', { records: [{ type: 'A', name: 'x', value: 'y', purpose: 'traffic' }] as never }, 'x'), /records_invalid/);
+		await assert.rejects(updateDomain(e, CH, 'example-net.qa-sites.alummahnow.com', { records: [{ type: 'A', name: 'x', value: 'y', purpose: 'traffic' }] as never }, 'x'), /records_invalid/);
 	});
 
 	it('internal routes: editor check by channel role, reserve and remove', async () => {
