@@ -10,7 +10,10 @@
  * - the API never hands out a thumbnail URL before the video is ready.
  * Both videos are deleted afterwards.
  */
+import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
+import { randomBytes } from 'crypto';
 import { encoding, untilEncoded } from './encode';
 import { test, expect, type Page } from '@playwright/test';
 import { target } from './targets';
@@ -22,6 +25,16 @@ import { fetchRetry } from './net';
 test.use({ trace: 'off' });
 
 const CLIP = path.join(__dirname, '..', 'test-fixtures', 'e2e-sample-40s.mp4');
+
+/**
+ * A copy of the clip under a new name: each upload here is a different file. Picking a file this
+ * browser already uploaded says "Already uploaded" instead of starting a second video (#1126).
+ */
+function freshClip(): string {
+  const file = path.join(os.tmpdir(), `e2e-clip-${Date.now().toString(36)}-${randomBytes(4).toString('hex')}.mp4`);
+  fs.copyFileSync(CLIP, file);
+  return file;
+}
 
 async function createChannelInMenu(page: Page, user: WebUser, name: string): Promise<string> {
   await page.context().addCookies([{ name: 'aun_consent', value: `v1.a0.e0.p0.${Date.now()}`, url: target().web, sameSite: 'Lax' }]);
@@ -66,7 +79,7 @@ test.describe('Release: single and bulk uploads behave the same', () => {
     // Single mode (public)
     await page.goto(`${target().web}/en/upload`);
     await expect(page.getByTestId('upload-dropzone')).toBeVisible({ timeout: 30000 });
-    await page.getByTestId('upload-file-input').setInputFiles(CLIP);
+    await page.getByTestId('upload-file-input').setInputFiles(freshClip());
     await expect(page.getByTestId('upload-details')).toBeVisible();
     await page.getByTestId('upload-title-en').fill(singleTitle);
     await page.getByTestId('upload-submit').click();
@@ -75,7 +88,7 @@ test.describe('Release: single and bulk uploads behave the same', () => {
     // Bulk mode (one file; public by default)
     await page.goto(`${target().web}/en/upload`);
     await page.getByTestId('upload-mode-batch').click();
-    await page.getByTestId('batch-file-input').setInputFiles(CLIP);
+    await page.getByTestId('batch-file-input').setInputFiles(freshClip());
     await expect(page.getByTestId('batch-queue')).toHaveAttribute('data-total', '1', { timeout: 60000 });
     await page.getByTestId('batch-start').click();
     await expect(page.getByTestId('batch-queue')).toHaveAttribute('data-completed', '1', { timeout: 150000 });

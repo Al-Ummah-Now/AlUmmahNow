@@ -12,7 +12,10 @@
  *    changing channel with a file queued asks first in the in-app dialog.
  * Every video is deleted afterwards.
  */
+import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
+import { randomBytes } from 'crypto';
 import { test, expect, type Page } from '@playwright/test';
 import { target } from './targets';
 import { apiFetch, createProfile, signUpOnWeb, type WebUser } from './web-session';
@@ -22,6 +25,16 @@ import { createChannelInMenu } from './account-menu';
 test.use({ trace: 'off' });
 
 const CLIP = path.join(__dirname, '..', 'test-fixtures', 'e2e-sample.mp4');
+
+/**
+ * A copy of the clip under a new name: each upload here is a different file. Picking a file this
+ * browser already uploaded says "Already uploaded" instead of starting a second video (#1126).
+ */
+function freshClip(): string {
+  const file = path.join(os.tmpdir(), `e2e-clip-${Date.now().toString(36)}-${randomBytes(4).toString('hex')}.mp4`);
+  fs.copyFileSync(CLIP, file);
+  return file;
+}
 
 /** Switches the acting channel in the videos header's account menu. */
 async function switchChannelInHeader(page: Page, channelId: string): Promise<void> {
@@ -52,7 +65,7 @@ async function switchChannelInHeader(page: Page, channelId: string): Promise<voi
 /** Uploads the clip in single mode; returns the new video id and the channelId header initiate was sent with. */
 async function uploadOnPage(page: Page, title: string): Promise<{ videoId: string; headerChannelId: string }> {
   await expect(page.getByTestId('upload-dropzone')).toBeVisible({ timeout: 30000 });
-  await page.getByTestId('upload-file-input').setInputFiles(CLIP);
+  await page.getByTestId('upload-file-input').setInputFiles(freshClip());
   await expect(page.getByTestId('upload-details')).toBeVisible();
   await page.getByTestId('upload-title-en').fill(title);
   await page.getByTestId('upload-is-public').uncheck();
@@ -132,7 +145,7 @@ test.describe('Release: the upload page shows and follows the chosen channel', (
 
       // With a file queued, changing channel asks first (in-app dialog); cancel keeps it
       await page.getByTestId('upload-mode-batch').click();
-      await page.getByTestId('batch-file-input').setInputFiles(CLIP);
+      await page.getByTestId('batch-file-input').setInputFiles(freshClip());
       await expect(page.getByTestId('batch-queue')).toHaveAttribute('data-total', '1', { timeout: 60000 });
       await combobox.click();
       await page.getByTestId(`upload-channel-option-${channelB}`).click();
