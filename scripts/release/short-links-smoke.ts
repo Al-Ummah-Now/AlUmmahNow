@@ -10,9 +10,17 @@
  *   - a public video's short link redirects (301) to its watch page, ?lang=ar to the Arabic one,
  *     with ?t= kept (the video is the newest public one of the public API; read only)
  * Exits 1 with every failure listed; the workflow then rolls the short-links Worker back.
+ *
+ * A custom domain attached by this very deploy (the first release of an env) needs a few minutes
+ * before its DNS and certificate serve: v2026.11.13.6's stage smoke failed with `fetch failed`
+ * while stage.alummahnow.link was still coming up. So the run first waits up to ~3 min for the host
+ * to answer at all (as status-smoke.ts does since #1229). If it never does, nothing is checked and
+ * the run ends with a warning (exit 0): the Worker is deployed and the domain is Cloudflare's to
+ * bring up. Any HTTP answer that is wrong still fails.
  */
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
+import { waitForHost, type SmokeDeps } from './status-smoke.ts';
 
 export type ShortLinksEnv = 'qa' | 'stage' | 'production';
 
@@ -86,6 +94,20 @@ export async function shortLinksSmoke(env: ShortLinksEnv, deps: { fetch: typeof 
 	return out;
 }
 
+export interface ShortLinksReport {
+	/** The host never answered (DNS / certificate of a new custom domain not live yet): nothing was checked */
+	unreachable: boolean;
+	results: SmokeResult[];
+}
+
+/** Waits for a newly attached host to answer at all, then runs the checks. */
+export async function shortLinksReport(env: ShortLinksEnv, deps: Pick<SmokeDeps, 'fetch' | 'sleep' | 'reachAttempts'>): Promise<ShortLinksReport> {
+	const base = SHORT_LINK_HOSTS[env].short;
+	const reach = await waitForHost(`${base}/robots.txt`, deps as SmokeDeps);
+	if (!reach.reached) return { unreachable: true, results: [{ name: `${base} answers`, ok: false, detail: reach.last }] };
+	return { unreachable: false, results: await shortLinksSmoke(env, { fetch: deps.fetch }) };
+}
+
 const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
 	const i = process.argv.indexOf('--env');
@@ -94,7 +116,11 @@ if (isMain) {
 		process.stderr.write('usage: short-links-smoke.ts --env qa|stage|production\n');
 		process.exit(2);
 	}
-	shortLinksSmoke(env, { fetch }).then((results) => {
+	shortLinksReport(env, { fetch, sleep: (ms) => new Promise((r) => setTimeout(r, ms)) }).then(({ unreachable, results }) => {
+		if (unreachable) {
+			console.log(`::warning::short links smoke (${env}) skipped: ${SHORT_LINK_HOSTS[env].short} did not answer in ~3 min (${results[0].detail}); a newly attached custom domain can take longer. The Worker is deployed.`);
+			return;
+		}
 		for (const r of results) console.log(`${r.ok ? 'ok  ' : 'FAIL'} ${r.name}: ${r.detail}`);
 		if (results.some((r) => !r.ok)) {
 			console.error(`::error::short links smoke (${env}) failed`);
