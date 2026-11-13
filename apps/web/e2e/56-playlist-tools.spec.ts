@@ -251,7 +251,8 @@ test.describe('Playlist tools', () => {
     await expect(page.getByText('Order saved')).toBeVisible();
 
     // Alt+Down / Alt+Up on a row (the bulk-rename shortcut), where the target has it
-    if (await page.getByText(/press Alt with the Up or Down arrow/).isVisible()) {
+    // The visible hint (dnd-kit repeats it in a hidden describedby node)
+    if (await page.locator('#playlist-reorder-hint').filter({ hasText: /press Alt with the Up or Down arrow/ }).isVisible()) {
       await page.getByTestId('playlist-item-handle').first().focus();
       await page.keyboard.press('Alt+ArrowDown');
       await expect.poll(() => itemOrder(page)).toEqual([videos[2].id, videos[1].id, videos[0].id]);
