@@ -20,7 +20,7 @@ let owner: Creator;
 const shorts: CreatedVideo[] = [];
 let landscape: CreatedVideo;
 let playlistId: string;
-/** The Short the tests start on (our newest) and the one the public feed puts after it */
+/** The Short the tests start on and the one the (stubbed) feed puts after it */
 let first: string;
 let following: string;
 
@@ -32,12 +32,18 @@ const LABELS = {
 test.describe.configure({ mode: 'default' });
 test.use({ storageState: ANONYMOUS_STATE });
 
-/** The public Shorts feed after a Short (what the next button follows). */
-async function feedAfter(id: string): Promise<string[]> {
-  const res = await fetch(`${target().api}/api/v1/shorts?after=${encodeURIComponent(id)}&limit=20`, { cache: 'no-store' }).catch(() => null);
-  if (!res?.ok) return [];
-  const body = (await res.json().catch(() => ({}))) as { items?: { id?: string }[] };
-  return (body.items ?? []).map((i) => i.id).filter((v): v is string => typeof v === 'string');
+/**
+ * The public Shorts feed (GET /api/v1/shorts?after=) leaves out E2E accounts' videos by design
+ * (lib/media/public-play.ts loadPlayable), so this file's Shorts are never in it. The next button
+ * is tested against a stubbed feed in the browser: after `first` comes `following`, then nothing.
+ * The feed's own order and filters have api-videos unit tests (public-play).
+ */
+async function stubFeed(page: Page) {
+  await page.route('**/api/v1/shorts?*', async (route) => {
+    const after = new URL(route.request().url()).searchParams.get('after');
+    const items = after === first ? [{ id: following }] : [];
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items, next: null }) });
+  });
 }
 
 const shortPath = (locale: string, id: string) => new RegExp(`/${locale}/shorts/${id}/?$`);
@@ -72,21 +78,12 @@ test.beforeAll(async ({ browser }) => {
   owner = await data.createCreator(browser, 'shorts');
   const channelId = owner.channelIds[0];
   const tag = `${ns()} ${Date.now().toString(36)}`;
-  // One at a time, so the feed (newest first) has them in creation order
   for (const n of [1, 2, 3]) shorts.push(await data.createVideo(owner.user, channelId, { clip: 'vertical', isPublic: true, title: `E2E Short ${n} ${tag}` }));
   landscape = await data.createVideo(owner.user, channelId, { clip: 'landscape40', isPublic: true, title: `E2E landscape ${tag}` });
   playlistId = await data.createPlaylist(owner.user, channelId, { title: `E2E Shorts playlist ${tag}`, videoIds: [shorts[0].id, shorts[1].id] });
 
   first = shorts[2].id;
-  // The feed reads the search index, filled from the queue: wait until our older Shorts follow the newest
-  await expect
-    .poll(async () => {
-      const after = await feedAfter(first);
-      return after.includes(shorts[1].id) && after.includes(shorts[0].id);
-    }, { message: 'the public Shorts feed never listed our Shorts after the newest', timeout: 90_000, intervals: [1000, 2000, 5000] })
-    .toBe(true);
-  following = (await feedAfter(first))[0];
-  expect(following, 'the feed has a Short after ours').toBeTruthy();
+  following = shorts[1].id;
 });
 
 for (const locale of ['en', 'ar'] as const) {
@@ -121,6 +118,7 @@ for (const locale of ['en', 'ar'] as const) {
     });
 
     test(`SHORTS-004 the Short plays; next and previous by button and arrow keys (${locale})`, async ({ page, browserName }, testInfo) => {
+      await stubFeed(page);
       await openShort(page, locale, first);
       await expect(page.locator('html')).toHaveAttribute('lang', locale);
       await expect(page.locator('html')).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
@@ -159,6 +157,7 @@ for (const locale of ['en', 'ar'] as const) {
 
     test(`SHORTS-005 a swipe up and down moves between Shorts on a phone (${locale})`, async ({ page }) => {
       await page.setViewportSize({ width: 390, height: 844 });
+      await stubFeed(page);
       await openShort(page, locale, first);
       await swipe(page, -200);
       await expect(page).toHaveURL(shortPath(locale, following));
