@@ -1,0 +1,131 @@
+# Orphaned Bunny Stream collections (#1085, #1086): collections no channel or
+# profile record refers to any more. #1086 stops new ones; this finds the old.
+#
+# test: library 553336 (QA + stage records). dry-run counts and stores the
+#   orphan ids; apply (an hour or more later) deletes only collections that
+#   were orphans then and still are. The worker refuses any other library.
+# prod: libraries 400189 and 498994 (production records). Counts only: the
+#   prod worker has READ_ONLY set, binds no snapshot bucket, and the script
+#   refuses any mode but dry-run.
+#
+# Like bunny-qa-status.yml, the job deploys a throwaway worker
+# (scripts/qa/bunny-collections/worker.js) bound to the Secrets Store keys,
+# calls it with a random bearer token and deletes it. Keys never reach the runner.
+name: Bunny Orphan Collections
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'test = library 553336 (QA + stage); prod = 400189 + 498994, read only'
+        type: choice
+        options: [test, prod]
+        default: test
+      mode:
+        description: 'dry-run = count (and, on test, snapshot); apply = test only, delete orphans of a snapshot at least 1 h old'
+        type: choice
+        options: [dry-run, apply]
+        default: dry-run
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bunny-orphan-collections-${{ inputs.target }}
+  cancel-in-progress: false
+
+env:
+  STORE: f8eddc9944d041919ed8dc7d08d32308
+
+jobs:
+  orphans:
+    name: Orphaned collections (${{ inputs.target }}, ${{ inputs.mode }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Refuse apply on prod
+        if: inputs.target == 'prod' && inputs.mode != 'dry-run'
+        run: echo "::error::prod is census only" && exit 1
+
+      - name: Deploy the probe
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          TARGET: ${{ inputs.target }}
+        run: |
+          set -euo pipefail
+          cd scripts/qa/bunny-collections
+          token=$(openssl rand -hex 32)
+          echo "::add-mask::$token"
+          echo "PROBE_TOKEN=$token" >> "$GITHUB_ENV"
+          printf '{"PROBE_TOKEN":"%s"}' "$token" > "$RUNNER_TEMP/probe-secrets.json"
+          if [ "$TARGET" = test ]; then
+            name=bunny-orphans-test-probe
+            cat > wrangler.json <<JSON
+          {
+            "name": "$name", "main": "worker.js", "compatibility_date": "2025-09-01", "workers_dev": true,
+            "vars": { "LIBRARY_1_ID": "553336", "REF_BUCKETS": "channels_qa,channels_stage,profiles_qa,profiles_stage" },
+            "r2_buckets": [
+              { "binding": "channels_qa", "bucket_name": "channels-qa" },
+              { "binding": "channels_stage", "bucket_name": "channels-stage" },
+              { "binding": "profiles_qa", "bucket_name": "profiles-qa" },
+              { "binding": "profiles_stage", "bucket_name": "profiles-stage" },
+              { "binding": "SNAPSHOT", "bucket_name": "global-settings-qa" }
+            ],
+            "secrets_store_secrets": [
+              { "binding": "LIBRARY_1_KEY", "store_id": "$STORE", "secret_name": "bunny-stream-key-qa" }
+            ]
+          }
+          JSON
+          else
+            name=bunny-orphans-prod-probe
+            cat > wrangler.json <<JSON
+          {
+            "name": "$name", "main": "worker.js", "compatibility_date": "2025-09-01", "workers_dev": true,
+            "vars": { "READ_ONLY": "true", "LIBRARY_1_ID": "400189", "LIBRARY_2_ID": "498994", "REF_BUCKETS": "channels,profiles" },
+            "r2_buckets": [
+              { "binding": "channels", "bucket_name": "channels" },
+              { "binding": "profiles", "bucket_name": "profiles" }
+            ],
+            "secrets_store_secrets": [
+              { "binding": "LIBRARY_1_KEY", "store_id": "$STORE", "secret_name": "bunny-stream-key" },
+              { "binding": "LIBRARY_2_KEY", "store_id": "$STORE", "secret_name": "bunny-stream-key-498994" }
+            ]
+          }
+          JSON
+          fi
+          echo "PROBE=$name" >> "$GITHUB_ENV"
+          npx -y wrangler@4.161.0 deploy --secrets-file "$RUNNER_TEMP/probe-secrets.json" 2>&1 | tee "$RUNNER_TEMP/deploy.txt"
+          rm -f "$RUNNER_TEMP/probe-secrets.json"
+          url=$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' "$RUNNER_TEMP/deploy.txt" | head -1)
+          test -n "$url"
+          echo "PROBE_URL=$url" >> "$GITHUB_ENV"
+          sleep 10
+
+      - name: Count (and on test, sweep) orphaned collections
+        env:
+          TARGET: ${{ inputs.target }}
+          MODE: ${{ inputs.mode }}
+        run: python3 scripts/qa/bunny-collections/orphans.py "$TARGET" "$MODE" "$RUNNER_TEMP/orphans.json"
+
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bunny-orphan-collections-${{ inputs.target }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/orphans.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Delete the probe
+        if: always()
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: '[ -n "${PROBE:-}" ] && npx -y wrangler@4.161.0 delete --name "$PROBE" --force || true'
