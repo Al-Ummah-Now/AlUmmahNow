@@ -29,6 +29,18 @@ function loadMoreButton(page: Page) {
   return page.getByRole('main').getByRole('button', { name: /^(Load More|تحميل المزيد)$/ });
 }
 
+/**
+ * Clicks "Load More" and waits for the page to arrive. The button is rendered only while the API
+ * has a next page (home page.tsx), so after the last page it is gone rather than disabled.
+ */
+async function loadNextPage(page: Page) {
+  const box = page.getByTestId('home-load-more');
+  await loadMoreButton(page).click();
+  await expect
+    .poll(async () => (await box.count()) === 0 || /^(Load More|تحميل المزيد)$/.test((await box.innerText()).trim()), { timeout: 30000 })
+    .toBe(true);
+}
+
 test.describe('Home - anonymous', () => {
   test.use({ storageState: ANONYMOUS_STATE });
 
@@ -58,10 +70,8 @@ test.describe('Home - anonymous', () => {
     // Loaded pages include it (load more until found, bounded)
     const mineCard = page.locator(`[data-testid="video-card"][data-video-id="${mine.id}"]`);
     for (let i = 0; i < 5 && (await mineCard.count()) === 0; i++) {
-      const more = loadMoreButton(page);
-      if (!(await more.isEnabled())) break;
-      await more.click();
-      await expect(more).toHaveText(/^(Load More|تحميل المزيد)$/, { timeout: 30000 });
+      if ((await loadMoreButton(page).count()) === 0) break;
+      await loadNextPage(page);
     }
     await expect(mineCard).toBeVisible();
     await expect(mineCard).toContainText(mine.title);
@@ -76,13 +86,10 @@ test.describe('Home - anonymous', () => {
 
     const before = await cards.count();
     await expect(more, 'this file made more public videos than a page holds').toBeEnabled();
-    await more.click();
-    // Either the next page is appended, or the API had no more public videos
-    // for the cursor and the button is disabled (end of the list)
-    await expect
-      .poll(async () => (await cards.count()) > before || !(await more.isEnabled()), { timeout: 30000 })
-      .toBe(true);
-    await expect(more).toHaveText(/^(Load More|تحميل المزيد)$/);
+    await loadNextPage(page);
+    // This file made more public videos than the first page holds, so the next page has cards;
+    // if it was the last page, the button is gone (end of the list)
+    await expect.poll(() => cards.count(), { timeout: 30000 }).toBeGreaterThan(before);
 
     const ids = await cards.evaluateAll((els) => els.map((el) => el.getAttribute('data-video-id')));
     expect(ids.length).toBeGreaterThanOrEqual(before);
