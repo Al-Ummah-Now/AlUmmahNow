@@ -149,9 +149,11 @@ The source of truth is [`scripts/release/secrets-manifest.ts`](scripts/release/s
 | | | `BUNNY_TOKEN_KEY` → `bunny-stream-token-key` / `bunny-stream-token-key-qa` / `bunny-stream-token-key-qa` | Signs Bunny CDN playback and thumbnail URLs (`BUNNY_SIGN_URLS=true`) |
 | | | `image_storage_key` → `al-ummah-now-images-key` (all envs) | Bunny Storage key for thumbnails and avatars |
 | | | `INTERNAL_API_KEY` → `internal-api-key` / `internal-api-key-qa` / `internal-api-key-stage` | `X-API-Key` for `/internal/*` and calls to other Workers |
+| | | `TURNSTILE_SECRET` → `turnstile-secret` / `turnstile-secret-test` / `turnstile-secret-test` | Cloudflare Turnstile siteverify (QA/stage: Cloudflare's public always-pass test secret; [docs/features/bot-protection.md](docs/features/bot-protection.md)) |
 | admin-api | `al-ummah-admin-api` / `-qa` / `-stage` | `INTERNAL_API_KEY` | as above; also checks the Contact us route's `X-API-Key` on `/internal/contact` |
 | | | `RESEND_API_KEY` → `RESEND_API_KEY` (all envs; the auth server's send-only key) | Contact us: support-inbox notification, sender acknowledgement and staff replies |
 | | | `AUTH_MODERATION_CLIENT_SECRET` (worker secret, one value per env) | Client secret of `AUTH_MODERATION_CLIENT_ID`: moderation requests to auth ([docs/admin/AUTH_MODERATION_REQUESTS.md](docs/admin/AUTH_MODERATION_REQUESTS.md)) |
+| | | `TURNSTILE_SECRET` → as api-videos | Turnstile on Contact us |
 | websocket-server | `al-ummah-now-comms` / `-qa` / `-stage` | `INTERNAL_API_KEY` | Authenticates broadcast calls from api-videos, processor and scheduler |
 | processor | `al-ummah-now-processor` / `-qa` / `-stage` | `INTERNAL_API_KEY` | as above |
 | scheduler | `al-ummah-scheduler` / `-qa` / `-stage` | `INTERNAL_API_KEY` | Scheduled-publish broadcasts. Needs wrangler 4: wrangler 3 silently drops `secrets_store_secrets` |

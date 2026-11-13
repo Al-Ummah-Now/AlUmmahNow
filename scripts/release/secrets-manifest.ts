@@ -51,6 +51,11 @@ const AUTH_MODERATION_CLIENT_SECRET: RequiredSecret = {
 		'worker secret; client secret of AUTH_MODERATION_CLIENT_ID (moderation requests to auth, docs/admin/AUTH_MODERATION_REQUESTS.md). Set by AlUmmahNowAuth scripts/release/rotate-client-secret.ts',
 };
 
+const TURNSTILE_SECRET: RequiredSecret = {
+	name: 'TURNSTILE_SECRET',
+	purpose: 'Secrets Store turnstile-secret (production) / turnstile-secret-test (QA, stage: Cloudflare\'s always-pass test secret); siteverify of Turnstile tokens (docs/features/bot-protection.md)',
+};
+
 const API_VIDEOS_SECRETS: RequiredSecret[] = [
 	{ name: 'bunny-stream-key', purpose: 'Secrets Store; Bunny Stream API key (create, upload, update videos)' },
 	{ name: 'bunny_stream_library_id', purpose: 'Secrets Store; Bunny Stream library id' },
@@ -59,6 +64,7 @@ const API_VIDEOS_SECRETS: RequiredSecret[] = [
 	{ name: 'LIVE_INGEST_SECRET', purpose: 'Secrets Store live-ingest-secret[-qa|-stage]; HMAC key of self-hosted live stream keys (lib/live/providers.ts)' },
 	INTERNAL_API_KEY,
 	{ name: 'MEDIA_SIGN_KEY', purpose: 'Secrets Store media-sign-key[-qa|-stage]; path tokens of private R2 renditions (shared with apps/media)' },
+	TURNSTILE_SECRET,
 ];
 
 const CLIENT_REQUIRED = [{ name: 'ClientId', required: true }];
@@ -85,6 +91,8 @@ export const SECRETS_MANIFEST: WorkerSecrets[] = [
 			INTERNAL_API_KEY,
 			{ name: 'RESEND_API_KEY', purpose: 'Secrets Store RESEND_API_KEY (shared with the auth server); Contact us notification, acknowledgement and reply emails' },
 			AUTH_MODERATION_CLIENT_SECRET,
+			// Contact us (endpoints/contact/ContactSubmit.ts)
+			TURNSTILE_SECRET,
 		],
 		// Checked when set: the var arrives with the deploy of the code that reads it
 		clientIdVars: [...CLIENT_OPTIONAL, { name: 'AUTH_MODERATION_CLIENT_ID', required: false }],
