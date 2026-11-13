@@ -1802,6 +1802,33 @@
   box-shadow: var(--fanous-player-menu-edge);
 }
 
+/*
+  A vertical video (Shorts) floats in a portrait box: in the 16:9 box it was a thin strip between
+  black bars. As tall as the viewport allows, so its controls stay on screen.
+*/
+.custom-video-player[data-mini][data-portrait] .video-js.vjs-fanous {
+  width: min(216px, 42vw, calc((100vh - 160px) * 9 / 16)) !important;
+  aspect-ratio: 9 / 16;
+}
+
+/* The portrait mini player is narrow: the bar keeps play, mute, time, settings and fullscreen on
+   one row; autoplay and captions are in settings (and C on the keyboard) until it docks again */
+.custom-video-player[data-mini][data-portrait] .video-js.vjs-fanous .vjs-control-bar .vjs-control.vjs-button.vjs-fanous-autoplay,
+.custom-video-player[data-mini][data-portrait] .video-js.vjs-fanous .vjs-control-bar .vjs-control.vjs-button.vjs-fanous-captions {
+  display: none;
+}
+
+/*
+  Below 1024px the site's tab bar (system.css .tabbar: 56px + the safe area, fixed at the bottom)
+  is drawn over the page, the player included: the mini player floated under it and lost its
+  controls (2026-11-13). It floats above the tab bar there.
+*/
+@media (max-width: 1023px) {
+  .custom-video-player[data-mini] .video-js.vjs-fanous {
+    inset-block-end: calc(56px + 12px + env(safe-area-inset-bottom)) !important;
+  }
+}
+
 .video-js.vjs-fanous .vjs-fanous-mini-actions {
   position: absolute;
   z-index: 6;

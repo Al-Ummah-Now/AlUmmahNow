@@ -115,6 +115,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/player/alignment.spec.ts': { placement: 'local', reason: 'already local: /en/dev/player harness with fixture video' },
   'apps/web/e2e/player/autoplay.spec.ts': { placement: 'local', reason: 'already local player harness; account endpoints served by the spec' },
   'apps/web/e2e/player/controls.spec.ts': { placement: 'local', reason: 'already local player harness' },
+  'apps/web/e2e/player/mini-player.spec.ts': { placement: 'local', reason: 'already local player harness' },
   'apps/web/e2e/player/end-screen.spec.ts': { placement: 'local', reason: 'already local player harness' },
   'apps/web/e2e/player/look.spec.ts': { placement: 'local', reason: 'already local player harness, review screenshots' },
   'apps/web/e2e/player/mobile-half-visible.spec.ts': { placement: 'local', reason: 'already local player harness' },
