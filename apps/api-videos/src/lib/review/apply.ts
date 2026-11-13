@@ -105,28 +105,65 @@ function notice(video: ReviewedVideo, key: 'reviewApproved' | 'reviewRejected', 
 	};
 }
 
+type Transition = { ok: true } | { ok: false; status: 404 | 409 | 400; why: string };
+
+/**
+ * The automated result on a review state (videos and live stream recordings): approve clears a
+ * `checking` review; a hold moves `checking` to a person, and pulls a public one (`post_review`,
+ * `approved`) back only on an NSFW hit or an escalation (VR1, VR2, VR9). Mutates `review`.
+ */
+export function outcomeTransition(review: VideoReviewState | undefined, req: ReviewOutcomeRequest): Transition {
+	if (!review || review.reviewId !== req.reviewId) return { ok: false, status: 409, why: 'not the current review' };
+	const now = new Date().toISOString();
+	if (req.routing.route === 'approve') {
+		// Only the automated check's own state moves: a person's decision is never overridden
+		if (review.status === 'checking') Object.assign(review, { status: 'approved', since: now });
+		delete review.etaAt;
+		return { ok: true };
+	}
+	// hold
+	const pullBack = req.routing.nsfw || req.routing.escalate;
+	if (review.status === 'checking' || (review.status === 'post_review' && pullBack) || (review.status === 'approved' && pullBack)) {
+		Object.assign(review, { status: 'in_review', since: now, holdCause: req.routing.holdCause ?? 'risk' });
+		delete review.etaAt;
+	}
+	// A trusted channel's non-NSFW risk stays public: a person reviews it post-hoc (VR1, VR2)
+	return { ok: true };
+}
+
+/** A person's decision on a review state, including undo within REVIEW_UNDO_MINUTES. Mutates `review`. */
+export function decisionTransition(review: VideoReviewState | undefined, req: ReviewDecisionRequest): Transition {
+	if (!review || review.reviewId !== req.reviewId) return { ok: false, status: 409, why: 'not the current review' };
+	const now = new Date().toISOString();
+	if (req.decision === 'undo') {
+		if (!review.decidedAt || !review.previousStatus) return { ok: false, status: 409, why: 'nothing to undo' };
+		if (Date.now() - Date.parse(review.decidedAt) > REVIEW_UNDO_MINUTES * 60_000) return { ok: false, status: 409, why: 'the undo window has passed' };
+		Object.assign(review, { status: review.previousStatus, since: now });
+		delete review.previousStatus;
+		delete review.decidedAt;
+		delete review.reasonCode;
+		return { ok: true };
+	}
+	if (!['in_review', 'appealed', 'post_review', 'checking'].includes(review.status)) return { ok: false, status: 409, why: `already ${review.status}` };
+	review.previousStatus = review.status;
+	review.decidedAt = req.decidedAt || now;
+	review.since = now;
+	delete review.etaAt;
+	delete review.holdCause;
+	if (req.decision === 'approve') {
+		review.status = 'approved';
+		delete review.reasonCode;
+	} else {
+		review.status = 'rejected';
+		review.reasonCode = req.reasonCode;
+	}
+	return { ok: true };
+}
+
 /** The processor's automated result. Shadow results never reach the video (the caller skips them). */
 export async function applyReviewOutcome(env: ReviewApplyEnv, videoId: string, req: ReviewOutcomeRequest): Promise<ApplyResult> {
 	if (req.mode === 'shadow') return { applied: false, status: 400, why: 'shadow results are recorded only' };
-	const res = await write(env, videoId, (video) => {
-		const review = video.review;
-		if (!review || review.reviewId !== req.reviewId) return { ok: false, status: 409, why: 'not the current review' };
-		const now = new Date().toISOString();
-		if (req.routing.route === 'approve') {
-			// Only the automated check's own state moves: a person's decision is never overridden
-			if (review.status === 'checking') Object.assign(review, { status: 'approved', since: now });
-			delete review.etaAt;
-			return { ok: true };
-		}
-		// hold
-		const pullBack = req.routing.nsfw || req.routing.escalate;
-		if (review.status === 'checking' || (review.status === 'post_review' && pullBack) || (review.status === 'approved' && pullBack)) {
-			Object.assign(review, { status: 'in_review', since: now, holdCause: req.routing.holdCause ?? 'risk' });
-			delete review.etaAt;
-		}
-		// A trusted channel's non-NSFW risk stays public: a person reviews it post-hoc (VR1, VR2)
-		return { ok: true };
-	});
+	const res = await write(env, videoId, (video) => outcomeTransition(video.review, req));
 	if ('error' in res) return { applied: false, ...(res as { error: { status: 404 | 409 | 400; why: string } }).error };
 	await afterVisibilityChange(env, res.before, res.after);
 	logger.info('[Review] Automated outcome applied', { videoId, reviewId: req.reviewId, route: req.routing.route, status: res.after.review?.status });
@@ -136,34 +173,7 @@ export async function applyReviewOutcome(env: ReviewApplyEnv, videoId: string, r
 /** A person's decision (admin-api, web or native), including undo within REVIEW_UNDO_MINUTES. */
 export async function applyReviewDecision(env: ReviewApplyEnv, videoId: string, req: ReviewDecisionRequest): Promise<ApplyResult> {
 	if (req.decision === 'reject' && !isReviewReasonCode(req.reasonCode)) return { applied: false, status: 400, why: 'a reason is required to reject' };
-	const res = await write(env, videoId, (video) => {
-		const review = video.review;
-		if (!review || review.reviewId !== req.reviewId) return { ok: false, status: 409, why: 'not the current review' };
-		const now = new Date().toISOString();
-		if (req.decision === 'undo') {
-			if (!review.decidedAt || !review.previousStatus) return { ok: false, status: 409, why: 'nothing to undo' };
-			if (Date.now() - Date.parse(review.decidedAt) > REVIEW_UNDO_MINUTES * 60_000) return { ok: false, status: 409, why: 'the undo window has passed' };
-			Object.assign(review, { status: review.previousStatus, since: now });
-			delete review.previousStatus;
-			delete review.decidedAt;
-			delete review.reasonCode;
-			return { ok: true };
-		}
-		if (!['in_review', 'appealed', 'post_review', 'checking'].includes(review.status)) return { ok: false, status: 409, why: `already ${review.status}` };
-		review.previousStatus = review.status;
-		review.decidedAt = req.decidedAt || now;
-		review.since = now;
-		delete review.etaAt;
-		delete review.holdCause;
-		if (req.decision === 'approve') {
-			review.status = 'approved';
-			delete review.reasonCode;
-		} else {
-			review.status = 'rejected';
-			review.reasonCode = req.reasonCode;
-		}
-		return { ok: true };
-	});
+	const res = await write(env, videoId, (video) => decisionTransition(video.review, req));
 	if ('error' in res) return { applied: false, ...(res as { error: { status: 404 | 409 | 400; why: string } }).error };
 	await afterVisibilityChange(env, res.before, res.after);
 	if (req.decision !== 'undo') {

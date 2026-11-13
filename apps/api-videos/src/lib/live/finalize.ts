@@ -7,7 +7,8 @@
  */
 import { logger } from '../logger';
 import type { LiveEnv } from './providers';
-import { recordEvent, updateSession, type LiveSessionRow } from './store';
+import { readSession, recordEvent, updateSession, type LiveSessionRow } from './store';
+import { vodReady } from './vod-ready';
 
 const prefix = (sessionId: string) => `live/${sessionId}/`;
 const PLAYLIST_CACHE = 'public, max-age=1';
@@ -98,6 +99,8 @@ export async function finalizeSelfHosted(env: LiveEnv, session: LiveSessionRow, 
 	await updateSession(d1, session.id, { vod_url: host ? `https://${host}/hls/${session.id}/vod.m3u8` : null, vod_ready_at: readyAt, stored_bytes: stored });
 	await d1.prepare('UPDATE live_sessions SET r2_writes = r2_writes + ? WHERE id = ?').bind(writes, session.id).run();
 	await recordEvent(d1, { sessionId: session.id, provider: 'selfhosted', kind: 'vod_ready', at: readyAt, value: readyAt - now, detail: { renditions: byRendition.size, segments: results?.length ?? 0, storedBytes: stored } });
+	const ready = await readSession(d1, session.id);
+	if (ready?.vod_url) await vodReady(env, ready);
 	logger.info('[Live] Self-hosted VOD ready', { sessionId: session.id, renditions: byRendition.size, segments: results?.length ?? 0, ms: readyAt - now });
 }
 

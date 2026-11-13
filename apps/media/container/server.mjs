@@ -16,7 +16,7 @@ import { join, relative } from 'node:path';
 import { Readable } from 'node:stream';
 import { bandwidthOf, displaySize, ffmpegArgs, ladderFor, MP4_FILE, mp4Args, mp4Rung, playlistFiles, progressSeconds, stillsArgs } from './ladder.mjs';
 import { RungTracker, uploadByPlan, uploadPlan } from './rungs.mjs';
-import { audioArgs, frameInterval, frameTimes, framesArgs, manifestFor, thinFrames } from './review.mjs';
+import { audioArgs, frameInterval, frameTimes, framesArgs, manifestFor, reviewVariant, thinFrames } from './review.mjs';
 
 const PORT = 8080;
 const WORK = '/tmp/work';
@@ -27,6 +27,8 @@ let sourceFile;
 
 /** @type {{ jobId: string, status: string, progress: number, error?: string, startedAt: number } | null} */
 let current = null;
+/** A live recording review is running (POST /review) */
+let reviewing = false;
 /** Where the current job is, for failure reports: fetch_source | probe | encode | stills | upload */
 let stage = { name: 'start', detail: undefined };
 let sourceBytesSoFar = 0;
@@ -424,6 +426,35 @@ const server = createServer(async (req, res) => {
 			log('remux failed', { jobId: job.jobId, error: String(error?.message || error) });
 			await rm(WORK, { recursive: true, force: true }).catch(() => undefined);
 			return send(500, { error: String(error?.message || error).slice(0, 300), fatal: !!error?.fatal, ...(Array.isArray(error?.stderrTail) ? { stderrTail: error.stderrTail } : {}) });
+		}
+	}
+	// Live recording review (VR9): frames and audio from an HLS VOD read through vod.internal
+	if (req.url === '/review' && req.method === 'POST') {
+		let raw = '';
+		for await (const c of req) raw += c;
+		const job = JSON.parse(raw || '{}');
+		if (!/^[A-Za-z0-9-]{8,64}$/.test(job.videoId || '') || !/^[a-z0-9]{8,32}$/.test(job.rev || '') || !/^http:\/\/vod\.internal\/[A-Za-z0-9._-]+\.m3u8$/.test(job.input || '') || job.reviewPrefix !== `review/${job.videoId}/${job.rev}/` || !job.review || typeof job.review !== 'object') {
+			return send(400, { error: 'bad job' });
+		}
+		if (reviewing || (current && ['starting', 'downloading', 'transcoding', 'uploading'].includes(current.status))) return send(409, { error: 'busy' });
+		reviewing = true;
+		const t0 = Date.now();
+		try {
+			// One variant of a master playlist, so ffmpeg reads a single rendition
+			const master = await fetch(job.input);
+			if (!master.ok) throw Object.assign(new Error(`recording HTTP ${master.status}`), { fatal: master.status === 404 || master.status === 403 });
+			const variant = reviewVariant(await master.text());
+			const input = variant ? new URL(variant, job.input).toString() : job.input;
+			const info = await probe(input);
+			const out = await extractReview(job, input, info);
+			if (!out.manifestKey) throw new Error('review media failed');
+			log('live review media', { videoId: job.videoId, ms: Date.now() - t0 });
+			return send(200, { manifestKey: out.manifestKey });
+		} catch (error) {
+			log('live review failed', { videoId: job.videoId, error: String(error?.message || error) });
+			return send(500, { error: String(error?.message || error).slice(0, 300), fatal: !!error?.fatal });
+		} finally {
+			reviewing = false;
 		}
 	}
 	send(404, { error: 'not found' });

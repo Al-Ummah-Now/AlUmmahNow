@@ -7,10 +7,10 @@
  * - fetch  media.<env>.alummahnow.net/priv/*: token-checked private renditions (edge.ts)
  * - fetch  /internal/jobs/:videoId (X-API-Key): the job as the container sees it (admin)
  */
-import type { Mp4JobMessage, TranscodeJobMessage } from '@al-ummah/shared-types';
-import { isMediaRev, isMediaVideoId, isMp4JobMessage } from '@al-ummah/shared-types';
-import { mp4QueueAction } from './jobs';
-import { reportMp4Event } from './videos-api';
+import type { LiveReviewJobMessage, Mp4JobMessage, TranscodeJobMessage } from '@al-ummah/shared-types';
+import { isLiveReviewJobMessage, isMediaRev, isMediaVideoId, isMp4JobMessage } from '@al-ummah/shared-types';
+import { liveReviewQueueAction, mp4QueueAction } from './jobs';
+import { reportLiveReviewMedia, reportMp4Event } from './videos-api';
 import { handlePrivate } from './edge';
 import { errorText, log, secret, type Env } from './env';
 import { withNoIndex } from './crawlers';
@@ -73,6 +73,38 @@ async function handleMp4Job(msg: Message<Mp4JobMessage>, env: Env): Promise<void
 	msg.ack();
 }
 
+/**
+ * A live recording's review media (VR9): Transcoder.extractLiveReview on the DO `live:<streamId>`.
+ * When it gives up, api-videos is told so the check still runs on the title and thumbnail.
+ */
+async function handleLiveReviewJob(msg: Message<LiveReviewJobMessage>, env: Env): Promise<void> {
+	const job = msg.body;
+	let result: Mp4Outcome;
+	try {
+		result = await env.TRANSCODER.get(env.TRANSCODER.idFromName(`live:${job.streamId}`)).extractLiveReview(job);
+	} catch (error) {
+		result = { outcome: 'failed', error: errorText(error).slice(0, 300), fatal: false };
+	}
+	const action = liveReviewQueueAction(result, msg.attempts);
+	if (!action.ack) {
+		if (result.outcome === 'failed') log.warn('[MediaQueue] Live review extraction failed; retrying', { streamId: job.streamId, attempts: msg.attempts, error: result.error });
+		msg.retry({ delaySeconds: action.delaySeconds });
+		return;
+	}
+	if (action.giveUp && result.outcome === 'failed') {
+		log.error('[MediaQueue] Live review extraction gave up; checking without frames', { streamId: job.streamId, attempts: msg.attempts, error: result.error });
+		try {
+			await reportLiveReviewMedia(env, job.streamId, { reviewId: job.reviewId, error: result.error ?? 'extraction failed' });
+		} catch (error) {
+			// api-videos unreachable: keep the message so the partial check is not lost
+			log.warn('[MediaQueue] Could not report the live review failure; retrying', { streamId: job.streamId, error: errorText(error) });
+			msg.retry({ delaySeconds: 300 });
+			return;
+		}
+	}
+	msg.ack();
+}
+
 export default {
 	// Private media and internal routes are never for search engines (crawlers.ts)
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -81,6 +113,10 @@ export default {
 
 	async queue(batch: MessageBatch<unknown>, env: Env): Promise<void> {
 		for (const msg of batch.messages) {
+			if (isLiveReviewJobMessage(msg.body)) {
+				await handleLiveReviewJob(msg as Message<LiveReviewJobMessage>, env);
+				continue;
+			}
 			if (isMp4JobMessage(msg.body)) {
 				await handleMp4Job(msg as Message<Mp4JobMessage>, env);
 				continue;

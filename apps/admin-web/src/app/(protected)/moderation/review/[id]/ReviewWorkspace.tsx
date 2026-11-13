@@ -111,7 +111,15 @@ export function ReviewWorkspace({ detail, media }: Props) {
       <div className="space-y-6 lg:col-span-2">
         <section className={cardClass} data-testid="review-player">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <h1 className="text-xl font-bold text-fg" dir="auto">{subject?.title || review.subject_id}</h1>
+            <div>
+              <h1 className="text-xl font-bold text-fg" dir="auto">{subject?.title || review.subject_id}</h1>
+              {review.subject_type === 'livestream' && (
+                <p className="mt-1 text-sm text-fg-muted" data-testid="review-live-recording">
+                  <span className="me-2 rounded border border-border px-1.5 py-0.5 text-xs font-medium text-fg">{t('review.liveRecording')}</span>
+                  {t('review.liveRecordingHint')}
+                </p>
+              )}
+            </div>
             <div className="flex items-center gap-1" role="group" aria-label={t('review.speed')}>
               {SPEEDS.map((s) => (
                 <button key={s} type="button" aria-pressed={speed === s} onClick={() => setSpeed(s)} className={`rounded border px-2 py-1 text-sm ${speed === s ? 'border-accent bg-accent text-on-accent' : 'border-border text-fg'}`} data-testid={`review-speed-${s}`}>

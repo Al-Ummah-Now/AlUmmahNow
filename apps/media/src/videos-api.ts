@@ -4,8 +4,9 @@
  *   GET  /internal/media/source/:videoId   → { url }  the original upload (Bunny "original", signed)
  *   POST /internal/media/events            TranscodeJobEvent → the video record
  *   POST /internal/media/mp4               Mp4JobEvent (remux-only job) → the video record
+ *   POST /internal/review/livestream/:id/media  a live recording's review media (VR9)
  */
-import type { Mp4JobEvent, TranscodeJobEvent } from '@al-ummah/shared-types';
+import type { LiveVodReviewMediaRequest, Mp4JobEvent, TranscodeJobEvent } from '@al-ummah/shared-types';
 import { secret, type Env } from './env';
 
 const ORIGIN = 'https://videos.internal';
@@ -52,4 +53,15 @@ export async function reportMp4Event(env: Env, event: Mp4JobEvent): Promise<void
 		body: JSON.stringify(event),
 	});
 	if (!res.ok) throw new Error(`api-videos mp4 event ${event.type} for ${event.videoId}: HTTP ${res.status}`);
+}
+
+/** A live recording's review media are ready (or extraction failed): api-videos queues the scan. */
+export async function reportLiveReviewMedia(env: Env, streamId: string, body: LiveVodReviewMediaRequest): Promise<void> {
+	const res = await call(env, `/internal/review/livestream/${encodeURIComponent(streamId)}/media`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify(body),
+	});
+	// 409: a newer recording replaced this review; nothing to do
+	if (!res.ok && res.status !== 409) throw new Error(`api-videos live review media for ${streamId}: HTTP ${res.status}`);
 }

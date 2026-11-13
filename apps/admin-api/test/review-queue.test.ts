@@ -203,3 +203,61 @@ describe('alerts, settings, trust, stats, retention', () => {
     assert.equal(f.media_key, null);
   });
 });
+
+describe('live stream recordings (VR9, AlUmmahNow#1295)', () => {
+  const SID = '11111111-2222-4333-8444-555555555555';
+  function live() {
+    const t = setup();
+    const calls: Array<{ method: string; path: string; body?: any }> = [];
+    let gone = false;
+    (t.env as any).VIDEOS = {
+      fetch: async (url: RequestInfo, init?: RequestInit) => {
+        const path = new URL(String(url)).pathname;
+        const method = init?.method ?? 'GET';
+        calls.push({ method, path, ...(init?.body ? { body: JSON.parse(String(init.body)) } : {}) });
+        if (method === 'GET') {
+          if (gone) return new Response('{"success":false}', { status: 404 });
+          return Response.json({ success: true, result: { id: SID, title: 'Friday live', description: 'From the masjid', tags: ['khutbah'], channelId: 'ch1', ownerId: 'u1', duration: 3600, status: 'ended', review: { status: 'in_review', manifestKey: `review/${SID}/abc/manifest.json` }, playUrl: 'https://live.example/hls/s/vod.m3u8', thumbnailUrl: null } });
+        }
+        return Response.json({ success: true });
+      },
+    };
+    t.insert('L1', { subject_type: 'livestream', subject_id: SID, timing: 'post', trigger: 'live_vod' });
+    return { ...t, calls, setGone: () => (gone = true) };
+  }
+
+  it('the review page shows the recording (title, signed playlist, manifest) read from api-videos', async () => {
+    const t = live();
+    const r = await t.call('GET', '/api/review/L1');
+    assert.equal(r.status, 200);
+    assert.equal(r.body.result.subject.title, 'Friday live');
+    assert.equal(r.body.result.subject.playUrl, 'https://live.example/hls/s/vod.m3u8');
+    assert.equal(r.body.result.subject.currentStatus, 'in_review');
+    assert.equal(r.body.result.manifestKey, `review/${SID}/abc/manifest.json`);
+    assert.equal(t.calls[0].path, `/internal/review/livestream/${SID}`);
+    t.setGone();
+    assert.equal((await t.call('GET', '/api/review/L1')).body.result.subject, null, 'a deleted stream still opens the review');
+  });
+
+  it('a decision goes to the stream\'s decision route, and can be undone', async () => {
+    const t = live();
+    const r = await t.call('POST', '/api/review/L1/decision', { body: { decision: 'reject', reasonCode: 'hate' } });
+    assert.equal(r.status, 200);
+    const sent = t.calls.find((c) => c.method === 'POST')!;
+    assert.equal(sent.path, `/internal/review/livestream/${SID}/decision`);
+    assert.equal(sent.body.decision, 'reject');
+    assert.equal(sent.body.reasonCode, 'hate');
+    const undo = await t.call('POST', '/api/review/L1/decision', { body: { decision: 'undo' } });
+    assert.equal(undo.status, 200);
+    assert.equal(t.calls.filter((c) => c.method === 'POST').at(-1)!.body.decision, 'undo');
+    assert.equal((await t.db.prepare('SELECT status FROM content_reviews WHERE id = ?').bind('L1').first<{ status: string }>())?.status, 'in_review');
+  });
+
+  it('retention purges the recording\'s review media', async () => {
+    const t = live();
+    t.env.REVIEW_MEDIA.files.set(`review/${SID}/abc/frames/1.jpg`, 'jpeg');
+    t.db.prepare('UPDATE content_reviews SET media_purge_after = ? WHERE id = ?').bind('2000-01-01T00:00:00.000Z', 'L1').run();
+    await purgeReviewMedia(t.env as never);
+    assert.equal(t.env.REVIEW_MEDIA.files.has(`review/${SID}/abc/frames/1.jpg`), false);
+  });
+});

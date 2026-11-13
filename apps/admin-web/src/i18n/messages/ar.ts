@@ -308,6 +308,8 @@ const ar: Messages = {
     holdCause: { nsfw: 'غير لائق', risk: 'خطورة', escalation: 'تصعيد', check_failed: 'تعذّر الفحص', budget: 'نفاد الميزانية', appeal: 'اعتراض' },
     status: { checking: 'قيد الفحص', in_review: 'قيد المراجعة', appealed: 'معترض عليه', approved: 'مقبول', rejected: 'مرفوض', post_review: 'مراجعة لاحقة', shadow: 'ظل' },
     back: 'العودة إلى القائمة',
+    liveRecording: 'تسجيل بث مباشر',
+    liveRecordingHint: 'يُفحص بعد انتهاء البث، ويبقى ظاهرًا للجميع ما لم ترفضه أو يسحبه الفحص.',
     player: 'المرئي',
     speed: 'السرعة',
     reveal: 'إظهار',

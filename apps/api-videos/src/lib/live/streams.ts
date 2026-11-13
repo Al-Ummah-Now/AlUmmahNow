@@ -14,6 +14,8 @@ import { announceLiveStarted } from '../notification-events';
 import type { LiveEnv } from './providers';
 import { currentBitrateKbps, endSession, provisionSession, refreshBunnySession, sessionIngest, sessionState, startSession, setOnSessionEnded } from './service';
 import { readSession, type LiveSessionRow } from './store';
+import { setOnVodReady } from './vod-ready';
+import { startLiveVodReview, type LiveReviewEnv } from '../review/live';
 
 export interface LiveStreamRecord {
 	id: string;
@@ -171,5 +173,9 @@ export function registerLiveStreamHooks(): void {
 	setOnSessionEnded(async (env, session) => {
 		const ended = env.SEARCH_DB ? await readSession(env.SEARCH_DB, session.id) : session;
 		await markStreamEnded(env as StreamsEnv, session.stream_id, ended);
+	});
+	// The recording is checked after the stream (VR9): never before it airs
+	setOnVodReady(async (env, session) => {
+		await startLiveVodReview(env as unknown as LiveReviewEnv, session.stream_id, session);
 	});
 }

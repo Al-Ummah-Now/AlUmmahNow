@@ -22,8 +22,8 @@ import { LiveRefusedError } from '../../lib/live/service';
 import { deleteStream, readStream, streamEnd, streamIngest, streamStart, streamState, type LiveStreamRecord, type StreamsEnv } from '../../lib/live/streams';
 import { readLiveRouting } from '../../lib/live/store';
 import { parseBeacon, QoeRejected, recordBeacon } from '../../lib/live/qoe';
-import { bunnyDirectoryToken, signedBunnyUrl, tokenExpiry } from '../../lib/bunny-signing';
-import { getSecret } from '../../lib/env-helpers';
+import { signLiveVodUrl } from '../../lib/live/vod-sign';
+import { isLiveVodWithheld } from '@al-ummah/shared-types';
 
 const Params = z.object({ id: Str({ description: 'Live stream id' }) });
 const Ok = (schema: z.ZodTypeAny, description: string) => ({ description, content: { 'application/json': { schema: z.object({ success: z.boolean(), result: schema }) } } });
@@ -32,11 +32,18 @@ const Err = (description: string) => ({ description, content: { 'application/jso
 const env = (c: AppContext) => c.env as unknown as StreamsEnv;
 const fail = (c: AppContext, status: number, code: string, error: string) => c.json({ success: false, code, error }, status as 400);
 
+/** An ended stream whose recording a person must decide, or rejected: owner only. */
+export function liveRecordingWithheld(s: { status?: string; review?: unknown }): boolean {
+	return s.status === 'ended' && isLiveVodWithheld(s.review as { status?: string } | undefined);
+}
+
 /** Public fields of a stream; encoder settings never leave the owner endpoints. */
 export function publicStream(s: LiveStreamRecord, isOwner: boolean) {
-	const { streamKey: _k, rtmpUrl: _r, providerMove, isTest: _t, likes, dislikes, comments, ...rest } = s as LiveStreamRecord & { likes?: unknown[]; dislikes?: unknown[]; comments?: unknown[] };
+	const { streamKey: _k, rtmpUrl: _r, providerMove, isTest: _t, likes, dislikes, comments, review, reviewShadow: _rs, reviewSessionId: _ri, ...rest } = s as LiveStreamRecord & { likes?: unknown[]; dislikes?: unknown[]; comments?: unknown[] };
 	return {
 		...rest,
+		// The recording's review is the owner's business (Studio shows it); the marker never leaves
+		...(isOwner && review ? { review } : {}),
 		likesCount: Array.isArray(likes) ? likes.length : 0,
 		dislikesCount: Array.isArray(dislikes) ? dislikes.length : 0,
 		commentsCount: Array.isArray(comments) ? comments.length : 0,
@@ -48,6 +55,8 @@ async function visibleStream(c: AppContext, id: string, userId: string | undefin
 	const stream = await readStream(env(c), id);
 	const isOwner = !!stream && !!userId && stream.userId === userId;
 	if (!stream || ((stream.isPrivate || stream.isHidden) && !isOwner)) return fail(c, 404, 'not_found', 'Live stream not found');
+	// A recording held for review (or rejected) reaches its owner only, like a held video (VR9)
+	if (!isOwner && liveRecordingWithheld(stream)) return fail(c, 404, 'not_found', 'Live stream not found');
 	return stream;
 }
 
@@ -75,17 +84,7 @@ function providerFailure(c: AppContext, error: unknown, where: string) {
 }
 
 /** Bunny recordings on a token-auth library need a signed playlist URL. */
-async function signVod(c: AppContext, url: string | null): Promise<string | null> {
-	const host = (c.env as { BUNNY_SIGN_HOSTNAME?: string; bunny_hostname?: string }).BUNNY_SIGN_HOSTNAME || (c.env as { bunny_hostname?: string }).bunny_hostname;
-	if (!url || !host || (c.env as { BUNNY_SIGN_URLS?: string }).BUNNY_SIGN_URLS !== 'true') return url;
-	const escaped = host.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-	const m = new RegExp(`^https://${escaped}/([0-9a-f-]{36})/playlist\\.m3u8$`).exec(url);
-	if (!m) return url;
-	const key = await getSecret((c.env as { BUNNY_TOKEN_KEY?: unknown }).BUNNY_TOKEN_KEY, 'BUNNY_TOKEN_KEY');
-	if (!key) return url;
-	const expires = tokenExpiry();
-	return signedBunnyUrl(host, m[1], 'playlist.m3u8', await bunnyDirectoryToken(key, m[1], expires), expires);
-}
+const signVod = (c: AppContext, url: string | null) => signLiveVodUrl(c.env as never, url);
 
 export class LiveStreamGet extends OptionalAuthRoute {
 	schema = {

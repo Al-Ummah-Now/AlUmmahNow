@@ -1,4 +1,5 @@
 import { OptionalAuthRoute, AppContext } from "../../base";
+import { liveRecordingWithheld } from './liveSession';
 import { Num, Str } from "chanfana";
 import { z } from "zod";
 import { LiveStream as BusinessLiveStream, PaginationResponse, ResponseError } from "../../lib/types";
@@ -79,6 +80,8 @@ export class LiveStreamsList extends OptionalAuthRoute {
 				if ((stream as { isHidden?: boolean }).isHidden && !isOwner) return false;
 				// Private streams only for their owner
 				if (stream.isPrivate && !isOwner) return false;
+				// A recording held for review or rejected (VR9) is listed for its owner only
+				if (!isOwner && liveRecordingWithheld(stream as never)) return false;
 				return true;
 			};
 			const scan = await scanFill<LiveStreamType>({

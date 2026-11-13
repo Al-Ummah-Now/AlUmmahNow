@@ -16,6 +16,7 @@ import {
 } from '@al-ummah/shared-types';
 import { logger } from '../logger';
 import { LIVE_ADAPTERS, LiveProviderError, type LiveEnv } from './providers';
+import { vodReady } from './vod-ready';
 import {
 	insertSession,
 	nextAssignSeq,
@@ -201,6 +202,8 @@ export async function refreshBunnySession(env: LiveEnv, session: LiveSessionRow,
 			if (await LIVE_ADAPTERS.bunny.vodReady(env, session)) {
 				await updateSession(d1, session.id, { vod_ready_at: now });
 				await recordEvent(d1, { sessionId: session.id, provider: 'bunny', kind: 'vod_ready', at: now, value: now - (session.ended_at ?? now) });
+				const ready = await readSession(d1, session.id);
+				if (ready?.vod_url) await vodReady(env, ready);
 			}
 			return (await readSession(d1, session.id))!;
 		}

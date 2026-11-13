@@ -66,6 +66,27 @@ function setup(opts: { budgetUsd?: number; frames?: number; videosStatus?: numbe
 }
 
 describe('the automated check', () => {
+  it('a live stream recording (VR9): a livestream row, the outcome goes to the stream, NSFW still holds', async () => {
+    const t = setup();
+    const r = await handleVideoReviewScan(t.payload('Live [review-fixture:nsfw_frame@42000]', { videoId: 'st1', timing: 'post', trigger: 'live_vod', subject: 'livestream' }), t.env, logger, { lastAttempt: false, now: NOW });
+    expect(r.route).toBe('hold');
+    expect(t.outcomes).toHaveLength(1);
+    expect(t.outcomes[0].url).toBe('https://videos.internal/internal/review/livestream/st1/outcome');
+    expect(t.outcomes[0].body.routing.nsfw).toBe(true);
+    const row = t.row();
+    expect(row.subject_type).toBe('livestream');
+    expect(row.subject_id).toBe('st1');
+    expect(row.timing).toBe('post');
+    expect(row.trigger).toBe('live_vod');
+  });
+
+  it('a clean recording stays in post-hoc review (the row), never sent to the video route', async () => {
+    const t = setup();
+    await handleVideoReviewScan(t.payload('Live [review-fixture:clean]', { videoId: 'st1', timing: 'post', trigger: 'live_vod', subject: 'livestream' }), t.env, logger, { lastAttempt: false, now: NOW });
+    expect(t.outcomes[0].url).toContain('/internal/review/livestream/st1/outcome');
+    expect(t.row().status).toBe('post_review');
+  });
+
   it('clean: approved, the outcome reaches api-videos, media purge scheduled (VR12)', async () => {
     const t = setup();
     const r = await handleVideoReviewScan(t.payload('A talk [review-fixture:clean]'), t.env, logger, { lastAttempt: false, now: NOW });
