@@ -37,14 +37,15 @@ const fail = (c: AppContext, status: number, code: string, error: string) => c.j
  * the recording's session, never to `status` (the owner can set that): only a new session (the
  * stream really live again, VR9: live is never pre-reviewed) makes it public again.
  */
-export function liveRecordingWithheld(s: { sessionId?: string | null; review?: unknown; reviewSessionId?: unknown }): boolean {
-	if (!isLiveVodWithheld(s.review as { status?: string } | undefined)) return false;
+export function liveRecordingWithheld(stream: object): boolean {
+	const s = stream as { sessionId?: string | null; review?: { status?: string }; reviewSessionId?: unknown };
+	if (!isLiveVodWithheld(s.review)) return false;
 	return !s.reviewSessionId || !s.sessionId || s.sessionId === s.reviewSessionId;
 }
 
 /** A held or rejected recording's URL never reaches anyone but the owner, whatever the stream does next. */
-export function recordingHidden(s: { review?: unknown }, isOwner: boolean): boolean {
-	return !isOwner && isLiveVodWithheld(s.review as { status?: string } | undefined);
+export function recordingHidden(s: object, isOwner: boolean): boolean {
+	return !isOwner && isLiveVodWithheld((s as { review?: { status?: string } }).review);
 }
 
 /** Public fields of a stream; encoder settings never leave the owner endpoints. */
