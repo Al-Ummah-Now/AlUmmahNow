@@ -36,7 +36,7 @@ describe('forwardClientEvents consent enforcement', () => {
   });
 
   it('maps beacon kinds to consent categories', () => {
-    expect(CONSENT_FOR_KIND).toEqual({ ab_test: 'experiments', performance: 'performance', visit: 'analytics' });
+    expect(CONSENT_FOR_KIND).toEqual({ ab_test: 'experiments', performance: 'performance' });
   });
 
   it('drops beacons without a consent cookie (default deny)', async () => {
