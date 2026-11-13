@@ -5,7 +5,7 @@ import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { AppContext } from '../../base';
 import { logger } from "../../lib/logger";
-import { isVideoRemoved } from "../../lib/visibility";
+import { isVideoRemoved, isRestrictedVideo } from "../../lib/visibility";
 import { PUBLIC_DISLIKES_COUNT, ReactorHeaders, reactorId } from "../../lib/reactions";
 import { applyCommentReaction, findStoredComment, isCommentVisible, StoredComment } from "../../lib/comments";
 
@@ -103,7 +103,7 @@ export async function handleCommentReaction(
 		ownChanged = false;
 		clearedDislike = null;
 		comment = undefined;
-		if (isVideoRemoved(fresh) || (fresh.isPublic === false && fresh.userId !== userId)) return { reject: true };
+		if (isVideoRemoved(fresh) || (isRestrictedVideo(fresh) && fresh.userId !== userId)) return { reject: true };
 		// Top-level comments and replies can be reacted to; held comments cannot
 		const target = findStoredComment(fresh.comments as unknown as StoredComment[], cid)?.comment;
 		if (!target || !isCommentVisible(target) || target.status === 'held') return { reject: true };

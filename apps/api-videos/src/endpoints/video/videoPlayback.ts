@@ -8,6 +8,7 @@ import { transformVideoToView } from "../../lib/transformations";
 import R2Repository from "../../lib/r2Repo";
 import { logger } from "../../lib/logger";
 import { applyPlayback, choosePlayback, countFallback, logDecision, parseFallbackReason } from "../../lib/media/playback";
+import { isRestrictedVideo } from '../../lib/visibility';
 
 /**
  * GET /api/videos/:id/playback?exclude=r2&reason=<code>
@@ -58,7 +59,7 @@ export class VideoPlayback extends OptionalAuthRoute {
 		const repository = new R2Repository<z.infer<typeof BusinessVideo>>(c.env.videos);
 		const video = await repository.getObject(id);
 		if (!video || video.isDeleted || video.isHidden) return notFound();
-		if (video.isPublic === false && !(await canOnVideo(c.env as never, video, userId, 'video.view_private'))) return notFound();
+		if (isRestrictedVideo(video) && !(await canOnVideo(c.env as never, video, userId, 'video.view_private'))) return notFound();
 
 		const choice = await choosePlayback(c.env as never, video as never, { exclude: request.query.exclude, reason, context: "fallback" });
 		logDecision(choice.decision);

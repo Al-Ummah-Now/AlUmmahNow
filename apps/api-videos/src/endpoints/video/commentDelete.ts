@@ -7,6 +7,7 @@ import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { StoredComment, findStoredComment, removeStoredComment } from "../../lib/comments";
 import { broadcastInBackground } from "../../lib/websocket-notify";
+import { isRestrictedVideo } from '../../lib/visibility';
 
 export class CommentDelete extends AuthenticatedRoute {
 	schema = {
@@ -73,7 +74,7 @@ export class CommentDelete extends AuthenticatedRoute {
 		}
 
 		// Check privacy permissions
-		if (video.isPublic === false && !(await canOnVideo(c.env as never, video, userId, 'video.view_private')) && !(await canOnVideo(c.env as never, video, userId, 'comment.moderate'))) {
+		if (isRestrictedVideo(video) && !(await canOnVideo(c.env as never, video, userId, 'video.view_private')) && !(await canOnVideo(c.env as never, video, userId, 'comment.moderate'))) {
 			return c.json({
 				success: false,
 				error: "Video not found", // Don't reveal that private video exists

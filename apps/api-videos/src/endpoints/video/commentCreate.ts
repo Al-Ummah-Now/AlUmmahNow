@@ -6,7 +6,7 @@ import Queue, { MessageType } from "../../lib/queue";
 import { broadcastInBackground, notifyUserInBackground } from "../../lib/websocket-notify";
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { logger } from "../../lib/logger";
-import { isVideoRemoved } from "../../lib/visibility";
+import { isVideoRemoved, isRestrictedVideo } from "../../lib/visibility";
 import {
 	MAX_COMMENT_LENGTH,
 	StoredComment,
@@ -109,7 +109,7 @@ export class CommentCreate extends AuthenticatedRoute {
 			parent = undefined;
 			if (isVideoRemoved(fresh)) return { reject: { status: 404, error: "Object not found" } };
 			// Check privacy permissions for commenting on videos
-			if (fresh.isPublic === false && fresh.userId !== userId) {
+			if (isRestrictedVideo(fresh) && fresh.userId !== userId) {
 				// Don't reveal that private video exists
 				return { reject: { status: 404, error: "Object not found" } };
 			}
