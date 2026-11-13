@@ -35,13 +35,13 @@ describe('push fan-out', () => {
     global.fetch = originalFetch;
   });
 
-  function device(installId: string, userId: string, opts: { provider?: string; token?: string; categories?: string[] } = {}) {
+  function device(installId: string, userId: string, opts: { provider?: string; token?: string; categories?: string[]; app?: string } = {}) {
     db.raw
       .prepare(
-        `INSERT INTO push_devices (install_id, user_id, platform, provider, token, locale, categories, created_at, updated_at)
-         VALUES (?, ?, 'ios', ?, ?, 'ar', ?, 0, 0)`,
+        `INSERT INTO push_devices (install_id, user_id, app, platform, provider, token, locale, categories, created_at, updated_at)
+         VALUES (?, ?, ?, 'ios', ?, ?, 'ar', ?, 0, 0)`,
       )
-      .run(installId, userId, opts.provider ?? 'apns', opts.token ?? `tok-${installId}`, opts.categories ? JSON.stringify(opts.categories) : null);
+      .run(installId, userId, opts.app ?? 'viewer', opts.provider ?? 'apns', opts.token ?? `tok-${installId}`, opts.categories ? JSON.stringify(opts.categories) : null);
   }
   const installs = () => db.raw.prepare('SELECT install_id FROM push_devices ORDER BY install_id').all().map((r: any) => r.install_id);
 
@@ -67,6 +67,25 @@ describe('push fan-out', () => {
     ]);
     expect(p.sent[0].message).toMatchObject({ notificationKey: 'newVideo', category: 'new_videos', params: { title: 'Lecture' }, actionUrl: '/watch/v1' });
     expect(p.sent[0].target.locale).toBe('ar');
+  });
+
+  it('sends ordinary notifications to the viewer and Studio apps, never to the staff Admin app (#1264)', async () => {
+    device('i-viewer', 'a');
+    device('i-studio', 'a', { app: 'studio' });
+    device('i-admin', 'a', { app: 'admin' });
+    const p = new RecordingProvider();
+    const summary = await dispatchPush(db, payload(['a']), all(p));
+    expect(summary).toMatchObject({ devices: 2, sent: 2 });
+    expect(p.sent.map((s) => [s.target.installId, s.target.app]).sort()).toEqual([
+      ['i-studio', 'studio'],
+      ['i-viewer', 'viewer'],
+    ]);
+  });
+
+  it('a row written before the app column existed is the viewer app', () => {
+    db.raw.prepare("INSERT INTO push_devices (install_id, user_id, platform, provider, token, created_at, updated_at) VALUES ('old', 'u', 'ios', 'apns', 't', 0, 0)").run();
+    expect(db.raw.prepare("SELECT app FROM push_devices WHERE install_id = 'old'").get()).toEqual({ app: 'viewer' });
+    expect(() => device('bad', 'u', { app: 'tv' })).toThrow(/CHECK/);
   });
 
   it('skips devices narrowed to other categories', async () => {

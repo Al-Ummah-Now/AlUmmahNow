@@ -8,7 +8,11 @@
  *   guessed install id can't redirect another user's notifications;
  * - a push token belongs to one install: registering it under a new install
  *   id (reinstall) removes the old row;
- * - at most MAX_DEVICES_PER_USER rows per user; the least recently updated go first.
+ * - at most MAX_DEVICES_PER_USER rows per user; the least recently updated go first;
+ * - each row records which app registered it (`app`, #1264): APNs sends with that
+ *   app's bundle id as the topic, ordinary notifications go to the viewer and
+ *   Studio apps, review alerts only to the staff Admin app. Only staff may
+ *   register an Admin install (the endpoint checks the token's roles).
  */
 import { z } from 'zod';
 import { NOTIFICATION_CATEGORIES, type NotificationCategory } from '@al-ummah/shared-types';
@@ -18,6 +22,9 @@ export const PUSH_PROVIDERS = ['apns', 'fcm', 'wns', 'webpush'] as const;
 export const PUSH_PLATFORMS = ['ios', 'ipados', 'tvos', 'macos', 'android', 'androidtv', 'windows', 'web'] as const;
 export type PushProvider = (typeof PUSH_PROVIDERS)[number];
 export type PushPlatform = (typeof PUSH_PLATFORMS)[number];
+/** The app that owns the install (old clients send none: the viewer app). */
+export const PUSH_APPS = ['viewer', 'studio', 'admin'] as const;
+export type PushApp = (typeof PUSH_APPS)[number];
 
 /** Which providers a platform may register with. */
 export const PLATFORM_PROVIDERS: Record<PushPlatform, readonly PushProvider[]> = {
@@ -82,6 +89,7 @@ export const DeviceRegistrationSchema = z
 	.object({
 		platform: z.enum(PUSH_PLATFORMS),
 		provider: z.enum(PUSH_PROVIDERS),
+		app: z.enum(PUSH_APPS).default('viewer'),
 		token: z.string().optional(),
 		subscription: WebPushSubscriptionSchema.optional(),
 		locale: z.string().regex(/^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/).optional(),
@@ -107,6 +115,7 @@ export type DeviceRegistration = z.infer<typeof DeviceRegistrationSchema>;
 
 export interface PushDevice {
 	installId: string;
+	app: PushApp;
 	platform: string;
 	provider: PushProvider;
 	/** Last characters only: enough to tell devices apart, useless to send with. */
@@ -121,6 +130,7 @@ export interface PushDevice {
 interface DeviceRow {
 	install_id: string;
 	user_id: string;
+	app: PushApp;
 	platform: string;
 	provider: PushProvider;
 	token: string;
@@ -156,6 +166,7 @@ function parseCategories(raw: string | null): NotificationCategory[] | null {
 export function toDevice(row: DeviceRow): PushDevice {
 	return {
 		installId: row.install_id,
+		app: row.app ?? 'viewer',
 		platform: row.platform,
 		provider: row.provider,
 		tokenHint: tokenHint(row),
@@ -187,13 +198,13 @@ export async function registerDevice(
 		db.prepare('DELETE FROM push_devices WHERE provider = ? AND token = ? AND install_id != ?').bind(reg.provider, token, installId),
 		db
 			.prepare(
-				`INSERT INTO push_devices (install_id, user_id, platform, provider, token, locale, app_version, categories, created_at, updated_at)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-				 ON CONFLICT(install_id) DO UPDATE SET user_id = excluded.user_id, platform = excluded.platform,
+				`INSERT INTO push_devices (install_id, user_id, app, platform, provider, token, locale, app_version, categories, created_at, updated_at)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				 ON CONFLICT(install_id) DO UPDATE SET user_id = excluded.user_id, app = excluded.app, platform = excluded.platform,
 				   provider = excluded.provider, token = excluded.token, locale = excluded.locale,
 				   app_version = excluded.app_version, categories = excluded.categories, updated_at = excluded.updated_at`,
 			)
-			.bind(installId, userId, reg.platform, reg.provider, token, reg.locale ?? null, reg.appVersion ?? null, categories, now, now),
+			.bind(installId, userId, reg.app ?? 'viewer', reg.platform, reg.provider, token, reg.locale ?? null, reg.appVersion ?? null, categories, now, now),
 		// Cap per user: the least recently updated beyond the limit go
 		db
 			.prepare(

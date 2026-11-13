@@ -11,6 +11,10 @@ export const ROLE_IDS = {
   superAdmin: 'super_admin',
   admin: 'admin',
   moderator: 'moderator',
+  /** Reviews held videos (wiki AUN-VIDEO-REVIEW VR7); never escalations or minor items. */
+  contentReviewer: 'content_reviewer',
+  /** Reviews everything, including escalations and minor items; the owner is the first one. */
+  seniorReviewer: 'senior_reviewer',
 } as const;
 
 export type RoleId = (typeof ROLE_IDS)[keyof typeof ROLE_IDS];
@@ -43,3 +47,18 @@ export const isAdmin = (roles: unknown): boolean => hasAnyRole(roles, [ROLE_IDS.
 
 /** Super Admin, Admin or Moderator. */
 export const isModerator = (roles: unknown): boolean => hasAnyRole(roles, [ROLE_IDS.superAdmin, ROLE_IDS.admin, ROLE_IDS.moderator]);
+
+/** Any staff role: the admin tools and the native Admin app (wiki AUN-ADMIN-NATIVE). */
+export const STAFF_ROLE_IDS = [
+  ROLE_IDS.superAdmin,
+  ROLE_IDS.admin,
+  ROLE_IDS.moderator,
+  ROLE_IDS.contentReviewer,
+  ROLE_IDS.seniorReviewer,
+] as const;
+
+/** Holds any staff role (who may install and register the Admin app). */
+export const isStaff = (roles: unknown): boolean => hasAnyRole(roles, STAFF_ROLE_IDS);
+
+/** Senior reviewer or Super Admin: may see escalations and minor-present items. */
+export const isSeniorReviewer = (roles: unknown): boolean => hasAnyRole(roles, [ROLE_IDS.superAdmin, ROLE_IDS.seniorReviewer]);

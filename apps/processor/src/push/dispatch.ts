@@ -28,7 +28,7 @@ import type { AlUmmahMessage, D1Database, QueueEnvironment } from '../types';
 export const SEND_BATCH = 25;
 import type { StoredNotification } from '../lib/notifications-store';
 import { logger } from '../lib/logger';
-import type { PushProviderName, PushProviders, PushTarget } from './provider';
+import { NOTIFICATION_APPS, type PushApp, type PushProviderName, type PushProviders, type PushTarget } from './provider';
 
 export async function enqueuePush(
   env: Pick<QueueEnvironment, 'MESSAGE_QUEUE'>,
@@ -71,6 +71,7 @@ export async function enqueuePush(
 interface DeviceRow {
   install_id: string;
   user_id: string;
+  app: PushApp;
   platform: string;
   provider: PushProviderName;
   token: string;
@@ -107,10 +108,11 @@ export async function dispatchPush(db: D1Database, payload: PushDispatchPayload,
   const userIds = [...notificationFor.keys()];
   const { results } = await db
     .prepare(
-      `SELECT install_id, user_id, platform, provider, token, locale, categories FROM push_devices
-       WHERE user_id IN (${userIds.map(() => '?').join(', ')})`,
+      // Per app (#1264): the staff Admin app gets review alerts only
+      `SELECT install_id, user_id, app, platform, provider, token, locale, categories FROM push_devices
+       WHERE user_id IN (${userIds.map(() => '?').join(', ')}) AND app IN (${NOTIFICATION_APPS.map(() => '?').join(', ')})`,
     )
-    .bind(...userIds)
+    .bind(...userIds, ...NOTIFICATION_APPS)
     .all<DeviceRow>();
   const devices = results || [];
   summary.devices = devices.length;
@@ -125,6 +127,7 @@ export async function dispatchPush(db: D1Database, payload: PushDispatchPayload,
       const target: PushTarget = {
         installId: row.install_id,
         userId: row.user_id,
+        app: row.app,
         platform: row.platform,
         provider: row.provider,
         token: row.token,

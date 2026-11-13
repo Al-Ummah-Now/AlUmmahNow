@@ -13929,7 +13929,7 @@
           "Devices"
         ],
         "summary": "Register or refresh this install's push token",
-        "description": "Idempotent; call on every launch and whenever the OS rotates the token. APNs/FCM take `token`, WNS takes the channel URI as `token`, Web Push takes `subscription` (PushSubscription.toJSON()).",
+        "description": "Idempotent; call on every launch and whenever the OS rotates the token. APNs/FCM take `token`, WNS takes the channel URI as `token`, Web Push takes `subscription` (PushSubscription.toJSON()). `app` names the app that owns the install (`viewer` when omitted, for older clients); `admin` installs need a staff role.",
         "operationId": "put_DeviceRegister",
         "parameters": [
           {
@@ -13969,6 +13969,15 @@
                       "wns",
                       "webpush"
                     ]
+                  },
+                  "app": {
+                    "type": "string",
+                    "enum": [
+                      "viewer",
+                      "studio",
+                      "admin"
+                    ],
+                    "default": "viewer"
                   },
                   "token": {
                     "type": "string"
@@ -14045,6 +14054,31 @@
         "responses": {
           "200": {
             "description": "{ device, created }"
+          },
+          "403": {
+            "description": "Only staff may register an Admin app install",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
           },
           "409": {
             "description": "This install is registered to another account with a different token",

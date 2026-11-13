@@ -25,8 +25,8 @@ const routes = (r: any) => {
 
 function harness() {
 	const db = createSqliteD1();
-	const as = (userId: string) => {
-		const app = buildApp(routes, { userId });
+	const as = (userId: string, roles?: string[]) => {
+		const app = buildApp(routes, { userId, ...(roles ? { roles } : {}) });
 		const env = { NOTIFICATIONS_DB: db } as any;
 		return {
 			put: (installId: string, body: unknown) =>
@@ -173,5 +173,47 @@ describe('device store', () => {
 		await registerDevice(db, 'usr_b', 'install-b001', { platform: 'ios', provider: 'apns', token: APNS_2 });
 		assert.equal(await deleteUserDevices(db, 'usr_a'), 1);
 		assert.deepEqual(db.rows('SELECT user_id FROM push_devices').map((r: any) => r.user_id), ['usr_b']);
+	});
+});
+
+describe('which app owns the install (#1264)', () => {
+	it('old clients that send no app register the viewer app', async () => {
+		const { as } = harness();
+		const res = await as('u1').put('install-old', { platform: 'ios', provider: 'apns', token: APNS });
+		assert.equal(res.status, 200);
+		assert.equal(((await res.json()) as any).result.device.app, 'viewer');
+	});
+
+	it('Studio installs register as studio, and the list shows each app', async () => {
+		const { as } = harness();
+		assert.equal((await as('u1').put('install-studio', { app: 'studio', platform: 'android', provider: 'fcm', token: FCM })).status, 200);
+		assert.equal((await as('u1').put('install-viewer', { platform: 'ios', provider: 'apns', token: APNS })).status, 200);
+		assert.deepEqual((await as('u1').list()).map((d) => [d.installId, d.app]).sort(), [['install-studio', 'studio'], ['install-viewer', 'viewer']]);
+	});
+
+	it('only staff may register an Admin install', async () => {
+		const { as, db } = harness();
+		for (const roles of [undefined, [], ['creator']]) {
+			const res = await as('u1', roles).put('install-admin', { app: 'admin', platform: 'ios', provider: 'apns', token: APNS });
+			assert.equal(res.status, 403, String(roles));
+			assert.equal(((await res.json()) as any).error, 'staff_only');
+		}
+		assert.equal((await db.prepare('SELECT COUNT(*) AS n FROM push_devices').first<{ n: number }>())!.n, 0);
+		for (const [i, role] of ['Super Admin', 'admin', 'Moderator', 'content_reviewer', 'Senior Reviewer'].entries()) {
+			const res = await as(`staff${i}`, [role]).put(`install-admin-${i}`, { app: 'admin', platform: 'macos', provider: 'apns', token: String(i).repeat(64) });
+			assert.equal(res.status, 200, role);
+			assert.equal(((await res.json()) as any).result.device.app, 'admin');
+		}
+	});
+
+	it('rejects an unknown app', () => {
+		assert.ok(!DeviceRegistrationSchema.safeParse({ app: 'tv', platform: 'ios', provider: 'apns', token: APNS }).success);
+	});
+
+	it('the token stays unique per provider across apps: re-registering it under another app moves it', async () => {
+		const { as } = harness();
+		await as('u1').put('install-a', { app: 'studio', platform: 'ios', provider: 'apns', token: APNS });
+		await as('u1').put('install-b', { platform: 'ios', provider: 'apns', token: APNS });
+		assert.deepEqual((await as('u1').list()).map((d) => d.installId), ['install-b']);
 	});
 });
