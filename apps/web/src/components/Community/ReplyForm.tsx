@@ -5,6 +5,8 @@ import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
 import { createPostComment } from '@/lib/api/post-comments';
+import { useLanguage } from '@/hooks/useLanguage';
+import { useHumanCheck } from '@/hooks/useHumanCheck';
 
 const MAX_COMMENT_LENGTH = 10000;
 const SHOW_COUNTER_THRESHOLD = 500;
@@ -37,6 +39,8 @@ export default function ReplyForm({
   onReplyCreated,
   onCancel,
 }: ReplyFormProps) {
+  const { t } = useLanguage();
+  const { ensureHuman } = useHumanCheck();
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -77,6 +81,12 @@ export default function ReplyForm({
     setLoading(true);
 
     try {
+      // An account's first comment needs the Turnstile check (normally invisible)
+      const human = await ensureHuman('comment');
+      if (!human.ok) {
+        setError(t.humanCheck.failed);
+        return;
+      }
       const result = await createPostComment(
         postChannelId,
         postId,
@@ -84,7 +94,8 @@ export default function ReplyForm({
           content: content.trim(),
           parentCommentId,
         },
-        { channelId }
+        { channelId },
+        human.token
       );
 
       if (result?.success && result.comment) {

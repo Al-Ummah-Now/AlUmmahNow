@@ -66,12 +66,15 @@ export async function getCommunityPost(
 export async function createCommunityPost(
   channelId: string,
   data: CreateCommunityPostRequest,
-  headers: Required<Pick<ApiHeaders, 'channelId'>>
+  headers: Required<Pick<ApiHeaders, 'channelId'>>,
+  /** Turnstile token (hooks/useHumanCheck) when the account's first post needs one */
+  turnstileToken?: string
 ): Promise<{ success: boolean; post: CommunityPost } | null> {
   return apiRequestServer<{ success: boolean; post: CommunityPost }>({
     method: 'POST',
     url: buildApiUrl(`/api/community/channels/${channelId}/posts`),
     body: data,
+    ...(turnstileToken ? { headers: { 'X-Turnstile-Token': turnstileToken } } : {}),
     functionName: 'createCommunityPost'
   }, async () => ({
     channelId: headers.channelId,

@@ -103,7 +103,8 @@ export function buildContentSecurityPolicy({ isDevelopment, insecureOrigin = fal
       : websocketOrigins(env.websocketUrl)),
   ].filter(Boolean);
 
-  const scriptHosts = ['https://vjs.zencdn.net', 'https://assets.mediadelivery.net'];
+  // challenges.cloudflare.com: Turnstile (lib/turnstile, docs/features/bot-protection.md)
+  const scriptHosts = ['https://vjs.zencdn.net', 'https://assets.mediadelivery.net', 'https://challenges.cloudflare.com'];
   const scriptSrc = isDevelopment
     ? ["'self'", "'unsafe-eval'", "'unsafe-inline'", ...scriptHosts]
     : nonce
@@ -120,7 +121,7 @@ export function buildContentSecurityPolicy({ isDevelopment, insecureOrigin = fal
     `connect-src ${Array.from(new Set(connectSrc)).join(' ')}`,
     "img-src 'self' data: https: blob:",
     "font-src 'self' data: https://cdnjs.cloudflare.com",
-    "frame-src 'self' https://iframe.mediadelivery.net",
+    "frame-src 'self' https://iframe.mediadelivery.net https://challenges.cloudflare.com",
     "worker-src 'self' blob:",
     "object-src 'none'",
     "base-uri 'self'",

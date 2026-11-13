@@ -178,11 +178,27 @@
 	"ratelimits": [
 		{ "name": "WATCH_TIME_LIMITER", "namespace_id": "2201", "simple": { "limit": 6, "period": 60 } },
 		// Typeahead lookups per user or IP (GET /api/search/suggestions)
-		{ "name": "SUGGEST_LIMITER", "namespace_id": "2221", "simple": { "limit": 120, "period": 60 } }
+		{ "name": "SUGGEST_LIMITER", "namespace_id": "2221", "simple": { "limit": 120, "period": 60 } },
+		// Comments (videos and posts) per user
+		{ "name": "COMMENT_LIMITER", "namespace_id": "2231", "simple": { "limit": 10, "period": 60 } },
+		// Community posts created per user
+		{ "name": "POST_LIMITER", "namespace_id": "2241", "simple": { "limit": 5, "period": 60 } },
+		// Likes, votes and subscriptions per user
+		{ "name": "REACTION_LIMITER", "namespace_id": "2251", "simple": { "limit": 60, "period": 60 } },
+		// Reports per user
+		{ "name": "REPORT_LIMITER", "namespace_id": "2261", "simple": { "limit": 10, "period": 60 } },
+		// Upload initiations per user (on top of the D1 tier limits)
+		{ "name": "UPLOAD_INITIATE_LIMITER", "namespace_id": "2271", "simple": { "limit": 10, "period": 60 } },
+		// Searches per user or IP (not Worker subrequests)
+		{ "name": "SEARCH_LIMITER", "namespace_id": "2281", "simple": { "limit": 120, "period": 60 } }
 	],
+	// Abuse counters for the admin Abuse panel (Turnstile outcomes, rate-limit hits; no personal data)
+	"analytics_engine_datasets": [{ "binding": "ABUSE_EVENTS", "dataset": "al_ummah_now_abuse" }],
 	"kv_namespaces": [
 			// Token revocation list written by the auth worker (#437)
 			{ "binding": "TOKEN_REVOCATIONS", "id": "2afbb5f5d5414c9ea1a7d54013cfe724", "preview_id": "e6e662fc9cd9420797ddfa8060eb6956" },
+			// Accounts that passed Turnstile once (middleware/bot-protection.ts, 180-day TTL)
+			{ "binding": "HUMAN_VERIFIED", "id": "71f0659777884bba8adaa50d9334a2b3", "preview_id": "52611e9cb9cd4482a06305cad2dd73b2" },
 		{
 			"binding": "TUS_SESSIONS",
 			"id": "a7f78b8bf0984994a2cd2f4c92169ae1",
@@ -235,6 +251,7 @@
 		]
 	},
 	"secrets_store_secrets": [
+		{ "binding": "TURNSTILE_SECRET", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "turnstile-secret" },
 	  {
 		// HMAC key of self-hosted live stream keys (lib/live/providers.ts)
 		"binding": "LIVE_INGEST_SECRET",
@@ -323,6 +340,11 @@
 		// Logging policy (docs/operations/logging.md): warn on production, stage and QA (only warnings, errors, slow requests); debug locally
 		"LOG_LEVEL": "warn",
 		"ENVIRONMENT": "production",
+		// Bot protection (docs/features/bot-protection.md): off | monitor | enforce
+		"TURNSTILE_MODE": "off",
+		"TURNSTILE_SITE_KEY": "0x4AAAAAAF_3KPNkPlEGf_dP",
+		// Native apps cannot show the widget (Studio iOS/Android)
+		"NATIVE_CLIENT_IDS": "6f8073c6-754b-4d63-bf80-0546214e0d62",
 		"ZONE": "al-ummah-now-images",
 		"ClientId": "b1770235-e4b6-42f3-9eb4-3c03ca111b02",
 		"Issuer": "https://auth.alummahnow.net",
@@ -485,11 +507,26 @@
 			"ratelimits": [
 				{ "name": "WATCH_TIME_LIMITER", "namespace_id": "2202", "simple": { "limit": 6, "period": 60 } },
 				// Typeahead lookups per user or IP (GET /api/search/suggestions)
-				{ "name": "SUGGEST_LIMITER", "namespace_id": "2222", "simple": { "limit": 120, "period": 60 } }
+				{ "name": "SUGGEST_LIMITER", "namespace_id": "2222", "simple": { "limit": 120, "period": 60 } },
+				// Comments (videos and posts) per user
+				{ "name": "COMMENT_LIMITER", "namespace_id": "2232", "simple": { "limit": 10, "period": 60 } },
+				// Community posts created per user
+				{ "name": "POST_LIMITER", "namespace_id": "2242", "simple": { "limit": 5, "period": 60 } },
+				// Likes, votes and subscriptions per user
+				{ "name": "REACTION_LIMITER", "namespace_id": "2252", "simple": { "limit": 60, "period": 60 } },
+				// Reports per user
+				{ "name": "REPORT_LIMITER", "namespace_id": "2262", "simple": { "limit": 10, "period": 60 } },
+				// Upload initiations per user (on top of the D1 tier limits)
+				{ "name": "UPLOAD_INITIATE_LIMITER", "namespace_id": "2272", "simple": { "limit": 10, "period": 60 } },
+				// Searches per user or IP (not Worker subrequests)
+				{ "name": "SEARCH_LIMITER", "namespace_id": "2282", "simple": { "limit": 120, "period": 60 } }
 			],
+			"analytics_engine_datasets": [{ "binding": "ABUSE_EVENTS", "dataset": "al_ummah_now_abuse_stage" }],
 			"kv_namespaces": [
 			// Token revocation list written by the auth worker (#437)
 			{ "binding": "TOKEN_REVOCATIONS", "id": "0831520b71144a6e848ed62918602c13" },
+			// Accounts that passed Turnstile once (middleware/bot-protection.ts, 180-day TTL)
+			{ "binding": "HUMAN_VERIFIED", "id": "ffbc2d62e6264070ae5c8d3f2e34eb69" },
 				{
 					"binding": "TUS_SESSIONS",
 					"id": "a200f6a898594502971558727243e538"
@@ -537,6 +574,7 @@
 				]
 			},
 			"secrets_store_secrets": [
+				{ "binding": "TURNSTILE_SECRET", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "turnstile-secret-test" },
 				{
 					"binding": "LIVE_INGEST_SECRET",
 					"store_id": "f8eddc9944d041919ed8dc7d08d32308",
@@ -611,6 +649,11 @@
 				// Logging policy (docs/operations/logging.md): warn on production, stage and QA (only warnings, errors, slow requests); debug locally
 				"LOG_LEVEL": "warn",
 				"ENVIRONMENT": "stage",
+				// Bot protection (docs/features/bot-protection.md): off | monitor | enforce
+				"TURNSTILE_MODE": "enforce",
+				"TURNSTILE_SITE_KEY": "1x00000000000000000000AA",
+				// Native apps cannot show the widget (Studio iOS/Android)
+				"NATIVE_CLIENT_IDS": "6f8073c6-754b-4d63-bf80-0546214e0d62",
 				"ZONE": "al-ummah-now-images",
 				"ClientId": "b1770235-e4b6-42f3-9eb4-3c03ca111b02",
 				"Issuer": "https://auth.stage.alummahnow.net",

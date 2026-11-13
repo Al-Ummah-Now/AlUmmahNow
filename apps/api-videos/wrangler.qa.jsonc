@@ -124,11 +124,27 @@
   "ratelimits": [
     { "name": "WATCH_TIME_LIMITER", "namespace_id": "2203", "simple": { "limit": 6, "period": 60 } },
     // Typeahead lookups per user or IP (GET /api/search/suggestions)
-    { "name": "SUGGEST_LIMITER", "namespace_id": "2223", "simple": { "limit": 120, "period": 60 } }
+    { "name": "SUGGEST_LIMITER", "namespace_id": "2223", "simple": { "limit": 120, "period": 60 } },
+    // Comments (videos and posts) per user
+    { "name": "COMMENT_LIMITER", "namespace_id": "2233", "simple": { "limit": 10, "period": 60 } },
+    // Community posts created per user
+    { "name": "POST_LIMITER", "namespace_id": "2243", "simple": { "limit": 5, "period": 60 } },
+    // Likes, votes and subscriptions per user
+    { "name": "REACTION_LIMITER", "namespace_id": "2253", "simple": { "limit": 60, "period": 60 } },
+    // Reports per user
+    { "name": "REPORT_LIMITER", "namespace_id": "2263", "simple": { "limit": 10, "period": 60 } },
+    // Upload initiations per user (on top of the D1 tier limits)
+    { "name": "UPLOAD_INITIATE_LIMITER", "namespace_id": "2273", "simple": { "limit": 10, "period": 60 } },
+    // Searches per user or IP (not Worker subrequests)
+    { "name": "SEARCH_LIMITER", "namespace_id": "2283", "simple": { "limit": 120, "period": 60 } }
   ],
+  // Abuse counters for the admin Abuse panel (Turnstile outcomes, rate-limit hits; no personal data)
+  "analytics_engine_datasets": [{ "binding": "ABUSE_EVENTS", "dataset": "al_ummah_now_abuse_qa" }],
   "kv_namespaces": [
 			// Token revocation list written by the auth worker (#437)
 			{ "binding": "TOKEN_REVOCATIONS", "id": "e6e662fc9cd9420797ddfa8060eb6956" },
+			// Accounts that passed Turnstile once (middleware/bot-protection.ts, 180-day TTL)
+			{ "binding": "HUMAN_VERIFIED", "id": "924324ece3634d2f92924fa0be2b51c9" },
     {
       "binding": "TUS_SESSIONS",
       "id": "89659e4b76fe4f41823ad956990e6731"
@@ -192,6 +208,7 @@
     ]
   },
   "secrets_store_secrets": [
+    { "binding": "TURNSTILE_SECRET", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "turnstile-secret-test" },
     {
       // HMAC key of self-hosted live stream keys (lib/live/providers.ts)
       "binding": "LIVE_INGEST_SECRET",
@@ -260,6 +277,11 @@
     "MEDIA_MAX_TRANSCODES": "2",
     // Logging policy (docs/operations/logging.md): warn on production, stage and QA (only warnings, errors, slow requests); debug locally
     "LOG_LEVEL": "warn",
+    // Bot protection (docs/features/bot-protection.md): off | monitor | enforce; Cloudflare test keys outside production
+    "TURNSTILE_MODE": "enforce",
+    "TURNSTILE_SITE_KEY": "1x00000000000000000000AA",
+    // Native apps cannot show the widget (Studio iOS/Android)
+    "NATIVE_CLIENT_IDS": "45364a42-21f4-4359-a76c-0a1e6615fd7b",
     // Upload limits enforced (any value but "off"): the numbers come from each user's creator tier, edited in the videos admin (middleware/upload-limits.ts)
     "UPLOAD_RATE_LIMIT": "relaxed",
     "ZONE": "al-ummah-now-images",

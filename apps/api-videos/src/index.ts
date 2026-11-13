@@ -1,3 +1,4 @@
+import { edgeRateLimit, humanCheckStatus, requireHuman, scriptedClientBlock } from './middleware/bot-protection';
 import { reportServerError, withErrorReporting, type ErrorReporterEnv } from '@al-ummah/shared-types';
 import { SUBSCRIPTION_IMPORT_CRON, importPendingSubscriptions } from './lib/subscription-import';
 import { handleProcessingCheckBatch, sweepProcessingVideos } from './lib/processing/loop';
@@ -102,7 +103,7 @@ app.use('*', cors({
 	// origin callback receives (origin, context) - context has env access
 	origin: (origin, c) => allowOrigin(origin, c as never),
 	allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
-	allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'channelId', 'userId', 'Tus-Resumable', 'Upload-Length', 'Upload-Metadata', 'Upload-Offset', 'Upload-Defer-Length', 'Upload-Concat'],
+	allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Turnstile-Token', 'X-AUN-Bot-Bypass', 'channelId', 'userId', 'Tus-Resumable', 'Upload-Length', 'Upload-Metadata', 'Upload-Offset', 'Upload-Defer-Length', 'Upload-Concat'],
 	exposeHeaders: ['Content-Length', 'X-Kuma-Revision', 'Allow', 'Location', 'Tus-Resumable', 'Tus-Version', 'Tus-Max-Size', 'Tus-Extension', 'Upload-Offset', 'Upload-Length', 'Upload-Metadata', 'X-API-Version', 'Deprecation', 'Sunset', 'Retry-After', 'Date'],
 	maxAge: 600,
 	credentials: false,
@@ -208,11 +209,44 @@ for (const path of UPLOAD_SESSION_PATHS) app.use(path, uploadSessionLimit);
 const uploadContinueLimit = uploadContinueLimitMiddleware();
 for (const path of UPLOAD_CONTINUE_PATHS) app.use(path, uploadContinueLimit);
 
+// BOT PROTECTION (middleware/bot-protection.ts, docs/features/bot-protection.md):
+// edge rate limits per user (else IP), Turnstile on reports and an account's first
+// comment or post, and (production, Turnstile enforced) no writes from curl & co.
+app.use('/api/*', scriptedClientBlock());
+for (const path of ['/api/videos/:id/comments', '/api/community/channels/:channelId/posts/:postId/comments']) {
+	app.use(path, edgeRateLimit('COMMENT_LIMITER', 'videos.comment'));
+	app.use(path, requireHuman('videos.comment', 'first'));
+}
+app.use('/api/community/channels/:channelId/posts', edgeRateLimit('POST_LIMITER', 'videos.post'));
+app.use('/api/community/channels/:channelId/posts', requireHuman('videos.post', 'first'));
+for (const path of [
+	'/api/videos/:id/likes',
+	'/api/videos/:id/dislikes',
+	'/api/videos/:id/comments/:cid/likes',
+	'/api/videos/:id/comments/:cid/dislikes',
+	'/api/community/channels/:channelId/posts/:postId/like',
+	'/api/community/channels/:channelId/posts/:postId/vote',
+	'/api/community/channels/:channelId/posts/:postId/comments/:commentId/like',
+	'/api/channels/:id/subscriptions',
+]) {
+	app.use(path, edgeRateLimit('REACTION_LIMITER', 'videos.reaction', ['POST', 'DELETE']));
+}
+app.use('/api/moderation/reports', edgeRateLimit('REPORT_LIMITER', 'videos.report'));
+app.use('/api/moderation/reports', requireHuman('videos.report', 'always'));
+for (const path of ['/api/videos/upload/initiate', '/api/videos/upload/batch/initiate']) {
+	app.use(path, edgeRateLimit('UPLOAD_INITIATE_LIMITER', 'videos.upload_initiate'));
+}
+for (const path of ['/api/search', '/api/videos/search']) {
+	app.use(path, edgeRateLimit('SEARCH_LIMITER', 'videos.search', ['GET']));
+}
+
 // Channel creation is by invitation too: a creator tier, within its channel limit
 app.use('/api/channels', channelCreateGate);
 app.use('/api/channels/', channelCreateGate);
 // What the signed-in user may do (Upload, Create channel) for the web UI
 app.get('/api/me/creator', authMiddleware, handleCreatorAccess);
+// Whether the next comment/post/report needs a Turnstile token (middleware/bot-protection.ts)
+app.get('/api/me/human-check', authMiddleware, humanCheckStatus);
 
 // SECURITY: Apply rate limiting to community media uploads
 app.use('/api/community/media/upload/images', rateLimitMiddleware('image_upload'));

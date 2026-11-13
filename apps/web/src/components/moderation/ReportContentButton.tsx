@@ -9,6 +9,7 @@ import type { ReportCreateRequest, ReportContentType, ReportReason } from "@/lib
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useLanguage } from "@/hooks/useLanguage";
+import { useHumanCheck } from "@/hooks/useHumanCheck";
 import { logger } from "@/lib/logger-client";
 
 interface ReportContentButtonProps {
@@ -40,6 +41,7 @@ const ReportContentButton: React.FC<ReportContentButtonProps> = ({
   hideTrigger = false,
 }) => {
   const { t, isRTL } = useLanguage();
+  const { ensureHuman } = useHumanCheck();
   const [openState, setOpenState] = useState(false);
   const isOpen = open ?? openState;
   const setIsOpen = (value: boolean) => {
@@ -85,7 +87,14 @@ const ReportContentButton: React.FC<ReportContentButtonProps> = ({
       ...(reportForm.description && { description: reportForm.description }),
     };
 
-    const result = await ModerationAPI.createReport(reportData);
+    // Reports need the Turnstile check (normally invisible) when it is on
+    const human = await ensureHuman('report');
+    if (!human.ok) {
+      setLoading(false);
+      setError(t.humanCheck.failed);
+      return;
+    }
+    const result = await ModerationAPI.createReport(reportData, undefined, human.token);
     setLoading(false);
 
     if (!result.success) {
@@ -95,7 +104,11 @@ const ReportContentButton: React.FC<ReportContentButtonProps> = ({
           ? t.errors.loginRequired
           : result.error === 'duplicate'
             ? t.reportContent.alreadyReported
-            : t.reportContent.failed
+            : result.error === 'human_check'
+              ? t.humanCheck.failed
+              : result.error === 'rate_limited'
+                ? t.humanCheck.rateLimited
+                : t.reportContent.failed
       );
       return;
     }

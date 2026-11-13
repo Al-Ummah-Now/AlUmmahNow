@@ -14,7 +14,7 @@ that product/legal should confirm.
 | websocket-server (Durable Object, memory only) | Presence: the open sockets of a signed-in user; gone when the socket closes | This repo |
 | Browser (web app) | Preferences, consent cookie, encrypted on-device watch progress | This repo |
 | Bunny.net | Video files, thumbnails, avatars, community images | Processor (sub-processor) |
-| Cloudflare | Hosting, Workers logs | Processor (sub-processor) |
+| Cloudflare | Hosting, Workers logs, Turnstile bot checks (§3) | Processor (sub-processor) |
 
 ## 2. Server-side data inventory (api-videos R2)
 
@@ -54,6 +54,10 @@ used today.
 | D1 `reports` (`reporter_id`) | Reporter id | Legitimate interest (f) | Kept; reporter anonymised on erasure |
 | Cloudflare Workers logs (observability) | User ids and paths in structured logs | Legitimate interest (f): operations, security | Cloudflare plan default (3-7 days). **Decision needed:** confirm the plan's log retention and add it to the privacy notice |
 | Security event logs (`/api/security/events`, `/api/security/csp-report`) | Path (no query), event type | Legitimate interest (f): security | Same as Workers logs |
+| Cloudflare Turnstile bot check (sign-up, password reset / email code, sign-in after 3 failed attempts, Contact us, reports, an account's first comment or post; `docs/features/bot-protection.md`) | Cloudflare processes the visitor's IP address and browser signals to issue a one-time token; we send that token and the client IP to Cloudflare's `siteverify` and store neither. No cookie is set for this by us; Turnstile does not use the data for ads | Legitimate interest (f): preventing spam, fake accounts and credential abuse | Nothing kept by us. Cloudflare's own handling: Turnstile privacy addendum (cloudflare.com/turnstile-privacy-policy) |
+| "Passed the check" marker (api-videos KV `HUMAN_VERIFIED`, key `h:<user id>`) | Account id only | Legitimate interest (f): ask a person only once | **180 days** (KV expiry). It holds nothing but the id and expires on its own, so erasure does not need to touch it |
+| Abuse counters (Analytics Engine `al_ummah_now_abuse[_stage|_qa]`) | None: app, endpoint, outcome, environment counts | n/a | Analytics Engine retention (3 months) |
+| Rate-limit counters (Workers Rate Limiting) | User id or IP as a counter key, in Cloudflare memory only | Legitimate interest (f): abuse prevention | 60 seconds |
 
 **How the archive is pseudonymised (#1177).** The processor scrubs every message before it
 writes it (`@al-ummah/shared-types` `archive-privacy.ts`, processor `lib/archive-record.ts`).

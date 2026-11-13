@@ -29,7 +29,7 @@ export interface ReportCreateResponse {
   dateCreated: string;
 }
 
-export type ReportCreateErrorCode = 'auth' | 'duplicate' | 'invalid' | 'failed';
+export type ReportCreateErrorCode = 'auth' | 'duplicate' | 'invalid' | 'failed' | 'human_check' | 'rate_limited';
 
 /**
  * Server actions cannot surface thrown error messages to the client in
@@ -57,7 +57,9 @@ interface ReportApiResponse {
  */
 export async function createReport(
   reportData: ReportCreateRequest,
-  headers?: ApiHeaders
+  headers?: ApiHeaders,
+  /** Turnstile token (hooks/useHumanCheck); reports always need one when the check is on */
+  turnstileToken?: string
 ): Promise<ReportCreateResult> {
   try {
     const auth = await getServerAuthContext();
@@ -77,6 +79,7 @@ export async function createReport(
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${auth.accessToken}`,
         ...(reporterChannelId && { 'channelId': reporterChannelId }),
+        ...(turnstileToken && { 'X-Turnstile-Token': turnstileToken }),
       },
       body: JSON.stringify({
         entityType: reportData.contentType,
@@ -91,6 +94,9 @@ export async function createReport(
       logger.warn('[createReport] API rejected report', { status: response.status, error: errorData?.error });
       if (response.status === 401) return { success: false, error: 'auth' };
       if (response.status === 409) return { success: false, error: 'duplicate' };
+      // Bot protection (api-videos middleware/bot-protection.ts)
+      if (response.status === 403 && errorData?.code === 'human_check_required') return { success: false, error: 'human_check' };
+      if (response.status === 429 && errorData?.code === 'rate_limited') return { success: false, error: 'rate_limited' };
       if (response.status === 400) return { success: false, error: 'invalid' };
       return { success: false, error: 'failed' };
     }

@@ -6,6 +6,7 @@
  * and, when signed in, the account's access token. With a token the account's
  * email replaces the form's.
  */
+import { checkHuman, recordAbuse } from '../../lib/bot-guard';
 import type { Context } from 'hono';
 import type { AdminBindings } from '../../base/types';
 import { logger } from '../../lib/logger';
@@ -44,6 +45,14 @@ export async function contactSubmit(c: Context<{ Bindings: AdminBindings }>): Pr
     return c.json({ success: true, result: { id: null } }, 201);
   }
 
+  // Cloudflare Turnstile (lib/bot-guard.ts): the web form sends the widget token in the body
+  const token = raw && typeof raw === 'object' ? (raw as { turnstileToken?: unknown }).turnstileToken : undefined;
+  const clientIp = c.req.header('X-Client-IP') || undefined;
+  const human = await checkHuman(env as never, c.req.raw, typeof token === 'string' ? token : null, 'videos.contact', { ip: clientIp });
+  if (!human.allowed) {
+    return c.json({ success: false, error: 'human_check_required', siteKey: (env as { TURNSTILE_SITE_KEY?: string }).TURNSTILE_SITE_KEY }, 403);
+  }
+
   let user: { id: string; email: string } | null = null;
   const authorization = c.req.header('Authorization');
   if (authorization?.startsWith('Bearer ')) {
@@ -65,6 +74,7 @@ export async function contactSubmit(c: Context<{ Bindings: AdminBindings }>): Pr
   );
   if (!stored) {
     logger.warn('[Contact] Rate limited', { userId: user?.id });
+    recordAbuse(env as never, 'videos.contact', 'rate_limited');
     return c.json({ success: false, error: 'rate_limited' }, 429, { 'Retry-After': '3600' });
   }
 

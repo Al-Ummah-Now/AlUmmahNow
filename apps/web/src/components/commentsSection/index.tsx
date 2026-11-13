@@ -43,6 +43,8 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
   const [newCommentText, setNewCommentText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionError, setActionError] = useState(false);
+  // Bot protection: the check failed, or too many comments in a minute
+  const [botNotice, setBotNotice] = useState<'human_check' | 'rate_limited' | null>(null);
   const [heldNotice, setHeldNotice] = useState(false);
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
@@ -79,7 +81,8 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
     isLoadingMore,
     loadError,
     isConnected,
-    commentsCount
+    commentsCount,
+    humanChecking,
   } = useRealTimeComments({
     videoId,
     channelId,
@@ -91,7 +94,12 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
   const reportResult = (result: AddCommentResult) => {
     if (result.ok) {
       setHeldNotice(result.held);
+      setBotNotice(null);
       return true;
+    }
+    if (result.error === 'human_check' || result.error === 'rate_limited') {
+      setBotNotice(result.error);
+      return false;
     }
     setActionError(result.error !== 'comments_disabled');
     return false;
@@ -379,6 +387,14 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
 
       {heldNotice && (
         <p className="text-sm text-brand-ink dark:text-brand-ink" role="status" data-testid="comment-held-notice">{t.comments.heldNotice}</p>
+      )}
+      {humanChecking && (
+        <p className="text-sm text-gray-600 dark:text-gray-400" role="status" data-testid="comment-human-check">{t.humanCheck.checking}</p>
+      )}
+      {botNotice && (
+        <p className="text-sm text-red-600 dark:text-red-400" role="alert" data-testid="comment-bot-notice">
+          {botNotice === 'rate_limited' ? t.humanCheck.rateLimited : t.humanCheck.failed}
+        </p>
       )}
       {actionError && (
         <p className="text-sm text-red-600 dark:text-red-400" role="alert">{t.comments.actionFailed}</p>

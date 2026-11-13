@@ -182,7 +182,7 @@ export class APIClient {
   // Moderation (user-facing only - admin functions are in admin-api)
   get moderation() {
     return {
-      createReport: (reportData: ReportCreateRequest, headers?: ApiHeaders) => ModerationAPI.createReport(reportData, { ...this.headers, ...headers }),
+      createReport: (reportData: ReportCreateRequest, headers?: ApiHeaders, turnstileToken?: string) => ModerationAPI.createReport(reportData, { ...this.headers, ...headers }, turnstileToken),
     };
   }
 

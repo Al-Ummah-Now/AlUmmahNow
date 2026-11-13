@@ -63,10 +63,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'unavailable' }, { status: 503 });
   }
 
-  const result = (await upstream.json().catch(() => ({}))) as { result?: { id?: string | null }; errors?: Record<string, string>; error?: string };
+  const result = (await upstream.json().catch(() => ({}))) as { result?: { id?: string | null }; errors?: Record<string, string>; error?: string; siteKey?: string };
   if (upstream.status === 201) return NextResponse.json({ ok: true }, { status: 201, headers: { 'Cache-Control': 'no-store' } });
   if (upstream.status === 400 && result.errors) return NextResponse.json({ error: 'validation', errors: result.errors }, { status: 400 });
   if (upstream.status === 429) return NextResponse.json({ error: 'rate_limited' }, { status: 429 });
+  // Turnstile (admin-api lib/bot-guard.ts): the page runs the check and sends again with the token
+  if (upstream.status === 403 && result.error === 'human_check_required') {
+    return NextResponse.json({ error: 'human_check_required', siteKey: result.siteKey ?? null }, { status: 403, headers: { 'Cache-Control': 'no-store' } });
+  }
   logger.error('[contact] admin-api refused the message', { status: upstream.status, error: result.error });
   return NextResponse.json({ error: 'failed' }, { status: 502 });
 }

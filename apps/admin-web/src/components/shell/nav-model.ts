@@ -97,6 +97,8 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/live-streaming', label: 'nav.liveStreaming', icon: 'activity', group: 'operations' },
   // Public status page: incidents and maintenance (docs/status-page/README.md); admins (status:manage)
   { href: '/status', label: 'nav.status', icon: 'alert', group: 'operations', requires: (a) => a.ops },
+  // Bot protection: Turnstile outcomes and rate-limit hits per endpoint (docs/features/bot-protection.md); ops:read
+  { href: '/abuse', label: 'nav.abuse', icon: 'alert', group: 'operations', requires: (a) => a.ops },
 
   { href: '/site-theme', label: 'nav.siteTheme', icon: 'palette', group: 'site' },
   { href: '/platform-settings', label: 'nav.platformSettings', icon: 'sliders', group: 'site' },
