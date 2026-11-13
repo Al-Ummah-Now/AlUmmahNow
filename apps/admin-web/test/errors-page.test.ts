@@ -45,7 +45,7 @@ describe('errors list filters → admin-api query string', () => {
   });
 
   it('drops values admin-api would reject and defaults the sort', () => {
-    const f = parseErrorFilters({ app: 'auth', environment: 'Prod Env', release: 'a b', status: 'deleted', from: 'yesterday', sort: 'random', page: '-2' });
+    const f = parseErrorFilters({ app: 'cms', environment: 'Prod Env', release: 'a b', status: 'deleted', from: 'yesterday', sort: 'random', page: '-2' });
     assert.equal(errorGroupsQuery(f), 'sort=last_seen&limit=25&offset=0');
   });
 
