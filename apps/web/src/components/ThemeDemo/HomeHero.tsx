@@ -10,6 +10,7 @@ import { resolveUrl } from '@/lib/utility';
 import { aspectOf } from '@/lib/video/aspect';
 import { heroSrcSet, heroThumbFit, type HeroThumbnailSizes, type HeroVideo } from '@/lib/video/hero';
 import { channelLabel } from '@/lib/channel-name';
+import { thumbSrcSet } from '@/lib/embed/share-image';
 
 const heroCopy = (lang: string) => (lang === 'ar' ? { tag: 'مختارات', watch: 'شاهد الآن' } : { tag: 'Featured', watch: 'Watch now' });
 
@@ -32,7 +33,8 @@ interface HeroThumbProps {
  * (`data-fit="contain"`) over a blurred, dimmed copy of itself.
  */
 export function HeroThumb({ video, href, label, alt, children }: HeroThumbProps) {
-  const src = video.thumbnailUrl ? resolveUrl(video.thumbnailUrl) : '';
+  // A same-origin path (/thumb) stays relative, as the server rendered it
+  const src = video.thumbnailUrl ? (video.thumbnailUrl.startsWith('/') ? video.thumbnailUrl : resolveUrl(video.thumbnailUrl)) : '';
   // Keyed by src: a new image is measured again
   const [measured, setMeasured] = useState<{ src: string; aspect?: number } | null>(null);
   // The src that failed to load (keyed by src, so a new image gets a fresh attempt): the frame then
@@ -62,7 +64,7 @@ export function HeroThumb({ video, href, label, alt, children }: HeroThumbProps)
     <Link href={href} className="home-hero-t" aria-label={label} data-fit={fit} data-testid="hero-thumb">
       {src && !failed && fit === 'contain' && (
         // eslint-disable-next-line @next/next/no-img-element -- decorative backdrop, the smallest variant is enough under the blur
-        <img className="home-hero-bd" src={video.thumbnailSizes?.mobile || src} alt="" aria-hidden="true" data-testid="hero-thumb-backdrop" />
+        <img className="home-hero-bd" src={video.thumbnailSizes?.mobile || (thumbSrcSet(src) ? `${src}?w=320` : src)} alt="" aria-hidden="true" data-testid="hero-thumb-backdrop" />
       )}
       {failed && (
         <span className="home-hero-ph" role="img" aria-label={alt} data-testid="hero-thumb-placeholder">
@@ -74,7 +76,7 @@ export function HeroThumb({ video, href, label, alt, children }: HeroThumbProps)
         <img
           className="home-hero-img"
           src={src}
-          srcSet={heroSrcSet(video.thumbnailSizes)}
+          srcSet={heroSrcSet(video.thumbnailSizes) ?? thumbSrcSet(video.thumbnailUrl)}
           sizes={HERO_SIZES}
           width={width}
           height={height}

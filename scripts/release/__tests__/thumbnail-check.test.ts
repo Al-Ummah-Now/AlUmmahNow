@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { htmlImages, jsonImageUrls, jsonLdImages, judge, metaImages, thumbnailCheck, tokenOf } from '../thumbnail-check.ts';
+import { htmlImages, jsonImageUrls, jsonLdImages, judge, metaImages, sharedCacheable, signedUrlsInHtml, thumbnailCheck, tokenOf } from '../thumbnail-check.ts';
 
 const ID = '0174501b-cbc9-41b4-b386-93f9bb8429a7';
 const NOW = 1_794_500_000;
@@ -50,6 +50,22 @@ describe('thumbnail check: extraction', () => {
 	});
 });
 
+describe('thumbnail check: server-rendered HTML (#1209)', () => {
+	it('finds signed URLs in markup and in the escaped RSC payload, never printing a token', () => {
+		const html = `<img src="/thumb/${ID}.jpg?w=320"><img src="${file(1).replace(/&/g, '&amp;')}"><script>self.__next_f.push(["\\"${file(2).replace('&', '\\u0026')}\\""])</script><a href="${dir(3)}">x</a><img src="${priv(NOW)}">`;
+		const found = signedUrlsInHtml(html);
+		assert.equal(found.length, 4);
+		for (const f of found) assert.doesNotMatch(f, /token=T\b|\.SIG/);
+		assert.deepEqual(signedUrlsInHtml(`<img src="/thumb/${ID}.jpg" srcset="/thumb/${ID}.jpg?w=640 640w"><img src="https://images.alummahnow.net/a.jpg?width=320">`), []);
+	});
+	it('flags HTML that a shared cache may keep', () => {
+		assert.equal(sharedCacheable('private, no-cache, no-store, max-age=0, must-revalidate'), false);
+		assert.equal(sharedCacheable('public, max-age=600'), true);
+		assert.equal(sharedCacheable('s-maxage=60'), true);
+		assert.equal(sharedCacheable(null), false);
+	});
+});
+
 describe('thumbnail check: end to end with a fake site', () => {
 	const stable = `https://videos.alummahnow.net/thumb/${ID}.jpg`;
 	const site = (overrides: Record<string, () => Response> = {}) =>
@@ -63,13 +79,15 @@ describe('thumbnail check: end to end with a fake site', () => {
 			if (url.includes('/thumb/00000000')) return new Response('nf', { status: 404 });
 			if (url.includes('/thumb/')) return new Response('img', { status: 200, headers: { 'content-type': 'image/jpeg' } });
 			if (url.includes('/oembed')) return j({ thumbnail_url: stable });
-			if (url.includes('/api/videos?')) return j({ data: [{ id: ID, thumbnailUrl: file(NOW + 6 * 3600) }] });
+			if (url.includes('/api/videos?')) return j({ data: [{ id: ID, channelId: 'c1', thumbnailUrl: file(NOW + 6 * 3600) }] });
+			if (url.includes('/api/playlists?')) return j({ data: [{ id: 'p1' }] });
 			if (url.includes('videos.api')) return j({ id: ID, thumbnailUrl: file(NOW + 6 * 3600) });
-			if (url.includes('/video/')) return new Response(`<meta property="og:image" content="${stable}">`, { status: 200 });
+			const page = (body: string) => new Response(body, { status: 200, headers: { 'content-type': 'text/html', 'cache-control': 'private, no-cache, no-store, max-age=0, must-revalidate' } });
+			if (url.includes('/video/')) return page(`<meta property="og:image" content="${stable}"><img src="/thumb/${ID}.jpg" srcset="/thumb/${ID}.jpg?w=320 320w">`);
 			if (url.includes('/embed/')) return new Response(`<img src="${stable}">`, { status: 200 });
 			if (url.includes('cms.')) return j({ items: [] });
 			if (new URL(url).hostname.endsWith('.b-cdn.net')) return new Response('x', { status: 206 });
-			return new Response('<html></html>', { status: 200 });
+			return page('<html></html>');
 		}) as typeof fetch;
 
 	it('passes a healthy site', async () => {
@@ -88,6 +106,18 @@ describe('thumbnail check: end to end with a fake site', () => {
 		assert.ok(rules.has('signed share image'));
 		assert.ok(rules.has('share image not the stable /thumb URL'));
 		assert.ok(rules.has('stable share image leaks or errors'));
+	});
+	it('fails when a server-rendered page carries a signed thumbnail or is publicly cacheable', async () => {
+		const { findings } = await thumbnailCheck('production', {
+			fetch: site({
+				'/en/channels/': () => new Response(`<img src="${file(NOW + 3600).replace(/&/g, '&amp;')}">`, { status: 200, headers: { 'cache-control': 'private, no-store' } }),
+				'/en/playlist/': () => new Response('<html></html>', { status: 200, headers: { 'cache-control': 'public, max-age=86400' } }),
+			}),
+			now: () => NOW * 1000,
+		}, { strictStored: false });
+		const fails = findings.filter((f) => f.level === 'fail');
+		assert.ok(fails.some((f) => f.rule === 'signed URL in server-rendered HTML' && f.surface.startsWith('web SSR /en/channels/')));
+		assert.ok(fails.some((f) => f.rule === 'server-rendered HTML cacheable by shared caches' && f.surface.startsWith('web SSR /en/playlist/')));
 	});
 	it('fails when the API serves an expired thumbnail or Bunny refuses a fresh one', async () => {
 		const { findings } = await thumbnailCheck('production', {

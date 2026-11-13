@@ -17,7 +17,10 @@
  *     JSON-LD thumbnailUrl that carry a token (crawlers cache them for days);
  *   - stable share image broken: /thumb/<id>.jpg of a public video is not an image, or an
  *     unknown id is not 404;
- *   - unreachable: a sampled thumbnail answers 403/404.
+ *   - unreachable: a sampled thumbnail answers 403/404;
+ *   - signed URL in server-rendered HTML (#1209): the HTML of home, a watch page, a channel (Home
+ *     and Videos tabs) and a playlist, RSC payload included, carries a Bunny token or an R2 /priv/
+ *     link (server-rendered lists use /thumb), or that HTML may be kept by a shared cache.
  * Signed thumbnails that www or the CMS store (KV feed, D1 snapshots) fail with --strict-stored
  * (or THUMB_CHECK_STRICT_STORED=1), which the release uses; without it they are warnings.
  */
@@ -147,19 +150,35 @@ export function judge(surface: string, kind: 'api' | 'share' | 'stored', urls: s
 	return findings;
 }
 
+/**
+ * Signed media URLs anywhere in a server-rendered page: markup and the RSC payload (JSON escaped in
+ * scripts), so the whole body is scanned. Returned shortened, token values hidden.
+ */
+const SIGNED_IN_HTML = /(?:https?:\/\/|\/\/)[^"'\s<>\\]*?(?:bcdn_token=[^"'\s<>\\&]*|[?&](?:amp;|\\u0026)?token=[^&"'\\\s]+(?:&|&amp;|\\u0026)expires=\d+|\/priv\/\d{9,}\.[^/"'\s]*)/g;
+export function signedUrlsInHtml(html: string): string[] {
+	return [...new Set([...html.matchAll(SIGNED_IN_HTML)].map((m) => m[0].replace(/(bcdn_token=|token=)[^&\\]+/g, '$1…').replace(/\/priv\/(\d+)\.[^/]*/, '/priv/$1.…').slice(0, 140)))];
+}
+
+/** A server-rendered page may only be kept by the browser that asked (its data is per viewer and signed links expire) */
+export function sharedCacheable(cacheControl: string | null): boolean {
+	const cc = (cacheControl ?? '').toLowerCase();
+	if (/\bno-store\b|\bprivate\b/.test(cc)) return false;
+	return /\bpublic\b|s-maxage=\d*[1-9]|max-age=\d*[1-9]/.test(cc);
+}
+
 interface Deps {
 	fetch: typeof fetch;
 	now: () => number;
 }
 
-async function text(deps: Deps, url: string, accept: string): Promise<{ status: number; body: string; type: string }> {
+async function text(deps: Deps, url: string, accept: string): Promise<{ status: number; body: string; type: string; cacheControl: string | null }> {
 	for (let attempt = 1; ; attempt++) {
 		try {
 			const res = await deps.fetch(url, { headers: { Accept: accept, 'User-Agent': 'aun-release-thumbnail-check' }, redirect: 'follow' });
 			if (res.status >= 500 && attempt < 3) continue;
-			return { status: res.status, body: await res.text(), type: res.headers.get('content-type') ?? '' };
+			return { status: res.status, body: await res.text(), type: res.headers.get('content-type') ?? '', cacheControl: res.headers.get('cache-control') };
 		} catch (error) {
-			if (attempt >= 3) return { status: 0, body: String(error), type: '' };
+			if (attempt >= 3) return { status: 0, body: String(error), type: '', cacheControl: null };
 		}
 	}
 }
@@ -234,6 +253,28 @@ export async function thumbnailCheck(env: CheckEnv, deps: Deps, opts: { strictSt
 	const unknown = await deps.fetch(`${h.web}/thumb/00000000-0000-4000-8000-000000000000.jpg`, { headers: { 'User-Agent': 'aun-release-thumbnail-check' } }).catch(() => null);
 	checked.push('thumb unknown id');
 	if (unknown?.status !== 404) findings.push({ level: 'fail', rule: 'stable share image leaks or errors', surface: '/thumb unknown id', detail: `HTTP ${unknown?.status ?? 0} (want 404)` });
+
+	// Server-rendered pages (AUN-SEO phase 4, #1209): no signed media URL in the HTML or its RSC payload,
+	// and never kept by a shared cache. A public video, its channel and a public playlist from the API above.
+	const channelId = videos.find((v) => typeof v.channelId === 'string' && v.channelId)?.channelId as string | undefined;
+	const ssrPages = [
+		'/en',
+		'/ar',
+		...ids.slice(0, 1).map((id) => `/en/video/${id}`),
+		...(channelId ? [`/en/channels/${channelId}`, `/en/channels/${channelId}?tab=videos`] : []),
+		...(playlistId ? [`/en/playlist/${playlistId}`] : []),
+	];
+	for (const path of ssrPages) {
+		const page = await text(deps, `${h.web}${path}`, 'text/html');
+		const surface = `web SSR ${path.replace(/[0-9a-f-]{36}/, (m) => m.slice(0, 8))}`;
+		checked.push(surface);
+		if (page.status !== 200) {
+			findings.push({ level: 'fail', rule: 'surface unavailable', surface, detail: `HTTP ${page.status}` });
+			continue;
+		}
+		for (const u of signedUrlsInHtml(page.body)) findings.push({ level: 'fail', rule: 'signed URL in server-rendered HTML', surface, detail: u });
+		if (sharedCacheable(page.cacheControl)) findings.push({ level: 'fail', rule: 'server-rendered HTML cacheable by shared caches', surface, detail: `Cache-Control: ${page.cacheControl}` });
+	}
 
 	// www and the CMS store and cache what the API returned
 	for (const path of ['/en', '/en/videos', '/ar/videos']) {

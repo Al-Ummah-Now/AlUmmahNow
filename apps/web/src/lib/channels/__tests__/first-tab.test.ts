@@ -1,16 +1,18 @@
 import { activeChannelTab, loadChannelFirstTab } from '../first-tab';
 import { getChannelTabConfig } from '@/lib/api/channel-tabs';
-import { getChannelShorts, getChannelVideos } from '@/lib/api/channels';
+import { getChannelPlaylists, getChannelShorts, getChannelVideos } from '@/lib/api/channels';
 import { listChannelSectionsPopulated } from '@/lib/api/channel-sections';
 
 jest.mock('@/lib/api/channel-tabs', () => ({ getChannelTabConfig: jest.fn() }));
-jest.mock('@/lib/api/channels', () => ({ getChannelVideos: jest.fn(), getChannelShorts: jest.fn() }));
+jest.mock('@/lib/api/channels', () => ({ getChannelVideos: jest.fn(), getChannelShorts: jest.fn(), getChannelPlaylists: jest.fn() }));
 jest.mock('@/lib/api/channel-sections', () => ({ listChannelSectionsPopulated: jest.fn() }));
 
 const config = getChannelTabConfig as jest.Mock;
 const videos = getChannelVideos as jest.Mock;
 const shorts = getChannelShorts as jest.Mock;
 const sections = listChannelSectionsPopulated as jest.Mock;
+const playlists = getChannelPlaylists as jest.Mock;
+const SIGNED = 'https://vz-1.b-cdn.net/v1/thumbnail.jpg?token=t&expires=1794603600';
 
 describe('channel first tab (server-rendered channel page)', () => {
   beforeEach(() => jest.resetAllMocks());
@@ -23,8 +25,30 @@ describe('channel first tab (server-rendered channel page)', () => {
 
   it('should read the Home tab sections for the default tab', async () => {
     config.mockResolvedValue(null);
-    sections.mockResolvedValue([{ id: 's1' }]);
-    await expect(loadChannelFirstTab('c1', undefined)).resolves.toEqual({ defaultTab: 'home', initial: { tab: 'home', sections: [{ id: 's1' }] } });
+    const filled = { id: 's1', type: 'recent_uploads', populatedContent: { videos: [{ id: 'v1', thumbnailUrl: SIGNED, views: 1 }] } };
+    sections.mockResolvedValue([filled]);
+    await expect(loadChannelFirstTab('c1', undefined)).resolves.toEqual({
+      defaultTab: 'home',
+      initial: { tab: 'home', sections: [{ ...filled, populatedContent: { videos: [{ id: 'v1', thumbnailUrl: '/thumb/v1.jpg', views: 1 }] } }] },
+    });
+    expect(videos).not.toHaveBeenCalled();
+  });
+
+  it('should give a Home tab without sections to show the channel uploads (#1206), with stable images', async () => {
+    config.mockResolvedValue(null);
+    sections.mockResolvedValue([{ id: 'empty', type: 'featured_videos', populatedContent: {} }]);
+    videos.mockResolvedValue({ data: [{ id: 'v1', thumbnailUrl: SIGNED, views: 1 }, { id: 'v2', thumbnailUrl: SIGNED, views: 0, isPublic: false }], cursor: 'x' });
+    shorts.mockResolvedValue({ data: [], cursor: '' });
+    playlists.mockResolvedValue({ data: [{ id: 'p1', name: 'Public' }, { id: 'p2', name: 'Private', isPublic: false }] });
+    const { initial } = await loadChannelFirstTab('c1', undefined);
+    expect(initial?.fallback).toEqual({
+      videos: [{ id: 'v1', thumbnailUrl: '/thumb/v1.jpg', views: 1 }, { id: 'v2', views: 0, isPublic: false }],
+      shorts: [],
+      playlists: [{ id: 'p1', name: 'Public' }],
+    });
+    // The private video's image was dropped: the tab reloads after hydration
+    expect(initial?.partial).toBe(true);
+    expect(JSON.stringify(initial)).not.toContain('token=');
   });
 
   it('should read the first page of the Videos or Shorts tab', async () => {

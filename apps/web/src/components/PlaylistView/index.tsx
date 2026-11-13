@@ -32,6 +32,7 @@ import { formatDuration, getPlayAllHref, getWatchHref, moveItem, storedIndexOf }
 import type { VideoObject } from '@/interfaces';
 import { channelLabel } from '@/lib/channel-name';
 import { LEADING_CARDS } from '@/components/VideoThumbnail/leading';
+import { mergeFresh } from '@/lib/ssr/merge-fresh';
 
 interface PlaylistViewProps {
   playlistId: string;
@@ -41,9 +42,11 @@ interface PlaylistViewProps {
    * playlist then loads after hydration.
    */
   initialPlaylist?: PlaylistWithVideos;
+  /** The server dropped an image only the viewer may see: reload the playlist after hydration */
+  initialPartial?: boolean;
 }
 
-export default function PlaylistView({ playlistId, initialPlaylist }: PlaylistViewProps) {
+export default function PlaylistView({ playlistId, initialPlaylist, initialPartial = false }: PlaylistViewProps) {
   const { t, lang, isRTL } = useLanguage();
   const { confirm, dialog: confirmDialog } = useConfirm();
   // The updated date is in UTC in the server's HTML and while hydrating, then in the viewer's zone
@@ -80,6 +83,21 @@ export default function PlaylistView({ playlistId, initialPlaylist }: PlaylistVi
     if (seeded.current === playlistId) return;
     load();
   }, [load, playlistId]);
+
+  // The server's copy had to drop an image only the viewer may see: fetch it once more, quietly, and take
+  // the fresh items in place (same order as shown)
+  const refreshed = useRef(false);
+  useEffect(() => {
+    if (!initialPartial || refreshed.current || seeded.current !== playlistId) return;
+    refreshed.current = true;
+    getPlaylistById(playlistId, undefined, { includeVideos: true })
+      .then((fresh) => {
+        if (!fresh) return;
+        setPlaylist((shown) => (shown ? { ...shown, thumbnailUrl: fresh.thumbnailUrl, cover: fresh.cover } : shown));
+        setVideos((shown) => mergeFresh(shown, fresh.videoItems));
+      })
+      .catch((error) => logger.warn('[PlaylistView] Refreshing the playlist failed', { playlistId, error }));
+  }, [initialPartial, playlistId]);
 
   const isOwner = !!user && !!playlist && playlist.userId === user.id;
 

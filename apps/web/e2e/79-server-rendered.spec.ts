@@ -8,9 +8,15 @@ import { target } from './release/targets';
  * channel (by id and by @handle) and playlist pages already show their title (h1), channel link and
  * list items as real links with titles and thumbnails, as search engines and no-JS readers get them.
  *
+ * The channel the spec makes has no Home sections, so its Home tab (its main URL) falls back to its
+ * latest uploads (#1206). No server-rendered HTML carries a signed media URL (Bunny token or R2
+ * /priv/ link): thumbnails are the stable /thumb images (#1209).
+ *
  * Own data (release/builders.ts): a creator with a channel, two public videos and a public playlist
  * of both, made in beforeAll and deleted in afterAll (useOwnData), pass or fail.
  */
+/** A Bunny token (query or path form) or an R2 private link, as raw HTML or the RSC payload carries it */
+const SIGNED_URL = /bcdn_token=|[?&](?:amp;|\\u0026)?token=[^&"'\\\s]+(?:&|&amp;|\\u0026)expires=|\/priv\/\d{9,}\./;
 const data = useOwnData(test);
 let owner: Creator;
 let channelId: string;
@@ -78,6 +84,39 @@ for (const locale of ['en', 'ar'] as const) {
         }
       }
       expect(handle, 'the channel has an @handle (its canonical page)').toBeTruthy();
+    });
+
+    test(`SSR-005 the channel's main URL (no Home sections) lists its uploads (${locale})`, async ({ page }) => {
+      const paths = [`/${locale}/channels/${channelId}`, ...(handle ? [`/${locale}/@${handle}`] : [])];
+      for (const path of paths) {
+        await page.goto(path);
+        await expect(page.getByTestId('channel-sections')).toHaveAttribute('data-fallback', 'uploads');
+        for (const video of videos) {
+          const card = page.locator(`a[data-testid="video-card"][data-video-id="${video.id}"]`);
+          await expect(card, `${path} lists ${video.id} on its Home tab`).toBeVisible();
+          await expect(card).toHaveAttribute('href', `/${locale}/video/${video.id}`);
+        }
+      }
+    });
+
+    test(`SSR-006 no server-rendered page carries a signed media URL; thumbnails are /thumb (${locale})`, async ({ request }) => {
+      const pages = [
+        `/${locale}`,
+        `/${locale}/video/${videos[0].id}`,
+        `/${locale}/channels/${channelId}`,
+        `/${locale}/channels/${channelId}?tab=videos`,
+        `/${locale}/playlist/${playlistId}`,
+      ];
+      for (const path of pages) {
+        const res = await request.get(path);
+        expect(res.status(), path).toBe(200);
+        expect(res.headers()['cache-control'] ?? '', `${path} must not be stored by shared caches`).toMatch(/private|no-store/);
+        const html = await res.text();
+        const signed = SIGNED_URL.exec(html);
+        expect(signed, `${path} carries a signed URL near: ${signed ? html.slice(Math.max(0, signed.index - 80), signed.index + 40) : ''}`).toBeNull();
+      }
+      const channelHtml = await (await request.get(`/${locale}/channels/${channelId}?tab=videos`)).text();
+      expect(channelHtml).toContain(`/thumb/${videos[0].id}.jpg`);
     });
 
     test(`SSR-004 the playlist page has its title, channel link and items as links (${locale})`, async ({ page }) => {

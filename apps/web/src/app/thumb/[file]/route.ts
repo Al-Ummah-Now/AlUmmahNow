@@ -7,11 +7,15 @@
  * streams its current thumbnail from the freshly signed source: Bunny or the
  * public R2 copy, whichever the API chose. Responses are cached at the edge
  * for an hour, so a changed thumbnail shows within the hour.
+ *
+ * `?w=320|480|640|1280` asks for a width (the srcset of server-rendered cards and posters): custom
+ * thumbnails are resized by Bunny's Optimizer, Stream thumbnails come as stored
+ * (lib/embed/share-image.ts sizedImageSource). Each width is cached on its own.
  */
 
 import { logger } from '@/lib/logger-server';
 import { loadPublicVideo } from '@/lib/embed/content';
-import { isAllowedImageSource, parseShareImageFile } from '@/lib/embed/share-image';
+import { isAllowedImageSource, parseShareImageFile, sizedImageSource, thumbWidth } from '@/lib/embed/share-image';
 
 const CACHE_SECONDS = 3600;
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -36,8 +40,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ file
   const videoId = parseShareImageFile((await params).file);
   if (!videoId) return notFound();
 
+  const width = thumbWidth(new URL(request.url).searchParams.get('w'));
   const cache = edgeCache();
-  const cacheKey = new Request(new URL(`/thumb/${videoId}.jpg`, request.url).toString());
+  const cacheKey = new Request(new URL(`/thumb/${videoId}.jpg${width ? `?w=${width}` : ''}`, request.url).toString());
   const cached = await cache?.match(cacheKey).catch(() => undefined);
   if (cached) return cached;
 
@@ -47,7 +52,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ file
 
   let upstream: Response;
   try {
-    upstream = await fetch(source, { headers: { Accept: 'image/*' }, redirect: 'follow', cache: 'no-store' });
+    upstream = await fetch(sizedImageSource(source, width), { headers: { Accept: 'image/*' }, redirect: 'follow', cache: 'no-store' });
   } catch (error) {
     logger.warn('[thumb] Thumbnail fetch failed', { videoId, error: error instanceof Error ? error.message : String(error) });
     return new Response('Unavailable', { status: 502, headers: { 'Cache-Control': 'no-store' } });

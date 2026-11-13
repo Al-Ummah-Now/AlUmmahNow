@@ -1,4 +1,8 @@
 import { ChapterNavPlaceholder } from '@/components/VideoPagePlayer/ChapterNav';
+import { thumbSrcSet } from '@/lib/embed/share-image';
+
+/** The player is the page's width below lg, about 70% of it beside the related column */
+const POSTER_SIZES = '(min-width: 1024px) 70vw, 100vw';
 
 /** What the server already knows about the video when the page starts. */
 export interface WatchHint {
@@ -41,6 +45,8 @@ export function WatchDetailsSkeleton({ hint }: { hint?: WatchHint }) {
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={hint.poster}
+              srcSet={thumbSrcSet(hint.poster)}
+              sizes={thumbSrcSet(hint.poster) ? POSTER_SIZES : undefined}
               alt=""
               width={hint.width ?? 1280}
               height={hint.height ?? 720}

@@ -201,6 +201,26 @@ describe('GET /thumb/<id>.jpg', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('should resize a custom thumbnail for ?w= and cache each width on its own key', async () => {
+    const source = `https://images.alummahnow.net/thumbnails/${ID}/custom.jpg?width=1280&quality=90`;
+    content.loadPublicVideo.mockResolvedValue({ id: ID, title: 'T', playUrl: 'x', poster: `/thumb/${ID}.jpg`, thumbnailSource: source });
+    fetchMock.mockResolvedValue(new Response(new Uint8Array([0xff, 0xd8]), { status: 200, headers: { 'content-type': 'image/jpeg' } }));
+    const response = await thumbRoute.GET(new Request(`https://${HOST}/thumb/${ID}.jpg?w=320`), { params: Promise.resolve({ file: `${ID}.jpg` }) });
+    expect(response.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledWith(`https://images.alummahnow.net/thumbnails/${ID}/custom.jpg?width=320&quality=80`, expect.anything());
+  });
+
+  it('should fetch a signed Stream thumbnail as stored for ?w= (its token covers the query) and ignore unknown widths', async () => {
+    const source = `https://vz-215a1ffd-a5a.b-cdn.net/${ID}/thumbnail.jpg?token=fresh&expires=1999999999`;
+    content.loadPublicVideo.mockResolvedValue({ id: ID, title: 'T', playUrl: 'x', poster: `/thumb/${ID}.jpg`, thumbnailSource: source });
+    fetchMock.mockImplementation(async () => new Response(new Uint8Array([0xff, 0xd8]), { status: 200, headers: { 'content-type': 'image/jpeg' } }));
+    for (const w of ['640', '999']) {
+      const response = await thumbRoute.GET(new Request(`https://${HOST}/thumb/${ID}.jpg?w=${w}`), { params: Promise.resolve({ file: `${ID}.jpg` }) });
+      expect(response.status).toBe(200);
+    }
+    expect(fetchMock.mock.calls.map((c) => c[0])).toEqual([source, source]);
+  });
+
   it('404s when the source is not an image', async () => {
     content.loadPublicVideo.mockResolvedValue({ id: ID, title: 'T', playUrl: 'x', poster: `/thumb/${ID}.jpg`, thumbnailSource: `https://media.alummahnow.net/pub/${ID}/r/thumb.jpg` });
     fetchMock.mockResolvedValue(new Response('<html>', { status: 200, headers: { 'content-type': 'text/html' } }));

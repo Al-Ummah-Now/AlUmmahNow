@@ -15,10 +15,13 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { logger } from '@/lib/logger-client';
+import { mergeFresh } from '@/lib/ssr/merge-fresh';
 
 export interface CursorPage<T> {
   data?: T[] | null;
   cursor?: string | null;
+  /** Server-rendered page that had to drop an image only the viewer may see: reloaded after hydration */
+  partial?: boolean;
 }
 
 export type FetchCursorPage<T> = (cursor: string | undefined) => Promise<CursorPage<T> | null>;
@@ -52,6 +55,20 @@ export function useCursorList<T extends { id?: string }>(key: string, fetchPage:
   const generation = useRef(0);
   const fetchRef = useRef(fetchPage);
   fetchRef.current = fetchPage;
+
+  // The server's page dropped an image: fetch the first page once, quietly, and take its items in place
+  const refreshKey = useRef<string | null>(initial?.partial ? key : null);
+  useEffect(() => {
+    if (refreshKey.current !== key) return;
+    refreshKey.current = null;
+    const mine = generation.current;
+    fetchRef
+      .current(undefined)
+      .then((page) => {
+        if (mine === generation.current) setItems((shown) => mergeFresh(shown, page?.data));
+      })
+      .catch((error) => logger.warn(`Failed to refresh ${label}`, { key, error }));
+  }, [key, label]);
 
   useEffect(() => {
     if (seededKey.current === key && attempt === 0) return;
