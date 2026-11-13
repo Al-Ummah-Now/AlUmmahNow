@@ -70,6 +70,9 @@ export async function apiAs<T = unknown>(
     headers: {
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
+      // Cloudflare's documented Turnstile test token: the local stack, QA and stage use the
+      // always-pass test secret; production ignores it (docs/features/bot-protection.md)
+      'X-Turnstile-Token': 'XXXX.DUMMY.TOKEN.XXXX',
       ...(options.channelId ? { channelId: options.channelId } : {}),
     },
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
