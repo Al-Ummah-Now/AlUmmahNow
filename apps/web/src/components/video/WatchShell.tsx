@@ -4,8 +4,8 @@ import React from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import WatchPageContent from '@/components/video/WatchPageContent';
 
-/** /<locale>/video/<id>: the watch page (not /edit) */
-const WATCH_PATH = /^\/[^/]+\/video\/([^/?#]+)\/?$/;
+/** /<locale>/video/<id> or /<locale>/shorts/<id>: the watch page (not /edit) */
+const WATCH_PATH = /^\/[^/]+\/(?:video|shorts)\/([^/?#]+)\/?$/;
 /** /<locale>/video?vid=<id>: the legacy watch route video cards still link to */
 const LEGACY_PATH = /^\/[^/]+\/video\/?$/;
 

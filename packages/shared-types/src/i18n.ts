@@ -761,6 +761,9 @@ export interface AppTranslations {
     videoPrivacy?: string;
     publicVideo?: string;
     privateVideo?: string;
+    /** Shorts viewer (D-SEO-10) */
+    nextShort?: string;
+    previousShort?: string;
     /** Unlisted (D-SEO-5) */
     unlisted?: string;
     unlistedVideo?: string;
