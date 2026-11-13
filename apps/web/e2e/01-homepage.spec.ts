@@ -69,7 +69,8 @@ test.describe('Homepage - Arabic (RTL)', () => {
   test('should load Arabic version', async ({ page }) => {
     await page.goto('/ar/');
 
-    await expect(page).toHaveTitle(/Al Ummah Now/i);
+    // The site name in the page's language (the /ar home used to be titled in English)
+    await expect(page).toHaveTitle('الأمة الآن');
     await expect(page.getByRole('heading', { level: 1 })).toContainText('المرئيات');
     await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
   });
