@@ -14,8 +14,7 @@ test.describe('Media is never an empty box', () => {
   test.use({ storageState: ANONYMOUS_STATE });
 
   for (const path of PAGES) {
-    // quarantined: #1030 @meywd (the home pages show other specs' videos, whose thumbnails 404 mid-run on the stack)
-    (path === '/en' || path === '/ar' ? test.fixme : test)(`MEDIA-001 ${path}`, async ({ page }) => {
+    test(`MEDIA-001 ${path}`, async ({ page }) => {
       await page.goto(path, { waitUntil: 'load' });
       // A section still loading shows a pulsing placeholder (a designed one); judge the page once its sections answered
       await expect(page.locator(LOADING), `${path} sections still loading`).toHaveCount(0, { timeout: 30000 });
