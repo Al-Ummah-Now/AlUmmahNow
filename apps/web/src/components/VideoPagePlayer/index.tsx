@@ -2,7 +2,7 @@
 import React from "react";
 import type { Player } from "video.js";
 import { removeUnwantedChars } from "@/lib/utility";
-import { PlayerOptions } from "./interface";
+import { PlayerOptions, startsPortrait } from "./interface";
 import { VideoPlayerWithChapters } from "@/components/VideoPagePlayer/VideoPlayerWithChapters";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { getLocalizedValue } from "@al-ummah/shared-types";
@@ -48,7 +48,7 @@ const VideoPlayer: React.FC<WatchPlayerProps> = ({ options, startTime, onPlayerR
             userId={user?.id}
             sources={videoSources}
             poster={posterUrl}
-            initialPortrait={(options.height ?? 0) > (options.width ?? 0)}
+            initialPortrait={startsPortrait(options)}
             controls={true}
             autoplay={false}
             enableAnalytics={true}

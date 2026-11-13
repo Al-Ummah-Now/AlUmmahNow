@@ -475,6 +475,8 @@ button.group:hover span.rounded-full{filter:brightness(1.12)}
 /* Watch page skeleton: same boxes as the final layout */
 .wsk-b{background:color-mix(in srgb,var(--fanous-color-text-primary) 10%,transparent)!important}
 .wsk-player{border-radius:var(--r-lg);max-height:calc(100dvh - 148px);background-color:#000}
+/* A vertical video's skeleton is the player's portrait frame (player-skin.css .custom-video-player[data-portrait]), so nothing moves when the player replaces it (#1208) */
+.wsk-player[data-portrait]{width:min(100%,calc(80vh * 9 / 16));aspect-ratio:9/16;max-height:none;margin-inline:auto}
 .wsk-details{margin-top:12px}.wsk-title{margin:0 0 10px;font-size:20px;line-height:28px;font-weight:600;letter-spacing:-.01em;color:var(--fanous-color-text-primary)}html[lang=ar] .wsk-title{letter-spacing:0}.wsk-title-b{height:28px;margin-bottom:10px}
 .wsk-channel{min-height:42px;gap:12px}.wsk-avatar{width:40px!important;height:40px!important}.wsk-subscribe{display:block!important;height:36px}
 .wsk-metrics{display:none!important}.wsk-actions{margin-top:12px;padding:0;max-width:none;gap:8px}.wsk-actions>*{height:36px!important;border-radius:var(--r-pill)!important}
