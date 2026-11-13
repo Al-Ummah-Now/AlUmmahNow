@@ -50,16 +50,38 @@ function titleOf(video: EmbedVideo, lang: string): string {
 }
 
 /**
- * The player box: the largest box at the video's own ratio that fits the frame, centred (a Short
- * in X's wide card fills the height; the "Watch on" link and the controls belong to that box, so
- * they sit on the video, not on the page). Unknown size: the whole frame. embed-frame.css reads
- * --box-w / --box-h.
+ * The player box is the whole frame, and the video is fitted inside it at its own ratio (the video
+ * element and the poster are object-fit: contain, on the night colour; embed-frame.css). A Short in
+ * X's wide card is pillarboxed, as before, but the control bar, the progress bar and the "Watch on"
+ * link are laid out across the frame, like YouTube's vertical videos in a landscape player: on a
+ * box the video's own width (~175-250px in X's card) the bar wrapped onto two rows, lifting the
+ * progress bar to the middle of the video, and the link covered the video's title (2026-11-12).
  */
-function playerBoxStyle(aspect: number | null): React.CSSProperties {
-  if (!aspect) return {};
-  const a = aspect.toFixed(4);
-  return { ['--box-w' as string]: `min(100vw, calc(100vh * ${a}))`, ['--box-h' as string]: `min(100vh, calc(100vw / ${a}))` } as React.CSSProperties;
+/**
+ * Whether the "Watch on" link shows its icon alone: in frames under 480px wide, and wherever the
+ * picture is pillarboxed but the full link does not fit in the bar beside it (it would cover the
+ * top of the picture: a Short's title, a logo burned into its corner). A landscape video filling a
+ * wide frame keeps the label on the picture, as before. The label's own width is measured
+ * (scrollWidth, also while it is visually hidden), so English and Arabic each get their real size.
+ */
+const LINK_CHROME_PX = 14 + 4 + 20 + 8; // icon, gap, padding, the 8px inset from the frame's edge
+function useCompactLink(labelRef: React.RefObject<HTMLSpanElement | null>, aspect: number | null): boolean {
+  const [compact, setCompact] = useState(false);
+  useEffect(() => {
+    const fit = () => {
+      const width = window.innerWidth;
+      const picture = aspect ? Math.min(width, window.innerHeight * aspect) : width;
+      const side = (width - picture) / 2;
+      const full = (labelRef.current?.scrollWidth ?? 0) + LINK_CHROME_PX;
+      setCompact(width < 480 || (side > 4 && side < full + 8));
+    };
+    fit();
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, [labelRef, aspect]);
+  return compact;
 }
+
 const FACADE_STYLE = { width: '100%', height: '100%' } as const;
 
 export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerProps) {
@@ -73,10 +95,13 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
   const [needsUnmute, setNeedsUnmute] = useState(false);
   /** The first video of a gesture start is started here, with sound (see handlePlayerReady) */
   const startWithSoundRef = useRef(params.autoplay && params.gesture);
+  /** "Watch on" shows its icon alone where its label would cover the picture (see useCompactLink) */
+  const watchLabelRef = useRef<HTMLSpanElement>(null);
   const playerRef = useRef<ExtendedPlayer | null>(null);
   const pendingStartRef = useRef<number>(params.start);
   const lastTimeUpdateRef = useRef(0);
   const video = videos[index];
+  const compactLink = useCompactLink(watchLabelRef, videoAspect(video));
 
   const analyticsContext = useMemo<AnalyticsContext>(() => ({
     source: 'embed',
@@ -246,7 +271,7 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
         data-video-id={video.id}
         className="relative w-screen h-screen bg-black text-white overflow-hidden flex items-center justify-center"
       >
-        <div className="relative" style={playerBoxStyle(videoAspect(video))} data-fit={videoAspect(video) ? 'video' : 'frame'}>
+        <div className="embed-box relative" data-aspect={videoAspect(video)?.toFixed(4) ?? undefined}>
           {activated ? (
             <VideoPlayerWithChapters
               key={video.id}
@@ -270,7 +295,7 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
             <button
               type="button"
               onClick={() => setActivated(true)}
-              className="group relative block w-full bg-black focus:outline-none focus-visible:ring-4 focus-visible:ring-emerald-400"
+              className="group relative block w-full bg-transparent focus:outline-none focus-visible:ring-4 focus-visible:ring-emerald-400"
               style={FACADE_STYLE}
               aria-label={fill(s.playVideo, { title })}
               data-testid="embed-facade"
@@ -318,7 +343,7 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
               <button
                 type="button"
                 onClick={unmute}
-                className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-[var(--fanous-c-nav-bg)] text-[var(--fanous-c-nav-text)] px-4 py-2 text-sm font-semibold shadow-lg hover:opacity-90 focus-visible:ring-2 focus-visible:ring-[var(--fanous-color-focus-ring)]"
+                className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-[var(--fanous-c-nav-bg)] text-[var(--fanous-c-nav-text)] px-4 py-2 text-sm font-semibold shadow-lg ring-1 ring-[color-mix(in_srgb,var(--fanous-c-nav-text)_45%,transparent)] hover:opacity-90 focus-visible:ring-2 focus-visible:ring-[var(--fanous-color-focus-ring)]"
                 data-testid="embed-unmute"
               >
                 <VolumeX className="w-5 h-5" aria-hidden="true" />
@@ -347,11 +372,14 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
               onClick={onWatchClick}
               target="_blank"
               rel="noopener"
-              className="inline-flex items-center gap-1 rounded-full bg-black/70 px-3 py-1.5 text-xs hover:bg-black/90 focus-visible:ring-2 focus-visible:ring-white"
+              title={s.watchOn}
+              data-compact={compactLink || undefined}
+              className="embed-watch-link inline-flex items-center gap-1 rounded-full bg-black/70 px-2.5 py-1 text-xs leading-5 hover:bg-black/90 focus-visible:ring-2 focus-visible:ring-white"
               data-testid="embed-watch-link"
             >
-              <span>{s.watchOn}</span>
-              <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
+              {/* Compact: the icon alone; the label stays the link's name (embed-frame.css) */}
+              <span ref={watchLabelRef} className="embed-watch-label">{s.watchOn}</span>
+              <ExternalLink className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
             </a>
           </div>
 

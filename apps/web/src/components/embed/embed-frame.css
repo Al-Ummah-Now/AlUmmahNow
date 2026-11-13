@@ -1,29 +1,109 @@
 /*
  * The embed page (app/embed, main[data-testid=embed-player]) is a player inside someone else's
- * frame. The host sizes the frame (www uses the video's own aspect ratio), so here:
+ * frame. The host sizes the frame (www uses the video's own aspect ratio; X's card is always wide),
+ * so here:
  *  - the theme's night colour as the backdrop in every theme and mode (--fanous-c-nav-bg, dark in
  *    all of them; www's player frame uses the same colour), where the theme's page background
- *    and its `main { background: transparent !important }` made it parchment, and
- *  - the player box takes the video's ratio, as large as the frame allows and centred (a Short in
- *    X's wide card fills its height), and the player fills that box: no 16:9 box inside a square
+ *    and its `main { background: transparent !important }` made it parchment,
+ *  - the player fills the whole frame and the video is fitted inside it at its own ratio
+ *    (object-fit: contain) on that same colour: one set of bars, never a 16:9 box inside a square
  *    or vertical frame (double bars), and no watch-page header allowance
- *    (max-height: 100dvh - 148px), which squashed it to a strip in a small iframe.
+ *    (max-height: 100dvh - 148px), which squashed it to a strip in a small iframe,
+ *  - the controls are laid out across the frame, not the video: a Short in X's wide card is
+ *    ~175-250px wide, where the bar wrapped onto two rows with the progress bar mid-video
+ *    (2026-11-12, owner's X screenshot). The bar's own container queries still drop the least
+ *    important controls when the frame itself is narrow,
+ *  - a thinner progress track with a smaller handle (small frames), and
+ *  - the "Watch on" link shows its icon alone in narrow frames and wherever its label would cover
+ *    the picture (its label stays the link's name).
  */
 html:has(main[data-testid="embed-player"]),
 html body:has(main[data-testid="embed-player"]),
 main[data-testid="embed-player"] {
   background: var(--fanous-c-nav-bg) !important;
 }
-/* the player box: the video's ratio fitted in the frame (EmbedPlayer --box-w/--box-h), else the whole frame */
-main[data-testid="embed-player"] > div {
-  width: var(--box-w, 100vw) !important;
-  height: var(--box-h, 100vh) !important;
+
+main[data-testid="embed-player"] {
+  container: embed-frame / inline-size;
 }
+
+/* the player box: the whole frame */
+main[data-testid="embed-player"] > .embed-box {
+  width: 100vw !important;
+  height: 100vh !important;
+}
+
 main[data-testid="embed-player"] .custom-video-player,
-main[data-testid="embed-player"] .custom-video-player.aspect-video:not([data-portrait]) {
+main[data-testid="embed-player"] .custom-video-player.aspect-video:not([data-portrait]),
+main[data-testid="embed-player"] .custom-video-player[data-portrait] {
   width: 100% !important;
-  height: var(--box-h, 100vh) !important;
+  height: 100vh !important;
   max-height: none !important;
   aspect-ratio: auto !important;
   margin: 0;
+}
+
+/* Square edges on the night colour: the host's card has its own corners, and a rounded video
+   clipped what sits in its corners (a channel logo burned into a Short) */
+main[data-testid="embed-player"] .video-js.vjs-fanous {
+  --vjs-fanous-handle: 14px;
+  --vjs-fanous-handle-active: 18px;
+  border-radius: 0;
+  background-color: transparent;
+}
+
+main[data-testid="embed-player"] .video-js.vjs-fanous .vjs-tech,
+main[data-testid="embed-player"] .video-js.vjs-fanous .vjs-poster img {
+  object-fit: contain;
+  border-radius: 0;
+}
+
+main[data-testid="embed-player"] .video-js.vjs-fanous .vjs-poster {
+  background-color: transparent;
+}
+
+main[data-testid="embed-player"] .video-js.vjs-fanous .vjs-progress-control .vjs-progress-holder {
+  height: 6px;
+}
+
+@media (hover: hover) {
+  main[data-testid="embed-player"] .video-js.vjs-fanous .vjs-progress-control:hover .vjs-progress-holder {
+    height: 10px;
+  }
+}
+
+main[data-testid="embed-player"] .video-js.vjs-fanous.vjs-scrubbing .vjs-progress-control .vjs-progress-holder {
+  height: 10px;
+}
+
+/* "Watch on", compact (EmbedPlayer useCompactLink: a narrow frame, or no room beside the picture):
+   the icon alone, the label kept as the link's name. The container query covers the first paint. */
+main[data-testid="embed-player"] .embed-watch-link[data-compact] {
+  padding: 6px;
+}
+
+main[data-testid="embed-player"] .embed-watch-link[data-compact] .embed-watch-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@container embed-frame (max-width: 479px) {
+  main[data-testid="embed-player"] .embed-watch-link {
+    padding: 6px;
+  }
+
+  main[data-testid="embed-player"] .embed-watch-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
