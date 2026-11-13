@@ -7,8 +7,10 @@ lists which specs run here (**local**) and which still need QA/stage (**deployed
 ## What runs
 
 One Miniflare instance (`scripts/local-stack/boot.ts`) runs every worker, so queues, Durable Objects,
-D1, R2, KV and the Secrets Store are shared exactly as in a deployed environment. Each worker
-listens on its own port:
+D1, R2, KV and the Secrets Store are shared exactly as in a deployed environment. Miniflare's own
+warnings and errors (a queue batch whose dispatch threw, a message retried, dead-lettered or dropped)
+and one `[mf:info] QUEUE <name> acked/total (ms)` line per queue batch go to the stack log with the
+workers' output (#1128). Each worker listens on its own port:
 
 | App | Port | Source |
 |---|---:|---|

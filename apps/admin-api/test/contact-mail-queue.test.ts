@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { MAX_ATTEMPTS, backoffSeconds, contactMailConsumer, processContactMailJob, type ContactMailJob } from '../src/lib/contact-mail-queue';
 import { contactCounts, getContactMessage, insertContactMessage, insertContactNote, listContactMessages, listContactNotes, recordDelivery } from '../src/lib/contact-store';
 import { sqliteD1 } from './d1-sqlite';
+import { configureLogging } from '@al-ummah/logger';
 
 const roomy = { perIpHour: 99, perIpDay: 99, perUserHour: 99, perUserDay: 99 };
 const realFetch = globalThis.fetch;
@@ -60,6 +61,27 @@ describe('contact mail queue', () => {
     const row = await getContactMessage(db, 'm1');
     assert.equal(row?.ack_status, 'sent');
     assert.equal(row?.notify_status, 'sent');
+  });
+
+  it('logs one summary per batch with each job\'s outcome (#1128)', async () => {
+    const { env } = await setup('x@e2e.alummahnow.net', 'qa');
+    const lines: Record<string, unknown>[] = [];
+    const keep = { info: console.info, warn: console.warn, debug: console.debug };
+    const capture = (entry: unknown) => { if (entry && typeof entry === 'object') lines.push(entry as Record<string, unknown>); };
+    console.info = capture; console.warn = capture; console.debug = capture;
+    const before = configureLogging({ LOG_LEVEL: 'info' });
+    try {
+      await contactMailConsumer({ messages: [msg({ v: 1, kind: 'ack', messageId: 'm1' }), msg({ v: 1, kind: 'notify', messageId: 'gone' })] }, env);
+    } finally {
+      Object.assign(console, keep);
+      configureLogging({ LOG_LEVEL: before });
+    }
+    const batches = lines.filter((l) => l.job === 'contact-mail-batch');
+    assert.equal(batches.length, 1);
+    assert.equal(batches[0]!.outcome, 'ok');
+    assert.equal(batches[0]!.messages, 2);
+    // the notify for a message that does not exist ends quietly as done: the summary still shows it
+    assert.deepEqual(batches[0]!.outcomes, { 'ack:done': 1, 'notify:done': 1 });
   });
 
   it('is idempotent: an email already sent is not sent again', async () => {
