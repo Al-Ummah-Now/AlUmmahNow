@@ -97,6 +97,8 @@ export interface TranscodeResult {
 	timings: { downloadMs: number; transcodeMs: number; uploadMs: number; totalMs: number };
 	thumbnail: string;
 	preview?: string;
+	/** One progressive MP4 remuxed from a rung (D-SEO-11: public videos' contentUrl) */
+	mp4?: { file: string; rung: string; width: number; height: number; bytes: number };
 }
 
 /** Where a transcode attempt was when it failed. */
@@ -248,6 +250,7 @@ export function mediaVideoPrefixes(videoId: string): string[] {
 export const MEDIA_MASTER = 'master.m3u8';
 export const MEDIA_THUMBNAIL = 'thumb.jpg';
 export const MEDIA_PREVIEW = 'preview.webp';
+export const MEDIA_MP4 = 'video.mp4';
 export const MEDIA_MANIFEST = 'manifest.json';
 
 /** Signed URLs live 6 h, rounded up to the hour, so a URL is stable (cacheable) for an hour. */

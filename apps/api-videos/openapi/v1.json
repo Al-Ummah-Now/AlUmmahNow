@@ -6112,6 +6112,10 @@
                               "isPublic": {
                                 "type": "boolean"
                               },
+                              "contentUrl": {
+                                "type": "string",
+                                "description": "Stable public MP4 (480p) for search engines; public R2 videos only (D-SEO-11)"
+                              },
                               "isLive": {
                                 "type": "boolean"
                               },
@@ -6617,6 +6621,10 @@
                           },
                           "isPublic": {
                             "type": "boolean"
+                          },
+                          "contentUrl": {
+                            "type": "string",
+                            "description": "Stable public MP4 (480p) for search engines; public R2 videos only (D-SEO-11)"
                           },
                           "isLive": {
                             "type": "boolean"
@@ -8256,6 +8264,10 @@
                           "isPublic": {
                             "type": "boolean"
                           },
+                          "contentUrl": {
+                            "type": "string",
+                            "description": "Stable public MP4 (480p) for search engines; public R2 videos only (D-SEO-11)"
+                          },
                           "isLive": {
                             "type": "boolean"
                           },
@@ -9645,6 +9657,10 @@
                           },
                           "isPublic": {
                             "type": "boolean"
+                          },
+                          "contentUrl": {
+                            "type": "string",
+                            "description": "Stable public MP4 (480p) for search engines; public R2 videos only (D-SEO-11)"
                           },
                           "isLive": {
                             "type": "boolean"
@@ -25861,6 +25877,10 @@
                           "isPublic": {
                             "type": "boolean"
                           },
+                          "contentUrl": {
+                            "type": "string",
+                            "description": "Stable public MP4 (480p) for search engines; public R2 videos only (D-SEO-11)"
+                          },
                           "isLive": {
                             "type": "boolean"
                           },
@@ -26374,6 +26394,10 @@
                             },
                             "isPublic": {
                               "type": "boolean"
+                            },
+                            "contentUrl": {
+                              "type": "string",
+                              "description": "Stable public MP4 (480p) for search engines; public R2 videos only (D-SEO-11)"
                             },
                             "isLive": {
                               "type": "boolean"
@@ -29174,6 +29198,10 @@
                           },
                           "isPublic": {
                             "type": "boolean"
+                          },
+                          "contentUrl": {
+                            "type": "string",
+                            "description": "Stable public MP4 (480p) for search engines; public R2 videos only (D-SEO-11)"
                           },
                           "isLive": {
                             "type": "boolean"
@@ -32583,6 +32611,10 @@
                     "isPublic": {
                       "type": "boolean"
                     },
+                    "contentUrl": {
+                      "type": "string",
+                      "description": "Stable public MP4 (480p) for search engines; public R2 videos only (D-SEO-11)"
+                    },
                     "isLive": {
                       "type": "boolean"
                     },
@@ -33160,6 +33192,10 @@
                             },
                             "isPublic": {
                               "type": "boolean"
+                            },
+                            "contentUrl": {
+                              "type": "string",
+                              "description": "Stable public MP4 (480p) for search engines; public R2 videos only (D-SEO-11)"
                             },
                             "isLive": {
                               "type": "boolean"

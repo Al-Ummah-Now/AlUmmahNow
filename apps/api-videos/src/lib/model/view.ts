@@ -90,6 +90,7 @@ export const VideoView = z.object({
     commentsCount: z.number(),
     commentSettings: z.enum(["on", "held", "off"]).optional().describe("Comments: on, held for review, off"),
     isPublic: z.boolean(),
+    contentUrl: z.string().optional().describe("Stable public MP4 (480p) for search engines; public R2 videos only (D-SEO-11)"),
     isLive: z.boolean(),
     titleLocalized: z.record(z.string()).optional(),
     descriptionLocalized: z.record(z.string()).optional(),

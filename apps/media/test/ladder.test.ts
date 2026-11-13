@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { bandwidthOf, displaySize, ffmpegArgs, ladderFor, posterTime, progressSeconds, stillsArgs } from '../container/ladder.mjs';
+import { bandwidthOf, displaySize, ffmpegArgs, ladderFor, MP4_FILE, mp4Args, mp4Rung, posterTime, progressSeconds, stillsArgs } from '../container/ladder.mjs';
 
 describe('ladderFor', () => {
 	it('gives a 1080p landscape source all four rungs at 16:9', () => {
@@ -80,5 +80,22 @@ describe('stills and progress', () => {
 	it('computes bandwidth', () => {
 		assert.equal(bandwidthOf(1_000_000, 8), 1_000_000);
 		assert.equal(bandwidthOf(5, 0), 0);
+	});
+});
+
+describe('progressive MP4 (D-SEO-11)', () => {
+	it('copies the 480p rung, else the best smaller one', () => {
+		assert.equal(mp4Rung(ladderFor({ width: 1920, height: 1080 })).name, '480p');
+		assert.equal(mp4Rung(ladderFor({ width: 1080, height: 1920 })).name, '480p');
+		assert.equal(mp4Rung(ladderFor({ width: 640, height: 360 })).name, '360p');
+		assert.equal(mp4Rung(ladderFor({ width: 321, height: 241 })).name, '360p');
+		assert.equal(mp4Rung([]), null);
+	});
+	it('remuxes with stream copy and faststart, never re-encoding', () => {
+		const args = mp4Args({ out: '/tmp/out', rung: '480p' });
+		assert.deepEqual(args.slice(args.indexOf('-i'), args.indexOf('-i') + 2), ['-i', '/tmp/out/480p/index.m3u8']);
+		assert.ok(args.includes('copy'));
+		assert.ok(!args.includes('libx264'));
+		assert.deepEqual(args.slice(-3), ['-movflags', '+faststart', `/tmp/out/${MP4_FILE}`]);
 	});
 });

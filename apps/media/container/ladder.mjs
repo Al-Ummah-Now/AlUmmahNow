@@ -90,6 +90,32 @@ export function ffmpegArgs(o) {
 	return args;
 }
 
+/** The progressive MP4's file name (D-SEO-11: search engines' contentUrl for public videos). */
+export const MP4_FILE = 'video.mp4';
+
+/**
+ * The rung the progressive MP4 copies: 480p (good enough to index and preview, about 0.45 GB an hour),
+ * else the highest rung below it for a smaller source.
+ * @param {{ name: string, width: number, height: number }[]} rungs
+ */
+export function mp4Rung(rungs) {
+	const order = ['480p', '360p'];
+	for (const name of order) {
+		const r = rungs.find((x) => x.name === name);
+		if (r) return r;
+	}
+	return rungs[0] ?? null;
+}
+
+/**
+ * FFmpeg arguments that remux a rung's fMP4 HLS (init.mp4 + segments) into one progressive MP4,
+ * moov first (+faststart). Stream copy: no second encode.
+ * @param {{ out: string, rung: string }} o
+ */
+export function mp4Args(o) {
+	return ['-hide_banner', '-nostdin', '-y', '-allowed_extensions', 'ALL', '-i', `${o.out}/${o.rung}/index.m3u8`, '-map', '0', '-c', 'copy', '-movflags', '+faststart', `${o.out}/${MP4_FILE}`];
+}
+
 /** Where the poster frame is taken: 10% in, at most 30 s, at least 0. */
 export function posterTime(durationSeconds) {
 	if (!(durationSeconds > 0)) return 0;
