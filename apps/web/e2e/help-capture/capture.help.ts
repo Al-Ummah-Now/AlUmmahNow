@@ -325,7 +325,7 @@ const SCENES: Scene[] = [
     run: async (page, lang) => {
       await settle(page, '/library/playlists', lang);
       const item = page.getByTestId('playlist-manager-item').first();
-      const create = page.getByRole('link', { name: /^(New playlist|قائمة تشغيل جديدة)$/ }).or(page.getByRole('button', { name: /^(New playlist|قائمة تشغيل جديدة)$/ })).first();
+      const create = page.getByTestId('new-playlist-link');
       return [[item, create], []];
     },
   },
