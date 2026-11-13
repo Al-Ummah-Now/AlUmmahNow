@@ -43,7 +43,8 @@ const NAMES = {
   second: { en: 'Weekend Sessions', ar: 'لقاءات نهاية الأسبوع' },
   video: { en: 'Planting a balcony garden', ar: 'زراعة حديقة في الشرفة' },
   comment: { en: 'Thank you, this was really clear.', ar: 'شكرًا، كان الشرح واضحًا جدًا.' },
-  post: { en: 'New videos every Friday. What should we cover next?', ar: 'مرئيات جديدة كل جمعة. ما الموضوع الذي تقترحونه؟' },
+  // One post shows in both languages' pictures: it says it in both
+  post: { en: 'New videos every Friday · مرئيات جديدة كل جمعة', ar: 'New videos every Friday · مرئيات جديدة كل جمعة' },
   playlist: { en: 'Weekend projects', ar: 'مشاريع نهاية الأسبوع' },
 };
 
@@ -144,9 +145,11 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       const m = document.createElement('span');
       m.dataset.helpMarker = '';
       m.textContent = (i + 1).toLocaleString(rtl ? 'ar-EG' : 'en');
-      const x = rtl ? box.x + box.width - 12 : box.x - 12;
+      // Outside the control at its inline start, so no label is covered; inside only at the screen edge
+      const outside = rtl ? box.x + box.width + 6 : box.x - 30;
+      const x = Math.min(window.innerWidth - 26, Math.max(2, outside));
       Object.assign(m.style, {
-        position: 'fixed', left: `${Math.max(2, x)}px`, top: `${Math.max(2, box.y - 12)}px`, zIndex: '2147483647',
+        position: 'fixed', left: `${x}px`, top: `${Math.max(2, box.y + box.height / 2 - 12)}px`, zIndex: '2147483647',
         width: '24px', height: '24px', borderRadius: '50%', display: 'grid', placeItems: 'center',
         font: '700 13px/1 system-ui, sans-serif', background: 'var(--fanous-color-primary)', color: 'var(--fanous-color-on-primary)',
         boxShadow: '0 0 0 2px var(--fanous-color-surface), 0 2px 6px rgba(0,0,0,.35)', pointerEvents: 'none',
@@ -164,6 +167,16 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
 
 /** A screenshot of the area around `region` (the whole viewport when empty), saved as WebP */
 async function shoot(page: Page, file: string, region: Locator[] = []): Promise<void> {
+  // The run account's address (e2e+<run>…@e2e.alummahnow.net) reads as noise: show an example one
+  await page.evaluate(() => {
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (node.textContent && /e2e\.alummahnow\.net|^e2e\+/.test(node.textContent)) {
+        node.textContent = node.textContent.replace(/e2e\+[^@\s]*/g, 'amina').replace(/@?e2e\.alummahnow\.net/g, '@example.com');
+      }
+    }
+    document.querySelectorAll<HTMLElement>('[title*="e2e.alummahnow.net"]').forEach((el) => { el.title = 'amina@example.com'; });
+  });
   const viewport = page.viewportSize()!;
   let clip: { x: number; y: number; width: number; height: number } | undefined;
   if (region.length) {
