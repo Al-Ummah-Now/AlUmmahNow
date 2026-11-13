@@ -1,16 +1,19 @@
 /**
  * The account menu's "Al Ummah Now apps" icons (AlUmmahNow docs/design/NAV.md): each app's own
- * favicon, the owner's art as is. It is the exact 48 px PNG every app serves as favicon-48x48.png
- * (the same `downscale` call, byte for byte), shown at 24 px in the menu (2x) and 48 px on the
- * profile app's "Your apps" cards (1x). Nothing is drawn, recoloured or badged. The PNGs are
- * embedded in the shared nav stylesheet, so every app shows the same icons with no extra request
- * and no cross-origin image.
+ * favicon, the owner's art as is, whole. The source is the app's highest-resolution favicon asset,
+ * the 512 px crop every app serves as icon-512.png; it is downscaled (Lanczos, the same `downscale`
+ * as every favicon size) to 96 px and stored as lossless WebP (every visible pixel identical to the
+ * PNG). The stylesheet shows the whole square inside a circle: 2rem in the menu, like the account
+ * avatars (3x), and 3rem on the profile app's "Your apps" cards (2x). Nothing is drawn, recoloured
+ * or badged. The images are embedded in the shared nav stylesheet, so every app shows the same
+ * icons with no extra request and no cross-origin image.
  *
  *   node --experimental-strip-types src/nav-icons.ts          rewrite the block in aun-nav.css
  *   node --experimental-strip-types src/nav-icons.ts --check  fail when the block is out of date
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import sharp from 'sharp';
 import { downscale } from './build.ts';
 import type { AppId } from './crop.ts';
 
@@ -23,8 +26,8 @@ export const NAV_APPS: Record<string, AppId> = {
   admin: 'videos-admin',
   'auth-admin': 'auth-admin',
 };
-/** The favicon size used: the exact favicon-48x48.png of each app. */
-export const NAV_ICON_SIZE = 48;
+/** Embedded size: 3x the 2rem menu circle, 2x the 3rem profile card. */
+export const NAV_ICON_SIZE = 96;
 const CSS = join(import.meta.dirname, '../../fanous-tokens/nav/aun-nav.css');
 const START = '/* @generated app icons (packages/app-icons src/nav-icons.ts): do not edit */';
 const END = '/* @end app icons */';
@@ -32,8 +35,9 @@ const END = '/* @end app icons */';
 export async function navIconsBlock(): Promise<string> {
   const rules: string[] = [];
   for (const [id, app] of Object.entries(NAV_APPS)) {
-    const png = Buffer.from(await downscale(app, NAV_ICON_SIZE));
-    rules.push(`.aun-app-icon[data-app='${id}'] {\n  background-image: url('data:image/png;base64,${png.toString('base64')}');\n}`);
+    // Lossless: every visible pixel equals the PNG; only fully transparent ones (the www logo's corners) may differ
+    const webp = await sharp(Buffer.from(await downscale(app, NAV_ICON_SIZE))).webp({ lossless: true, exact: true, effort: 6 }).toBuffer();
+    rules.push(`.aun-app-icon[data-app='${id}'] {\n  background-image: url('data:image/webp;base64,${webp.toString('base64')}');\n}`);
   }
   return `${START}\n${rules.join('\n')}\n${END}`;
 }
