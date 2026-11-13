@@ -109,7 +109,7 @@ async function checkText(
  * a word whose midpoint is inside a span belongs to it. Consecutive non-Quran words go together, so
  * commentary next to a recitation is never tagged as Quran.
  */
-export function splitByQuran(transcript: TranscriptSegment[], spans: Array<{ startMs: number; endMs: number; ref: string }>): Array<{ segments: TranscriptSegment[]; ref?: string }> {
+export function splitByQuran(transcript: TranscriptSegment[], spans: QuranSpan[]): Array<{ segments: TranscriptSegment[]; ref?: string }> {
   const pieces: Array<{ segments: TranscriptSegment[]; ref?: string }> = [];
   let other: TranscriptSegment[] = [];
   let open: { ref: string; seg: TranscriptSegment } | null = null;
@@ -117,6 +117,7 @@ export function splitByQuran(transcript: TranscriptSegment[], spans: Array<{ sta
     if (other.length) pieces.push({ segments: other });
     other = [];
   };
+  let wordIndex = -1;
   for (const s of transcript) {
     const parts = s.text.split(/\s+/).filter(Boolean);
     const step = parts.length ? Math.max(0, s.endMs - s.startMs) / parts.length : 0;
@@ -125,7 +126,9 @@ export function splitByQuran(transcript: TranscriptSegment[], spans: Array<{ sta
       const startMs = Math.round(s.startMs + i * step);
       const endMs = Math.round(s.startMs + (i + 1) * step);
       const mid = (startMs + endMs) / 2;
-      const span = spans.find((q) => q.startMs <= mid && mid <= q.endMs);
+      wordIndex++;
+      // By word index when the matcher gives one (the same word split as segmentWords), else by time
+      const span = spans.find((q) => (q.wordStart !== undefined && q.wordEnd !== undefined ? wordIndex >= q.wordStart && wordIndex < q.wordEnd : q.startMs <= mid && mid <= q.endMs));
       if (span) {
         if (run) other.push(run);
         run = null;
@@ -155,7 +158,15 @@ export function splitByQuran(transcript: TranscriptSegment[], spans: Array<{ sta
   return pieces;
 }
 
-export type QuranMatcher = (segments: TranscriptSegment[]) => Promise<Array<{ startMs: number; endMs: number; ref: string }>>;
+export interface QuranSpan {
+  startMs: number;
+  endMs: number;
+  ref: string;
+  /** Transcript word indexes [wordStart, wordEnd) (words split on whitespace across all segments) */
+  wordStart?: number;
+  wordEnd?: number;
+}
+export type QuranMatcher = (segments: TranscriptSegment[]) => Promise<QuranSpan[]>;
 export const noQuranMatcher: QuranMatcher = async () => [];
 
 export async function runReviewPipeline(

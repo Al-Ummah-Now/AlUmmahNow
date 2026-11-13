@@ -248,6 +248,13 @@ export interface QuranMatch {
   alternatives: QuranRange[];
   /** The surah this basmala opens (class `basmala`) */
   basmalaFor?: number;
+  /**
+   * Input word indexes actually aligned to Quran words, ascending. A word inside the span that was
+   * skipped (inserted or unrecognised) is not in it: only these words may be treated as Quran.
+   */
+  matchedWords: number[];
+  /** The subset of matchedWords equal to the Quran word after normalisation (no fuzzy tolerance) */
+  exactWords: number[];
   /** ASR word indexes [start, end) in the input, and their times */
   asrStart: number;
   asrEnd: number;
@@ -314,6 +321,10 @@ interface Raw {
   L: number;
   occ: number;
   cands: number[];
+  /** Indexes into h of the words aligned to a Quran word (skipped words are not in it) */
+  hits: number[];
+  /** Per hit: the ASR word equals the Quran word after normalisation (not just similar) */
+  exact: boolean[];
 }
 
 /**
@@ -321,7 +332,7 @@ interface Raw {
  * at the end of the surah. Returns a checkpoint at every matched word, so the caller can keep the
  * longest prefix that still clears the agreement bar (a noisy tail never sinks a clean span).
  */
-function extend(h: string[], i: number, q: number, index: QuranIndex): Array<{ he: number; qe: number; m: number }> {
+function extend(h: string[], i: number, q: number, index: QuranIndex): { marks: Array<{ he: number; qe: number; m: number }>; hits: number[]; exact: boolean[] } {
   const W = index.words;
   const surah = index.locs[q]!.surah;
   const inSurah = (k: number) => k < W.length && index.locs[k]!.surah === surah;
@@ -330,9 +341,13 @@ function extend(h: string[], i: number, q: number, index: QuranIndex): Array<{ h
   let m = 0;
   let miss = 0;
   const marks: Array<{ he: number; qe: number; m: number }> = [];
+  const hits: number[] = [];
+  const exact: boolean[] = [];
   while (hi < h.length && inSurah(qi)) {
     if (ws(h[hi]!, W[qi]!)) {
       m++;
+      hits.push(hi);
+      exact.push(h[hi] === W[qi]);
       hi++;
       qi++;
       marks.push({ he: hi, qe: qi, m });
@@ -349,7 +364,7 @@ function extend(h: string[], i: number, q: number, index: QuranIndex): Array<{ h
     }
     if (++miss > 2) break;
   }
-  return marks;
+  return { marks, hits, exact };
 }
 
 function classOf(index: QuranIndex, s: Raw): 'basmala' | 'ambiguous' | 'confirmed' | 'possible' | 'drop' {
@@ -387,19 +402,20 @@ export function matchQuran(index: QuranIndex, input: AsrWord[]): QuranMatch[] {
   }
   const h = words.map((x) => x.w);
   const W = index.words;
+  const inputIndexes = (k: number) => Array.from({ length: words[k]!.b - words[k]!.a }, (_, d) => words[k]!.a + d);
 
   // Detection (§5.5 step 4): 3-gram seeds, extension to the right, best match wins
   const raw: Raw[] = [];
   for (let i = 0; i + N <= h.length; ) {
     let best: Raw | null = null;
     for (const q of index.seedsFor(h, i).slice(0, 300)) {
-      const marks = extend(h, i, q, index);
+      const { marks, hits, exact } = extend(h, i, q, index);
       for (let k = marks.length - 1; k >= 0; k--) {
         const { he, qe, m } = marks[k]!;
         const L = he - i;
         if (L < 4) break;
         if (m / L < 0.75) continue;
-        if (!best || m > best.m) best = { hs: i, he, qs: q, qe, m, L, occ: 0, cands: [] };
+        if (!best || m > best.m) best = { hs: i, he, qs: q, qe, m, L, occ: 0, cands: [], hits: hits.slice(0, m), exact: exact.slice(0, m) };
         break;
       }
     }
@@ -413,6 +429,8 @@ export function matchQuran(index: QuranIndex, input: AsrWord[]): QuranMatch[] {
     while (s.hs > 0 && s.qs > 0 && index.locs[s.qs - 1]!.surah === index.locs[s.qs]!.surah && ws(h[s.hs - 1]!, W[s.qs - 1]!) && !raw.some((o) => o !== s && o.he > s.hs - 1 && o.hs <= s.hs - 1)) {
       s.hs--;
       s.qs--;
+      s.hits.unshift(s.hs);
+      s.exact.unshift(h[s.hs] === W[s.qs]);
       s.m++;
       s.L++;
     }
@@ -486,6 +504,8 @@ export function matchQuran(index: QuranIndex, input: AsrWord[]): QuranMatch[] {
       occurrences: s.occ,
       alternatives: c === 'ambiguous' ? s.cands.slice(0, 10).map((q) => ({ from: ayahOf(q), to: ayahOf(q + (s.qe - s.qs) - 1) })) : [],
       ...(basmalaFor[j] ? { basmalaFor: basmalaFor[j] } : {}),
+      matchedWords: s.hits.flatMap(inputIndexes),
+      exactWords: s.hits.filter((_, n) => s.exact[n]).flatMap(inputIndexes),
       asrStart: first.a,
       asrEnd: last.b,
       startMs: first.startMs,
