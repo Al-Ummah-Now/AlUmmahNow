@@ -38,6 +38,12 @@ jest.mock('@/components/AuthProvider/authContext', () => ({
   useAuth: () => ({ user: mockUser.current }),
 }));
 
+// The comment forms read the account (its channels) and the member's profile (#1151)
+jest.mock('@/hooks/useMultiAccount', () => ({
+  useMultiAccount: () => ({ user: mockUser.current ? { id: 'viewer-user', channel: { id: 'viewer-channel', name: 'Viewer' }, channels: [] } : null }),
+}));
+jest.mock('@/hooks/useProfile', () => ({ useProfile: () => ({ profile: null }) }));
+
 jest.mock('@/contexts/ActiveChannelContext', () => ({
   useActiveChannel: () => ({
     activeChannel: mockUser.current
