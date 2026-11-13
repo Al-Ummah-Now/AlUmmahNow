@@ -196,8 +196,8 @@ export function IdentityTour() {
         return;
       }
       const r = el.getBoundingClientRect();
-      if (r.bottom < 0 || r.top > window.innerHeight) {
-        // Off screen: no highlight, the card docks
+      // Off screen (scrolled away, or in a closed drawer slid off the side): no highlight, the card docks
+      if (r.bottom < 0 || r.top > window.innerHeight || r.right <= 0 || r.left >= window.innerWidth) {
         setSpot(null);
         setCard({ top: 0, left: 0, docked: true });
         return;
