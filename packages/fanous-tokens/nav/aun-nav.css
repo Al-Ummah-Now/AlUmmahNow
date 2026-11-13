@@ -43,6 +43,8 @@
 .aun-acct-btn {
   max-width: 15rem;
   padding-inline: var(--fanous-spacing-xs, 4px) var(--fanous-spacing-sm, 8px);
+  /* no ring around the avatar (owner, 2026-11-13): the border stays for size, never drawn */
+  border-color: transparent;
 }
 .aun-acct-btn:hover,
 .aun-icon-btn:hover,
