@@ -71,6 +71,70 @@ export function quranAyahLabel(r: QuranRange): string {
 export const QURAN_ATTRIBUTION = { en: 'Quran text: Quran Foundation (quran.com)', ar: 'نص القرآن: مؤسسة القرآن (quran.com)' } as const;
 
 // ---------------------------------------------------------------------------
+// The synced copy (private media bucket, prefix `quran/`; written by the processor's Content Sync job)
+// ---------------------------------------------------------------------------
+
+export const QURAN_PREFIX = 'quran/';
+/** Pointer to the live version, written last (an atomic switch). */
+export const QURAN_CURRENT_KEY = 'quran/current.json';
+/** The job's own state: the QF sync token and the last attempt. */
+export const QURAN_STATE_KEY = 'quran/state.json';
+export const quranTextKey = (version: string, surah: number) => `quran/text/${version}/${surah}.json`;
+export const quranIndexKey = (version: string) => `quran/index/${version}.json`;
+/** QF terms: a copy not synced for 7 days is deleted, and never served. */
+export const QURAN_MAX_STALE_MS = 7 * 24 * 60 * 60 * 1000;
+
+export interface QuranCurrent {
+  v: 1;
+  version: string;
+  /** Last successful sync with QF (a rebuild or a "nothing changed" check) */
+  syncedAt: string;
+  /** When this version's text was built */
+  builtAt: string;
+  surahs: number;
+  words: number;
+}
+
+/** One surah of the official Uthmani text (QF `quran_core` verse `text_uthmani`, verbatim). */
+export interface QuranSurahFile {
+  v: 1;
+  surah: number;
+  name: { ar: string; simple: string };
+  /** ayat[i] = ayah i + 1 */
+  ayat: Array<{
+    /** The verse's `text_uthmani`, verbatim */
+    text: string;
+    /** The same text split into its words (a pause mark stays with the word before it); `words.join(' ') === text` */
+    words: string[];
+  }>;
+}
+
+/** The copy is usable only while it is fresh (QF terms). */
+export function quranCopyFresh(current: Pick<QuranCurrent, 'syncedAt'> | null | undefined, now = Date.now()): boolean {
+  const at = current ? Date.parse(current.syncedAt) : NaN;
+  return Number.isFinite(at) && now - at <= QURAN_MAX_STALE_MS;
+}
+
+/**
+ * The official text of a range, from the synced surah file: whole ayat verbatim, partial ayat as
+ * the words in range. Null when the range does not exist in the copy (never a guess).
+ */
+export function quranPassage(file: QuranSurahFile, range: QuranRange): { ayat: Array<{ ayah: number; text: string; partial: boolean }> } | null {
+  if (file.surah !== range.from.surah || range.to.surah !== file.surah) return null;
+  const ayat: Array<{ ayah: number; text: string; partial: boolean }> = [];
+  for (let a = range.from.ayah; a <= range.to.ayah; a++) {
+    const ayah = file.ayat[a - 1];
+    if (!ayah) return null;
+    const first = a === range.from.ayah ? range.from.word : 1;
+    const last = a === range.to.ayah ? range.to.word : ayah.words.length;
+    if (first < 1 || last > ayah.words.length || first > last) return null;
+    const partial = first !== 1 || last !== ayah.words.length;
+    ayat.push({ ayah: a, text: partial ? ayah.words.slice(first - 1, last).join(' ') : ayah.text, partial });
+  }
+  return { ayat };
+}
+
+// ---------------------------------------------------------------------------
 // Normalisation (§5.5 step 2)
 // ---------------------------------------------------------------------------
 

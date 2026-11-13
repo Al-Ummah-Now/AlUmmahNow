@@ -21,6 +21,7 @@ import { importLegacyRollups } from './lib/analytics-rollup';
 import { resumeStalledImports } from './lib/post-counters';
 import { isCategorizeMessage, processCategorizeMessages, sweepCategorySuggestions, type CategorizeQueueMessage } from './categorize/queue';
 import type { CategorizeEnv } from './categorize/job';
+import { isQuranSyncMessage, processQuranSyncMessages, quranSyncMessage, runQuranDaily, type QuranQueueMessage, type QuranSyncEnv } from './quran/sync';
 import type { SearchDb } from '@al-ummah/shared-types';
 
 interface QueueMessage<T> {
@@ -159,6 +160,17 @@ export async function handleDeadLetterRequest(
     return json(outcome, status);
   }
   return json({ error: 'Method not allowed' }, 405);
+}
+
+/** POST /internal/quran/sync {"rebuild"?: boolean} (X-API-Key): queue a Content Sync run. */
+export async function handleQuranSyncRequest(request: Request, env: QueueEnvironment, logger: ReturnType<typeof createLogger>): Promise<Response> {
+  if (!(await isInternalCaller(request, env))) return json({ error: 'Unauthorized' }, 401);
+  if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+  if (!env.MESSAGE_QUEUE) return json({ error: 'MESSAGE_QUEUE not bound' }, 503);
+  const body = (await request.json().catch(() => ({}))) as { rebuild?: unknown } | null;
+  await env.MESSAGE_QUEUE.send(quranSyncMessage({ reason: 'admin', rebuild: body?.rebuild !== false }) as unknown as AlUmmahMessage);
+  logger.info('[Quran] Sync queued by an admin');
+  return json({ queued: true }, 202);
 }
 
 // Health check helper functions
@@ -305,6 +317,8 @@ export default {
     }
     ctx.waitUntil(runScheduled(env));
     ctx.waitUntil(runCategorizeSweep(env, true));
+    // Quran Foundation Content Sync (AUN-CAPTIONS): the 7-day rule, then a queued sync
+    ctx.waitUntil(runQuranDaily(env as unknown as QuranSyncEnv, ctx as ExecutionContextLike, loggerFor(env)).catch((error) => loggerFor(env).error('[Quran] Daily sync not queued', error)));
   },
 
   async queue(batch: MessageBatch<AlUmmahMessage>, env: QueueEnvironment, ctx?: ExecutionContextLike): Promise<void> {
@@ -334,6 +348,13 @@ async function handleQueue(batch: MessageBatch<AlUmmahMessage>, env: QueueEnviro
   if (categorize.length) {
     await processCategorizeMessages(categorize as unknown as CategorizeQueueMessage[], env as unknown as CategorizeEnv, logger);
     batch = { ...batch, messages: batch.messages.filter((m) => !isCategorizeMessage(m)) };
+    if (batch.messages.length === 0) return;
+  }
+  // Quran Content Sync (AUN-CAPTIONS) rides on the videos queue: its own backoff, then the DLQ
+  const quran = batch.messages.filter(isQuranSyncMessage);
+  if (quran.length) {
+    await processQuranSyncMessages(quran as unknown as QuranQueueMessage[], env as unknown as QuranSyncEnv, ctx, logger);
+    batch = { ...batch, messages: batch.messages.filter((m) => !isQuranSyncMessage(m)) };
     if (batch.messages.length === 0) return;
   }
   if (batch.queue?.includes('moderation')) {
@@ -423,6 +444,11 @@ async function handleFetch(request: Request, env: QueueEnvironment, ctx?: Execut
   // Dead letters (see src/dlq): GET /dlq lists, POST /dlq/replay {"id"} re-sends one.
   if (url.pathname === '/dlq' || url.pathname === '/dlq/replay') {
     return handleDeadLetterRequest(request, url, env, logger, ctx);
+  }
+
+  // Quran Content Sync now (the Errors page's "Sync now"): queued, never run in the request
+  if (url.pathname === '/internal/quran/sync') {
+    return handleQuranSyncRequest(request, env, logger);
   }
 
   // Health check endpoint
