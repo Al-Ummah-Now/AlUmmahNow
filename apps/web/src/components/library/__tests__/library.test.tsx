@@ -39,6 +39,12 @@ jest.mock('@/services/api/library', () => ({
   },
 }));
 
+// The card menu's Save to playlist dialog (its own tests: SaveToPlaylist/__tests__)
+jest.mock('@/components/SaveToPlaylist', () => ({
+  __esModule: true,
+  default: ({ videoId, open }: { videoId: string; open?: boolean }) => (open ? <div role="dialog" data-testid="card-save-to-playlist" data-video-id={videoId} /> : null),
+}));
+
 import { LibraryService } from '@/services/api/library';
 import { LibraryListPage } from '../LibraryListPage';
 import { WatchLaterButton } from '../WatchLaterButton';
@@ -131,6 +137,15 @@ describe('Watch later controls', () => {
     });
     expect(service.addToWatchLater).toHaveBeenCalledWith('v9');
     expect(screen.getByTestId('video-card-menu-status')).toHaveTextContent('Watch later is full');
+  });
+
+  it('opens Save to playlist from the card overflow menu', async () => {
+    render(<VideoCardMenu videoId="v9" title="Nine" />);
+    fireEvent.keyDown(screen.getByRole('button', { name: 'More actions for Nine' }), { key: 'Enter' });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Save to playlist' }));
+    });
+    expect(screen.getByTestId('card-save-to-playlist')).toHaveAttribute('data-video-id', 'v9');
   });
 
   it('is hidden for anonymous viewers', () => {

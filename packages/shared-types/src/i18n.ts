@@ -1651,6 +1651,8 @@ export interface AppTranslations {
     notFoundDescription: string;
     publicLabel: string;
     privateLabel: string;
+    /** Link-only playlist visibility */
+    unlistedLabel: string;
     updatedOn: string;
     removeFromPlaylist: string;
     moveUp: string;
@@ -1671,6 +1673,10 @@ export interface AppTranslations {
     visibilityLabel: string;
     publicDescription: string;
     privateDescription: string;
+    unlistedDescription: string;
+    /** Personal playlists (no channel): manage page subtitle and the add-videos hint */
+    personalPlaylistsDescription: string;
+    personalAddVideosHint: string;
     nameRequired: string;
     createFailed: string;
     updateFailed: string;
@@ -1684,7 +1690,6 @@ export interface AppTranslations {
     removedFrom: string;
     saveFailed: string;
     createAndAdd: string;
-    channelRequired: string;
     /** Upload page: pick or create playlists for new uploads */
     upload: {
       label: string;

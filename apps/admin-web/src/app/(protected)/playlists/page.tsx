@@ -64,7 +64,8 @@ export default async function PlaylistsPage({ searchParams }: { searchParams: Pr
                     <span className="block font-medium text-fg break-words" dir="auto">{localizedPlaylistText(p.title, p.titleLocalized, locale) || p.id}</span>
                     <span className="block"><MonoId value={p.id} /></span>
                     <div className="mt-1 flex flex-wrap gap-1">
-                      <Chip tone="neutral">{p.isPublic ? t('videos.public') : t('videos.private')}</Chip>
+                      <Chip tone="neutral">{p.isPublic ? t('videos.public') : p.isUnlisted ? t('playlists.unlisted') : t('videos.private')}</Chip>
+                      {!p.channelId && <Chip tone="neutral">{t('playlists.personal')}</Chip>}
                       <span className="md:hidden text-xs text-fg-muted">{formatNumber(p.videoCount, locale)} · {p.createdAt ? formatDate(p.createdAt, locale) : ''}</span>
                     </div>
                   </td>

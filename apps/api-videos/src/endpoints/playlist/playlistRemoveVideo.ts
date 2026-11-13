@@ -18,7 +18,8 @@ export class PlaylistRemoveVideo extends AuthenticatedRoute {
                 videoId: Str({ description: "Video ID to remove from playlist" }),
             }),
             headers: z.object({
-                channelId: Str({ description: "Channel ID" }),
+                // Absent reaches the schema as null (#1139): no channel = a personal playlist
+                channelId: Str({ description: "The caller's active channel; optional" }).optional().nullable(),
             }),
         },
         responses: {
@@ -68,7 +69,7 @@ export class PlaylistRemoveVideo extends AuthenticatedRoute {
 
         // Retrieve the validated parameters
         const { id, videoId } = request.params;
-        const { channelId } = request.headers;
+        const channelId = request.headers.channelId || null;
         const userId = this.getUserId(c);
 
         // Get existing playlist
@@ -122,7 +123,7 @@ export class PlaylistRemoveVideo extends AuthenticatedRoute {
             playlistId: id,
             videoId: videoId,
             userId: userId,
-            channelId: channelId,
+            ...(channelId ? { channelId } : {}),
             timestamp: new Date().toISOString(),
         });
 

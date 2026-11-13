@@ -9,7 +9,7 @@ import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { PLAYLIST_BULK_MAX, can, normalizePlaylistLocalized, playlistSortOf, uniqueVideoIds, type ChannelRole, type PlaylistBulkAddResult } from "@al-ummah/shared-types";
 import { uploadIdentity } from "../../lib/channelAccess";
-import { PLAYLIST_DESCRIPTION_MAX, PLAYLIST_TITLE_MAX } from "../../lib/playlists";
+import { PLAYLIST_DESCRIPTION_MAX, PLAYLIST_TITLE_MAX, playlistVisibilityFlags } from "../../lib/playlists";
 import { bulkAddVideos, type PlaylistEnv } from "../../lib/playlistBulk";
 import { logger } from "../../lib/logger";
 
@@ -17,9 +17,11 @@ export class PlaylistCreate extends AuthenticatedRoute {
     schema = {
         tags: ["Playlists"],
         summary: "Create a new Playlist",
+        description: "With a channel active (channelId header) the playlist is the channel's; without one it is a personal playlist of the caller (channelId ''), no channel needed. `visibility` sets public, unlisted (link-only) or private.",
         request: {
 			headers: z.object({
-				channelId: Str({ description: "Channel ID" }),
+				// Absent reaches the schema as null (#1139): no channel = a personal playlist
+				channelId: Str({ description: "The channel to create it for; omit to make a personal playlist (yours, no channel needed)" }).optional().nullable(),
 			}),
             body: {
                 content: {
@@ -77,7 +79,8 @@ export class PlaylistCreate extends AuthenticatedRoute {
 
         // Retrieve the validated request body
         const playlistInput = request.body;
-		const { channelId } = request.headers;
+		// No channel active: a personal playlist (channelId '', like Watch later), the user's alone
+		const channelId = request.headers.channelId || '';
         const userId = this.getUserId(c);
 
         // A channel member creates the playlist for the channel: it belongs to
@@ -116,9 +119,10 @@ export class PlaylistCreate extends AuthenticatedRoute {
             thumbnailUrl: playlistInput.thumbnailUrl,
             userId: ownerId,
             ...(uploadedBy ? { createdBy: uploadedBy } : {}),
-            channelId: channelId,
+            channelId,
             videos: [] as string[],
-            isPublic: playlistInput.isPublic ?? true,
+            isPublic: true,
+            ...playlistVisibilityFlags(playlistInput),
             // The order (default manual); an automatic one sorts the videos as they are added
             ...playlistSortOf(playlistInput),
             videoAddedAt: {} as Record<string, string>,
@@ -135,7 +139,7 @@ export class PlaylistCreate extends AuthenticatedRoute {
         await queue.send(MessageType.PlaylistCreate, {
             playlistId: businessPlaylist.id,
             userId: userId,
-            channelId: channelId,
+            ...(channelId ? { channelId } : {}),
             timestamp: new Date().toISOString(),
         });
 

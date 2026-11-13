@@ -152,8 +152,16 @@ it('details: saves name, visibility and the chosen cover video', async () => {
   fireEvent.click(screen.getByRole('radio', { name: /^Private/ }));
   fireEvent.click(screen.getByRole('radio', { name: 'Use the thumbnail of Lesson b' }));
   await act(async () => { fireEvent.click(screen.getByTestId('playlist-details-save')); });
-  expect(savePlaylist).toHaveBeenCalledWith('pl', { title: 'Tafsir 2', titleLocalized: { en: 'Tafsir 2' }, description: '', descriptionLocalized: {}, isPublic: false, coverVideoId: 'b' }, { channelId: 'ch' });
+  expect(savePlaylist).toHaveBeenCalledWith('pl', { title: 'Tafsir 2', titleLocalized: { en: 'Tafsir 2' }, description: '', descriptionLocalized: {}, isPublic: false, visibility: 'private', coverVideoId: 'b' }, { channelId: 'ch' });
   expect(screen.getByText('Changes saved')).toBeInTheDocument();
+});
+
+it('details: unlisted is saved as link-only', async () => {
+  await renderEditor();
+  (savePlaylist as jest.Mock).mockResolvedValue({ ok: true, data: { playlist: {} } });
+  fireEvent.click(screen.getByRole('radio', { name: /^Unlisted/ }));
+  await act(async () => { fireEvent.click(screen.getByTestId('playlist-details-save')); });
+  expect(savePlaylist).toHaveBeenCalledWith('pl', expect.objectContaining({ isPublic: false, visibility: 'unlisted' }), { channelId: 'ch' });
 });
 
 it('follows a background add started by the create form', async () => {

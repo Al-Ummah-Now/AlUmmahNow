@@ -5,7 +5,7 @@ import { Playlist, Channel as BusinessChannel, ResponseError } from "../../lib/t
 import R2Repository from "../../lib/r2Repo";
 import { OptionalAuthRoute, AppContext } from "../../base";
 import { transformVideoToView } from "../../lib/transformations";
-import { toPlaylistResponse, canViewPlaylist, canViewVideo, PlaylistType, VideoType } from "../../lib/playlists";
+import { toPlaylistResponse, canOpenPlaylist, canViewVideo, PlaylistType, VideoType } from "../../lib/playlists";
 import { resolvePlaylistCovers, type PlaylistCover } from "../../lib/playlistCovers";
 import { logger } from "../../lib/logger";
 import { canManageChannelPlaylists } from "../../lib/playlistBulk";
@@ -83,7 +83,7 @@ export class PlaylistFetch extends OptionalAuthRoute {
         // Deleted, hidden and other users' private playlists all look "not found".
         // A private channel playlist is also shown to the channel's playlist
         // managers (owner, admins, editors: playlist.manage).
-        const visible = !!playlist && (canViewPlaylist(playlist, userId)
+        const visible = !!playlist && (canOpenPlaylist(playlist, userId)
             || (!playlist.isDeleted && !playlist.isHidden && playlist.isPublic === false && !isSystemPlaylist(playlist) && await canManageChannelPlaylists(c.env as never, playlist.channelId, userId)));
         if (!playlist || !visible) {
             // Purged (deleted, then removed for good): 410 (lib/gone.ts)

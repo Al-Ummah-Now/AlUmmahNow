@@ -7,7 +7,7 @@ import { transformPlaylistToView } from "../../lib/transformations";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from "../../base";
-import { PLAYLIST_DESCRIPTION_MAX, PLAYLIST_TITLE_MAX, isSameVideoSet } from "../../lib/playlists";
+import { PLAYLIST_DESCRIPTION_MAX, PLAYLIST_TITLE_MAX, isSameVideoSet, playlistVisibilityFlags } from "../../lib/playlists";
 import { canManagePlaylist } from "../../lib/playlistBulk";
 import { loadPlaylistVideos, orderOf, persistAutoOrder } from "../../lib/playlistOrder";
 import { normalizePlaylistLocalized, playlistSortOf } from "@al-ummah/shared-types";
@@ -21,7 +21,8 @@ export class PlaylistUpdate extends AuthenticatedRoute {
                 id: Str({ description: "Playlist ID" }),
             }),
             headers: z.object({
-                channelId: Str({ description: "Channel ID" }),
+                // Absent reaches the schema as null (#1139): no channel = a personal playlist
+                channelId: Str({ description: "The caller's active channel; optional (the owner, or a playlist manager of its channel, may edit)" }).optional().nullable(),
             }),
             body: {
                 content: {
@@ -82,7 +83,7 @@ export class PlaylistUpdate extends AuthenticatedRoute {
 
         // Retrieve the validated parameters
         const { id } = request.params;
-        const { channelId } = request.headers;
+        const channelId = request.headers.channelId || null;
         const userId = this.getUserId(c);
         const updateData = request.body;
 
@@ -111,7 +112,9 @@ export class PlaylistUpdate extends AuthenticatedRoute {
         // The order: manual, or automatic by a field and direction. Switching
         // to automatic sorts now; switching back to manual keeps the current
         // automatic order as the starting manual order. Both need the videos.
-        const { sortMode, sortField, sortDirection, coverVideoId, titleLocalized, descriptionLocalized, ...fields } = updateData;
+        const { sortMode, sortField, sortDirection, coverVideoId, titleLocalized, descriptionLocalized, visibility, isPublic, ...fields } = updateData;
+        // public / unlisted / private (visibility wins over isPublic)
+        const visibilityFlags = playlistVisibilityFlags({ visibility, isPublic });
         if (fields.title !== undefined) {
             fields.title = fields.title.trim().slice(0, PLAYLIST_TITLE_MAX);
             if (!fields.title) delete fields.title;
@@ -143,7 +146,7 @@ export class PlaylistUpdate extends AuthenticatedRoute {
             if (coverVideoId && !(fresh.videos || []).includes(coverVideoId)) {
                 return { reject: { status: 400, error: "coverVideoId must be a video of this playlist" } };
             }
-            Object.assign(fresh, fields, { dateModified: new Date().toISOString() });
+            Object.assign(fresh, fields, visibilityFlags, { dateModified: new Date().toISOString() });
             if (names !== undefined) {
                 if (names) fresh.titleLocalized = names;
                 else delete fresh.titleLocalized;
@@ -186,7 +189,7 @@ export class PlaylistUpdate extends AuthenticatedRoute {
         await queue.send(MessageType.PlaylistEdit, {
             playlistId: id,
             userId: userId,
-            channelId: channelId,
+            ...(channelId ? { channelId } : {}),
             timestamp: new Date().toISOString(),
         });
 

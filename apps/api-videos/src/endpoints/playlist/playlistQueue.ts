@@ -13,7 +13,7 @@ import { OptionalAuthRoute, AppContext } from "../../base";
 import R2Repository from "../../lib/r2Repo";
 import { logger } from "../../lib/logger";
 import { ResponseError } from "../../lib/types";
-import { canViewPlaylist, type PlaylistType } from "../../lib/playlists";
+import { canOpenPlaylist, type PlaylistType } from "../../lib/playlists";
 import { canManageChannelPlaylists } from "../../lib/playlistBulk";
 import { isSystemPlaylist, listAllLikedIds, watchLaterId } from "../../lib/library";
 import { orderedPlaylist } from "../../lib/playlistOrder";
@@ -28,7 +28,8 @@ const notFound = (c: AppContext) => c.json({ success: false, error: "Playlist no
 /** Whether the caller may play this (non-system) playlist: the rule of GET /api/playlists/{id}. */
 export async function canPlayPlaylist(env: unknown, playlist: PlaylistType, userId: string | undefined): Promise<boolean> {
 	if (isSystemPlaylist(playlist)) return false;
-	if (canViewPlaylist(playlist, userId)) return true;
+	// Listed, link-only (unlisted) or the caller's own
+	if (canOpenPlaylist(playlist, userId)) return true;
 	return !playlist.isDeleted && !playlist.isHidden && playlist.isPublic === false
 		&& await canManageChannelPlaylists(env as never, playlist.channelId, userId);
 }

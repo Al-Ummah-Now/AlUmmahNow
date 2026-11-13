@@ -1677,6 +1677,8 @@ const ar: Messages = {
     colChannel: 'القناة',
     colOwner: 'المالك',
     colVideos: 'المرئيات',
+    unlisted: 'غير مُدرجة',
+    personal: 'شخصية (بلا قناة)',
     colVisibility: 'الظهور',
     colCreated: 'تاريخ الإنشاء',
     tableCaption: 'قوائم التشغيل',

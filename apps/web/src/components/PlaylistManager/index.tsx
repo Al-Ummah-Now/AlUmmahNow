@@ -27,8 +27,9 @@ interface PlaylistManagerProps {
 
 const MAX_PLAYLISTS = 100;
 
+/** Manage Playlists of a channel, or (channelId '') the user's personal playlists under You. */
 export function managePlaylistsHref(lang: string, channelId: string, playlistId?: string): string {
-  const base = `/${lang}/settings/channel/${channelId}/playlists`;
+  const base = channelId ? `/${lang}/settings/channel/${channelId}/playlists` : `/${lang}/library/playlists`;
   return playlistId ? `${base}/${encodeURIComponent(playlistId)}` : base;
 }
 
@@ -45,7 +46,8 @@ export default function PlaylistManager({ channelId }: PlaylistManagerProps) {
     setLoading(true);
     setError(null);
     try {
-      const result = await listPlaylists({ channelId, limit: MAX_PLAYLISTS });
+      // A channel's playlists, or (no channel) the user's personal ones
+      const result = await listPlaylists(channelId ? { channelId, limit: MAX_PLAYLISTS } : { mine: true, limit: MAX_PLAYLISTS });
       if (!result) {
         setError({ message: t.playlist.loadFailed, ref: reportError(new Error('Listing channel playlists failed'), { shown: true, extra: { step: 'playlist-manager-load', channelId } }) });
       }
@@ -92,7 +94,7 @@ export default function PlaylistManager({ channelId }: PlaylistManagerProps) {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className={`text-2xl font-bold ${TEXT}`}>{t.playlist.managePlaylists}</h1>
-          <p className={MUTED}>{t.playlist.managePlaylistsDescription}</p>
+          <p className={MUTED}>{channelId ? t.playlist.managePlaylistsDescription : t.playlist.personalPlaylistsDescription}</p>
         </div>
         <Link href={`${managePlaylistsHref(lang, channelId)}/new`} className="b b-primary" data-testid="new-playlist-link">
           <Plus className="h-4 w-4" aria-hidden="true" />
@@ -130,7 +132,7 @@ export default function PlaylistManager({ channelId }: PlaylistManagerProps) {
             const sort = playlistSortOf(playlist);
             const editHref = managePlaylistsHref(lang, channelId, playlist.id);
             return (
-              <li key={playlist.id} className="flex flex-wrap items-center gap-4 p-4 sm:flex-nowrap">
+              <li key={playlist.id} className="flex flex-wrap items-center gap-4 p-4 sm:flex-nowrap" data-testid="playlist-manager-item" data-playlist-id={playlist.id}>
                 <Link href={editHref} className="w-28 flex-none overflow-hidden rounded-[var(--r-sm)]" tabIndex={-1} aria-hidden="true">
                   <PlaylistCover playlist={playlist} alt="" sizes="112px" />
                 </Link>
@@ -169,6 +171,7 @@ export default function PlaylistManager({ channelId }: PlaylistManagerProps) {
                     className="b b-ghost b-icon text-[var(--fanous-color-error-text)] disabled:opacity-40"
                     aria-label={t.playlist.deletePlaylist}
                     title={t.playlist.deletePlaylist}
+                    data-testid="playlist-delete"
                   >
                     <Trash2 className="h-4 w-4" aria-hidden="true" />
                   </button>

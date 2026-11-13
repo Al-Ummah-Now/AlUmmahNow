@@ -63,11 +63,13 @@ async function requiredAuth(channelId: string) {
 
 /**
  * List playlists
- * GET /api/playlists (?channelId= filters to one channel)
+ * GET /api/playlists (?channelId= filters to one channel; ?mine=true: the
+ * signed-in user's personal playlists, made without a channel)
  */
 export async function listPlaylists(
   params?: ListQueryParams & {
     isPublic?: boolean;
+    mine?: boolean;
   },
   _headers?: ApiHeaders
 ): Promise<PaginationResponse<PlaylistWithVideos> | null> {
@@ -75,6 +77,7 @@ export async function listPlaylists(
   if (params?.limit) queryParams.append('limit', params.limit.toString());
   if (params?.cursor) queryParams.append('cursor', params.cursor);
   if (params?.channelId) queryParams.append('channelId', params.channelId);
+  else if (params?.mine) queryParams.append('mine', 'true');
 
   return apiRequestServer<PaginationResponse<PlaylistWithVideos>>({
     method: 'GET',
@@ -116,7 +119,10 @@ export async function createPlaylist(
   }, () => requiredAuth(headers.channelId), true);
 }
 
-export type NewPlaylistRequest = PlaylistCreateRequest & Partial<PlaylistSort> & { title?: string; videoIds?: string[] };
+/** public: listed; unlisted: anyone with the link, never listed; private: only you (and the channel's managers) */
+export type PlaylistVisibility = 'public' | 'unlisted' | 'private';
+
+export type NewPlaylistRequest = PlaylistCreateRequest & Partial<PlaylistSort> & { title?: string; videoIds?: string[]; visibility?: PlaylistVisibility };
 
 function createBody(data: NewPlaylistRequest) {
   return {
@@ -128,6 +134,7 @@ function createBody(data: NewPlaylistRequest) {
     ...(data.descriptionLocalized && Object.keys(data.descriptionLocalized).length ? { descriptionLocalized: data.descriptionLocalized } : {}),
     thumbnailUrl: data.thumbnailUrl,
     isPublic: data.isPublic,
+    ...(data.visibility ? { visibility: data.visibility } : {}),
     // The order (manual when left out)
     ...(data.sortMode ? { sortMode: data.sortMode } : {}),
     ...(data.sortField ? { sortField: data.sortField } : {}),
@@ -172,6 +179,7 @@ export type PlaylistPatch = PlaylistUpdateRequest & Partial<PlaylistSort> & {
   videos?: string[];
   /** A video of the playlist shown as its cover; null: automatic (the first video) */
   coverVideoId?: string | null;
+  visibility?: PlaylistVisibility;
 };
 
 function patchBody(data: PlaylistPatch): Record<string, unknown> {
@@ -183,6 +191,7 @@ function patchBody(data: PlaylistPatch): Record<string, unknown> {
   if (data.descriptionLocalized !== undefined) body.descriptionLocalized = data.descriptionLocalized;
   if (data.thumbnailUrl !== undefined) body.thumbnailUrl = data.thumbnailUrl;
   if (data.isPublic !== undefined) body.isPublic = data.isPublic;
+  if (data.visibility !== undefined) body.visibility = data.visibility;
   if (data.videos !== undefined) body.videos = data.videos;
   if (data.sortMode !== undefined) body.sortMode = data.sortMode;
   if (data.sortField !== undefined) body.sortField = data.sortField;
@@ -309,7 +318,7 @@ export async function reorderPlaylistVideos(
 }
 
 export interface PlaylistManagePage {
-  playlist: PlaylistSort & { id: string; title: string; description?: string; titleLocalized?: Record<string, string>; descriptionLocalized?: Record<string, string>; isPublic: boolean; thumbnailUrl?: string; coverVideoId?: string; channelId: string; videosCount: number };
+  playlist: PlaylistSort & { id: string; title: string; description?: string; titleLocalized?: Record<string, string>; descriptionLocalized?: Record<string, string>; isPublic: boolean; isUnlisted?: boolean; visibility?: PlaylistVisibility; thumbnailUrl?: string; coverVideoId?: string; channelId: string; videosCount: number };
   items: PlaylistManageItem[];
   nextOffset: number | null;
 }

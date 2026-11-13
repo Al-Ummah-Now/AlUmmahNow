@@ -1,11 +1,12 @@
 'use client';
 
 /**
- * "Save to playlist" control for the watch page.
+ * "Save to playlist" control for the watch page and the video cards' menu.
  *
- * Shown to logged-in users with an active channel. Lists that channel's
- * playlists with a checkbox per playlist (checked = video is in it) and lets
- * the user create a new playlist that the video is added to immediately.
+ * Shown to signed-in users. With a channel active it lists that channel's
+ * playlists; without one, the user's personal playlists (no channel needed).
+ * A checkbox per playlist (checked = video is in it), and a new playlist the
+ * video is added to immediately.
  */
 
 import { playlistName } from '@/lib/playlists/playlist-names';
@@ -27,19 +28,29 @@ import { menuShift } from './menu-shift';
 
 interface SaveToPlaylistProps {
   videoId: string;
-  /** The channel whose playlists to use. Defaults to the active channel */
+  /** The channel whose playlists to use. Defaults to the active channel; without one, the user's personal playlists */
   channelId?: string;
   className?: string;
+  /** Controlled: the dialog is opened from elsewhere (the card menu) and there is no button of its own */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 const MAX_PLAYLISTS = 50;
-export default function SaveToPlaylist({ videoId, channelId: channelIdProp, className = '' }: SaveToPlaylistProps) {
+export default function SaveToPlaylist({ videoId, channelId: channelIdProp, className = '', open: openProp, onOpenChange }: SaveToPlaylistProps) {
   const { t, isRTL } = useLanguage();
   const { user } = useAuth();
   const channel = useCurrentChannel();
   const channelId = channelIdProp ?? channel?.id;
 
-  const [open, setOpen] = useState(false);
+  const [openState, setOpenState] = useState(false);
+  const controlled = openProp !== undefined;
+  const open = controlled ? openProp : openState;
+  const setOpen = useCallback((next: boolean | ((was: boolean) => boolean)) => {
+    const value = typeof next === 'function' ? next(open) : next;
+    if (!controlled) setOpenState(value);
+    onOpenChange?.(value);
+  }, [controlled, onOpenChange, open]);
   const [playlists, setPlaylists] = useState<PlaylistWithVideos[]>([]);
   const [loading, setLoading] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -73,10 +84,10 @@ export default function SaveToPlaylist({ videoId, channelId: channelIdProp, clas
   const createdHere = useRef(new Map<string, PlaylistWithVideos>());
 
   const loadPlaylists = useCallback(async () => {
-    if (!channelId) return;
     setLoading(true);
     try {
-      const result = await listPlaylists({ channelId, limit: MAX_PLAYLISTS });
+      // The active channel's playlists, or (no channel) the user's personal ones
+      const result = await listPlaylists(channelId ? { channelId, limit: MAX_PLAYLISTS } : { mine: true, limit: MAX_PLAYLISTS });
       const loaded = result?.data || [];
       const loadedIds = new Set(loaded.map((p) => p.id));
       setPlaylists([...[...createdHere.current.values()].filter((p) => !loadedIds.has(p.id)), ...loaded]);
@@ -110,20 +121,20 @@ export default function SaveToPlaylist({ videoId, channelId: channelIdProp, clas
       document.removeEventListener('mousedown', onPointer);
       document.removeEventListener('keydown', onKey);
     };
-  }, [open]);
+  }, [open, setOpen]);
 
   if (!user) return null;
 
   const toggle = async (playlist: PlaylistWithVideos) => {
-    if (!channelId || pendingId) return;
+    if (pendingId) return;
     const contains = (playlist.videos || []).includes(videoId);
     const title = playlistName(playlist, isRTL ? 'ar' : 'en');
     setPendingId(playlist.id);
     setMessage(null);
 
     const result = contains
-      ? await removeVideoFromPlaylist(playlist.id, videoId, { channelId: playlist.channelId || channelId })
-      : await addVideoToPlaylist(playlist.id, { videoId }, { channelId: playlist.channelId || channelId });
+      ? await removeVideoFromPlaylist(playlist.id, videoId, { channelId: playlist.channelId || channelId || '' })
+      : await addVideoToPlaylist(playlist.id, { videoId }, { channelId: playlist.channelId || channelId || '' });
 
     setPendingId(null);
 
@@ -145,7 +156,7 @@ export default function SaveToPlaylist({ videoId, channelId: channelIdProp, clas
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!channelId || creating) return;
+    if (creating) return;
     const title = normalizePlaylistTitle(newTitle);
     if (!title) {
       setMessage({ type: 'error', text: t.playlist.nameRequired });
@@ -154,7 +165,8 @@ export default function SaveToPlaylist({ videoId, channelId: channelIdProp, clas
 
     setCreating(true);
     setMessage(null);
-    const created = await createPlaylist({ name: title, isPublic: newIsPublic }, { channelId });
+    // No channel header without an active channel: a personal playlist, the user's own
+    const created = await createPlaylist({ name: title, isPublic: newIsPublic }, { channelId: channelId || '' });
     const playlist = created?.result?.playlist;
 
     if (!created?.success || !playlist) {
@@ -164,7 +176,7 @@ export default function SaveToPlaylist({ videoId, channelId: channelIdProp, clas
       return;
     }
 
-    const added = await addVideoToPlaylist(playlist.id, { videoId }, { channelId });
+    const added = await addVideoToPlaylist(playlist.id, { videoId }, { channelId: channelId || '' });
     setCreating(false);
     setNewTitle('');
 
@@ -183,17 +195,18 @@ export default function SaveToPlaylist({ videoId, channelId: channelIdProp, clas
 
   return (
     <div ref={containerRef} className={`relative inline-block ${className}`} dir={isRTL ? 'rtl' : 'ltr'}>
-      <button
+      {!controlled && <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="dialog"
         aria-expanded={open}
+        data-testid="save-to-playlist-button"
         title={t.playlist.saveToPlaylist}
         className="inline-flex items-center gap-2 px-4 py-2 border dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors dark:text-white"
       >
         <ListPlus size={20} />
         <span className="wa-label">{t.playlist.saveToPlaylist}</span>
-      </button>
+      </button>}
 
       {open && (
         <div
@@ -215,9 +228,7 @@ export default function SaveToPlaylist({ videoId, channelId: channelIdProp, clas
             </button>
           </div>
 
-          {!channelId ? (
-            <p className="px-4 py-4 text-sm text-gray-600 dark:text-gray-400">{t.playlist.channelRequired}</p>
-          ) : (
+          {(
             <>
               <div className="max-h-64 overflow-y-auto py-2">
                 {loading && playlists.length === 0 ? (
@@ -252,7 +263,7 @@ export default function SaveToPlaylist({ videoId, channelId: channelIdProp, clas
                 )}
               </div>
 
-              <form onSubmit={handleCreate} className="border-t dark:border-gray-700 p-3 space-y-2">
+              <form onSubmit={handleCreate} className="border-t dark:border-gray-700 p-3 space-y-2" data-testid="save-to-playlist-create">
                 <label className="sr-only" htmlFor={`new-playlist-${videoId}`}>{t.playlist.nameLabel}</label>
                 <input
                   id={`new-playlist-${videoId}`}

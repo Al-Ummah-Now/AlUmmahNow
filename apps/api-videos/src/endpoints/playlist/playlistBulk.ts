@@ -18,7 +18,7 @@ import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { ResponseError } from "../../lib/types";
-import type { PlaylistType } from "../../lib/playlists";
+import { playlistVisibility, type PlaylistType } from "../../lib/playlists";
 import {
 	bulkAddVideos,
 	canManagePlaylist,
@@ -70,7 +70,7 @@ async function notify(c: AppContext, playlist: PlaylistType, userId: string, ext
 	await new Queue(c.env.queue).send(MessageType.PlaylistEdit, {
 		playlistId: playlist.id,
 		userId,
-		channelId: playlist.channelId,
+		...(playlist.channelId ? { channelId: playlist.channelId } : {}),
 		timestamp: new Date().toISOString(),
 		...extra,
 	});
@@ -206,7 +206,7 @@ export class PlaylistManageItems extends AuthenticatedRoute {
 						schema: z.object({
 							success: z.boolean(),
 							result: z.object({
-								playlist: z.object({ id: z.string(), title: z.string(), titleLocalized: z.record(z.string()).optional(), description: z.string().optional(), descriptionLocalized: z.record(z.string()).optional(), isPublic: z.boolean(), thumbnailUrl: z.string().optional(), coverVideoId: z.string().optional(), channelId: z.string(), videosCount: z.number(), sortMode: z.enum(["manual", "auto"]), sortField: z.string(), sortDirection: z.enum(["asc", "desc"]) }),
+								playlist: z.object({ id: z.string(), title: z.string(), titleLocalized: z.record(z.string()).optional(), description: z.string().optional(), descriptionLocalized: z.record(z.string()).optional(), isPublic: z.boolean(), isUnlisted: z.boolean().optional(), visibility: z.enum(["public", "unlisted", "private"]).optional(), thumbnailUrl: z.string().optional(), coverVideoId: z.string().optional(), channelId: z.string().describe("'' for a personal playlist"), videosCount: z.number(), sortMode: z.enum(["manual", "auto"]), sortField: z.string(), sortDirection: z.enum(["asc", "desc"]) }),
 								items: z.array(z.object({ id: z.string(), position: z.number(), video: z.object({ id: z.string(), title: z.string() }).passthrough().nullable() })),
 								nextOffset: z.number().nullable(),
 							}),
@@ -239,9 +239,11 @@ export class PlaylistManageItems extends AuthenticatedRoute {
 					...(playlist.description ? { description: playlist.description } : {}),
 					...(playlist.descriptionLocalized ? { descriptionLocalized: playlist.descriptionLocalized } : {}),
 					isPublic: playlist.isPublic !== false,
+					...(playlist.isUnlisted ? { isUnlisted: true } : {}),
+					visibility: playlistVisibility(playlist),
 					...(playlist.thumbnailUrl ? { thumbnailUrl: playlist.thumbnailUrl } : {}),
 					...(playlist.coverVideoId ? { coverVideoId: playlist.coverVideoId } : {}),
-					channelId: playlist.channelId,
+					channelId: playlist.channelId || '',
 					videosCount: total,
 					...playlistSortOf(playlist),
 				},

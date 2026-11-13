@@ -138,8 +138,8 @@ export function LibraryHubView({ dir }: { dir: 'ltr' | 'rtl' }) {
   );
   const playlists = useSection<PlaylistWithVideos>(
     useCallback(async () => {
-      if (!channelId) return { items: [] };
-      const page = await listPlaylists({ channelId, limit: PREVIEW });
+      // The active channel's playlists, or (no channel) the user's personal ones
+      const page = await listPlaylists(channelId ? { channelId, limit: PREVIEW } : { mine: true, limit: PREVIEW });
       return page ? { items: page.data || [] } : null;
     }, [channelId]),
     enabled,
@@ -209,8 +209,8 @@ export function LibraryHubView({ dir }: { dir: 'ltr' | 'rtl' }) {
         id="playlists"
         title={texts.playlists}
         icon={<ListVideo className="h-5 w-5" />}
-        seeAllHref={channelId ? `/${lang}/channels/${channelId}?tab=playlists` : null}
-        empty={channelId ? texts.emptyPlaylists : texts.createChannelForPlaylists}
+        seeAllHref={channelId ? `/${lang}/channels/${channelId}?tab=playlists` : `/${lang}/library/playlists`}
+        empty={texts.emptyPlaylists}
         state={playlists.state}
         retry={playlists.retry}
         keyOf={(p) => p.id}

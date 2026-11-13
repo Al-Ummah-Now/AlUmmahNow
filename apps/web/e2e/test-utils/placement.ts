@@ -158,6 +158,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/release/multi-account.spec.ts': { placement: 'local', reason: 'web cookie split and account switcher; mock issuer must honour prompt=login' },
   'apps/web/e2e/release/network-error.player.spec.ts': { placement: 'local', reason: 'player retry UI with CDN aborted by route' },
   'apps/web/e2e/release/page-frame.spec.ts': { placement: 'local', reason: 'header/sidebar/tab bar layout, Upload states' },
+  'apps/web/e2e/release/playlists-no-channel.spec.ts': { placement: 'local', reason: 'a viewer without a channel creates a personal playlist with Save (watch page and card menu), sees it under You, makes it Unlisted, plays it and deletes it (en/ar); own creator/videos/viewer' },
   'apps/web/e2e/release/playlist-playback.player.spec.ts': { placement: 'local', reason: 'playlist order, autoplay and pane over its own uploads; fake Bunny HLS plays locally' },
   'apps/web/e2e/release/seamless-next.player.spec.ts': { placement: 'local', reason: 'same player element across Next, auto-advance and Back, and the phone pin, over its own uploads; fake Bunny HLS plays locally' },
   'apps/web/e2e/release/player-a11y.player.spec.ts': { placement: 'local', reason: 'player a11y, touch, analytics route' },

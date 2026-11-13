@@ -8,7 +8,7 @@
  */
 
 import React from 'react';
-import { Lock, Globe, Hand, ArrowDownUp } from 'lucide-react';
+import { Lock, Globe, Hand, ArrowDownUp, Link2 } from 'lucide-react';
 import {
   PLAYLIST_SORT_FIELDS,
   type PlaylistSortDirection,
@@ -28,6 +28,8 @@ export interface PlaylistDetailsValue {
   descriptionEn: string;
   descriptionAr: string;
   isPublic: boolean;
+  /** With isPublic false: link-only (anyone with the link, never listed) instead of private */
+  isUnlisted?: boolean;
   sortMode: PlaylistSortMode;
   sortField: PlaylistSortField;
   sortDirection: PlaylistSortDirection;
@@ -43,6 +45,12 @@ export const EMPTY_PLAYLIST_DETAILS: PlaylistDetailsValue = {
   sortField: 'added',
   sortDirection: 'desc',
 };
+
+/** The API visibility of the chosen details: public, unlisted (link-only) or private. */
+export function detailsVisibility(value: Pick<PlaylistDetailsValue, 'isPublic' | 'isUnlisted'>): 'public' | 'unlisted' | 'private' {
+  if (value.isPublic) return 'public';
+  return value.isUnlisted ? 'unlisted' : 'private';
+}
 
 export const PLAYLIST_TITLE_MAX = 150;
 export const PLAYLIST_DESCRIPTION_MAX = 5000;
@@ -224,11 +232,11 @@ export default function PlaylistDetailsFields({ value, onChange, idPrefix, compa
 
       <fieldset>
         <legend className={LABEL}>{t.playlist.visibilityLabel}</legend>
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid gap-2 sm:grid-cols-3">
           <ChoiceCard
             name={`${idPrefix}-visibility`}
             checked={value.isPublic}
-            onSelect={() => set({ isPublic: true })}
+            onSelect={() => set({ isPublic: true, isUnlisted: false })}
             icon={<Globe className="h-4 w-4" aria-hidden="true" />}
             title={t.playlist.publicLabel}
             help={t.playlist.publicDescription}
@@ -236,8 +244,17 @@ export default function PlaylistDetailsFields({ value, onChange, idPrefix, compa
           />
           <ChoiceCard
             name={`${idPrefix}-visibility`}
-            checked={!value.isPublic}
-            onSelect={() => set({ isPublic: false })}
+            checked={!value.isPublic && value.isUnlisted === true}
+            onSelect={() => set({ isPublic: false, isUnlisted: true })}
+            icon={<Link2 className="h-4 w-4" aria-hidden="true" />}
+            title={t.playlist.unlistedLabel}
+            help={t.playlist.unlistedDescription}
+            disabled={disabled}
+          />
+          <ChoiceCard
+            name={`${idPrefix}-visibility`}
+            checked={!value.isPublic && value.isUnlisted !== true}
+            onSelect={() => set({ isPublic: false, isUnlisted: false })}
             icon={<Lock className="h-4 w-4" aria-hidden="true" />}
             title={t.playlist.privateLabel}
             help={t.playlist.privateDescription}

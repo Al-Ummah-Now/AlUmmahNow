@@ -15,7 +15,8 @@ export class PlaylistDelete extends AuthenticatedRoute {
                 id: Str({ description: "Playlist ID" }),
             }),
 			headers: z.object({
-				channelId: Str({ description: "Channel ID" }),
+				// Absent reaches the schema as null (#1139): no channel = a personal playlist
+				channelId: Str({ description: "The caller's active channel; optional" }).optional().nullable(),
 			}),
         },
         responses: {
@@ -54,7 +55,7 @@ export class PlaylistDelete extends AuthenticatedRoute {
 
         // Retrieve the validated playlist ID
         const { id } = request.params;
-		const { channelId } = request.headers;
+		const channelId = request.headers.channelId || null;
         const userId = this.getUserId(c);
 
         // Fetch the playlist first to check ownership and privacy
@@ -90,7 +91,7 @@ export class PlaylistDelete extends AuthenticatedRoute {
         await queue.send(MessageType.PlaylistDelete, {
             playlistId: id,
             userId: userId,
-            channelId: channelId,
+            ...(channelId ? { channelId } : {}),
             timestamp: new Date().toISOString(),
         });
 

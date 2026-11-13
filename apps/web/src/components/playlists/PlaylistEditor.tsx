@@ -53,10 +53,11 @@ import { pairOf, pairPayload, playlistName } from '@/lib/playlists/playlist-name
 import { getPlaylistHref } from '@/lib/playlists/playlist-utils';
 import '@/theme/playlist-tools.css';
 import BulkAddNotice, { type BulkAddOutcome } from './BulkAddNotice';
-import PlaylistDetailsFields, { PlaylistSortFields, type PlaylistDetailsValue } from './PlaylistDetailsFields';
+import PlaylistDetailsFields, { PlaylistSortFields, detailsVisibility, type PlaylistDetailsValue } from './PlaylistDetailsFields';
 import VideoPicker, { type PickedVideo } from './VideoPicker';
 import { counted, fill, formatDuration, localTitle } from './text';
 import { LABEL, MUTED, NOTICE, TEXT } from './styles';
+import { managePlaylistsHref } from '@/components/PlaylistManager';
 
 interface Props {
   channelId: string;
@@ -84,6 +85,7 @@ function detailsOf(meta: Meta): PlaylistDetailsValue {
     descriptionEn: about.en,
     descriptionAr: about.ar,
     isPublic: meta.isPublic,
+    isUnlisted: meta.isUnlisted === true,
     sortMode: meta.sortMode,
     sortField: meta.sortField,
     sortDirection: meta.sortDirection,
@@ -293,10 +295,11 @@ export default function PlaylistEditor({ channelId, playlistId, initialJobId }: 
         description: about.base,
         descriptionLocalized: about.localized,
         isPublic: details.isPublic,
+        visibility: detailsVisibility(details),
         coverVideoId: cover,
       }, { channelId });
       if (answer.ok) {
-        setMeta({ ...meta, title, titleLocalized: name.localized, description: about.base, descriptionLocalized: about.localized, isPublic: details.isPublic, coverVideoId: cover ?? undefined });
+        setMeta({ ...meta, title, titleLocalized: name.localized, description: about.base, descriptionLocalized: about.localized, isPublic: details.isPublic, isUnlisted: !details.isPublic && details.isUnlisted === true, coverVideoId: cover ?? undefined });
         setDetailsStatus({ tone: 'success', message: p.detailsSaved });
       } else {
         const ref = reportError(new Error('Saving playlist details failed'), { shown: true, status: answer.status ?? undefined, extra: { step: 'playlist-details-save', playlistId } });
@@ -452,7 +455,9 @@ export default function PlaylistEditor({ channelId, playlistId, initialJobId }: 
 
   // ── Render ────────────────────────────────────────────────────────────
   const Back = isRTL ? ArrowRight : ArrowLeft;
-  const allHref = `/${lang}/settings/channel/${channelId}/playlists`;
+  const allHref = managePlaylistsHref(lang, channelId);
+  // A personal playlist (no channel): videos come from Save on any video, not a channel's picker
+  const personal = !channelId;
 
   if (loadError && !meta) {
     return (
@@ -543,7 +548,7 @@ export default function PlaylistEditor({ channelId, playlistId, initialJobId }: 
               {p.videosHeading}
               <span className={`ms-2 text-sm font-normal ${MUTED}`} data-testid="playlist-item-count">{counted(items.length, p.countOne, p.countOther)}</span>
             </h2>
-            {!picking && (
+            {!picking && !personal && (
               <button type="button" className="b b-primary b-sm" onClick={() => setPicking(true)} data-testid="playlist-add-videos">
                 <ListPlus className="h-4 w-4" aria-hidden="true" />
                 {p.addVideos}
@@ -570,7 +575,9 @@ export default function PlaylistEditor({ channelId, playlistId, initialJobId }: 
             </div>
           )}
 
-          {picking && (
+          {personal && <p className={`text-sm ${MUTED}`} data-testid="playlist-personal-add-hint">{t.playlist.personalAddVideosHint}</p>}
+
+          {picking && !personal && (
             <div className="pl-tray space-y-3 rounded-[var(--r-lg)] p-4" data-testid="playlist-add-panel">
               <div className="flex items-center justify-between gap-2">
                 <h3 className={`font-semibold ${TEXT}`}>{p.pickerTitle}</h3>

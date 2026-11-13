@@ -75,7 +75,7 @@
   "apps/web/src/components/PlaylistView/index.tsx": 58,
   "apps/web/src/components/ProfileGuard/index.tsx": 15,
   "apps/web/src/components/SaveButton/index.tsx": 14,
-  "apps/web/src/components/SaveToPlaylist/index.tsx": 35,
+  "apps/web/src/components/SaveToPlaylist/index.tsx": 33,
   "apps/web/src/components/TabManagement/SortableTabItem.tsx": 33,
   "apps/web/src/components/TabManagement/index.tsx": 26,
   "apps/web/src/components/UploadButton/index.tsx": 6,
