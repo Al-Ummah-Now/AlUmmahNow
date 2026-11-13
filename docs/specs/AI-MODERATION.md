@@ -69,7 +69,7 @@ Admins can tune thresholds and actions per category, per surface and per languag
 | Purpose | Model (Workers AI) | Notes |
 |---|---|---|
 | Text safety (base categories) | `@cf/meta/llama-guard-3-8b` | **Arabic is not among its listed languages.** Used on English text and on English translations of Arabic text |
-| Arabic → English for safety | `@cf/meta/m2m100-1.2b` | Translate, then Llama Guard; keep the original for reviewers |
+| Arabic → English for safety | `@cf/google/gemma-4-26b-a4b-it` (m2m100 retired 2026-11-13: unusable for Arabic, #813; owner decision VR3) | Translate, then Llama Guard; keep the original for reviewers |
 | Platform extensions + Arabic native pass | A multilingual instruction model with JSON output (candidates: `@cf/meta/llama-4-scout-17b-16e-instruct`, `@cf/qwen/...`, `@cf/mistralai/mistral-small-3.1-24b-instruct`) | Chosen by eval (section 8); prompt contains our policy, few-shot Arabic/English examples and an Islamic-context allow list |
 | Images / video frames | `@cf/meta/llama-3.2-11b-vision-instruct` or `llama-4-scout` (vision) | Structured JSON verdict; frames sampled every N seconds + scene changes |
 | Speech-to-text | `@cf/openai/whisper-large-v3-turbo` | Transcripts feed text safety; **bonus:** draft captions for creators |

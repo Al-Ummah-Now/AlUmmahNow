@@ -74,9 +74,10 @@ describe('golden set (mocked Workers AI)', () => {
     const byText = new Map(items.map((i) => [i.text, i]));
     const ai: AiBinding = {
       run: async (model, input) => {
-        if (model.includes('m2m100')) return { translated_text: `EN:${String(input.text)}` };
         const messages = input.messages as { role: string; content: string }[];
         const content = messages[messages.length - 1].content.replace(/^<content>|<\/content>$/g, '');
+        // Gemma 4 translates (VR3, #813): its translation is a marked copy of the text
+        if (String(messages[0]?.content ?? '').startsWith('Translate')) return { response: `EN:${content}` };
         const item = byText.get(content.replace(/^EN:/, ''))!;
         if (model.includes('llama-guard')) {
           return item.label in LLAMA_GUARD_CATEGORIES ? { response: `unsafe\n${item.label}` } : { response: { safe: true, categories: [] } };
