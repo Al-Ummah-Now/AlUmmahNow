@@ -7,6 +7,8 @@ import { pruneErrorData } from './errors-store';
 import { logger } from './logger';
 import type { D1Database } from './types';
 
+// QA's bucket (al-ummah-now-sourcemaps-qa) also has an R2 lifecycle rule, `expire-14d`, set 2026-11-13:
+// QA deploys add 2-4 GB of maps a day, more than this daily prune's 20 list pages delete.
 export const SOURCEMAP_RETENTION_DAYS = 90;
 
 export interface ListableBucket {

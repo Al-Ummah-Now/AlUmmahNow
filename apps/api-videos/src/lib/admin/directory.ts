@@ -111,6 +111,12 @@ export function pageOf(page?: number, pageSize?: number): { page: number; pageSi
 	return { page: p, pageSize: size, offset: (p - 1) * size };
 }
 
+/** A short, stable cache key for a list filter (its SQL and bound values). */
+export async function filterKey(sql: string, binds: unknown[]): Promise<string> {
+	const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify([sql, binds])));
+	return [...new Uint8Array(digest).slice(0, 12)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 /** The COUNT row, or -1 when the caller skipped it (noTotal). */
 const totalOf = (row: { n: number } | null | undefined): number => (row === null ? -1 : Number(row?.n) || 0);
 
@@ -245,7 +251,12 @@ export async function listChannels(env: AdminEnv, query: AdminChannelQuery, wait
 		where.push(`c.created_at <= ${n()}`);
 	}
 	const whereSql = where.join(' AND ');
-	const total = query.noTotal ? null : await db.prepare(`SELECT COUNT(*) AS n FROM ${OWNERSHIP_TABLE} c WHERE ${whereSql}`).bind(...binds).first<{ n: number }>();
+	// A searched count walks every channel plus every profile's email (~55k rows on QA), so it is reused
+	// for a minute per filter (cachedCount, as the users list); a picker skips it (noTotal).
+	const total = query.noTotal
+		? -1
+		: await cachedCount(db, `channels:${await filterKey(whereSql, binds)}`, () =>
+				db.prepare(`SELECT COUNT(*) AS n FROM ${OWNERSHIP_TABLE} c WHERE ${whereSql}`).bind(...binds).first<{ n: number }>().then((r) => Number(r?.n) || 0));
 	const { results } = await db
 		.prepare(
 			`SELECT c.*, (SELECT COALESCE(SUM(v.views), 0) FROM ${OWNERSHIP_TABLE} v WHERE v.kind = 'video' AND v.channel_id = c.id AND v.is_deleted = 0) AS total_views
@@ -254,7 +265,7 @@ export async function listChannels(env: AdminEnv, query: AdminChannelQuery, wait
 		.bind(...binds)
 		.all<Row>();
 	const rows = results ?? [];
-	return { items: await hydrateChannels(env, rows), total: totalOf(total), page, pageSize, indexComplete };
+	return { items: await hydrateChannels(env, rows), total, page, pageSize, indexComplete };
 }
 
 /** Index rows → AdminChannelRow, with R2 for names/avatars and D1 for subscriber counts. */
