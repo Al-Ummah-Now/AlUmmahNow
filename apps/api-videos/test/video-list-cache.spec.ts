@@ -113,6 +113,8 @@ describe('changesVideoList', () => {
 			['PATCH', '/api/videos/bulk'],
 			['POST', '/api/videos/bulk-delete'],
 			['POST', '/api/videos/bulk/undo'],
+			['PUT', '/api/channels/c1'],
+			['DELETE', '/api/channels/c1'],
 			['POST', '/api/moderation/actions'],
 			['POST', '/internal/admin/videos/v1/unpublish'],
 			['DELETE', '/internal/admin/deletions/video/v1'],
@@ -132,6 +134,8 @@ describe('changesVideoList', () => {
 			['PUT', '/api/videos/v1/chapters'],
 			['DELETE', '/api/videos/v1/subtitles/en'],
 			['GET', '/internal/admin/videos'],
+			['GET', '/api/channels/c1'],
+			['POST', '/api/channels/c1/subscriptions'],
 		]) {
 			assert.equal(changesVideoList(method, path), false, `${method} ${path}`);
 		}

@@ -50,7 +50,8 @@ const VIDEO_ID = '[^/]+';
 /**
  * Requests that can change which videos the list shows, or how a card looks
  * (title, thumbnail): deletes and restores, edits (visibility included),
- * thumbnails, schedules, bulk edits, admin and moderation actions. Views,
+ * thumbnails, schedules, bulk edits, channel edits and deletes (cards show the
+ * channel's name), admin and moderation actions. Views,
  * likes, comments, chapters and subtitles do not, so they keep the cache.
  */
 const LIST_CHANGES: Array<{ methods: string[]; path: RegExp }> = [
@@ -60,6 +61,7 @@ const LIST_CHANGES: Array<{ methods: string[]; path: RegExp }> = [
   { methods: ['PATCH', 'DELETE'], path: new RegExp(`^/api/videos/${VIDEO_ID}/schedule$`) },
   { methods: ['PATCH'], path: /^\/api\/videos\/bulk$/ },
   { methods: ['POST'], path: /^\/api\/videos\/(bulk\/undo|bulk-(delete|update|schedule|restore|purge))$/ },
+  { methods: ['PUT', 'DELETE'], path: /^\/api\/channels\/[^/]+$/ },
   { methods: ['POST', 'PUT', 'PATCH', 'DELETE'], path: /^\/api\/moderation\// },
   { methods: ['POST', 'PUT', 'PATCH', 'DELETE'], path: /^\/internal\/admin\/(videos|deletions|channels|users)\// },
 ];

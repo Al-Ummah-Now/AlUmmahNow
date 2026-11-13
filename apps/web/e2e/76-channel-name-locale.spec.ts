@@ -23,9 +23,14 @@ test.describe('Channel name in the page language', () => {
       const expected = lang === 'ar' ? 'قناة اختبار الاسم' : own.channelName();
       const other = lang === 'ar' ? own.channelName() : 'قناة اختبار الاسم';
 
-      await page.goto(`/${lang}`);
-      const card = await own.showCard(page);
-      await expect(card).toContainText(expected);
+      // Reloaded until it holds: other specs on the shard upload and rename at the same time, and the
+      // anonymous first page is cached for 30 s
+      let card = page.locator('[data-testid="video-card"]').first();
+      await expect(async () => {
+        await page.goto(`/${lang}`);
+        card = await own.showCard(page);
+        await expect(card).toContainText(expected, { timeout: 5_000 });
+      }).toPass({ timeout: 60_000 });
       await expect(card).not.toContainText(other);
       // YouTube style (owner, 2026-11-13): the card reads "views • 1 day ago"; its date's tooltip says
       // what the date is, with a verb and the exact date and time
