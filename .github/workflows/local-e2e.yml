@@ -382,7 +382,7 @@ jobs:
           code=0
           # Visual baselines are made here (Linux, the stack's own data): workflow_dispatch update_visual=true
           update=()
-          if [ "${UPDATE_VISUAL:-}" = "true" ]; then update=(--update-snapshots); fi
+          if [ "${UPDATE_VISUAL:-}" = "true" ]; then update=(--update-snapshots=all); fi
           pnpm exec playwright test --project=chromium --project=shared-state --project=a11y --project=visual --shard="$SHARD" "${update[@]}" || code=$?
           # A shard that ran nothing is a broken split, never a pass (Playwright exits 0 on an empty shard)
           ran=$(node -e 'const s=require("./test-results/test-results.json").stats||{};console.log((s.expected||0)+(s.unexpected||0)+(s.flaky||0))' 2>/dev/null || echo 0)
