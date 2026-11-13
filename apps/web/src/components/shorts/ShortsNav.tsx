@@ -7,7 +7,7 @@
  * Page Up / Page Down, and a vertical swipe all do the same; each move is a normal navigation, so the
  * URL, history and the page's metadata follow, and the watch shell keeps the player mounted.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getApiUrl } from '@/lib/runtime-config';
@@ -34,19 +34,21 @@ export function ShortsNav() {
   const { t, locale } = useLanguage();
   const match = pathname ? SHORT_PATH.exec(pathname) : null;
   const id = match ? decodeURIComponent(match[2]) : null;
-  /** Shorts this tab moved through, so "previous" can go back */
-  const trail = useRef<string[]>([]);
+  /** Shorts this tab moved through, so "previous" can go back (state, not a ref: the buttons follow it) */
+  const [trail, setTrail] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [atEnd, setAtEnd] = useState(false);
 
   useEffect(() => {
     if (!id) return;
-    const at = trail.current.indexOf(id);
-    trail.current = at >= 0 ? trail.current.slice(0, at + 1) : [...trail.current, id];
+    setTrail((current) => {
+      const at = current.indexOf(id);
+      return at >= 0 ? current.slice(0, at + 1) : [...current, id];
+    });
     setAtEnd(false);
   }, [id]);
 
-  const canGoBack = !!id && trail.current.indexOf(id) > 0;
+  const canGoBack = !!id && trail.indexOf(id) > 0;
 
   const next = useCallback(async () => {
     if (!id || busy) return;
