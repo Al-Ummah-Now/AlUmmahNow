@@ -318,6 +318,7 @@ function transformTrendingVideoForResponse(video: any) {
     videoUrl: video.videoUrl,
     channelId: video.channelId || '',
     channelName: video.channelName,
+    channelNameLocalized: video.channelNameLocalized,
     channelAvatarUrl: video.channelAvatarUrl,
     dateCreated: video.dateCreated || new Date().toISOString(),
     views: video.views || 0,

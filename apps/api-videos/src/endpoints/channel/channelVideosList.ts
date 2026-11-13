@@ -12,6 +12,7 @@ import { waitUntilOf } from "../../lib/search/ownership";
 import { channelVideosFromIndex } from "../../lib/search/channelVideoIndex";
 import { scanFill } from "../../lib/listFill";
 import { PUBLIC_DISLIKES_COUNT } from "../../lib/reactions";
+import { channelNameFields } from '../../lib/channelName';
 
 export class ChannelVideosList extends OptionalAuthRoute {
 	schema = {
@@ -224,7 +225,7 @@ export class ChannelVideosList extends OptionalAuthRoute {
 			const transformToView = (video: VideoType) => ({
 				...publicVideoFields(video),
 				...uploaderProcessingIssue(video, channel, userId),
-				channelName: channel.name || "",
+				...channelNameFields(channel),
 				channelAvatarUrl: channel.avatarUrl || undefined,
 				likesCount: video.likes?.length || 0,
 				dislikesCount: PUBLIC_DISLIKES_COUNT,

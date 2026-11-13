@@ -20,6 +20,8 @@ import { orderedPlaylist } from "../../lib/playlistOrder";
 import { LIST_ALIASES, QUEUE_PAGE_MAX, listAliasOf, queueItems, queueWindow, visibleEntries, type QueueKind } from "../../lib/playlistQueue";
 import { playlistSortOf } from "@al-ummah/shared-types";
 import type { VideoType } from "../../lib/playlists";
+import { channelNameFields } from '../../lib/channelName';
+import { channelNamesByIds } from '../../lib/channelNames';
 
 const notFound = (c: AppContext) => c.json({ success: false, error: "Playlist not found" }, 404);
 
@@ -90,7 +92,7 @@ export class PlaylistQueue extends OptionalAuthRoute {
 				title: playlist.title || "",
 				...(extra.titleLocalized ? { titleLocalized: extra.titleLocalized } : {}),
 				channelId: playlist.channelId || null,
-				channelName: channel?.name || "",
+				...channelNameFields(channel),
 				channelHandle: channel?.handle || null,
 				isPublic: playlist.isPublic !== false,
 				...playlistSortOf(playlist),
@@ -99,14 +101,7 @@ export class PlaylistQueue extends OptionalAuthRoute {
 
 		const { entries, exact, videos } = await visibleEntries(c.env, ids, userId, known);
 		const window = queueWindow(entries, { video: query.video, index: query.index, offset: query.offset, limit: query.limit, exact });
-		const items = await queueItems(c.env, window, userId, videos, async (channelIds) => {
-			const names = new Map<string, string>();
-			await Promise.all(channelIds.map(async (id) => {
-				const channel = await channelRepo.getObject(id).catch(() => null);
-				if (channel?.name) names.set(id, channel.name);
-			}));
-			return names;
-		});
+		const items = await queueItems(c.env, window, userId, videos, (channelIds) => channelNamesByIds(c.env.channels, channelIds));
 
 		logger.debug("[PlaylistQueue] Served", { list: alias ?? params.id, total: window.total, exact, position: window.position, returned: items.length });
 		// Per viewer (private items, aliases): never shared by a cache

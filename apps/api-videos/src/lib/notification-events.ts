@@ -12,6 +12,7 @@ import R2Repository from './r2Repo';
 import { logger } from './logger';
 import { enqueueFanout, NotificationsEnv } from './notifications';
 import { isVideoPubliclyVisible } from './visibility';
+import { channelNameParams, type NamedChannel } from './channelName';
 
 interface PublishableVideo {
 	id: string;
@@ -47,13 +48,13 @@ export function isHighlightVideo(video: VideoFormatInput): boolean {
 	return !isShort(video);
 }
 
-async function channelName(env: EventsEnv, channelId: string): Promise<string> {
+/** The channel's name as notification params, every language included (lib/channelName.ts). */
+async function channelNameParamsOf(env: EventsEnv, channelId: string): Promise<Record<string, string>> {
 	try {
-		const channel = await new R2Repository<{ name?: string }>(env.channels).getObject(channelId);
-		return channel?.name || '';
+		return channelNameParams(await new R2Repository<NamedChannel>(env.channels).getObject(channelId));
 	} catch (error) {
 		logger.warn('[notification-events] Channel lookup failed', { channelId, error });
-		return '';
+		return { channelName: '' };
 	}
 }
 
@@ -65,7 +66,7 @@ export async function announceNewVideo(env: EventsEnv, video: PublishableVideo):
 		channelId: video.channelId as string,
 		entityId: video.id,
 		isHighlight: isHighlightVideo(video),
-		params: { channelName: await channelName(env, video.channelId as string), videoTitle: video.title || '' },
+		params: { ...(await channelNameParamsOf(env, video.channelId as string)), videoTitle: video.title || '' },
 		actionUrl: `/video/${video.id}`,
 		actorUserId: video.userId,
 	});
@@ -82,7 +83,7 @@ export async function announceLiveStarted(
 		channelId: stream.channelId,
 		entityId: stream.id,
 		isHighlight: true,
-		params: { channelName: await channelName(env, stream.channelId), streamTitle: stream.title || '' },
+		params: { ...(await channelNameParamsOf(env, stream.channelId)), streamTitle: stream.title || '' },
 		// The live watch page (web /[locale]/live/[id])
 		actionUrl: `/live/${stream.id}`,
 		actorUserId: stream.userId,

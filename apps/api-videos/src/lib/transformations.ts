@@ -71,7 +71,7 @@ export function transformVideoToView(
         ...publicVideoFields(video),
         comments: publicComments,
         commentSettings: getCommentSettings(video),
-        channelName: channel?.name || "",
+        ...channelNameFields(channel),
         channelAvatarUrl: channel?.avatarUrl,
         channelCoverUrl: channel?.coverUrl,
         // Set only by admins (admin-api channel verification); not in the business schema
@@ -149,7 +149,7 @@ export function transformPlaylistToView(
         thumbnailUrl: playlist.thumbnailUrl,
         userId: playlist.userId,
         channelId: playlist.channelId,
-        channelName: channel?.name || "",
+        ...channelNameFields(channel),
         dateCreated: playlist.dateCreated,
         dateModified: playlist.dateModified,
         videosCount: playlist.videos?.length || 0,
@@ -224,6 +224,7 @@ export function createEntityDefaults() {
 
 import { ChannelSection, ChannelSectionView } from '@al-ummah/shared-types';
 import { hasValidSectionConsent } from './channelSectionAccess';
+import { channelNameFields } from './channelName';
 
 /**
  * Transform a channel section to its view model. `channel` (the section's

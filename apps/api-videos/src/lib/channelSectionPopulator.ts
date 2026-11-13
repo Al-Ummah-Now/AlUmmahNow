@@ -32,6 +32,7 @@ import { withPostCounts } from './post-counters';
 import { transformChannelSectionToView, transformVideoToView } from './transformations';
 import { hasValidSectionConsent } from './channelSectionAccess';
 import { clampItemCount, isListableChannel, isListablePlaylist, isListableVideo } from './channelSectionRules';
+import { channelNameFields } from './channelName';
 
 /**
  * Public-safe channel summary returned in populated section content.
@@ -428,7 +429,7 @@ async function getLiveStreams(channelId: string, limit: number, env: any, filter
     id: st.id,
     title: st.title,
     channelId: st.channelId,
-    channelName: channel?.name,
+    ...channelNameFields(channel),
     thumbnailUrl: st.thumbnailUrl,
     status: st.status,
     currentViewers: st.currentViewers,

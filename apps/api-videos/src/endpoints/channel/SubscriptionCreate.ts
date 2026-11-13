@@ -7,6 +7,7 @@ import { logger } from '../../lib/logger';
 import { inBackground, notifyUser } from '../../lib/websocket-notify';
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { changeSubscription } from "../../lib/subscription-store";
+import { channelNameParams } from "../../lib/channelName";
 
 const SubscriptionStatusResponse = z.object({
 	success: z.boolean(),
@@ -135,7 +136,7 @@ export class SubscriptionCreate extends AuthenticatedRoute {
 					await notifyUser(c.env, channel.userId, {
 						notificationType: 'subscription',
 						notificationKey: 'newSubscriber',
-						params: { channelName: channel.name || '' },
+						params: channelNameParams(channel),
 						actionUrl: `/channel/${id}`,
 					});
 				}

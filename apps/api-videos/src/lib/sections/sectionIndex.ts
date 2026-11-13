@@ -19,6 +19,7 @@ import R2Repository from '../r2Repo';
 import { isVideoPubliclyVisible } from '../visibility';
 import { calculateTrendingScore, calculateViewVelocity, calculateEngagementVelocity } from '../trendingAlgorithm';
 import { logger } from '../logger';
+import { withChannelNames } from '../channelNames';
 
 export type SectionSort = 'recent' | 'popular' | 'trending';
 export type TrendingAlgorithm = 'velocity' | 'engagement' | 'hybrid';
@@ -157,7 +158,7 @@ async function pageIds(db: Db, q: SectionQuery): Promise<{ ids: string[]; total:
  * A section page from the D1 search index, or null when it cannot be served
  * from there (SEARCH_DB not bound, query failed).
  */
-export async function sectionFromIndex(env: { SEARCH_DB?: unknown; videos: R2Bucket }, q: SectionQuery): Promise<SectionPage | null> {
+export async function sectionFromIndex(env: { SEARCH_DB?: unknown; videos: R2Bucket; channels?: R2Bucket }, q: SectionQuery): Promise<SectionPage | null> {
 	const db = env.SEARCH_DB as Db | undefined;
 	if (!db) return null;
 	q = {
@@ -175,7 +176,9 @@ export async function sectionFromIndex(env: { SEARCH_DB?: unknown; videos: R2Buc
 	// The objects themselves come from R2 (the source of truth; the index row may lag a write)
 	const repo = new R2Repository<VideoObject>(env.videos);
 	const objects = await Promise.all(found.ids.map((id) => repo.getObject(id).catch(() => null)));
-	const videos = objects.filter((v): v is VideoObject => isVideoPubliclyVisible(v) && (!q.category || v!.category === q.category));
+	const listed = objects.filter((v): v is VideoObject => isVideoPubliclyVisible(v) && (!q.category || v!.category === q.category));
+	// The channel's names per language, not only the default name copied at upload
+	const videos = (await withChannelNames(env.channels, listed)) as VideoObject[];
 	const end = q.offset + found.ids.length;
 	return {
 		videos,

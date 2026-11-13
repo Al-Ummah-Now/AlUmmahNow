@@ -26,6 +26,7 @@ import { logger } from '../logger';
 import R2Repository from '../r2Repo';
 import { choosePlayback, logDecision } from './playback';
 import type { MediaEnv } from './r2-delivery';
+import { channelNameFields } from '../channelName';
 
 /** One playable video, as both endpoints return it. */
 export interface PublicPlayItem {
@@ -212,7 +213,7 @@ export async function buildPublicPlay(
 		id,
 		format: classifyVideoFormat(video).format,
 		title: video.title ?? '',
-		channelName: channel?.name ?? '',
+		...channelNameFields(channel),
 		channelHandle: channel?.handle ? channel.handle : null,
 		width: positive(video.width),
 		height: positive(video.height),

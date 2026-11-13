@@ -5,6 +5,7 @@ import { CommunityPost, PostStatus } from '@al-ummah/shared-types';
 import { OptionalAuthRoute, AppContext } from '../../base';
 import { withPostCounts } from '../../lib/post-counters';
 import { logger } from '../../lib/logger';
+import { withChannelNames } from '../../lib/channelNames';
 
 export class GetCommunityPost extends OptionalAuthRoute {
   schema = {
@@ -77,7 +78,9 @@ export class GetCommunityPost extends OptionalAuthRoute {
       // Like / vote totals live in D1 (the processor no longer writes them into the document)
       await withPostCounts(c.env.NOTIFICATIONS_DB, [post]);
 
-      return c.json(post);
+      // The channel's name in every language (lib/channelNames.ts)
+      const [named] = await withChannelNames(c.env.channels, [post]);
+      return c.json(named);
     } catch (error) {
       logger.error('Error getting community post:', error);
       return c.json({ error: 'Failed to get post' }, 500);

@@ -6051,6 +6051,13 @@
                               "channelName": {
                                 "type": "string"
                               },
+                              "channelNameLocalized": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "string"
+                                },
+                                "description": "The channel's name per language (e.g. { en, ar }); show the page language's name, else channelName"
+                              },
                               "channelAvatarUrl": {
                                 "type": "string"
                               },
@@ -6549,6 +6556,13 @@
                           },
                           "channelName": {
                             "type": "string"
+                          },
+                          "channelNameLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            },
+                            "description": "The channel's name per language (e.g. { en, ar }); show the page language's name, else channelName"
                           },
                           "channelAvatarUrl": {
                             "type": "string"
@@ -8181,6 +8195,13 @@
                           "channelName": {
                             "type": "string"
                           },
+                          "channelNameLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            },
+                            "description": "The channel's name per language (e.g. { en, ar }); show the page language's name, else channelName"
+                          },
                           "channelAvatarUrl": {
                             "type": "string"
                           },
@@ -9563,6 +9584,13 @@
                           },
                           "channelName": {
                             "type": "string"
+                          },
+                          "channelNameLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            },
+                            "description": "The channel's name per language (e.g. { en, ar }); show the page language's name, else channelName"
                           },
                           "channelAvatarUrl": {
                             "type": "string"
@@ -17920,6 +17948,13 @@
                             "channelName": {
                               "type": "string"
                             },
+                            "channelNameLocalized": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              },
+                              "description": "The channel's name per language (e.g. { en, ar }); show the page language's name, else channelName"
+                            },
                             "dateCreated": {
                               "type": "string",
                               "format": "date-time"
@@ -18902,6 +18937,13 @@
                             },
                             "channelName": {
                               "type": "string"
+                            },
+                            "channelNameLocalized": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              },
+                              "description": "The channel's name per language (e.g. { en, ar }); show the page language's name, else channelName"
                             },
                             "dateCreated": {
                               "type": "string",
@@ -19899,6 +19941,13 @@
                             "channelName": {
                               "type": "string"
                             },
+                            "channelNameLocalized": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              },
+                              "description": "The channel's name per language (e.g. { en, ar }); show the page language's name, else channelName"
+                            },
                             "dateCreated": {
                               "type": "string",
                               "format": "date-time"
@@ -20673,6 +20722,13 @@
                             },
                             "channelName": {
                               "type": "string"
+                            },
+                            "channelNameLocalized": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              },
+                              "description": "The channel's name per language (e.g. { en, ar }); show the page language's name, else channelName"
                             },
                             "dateCreated": {
                               "type": "string",
@@ -25744,6 +25800,13 @@
                           "channelName": {
                             "type": "string"
                           },
+                          "channelNameLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            },
+                            "description": "The channel's name per language (e.g. { en, ar }); show the page language's name, else channelName"
+                          },
                           "channelAvatarUrl": {
                             "type": "string"
                           },
@@ -26250,6 +26313,13 @@
                             },
                             "channelName": {
                               "type": "string"
+                            },
+                            "channelNameLocalized": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              },
+                              "description": "The channel's name per language (e.g. { en, ar }); show the page language's name, else channelName"
                             },
                             "channelAvatarUrl": {
                               "type": "string"
@@ -29043,6 +29113,13 @@
                           },
                           "channelName": {
                             "type": "string"
+                          },
+                          "channelNameLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            },
+                            "description": "The channel's name per language (e.g. { en, ar }); show the page language's name, else channelName"
                           },
                           "channelAvatarUrl": {
                             "type": "string"
@@ -32445,6 +32522,13 @@
                     "channelName": {
                       "type": "string"
                     },
+                    "channelNameLocalized": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "description": "The channel's name per language (e.g. { en, ar }); show the page language's name, else channelName"
+                    },
                     "channelAvatarUrl": {
                       "type": "string"
                     },
@@ -32990,6 +33074,13 @@
                             },
                             "channelName": {
                               "type": "string"
+                            },
+                            "channelNameLocalized": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              },
+                              "description": "The channel's name per language (e.g. { en, ar }); show the page language's name, else channelName"
                             },
                             "channelAvatarUrl": {
                               "type": "string"

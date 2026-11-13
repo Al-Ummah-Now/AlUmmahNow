@@ -14,6 +14,7 @@ import R2Repository from './r2Repo';
 import Queue, { MessageType } from './queue';
 import { logger } from './logger';
 import { canViewVideo, type VideoType } from './playlists';
+import { channelNamesByIds } from './channelNames';
 
 interface ProfileWithHistorySettings {
 	id: string;
@@ -99,22 +100,20 @@ export async function resolveVideoChannelName(
 }
 
 /**
- * Fill in channel names for entries stored without one (recorded before #294
- * was fixed). One lookup per distinct channel; entries are not rewritten.
+ * Each entry with its channel's names: `channelName` and, per language,
+ * `channelNameLocalized` (lib/channelName.ts), so the history and "continue
+ * watching" show the name in the page's language. Entries stored without a name
+ * (recorded before #294 was fixed) get one too. One read per distinct channel;
+ * a channel that cannot be read keeps the stored name. Entries are not rewritten.
  */
 export async function withChannelNames<T extends { channelId?: string; channelName?: string }>(
   channels: R2Bucket | undefined,
   entries: T[],
-): Promise<T[]> {
-  const missing = (e: T) => !!e.channelId && (!e.channelName || e.channelName === UNKNOWN_CHANNEL_NAME);
-  const ids = [...new Set(entries.filter(missing).map(e => e.channelId as string))];
-  if (!ids.length) return entries;
-  const names = new Map<string, string | null>(
-    await Promise.all(ids.map(async id => [id, await channelNameById(channels, id)] as const)),
-  );
+): Promise<Array<T & { channelNameLocalized?: Record<string, string> }>> {
+  const names = await channelNamesByIds(channels, entries.map(e => e.channelId));
   return entries.map(e => {
-    const name = missing(e) ? names.get(e.channelId as string) : null;
-    return name ? { ...e, channelName: name } : e;
+    const named = e.channelId ? names.get(e.channelId) : undefined;
+    return named ? { ...e, ...named } : e;
   });
 }
 
