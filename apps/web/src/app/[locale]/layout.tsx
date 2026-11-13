@@ -12,6 +12,8 @@ import { logger } from '@/lib/logger-client';
  */
 
 import React from 'react';
+import type { Metadata } from 'next';
+import { getTranslations } from '@/lib/i18n/utils/getTranslations';
 import { notFound } from 'next/navigation';
 import ProfileGuard from '@/components/ProfileGuard';
 import { HtmlLocaleAttributes } from '@/components/HtmlLocaleAttributes';
@@ -21,6 +23,16 @@ import { isLocaleSupported, getTextDirection } from '@/lib/i18n/utils';
 interface LocaleLayoutProps {
   children: React.ReactNode;
   params: Promise<{ locale: string }>;
+}
+
+/**
+ * The site name in the page's language: the title of every page that does not set its own
+ * (home included), so /ar pages never carry the English name.
+ */
+export async function generateMetadata({ params }: Pick<LocaleLayoutProps, 'params'>): Promise<Metadata> {
+  const { locale } = await params;
+  if (!isLocaleSupported(locale)) return {};
+  return { title: getTranslations(locale === 'ar' ? 'ar' : 'en').common.appName };
 }
 
 /**

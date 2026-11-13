@@ -70,7 +70,7 @@ describe('SearchBar', () => {
     expect(push).toHaveBeenLastCalledWith('/en/@seerah');
     await type('seerah');
     fireEvent.click(screen.getAllByTestId('search-suggestion')[1]);
-    expect(push).toHaveBeenLastCalledWith('/en/video?vid=v1');
+    expect(push).toHaveBeenLastCalledWith('/en/video/v1');
     await type('seerah p');
     fireEvent.click(screen.getAllByTestId('search-suggestion')[2]);
     expect(push).toHaveBeenLastCalledWith('/en/playlist/p1');

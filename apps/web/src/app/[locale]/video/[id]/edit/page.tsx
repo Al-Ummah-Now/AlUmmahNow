@@ -95,12 +95,12 @@ export default function VideoEditPage() {
     setVideo(updatedVideo);
     // Redirect to video page after successful save
     setTimeout(() => {
-      router.push(`/${lang}/video?vid=${videoId}`);
+      router.push(`/${lang}/video/${encodeURIComponent(videoId)}`);
     }, 1500);
   };
 
   const handleCancel = () => {
-    router.push(`/${lang}/video?vid=${videoId}`);
+    router.push(`/${lang}/video/${encodeURIComponent(videoId)}`);
   };
 
   if (!user) {

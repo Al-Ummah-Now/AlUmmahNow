@@ -47,7 +47,7 @@ test.describe('Homepage - English', () => {
 
     const cards = page.getByTestId('video-card');
     await expect(cards.first()).toBeVisible();
-    await expect(cards.first()).toHaveAttribute('href', /^\/en\/video\?vid=/);
+    await expect(cards.first()).toHaveAttribute('href', /^\/en\/video\/[\w-]+$/);
     await expect(page.getByTestId('video-grid-loading')).toHaveCount(0);
   });
 
@@ -80,7 +80,7 @@ test.describe('Homepage - Arabic (RTL)', () => {
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     const main = page.getByRole('main');
     await expect(main).toHaveCSS('direction', 'rtl');
-    await expect(await own.showCard(page)).toHaveAttribute('href', /^\/ar\/video\?vid=/);
+    await expect(await own.showCard(page)).toHaveAttribute('href', /^\/ar\/video\/[\w-]+$/);
   });
 });
 

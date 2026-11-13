@@ -131,11 +131,20 @@ export function toEmbedVideo(video: ApiVideo | null | undefined): EmbedVideo | n
   };
 }
 
-async function anonymousGet<T>(path: string): Promise<T | null> {
+/**
+ * An anonymous API answer: `status` is the HTTP status, or null when the API
+ * could not be reached (or API_URL is missing); `data` only on a 2xx.
+ */
+export interface AnonymousResult<T> {
+  status: number | null;
+  data: T | null;
+}
+
+async function anonymousGetResult<T>(path: string): Promise<AnonymousResult<T>> {
   const base = apiBase();
   if (!base) {
     logger.error('[embed] API_URL is not configured');
-    return null;
+    return { status: null, data: null };
   }
   try {
     const response = await fetch(`${base}${path}`, {
@@ -144,21 +153,33 @@ async function anonymousGet<T>(path: string): Promise<T | null> {
       // Signed playback URLs expire: never serve a cached copy
       cache: 'no-store',
     });
-    if (response.status === 404) return null;
+    if (response.status === 404) return { status: 404, data: null };
     if (!response.ok) {
       logger.warn('[embed] API request failed', { path, status: response.status });
-      return null;
+      return { status: response.status, data: null };
     }
-    return (await response.json()) as T;
+    return { status: response.status, data: (await response.json()) as T };
   } catch (error) {
     logger.error('[embed] API request error', { path, error: error instanceof Error ? error.message : String(error) });
-    return null;
+    return { status: null, data: null };
   }
 }
 
+async function anonymousGet<T>(path: string): Promise<T | null> {
+  return (await anonymousGetResult<T>(path)).data;
+}
+
+/** Per-request memoised raw answer for a video: the watch page's status code comes from it. */
+export const loadPublicVideoResult = cache((videoId: string): Promise<AnonymousResult<unknown>> =>
+  anonymousGetResult<unknown>(`/api/videos/${encodeURIComponent(videoId)}`));
+
+/** Per-request memoised raw answer for a playlist (the playlist page's status code). */
+export const loadPublicPlaylistResult = cache((playlistId: string): Promise<AnonymousResult<unknown>> =>
+  anonymousGetResult<unknown>(`/api/playlists/${encodeURIComponent(playlistId)}`));
+
 /** Per-request memoised: metadata and page share one API call. */
 export const loadPublicVideo = cache(async (videoId: string): Promise<EmbedVideo | null> =>
-  toEmbedVideo(await anonymousGet<ApiVideo>(`/api/videos/${encodeURIComponent(videoId)}`)));
+  toEmbedVideo((await loadPublicVideoResult(videoId)).data as ApiVideo | null));
 
 interface ApiPlaylist {
   id?: string;

@@ -23,7 +23,7 @@ test.describe('Navigation - English Routes', () => {
     await expect(card).toBeVisible();
     const id = await card.getAttribute('data-video-id');
 
-    await clickAndWaitForURL(page, card, new RegExp(`/en/video\\?vid=${id}$`));
+    await clickAndWaitForURL(page, card, new RegExp(`/en/video/${id}$`));
     await expect(page.locator('main')).toBeVisible();
   });
 
@@ -33,10 +33,10 @@ test.describe('Navigation - English Routes', () => {
     await expect(page.getByRole('heading', { name: /sign in/i })).toBeVisible();
   });
 
-  test('keeps the vid query parameter on direct video navigation', async ({ page }) => {
-    await page.goto('/en/video?vid=test-123');
-    await expect(page).toHaveURL(/vid=test-123/);
-    await expect(page.locator('body')).toBeVisible();
+  test('moves the old ?vid= watch URL to /video/<id> with a 301', async ({ page }) => {
+    const response = await page.request.get('/en/video?vid=test-123', { maxRedirects: 0 });
+    expect(response.status()).toBe(301);
+    expect(new URL(response.headers()['location'], 'http://x').pathname).toBe('/en/video/test-123');
   });
 
   test('navigates between sections', async ({ page }) => {
@@ -73,14 +73,14 @@ test.describe('Navigation - Arabic Routes', () => {
   });
 
   test('keeps query parameters on Arabic routes', async ({ page }) => {
-    await page.goto('/ar/video?vid=test-123');
-    await expect(page).toHaveURL(/\/ar\/video\?vid=test-123/);
+    await page.goto('/ar/video?vid=test-123&t=30');
+    await expect(page).toHaveURL(/\/ar\/video\/test-123\?t=30$/);
   });
 
   test('Arabic card links stay in the Arabic locale', async ({ page }) => {
     await page.goto('/ar/');
     const card = await own.showCard(page);
-    await clickAndWaitForURL(page, card, /\/ar\/video\?vid=/);
+    await clickAndWaitForURL(page, card, /\/ar\/video\/[\w-]+$/);
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   });
 });
@@ -107,7 +107,7 @@ test.describe('Navigation - Browser Controls', () => {
 
   test('client-side navigation works with back', async ({ page }) => {
     await page.goto('/en/');
-    await clickAndWaitForURL(page, await own.showCard(page), /\/en\/video\?vid=/);
+    await clickAndWaitForURL(page, await own.showCard(page), /\/en\/video\/[\w-]+$/);
 
     await page.goBack();
     // Home, at the page of the grid the card was on ("Load More" keeps its cursor in the URL)
@@ -128,14 +128,15 @@ test.describe('Navigation - Deep Linking', () => {
   test('deep links to specific videos', async ({ page }) => {
     const videoId = 'deep-link-test-123';
     await page.goto(`/en/video?vid=${videoId}`);
-    await expect(page).toHaveURL(new RegExp(`vid=${videoId}`));
+    await expect(page).toHaveURL(new RegExp(`/en/video/${videoId}$`));
   });
 
   test('deep links with multiple query parameters', async ({ page }) => {
     await page.goto('/en/video?vid=test-123&t=30&quality=720p');
 
     const url = new URL(page.url());
-    expect(url.searchParams.get('vid')).toBe('test-123');
+    expect(url.pathname).toBe('/en/video/test-123');
+    expect(url.searchParams.get('vid')).toBeNull();
     expect(url.searchParams.get('t')).toBe('30');
     expect(url.searchParams.get('quality')).toBe('720p');
   });
@@ -170,7 +171,7 @@ test.describe('Navigation - Responsive Behavior', () => {
 
     await page.goto('/en/');
     const card = await own.showCard(page);
-    await clickAndWaitForURL(page, card, /\/en\/video\?vid=/);
+    await clickAndWaitForURL(page, card, /\/en\/video\/[\w-]+$/);
   });
 
   test('navigates on a tablet viewport', async ({ page }) => {

@@ -21,7 +21,7 @@ const VideoCard: React.FC<VideoObject> = (video) => {
     return (
         <div className="relative">
             <Link
-                href={`/${lang}/video?vid=${video.id}`}
+                href={`/${lang}/video/${encodeURIComponent(video.id)}`}
                 data-testid="video-card"
                 data-video-id={video.id}
                 className="video-card cursor-pointer bg-white dark:bg-gray-900 text-black dark:text-white flex flex-col rounded-lg shadow-md overflow-hidden"

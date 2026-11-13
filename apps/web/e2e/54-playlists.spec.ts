@@ -217,10 +217,10 @@ test.describe('Playlist page - visitor', () => {
     await expect(page.getByText('عامة', { exact: true })).toBeVisible();
   });
 
-  test('PLAY-012 unknown playlist shows the not-found state', async ({ page }) => {
-    await page.goto('/en/playlist/00000000-0000-0000-0000-000000000000');
-    await expect(page.getByRole('heading', { level: 1, name: 'Playlist not found' })).toBeVisible();
-    await expect(page.getByText('This playlist does not exist or is private.')).toBeVisible();
+  test('PLAY-012 unknown playlist is a real 404 page', async ({ page }) => {
+    const response = await page.goto('/en/playlist/00000000-0000-0000-0000-000000000000');
+    expect(response?.status()).toBe(404);
+    await expect(page.getByTestId('not-found-page')).toBeVisible();
   });
 });
 
@@ -268,8 +268,10 @@ test.describe('Playlist page - owner', () => {
       const anon = await browser.newContext({ storageState: ANONYMOUS_STATE, baseURL: test.info().project.use.baseURL });
       try {
         const anonPage = await anon.newPage();
-        await anonPage.goto(`/en/playlist/${id}`);
-        await expect(anonPage.getByRole('heading', { level: 1, name: 'Playlist not found' })).toBeVisible();
+        // Anonymous visitors get a real 404 (never 403, which would confirm the playlist exists)
+        const anonResponse = await anonPage.goto(`/en/playlist/${id}`);
+        expect(anonResponse?.status()).toBe(404);
+        await expect(anonPage.getByTestId('not-found-page')).toBeVisible();
       } finally {
         await anon.close();
       }

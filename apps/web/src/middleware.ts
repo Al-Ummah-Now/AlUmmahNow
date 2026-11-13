@@ -35,6 +35,7 @@ import { NONCE_HEADER } from '@/lib/security/nonce-header';
 import { handleRewritePath } from '@/lib/channel-url';
 import { refreshSessionCookie } from '@/lib/auth/middleware-refresh';
 import { presentSessionCookieNames, sessionCookieOptions, writeSessionValue } from '@/lib/auth/session-cookie';
+import { isProductionDeployment, legacyWatchRedirect, robotsHeaderFor } from '@/lib/seo/robots';
 
 /**
  * Build the CSP for this request. In production a fresh nonce is generated per
@@ -110,6 +111,10 @@ export async function middleware(request: NextRequest) {
   const browserSessionCookies = presentSessionCookieNames(request.cookies);
   const refreshedSession = await refreshSessionCookie(request);
   const response = routeRequest(request);
+  // Crawler rules (lib/seo/robots.ts): every page of a non-production deployment, and the
+  // viewer-only pages of production, are noindex
+  const robots = robotsHeaderFor(request.nextUrl.pathname, isProductionDeployment(process.env.NEXTJS_ENV, request.headers.get('host')));
+  if (robots) response.headers.set('X-Robots-Tag', robots);
   if (refreshedSession) {
     writeSessionValue(response.cookies, refreshedSession, browserSessionCookies, sessionCookieOptions(request.headers.get('host')));
   }
@@ -129,6 +134,12 @@ function routeRequest(request: NextRequest): NextResponse {
   if (pathname === '/') {
     const preferredLocale = getLanguagePreferenceFromCookie(request) || DEFAULT_LOCALE;
     return NextResponse.redirect(new URL(`/${preferredLocale}`, request.url));
+  }
+
+  // The old watch URL (/<locale>/video?vid=<id>) moved for good to /<locale>/video/<id>
+  const legacyWatch = legacyWatchRedirect(pathname, request.nextUrl.searchParams, getLanguagePreferenceFromCookie(request) || DEFAULT_LOCALE);
+  if (legacyWatch) {
+    return NextResponse.redirect(new URL(legacyWatch, request.url), 301);
   }
 
   // oEmbed endpoint (route handler with its own CORS/caching headers): no locale redirect

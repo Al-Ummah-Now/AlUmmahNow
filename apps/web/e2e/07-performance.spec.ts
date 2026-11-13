@@ -30,7 +30,7 @@ test.describe('Performance - Page Load', { tag: '@load' }, () => {
   });
 
   test('video page DOM is ready within budget', async ({ page }) => {
-    await page.goto('/en/video?vid=perf-test');
+    await page.goto('/en/video/perf-test');
     const { domContentLoaded } = await navigationTiming(page);
     expect(domContentLoaded).toBeLessThan(6000);
   });

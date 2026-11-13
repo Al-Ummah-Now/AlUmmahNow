@@ -191,7 +191,7 @@ describe('Spotlight', () => {
     render(<ChannelSectionRenderer section={section('channel_spotlight', FILLED.channel_spotlight)} channelId={CHANNEL} />);
     expect(mockStatus).not.toHaveBeenCalled();
     expect(screen.getByRole('heading', { name: 'Welcome' })).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: /Watch/ })[0]).toHaveAttribute('href', '/en/video?vid=t1');
+    expect(screen.getAllByRole('link', { name: /Watch/ })[0]).toHaveAttribute('href', '/en/video/t1');
   });
 });
 

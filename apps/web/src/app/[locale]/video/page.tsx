@@ -1,8 +1,9 @@
-import LegacyWatch from '@/components/video/LegacyWatch';
-import { WatchSkeletonSlot } from '@/components/video/WatchSkeletonSlot';
+import { notFound } from 'next/navigation';
 
-/** Legacy watch route (/[locale]/video?vid=<id>), still used by video cards. */
-export default async function LegacyVideoPage({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ vid?: string | string[] }> }) {
-  const [{ locale }, { vid }] = await Promise.all([params, searchParams]);
-  return <LegacyWatch skeleton={<WatchSkeletonSlot id={typeof vid === 'string' ? vid : undefined} locale={locale} />} />;
+/**
+ * /[locale]/video: the legacy /video?vid=<id> form is a 301 to /[locale]/video/<id> (middleware.ts),
+ * so this page only answers when no video was given: 404.
+ */
+export default function LegacyVideoPage(): never {
+  notFound();
 }

@@ -52,7 +52,7 @@ test.describe('Home - anonymous', () => {
 
     const id = await card.getAttribute('data-video-id');
     expect(id).toBeTruthy();
-    await expect(card).toHaveAttribute('href', `/en/video?vid=${id}`);
+    await expect(card).toHaveAttribute('href', `/en/video/${id}`);
     // Every card has a non-empty title and an image with alt text
     const firstTitle = (await card.innerText()).trim();
     expect(firstTitle.length).toBeGreaterThan(0);
@@ -102,7 +102,7 @@ test.describe('Home - anonymous', () => {
     await page.goto('/en');
     const card = await own.showCard(page);
     await expect(card).toBeVisible();
-    await clickAndWaitForURL(page, card, /\/en\/video\?vid=[\w-]+$/);
+    await clickAndWaitForURL(page, card, /\/en\/video\/[\w-]+$/);
   });
 
   test('HOME-005 Arabic home is RTL with RTL cards', async ({ page }) => {
@@ -110,7 +110,7 @@ test.describe('Home - anonymous', () => {
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('المرئيات');
     const card = await own.showCard(page);
-    await expect(card).toHaveAttribute('href', /^\/ar\/video\?vid=/);
+    await expect(card).toHaveAttribute('href', /^\/ar\/video\/[\w-]+$/);
     await expect(loadMoreButton(page)).toBeVisible();
     await expect(page.getByRole('main')).toHaveCSS('direction', 'rtl');
   });
@@ -190,7 +190,7 @@ test.describe('All videos page', () => {
     await expect(page.getByText('Browse the latest videos from every channel')).toBeVisible();
     const card = await own.showCard(page);
     await expect(card).toBeVisible();
-    await expect(card).toHaveAttribute('href', /^\/en\/video\?vid=/);
+    await expect(card).toHaveAttribute('href', /^\/en\/video\/[\w-]+$/);
   });
 
   test('VIDS-002 Arabic browse page is RTL', async ({ page }) => {
@@ -198,7 +198,7 @@ test.describe('All videos page', () => {
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     await expect(page.getByRole('heading', { level: 1, name: 'جميع المرئيات' })).toBeVisible();
     await expect(page.getByRole('main')).toHaveAttribute('dir', 'rtl');
-    await expect(await own.showCard(page)).toHaveAttribute('href', /^\/ar\/video\?vid=/);
+    await expect(await own.showCard(page)).toHaveAttribute('href', /^\/ar\/video\/[\w-]+$/);
   });
 
   test('VIDS-003 load more appends unique videos', async ({ page }) => {

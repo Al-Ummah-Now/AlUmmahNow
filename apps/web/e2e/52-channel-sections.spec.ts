@@ -488,7 +488,7 @@ const pickPlaylist = async (dialog: Locator, fx: Fixtures) => {
   await expect(dialog.getByTestId('playlist-picker-options').locator(`[data-option-id="${fx.playlistId}"]`)).toHaveAttribute('aria-checked', 'true');
 };
 
-const videoLink = (section: Locator, videoId: string) => section.locator(`a[href*="vid=${videoId}"]`).first();
+const videoLink = (section: Locator, videoId: string) => section.locator(`a[href*="/video/${videoId}"]`).first();
 
 const TYPE_CASES = (fx: () => Fixtures): TypeCase[] => [
   {
@@ -500,7 +500,7 @@ const TYPE_CASES = (fx: () => Fixtures): TypeCase[] => [
       // Nobody here is subscribed to the test channel: the trailer plays
       const spot = section.page().getByTestId('section-spotlight');
       await expect(spot).toHaveAttribute('data-spotlight-kind', 'trailer');
-      await expect(spot.locator(`a[href="/${locale}/video?vid=${f.ownVideoId}"]`).first()).toBeVisible();
+      await expect(spot.locator(`a[href="/${locale}/video/${f.ownVideoId}"]`).first()).toBeVisible();
     },
   },
   {

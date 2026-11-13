@@ -87,7 +87,7 @@ export function suggestionHref(suggestion: SearchSuggestion, locale: string): st
   const id = suggestion.id;
   switch (suggestion.type) {
     case 'video':
-      return id ? `/${locale}/video?vid=${encodeURIComponent(id)}` : null;
+      return id ? `/${locale}/video/${encodeURIComponent(id)}` : null;
     case 'channel':
       return id ? channelPath(locale, { id, handle: suggestion.handle }) : null;
     case 'playlist':

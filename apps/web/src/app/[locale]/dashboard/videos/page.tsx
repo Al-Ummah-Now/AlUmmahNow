@@ -670,7 +670,7 @@ export default function VideoDashboardPage() {
                   {/* Actions */}
                   <div className="flex gap-2 mt-3">
                     <Link
-                      href={`/${lang}/video?vid=${video.id}`}
+                      href={`/${lang}/video/${encodeURIComponent(video.id)}`}
                       data-testid="dashboard-video-view"
                       className="flex-1 flex items-center justify-center gap-1 px-2 py-2 border dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-sm"
                     >
