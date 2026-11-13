@@ -2,6 +2,7 @@
 export * from './video';
 export * from './video-visibility';
 export * from './video-review';
+export * from './quran';
 export * from './channel-name';
 export * from './video-format';
 export * from './video-format-ops';
