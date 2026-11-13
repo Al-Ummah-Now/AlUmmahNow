@@ -20,10 +20,13 @@ for (const lang of LANGS) {
         await applyTheme(page, theme, mode);
         await expect.poll(() => sockets.length, { timeout: 30_000 }).toBeGreaterThan(0);
         const data = { type: 'notification', notificationId: `t${Date.now()}`, userId: 'x', notificationType: 'upload', notificationKey: 'uploadReady', params: { videoTitle: 'Toast contrast' }, actionUrl: '/video/v1', persisted: false };
-        sockets.forEach((ws) => ws.send(JSON.stringify({ type: 'notification', channel: 'user:x', timestamp: Date.now(), data })));
-
         const toast = page.getByTestId('realtime-toast').first();
-        await expect(toast.getByTestId('realtime-toast-action')).toBeVisible();
+        // The socket can open before the page subscribes to user:x, and a message sent before that is
+        // dropped: send again (same notificationId, so one toast) until it shows (#1196)
+        await expect(async () => {
+          sockets.forEach((ws) => ws.send(JSON.stringify({ type: 'notification', channel: 'user:x', timestamp: Date.now(), data })));
+          await expect(toast.getByTestId('realtime-toast-action')).toBeVisible({ timeout: 3_000 });
+        }).toPass({ timeout: 30_000 });
         // Never see-through while it arrives: no opacity in its animation, fully opaque from the start
         const fade = await toast.evaluate((el) => {
           const name = getComputedStyle(el).animationName;
