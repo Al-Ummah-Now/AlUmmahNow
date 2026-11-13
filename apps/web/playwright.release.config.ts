@@ -101,7 +101,14 @@ export default defineConfig({
   outputDir: `test-results${OUTPUT_SUFFIX}`,
   // outcome-reporter: failed and flaky tests in the job summary, release-outcomes*.json for the nightly job
   reporter: process.env.CI
-    ? [['github'], ['list'], ['html', { outputFolder: `release-report${OUTPUT_SUFFIX}`, open: 'never' }], ['./e2e/release/outcome-reporter.ts']]
+    ? [
+        ['github'],
+        ['list'],
+        ['html', { outputFolder: `release-report${OUTPUT_SUFFIX}`, open: 'never' }],
+        // Per-test results (scripts/ci/playwright-outcomes.ts): every test's status, skips included
+        ['json', { outputFile: `test-results${OUTPUT_SUFFIX}/test-results.json` }],
+        ['./e2e/release/outcome-reporter.ts'],
+      ]
     : [['list'], ['./e2e/release/outcome-reporter.ts']],
   use: {
     actionTimeout: 15000,

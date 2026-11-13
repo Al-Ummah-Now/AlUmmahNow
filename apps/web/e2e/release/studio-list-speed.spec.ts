@@ -15,11 +15,9 @@
  */
 import { expect, test, type Page } from '@playwright/test';
 import { skipUntilStudioDeployed, studioOwner } from './studio';
-import { target, releaseEnv } from './targets';
+import { target } from './targets';
 import { expectHydrated } from './web-session';
 
-// quarantined: #1020 @meywd: on the local stack WebKit never fires the load event (every navigation times out)
-test.fixme(({ browserName }) => browserName === 'webkit' && releaseEnv() === 'local', 'quarantined: #1020 @meywd: WebKit load event on the local stack');
 
 test.use({ trace: 'off', video: 'off' });
 
