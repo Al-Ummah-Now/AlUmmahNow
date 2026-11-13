@@ -45,7 +45,9 @@ test.describe('Consent banner - first visit', () => {
     expect(await consentValue(context)).toBeUndefined();
     const dialog = banner(page);
     await expect(dialog).toBeVisible();
-    await expect(dialog).toHaveAttribute('role', 'dialog');
+    // A labelled region (a non-modal bar), not a dialog that would trap or hide the page
+    await expect(dialog).toHaveAttribute('role', 'region');
+    await expect(page.getByRole('region', { name: 'We respect your privacy' })).toBeVisible();
     await expect(dialog.getByRole('heading', { name: 'We respect your privacy' })).toBeVisible();
     const accept = dialog.getByRole('button', { name: 'Accept all' });
     const reject = dialog.getByRole('button', { name: 'Reject all' });
@@ -111,12 +113,37 @@ test.describe('Consent banner - first visit', () => {
 
   test('CONS-007 banner does not hide the page behind a modal', async ({ page }) => {
     await page.goto('/en');
-    await expect(banner(page)).toHaveAttribute('aria-modal', 'false');
+    await expect(banner(page)).toBeVisible();
+    await expect(page.locator('[aria-modal="true"]')).toHaveCount(0);
     // The header stays usable while the banner is open
     await expect(page.getByTestId('nav-drawer-toggle')).toBeEnabled();
     const box = await banner(page).boundingBox();
     const viewport = page.viewportSize()!;
     expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height + 1);
+  });
+});
+
+test.describe('Consent banner - server HTML', () => {
+  test.use({ storageState: ANONYMOUS_STATE, javaScriptEnabled: false });
+
+  // #1205: a bar that only appeared after hydration became the page's LCP element
+  test('CONS-008 a first visit gets the bar in the first HTML, fixed at the bottom', async ({ page }) => {
+    for (const locale of ['en', 'ar'] as const) {
+      await page.goto(`/${locale}`);
+      const bar = banner(page);
+      await expect(bar).toBeVisible();
+      await expect(bar).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
+      expect(await bar.evaluate((el) => getComputedStyle(el).position)).toBe('fixed');
+      // The settings link works without JavaScript
+      await expect(bar.getByRole('link')).toHaveAttribute('href', `/${locale}/settings/privacy`);
+    }
+  });
+
+  test('CONS-009 a stored choice keeps the bar out of the first HTML', async ({ page, context, baseURL }) => {
+    await context.addCookies([{ name: 'aun_consent', value: `v1.a0.e0.p0.${Date.now()}`, url: baseURL!, sameSite: 'Lax' }]);
+    await page.goto('/en');
+    await expect(page.locator('h1, main').first()).toBeAttached();
+    await expect(banner(page)).toHaveCount(0);
   });
 });
 
