@@ -10,6 +10,7 @@ import type { VideoObject } from '@al-ummah/shared-types';
 import { logger } from '../../lib/logger';
 import { inBackground } from "../../lib/websocket-notify";
 import { announceNewVideo } from "../../lib/notification-events";
+import { markPublished } from '../../lib/published';
 
 export class VideoSchedulePublishNow extends AuthenticatedRoute {
   schema = addAuthToSchema(
@@ -136,9 +137,12 @@ export class VideoSchedulePublishNow extends AuthenticatedRoute {
         if (fresh.userId !== video.userId) return { reject: { status: 403, error: 'Not authorized to publish this video' } };
         if (fresh.isPublic === true) return { reject: { status: 409, error: 'Video is already public' } };
         previousStatus = fresh.scheduledPublishStatus;
+        const before = { ...fresh };
         fresh.isPublic = true;
         fresh.isDraft = false;
         fresh.dateModified = now;
+        // Published now, once (lib/published.ts)
+        markPublished(before, fresh, now);
         // Update scheduling status if video was scheduled
         if (fresh.scheduledPublishStatus) {
           fresh.scheduledPublishStatus = 'published';

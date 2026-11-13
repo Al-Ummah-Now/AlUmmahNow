@@ -27,6 +27,7 @@ import {
 } from "../../lib/bulkEdit";
 import { OPERATION_ID, readUndo, writeUndo, type BulkUndoRecord, type UndoKv } from "../../lib/bulkEditUndo";
 import { AuthenticatedRoute, AppContext } from '../../base';
+import { markPublished } from "../../lib/published";
 
 type VideoType = z.infer<typeof BusinessVideo>;
 type PlaylistType = z.infer<typeof BusinessPlaylist>;
@@ -234,6 +235,8 @@ export class VideoBulkUpdate extends AuthenticatedRoute {
 					if (!applied.changed) return false;
 					previous = { ...fresh };
 					Object.assign(fresh, applied.video);
+					// Made public (and ready): published now, once (lib/published.ts)
+					markPublished(previous, fresh, new Date().toISOString());
 					return true;
 				});
 				if (!video) return void results.set(videoId, fail(videoId, 'not_found'));

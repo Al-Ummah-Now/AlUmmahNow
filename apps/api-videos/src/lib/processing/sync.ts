@@ -11,6 +11,8 @@
  * 6 UploadFailed, 7 Transcribing (playable), 8+ JIT states (playable).
  */
 
+import { markPublished } from '../published';
+
 export interface BunnyVideoState {
 	guid?: string;
 	status?: number;
@@ -45,6 +47,12 @@ export interface SyncableVideo {
 	processingIssue?: { kind: 'encode_failed' | 'needs_reupload' | 'stalled'; reason?: string; at: string };
 	/** First time Bunny's playlist played (time to playable vs R2, epic #687) */
 	playableAt?: string;
+	/** Publish state (lib/published.ts): a public video that becomes ready is published then */
+	isPublic?: boolean;
+	isDraft?: boolean;
+	isDeleted?: boolean;
+	isHidden?: boolean;
+	publishedAt?: string;
 }
 
 /**
@@ -278,6 +286,7 @@ export function planSync(video: SyncableVideo, bunny: BunnyVideoState | null, op
 /** Apply a plan to a record in place. Returns true when anything changed. */
 export function applyPlan<T extends SyncableVideo>(video: T, plan: SyncPlan): boolean {
 	let changed = false;
+	const before = { ...video };
 	for (const [key, value] of Object.entries(plan.patch)) {
 		(video as Record<string, unknown>)[key] = value;
 		changed = true;
@@ -288,6 +297,8 @@ export function applyPlan<T extends SyncableVideo>(video: T, plan: SyncPlan): bo
 			changed = true;
 		}
 	}
+	// A public video that just became ready is published now (once; lib/published.ts)
+	if (plan.patch.uploadStatus === 'ready' && markPublished(before, video, plan.patch.playableAt ?? new Date().toISOString())) changed = true;
 	return changed;
 }
 

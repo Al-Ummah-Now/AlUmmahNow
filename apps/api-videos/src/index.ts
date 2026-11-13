@@ -63,6 +63,7 @@ import { createVideoFormatInternalRouter } from "./endpoints/video/videoFormatIn
 import { createFootprintsInternalRouter } from "./endpoints/privacy/footprintsInternal";
 import { handleFootprintBackfillMessage, isFootprintBackfillMessage, maintainFootprintPasses } from "./lib/privacy/footprints";
 import { handleVideoFormatMessage, startDailyVideoFormatRun } from "./lib/video-format/job";
+import { handlePublishedAtBackfillMessage, isPublishedAtBackfillMessage } from "./lib/publishedAtBackfill";
 import { startDailyThumbnailCheck } from "./lib/thumbnail/repair";
 import { VIDEO_FORMAT_JOB_KIND } from "@al-ummah/shared-types";
 // Profile/Channel image upload handlers (not in routers yet)
@@ -671,9 +672,11 @@ async function queue(batch: MessageBatch<unknown>, env: AppBindings, ctx: Execut
 		// Channel collection backfill (lib/bunny/collectionBackfill.ts)
 		const isCollectionBackfill = (m: { body: unknown }) => isCollectionBackfillMessage(m.body);
 		for (const msg of batch.messages.filter(isCollectionBackfill)) await handleCollectionBackfillMessage(synced, msg);
+		// publishedAt backfill (lib/publishedAtBackfill.ts), one bucket page per message, dry run by default
+		for (const msg of batch.messages.filter((m) => isPublishedAtBackfillMessage(m.body))) await handlePublishedAtBackfillMessage(synced, msg);
 		// Privacy footprint backfill (lib/privacy/footprints.ts), one bucket page per message
 		for (const msg of batch.messages.filter((m) => isFootprintBackfillMessage(m.body))) await handleFootprintBackfillMessage(env as never, msg.body as never);
-		const rest = batch.messages.filter((m) => !isFormat(m) && !isCollectionBackfill(m) && !isFootprintBackfillMessage(m.body));
+		const rest = batch.messages.filter((m) => !isFormat(m) && !isCollectionBackfill(m) && !isFootprintBackfillMessage(m.body) && !isPublishedAtBackfillMessage(m.body));
 		// New uploads → playlists (lib/playlistUploadAdds.ts)
 		const playlistAdds = rest.filter((m) => isPlaylistAddMessage(m.body));
 		const reaper = rest.filter((m) => isReaperMessage(m.body));
