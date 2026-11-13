@@ -8,6 +8,7 @@
  * audited in moderation_actions; a decision is applied to the video by api-videos (the single
  * writer of its review state) before the row records it.
  */
+import { logger } from '../logger';
 import {
   REVIEW_UNDO_MINUTES,
   isReviewReasonCode,
@@ -203,6 +204,17 @@ export async function getReview(env: ReviewEnv, reviewer: Reviewer, id: string) 
   const history = await env.REPORTS_DB.prepare('SELECT id, status, decision, reason_code, decided_at, decided_by, created_at, appeal_of FROM content_reviews WHERE subject_type = ? AND subject_id = ? ORDER BY created_at DESC LIMIT 20')
     .bind(row.subject_type, row.subject_id)
     .all();
+  if (row.subject_type === 'livestream') {
+    // A live stream's recording (VR9): api-videos reads the stream and signs its playlist
+    const stream = await liveSubject(env, row.subject_id);
+    return {
+      review: row,
+      findings: findings.results ?? [],
+      history: history.results ?? [],
+      subject: stream ? { id: stream.id, title: stream.title, description: stream.description, tags: stream.tags, channelId: stream.channelId, ownerId: stream.ownerId, duration: stream.duration, currentStatus: stream.review?.status ?? null, playUrl: stream.playUrl, posterUrl: stream.thumbnailUrl } : null,
+      manifestKey: stream?.review?.manifestKey ?? null,
+    };
+  }
   let video: VideoSummary | null = null;
   if (row.subject_type === 'video' && env.videos) {
     video = (await (await env.videos.get(row.subject_id))?.json<VideoSummary>()) ?? null;
@@ -214,6 +226,35 @@ export async function getReview(env: ReviewEnv, reviewer: Reviewer, id: string) 
     subject: video ? { id: video.id, title: video.title ?? '', description: video.description ?? '', tags: video.tags ?? [], channelId: video.channelId, ownerId: video.userId, duration: video.duration, currentStatus: video.review?.status ?? null } : null,
     manifestKey: video?.review?.manifestKey ?? null,
   };
+}
+
+interface LiveSubject {
+  id: string;
+  title: string;
+  description: string;
+  tags: string[];
+  channelId?: string;
+  ownerId?: string;
+  duration?: number;
+  review: { status?: string; manifestKey?: string } | null;
+  playUrl: string | null;
+  thumbnailUrl: string | null;
+}
+
+/** The recording as api-videos shows it to reviewers; null when it is gone or unreachable (the page still opens). */
+async function liveSubject(env: ReviewEnv, streamId: string): Promise<LiveSubject | null> {
+  if (!env.VIDEOS) return null;
+  try {
+    const res = await env.VIDEOS.fetch(`https://videos.internal/internal/review/livestream/${encodeURIComponent(streamId)}`, { headers: { 'X-API-Key': await secret(env.INTERNAL_API_KEY) } });
+    if (!res.ok) {
+      if (res.status !== 404) logger.warn('[Review] Recording unavailable for the review page', { streamId, status: res.status });
+      return null;
+    }
+    return ((await res.json()) as { result?: LiveSubject }).result ?? null;
+  } catch (error) {
+    logger.warn('[Review] Recording unavailable for the review page', { streamId, error: error instanceof Error ? error.message : String(error) });
+    return null;
+  }
 }
 
 /** A media object of the review (frames, manifest), only under the subject's own review/ prefix. */
@@ -240,10 +281,15 @@ async function secret(value: ReviewEnv['INTERNAL_API_KEY']): Promise<string> {
   return typeof value === 'string' ? value : ((await value?.get()) ?? '');
 }
 
-/** api-videos applies the decision to the video first (single writer). */
-async function applyOnVideo(env: ReviewEnv, videoId: string, body: ReviewDecisionRequest): Promise<void> {
+/** Subjects whose state api-videos keeps with the video review machine (decisions can be undone). */
+const VIDEO_LIKE = ['video', 'livestream'];
+
+/** api-videos applies the decision to the video (or the live stream's recording, VR9) first (single writer). */
+async function applyOnVideo(env: ReviewEnv, row: Pick<ReviewRow, 'subject_type' | 'subject_id'>, body: ReviewDecisionRequest): Promise<void> {
   if (!env.VIDEOS) throw new ReviewError(502, 'not_configured', 'The VIDEOS service binding is not configured');
-  const res = await env.VIDEOS.fetch(`https://videos.internal/internal/review/${encodeURIComponent(videoId)}/decision`, {
+  const id = encodeURIComponent(row.subject_id);
+  const path = row.subject_type === 'livestream' ? `/internal/review/livestream/${id}/decision` : `/internal/review/${id}/decision`;
+  const res = await env.VIDEOS.fetch(`https://videos.internal${path}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'X-API-Key': await secret(env.INTERNAL_API_KEY) },
     body: JSON.stringify(body),
@@ -292,8 +338,8 @@ export async function decideReview(env: ReviewEnv, reviewer: Reviewer, id: strin
   if (input.decision === 'undo') {
     if (!row.decided_at || row.decided_by !== reviewer.id) throw new ReviewError(409, 'nothing_to_undo', 'Only your own decision can be undone');
     if (!row.undo_until || iso > row.undo_until) throw new ReviewError(409, 'undo_expired', `Decisions can be undone for ${REVIEW_UNDO_MINUTES} minutes`);
-    if (row.subject_type !== 'video') throw new ReviewError(409, 'undo_video_only', 'An image decision cannot be undone; decide it again from History');
-    await applyOnVideo(env, row.subject_id, { reviewId: id, decision: 'undo', reviewerId: reviewer.id, decidedAt: iso });
+    if (!VIDEO_LIKE.includes(row.subject_type)) throw new ReviewError(409, 'undo_video_only', 'An image decision cannot be undone; decide it again from History');
+    await applyOnVideo(env, row, { reviewId: id, decision: 'undo', reviewerId: reviewer.id, decidedAt: iso });
     const restored = row.appeal_of ? 'appealed' : 'in_review';
     await db.prepare('UPDATE content_reviews SET status = ?, decision = NULL, decided_at = NULL, decided_by = NULL, reason_code = NULL, note = NULL, undo_until = NULL, media_purge_after = NULL, updated_at = ? WHERE id = ?').bind(restored, iso, id).run();
     await audit(db, { reviewId: id, subjectId: row.subject_id, action: 'review_undo', actorId: reviewer.id }, iso);
@@ -307,8 +353,8 @@ export async function decideReview(env: ReviewEnv, reviewer: Reviewer, id: strin
     const original = await db.prepare('SELECT decided_by FROM content_reviews WHERE id = ?').bind(row.appeal_of).first<{ decided_by: string | null }>();
     if (original?.decided_by === reviewer.id) throw new ReviewError(403, 'different_reviewer', 'An appeal is decided by a different reviewer');
   }
-  if (row.subject_type === 'video') {
-    await applyOnVideo(env, row.subject_id, { reviewId: id, decision: input.decision, reasonCode: input.reasonCode as VideoReviewReasonCode | undefined, note, reviewerId: reviewer.id, decidedAt: iso });
+  if (VIDEO_LIKE.includes(row.subject_type)) {
+    await applyOnVideo(env, row, { reviewId: id, decision: input.decision, reasonCode: input.reasonCode as VideoReviewReasonCode | undefined, note, reviewerId: reviewer.id, decidedAt: iso });
   } else {
     await applyOnImage(env, row, input.decision, reviewer.id, input.reasonCode);
   }
@@ -398,8 +444,8 @@ export async function purgeReviewMedia(env: ReviewEnv, now = new Date(), limit =
   const due = await env.REPORTS_DB.prepare(`SELECT id, subject_type, subject_id FROM content_reviews WHERE media_purge_after IS NOT NULL AND media_purge_after <= ? LIMIT ?`).bind(iso, limit).all<{ id: string; subject_type: string; subject_id: string }>();
   let purged = 0;
   for (const row of due.results ?? []) {
-    if (row.subject_type === 'video' && env.REVIEW_MEDIA) {
-      // The video's review media; a later review of it re-extracts from a new transcode
+    if (VIDEO_LIKE.includes(row.subject_type) && env.REVIEW_MEDIA) {
+      // The video's (or recording's) review media; a later review of it re-extracts from a new transcode
       let cursor: string | undefined;
       do {
         const page = await env.REVIEW_MEDIA.list({ prefix: `review/${row.subject_id}/`, cursor, limit: 1000 });

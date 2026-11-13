@@ -168,3 +168,39 @@ export function mp4QueueAction(
 	if (result.fatal || attempts >= MP4_MAX_ATTEMPTS) return { ack: true, giveUp: true };
 	return { ack: false, delaySeconds: Math.min(900, 120 * 2 ** Math.max(0, attempts - 1)) };
 }
+
+// ---------------------------------------------------------------------------
+// Live recording review (VR9): review frames and audio from a live stream's HLS VOD
+// ---------------------------------------------------------------------------
+
+/** The recording's directory (the `vod.internal` handler serves only under it) and its playlist file. */
+export function liveVodSource(vodUrl: string): { base: string; file: string } | null {
+	let url: URL;
+	try {
+		url = new URL(vodUrl);
+	} catch {
+		return null;
+	}
+	if (url.protocol !== 'https:' || url.username || url.password) return null;
+	// Raw path (Bunny's token path keeps its %2F encoding): base = up to and including the last "/"
+	const raw = vodUrl.slice(url.origin.length).split('?')[0]!;
+	const cut = raw.lastIndexOf('/');
+	const file = raw.slice(cut + 1);
+	if (!/^[A-Za-z0-9._-]+\.m3u8$/.test(file)) return null;
+	return { base: `${url.origin}${raw.slice(0, cut + 1)}`, file };
+}
+
+/**
+ * GET http://vod.internal/<rel> → `${base}<rel>`: only a relative path under the recording's
+ * directory (no `..`, no scheme, no host), so the container can read that recording and nothing else.
+ */
+export function liveVodTarget(base: string, rel: string): string | null {
+	if (!rel || rel.startsWith('/') || rel.includes('..') || rel.includes('\\') || /^[a-z][a-z0-9+.-]*:/i.test(rel) || rel.includes('//')) return null;
+	return `${base}${rel}`;
+}
+
+/** Same queue policy as a remux-only job: busy waits, a passing failure retries, then give up. */
+export const liveReviewQueueAction = (result: { outcome: 'ready' | 'busy' | 'failed'; fatal?: boolean }, attempts: number) => mp4QueueAction(result, attempts);
+
+/** The review media prefix of a live recording job. */
+export const liveReviewPrefix = (streamId: string, rev: string) => reviewMediaPrefix(streamId, rev);

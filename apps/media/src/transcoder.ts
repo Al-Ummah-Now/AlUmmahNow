@@ -6,10 +6,10 @@
  * start to this job's video, prefix and id.
  */
 import { Container, type OutboundHandlerContext } from '@cloudflare/containers';
-import { failRungs, MEDIA_MP4, mediaPrefix, sanitizeFailure, sanitizeMp4, type Mp4JobMessage, sanitizeRungs, type R2RungProgress, type TranscodeFailure, type TranscodeJobEvent, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
+import { failRungs, MEDIA_MP4, mediaPrefix, sanitizeFailure, sanitizeMp4, type LiveReviewJobMessage, type Mp4JobMessage, sanitizeRungs, type R2RungProgress, type TranscodeFailure, type TranscodeJobEvent, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
 import { bucketFor, errorText, log, type Env } from './env';
-import { containerSeconds, keyAllowed, newJob, onFailure, onMessage, onProgressEvent, watchdogVerdict, WATCHDOG_SECONDS, type JobState } from './jobs';
-import { reportEvent, reportMp4Event, sourceCandidates } from './videos-api';
+import { containerSeconds, keyAllowed, liveReviewPrefix, liveVodSource, liveVodTarget, newJob, onFailure, onMessage, onProgressEvent, watchdogVerdict, WATCHDOG_SECONDS, type JobState } from './jobs';
+import { reportEvent, reportLiveReviewMedia, reportMp4Event, sourceCandidates } from './videos-api';
 import { serveOriginal } from './originals';
 import { storeUpload } from './uploads';
 
@@ -124,6 +124,21 @@ export class Transcoder extends Container<Env> {
 			if (key !== `${ctx.params.prefix}/${MEDIA_MP4}`) return new Response('key outside the job', { status: 403 });
 			await storeUpload(bucketFor(env, key), key, req);
 			return new Response(null, { status: 201 });
+		},
+		/**
+		 * GET http://vod.internal/<rel> → a live recording's playlist or segment, read only and only
+		 * under that recording's directory (live review jobs; the container has no internet)
+		 */
+		async vod(req: Request, _env: Env, ctx: OutboundHandlerContext<{ base: string }>): Promise<Response> {
+			if (req.method !== 'GET' && req.method !== 'HEAD') return new Response('method', { status: 405 });
+			const url = new URL(req.url);
+			const target = liveVodTarget(ctx.params.base, url.pathname.slice(1) + url.search);
+			if (!target) return new Response('outside the recording', { status: 403 });
+			const headers = new Headers();
+			const range = req.headers.get('range');
+			if (range) headers.set('range', range);
+			const res = await fetch(target, { method: req.method, headers });
+			return new Response(res.body, { status: res.status, headers: { 'content-type': res.headers.get('content-type') ?? 'application/octet-stream', ...(res.headers.get('content-length') ? { 'content-length': res.headers.get('content-length')! } : {}), ...(res.headers.get('content-range') ? { 'content-range': res.headers.get('content-range')! } : {}) } });
 		},
 		/** POST http://control.internal/event → this job's Durable Object */
 		async control(req: Request, env: Env, ctx: OutboundHandlerContext<{ videoId: string; jobId: string }>): Promise<Response> {
@@ -350,6 +365,40 @@ export class Transcoder extends Container<Env> {
 			const mp4 = sanitizeMp4(body.mp4);
 			if (!res.ok || !mp4) throw Object.assign(new Error(body.error || `remux HTTP ${res.status}`), { fatal: !!body.fatal });
 			await reportMp4Event(this.env, { ...base, type: 'ready', at: new Date().toISOString(), mp4, containerSeconds: Math.round((Date.now() - startedAt) / 1000) });
+			result = { outcome: 'ready' };
+		} catch (error) {
+			result = { outcome: 'failed', error: errorText(error).slice(0, 300), fatal: !!(error as { fatal?: boolean })?.fatal };
+		} finally {
+			await this.stop().catch(() => undefined);
+		}
+		return result;
+	}
+
+	/**
+	 * Live recording review (VR9): frames and audio from a live stream's HLS VOD, no transcode. The
+	 * DO is named `live:<streamId>`, so it never holds a video's transcode state. The result goes to
+	 * api-videos, which queues the scan only while the stream's review is still `reviewId`.
+	 */
+	async extractLiveReview(msg: LiveReviewJobMessage): Promise<Mp4Outcome> {
+		const source = liveVodSource(msg.vodUrl);
+		if (!source) return { outcome: 'failed', error: 'bad recording url', fatal: true };
+		const reviewPrefix = liveReviewPrefix(msg.streamId, msg.rev);
+		let result: Mp4Outcome;
+		try {
+			await this.setOutboundByHosts({
+				'vod.internal': { method: 'vod', params: { base: source.base } },
+				'review.internal': { method: 'review', params: { prefix: reviewPrefix } },
+			});
+			await this.startAndWaitForPorts();
+			const res = await this.containerFetch('http://container/review', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ videoId: msg.streamId, rev: msg.rev, input: `http://vod.internal/${source.file}`, review: msg.review, reviewPrefix }),
+			});
+			const body = (await res.json().catch(() => ({}))) as { manifestKey?: unknown; error?: string; fatal?: boolean };
+			if (res.status === 409) return { outcome: 'busy' };
+			if (!res.ok || typeof body.manifestKey !== 'string' || !body.manifestKey.startsWith(reviewPrefix)) throw Object.assign(new Error(body.error || `review HTTP ${res.status}`), { fatal: !!body.fatal });
+			await reportLiveReviewMedia(this.env, msg.streamId, { reviewId: msg.reviewId, manifestKey: body.manifestKey });
 			result = { outcome: 'ready' };
 		} catch (error) {
 			result = { outcome: 'failed', error: errorText(error).slice(0, 300), fatal: !!(error as { fatal?: boolean })?.fatal };

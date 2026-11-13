@@ -389,6 +389,12 @@ export interface VideoReviewScanPayload {
   manifestKey?: string;
   /** What triggered it: a new upload, a metadata edit (text only), a resubmit, a live VOD */
   trigger: 'upload' | 'metadata_edit' | 'resubmit' | 'live_vod' | 'thumbnail';
+  /**
+   * What is reviewed (absent: a video). `livestream`: a live stream's recording (VR9); `videoId`
+   * then holds the stream id, the outcome goes to `/internal/review/livestream/:id/outcome` and the
+   * review row's subject_type is `livestream`.
+   */
+  subject?: ReviewScanSubject;
   /** A settings snapshot (thresholds, models, budget) so a scan is routed by the rules it was queued with */
   settings: VideoReviewSettings;
   queuedAt: string;
@@ -644,4 +650,65 @@ export function routeImageReview(findings: readonly ReviewFinding[], settings: P
 export function isPostHeldByReview(post: { review?: { status?: string } | null }): boolean {
   const s = post.review?.status;
   return s === 'checking' || s === 'in_review' || s === 'rejected' || s === 'appealed';
+}
+
+// ---------------------------------------------------------------------------
+// Live stream recordings (VR9): never pre-reviewed; the VOD is checked after the stream ends
+// ---------------------------------------------------------------------------
+
+/** The subjects a VideoReviewScanPayload can carry. */
+export type ReviewScanSubject = 'video' | 'livestream';
+
+/**
+ * A live stream's recording is withheld from everyone but its owner while a person decides it,
+ * and after a rejection: an NSFW hit or an escalation pulled it back (VR9), or a reviewer
+ * rejected it. `post_review` and `approved` (and no review at all) play as before.
+ */
+export function isLiveVodWithheld(review: { status?: VideoReviewStatus | string } | null | undefined): boolean {
+  return !isReviewCleared(review);
+}
+
+/**
+ * api-videos → media (TRANSCODE_QUEUE): extract review frames and audio from a live stream's
+ * recording (an HLS VOD) without transcoding it. The media worker reports the manifest key (or
+ * the failure) to api-videos `POST /internal/review/livestream/:id/media`.
+ */
+export interface LiveReviewJobMessage {
+  kind: 'live_review';
+  streamId: string;
+  reviewId: string;
+  /** Review media go under review/<streamId>/<rev>/ (MEDIA_PRIVATE) */
+  rev: string;
+  /** The recording's HLS playlist (https; signed when the library needs it) */
+  vodUrl: string;
+  review: ReviewExtractionOptions;
+  queuedAt: string;
+}
+
+const LIVE_SAFE_ID = /^[A-Za-z0-9-]{8,64}$/;
+const LIVE_SAFE_REV = /^[a-z0-9]{8,32}$/;
+
+export function isLiveReviewJobMessage(body: unknown): body is LiveReviewJobMessage {
+  const b = body as Partial<LiveReviewJobMessage> | null;
+  return (
+    !!b &&
+    b.kind === 'live_review' &&
+    typeof b.streamId === 'string' &&
+    LIVE_SAFE_ID.test(b.streamId) &&
+    typeof b.reviewId === 'string' &&
+    typeof b.rev === 'string' &&
+    LIVE_SAFE_REV.test(b.rev) &&
+    typeof b.vodUrl === 'string' &&
+    /^https:\/\/[^/\s]+\/\S+\.m3u8(\?\S*)?$/.test(b.vodUrl) &&
+    !!b.review &&
+    typeof b.review === 'object'
+  );
+}
+
+/** media → api-videos `POST /internal/review/livestream/:id/media`: the review media are ready (or not). */
+export interface LiveVodReviewMediaRequest {
+  reviewId: string;
+  /** Absent when extraction failed: the check runs on the title and thumbnail only (partial) */
+  manifestKey?: string;
+  error?: string;
 }

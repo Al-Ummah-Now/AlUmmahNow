@@ -33,7 +33,7 @@ export interface ReviewConsumerEnv {
   AI?: AiRunner;
   /** MEDIA_PRIVATE: frames, audio and manifests under review/ */
   REVIEW_MEDIA?: ReviewMediaBucket & { put?(key: string, value: string, options?: unknown): Promise<unknown> };
-  /** api-videos (service binding): /internal/review/:videoId/outcome */
+  /** api-videos (service binding): /internal/review/:videoId/outcome (livestream/:id/outcome for recordings) */
   VIDEOS?: { fetch(input: RequestInfo, init?: RequestInit): Promise<Response> };
   INTERNAL_API_KEY?: string | { get(): Promise<string> };
   MESSAGE_QUEUE?: { send(message: unknown): Promise<unknown> };
@@ -70,10 +70,16 @@ async function secret(value: ReviewConsumerEnv['INTERNAL_API_KEY']): Promise<str
   return typeof value === 'string' ? value : ((await value?.get()) ?? '');
 }
 
+/** Where the result goes: a video, or a live stream's recording (VR9: `videoId` holds the stream id). */
+export function outcomePath(p: Pick<VideoReviewScanPayload, 'videoId' | 'subject'>): string {
+  const id = encodeURIComponent(p.videoId);
+  return p.subject === 'livestream' ? `/internal/review/livestream/${id}/outcome` : `/internal/review/${id}/outcome`;
+}
+
 async function sendOutcome(env: ReviewConsumerEnv, p: VideoReviewScanPayload, routing: Pick<ReviewRouting, 'route' | 'risk' | 'nsfw' | 'escalate' | 'holdCause'>, findingsCount: number): Promise<void> {
   if (!env.VIDEOS) throw new ProviderError('VIDEOS service binding missing', true);
   const body: ReviewOutcomeRequest = { reviewId: p.reviewId, mode: p.mode, timing: p.timing, routing, findingsCount, checkedAt: new Date().toISOString() };
-  const res = await env.VIDEOS.fetch(`https://videos.internal/internal/review/${encodeURIComponent(p.videoId)}/outcome`, {
+  const res = await env.VIDEOS.fetch(`https://videos.internal${outcomePath(p)}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'X-API-Key': await secret(env.INTERNAL_API_KEY) },
     body: JSON.stringify(body),
@@ -142,7 +148,7 @@ export async function handleVideoReviewScan(
     logger.warn('[Review] Scan received where review is not allowed; dropped', { videoId: p.videoId });
     return { status: 'done' };
   }
-  await startReviewRow(db, p, new Date(now).toISOString());
+  await startReviewRow(db, p, new Date(now).toISOString(), p.subject === 'livestream' ? 'livestream' : 'video');
 
   // Redelivery after the result was stored: only the outcome is sent again
   const existing = await getReviewRow(db, p.reviewId);

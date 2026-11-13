@@ -70,3 +70,33 @@ export function manifestFor({ videoId, rev, prefix, durationSeconds, frames, aud
 		createdAt: now,
 	};
 }
+
+/**
+ * Live recordings (VR9): the variant of an HLS master to extract review media from, relative to
+ * the master. The smallest variant at least 360 px tall (frames are scaled to ≤ 512 px anyway),
+ * else the tallest one; null when `text` is already a media playlist. Reading one variant keeps
+ * ffmpeg from downloading every rendition of a long stream.
+ */
+export function reviewVariant(text) {
+	const lines = String(text).split(/\r?\n/);
+	const variants = [];
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i].trim();
+		if (!line.startsWith('#EXT-X-STREAM-INF:')) continue;
+		let uri = '';
+		for (let j = i + 1; j < lines.length; j++) {
+			const next = lines[j].trim();
+			if (!next) continue;
+			if (!next.startsWith('#')) uri = next;
+			break;
+		}
+		if (!uri) continue;
+		const height = Number(/RESOLUTION=\d+x(\d+)/.exec(line)?.[1]) || 0;
+		const bandwidth = Number(/[:,]BANDWIDTH=(\d+)/.exec(line)?.[1]) || 0;
+		variants.push({ uri, height, bandwidth });
+	}
+	if (!variants.length) return null;
+	const enough = variants.filter((v) => v.height >= 360).sort((a, b) => a.height - b.height || a.bandwidth - b.bandwidth);
+	if (enough.length) return enough[0].uri;
+	return variants.sort((a, b) => b.height - a.height || b.bandwidth - a.bandwidth)[0].uri;
+}

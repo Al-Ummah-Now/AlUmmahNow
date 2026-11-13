@@ -323,6 +323,8 @@ const en = {
     holdCause: { nsfw: 'NSFW', risk: 'Risk', escalation: 'Escalation', check_failed: 'Check failed', budget: 'Budget stop', appeal: 'Appeal' },
     status: { checking: 'Checking', in_review: 'In review', appealed: 'Appealed', approved: 'Approved', rejected: 'Rejected', post_review: 'Post-hoc', shadow: 'Shadow' },
     back: 'Back to the queue',
+    liveRecording: 'Live stream recording',
+    liveRecordingHint: 'Checked after the stream ended. It stays public unless you reject it or the check pulled it back.',
     player: 'Video',
     speed: 'Speed',
     reveal: 'Show',

@@ -36,6 +36,9 @@ export default async function ReviewPage({ params }: PageProps) {
     } catch (e) {
       logger.warn('[review] Preview unavailable', { id, error: e instanceof Error ? e.message : String(e) });
     }
+  } else if (detail?.review.subject_type === 'livestream') {
+    // A live stream's recording: its HLS playlist, already signed by api-videos
+    media = { playUrl: detail.subject?.playUrl ?? null, videoUrl: null, poster: detail.subject?.posterUrl ?? null };
   }
   return (
     <div className="space-y-6">
