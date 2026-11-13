@@ -4,7 +4,8 @@ A theme is a full skin for every Al Ummah Now app: a rebrand, a Ramadan or Eid e
 look to switch to. It changes look and assets only. Layout, features and content structure are the
 same in every theme.
 
-Status: spec, 2026-11-08. Lantern is the first theme and the one deployed.
+Status: spec, 2026-11-08; decisions updated 2026-11-12 to match the code. Lantern was the first theme;
+the site default is now Fawanees.
 
 > **Videos site, 2026-11-09:** the web themes are now theme packages (`docs/themes/README.md`):
 > `packages/theme-packages/themes/<id>/` compiles to the stylesheets the site imports, and the site
@@ -15,11 +16,11 @@ Status: spec, 2026-11-08. Lantern is the first theme and the one deployed.
 
 | Topic | Decision |
 |---|---|
-| When a theme changes | With a deploy. One config value per app and environment: `ACTIVE_THEME`. |
+| When a theme changes | At runtime, no deploy. An admin picks the site theme on the videos admin's **Site theme** page (`admin-web` `/site-theme`, #492). It is stored as the `site.theme` setting (admin-api, D1 `site_settings`, audited in `site_settings_log`) and the web apps read it from `GET /public/site-theme`, so a change reaches visitors within about 30 s. The value is a built-in id or a custom theme package `<id>@<version>` made in the admin theme builder (#575; files in R2 `theme-packages`, metadata in D1, see [`docs/themes/README.md`](../themes/README.md)). Unset or invalid falls back to **Fawanees** (`DEFAULT_SITE_THEME` in `@al-ummah/shared-types`). A build-time `NEXT_PUBLIC_ACTIVE_THEME` pins one theme and is used only by demo and test builds. |
 | User choice of theme | None. No picker, no per-user preference, no profile sync. |
-| Date-based switching | None. An event theme goes live and comes down through a deploy. |
+| Date-based switching | None. An admin switches an event theme on and off on the Site theme page. |
 | Light and dark | Every surface supports both, in every theme, unless listed under exceptions. Mode follows the system preference, and an existing toggle stays. |
-| What ships | Only the active theme's CSS and assets, resolved at build time. |
+| What ships | Every web app (`apps/web`, `apps/admin-web`) ships all four built-in themes (Lantern, Zujaj, Nahas, Fawanees) in one stylesheet, `apps/web/src/theme/site-themes.css`, generated from the built-in theme packages and scoped by `html[data-theme='<id>']`. The server renders the active id into `data-theme`; a custom package's compiled CSS is fetched and inlined. Native apps still build one theme from the fanous-tokens output (see below). |
 | Page code | Refers to semantic tokens and named slots, never to a theme's files. |
 
 ## Theme model
@@ -40,8 +41,13 @@ themes/
 ```
 
 The shared scales stay global: spacing, type sizes, the motion scale, focus widths and TV metrics.
-`data-fanous-theme` keeps its current meaning, which is the **mode** (`light` or `dark`). There is no
-runtime attribute for the theme, because a build contains only one.
+`data-fanous-theme` keeps its current meaning, which is the **mode** (`light` or `dark`). On the web
+the theme is the `data-theme` attribute on `<html>`, because every build contains all themes.
+
+`registry.json`'s `default` (`fawanees`, the same as the site default) is the theme
+`fanous-tokens build` emits when neither `--theme` nor `ACTIVE_THEME` is given, and the theme the
+theme-packages base data (shared scales) is read from. It does not choose the site theme, which is
+the admin setting above.
 
 ### Parents and standalone themes
 
@@ -142,7 +148,11 @@ CI checks every part pair for contrast in every theme and mode, holds text on th
 buttons to 7:1, and applies the logo-hue rule to overrides. Part colours reach the web output today.
 Native outputs follow when those apps adopt them.
 
-## Build-time selection
+## Build-time selection (native apps)
+
+The web apps no longer select a theme at build time (see [Decisions](#decisions)); this section and
+the `ACTIVE_THEME` column below describe the native and cross-repo surfaces, and the original plan for
+the web ones.
 
 `fanous-tokens build --theme <id> --app <app> --out <dir>` validates the theme, resolves its chain and
 writes the flat output into a gitignored directory. Apps import from that directory. Every
@@ -278,22 +288,24 @@ and nightly on `main`.
 
 ## Runbooks
 
-**Start an event theme**
+**Start an event theme (web)**
 
-1. Add the theme with `extends` set to the theme it layers on, and merge it once the matrix is green.
+1. Make the theme in the admin theme builder (or add a built-in package and merge it once CI is green), and publish it.
 2. Get owner approval of the before and after screenshots.
-3. Change `ACTIVE_THEME` for QA, deploy and check it.
-4. Change `ACTIVE_THEME` for production and ship it through the normal tag release.
+3. Pick it on the QA admin's Site theme page and check it.
+4. Pick it on the production admin's Site theme page. No deploy or release is needed.
 
-**End an event theme**
+**End an event theme (web)**
 
-1. Set `ACTIVE_THEME` back to its previous value and ship through the normal tag release.
-2. Keep the theme registered for next year, so CI goes on proving it builds.
+1. Pick the previous theme on the Site theme page.
+2. Keep the theme for next year.
+
+Native apps still change theme through their `ACTIVE_THEME`-style build setting and an app release.
 
 Purge the CDN for the favicon, the manifest and the OG image after either change. Social networks cache
 share images on their own schedule, so an old image can linger there.
 
-**QA and production show whatever their config says.** Neither moves to a new theme without owner
+**QA and production show whatever their Site theme setting says.** Neither moves to a new theme without owner
 approval of the screenshots.
 
 ## Delivery order

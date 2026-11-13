@@ -11,7 +11,7 @@ A comprehensive Islamic content platform built as a Turborepo monorepo with thre
 - **Authentication**: Secure OpenAuth integration with JWT tokens
 - **Real-time Features**: WebSocket server for notifications and live updates
 - **Real-time Processing**: Queue-based event processing and analytics
-- **Modern Stack**: Next.js 15, Hono, Cloudflare Workers, Bunny.net CDN
+- **Modern Stack**: Next.js 16, Hono, Cloudflare Workers, Bunny.net CDN
 - **Type-Safe**: Shared TypeScript types across all applications
 
 ## 🏗️ Monorepo Structure
@@ -19,7 +19,7 @@ A comprehensive Islamic content platform built as a Turborepo monorepo with thre
 ```
 al-ummah-now/
 ├── apps/
-│   ├── web/                Next.js 15 frontend
+│   ├── web/                Next.js 16 frontend
 │   ├── api-videos/         Hono API backend with OpenAPI
 │   ├── processor/          Queue consumer for events
 │   └── websocket-server/   WebSocket server (Durable Objects)
@@ -93,7 +93,7 @@ pnpm lint
 
 | Layer | Technology |
 |-------|-----------|
-| **Frontend** | Next.js 15, React 19, Tailwind CSS, shadcn/ui |
+| **Frontend** | Next.js 16, React 19, Tailwind CSS, shadcn/ui |
 | **API** | Hono v4, chanfana (OpenAPI 3.1), Zod validation |
 | **Processing** | Cloudflare Queue Consumer, TypeScript |
 | **Authentication** | OpenAuth (JWT/OAuth2) |

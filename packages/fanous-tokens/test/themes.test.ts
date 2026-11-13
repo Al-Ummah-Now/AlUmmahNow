@@ -16,10 +16,10 @@ test('every registered theme passes validation', () => {
   assert.deepEqual(validateThemes(fresh(), tokens), []);
 });
 
-test('the four themes are registered and lantern is the default', () => {
+test('the four themes are registered and fawanees is the default', () => {
   const t = fresh();
   assert.deepEqual(t.ids, ['lantern', 'zujaj', 'nahas', 'fawanees']);
-  assert.equal(t.defaultTheme, 'lantern');
+  assert.equal(t.defaultTheme, 'fawanees');
 });
 
 test('lantern keeps the approved gold, and fawanees overrides only its own', () => {
