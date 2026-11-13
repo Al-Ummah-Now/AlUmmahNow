@@ -50,7 +50,14 @@ function obstacles(region) {
     const media = /^(img|video|svg|canvas|iframe|input|select|textarea|button|picture)$/i.test(el.tagName)
       || s.backgroundImage !== 'none' || s.boxShadow !== 'none' || parseFloat(s.borderTopWidth) > 0;
     const text = Array.from(el.childNodes).some((n) => n.nodeType === 3 && n.textContent.trim());
-    if (transparent(s.backgroundColor) && !media && !text) continue;
+    // A ::before / ::after that paints (a rule beside a heading, a marker) is not in the DOM:
+    // the element's whole box stands for it
+    const pseudo = !media && !text && ['::before', '::after'].some((p) => {
+      const ps = win.getComputedStyle(el, p);
+      return ps.content !== 'none' && ps.content !== 'normal' && ps.display !== 'none'
+        && (!transparent(ps.backgroundColor) || ps.backgroundImage !== 'none' || parseFloat(ps.borderTopWidth) > 0 || parseFloat(ps.borderBottomWidth) > 0 || (ps.content !== '""' && ps.content !== "''"));
+    });
+    if (transparent(s.backgroundColor) && !media && !text && !pseudo) continue;
     out.push(r);
   }
   return out;
