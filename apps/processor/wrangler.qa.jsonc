@@ -82,6 +82,10 @@
   },
 
   "vars": {
+
+    // Pre-publication video review (wiki AUN-VIDEO-REVIEW): production only, never QA
+
+    "VIDEO_REVIEW_ALLOWED": "false",
     // Error reports to the admin Errors page (docs/features/error-reporting.md)
     "ERRORS_INGEST_URL": "https://admin.api.qa.alummahnow.net/internal/errors",
     "ENVIRONMENT": "qa",

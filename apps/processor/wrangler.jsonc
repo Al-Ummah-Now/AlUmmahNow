@@ -90,6 +90,8 @@
 
 	// Environment variables
 	"vars": {
+		// Pre-publication video review (wiki AUN-VIDEO-REVIEW): production only. QA, stage and previews keep it "false"
+		"VIDEO_REVIEW_ALLOWED": "true",
 		// Error reports to the admin Errors page (docs/features/error-reporting.md)
 		"ERRORS_INGEST_URL": "https://admin.api.alummahnow.net/internal/errors",
 		"ENVIRONMENT": "production",
@@ -194,6 +196,7 @@
 				]
 			},
 			"vars": {
+				"VIDEO_REVIEW_ALLOWED": "false",
 				// Error reports to the admin Errors page (docs/features/error-reporting.md)
 				"ERRORS_INGEST_URL": "https://admin.api.stage.alummahnow.net/internal/errors",
 				"ENVIRONMENT": "stage",
@@ -223,6 +226,7 @@
 		// Development environment
 		"development": {
 			"vars": {
+				"VIDEO_REVIEW_ALLOWED": "false",
 				"ENVIRONMENT": "development",
 				// Logging policy (docs/operations/logging.md): warn on production, stage and QA (only warnings, errors, slow requests); debug locally
 				"LOG_LEVEL": "debug"
@@ -231,6 +235,7 @@
 		// Staging environment
 		"staging": {
 			"vars": {
+				"VIDEO_REVIEW_ALLOWED": "false",
 				"ENVIRONMENT": "staging",
 				// Logging policy (docs/operations/logging.md): warn on production, stage and QA (only warnings, errors, slow requests); debug locally
 				"LOG_LEVEL": "info"

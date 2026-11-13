@@ -321,6 +321,8 @@
 	 */
 	// "vars": { "MY_VARIABLE": "production_value" },
 	"vars": {
+		// Pre-publication video review (wiki AUN-VIDEO-REVIEW): production only. QA, stage and previews keep it "false"
+		"VIDEO_REVIEW_ALLOWED": "true",
 		// Self-hosted live edge host (custom domain on this worker, attached with the Workers domains API like videos.api)
 		"LIVE_PUBLIC_HOST": "live.alummahnow.net",
 		// White-label scholar sites (wiki AUN-SCHOLAR-SITES): host suffix <slug>.{alummahnow.org | stage. | qa.}; revoked sites redirect to the channel here
@@ -634,6 +636,7 @@
 				}
 			],
 			"vars": {
+				"VIDEO_REVIEW_ALLOWED": "false",
 				"LIVE_PUBLIC_HOST": "live.stage.alummahnow.net",
 				// White-label scholar sites (wiki AUN-SCHOLAR-SITES): host suffix <slug>.{alummahnow.org | stage. | qa.}; revoked sites redirect to the channel here
 				"SITES_ENV": "stage",

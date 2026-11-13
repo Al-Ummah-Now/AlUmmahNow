@@ -128,6 +128,10 @@
   ],
 
   "vars": {
+
+    // Pre-publication video review (wiki AUN-VIDEO-REVIEW): production only, never QA
+
+    "VIDEO_REVIEW_ALLOWED": "false",
     "ENVIRONMENT": "qa",
     // Bot protection (lib/bot-guard.ts): Turnstile on Contact us; off | monitor | enforce
     "TURNSTILE_MODE": "enforce",

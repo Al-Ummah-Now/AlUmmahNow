@@ -160,6 +160,8 @@
 
 	// Environment variables
 	"vars": {
+		// Pre-publication video review (wiki AUN-VIDEO-REVIEW): production only. QA, stage and previews keep it "false"
+		"VIDEO_REVIEW_ALLOWED": "true",
 		"ENVIRONMENT": "production",
 		// Bot protection (lib/bot-guard.ts): Turnstile on Contact us; off | monitor | enforce
 		"TURNSTILE_MODE": "off",
@@ -333,6 +335,7 @@
 				{ "binding": "SCHEDULER", "service": "al-ummah-scheduler-stage" }
 			],
 			"vars": {
+				"VIDEO_REVIEW_ALLOWED": "false",
 				"ENVIRONMENT": "stage",
 				// Bot protection (lib/bot-guard.ts): Turnstile on Contact us; off | monitor | enforce
 				"TURNSTILE_MODE": "enforce",
@@ -370,6 +373,7 @@
 		},
 		"development": {
 			"vars": {
+				"VIDEO_REVIEW_ALLOWED": "false",
 				"ENVIRONMENT": "development",
 				// Logging policy (docs/operations/logging.md): warn on production, stage and QA (only warnings, errors, slow requests); debug locally
 				"LOG_LEVEL": "debug",
@@ -381,6 +385,7 @@
 		},
 		"staging": {
 			"vars": {
+				"VIDEO_REVIEW_ALLOWED": "false",
 				"ENVIRONMENT": "staging",
 				// Logging policy (docs/operations/logging.md): warn on production, stage and QA (only warnings, errors, slow requests); debug locally
 				"LOG_LEVEL": "info"

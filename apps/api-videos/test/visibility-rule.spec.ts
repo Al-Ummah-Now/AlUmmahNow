@@ -41,6 +41,15 @@ const STATES: Array<{ name: string; video: Record<string, unknown>; listed: bool
 	{ name: 'hidden by moderation', video: { uploadStatus: 'ready', isHidden: true }, listed: false, open: false, mediaPublic: false },
 	{ name: 'deleted', video: { uploadStatus: 'ready', isDeleted: true }, listed: false, open: false, mediaPublic: false },
 	{ name: 'in a deleted channel', video: { uploadStatus: 'ready', markedForDeletion: true }, listed: false, open: false, mediaPublic: false },
+	// Pre-publication review (wiki AUN-VIDEO-REVIEW): the gate is isVideoReady
+	{ name: 'review: automated check running', video: { uploadStatus: 'ready', review: { status: 'checking', reviewId: 'r', timing: 'pre', since: 'x' } }, listed: false, open: false, mediaPublic: true },
+	{ name: 'review: held for a person', video: { uploadStatus: 'ready', review: { status: 'in_review', reviewId: 'r', timing: 'pre', since: 'x' } }, listed: false, open: false, mediaPublic: false },
+	{ name: 'review: rejected', video: { uploadStatus: 'ready', review: { status: 'rejected', reviewId: 'r', timing: 'pre', since: 'x' } }, listed: false, open: false, mediaPublic: false },
+	{ name: 'review: appealed', video: { uploadStatus: 'ready', review: { status: 'appealed', reviewId: 'r', timing: 'pre', since: 'x' } }, listed: false, open: false, mediaPublic: false },
+	{ name: 'review: approved', video: { uploadStatus: 'ready', review: { status: 'approved', reviewId: 'r', timing: 'pre', since: 'x' } }, listed: true, open: true, mediaPublic: true },
+	{ name: 'review: trusted channel, post-hoc', video: { uploadStatus: 'ready', review: { status: 'post_review', reviewId: 'r', timing: 'post', since: 'x' } }, listed: true, open: true, mediaPublic: true },
+	{ name: 'review: approved but still processing', video: { uploadStatus: 'processing', review: { status: 'approved', reviewId: 'r', timing: 'pre', since: 'x' } }, listed: false, open: false, mediaPublic: true },
+	{ name: 'review: unlisted and held', video: { uploadStatus: 'ready', isPublic: false, isUnlisted: true, review: { status: 'in_review', reviewId: 'r', timing: 'pre', since: 'x' } }, listed: false, open: false, mediaPublic: false },
 ];
 
 const fixture = (video: Record<string, unknown>) => videoFixture({ id: 'v1', userId: OWNER, channelId: 'ch1', ...video }) as never;
