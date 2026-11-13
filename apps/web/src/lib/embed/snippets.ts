@@ -56,6 +56,16 @@ export function watchPageUrl(host: string, locale: string, videoId: string, star
   return url.toString();
 }
 
+/** A Short's page (D-SEO-10): /{locale}/shorts/{id}, the vertical viewer. */
+export function shortsPageUrl(host: string, locale: string, videoId: string): string {
+  return `${trimHost(host)}/${locale}/shorts/${encodeURIComponent(videoId)}`;
+}
+
+/** The canonical page of a video: /shorts/{id} for a Short, /video/{id} for everything else. */
+export function canonicalWatchUrl(host: string, locale: string, video: { id: string; isShort?: boolean }): string {
+  return video.isShort ? shortsPageUrl(host, locale, video.id) : watchPageUrl(host, locale, video.id);
+}
+
 export function oembedEndpointUrl(host: string, contentUrl: string): string {
   const url = new URL(`${trimHost(host)}/oembed`);
   url.searchParams.set('url', contentUrl);

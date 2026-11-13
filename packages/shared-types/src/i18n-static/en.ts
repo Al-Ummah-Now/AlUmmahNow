@@ -574,6 +574,8 @@ export const EN_TRANSLATIONS: AppTranslations = {
     videoPrivacy: 'Privacy',
     publicVideo: 'Public - Anyone can watch',
     privateVideo: 'Private - Only you can watch',
+    nextShort: 'Next Short',
+    previousShort: 'Previous Short',
     unlisted: 'Unlisted',
     unlistedVideo: 'Unlisted - Anyone with the link can watch. It never appears in search, lists or the channel',
     saveChanges: 'Save Changes',

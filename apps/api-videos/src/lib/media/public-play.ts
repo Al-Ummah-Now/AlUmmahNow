@@ -209,9 +209,10 @@ export async function buildPublicPlay(
 
 	const mp4Url = await bunny.file(`play_${pickPreviewMp4(video.availableResolutions)}.mp4`);
 	const id = video.id;
+	const format = classifyVideoFormat(video).format;
 	return {
 		id,
-		format: classifyVideoFormat(video).format,
+		format,
 		title: video.title ?? '',
 		...channelNameFields(channel),
 		channelHandle: channel?.handle ? channel.handle : null,
@@ -222,7 +223,8 @@ export async function buildPublicPlay(
 		mp4: mp4Url ? { url: mp4Url, width: null, height: null } : null,
 		hls,
 		expiresAt: new Date(expires * 1000).toISOString(),
-		watchUrl: `${webOrigin(env.CORS_ORIGINS)}/en/video/${encodeURIComponent(id)}`,
+		// A Short's page is /shorts/{id} (D-SEO-10)
+		watchUrl: `${webOrigin(env.CORS_ORIGINS)}/en/${format === 'short' ? 'shorts' : 'video'}/${encodeURIComponent(id)}`,
 	};
 }
 

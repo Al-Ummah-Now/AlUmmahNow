@@ -572,6 +572,8 @@ export const AR_TRANSLATIONS: AppTranslations = {
     videoPrivacy: 'الخصوصية',
     publicVideo: 'عام - يمكن للجميع المشاهدة',
     privateVideo: 'خاص - يمكنك فقط المشاهدة',
+    nextShort: 'المقطع القصير التالي',
+    previousShort: 'المقطع القصير السابق',
     unlisted: 'غير مدرج',
     unlistedVideo: 'غير مدرج - يشاهده كل من لديه الرابط، ولا يظهر في البحث أو القوائم أو القناة',
     saveChanges: 'حفظ التغييرات',

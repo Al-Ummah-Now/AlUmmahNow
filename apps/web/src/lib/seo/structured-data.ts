@@ -6,7 +6,7 @@
  */
 import type { Metadata } from 'next';
 import type { EmbedVideo } from '@/lib/embed/content';
-import { embedUrl, watchPageUrl } from '@/lib/embed/snippets';
+import { canonicalWatchUrl, embedUrl } from '@/lib/embed/snippets';
 import { shareImageUrl } from '@/lib/embed/share-image';
 
 export const WWW_ORGANIZATION_ID = 'https://www.alummahnow.net/#organization';
@@ -60,7 +60,8 @@ export function videoObjectLd(video: EmbedVideo, locale: string, origin: string)
   const lang = locale === 'ar' ? 'ar' : 'en';
   const name = video.titleLocalized?.[lang] || video.title;
   const own = (video.descriptionLocalized?.[lang] || video.description || '').replace(/\s+/g, ' ').trim();
-  const page = watchPageUrl(origin, lang, video.id);
+  // A Short's page is /shorts/{id} (D-SEO-10)
+  const page = canonicalWatchUrl(origin, lang, video);
   const duration = isoDuration(video.duration);
   return {
     '@context': 'https://schema.org',

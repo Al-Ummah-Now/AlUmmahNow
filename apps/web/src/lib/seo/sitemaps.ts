@@ -26,6 +26,7 @@ export interface SitemapVideo {
   titleLocalized?: Record<string, string>;
   description?: string;
   duration: number | null;
+  isShort?: boolean;
   isLive: boolean;
   publishedAt: string | null;
   lastModified: string | null;
@@ -77,7 +78,8 @@ export function staticSitemapXml(origin: string): string {
 export function videosSitemapXml(origin: string, videos: SitemapVideo[]): string {
   const urls = videos.flatMap((v) =>
     urlEntries(
-      (l) => `${origin}/${l}/video/${encodeURIComponent(v.id)}`,
+      // A Short's page is /shorts/{id} (D-SEO-10)
+      (l) => `${origin}/${l}/${v.isShort ? 'shorts' : 'video'}/${encodeURIComponent(v.id)}`,
       v.lastModified ?? v.publishedAt,
       (l) => {
         const title = v.titleLocalized?.[l] || v.title;

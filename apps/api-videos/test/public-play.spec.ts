@@ -149,7 +149,7 @@ describe('the play item', () => {
 				hls: undefined,
 				poster: undefined,
 				expiresAt: undefined,
-				watchUrl: `https://videos.qa.alummahnow.net/en/video/${ID}`,
+				watchUrl: `https://videos.qa.alummahnow.net/en/shorts/${ID}`,
 			},
 		);
 	});

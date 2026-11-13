@@ -6,7 +6,7 @@
 
 import type { Metadata } from 'next';
 import { videoAspect, type EmbedVideo } from './content';
-import { embedUrl, oembedEndpointUrl, watchPageUrl } from './snippets';
+import { canonicalWatchUrl, embedUrl, oembedEndpointUrl } from './snippets';
 import { shareImageUrl } from './share-image';
 import { watchFallbackDescription } from '@/lib/seo/structured-data';
 
@@ -37,7 +37,8 @@ export function buildWatchMetadata(video: EmbedVideo | null, locale: string, ori
   const rawDescription = video.descriptionLocalized?.[lang] || video.description || '';
   // A video without a description gets one naming it and its channel, never the site's default text
   const description = truncate(rawDescription || watchFallbackDescription(lang, title, video.channelName), DESCRIPTION_MAX);
-  const pageUrl = watchPageUrl(origin, lang, video.id);
+  // A Short's canonical page is /shorts/{id} (D-SEO-10)
+  const pageUrl = canonicalWatchUrl(origin, lang, video);
   const player = embedUrl(origin, 'video', video.id, { lang });
   const size = declaredPlayerSize(video);
   // Stable image on our domain: crawlers cache it, so never a signed CDN URL
@@ -50,7 +51,7 @@ export function buildWatchMetadata(video: EmbedVideo | null, locale: string, ori
     alternates: {
       canonical: pageUrl,
       // Each language is its own canonical; x-default is English (D-SEO-1)
-      languages: { en: watchPageUrl(origin, 'en', video.id), ar: watchPageUrl(origin, 'ar', video.id), 'x-default': watchPageUrl(origin, 'en', video.id) },
+      languages: { en: canonicalWatchUrl(origin, 'en', video), ar: canonicalWatchUrl(origin, 'ar', video), 'x-default': canonicalWatchUrl(origin, 'en', video) },
       types: { 'application/json+oembed': [{ url: oembedEndpointUrl(origin, pageUrl), title }] },
     },
     openGraph: {
