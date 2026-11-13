@@ -361,7 +361,7 @@ describe('public model, page and feeds', () => {
     const list = (await buildSummary(db, now, 'production')).active;
     const atom = atomFeed('ar', 'https://status.alummahnow.net', list, now);
     assert.match(atom, /<feed xmlns="http:\/\/www.w3.org\/2005\/Atom" xml:lang="ar">/);
-    assert.match(atom, /https:\/\/status.alummahnow.net\/ar\/incidents\/i1/);
+    assert.ok(atom.includes("https://status.alummahnow.net/ar/incidents/i1"));
     const rss = rssFeed('en', 'https://status.alummahnow.net', list, now);
     assert.match(rss, /<title>Slow &lt;videos&gt; \(Identified\)<\/title>/);
   });
