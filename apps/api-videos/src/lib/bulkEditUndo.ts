@@ -36,6 +36,11 @@ export interface UndoKv {
   put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
 }
 
+/** Every undo record of one user starts with this (account erasure, lib/privacy/upload-traces.ts). */
+export function undoUserPrefix(userId: string): string {
+  return `${PREFIX}:${userId}:`;
+}
+
 export function undoKey(userId: string, operationId: string, videoId: string): string {
   return `${PREFIX}:${userId}:${operationId}:${videoId}`;
 }

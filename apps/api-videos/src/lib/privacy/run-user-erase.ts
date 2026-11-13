@@ -12,7 +12,8 @@
  *   search_playlists: playlists on those channels
  *   keyed prefixes: watch_history/{userId}:, upload-defaults/{userId}/,
  *     channel_sections/{channelId}/, community posts/{channelId}/
- *   NOTIFICATIONS_DB subscriptions, then the profile
+ *   privacy_footprints: its playlists without a channel (Watch later, personal playlists)
+ *   NOTIFICATIONS_DB subscriptions, its footprints, then the profile
  *   (hooks remove Bunny media and the channels' and profile's collections)
  *
  * Not covered, by design (run accounts only): reactions and comments on
@@ -25,6 +26,8 @@
  */
 import { defaultPointerPrefix } from '../uploadDefaultPointer';
 import { deleteVideoSideRecords } from '../videoSideRecords';
+import { watchLaterId } from '../library';
+import { footprintTargets, forgetFootprints } from './footprints';
 import { sectionOrderKey } from '../channelSectionOrder';
 import { eraseUserSubscriptions } from '../subscription-store';
 import { isOwnershipComplete } from '../search/ownership';
@@ -160,6 +163,19 @@ export async function eraseRunUserData(
 				.all<{ id: string }>();
 			bump('playlists', await deleteKeys(asBucket(env.playlists), (results ?? []).map((r) => r.id), budget));
 		},
+		// Its playlists without a channel (Watch later, personal playlists, #1183): the footprints name
+		// them; only the account's own are deleted
+		async () => {
+			const playlists = asBucket(env.playlists);
+			budget.spend();
+			const named = await footprintTargets(db as never, userId, 'playlist');
+			const mine: string[] = [];
+			for (const key of new Set([...named, watchLaterId(userId)])) {
+				const playlist = await readJson<Json>(playlists, key, budget);
+				if (playlist && playlist.userId === userId) mine.push(key);
+			}
+			bump('playlists', await deleteKeys(playlists, mine, budget));
+		},
 		// Channel sections, tabs and @handles, then the channels
 		async () => {
 			const channelsBucket = asBucket(env.channels);
@@ -186,6 +202,9 @@ export async function eraseRunUserData(
 				budget.spend();
 				bump('subscriptions', await eraseUserSubscriptions(env.NOTIFICATIONS_DB, userId));
 			}
+			// The footprints point at nothing of the account's any more
+			budget.spend();
+			await forgetFootprints(db as never, userId);
 			budget.spend();
 			const profiles = asBucket(env.profiles);
 			const stored = await profiles.get(userId);

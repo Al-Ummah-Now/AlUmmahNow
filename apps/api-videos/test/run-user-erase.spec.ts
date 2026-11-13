@@ -67,6 +67,23 @@ describe('run-account erasure through the indexes (#887)', () => {
 		assert.deepEqual([...env.community_posts.store.keys()], ['posts/chX/p2.json']);
 	});
 
+	it('erases its playlists without a channel (Watch later, personal) and its footprints, not someone else\'s', async () => {
+		const db = new SqliteD1();
+		const { env } = buckets();
+		await env.playlists.put('watch-later-run1', JSON.stringify({ id: 'watch-later-run1', userId: 'run1', channelId: '', systemType: 'watch_later' }));
+		await env.playlists.put('pl-mine', JSON.stringify({ id: 'pl-mine', userId: 'run1', channelId: '' }));
+		await env.playlists.put('pl-other', JSON.stringify({ id: 'pl-other', userId: 'other', channelId: '' }));
+		const full = { ...env, SEARCH_DB: db };
+		for (const kind of ['channel', 'video', 'profile'] as const) await runOwnershipPass(full as never, kind, { maxPages: 10 });
+		for (const [user, target] of [['run1', 'pl-mine'], ['run1', 'pl-other'], ['other', 'pl-other']]) {
+			db.db.prepare("INSERT INTO privacy_footprints (user_id, kind, target_id) VALUES (?, 'playlist', ?)").run(user, target);
+		}
+		const result = await eraseRunUserData(full as never, 'run1', new OperationBudget(900));
+		assert.equal(result.complete, true);
+		assert.deepEqual([...env.playlists.store.keys()], ['pl-other']);
+		assert.deepEqual(db.db.prepare('SELECT user_id, target_id FROM privacy_footprints').all().map((r) => ({ ...(r as object) })), [{ user_id: 'other', target_id: 'pl-other' }]);
+	});
+
 	it('resumes from the step where its budget ran out', async () => {
 		const db = new SqliteD1();
 		const { env } = buckets();
