@@ -611,7 +611,9 @@ const TYPE_CASES = (fx: () => Fixtures): TypeCase[] => [
 
 /** The section on the Home tab: the spotlight draws its own hero when it has a video */
 function homeSection(page: Page, c: TypeCase): Locator {
-  const section = page.locator(`[data-testid="channel-section-${c.type}"]`);
+  // The channel's own sections: not the uploads fallback a Home tab without sections to show draws
+  // with the same shelf types (#1206)
+  const section = page.locator(`[data-testid="channel-sections"]:not([data-fallback]) [data-testid="channel-section-${c.type}"]`);
   return c.type === 'channel_spotlight' ? section.or(page.getByTestId('section-spotlight')) : section;
 }
 
