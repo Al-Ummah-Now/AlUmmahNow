@@ -5,6 +5,7 @@ import { loadPublicChapters, loadPublicVideo } from '@/lib/embed/content';
 import { isValidContentId } from '@/lib/embed/params';
 import { originFromHost } from '@/lib/embed/request-origin';
 import { buildWatchMetadata } from '@/lib/embed/watch-metadata';
+import { loadSiteLink, siteWatchCanonical } from '@/lib/seo/site-link';
 import { ContentUnavailableError } from '@/lib/seo/availability';
 import { videoAvailability } from '@/lib/seo/availability-server';
 import { breadcrumbLd, videoObjectLd } from '@/lib/seo/structured-data';
@@ -31,7 +32,9 @@ export async function generateMetadata({ params }: Pick<WatchLayoutProps, 'param
   if (!video) return NOINDEX;
   const host = (await headers()).get('host');
   if (!host) return {};
-  const meta = buildWatchMetadata(video, locale, originFromHost(host));
+  // The channel's scholar site on its own domain holds the canonical (AUN-SCHOLAR-SITES §4.4)
+  const onSite = siteWatchCanonical(await loadSiteLink(video.channelId), locale, video.id);
+  const meta = buildWatchMetadata(video, locale, originFromHost(host), onSite);
   // Unlisted (D-SEO-5): the share card stays, search engines never index it
   return video.isUnlisted ? { ...meta, robots: { index: false, follow: false } } : meta;
 }
@@ -64,6 +67,8 @@ async function WatchStructuredData({ id, locale }: { id: string; locale: string 
   // Chapters become the VideoObject's Clip parts (key moments); fetched only when the API says there are some
   const chapters = video.hasChapters ? await loadPublicChapters(id) : [];
   const ld = videoObjectLd(video, lang, origin, chapters);
+  const onSite = siteWatchCanonical(await loadSiteLink(video.channelId), lang, video.id);
+  if (onSite) ld.url = onSite.canonical;
   const crumbs = video.channelName && (video.channelHandle || video.channelId)
     ? [breadcrumbLd([
         { name: video.channelName, url: video.channelHandle ? `${origin}/${lang}/@${video.channelHandle}` : `${origin}/${lang}/channels/${video.channelId}` },

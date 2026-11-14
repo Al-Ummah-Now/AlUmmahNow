@@ -9,6 +9,7 @@ import { channelPath } from '@/lib/channel-url';
 import { originFromHost } from '@/lib/embed/request-origin';
 import { ContentUnavailableError } from '@/lib/seo/availability';
 import { breadcrumbLd, siteName } from '@/lib/seo/structured-data';
+import { loadSiteLink, sitePostCanonical } from '@/lib/seo/site-link';
 import { isIndexablePost, postChannelName, postDescription, postHeadline, postImage, postPermalink, socialMediaPostingLd } from '@/lib/seo/post';
 
 interface PostPageProps {
@@ -37,11 +38,14 @@ export async function generateMetadata({ params }: PostPageProps): Promise<Metad
   const image = postImage(post);
   const host = (await headers()).get('host');
   const url = (l: string) => (host ? postPermalink(originFromHost(host), l, id) : `/${l}/post/${encodeURIComponent(id)}`);
+  // A channel with a live scholar site: the post is canonical there (AUN-SCHOLAR-SITES §4.4)
+  const onSite = sitePostCanonical(await loadSiteLink(post.channelId), lang, id);
+  const canonical = onSite?.canonical ?? url(lang);
   return {
     title,
     description,
-    alternates: { canonical: url(lang), languages: { en: url('en'), ar: url('ar'), 'x-default': url('en') } },
-    openGraph: { type: 'article', siteName: siteName(lang), url: url(lang), title, description, ...(image ? { images: [{ url: image }] } : {}), ...(post.createdAt ? { publishedTime: post.createdAt } : {}) },
+    alternates: { canonical, languages: onSite?.languages ?? { en: url('en'), ar: url('ar'), 'x-default': url('en') } },
+    openGraph: { type: 'article', siteName: siteName(lang), url: canonical, title, description, ...(image ? { images: [{ url: image }] } : {}), ...(post.createdAt ? { publishedTime: post.createdAt } : {}) },
     twitter: { card: image ? 'summary_large_image' : 'summary', title, description, ...(image ? { images: [image] } : {}) },
     ...(isIndexablePost(post) ? {} : { robots: { index: false, follow: false } }),
   };
@@ -61,9 +65,12 @@ export default async function PostPage({ params }: PostPageProps) {
   const channelUrl = await channelHref(lang, post.channelId);
   const host = (await headers()).get('host');
   const origin = host ? originFromHost(host) : '';
-  const ld = host && isIndexablePost(post)
+  const onSite = sitePostCanonical(await loadSiteLink(post.channelId), lang, id);
+  const posting = host && isIndexablePost(post) ? socialMediaPostingLd(post, lang, origin, `${origin}${channelUrl}`) : null;
+  if (posting && onSite) Object.assign(posting, { '@id': `${onSite.canonical}#post`, url: onSite.canonical, mainEntityOfPage: onSite.canonical });
+  const ld = posting
     ? [
-        socialMediaPostingLd(post, lang, origin, `${origin}${channelUrl}`),
+        posting,
         breadcrumbLd([
           { name: postChannelName(post, lang), url: `${origin}${channelUrl}` },
           { name: postHeadline(post, lang), url: postPermalink(origin, lang, id) },

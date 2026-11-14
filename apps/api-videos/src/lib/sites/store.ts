@@ -4,6 +4,7 @@
  *   channel_sections  site/{channelId}/settings.json         SiteSettings (ETag-guarded writes)
  *                     site/{channelId}/previews/{token}.json  Studio previews, 10 minutes
  *   channel_tabs      site-hosts/{host}.json                  SiteHostEntry, create-only (like channel-handles/)
+ *                     site-canonicals.json                    live sites, for the platform's canonicals (canonical.ts)
  * Every read is "this channel's site" or "this host": never a list or a scan.
  */
 import {
@@ -16,6 +17,7 @@ import {
 	type SiteSettings,
 	type SiteSettingsUpdate,
 } from '@al-ummah/shared-types';
+import { syncSiteCanonical } from './canonical';
 
 export interface SitesBucket {
 	get(key: string): Promise<{ etag: string; json<T>(): Promise<T> } | null>;
@@ -62,6 +64,8 @@ export async function writeSettings(env: SitesEnv, settings: SiteSettings, etag:
 		httpMetadata: { contentType: 'application/json' },
 	});
 	if (!result) throw new SiteError(412, etag ? 'changed_elsewhere' : 'site_exists');
+	// The platform's canonicals follow the site (live or not, which host): never fails the save
+	await syncSiteCanonical(env, settings);
 	return result.etag;
 }
 

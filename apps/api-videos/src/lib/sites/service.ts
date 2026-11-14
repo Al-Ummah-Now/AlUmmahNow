@@ -30,6 +30,8 @@ import {
 	type SiteStatus,
 	type SiteTier,
 } from '@al-ummah/shared-types';
+import { logger } from '../logger';
+import { repairSiteCanonical } from './canonical';
 import { CHANNEL_ID, SiteError, claimHost, readHost, readPreview, readSettings, releaseHost, siteEnvironment, writeSettings, type SitesEnv } from './store';
 
 /** A renamed subdomain keeps redirecting for 12 months (SS12, recommended). */
@@ -345,6 +347,8 @@ export async function publicSiteForHost(env: SitesEnv & { VIDEOS_WEB_URL?: strin
 	if (!current) return { kind: 'not_found' };
 	const s = current.settings;
 	const primary = primarySiteHost(s, siteEnvironment(env));
+	// The sites Worker asks every minute: puts right an index entry a failed sync left wrong
+	await repairSiteCanonical(env, s).catch((error) => logger.warn('[Sites] canonical index repair failed', { channelId: s.channelId, error: error instanceof Error ? error.message : String(error) }));
 
 	if (s.status === 'revoked') {
 		const channel = await loadChannel(env, s.channelId);

@@ -9,6 +9,7 @@ import { videoAspect, type EmbedVideo } from './content';
 import { canonicalWatchUrl, embedUrl, oembedEndpointUrl } from './snippets';
 import { shareImageUrl } from './share-image';
 import { watchFallbackDescription } from '@/lib/seo/structured-data';
+import type { siteWatchCanonical } from '@/lib/seo/site-link';
 
 const PLAYER_WIDTH = 1280;
 const PLAYER_HEIGHT = 720;
@@ -30,7 +31,11 @@ function truncate(text: string, max: number): string {
   return clean.length > max ? `${clean.slice(0, max - 1).trimEnd()}…` : clean;
 }
 
-export function buildWatchMetadata(video: EmbedVideo | null, locale: string, origin: string): Metadata {
+/**
+ * `onSite`: the video's page on the channel's scholar site when that site, on the scholar's own
+ * domain, holds the canonical (AUN-SCHOLAR-SITES §4.4, siteWatchCanonical); the cards still play here.
+ */
+export function buildWatchMetadata(video: EmbedVideo | null, locale: string, origin: string, onSite: ReturnType<typeof siteWatchCanonical> = null): Metadata {
   if (!video) return {};
   const lang = locale === 'ar' ? 'ar' : 'en';
   const title = video.titleLocalized?.[lang] || video.title;
@@ -38,7 +43,8 @@ export function buildWatchMetadata(video: EmbedVideo | null, locale: string, ori
   // A video without a description gets one naming it and its channel, never the site's default text
   const description = truncate(rawDescription || watchFallbackDescription(lang, title, video.channelName), DESCRIPTION_MAX);
   // A Short's canonical page is /shorts/{id} (D-SEO-10)
-  const pageUrl = canonicalWatchUrl(origin, lang, video);
+  const ownUrl = canonicalWatchUrl(origin, lang, video);
+  const pageUrl = onSite?.canonical ?? ownUrl;
   const player = embedUrl(origin, 'video', video.id, { lang });
   const size = declaredPlayerSize(video);
   // Stable image on our domain: crawlers cache it, so never a signed CDN URL
@@ -50,9 +56,10 @@ export function buildWatchMetadata(video: EmbedVideo | null, locale: string, ori
     description,
     alternates: {
       canonical: pageUrl,
-      // Each language is its own canonical; x-default is English (D-SEO-1)
-      languages: { en: canonicalWatchUrl(origin, 'en', video), ar: canonicalWatchUrl(origin, 'ar', video), 'x-default': canonicalWatchUrl(origin, 'en', video) },
-      types: { 'application/json+oembed': [{ url: oembedEndpointUrl(origin, pageUrl), title }] },
+      // Each language is its own canonical; x-default is English (D-SEO-1), or the site's languages
+      languages: onSite?.languages ?? { en: canonicalWatchUrl(origin, 'en', video), ar: canonicalWatchUrl(origin, 'ar', video), 'x-default': canonicalWatchUrl(origin, 'en', video) },
+      // oEmbed answers for this site's own watch URL
+      types: { 'application/json+oembed': [{ url: oembedEndpointUrl(origin, ownUrl), title }] },
     },
     openGraph: {
       type: 'video.other',

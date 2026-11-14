@@ -387,6 +387,36 @@ export interface PublicSite {
   preview: boolean;
 }
 
+/**
+ * `GET /api/sites/by-channel/:channelId`: where a channel's live site is, for the platform's own
+ * canonicals (§4.4, #1215). Only a live site of a channel that isn't suspended has one.
+ */
+export interface PublicSiteLink {
+  channelId: string;
+  primaryHost: string;
+  /** `custom`: the scholar's own domain, so the channel's watch pages are canonical on the site too (SS7). */
+  primaryKind: 'subdomain' | 'custom';
+  /** Languages the site serves; the first is its default. */
+  locales: SiteLocale[];
+}
+
+/**
+ * A page on the site in one language: `siteUrl(link, 'ar', 'posts/abc/')` →
+ * `https://<host>/ar/posts/abc/`. A language the site doesn't serve gets the site's default.
+ */
+export function siteUrl(link: Pick<PublicSiteLink, 'primaryHost' | 'locales'>, locale: string, pathAfterLocale: string): string {
+  const lang = (link.locales as string[]).includes(locale) ? locale : (link.locales[0] ?? 'en');
+  return `https://${link.primaryHost}/${lang}/${pathAfterLocale.replace(/^\/+/, '')}`;
+}
+
+/** The site's hreflang set for a page: its languages plus x-default (its default), or one entry for a single-language site. */
+export function siteAlternates(link: Pick<PublicSiteLink, 'primaryHost' | 'locales'>, pathAfterLocale: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const l of link.locales) out[l] = siteUrl(link, l, pathAfterLocale);
+  if (link.locales.length > 1) out['x-default'] = siteUrl(link, link.locales[0], pathAfterLocale);
+  return out;
+}
+
 /** The site's primary host (the subdomain until an own domain is made primary). */
 export function primarySiteHost(settings: Pick<SiteSettings, 'hosts' | 'slug'>, env: SiteEnvironment): SiteHost {
   return settings.hosts.find((h) => h.primary) ?? { host: siteSubdomainHost(settings.slug, env), kind: 'subdomain', primary: true };

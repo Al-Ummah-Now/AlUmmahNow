@@ -12,11 +12,25 @@ export type SitemapKind = (typeof SITEMAP_KINDS)[number];
 
 const TABLE: Record<SitemapKind, string> = { videos: 'search_videos', channels: 'search_channels', playlists: 'search_playlists', posts: 'search_posts' };
 
-/** Rows of one kind, oldest first (stable pages), only visible ones in visible channels. */
-function visibleFrom(kind: SitemapKind): string {
+/**
+ * Channels whose items are canonical on a scholar site (wiki AUN-SCHOLAR-SITES §4.4, #1215): their
+ * posts (any live site) or videos (a site on the scholar's own domain) are in that site's sitemap,
+ * so this one leaves them out. Channel and playlist pages stay canonical here.
+ */
+export interface SitemapExclusions {
+	posts?: string[];
+	videos?: string[];
+}
+
+const excludedFor = (kind: SitemapKind, exclude: SitemapExclusions): string[] => (kind === 'posts' ? exclude.posts : kind === 'videos' ? exclude.videos : undefined) ?? [];
+
+/** Rows of one kind, oldest first (stable pages), only visible ones in visible channels; binds one JSON list of excluded channels. */
+function visibleFrom(kind: SitemapKind, excluded: string[]): { sql: string; binds: unknown[] } {
 	const base = TABLE[kind];
-	if (kind === 'channels') return `FROM ${base} d WHERE d.visible = 1`;
-	return `FROM ${base} d LEFT JOIN search_channels c ON c.id = d.channel_id WHERE d.visible = 1 AND (c.id IS NULL OR c.visible = 1)`;
+	if (kind === 'channels') return { sql: `FROM ${base} d WHERE d.visible = 1`, binds: [] };
+	const sql = `FROM ${base} d LEFT JOIN search_channels c ON c.id = d.channel_id WHERE d.visible = 1 AND (c.id IS NULL OR c.visible = 1)`;
+	if (!excluded.length) return { sql, binds: [] };
+	return { sql: `${sql} AND (d.channel_id IS NULL OR d.channel_id NOT IN (SELECT value FROM json_each(?)))`, binds: [JSON.stringify(excluded)] };
 }
 
 const iso = (ms: unknown): string | null => (typeof ms === 'number' && ms > 0 ? new Date(ms).toISOString() : null);
@@ -26,10 +40,11 @@ export interface SitemapSummary {
 	kinds: Record<SitemapKind, { count: number; pages: number; lastModified: string | null }>;
 }
 
-export async function sitemapSummary(db: SearchDb): Promise<SitemapSummary> {
+export async function sitemapSummary(db: SearchDb, exclude: SitemapExclusions = {}): Promise<SitemapSummary> {
 	const kinds = {} as SitemapSummary['kinds'];
 	for (const kind of SITEMAP_KINDS) {
-		const row = await db.prepare(`SELECT count(*) AS n, max(d.indexed_at) AS m ${visibleFrom(kind)}`).first<{ n: number; m: number | null }>();
+		const from = visibleFrom(kind, excludedFor(kind, exclude));
+		const row = await db.prepare(`SELECT count(*) AS n, max(d.indexed_at) AS m ${from.sql}`).bind(...from.binds).first<{ n: number; m: number | null }>();
 		const count = Number(row?.n ?? 0);
 		kinds[kind] = { count, pages: Math.ceil(count / SITEMAP_PAGE_SIZE), lastModified: iso(row?.m) };
 	}
@@ -79,10 +94,17 @@ function contentUrl(mediaHost: string | undefined, id: string, path: unknown): s
 	return `https://${mediaHost}/${path}`;
 }
 
-export async function sitemapPage(db: SearchDb, kind: SitemapKind, page: number, mediaHost?: string): Promise<(SitemapVideo | SitemapChannel | SitemapPlaylist | SitemapPost)[]> {
+export async function sitemapPage(
+	db: SearchDb,
+	kind: SitemapKind,
+	page: number,
+	mediaHost?: string,
+	exclude: SitemapExclusions = {},
+): Promise<(SitemapVideo | SitemapChannel | SitemapPlaylist | SitemapPost)[]> {
+	const from = visibleFrom(kind, excludedFor(kind, exclude));
 	const { results } = await db
-		.prepare(`SELECT d.id, d.payload, d.created_at, d.indexed_at, d.duration, d.is_short, d.is_live, d.views ${visibleFrom(kind)} ORDER BY d.rowid LIMIT ? OFFSET ?`)
-		.bind(SITEMAP_PAGE_SIZE, page * SITEMAP_PAGE_SIZE)
+		.prepare(`SELECT d.id, d.payload, d.created_at, d.indexed_at, d.duration, d.is_short, d.is_live, d.views ${from.sql} ORDER BY d.rowid LIMIT ? OFFSET ?`)
+		.bind(...from.binds, SITEMAP_PAGE_SIZE, page * SITEMAP_PAGE_SIZE)
 		.all<Row>();
 	return (results ?? []).map((r) => {
 		const p = parse(r.payload);
