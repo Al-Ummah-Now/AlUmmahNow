@@ -38,7 +38,7 @@ export default function PostPermalinkView({ post, locale, channelHref, channelNa
       <nav aria-label={fill(t.community.allPostsFrom)} className="mb-3">
         <Link
           href={postsHref}
-          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 -ms-3 text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white transition-colors"
+          className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 -ms-3 text-sm font-medium text-[var(--fanous-color-text-secondary)] hover:bg-[var(--fanous-color-surface-raised)] hover:text-[var(--fanous-color-text-primary)] transition-colors"
           data-testid="post-permalink-back"
         >
           <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className={`h-4 w-4${isRTL ? ' rotate-180' : ''}`}>
@@ -47,7 +47,7 @@ export default function PostPermalinkView({ post, locale, channelHref, channelNa
           {fill(t.community.allPostsFrom)}
         </Link>
       </nav>
-      <h1 className="mb-4 text-xl font-semibold text-gray-900 dark:text-gray-100">{fill(t.community.postFrom)}</h1>
+      <h1 className="mb-4 text-xl font-semibold text-[var(--fanous-color-text-primary)]">{fill(t.community.postFrom)}</h1>
       <PostCard
         post={post}
         isRTL={isRTL}

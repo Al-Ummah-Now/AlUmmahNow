@@ -72,7 +72,7 @@ export default async function PostPage({ params }: PostPageProps) {
     : null;
 
   return (
-    <main className="flex-1 min-h-screen bg-gray-50 dark:bg-gray-950">
+    <main className="flex-1 min-h-screen bg-[var(--fanous-color-background)]">
       {ld ? <JsonLd data={ld} /> : null}
       <PostPermalinkView post={post} locale={lang} channelHref={channelUrl} channelName={postChannelName(post, lang)} />
     </main>
