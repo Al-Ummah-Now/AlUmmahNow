@@ -204,6 +204,11 @@ export interface AppTranslations {
   humanCheck: HumanCheckTranslations;
   /** Help pages and the identity tour (/[locale]/help) */
   help: HelpTranslations;
+  /** The About page (/[locale]/about): the CMS page, built from page-builder blocks (wiki AUN-CMS-PAGE-BUILDER) */
+  aboutPage: {
+    /** A card-post grid lives on www: the About page links to it */
+    cardsLink: string;
+  };
   /** After-upload processing status on the upload page (single and batch) */
   uploadStatus: UploadStatusTranslations;
   /** Caption drafts in Studio: list, editor, Quran review (AUN-CAPTIONS) */

@@ -35,3 +35,10 @@ html[lang=ar] .ab-prose p,html[lang=ar] .ab-prose li{line-height:1.95}
 .ab-prose ol>li::before{content:counter(ab);position:absolute;inset-inline-start:0;top:.2em;display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--m-primary);color:var(--fanous-color-on-primary);font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}
 .ab-prose blockquote{margin:0;padding:12px 16px;border-inline-start:3px solid var(--fanous-color-primary);border-radius:var(--r-md,10px);background:color-mix(in srgb,var(--fanous-color-primary) 8%,var(--fanous-color-surface))}
 .ab-prose hr{width:100%;margin:8px 0;border:0;border-top:1px solid var(--fanous-color-divider)}
+
+/* A page built from blocks (lib/about/blocks.ts, @al-ummah/shared-types/page-blocks.css): the blocks lay
+   themselves out (content 46rem, wide 76rem, full bleed), so the article takes the shell's full width
+   and the page's own side padding moves into the blocks' gutter */
+.ab-built{padding-inline:0;padding-block-start:0}
+.ab-built .ab-article{max-width:none;gap:0}
+.ab-built .ab-head{width:100%;max-width:46rem;margin-inline:auto;padding:clamp(20px,4vw,48px) 16px 8px}

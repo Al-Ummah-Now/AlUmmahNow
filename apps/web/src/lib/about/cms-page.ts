@@ -9,6 +9,7 @@
  *   every successful read. A 404 is an answer (the page was removed or unpublished), not a failure.
  * Never throws.
  */
+import { MAX_BLOCKS, PAGE_BLOCK_TYPES, type ServedBlock } from '@al-ummah/shared-types';
 import { logger } from '@/lib/logger';
 import { deriveCmsUrl } from '@/lib/scholars/sites';
 
@@ -19,6 +20,11 @@ export interface CmsPage {
   summary: string | null;
   /** Markdown: the whole page as text (the CMS keeps it in step with the page's blocks). */
   body: string;
+  /**
+   * The page as page-builder blocks (wiki AUN-CMS-PAGE-BUILDER), served shapes: shown with the shared
+   * renderer when present, otherwise the markdown body. Types this build doesn't know are left out.
+   */
+  blocks: ServedBlock[];
   seo_title: string | null;
   seo_description: string | null;
   alternates: { locale: 'en' | 'ar'; slug: string }[];
@@ -34,6 +40,8 @@ const STORED_AT = 'x-stored-at';
 
 const isLocale = (v: unknown): v is 'en' | 'ar' => v === 'en' || v === 'ar';
 const strOrNull = (v: unknown) => v === null || v === undefined || typeof v === 'string';
+const isServedBlock = (b: unknown): b is ServedBlock =>
+  !!b && typeof b === 'object' && typeof (b as { id?: unknown }).id === 'string' && (PAGE_BLOCK_TYPES as readonly unknown[]).includes((b as { type?: unknown }).type);
 
 /** The fields this site renders, checked: anything else is treated as a CMS failure. */
 export function toCmsPage(v: unknown): CmsPage | null {
@@ -52,6 +60,7 @@ export function toCmsPage(v: unknown): CmsPage | null {
     title: o.title,
     summary: (o.summary as string | null | undefined) ?? null,
     body: o.body,
+    blocks: Array.isArray(o.blocks) ? o.blocks.filter(isServedBlock).slice(0, MAX_BLOCKS) : [],
     seo_title: (o.seo_title as string | null | undefined) ?? null,
     seo_description: (o.seo_description as string | null | undefined) ?? null,
     alternates,
