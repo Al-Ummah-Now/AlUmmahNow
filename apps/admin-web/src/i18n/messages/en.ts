@@ -142,7 +142,7 @@ const en = {
     neededBody: 'Since {date}, staff accounts must sign in with a passkey to use the admin.',
     stepUpTitle: 'Sign in with a passkey',
     stepUpBody: 'This action needs a passkey sign-in. Sign in with your passkey, or add one first.',
-    why: 'A passkey keeps your account safe even if your password is stolen. It takes a minute to add, on this device or your phone.',
+    why: 'A passkey keeps your account safe even if your password is stolen. It can be saved on this device, in your password manager, on your phone or on a security key, and takes a minute to add.',
     add: 'Add a passkey',
     signIn: 'Sign in with a passkey',
     back: 'Back',

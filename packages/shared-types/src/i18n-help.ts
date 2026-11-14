@@ -136,6 +136,7 @@ export const HELP_EN: HelpTranslations = {
           blocks: [
             { type: 'p', text: 'Select **Sign In** at the end of the header. One Al Ummah Now account works on all our sites — videos, the main site and your profile — so you sign in once.' },
             { type: 'figure', picture: 'start-signin', alt: 'The header with the Sign In button at its end', markers: ['Sign In'] },
+            { type: 'tip', text: 'Add a **passkey** in your account to sign in without a password, using a passkey saved on this device, in your password manager, on your phone or on a security key.' },
           ],
         },
         {
@@ -472,6 +473,7 @@ export const HELP_AR: HelpTranslations = {
           blocks: [
             { type: 'p', text: 'اختر **تسجيل الدخول** في طرف الشريط العلوي. حساب واحد في الأمة الآن يكفيك في كل مواقعنا: موقع المرئيات والموقع الرئيسي وملفك الشخصي، فتسجّل الدخول مرة واحدة.' },
             { type: 'figure', picture: 'start-signin', alt: 'الشريط العلوي وفي طرفه زر تسجيل الدخول', markers: ['تسجيل الدخول'] },
+            { type: 'tip', text: 'أضف **مفتاح مرور** في حسابك لتسجّل الدخول دون كلمة مرور، بمفتاح مرور محفوظ على هذا الجهاز أو في مدير كلمات المرور أو على هاتفك أو على مفتاح أمان.' },
           ],
         },
         {
