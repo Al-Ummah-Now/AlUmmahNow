@@ -35,6 +35,8 @@ import { captionSubject, commitMinutes, readUsage, releaseMinutes, reserveMinute
 export const CAPTION_PROVIDER = 'workers-ai';
 export const CAPTION_MODEL = '@cf/openai/whisper-large-v3-turbo';
 const SETTINGS_KEY = 'captions/settings.json';
+/** Past the processor's whole retry window (backoff 1+2+4 min plus four ≤ 15-minute deliveries). */
+export const POSTPROCESSING_STALE_MS = 90 * 60_000;
 
 interface Bucket {
 	get(key: string): Promise<{ text(): Promise<string> } | null>;
@@ -284,10 +286,17 @@ export async function cancelJob(env: CaptionJobsEnv, videoId: string, jobId: str
 	if (!row || row.video_id !== videoId) throw new CaptionJobHttpError(404, 'job_not_found');
 	if (!isCaptionJobActive(row.status)) return toJob(row);
 	// Writing the draft: too late to cancel (the draft would be free). The processor's
-	// `postprocessing` report and this update are both conditional, so exactly one wins.
+	// `postprocessing` report and this update are both conditional, so exactly one wins. A job
+	// stuck there (its processor gave up and could not report) may be cancelled once stale:
+	// every processor retry reports `postprocessing` again before it writes, which keeps a live
+	// job fresh and makes a retry after this cancel stop (409) before any draft is written.
+	const staleBefore = new Date(now.getTime() - POSTPROCESSING_STALE_MS).toISOString();
 	const changed = await db(env)
-		.prepare("UPDATE caption_jobs SET status = 'cancelled', finished_at = ?, updated_at = ? WHERE id = ? AND status NOT IN ('ready', 'failed', 'cancelled', 'postprocessing')")
-		.bind(now.toISOString(), now.toISOString(), jobId)
+		.prepare(
+			`UPDATE caption_jobs SET status = 'cancelled', finished_at = ?, updated_at = ?
+			 WHERE id = ? AND status NOT IN ('ready', 'failed', 'cancelled') AND (status != 'postprocessing' OR updated_at < ?)`,
+		)
+		.bind(now.toISOString(), now.toISOString(), jobId, staleBefore)
 		.run();
 	if ((changed.meta?.changes ?? 0) === 0) {
 		const fresh = (await readRow(env, jobId))!;
@@ -353,9 +362,10 @@ export async function onProgress(env: CaptionJobsEnv, jobId: string, p: { status
 	const changed = await db(env)
 		.prepare(
 			`UPDATE caption_jobs SET status = ?, progress_done = COALESCE(?, progress_done), progress_total = COALESCE(?, progress_total), updated_at = ?
-			 WHERE id = ? AND status NOT IN ('ready', 'failed', 'cancelled')`,
+			 WHERE id = ? AND status NOT IN ('ready', 'failed', 'cancelled')
+			   AND (status != 'postprocessing' OR ? = 'postprocessing')`,
 		)
-		.bind(p.status, p.done ?? null, p.total ?? null, now.toISOString(), jobId)
+		.bind(p.status, p.done ?? null, p.total ?? null, now.toISOString(), jobId, p.status)
 		.run();
 	return (changed.meta?.changes ?? 0) > 0;
 }

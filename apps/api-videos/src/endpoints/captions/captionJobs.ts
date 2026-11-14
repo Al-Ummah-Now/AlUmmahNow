@@ -154,7 +154,7 @@ export class CaptionJobCancel extends AuthenticatedRoute {
 		{
 			tags: ['Captions'],
 			summary: 'Cancel a transcription job',
-			description: 'Gives back its reserved minutes. A job that already ended is returned unchanged; one already writing its draft is 409 `job_finishing`.',
+			description: 'Gives back its reserved minutes. A job that already ended is returned unchanged; one writing its draft is 409 `job_finishing` (cancellable after 90 minutes without progress).',
 			request: { params: videoParams.extend({ jobId: Str({ description: 'Job ID' }) }) },
 			responses: {
 				'200': { description: 'The job', content: { 'application/json': { schema: z.object({ success: z.literal(true), data: z.object({ job: Job }) }) } } },
