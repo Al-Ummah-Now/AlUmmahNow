@@ -43,6 +43,63 @@ export interface CaptionsTranslations {
     tryAgain: string;
     requestFailed: string;
   };
+  /** Transcribing a video on request (§3.1, caption minutes) */
+  jobs: {
+    title: string;
+    body: string;
+    languageLabel: string;
+    action: string;
+    confirmTitle: string;
+    /** {minutes} {remaining} */
+    cost: string;
+    /** {minutes}: no monthly limit */
+    costUnlimited: string;
+    /** The video's length isn't known yet */
+    notReady: string;
+    /** {used} {limit} {date} */
+    meter: string;
+    meterUnlimited: string;
+    /** Accessible name of the meter */
+    meterLabel: string;
+    /** {count} minutes left on extra grants */
+    meterPacks: string;
+    meterWarning: string;
+    /** 402 or a cost above what is left: {minutes} {remaining} {date} */
+    notEnough: string;
+    noPlan: string;
+    contact: string;
+    replaceTitle: string;
+    /** {language} */
+    replaceBody: string;
+    step: {
+      queued: string;
+      waiting_budget: string;
+      extracting: string;
+      /** {done} {total} */
+      transcribing: string;
+      transcribingStart: string;
+      postprocessing: string;
+    };
+    /** {language}: {step} */
+    chip: string;
+    waitingBudgetHint: string;
+    cancel: string;
+    cancelTitle: string;
+    cancelBody: string;
+    cancelConfirm: string;
+    keep: string;
+    cancelled: string;
+    finishing: string;
+    /** {language} */
+    ready: string;
+    failed: { audio_unavailable: string; transcription_failed: string; no_speech: string; draft_exists: string; video_gone: string; failed: string };
+    /** {minutes} */
+    refunded: string;
+    tryAgain: string;
+    paused: string;
+    requestFailed: string;
+    cancelFailed: string;
+  };
   editor: {
     /** {language} */
     title: string;
@@ -146,6 +203,57 @@ export const CAPTIONS_EN: CaptionsTranslations = {
     tryAgain: 'Try again',
     requestFailed: "Couldn't start the draft. Try again.",
   },
+  jobs: {
+    title: 'Transcribe this video',
+    body: 'Get captions from what is said in the video. You get a draft to check and publish, and Quran in it is shown as the official text once you confirm it.',
+    languageLabel: 'Language spoken in the video',
+    action: 'Transcribe',
+    confirmTitle: 'Transcribe this video?',
+    cost: 'This uses {minutes} of your {remaining} remaining caption minutes.',
+    costUnlimited: 'This uses {minutes} caption minutes. Your plan has no monthly limit.',
+    notReady: 'You can transcribe the video once it has finished processing.',
+    meter: 'Caption minutes: {used} / {limit} this month · resets {date}',
+    meterUnlimited: 'Caption minutes: no monthly limit',
+    meterLabel: 'Caption minutes used this month',
+    meterPacks: '+{count} extra minutes',
+    meterWarning: "You've used most of this month's caption minutes.",
+    notEnough: 'Transcribing this video takes {minutes} caption minutes and you have {remaining} left. Your minutes reset on {date}.',
+    noPlan: "Your plan doesn't include caption minutes.",
+    contact: 'Ask our team for more minutes',
+    replaceTitle: 'Replace your draft?',
+    replaceBody: 'You already have a {language} draft. The new transcript replaces it and your edits.',
+    step: {
+      queued: 'Waiting to start',
+      waiting_budget: 'Waiting',
+      extracting: 'Preparing audio',
+      transcribing: 'Transcribing {done}/{total}',
+      transcribingStart: 'Transcribing',
+      postprocessing: 'Checking Quran',
+    },
+    chip: '{language}: {step}',
+    waitingBudgetHint: "Today's transcription capacity is used up. It starts on its own, you don't need to do anything.",
+    cancel: 'Cancel',
+    cancelTitle: 'Cancel the transcription?',
+    cancelBody: 'The caption minutes it holds come back to you.',
+    cancelConfirm: 'Cancel transcription',
+    keep: 'Keep transcribing',
+    cancelled: 'Transcription cancelled. The minutes are back.',
+    finishing: "It's almost done: the draft is being written, so it can't be cancelled now.",
+    ready: 'The {language} draft is ready to check.',
+    failed: {
+      audio_unavailable: "We couldn't get the audio of this video.",
+      transcription_failed: "The transcription didn't work.",
+      no_speech: 'No speech was found in this video.',
+      draft_exists: 'A draft in this language already exists.',
+      video_gone: 'This video is no longer available.',
+      failed: "The transcription didn't work. Our team has been told.",
+    },
+    refunded: 'Your {minutes} caption minutes were given back.',
+    tryAgain: 'Try again',
+    paused: 'Transcription is paused right now. Try again later.',
+    requestFailed: "Couldn't start the transcription. Try again.",
+    cancelFailed: "Couldn't cancel the transcription. Try again.",
+  },
   editor: {
     title: 'Edit {language} captions',
     banner: "Viewers don't see this draft until you publish it.",
@@ -240,6 +348,57 @@ export const CAPTIONS_AR: CaptionsTranslations = {
     },
     tryAgain: 'حاول مرة أخرى',
     requestFailed: 'تعذّر بدء المسودة. حاول مرة أخرى.',
+  },
+  jobs: {
+    title: 'تفريغ هذا المرئي',
+    body: 'احصل على ترجمة مما يُقال في المرئي. تصلك مسودة تراجعها ثم تنشرها، ويظهر القرآن فيها بالنص الرسمي بعد أن تؤكده.',
+    languageLabel: 'لغة الكلام في المرئي',
+    action: 'تفريغ',
+    confirmTitle: 'تفريغ هذا المرئي؟',
+    cost: 'يستهلك هذا {minutes} من دقائق الترجمة المتبقية لك وعددها {remaining}.',
+    costUnlimited: 'يستهلك هذا {minutes} من دقائق الترجمة. ليس لخطتك حد شهري.',
+    notReady: 'يمكنك تفريغ المرئي بعد انتهاء معالجته.',
+    meter: 'دقائق الترجمة: {used} من {limit} هذا الشهر · تتجدد في {date}',
+    meterUnlimited: 'دقائق الترجمة: بلا حد شهري',
+    meterLabel: 'دقائق الترجمة المستهلكة هذا الشهر',
+    meterPacks: '+{count} دقيقة إضافية',
+    meterWarning: 'استهلكت معظم دقائق الترجمة لهذا الشهر.',
+    notEnough: 'يحتاج تفريغ هذا المرئي إلى {minutes} من دقائق الترجمة، والمتبقي لك {remaining}. تتجدد دقائقك في {date}.',
+    noPlan: 'لا تشمل خطتك دقائق للترجمة.',
+    contact: 'اطلب دقائق إضافية من فريقنا',
+    replaceTitle: 'استبدال مسودتك؟',
+    replaceBody: 'لديك مسودة {language} بالفعل. التفريغ الجديد يستبدلها مع تعديلاتك.',
+    step: {
+      queued: 'في انتظار البدء',
+      waiting_budget: 'في الانتظار',
+      extracting: 'جارٍ تجهيز الصوت',
+      transcribing: 'جارٍ التفريغ {done}/{total}',
+      transcribingStart: 'جارٍ التفريغ',
+      postprocessing: 'جارٍ التحقق من القرآن',
+    },
+    chip: '{language}: {step}',
+    waitingBudgetHint: 'استُنفدت طاقة التفريغ لهذا اليوم. سيبدأ تلقائيًا ولا تحتاج إلى فعل شيء.',
+    cancel: 'إلغاء',
+    cancelTitle: 'إلغاء التفريغ؟',
+    cancelBody: 'تعود إليك دقائق الترجمة المحجوزة له.',
+    cancelConfirm: 'إلغاء التفريغ',
+    keep: 'متابعة التفريغ',
+    cancelled: 'أُلغي التفريغ وعادت الدقائق إليك.',
+    finishing: 'أوشك على الانتهاء: تُكتب المسودة الآن، فلا يمكن إلغاؤه.',
+    ready: 'مسودة {language} جاهزة للمراجعة.',
+    failed: {
+      audio_unavailable: 'تعذّر الحصول على صوت هذا المرئي.',
+      transcription_failed: 'لم ينجح التفريغ.',
+      no_speech: 'لم يُعثر على كلام في هذا المرئي.',
+      draft_exists: 'توجد مسودة بهذه اللغة بالفعل.',
+      video_gone: 'لم يعد هذا المرئي متاحًا.',
+      failed: 'لم ينجح التفريغ، وأُبلغ فريقنا.',
+    },
+    refunded: 'أُعيدت إليك دقائق الترجمة وعددها {minutes}.',
+    tryAgain: 'حاول مرة أخرى',
+    paused: 'التفريغ متوقف حاليًا. حاول لاحقًا.',
+    requestFailed: 'تعذّر بدء التفريغ. حاول مرة أخرى.',
+    cancelFailed: 'تعذّر إلغاء التفريغ. حاول مرة أخرى.',
   },
   editor: {
     title: 'تعديل ترجمة {language}',

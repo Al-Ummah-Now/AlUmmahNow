@@ -14,6 +14,8 @@ jest.mock('@/lib/api/caption-drafts', () => ({
   claimReviewTranscript: (...a: unknown[]) => claimReviewTranscript(...a),
   deleteCaptionDraft: jest.fn(),
   publishCaptionDraft: jest.fn(),
+  listCaptionJobs: jest.fn(async () => ({ ok: true, data: { jobs: [] } })),
+  getCaptionMinutes: jest.fn(async () => ({ ok: false, status: 403, error: 'forbidden' })),
 }));
 
 import CaptionDraftsPanel from '../CaptionDraftsPanel';

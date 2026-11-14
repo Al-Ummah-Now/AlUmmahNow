@@ -3,17 +3,30 @@
 /**
  * Caption drafts in Studio's Subtitles section (AUN-CAPTIONS §3.1): each language's draft with
  * where it came from, Quran suggestions left to check and whether it is published, with Edit,
- * Publish and Delete; and, while the video review's automatic transcript is available, the offer
- * to use it as a draft (#1296). Renders nothing when there is neither.
+ * Publish and Delete; while the video review's automatic transcript is available, the offer to use
+ * it as a draft (#1296); and Transcribe on request with the caption minutes (CaptionTranscribe).
+ * Renders nothing when there is none of these (no drafts, no transcript, minutes not readable).
  */
-import React, { useCallback, useEffect, useId, useState } from 'react';
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { isCaptionJobActive } from '@al-ummah/shared-types';
 import { AudioLines, BookOpen, FilePenLine, Loader2, Trash2, UploadCloud } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { reportError } from '@/lib/errors/reporter';
 import { SUPPORTED_LANGUAGES } from '@/lib/api/subtitles-types';
-import { claimReviewTranscript, deleteCaptionDraft, listCaptionDrafts, publishCaptionDraft, type CaptionClaim, type CaptionDraftSummary } from '@/lib/api/caption-drafts';
+import {
+  claimReviewTranscript,
+  deleteCaptionDraft,
+  getCaptionMinutes,
+  listCaptionDrafts,
+  listCaptionJobs,
+  publishCaptionDraft,
+  type CaptionClaim,
+  type CaptionDraftSummary,
+  type CaptionJobView,
+} from '@/lib/api/caption-drafts';
 import CaptionDraftEditor from './CaptionDraftEditor';
+import CaptionTranscribe, { type CaptionMinutes } from './CaptionTranscribe';
 
 export interface CaptionDraftsPanelProps {
   videoId: string;
@@ -23,9 +36,11 @@ export interface CaptionDraftsPanelProps {
   onPublished?: () => void;
   /** Bumped by the parent to reload (e.g. after a transcript was claimed) */
   refreshKey?: number;
+  /** The video's language when it is one language: Transcribe's first choice */
+  spokenLanguage?: string;
 }
 
-export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPublished, refreshKey = 0 }: CaptionDraftsPanelProps) {
+export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPublished, refreshKey = 0, spokenLanguage }: CaptionDraftsPanelProps) {
   const { t, lang } = useLanguage();
   const tc = t.captions;
   const { confirm, dialog } = useConfirm();
@@ -38,9 +53,15 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
   const [transcript, setTranscript] = useState(false);
   const [claimLang, setClaimLang] = useState('ar');
   const claimLangId = useId();
+  const [jobs, setJobs] = useState<CaptionJobView[]>([]);
+  const [minutes, setMinutes] = useState<CaptionMinutes | null>(null);
+  /** Jobs seen running, so the one that finishes says its draft is ready */
+  const runningJobs = useRef(new Set<string>());
+  /** The language whose transcription just finished */
+  const [readyLanguage, setReadyLanguage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const res = await listCaptionDrafts(videoId);
+    const [res, jobsRes, minutesRes] = await Promise.all([listCaptionDrafts(videoId), listCaptionJobs(videoId), getCaptionMinutes(videoId)]);
     if (!res.ok) {
       setFailed(true);
       return;
@@ -49,10 +70,21 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
     setDrafts(res.data.drafts);
     setClaims(res.data.claims ?? []);
     setTranscript(!!res.data.transcriptAvailable);
+    // Without jobs or minutes (no access to transcription) the drafts still work
+    if (jobsRes.ok) {
+      const finished = jobsRes.data.jobs.find((j) => j.status === 'ready' && runningJobs.current.has(j.id));
+      runningJobs.current = new Set(jobsRes.data.jobs.filter((j) => isCaptionJobActive(j.status)).map((j) => j.id));
+      setJobs(jobsRes.data.jobs);
+      if (finished) {
+        setNotice(null);
+        setReadyLanguage(finished.language);
+      }
+    }
+    setMinutes(minutesRes.ok ? minutesRes.data : null);
   }, [videoId]);
 
-  // While a draft is being prepared, check back until it is there
-  const preparing = claims.some((c) => c.status === 'queued');
+  // While a draft is being prepared or transcribed, check back until it is there
+  const preparing = claims.some((c) => c.status === 'queued') || jobs.some((j) => isCaptionJobActive(j.status));
   useEffect(() => {
     if (!preparing) return;
     const timer = setInterval(() => void load(), 8000);
@@ -147,7 +179,7 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
   };
 
   if (failed) return <p className="text-sm text-[var(--fanous-color-error-text)]">{tc.loadFailed}</p>;
-  if (!drafts?.length && !transcript && !claims.length && !notice) return <>{dialog}</>;
+  if (!drafts?.length && !transcript && !claims.length && !notice && !minutes) return <>{dialog}</>;
 
   return (
     <section aria-labelledby="caption-drafts-title" data-testid="caption-drafts" className="space-y-3">
@@ -157,10 +189,16 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
         </h4>
         <p className="text-xs text-muted-foreground">{tc.draftsHint}</p>
       </div>
-      {notice && (
+      {notice ? (
         <p role="status" className="text-sm text-foreground">
           {notice}
         </p>
+      ) : (
+        readyLanguage && (
+          <p role="status" data-testid="caption-job-ready" className="text-sm text-foreground">
+            {tc.jobs.ready.replace('{language}', label(readyLanguage))}
+          </p>
+        )
       )}
       {(transcript || claims.length > 0) && (
         <div data-testid="caption-claim" className="rounded-xl border border-dashed border-brand-edge bg-brand-soft p-4 space-y-3">
@@ -227,6 +265,21 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
             </div>
           )}
         </div>
+      )}
+      {minutes && (
+        <CaptionTranscribe
+          videoId={videoId}
+          spokenLanguage={spokenLanguage}
+          jobs={jobs}
+          minutes={minutes}
+          draftLanguages={(drafts ?? []).map((d) => d.language)}
+          t={tc.jobs}
+          lang={lang}
+          cancelLabel={t.common?.cancel ?? tc.quran.cancel}
+          confirm={confirm}
+          label={label}
+          reload={load}
+        />
       )}
       <ul className="grid grid-cols-1 gap-3">
         {(drafts ?? []).map((d) => {

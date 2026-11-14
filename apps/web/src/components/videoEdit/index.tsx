@@ -518,6 +518,7 @@ export default function VideoEdit({
           channelId={channelId}
           videoUrl={video.videoUrl}
           posterUrl={video.thumbnailUrl}
+          spokenLanguage={formData.language === 'both' ? undefined : formData.language}
         />
 
         {/* Video Chapters Section */}
