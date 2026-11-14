@@ -13,6 +13,9 @@
  * like stale previews.
  */
 
+import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
+
 const API = 'https://api.cloudflare.com/client/v4';
 
 export type Env = 'production' | 'stage' | 'qa' | 'preview' | 'dev';
@@ -145,6 +148,8 @@ const only = <T>(rows: T[] | undefined, allowed: Set<string>, key: (r: T) => str
 
 const fmt = (n: number) => (n >= 1e9 ? `${(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}k` : `${Math.round(n)}`);
 const usd = (n: number) => `$${n.toFixed(2)}`;
+/** A markdown table cell: backslashes first, then pipes; no line breaks. */
+export const cell = (v: string) => v.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/[\r\n]+/g, ' ');
 
 export interface Report {
 	lines: Line[];
@@ -437,7 +442,7 @@ export function render(r: Report): string {
 	out.push('\n## By product\n\n| Product | $/month |\n|---|---|');
 	for (const [k, v] of group((l) => l.product)) out.push(`| ${k} | ${usd(v * scale)} |`);
 	out.push('\n## By product × env\n\n| Product | Env | $/month |\n|---|---|---|');
-	for (const [k, v] of group((l) => `${l.product}|${l.env}`).slice(0, 30)) out.push(`| ${k.replace('|', ' | ')} | ${usd(v * scale)} |`);
+	for (const [k, v] of group((l) => `${l.product}\u0000${l.env}`).slice(0, 30)) out.push(`| ${k.split('\u0000').map(cell).join(' | ')} | ${usd(v * scale)} |`);
 	out.push('\n## Account usage vs included allowances (al-ummah share only)\n\n| Metric | Used / month | Included |\n|---|---|---|');
 	for (const [k, inc] of Object.entries(ALLOWANCE)) out.push(`| ${k} | ${fmt((r.usage[k] ?? 0) * scale)} | ${fmt(inc)} |`);
 	const top = [...r.lines].sort((a, b) => b.usd - a.usd).slice(0, 40);
@@ -450,11 +455,11 @@ export function render(r: Report): string {
 		out.push(`| ${d} | ${(['production', 'stage', 'qa', 'preview', 'dev'] as Env[]).map((e) => by(e).toFixed(2)).join(' | ')} |`);
 	}
 	out.push('\n## Top D1 statements by rows written\n\n| DB | Rows written | Rows read | Runs | Statement |\n|---|---|---|---|---|');
-	for (const q of [...r.topQueries].sort((a, b) => b.rowsWritten - a.rowsWritten).slice(0, 25)) out.push(`| ${q.db} | ${fmt(q.rowsWritten)} | ${fmt(q.rowsRead)} | ${fmt(q.count)} | \`${q.query.replace(/\|/g, '\\|')}\` |`);
+	for (const q of [...r.topQueries].sort((a, b) => b.rowsWritten - a.rowsWritten).slice(0, 25)) out.push(`| ${q.db} | ${fmt(q.rowsWritten)} | ${fmt(q.rowsRead)} | ${fmt(q.count)} | \`${cell(q.query)}\` |`);
 	out.push('\n## Top D1 statements by rows read\n\n| DB | Rows read | Rows written | Runs | Statement |\n|---|---|---|---|---|');
-	for (const q of [...r.topQueries].sort((a, b) => b.rowsRead - a.rowsRead).slice(0, 15)) out.push(`| ${q.db} | ${fmt(q.rowsRead)} | ${fmt(q.rowsWritten)} | ${fmt(q.count)} | \`${q.query.replace(/\|/g, '\\|')}\` |`);
+	for (const q of [...r.topQueries].sort((a, b) => b.rowsRead - a.rowsRead).slice(0, 15)) out.push(`| ${q.db} | ${fmt(q.rowsRead)} | ${fmt(q.rowsWritten)} | ${fmt(q.count)} | \`${cell(q.query)}\` |`);
 	out.push('\n## Top D1 statements by runs\n\n| DB | Runs | Rows read | Rows written | Statement |\n|---|---|---|---|---|');
-	for (const q of [...r.topQueries].sort((a, b) => b.count - a.count).slice(0, 15)) out.push(`| ${q.db} | ${fmt(q.count)} | ${fmt(q.rowsRead)} | ${fmt(q.rowsWritten)} | \`${q.query.replace(/\|/g, '\\|')}\` |`);
+	for (const q of [...r.topQueries].sort((a, b) => b.count - a.count).slice(0, 15)) out.push(`| ${q.db} | ${fmt(q.count)} | ${fmt(q.rowsRead)} | ${fmt(q.rowsWritten)} | \`${cell(q.query)}\` |`);
 	out.push('\n## Cron triggers\n\n| Worker | Crons |\n|---|---|');
 	for (const c of r.crons) out.push(`| ${c.name} | ${c.crons.join(', ')} |`);
 	out.push('\n## Preview / dev Workers still deployed\n');
@@ -529,7 +534,7 @@ async function main() {
 	}
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
 	main().catch((e) => {
 		console.error(e instanceof Error ? e.message : e);
 		process.exit(1);
