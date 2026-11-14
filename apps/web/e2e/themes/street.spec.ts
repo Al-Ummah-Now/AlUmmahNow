@@ -57,13 +57,15 @@ async function seeThrough(page: Page) {
 }
 
 async function lanterns(page: Page) {
-  // The module re-measures after layout changes: wait until the drawing stops changing
+  // The module re-measures after layout changes: wait until the drawing stops changing. It waits for a
+  // quiet second and measures at most every 2 s, so a reading only counts as settled when it holds for
+  // longer than that; compare the markup itself, since a garland that moves keeps its length.
   let last = '';
-  for (let i = 0; i < 20; i++) {
-    const now = await page.evaluate(() => document.getElementById('fanous-street')?.innerHTML.length + ':' + document.documentElement.scrollHeight);
+  for (let i = 0; i < 10; i++) {
+    const now = await page.evaluate(() => document.getElementById('fanous-street')?.innerHTML + ':' + document.documentElement.scrollHeight);
     if (now === last) break;
     last = now;
-    await page.waitForTimeout(350);
+    await page.waitForTimeout(2_200);
   }
   const boxes = await page.evaluate(() => {
     // Fixed and sticky things (header, bottom bar, a sticky player) slide over the page like the window edge
