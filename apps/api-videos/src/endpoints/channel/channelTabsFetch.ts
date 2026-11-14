@@ -4,13 +4,6 @@ import { ChannelTabConfig as BusinessChannelTabConfig, Channel as BusinessChanne
 import R2Repository from "../../lib/r2Repo";
 import { DEFAULT_CHANNEL_TABS } from '@al-ummah/shared-types';
 import { OptionalAuthRoute, AppContext } from "../../base";
-import { edgeCacheUrl, readEdgeCache, writeEdgeCache } from '../../lib/edge-cache';
-import { waitUntilOf } from '../../lib/search/ownership';
-
-/** Anonymous tab configs (the channel page's server render) are kept per colo this long; signed-in readers always read R2 */
-export const CHANNEL_TABS_TTL_SECONDS = 30;
-
-export const channelTabsCacheUrl = (requestUrl: string, channelId: string) => edgeCacheUrl(requestUrl, `channel-tabs/${encodeURIComponent(channelId)}`);
 
 export class ChannelTabsFetch extends OptionalAuthRoute {
 	schema = {
@@ -61,12 +54,6 @@ export class ChannelTabsFetch extends OptionalAuthRoute {
 			// Retrieve the validated id
 			const { id } = request.params;
 
-			const cacheUrl = this.getUserId(c) ? null : channelTabsCacheUrl(c.req.url, id);
-			if (cacheUrl) {
-				const hit = await readEdgeCache<z.infer<typeof BusinessChannelTabConfig>>(cacheUrl);
-				if (hit) return hit;
-			}
-
 			// The channel (it must exist) and its tab configuration, read together
 			type ChannelType = z.infer<typeof BusinessChannel>;
 			type ChannelTabConfigType = z.infer<typeof BusinessChannelTabConfig>;
@@ -99,9 +86,6 @@ export class ChannelTabsFetch extends OptionalAuthRoute {
 				};
 			}
 
-			// Only a channel everyone may see is stored (a private, hidden or deleted one is read from R2 every time)
-			const visible = !channel.isPrivate && !channel.isHidden && !channel.isDeleted;
-			if (cacheUrl && visible) writeEdgeCache(cacheUrl, config, CHANNEL_TABS_TTL_SECONDS, waitUntilOf(c as never));
 			return config;
 		} catch (error) {
 			// Add context to error before re-throwing

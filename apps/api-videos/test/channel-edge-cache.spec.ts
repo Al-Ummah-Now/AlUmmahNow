@@ -1,13 +1,12 @@
 /**
- * GET /api/channels/:id and GET /api/channels/:id/tabs for anonymous viewers are reused on the edge for
- * a short TTL (the channel page's server render; wiki AUN-SEO TTFB work). Signed-in viewers always
- * read R2, and private or missing channels are never stored.
+ * GET /api/channels/:id for anonymous viewers reuses the built view (it saves the D1 counts) while the
+ * stored channel's version matches (the channel page's server render; wiki AUN-SEO TTFB work). The
+ * channel is read from R2 and its visibility checked every time: moderation applies at once.
  */
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { MemoryBucket, MemoryQueue, buildApp } from './helpers';
 import { ChannelFetch, CHANNEL_VIEW_TTL_SECONDS } from '../src/endpoints/channel/channelFetch';
-import { ChannelTabsFetch, CHANNEL_TABS_TTL_SECONDS } from '../src/endpoints/channel/channelTabsFetch';
 
 const OWNER = 'owner';
 
@@ -40,7 +39,6 @@ function setup(over: Record<string, unknown> = {}) {
 
 const app = (userId: string | null) =>
 	buildApp((r: any) => {
-		r.get('/api/channels/:id/tabs', ChannelTabsFetch);
 		r.get('/api/channels/:id', ChannelFetch);
 	}, userId ? { userId } : null);
 
@@ -64,7 +62,7 @@ describe('anonymous channel edge cache', () => {
 		g.caches = saved;
 	});
 
-	it('stores the anonymous channel view for a short TTL and serves the next one without R2', async () => {
+	it('stores the anonymous view for a short TTL and reuses it while the channel is unchanged', async () => {
 		const env = setup();
 		assert.equal((await get(env, null, '/api/channels/ch')).body.name, 'Channel');
 		await settle();
@@ -72,10 +70,30 @@ describe('anonymous channel edge cache', () => {
 		assert.equal(entry?.cacheControl, `public, max-age=${CHANNEL_VIEW_TTL_SECONDS}`);
 		assert.ok(CHANNEL_VIEW_TTL_SECONDS <= 60);
 		assert.ok(!/"email"\s*:/.test(entry!.body), 'the stored view is the public one');
+		// Same version in R2: the cached view answers (a changed field without a new dateModified is not seen)
+		env.channels.store.set('ch', JSON.stringify(channel({ description: 'unseen' })));
+		const cached = await get(env, null, '/api/channels/ch');
+		assert.equal(cached.status, 200);
+		assert.ok(!JSON.stringify(cached.body).includes('unseen'));
+		// A new version is built fresh
+		env.channels.store.set('ch', JSON.stringify(channel({ name: 'Renamed', dateModified: '2026-02-01T00:00:00.000Z' })));
+		assert.equal((await get(env, null, '/api/channels/ch')).body.name, 'Renamed');
+	});
+
+	it('suspension, deletion and a private switch are a 404 at once, whatever the cache holds', async () => {
+		for (const flag of ['isHidden', 'isDeleted', 'isPrivate']) {
+			cache.store.clear();
+			const env = setup();
+			assert.equal((await get(env, null, '/api/channels/ch')).status, 200);
+			await settle();
+			assert.equal(cache.store.size, 1);
+			env.channels.store.set('ch', JSON.stringify(channel({ [flag]: true })));
+			assert.equal((await get(env, null, '/api/channels/ch')).status, 404, flag);
+		}
+		const env = setup();
+		await get(env, null, '/api/channels/ch');
 		env.channels.store.delete('ch');
-		const second = await get(env, null, '/api/channels/ch');
-		assert.equal(second.status, 200);
-		assert.equal(second.body.name, 'Channel');
+		assert.equal((await get(env, null, '/api/channels/ch')).status, 404);
 	});
 
 	it('signed-in viewers read R2 and never fill the cache; private and missing channels are never stored', async () => {
@@ -95,22 +113,4 @@ describe('anonymous channel edge cache', () => {
 		assert.equal(cache.store.size, 0);
 	});
 
-	it('tabs: the anonymous config is stored for a short TTL; signed-in readers and missing channels bypass it', async () => {
-		const env = setup();
-		assert.equal((await get(env, null, '/api/channels/ch/tabs')).body.defaultTab, 'videos');
-		await settle();
-		const [entry] = [...cache.store.values()];
-		assert.equal(entry?.cacheControl, `public, max-age=${CHANNEL_TABS_TTL_SECONDS}`);
-		assert.ok(CHANNEL_TABS_TTL_SECONDS <= 60);
-
-		env.channel_tabs.store.set('channel-tabs/ch', JSON.stringify(tabs('shorts')));
-		assert.equal((await get(env, null, '/api/channels/ch/tabs')).body.defaultTab, 'videos');
-		assert.equal((await get(env, OWNER, '/api/channels/ch/tabs')).body.defaultTab, 'shorts');
-
-		cache.store.clear();
-		assert.equal((await get(env, null, '/api/channels/missing/tabs')).status, 404);
-		for (const flag of ['isPrivate', 'isHidden', 'isDeleted']) await get(setup({ [flag]: true }), null, '/api/channels/ch/tabs');
-		await settle();
-		assert.equal(cache.store.size, 0);
-	});
 });

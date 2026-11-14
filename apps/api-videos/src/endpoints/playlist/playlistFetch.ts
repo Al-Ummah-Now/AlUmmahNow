@@ -38,6 +38,8 @@ type PlaylistBody = ReturnType<typeof toPlaylistResponse> & {
 };
 /** What the anonymous edge entry holds: the response before playback, and each item's view + R2 state */
 interface ExpandedEntry {
+    /** The playlist's dateModified when the entry was built: another version is a miss */
+    version: string;
     body: PlaylistBody;
     /** What withPlayback reads: id, r2 and the visibility flags publicMp4Url checks before naming an MP4 */
     items: { view: PlaylistView; video: Pick<VideoType, 'id'> & { r2?: unknown; isPublic?: boolean; isDeleted?: boolean; isHidden?: boolean } }[];
@@ -116,13 +118,6 @@ export class PlaylistFetch extends OptionalAuthRoute {
         const includeVideos = request.query?.includeVideos === "true";
         const userId = this.getUserId(c);
 
-        // Anonymous expanded reads (the playlist page's server render) may come from the edge
-        const cacheUrl = !userId && includeVideos ? edgeCacheUrl(c.req.url, `playlist-expanded/${encodeURIComponent(id)}`) : null;
-        if (cacheUrl) {
-            const hit = await readEdgeCache<ExpandedEntry>(cacheUrl);
-            if (hit) return finishExpanded(c.env as never, hit);
-        }
-
         const repository = new R2Repository<PlaylistType>(c.env.playlists);
         const playlist = await repository.getObject(id);
 
@@ -135,6 +130,17 @@ export class PlaylistFetch extends OptionalAuthRoute {
             // Purged (deleted, then removed for good): 410 (lib/gone.ts)
             if (!playlist && await isPurged(c.env as never, 'playlist', id)) return c.json(GONE_BODY, 410);
             return c.json({ success: false, error: "Playlist not found" }, 404);
+        }
+
+        // Anonymous expanded reads (the playlist page's server render) may reuse the list built for this
+        // exact version of the playlist. The playlist is read and its visibility checked first, so a
+        // suspension, deletion or private switch applies at once; the cached videos are at most
+        // EXPANDED_PLAYLIST_TTL_SECONDS old (the video list cache's window).
+        const cacheUrl = !userId && includeVideos ? edgeCacheUrl(c.req.url, `playlist-expanded/${encodeURIComponent(id)}`) : null;
+        const version = String(playlist.dateModified ?? playlist.dateCreated ?? '');
+        if (cacheUrl) {
+            const hit = await readEdgeCache<ExpandedEntry>(cacheUrl);
+            if (hit && hit.version === version) return finishExpanded(c.env as never, hit);
         }
 
         const response: PlaylistBody = toPlaylistResponse(playlist);
@@ -169,6 +175,7 @@ export class PlaylistFetch extends OptionalAuthRoute {
             // Every language's name (lib/channelName.ts)
             if (channel) Object.assign(response, channelNameFields(channel));
             const entry: ExpandedEntry = {
+                version,
                 body: response,
                 items: videos
                     .filter((video): video is VideoType => !!video && canViewVideo(video, userId))
