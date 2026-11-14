@@ -622,8 +622,8 @@ async function deleteRendition(env: MediaEnv, videoId: string, access: MediaAcce
 	return keys.length;
 }
 
-/** Every R2 object of a video, both buckets (the 30-day purge, promote, erase). Idempotent. */
-export async function purgeVideoMedia(env: MediaEnv, videoId: string): Promise<number> {
+/** Every rendition of a video, both buckets, purged from the CDN; the original stays. Idempotent. */
+export async function purgeVideoRenditions(env: MediaEnv, videoId: string, opts: { strict?: boolean } = {}): Promise<number> {
 	let n = 0;
 	for (const access of ['pub', 'priv'] as const) {
 		const bucket = bucketOf(env, access);
@@ -632,26 +632,58 @@ export async function purgeVideoMedia(env: MediaEnv, videoId: string): Promise<n
 		await deleteKeys(bucket, keys);
 		n += keys.length;
 	}
-	if (n) await purgeCdnPrefix(env, `${videoId}/`);
+	// The CSAM takedown purges even when nothing is left in R2: the CDN may still hold copies
+	if (n || opts.strict) {
+		const purged = await purgeCdnPrefix(env, `${videoId}/`);
+		if (opts.strict && purged === 'failed') throw new Error(`CDN purge failed for ${videoId}`);
+	}
+	return n;
+}
+
+/** Every R2 object of a video, both buckets (the 30-day purge, promote, erase). Idempotent. */
+export async function purgeVideoMedia(env: MediaEnv, videoId: string): Promise<number> {
+	let n = await purgeVideoRenditions(env, videoId);
 	// The kept original (docs/media-delivery/ORIGINALS.md)
 	n += await deleteOriginal(env as never, videoId);
 	return n;
 }
 
+export type CdnPurge = 'purged' | 'not_configured' | 'failed';
+
 /** Drops cached copies of pub/<rest> from the CDN when a zone token with Cache Purge is set. */
-async function purgeCdnPrefix(env: MediaEnv, rest: string): Promise<void> {
-	if (!env.MEDIA_CDN_API_TOKEN || !env.MEDIA_PUBLIC_HOST) return;
+async function purgeCdnPrefix(env: MediaEnv, rest: string): Promise<CdnPurge> {
+	if (!env.MEDIA_PUBLIC_HOST) return 'not_configured';
+	return purgeCdn(env, { prefixes: [`${env.MEDIA_PUBLIC_HOST}/pub/${rest}`] });
+}
+
+/**
+ * Cloudflare cache purge on the alummahnow.net zone (by URL or by prefix). Never throws:
+ * 'not_configured' without a zone token, 'failed' when the API refused.
+ */
+export async function purgeCdn(env: Pick<MediaEnv, 'MEDIA_CDN_API_TOKEN'>, body: { files: string[] } | { prefixes: string[] }): Promise<CdnPurge> {
+	if (!env.MEDIA_CDN_API_TOKEN) return 'not_configured';
+	const list = 'files' in body ? body.files : body.prefixes;
+	if (!list.length) return 'purged';
 	try {
 		const token = await getSecret(env.MEDIA_CDN_API_TOKEN, 'MEDIA_CDN_API_TOKEN');
-		if (!token) return;
-		const res = await fetch(`https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/purge_cache`, {
-			method: 'POST',
-			headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-			body: JSON.stringify({ prefixes: [`${env.MEDIA_PUBLIC_HOST}/pub/${rest}`] }),
-		});
-		if (!res.ok) logger.warn('[Media] CDN purge failed', { status: res.status, rest });
+		if (!token) return 'not_configured';
+		// The API takes at most 30 URLs or prefixes per call
+		for (let i = 0; i < list.length; i += 30) {
+			const part = list.slice(i, i + 30);
+			const res = await fetch(`https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/purge_cache`, {
+				method: 'POST',
+				headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+				body: JSON.stringify('files' in body ? { files: part } : { prefixes: part }),
+			});
+			if (!res.ok) {
+				logger.warn('[Media] CDN purge failed', { status: res.status, count: part.length });
+				return 'failed';
+			}
+		}
+		return 'purged';
 	} catch (error) {
-		logger.warn('[Media] CDN purge failed', { rest, error: error instanceof Error ? error.message : String(error) });
+		logger.warn('[Media] CDN purge failed', { error: error instanceof Error ? error.message : String(error) });
+		return 'failed';
 	}
 }
 

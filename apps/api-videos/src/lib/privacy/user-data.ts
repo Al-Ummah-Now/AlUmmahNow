@@ -45,6 +45,7 @@ import { postLocationKey } from '../community-posts';
 import { eraseChannelHandleHistory } from './handle-history';
 import { footprintTargets, footprintsComplete, forgetFootprints } from './footprints';
 import { eraseCaptionMinutes } from '../captions/minutes';
+import { eraseImageOwners } from '../csam/imageOwners';
 
 /** Tombstone written in place of a user id on content kept after erasure. */
 export const DELETED_USER_ID = 'deleted-user';
@@ -1012,6 +1013,12 @@ export async function eraseUserData(
 				if (hooks.onProfileDeleted) await hooks.onProfileDeleted(userId, await stored.json().catch(() => null));
 				await deleteKeys(profiles, [userId], ctx.budget);
 				bump(summary.deleted, 'profile');
+			}
+			// Who uploaded which image (lib/csam/imageOwners.ts). CSAM evidence is not here: it
+			// lives in its own bucket that no erasure touches (docs/specs/CSAM-RESPONSE.md §4)
+			if (db) {
+				ctx.budget.spend();
+				await eraseImageOwners(db as never, userId);
 			}
 		},
 	];

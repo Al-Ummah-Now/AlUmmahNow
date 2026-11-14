@@ -130,3 +130,4 @@ export * from './archive-privacy';
 export * from './erasure-privacy';
 export * from './status-page';
 export * from './review-alerts';
+export * from './csam';

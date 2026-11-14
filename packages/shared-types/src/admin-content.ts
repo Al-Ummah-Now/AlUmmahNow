@@ -505,6 +505,19 @@ export const ADMIN_JOB_KINDS = [
    * Idempotent: a video already in the playlist is skipped.
    */
   'playlist.add-videos',
+  /**
+   * Take a CSAM match down (api-videos lib/csam/contain.ts, docs/specs/CSAM-RESPONSE.md):
+   * encrypted evidence copy, then every copy purged (R2, originals, Bunny, images, CDN), then the
+   * uploader banned. Resumable phases in params; the last failure flags the admin. Target the
+   * video, the channel (post, channel image) or the user (profile image).
+   */
+  'csam.contain',
+  /**
+   * Fill the image_owners index (api-videos lib/csam/imageOwners.ts) from stored profiles,
+   * channels and posts, so a matched avatar, cover or post image maps to its uploader. Resumable,
+   * idempotent (INSERT OR IGNORE). Target 'user' / 'image-owners'.
+   */
+  'images.index-owners',
 ] as const;
 
 export type AdminJobKind = (typeof ADMIN_JOB_KINDS)[number];
@@ -542,6 +555,9 @@ export const ADMIN_JOB_PERMISSIONS: Readonly<Record<AdminJobKind, readonly Admin
   'videos.repair-thumbnails': ['videos:manage'],
   'search.rebuild-ownership': ['videos:manage'],
   'playlist.add-videos': ['videos:manage'],
+  // admin-api also requires a super admin for this kind (CSAM cases are super-admin only)
+  'csam.contain': ['users:manage', 'content:delete'],
+  'images.index-owners': ['users:manage'],
 };
 
 // ---------------------------------------------------------------------------

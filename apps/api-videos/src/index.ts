@@ -31,6 +31,7 @@ import { authMiddleware, optionalAuthMiddleware, channelIdMiddleware } from "./m
 import { videosBanMiddleware } from "./middleware/videos-ban";
 import { videosPendingDeletionMiddleware } from "./middleware/videos-pending-deletion";
 import adminInternalRouter from "./routers/admin.router";
+import csamInternalRouter from "./routers/csam.router";
 import { handleLiveEdge, isLiveHost } from "./lib/live/edge";
 import type { LiveEnv } from "./lib/live/providers";
 import { sweepLiveSessions } from "./lib/live/service";
@@ -360,6 +361,8 @@ registerAllRouters(openapi);
 
 // Platform content management for admin-api (X-API-Key, see INTERNAL_PATHS)
 app.route('/internal/admin', adminInternalRouter);
+// CSAM response (docs/specs/CSAM-RESPONSE.md): super-admin actions relayed by admin-api
+app.route('/internal/csam', csamInternalRouter);
 
 // ==========================================
 // OPENAPI CUSTOMIZATION

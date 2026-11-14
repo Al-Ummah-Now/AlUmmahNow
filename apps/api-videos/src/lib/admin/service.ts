@@ -68,6 +68,8 @@ import {
 } from './directory';
 import { resolveDisplayName, type NameFields } from '@al-ummah/shared-types';
 import { markPublished, type PublishableState } from '../published';
+import { runContainStep, type ContainEnv } from '../csam/contain';
+import { backfillImageOwnersStep } from '../csam/imageOwners';
 
 type Row = Record<string, any>;
 
@@ -515,6 +517,12 @@ async function purgeVideo(
 		}
 	}
 	await send(env, MessageType.VideoDelete, { videoId, userId: video?.userId, channelId: video?.channelId, reason: 'admin' });
+}
+
+/** The CSAM takedown's final purge (lib/csam/contain.ts): strict, after the evidence copy. */
+export async function purgeVideoForCsam(env: AdminServiceEnv, videoId: string): Promise<void> {
+	const stored = (await repo(env.videos).getObject(videoId).catch(() => null)) as Row | null;
+	await purgeVideo(env, videoId, stored, undefined, { strict: true });
 }
 
 /** What a soft delete changed on the record, so a restore can put it back. */
@@ -1585,5 +1593,8 @@ export const ADMIN_JOB_HANDLERS: Record<AdminJobKind, JobHandler> = {
 	'search.rebuild-ownership': (env, job) => runOwnershipRebuildStep(env as OwnershipRebuildEnv, job),
 	// Bulk adds to a channel playlist above the inline cap, or after an inline write failed (lib/playlistBulk.ts)
 	'playlist.add-videos': (env, job) => runPlaylistAddStep(env as PlaylistEnv, job),
+	// CSAM takedown (lib/csam/contain.ts) and the image owner index it maps images with
+	'csam.contain': (env, job) => runContainStep(env as ContainEnv, job),
+	'images.index-owners': (env, job) => backfillImageOwnersStep(env as never, job.params as never),
 };
 

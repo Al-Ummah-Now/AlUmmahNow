@@ -833,6 +833,8 @@ const ar: Messages = {
       videosRepairThumbnails: 'إصلاح أبعاد الصور المصغّرة',
       searchRebuildOwnership: 'إعادة بناء فهرس قوائم الإدارة',
       playlistAddVideos: 'إضافة مرئيات إلى قائمة تشغيل',
+      csamContain: 'إزالة مواد استغلال جنسي للأطفال',
+      imagesIndexOwners: 'فهرسة رافعي الصور',
     },
     statuses: {
       queued: 'في الانتظار',
