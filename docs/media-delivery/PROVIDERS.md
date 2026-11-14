@@ -103,6 +103,15 @@ Two signals per provider (`lib/media/health.ts`):
   (anything below 500 is up); R2 is a HEAD of `pub/_health/probe.txt` through the public media
   domain (written through the binding only when the edge answers 404).
 
+**Idle cost.** The cron fires every minute, but a quiet minute (every provider healthy, last probes
+passed, no fallback rows in the window) returns before probing until `IDLE_CHECK_MINUTES` (15) have
+passed since the last check, so an idle site costs one zero-row D1 read a minute and a probe pair
+plus one snapshot write every 15 minutes. Any fallback row, failed probe or unhealthy provider
+brings back the minute cadence. The snapshot is rewritten only when its state changed or the idle
+interval is due, and stale rows are pruned on the first stored pass of each hour. **Check now** is
+always forced (probes and writes). Fallback reports are counted (D1 writes) at most 6 a minute per
+video and 6 a minute per client network (`WATCH_TIME_LIMITER`); the answer itself is never refused.
+
 `nextProviderHealth` turns them into `healthy` / `unhealthy`: unhealthy after `probeFailures` failed
 probes in a row or `failureThreshold` distinct fallback reporters in the window, healthy again after `cooldownMinutes`
 with passing probes and fallback reporters under the threshold. The snapshot is stored at
