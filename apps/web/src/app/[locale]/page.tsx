@@ -1,7 +1,8 @@
 import { headers } from 'next/headers';
 import { JsonLd } from '@/components/seo/JsonLd';
 import { originFromHost } from '@/lib/embed/request-origin';
-import { websiteLd } from '@/lib/seo/structured-data';
+import type { Metadata } from 'next';
+import { homeMetadata, websiteLd } from '@/lib/seo/structured-data';
 import { fetchVideosWithPagination } from '@/lib/api/videos';
 import { withinBudget } from '@/lib/ssr/first-data';
 import { stableImages } from '@/lib/ssr/stable-images';
@@ -13,6 +14,10 @@ import HomePageClient from './HomePageClient';
  * and the cards (wiki AUN-SEO, phase 4); the client goes on from it. Its images are the stable /thumb
  * ones, never signed CDN URLs (lib/ssr/stable-images.ts).
  */
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  return homeMetadata((await params).locale);
+}
+
 export default async function HomePage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   const [host, firstPage] = await Promise.all([
