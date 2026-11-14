@@ -18,7 +18,6 @@ import {
   AlertCircle,
   BookOpen,
   CheckCircle2,
-  Clock,
   Copyright,
   Handshake,
   Link2,
@@ -468,10 +467,6 @@ export function ContactPage() {
             {c.aside.title}
           </h2>
           <ul className="ct-tips">
-            <li>
-              <Clock aria-hidden="true" />
-              <span>{c.aside.reply}</span>
-            </li>
             <li>
               <ShieldCheck aria-hidden="true" />
               <span>{c.aside.privacy}</span>

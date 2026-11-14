@@ -52,7 +52,6 @@ export interface ContactTranslations {
   };
   aside: {
     title: string;
-    reply: string;
     privacy: string;
     guidelines: string;
   };
@@ -110,7 +109,6 @@ export const CONTACT_EN: ContactTranslations = {
   },
   aside: {
     title: 'Before you write',
-    reply: 'We usually reply within two working days.',
     privacy: 'We use your name and email only to answer this message.',
     guidelines: 'Read the community guidelines',
   },
@@ -168,7 +166,6 @@ export const CONTACT_AR: ContactTranslations = {
   },
   aside: {
     title: 'قبل أن تكتب',
-    reply: 'نرد عادةً خلال يومي عمل.',
     privacy: 'نستخدم اسمك وبريدك فقط للرد على هذه الرسالة.',
     guidelines: 'اقرأ إرشادات المجتمع',
   },
