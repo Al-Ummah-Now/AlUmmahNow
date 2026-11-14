@@ -12,37 +12,11 @@
  */
 
 import { Metadata } from 'next';
+import { listPageMetadata } from '@/lib/seo/structured-data';
 import { LivePageClient } from './LivePageClient';
 
-export const metadata: Metadata = {
-  title: 'Live Streams | Al Ummah Now',
-  description: "Watch live streams from channels in the Al Ummah Now community, and see what's coming up.",
-  keywords: ['live streams', 'live', 'Islamic', 'channels', 'Al Ummah Now'],
-  openGraph: {
-    title: 'Live Streams | Al Ummah Now',
-    description: "Watch live streams from channels in the Al Ummah Now community, and see what's coming up.",
-    type: 'website',
-    url: 'https://alummahnow.com/en/live',
-    images: [
-      {
-        url: '/favicon-32x32.png',
-        width: 32,
-        height: 32,
-        alt: 'Al Ummah Now',
-      },
-    ],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'Live Streams | Al Ummah Now',
-    description: "Watch live streams from channels in the Al Ummah Now community, and see what's coming up.",
-    images: ['/favicon-32x32.png'],
-  },
-  robots: {
-    index: true,
-    follow: true,
-  },
-};
+// Self-canonical with the en/ar pair and x-default (D-SEO-1); og:url on this site (wiki AUN-SEO #13)
+export const metadata: Metadata = listPageMetadata('en', '/live', 'Live Streams', "Watch live streams from channels in the Al Ummah Now community, and see what's coming up.");
 
 /**
  * Live Streams Page (Server Component)

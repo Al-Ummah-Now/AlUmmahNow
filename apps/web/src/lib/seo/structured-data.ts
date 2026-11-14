@@ -45,6 +45,16 @@ export function listPageMetadata(locale: string, path: string, name: string, des
   };
 }
 
+/**
+ * The home page: self-canonical per language with the en/ar pair and x-default (D-SEO-1). Only the
+ * links: its title, description and share image are the root layout's site defaults (Next merges
+ * metadata per key, so setting openGraph here would drop the root's image).
+ */
+export function homeMetadata(locale: string): Metadata {
+  const lang = locale === 'ar' ? 'ar' : 'en';
+  return { alternates: { canonical: `/${lang}`, languages: { en: '/en', ar: '/ar', 'x-default': '/en' } } };
+}
+
 /** ISO 8601 duration (PT1H2M3S) for whole seconds; undefined when unknown. */
 export function isoDuration(seconds?: number): string | undefined {
   if (!seconds || !Number.isFinite(seconds) || seconds <= 0) return undefined;

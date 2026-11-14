@@ -13,38 +13,11 @@
  */
 
 import { Metadata } from 'next';
+import { listPageMetadata } from '@/lib/seo/structured-data';
 import { LivePageClientRTL } from './LivePageClientRTL';
 
-export const metadata: Metadata = {
-  title: 'البث المباشر | الأمة الآن',
-  description: 'شاهد البث المباشر من قنوات مجتمع الأمة الآن، واطّلع على البث القادم.',
-  keywords: ['البث المباشر', 'مباشر', 'إسلامي', 'قنوات', 'الأمة الآن'],
-  openGraph: {
-    title: 'البث المباشر | الأمة الآن',
-    description: 'شاهد البث المباشر من قنوات مجتمع الأمة الآن، واطّلع على البث القادم.',
-    type: 'website',
-    url: 'https://alummahnow.com/ar/live',
-    locale: 'ar_SA',
-    images: [
-      {
-        url: '/favicon-32x32.png',
-        width: 32,
-        height: 32,
-        alt: 'الأمة الآن',
-      },
-    ],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'البث المباشر | الأمة الآن',
-    description: 'شاهد البث المباشر من قنوات مجتمع الأمة الآن، واطّلع على البث القادم.',
-    images: ['/favicon-32x32.png'],
-  },
-  robots: {
-    index: true,
-    follow: true,
-  },
-};
+// Self-canonical with the en/ar pair and x-default (D-SEO-1); og:url on this site (wiki AUN-SEO #13)
+export const metadata: Metadata = listPageMetadata('ar', '/live', 'البث المباشر', 'شاهد البث المباشر من قنوات مجتمع الأمة الآن، واطّلع على البث القادم.');
 
 /**
  * Live Streams Page (Server Component - RTL)

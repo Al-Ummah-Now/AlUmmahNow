@@ -1,7 +1,7 @@
 /**
  * @jest-environment node
  */
-import { breadcrumbLd, chapterClips, isoDuration, listPageMetadata, videoObjectLd, websiteLd } from '../structured-data';
+import { breadcrumbLd, chapterClips, homeMetadata, isoDuration, listPageMetadata, videoObjectLd, websiteLd } from '../structured-data';
 
 const O = 'https://videos.alummahnow.net';
 
@@ -60,6 +60,13 @@ describe('structured data (wiki AUN-SEO)', () => {
     expect(videoObjectLd(v, 'en', O, [{ startTime: 0, title: 'Only' }]).hasPart).toBeUndefined();
     expect(videoObjectLd(v, 'en', O).hasPart).toBeUndefined();
     expect(videoObjectLd({ ...v, isLive: true }, 'en', O, [{ startTime: 0, title: 'A' }, { startTime: 60, title: 'B' }]).hasPart).toBeUndefined();
+  });
+
+  it('the home page is self-canonical per language with x-default, and keeps the site title and image', () => {
+    expect(homeMetadata('ar')).toEqual({ alternates: { canonical: '/ar', languages: { en: '/en', ar: '/ar', 'x-default': '/en' } } });
+    expect(homeMetadata('en').alternates?.canonical).toBe('/en');
+    expect(homeMetadata('en')).not.toHaveProperty('openGraph');
+    expect(homeMetadata('en')).not.toHaveProperty('title');
   });
 
   it('isoDuration', () => {
