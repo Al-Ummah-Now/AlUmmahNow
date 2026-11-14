@@ -8,6 +8,7 @@ import { z } from "zod";
 import { requireSecret, requireEnvVar } from "../../lib/env-helpers";
 import Queue, { MessageType } from "../../lib/queue";
 import { logger } from '../../lib/logger';
+import { recordImageOwner } from '../../lib/csam/imageOwners';
 
 const app = new Hono();
 
@@ -63,6 +64,8 @@ const handleAvatarUpdate = async (c: AppContext) => {
         //Update the profile's avatar URL
         // Conditional write on the fresh profile (SCALABILITY-AUDIT AV-6)
         const avatarUrl = `https://images.alummahnow.net${path}`;
+        // Who uploaded it (a CSAM match maps the image to its uploader; lib/csam/imageOwners.ts)
+        await recordImageOwner(c.env.SEARCH_DB, avatarUrl, { kind: 'profile_avatar', ownerId: userId });
         // Pre-publication review (VR16): the new image waits in pendingImages until it is clean
         const gate = await imageGate(c.env as never);
         let reviewId: string | null = null;

@@ -36,6 +36,7 @@ import { eraseUserSubscriptions } from '../subscription-store';
 import { isOwnershipComplete } from '../search/ownership';
 import { BudgetExhausted, OperationBudget, asBucket, deleteKeys, readJson, type BucketLike } from './scan';
 import type { ErasureHooks, PrivacyBuckets } from './user-data';
+import { eraseImageOwners } from '../csam/imageOwners';
 
 type Json = Record<string, any>;
 
@@ -220,6 +221,9 @@ export async function eraseRunUserData(
 				if (hooks.onProfileDeleted) await hooks.onProfileDeleted(userId, await stored.json().catch(() => null));
 				bump('profile', await deleteKeys(profiles, [userId], budget));
 			}
+			// Who uploaded which image (lib/csam/imageOwners.ts); CSAM evidence is never erased here
+			budget.spend();
+			await eraseImageOwners(db, userId);
 		},
 	];
 

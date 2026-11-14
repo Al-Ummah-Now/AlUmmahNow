@@ -834,6 +834,8 @@ const en = {
       videosRepairThumbnails: 'Fix thumbnail shapes',
       searchRebuildOwnership: 'Rebuild the admin lists index',
       playlistAddVideos: 'Add videos to a playlist',
+      csamContain: 'CSAM takedown',
+      imagesIndexOwners: 'Index image uploaders',
     },
     statuses: {
       queued: 'Queued',

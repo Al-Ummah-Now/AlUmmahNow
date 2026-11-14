@@ -8,6 +8,7 @@ import { validateImageMagicBytes, readFileHeader } from '../../lib/security/magi
 import { generateUniqueFilename } from '../../lib/security/filename-sanitize';
 import { logger } from '../../lib/logger';
 import { getChannelObject } from './post-comment-helpers';
+import { recordImageOwner } from '../../lib/csam/imageOwners';
 
 const MAX_GIF_SIZE = 10 * 1024 * 1024; // 10MB for GIFs
 
@@ -182,6 +183,8 @@ export class UploadCommunityPostGif extends AuthenticatedRoute {
       const height = 500;
       const duration = 5; // seconds
 
+      // Who uploaded it (a CSAM match maps the image to its uploader; lib/csam/imageOwners.ts)
+      await recordImageOwner(c.env.SEARCH_DB, `https://images.alummahnow.net${path}`, { kind: 'post_image', ownerId: userId, channelId });
       return c.json({
         success: true,
         gif: {

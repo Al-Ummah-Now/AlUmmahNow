@@ -8,6 +8,7 @@ import { validateImageMagicBytes, readFileHeader } from '../../lib/security/magi
 import { generateUniqueFilename } from '../../lib/security/filename-sanitize';
 import { logger } from '../../lib/logger';
 import { getChannelObject } from './post-comment-helpers';
+import { recordImageOwner } from '../../lib/csam/imageOwners';
 
 const MAX_IMAGES = 10;
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB per image
@@ -209,6 +210,8 @@ export class UploadCommunityPostImages extends AuthenticatedRoute {
           height = 800;
         }
 
+        // Who uploaded it (a CSAM match maps the image to its uploader; lib/csam/imageOwners.ts)
+        await recordImageOwner(c.env.SEARCH_DB, `https://images.alummahnow.net${path}`, { kind: 'post_image', ownerId: userId, channelId });
         uploadedImages.push({
           url: `https://images.alummahnow.net${path}`,
           width,

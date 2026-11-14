@@ -65,6 +65,10 @@ const API_VIDEOS_SECRETS: RequiredSecret[] = [
 	INTERNAL_API_KEY,
 	{ name: 'MEDIA_SIGN_KEY', purpose: 'Secrets Store media-sign-key[-qa|-stage]; path tokens of private R2 renditions (shared with apps/media)' },
 	TURNSTILE_SECRET,
+	{
+		name: 'CSAM_EVIDENCE_KEY',
+		purpose: 'Secrets Store csam-evidence-key[-qa|-stage]; AES-256-GCM key(s) of the CSAM evidence store, <version>:<base64 32 bytes>[,...] (lib/csam/crypto.ts, docs/specs/CSAM-RESPONSE.md §4). Never rotate by replacing: append a new version',
+	},
 ];
 
 const CLIENT_REQUIRED = [{ name: 'ClientId', required: true }];

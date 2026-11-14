@@ -7,6 +7,7 @@ import { addAuthToSchema } from '../../lib/openapi-auth';
 import { validateImageMagicBytes } from '../../lib/security/magic-bytes';
 import { IMAGE_MAX_BYTES, PreviewError, fetchPreview, readLimited, safeFetch } from '../../lib/link-preview';
 import { logger } from '../../lib/logger';
+import { recordImageOwner } from '../../lib/csam/imageOwners';
 import { getChannelObject } from './post-comment-helpers';
 
 const EXT: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/gif': 'gif', 'image/webp': 'webp' };
@@ -78,6 +79,7 @@ async function copyImage(c: AppContext, imageUrl: string, channelId: string, use
     const path = `/community-posts/${channelId}/link-${crypto.randomUUID()}.${EXT[type]}`;
     const body = new Blob([bytes]).stream() as ReadableStream;
     if (!(await new BunnyStorageClient(zone, key).putFile(path, body))) return null;
+    await recordImageOwner(c.env.SEARCH_DB, `https://images.alummahnow.net${path}`, { kind: 'post_image', ownerId: userId, channelId });
     return { url: `https://images.alummahnow.net${path}`, alt: null, width: null, height: null };
   } catch (error) {
     if (!(error instanceof PreviewError)) logger.warn('[link-preview] image copy failed', { channelId, userId, error });

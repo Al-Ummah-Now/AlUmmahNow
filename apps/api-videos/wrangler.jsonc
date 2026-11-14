@@ -145,6 +145,8 @@
 		{ "binding": "MEDIA_PRIVATE", "bucket_name": "al-ummah-now-media-private" },
 		// Uploads as received, for the R2 transcode (docs/media-delivery/ORIGINALS.md)
 		{ "binding": "MEDIA_ORIGINALS", "bucket_name": "al-ummah-now-media-originals" },
+		// CSAM evidence (docs/specs/CSAM-RESPONSE.md §4): encrypted, legal hold, no erasure or backfill
+		{ "binding": "CSAM_EVIDENCE", "bucket_name": "al-ummah-now-csam-evidence" },
 		{
 			// Self-hosted live HLS and recordings (lib/live/edge.ts), served on LIVE_PUBLIC_HOST
 			"binding": "LIVE_MEDIA",
@@ -251,6 +253,12 @@
 		]
 	},
 	"secrets_store_secrets": [
+	  {
+		// AES-256-GCM key(s) of the CSAM evidence store (lib/csam/crypto.ts), <version>:<base64>[,...]
+		"binding": "CSAM_EVIDENCE_KEY",
+		"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+		"secret_name": "csam-evidence-key"
+	  },
 		{ "binding": "TURNSTILE_SECRET", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "turnstile-secret" },
 	  {
 		// HMAC key of self-hosted live stream keys (lib/live/providers.ts)
@@ -481,6 +489,7 @@
 				{ "binding": "MEDIA", "bucket_name": "al-ummah-now-media-stage" },
 				{ "binding": "MEDIA_PRIVATE", "bucket_name": "al-ummah-now-media-private-stage" },
 				{ "binding": "MEDIA_ORIGINALS", "bucket_name": "al-ummah-now-media-originals-stage" },
+				{ "binding": "CSAM_EVIDENCE", "bucket_name": "al-ummah-now-csam-evidence-stage" },
 				{
 					"binding": "LIVE_MEDIA",
 					"bucket_name": "al-ummah-now-live-stage"
@@ -576,6 +585,11 @@
 				]
 			},
 			"secrets_store_secrets": [
+				{
+					"binding": "CSAM_EVIDENCE_KEY",
+					"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+					"secret_name": "csam-evidence-key-stage"
+				},
 				{ "binding": "TURNSTILE_SECRET", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "turnstile-secret-test" },
 				{
 					"binding": "LIVE_INGEST_SECRET",

@@ -29,6 +29,7 @@
 --   apps/api-videos/migrations/search/0033_caption_jobs.sql
 --   apps/api-videos/migrations/search/0035_caption_overdraft.sql
 --   apps/api-videos/migrations/search/0036_media_providers.sql
+--   apps/api-videos/migrations/search/0037_image_owners.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -47,6 +48,7 @@ CREATE TABLE content_ownership (kind TEXT NOT NULL, id TEXT NOT NULL, owner_id T
 CREATE TABLE creator_tier_assignments (user_id TEXT PRIMARY KEY, tier_id TEXT NOT NULL, source TEXT NOT NULL DEFAULT 'admin' CHECK (source IN ('admin', 'subscription')), assigned_by TEXT NOT NULL, assigned_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE creator_tiers (id TEXT PRIMARY KEY, name TEXT NOT NULL, unlimited INTEGER NOT NULL DEFAULT 0, per_hour INTEGER NOT NULL, per_day INTEGER NOT NULL, max_concurrent INTEGER NOT NULL, max_channels INTEGER, updated_at TEXT, updated_by TEXT, deleted_at TEXT, deleted_by TEXT, delete_reason TEXT, purge_requested_at TEXT, purge_requested_by TEXT, caption_minutes_month INTEGER NOT NULL DEFAULT 0) WITHOUT ROWID;
 CREATE TABLE delivery_cost_daily (day TEXT NOT NULL, provider TEXT NOT NULL, metric TEXT NOT NULL, value REAL NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (day, provider, metric));
+CREATE TABLE image_owners (path TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK (kind IN ('profile_avatar', 'profile_cover', 'channel_avatar', 'channel_cover', 'post_image', 'video_thumbnail')), owner_id TEXT, channel_id TEXT, created_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE indexnow_pending (video_id TEXT PRIMARY KEY, is_short INTEGER NOT NULL DEFAULT 0, queued_at REAL NOT NULL) WITHOUT ROWID;
 CREATE TABLE live_channel_overrides (channel_id TEXT PRIMARY KEY, provider TEXT NOT NULL CHECK (provider IN ('bunny', 'selfhosted')), note TEXT, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE live_counters (name TEXT PRIMARY KEY, value INTEGER NOT NULL DEFAULT 0) WITHOUT ROWID;
@@ -133,6 +135,7 @@ CREATE INDEX idx_content_ownership_needs_format ON content_ownership (kind, need
 CREATE INDEX idx_content_ownership_owner ON content_ownership (kind, owner_id);
 CREATE INDEX idx_creator_tier_assignments_tier ON creator_tier_assignments (tier_id);
 CREATE INDEX idx_creator_tiers_deleted ON creator_tiers (deleted_at) WHERE deleted_at IS NOT NULL;
+CREATE INDEX idx_image_owners_owner ON image_owners (owner_id);
 CREATE INDEX idx_indexnow_pending_queued ON indexnow_pending (queued_at);
 CREATE INDEX idx_live_events_kind ON live_events (kind, at);
 CREATE INDEX idx_live_events_session ON live_events (session_id, at);

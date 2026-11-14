@@ -9,6 +9,7 @@ import { Channel } from "../../lib/types";
 import { z } from "zod";
 import Queue, { MessageType } from "../../lib/queue";
 import { requireSecret, requireEnvVar } from "../../lib/env-helpers";
+import { recordImageOwner } from '../../lib/csam/imageOwners';
 
 const app = new Hono();
 
@@ -74,6 +75,8 @@ const handleAvatarUpdate = async (c: AppContext) => {
 
         //Update the Channel's avatar URL
         const avatarUrl = `https://images.alummahnow.net${path}`;
+        // Who uploaded it (a CSAM match maps the image to its uploader; lib/csam/imageOwners.ts)
+        await recordImageOwner(c.env.SEARCH_DB, avatarUrl, { kind: 'channel_avatar', ownerId: userId ?? null, channelId: id });
 
         const queue = new Queue(c.env.queue);
         await queue.send(MessageType.ChannelUpdate, {

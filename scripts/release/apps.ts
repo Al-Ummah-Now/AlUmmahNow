@@ -144,6 +144,9 @@ export const APPS: AppRule[] = [
 				{ kind: 'queue_producer', name: 'TRANSCODE_QUEUE' },
 				{ kind: 'secrets_store_secrets', name: 'MEDIA_SIGN_KEY' },
 				{ kind: 'r2_buckets', name: 'MEDIA_ORIGINALS' },
+				// CSAM response (docs/specs/CSAM-RESPONSE.md): the evidence store and its key
+				{ kind: 'r2_buckets', name: 'CSAM_EVIDENCE' },
+				{ kind: 'secrets_store_secrets', name: 'CSAM_EVIDENCE_KEY' },
 				{ kind: 'queue_consumer', name: 'al-ummah-now-processing-check' },
 				// Heavy admin actions run as queued jobs (lib/admin/jobs.ts)
 				{ kind: 'queue_producer', name: 'ADMIN_JOBS_QUEUE' },

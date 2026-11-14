@@ -93,6 +93,8 @@
     { "binding": "MEDIA_PRIVATE", "bucket_name": "al-ummah-now-media-private-qa" },
     // Uploads as received, for the R2 transcode (docs/media-delivery/ORIGINALS.md)
     { "binding": "MEDIA_ORIGINALS", "bucket_name": "al-ummah-now-media-originals-qa" },
+    // CSAM evidence (docs/specs/CSAM-RESPONSE.md §4): encrypted, legal hold, no erasure or backfill
+    { "binding": "CSAM_EVIDENCE", "bucket_name": "al-ummah-now-csam-evidence-qa" },
     {
       // Self-hosted live HLS (lib/live/edge.ts), served on LIVE_PUBLIC_HOST; test content expires after 30 days (lifecycle rule)
       "binding": "LIVE_MEDIA",
@@ -208,6 +210,12 @@
     ]
   },
   "secrets_store_secrets": [
+    {
+      // AES-256-GCM key(s) of the CSAM evidence store (lib/csam/crypto.ts)
+      "binding": "CSAM_EVIDENCE_KEY",
+      "store_id": "f8eddc9944d041919ed8dc7d08d32308",
+      "secret_name": "csam-evidence-key-qa"
+    },
     { "binding": "TURNSTILE_SECRET", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "turnstile-secret-test" },
     {
       // HMAC key of self-hosted live stream keys (lib/live/providers.ts)
