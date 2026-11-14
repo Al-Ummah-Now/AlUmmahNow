@@ -118,7 +118,8 @@ test.describe('Media providers: an R2-only upload', () => {
       await expect
         .poll(async () => {
           const res = await fetch(`${target().api}/api/videos/${videoId}`);
-          view = res.ok ? ((await res.json()) as { result?: typeof view }).result ?? {} : {};
+          const body = res.ok ? ((await res.json()) as { result?: typeof view } & typeof view) : null;
+          view = body ? body.result ?? body : {};
           return view.uploadStatus ?? `HTTP ${res.status}`;
         }, { message: 'the video turns ready for a visitor', timeout: 60000 })
         .toBe('ready');
