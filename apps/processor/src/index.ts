@@ -22,6 +22,7 @@ import { resumeStalledImports } from './lib/post-counters';
 import { isCategorizeMessage, processCategorizeMessages, sweepCategorySuggestions, type CategorizeQueueMessage } from './categorize/queue';
 import type { CategorizeEnv } from './categorize/job';
 import { isQuranSyncMessage, processQuranSyncMessages, quranSyncMessage, runQuranDaily, type QuranQueueMessage, type QuranSyncEnv } from './quran/sync';
+import { isCaptionJobMessage, processCaptionJobMessages, type CaptionJobEnv, type CaptionJobQueueMessage } from './captions/job';
 import { captionClaimMessage, claimFromRetryBody, isCaptionClaimMessage, processCaptionClaimMessages, type CaptionClaimEnv, type CaptionClaimQueueMessage } from './captions/claim';
 import { captionClaimKey, type CaptionClaimState } from '@al-ummah/shared-types';
 import type { SearchDb } from '@al-ummah/shared-types';
@@ -395,6 +396,13 @@ async function handleQueue(batch: MessageBatch<AlUmmahMessage>, env: QueueEnviro
   if (claims.length) {
     await processCaptionClaimMessages(claims as unknown as CaptionClaimQueueMessage[], env as unknown as CaptionClaimEnv, ctx, logger);
     batch = { ...batch, messages: batch.messages.filter((m) => !isCaptionClaimMessage(m)) };
+    if (batch.messages.length === 0) return;
+  }
+  // On-demand transcription (AUN-CAPTIONS §5.1): one audio chunk per delivery, then the draft
+  const captionJobs = batch.messages.filter(isCaptionJobMessage);
+  if (captionJobs.length) {
+    await processCaptionJobMessages(captionJobs as unknown as CaptionJobQueueMessage[], env as unknown as CaptionJobEnv, ctx, logger);
+    batch = { ...batch, messages: batch.messages.filter((m) => !isCaptionJobMessage(m)) };
     if (batch.messages.length === 0) return;
   }
   if (batch.queue?.includes('moderation')) {

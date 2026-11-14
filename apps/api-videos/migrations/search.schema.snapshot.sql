@@ -26,12 +26,14 @@
 --   apps/api-videos/migrations/search/0030_indexnow_pending.sql
 --   apps/api-videos/migrations/search/0031_admin_history_privacy.sql
 --   apps/api-videos/migrations/search/0032_caption_minutes.sql
+--   apps/api-videos/migrations/search/0033_caption_jobs.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
 CREATE TABLE admin_deletions (kind TEXT NOT NULL, target_id TEXT NOT NULL, parent_id TEXT, title TEXT NOT NULL DEFAULT '', owner_id TEXT, channel_id TEXT, deleted_at TEXT NOT NULL, deleted_by TEXT NOT NULL, reason TEXT, purge_requested_at TEXT, purge_requested_by TEXT, purge_started_at TEXT, purge_job_id TEXT, purged_at TEXT, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, PRIMARY KEY (kind, target_id)) WITHOUT ROWID;
 CREATE TABLE admin_job_users (user_id TEXT NOT NULL, job_id TEXT NOT NULL, PRIMARY KEY (user_id, job_id)) WITHOUT ROWID;
 CREATE TABLE admin_jobs (id TEXT PRIMARY KEY, kind TEXT NOT NULL, target_kind TEXT NOT NULL, target_id TEXT NOT NULL, params TEXT NOT NULL DEFAULT '{}', status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, result TEXT, actor_id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, finished_at TEXT);
+CREATE TABLE caption_jobs (id TEXT PRIMARY KEY, idempotency_key TEXT NOT NULL, video_id TEXT NOT NULL, channel_id TEXT, subject_id TEXT NOT NULL, requested_by TEXT NOT NULL, kind TEXT NOT NULL CHECK (kind IN ('transcribe')), language TEXT NOT NULL, replace_draft INTEGER NOT NULL DEFAULT 0, provider TEXT NOT NULL, model TEXT NOT NULL, status TEXT NOT NULL CHECK (status IN ('queued', 'waiting_budget', 'extracting', 'transcribing', 'postprocessing', 'ready', 'failed', 'cancelled')), progress_done INTEGER, progress_total INTEGER, minutes_reserved INTEGER NOT NULL DEFAULT 0, minutes_charged INTEGER, waived INTEGER NOT NULL DEFAULT 0, error TEXT, audio_manifest_key TEXT, attempts INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, finished_at TEXT) WITHOUT ROWID;
 CREATE TABLE caption_minute_grants (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, minutes INTEGER NOT NULL CHECK (minutes > 0), scope TEXT NOT NULL CHECK (scope IN ('month', 'until_used')), period TEXT, used INTEGER NOT NULL DEFAULT 0 CHECK (used >= 0), reason TEXT NOT NULL, created_by TEXT NOT NULL, created_at TEXT NOT NULL, revoked_at TEXT, revoked_by TEXT, revoke_reason TEXT) WITHOUT ROWID;
 CREATE TABLE caption_minute_holds (hold_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, period TEXT NOT NULL, minutes INTEGER NOT NULL, month_minutes INTEGER NOT NULL, packs_json TEXT NOT NULL DEFAULT '[]', state TEXT NOT NULL CHECK (state IN ('reserved', 'committed', 'released')), charged INTEGER, created_at TEXT NOT NULL, updated_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE caption_minute_usage (user_id TEXT NOT NULL, period TEXT NOT NULL, minutes INTEGER NOT NULL DEFAULT 0 CHECK (minutes >= 0), updated_at TEXT NOT NULL, PRIMARY KEY (user_id, period)) WITHOUT ROWID;
@@ -102,6 +104,8 @@ CREATE INDEX idx_admin_job_users_job ON admin_job_users (job_id);
 CREATE INDEX idx_admin_jobs_finished ON admin_jobs (finished_at);
 CREATE INDEX idx_admin_jobs_status ON admin_jobs (status, updated_at);
 CREATE INDEX idx_admin_jobs_target ON admin_jobs (target_kind, target_id, created_at);
+CREATE UNIQUE INDEX idx_caption_jobs_active ON caption_jobs (idempotency_key) WHERE status NOT IN ('ready', 'failed', 'cancelled');
+CREATE INDEX idx_caption_jobs_video ON caption_jobs (video_id, created_at);
 CREATE INDEX idx_caption_minute_grants_user ON caption_minute_grants (user_id, created_at);
 CREATE INDEX idx_caption_minute_holds_user ON caption_minute_holds (user_id, period);
 CREATE INDEX idx_catsug_hash ON category_suggestions (input_hash);

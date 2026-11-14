@@ -358,4 +358,6 @@ export async function eraseCaptionMinutes(db: { prepare(sql: string): { bind(...
 	for (const table of ['caption_minute_usage', 'caption_minute_holds', 'caption_minute_grants']) {
 		await db.prepare(`DELETE FROM ${table} WHERE user_id = ?`).bind(userId).run();
 	}
+	// Their transcription jobs (0033); a running one then ends at the processor's next report (404)
+	await db.prepare('DELETE FROM caption_jobs WHERE subject_id = ? OR requested_by = ?').bind(userId, userId).run();
 }

@@ -72,6 +72,26 @@ export function manifestFor({ videoId, rev, prefix, durationSeconds, frames, aud
 }
 
 /**
+ * Captions (AUN-CAPTIONS §5.2): a job's audio only, in the same chunks, under captions-work/<jobId>/
+ * (shared-types CaptionAudioManifest). The video review's own audio is reused when it still exists;
+ * this is for videos whose review media were purged or never made.
+ */
+export function captionAudioManifestFor({ jobId, videoId, prefix, durationSeconds, audioCount, now }) {
+	const durationMs = Math.round(durationSeconds * 1000);
+	return {
+		jobId,
+		videoId,
+		durationMs,
+		audio: Array.from({ length: audioCount }, (_, i) => ({
+			key: `${prefix}audio/${String(i).padStart(3, '0')}.mp3`,
+			startMs: i * AUDIO_CHUNK_SECONDS * 1000,
+			endMs: Math.min(durationMs, (i + 1) * AUDIO_CHUNK_SECONDS * 1000),
+		})),
+		createdAt: now,
+	};
+}
+
+/**
  * Live recordings (VR9): the variant of an HLS master to extract review media from, relative to
  * the master. The smallest variant at least 360 px tall (frames are scaled to ≤ 512 px anyway),
  * else the tallest one; null when `text` is already a media playlist. Reading one variant keeps

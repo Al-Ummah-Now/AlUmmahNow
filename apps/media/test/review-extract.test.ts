@@ -44,3 +44,13 @@ describe('frame times and the manifest', () => {
 		assert.deepEqual(m.audio.map((a: { startMs: number; endMs: number }) => [a.startMs, a.endMs]), [[0, 600_000], [600_000, 900_000]]);
 	});
 });
+
+describe('caption audio manifest (AUN-CAPTIONS §5.2)', () => {
+	it('lists the chunks under the job prefix with their times', async () => {
+		const { captionAudioManifestFor } = await import('../container/review.mjs');
+		const m = captionAudioManifestFor({ jobId: 'job-12345678', videoId: 'v1', prefix: 'captions-work/job-12345678/', durationSeconds: 1500, audioCount: 3, now: 'x' });
+		assert.equal(m.durationMs, 1_500_000);
+		assert.deepEqual(m.audio.map((a: { key: string }) => a.key), ['captions-work/job-12345678/audio/000.mp3', 'captions-work/job-12345678/audio/001.mp3', 'captions-work/job-12345678/audio/002.mp3']);
+		assert.deepEqual(m.audio[2], { key: 'captions-work/job-12345678/audio/002.mp3', startMs: 1_200_000, endMs: 1_500_000 });
+	});
+});
