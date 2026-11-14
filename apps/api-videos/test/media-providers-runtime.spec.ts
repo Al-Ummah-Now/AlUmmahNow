@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { Hono } from 'hono';
 import { DEFAULT_MEDIA_SETTINGS } from '@al-ummah/shared-types';
 import { allProviders, bunnyRef, provider, videoProviderRecords } from '../src/lib/media/providers';
-import { clearHealthCache, countProviderFailure, HEALTH_KEY, readHealth, reporterKey, reporterNetwork, runHealthCheck } from '../src/lib/media/health';
+import { clearHealthCache, countProviderFailure, HEALTH_KEY, IDLE_CHECK_MINUTES, readHealth, reporterKey, reporterNetwork, runHealthCheck } from '../src/lib/media/health';
 import { clearMediaSettingsCache, readMediaSettings, saveMediaSettings, SETTINGS_KEY } from '../src/lib/media/settings';
 import { createMediaInternalRouter } from '../src/endpoints/media/mediaInternal';
 import { SqliteD1 } from './search-sqlite-d1';
@@ -186,6 +186,40 @@ describe('provider health', () => {
 		const resolved = calls.filter((x) => x.url.endsWith('/internal/errors'));
 		assert.equal(resolved.length, 1);
 		assert.match(JSON.stringify(resolved[0]!.body), /"resolved".*media-provider-health:r2/);
+	});
+
+	it('idle costs: with no traffic and healthy providers, one probe pair and one write per 15 minutes', async () => {
+		const e = env();
+		let puts = 0;
+		const put = e.global_settings.put.bind(e.global_settings);
+		e.global_settings.put = ((key: string, value: unknown, o?: unknown) => {
+			if (key === HEALTH_KEY) puts++;
+			return put(key as never, value as never, o as never);
+		}) as typeof e.global_settings.put;
+		const start = Date.parse('2026-11-14T10:00:00Z');
+		for (let m = 0; m < 60; m++) await runHealthCheck(e as never, undefined, new Date(start + m * 60_000));
+		const probes = calls.filter((c) => c.method === 'HEAD');
+		assert.equal(IDLE_CHECK_MINUTES, 15);
+		assert.equal(probes.filter((c) => new URL(c.url).host === MEDIA_HOST).length, 4, 'R2 probed at minutes 0, 15, 30, 45');
+		assert.equal(probes.filter((c) => new URL(c.url).host === BUNNY_HOST).length, 4);
+		assert.equal(puts, 4, 'the snapshot is written once per idle pass, never on skipped minutes');
+	});
+
+	it('one player fallback brings back the minute cadence; a forced check always probes and writes', async () => {
+		const e = env();
+		const start = Date.parse('2026-11-14T10:00:00Z');
+		await runHealthCheck(e as never, undefined, new Date(start));
+		calls = [];
+		await runHealthCheck(e as never, undefined, new Date(start + 60_000));
+		assert.equal(calls.length, 0, 'quiet minute: no probe');
+		await countProviderFailure(e as never, 'r2', 'viewer-1', start + 90_000);
+		await runHealthCheck(e as never, undefined, new Date(start + 120_000));
+		assert.ok(calls.some((c) => new URL(c.url).host === MEDIA_HOST), 'a reported failure probes at once');
+		calls = [];
+		const forced = await runHealthCheck(e as never, undefined, new Date(start + 121_000), { force: true });
+		assert.ok(calls.some((c) => c.method === 'HEAD'), 'Check now probes');
+		const stored = await (await e.global_settings.get(HEALTH_KEY))!.json<{ checkedAt: string }>();
+		assert.equal(stored.checkedAt, forced!.checkedAt, 'Check now stores its pass');
 	});
 
 	it('a provider switched off is not probed', async () => {

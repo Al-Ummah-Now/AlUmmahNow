@@ -272,6 +272,27 @@ describe('GET /api/videos/:id/playback?exclude=…', () => {
 		assert.equal((await hidden.get(`/api/videos/${ID}/playback?exclude=r2&reason=decode`)).status, 404);
 	});
 
+	it('failure reports are rate limited per video and per client network; the answer never is', async () => {
+		const { env, raw, get, db } = setup();
+		await writeDeliverySettings(env, { mode: 'r2' }, 'admin-1');
+		const keys: string[] = [];
+		const counts = new Map<string, number>();
+		(raw as Record<string, unknown>).WATCH_TIME_LIMITER = {
+			limit: async ({ key }: { key: string }) => {
+				keys.push(key);
+				const n = (counts.get(key) ?? 0) + 1;
+				counts.set(key, n);
+				// Only the network key runs out here, so the cap below is the per-network one
+				return { success: key.startsWith('playback-fallback-net:') ? n <= 6 : true };
+			},
+		};
+		for (let i = 0; i < 10; i++) assert.equal((await get(`/api/videos/${ID}/playback?exclude=r2&reason=network`)).status, 200);
+		assert.ok(keys.includes(`playback-fallback:${ID}`));
+		assert.ok(keys.includes('playback-fallback-net:203.0.113.7'));
+		const row = (await db.prepare('SELECT server_fallbacks AS n FROM playback_fallback_daily').first()) as { n: number };
+		assert.equal(row.n, 6, 'only 6 of 10 reports counted');
+	});
+
 	it('parseExclude: a comma list, repeated params, unknown ids ignored, no duplicates', () => {
 		assert.deepEqual(parseExclude('r2'), ['r2']);
 		assert.deepEqual(parseExclude('r2, bunny,r2'), ['r2', 'bunny']);

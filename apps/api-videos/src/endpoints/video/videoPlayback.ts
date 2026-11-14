@@ -8,7 +8,7 @@ import { transformVideoToView } from "../../lib/transformations";
 import R2Repository from "../../lib/r2Repo";
 import { logger } from "../../lib/logger";
 import { applyPlayback, choosePlayback, countFallback, logDecision, parseExclude, parseFallbackReason } from "../../lib/media/playback";
-import { countProviderFailure, reporterKey } from "../../lib/media/health";
+import { countProviderFailure, reporterKey, reporterNetwork } from "../../lib/media/health";
 import { getSecret } from "../../lib/env-helpers";
 import { isRestrictedVideo, isVideoOpenToAnyone, isVideoRemoved } from '../../lib/visibility';
 
@@ -72,11 +72,15 @@ export class VideoPlayback extends OptionalAuthRoute {
 		const failed = exclude[exclude.length - 1]!;
 		const choice = await choosePlayback(c.env as never, video as never, { exclude, reason, context: "fallback" });
 		logDecision(choice.decision);
-		// The answer is never refused (a player is waiting on it); only the count is rate limited
+		// The answer is never refused (a player is waiting on it); only the count (D1 writes) is rate
+		// limited, per video and per client network (6 a minute each), so a client looping over videos
+		// or a burst on one video cannot turn into a write per request
 		let count = true;
 		if (c.env.WATCH_TIME_LIMITER) {
 			try {
+				const network = reporterNetwork(c.req.header("CF-Connecting-IP"));
 				count = (await c.env.WATCH_TIME_LIMITER.limit({ key: `playback-fallback:${id}` })).success;
+				if (count && network) count = (await c.env.WATCH_TIME_LIMITER.limit({ key: `playback-fallback-net:${network}` })).success;
 			} catch (error) {
 				logger.warn("[playback] rate limiter unavailable", { error });
 			}

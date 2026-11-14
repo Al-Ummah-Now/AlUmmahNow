@@ -239,7 +239,7 @@ export function createMediaInternalRouter() {
 		} catch {
 			ctx = undefined;
 		}
-		const snapshot = await runHealthCheck(c.env, ctx);
+		const snapshot = await runHealthCheck(c.env, ctx, new Date(), { force: true });
 		if (!snapshot) return c.json({ success: false, error: 'The health check failed; see the logs' }, 500);
 		return c.json({ success: true, result: snapshot });
 	});
