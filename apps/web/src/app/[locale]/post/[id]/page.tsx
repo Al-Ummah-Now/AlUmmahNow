@@ -10,6 +10,7 @@ import { originFromHost } from '@/lib/embed/request-origin';
 import { ContentUnavailableError } from '@/lib/seo/availability';
 import { breadcrumbLd, siteName } from '@/lib/seo/structured-data';
 import { loadSiteLink, sitePostCanonical } from '@/lib/seo/site-link';
+import { ogImages, twitterImages } from '@/lib/seo/site-share-image';
 import { isIndexablePost, postChannelName, postDescription, postHeadline, postImage, postPermalink, socialMediaPostingLd } from '@/lib/seo/post';
 
 interface PostPageProps {
@@ -45,8 +46,8 @@ export async function generateMetadata({ params }: PostPageProps): Promise<Metad
     title,
     description,
     alternates: { canonical, languages: onSite?.languages ?? { en: url('en'), ar: url('ar'), 'x-default': url('en') } },
-    openGraph: { type: 'article', siteName: siteName(lang), url: canonical, title, description, ...(image ? { images: [{ url: image }] } : {}), ...(post.createdAt ? { publishedTime: post.createdAt } : {}) },
-    twitter: { card: image ? 'summary_large_image' : 'summary', title, description, ...(image ? { images: [image] } : {}) },
+    openGraph: { type: 'article', siteName: siteName(lang), url: canonical, title, description, images: ogImages(image), ...(post.createdAt ? { publishedTime: post.createdAt } : {}) },
+    twitter: { card: image ? 'summary_large_image' : 'summary', title, description, images: twitterImages(image) },
     ...(isIndexablePost(post) ? {} : { robots: { index: false, follow: false } }),
   };
 }
