@@ -96,3 +96,40 @@ describe('account erasure: upload markers and TUS sessions (#1059)', () => {
 		assert.deepEqual(await eraseUploadTraces({}, 'usr_a', ['v1']), { markers: 0, sessions: 0 });
 	});
 });
+
+describe('account erasure: the admin named on the provider settings', () => {
+	function settingsBucket(doc: Record<string, unknown> | null) {
+		const store = new Map<string, string>(doc ? [['ops/media-delivery.json', JSON.stringify(doc)]] : []);
+		return {
+			store,
+			async get(key: string) {
+				const v = store.get(key);
+				return v === undefined ? null : { json: async () => JSON.parse(v) };
+			},
+			async put(key: string, value: string) {
+				store.set(key, value);
+			},
+			async delete(key: string | string[]) {
+				for (const k of Array.isArray(key) ? key : [key]) store.delete(k);
+			},
+		};
+	}
+
+	it('forgets the erased user as the last editor, and keeps the settings', async () => {
+		const bucket = settingsBucket({ version: 2, ingest: ['bunny'], updatedAt: '2026-11-14T00:00:00.000Z', updatedBy: 'usr_admin' });
+		await eraseUploadTraces({ global_settings: bucket } as never, 'usr_admin', []);
+		const doc = JSON.parse(bucket.store.get('ops/media-delivery.json')!);
+		assert.equal(doc.updatedBy, null);
+		assert.deepEqual(doc.ingest, ['bunny']);
+		assert.equal(doc.updatedAt, '2026-11-14T00:00:00.000Z');
+	});
+
+	it("leaves another editor's settings, and no settings, alone", async () => {
+		const other = settingsBucket({ version: 2, updatedBy: 'usr_other' });
+		await eraseUploadTraces({ global_settings: other } as never, 'usr_admin', []);
+		assert.equal(JSON.parse(other.store.get('ops/media-delivery.json')!).updatedBy, 'usr_other');
+		const none = settingsBucket(null);
+		await eraseUploadTraces({ global_settings: none } as never, 'usr_admin', []);
+		assert.equal(none.store.size, 0);
+	});
+});
