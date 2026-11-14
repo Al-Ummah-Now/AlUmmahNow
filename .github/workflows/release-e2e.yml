@@ -24,6 +24,10 @@ on:
         description: 'Run every test this many times, no retries (the nightly flake hunt uses 3)'
         type: number
         default: 1
+      spec:
+        description: 'Only spec files matching this (e.g. live-stream); by hand only, empty = the whole suite'
+        type: string
+        default: ''
   workflow_call:
     inputs:
       env:
@@ -92,6 +96,8 @@ jobs:
       # --repeat-each for the nightly flake hunt; a repeat run has no retries, so every
       # attempt counts (outcome-reporter.ts writes release-outcomes*.json per test and repeat)
       E2E_REPEAT: ${{ inputs.repeat || 1 }}
+      # By hand only: run the spec files matching this (playwright file filter), nothing else
+      E2E_SPEC: ${{ github.event_name == 'workflow_dispatch' && inputs.spec || '' }}
       E2E_RETRIES: ${{ (inputs.repeat || 1) > 1 && '0' || '1' }}
       AUTH_URL: ${{ (inputs.env || 'qa') == 'stage' && 'https://auth.stage.alummahnow.net' || 'https://auth.qa.alummahnow.net' }}
     steps:
@@ -167,6 +173,14 @@ jobs:
           echo "::add-mask::$pw"
           echo "E2E_TEST_PASSWORD=$pw" >> "$GITHUB_ENV"
 
+      # live-stream.player.spec.ts pushes a real test stream (test pattern + tone) with ffmpeg
+      - name: Install ffmpeg for the live stream spec
+        if: matrix.part == 'main'
+        uses: ./.github/actions/apt-install
+        with:
+          packages: ffmpeg
+          no-install-recommends: 'true'
+
       - name: Run release regressions
         if: matrix.part == 'main'
         working-directory: ${{ env.SUITE }}
@@ -177,7 +191,7 @@ jobs:
           # The shared-state specs run below under their lock; the encode-waiting specs in the encode part
           E2E_SHARED_STATE: skip
           E2E_ENCODE: skip
-        run: npx playwright test -c playwright.release.config.ts --repeat-each="$E2E_REPEAT" --pass-with-no-tests
+        run: npx playwright test -c playwright.release.config.ts --repeat-each="$E2E_REPEAT" --pass-with-no-tests ${E2E_SPEC:+"$E2E_SPEC"}
 
       # The specs that wait for Bunny to encode an upload share one encode queue with
       # every other run on the QA/stage library: at most two runs encode at once
@@ -207,7 +221,7 @@ jobs:
           # the end (e2e/release/run-videos.ts): retries, workers and projects never re-upload
           E2E_SHARED_RUN_VIDEOS: '1'
           E2E_RUN_VIDEOS_FILE: ${{ runner.temp }}/run-videos.json
-        run: npx playwright test -c playwright.release.config.ts --repeat-each="$E2E_REPEAT" --pass-with-no-tests
+        run: npx playwright test -c playwright.release.config.ts --repeat-each="$E2E_REPEAT" --pass-with-no-tests ${E2E_SPEC:+"$E2E_SPEC"}
 
       - name: Release the ${{ env.E2E_ENV }}-encode slot
         if: always() && steps.encode-lock.outputs.holder != ''
@@ -229,7 +243,7 @@ jobs:
           E2E_SHARED_STATE: only
         # A listing that fails reports no count, so the lock and the specs still run
         run: |
-          if npx playwright test -c playwright.release.config.ts --list --pass-with-no-tests > "$RUNNER_TEMP/shared-list.txt" 2>&1; then
+          if npx playwright test -c playwright.release.config.ts --list --pass-with-no-tests ${E2E_SPEC:+"$E2E_SPEC"} > "$RUNNER_TEMP/shared-list.txt" 2>&1; then
             n=$(grep -cE '^ +\[' "$RUNNER_TEMP/shared-list.txt" || true)
             echo "Shared-state tests for $E2E_ENV: $n"
             echo "count=$n" >> "$GITHUB_OUTPUT"
@@ -255,7 +269,7 @@ jobs:
           TEST_PROMOTE_SECRET: ${{ secrets.TEST_PROMOTE_SECRET || (inputs.env == 'stage' && secrets.TEST_PROMOTE_SECRET_STAGE) || secrets.TEST_PROMOTE_SECRET_QA }}
           E2E_SHARED_STATE: only
           E2E_OUTPUT_SUFFIX: shared-state
-        run: npx playwright test -c playwright.release.config.ts --repeat-each="$E2E_REPEAT" --pass-with-no-tests
+        run: npx playwright test -c playwright.release.config.ts --repeat-each="$E2E_REPEAT" --pass-with-no-tests ${E2E_SPEC:+"$E2E_SPEC"}
 
       - name: Release the ${{ env.E2E_ENV }}-global lock
         if: always() && steps.lock.outputs.holder != ''
@@ -271,7 +285,7 @@ jobs:
       # in the job summary, never gating a PR, main or a release (owner rule 2026-11-12). Not on PRs
       # (no extra QA load); nightly, by hand and in releases (workflow_call).
       - name: Load and timing specs (non-blocking)
-        if: matrix.part == 'main' && github.event_name != 'pull_request' && !cancelled()
+        if: matrix.part == 'main' && github.event_name != 'pull_request' && env.E2E_SPEC == '' && !cancelled()
         continue-on-error: true
         working-directory: ${{ env.SUITE }}
         timeout-minutes: 30
