@@ -113,7 +113,8 @@ function enabledOf(f: FormState): MediaProviderId[] {
  * edits (shared-types settingsProblems), so an unsafe change cannot be saved; changes that move
  * live traffic ask first in the in-app dialog. Saving goes through admin-api (media:manage, audited).
  */
-export function ProviderSettings({ view }: { view: MediaProvidersView }) {
+/** The page's heading names the form (media-providers/page.tsx), so the card carries no title of its own. */
+export function ProviderSettings({ view, labelledBy }: { view: MediaProvidersView; labelledBy: string }) {
   const { t, locale } = useLanguage();
   const router = useRouter();
   const ids = useId();
@@ -241,10 +242,8 @@ export function ProviderSettings({ view }: { view: MediaProvidersView }) {
   const channelIds = Object.keys(form.channels).sort();
 
   return (
-    <section className={`${cardClass} mb-6`} aria-labelledby={`${ids}-title`} data-testid="providers-settings">
+    <section className={`${cardClass} mb-6`} aria-labelledby={labelledBy} data-testid="providers-settings">
       {dialog}
-      <h2 id={`${ids}-title`} className="text-lg font-semibold text-fg mb-1">{t('mediaProviders.title')}</h2>
-      <p className="text-fg-muted text-sm mb-5 max-w-3xl">{t('mediaProviders.intro')}</p>
       <form onSubmit={save} className="space-y-7" noValidate>
         {/* Providers: on/off and health */}
         <fieldset>

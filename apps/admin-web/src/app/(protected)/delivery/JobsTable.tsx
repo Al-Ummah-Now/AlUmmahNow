@@ -55,7 +55,7 @@ export function JobsTable({ jobs }: { jobs: MediaJob[] }) {
     <div className="space-y-3">
       {error && <ErrorAlert testId="delivery-retry-error">{error}</ErrorAlert>}
       <p role="status" className="text-sm text-fg empty:hidden" data-testid="delivery-retry-notice">{notice}</p>
-      <div className="bg-surface border border-border rounded-lg overflow-x-auto">
+      <div className="relative bg-surface border border-border rounded-lg overflow-x-auto">
         <table className="w-full" data-testid="delivery-jobs">
           <caption className="sr-only">{t('mediaDelivery.jobsCaption')}</caption>
           <thead className="border-b border-border">

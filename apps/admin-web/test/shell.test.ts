@@ -14,14 +14,14 @@ const hrefs = (access: NavAccess) => visibleItems(access).map((i) => i.href);
 
 describe('nav model', () => {
   it('keeps every section of the old top nav', () => {
-    for (const href of ['/dashboard', '/moderation', '/moderation/ai', '/channels', '/videos', '/comments', '/playlists', '/community', '/deleted', '/users', '/category-suggestions', '/translations', '/indices', '/site-theme', '/contact', '/processing', '/stale-uploads', '/errors', '/jobs', '/tiers', '/auth-requests', '/legacy-profiles', '/video-formats', '/delivery', '/operations']) {
+    for (const href of ['/dashboard', '/moderation', '/moderation/ai', '/channels', '/videos', '/comments', '/playlists', '/community', '/deleted', '/users', '/category-suggestions', '/translations', '/indices', '/site-theme', '/contact', '/processing', '/stale-uploads', '/errors', '/jobs', '/tiers', '/auth-requests', '/legacy-profiles', '/video-formats', '/delivery', '/media-providers', '/operations']) {
       assert.ok(NAV_ITEMS.some((i) => i.href === href), href);
     }
   });
 
   it('hides from moderators exactly what the old nav hid', () => {
     const hidden = hrefs(admin).filter((h) => !hrefs(moderator).includes(h)).sort();
-    assert.deepEqual(hidden, ['/contact', '/delivery', '/errors', '/legacy-profiles', '/operations', '/processing', '/stale-uploads', '/status', '/abuse', '/web-vitals', '/video-formats'].sort());
+    assert.deepEqual(hidden, ['/contact', '/delivery', '/media-providers', '/errors', '/legacy-profiles', '/operations', '/processing', '/stale-uploads', '/status', '/abuse', '/web-vitals', '/video-formats'].sort());
   });
 
   it('shows Errors to whoever has errors:read or videos:processing', () => {
