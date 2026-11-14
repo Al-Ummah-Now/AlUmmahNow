@@ -37,7 +37,7 @@ import { compareProviders } from '../lib/live/qoe';
 import { readStream, streamEnd, type LiveStreamRecord } from '../lib/live/streams';
 import { bulkAssignTier, limitHitsSince, listCreators, tierCounts } from '../lib/admin/creators';
 import { createChannelFor, lookupAccount, provisionProfile } from '../lib/admin/invites';
-import { addGrant, CaptionMinutesError, listGrants, readUsage, revokeGrant, subjectOfUser } from '../lib/captions/minutes';
+import { addGrant, CaptionMinutesError, listGrants, listLedger, readUsage, revokeGrant, subjectOfUser } from '../lib/captions/minutes';
 import { assignTier, CreatorTierError, deleteTier, purgeTiers, readAssignment, readDeletedTiers, readTiers, requestTierPurge, restoreTier, saveTier } from '../lib/creatorTiers';
 import { shortLinkClicksReport, siteVisitsReport } from '../lib/site-visits';
 
@@ -376,8 +376,9 @@ app.put('/users/:id/creator-tier', async (c) => {
 app.get('/users/:id/caption-minutes', async (c) => {
 	const db = searchDb(c);
 	const userId = c.req.param('id');
-	const [usage, grants] = await Promise.all([subjectOfUser(db, userId).then((s) => readUsage(db, s)), listGrants(db, userId)]);
-	return ok(c, { usage, grants });
+	const usage = await readUsage(db, await subjectOfUser(db, userId));
+	const [grants, ledger] = await Promise.all([listGrants(db, userId), listLedger(db, userId)]);
+	return ok(c, { usage, grants, ledger });
 });
 const GrantBody = z.object({ minutes: z.coerce.number(), scope: z.enum(['month', 'until_used']), reason: z.string().max(500) }).strict();
 app.post('/users/:id/caption-minutes/grants', async (c) => ok(c, { grant: await addGrant(searchDb(c), c.req.param('id'), parse(GrantBody, await body(c)), actor(c)) }));

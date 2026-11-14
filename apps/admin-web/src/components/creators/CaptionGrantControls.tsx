@@ -2,10 +2,10 @@
 
 import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CAPTION_GRANT_BOUNDS, type CaptionGrantScope, type CaptionMinuteGrant, type CaptionMinutesUsage } from '@al-ummah/shared-types';
+import { CAPTION_GRANT_BOUNDS, type CaptionGrantScope, type CaptionLedgerEntry, type CaptionMinuteGrant, type CaptionMinutesUsage } from '@al-ummah/shared-types';
 import type { ActionResult } from '@/lib/api/errors';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatDate, formatNumber } from '@/i18n/translate';
+import { formatDate, formatNumber, type MessageKey } from '@/i18n/translate';
 import { fieldClass } from '@/components/ui';
 import { Chip, dangerButtonClass, smallButtonClass } from '@/components/content/parts';
 import { reportError } from '@/lib/errors/reporter';
@@ -15,6 +15,8 @@ export interface CaptionGrantControlsProps {
   userId: string;
   usage: CaptionMinutesUsage;
   grants: CaptionMinuteGrant[];
+  /** The newest balance changes (each job step and overdraft paydown) */
+  ledger?: CaptionLedgerEntry[];
   canManage: boolean;
   grant: (userId: string, grant: { minutes: number; scope: CaptionGrantScope; reason: string }) => Promise<ActionResult<unknown>>;
   revoke: (userId: string, grantId: string, reason: string) => Promise<ActionResult<unknown>>;
@@ -23,11 +25,13 @@ export interface CaptionGrantControlsProps {
 type Status = { kind: 'ok' | 'error'; text: string } | null;
 
 /** This month's caption minutes, the grant form and the grants (each revocable with a reason). */
-export function CaptionGrantControls({ userId, usage, grants, canManage, grant, revoke }: CaptionGrantControlsProps) {
+export function CaptionGrantControls({ userId, usage, grants, ledger = [], canManage, grant, revoke }: CaptionGrantControlsProps) {
   const router = useRouter();
   const { t, locale } = useLanguage();
   const ids = useId();
   const n = (value: number) => formatNumber(value, locale);
+  /** Signed: +17 charged, −5 given back (a real minus sign) */
+  const signed = (value: number) => (value > 0 ? `+${n(value)}` : value < 0 ? `\u2212${n(-value)}` : n(0));
   const [minutes, setMinutes] = useState<number>(60);
   const [scope, setScope] = useState<CaptionGrantScope>('month');
   const [reason, setReason] = useState('');
@@ -91,7 +95,12 @@ export function CaptionGrantControls({ userId, usage, grants, canManage, grant, 
               {usage.warning && <Chip tone="warn">80%</Chip>}
             </p>
             {usage.packsRemaining > 0 && <p className="text-fg">{t('captionMinutes.packsLine', { count: n(usage.packsRemaining) })}</p>}
-            <p className="font-medium text-fg" data-testid="caption-minutes-remaining">{t('captionMinutes.remainingLine', { count: n(usage.remaining ?? 0) })}</p>
+            {usage.held > 0 && <p className="text-fg-muted">{t('captionMinutes.heldLine', { count: n(usage.held) })}</p>}
+            {usage.overdraft > 0 ? (
+              <p className="font-medium text-danger-fg" data-testid="caption-minutes-overdraft">{t('captionMinutes.overdraftLine', { count: n(usage.overdraft) })}</p>
+            ) : (
+              <p className="font-medium text-fg" data-testid="caption-minutes-remaining">{t('captionMinutes.remainingLine', { count: n(Math.max(0, usage.remaining ?? 0)) })}</p>
+            )}
           </>
         )}
       </div>
@@ -158,6 +167,36 @@ export function CaptionGrantControls({ userId, usage, grants, canManage, grant, 
       <p role="status" aria-live="polite" className={`text-sm min-h-5 ${status?.kind === 'error' ? 'text-danger-fg' : 'text-fg'}`} data-testid="caption-grant-status">
         {status?.text}
       </p>
+
+      <div>
+        <h3 className="text-base font-semibold text-fg mb-2">{t('captionMinutes.ledgerTitle')}</h3>
+        {ledger.length === 0 ? (
+          <p className="text-sm text-fg-muted">{t('captionMinutes.ledgerEmpty')}</p>
+        ) : (
+          <ul className="flex flex-col gap-2 text-sm" data-testid="caption-ledger">
+            {ledger.map((e) => (
+              <li key={e.id} className="flex flex-col gap-0.5 border-b border-border pb-2 last:border-b-0" data-testid="caption-ledger-entry" data-kind={e.kind}>
+                <span className="text-fg">
+                  {formatDate(e.createdAt, locale, true)} · {t(`captionMinutes.ledgerKind.${e.kind}` as MessageKey)} · <bdi dir="ltr">{signed(e.minutes)}</bdi>
+                  {e.balanceAfter !== null && (
+                    <>
+                      {' · '}
+                      <span className={e.balanceAfter < 0 ? 'font-medium text-danger-fg' : undefined}>
+                        {t('captionMinutes.ledgerBalance')} <bdi dir="ltr">{signed(e.balanceAfter)}</bdi>
+                      </span>
+                    </>
+                  )}
+                </span>
+                {e.holdId && (
+                  <span className="text-xs text-fg-muted">
+                    {t('captionMinutes.ledgerJob')} <bdi dir="ltr">{e.holdId}</bdi>
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       <div>
         <h3 className="text-base font-semibold text-fg mb-2">{t('captionMinutes.grantsTitle')}</h3>

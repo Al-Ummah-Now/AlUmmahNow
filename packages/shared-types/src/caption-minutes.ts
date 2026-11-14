@@ -9,9 +9,13 @@
  * Everything is videos-side (the videos admin), never Auth RBAC. Months are
  * calendar months in UTC.
  *
- * A job reserves its minutes when it is requested; the reservation is
- * committed (with any difference released) when the job finishes and released
- * in full when it fails or is cancelled.
+ * A job is charged its estimate when it starts, so the meter and the next start
+ * see it at once; it is settled to the minutes it used when it finishes (the
+ * difference charged or given back), refunded in full when it fails, and charged
+ * only what it transcribed when it is cancelled. A start needs a balance above 0;
+ * a started job always runs to the end, so the balance may go below 0 (the
+ * overdraft), which the next month's allowance and the admin's grants pay down
+ * (owner decisions 2026-11-14).
  */
 
 export const CAPTION_GRANT_SCOPES = ['month', 'until_used'] as const;
@@ -36,6 +40,21 @@ export interface CaptionMinuteGrant {
   revokeReason: string | null;
 }
 
+/** One change of a subject's caption-minutes balance (the admin's ledger). */
+export interface CaptionLedgerEntry {
+  /** The step's idempotency key: `<jobId>:start|settle|cancel|refund` or `paydown:<uuid>` */
+  id: string;
+  holdId: string | null;
+  /** start: the estimate charged; settle: the difference at the end; cancel: given back but what was transcribed; refund: all back on failure; paydown: overdraft paid from the month or a grant */
+  kind: 'start' | 'settle' | 'cancel' | 'refund' | 'paydown';
+  /** + charged, − given back (paydown: the minutes paid off) */
+  minutes: number;
+  /** The balance after the step; null when unlimited */
+  balanceAfter: number | null;
+  period: string;
+  createdAt: string;
+}
+
 /** Where a subject's caption minutes stand this month. */
 export interface CaptionMinutesUsage {
   /** `YYYY-MM` (UTC) */
@@ -55,9 +74,13 @@ export interface CaptionMinutesUsage {
   monthUsed: number;
   /** Minutes left on "until used" grants */
   packsRemaining: number;
-  /** What a new job may spend now; null when unlimited */
+  /** Minutes charged past the allowance and grants, owed to the next month (0 when none) */
+  overdraft: number;
+  /** Minutes charged to jobs still running (counted in the figures above already) */
+  held: number;
+  /** The balance: below 0 by the overdraft; a job may start while it is above 0; null when unlimited */
   remaining: number | null;
-  /** At least 80% of the month's allowance is spent */
+  /** At least 80% of the month's allowance is spent, or the balance is below 0 */
   warning: boolean;
 }
 
@@ -97,9 +120,12 @@ export function captionUsageFrom(input: {
   monthGranted: number;
   monthUsed: number;
   packsRemaining: number;
+  overdraft?: number;
+  held?: number;
 }): CaptionMinutesUsage {
   const monthLimit = input.unlimited ? null : input.tierMinutes + input.monthGranted;
-  const remaining = monthLimit === null ? null : Math.max(0, monthLimit - input.monthUsed) + input.packsRemaining;
+  const overdraft = input.unlimited ? 0 : Math.max(0, input.overdraft ?? 0);
+  const remaining = monthLimit === null ? null : Math.max(0, monthLimit - input.monthUsed) + input.packsRemaining - overdraft;
   return {
     period: input.period,
     resetsAt: captionPeriodResetsAt(input.period),
@@ -110,7 +136,12 @@ export function captionUsageFrom(input: {
     monthLimit,
     monthUsed: input.monthUsed,
     packsRemaining: input.packsRemaining,
+    overdraft,
+    held: Math.max(0, input.held ?? 0),
     remaining,
-    warning: monthLimit !== null && monthLimit > 0 && input.monthUsed >= monthLimit * CAPTION_MINUTES_WARNING_RATIO,
+    warning: monthLimit !== null && ((monthLimit > 0 && input.monthUsed >= monthLimit * CAPTION_MINUTES_WARNING_RATIO) || overdraft > 0),
   };
 }
+
+/** A start needs a balance above 0 (unlimited always may). */
+export const captionMinutesCanStart = (usage: Pick<CaptionMinutesUsage, 'unlimited' | 'remaining'>): boolean => usage.unlimited || (usage.remaining ?? 0) > 0;

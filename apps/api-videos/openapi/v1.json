@@ -42760,7 +42760,7 @@
           "Captions"
         ],
         "summary": "Transcribe a video into a caption draft",
-        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nStarts a background job that transcribes the language spoken in the video; Quran recitation is written from the official text. Asking again while a job of the same language runs returns that job (200). Reserves `ceil(duration in minutes)` caption minutes; a failed or cancelled job gives them back. 409 `draft_exists` unless `replace`; 402 `upgrade_required` when the minutes would run out.",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nStarts a background job that transcribes the language spoken in the video; Quran recitation is written from the official text. Asking again while a job of the same language runs returns that job (200). Reserves `ceil(duration in minutes)` caption minutes; a failed or cancelled job gives them back. 409 `draft_exists` unless `replace`; 402 `upgrade_required` when the balance is 0 or below. The estimate is charged at the start and may take the balance below 0: a started job always runs to the end.",
         "operationId": "post_CaptionJobCreate",
         "parameters": [
           {
@@ -43196,16 +43196,24 @@
                           "type": "number",
                           "description": "Minutes left on \"until used\" grants"
                         },
+                        "overdraft": {
+                          "type": "number",
+                          "description": "Minutes charged past the allowance and grants; the next month and grants pay it down"
+                        },
+                        "held": {
+                          "type": "number",
+                          "description": "Minutes charged to jobs still running (included above)"
+                        },
                         "remaining": {
                           "type": [
                             "number",
                             "null"
                           ],
-                          "description": "What a new job may spend now; null when unlimited"
+                          "description": "The balance, below 0 by the overdraft; a job may start while it is above 0; null when unlimited"
                         },
                         "warning": {
                           "type": "boolean",
-                          "description": "80% of the month's allowance is spent"
+                          "description": "80% of the month's allowance is spent, or the balance is below 0"
                         }
                       },
                       "required": [
@@ -43218,6 +43226,8 @@
                         "monthLimit",
                         "monthUsed",
                         "packsRemaining",
+                        "overdraft",
+                        "held",
                         "remaining",
                         "warning"
                       ]
@@ -43682,16 +43692,24 @@
                               "type": "number",
                               "description": "Minutes left on \"until used\" grants"
                             },
+                            "overdraft": {
+                              "type": "number",
+                              "description": "Minutes charged past the allowance and grants; the next month and grants pay it down"
+                            },
+                            "held": {
+                              "type": "number",
+                              "description": "Minutes charged to jobs still running (included above)"
+                            },
                             "remaining": {
                               "type": [
                                 "number",
                                 "null"
                               ],
-                              "description": "What a new job may spend now; null when unlimited"
+                              "description": "The balance, below 0 by the overdraft; a job may start while it is above 0; null when unlimited"
                             },
                             "warning": {
                               "type": "boolean",
-                              "description": "80% of the month's allowance is spent"
+                              "description": "80% of the month's allowance is spent, or the balance is below 0"
                             }
                           },
                           "required": [
@@ -43704,6 +43722,8 @@
                             "monthLimit",
                             "monthUsed",
                             "packsRemaining",
+                            "overdraft",
+                            "held",
                             "remaining",
                             "warning"
                           ]

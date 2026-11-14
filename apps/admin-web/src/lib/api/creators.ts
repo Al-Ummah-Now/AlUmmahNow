@@ -4,7 +4,7 @@
  * Creator tiers (admin-api /api/content/creators, /creator-tiers,
  * /users/:id/creator-tier). Videos-side data: never the Auth admin or Auth RBAC.
  */
-import type { AdminAuditEntry, AdminCreatorFilter, CaptionGrantScope, CaptionMinuteGrant, CaptionMinutesUsage, AdminCreatorsPage, CreatorTierAssignment, CreatorTierBulkResult, CreatorTiersList } from '@al-ummah/shared-types';
+import type { AdminAuditEntry, AdminCreatorFilter, CaptionGrantScope, CaptionLedgerEntry, CaptionMinuteGrant, CaptionMinutesUsage, AdminCreatorsPage, CreatorTierAssignment, CreatorTierBulkResult, CreatorTiersList } from '@al-ummah/shared-types';
 import { AdminApiError, type ActionResult } from './errors';
 import { requestAdmin, navigateForPasskey } from './request';
 
@@ -91,7 +91,7 @@ export async function deleteCreatorTier(id: string): Promise<ActionResult<unknow
 }
 
 /** A user's caption minutes this month, their grants and the grant history (admin-api /users/:id/caption-minutes). */
-export async function getUserCaptionMinutes(userId: string): Promise<{ usage: CaptionMinutesUsage; grants: CaptionMinuteGrant[]; audit: AdminAuditEntry[] }> {
+export async function getUserCaptionMinutes(userId: string): Promise<{ usage: CaptionMinutesUsage; grants: CaptionMinuteGrant[]; ledger?: CaptionLedgerEntry[]; audit: AdminAuditEntry[] }> {
   return fetchAdmin(`/api/content/users/${encodeURIComponent(userId)}/caption-minutes`);
 }
 

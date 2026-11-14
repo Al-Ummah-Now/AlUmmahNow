@@ -119,13 +119,25 @@ describe('caption jobs', () => {
 		assert.ok('job' in other && other.job.id !== first.job.id, 'another language is another job');
 	});
 
-	it('refuses with the usage when minutes would run out, and keeps an existing draft unless replace', async () => {
-		const { env, asEnv } = await setup(2);
-		const refused = await ask(asEnv);
+	it('starts with too few minutes and goes negative; refuses once the balance is 0 or below', async () => {
+		const { asEnv, remaining } = await setup(2);
+		const started = await ask(asEnv);
+		assert.ok('job' in started, 'a balance above 0 starts a job that costs more');
+		assert.equal(await remaining(), -1);
+		const refused = await ask(asEnv, { language: 'en' });
 		assert.ok('refused' in refused);
 		assert.equal(refused.minutes, 3);
-		assert.equal(refused.usage.remaining, 2);
-		assert.equal((await listJobs(asEnv, 'v1')).length, 0);
+		assert.equal(refused.usage.remaining, -1);
+		assert.equal(refused.usage.overdraft, 1);
+		assert.equal((await listJobs(asEnv, 'v1')).length, 1);
+		// The started job runs to the end and is charged in full
+		await finishJob(asEnv, started.job.id, { outcome: 'ready', minutesUsed: 3 }, undefined, NOV);
+		assert.equal((await listJobs(asEnv, 'v1'))[0].minutesCharged, 3);
+		assert.equal(await remaining(), -1);
+	});
+
+	it('keeps an existing draft unless replace', async () => {
+		const { env, asEnv } = await setup(10);
 		env.subtitles.objects[captionDraftKey('v1', 'ar')] = '{}';
 		await assert.rejects(ask(asEnv, { video: video({ duration: 30 }) }), /draft_exists/);
 		const replaced = await ask(asEnv, { video: video({ duration: 30 }), replace: true });
@@ -144,6 +156,19 @@ describe('caption jobs', () => {
 		await assert.rejects(ask(asEnv), /queue_unavailable/);
 		assert.equal(await remaining(), 10);
 		assert.equal((await listJobs(asEnv, 'v1'))[0].status, 'failed');
+	});
+
+	it('cancel charges only what was transcribed; the rest comes back', async () => {
+		const { asEnv, remaining } = await setup(10);
+		const out = await ask(asEnv, { video: video({ duration: 8 * 60 }) });
+		assert.ok('job' in out);
+		assert.equal(await remaining(), 2, 'the estimate counts from the start');
+		await onProgress(asEnv, out.job.id, { status: 'transcribing', done: 1, total: 4 }, NOV);
+		const cancelled = await cancelJob(asEnv, 'v1', out.job.id, NOV);
+		assert.equal(cancelled.minutesCharged, 2, 'a quarter of 8 minutes');
+		assert.equal(await remaining(), 8);
+		await cancelJob(asEnv, 'v1', out.job.id, NOV);
+		assert.equal(await remaining(), 8, 'cancelling again changes nothing');
 	});
 
 	it('cancel gives the minutes back and stops progress', async () => {

@@ -22,6 +22,8 @@ import {
 } from '../src/lib/creator-tiers';
 import { createTranslator } from '../src/i18n/translate';
 import { I18nProvider } from '../src/i18n/I18nProvider';
+import { CaptionGrantControls } from '../src/components/creators/CaptionGrantControls';
+import { captionUsageFrom } from '@al-ummah/shared-types';
 import { CreatorTierControl } from '../src/components/creators/CreatorTierControl';
 import { CreatorsTable } from '../src/components/creators/CreatorsTable';
 import { LimitHitsNotice } from '../src/components/creators/LimitHitsNotice';
@@ -227,5 +229,28 @@ describe('rendered components', () => {
     assert.match(unlimited, /always stays unlimited/);
     const arabic = render(el(TierEditor, { tiers: TIERS, counts: { creator: 12 }, canManage: true, actions: tierActions }), 'ar');
     assert.match(arabic, new RegExp(`${new Intl.NumberFormat('ar').format(12)} مستخدم`));
+  });
+});
+
+describe('caption minutes on the user page: overdraft and ledger', () => {
+  const noop = async () => ({ ok: true as const, data: null });
+  const usage = captionUsageFrom({ period: '2026-11', unlimited: false, via: 'tier', tierMinutes: 120, monthGranted: 0, monthUsed: 120, packsRemaining: 0, overdraft: 7, held: 17 });
+  const ledger = [
+    { id: 'job-1:settle', holdId: 'job-1', kind: 'settle' as const, minutes: -2, balanceAfter: -7, period: '2026-11', createdAt: '2026-11-14T11:00:00.000Z' },
+    { id: 'job-1:start', holdId: 'job-1', kind: 'start' as const, minutes: 17, balanceAfter: -5, period: '2026-11', createdAt: '2026-11-14T10:00:00.000Z' },
+  ];
+
+  it('shows the overdraft in red instead of a negative "available", the held minutes, and each step with its signed balance', () => {
+    assert.equal(usage.remaining, -7);
+    const html = render(React.createElement(CaptionGrantControls, { userId: 'u1', usage, grants: [], ledger, canManage: false, grant: noop, revoke: noop }));
+    assert.match(html, /data-testid="caption-minutes-overdraft"[^>]*>Over by 7 minutes\./);
+    assert.doesNotMatch(html, /minutes available now/);
+    assert.match(html, /17 minutes are charged to transcriptions still running/);
+    assert.match(html, /Job finished · <bdi dir="ltr">\u22122<\/bdi>/);
+    assert.match(html, /text-danger-fg">balance <bdi dir="ltr">\u22127<\/bdi>/);
+    assert.match(html, /Job started · <bdi dir="ltr">\+17<\/bdi>/);
+    const ar = render(React.createElement(CaptionGrantControls, { userId: 'u1', usage, grants: [], ledger, canManage: false, grant: noop, revoke: noop }), 'ar');
+    assert.match(ar, /تجاوز الرصيد بـ 7 من الدقائق/);
+    assert.match(ar, /بدأ التفريغ/);
   });
 });

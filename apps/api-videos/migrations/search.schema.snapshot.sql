@@ -27,6 +27,7 @@
 --   apps/api-videos/migrations/search/0031_admin_history_privacy.sql
 --   apps/api-videos/migrations/search/0032_caption_minutes.sql
 --   apps/api-videos/migrations/search/0033_caption_jobs.sql
+--   apps/api-videos/migrations/search/0035_caption_overdraft.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -36,6 +37,8 @@ CREATE TABLE admin_jobs (id TEXT PRIMARY KEY, kind TEXT NOT NULL, target_kind TE
 CREATE TABLE caption_jobs (id TEXT PRIMARY KEY, idempotency_key TEXT NOT NULL, video_id TEXT NOT NULL, channel_id TEXT, subject_id TEXT NOT NULL, requested_by TEXT NOT NULL, kind TEXT NOT NULL CHECK (kind IN ('transcribe')), language TEXT NOT NULL, replace_draft INTEGER NOT NULL DEFAULT 0, provider TEXT NOT NULL, model TEXT NOT NULL, status TEXT NOT NULL CHECK (status IN ('queued', 'waiting_budget', 'extracting', 'transcribing', 'postprocessing', 'ready', 'failed', 'cancelled')), progress_done INTEGER, progress_total INTEGER, minutes_reserved INTEGER NOT NULL DEFAULT 0, minutes_charged INTEGER, waived INTEGER NOT NULL DEFAULT 0, error TEXT, audio_manifest_key TEXT, attempts INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, finished_at TEXT) WITHOUT ROWID;
 CREATE TABLE caption_minute_grants (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, minutes INTEGER NOT NULL CHECK (minutes > 0), scope TEXT NOT NULL CHECK (scope IN ('month', 'until_used')), period TEXT, used INTEGER NOT NULL DEFAULT 0 CHECK (used >= 0), reason TEXT NOT NULL, created_by TEXT NOT NULL, created_at TEXT NOT NULL, revoked_at TEXT, revoked_by TEXT, revoke_reason TEXT) WITHOUT ROWID;
 CREATE TABLE caption_minute_holds (hold_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, period TEXT NOT NULL, minutes INTEGER NOT NULL, month_minutes INTEGER NOT NULL, packs_json TEXT NOT NULL DEFAULT '[]', state TEXT NOT NULL CHECK (state IN ('reserved', 'committed', 'released')), charged INTEGER, created_at TEXT NOT NULL, updated_at TEXT NOT NULL) WITHOUT ROWID;
+CREATE TABLE caption_minute_ledger (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, hold_id TEXT, kind TEXT NOT NULL CHECK (kind IN ('start', 'settle', 'cancel', 'refund', 'paydown')), minutes INTEGER NOT NULL, balance_after INTEGER, period TEXT NOT NULL, created_at TEXT NOT NULL) WITHOUT ROWID;
+CREATE TABLE caption_minute_overdraft (user_id TEXT PRIMARY KEY, minutes INTEGER NOT NULL DEFAULT 0 CHECK (minutes >= 0), updated_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE caption_minute_usage (user_id TEXT NOT NULL, period TEXT NOT NULL, minutes INTEGER NOT NULL DEFAULT 0 CHECK (minutes >= 0), updated_at TEXT NOT NULL, PRIMARY KEY (user_id, period)) WITHOUT ROWID;
 CREATE TABLE category_suggestions (subject_id TEXT PRIMARY KEY, subject_type TEXT NOT NULL, user_id TEXT, channel_id TEXT, reason TEXT NOT NULL, status TEXT NOT NULL, input_hash TEXT, category TEXT, confidence REAL, options_json TEXT, model TEXT, prompt_version TEXT, threshold REAL, applied INTEGER NOT NULL DEFAULT 0, previous_category TEXT, previous_source TEXT, outcome TEXT NOT NULL DEFAULT 'pending', final_category TEXT, reviewed_by TEXT, reviewed_at INTEGER, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
 CREATE TABLE channel_access (channel_id TEXT NOT NULL, user_id TEXT NOT NULL, role TEXT NOT NULL, source_version INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (channel_id, user_id));
@@ -108,6 +111,7 @@ CREATE UNIQUE INDEX idx_caption_jobs_active ON caption_jobs (idempotency_key) WH
 CREATE INDEX idx_caption_jobs_video ON caption_jobs (video_id, created_at);
 CREATE INDEX idx_caption_minute_grants_user ON caption_minute_grants (user_id, created_at);
 CREATE INDEX idx_caption_minute_holds_user ON caption_minute_holds (user_id, period);
+CREATE INDEX idx_caption_minute_ledger_user ON caption_minute_ledger (user_id, created_at);
 CREATE INDEX idx_catsug_hash ON category_suggestions (input_hash);
 CREATE INDEX idx_catsug_hash_done ON category_suggestions (input_hash, prompt_version, status, updated_at);
 CREATE INDEX idx_catsug_review ON category_suggestions (subject_type, outcome, confidence);
