@@ -3,13 +3,18 @@
  *
  * /{locale}/post/{id} (wiki AUN-SEO): 404 when nobody here may see the post, 503 when the API is
  * down, canonical + hreflang per language, noindex for a members-only post, and SocialMediaPosting
- * only for a public one.
+ * only for a public one. A channel with a live scholar site: the canonical is the site's post page.
  */
 import { renderToStaticMarkup } from 'react-dom/server';
 import PostPage, { generateMetadata } from '../page';
 import { loadPermalinkPost } from '@/lib/community/post-permalink';
 import { ContentUnavailableError } from '@/lib/seo/availability';
+import { loadSiteLink } from '@/lib/seo/site-link';
 
+// React.cache exists in Next's server React build, not in the react@18 test copy
+jest.mock('react', () => ({ ...jest.requireActual('react'), cache: <T,>(fn: T) => fn }));
+jest.mock('@/lib/logger-server', () => ({ logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() } }));
+jest.mock('@/lib/seo/site-link', () => ({ ...jest.requireActual('@/lib/seo/site-link'), loadSiteLink: jest.fn(async () => null) }));
 jest.mock('next/headers', () => ({ headers: async () => new Map([['host', 'videos.alummahnow.net']]) }));
 jest.mock('next/navigation', () => ({ notFound: jest.fn(() => { throw new Error('NEXT_NOT_FOUND'); }) }));
 jest.mock('@/lib/community/post-permalink', () => ({ loadPermalinkPost: jest.fn() }));
@@ -17,6 +22,7 @@ jest.mock('@/lib/channel-loaders', () => ({ loadChannelById: jest.fn(async () =>
 jest.mock('@/components/Community/permalink/PostPermalinkView', () => ({ __esModule: true, default: (p: { channelHref: string }) => <div data-href={p.channelHref}>post</div> }));
 
 const load = loadPermalinkPost as jest.Mock;
+const siteLink = loadSiteLink as jest.Mock;
 const params = (locale: string, id = 'p1') => ({ params: Promise.resolve({ locale, id }) });
 const post = (over: Record<string, unknown> = {}) => ({
   status: 'ok',
@@ -52,6 +58,21 @@ describe('post permalink page', () => {
     expect(ld[0].author.url).toBe('https://videos.alummahnow.net/en/@Noor');
     expect(ld[1]['@type']).toBe('BreadcrumbList');
     expect(html).toContain('data-href="/en/@Noor"');
+  });
+
+  it('a channel with a live scholar site: canonical, hreflang, og:url and the markup point at the site (AUN-SCHOLAR-SITES §4.4)', async () => {
+    load.mockResolvedValue(post());
+    siteLink.mockResolvedValue({ channelId: 'c1', primaryHost: 'noor.alummahnow.org', primaryKind: 'subdomain', locales: ['ar', 'en'] });
+    const meta = await generateMetadata(params('en'));
+    expect(meta.alternates).toEqual({
+      canonical: 'https://noor.alummahnow.org/en/posts/p1/',
+      languages: { ar: 'https://noor.alummahnow.org/ar/posts/p1/', en: 'https://noor.alummahnow.org/en/posts/p1/', 'x-default': 'https://noor.alummahnow.org/ar/posts/p1/' },
+    });
+    expect(meta.openGraph).toMatchObject({ url: 'https://noor.alummahnow.org/en/posts/p1/' });
+    const html = renderToStaticMarkup(await PostPage(params('en')));
+    const ld = JSON.parse(html.match(/<script type="application\/ld\+json">(.*?)<\/script>/)![1]);
+    expect(ld[0]).toMatchObject({ url: 'https://noor.alummahnow.org/en/posts/p1/', mainEntityOfPage: 'https://noor.alummahnow.org/en/posts/p1/', '@id': 'https://noor.alummahnow.org/en/posts/p1/#post' });
+    siteLink.mockResolvedValue(null);
   });
 
   it('a post nobody may see is a 404; an API outage is a 503', async () => {
