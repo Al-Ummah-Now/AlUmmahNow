@@ -147,8 +147,9 @@ export enum MessageType {
 
   // Review alerts for the native Admin app (wiki AUN-ADMIN-NATIVE, #1265): held, escalate,
   // opened, claimed, decided (payload: ReviewAlertPayload, review-alerts.ts). Its own queue
-  // al-ummah-now-review-alerts (batch size 1, 1 s), consumed by the processor. Range 260-269.
-  ReviewAlert = 260,
+  // al-ummah-now-review-alerts (batch size 1, 1 s), consumed by the processor. Range 270-279
+  // (260-269 is the captions range; every value must be unique, see message-types.test.ts).
+  ReviewAlert = 270,
 
   // Account erasure, Contact us step (processor contact/erase.ts). Queued by the processor's
   // UserDataErased handler on its own queue so it retries and dead-letters on its own.

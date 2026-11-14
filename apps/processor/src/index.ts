@@ -352,6 +352,12 @@ async function handleQueue(batch: MessageBatch<AlUmmahMessage>, env: QueueEnviro
     await processDeadLetterBatch(batch, env, logger, Date.now(), ctx);
     return;
   }
+  // Review alerts for the Admin app (#1265): their own queue, one message per batch. Routed by
+  // queue before any routing by message type, so a type that shares a value cannot take them
+  if (batch.queue?.includes('review-alerts')) {
+    await processReviewAlertBatch(batch, env, resolvePushProviders(), logger);
+    return;
+  }
   // AI category suggestions ride on both the moderation queue (api-videos) and the
   // videos queue (admin-api, DLQ replays): routed by message type, never by queue
   const categorize = batch.messages.filter(isCategorizeMessage);
@@ -369,11 +375,6 @@ async function handleQueue(batch: MessageBatch<AlUmmahMessage>, env: QueueEnviro
   }
   if (batch.queue?.includes('moderation')) {
     await processModerationBatch(batch, env, logger);
-    return;
-  }
-  // Review alerts for the Admin app (#1265): their own queue, one message per batch
-  if (batch.queue?.includes('review-alerts')) {
-    await processReviewAlertBatch(batch, env, resolvePushProviders(), logger);
     return;
   }
 
