@@ -12,6 +12,7 @@ import { AuditCard, BackLink, Chip, MonoId, Notice, ReportsCard, SectionCard, St
 import { JobsPanel } from '@/components/content/jobs';
 import { UserAuthRequestsPanel } from '@/components/auth-requests/UserAuthRequestsPanel';
 import { UserCreatorTierPanel } from '@/components/creators/UserCreatorTierPanel';
+import { UserCaptionMinutesPanel } from '@/components/creators/UserCaptionMinutesPanel';
 import { logger } from '@/lib/logger';
 import { UserActions } from './UserActions';
 import { InviteStatusChip } from '@/components/invites/InviteStatusChip';
@@ -88,6 +89,7 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
       )}
 
       <UserCreatorTierPanel userId={u.id} userName={adminUserName(u)} canManage={canManageCreators(role)} />
+      <UserCaptionMinutesPanel userId={u.id} canManage={canManageCreators(role)} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">

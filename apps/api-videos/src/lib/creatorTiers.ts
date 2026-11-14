@@ -51,6 +51,7 @@ interface TierRow {
 	per_day: number;
 	max_concurrent: number;
 	max_channels: number | null;
+	caption_minutes_month?: number | null;
 	updated_at: string | null;
 	updated_by: string | null;
 }
@@ -64,6 +65,7 @@ function toTier(row: TierRow): CreatorTier {
 		perDay: Number(row.per_day),
 		maxConcurrent: Number(row.max_concurrent),
 		maxChannels: row.max_channels === null || row.max_channels === undefined ? null : Number(row.max_channels),
+		captionMinutesMonth: Number(row.caption_minutes_month ?? 0) || 0,
 		updatedAt: row.updated_at ?? null,
 		updatedBy: row.updated_by ?? null,
 	};
@@ -233,6 +235,7 @@ export interface TierInput {
 	perDay?: unknown;
 	maxConcurrent?: unknown;
 	maxChannels?: unknown;
+	captionMinutesMonth?: unknown;
 }
 
 function intIn(value: unknown, field: keyof typeof CREATOR_TIER_BOUNDS): number {
@@ -249,14 +252,15 @@ export function validateTier(id: string, input: TierInput, current?: CreatorTier
 	const name = typeof input.name === 'string' ? input.name.trim() : current?.name ?? '';
 	if (!name || name.length > 60) throw new CreatorTierError(400, 'invalid_tier', 'name must be 1 to 60 characters');
 	const unlimited = id === DEFAULT_UNLIMITED_TIER.id ? true : input.unlimited === undefined ? current?.unlimited ?? false : input.unlimited === true;
-	if (unlimited) return { id, name, unlimited, perHour: 0, perDay: 0, maxConcurrent: 0, maxChannels: null };
+	if (unlimited) return { id, name, unlimited, perHour: 0, perDay: 0, maxConcurrent: 0, maxChannels: null, captionMinutesMonth: 0 };
 	const pick = (field: 'perHour' | 'perDay' | 'maxConcurrent') => intIn(input[field] ?? current?.[field], field);
 	const perHour = pick('perHour');
 	const perDay = pick('perDay');
 	if (perDay < perHour) throw new CreatorTierError(400, 'invalid_tier', 'perDay must be at least perHour');
 	const rawChannels = input.maxChannels === undefined ? current?.maxChannels ?? null : input.maxChannels;
 	const maxChannels = rawChannels === null || rawChannels === '' ? null : intIn(rawChannels, 'maxChannels');
-	return { id, name, unlimited, perHour, perDay, maxConcurrent: pick('maxConcurrent'), maxChannels };
+	const captionMinutesMonth = intIn(input.captionMinutesMonth ?? current?.captionMinutesMonth ?? 0, 'captionMinutesMonth');
+	return { id, name, unlimited, perHour, perDay, maxConcurrent: pick('maxConcurrent'), maxChannels, captionMinutesMonth };
 }
 
 /** Creates (new id) or replaces a tier definition. */
@@ -279,13 +283,13 @@ export async function saveTier(
 	const tier = { ...validateTier(id, input, previous), updatedAt: now, updatedBy: actorId };
 	await db
 		.prepare(
-			`INSERT INTO creator_tiers (id, name, unlimited, per_hour, per_day, max_concurrent, max_channels, updated_at, updated_by)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+			`INSERT INTO creator_tiers (id, name, unlimited, per_hour, per_day, max_concurrent, max_channels, caption_minutes_month, updated_at, updated_by)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			 ON CONFLICT (id) DO UPDATE SET name = excluded.name, unlimited = excluded.unlimited, per_hour = excluded.per_hour,
 			   per_day = excluded.per_day, max_concurrent = excluded.max_concurrent, max_channels = excluded.max_channels,
-			   updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
+			   caption_minutes_month = excluded.caption_minutes_month, updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
 		)
-		.bind(id, tier.name, tier.unlimited ? 1 : 0, tier.perHour, tier.perDay, tier.maxConcurrent, tier.maxChannels, now, actorId)
+		.bind(id, tier.name, tier.unlimited ? 1 : 0, tier.perHour, tier.perDay, tier.maxConcurrent, tier.maxChannels, tier.captionMinutesMonth, now, actorId)
 		.run();
 	return { previous, tier };
 }

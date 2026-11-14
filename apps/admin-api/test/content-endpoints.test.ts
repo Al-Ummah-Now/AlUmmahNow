@@ -470,6 +470,33 @@ describe('content endpoints: creator tiers', () => {
     assert.equal(page.result.audit.length, 2);
   });
 
+  it('a caption-minute grant or revoke needs creators:manage and a reason, is audited, and the user page reads it back', async () => {
+    const { db, log } = fakeDb();
+    const { fetcher, calls } = fakeVideos({
+      'GET /users/usr_1/caption-minutes': () => ({ body: { success: true, result: { usage: { remaining: 60 }, grants: [] } } }),
+      'POST /users/usr_1/caption-minutes/grants': (call) =>
+        typeof (call.body as { reason?: string }).reason === 'string' && (call.body as { reason: string }).reason
+          ? { body: { success: true, result: { grant: { id: 'g1', ...(call.body as object) } } } }
+          : { status: 400, body: { success: false, code: 'invalid_grant', error: 'a reason is required' } },
+      'POST /users/usr_1/caption-minutes/grants/g1/revoke': () => ({ body: { success: true, result: { grant: { id: 'g1' } } } }),
+    });
+    const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
+    const grant = { minutes: 120, scope: 'until_used', reason: ' invoice 42 ' };
+    assert.equal((await call('/api/content/users/usr_1/caption-minutes/grants', { method: 'POST', roles: 'moderator', json: grant })).status, 403);
+    assert.ok(!calls.some((c) => c.method === 'POST'), 'a moderator grant never reaches api-videos');
+    assert.equal((await call('/api/content/users/usr_1/caption-minutes/grants', { method: 'POST', roles: 'admin', json: { ...grant, reason: '' } })).status, 400);
+    assert.equal(log.length, 0, 'a refused grant leaves no audit row');
+    assert.equal((await call('/api/content/users/usr_1/caption-minutes/grants', { method: 'POST', roles: 'admin', user: 'admin-7', json: grant })).status, 200);
+    assert.equal((await call('/api/content/users/usr_1/caption-minutes/grants/g1/revoke', { method: 'POST', roles: 'super_admin', json: { reason: 'refunded' } })).status, 200);
+    assert.deepEqual(log.map((r) => JSON.parse(r.new_value)), [
+      { action: 'caption-grant', details: { minutes: 120, scope: 'until_used', reason: 'invoice 42' } },
+      { action: 'caption-grant-revoke', details: { grantId: 'g1', reason: 'refunded' } },
+    ]);
+    const page = (await (await call('/api/content/users/usr_1/caption-minutes', { roles: 'moderator' })).json()) as { result: { usage: unknown; audit: unknown[] } };
+    assert.deepEqual(page.result.usage, { remaining: 60 });
+    assert.equal(page.result.audit.length, 2);
+  });
+
   it('editing a tier definition is audited with the previous limits; a refused edit leaves no row', async () => {
     const { db, log } = fakeDb();
     const { fetcher } = fakeVideos({

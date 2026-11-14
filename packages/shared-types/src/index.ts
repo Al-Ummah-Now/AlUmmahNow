@@ -4,6 +4,7 @@ export * from './video-visibility';
 export * from './video-review';
 export * from './quran';
 export * from './captions';
+export * from './caption-minutes';
 export * from './channel-name';
 export * from './video-format';
 export * from './video-format-ops';

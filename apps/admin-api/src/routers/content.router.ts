@@ -694,6 +694,38 @@ app.put('/users/:id/creator-tier', async (c) => {
 });
 
 /**
+ * Caption minutes (AUN-CAPTIONS §6, owner decision 2026-11-14): the user's month
+ * (tier minutes + grants) and the admin's grants. Reads for every admin; a
+ * grant or a revoke needs creators:manage, a reason, and is audited.
+ */
+app.get('/users/:id/caption-minutes', async (c) => {
+  const id = c.req.param('id');
+  const [current, audit] = await Promise.all([
+    videos<Record<string, unknown>>(c, `/users/${encodeURIComponent(id)}/caption-minutes`),
+    readAudit(c.env.REPORTS_DB, { kind: 'user', id, limit: 50 }),
+  ]);
+  return ok(c, { ...current, audit: audit.filter((e) => e.action === 'caption-grant' || e.action === 'caption-grant-revoke') });
+});
+
+app.post('/users/:id/caption-minutes/grants', async (c) => {
+  need(c, 'creators:manage');
+  const id = c.req.param('id');
+  const input = await body(c);
+  const details = { minutes: input.minutes, scope: input.scope, reason: typeof input.reason === 'string' ? input.reason.trim() : input.reason };
+  return ok(c, await audited(c, { kind: 'user', id, action: 'caption-grant', details }, () =>
+    videos(c, `/users/${encodeURIComponent(id)}/caption-minutes/grants`, { method: 'POST', json: details })));
+});
+
+app.post('/users/:id/caption-minutes/grants/:grantId/revoke', async (c) => {
+  need(c, 'creators:manage');
+  const id = c.req.param('id');
+  const grantId = c.req.param('grantId');
+  const reason = (await body(c)).reason;
+  return ok(c, await audited(c, { kind: 'user', id, action: 'caption-grant-revoke', details: { grantId, reason } }, () =>
+    videos(c, `/users/${encodeURIComponent(id)}/caption-minutes/grants/${encodeURIComponent(grantId)}/revoke`, { method: 'POST', json: { reason } })));
+});
+
+/**
  * One tier (or none) for the selected users. Light work (one D1 batch of at
  * most MAX_BULK_CREATOR_TIER rows), so it runs inline rather than as a queued
  * admin job. Plans first (dry run), audits each user who changes, then

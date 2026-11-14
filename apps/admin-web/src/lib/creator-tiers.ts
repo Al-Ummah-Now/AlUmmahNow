@@ -16,19 +16,20 @@ import {
 import type { Locale } from '@/i18n/config';
 import { formatNumber, type MessageKey, type Translator } from '@/i18n/translate';
 
-export type TierLimits = Pick<CreatorTier, 'unlimited' | 'perHour' | 'perDay' | 'maxConcurrent' | 'maxChannels'>;
+export type TierLimits = Pick<CreatorTier, 'unlimited' | 'perHour' | 'perDay' | 'maxConcurrent' | 'maxChannels'> & Partial<Pick<CreatorTier, 'captionMinutesMonth'>>;
 
 /** What holding `tier` lets a user do; null = no tier. */
 export function tierEffect(tier: TierLimits | null, t: Translator, locale: Locale): string {
   if (!tier) return t('creators.effectNone');
   if (tier.unlimited) return t('creators.effectUnlimited');
   const n = (value: number) => formatNumber(value, locale);
-  return t('creators.effectLimited', {
+  const uploads = t('creators.effectLimited', {
     perHour: n(tier.perHour),
     perDay: n(tier.perDay),
     concurrent: n(tier.maxConcurrent),
     channels: tier.maxChannels === null ? t('creators.effectChannelsAny') : t('creators.effectChannels', { count: n(tier.maxChannels) }),
   });
+  return tier.captionMinutesMonth ? `${uploads} ${t('creators.effectCaptions', { minutes: n(tier.captionMinutesMonth) })}` : uploads;
 }
 
 /** The confirmation of a change from one tier to another (or none). */
@@ -54,9 +55,10 @@ export interface TierFormValues {
   perDay: number;
   maxConcurrent: number;
   maxChannels: number | null;
+  captionMinutesMonth: number;
 }
 
-export type TierField = 'id' | 'name' | 'perHour' | 'perDay' | 'maxConcurrent' | 'maxChannels';
+export type TierField = 'id' | 'name' | 'perHour' | 'perDay' | 'maxConcurrent' | 'maxChannels' | 'captionMinutesMonth';
 export type TierFormErrors = Partial<Record<TierField, { key: MessageKey; params?: Record<string, string | number> }>>;
 
 export const TIER_ID_PATTERN = /^[a-z0-9][a-z0-9-]{1,39}$/;
@@ -77,6 +79,7 @@ export function validateTierForm(form: TierFormValues, opts: { create?: boolean 
   inRange('perDay', form.perDay);
   inRange('maxConcurrent', form.maxConcurrent);
   if (form.maxChannels !== null) inRange('maxChannels', form.maxChannels);
+  inRange('captionMinutesMonth', form.captionMinutesMonth);
   if (!errors.perHour && !errors.perDay && form.perDay < form.perHour) errors.perDay = { key: 'creators.errorPerDay' };
   return errors;
 }

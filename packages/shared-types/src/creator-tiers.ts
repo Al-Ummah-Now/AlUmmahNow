@@ -50,6 +50,12 @@ export interface CreatorTier {
   maxConcurrent: number;
   /** Channels the holder may own; null = no limit */
   maxChannels: number | null;
+  /**
+   * Caption minutes per calendar month (UTC) for on-demand transcription and
+   * translation (AUN-CAPTIONS §6; 1 per video-minute per language). 0 = none
+   * unless an admin grants minutes; ignored when `unlimited`.
+   */
+  captionMinutesMonth: number;
   updatedAt: string | null;
   updatedBy: string | null;
 }
@@ -63,6 +69,7 @@ export const DEFAULT_CREATOR_TIER: Omit<CreatorTier, 'updatedAt' | 'updatedBy'> 
   perDay: 2000,
   maxConcurrent: 20,
   maxChannels: 3,
+  captionMinutesMonth: 0,
 };
 
 export const DEFAULT_UNLIMITED_TIER: Omit<CreatorTier, 'updatedAt' | 'updatedBy'> = {
@@ -73,6 +80,7 @@ export const DEFAULT_UNLIMITED_TIER: Omit<CreatorTier, 'updatedAt' | 'updatedBy'
   perDay: 0,
   maxConcurrent: 0,
   maxChannels: null,
+  captionMinutesMonth: 0,
 };
 
 /** Bounds an admin may set on a tier (validation, not a policy). */
@@ -81,6 +89,7 @@ export const CREATOR_TIER_BOUNDS = {
   perDay: { min: 1, max: 1_000_000 },
   maxConcurrent: { min: 1, max: 1000 },
   maxChannels: { min: 1, max: 1000 },
+  captionMinutesMonth: { min: 0, max: 1_000_000 },
 } as const;
 
 /** A user's tier assignment. */

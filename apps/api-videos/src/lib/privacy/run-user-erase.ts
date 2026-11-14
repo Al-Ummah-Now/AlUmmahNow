@@ -28,6 +28,7 @@ import { defaultPointerPrefix } from '../uploadDefaultPointer';
 import { deleteVideoSideRecords } from '../videoSideRecords';
 import { watchLaterId } from '../library';
 import { footprintTargets, forgetFootprints } from './footprints';
+import { eraseCaptionMinutes } from '../captions/minutes';
 import { sectionOrderKey } from '../channelSectionOrder';
 import { eraseUserSubscriptions } from '../subscription-store';
 import { isOwnershipComplete } from '../search/ownership';
@@ -203,8 +204,9 @@ export async function eraseRunUserData(
 				bump('subscriptions', await eraseUserSubscriptions(env.NOTIFICATIONS_DB, userId));
 			}
 			// The footprints point at nothing of the account's any more
-			budget.spend();
+			budget.spend(2);
 			await forgetFootprints(db as never, userId);
+			await eraseCaptionMinutes(db, userId);
 			budget.spend();
 			const profiles = asBucket(env.profiles);
 			const stored = await profiles.get(userId);
