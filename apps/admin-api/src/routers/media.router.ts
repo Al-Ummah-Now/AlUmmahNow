@@ -17,6 +17,8 @@
  *   GET  /providers         provider settings, health and problems (docs/media-delivery/PROVIDERS.md)
  *   PUT  /providers { settings }  replace them (audited, key media:delivery); 400 { problems } when unsafe
  *   POST /health/check      one provider health pass now
+ *   PUT  /videos/:id/override { override | null }  pin one video's playback providers (audited, key
+ *                           media:video:<id>); 400 { problems } when it would leave the video unplayable
  *
  * Every change writes its audit row (site_settings_log) before calling
  * api-videos and removes it again if the call fails, so no change goes unaudited.
@@ -193,6 +195,23 @@ app.put('/providers', async (c) => {
     callVideosInternal(c.env, '/internal/media/providers', { method: 'PUT', json: { settings: parsed.value, actorId: actorOf(c) } }),
   );
   logger.info('[Media] Provider settings changed', { actorId: actorOf(c) });
+  return c.json({ success: true, result });
+});
+
+const VIDEO_ID = /^[A-Za-z0-9-]{8,64}$/;
+
+/** A video's playback override (api-videos checks it against the video's copies and the settings). */
+app.put('/videos/:id/override', async (c) => {
+  const id = c.req.param('id');
+  if (!VIDEO_ID.test(id)) return bad(c, 'bad video id');
+  const body = (await c.req.json().catch(() => null)) as { override?: unknown } | null;
+  const override = body?.override;
+  if (override !== null && (!override || typeof override !== 'object' || Array.isArray(override))) return bad(c, 'override must be an object or null');
+  if (override && JSON.stringify(override).length > 4_000) return bad(c, 'override is too large');
+  const result = await audited(c, [{ key: `${MEDIA_VIDEO_AUDIT_PREFIX}${id}`, oldValue: undefined, newValue: { action: 'playback_override', override } }], () =>
+    callVideosInternal(c.env, `/internal/media/videos/${encodeURIComponent(id)}/override`, { method: 'PUT', json: { override, actorId: actorOf(c) } }),
+  );
+  logger.info('[Media] Video playback override changed', { videoId: id, actorId: actorOf(c), cleared: override === null });
   return c.json({ success: true, result });
 });
 

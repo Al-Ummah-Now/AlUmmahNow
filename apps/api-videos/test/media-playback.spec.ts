@@ -188,7 +188,7 @@ describe('the API orders the sources', () => {
 		const onChannel = await choosePlayback(env, { id: ID, channelId: 'ch_1', r2: READY as never });
 		assert.deepEqual(onChannel.decision.order, ['r2', 'bunny']);
 		assert.equal(onChannel.source, 'r2');
-		const pinned = await choosePlayback(env, { id: ID, channelId: 'ch_1', r2: READY as never, media: { providers: { bunny: { ref: ID, status: 'ready', addedAt: 'x' }, r2: { ref: ID, status: 'ready', addedAt: 'x' } }, override: { order: ['bunny'] } } });
+		const pinned = await choosePlayback(env, { id: ID, channelId: 'ch_1', r2: READY as never, media: { providers: { bunny: { ref: ID, status: 'ready', addedAt: 'x' }, r2: { ref: ID, status: 'ready', addedAt: 'x' } } }, mediaOverride: { order: ['bunny'] } });
 		assert.equal(pinned.source, 'bunny');
 	});
 

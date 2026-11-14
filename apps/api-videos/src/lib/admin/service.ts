@@ -8,6 +8,7 @@
  * comment indexes follow (lib/search/sync.ts).
  */
 import { bunnyRef } from '../media/providers';
+import { adminVideoMedia } from '../media/video-override';
 import { eraseUploadTraces } from '../privacy/upload-traces';
 import {
 	applySuspensionHold,
@@ -705,6 +706,12 @@ export async function videoDetail(env: AdminServiceEnv, id: string): Promise<Adm
 			logger.debug('[Admin] Bunny status unavailable', { id, error: error instanceof Error ? error.message : String(error) });
 		}
 	}
+	let media: Awaited<ReturnType<typeof adminVideoMedia>> | null = null;
+	try {
+		media = await adminVideoMedia(env as { global_settings?: R2Bucket }, { ...video, id });
+	} catch (error) {
+		logger.warn('[Admin] Could not read the video providers view', { id, error: error instanceof Error ? error.message : String(error) });
+	}
 	const countComments = (list: unknown): number =>
 		Array.isArray(list) ? list.reduce((n: number, c: Row) => n + (c?.isDeleted ? 0 : 1) + countComments(c?.replies), 0) : 0;
 	return {
@@ -742,6 +749,7 @@ export async function videoDetail(env: AdminServiceEnv, id: string): Promise<Adm
 				? { kind: video.processingIssue.kind, ...(typeof video.processingIssue.reason === 'string' ? { reason: video.processingIssue.reason.slice(0, 300) } : {}), at: String(video.processingIssue.at ?? '') }
 				: null,
 		r2: adminR2Detail(video),
+		media,
 	};
 }
 

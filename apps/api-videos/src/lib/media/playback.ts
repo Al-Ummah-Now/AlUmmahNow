@@ -96,7 +96,7 @@ export async function choosePlayback(
 	opts: { exclude?: MediaProviderId | MediaProviderId[]; reason?: PlaybackFallbackReason; context?: string; draw?: () => number; nowSeconds?: number } = {},
 ): Promise<PlaybackChoice> {
 	const settings = await readMediaSettings(env);
-	const rules = effectiveRules(settings, video.channelId ? settings.channels[video.channelId] : undefined, video.media?.override);
+	const rules = effectiveRules(settings, video.channelId ? settings.channels[video.channelId] : undefined, video.mediaOverride);
 	const records = videoProviderRecords(video);
 	const ready = records.filter((r) => r.status === 'ready').map((r) => r.provider);
 	const enabled = MEDIA_PROVIDER_IDS.filter((p) => settings.providers[p].enabled);

@@ -5,11 +5,11 @@ import { SPEC_PLACEMENT } from '../web/e2e/test-utils/placement';
 /**
  * Specs that change state shared by every run and every reader of QA (the
  * translation file, the public site theme, the profiles bucket the legacy
- * restore scans). They run once, in the shared-state project, which CI runs
+ * restore scans, the video provider settings). They run once, in the shared-state project, which CI runs
  * under a cross-run lock; every other spec only touches this job's own
  * accounts and reports, so the device projects run concurrently with other runs.
  */
-const SHARED_STATE_SPECS = /(06-translations-save|11-site-theme|12-legacy-profiles|17-live-streaming)\.spec\.ts$/;
+const SHARED_STATE_SPECS = /(06-translations-save|11-site-theme|12-legacy-profiles|17-live-streaming|22-media-providers)\.spec\.ts$/;
 
 /**
  * E2E_ENV=local: the local E2E stack (docs/testing/LOCAL-STACK.md) the job booted. Only the specs

@@ -1,6 +1,6 @@
 'use server';
 
-import type { AdminJob, AdminJobStatus, ErrorStatus, LegacyRestorePlan, Report, ReportStats } from '@al-ummah/shared-types';
+import type { AdminJob, AdminJobStatus, AdminVideoMedia, ErrorStatus, LegacyRestorePlan, MediaHealthSnapshot, MediaOverride, MediaSettings, Report, ReportStats } from '@al-ummah/shared-types';
 import { AdminApiError, type ActionResult } from './errors';
 import { fetchAdmin, requestAdmin, navigateForPasskey } from './request';
 import type {
@@ -35,7 +35,7 @@ import type {
   CategorizeConfigView,
   FlaggedVideoList,
   VideoFormatRunView,
-  DeliverySettings,
+  MediaProvidersView,
   MediaJob,
   MediaLive,
   QoeLiveData,
@@ -121,7 +121,7 @@ async function mutate<T>(endpoint: string, method: string, body: unknown): Promi
     return { ok: true, data };
   } catch (error) {
     await navigateForPasskey(error);
-    if (error instanceof AdminApiError) return { ok: false, status: error.status, error: error.message };
+    if (error instanceof AdminApiError) return { ok: false, status: error.status, error: error.message, ...(error.problems ? { problems: error.problems } : {}) };
     return { ok: false, status: 500, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
@@ -354,13 +354,24 @@ export async function retryMediaJobs(ids: string[]): Promise<ActionResult<unknow
   return mutate('/api/media/retry', 'POST', { ids });
 }
 
-export async function getDeliverySettings(): Promise<DeliverySettings> {
-  return fetchAdmin<DeliverySettings>('/api/media/settings');
+/** Provider settings with each provider's health and what makes them unsafe (docs/media-delivery/PROVIDERS.md). */
+export async function getMediaProviders(): Promise<MediaProvidersView> {
+  return fetchAdmin<MediaProvidersView>('/api/media/providers');
 }
 
-/** The delivery switch (audited in admin-api under media:delivery). */
-export async function saveDeliverySettings(input: Pick<DeliverySettings, 'mode' | 'r2Percent' | 'assign' | 'transcode'>): Promise<ActionResult<DeliverySettings>> {
-  return mutate('/api/media/settings', 'PUT', input);
+/** Replace the provider settings (audited in admin-api under media:delivery; refused with `problems` when unsafe). */
+export async function saveMediaProviders(settings: MediaSettings): Promise<ActionResult<MediaProvidersView>> {
+  return mutate('/api/media/providers', 'PUT', { settings });
+}
+
+/** One provider health pass now (probes each enabled provider). */
+export async function checkMediaProviderHealth(): Promise<ActionResult<MediaHealthSnapshot>> {
+  return mutate('/api/media/health/check', 'POST', {});
+}
+
+/** Pin (or with null, clear) one video's playback providers (audited per video). */
+export async function setVideoPlaybackOverride(videoId: string, override: MediaOverride | null): Promise<ActionResult<{ override: MediaOverride | null; media: AdminVideoMedia | null }>> {
+  return mutate(`/api/media/videos/${encodeURIComponent(videoId)}/override`, 'PUT', { override });
 }
 
 // Admin jobs (heavy actions queued in api-videos; admin-api /api/content/jobs)

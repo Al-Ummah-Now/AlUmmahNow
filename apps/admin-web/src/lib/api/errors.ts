@@ -8,6 +8,8 @@ export class AdminApiError extends Error {
     public readonly status: number,
     /** Machine-readable error code from admin-api (e.g. "handle_taken"), when given. */
     public readonly code?: string,
+    /** Why admin-api refused a settings change (shared-types settingsProblems shape), when given. */
+    public readonly problems?: { problem: string; detail?: string }[],
   ) {
     super(message);
     this.name = 'AdminApiError';
@@ -15,4 +17,4 @@ export class AdminApiError extends Error {
 }
 
 /** Result shape for mutations invoked from client components. */
-export type ActionResult<T> = { ok: true; data: T } | { ok: false; status: number; error: string; code?: string };
+export type ActionResult<T> = { ok: true; data: T } | { ok: false; status: number; error: string; code?: string; problems?: { problem: string; detail?: string }[] };

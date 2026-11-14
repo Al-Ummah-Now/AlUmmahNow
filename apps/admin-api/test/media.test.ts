@@ -209,3 +209,42 @@ describe('/api/media/providers (provider settings)', () => {
     assert.ok(SERVICE_RETRIES['api-videos']!.paths.includes('/internal/media/health/check'));
   });
 });
+
+describe('/api/media/videos/:id/override (per-video playback)', () => {
+  const PATH = `/internal/media/videos/${ID}/override`;
+  const answer: Answer = (path, method, body) => (path === PATH && method === 'PUT' ? ok({ override: body.override, media: null }) : ok({}));
+
+  it('is audited per video and forwarded with the admin as the actor', async () => {
+    const { req, calls, audit } = setup(['Admin'], answer);
+    const res = await req(`/api/media/videos/${ID}/override`, send('PUT', { override: { order: ['r2', 'bunny'] }, actorId: 'spoofed' }));
+    assert.equal(res.status, 200);
+    assert.equal(calls[0]!.path, PATH);
+    assert.equal(calls[0]!.body.actorId, 'admin-1');
+    assert.deepEqual(calls[0]!.body.override, { order: ['r2', 'bunny'] });
+    const rows = await audit();
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].key, `${MEDIA_VIDEO_AUDIT_PREFIX}${ID}`);
+    assert.equal(JSON.parse(rows[0].new_value).action, 'playback_override');
+  });
+
+  it('null clears; bad ids and bodies never reach api-videos; moderators are refused', async () => {
+    const { req, calls } = setup(['Admin'], answer);
+    assert.equal((await req(`/api/media/videos/${ID}/override`, send('PUT', { override: null }))).status, 200);
+    assert.equal(calls[0]!.body.override, null);
+    assert.equal((await req('/api/media/videos/bad!id/override', send('PUT', { override: null }))).status, 400);
+    assert.equal((await req(`/api/media/videos/${ID}/override`, send('PUT', { override: ['r2'] }))).status, 400);
+    assert.equal((await req(`/api/media/videos/${ID}/override`, send('PUT', {}))).status, 400);
+    assert.equal(calls.length, 1);
+    const mod = setup(['Moderator'], answer);
+    assert.equal((await mod.req(`/api/media/videos/${ID}/override`, send('PUT', { override: null }))).status, 403);
+  });
+
+  it('an unplayable override passes the problem through and leaves no audit row', async () => {
+    const refusing: Answer = () => ({ status: 400, json: { success: false, error: 'unplayable', problem: 'not_playable', problems: [{ problem: 'not_playable' }] } });
+    const { req, audit } = setup(['Admin'], refusing);
+    const res = await req(`/api/media/videos/${ID}/override`, send('PUT', { override: { order: ['r2'] } }));
+    assert.equal(res.status, 400);
+    assert.deepEqual(((await res.json()) as { problems: unknown }).problems, [{ problem: 'not_playable' }]);
+    assert.equal((await audit()).length, 0);
+  });
+});
