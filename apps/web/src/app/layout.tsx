@@ -45,6 +45,7 @@ import { ErrorReportingProvider } from "@/lib/errors/ErrorReportingProvider";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { appIcons } from "@/lib/favicon";
 import { WebVitalsBeacon } from "@/components/analytics/WebVitalsBeacon";
+import { originFromHost } from '@/lib/embed/request-origin';
 
 /** Worker version id and environment for client error reports (admin Errors page). */
 async function errorReportingContext(): Promise<{ workerVersion?: string; environment?: string }> {
@@ -133,8 +134,8 @@ async function requestOrigin(): Promise<string | undefined> {
     const h = await headers();
     const host = h.get('x-forwarded-host') || h.get('host');
     if (!host) return undefined;
-    const proto = h.get('x-forwarded-proto') || (host.startsWith('localhost') ? 'http' : 'https');
-    return `${proto}://${host}`;
+    // the same origin rule as every page's canonical (originFromHost)
+    return originFromHost(host);
   } catch {
     return undefined;
   }

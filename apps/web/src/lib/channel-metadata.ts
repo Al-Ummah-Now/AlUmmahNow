@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import type { Channel } from '@al-ummah/shared-types';
 import { channelPath } from '@/lib/channel-url';
+import { originFromHost } from '@/lib/embed/request-origin';
 import { channelFallbackDescription, channelLd, siteName } from '@/lib/seo/structured-data';
 
 /** Absolute origin of the current request (canonical links need absolute URLs). */
@@ -11,8 +12,8 @@ async function requestOrigin(): Promise<string | null> {
     const h = await headers();
     const host = h.get('x-forwarded-host') || h.get('host');
     if (!host) return null;
-    const proto = h.get('x-forwarded-proto') || (host.startsWith('localhost') || host.startsWith('127.') ? 'http' : 'https');
-    return `${proto}://${host}`;
+    // the same origin rule as the watch, playlist and home pages (originFromHost)
+    return originFromHost(host);
   } catch {
     return null;
   }
