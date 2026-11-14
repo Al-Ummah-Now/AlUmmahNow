@@ -14,6 +14,7 @@ import { canManageMedia } from '@/lib/roles';
 import { VideoActions } from './VideoActions';
 import { VideoPlayer } from './VideoPlayer';
 import { ProcessingCard } from './ProcessingCard';
+import { VideoProvidersPanel } from './VideoProvidersPanel';
 import { LIST_RETURN_PARAM, videosBackHref } from '../list-spec';
 
 export const dynamic = 'force-dynamic';
@@ -138,6 +139,12 @@ export default async function VideoPage({ params, searchParams }: { params: Prom
               canManage={canManageMedia(session?.user.role)}
             />
           </SectionCard>
+
+          {v.media !== undefined && (
+            <SectionCard title={t('mediaProviders.video.title')} id="video-providers" testId="video-providers-section">
+              <VideoProvidersPanel videoId={v.id} media={v.media} canManage={canManageMedia(session?.user.role)} />
+            </SectionCard>
+          )}
 
           <SectionCard title={t('videos.detailsTitle')} id="video-details">
             <StatGrid

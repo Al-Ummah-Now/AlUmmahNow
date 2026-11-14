@@ -51,8 +51,6 @@ export interface VideoProviderRecord {
 export interface VideoMediaProviders {
 	/** Providers this video was ingested to, in ingest order */
 	providers: Partial<Record<MediaProviderId, StoredProviderRef>>;
-	/** Per-video playback override (admin) */
-	override?: MediaOverride;
 }
 
 export interface StoredProviderRef {
@@ -229,7 +227,8 @@ function boundedInt(value: unknown, min: number, max: number, fallback: number):
 	return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
 }
 
-function normaliseOverride(input: unknown): MediaOverride | null {
+/** A stored or submitted override with only known, meaningful fields; null when nothing is left. */
+export function normaliseMediaOverride(input: unknown): MediaOverride | null {
 	if (!input || typeof input !== 'object') return null;
 	const o = input as Record<string, unknown>;
 	const out: MediaOverride = {};
@@ -273,7 +272,7 @@ export function normaliseMediaSettings(input: unknown): MediaSettings {
 	if (raw.channels && typeof raw.channels === 'object') {
 		for (const [id, o] of Object.entries(raw.channels as Record<string, unknown>)) {
 			if (!CHANNEL_ID.test(id) || Object.keys(channels).length >= MAX_CHANNEL_OVERRIDES) continue;
-			const override = normaliseOverride(o);
+			const override = normaliseMediaOverride(o);
 			if (override) channels[id] = override;
 		}
 	}

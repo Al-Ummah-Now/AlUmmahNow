@@ -1,13 +1,13 @@
 import Link from '@/components/AppLink';
-import { getDeliverySettings, getMediaQoeLive, getMediaSummary, listMediaJobs } from '@/lib/api/admin';
-import type { DeliverySettings, MediaJob, MediaSummary } from '@/lib/api/types';
+import { getMediaProviders, getMediaQoeLive, getMediaSummary, listMediaJobs } from '@/lib/api/admin';
+import type { MediaJob, MediaProvidersView, MediaSummary } from '@/lib/api/types';
 import { getAdminSession } from '@/lib/auth';
 import { canManageMedia } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
 import type { MessageKey } from '@/i18n/translate';
 import { ErrorAlert, cardClass, fieldClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
-import { DeliverySwitch } from './DeliverySwitch';
+import { ProviderSettings } from './ProviderSettings';
 import { JobsTable } from './JobsTable';
 import { LiveTranscodes } from './LiveTranscodes';
 import { LiveQoe } from './LiveQoe';
@@ -30,7 +30,7 @@ function settled<T>(result: PromiseSettledResult<T>, what: string): T | null {
 
 /**
  * Delivery comparison (epic #687, docs/media-delivery/R2-DELIVERY-PLAN.md
- * Phase 3): the Bunny/R2 switch, time to playable, playback quality per
+ * Phase 3): the provider settings (docs/media-delivery/PROVIDERS.md), time to playable, playback quality per
  * source, cost with the projection against the monthly cap, and recent
  * R2 transcodes with "Transcode again".
  */
@@ -44,16 +44,16 @@ export default async function DeliveryComparisonPage({ searchParams }: PageProps
     return <ErrorAlert testId="delivery-no-access">{t('mediaDelivery.noAccess')}</ErrorAlert>;
   }
 
-  const [summaryResult, jobsResult, settingsResult, qoeLiveResult] = await Promise.allSettled([
+  const [summaryResult, jobsResult, providersResult, qoeLiveResult] = await Promise.allSettled([
     getMediaSummary(days),
     listMediaJobs({ status: filter === 'all' ? undefined : filter, limit: 50 }),
-    getDeliverySettings(),
+    getMediaProviders(),
     getMediaQoeLive(),
   ]);
   const qoeLive = qoeLiveResult.status === 'fulfilled' && qoeLiveResult.value.ok ? qoeLiveResult.value.data : null;
   const summary: MediaSummary | null = settled(summaryResult, 'summary');
   const jobs: MediaJob[] | null = settled(jobsResult, 'jobs');
-  const settings: DeliverySettings | null = settled(settingsResult, 'settings');
+  const providers: MediaProvidersView | null = settled(providersResult, 'provider settings');
   const query = (next: Record<string, string>) => `?${new URLSearchParams({ days: String(days), ...(filter === 'all' ? {} : { status: filter }), ...next })}`;
 
   return (
@@ -82,7 +82,7 @@ export default async function DeliveryComparisonPage({ searchParams }: PageProps
         </nav>
       </div>
 
-      {settings ? <DeliverySwitch settings={settings} /> : <div className="mb-6"><ErrorAlert testId="delivery-switch-error">{t('mediaDelivery.switchFailed')}</ErrorAlert></div>}
+      {providers ? <ProviderSettings view={providers} /> : <div className="mb-6"><ErrorAlert testId="providers-load-error">{t('mediaProviders.loadFailed')}</ErrorAlert></div>}
 
       {summary ? (
         <>

@@ -28,7 +28,7 @@ Container + the media Worker, see [R2-DELIVERY-PLAN.md](./R2-DELIVERY-PLAN.md)).
   (`packages/shared-types/src/media-providers.ts`) and its label. Call sites never name a provider;
   they ask the registry (`provider(id)`, `allProviders()`, `videoProviderRecords(video)`).
 - **A video's providers.** New videos carry `media.providers` (`{ [provider]: { ref, status,
-  libraryId?, addedAt, readyAt?, error? } }`) and an optional `media.override`. Rows written before
+  libraryId?, addedAt, readyAt?, error? } }`). Rows written before
   providers existed have no `media` field and are read in code, never backfilled: Bunny under the
   video's own id (the GUID was the id) with the row's `uploadStatus`, plus R2 where `video.r2` exists.
   `bunnyRef(video)` is the one way to get a video's Bunny id.
@@ -49,8 +49,12 @@ switch used), cached 30 s per isolate (`lib/media/settings.ts`):
 | `thumbnails.store` | where new custom thumbnails are stored |
 | `channels.<channelId>` | override: `ingest`, `strategy`, `order`, `weights`, `note` (at most 200 channels) |
 
-A video's `media.override` has the same fields and wins over its channel's, which wins over the
-global settings (`effectiveRules`).
+A video's override (`mediaOverride` on the record: `strategy`, `order`, `weights`, `note`; no
+`ingest`) wins over its channel's, which wins over the global settings (`effectiveRules`). It sits
+beside `media`, not inside it: `media` present means "new-style record" to every adapter, so pinning
+a legacy video must not add it (`lib/media/video-override.ts`). Refused with 400 `problem` when its
+order reaches no provider that is on and holds a copy that has not failed (`not_playable`), or
+weighted with all of those at weight 0 (`weights_zero`).
 
 **Refused** (`settingsProblems`, checked by admin-api and again by api-videos; 400 with `problems`):
 no provider on, empty ingest, an ingest target that is off, no enabled provider in the playback order,
@@ -68,7 +72,20 @@ priority `[bunny]`, assign `video`, thumbnails on Bunny.
 
 Routes: api-videos `GET|PUT /internal/media/providers`, admin-api `GET|PUT /api/media/providers`
 (`media:manage`, audited as `media:delivery` with the old and new document). The legacy
-`/settings` pair still works and rebuilds playback from the old shape, keeping the rest.
+`/settings` pair still works and rebuilds playback from the old shape, keeping the rest. A video's
+override: api-videos `PUT /internal/media/videos/:id/override`, admin-api
+`PUT /api/media/videos/:id/override` (`{ override | null }`, audited as `media:video:<id>`).
+
+**Admin.** The videos admin **Delivery** page edits all of it (`ProviderSettings.tsx`): providers
+on/off with their health and "Check now", upload targets, strategy, order (also the fallback order)
+and weights with each provider's share, the draw, the health fallback numbers, the custom thumbnail
+store and channel overrides. The same `settingsProblems` run as the admin edits, so an unsafe
+document cannot be submitted; switching a provider off, changing which provider plays first, or
+dropping an upload target asks first in the in-app dialog. The **video page** (`VideoProvidersPanel`)
+lists the video's copies and their state, the rules its plays use now and where they come from
+(settings, channel, or pinned), and pins or unpins that one video. The admin video detail carries
+this as `media` (`AdminVideoMedia`, no provider-side ids). "Encode again at Bunny" on a video Bunny
+holds no copy of answers 409 `not_on_bunny`, shown as "use Transcode again for its R2 copy".
 
 ## Playback
 
@@ -222,9 +239,11 @@ dropped. What leaves the API is our ids and server-signed playback and thumbnail
 | Originals kept for a sole R2 copy | `apps/api-videos/src/lib/media/originals.ts`, D1 `0038_media_originals_keep.sql` |
 | Internal routes | `apps/api-videos/src/endpoints/media/mediaInternal.ts` |
 | Admin routes | `apps/admin-api/src/routers/media.router.ts` |
+| Per-video override | `apps/api-videos/src/lib/media/video-override.ts` |
+| Admin UI | `apps/admin-web/src/app/(protected)/delivery/ProviderSettings.tsx`, `videos/[id]/VideoProvidersPanel.tsx`, `src/components/media/ProviderOrderEditor.tsx`, `src/lib/media/providers-form.ts` |
 | Our ids, refs, ingest plan | `apps/api-videos/src/lib/media/refs.ts`, `ingest.ts`, D1 `media_provider_refs` |
 | Our own TUS target | `apps/api-videos/src/lib/media/r2-tus.ts`, `endpoints/video/tus/tusProxy.ts` |
 | Readiness from R2 | `apps/api-videos/src/lib/media/r2-delivery.ts` (`readyFromR2`, `applyJobEvent`) |
 | Custom thumbnail store, frame signing | `apps/api-videos/src/lib/thumbnail/store.ts`, `lib/media/frame-signing.ts`, `apps/media/src/edge.ts` |
 | Local stack fake media pipeline | `scripts/local-stack/fake-external.ts` (`POST /__fake/media/transcode/<id>`, `media.local-stack.test`) |
-| Tests | `apps/api-videos/test/media-providers-*.spec.ts`, `media-playback.spec.ts`, `apps/admin-api/test/media.test.ts`, `apps/media/test/edge.test.ts`, E2E `apps/web/e2e/release/r2-only-upload.player.spec.ts` (local) |
+| Tests | `apps/api-videos/test/media-providers-*.spec.ts`, `media-playback.spec.ts`, `media-video-override.spec.ts`, `apps/admin-api/test/media.test.ts`, `apps/admin-web/test/media-providers-form.test.ts`, `apps/media/test/edge.test.ts`, E2E `apps/web/e2e/release/r2-only-upload.player.spec.ts` and `apps/admin-web/e2e/22-media-providers.spec.ts` (local) |

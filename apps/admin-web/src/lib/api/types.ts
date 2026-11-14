@@ -464,6 +464,13 @@ export interface FlaggedVideoList {
 
 export type { DeliverySettings, DeliveryMode, DeliveryAssign } from '@al-ummah/shared-types';
 
+/** GET /api/media/providers: the settings, each provider's health, and what makes them unsafe. */
+export interface MediaProvidersView {
+  settings: import('@al-ummah/shared-types').MediaSettings;
+  health: import('@al-ummah/shared-types').MediaHealthSnapshot | null;
+  problems: { problem: import('@al-ummah/shared-types').SettingsProblem; detail?: string }[];
+}
+
 /** Job counts and time to playable over the period (api-videos media_jobs); null when the table is not bound. */
 export interface MediaJobsSummary {
   jobs: number;

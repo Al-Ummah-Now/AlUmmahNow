@@ -18,6 +18,9 @@
  *   GET  /internal/media/providers         { settings, health, problems } provider settings (docs/media-delivery/PROVIDERS.md)
  *   PUT  /internal/media/providers         { settings, actorId } → 400 { problems } when unsafe
  *   POST /internal/media/health/check      one provider health pass now (the Errors page "Check now")
+ *   PUT  /internal/media/videos/:id/override  { override | null, actorId } a video's playback override
+ *                                          (lib/media/video-override.ts) → { override, media };
+ *                                          400 { problem } when it would leave the video unplayable
  */
 import { Hono } from 'hono';
 import { isMediaRev, isMediaVideoId, settingsProblems, type DeliverySettings, type ErrorReporterEnv, type ExecutionContextLike, type Mp4JobEvent, type TranscodeJobEvent } from '@al-ummah/shared-types';
@@ -26,6 +29,7 @@ import { pushMediaLive, type MediaVideo } from '../../lib/media/r2-delivery';
 import { readQoeLive } from '../../lib/media/qoe-live';
 import { readHealth, runHealthCheck } from '../../lib/media/health';
 import { MediaSettingsError, readMediaSettings, saveMediaSettings } from '../../lib/media/settings';
+import { setVideoOverride } from '../../lib/media/video-override';
 import type { LibraryHints } from '../../lib/bunny/libraries';
 import { applyJobEvent, applyMp4Event, enqueueTranscode, readDeliverySettings, sourceCandidates, writeDeliverySettings, type MediaEnv } from '../../lib/media/r2-delivery';
 
@@ -230,6 +234,20 @@ export function createMediaInternalRouter() {
 			if (error instanceof MediaSettingsError) return c.json({ success: false, error: error.message, problems: error.problems }, 400);
 			throw error;
 		}
+	});
+
+	app.put('/videos/:id/override', async (c) => {
+		const id = c.req.param('id');
+		if (!isMediaVideoId(id)) return c.json({ success: false, error: 'bad id' }, 400);
+		const body = (await c.req.json().catch(() => null)) as { override?: unknown; actorId?: string } | null;
+		if (!body || typeof body.actorId !== 'string' || !body.actorId) return c.json({ success: false, error: 'actorId is required' }, 400);
+		if (body.override !== null && (typeof body.override !== 'object' || Array.isArray(body.override))) return c.json({ success: false, error: 'override must be an object or null' }, 400);
+		const result = await setVideoOverride(c.env, id, body.override, body.actorId);
+		if ('problem' in result) {
+			if (result.problem === 'not_found' || result.problem === 'deleted') return c.json({ success: false, error: 'video not found', problem: result.problem }, 404);
+			return c.json({ success: false, error: 'This override would leave the video unplayable', problem: result.problem, problems: [{ problem: result.problem }] }, 400);
+		}
+		return c.json({ success: true, result: { override: result.override, media: result.media } });
 	});
 
 	app.post('/health/check', async (c) => {

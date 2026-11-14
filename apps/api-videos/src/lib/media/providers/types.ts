@@ -3,7 +3,7 @@
  * only ever go through the registry (./index.ts), so adding a provider means writing an adapter
  * and adding its id to MEDIA_PROVIDER_IDS, never editing call sites.
  */
-import type { MediaProviderId, StoredProviderRef, VideoMediaProviders, VideoProviderRecord, VideoR2State } from '@al-ummah/shared-types';
+import type { MediaOverride, MediaProviderId, StoredProviderRef, VideoMediaProviders, VideoProviderRecord, VideoR2State } from '@al-ummah/shared-types';
 import type { MediaEnv } from '../r2-delivery';
 
 /** The fields of a video record the adapters read. */
@@ -22,6 +22,11 @@ export interface ProviderVideo {
 	r2?: VideoR2State;
 	/** New videos: which providers hold the video and their provider-side ids */
 	media?: VideoMediaProviders;
+	/**
+	 * Per-video playback override (admin, lib/media/video-override.ts). Kept beside `media`, not in it:
+	 * a legacy row stays legacy (no `media`) when an admin pins its playback.
+	 */
+	mediaOverride?: MediaOverride;
 	readyAt?: string;
 	playableAt?: string;
 }

@@ -13,6 +13,7 @@
 import type { CreatorTierAssignment } from './creator-tiers';
 import { normalizeRole } from './roles';
 import type { MediaRung, TranscodeResult, VideoR2State } from './media-delivery';
+import type { MediaOverride, MediaProviderId, PlaybackRules, ProviderMediaStatus } from './media-providers';
 
 // ---------------------------------------------------------------------------
 // Permissions
@@ -296,6 +297,31 @@ export interface AdminVideoDetail extends AdminVideoRow {
   processingIssue?: { kind: string; reason?: string; at: string } | null;
   /** R2 transcode state (epic #687); null when the video was never queued for R2. */
   r2?: AdminVideoR2 | null;
+  /** Which providers hold the video and how it plays (docs/media-delivery/PROVIDERS.md). Absent from older api-videos. */
+  media?: AdminVideoMedia | null;
+}
+
+/** One provider's copy of a video as the admin sees it (no provider-side ids). */
+export interface AdminVideoProviderCopy {
+  provider: MediaProviderId;
+  status: ProviderMediaStatus;
+  renditions: string[];
+  readyAt?: string;
+  error?: string;
+  /** Read from a row written before provider records existed */
+  legacy?: boolean;
+}
+
+export interface AdminVideoMedia {
+  copies: AdminVideoProviderCopy[];
+  /** This video's playback override; null when it follows its channel and the global settings */
+  override: MediaOverride | null;
+  /** The channel's override applies (Delivery settings) */
+  channelOverride: boolean;
+  /** The rules a play of this video uses now: global, then channel, then video override */
+  effective: PlaybackRules;
+  /** Providers switched on in the Delivery settings */
+  enabled: MediaProviderId[];
 }
 
 export interface AdminCommentRow {
