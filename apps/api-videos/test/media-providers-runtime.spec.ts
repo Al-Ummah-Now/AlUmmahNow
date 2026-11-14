@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { Hono } from 'hono';
 import { DEFAULT_MEDIA_SETTINGS } from '@al-ummah/shared-types';
 import { allProviders, bunnyRef, provider, videoProviderRecords } from '../src/lib/media/providers';
-import { clearHealthCache, countProviderFailure, HEALTH_KEY, readHealth, runHealthCheck } from '../src/lib/media/health';
+import { clearHealthCache, countProviderFailure, HEALTH_KEY, readHealth, reporterKey, runHealthCheck } from '../src/lib/media/health';
 import { clearMediaSettingsCache, readMediaSettings, saveMediaSettings, SETTINGS_KEY } from '../src/lib/media/settings';
 import { createMediaInternalRouter } from '../src/endpoints/media/mediaInternal';
 import { SqliteD1 } from './search-sqlite-d1';
@@ -109,17 +109,38 @@ describe('adapters', () => {
 });
 
 describe('provider health', () => {
-	it('player fallbacks are counted per provider per minute', async () => {
+	it('player fallbacks are counted per provider, minute and reporter', async () => {
 		const e = env();
 		const now = Date.parse('2026-11-14T10:00:30Z');
-		await countProviderFailure(e as never, 'r2', now);
-		await countProviderFailure(e as never, 'r2', now + 10_000);
-		await countProviderFailure(e as never, 'bunny', now + 61_000);
-		const rows = await e.SEARCH_DB.prepare('SELECT provider, minute, failures FROM media_provider_health ORDER BY provider').all();
+		await countProviderFailure(e as never, 'r2', 'aaaa', now);
+		await countProviderFailure(e as never, 'r2', 'aaaa', now + 10_000);
+		await countProviderFailure(e as never, 'bunny', 'aaaa', now + 61_000);
+		const rows = await e.SEARCH_DB.prepare('SELECT provider, minute, reporter, failures FROM media_provider_health ORDER BY provider').all();
 		assert.deepEqual(rows.results.map((r) => ({ ...r })), [
-			{ provider: 'bunny', minute: '2026-11-14T10:01', failures: 1 },
-			{ provider: 'r2', minute: '2026-11-14T10:00', failures: 2 },
+			{ provider: 'bunny', minute: '2026-11-14T10:01', reporter: 'aaaa', failures: 1 },
+			{ provider: 'r2', minute: '2026-11-14T10:00', reporter: 'aaaa', failures: 2 },
 		]);
+	});
+
+	it('one client looping over videos counts once: the threshold needs distinct reporters', async () => {
+		const e = env();
+		const start = Date.parse('2026-11-14T10:00:00Z');
+		for (let i = 0; i < 50; i++) await countProviderFailure(e as never, 'r2', 'one-client', start + i * 1000);
+		const one = await runHealthCheck(e as never, undefined, new Date(start + 60_000));
+		assert.equal(one!.providers.r2!.recentFailures, 1);
+		assert.equal(one!.providers.r2!.state, 'healthy');
+		for (let i = 0; i < 10; i++) await countProviderFailure(e as never, 'r2', `client-${i}`, start + 70_000);
+		const many = await runHealthCheck(e as never, undefined, new Date(start + 120_000));
+		assert.equal(many!.providers.r2!.state, 'unhealthy');
+	});
+
+	it('reporter keys: stable within a day, different across days and clients, never the raw IP', async () => {
+		const day = Date.parse('2026-11-14T10:00:00Z');
+		const a = await reporterKey('203.0.113.7', null, day);
+		assert.equal(a, await reporterKey('203.0.113.7', null, day + 3600_000));
+		assert.notEqual(a, await reporterKey('203.0.113.7', null, day + 86400_000));
+		assert.notEqual(a, await reporterKey('203.0.113.8', null, day));
+		assert.match(a, /^[0-9a-f]{16}$/);
 	});
 
 	it('a failing probe turns the provider unhealthy after probeFailures passes and flags the Errors page once', async () => {

@@ -1,14 +1,16 @@
 -- Media providers (docs/media-delivery/PROVIDERS.md).
 
--- Provider health: player fallbacks away from a provider, one row per provider per minute.
--- The api-videos cron sums the last window and probes each provider (lib/media/health.ts);
--- rows older than a day are deleted hourly.
+-- Provider health: player fallbacks away from a provider, one row per provider, minute and
+-- reporter. The api-videos cron counts DISTINCT reporters in the last window (one client looping
+-- over many videos counts once) and probes each provider (lib/media/health.ts); rows older than a
+-- day are deleted hourly. reporter is a daily-salted hash of the client, never an IP or user id.
 CREATE TABLE IF NOT EXISTS media_provider_health (
   provider TEXT NOT NULL,
   -- YYYY-MM-DDTHH:MM (UTC)
   minute TEXT NOT NULL,
+  reporter TEXT NOT NULL,
   failures INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (provider, minute)
+  PRIMARY KEY (provider, minute, reporter)
 );
 
 -- Provider-side ids of videos: our video id ↔ the id a provider gave its copy (a Bunny GUID).

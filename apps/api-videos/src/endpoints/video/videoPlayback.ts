@@ -8,7 +8,7 @@ import { transformVideoToView } from "../../lib/transformations";
 import R2Repository from "../../lib/r2Repo";
 import { logger } from "../../lib/logger";
 import { applyPlayback, choosePlayback, countFallback, logDecision, parseExclude, parseFallbackReason } from "../../lib/media/playback";
-import { countProviderFailure } from "../../lib/media/health";
+import { countProviderFailure, reporterKey } from "../../lib/media/health";
 import { isRestrictedVideo, isVideoOpenToAnyone, isVideoRemoved } from '../../lib/visibility';
 
 /**
@@ -81,9 +81,11 @@ export class VideoPlayback extends OptionalAuthRoute {
 			}
 		}
 		if (count) {
+			// A health signal only when the provider really was offered for this video
+			const plausible = choice.decision.ready.includes(failed);
 			const write = Promise.all([
 				countFallback(c.env as never, { day: new Date().toISOString().slice(0, 10), requested: failed, actual: choice.source, reason, column: "server_fallbacks" }),
-				countProviderFailure(c.env as never, failed),
+				plausible ? reporterKey(c.req.header("CF-Connecting-IP"), userId).then((reporter) => countProviderFailure(c.env as never, failed, reporter)) : undefined,
 			]);
 			try {
 				c.executionCtx.waitUntil(write);
