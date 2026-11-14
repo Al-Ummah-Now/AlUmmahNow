@@ -6,10 +6,8 @@
 //   points; the string leaves the right edge at the height it enters on the left, so rows run on
 //   across tiles. Row spacing is uneven and adds up to the tile height, and every row is drawn
 //   again one tile up and down, so the vertical seam does not show either.
-// - Lanterns (the street's lantern art, unchanged; only resized) hang only in the outer parts of
-//   the tile, at least MARGIN from its centre: the tile is centred on the page, so they fall in the
-//   page margins, outside the content column, and are not cut by a card edge. Strings and bulbs
-//   cross the middle (cards simply cover them).
+// - Lanterns (the street's lantern art, unchanged; only resized) hang along the whole string at
+//   even spacing, across the full width; posts and cards simply cover whatever is behind them.
 // - Drawn at 2x, shown at its CSS size by image-set(… 2x): never stretched.
 import { execFileSync } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
@@ -25,8 +23,8 @@ const { chromium } = require('@playwright/test');
 
 /** Tile size in CSS pixels: as wide as a large desktop, tall enough that the repeat is hard to spot. */
 const W = 1920, H = 1560;
-/** Lanterns hang at least this far from the centre (the content column and its card stacks). */
-const MARGIN = 480;
+/** Distance between lanterns along a string; divides W so the pattern runs on across tiles. */
+const SPACING = 160;
 const LANTERN = '<circle cx="0" cy="4" r="3"/><path d="M0 7V12"/><path d="M-14 34C-18 24-6 20 0 12C6 20 18 24 14 34Z"/><path d="M-17 34H17V38H-17Z"/><path d="M-15 38H15L18 44V74L15 80H-15L-18 74V44Z"/><path class="w" d="M-5 74V55C-5 50-1 49 0 45C1 49 5 50 5 55V74Z"/><path class="w" d="M-14 73V58C-14 55-12 54-11 51C-10 54-9 55-9 58V73Z"/><path class="w" d="M14 73V58C14 55 12 54 11 51C10 54 9 55 9 58V73Z"/><path d="M-17 80H17L12 88H-12Z"/><path d="M-4 88L0 96L4 88"/>';
 /** The street's colours per mode (the theme's street tokens; dark is prod's lit look). */
 const MODES = {
@@ -47,6 +45,7 @@ function rows() {
   while (gaps.reduce((a, b) => a + b, 0) < H - 250) gaps.push(r(185, 255));
   const scale = H / gaps.reduce((a, b) => a + b, 0);
   let y = r(30, 80);
+  let rowIndex = 0;
   return gaps.map((g) => {
     // Hang points across the tile; the first and last share their height (the row runs on)
     const xs = [0];
@@ -55,22 +54,17 @@ function rows() {
     const edgeY = y + r(-5, 5);
     const pts = xs.map((x, i) => ({ x, y: i === 0 || i === xs.length - 1 ? edgeY : y + r(-7, 7) }));
     const swags = [];
+    for (let i = 0; i < pts.length - 1; i++) swags.push({ a: pts[i], b: pts[i + 1], sag: r(8, 18) });
+    // Lanterns along the whole string, evenly spaced (SPACING divides W, so the spacing holds
+    // across the tile edge too); each row is shifted by half a step from the last so the
+    // lanterns do not line up in columns.
     const lanterns = [];
-    for (let i = 0; i < pts.length - 1; i++) {
-      const a = pts[i], b = pts[i + 1], sag = r(8, 18);
-      swags.push({ a, b, sag });
-      // Lanterns only in the outer parts (page margins), one or two per swag, never evenly spaced
-      const want = rnd() < 0.3 ? 1 : 2;
-      const ts = [];
-      for (let k = 0; k < 30 && ts.length < want; k++) {
-        const t = r(0.15, 0.85), x = a.x + (b.x - a.x) * t;
-        if (Math.abs(x - W / 2) < MARGIN) continue;
-        if (ts.every((u) => Math.abs(u - t) * (b.x - a.x) > 64)) ts.push(t);
-      }
-      for (const t of ts) {
-        const x = a.x + (b.x - a.x) * t, top = a.y + (b.y - a.y) * t + sag * 4 * t * (1 - t);
-        lanterns.push({ x, top, y: top + r(5, 30), h: r(36, 50) });
-      }
+    const shift = (rowIndex++ % 2) * SPACING / 2 + SPACING / 4;
+    for (let x = shift; x < W; x += SPACING) {
+      const { a, b, sag } = swags.find((w) => x >= w.a.x && x < w.b.x);
+      const t = (x - a.x) / (b.x - a.x);
+      const top = a.y + (b.y - a.y) * t + sag * 4 * t * (1 - t);
+      lanterns.push({ x, top, y: top + r(8, 22), h: r(38, 46) });
     }
     y += g * scale;
     return { swags, lanterns };
