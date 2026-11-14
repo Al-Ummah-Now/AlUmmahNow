@@ -2,14 +2,15 @@
  * POST /api/rum: field Core Web Vitals beacons (wiki AUN-SEO phase 4, #1207; D-SEO-9).
  *
  * Cookieless and anonymous: the body is a page kind, a device class, a locale and up to three metric
- * values (lib/rum/vitals.ts). No cookie, header, IP or user agent is read or kept. Each metric becomes
+ * values (lib/rum/vitals.ts). No cookie, header or IP is read or kept; the user agent is looked at only to
+ * drop beacons from automated browsers (E2E suites, Lighthouse: isAutomatedAgent) and is never stored. Each metric becomes
  * one Workers Analytics Engine data point (binding RUM): index = metric, blobs = metric, page kind,
  * device, locale, environment; double = value. Read p75s with the SQL API (docs/operations/rum.md,
  * scripts/ops/rum-report.ts). Always 204: a beacon never fails a page.
  */
 import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { logger } from '@/lib/logger-server';
-import { parseRumBeacon, RUM_METRICS } from '@/lib/rum/vitals';
+import { isAutomatedAgent, parseRumBeacon, RUM_METRICS } from '@/lib/rum/vitals';
 
 /** Workers Analytics Engine dataset binding (wrangler analytics_engine_datasets) */
 interface AnalyticsEngineDataset {
@@ -22,6 +23,7 @@ const MAX_BODY_BYTES = 512;
 const noContent = () => new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store' } });
 
 export async function POST(request: Request): Promise<Response> {
+  if (isAutomatedAgent(request.headers.get('user-agent'))) return noContent();
   let raw: string;
   try {
     raw = await request.text();

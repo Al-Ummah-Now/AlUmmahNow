@@ -5,7 +5,7 @@
  *
  * The videos site samples one page load in 20 and writes its field LCP, CLS and INP to Workers
  * Analytics Engine (apps/web app/api/rum, dataset al_ummah_now_rum[_stage|_qa]; blobs metric, page
- * kind, device, locale; no URL, ids or personal data, D-SEO-9). This reads the weighted p75 back
+ * kind, device, locale, environment; no URL, ids or personal data, D-SEO-9; automated browsers dropped). This reads the weighted p75 back
  * with the Analytics Engine SQL API (CF_ANALYTICS_TOKEN, Account Analytics Read), overall and per
  * page kind × device. No D1; answers are cached 5 minutes per env, window and locale. Needs `ops:read`.
  */
@@ -68,8 +68,11 @@ export function rate(metric: VitalsMetric, p75: number): VitalsRating {
  * The SQL for one dataset, window and locale, grouped by `by` (none: one row per metric). Every
  * piece comes from the fixed lists above, never from free input.
  */
-export function vitalsQuery(dataset: string, days: number, locale: VitalsLocale, by: 'metric' | 'detail'): string {
+export function vitalsQuery(dataset: string, days: number, locale: VitalsLocale, by: 'metric' | 'detail', env?: VitalsEnv): string {
 	const where = [`timestamp > NOW() - INTERVAL '${days}' DAY`];
+	// Each env has its own dataset; blob5 (the writer's NEXTJS_ENV) also has to match, so a build bound
+	// to the wrong dataset never mixes into another env's numbers
+	if (env) where.push(`blob5 = '${env}'`);
 	if (locale !== 'all') where.push(`blob4 = '${locale}'`);
 	const dims = by === 'detail' ? 'blob1 AS metric, blob2 AS kind, blob3 AS device' : 'blob1 AS metric';
 	const group = by === 'detail' ? 'metric, kind, device' : 'metric';
@@ -190,8 +193,8 @@ app.get('/summary', async (c) => {
 	try {
 		const dataset = VITALS_DATASETS[env];
 		const [overallData, detailData] = await Promise.all([
-			query(account, token, vitalsQuery(dataset, days, locale, 'metric')),
-			query(account, token, vitalsQuery(dataset, days, locale, 'detail')),
+			query(account, token, vitalsQuery(dataset, days, locale, 'metric', env)),
+			query(account, token, vitalsQuery(dataset, days, locale, 'detail', env)),
 		]);
 		summary = summarizeVitals(env, days, locale, overallData, detailData);
 	} catch {

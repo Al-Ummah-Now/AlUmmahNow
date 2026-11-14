@@ -8,6 +8,14 @@
 /** Share of page loads that report (decided per load with Math.random: nothing is stored) */
 export const RUM_SAMPLE_RATE = 0.05;
 
+/**
+ * A browser driven by automation rather than a visitor: headless Chrome/Chromium (Playwright, Puppeteer),
+ * Lighthouse and PageSpeed. Matched on the request's user agent only to drop the beacon; it is never kept.
+ */
+export function isAutomatedAgent(userAgent: string | null | undefined): boolean {
+  return /headless|playwright|puppeteer|lighthouse|chrome-lighthouse|pagespeed|phantomjs|selenium/i.test(userAgent ?? '');
+}
+
 export const RUM_METRICS = ['LCP', 'CLS', 'INP'] as const;
 export type RumMetric = (typeof RUM_METRICS)[number];
 

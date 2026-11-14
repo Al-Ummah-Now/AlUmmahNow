@@ -11,6 +11,8 @@ describe('Web vitals panel (/api/vitals)', () => {
     assert.doesNotMatch(overall, /blob4/);
     const detail = vitalsQuery(VITALS_DATASETS.qa, 28, 'ar', 'detail');
     assert.match(detail, /FROM al_ummah_now_rum_qa WHERE timestamp > NOW\(\) - INTERVAL '28' DAY AND blob4 = 'ar' GROUP BY metric, kind, device/);
+    // With the env, only that env's points count
+    assert.match(vitalsQuery(VITALS_DATASETS.production, 7, 'en', 'metric', 'production'), /WHERE timestamp > NOW\(\) - INTERVAL '7' DAY AND blob5 = 'production' AND blob4 = 'en' GROUP BY/);
   });
 
   it('rates p75 against the web.dev limits', () => {
@@ -94,6 +96,7 @@ describe('Web vitals panel (/api/vitals)', () => {
       assert.equal(sent.length, 2);
       for (const sql of sent) {
         assert.match(sql, /al_ummah_now_rum_stage/);
+        assert.match(sql, /blob5 = 'stage'/);
         assert.doesNotMatch(sql, /fr'|blob4/);
       }
     } finally {

@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { cacheRule, mediaBucket, mediaHost, MP4_RATE_LIMIT, planCors, planRateLimit, ruleDiffers } from '../apply.ts';
+import { cacheRule, mediaBucket, mediaHost, MP4_RATE_LIMIT, planCors, planRateLimit, planRumOff, RUM_OFF_RULE, ruleDiffers } from '../apply.ts';
 import { CfApiError } from '../../release/cf-api.ts';
 import type { CfClient } from '../../release/cf-api.ts';
 
@@ -56,5 +56,34 @@ describe('media-cdn', () => {
 		assert.deepEqual(await planRateLimit(zone({ id: 'rs', rules: [other, { ...MP4_RATE_LIMIT, id: 'r1' }] })), []);
 		await assert.rejects(planRateLimit(zone(new CfApiError(403, 'Authentication error'))));
 		assert.ok(calls.every((c) => c === 'GET /rulesets/phases/http_ratelimit/entrypoint'));
+	});
+
+	it('turns Web Analytics off on every QA and stage host and for headless browsers, never on production', () => {
+		assert.equal(RUM_OFF_RULE.action, 'set_config');
+		assert.deepEqual(RUM_OFF_RULE.action_parameters, { disable_rum: true });
+		const e = RUM_OFF_RULE.expression;
+		assert.match(e, /http\.host in \{"qa\.alummahnow\.net" "stage\.alummahnow\.net"\}/);
+		assert.match(e, /http\.host wildcard "\*\.qa\.alummahnow\.net"/);
+		assert.match(e, /http\.host wildcard "\*\.stage\.alummahnow\.net"/);
+		assert.match(e, /lower\(http\.user_agent\) contains "headless"/);
+		// Nothing that could match a production host
+		assert.doesNotMatch(e, /"\*\.alummahnow\.net"|"www\.alummahnow\.net"|"videos\.alummahnow\.net"/);
+	});
+
+	it('plans the rum rule in the config-settings phase: create, add beside others, update, or nothing', async () => {
+		const calls: string[] = [];
+		const zone = (entry: unknown) =>
+			(async (method: string, path: string) => {
+				calls.push(`${method} ${path}`);
+				if (entry instanceof Error) throw entry;
+				return entry;
+			}) as never;
+		assert.match((await planRumOff(zone(new CfApiError(404, 'none'))))[0].what, /create/);
+		const other = { id: 'o', ref: 'someone-else', expression: 'x', action: 'set_config' };
+		assert.match((await planRumOff(zone({ id: 'rs', rules: [other] })))[0].what, /add/);
+		assert.match((await planRumOff(zone({ id: 'rs', rules: [{ ...RUM_OFF_RULE, id: 'r1', expression: 'old' }] })))[0].what, /update/);
+		assert.deepEqual(await planRumOff(zone({ id: 'rs', rules: [other, { ...RUM_OFF_RULE, id: 'r1' }] })), []);
+		await assert.rejects(planRumOff(zone(new CfApiError(403, 'Authentication error'))));
+		assert.ok(calls.every((c) => c === 'GET /rulesets/phases/http_config_settings/entrypoint'));
 	});
 });
