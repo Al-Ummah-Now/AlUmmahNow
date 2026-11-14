@@ -2485,7 +2485,8 @@ const ar: Messages = {
       needsReport: 'تحتاج إلى بلاغ CyberTipline',
       hold: 'حجز قانوني',
       evidenceDeleted: 'حُذفت الأدلة',
-      retainNever: 'حتى البلاغ (أو الحجز)',
+      retainHold: 'محفوظة ما دام الحجز قائمًا',
+      retainUntilReported: 'حتى البلاغ',
     },
     intake: {
       title: 'ألصق تنبيه CSAM من Cloudflare',
@@ -2549,6 +2550,14 @@ const ar: Messages = {
       none: 'لم تبدأ',
       phase: 'الخطوة: {phase}',
       attempts: 'المحاولات: {count}',
+      phases: {
+        plan: 'التخطيط',
+        copy_public: 'نسخ الملفات العامة',
+        purge_public: 'حذف الملفات العامة',
+        copy_source: 'نسخ الملف الأصلي',
+        purge: 'حذف كل النسخ',
+        ban: 'تجميد حساب من رفعه',
+      },
       statuses: {
         queued: 'في الانتظار',
         running: 'قيد التشغيل',

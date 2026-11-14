@@ -53,10 +53,10 @@ export function ReportChecklist({ caseId, rows, reported, canDownload, files }: 
         {rows.map((r) => (
           <div key={r.id} className="grid grid-cols-1 gap-1 py-2 border-t border-border sm:grid-cols-3 sm:items-center" data-testid="csam-fact" data-fact={r.id} data-filled={r.value ? 'true' : 'false'}>
             <dt className="text-sm text-fg-muted">{label(r.id)}</dt>
-            <dd className="sm:col-span-2 flex flex-wrap items-center justify-between gap-2">
+            <dd className="sm:col-span-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
               {r.value ? (
                 <>
-                  <span className="text-sm text-fg break-all" dir={r.ltr ? 'ltr' : undefined}>{r.value}</span>
+                  <span className="text-sm text-fg break-all">{r.ltr ? <bdi dir="ltr">{r.value}</bdi> : r.value}</span>
                   <CopyButton value={r.value} testId={`csam-fact-copy-${r.id}`} />
                 </>
               ) : (
@@ -73,7 +73,7 @@ export function ReportChecklist({ caseId, rows, reported, canDownload, files }: 
           <ul className="space-y-1">
             {files.map((name) => (
               <li key={name} className="text-sm">
-                <a href={csamDownloadHref(caseId, name)} className={linkClass} dir="ltr" rel="noreferrer">{name}</a>
+                <a href={csamDownloadHref(caseId, name)} className={linkClass} rel="noreferrer"><bdi dir="ltr">{name}</bdi></a>
               </li>
             ))}
           </ul>

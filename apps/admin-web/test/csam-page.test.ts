@@ -17,6 +17,9 @@ import {
   isCsamEvidenceName,
   needsReport,
   sortCases,
+  logDetailText,
+  retentionLabelKey,
+  utcTime,
   validReportId,
 } from '../src/app/(protected)/moderation/csam/model';
 import { visibleItems, type NavAccess } from '../src/components/shell/nav-model';
@@ -54,7 +57,9 @@ describe('CyberTipline checklist', () => {
     assert.deepEqual(rows.map((r) => r.id), [...CSAM_FACT_IDS]);
     const value = (id: string) => rows.find((r) => r.id === id)!.value;
     assert.equal(value('matchedUrl'), FACTS.matchedUrl);
-    assert.equal(value('incidentAt'), FACTS.detectedAt);
+    // Times as the form takes them, in UTC (the time zone field)
+    assert.equal(value('incidentAt'), '2026-11-14 03:00:00');
+    assert.equal(value('uploadedAt'), '2026-11-13 22:00:00');
     assert.equal(value('timeZone'), 'UTC');
     assert.equal(value('itemKind'), 'kind:video_thumbnail');
     assert.equal(value('email'), 'synthetic@example.invalid');
@@ -68,7 +73,7 @@ describe('CyberTipline checklist', () => {
 
   it('"Copy all" lists the filled fields with their labels', () => {
     const text = csamFactsText(csamFactRows(FACTS, (k) => k), (id) => `L-${id}`);
-    assert.ok(text.startsWith(`L-incidentAt: ${FACTS.detectedAt}\n`));
+    assert.ok(text.startsWith('L-incidentAt: 2026-11-14 03:00:00\n'));
     assert.ok(text.includes(`L-matchedUrl: ${FACTS.matchedUrl}`));
     assert.equal(text.includes('L-ipAddress'), false);
   });
@@ -140,6 +145,24 @@ describe('case list and actions', () => {
   });
 });
 
+describe('readable values', () => {
+  it('says when evidence goes: a date, deleted, kept under a hold, or not until the report', () => {
+    assert.equal(retentionLabelKey({ evidenceDeletedAt: null, retainUntil: '2027-11-14T00:00:00Z', legalHold: false }), 'date');
+    assert.equal(retentionLabelKey({ evidenceDeletedAt: null, retainUntil: null, legalHold: true }), 'hold');
+    assert.equal(retentionLabelKey({ evidenceDeletedAt: null, retainUntil: null, legalHold: false }), 'untilReported');
+    assert.equal(retentionLabelKey({ evidenceDeletedAt: '2027-11-14T00:00:00Z', retainUntil: null, legalHold: true }), 'deleted');
+  });
+
+  it('writes log details and report times for people, not as JSON', () => {
+    assert.equal(logDetailText({ retentionDays: { from: 365, to: 730 } }), 'retentionDays: 365 → 730');
+    assert.equal(logDetailText({ name: '01-matched-image.jpg', ban: 'banned' }), 'name: 01-matched-image.jpg · ban: banned');
+    assert.equal(logDetailText(null), null);
+    assert.equal(logDetailText({}), null);
+    assert.equal(utcTime('2026-11-14T04:05:06.789Z'), '2026-11-14 04:05:06');
+    assert.equal(utcTime('not a time'), 'not a time');
+  });
+});
+
 describe('CSAM copy', () => {
   it('labels every status, kind, fact, job state and log action in both languages', () => {
     for (const m of [en, ar]) {
@@ -148,6 +171,8 @@ describe('CSAM copy', () => {
       for (const f of CSAM_FACT_IDS) assert.ok(m.csamPage.facts[f], f);
       for (const a of CSAM_ACCESS_ACTIONS) assert.ok(m.csamPage.log.actions[a.replace(/\./g, '_') as keyof typeof m.csamPage.log.actions], a);
       for (const j of ['queued', 'running', 'retrying', 'succeeded', 'failed'] as const) assert.ok(m.csamPage.job.statuses[j], j);
+      // The takedown job's steps (api-videos lib/csam/contain.ts CONTAIN_PHASES, '-' as '_')
+      for (const ph of ['plan', 'copy_public', 'purge_public', 'copy_source', 'purge', 'ban'] as const) assert.ok(m.csamPage.job.phases[ph], ph);
       assert.ok(m.nav.csam);
     }
   });

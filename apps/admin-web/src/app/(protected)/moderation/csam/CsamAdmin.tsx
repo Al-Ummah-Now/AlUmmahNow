@@ -85,7 +85,7 @@ export function IntakeForm() {
               <ul className="list-disc ms-5">
                 {result.cases.map((c) => (
                   <li key={c.id}>
-                    <Link className={`${linkClass} break-all`} href={`/moderation/csam/${encodeURIComponent(c.id)}`} dir="ltr">{c.matchedUrl}</Link>
+                    <Link className={`${linkClass} break-all`} href={`/moderation/csam/${encodeURIComponent(c.id)}`}><bdi dir="ltr">{c.matchedUrl}</bdi></Link>
                     {c.status === 'unmapped' && <span className="text-danger-fg"> · {t('csamPage.intake.unmapped')}</span>}
                   </li>
                 ))}
