@@ -47,6 +47,7 @@ import {
   rememberUploadChannel,
   requeueableRows,
   roleOn,
+  tierAllowedChannels,
   uploadEligibleChannels,
   type RememberedUploadChannel,
 } from "@/lib/upload/upload-channel";
@@ -73,9 +74,12 @@ const UploadPage: React.FC = () => {
   // header's active channel or the session's, in that order. The API checks
   // the chosen channel (channelId header) against the channel's owner and
   // members, not against the session.
+  // An owned channel uploads under the user's own tier, any other under its
+  // owner's: channels whose tier doesn't allow it are left out (#759)
+  const tierAccess = creator.status === 'ready' ? creator.access : null;
   const uploadChannels = useMemo(
-    () => uploadEligibleChannels(sessionUser?.channels, userId),
-    [sessionUser?.channels, userId],
+    () => tierAllowedChannels(uploadEligibleChannels(sessionUser?.channels, userId), userId, tierAccess),
+    [sessionUser?.channels, userId, tierAccess],
   );
   const navChannelId = activeChannel?.channelId ?? null;
   const sessionChannelId = sessionUser?.channel?.id ?? null;

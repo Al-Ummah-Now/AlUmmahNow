@@ -552,6 +552,28 @@ describe('creator tiers: channels, access and admin', () => {
     assert.equal((await creatorAccess(h.d1, 'boss2', [])).tier?.id, 'creator');
   });
 
+  it("lists the channels a member may upload to under the owner's tier, never owned ones without a tier (#759)", async () => {
+    const h = await harness({ tiers: { alice: 'small' } });
+    const role = (channel: string, user: string, r: string) =>
+      h.db.db.prepare('INSERT INTO channel_access (channel_id, user_id, role) VALUES (?, ?, ?)').run(channel, user, r);
+    h.indexChannel('ch-alice', 'alice');
+    h.indexChannel('ch-bob', 'bob');
+    h.indexChannel('ch-alice-2', 'alice');
+    h.indexChannel('ch-ed-own', 'ed');
+    role('ch-alice', 'ed', 'editor');
+    role('ch-bob', 'ed', 'admin');
+    role('ch-alice-2', 'ed', 'moderator');
+    const ed = await creatorAccess(h.d1, 'ed', []);
+    // Alice has a tier, Bob none; a moderator can't upload; ed owns a channel but has no tier of their own
+    assert.deepEqual([ed.canUpload, ed.tier, ed.uploadChannelIds, ed.canCreateChannel], [true, null, ['ch-alice'], false]);
+    // A deleted channel is left out
+    h.deleteChannel('ch-alice');
+    const later = await creatorAccess(h.d1, 'ed', []);
+    assert.deepEqual([later.canUpload, later.uploadChannelIds], [false, []]);
+    // The owner's own answer lists no member channels
+    assert.deepEqual((await creatorAccess(h.d1, 'alice', [])).uploadChannelIds, []);
+  });
+
   it("an automatic super admin row never grants on someone else's channel", async () => {
     const h = await harness();
     await creatorAccess(h.d1, 'boss', ['Super Admin']);
