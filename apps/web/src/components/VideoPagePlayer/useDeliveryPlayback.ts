@@ -90,8 +90,13 @@ export function useDeliveryPlayback(
   const trackerRef = useRef<QoeTracker | null>(null);
   /** This load's error handler (the effect below); true while a fallback is under way */
   const walkerRef = useRef<{ player: Player; onError: () => boolean } | null>(null);
-  /** An error the player saw before the effect was attached, held because another source exists */
-  const pendingErrorRef = useRef(false);
+  /**
+   * An error the player saw before the effect was attached, held because another source exists.
+   * Its reason is taken when it happens: on a fast failure (a 503 before the MediaSource opens)
+   * Video.js fires loadstart right after the error, which clears player.error(), so by the time
+   * the effect runs there is nothing left to read and the load would sit until the stall timeout.
+   */
+  const pendingErrorRef = useRef<{ player: Player; reason: PlaybackFallbackReason } | null>(null);
   const listRef = useRef(list);
   listRef.current = list;
   const [player, setPlayer] = useState<Player | null>(null);
@@ -188,10 +193,9 @@ export function useDeliveryPlayback(
       if ((player as unknown as { error?: () => unknown }).error?.()) handleError();
     };
     walkerRef.current = { player, onError: handleError };
-    if (pendingErrorRef.current) {
-      pendingErrorRef.current = false;
-      onError();
-    }
+    const pending = pendingErrorRef.current;
+    pendingErrorRef.current = null;
+    if (pending?.player === player) fallBack(pending.reason);
     const onWaiting = () => {
       if (stallTimer !== undefined || waitingForApi) return;
       stallTimer = setTimeout(() => {
@@ -239,7 +243,7 @@ export function useDeliveryPlayback(
     const walker = walkerRef.current;
     if (walker && walker.player === errored) return walker.onError();
     if (listRef.current.length < 2) return false;
-    pendingErrorRef.current = true;
+    pendingErrorRef.current ??= { player: errored, reason: playerErrorReason(errored) };
     return true;
   }, []);
 
