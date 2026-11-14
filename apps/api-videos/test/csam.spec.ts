@@ -406,7 +406,11 @@ describe('taking a video down', () => {
 		// Nothing was destroyed before the evidence was kept
 		assert.ok(t.env.videos.read('vid-synth-01'));
 		assert.ok(t.env.MEDIA.store.has('pub/vid-synth-01/r1/thumb.jpg'));
-		assert.ok(calls.some((c) => c.startsWith('POST https://admin.example.test/internal/errors') && c.includes('csam-contain:case-0001-synthetic') && c.includes('/internal/csam/retry')));
+		const flag = calls.find((c) => c.startsWith('POST https://admin.example.test/internal/errors') && c.includes('csam-contain:case-0001-synthetic'));
+		assert.ok(flag);
+		// No Errors-page Retry: only the case page (super admins) retries a CSAM takedown
+		assert.equal(flag.includes('"retry"'), false);
+		assert.ok(flag.includes('/moderation/csam/case-0001-synthetic'));
 		// Retry once the key is there finishes it
 		(t.env as Record<string, unknown>).CSAM_EVIDENCE_KEY = KEY_V1;
 		assert.equal((await t.json('POST', '/retry', { caseId: CASE })).body.result.retried, true);
@@ -429,6 +433,19 @@ describe('taking images down', () => {
 		assert.equal(images.size, 2); // the custom thumbnail and the avatar are untouched
 		assert.equal(t.env.community_posts.read('posts/chan-synth-01/post-synth-01.json'), null);
 		assert.equal(await (await t.call('GET', `/cases/${CASE}/files/05-post-image-2.jpg`)).text(), `${PLACEHOLDER}-b`);
+	});
+
+	it("a post naming another account's file never deletes that file", async () => {
+		const t = setup();
+		const post = t.env.community_posts.read('posts/chan-synth-01/post-synth-01.json');
+		post.images.push({ url: 'https://images.alummahnow.net/avatar-placeholder_avatar.jpeg' }, { url: 'https://images.alummahnow.net/community-posts/other-channel-01/z.jpg' });
+		t.env.community_posts.store.set('posts/chan-synth-01/post-synth-01.json', JSON.stringify(post));
+		images.set('/community-posts/other-channel-01/z.jpg', enc(`${PLACEHOLDER}-z`));
+		await t.json('POST', '/contain', { caseId: CASE, matchedUrl: 'https://images.alummahnow.net/community-posts/chan-synth-01/a.jpg', resolution: { kind: 'post_image', channelId: 'chan-synth-01', postId: 'post-synth-01', imagePath: '/community-posts/chan-synth-01/a.jpg', uploaderId: OWNER } });
+		await t.drain();
+		assert.equal(images.has('/avatar-placeholder_avatar.jpeg'), true);
+		assert.equal(images.has('/community-posts/other-channel-01/z.jpg'), true);
+		assert.equal(images.has('/community-posts/chan-synth-01/b.jpg'), false);
 	});
 
 	it('an avatar: the field is cleared at once (kept on the takedown mark), the file kept then deleted, its index row gone', async () => {

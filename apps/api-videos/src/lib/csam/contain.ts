@@ -223,7 +223,15 @@ async function purgeBunnyEdge(env: ContainEnv, urls: string[]): Promise<CdnPurge
 	return 'purged';
 }
 
-/** Every image path the item shows (all of them go: a post with one matched image goes whole). */
+/** A path that is one plain file under the prefix (no dot segments, no encoded separators). */
+const under = (path: string, prefix: string) => path.startsWith(prefix) && !path.slice(prefix.length).split('/').some((p) => !p || p === '.' || p === '..' || p.includes('\\'));
+
+/**
+ * Every image file of the item that goes with it: the matched file, and the files the item itself
+ * stored. A post's other images go only when they are in that channel's own upload folder, and a
+ * video's custom thumbnail only from its own folder: a record can name another account's file
+ * (a pasted URL), and that file is not ours to delete.
+ */
 async function imagePathsOf(env: ContainEnv, r: CsamResolution): Promise<string[]> {
 	const paths = new Set<string>();
 	if (r.imagePath) paths.add(r.imagePath);
@@ -232,14 +240,14 @@ async function imagePathsOf(env: ContainEnv, r: CsamResolution): Promise<string[
 		const post = object ? ((await object.json().catch(() => null)) as { images?: Array<{ url?: string }> } | null) : null;
 		for (const image of post?.images ?? []) {
 			const path = imagePathOfUrl(image.url);
-			if (path) paths.add(path);
+			if (path && under(path, `/community-posts/${r.channelId}/`)) paths.add(path);
 		}
 	}
 	if (r.videoId) {
 		const object = await env.videos.get(r.videoId);
 		const video = object ? ((await object.json().catch(() => null)) as Row | null) : null;
 		const path = imagePathOfUrl(video?.thumbnailUrl);
-		if (path?.startsWith('/thumbnails/')) paths.add(path);
+		if (path && under(path, `/thumbnails/${r.videoId}/`)) paths.add(path);
 	}
 	return [...paths];
 }
@@ -367,12 +375,11 @@ export async function runContainStep(env: ContainEnv, job: AdminJob): Promise<Jo
 				key: needsActionKey,
 				source: 'admin-job',
 				title: 'CSAM takedown did not finish',
-				message: `Case ${p.caseId}: the "${p.phase}" step failed after every retry (${reason}). The item is hidden; Retry finishes the takedown.`,
+				message: `Case ${p.caseId}: the "${p.phase}" step failed after every retry (${reason}). The item is hidden; Retry on the case page finishes the takedown.`,
 				itemType: 'csam-case',
 				itemId: p.caseId,
+				// Retry lives on the case page (super admins only, audited), not on the Errors page
 				itemUrl: `/moderation/csam/${p.caseId}`,
-				retry: { kind: 'service', service: 'api-videos', path: '/internal/csam/retry', body: { caseId: p.caseId } },
-				retryLabel: 'Retry takedown',
 			});
 		}
 		throw error;
