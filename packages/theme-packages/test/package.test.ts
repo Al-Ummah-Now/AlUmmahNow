@@ -244,6 +244,21 @@ test('street: tokens per mode, the lights inlined when asked, otherwise by URL; 
   assert.doesNotMatch(compilePackage(none).tokens, /--fanous-street-line/);
 });
 
+test('street bands: built-in tiles served by the apps at /fanous/street/, an uploaded package by its asset URL, shown at 2x (no stretch)', () => {
+  const { theme } = fawanees();
+  const builtIn = compilePackage(theme).tokens;
+  const dark = builtIn.slice(0, builtIn.indexOf(':not(.dark) {'));
+  const light = builtIn.slice(builtIn.indexOf(':not(.dark) {'));
+  assert.match(dark, /--fanous-street-band-left: image-set\(url\("\/fanous\/street\/street-band-left-dark\.webp"\) 2x\);/);
+  assert.match(light, /--fanous-street-band-right: image-set\(url\("\/fanous\/street\/street-band-right\.webp"\) 2x\);/);
+  assert.match(dark, /--fanous-street-faint: 0\.35;/);
+  assert.match(light, /--fanous-street-faint: 1;/);
+  const uploaded = compilePackage(theme, { assetUrl: (p) => `/t/${p}` }).tokens;
+  assert.match(uploaded, /--fanous-street-band-left: image-set\(url\("\/t\/assets\/street-band-left-dark\.webp"\) 2x\);/);
+  const plain = clone(theme); delete plain.street!.bands;
+  assert.match(compilePackage(plain).tokens, /--fanous-street-band-left: none;/);
+});
+
 test('street: its art must be in the package and its colours #rrggbbaa', () => {
   const { theme, assets } = fawanees();
   const t = clone(theme);

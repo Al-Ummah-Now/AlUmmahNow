@@ -1903,7 +1903,7 @@ export const SCHEMA: Record<string, any> = {
     },
     "street": {
       "type": "object",
-      "description": "The lantern street: whole lanterns hung on strings in the page's free gaps and soft distant lights behind the content. Drawn by the apps' shared street module (no code in the package); the package switches it on and gives its colours and art.",
+      "description": "The lantern street: strings of lit lanterns down the sides of the page (image tiles repeated vertically) and soft distant lights behind the content. No code in the package; the package switches it on and gives its art.",
       "properties": {
         "enabled": {
           "type": "boolean"
@@ -1975,6 +1975,91 @@ export const SCHEMA: Record<string, any> = {
             "light",
             "dark"
           ]
+        },
+        "bands": {
+          "type": "object",
+          "description": "Tall image tiles of strings and lit lanterns (drawn at 2x) for the left and right side of the page, repeated vertically without a seam.",
+          "properties": {
+            "left": {
+              "type": "object",
+              "properties": {
+                "light": {
+                  "$ref": "#/$defs/imageAsset"
+                },
+                "dark": {
+                  "$ref": "#/$defs/imageAsset"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "light",
+                "dark"
+              ]
+            },
+            "right": {
+              "type": "object",
+              "properties": {
+                "light": {
+                  "$ref": "#/$defs/imageAsset"
+                },
+                "dark": {
+                  "$ref": "#/$defs/imageAsset"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "light",
+                "dark"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "left",
+            "right"
+          ]
+        },
+        "faint": {
+          "type": "object",
+          "properties": {
+            "light": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "dark": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "light",
+            "dark"
+          ],
+          "description": "Opacity of the bands where they lie behind text, chosen so every text colour keeps 4.5:1."
+        },
+        "lightsOpacity": {
+          "type": "object",
+          "properties": {
+            "light": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "dark": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "light",
+            "dark"
+          ],
+          "description": "Opacity of the distant lights layer."
         }
       },
       "additionalProperties": false,
