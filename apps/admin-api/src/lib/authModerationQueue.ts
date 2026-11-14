@@ -6,7 +6,7 @@
  *       ok                       → 'sent' (+ auth's id and status)
  *       permanent error (4xx)    → 'failed' at once, flagged for a videos admin (Retry)
  *       transient error          → retried: 30 s doubling to 15 min, 6 retries, then 'failed'
- *   cron (every 5 min) / reads ──▶ { type: 'sync' } ──▶ auth's status into the mirror
+ *   cron (every 5 min, paced by age) / reads ──▶ { type: 'sync' } ──▶ auth's status into the mirror
  *       failing after its retries → sync_error (shown), next cron tries again
  *   POST /:id/info ──▶ pending_info ──▶ { type: 'info' } ──▶ auth (then a status read)
  *       failing after its retries → sync_error; the answer stays pending for Retry
@@ -22,6 +22,7 @@ import {
   AuthApiError,
   AuthModerationClient,
   audit,
+  cronSyncDue,
   getRow,
   isFinalStatus,
   isPermanentAuthError,
@@ -81,20 +82,23 @@ export async function enqueueSyncs(env: QueueEnv, rows: MirrorRow[], now = Date.
   );
   if (!due.length) return 0;
   const at = new Date(now).toISOString();
-  for (const r of due) {
-    await env.REPORTS_DB.prepare('UPDATE auth_moderation_requests SET sync_requested_at = ? WHERE id = ?').bind(at, r.id).run();
-  }
+  await env.REPORTS_DB.prepare('UPDATE auth_moderation_requests SET sync_requested_at = ? WHERE id IN (SELECT value FROM json_each(?))')
+    .bind(at, JSON.stringify(due.map((r) => r.id)))
+    .run();
   await env.AUTH_REQUESTS_QUEUE.sendBatch(due.map((r) => ({ body: { type: 'sync' as const, id: r.id }, contentType: 'json' as const })));
   return due.length;
 }
 
-/** Cron: every open request gets a status read (oldest first, at most 100). */
+/** Cron: open requests due for a status read (paced by age, CRON_SYNC_STEPS), oldest read first, at most 100. */
 export async function scheduleSyncs(env: QueueEnv, now = Date.now()): Promise<number> {
+  const due = cronSyncDue(now);
   const { results } = await env.REPORTS_DB.prepare(
     `SELECT * FROM auth_moderation_requests
-     WHERE delivery_status = 'sent' AND (status IS NULL OR status NOT IN ('rejected', 'actioned'))
+     WHERE delivery_status = 'sent' AND (status IS NULL OR status NOT IN ('rejected', 'actioned')) AND ${due.sql}
      ORDER BY COALESCE(synced_at, created_at) ASC LIMIT 100`
-  ).all<MirrorRow>();
+  )
+    .bind(...due.binds)
+    .all<MirrorRow>();
   return enqueueSyncs(env, results ?? [], now);
 }
 

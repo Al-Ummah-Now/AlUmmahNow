@@ -16,7 +16,7 @@
  */
 import { logger } from './logger';
 import type { D1Database } from './types';
-import { AuthApiError, AuthModerationClient, audit, isPermanentAuthError } from './authModeration';
+import { AuthApiError, AuthModerationClient, audit, cronSyncDue, isPermanentAuthError } from './authModeration';
 import { containsPattern } from '@al-ummah/shared-types';
 
 export type InviteRole = 'creator' | 'viewer';
@@ -355,6 +355,18 @@ const iso = (ms: number | null | undefined) => (typeof ms === 'number' ? new Dat
 /** Copies auth's state into the mirror; true when the status changed. */
 export async function applyAuthState(db: D1Database, row: InviteRow, invite: AuthInvite, extra: { emailSent?: boolean } = {}): Promise<boolean> {
   const now = new Date().toISOString();
+  const unchanged =
+    row.status === invite.status &&
+    row.expires_at === iso(invite.expiresAt) &&
+    row.accepted_at === iso(invite.acceptedAt) &&
+    row.last_sent_at === iso(invite.lastSentAt) &&
+    row.send_count === invite.sendCount &&
+    (!extra.emailSent || !!row.email_sent);
+  if (unchanged) {
+    // Nothing changed in auth: only the read time (one narrow write instead of the whole row)
+    await db.prepare('UPDATE creator_invites SET synced_at = ? WHERE id = ?').bind(now, row.id).run();
+    return false;
+  }
   await db
     .prepare(
       `UPDATE creator_invites SET status = ?, expires_at = ?, accepted_at = ?, last_sent_at = ?, send_count = ?,
@@ -468,16 +480,17 @@ export async function processInvite(env: InviteQueueEnv, msg: InviteMessage, att
   }
 }
 
-/** Cron: status reads for open invites (not accepted, not revoked), oldest read first. */
+/** Cron: status reads for open invites (not accepted, not revoked) due by age (CRON_SYNC_STEPS), oldest read first. */
 export async function scheduleInviteSyncs(env: InviteQueueEnv, now = Date.now()): Promise<number> {
   if (!env.AUTH_REQUESTS_QUEUE) return 0;
+  const due = cronSyncDue(now);
   const { results } = await env.REPORTS_DB.prepare(
     `SELECT id FROM creator_invites
      WHERE delivery_status = 'sent' AND deleted_at IS NULL AND accepted_at IS NULL AND COALESCE(status, 'invited') IN ('invited', 'expired')
-       AND (sync_requested_at IS NULL OR sync_requested_at < ?)
+       AND (sync_requested_at IS NULL OR sync_requested_at < ?) AND ${due.sql}
      ORDER BY COALESCE(synced_at, created_at) ASC LIMIT 100`
   )
-    .bind(new Date(now - 60_000).toISOString())
+    .bind(new Date(now - 60_000).toISOString(), ...due.binds)
     .all<{ id: string }>();
   const ids = (results ?? []).map((r) => r.id);
   if (!ids.length) return 0;

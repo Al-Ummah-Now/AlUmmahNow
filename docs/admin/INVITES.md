@@ -88,7 +88,8 @@ autocompletes (suggest kind `invite`). Opening an invite, the invites list or an
 invited user's page queues a status read from auth for each open invite shown
 (at most every 15 s per invite; still only a queue message, never a call to
 auth inside the request), so "Signed in" shows within seconds of the first
-sign-in. A 5-minute cron reads the rest as a backstop.
+sign-in. A 5-minute cron reads the rest as a backstop, paced by age like the auth
+requests (every run for the first hour, then every 30 min, 3 h, and daily after a week).
 
 ## Security
 

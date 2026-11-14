@@ -340,10 +340,47 @@ export async function markDelivery(db: D1Database, id: string, status: DeliveryS
 }
 
 /** Updates the mirror from auth's current view; returns true when the status changed. */
+/**
+ * How often the 5-minute cron reads an open request or invite again, by its age. Decisions and
+ * first sign-ins mostly come soon after; an admin opening the item (or its list) still asks for a
+ * read at once (SYNC_INTERVAL_MS / READ_SYNC_INTERVAL_MS), so this only paces the background
+ * polling. Without it every open item cost a queue message, two D1 writes and an auth call every
+ * 5 minutes, forever (QA: ~29k a day from E2E leftovers).
+ */
+export const CRON_SYNC_STEPS: ReadonlyArray<{ maxAgeMs: number; everyMs: number }> = [
+  { maxAgeMs: 60 * 60_000, everyMs: 5 * 60_000 },
+  { maxAgeMs: 24 * 60 * 60_000, everyMs: 30 * 60_000 },
+  { maxAgeMs: 7 * 24 * 60 * 60_000, everyMs: 3 * 60 * 60_000 },
+  { maxAgeMs: Infinity, everyMs: 24 * 60 * 60_000 },
+];
+/** Cron jitter: an item due a few seconds after the run is still read in it. */
+const CRON_SLACK_MS = 60_000;
+
+/**
+ * SQL condition (and its binds) for "due for a cron read": `synced_at` older than the step for
+ * the row's age. Timestamps are ISO strings, so they compare as text.
+ */
+export function cronSyncDue(now: number): { sql: string; binds: string[] } {
+  const iso = (ms: number) => new Date(ms).toISOString();
+  const steps = CRON_SYNC_STEPS.filter((s) => Number.isFinite(s.maxAgeMs));
+  const whens = steps.map(() => 'WHEN created_at > ? THEN synced_at < ?').join(' ');
+  const binds = steps.flatMap((s) => [iso(now - s.maxAgeMs), iso(now - s.everyMs + CRON_SLACK_MS)]);
+  const last = CRON_SYNC_STEPS[CRON_SYNC_STEPS.length - 1];
+  binds.push(iso(now - last.everyMs + CRON_SLACK_MS));
+  return { sql: `(synced_at IS NULL OR CASE ${whens} ELSE synced_at < ? END)`, binds };
+}
+
 export async function syncMirror(db: D1Database, row: MirrorRow, request: AuthRequest, now = new Date().toISOString()): Promise<boolean> {
+  const history = JSON.stringify(request.history ?? []);
+  const evidence = JSON.stringify(request.evidence ?? []);
+  if (row.status === request.status && (row.decision_note ?? null) === (request.decision_note ?? null) && row.history === history && row.evidence === evidence) {
+    // Nothing changed in auth: only the read time (one narrow write instead of the whole row)
+    await db.prepare('UPDATE auth_moderation_requests SET sync_error = NULL, synced_at = ? WHERE id = ?').bind(now, row.id).run();
+    return false;
+  }
   await db
     .prepare('UPDATE auth_moderation_requests SET status = ?, decision_note = ?, history = ?, evidence = ?, sync_error = NULL, synced_at = ?, updated_at = ? WHERE id = ?')
-    .bind(request.status, request.decision_note, JSON.stringify(request.history ?? []), JSON.stringify(request.evidence ?? []), now, now, row.id)
+    .bind(request.status, request.decision_note, history, evidence, now, now, row.id)
     .run();
   return row.status !== request.status;
 }

@@ -277,6 +277,27 @@ describe('the queue to auth', () => {
     assert.equal(await scheduleInviteSyncs(t.env as never, Date.now() + 120_000), 0, 'accepted invites are not read again');
   });
 
+  it('the cron reads open invites paced by age: a month-old invite once a day, not every 5 minutes', async () => {
+    const t = setup();
+    const inv = (await t.call('POST', '/api/invites', invite())).body.result.invite;
+    await t.drain();
+    const now = Date.now();
+    const iso = (ms: number) => new Date(ms).toISOString();
+    const age = (createdAgoMs: number, syncedAgoMs: number) =>
+      t.env.REPORTS_DB.prepare('UPDATE creator_invites SET created_at = ?, synced_at = ?, sync_requested_at = NULL WHERE id = ?')
+        .bind(iso(now - createdAgoMs), iso(now - syncedAgoMs), inv.id)
+        .run();
+    await age(30 * 86_400_000, 23 * 3_600_000);
+    assert.equal(await scheduleInviteSyncs(t.env as never, now), 0, 'read 23 h ago: not due');
+    await age(30 * 86_400_000, 25 * 3_600_000);
+    assert.equal(await scheduleInviteSyncs(t.env as never, now), 1, 'read 25 h ago: due');
+    await t.drain();
+    // Nothing changed in auth: only the read time was written
+    const row = await t.env.REPORTS_DB.prepare('SELECT status, synced_at FROM creator_invites WHERE id = ?').bind(inv.id).first<{ status: string; synced_at: string }>();
+    assert.equal(row!.status, 'invited');
+    assert.ok(row!.synced_at > iso(now - 60_000));
+  });
+
   it('reading an invite asks auth again (queued, at most every 15 s): Signed in shows within seconds, not at the next cron', async () => {
     const t = setup();
     const inv = (await t.call('POST', '/api/invites', invite())).body.result.invite;

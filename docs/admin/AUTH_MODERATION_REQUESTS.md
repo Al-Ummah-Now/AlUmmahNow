@@ -73,8 +73,11 @@ Errors (synchronous): 400 (validation), 403 (moderator writing), 404, 409.
 | `sync` | reads auth's status into the mirror; a change is audit-logged | after the retries: `sync_error` (the next cron or read tries again) |
 | `info` | delivers a queued answer to auth's "more info" | after the retries: `sync_error`, the answer stays queued for Retry |
 
-- The cron (`*/5 * * * *`) queues a status read for every open request (oldest first, 100 at most);
-  reads of a request queue one too, at most every 30 s per request. The panel refreshes every 10 s
+- The cron (`*/5 * * * *`) queues a status read for open requests that are due, paced by age
+  (`CRON_SYNC_STEPS` in `lib/authModeration.ts`): under 1 h old every run, under a day every 30 min,
+  under a week every 3 h, then daily (oldest read first, 100 at most). Reads of a request queue one
+  too, at most every 30 s per request, whatever its age. A read that finds nothing new in auth
+  writes only `synced_at`. The panel refreshes every 10 s
   while a request is sending or open.
 - The handler crashing repeatedly sends the message to `auth-moderation-requests-dlq[-env]`, whose
   consumer flags it the same way (`failed` / `sync_error`).

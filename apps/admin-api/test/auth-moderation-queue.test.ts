@@ -176,7 +176,9 @@ describe('status reads', () => {
   it('queues reads only for sent, open requests, at most every 30 s', async () => {
     await sent('areq_1', 'key-0001', 'modreq_1');
     await newRequest('areq_2', 'key-0002'); // still sending
-    const now = Date.now();
+    // The send stored auth's status; the cron reads a young request again from its next run (5 min)
+    assert.equal(await scheduleSyncs(env, Date.now()), 0);
+    const now = Date.now() + 5 * 60_000;
     assert.equal(await scheduleSyncs(env, now), 1);
     assert.deepEqual(q.sent, [{ type: 'sync', id: 'areq_1' }]);
     assert.equal(await enqueueSyncs(env, [await row('areq_1')], now + 10_000), 0, 'throttled');
@@ -226,5 +228,53 @@ describe('answers and the dead-letter queue', () => {
     const bad = msgs('auth-moderation-requests-qa', [{ type: 'nope' } as never], 1);
     await handleAuthRequestBatch(bad.batch, env, fakeClient([]).client);
     assert.equal(bad.list[0].acked, true);
+  });
+});
+
+describe('background reads are paced (cost: QA E2E leftovers were read every 5 minutes, forever)', () => {
+  const HOUR = 3_600_000;
+  const iso = (ms: number) => new Date(ms).toISOString();
+  async function openRequest(id: string, key: string, createdAt: number, syncedAt: number | null) {
+    await newRequest(id, key);
+    await processSend(env, id, 1, fakeClient([authRequest({ id: `mod_${id}` })]).client);
+    await env.REPORTS_DB.prepare('UPDATE auth_moderation_requests SET created_at = ?, synced_at = ?, sync_requested_at = NULL WHERE id = ?')
+      .bind(iso(createdAt), syncedAt === null ? null : iso(syncedAt), id)
+      .run();
+  }
+
+  it('the cron reads a young request every run, older ones every 30 min, 3 h, then daily', async () => {
+    const now = Date.now();
+    await openRequest('young', 'key-0001', now - 20 * 60_000, now - 5 * 60_000); // 20 min old, read 5 min ago: due
+    await openRequest('day', 'key-0002', now - 5 * HOUR, now - 10 * 60_000); // 5 h old, read 10 min ago: not due (30 min)
+    await openRequest('week', 'key-0003', now - 3 * 24 * HOUR, now - 2 * HOUR); // 3 days old, read 2 h ago: not due (3 h)
+    await openRequest('old', 'key-0004', now - 30 * 24 * HOUR, now - 23 * HOUR); // a month old, read 23 h ago: not due (daily)
+    await openRequest('stale', 'key-0005', now - 30 * 24 * HOUR, now - 25 * HOUR); // read 25 h ago: due
+    await openRequest('never', 'key-0006', now - 30 * 24 * HOUR, null); // never read: due
+    assert.equal(await scheduleSyncs(env, now), 3);
+    assert.deepEqual(q.sent.map((m) => m.id).sort(), ['never', 'stale', 'young']);
+  });
+
+  it('an admin opening a request still reads it at once, whatever its age', async () => {
+    const now = Date.now();
+    await openRequest('old', 'key-0001', now - 30 * 24 * HOUR, now - HOUR);
+    assert.equal(await scheduleSyncs(env, now), 0);
+    assert.equal(await enqueueSyncs(env, [await row('old')], now), 1);
+  });
+
+  it('a read that finds nothing new writes only the read time', async () => {
+    await newRequest();
+    await processSend(env, 'areq_1', 1, fakeClient([authRequest()]).client);
+    await processSync(env, 'areq_1', 1, fakeClient([authRequest()]).client);
+    const before = await row();
+    await env.REPORTS_DB.prepare("UPDATE auth_moderation_requests SET sync_error = 'old error' WHERE id = 'areq_1'").run();
+    assert.equal(await processSync(env, 'areq_1', 1, fakeClient([authRequest()]).client), 'done');
+    const after = await row();
+    assert.equal(after.updated_at, before.updated_at, 'row untouched');
+    assert.equal(after.sync_error, null, 'a stale sync error is cleared');
+    assert.ok(after.synced_at && after.synced_at >= before.synced_at!);
+    // A change still lands in full
+    await processSync(env, 'areq_1', 1, fakeClient([authRequest({ status: 'info_requested', decision_note: 'More please' })]).client);
+    assert.equal((await row()).status, 'info_requested');
+    assert.equal((await row()).decision_note, 'More please');
   });
 });
