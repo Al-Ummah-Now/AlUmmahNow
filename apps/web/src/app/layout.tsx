@@ -38,6 +38,8 @@ import { FanousStreet } from "@/components/FanousStreet";
 import { EMBED_REQUEST_HEADER } from "@/lib/embed/routes";
 import { getSiteTheme } from "@/lib/theme/site-theme";
 import { MODE_MIGRATE_SCRIPT } from "@/lib/theme/color-mode";
+// The lantern street picks its tile variant for this load before first paint (shared street module)
+import { STREET_VARIANT_SCRIPT } from "../../../../packages/fanous-tokens/street/fanous-street.js";
 import { VersionSkewProvider } from "@/lib/version-skew/VersionSkewProvider";
 import { ErrorReportingProvider } from "@/lib/errors/ErrorReportingProvider";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
@@ -226,6 +228,8 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
       <head>
         {/* Light / Dark: an old saved "system" becomes the device's mode once (src/lib/theme/color-mode.ts) */}
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: MODE_MIGRATE_SCRIPT }} />
+        {/* Lantern street: one of the theme's tile variants at random per load, set before first paint so it never swaps */}
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: STREET_VARIANT_SCRIPT }} />
         {/* No third-party stylesheet or script in the critical path (wiki AUN-SEO, phase 4): icons are
             inline SVG (lucide), fonts are self-hosted (theme/font-faces.css) */}
         <ThemePackageStyle css={themeCss} nonce={nonce} />

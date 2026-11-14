@@ -3,11 +3,12 @@ import { applyTheme, mockApi, signIn, THEMES, type Mode } from './harness';
 
 /**
  * THEME-STREET: the Fawanees lantern street (packages/fanous-tokens/street). The street is
- * pre-made art: one wide image tile of strings (edge to edge) and lit lanterns (in the page
- * margins) repeated behind the whole page (seamless, shown at 2x) over the distant lights tile,
- * painted by CSS. In Fawanees light and dark, English and Arabic, desktop and phone:
- *   - the street's layers are there, with the theme's tile, repeated, centred and never
- *     stretched, and the tile file loads;
+ * pre-made art: a wide image tile of strings and lit lanterns across the full width, repeated
+ * behind the whole page (it wraps both ways, shown at 2x) over the distant lights tile, painted by
+ * CSS. In Fawanees light and dark, English and Arabic, desktop and phone:
+ *   - the page picked one of the theme's tile variants before first paint, the street shows that
+ *     variant, and no other variant is fetched;
+ *   - the street's layers are there, repeated, centred and never stretched, and the tile loads;
  *   - this app keeps the street at the theme's faint opacity (its content spans the page, so the
  *     lanterns lie behind text);
  *   - no control or text block on the page is see-through (the street must never show through one);
@@ -18,7 +19,7 @@ import { applyTheme, mockApi, signIn, THEMES, type Mode } from './harness';
 const MODES: Mode[] = ['light', 'dark'];
 const LANGS = ['en', 'ar'];
 const DEPTHS = [0, 900, 1800];
-const TILE = /street-tile(-dark)?\.webp/;
+const TILE = /street-tile(-dark)?-[1-4]\.webp/;
 // Transitions and time-based animations off
 const STILL = '*,*::before,*::after{transition:none!important;animation-duration:0s!important;animation-delay:0s!important}';
 
@@ -65,6 +66,7 @@ async function layers(page: Page) {
     const before = getComputedStyle(host, '::before'), after = getComputedStyle(host, '::after');
     const css = getComputedStyle(document.documentElement);
     return {
+      variant: document.documentElement.getAttribute('data-fanous-street-variant'),
       lights: before.content !== 'none' ? before.backgroundImage : 'none',
       street: after.content !== 'none' ? after.backgroundImage : 'none',
       repeat: after.backgroundRepeat,
@@ -84,6 +86,8 @@ for (const lang of LANGS) {
     test.setTimeout(180_000);
     await signIn(context, baseURL!);
     await mockApi(page);
+    const fetched = new Set<string>();
+    page.on('request', (req) => { const m = req.url().match(/street-tile(?:-dark)?-(\d)\.webp/); if (m) fetched.add(m[1]); });
     await open(page, `/${lang}`);
     const problems: string[] = [];
     for (const mode of MODES) {
@@ -92,7 +96,10 @@ for (const lang of LANGS) {
       await expect(page.locator('html')).toHaveClass(/fanous-street/);
       const l = await layers(page);
       expect(l.street, `${mode}: street tile`).toMatch(TILE);
-      expect(l.street.includes('-dark.webp'), `${mode}: the ${mode} tile`).toBe(mode === 'dark');
+      expect(l.street.includes('-dark-'), `${mode}: the ${mode} tile`).toBe(mode === 'dark');
+      // The variant picked before first paint is the one shown, and the only one fetched
+      expect(l.variant, `${mode}: a variant picked`).toMatch(/^[1-4]$/);
+      expect(l.street, `${mode}: the picked variant`).toContain(`-${l.variant}.webp`);
       expect(l.lights, `${mode}: distant lights`).toMatch(/url\(/);
       expect(l.repeat, `${mode}: repeated both ways`).toBe('repeat');
       expect(l.at, `${mode}: centred on the page`).toMatch(/^50% 0(%|px)?$/);
@@ -114,6 +121,8 @@ for (const lang of LANGS) {
       }
       await page.evaluate(() => window.scrollTo(0, 0));
     }
+    const variant = await page.locator('html').getAttribute('data-fanous-street-variant');
+    expect([...fetched], 'only the picked variant downloads').toEqual([variant]);
     expect(problems, problems.join('\n')).toEqual([]);
   });
 }

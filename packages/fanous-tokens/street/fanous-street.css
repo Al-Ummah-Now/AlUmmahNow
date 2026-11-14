@@ -1,10 +1,12 @@
 /* Fanous lantern street: pre-made art behind the page, when <html> has the class fanous-street
    (set by fanous-street.js when the active theme switches the street on).
    - body::before: the soft distant lights (--fanous-street-lights), a small tile over the page;
-   - body::after: the street, one wide image tile (--fanous-street-tile) of strings that run edge
-     to edge and lit lanterns in the page margins. It closes on itself both ways, so it repeats
-     with no seam; it is centred on the page (its lantern-free middle lies under the content
-     column) and shown at its CSS size by image-set(… 2x), never stretched.
+   - body::after: the street, a wide image tile of strings and lit lanterns across the full width.
+     It wraps both ways like a cylinder (left edge meets right, top meets bottom), so it repeats
+     with no joint at any width; it is centred on the page and shown at its CSS size by
+     image-set(… 2x), never stretched. A theme gives up to 4 variants (--fanous-street-tile-<n>);
+     STREET_VARIANT_SCRIPT (fanous-street.js) picks one per load before first paint
+     (<html data-fanous-street-variant>), and only that one is fetched.
    Both layers are as tall as the body and scroll with it: no fixed layers, no script, no
    animation, no filters, nothing to repaint on scroll. Opaque cards simply cover the street; page
    wrappers between the body and the cards stay transparent so it shows everywhere else.
@@ -33,9 +35,15 @@ html.fanous-street body::before {
 }
 
 html.fanous-street body::after {
-  background: var(--fanous-street-tile) 50% 0 repeat;
+  background: var(--fanous-street-tile-pick, var(--fanous-street-tile)) 50% 0 repeat;
   opacity: var(--fanous-street-opacity, 1);
 }
+
+/* The picked variant (a theme with fewer variants falls back to its first). Unused custom
+   properties fetch nothing, so only this tile downloads. */
+html[data-fanous-street-variant='2'] { --fanous-street-tile-pick: var(--fanous-street-tile-2, var(--fanous-street-tile)); }
+html[data-fanous-street-variant='3'] { --fanous-street-tile-pick: var(--fanous-street-tile-3, var(--fanous-street-tile)); }
+html[data-fanous-street-variant='4'] { --fanous-street-tile-pick: var(--fanous-street-tile-4, var(--fanous-street-tile)); }
 
 @media print {
   html.fanous-street body::before,
