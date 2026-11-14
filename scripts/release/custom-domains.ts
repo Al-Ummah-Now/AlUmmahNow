@@ -21,6 +21,20 @@ export const HOST_APP: Record<keyof Hosts, string> = {
 	adminApi: 'admin-api',
 };
 
+/**
+ * Hosts the release itself attaches when no worker has them (the others are
+ * attached by `triggers deploy` from config or in the dashboard). Production
+ * config declares no routes (a preview deploy with routes moves them, see the
+ * 2026-11-09 note above), so its live edge host is attached here:
+ * live.alummahnow.net was never attached, so prod self-hosted live had no
+ * ingest or playback host (Studio showed encoder settings for a host that did
+ * not answer).
+ */
+export const RELEASE_ATTACHED_HOSTS: Record<'stage' | 'production', Record<string, string>> = {
+	production: { 'live.alummahnow.net': 'api-videos' },
+	stage: { 'live.stage.alummahnow.net': 'api-videos' },
+};
+
 /** hostname -> worker, for the hosts served by `apps` in `env`. */
 export function expectedDomains(env: 'stage' | 'production', apps: string[]): Record<string, string> {
 	const out: Record<string, string> = {};
@@ -28,7 +42,19 @@ export function expectedDomains(env: 'stage' | 'production', apps: string[]): Re
 		if (!apps.includes(app)) continue;
 		out[new URL(HOSTS[env][key]).hostname] = WORKERS[env][app];
 	}
+	for (const [hostname, app] of Object.entries(RELEASE_ATTACHED_HOSTS[env])) {
+		if (apps.includes(app)) out[hostname] = WORKERS[env][app];
+	}
 	return out;
+}
+
+/** The release-attached hostnames of `env` (attached when missing, not only re-attached). */
+export const attachWhenMissing = (env: 'stage' | 'production') => Object.keys(RELEASE_ATTACHED_HOSTS[env]);
+
+/** The zone of a hostname, from an attached sibling in the same apex (no zone read permission needed). */
+function siblingZone(records: DomainRecord[], hostname: string): string | null {
+	const apex = hostname.split('.').slice(-2).join('.');
+	return records.find((r) => r.hostname === apex || r.hostname.endsWith(`.${apex}`))?.zone_id ?? null;
 }
 
 export interface DomainRecord {
@@ -50,13 +76,20 @@ const attach = (cf: Cf, rec: DomainRecord, service: string) =>
  * declared in config; the rest are attached in the dashboard).
  * Returns the hostnames it moved.
  */
-export async function ensureCustomDomains(cf: Cf, expected: Record<string, string>, log: (line: string) => void): Promise<string[]> {
+export async function ensureCustomDomains(cf: Cf, expected: Record<string, string>, log: (line: string) => void, attachMissing: readonly string[] = []): Promise<string[]> {
 	const records = await cf.request<DomainRecord[]>('GET', '/workers/domains?per_page=500');
 	const moved: string[] = [];
 	for (const [hostname, worker] of Object.entries(expected)) {
 		const rec = records.find((r) => r.hostname === hostname);
 		if (!rec) {
-			log(`${hostname}: not attached to any worker (left to triggers deploy / the dashboard)`);
+			const zone = attachMissing.includes(hostname) ? siblingZone(records, hostname) : null;
+			if (!zone) {
+				log(`${hostname}: not attached to any worker (left to triggers deploy / the dashboard)`);
+				continue;
+			}
+			log(`${hostname}: not attached; attaching to ${worker}`);
+			await attach(cf, { id: '', hostname, service: worker, zone_id: zone }, worker);
+			moved.push(hostname);
 			continue;
 		}
 		if (rec.service === worker) continue;

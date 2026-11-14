@@ -25,7 +25,7 @@ import { writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createCfClient } from './cf-api.ts';
-import { ensureCustomDomains, expectedDomains } from './custom-domains.ts';
+import { attachWhenMissing, ensureCustomDomains, expectedDomains } from './custom-domains.ts';
 import { runSmoke, HOSTS, VERSIONED_HEALTH, WORKERS, type CheckResult, type SmokeEnv } from './smoke.ts';
 import { computeMapping, mappingVarArgs, readDeploymentId, SKEW_APPS } from './skew-mapping.ts';
 import { captureBuild, checkOldBuildServed, OLD_BUILD_RETRY, type BuildSnapshot } from './skew-check.ts';
@@ -349,7 +349,7 @@ if (isMain) {
 			smoke: (e, overrides) => runSmoke({ env: e, overrides }),
 			waitForVersions,
 			waitForHosts,
-			ensureDomains: async (e, list) => void (await ensureCustomDomains(createCfClient(), expectedDomains(e, list), log)),
+			ensureDomains: async (e, list) => void (await ensureCustomDomains(createCfClient(), expectedDomains(e, list), log, attachWhenMissing(e))),
 			skewArgs: (a, previous) => skewArgsFor(a, previous, log),
 			captureBuilds: async (e, list) =>
 				Promise.all(Object.entries(SKEW_PAGES).filter(([app]) => list.includes(app)).map(([app, page]) => captureBuild(app, `${HOSTS[e][page.host]}${page.path}`))),
