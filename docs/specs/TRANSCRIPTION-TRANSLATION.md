@@ -364,6 +364,15 @@ Owner decisions 2026-11-13: build with **mode A**; the **Arabic text is served f
 - **TTL:** 90 days.
 - **Used by:** inline translation, viewer-side metadata and repeated cue batches.
 
+### 5.6.1 As built: caption drafts (2026-11-14)
+
+- **Types:** `packages/shared-types/src/captions.ts`. A cue is `{ id, startMs, endMs, segments[] }` (integer milliseconds). A `quran` segment holds `range` (`surah:ayah:word-surah:ayah:word`), `status` (`confirmed` | `context` | `basmala` | `review` from the matcher, or `accepted` once the creator confirmed it), optional `alternatives`, and `heard` (what speech-to-text heard). `heard` is never rendered: it exists so "Not Quran" can turn the span back into speech.
+- **Storage:** subtitles bucket, `<videoId>/drafts/<lang>.json` (the draft, `version` +1 per save) and `<videoId>/drafts/<lang>/v<n>.json` (each published version, for a translation's `sourceVersion`). The track's status lives in the existing `metadata.json` (`SubtitleTrack.origin` = `upload` | `machine` | `machine_edited`, `version`), so no D1 `caption_tracks` table was needed. Video deletion already removes the whole `<videoId>/` prefix.
+- **API (api-videos, owner or `video.edit`):** `GET /api/videos/:id/captions/drafts`, `GET|PUT|DELETE …/drafts/:lang`, `POST …/drafts/:lang/publish`. Saves and publishes name `baseVersion`, the version the editor loaded; a changed draft is 409 `draft_conflict`. Publishing over a track the creator uploaded in the same language is 409 `replaces_upload` unless `replaceUpload: true`.
+- **Published track:** the stored WebVTT has a marker per Quran span (private-use characters, stripped from any text a client sends, so they can't be forged). `GET /subtitles/:lang` fills them as it serves: an accepted span becomes `﴿official text﴾ (surah name 3:166–167)` from our Content Sync copy; a suggestion, or any span when there is no fresh copy, becomes `[Quran 3:166–167 · quran.com/3/166-167]`. No Quran text and no ASR text of a Quran span is stored in the track. The copy version is part of the ETag.
+- **Passage API:** also takes whole ayat as typed (`3:166` or `3:166-167`) and returns the full word range; Studio's "Different reference" uses it.
+- **Studio:** Subtitles section → **Caption drafts** (status, origin, Quran suggestions left, Edit / Publish / Delete) and the editor: cues beside the video (click a time to play from it; the playing cue is highlighted), text edits, ±0.1 s nudges, split at the cursor, merge with next, delete, find and replace (speech only), undo/redo, autosave, and per span Confirm / Not Quran / Different reference / the alternatives, plus "Confirm all suggested" (confident classes only; `review` stays for a look). A confirmed span shows the official text with attribution; a suggestion shows only its reference and a quran.com link.
+
 ### 5.7 Translation of transcripts
 - **Input:** always the **corrected, published or latest draft source**, never raw ASR, and recorded as `sourceVersion`.
 - **Masking:** Quran segments (accepted, or suggested and not rejected) are replaced by tokens `⟦Q1⟧`. The model is told to keep tokens verbatim.

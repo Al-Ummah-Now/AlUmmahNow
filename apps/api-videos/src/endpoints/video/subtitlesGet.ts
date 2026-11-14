@@ -4,6 +4,7 @@
 
 import { Str, Enumeration } from 'chanfana';
 import { z } from 'zod';
+import { fillServedTrack, quranCopyTag } from '../../lib/captions/drafts';
 import { logger } from '../../lib/logger';
 import { PublicRoute, AppContext } from '../../base';
 
@@ -97,8 +98,10 @@ export class SubtitlesGet extends PublicRoute {
         );
       }
 
-      // Get ETag from R2 object for cache validation
-      const etag = subtitleObject.etag;
+      // A published caption draft carries Quran markers (AUN-CAPTIONS), filled from our Quran
+      // Foundation copy as it is served: the copy version is part of the ETag
+      const quranTrack = key.endsWith('.vtt') && subtitleObject.customMetadata?.quran === '1';
+      const etag = quranTrack ? `"${subtitleObject.etag.replace(/"/g, '')}-${await quranCopyTag(c.env.MEDIA_PRIVATE)}"` : subtitleObject.etag;
 
       // Check If-None-Match header for conditional request
       const ifNoneMatch = c.req.header('If-None-Match');
@@ -113,7 +116,8 @@ export class SubtitlesGet extends PublicRoute {
         });
       }
 
-      const content = await subtitleObject.text();
+      const raw = await subtitleObject.text();
+      const content = quranTrack ? await fillServedTrack(raw, language, c.env.MEDIA_PRIVATE) : raw;
 
       // Return raw subtitle content with ETag for cache validation
       return new Response(content, {

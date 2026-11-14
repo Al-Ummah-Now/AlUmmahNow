@@ -3,6 +3,7 @@ export * from './video';
 export * from './video-visibility';
 export * from './video-review';
 export * from './quran';
+export * from './captions';
 export * from './channel-name';
 export * from './video-format';
 export * from './video-format-ops';
@@ -77,6 +78,7 @@ export * from './i18n-contact';
 export * from './i18n-human-check';
 export * from './i18n-help';
 export * from './i18n-upload-status';
+export * from './i18n-captions';
 export * from './i18n-channel-roles';
 export * from './i18n-channel-sections';
 

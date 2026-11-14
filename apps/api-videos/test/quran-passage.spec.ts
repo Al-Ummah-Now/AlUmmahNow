@@ -53,10 +53,25 @@ describe('the Quran passage', () => {
 	});
 
 	it('a malformed range is 400; a range the Quran does not have is 404', async () => {
-		assert.equal((await get(env(), '112:1')).status, 400);
+		assert.equal((await get(env(), '112')).status, 400);
+		assert.equal((await get(env(), '112:1:1')).status, 400);
 		assert.equal((await get(env(), '112:4:1-112:5:1')).status, 404);
 		assert.equal((await get(env(), '112:4:1-112:4:6')).status, 404);
 		assert.equal((await get(env(), '113:1:1-113:1:2')).status, 404, 'not in the copy');
+	});
+
+	it('whole ayat typed short are expanded to the full word range', async () => {
+		const res = await get(env(), '112:3-4');
+		assert.equal(res.status, 200);
+		const body = (await res.json()) as any;
+		assert.equal(body.range, '112:3:1-112:4:5');
+		assert.equal(body.ayat.length, 2);
+		assert.equal(body.ayat[1].partial, false);
+		assert.equal(((await (await get(env(), '112:2')).json()) as any).range, '112:2:1-112:2:2');
+		assert.equal((await get(env(), '112:5')).status, 404);
+		assert.equal((await get(env(), '112:4-2')).status, 404);
+		clearQuranCopyCache();
+		assert.equal((await get(env(null), '112:2')).status, 503);
 	});
 
 	it('no copy, or a copy not synced for 7 days, is never served (503)', async () => {
