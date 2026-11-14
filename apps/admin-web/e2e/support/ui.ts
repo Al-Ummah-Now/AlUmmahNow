@@ -82,12 +82,16 @@ export async function expectColorMode(page: Page, mode: Theme | null) {
   }
 }
 
-/** Click Light or Dark in the main nav's preferences, and wait for the refresh. */
+/**
+ * Switch to Light or Dark with the main nav's toggle (one icon button named for the mode it
+ * switches to, as on the videos site), and wait for the refresh. A no-op when it already shows.
+ */
 export async function chooseTheme(page: Page, theme: Theme) {
   await openMainNav(page);
-  const button = page.getByTestId(`theme-${theme}`);
-  await button.click();
-  await expect(button).toHaveAttribute('aria-pressed', 'true');
+  const button = page.getByTestId('theme-toggle');
+  const shown = (await page.locator('html').getAttribute('class'))?.split(/\s+/).includes('dark') ? 'dark' : 'light';
+  if (shown !== theme) await button.click();
+  await expect(button).toHaveAccessibleName(theme === 'dark' ? /^(Switch to light mode|التبديل إلى الوضع الفاتح)$/ : /^(Switch to dark mode|التبديل إلى الوضع الداكن)$/);
   await expect(page.locator('[aria-busy]').filter({ has: button })).toHaveAttribute('aria-busy', 'false', { timeout: 15_000 });
 }
 

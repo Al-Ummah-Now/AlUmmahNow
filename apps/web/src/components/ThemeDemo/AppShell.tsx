@@ -16,10 +16,12 @@ import { BrandLogo } from '@/components/brand/BrandLogo';
 import { useRailMotion } from './rail-breakpoint';
 import { statusPageUrl } from '@/lib/navigation/destinations';
 import { IdentityTour } from '@/components/help/IdentityTour';
+// The Light / Dark names every app uses (docs/design/NAV.md); the icons stay lucide-react's Sun / Moon
+import { MODE_TOGGLE_LABELS } from '../../../../../packages/fanous-tokens/nav/mode-toggle.js';
 
 const L = {
-  en: { about: 'About', status: 'Status', browse: 'Browse', create: 'Create', more: 'More', history: 'History', watchLater: 'Watch later', liked: 'Liked videos', settings: 'Settings', search: 'Search videos', lightMode: 'Switch to light mode', darkMode: 'Switch to dark mode', other: 'العربية', otherLabel: 'التبديل إلى العربية', menu: 'Menu', close: 'Close menu' },
-  ar: { about: 'من نحن', status: 'حالة الخدمات', browse: 'تصفّح', create: 'إنشاء', more: 'المزيد', history: 'السجل', watchLater: 'المشاهدة لاحقًا', liked: 'المرئيات التي أعجبتك', settings: 'الإعدادات', search: 'ابحث عن مرئيات', lightMode: 'التبديل إلى الوضع الفاتح', darkMode: 'التبديل إلى الوضع الداكن', other: 'English', otherLabel: 'Switch to English', menu: 'القائمة', close: 'إغلاق القائمة' },
+  en: { about: 'About', status: 'Status', browse: 'Browse', create: 'Create', more: 'More', history: 'History', watchLater: 'Watch later', liked: 'Liked videos', settings: 'Settings', search: 'Search videos', lightMode: MODE_TOGGLE_LABELS.en.toLight, darkMode: MODE_TOGGLE_LABELS.en.toDark, other: 'العربية', otherLabel: 'التبديل إلى العربية', menu: 'Menu', close: 'Close menu' },
+  ar: { about: 'من نحن', status: 'حالة الخدمات', browse: 'تصفّح', create: 'إنشاء', more: 'المزيد', history: 'السجل', watchLater: 'المشاهدة لاحقًا', liked: 'المرئيات التي أعجبتك', settings: 'الإعدادات', search: 'ابحث عن مرئيات', lightMode: MODE_TOGGLE_LABELS.ar.toLight, darkMode: MODE_TOGGLE_LABELS.ar.toDark, other: 'English', otherLabel: 'Switch to English', menu: 'القائمة', close: 'إغلاق القائمة' },
 };
 
 /** `hub`: the "You" entry. In the collapsed rail it is an icon item; in the open rail and the drawer it reads as

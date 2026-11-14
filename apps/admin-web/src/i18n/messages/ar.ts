@@ -106,9 +106,6 @@ const ar: Messages = {
   },
   preferences: {
     language: 'اللغة',
-    theme: 'المظهر',
-    themeLight: 'فاتح',
-    themeDark: 'داكن',
     english: 'English',
     arabic: 'العربية',
   },

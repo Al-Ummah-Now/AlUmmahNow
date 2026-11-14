@@ -107,9 +107,6 @@ const en = {
   },
   preferences: {
     language: 'Language',
-    theme: 'Theme',
-    themeLight: 'Light',
-    themeDark: 'Dark',
     english: 'English',
     arabic: 'العربية',
   },
