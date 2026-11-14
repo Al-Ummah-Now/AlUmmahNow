@@ -25,6 +25,8 @@ interface SubtitleUploadSectionProps {
   /** For the caption draft editor's player */
   videoUrl?: string;
   posterUrl?: string;
+  /** The video's language when it is one language (Transcribe's first choice) */
+  spokenLanguage?: string;
 }
 
 /**
@@ -45,6 +47,7 @@ export default function SubtitleUploadSection({
   className = '',
   videoUrl,
   posterUrl,
+  spokenLanguage,
 }: SubtitleUploadSectionProps) {
   const { t, lang } = useLanguage();
 
@@ -210,7 +213,7 @@ export default function SubtitleUploadSection({
       </div>
 
       {/* Caption drafts (AUN-CAPTIONS): machine captions to review and publish */}
-      <CaptionDraftsPanel videoId={videoId} videoUrl={videoUrl} posterUrl={posterUrl} onPublished={loadSubtitles} />
+      <CaptionDraftsPanel videoId={videoId} videoUrl={videoUrl} posterUrl={posterUrl} onPublished={loadSubtitles} spokenLanguage={spokenLanguage} />
 
       {/* Loading State */}
       {isLoading && (
