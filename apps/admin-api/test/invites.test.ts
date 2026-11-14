@@ -270,11 +270,12 @@ describe('the queue to auth', () => {
     const inv = (await t.call('POST', '/api/invites', invite())).body.result.invite;
     await t.drain();
     Object.assign(t.auth.invites.get(inv.id), { status: 'active', acceptedAt: Date.now() });
-    assert.equal(await scheduleInviteSyncs(t.env as never), 1);
+    // Read at the next 5-minute tick after it was created (lib/authModeration.ts CRON_SYNC_STEPS)
+    assert.equal(await scheduleInviteSyncs(t.env as never, Date.now() + 5 * 60_000), 1);
     await t.drain();
     const now = await t.call('GET', `/api/invites/${inv.id}`);
     assert.equal(now.body.result.status, 'active');
-    assert.equal(await scheduleInviteSyncs(t.env as never, Date.now() + 120_000), 0, 'accepted invites are not read again');
+    assert.equal(await scheduleInviteSyncs(t.env as never, Date.now() + 15 * 60_000), 0, 'accepted invites are not read again');
   });
 
   it('the cron reads open invites paced by age: a month-old invite once a day, not every 5 minutes', async () => {
