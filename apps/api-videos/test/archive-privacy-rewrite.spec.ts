@@ -150,8 +150,8 @@ describe('archive privacy rewrite', () => {
 		const queue: ArchivePrivacyMessage[] = [];
 		let failSends = 1;
 		const send = async (m: ArchivePrivacyMessage) => {
-			// The first continuation of the day's prefix fails once, after the lane was saved
-			if (m.prefixIndex === 0 && m.cursor && failSends-- > 0) throw new Error('queue unavailable');
+			// The first continuation (only the seeded day has one) fails once, after the lane was saved
+			if (m.cursor && failSends-- > 0) throw new Error('queue unavailable');
 			queue.push(m);
 		};
 		const env = { analytics_rollups: bucket, global_settings: settings, PROCESSING_CHECK_QUEUE: { send } };
