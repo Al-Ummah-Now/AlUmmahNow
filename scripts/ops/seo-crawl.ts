@@ -39,8 +39,9 @@ const defaultFetch: Fetcher = async (url) => {
   return { status: res.status, headers: res.headers, text: res.status >= 300 && res.status < 400 ? '' : await res.text() };
 };
 
+// &amp; last, so an escaped entity (&amp;lt;) stays literal text instead of being decoded twice
 const decode = (s: string) =>
-  s.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'");
+  s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&amp;/g, '&');
 
 /** The <loc> values of a sitemap or sitemap index */
 export function sitemapLocs(xml: string): string[] {

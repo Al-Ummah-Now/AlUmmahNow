@@ -11,6 +11,8 @@ const h = (init: Record<string, string> = {}) => new Headers(init);
 describe('weekly SEO crawl (wiki AUN-SEO, Monitoring 4)', () => {
   it('reads sitemap and index locs, decoding entities', () => {
     assert.deepEqual(sitemapLocs('<urlset><url><loc>https://a/x?b=1&amp;c=2</loc></url><url><loc> https://a/y </loc></url></urlset>'), ['https://a/x?b=1&c=2', 'https://a/y']);
+    // Decoded once: an escaped entity stays as written
+    assert.deepEqual(sitemapLocs('<loc>https://a/?q=&amp;lt;b</loc>'), ['https://a/?q=&lt;b']);
   });
 
   it('a good page has no findings', () => {
