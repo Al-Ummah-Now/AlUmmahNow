@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useId, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { ReviewAlertSettings, ReviewRotaShift } from '@al-ummah/shared-types';
+import type { AdminSuggestion, ReviewAlertSettings, ReviewRotaShift } from '@al-ummah/shared-types';
 import {
   listStaffDevices,
   saveReviewAlertSettings,
@@ -14,6 +14,7 @@ import {
 import { useLanguage } from '@/i18n/I18nProvider';
 import { formatDate, type MessageKey } from '@/i18n/translate';
 import { Autocomplete } from '@/components/search/Autocomplete';
+import { resolveUrl } from '@/components/search/autocomplete-model';
 import { ConfirmButton } from '@/components/content/actions';
 import { useUndoableAction } from '@/components/undo/UndoToast';
 import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
@@ -35,6 +36,51 @@ import {
 } from './model';
 
 const check = 'mt-1 h-4 w-4 shrink-0 accent-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-focus';
+// A checkbox row tall enough to tap (44 px)
+const checkRow = 'flex min-h-11 items-start gap-2 py-1';
+// A day of a shift: a 44 px toggle that shows its state by its border too
+const dayToggle =
+  'inline-flex min-h-11 items-center gap-2 rounded border border-border bg-surface px-3 text-sm text-fg has-[:checked]:border-accent has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-focus';
+const dayCheck = 'h-4 w-4 shrink-0 accent-accent focus:outline-none';
+
+/** The chosen staff member's name and email (the autocomplete's lookup); undefined while loading, null when unknown. */
+function useStaffMember(userId: string | null): AdminSuggestion | null | undefined {
+  const [item, setItem] = useState<{ id: string; item: AdminSuggestion | null } | null>(null);
+  useEffect(() => {
+    if (!userId) return;
+    const controller = new AbortController();
+    fetch(resolveUrl('user', userId), { signal: controller.signal, headers: { Accept: 'application/json' }, cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`Lookup answered ${res.status}`))))
+      .then((body: { result?: { item?: AdminSuggestion | null } }) => setItem({ id: userId, item: body.result?.item ?? null }))
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        logger.warn('[review-alerts] Staff member lookup failed', { error: error instanceof Error ? error.message : String(error) });
+        setItem({ id: userId, item: null });
+      });
+    return () => controller.abort();
+  }, [userId]);
+  return item && item.id === userId ? item.item : undefined;
+}
+
+/** A staff member on the rota or an owner: name and email, read-only (removing is its own button). */
+function StaffChip({ userId, role }: { userId: string; role: string }) {
+  const { t } = useLanguage();
+  const item = useStaffMember(userId);
+  const name = item?.label ?? (item === null ? t('reviewAlerts.unknownUser', { id: userId }) : t('autocomplete.lookingUp'));
+  const initial = Array.from((item?.label ?? '').trim())[0]?.toUpperCase() ?? '';
+  return (
+    <div className="flex min-h-11 min-w-0 items-center gap-3" data-testid="review-alerts-staff" data-user-id={userId}>
+      <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-2 font-medium text-fg-muted">
+        {initial}
+      </span>
+      <span className="flex min-w-0 flex-col">
+        <span className="sr-only">{role}: </span>
+        <span className="truncate font-medium text-fg" dir="auto">{name}</span>
+        {item?.secondary && <span className="truncate text-xs text-fg-muted" dir="auto">{item.secondary}</span>}
+      </span>
+    </div>
+  );
+}
 
 export function ReviewAlertsAdmin({ view, timings }: { view: ReviewAlertsView; timings: ReviewTimingDayView[] | null }) {
   return (
@@ -60,6 +106,7 @@ function RotaSettings({ view }: { view: ReviewAlertsView }) {
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
   const days = t('reviewAlerts.dayNames').split(',');
   const zones = useMemo(() => timeZones(), []);
+  const actor = useStaffMember(view.updatedBy);
 
   const put = useCallback(
     async (settings: ReviewAlertSettings) => {
@@ -113,8 +160,8 @@ function RotaSettings({ view }: { view: ReviewAlertsView }) {
     <section className={cardClass} aria-labelledby={`${ids}-title`} data-testid="review-alerts-settings">
       <h2 id={`${ids}-title`} className="sr-only">{t('reviewAlerts.title')}</h2>
       <form onSubmit={save} className="space-y-6" noValidate>
-        <fieldset disabled={!editable} className="space-y-6">
-          <label className="flex items-start gap-2">
+        <fieldset disabled={!editable} className="min-w-0 space-y-6">
+          <label className={checkRow}>
             <input type="checkbox" className={check} checked={draft.enabled} onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })} aria-describedby={`${ids}-enabled-hint`} data-testid="review-alerts-enabled" />
             <span>
               <span className="block font-medium text-fg">{t('reviewAlerts.enabled')}</span>
@@ -135,8 +182,8 @@ function RotaSettings({ view }: { view: ReviewAlertsView }) {
             <p className="text-sm text-fg-muted mb-2">{t('reviewAlerts.ownersHint')}</p>
             <ul className="space-y-2 mb-3" data-testid="review-alerts-owners">
               {draft.owners.map((userId) => (
-                <li key={userId} className="flex flex-wrap items-end gap-2" data-user-id={userId}>
-                  <Autocomplete kind="user" mode="pick" label={t('reviewAlerts.ownersTitle')} defaultValue={userId} disabled className="min-w-64" />
+                <li key={userId} className="flex flex-wrap items-center justify-between gap-3 rounded border border-border bg-surface-2 p-3" data-user-id={userId}>
+                  <StaffChip userId={userId} role={t('reviewAlerts.owner')} />
                   <button type="button" className={secondaryButtonClass} onClick={() => setDraft(removeOwner(draft, userId))} data-testid="review-alerts-owner-remove">
                     {t('reviewAlerts.removeOwner')}
                   </button>
@@ -166,11 +213,16 @@ function RotaSettings({ view }: { view: ReviewAlertsView }) {
             <ul className="space-y-4" data-testid="review-alerts-rota">
               {draft.rota.map((entry) => (
                 <li key={entry.userId} className="rounded border border-border p-4 space-y-3" data-testid="review-alerts-rota-entry" data-user-id={entry.userId}>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <StaffChip userId={entry.userId} role={t('reviewAlerts.reviewer')} />
+                    <button type="button" className={secondaryButtonClass} onClick={() => setDraft(removeReviewer(draft, entry.userId))} data-testid="review-alerts-remove">
+                      {t('reviewAlerts.remove')}
+                    </button>
+                  </div>
                   <div className="flex flex-wrap items-end gap-3">
-                    <Autocomplete kind="user" mode="pick" label={t('reviewAlerts.addReviewer')} defaultValue={entry.userId} disabled className="min-w-64" />
-                    <label className="flex flex-col text-sm">
+                    <label className="flex min-w-0 max-w-full flex-col text-sm">
                       <span className="text-fg mb-1">{t('reviewAlerts.timeZone')}</span>
-                      <select className={fieldClass} value={entry.timeZone} onChange={(e) => setDraft(updateReviewer(draft, entry.userId, { timeZone: e.target.value }))} data-testid="review-alerts-time-zone">
+                      <select className={`${fieldClass} min-h-11 max-w-full`} value={entry.timeZone} onChange={(e) => setDraft(updateReviewer(draft, entry.userId, { timeZone: e.target.value }))} data-testid="review-alerts-time-zone">
                         {(zones.includes(entry.timeZone) ? zones : [entry.timeZone, ...zones]).map((z) => (
                           <option key={z} value={z}>{z}</option>
                         ))}
@@ -178,29 +230,29 @@ function RotaSettings({ view }: { view: ReviewAlertsView }) {
                     </label>
                   </div>
                   <div className="flex flex-wrap gap-4">
-                    <label className="flex items-start gap-2">
+                    <label className={checkRow}>
                       <input type="checkbox" className={check} checked={entry.senior} onChange={(e) => setDraft(updateReviewer(draft, entry.userId, { senior: e.target.checked }))} data-testid="review-alerts-senior" />
                       <span>
                         <span className="block text-fg">{t('reviewAlerts.senior')}</span>
                         <span className="block text-sm text-fg-muted">{t('reviewAlerts.seniorHint')}</span>
                       </span>
                     </label>
-                    <label className="flex items-start gap-2">
+                    <label className={checkRow}>
                       <input type="checkbox" className={check} checked={!!entry.paused} onChange={(e) => setDraft(updateReviewer(draft, entry.userId, { paused: e.target.checked || undefined }))} data-testid="review-alerts-paused" />
                       <span className="text-fg">{t('reviewAlerts.paused')}</span>
                     </label>
                   </div>
-                  <fieldset className="space-y-2">
+                  <fieldset className="min-w-0 space-y-2">
                     <legend className="text-sm font-medium text-fg">{t('reviewAlerts.shifts')}</legend>
                     {entry.shifts.length === 0 && <p className="text-sm text-fg-muted">{t('reviewAlerts.noShifts')}</p>}
                     {entry.shifts.map((shift, i) => (
-                      <div key={i} className="flex flex-wrap items-end gap-3 rounded bg-surface-2 p-2" data-testid="review-alerts-shift">
-                        <fieldset>
+                      <div key={i} className="flex flex-wrap items-end gap-3 rounded bg-surface-2 p-3" data-testid="review-alerts-shift">
+                        <fieldset className="min-w-0">
                           <legend className="text-xs text-fg-muted mb-1">{t('reviewAlerts.shiftDays')}</legend>
                           <div className="flex flex-wrap gap-2">
                             {days.map((name, d) => (
-                              <label key={d} className="flex items-center gap-1 text-sm">
-                                <input type="checkbox" className={check} checked={shift.days.includes(d)} onChange={() => setShift(entry.userId, i, toggleDay(shift, d))} />
+                              <label key={d} className={dayToggle}>
+                                <input type="checkbox" className={dayCheck} checked={shift.days.includes(d)} onChange={() => setShift(entry.userId, i, toggleDay(shift, d))} />
                                 {name}
                               </label>
                             ))}
@@ -208,11 +260,11 @@ function RotaSettings({ view }: { view: ReviewAlertsView }) {
                         </fieldset>
                         <label className="flex flex-col text-sm">
                           <span className="text-xs text-fg-muted mb-1">{t('reviewAlerts.shiftStart')}</span>
-                          <input type="time" className={fieldClass} value={shift.start} onChange={(e) => setShift(entry.userId, i, { ...shift, start: e.target.value })} />
+                          <input type="time" className={`${fieldClass} min-h-11`} value={shift.start} onChange={(e) => setShift(entry.userId, i, { ...shift, start: e.target.value })} />
                         </label>
                         <label className="flex flex-col text-sm">
                           <span className="text-xs text-fg-muted mb-1">{t('reviewAlerts.shiftEnd')}</span>
-                          <input type="time" className={fieldClass} value={shift.end === '24:00' ? '00:00' : shift.end} onChange={(e) => setShift(entry.userId, i, { ...shift, end: e.target.value === '00:00' ? '24:00' : e.target.value })} />
+                          <input type="time" className={`${fieldClass} min-h-11`} value={shift.end === '24:00' ? '00:00' : shift.end} onChange={(e) => setShift(entry.userId, i, { ...shift, end: e.target.value === '00:00' ? '24:00' : e.target.value })} />
                         </label>
                         {crossesMidnight(shift) && <span className="text-xs text-fg-muted">{t('reviewAlerts.crossesMidnight')}</span>}
                         <button type="button" className={secondaryButtonClass} onClick={() => setShift(entry.userId, i, null)}>{t('reviewAlerts.removeShift')}</button>
@@ -227,9 +279,6 @@ function RotaSettings({ view }: { view: ReviewAlertsView }) {
                       {t('reviewAlerts.addShift')}
                     </button>
                   </fieldset>
-                  <button type="button" className={secondaryButtonClass} onClick={() => setDraft(removeReviewer(draft, entry.userId))} data-testid="review-alerts-remove">
-                    {t('reviewAlerts.remove')}
-                  </button>
                 </li>
               ))}
             </ul>
@@ -253,7 +302,7 @@ function RotaSettings({ view }: { view: ReviewAlertsView }) {
         </fieldset>
 
         <p className="text-sm text-fg-muted" data-testid="review-alerts-last-changed">
-          {view.updatedAt ? t('reviewAlerts.lastChanged', { date: formatDate(view.updatedAt, locale, true), actor: view.updatedBy ?? '—' }) : t('reviewAlerts.neverChanged')}
+          {view.updatedAt ? t('reviewAlerts.lastChanged', { date: formatDate(view.updatedAt, locale, true), actor: actor?.label ?? view.updatedBy ?? '—' }) : t('reviewAlerts.neverChanged')}
         </p>
         {view.canManage ? (
           <button type="submit" className={primaryButtonClass} disabled={busy || !dirty} data-testid="review-alerts-save">
@@ -279,7 +328,7 @@ function MinutesField({ id, label, hint, seconds, onChange, testId }: { id: stri
         min={0.5}
         max={60}
         step={0.5}
-        className={fieldClass}
+        className={`${fieldClass} min-h-11`}
         value={toMinutes(seconds)}
         onChange={(e) => onChange(toSeconds(Number(e.target.value) || 0))}
         aria-describedby={`${id}-hint`}
@@ -291,9 +340,15 @@ function MinutesField({ id, label, hint, seconds, onChange, testId }: { id: stri
 }
 
 function Timings({ timings }: { timings: ReviewTimingDayView[] | null }) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const ids = useId();
-  const fmt = (v: { p50: number | null; p90: number | null }) => `${formatSeconds(v.p50, { s: (n) => t('reviewAlerts.seconds', { n }) })} / ${formatSeconds(v.p90, { s: (n) => t('reviewAlerts.seconds', { n }) })}`;
+  const units = { s: (n: number) => t('reviewAlerts.seconds', { n }) };
+  // Median / 90th percentile, each kept whole in a right-to-left row
+  const fmt = (v: { p50: number | null; p90: number | null }) => (
+    <>
+      <bdi>{formatSeconds(v.p50, units)}</bdi> / <bdi>{formatSeconds(v.p90, units)}</bdi>
+    </>
+  );
   const cols: { key: 'toAlert' | 'toOpen' | 'toClaim' | 'toDecision'; label: MessageKey }[] = [
     { key: 'toAlert', label: 'reviewAlerts.toAlert' },
     { key: 'toOpen', label: 'reviewAlerts.toOpen' },
@@ -309,8 +364,8 @@ function Timings({ timings }: { timings: ReviewTimingDayView[] | null }) {
       ) : timings.length === 0 ? (
         <p className="text-sm text-fg-muted">{t('reviewAlerts.timingsEmpty')}</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
+        <div className="overflow-x-auto rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-focus" tabIndex={0} role="region" aria-labelledby={`${ids}-title`}>
+          <table className="min-w-full whitespace-nowrap text-sm">
             <thead>
               <tr className="text-start text-fg-muted">
                 <th scope="col" className="text-start p-2">{t('reviewAlerts.day')}</th>
@@ -324,11 +379,11 @@ function Timings({ timings }: { timings: ReviewTimingDayView[] | null }) {
             <tbody>
               {timings.map((d) => (
                 <tr key={d.day} className="border-t border-border">
-                  <th scope="row" className="text-start p-2 font-normal" dir="ltr">{d.day}</th>
+                  <th scope="row" className="text-start p-2 font-normal">{formatDate(d.day, locale)}</th>
                   <td className="text-end p-2">{d.held}</td>
                   <td className="text-end p-2">{d.decided}</td>
                   {cols.map((c) => (
-                    <td key={c.key} className="text-end p-2" dir="ltr">{fmt(d[c.key])}</td>
+                    <td key={c.key} className="text-end p-2">{fmt(d[c.key])}</td>
                   ))}
                 </tr>
               ))}
@@ -392,7 +447,39 @@ function StaffDevices() {
       <p role="status" className="text-sm text-fg mt-2" data-testid="review-alerts-devices-status">{notice}</p>
       {devices && devices.length === 0 && <p className="text-sm text-fg-muted mt-2">{t('reviewAlerts.devicesEmpty')}</p>}
       {devices && devices.length > 0 && (
-        <div className="overflow-x-auto mt-3">
+        <ul className="mt-3 space-y-3 sm:hidden" data-testid="review-alerts-device-cards">
+          {devices.map((d) => (
+            <li key={d.installId} className="space-y-3 rounded border border-border bg-surface-2 p-4" data-install-id={d.installId}>
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <span className="font-medium text-fg">{t(APP_LABEL[d.app] ?? 'reviewAlerts.appViewer')}</span>
+                <span className="text-sm text-fg" dir="ltr">{d.platform}{d.appVersion ? ` · ${d.appVersion}` : ''}</span>
+              </div>
+              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+                <dt className="text-fg-muted">{t('reviewAlerts.deviceUpdated')}</dt>
+                <dd className="text-fg">{formatDate(new Date(d.updatedAt), locale, true)}</dd>
+                <dt className="text-fg-muted">{t('reviewAlerts.deviceToken')}</dt>
+                <dd className="font-mono text-fg"><bdi dir="ltr">{d.tokenHint}</bdi></dd>
+              </dl>
+              {/* Wrapped: the button's <dialog> sibling would otherwise take the card's spacing */}
+              <div>
+                <ConfirmButton
+                  label={t('reviewAlerts.signOut')}
+                  busy={busy === d.installId}
+                  title={t('reviewAlerts.signOutTitle')}
+                  body={t('reviewAlerts.signOutBody')}
+                  confirmLabel={t('reviewAlerts.signOut')}
+                  danger
+                  buttonClassName="min-h-11 w-full"
+                  testId="review-alerts-device-sign-out-card"
+                  onConfirm={() => signOut(d.installId)}
+                />
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      {devices && devices.length > 0 && (
+        <div className="mt-3 hidden overflow-x-auto sm:block">
           <table className="min-w-full text-sm" data-testid="review-alerts-device-list">
             <thead>
               <tr className="text-fg-muted">

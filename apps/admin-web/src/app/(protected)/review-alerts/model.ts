@@ -68,10 +68,10 @@ export function canSave(settings: ReviewAlertSettings): boolean {
   );
 }
 
-/** "1 min 30 s" style for the timings table. */
+/** Seconds under a minute ("45 s"), minutes and seconds from there ("1:50"), for the timings table. */
 export function formatSeconds(value: number | null, units: { s: (n: number) => string }): string {
   if (value === null) return '—';
-  if (value < 120) return units.s(value);
+  if (value < 60) return units.s(value);
   const m = Math.floor(value / 60);
   const s = value % 60;
   return s ? `${m}:${String(s).padStart(2, '0')}` : `${m}:00`;

@@ -3537,6 +3537,8 @@ const ar: Messages = {
     lastChanged: 'آخر تغيير {date} بواسطة {actor}.',
     neverChanged: 'لم تتغير قط: تسري القيم الافتراضية.',
     unknownUser: 'مستخدم غير معروف ({id})',
+    owner: 'المالك',
+    reviewer: 'المراجع',
     timingsTitle: 'الوقت حتى القرار',
     timingsHint: 'لكل يوم (بتوقيت UTC) منذ لحظة حجز المرئي: الوسيط / المئين التسعون.',
     timingsEmpty: 'لم يُحجز أي مرئي للمراجعة في آخر 14 يومًا.',

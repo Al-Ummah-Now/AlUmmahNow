@@ -577,7 +577,7 @@ function PickedChip({
         id={inputId}
         onClick={onChange}
         disabled={disabled}
-        className="rounded px-2 py-1 text-sm text-link hover:text-link-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+        className="rounded px-2 py-1 text-sm text-link hover:text-link-hover max-sm:min-h-11 max-sm:min-w-11 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
         aria-label={t('autocomplete.changeLabel', { kind: kindLabel, name })}
         data-testid={testId ? `${testId}-change` : undefined}
       >
@@ -587,7 +587,7 @@ function PickedChip({
         type="button"
         onClick={onClear}
         disabled={disabled}
-        className="rounded px-2 py-1 text-sm text-fg-muted hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+        className="rounded px-2 py-1 text-sm text-fg-muted hover:text-fg max-sm:min-h-11 max-sm:min-w-11 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
         aria-label={t('autocomplete.clearLabel', { kind: kindLabel, name })}
         data-testid={testId ? `${testId}-clear` : undefined}
       >
