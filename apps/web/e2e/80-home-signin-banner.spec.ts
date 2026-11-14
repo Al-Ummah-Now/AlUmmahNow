@@ -54,6 +54,19 @@ test.describe('Home sign-in banner - signed out', () => {
       return { b, h1 };
     });
     expect(top.b).toBeLessThan(top.h1);
+    // The art is the active theme's own (its package's header graphic, theme-art.css), in a fixed box
+    const art = page.getByTestId('signin-banner-art');
+    const theme = await page.evaluate(() => document.documentElement.dataset.theme ?? 'fawanees');
+    const scheme = await page.evaluate(() => (document.documentElement.classList.contains('dark') ? 'dark' : 'light'));
+    await expect.poll(() => art.evaluate((el) => getComputedStyle(el).backgroundImage)).toContain(`/fanous/art/${theme}-${scheme}.`);
+    const box = await art.boundingBox();
+    expect(box!.width).toBeGreaterThan(100);
+    expect(box!.height).toBeGreaterThan(30);
+    // Switching theme switches the art
+    const other = theme === 'nahas' ? 'zujaj' : 'nahas';
+    await page.evaluate((t) => { document.documentElement.dataset.theme = t; }, other);
+    await expect.poll(() => art.evaluate((el) => getComputedStyle(el).backgroundImage)).toContain(`/fanous/art/${other}-${scheme}.`);
+    await page.evaluate((t) => { document.documentElement.dataset.theme = t; }, theme);
     // No sideways scroll
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
     await page.waitForTimeout(1000);
@@ -94,6 +107,9 @@ test.describe('Home sign-in banner - signed out', () => {
     // Next visit: the server still sends the banner (it cannot read localStorage), the pre-paint
     // script hides it before the first paint, so it is never seen and nothing moves
     await watchLayoutShift(page);
+    // A hidden banner never fetches its art
+    const artRequests: string[] = [];
+    page.on('request', (r) => { if (r.url().includes('/fanous/art/')) artRequests.push(r.url()); });
     await page.addInitScript(() => {
       document.addEventListener('DOMContentLoaded', () => {
         const el = document.querySelector('[data-testid=signin-banner]');
@@ -107,6 +123,7 @@ test.describe('Home sign-in banner - signed out', () => {
     await expect(banner(page)).toHaveCount(0);
     await page.waitForTimeout(1000);
     expect(await cls(page), 'cumulative layout shift').toBeLessThan(0.01);
+    expect(artRequests, 'the art of a hidden banner is not loaded').toEqual([]);
 
     // Also on /ar, and after a dismissal older than 30 days it is back
     await page.goto('/ar');
