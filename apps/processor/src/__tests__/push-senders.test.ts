@@ -27,7 +27,7 @@ type Responder = (req: Seen) => { status: number; body?: unknown; headers?: Reco
 /** One local server standing in for every push host; the original host is the first path segment. */
 class MockPushServer {
   seen: Seen[] = [];
-  responders: Record<string, Responder> = {};
+  responders = new Map<string, Responder>();
   private server!: Server;
   port = 0;
 
@@ -39,7 +39,7 @@ class MockPushServer {
         const [, host, ...rest] = (req.url ?? '').split('/');
         const seen: Seen = { host: host ?? '', path: `/${rest.join('/')}`, method: req.method ?? '', headers: req.headers, body };
         this.seen.push(seen);
-        const answer = (this.responders[seen.host] ?? (() => ({ status: 200, body: {} })))(seen);
+        const answer = (this.responders.get(seen.host) ?? (() => ({ status: 200, body: {} })))(seen);
         res.writeHead(answer.status, { 'content-type': 'application/json', ...(answer.headers ?? {}) });
         res.end(answer.body === undefined ? '' : typeof answer.body === 'string' ? answer.body : JSON.stringify(answer.body));
       });
@@ -94,7 +94,7 @@ beforeAll(() => server.start());
 afterAll(() => server.stop());
 beforeEach(() => {
   server.seen = [];
-  server.responders = {};
+  server.responders.clear();
   resetApnsTokenCache();
   resetFcmTokenCache();
   resetWnsTokenCache();
@@ -180,10 +180,10 @@ describe('APNs', () => {
     now += 2000;
     await apns.sendAlert(target(), alert);
     expect(new Set(auth()).size).toBe(2);
-    server.responders['api.push.apple.com'] = () => ({ status: 403, body: { reason: 'ExpiredProviderToken' } });
+    server.responders.set('api.push.apple.com', () => ({ status: 403, body: { reason: 'ExpiredProviderToken' } }));
     now += 1000;
     expect(await apns.sendAlert(target(), alert)).toEqual({ ok: false, invalidToken: false, error: '403 ExpiredProviderToken' });
-    server.responders = {};
+    server.responders.clear();
     await apns.sendAlert(target(), alert);
     expect(new Set(auth()).size).toBe(3);
   });
@@ -191,7 +191,7 @@ describe('APNs', () => {
   it('dead tokens are reported for pruning; a topic mismatch is not', async () => {
     const apns = new ApnsPushProvider(env, new Counting(), server.fetch);
     for (const [status, reason, invalid] of [[410, 'Unregistered', true], [400, 'BadDeviceToken', true], [400, 'DeviceTokenNotForTopic', false], [429, 'TooManyRequests', false]] as const) {
-      server.responders['api.push.apple.com'] = () => ({ status, body: { reason } });
+      server.responders.set('api.push.apple.com', () => ({ status, body: { reason } }));
       expect(await apns.sendAlert(target(), alert)).toEqual({ ok: false, invalidToken: invalid, error: `${status} ${reason}` });
     }
   });
@@ -210,7 +210,7 @@ describe('FCM HTTP v1', () => {
   });
   beforeEach(async () => {
     env = { FCM_SERVICE_ACCOUNT: JSON.stringify({ type: 'service_account', project_id: 'alummahnow-test', client_email: 'push@alummahnow-test.iam.gserviceaccount.com', private_key: pem(await crypto.subtle.exportKey('pkcs8', keys.privateKey)), token_uri: 'https://evil.example/token' }) };
-    server.responders['oauth2.googleapis.com'] = () => ({ status: 200, body: { access_token: 'ya29.test', expires_in: 3600 } });
+    server.responders.set('oauth2.googleapis.com', () => ({ status: 200, body: { access_token: 'ya29.test', expires_in: 3600 } }));
   });
 
   it('exchanges a signed RS256 assertion once (only at Google), then sends a high-priority alert on the review_queue channel', async () => {
@@ -240,7 +240,7 @@ describe('FCM HTTP v1', () => {
   });
 
   it('UNREGISTERED tokens are pruned; FCM_PROJECT_ID overrides the JSON’s project', async () => {
-    server.responders['fcm.googleapis.com'] = () => ({ status: 404, body: { error: { status: 'NOT_FOUND', details: [{ errorCode: 'UNREGISTERED' }] } } });
+    server.responders.set('fcm.googleapis.com', () => ({ status: 404, body: { error: { status: 'NOT_FOUND', details: [{ errorCode: 'UNREGISTERED' }] } } }));
     const fcm = new FcmPushProvider({ ...env, FCM_PROJECT_ID: 'other-project' }, new Counting(), server.fetch);
     const res = await fcm.sendAlert(target({ provider: 'fcm', platform: 'android', token: 'gone' }), alert);
     expect(res).toMatchObject({ ok: false, invalidToken: true });
@@ -248,7 +248,7 @@ describe('FCM HTTP v1', () => {
   });
 
   it('an OAuth failure is a send failure, not a dead token', async () => {
-    server.responders['oauth2.googleapis.com'] = () => ({ status: 400, body: { error: 'invalid_grant' } });
+    server.responders.set('oauth2.googleapis.com', () => ({ status: 400, body: { error: 'invalid_grant' } }));
     const res = await new FcmPushProvider(env, new Counting(), server.fetch).sendAlert(target({ provider: 'fcm', token: 't' }), alert);
     expect(res).toEqual({ ok: false, invalidToken: false, error: 'FCM OAuth token refused (400)' });
   });
@@ -258,7 +258,7 @@ describe('WNS', () => {
   const env = { WNS_PACKAGE_SID: 'ms-app://s-1-15-2-123', WNS_CLIENT_SECRET: 'secret' };
   const channel = 'https://db5p.notify.windows.com/w/?token=AwYAAAB';
   beforeEach(() => {
-    server.responders['login.live.com'] = () => ({ status: 200, body: { access_token: 'EgAcAQMAAAAALYAAY', token_type: 'bearer', expires_in: 86400 } });
+    server.responders.set('login.live.com', () => ({ status: 200, body: { access_token: 'EgAcAQMAAAAALYAAY', token_type: 'bearer', expires_in: 86400 } }));
   });
 
   it('client-credentials token, then a toast in the review group with a 16-character tag', async () => {
@@ -286,7 +286,7 @@ describe('WNS', () => {
   it('410 and 404 channels are pruned', async () => {
     const wns = new WnsPushProvider(env, new Counting(), server.fetch);
     for (const [status, invalid] of [[410, true], [404, true], [406, false]] as const) {
-      server.responders['db5p.notify.windows.com'] = () => ({ status, headers: { 'x-wns-error-description': 'x' } });
+      server.responders.set('db5p.notify.windows.com', () => ({ status, headers: { 'x-wns-error-description': 'x' } }));
       expect(await wns.sendAlert(target({ provider: 'wns', token: channel }), alert)).toMatchObject({ ok: false, invalidToken: invalid });
     }
   });
