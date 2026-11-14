@@ -94,7 +94,8 @@ test.describe('Channel header', () => {
   test('CHTAB-003 anonymous subscribe sends the visitor to login and back', async ({ page }) => {
     await openChannel(page, 'en', lectures.id);
     const button = page.getByTestId('channel-subscribe-button');
-    const signIn = watchSignInRedirect(page, { locale: 'en', returnPath: `/en/channels/${lectures.id}` });
+    // The channel page is /@handle once it has one (/channels/<id> 308s there)
+    const signIn = watchSignInRedirect(page, { locale: 'en', returnPath: new RegExp(`^/en/(channels/${lectures.id}|@[^/?#]+)$`) });
     // Retried: a click before hydration has no handler yet
     await clickUntil(button, async () => expect(signIn.requested()).toBe(true));
     await signIn.verify();
