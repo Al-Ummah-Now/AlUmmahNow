@@ -137,7 +137,8 @@ test.describe('Release: a real live stream (ffmpeg → watch → end → recordi
     const exited = new Promise<number | null>((resolve) => encoder!.on('exit', resolve));
 
     // Live in Studio (first media at the provider), receiving per the API
-    await expect(page.getByTestId('studio-golive-status'), `encoder errors: ${stderr.join('').slice(-500)}`).toHaveText('Live', { timeout: 60000 });
+    await expect(page.getByTestId('studio-golive'), `encoder errors: ${stderr.join('').slice(-500)}`).toHaveAttribute('data-phase', 'live', { timeout: 60000 });
+    await expect(page.getByTestId('studio-golive-status')).toHaveText("You're live");
     await expect.poll(async () => (await liveState(user, streamId!)).receiving, { timeout: 30000 }).toBe(true);
     const live = await liveState(user, streamId!);
     expect(live.status).toBe('live');
