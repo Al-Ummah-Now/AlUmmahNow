@@ -65,7 +65,7 @@ function setup(video: Record<string, unknown> = {}) {
 	router.get('/api/videos/:id', VideoFetch);
 	router.get('/api/videos/:id/playback', VideoPlayback);
 	const get = async (path: string) => {
-		const res = await app.request(path, { method: 'GET' }, env as never);
+		const res = await app.request(path, { method: 'GET', headers: { 'CF-Connecting-IP': '203.0.113.7' } }, env as never);
 		return { status: res.status, body: (await res.json()) as Record<string, unknown> };
 	};
 	return { env: env as never, raw: env, db, get };

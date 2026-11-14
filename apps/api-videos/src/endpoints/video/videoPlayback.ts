@@ -9,6 +9,7 @@ import R2Repository from "../../lib/r2Repo";
 import { logger } from "../../lib/logger";
 import { applyPlayback, choosePlayback, countFallback, logDecision, parseExclude, parseFallbackReason } from "../../lib/media/playback";
 import { countProviderFailure, reporterKey } from "../../lib/media/health";
+import { getSecret } from "../../lib/env-helpers";
 import { isRestrictedVideo, isVideoOpenToAnyone, isVideoRemoved } from '../../lib/visibility';
 
 /**
@@ -85,7 +86,12 @@ export class VideoPlayback extends OptionalAuthRoute {
 			const plausible = choice.decision.ready.includes(failed);
 			const write = Promise.all([
 				countFallback(c.env as never, { day: new Date().toISOString().slice(0, 10), requested: failed, actual: choice.source, reason, column: "server_fallbacks" }),
-				plausible ? reporterKey(c.req.header("CF-Connecting-IP"), userId).then((reporter) => countProviderFailure(c.env as never, failed, reporter)) : undefined,
+				plausible
+					? getSecret(c.env.MEDIA_SIGN_KEY, "MEDIA_SIGN_KEY")
+							.then((key) => reporterKey(c.req.header("CF-Connecting-IP"), key))
+							.then((reporter) => (reporter ? countProviderFailure(c.env as never, failed, reporter) : undefined))
+							.catch((error) => logger.warn("[playback] Could not count a provider failure", { error: error instanceof Error ? error.message : String(error) }))
+					: undefined,
 			]);
 			try {
 				c.executionCtx.waitUntil(write);

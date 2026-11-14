@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { Hono } from 'hono';
 import { DEFAULT_MEDIA_SETTINGS } from '@al-ummah/shared-types';
 import { allProviders, bunnyRef, provider, videoProviderRecords } from '../src/lib/media/providers';
-import { clearHealthCache, countProviderFailure, HEALTH_KEY, readHealth, reporterKey, runHealthCheck } from '../src/lib/media/health';
+import { clearHealthCache, countProviderFailure, HEALTH_KEY, readHealth, reporterKey, reporterNetwork, runHealthCheck } from '../src/lib/media/health';
 import { clearMediaSettingsCache, readMediaSettings, saveMediaSettings, SETTINGS_KEY } from '../src/lib/media/settings';
 import { createMediaInternalRouter } from '../src/endpoints/media/mediaInternal';
 import { SqliteD1 } from './search-sqlite-d1';
@@ -134,13 +134,26 @@ describe('provider health', () => {
 		assert.equal(many!.providers.r2!.state, 'unhealthy');
 	});
 
-	it('reporter keys: stable within a day, different across days and clients, never the raw IP', async () => {
+	it('reporter networks: an IPv6 /64 is one reporter, IPv4 addresses are their own', () => {
+		assert.equal(reporterNetwork('2001:db8:aa:1:1111:2222:3333:4444'), '2001:db8:aa:1::/64');
+		assert.equal(reporterNetwork('2001:db8:aa:1::9'), '2001:db8:aa:1::/64');
+		assert.equal(reporterNetwork('2001:DB8:00aa:0001:ffff::1'), '2001:db8:aa:1::/64');
+		assert.equal(reporterNetwork('2001:db8::1'), '2001:db8:0:0::/64');
+		assert.equal(reporterNetwork('203.0.113.7'), '203.0.113.7');
+		assert.equal(reporterNetwork('not an ip'), null);
+		assert.equal(reporterNetwork(undefined), null);
+	});
+
+	it('reporter keys: keyed, stable within a day, different across days, networks and keys', async () => {
 		const day = Date.parse('2026-11-14T10:00:00Z');
-		const a = await reporterKey('203.0.113.7', null, day);
-		assert.equal(a, await reporterKey('203.0.113.7', null, day + 3600_000));
-		assert.notEqual(a, await reporterKey('203.0.113.7', null, day + 86400_000));
-		assert.notEqual(a, await reporterKey('203.0.113.8', null, day));
+		const a = (await reporterKey('2001:db8:aa:1::1', 'k1', day))!;
 		assert.match(a, /^[0-9a-f]{16}$/);
+		assert.equal(a, await reporterKey('2001:db8:aa:1:ffff::2', 'k1', day + 3600_000), 'same /64, same day');
+		assert.notEqual(a, await reporterKey('2001:db8:aa:1::1', 'k1', day + 86400_000));
+		assert.notEqual(a, await reporterKey('2001:db8:aa:2::1', 'k1', day));
+		assert.notEqual(a, await reporterKey('2001:db8:aa:1::1', 'k2', day), 'needs the key to reproduce');
+		assert.equal(await reporterKey('2001:db8:aa:1::1', '', day), null, 'no key: nothing counted');
+		assert.equal(await reporterKey(null, 'k1', day), null);
 	});
 
 	it('a failing probe turns the provider unhealthy after probeFailures passes and flags the Errors page once', async () => {

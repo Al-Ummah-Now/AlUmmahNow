@@ -3,8 +3,8 @@
  *
  *   player fallback away from it (GET /api/videos/:id/playback?exclude=…, only when that provider
  *       was ready for the video) ─► media_provider_health, one row per provider, minute and reporter
- *       (a daily-salted client hash); the window counts distinct reporters, so one client cannot
- *       push a provider over the threshold by looping over videos
+ *       (keyed hash of the client's /64 or IPv4); the window counts distinct reporters, so one
+ *       client cannot push a provider over the threshold by looping over videos
  *   cron, every minute ─► probe each enabled provider (adapter.probe) + sum failures in the window
  *       ─► nextProviderHealth ─► global_settings/ops/media-health.json
  *
@@ -42,13 +42,32 @@ export function clearHealthCache(): void {
 
 const minuteOf = (ms: number) => new Date(Math.floor(ms / 60_000) * 60_000).toISOString().slice(0, 16);
 
+/** The network a client reports from: an IPv6 /64 (one subscriber or host) or the IPv4 address. */
+export function reporterNetwork(ip: string | null | undefined): string | null {
+	const v = (ip ?? '').trim().toLowerCase();
+	if (!v) return null;
+	if (!v.includes(':')) return /^\d{1,3}(\.\d{1,3}){3}$/.test(v) ? v : null;
+	// Expand "::" so the first four groups are the /64
+	const [head, tail = ''] = v.split('::');
+	const h = head ? head.split(':') : [];
+	const t = v.includes('::') ? (tail ? tail.split(':') : []) : [];
+	const groups = v.includes('::') ? [...h, ...Array(Math.max(0, 8 - h.length - t.length)).fill('0'), ...t] : h;
+	if (groups.length !== 8 || !groups.every((g) => /^[0-9a-f]{1,4}$/.test(g))) return null;
+	return `${groups.slice(0, 4).map((g) => g.replace(/^0+(?=.)/, '')).join(':')}::/64`;
+}
+
 /**
- * Who reported a fallback, as a health signal: SHA-256 of the UTC day, the client IP and the user id,
- * truncated. Not linkable across days and never stored raw.
+ * Who reported a fallback, as a health signal: HMAC-SHA-256 of the client's network
+ * (reporterNetwork) keyed with MEDIA_SIGN_KEY and the UTC day, truncated. Without the key it cannot
+ * be reversed to an address, and rows are unlinkable across days. Null (nothing counted) without a
+ * network or a key.
  */
-export async function reporterKey(ip: string | null | undefined, userId: string | null | undefined, now = Date.now()): Promise<string> {
+export async function reporterKey(ip: string | null | undefined, key: string | null | undefined, now = Date.now()): Promise<string | null> {
+	const network = reporterNetwork(ip);
+	if (!network || !key) return null;
 	const day = new Date(now).toISOString().slice(0, 10);
-	const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`media-health|${day}|${ip ?? ''}|${userId ?? ''}`)));
+	const hmacKey = await crypto.subtle.importKey('raw', new TextEncoder().encode(`media-health|${day}|${key}`), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+	const bytes = new Uint8Array(await crypto.subtle.sign('HMAC', hmacKey, new TextEncoder().encode(network)));
 	return [...bytes.slice(0, 8)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
