@@ -236,3 +236,105 @@ export function csamRetainUntil(c: { reportedAt: string | null; legalHold: boole
 export function validCsamRetentionDays(days: unknown): days is number {
   return typeof days === 'number' && Number.isInteger(days) && days >= CSAM_RETENTION_MIN_DAYS && days <= CSAM_RETENTION_MAX_DAYS;
 }
+
+// ---------------------------------------------------------------------------
+// Cases (admin-api csam_cases; admin-web /moderation/csam)
+// ---------------------------------------------------------------------------
+
+export const CSAM_ACCESS_ACTIONS = [
+  'case.opened',
+  'case.viewed',
+  'case.mapped',
+  'manifest.viewed',
+  'file.downloaded',
+  'takedown.retried',
+  'freeze.requested',
+  'hold.set',
+  'hold.lifted',
+  'case.reported',
+  'evidence.deleted',
+  'settings.changed',
+  'webhook.secret.generated',
+] as const;
+export type CsamAccessAction = (typeof CSAM_ACCESS_ACTIONS)[number];
+
+export interface CsamFreezeState {
+  ban?: 'banned' | 'already_banned' | 'no_uploader';
+  revokeSessions?: string;
+  suspendAccount?: string;
+  error?: string;
+}
+
+export interface CsamCaseSummary {
+  id: string;
+  matchedUrl: string;
+  source: 'paste' | 'webhook';
+  status: CsamCaseStatus;
+  itemKind: CsamItemKind | null;
+  uploaderId: string | null;
+  detectedAt: string;
+  reportedAt: string | null;
+  legalHold: boolean;
+  evidenceDeletedAt: string | null;
+  /** When the evidence may be deleted (null: not reported yet, or under a hold) */
+  retainUntil: string | null;
+}
+
+export interface CsamTakedownJob {
+  id: string;
+  status: 'queued' | 'running' | 'retrying' | 'succeeded' | 'failed';
+  phase: string | null;
+  attempts: number;
+  lastError: string | null;
+  result: Record<string, unknown> | null;
+}
+
+export interface CsamAuthRequestState {
+  id: string;
+  action: 'revoke_sessions' | 'suspend_account';
+  status: string | null;
+  deliveryStatus: string;
+}
+
+export interface CsamCaseDetail extends CsamCaseSummary {
+  resolution: CsamResolution | null;
+  createdBy: string;
+  reportId: string | null;
+  reportedBy: string | null;
+  legalHoldReason: string | null;
+  freeze: CsamFreezeState | null;
+  authRequests: CsamAuthRequestState[];
+  job: CsamTakedownJob | null;
+  evidence: { files: Array<{ name: string; bytes: number; contentType: string; source: string }>; missing: Array<{ name: string; reason: string }>; completedAt: string | null } | null;
+  facts: CsamReportFacts;
+}
+
+export interface CsamAccessLogEntry {
+  id: string;
+  caseId: string | null;
+  actorId: string;
+  action: CsamAccessAction;
+  detail: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface CsamSettings {
+  retentionDays: number;
+  webhookConfigured: boolean;
+  webhookUrl: string | null;
+}
+
+/** One open case per matched file: lowercased host and path, optimizer wrappers removed. */
+export function csamUrlKey(input: string): string | null {
+  const url = toCsamUrl(input);
+  if (!url) return null;
+  const inner = unwrapImageUrl(url);
+  const post = inner.searchParams.get('post');
+  let path = inner.pathname;
+  try {
+    path = decodeURIComponent(path);
+  } catch {
+    // keep the encoded path
+  }
+  return `${inner.hostname.toLowerCase()}${path}${post ? `?post=${post}` : ''}`;
+}

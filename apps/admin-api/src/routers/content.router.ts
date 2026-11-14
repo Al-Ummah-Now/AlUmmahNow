@@ -16,6 +16,7 @@ import { Hono, type Context } from 'hono';
 import {
   ADMIN_DELETION_KINDS,
   ADMIN_JOB_PERMISSIONS,
+  isSuperAdmin,
   type AdminDeletionKind,
   type AdminDeletionPage,
   contentPermissionsFor,
@@ -166,7 +167,7 @@ async function withReportCounts<T extends { id: string; openReports?: number }>(
  */
 async function jobsFor(c: C, targetKind: AdminJob['targetKind'], targetId: string): Promise<AdminJob[] | null> {
   try {
-    return (await videos<{ items: AdminJob[] }>(c, '/jobs', { query: { targetKind, targetId, limit: '5' } })).items;
+    return (await videos<{ items: AdminJob[] }>(c, '/jobs', { query: { targetKind, targetId, limit: '5' } })).items.map((j) => redactJob(c, j));
   } catch (error) {
     logger.warn('[Content] Could not read the item\'s jobs', { targetKind, targetId, error: error instanceof Error ? error.message : String(error) });
     return null;
@@ -772,14 +773,28 @@ app.post('/creators/tier', async (c) => {
 // run from a queue in api-videos. Failed ones flag the admin here, with Retry.
 // ---------------------------------------------------------------------------
 
-app.get('/jobs', async (c) => ok(c, await videos(c, '/jobs', { query: c.req.query() })));
+/** A CSAM takedown job names the case and the matched URL: only super admins see its details. */
+const CSAM_JOB_KINDS = new Set<string>(['csam.contain']);
+function redactJob(c: C, job: AdminJob): AdminJob {
+  if (!CSAM_JOB_KINDS.has(job.kind) || isSuperAdmin(c.get('auth')?.roles)) return job;
+  return { ...job, params: {}, result: null, lastError: job.lastError ? 'hidden' : null };
+}
+
+app.get('/jobs', async (c) => {
+  const out = await videos<{ items: AdminJob[] }>(c, '/jobs', { query: c.req.query() });
+  return ok(c, Array.isArray(out?.items) ? { ...out, items: out.items.map((j) => redactJob(c, j)) } : out);
+});
 app.get('/jobs/counts', async (c) => ok(c, await videos(c, '/jobs/counts')));
-app.get('/jobs/:id', async (c) => ok(c, await videos(c, `/jobs/${encodeURIComponent(c.req.param('id'))}`)));
+app.get('/jobs/:id', async (c) => {
+  const job = await videos<AdminJob>(c, `/jobs/${encodeURIComponent(c.req.param('id'))}`);
+  return ok(c, job?.kind ? redactJob(c, job) : job);
+});
 
 app.post('/jobs/:id/retry', async (c) => {
   const jobId = c.req.param('id');
   const job = await videos<AdminJob>(c, `/jobs/${encodeURIComponent(jobId)}`);
   // Retrying runs the action again: it needs the permissions the action itself needs
+  if (CSAM_JOB_KINDS.has(job.kind) && !isSuperAdmin(c.get('auth')?.roles)) return c.json({ success: false, code: 'forbidden', error: 'Super admins only' }, 403);
   for (const permission of ADMIN_JOB_PERMISSIONS[job.kind] ?? ['content:delete']) need(c, permission);
   return ok(c, await audited(c, { kind: job.targetKind, id: job.targetId, action: 'job-retry', details: { jobId, jobKind: job.kind } }, () =>
     videos(c, `/jobs/${encodeURIComponent(jobId)}/retry`, { method: 'POST' })));

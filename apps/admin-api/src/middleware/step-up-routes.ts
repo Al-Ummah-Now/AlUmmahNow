@@ -12,7 +12,7 @@
 import type { Context, Hono } from 'hono';
 import { stepUp } from './passkeys';
 
-type Method = 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 /** A report action that bans the content's owner (the body is read from a clone: the handler reads it again). */
 async function reportActionBans(c: Context): Promise<boolean> {
@@ -37,6 +37,11 @@ export const STEP_UP_ROUTES: readonly { method: Method; path: string; what: stri
   { method: 'POST', path: '/api/trash/:kind/:id/purge', what: 'Delete permanently: contact messages, themes, creator tiers' },
   { method: 'POST', path: '/api/status/incidents/:id/purge', what: 'Delete permanently: status incident' },
   { method: 'POST', path: '/api/invites/:id/purge', what: 'Delete permanently: invite' },
+  // CSAM cases (docs/specs/CSAM-RESPONSE.md): evidence, legal hold, retention, the webhook secret
+  { method: 'GET', path: '/api/csam/:id/files/:name', what: 'CSAM evidence download' },
+  { method: 'POST', path: '/api/csam/:id/hold', what: 'CSAM legal hold' },
+  { method: 'PUT', path: '/api/csam/settings', what: 'CSAM evidence retention' },
+  { method: 'POST', path: '/api/csam/settings/webhook-secret', what: 'CSAM webhook secret' },
 ];
 
 export function registerStepUpRoutes(app: Hono): void {
