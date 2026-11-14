@@ -1,24 +1,24 @@
 "use client";
 /**
- * Playback for every web player (LTR and RTL watch pages, embeds; epic #687). Players are dumb:
+ * Playback for every web player (LTR and RTL watch pages, embeds; docs/media-delivery/PROVIDERS.md).
+ * Players are dumb: the API orders the providers and this hook walks its list.
  *
- *   - play `playUrl`, the one URL the API chose (lib/media/playback.ts in api-videos);
- *   - on a fatal error (or a stall of STALL_TIMEOUT_MS) while playing R2, ask the API once for a URL
- *     without R2 (fetchFallbackPlayback, with the error's class as the reason) and play that;
- *   - one QoE session per video load: requested source, actual source, fallback reason.
+ *   sources[0] ─(fatal error, or a stall of STALL_TIMEOUT_MS)─► sources[1] ─► … at the same time
+ *       │ every failure is reported: GET /playback?exclude=<failed so far>&reason=<class> (health)
+ *       └─ list used up (or an older response with only playUrl): that answer's sources come next
  *
- * `delivery.source` is only the label of what the API chose; this hook never picks a source.
+ * One QoE session per video load: requested source, the source it ended on, the first reason.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Player } from "video.js";
-import type { PlaybackFallbackReason } from "@al-ummah/shared-types";
+import type { MediaProviderId, PlaybackFallbackReason, PlaybackSourceView } from "@al-ummah/shared-types";
 import type { PlayerOptions } from "./interface";
-import { deviceClass, fallbackReasonFor } from "@/lib/video/delivery";
+import { deviceClass, fallbackReasonFor, playbackList, playbackSourcesOf } from "@/lib/video/delivery";
 import { QoeTracker, sendQoeBeacon } from "@/lib/video/qoe";
 import { fetchFallbackPlayback } from "@/lib/api/videos";
 
 export const HLS = 'application/x-mpegURL';
-/** A stall this long on R2 counts as a failure and falls back */
+/** A stall this long counts as a failure and moves to the next source */
 export const STALL_TIMEOUT_MS = 15_000;
 /** How often a playing session reports to the live view (admin Delivery page "now"; the server forgets a session after 75 s). */
 const QOE_HEARTBEAT_MS = 30_000;
@@ -71,13 +71,17 @@ export interface DeliveryPlaybackOptions {
 }
 
 export function useDeliveryPlayback(
-  options: Pick<PlayerOptions, 'id' | 'playUrl' | 'poster' | 'delivery'>,
+  options: Pick<PlayerOptions, 'id' | 'playUrl' | 'poster' | 'delivery' | 'sources'>,
   onPlayerReady?: (player: Player) => void,
   opts: DeliveryPlaybackOptions = {},
 ) {
-  const requested = options.delivery?.source === 'r2' ? 'r2' : 'bunny';
+  // Keyed by content: a new array with the same sources must not reload the video
+  const sourcesKey = (options.sources ?? []).map((x) => `${x.provider} ${x.src}`).join('\n');
+  const list = useMemo(() => playbackList(options), [options.playUrl, sourcesKey, options.delivery?.source]); // eslint-disable-line react-hooks/exhaustive-deps
+  const requested: MediaProviderId = list[0]?.provider ?? 'bunny';
   // A stable array: a new one would make the player reload the video
-  const videoSources = useMemo(() => [{ src: options.playUrl || '', type: HLS }], [options.playUrl]);
+  const firstSrc = list[0]?.src || '';
+  const videoSources = useMemo(() => [{ src: firstSrc, type: HLS }], [firstSrc]);
   const posterUrl = useMemo(() => posterFor(options), [options.poster, options.playUrl]); // eslint-disable-line react-hooks/exhaustive-deps
   const trackerRef = useRef<QoeTracker | null>(null);
   const [player, setPlayer] = useState<Player | null>(null);
@@ -89,7 +93,7 @@ export function useDeliveryPlayback(
     onPlayerReady?.(ready);
   }, [onPlayerReady]);
 
-  // One QoE session per video load on this player, plus the one-time fallback through the API
+  // One QoE session per video load on this player, and the walk down the source list
   useEffect(() => {
     // A playlist's next video re-keys the player: the old one is disposed until the new one is ready
     if (!player || (player as unknown as { isDisposed?: () => boolean }).isDisposed?.()) return;
@@ -106,47 +110,73 @@ export function useDeliveryPlayback(
     const onDispose = () => tracker.flush();
     player.on('dispose', onDispose);
 
-    let fellBack = requested !== 'r2';
+    let sources: PlaybackSourceView[] = [...list];
+    let index = 0;
+    const failed: MediaProviderId[] = [];
+    /** The API was asked for more after the list ran out (once per load) */
+    let askedForMore = false;
+    let waitingForApi = false;
     let stallTimer: ReturnType<typeof setTimeout> | undefined;
     let disposed = false;
     const clearStall = () => {
       if (stallTimer !== undefined) clearTimeout(stallTimer);
       stallTimer = undefined;
     };
+    const switchTo = (next: PlaybackSourceView, reason: PlaybackFallbackReason, at: number) => {
+      tracker.markFallback(reason, next.provider);
+      // Video.js accepts error(null) and a single source object; the local typings are narrower
+      const vjs = player as unknown as { error(e: null): void; src(s: { src: string; type: string }): void };
+      vjs.error(null);
+      vjs.src({ src: next.src, type: HLS });
+      player.one('loadedmetadata', () => {
+        if (at > 0) player.currentTime(at);
+        void player.play()?.catch(() => undefined);
+      });
+    };
     const fallBack = (reason: PlaybackFallbackReason) => {
-      if (fellBack) return;
-      fellBack = true;
+      if (waitingForApi || disposed) return;
+      const current = sources[index];
+      if (!current || failed.includes(current.provider)) return;
+      failed.push(current.provider);
       clearStall();
       const at = player.currentTime() || 0;
-      tracker.markFallback(reason);
-      void fetchFallback(videoId, reason, anonymous)
-        .catch(() => null)
-        .then((answer) => {
-          if (disposed || !answer?.playUrl || answer.delivery?.source === 'r2') return;
-          // Video.js accepts error(null) and a single source object; the local typings are narrower
-          const vjs = player as unknown as { error(e: null): void; src(s: { src: string; type: string }): void };
-          vjs.error(null);
-          vjs.src({ src: answer.playUrl, type: HLS });
-          player.one('loadedmetadata', () => {
-            if (at > 0) player.currentTime(at);
-            void player.play()?.catch(() => undefined);
-          });
-        });
+      // Every failure is reported (provider health); the answer is only needed when the list ran out
+      const answer = fetchFallback(videoId, reason, anonymous, [...failed]).catch(() => null);
+      const next = sources[index + 1];
+      if (next) {
+        index += 1;
+        switchTo(next, reason, at);
+        return;
+      }
+      if (askedForMore) return;
+      askedForMore = true;
+      waitingForApi = true;
+      void answer.then((reply) => {
+        waitingForApi = false;
+        if (disposed || !reply) return;
+        const more = playbackSourcesOf(reply.sources).filter((x) => !failed.includes(x.provider));
+        const single = reply.playUrl && reply.delivery?.source && !failed.includes(reply.delivery.source as MediaProviderId)
+          ? playbackList({ playUrl: reply.playUrl, delivery: reply.delivery })
+          : [];
+        const extra = more.length ? more : single;
+        if (!extra.length) return;
+        sources = [...sources.slice(0, index + 1), ...extra];
+        index += 1;
+        switchTo(sources[index]!, reason, at);
+      });
     };
     const onError = () => fallBack(playerErrorReason(player));
     const onWaiting = () => {
-      if (fellBack || stallTimer !== undefined) return;
+      if (stallTimer !== undefined || waitingForApi) return;
       stallTimer = setTimeout(() => {
         stallTimer = undefined;
         fallBack('stall_timeout');
       }, STALL_TIMEOUT_MS);
     };
     const stallEvents = ['playing', 'pause', 'seeking', 'ended'] as const;
-    if (!fellBack) {
-      player.on('error', onError);
-      player.on('waiting', onWaiting);
-      for (const e of stallEvents) player.on(e, clearStall);
-    }
+    player.on('error', onError);
+    player.on('waiting', onWaiting);
+    for (const e of stallEvents) player.on(e, clearStall);
     return () => {
       disposed = true;
       window.clearInterval(beat);
@@ -159,7 +189,7 @@ export function useDeliveryPlayback(
       for (const e of stallEvents) player.off(e, clearStall);
       if (trackerRef.current === tracker) trackerRef.current = null;
     };
-  }, [player, options.id, options.playUrl, requested, anonymous, fetchFallback]);
+  }, [player, options.id, list, requested, anonymous, fetchFallback]);
 
   // Report the session when the page is hidden or left
   useEffect(() => {

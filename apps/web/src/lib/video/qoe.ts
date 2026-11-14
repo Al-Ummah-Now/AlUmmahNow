@@ -11,12 +11,12 @@
  * with `live`, the deltas since the previous report; the final report carries
  * the last deltas. The daily rollup still counts only the final report.
  */
-import type { PlaybackFallbackReason } from '@al-ummah/shared-types';
+import type { MediaProviderId, PlaybackFallbackReason } from '@al-ummah/shared-types';
 import type { DeviceClass } from './delivery';
 
 export interface QoeReport {
   sessionId: string;
-  source: 'bunny' | 'r2';
+  source: MediaProviderId;
   device: DeviceClass;
   started: boolean;
   startupMs?: number;
@@ -29,14 +29,14 @@ export interface QoeReport {
   errors: number;
   fallback: boolean;
   /** Source the API chose for this play */
-  requested: 'bunny' | 'r2';
-  /** Source the session ended on (bunny after a fallback) */
-  actual: 'bunny' | 'r2';
+  requested: MediaProviderId;
+  /** Source the session ended on (the next source after a fallback) */
+  actual: MediaProviderId;
   /** Why the player left the requested source */
   fallbackReason?: PlaybackFallbackReason;
   kind?: 'final' | 'heartbeat';
-  /** Source delivering the session now (bunny after a fallback) */
-  serving?: 'bunny' | 'r2';
+  /** Source delivering the session now (the next source after a fallback) */
+  serving?: MediaProviderId;
   playing?: boolean;
   live?: QoeLiveDelta;
 }
@@ -66,7 +66,7 @@ export interface QoePlayer {
 type Clock = () => number;
 
 export class QoeTracker {
-  private source: 'bunny' | 'r2';
+  private source: MediaProviderId;
   private playRequestedAt?: number;
   private firstFrameAt?: number;
   private startupMs?: number;
@@ -93,7 +93,7 @@ export class QoeTracker {
     private player: QoePlayer,
     private readonly opts: {
       sessionId: string;
-      source: 'bunny' | 'r2';
+      source: MediaProviderId;
       device: DeviceClass;
       send: (r: QoeReport) => void;
       /** Live heartbeats (optional: without it the tracker sends only the final report) */
@@ -178,11 +178,15 @@ export class QoeTracker {
     this.peakKbps = Math.max(this.peakKbps, kbps);
   }
 
-  /** R2 failed and the player switched to Bunny: the session is now Bunny's, flagged as a fallback. */
-  markFallback(reason: PlaybackFallbackReason = 'other'): void {
+  /**
+   * The source failed and the player moved to `to` (the next in the API's list): the session now
+   * plays from `to`, flagged as a fallback. The first reason is kept; the report counts against the
+   * provider the API asked for.
+   */
+  markFallback(reason: PlaybackFallbackReason = 'other', to: MediaProviderId = 'bunny'): void {
+    if (!this.fallback) this.fallbackReason = reason;
     this.fallback = true;
-    this.fallbackReason = reason;
-    this.source = 'bunny';
+    this.source = to;
     this.lastKbps = undefined;
     this.heartbeat();
   }
@@ -235,8 +239,8 @@ export class QoeTracker {
     const watchMs = Math.round(this.watchMs);
     return {
       sessionId: this.opts.sessionId,
-      // A fallback session counts against R2 (the source that failed it)
-      source: this.fallback ? 'r2' : this.source,
+      // A fallback session counts against the source the API asked for (the one that failed it)
+      source: this.fallback ? this.opts.source : this.source,
       device: this.opts.device,
       started: this.firstFrameAt !== undefined,
       ...(this.startupMs !== undefined ? { startupMs: Math.min(this.startupMs, 120_000) } : {}),

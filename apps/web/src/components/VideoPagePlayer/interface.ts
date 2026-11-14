@@ -22,6 +22,8 @@ export interface PlayerOptions {
   playUrl?: string; // HLS streaming URL from Bunny.net
   /** R2 + Cloudflare CDN beside Bunny (epic #687): which source this play gets (lib/video/delivery.ts) */
   delivery?: import('@/lib/video/delivery').DeliveryView;
+  /** Every playable source, signed, in the API's order (the player falls back down the list) */
+  sources?: import('@al-ummah/shared-types').PlaybackSourceView[];
   poster?: string; // Video thumbnail/poster image URL
   autoplay: boolean;
   type: string;

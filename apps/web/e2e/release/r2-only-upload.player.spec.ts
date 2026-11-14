@@ -11,63 +11,15 @@
  * The R2-only rule is this spec's channel override only (the rest of the stack keeps the defaults),
  * set through the same internal route admin-api's Delivery settings call, and removed afterwards.
  */
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
-import { randomBytes } from 'crypto';
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import { target } from './targets';
-import { apiFetch, createProfile, signUpOnWeb, type WebUser } from './web-session';
+import { apiFetch, createProfile, signUpOnWeb } from './web-session';
 import { grantCreatorTier } from './creator-tier';
-import { submitNewChannelInMenu } from './account-menu';
 import { onLocalStack } from './builders';
 import { playFor, watchUrl } from './videos';
+import { CONTROL, MEDIA_HOST, createChannelInMenu, freshClip, readSettings, removeChannelOverride, writeSettings } from './media-providers';
 
 test.use({ trace: 'off', video: 'off' });
-
-const CLIP = path.join(__dirname, '..', 'test-fixtures', 'e2e-sample.mp4');
-const CONTROL = process.env.LOCAL_STACK_CONTROL_URL || 'http://127.0.0.1:3190';
-/** The local stack's internal key (scripts/local-stack/stack.ts LOCAL_SECRETS): never a deployed value */
-const LOCAL_INTERNAL_KEY = 'local-stack-internal-key';
-const MEDIA_HOST = 'media.local-stack.test';
-
-function freshClip(): string {
-  const file = path.join(os.tmpdir(), `e2e-r2-only-${Date.now().toString(36)}-${randomBytes(4).toString('hex')}.mp4`);
-  fs.copyFileSync(CLIP, file);
-  return file;
-}
-
-async function internal(pathname: string, init: RequestInit = {}): Promise<Response> {
-  return fetch(`${target().api}/internal/media${pathname}`, { ...init, headers: { 'content-type': 'application/json', 'X-API-Key': LOCAL_INTERNAL_KEY, ...(init.headers ?? {}) } });
-}
-
-type Settings = { channels?: Record<string, unknown> } & Record<string, unknown>;
-
-async function readSettings(): Promise<Settings> {
-  const res = await internal('/providers');
-  expect(res.ok, `GET providers: ${res.status}`).toBe(true);
-  return ((await res.json()) as { result: { settings: Settings } }).result.settings;
-}
-
-async function writeSettings(settings: Settings): Promise<void> {
-  const res = await internal('/providers', { method: 'PUT', body: JSON.stringify({ settings, actorId: 'e2e-r2-only' }) });
-  expect(res.ok, `PUT providers: ${res.status} ${await res.text()}`).toBe(true);
-}
-
-async function createChannelInMenu(page: Page, user: WebUser, name: string): Promise<string> {
-  await page.context().addCookies([{ name: 'aun_consent', value: `v1.a0.e0.p0.${Date.now()}`, url: target().web, sameSite: 'Lax' }]);
-  await page.goto(`${target().web}/en`);
-  await submitNewChannelInMenu(page, name);
-  let channelId = '';
-  await expect
-    .poll(async () => {
-      const body = (await (await apiFetch(user, '/api/channels?limit=100')).json().catch(() => ({}))) as { data?: Array<{ id: string; name: string }> };
-      channelId = body.data?.find((c) => c.name === name)?.id ?? '';
-      return channelId;
-    }, { timeout: 30000 })
-    .not.toBe('');
-  return channelId;
-}
 
 test.describe('Media providers: an R2-only upload', () => {
   test.skip(!onLocalStack(), 'local stack only (its fake media pipeline); stage runs the real transcode in media-delivery.spec.ts');
@@ -135,9 +87,7 @@ test.describe('Media providers: an R2-only upload', () => {
       expect(await playFor(page, 2)).toBeGreaterThan(2);
     } finally {
       if (videoId) await apiFetch(user, `/api/videos/${videoId}/permanent`, { method: 'DELETE', headers: { channelId } });
-      const now = await readSettings();
-      const { [channelId]: _mine, ...others } = (now.channels ?? {}) as Record<string, unknown>;
-      await writeSettings({ ...now, channels: others });
+      await removeChannelOverride(channelId);
     }
   });
 });
