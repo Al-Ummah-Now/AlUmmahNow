@@ -8,6 +8,7 @@
 import { cache } from 'react';
 import { cookies as getCookies, headers as getHeaders } from 'next/headers';
 import { createClient } from '@al-ummah-now/openauth/client';
+import { audienceMode, withAudienceCheck } from '@al-ummah/shared-types';
 import { redirect } from 'next/navigation';
 import { subjects } from '@/interfaces/subjects';
 import { hasPanelAccess, isReviewOnly, reviewOnlyRedirect, type PanelRole } from './roles';
@@ -52,10 +53,12 @@ let authClient: AuthClient | null = null;
  */
 export async function getAuthClient(): Promise<AuthClient> {
   if (!authClient) {
-    authClient = createClient({
-      clientID: process.env.ClientId!,
-      issuer: process.env.Issuer!,
-    });
+    // verify() also checks aud: only admin-web's own client's tokens (AUD_MODE log|enforce|off)
+    authClient = withAudienceCheck(
+      createClient({ clientID: process.env.ClientId!, issuer: process.env.Issuer! }),
+      { service: 'admin-web', issuer: process.env.Issuer, mode: () => audienceMode(process.env.AUD_MODE), route: 'admin-web session' },
+      (message, fields) => logger.warn(message, fields),
+    );
   }
   return authClient;
 }

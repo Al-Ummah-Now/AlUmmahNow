@@ -1,4 +1,6 @@
 import { createClient } from "@al-ummah-now/openauth/client"
+import { audienceMode, withAudienceCheck } from "@al-ummah/shared-types"
+import { logger } from "@/lib/logger-server"
 
 type OpenAuthClient = ReturnType<typeof createClient>
 
@@ -24,7 +26,9 @@ export function getOpenAuthClient(now: () => number = Date.now): OpenAuthClient 
   const key = `${issuer}|${clientID}`
   const t = now()
   if (!cached || cached.key !== key || t - cached.createdAt >= CLIENT_TTL_MS || t < cached.createdAt) {
-    cached = { key, client: createClient({ clientID, issuer }), createdAt: t }
+    // verify() also checks aud: only this site's own client's tokens (AUD_MODE log|enforce|off)
+    const client = withAudienceCheck(createClient({ clientID, issuer }), { service: "web", issuer, mode: () => audienceMode(process.env.AUD_MODE), route: "web session" }, (message, fields) => logger.warn(message, fields))
+    cached = { key, client, createdAt: t }
   }
   return cached.client
 }

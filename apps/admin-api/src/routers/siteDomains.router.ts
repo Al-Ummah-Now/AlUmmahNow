@@ -175,7 +175,7 @@ register(studioSiteDomainsRouter, '', async (c) => {
   const expected = await internalKey(c.env);
   if (!sameKey(c.req.header('X-API-Key') ?? '', expected)) return c.json({ success: false, code: 'unauthorized' }, 401);
   const authorization = c.req.header('Authorization') ?? '';
-  const payload = authorization.startsWith('Bearer ') ? await verifyAccessToken(authorization.slice(7), c.env as never) : null;
+  const payload = authorization.startsWith('Bearer ') ? await verifyAccessToken(authorization.slice(7), c.env as never, `${c.req.method} ${c.req.path}`) : null;
   const userId = (payload as { sub?: string } | null)?.sub;
   if (!userId) return c.json({ success: false, code: 'unauthorized' }, 401);
   if (!(await canEdit(c.env, c.req.param('channelId') ?? '', userId))) return c.json({ success: false, code: 'forbidden' }, 403);

@@ -13,7 +13,7 @@
 
 import { createRemoteJWKSet, jwtVerify, type JWTPayload, type JWTVerifyGetKey } from 'jose';
 import { logger } from './lib/logger';
-import { isAdminLiveChannel } from '@al-ummah/shared-types';
+import { audienceMode, checkAudience, isAdminLiveChannel } from '@al-ummah/shared-types';
 import { isLegacyLongLivedToken, isTokenRevoked } from './token-revocation';
 
 /** Identity established for a connection. */
@@ -33,11 +33,13 @@ export interface AuthPayload {
 export interface AuthEnv {
   Issuer?: string;
   /**
-   * Optional comma-separated OpenAuth client ids whose access tokens may connect (checked
-   * against `aud`). Unset in prod/QA: the auth server issues tokens for any client_id, so an
-   * aud check adds no protection there, and the web worker's client id is not reliably set.
+   * Optional comma-separated client ids that replace the registry allowlist and are always
+   * enforced (tests, local). Unset in prod/stage/QA: there the first-party registry in
+   * @al-ummah/shared-types token-audience.ts applies, in AUD_MODE.
    */
   ALLOWED_CLIENT_IDS?: string;
+  /** "log" (default): log a token issued to another client; "enforce": refuse it; "off". */
+  AUD_MODE?: string;
   ENVIRONMENT?: string;
   /** Token revocation list written by the auth worker (#437). */
   TOKEN_REVOCATIONS?: KVNamespace;
@@ -86,10 +88,26 @@ function allowedClientIds(env: AuthEnv): string[] {
 }
 
 function audienceAllowed(aud: JWTPayload['aud'], allowed: string[]): boolean {
-  if (allowed.length === 0) return true;
   // OpenAuth sets aud to the client id that obtained the token; require it.
   const auds = Array.isArray(aud) ? aud : aud ? [aud] : [];
   return auds.some((a) => allowed.includes(a));
+}
+
+/**
+ * Whether the token's client may connect. An explicit ALLOWED_CLIENT_IDS is enforced as is;
+ * otherwise the per-environment first-party registry applies in AUD_MODE (log by default: a
+ * mismatch is logged with the client id, never the token, and still connects).
+ */
+function clientMayConnect(aud: JWTPayload['aud'], issuer: string, env: AuthEnv): boolean {
+  const override = allowedClientIds(env);
+  if (override.length > 0) {
+    if (audienceAllowed(aud, override)) return true;
+    logger.warn('WebSocket token rejected: client not allowed', { aud });
+    return false;
+  }
+  const verdict = checkAudience({ service: 'websocket-server', aud, issuer, mode: audienceMode(env.AUD_MODE), route: 'WS authenticate' });
+  if (verdict.log) logger.warn("Access token audience is not one of this service's clients", verdict.log);
+  return verdict.ok;
 }
 
 /**
@@ -97,7 +115,7 @@ function audienceAllowed(aud: JWTPayload['aud'], allowed: string[]): boolean {
  *
  * - With `Issuer` set: ES256 signature against the issuer JWKS, `iss` must match,
  *   `exp` must be present and in the future, the token must be an access token for
- *   a `user` subject, and `aud` must be an allowed client id (when configured).
+ *   a `user` subject, and `aud` is checked against the allowed clients (clientMayConnect).
  * - Without `Issuer`: only in development, the payload is decoded unverified.
  * - Otherwise: rejected.
  */
@@ -107,7 +125,7 @@ export async function authenticateToken(
   deps: AuthDeps = {},
 ): Promise<AuthPayload | null> {
   if (env.Issuer) {
-    return verifySignedToken(token, env.Issuer, allowedClientIds(env), deps, env.TOKEN_REVOCATIONS);
+    return verifySignedToken(token, env.Issuer, env, deps);
   }
   if (isDevelopment(env)) {
     return decodeUnverifiedToken(token, deps.now);
@@ -119,10 +137,10 @@ export async function authenticateToken(
 async function verifySignedToken(
   token: string,
   issuer: string,
-  allowed: string[],
+  env: AuthEnv,
   deps: AuthDeps,
-  revocations?: KVNamespace,
 ): Promise<AuthPayload | null> {
+  const revocations = env.TOKEN_REVOCATIONS;
   try {
     const { payload } = await jwtVerify<OpenAuthAccessClaims>(token, deps.getKey ?? remoteJwks(issuer), {
       issuer,
@@ -140,10 +158,7 @@ async function verifySignedToken(
       logger.warn('WebSocket token rejected: no user id');
       return null;
     }
-    if (!audienceAllowed(payload.aud, allowed)) {
-      logger.warn('WebSocket token rejected: client not allowed', { aud: payload.aud });
-      return null;
-    }
+    if (!clientMayConnect(payload.aud, issuer, env)) return null;
     // A legacy 30-day token carries the roles from its issue (#663); clients fetch a fresh token
     if (isLegacyLongLivedToken(payload)) {
       logger.warn('WebSocket token rejected: legacy long-lived token');
