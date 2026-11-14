@@ -62,9 +62,9 @@ describe('site rules (shared-types)', () => {
 			SITE_THEME_CHOICES.map((t) => `${t.id}@${t.version}`),
 			BUILT_IN_THEMES.map((t) => `${t.id}@${t.version}`),
 		);
-		assert.ok(isChoosableThemeRef('fawanees@1.2.0'));
+		assert.ok(isChoosableThemeRef('fawanees@1.3.0'));
 		assert.ok(!isChoosableThemeRef('fawanees'));
-		assert.ok(!isChoosableThemeRef('fawanees@1.1.0'));
+		assert.ok(!isChoosableThemeRef('fawanees@1.2.0'));
 	});
 
 	it('validates Studio updates against the limits', () => {
