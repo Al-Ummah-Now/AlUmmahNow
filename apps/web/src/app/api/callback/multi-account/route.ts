@@ -138,7 +138,7 @@ export async function GET(req: NextRequest) {
     // Note: Could use state parameter to track where "Add Account" was clicked for better UX
     logger.debug("[Multi-Account Callback] Redirecting to profile page");
     // Add query param to trigger session reload
-    return NextResponse.redirect(`${url.origin}/${locale}/profile?session_updated=true`);
+    return NextResponse.redirect(`${url.origin}/${locale}/profile`);
   }
 
   // Error objects serialize to {}, so never answer with the raw error

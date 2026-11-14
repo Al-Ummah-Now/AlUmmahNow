@@ -101,12 +101,12 @@ export async function startSignIn(page: Page, locale: Locale): Promise<void> {
 }
 
 /**
- * Waits until the web app has finished the navigations it makes on its own after
- * the OAuth callback: /api/callback redirects to the start page (or, for a new
- * user, /<locale>/profile/create) with ?session_updated=true; on any other page the
- * client then drops that parameter once it has hydrated. A page.goto before that is
- * "interrupted by another navigation" (WebKit, Firefox) or lands on a page the
- * redirect replaces. Every sign-in helper ends here, so specs never wait for it.
+ * Waits until the web app is done after the OAuth callback: /api/callback redirects (a full page
+ * load) to the start page, or for a new user to /<locale>/profile/create, and React has hydrated
+ * it (a click before that is lost). A page.goto before the redirect lands is "interrupted by
+ * another navigation" (WebKit, Firefox). Builds before 2026-11-14 added ?session_updated=true and
+ * removed it once hydrated; that is still waited out. Every sign-in helper ends here, so specs
+ * never wait for it.
  */
 export async function settleSignIn(page: Page, locale: Locale, timeout = 45000): Promise<void> {
   const web = new URL(target().web).origin;
@@ -115,14 +115,23 @@ export async function settleSignIn(page: Page, locale: Locale, timeout = 45000):
       () => {
         const url = new URL(page.url());
         if (url.origin !== web || !url.pathname.startsWith(`/${locale}`)) return false;
-        // A new user's /profile/create keeps the parameter (nothing there drops it): that page is
-        // where the chain ends. Anywhere else the client drops it once it has hydrated.
+        // Older builds: a new user's /profile/create kept the parameter (nothing there dropped it)
         return url.pathname.startsWith(`/${locale}/profile/create`) || !url.searchParams.has('session_updated');
       },
       { message: `the web app did not settle after sign-in (at ${page.url()})`, timeout },
     )
     .toBe(true);
   await page.waitForLoadState('load');
+  await expect
+    .poll(
+      () =>
+        page
+          .evaluate(() => [...document.querySelectorAll('button')].some((b) => Object.keys(b).some((k) => k.startsWith('__reactProps$'))))
+          // A navigation of the app's own (a redirect) replaced the page while asking: ask again
+          .catch((error: unknown) => (/Execution context was destroyed|navigation/i.test(String(error)) ? false : Promise.reject(error))),
+      { message: `the web app never hydrated after sign-in (at ${page.url()})`, timeout },
+    )
+    .toBe(true);
 }
 
 /** The web app is back with a session, and done redirecting. */

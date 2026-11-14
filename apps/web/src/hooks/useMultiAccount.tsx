@@ -436,7 +436,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
     };
   }, [loadSessionData]);
 
-  // Detect OAuth callback redirect with session_updated query param
+  // A link or bookmark from before sign-in stopped adding ?session_updated=true: drop it
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const hasSessionUpdate = params.get('session_updated') === 'true';

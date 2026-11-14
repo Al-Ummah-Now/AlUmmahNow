@@ -155,15 +155,15 @@ export async function GET(req: NextRequest) {
         if (!profileExists) {
           const profilePath = getProfileCreationPath(locale as 'en' | 'ar');
           logger.debug("Redirecting new user to profile creation", profilePath);
-          return NextResponse.redirect(`${url.origin}${profilePath}?session_updated=true`);
+          return NextResponse.redirect(`${url.origin}${profilePath}`);
         }
       } catch (error) {
         logger.error('Error checking profile status:', error);
       }
     }
 
-    // Back to the page the sign-in started from (or the locale's home), with
-    // session_updated so the header reloads the session
+    // Back to the page the sign-in started from (or the locale's home). A full page load: the
+    // header reads the new session on mount, so the URL carries no marker (successDestination)
     return NextResponse.redirect(sameOriginUrl(successDestination(returnPath, locale), url.origin));
   }
   // Error objects serialize to {}, so never answer with the raw error
