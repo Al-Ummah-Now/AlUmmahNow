@@ -37,7 +37,12 @@ export const STEP_UP_ROUTES: readonly { method: Method; path: string; what: stri
   { method: 'POST', path: '/api/trash/:kind/:id/purge', what: 'Delete permanently: contact messages, themes, creator tiers' },
   { method: 'POST', path: '/api/status/incidents/:id/purge', what: 'Delete permanently: status incident' },
   { method: 'POST', path: '/api/invites/:id/purge', what: 'Delete permanently: invite' },
-  // CSAM cases (docs/specs/CSAM-RESPONSE.md): evidence, legal hold, retention, the webhook secret
+  // CSAM cases (docs/specs/CSAM-RESPONSE.md): intake and mapping freeze an account like a ban does;
+  // the report starts the retention clock; evidence, legal hold, retention, the webhook secret
+  { method: 'POST', path: '/api/csam/intake', what: 'CSAM intake (takes down and freezes the uploader)' },
+  { method: 'POST', path: '/api/csam/:id/map', what: 'CSAM hand mapping (takes down and freezes the uploader)' },
+  { method: 'POST', path: '/api/csam/:id/retry', what: 'CSAM takedown retry' },
+  { method: 'POST', path: '/api/csam/:id/reported', what: 'CSAM reported to NCMEC (starts the retention clock)' },
   { method: 'GET', path: '/api/csam/:id/files/:name', what: 'CSAM evidence download' },
   { method: 'POST', path: '/api/csam/:id/hold', what: 'CSAM legal hold' },
   { method: 'PUT', path: '/api/csam/settings', what: 'CSAM evidence retention' },

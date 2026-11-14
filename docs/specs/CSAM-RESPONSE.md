@@ -22,7 +22,13 @@ This spec covers what the platform does from the match to the report.
 
 Only **super admins** (`isSuperAdmin`, shared `roles.ts`) can see the CSAM pages, the cases, the evidence and the access log. No permission, role or channel role grants it, and that includes `users:manage` and `content:delete`.
 
-- admin-api checks super admin on every `/api/csam/*` route. Evidence downloads, legal-hold changes, the retention setting and evidence deletion are also step-up routes (`STEP_UP_ROUTES`).
+- admin-api checks super admin on every `/api/csam/*` route.
+- These are also step-up routes (`STEP_UP_ROUTES`), so they need a fresh sign-in:
+  - intake, hand mapping and takedown retry, which take an item down and freeze an account the way a ban does;
+  - "Reported", which starts the retention clock;
+  - evidence downloads, legal-hold changes, the retention setting and the webhook secret.
+- A hand mapping cannot be checked against the URL, because the URL did not resolve. The access log keeps exactly what was chosen: the item, the image path and the uploader.
+- The reasons sent with the videos ban and the Auth requests are neutral (`Trust and safety action (ref <case id>)`), because moderators who cannot open CSAM cases read them. Only `csam_cases` links an account to a case.
 - api-videos `/internal/csam/*` sits behind the internal API key. Only admin-api calls it, after its own checks.
 - The admin jobs list hides the parameters of `csam.contain` jobs from anyone who is not a super admin, and only a super admin can retry one.
 
@@ -125,6 +131,7 @@ The case is flagged on the Errors page as `csam:<caseId>`, "Report to the NCMEC 
 ## 7. Retention and legal hold
 
 - The setting is `csam_settings.retention_days`: default 365, accepted range 365–3650 (`validCsamRetentionDays`). Only a super admin can change it, with step-up, and the change is audited.
+- `reported_at` is set once. A later "Reported" may correct a mistyped report ID but never moves the time, because moving it earlier would bring the deletion forward.
 - A case's evidence may be deleted at `reported_at + retention_days` (`csamRetainUntil`). That never happens before a report, and never while the case is under a **legal hold**, which any super admin can set or lift with a reason (audited).
 - A daily sweep in admin-api deletes due evidence through api-videos. It keeps the case row and its access log, marks the case `closed`, and records the deletion in the log.
 

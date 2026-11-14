@@ -102,9 +102,9 @@ describe('who may use it', () => {
     assert.equal(t.videos.calls.length, 0);
   });
 
-  it('evidence, holds, retention and the webhook secret need a step-up', () => {
+  it('intake, mapping, retry, the report, evidence, holds, retention and the webhook secret need a step-up', () => {
     const paths = STEP_UP_ROUTES.map((r) => `${r.method} ${r.path}`);
-    for (const p of ['GET /api/csam/:id/files/:name', 'POST /api/csam/:id/hold', 'PUT /api/csam/settings', 'POST /api/csam/settings/webhook-secret']) assert.ok(paths.includes(p), p);
+    for (const p of ['POST /api/csam/intake', 'POST /api/csam/:id/map', 'POST /api/csam/:id/retry', 'POST /api/csam/:id/reported', 'GET /api/csam/:id/files/:name', 'POST /api/csam/:id/hold', 'PUT /api/csam/settings', 'POST /api/csam/settings/webhook-secret']) assert.ok(paths.includes(p), p);
   });
 
   it('other admins never see a CSAM job\'s details, and cannot retry one', async () => {
@@ -133,10 +133,15 @@ describe('intake', () => {
     assert.equal(contain.body.caseId, video.id);
     assert.equal(contain.actor, 'usr_super');
     assert.ok(t.videos.calls.some((c) => c.path === '/internal/admin/users/usr_uploader/ban' && c.method === 'POST'));
-    const requests = (await t.db.prepare('SELECT action, reason_category, evidence FROM auth_moderation_requests ORDER BY action').all<any>()).results;
+    const requests = (await t.db.prepare('SELECT action, reason_category, reason, evidence FROM auth_moderation_requests ORDER BY action').all<any>()).results;
     assert.deepEqual(requests.map((r) => r.action), ['revoke_sessions', 'suspend_account']);
-    // Never a link to the matched content in what goes to Auth
+    // Never a link to the matched content in what goes to Auth, and the reasons (read by moderators
+    // who cannot open CSAM cases) never say CSAM
     for (const r of requests) assert.equal(r.evidence.includes('alummahnow.net/pub'), false);
+    const ban = t.videos.calls.find((c) => c.path === '/internal/admin/users/usr_uploader/ban')!;
+    for (const reason of [ban.body.reason, ...requests.map((r) => r.reason)]) {
+      assert.equal(reason, `Trust and safety action (ref ${video.id})`);
+    }
     assert.equal(t.queued.length, 2);
     // Each case is flagged for the report
     assert.deepEqual(t.flags().filter((k: string) => k.startsWith('csam:')).sort(), [`csam:${avatar.id}`, `csam:${video.id}`].sort());
@@ -153,6 +158,9 @@ describe('intake', () => {
     const mapped = (await t.json(`/api/csam/${avatar.id}/map`, { method: 'POST', json: { kind: 'profile_image', id: 'usr_uploader', field: 'avatarUrl' } })).body.result;
     assert.equal(mapped.status, 'containing');
     assert.deepEqual(await t.log(avatar.id), ['case.opened', 'case.mapped']);
+    // The log keeps what was chosen: nothing can check a hand mapping against the URL
+    const entry = await t.db.prepare("SELECT detail FROM csam_access_log WHERE case_id = ? AND action = 'case.mapped'").bind(avatar.id).first<{ detail: string }>();
+    assert.equal(JSON.parse(entry!.detail).uploaderId, 'usr_uploader');
     assert.equal((await t.json(`/api/csam/${avatar.id}/map`, { method: 'POST', json: { kind: 'profile_image', id: 'usr_uploader', field: 'avatarUrl' } })).body.code, 'already_mapped');
   });
 });
@@ -198,6 +206,13 @@ describe('the case', () => {
     assert.equal(out.retainUntil, new Date(Date.parse(reportedAt) + 365 * DAY).toISOString());
     assert.ok(t.resolved().includes(`csam:${c.id}`));
     assert.ok((await t.log(c.id)).includes('case.reported'));
+    // The time is fixed once recorded (it starts the retention clock); a mistyped id can be corrected
+    const earlier = new Date(Date.now() - 3600_000).toISOString();
+    assert.equal((await t.json(`/api/csam/${c.id}/reported`, { method: 'POST', json: { reportId: 'SYNTH-0002', reportedAt: earlier } })).body.code, 'reported_at_fixed');
+    const fixed = (await t.json(`/api/csam/${c.id}/reported`, { method: 'POST', json: { reportId: 'SYNTH-0002' } })).body.result;
+    assert.equal(fixed.reportedAt, reportedAt);
+    const row = await t.db.prepare('SELECT report_id FROM csam_cases WHERE id = ?').bind(c.id).first<{ report_id: string }>();
+    assert.equal(row!.report_id, 'SYNTH-0002');
   });
 
   it('the access log is append-only', async () => {
