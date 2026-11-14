@@ -222,3 +222,26 @@ export function keyDown(state: AutocompleteState, mode: AutocompleteMode, key: s
       return { state, effect: NONE, preventDefault: false };
   }
 }
+
+/**
+ * An avatar's letter: the first letter grapheme of the name, skipping spaces, marks, emoji and
+ * punctuation ("  ✨Sara" → "S"). An Arabic letter alone takes its isolated form, where some
+ * (ه) look like a dot, so it is followed by a zero-width joiner to show its initial form (هـ).
+ */
+export function avatarInitial(label: string): string {
+  const text = label.normalize('NFC');
+  const graphemes =
+    typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function'
+      ? Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text), (s) => s.segment)
+      : Array.from(text);
+  const first = graphemes.find((g) => /^\p{L}/u.test(g));
+  if (!first) return '?';
+  const letter = first.replace(/\p{M}/gu, '');
+  return /\p{Script=Arabic}/u.test(letter) ? `${letter}‍` : letter.toLocaleUpperCase();
+}
+
+/** Whether an avatar letter is Arabic: drawn in the Arabic font a size up (the Latin font's fallback draws it small). */
+export const isArabicInitial = (initial: string): boolean => /\p{Script=Arabic}/u.test(initial);
+
+/** The avatar letter's font for an Arabic initial on any page (the page's own font may be Latin only). */
+export const ARABIC_INITIAL_STYLE = { fontFamily: 'var(--fanous-font-arabic), system-ui, sans-serif' } as const;

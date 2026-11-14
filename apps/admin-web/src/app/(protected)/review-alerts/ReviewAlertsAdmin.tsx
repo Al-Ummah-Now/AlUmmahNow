@@ -14,7 +14,8 @@ import {
 import { useLanguage } from '@/i18n/I18nProvider';
 import { formatDate, type MessageKey } from '@/i18n/translate';
 import { Autocomplete } from '@/components/search/Autocomplete';
-import { resolveUrl } from '@/components/search/autocomplete-model';
+import { ARABIC_INITIAL_STYLE, avatarInitial, isArabicInitial, resolveUrl } from '@/components/search/autocomplete-model';
+import { TimeField, TimeZoneField } from './fields';
 import { ConfirmButton } from '@/components/content/actions';
 import { useUndoableAction } from '@/components/undo/UndoToast';
 import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
@@ -66,11 +67,15 @@ function useStaffMember(userId: string | null): AdminSuggestion | null | undefin
 function StaffChip({ userId, role }: { userId: string; role: string }) {
   const { t } = useLanguage();
   const item = useStaffMember(userId);
-  const name = item?.label ?? (item === null ? t('reviewAlerts.unknownUser', { id: userId }) : t('autocomplete.lookingUp'));
-  const initial = Array.from((item?.label ?? '').trim())[0]?.toUpperCase() ?? '';
+  const name = item?.label ?? (item === null ? t('reviewAlerts.unknownUser') : t('autocomplete.lookingUp'));
+  const initial = item?.label ? avatarInitial(item.label) : '';
   return (
     <div className="flex min-h-11 min-w-0 items-center gap-3" data-testid="review-alerts-staff" data-user-id={userId}>
-      <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-2 font-medium text-fg-muted">
+      <span
+        aria-hidden="true"
+        style={isArabicInitial(initial) ? ARABIC_INITIAL_STYLE : undefined}
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-2 font-medium text-fg-muted ${isArabicInitial(initial) ? 'text-xl leading-none' : ''}`}
+      >
         {initial}
       </span>
       <span className="flex min-w-0 flex-col">
@@ -182,7 +187,7 @@ function RotaSettings({ view }: { view: ReviewAlertsView }) {
             <p className="text-sm text-fg-muted mb-2">{t('reviewAlerts.ownersHint')}</p>
             <ul className="space-y-2 mb-3" data-testid="review-alerts-owners">
               {draft.owners.map((userId) => (
-                <li key={userId} className="flex flex-wrap items-center justify-between gap-3 rounded border border-border bg-surface-2 p-3" data-user-id={userId}>
+                <li key={userId} className="flex flex-wrap items-center justify-between gap-3 rounded border border-border p-3" data-user-id={userId}>
                   <StaffChip userId={userId} role={t('reviewAlerts.owner')} />
                   <button type="button" className={secondaryButtonClass} onClick={() => setDraft(removeOwner(draft, userId))} data-testid="review-alerts-owner-remove">
                     {t('reviewAlerts.removeOwner')}
@@ -195,6 +200,7 @@ function RotaSettings({ view }: { view: ReviewAlertsView }) {
                 key={`owner-${pickerKey}`}
                 kind="user"
                 mode="pick"
+                showIds={false}
                 label={t('reviewAlerts.addOwner')}
                 onChange={(id) => {
                   if (!id) return;
@@ -219,16 +225,7 @@ function RotaSettings({ view }: { view: ReviewAlertsView }) {
                       {t('reviewAlerts.remove')}
                     </button>
                   </div>
-                  <div className="flex flex-wrap items-end gap-3">
-                    <label className="flex min-w-0 max-w-full flex-col text-sm">
-                      <span className="text-fg mb-1">{t('reviewAlerts.timeZone')}</span>
-                      <select className={`${fieldClass} min-h-11 max-w-full`} value={entry.timeZone} onChange={(e) => setDraft(updateReviewer(draft, entry.userId, { timeZone: e.target.value }))} data-testid="review-alerts-time-zone">
-                        {(zones.includes(entry.timeZone) ? zones : [entry.timeZone, ...zones]).map((z) => (
-                          <option key={z} value={z}>{z}</option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
+                  <TimeZoneField value={entry.timeZone} zones={zones} onChange={(timeZone) => setDraft(updateReviewer(draft, entry.userId, { timeZone }))} testId="review-alerts-time-zone" />
                   <div className="flex flex-wrap gap-4">
                     <label className={checkRow}>
                       <input type="checkbox" className={check} checked={entry.senior} onChange={(e) => setDraft(updateReviewer(draft, entry.userId, { senior: e.target.checked }))} data-testid="review-alerts-senior" />
@@ -258,14 +255,9 @@ function RotaSettings({ view }: { view: ReviewAlertsView }) {
                             ))}
                           </div>
                         </fieldset>
-                        <label className="flex flex-col text-sm">
-                          <span className="text-xs text-fg-muted mb-1">{t('reviewAlerts.shiftStart')}</span>
-                          <input type="time" className={`${fieldClass} min-h-11`} value={shift.start} onChange={(e) => setShift(entry.userId, i, { ...shift, start: e.target.value })} />
-                        </label>
-                        <label className="flex flex-col text-sm">
-                          <span className="text-xs text-fg-muted mb-1">{t('reviewAlerts.shiftEnd')}</span>
-                          <input type="time" className={`${fieldClass} min-h-11`} value={shift.end === '24:00' ? '00:00' : shift.end} onChange={(e) => setShift(entry.userId, i, { ...shift, end: e.target.value === '00:00' ? '24:00' : e.target.value })} />
-                        </label>
+                        <TimeField label={t('reviewAlerts.shiftStart')} value={shift.start} onChange={(start) => setShift(entry.userId, i, { ...shift, start })} />
+                        {/* "24:00" (end of day) shows as 00:00, and 00:00 is stored as 24:00 */}
+                        <TimeField label={t('reviewAlerts.shiftEnd')} value={shift.end === '24:00' ? '00:00' : shift.end} onChange={(end) => setShift(entry.userId, i, { ...shift, end: end === '00:00' ? '24:00' : end })} />
                         {crossesMidnight(shift) && <span className="text-xs text-fg-muted">{t('reviewAlerts.crossesMidnight')}</span>}
                         <button type="button" className={secondaryButtonClass} onClick={() => setShift(entry.userId, i, null)}>{t('reviewAlerts.removeShift')}</button>
                       </div>
@@ -288,6 +280,7 @@ function RotaSettings({ view }: { view: ReviewAlertsView }) {
                   key={`reviewer-${pickerKey}`}
                   kind="user"
                   mode="pick"
+                  showIds={false}
                   label={t('reviewAlerts.addReviewer')}
                   onChange={(id) => {
                     if (!id) return;
@@ -302,7 +295,7 @@ function RotaSettings({ view }: { view: ReviewAlertsView }) {
         </fieldset>
 
         <p className="text-sm text-fg-muted" data-testid="review-alerts-last-changed">
-          {view.updatedAt ? t('reviewAlerts.lastChanged', { date: formatDate(view.updatedAt, locale, true), actor: actor?.label ?? view.updatedBy ?? '—' }) : t('reviewAlerts.neverChanged')}
+          {view.updatedAt ? t('reviewAlerts.lastChanged', { date: formatDate(view.updatedAt, locale, true), actor: actor?.label ?? (actor === null ? t('reviewAlerts.unknownUser') : '…') }) : t('reviewAlerts.neverChanged')}
         </p>
         {view.canManage ? (
           <button type="submit" className={primaryButtonClass} disabled={busy || !dirty} data-testid="review-alerts-save">
@@ -442,7 +435,7 @@ function StaffDevices() {
     <section className={cardClass} aria-labelledby={`${ids}-title`} data-testid="review-alerts-devices">
       <h2 id={`${ids}-title`} className="text-lg font-semibold text-fg">{t('reviewAlerts.devicesTitle')}</h2>
       <p className="text-sm text-fg-muted mb-3">{t('reviewAlerts.devicesHint')}</p>
-      <Autocomplete kind="user" mode="pick" label={t('reviewAlerts.devicesPick')} onChange={(id) => void load(id)} testId="review-alerts-devices-user" />
+      <Autocomplete kind="user" mode="pick" showIds={false} label={t('reviewAlerts.devicesPick')} onChange={(id) => void load(id)} testId="review-alerts-devices-user" />
       {error && <ErrorAlert testId="review-alerts-devices-error">{error}</ErrorAlert>}
       <p role="status" className="text-sm text-fg mt-2" data-testid="review-alerts-devices-status">{notice}</p>
       {devices && devices.length === 0 && <p className="text-sm text-fg-muted mt-2">{t('reviewAlerts.devicesEmpty')}</p>}

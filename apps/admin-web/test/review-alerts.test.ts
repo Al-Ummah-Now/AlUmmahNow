@@ -16,6 +16,8 @@ import {
   toggleDay,
   updateReviewer,
 } from '../src/app/(protected)/review-alerts/model';
+import { cityFromId, matchZones, normalizeSearch, zoneOffset, zoneOptions } from '../src/app/(protected)/review-alerts/timezones';
+import { avatarInitial } from '../src/components/search/autocomplete-model';
 import en from '../src/i18n/messages/en';
 import ar from '../src/i18n/messages/ar';
 
@@ -60,5 +62,34 @@ describe('review alerts model', () => {
     assert.equal(en.reviewAlerts.dayNames.split(',').length, 7);
     assert.equal(ar.reviewAlerts.dayNames.split(',').length, 7);
     assert.ok(!JSON.stringify(ar.reviewAlerts).includes('فيديو'));
+  });
+
+  it('finds time zones by id, city, country and Arabic city, with the UTC offset', () => {
+    const zones = timeZones();
+    const at = new Date('2026-01-15T12:00:00Z');
+    const en = zoneOptions('en', zones, at);
+    const ar = zoneOptions('ar', zones, at);
+    assert.equal(matchZones(en, 'riyadh')[0]!.id, 'Asia/Riyadh');
+    assert.equal(matchZones(en, 'new york')[0]!.id, 'America/New_York');
+    assert.equal(matchZones(en, 'Asia/Amman')[0]!.id, 'Asia/Amman');
+    assert.equal(matchZones(ar, 'الرياض')[0]!.id, 'Asia/Riyadh');
+    assert.equal(matchZones(ar, 'عمان')[0]!.id, 'Asia/Amman', 'without the shadda too');
+    assert.equal(matchZones(ar, 'riyadh')[0]!.city, 'الرياض', 'English words still match on the Arabic page');
+    assert.equal(zoneOffset('Asia/Riyadh', at).label, 'UTC+3');
+    assert.equal(zoneOffset('America/New_York', at).label, 'UTC−5');
+    assert.equal(zoneOffset('Asia/Kolkata', at).label, 'UTC+5:30');
+    assert.equal(zoneOffset('UTC', at).label, 'UTC');
+    assert.equal(cityFromId('America/Argentina/Buenos_Aires'), 'Buenos Aires');
+    assert.equal(normalizeSearch('عمّان'), normalizeSearch('عمان'));
+    assert.equal(matchZones(en, '').length, zones.length);
+  });
+
+  it('takes the first letter of a name for its avatar', () => {
+    assert.equal(avatarInitial('sara Haddad'), 'S');
+    assert.equal(avatarInitial('  ✨ Lina'), 'L');
+    assert.equal(avatarInitial('\u0301émile'), 'É');
+    assert.equal(avatarInitial('هناء القاسم'), 'ه\u200D', 'Arabic letters show their initial form');
+    assert.equal(avatarInitial('«عمر»'), 'ع\u200D');
+    assert.equal(avatarInitial('🙂'), '?');
   });
 });
