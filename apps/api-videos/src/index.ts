@@ -1,5 +1,5 @@
 import { edgeRateLimit, humanCheckStatus, requireHuman, scriptedClientBlock } from './middleware/bot-protection';
-import { reportServerError, withErrorReporting, type ErrorReporterEnv } from '@al-ummah/shared-types';
+import { constantTimeEqual, reportServerError, withErrorReporting, type ErrorReporterEnv } from '@al-ummah/shared-types';
 import { SUBSCRIPTION_IMPORT_CRON, importPendingSubscriptions } from './lib/subscription-import';
 import { handleProcessingCheckBatch, sweepProcessingVideos } from './lib/processing/loop';
 import { handleReaperBatch, isReaperMessage, sweepStaleUploads } from './lib/uploads/reaper';
@@ -118,14 +118,14 @@ app.use('*', cors({
 }));
 
 // Internal / diagnostic endpoints require the service-to-service key
-// (X-API-Key == INTERNAL_API_KEY). They mutate storage or expose internals.
+// (X-API-Key == INTERNAL_API_KEY, compared in constant time). They mutate storage or expose internals.
 const INTERNAL_PATHS = ['/internal/*', '/test', '/test-error', '/api/i18n/sync'];
 for (const p of INTERNAL_PATHS) {
 	app.use(p, async (c, next) => {
 		const binding = (c.env as unknown as { INTERNAL_API_KEY?: string | { get(): Promise<string> } }).INTERNAL_API_KEY;
 		const expected = typeof binding === 'string' ? binding : await binding?.get();
 		const provided = c.req.header('X-API-Key');
-		if (!expected || !provided || provided !== expected) {
+		if (!constantTimeEqual(provided, expected)) {
 			return c.json({ success: false, error: 'Unauthorized' }, 401);
 		}
 		return next();

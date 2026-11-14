@@ -9,7 +9,7 @@ import { WebSocketDurableObject, MAX_BROADCAST_ITEMS } from './websocket';
 import { SHARD_HEADER, readAllShards, routeBroadcast, shardsInRandomOrder, topicRoutingReady, type BroadcastItem } from './shards';
 import { logger } from './lib/logger';
 import { coalescerName } from './admin-coalescer';
-import { isAdminLiveChannel } from '@al-ummah/shared-types';
+import { constantTimeEqual, isAdminLiveChannel } from '@al-ummah/shared-types';
 import { reportServerError, requestIdOf, type ErrorReporterEnv, type ExecutionContextLike } from '@al-ummah/shared-types';
 import { robotsTxtResponse, withNoIndex } from './lib/crawlers';
 
@@ -123,7 +123,7 @@ app.get('/ws', async (c) => {
   }
 });
 
-/** Checks the X-API-Key header against INTERNAL_API_KEY. */
+/** Checks the X-API-Key header against INTERNAL_API_KEY (constant time). */
 async function hasInternalKey(c: { req: { header(name: string): string | undefined }; env: Env }): Promise<boolean> {
   const apiKey = c.req.header('X-API-Key');
   let expectedApiKey: string | undefined;
@@ -134,7 +134,7 @@ async function hasInternalKey(c: { req: { header(name: string): string | undefin
       expectedApiKey = await c.env.INTERNAL_API_KEY.get();
     }
   }
-  return Boolean(apiKey && expectedApiKey && apiKey === expectedApiKey);
+  return constantTimeEqual(apiKey, expectedApiKey);
 }
 
 /**

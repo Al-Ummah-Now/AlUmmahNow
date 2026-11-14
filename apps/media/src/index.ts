@@ -12,7 +12,7 @@ import { isCaptionAudioJobMessage, isLiveReviewJobMessage, isMediaRev, isMediaVi
 import { liveReviewQueueAction, mp4QueueAction } from './jobs';
 import { reportCaptionAudio, reportLiveReviewMedia, reportMp4Event } from './videos-api';
 import { handlePrivate } from './edge';
-import { errorText, log, secret, type Env } from './env';
+import { errorText, hasInternalKey, log, type Env } from './env';
 import { withNoIndex } from './crawlers';
 import type { Mp4Outcome } from './transcoder';
 
@@ -39,8 +39,7 @@ async function handleFetch(request: Request, env: Env, ctx: ExecutionContext): P
 	if (url.pathname === '/health') return Response.json({ ok: true });
 	const m = /^\/internal\/jobs\/([^/]+)$/.exec(url.pathname);
 	if (m && request.method === 'GET') {
-		const expected = await secret(env.INTERNAL_API_KEY, 'INTERNAL_API_KEY');
-		if (request.headers.get('X-API-Key') !== expected) return new Response('Unauthorized', { status: 401 });
+		if (!(await hasInternalKey(request, env.INTERNAL_API_KEY))) return new Response('Unauthorized', { status: 401 });
 		const videoId = decodeURIComponent(m[1]!);
 		if (!isMediaVideoId(videoId)) return new Response('Bad id', { status: 400 });
 		const state = await env.TRANSCODER.get(env.TRANSCODER.idFromName(videoId)).jobState();
