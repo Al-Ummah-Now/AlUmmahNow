@@ -161,7 +161,7 @@ export const SITE_THEME_CHOICES: readonly { id: string; version: string; name: {
   { id: 'lantern', version: '1.0.0', name: { en: 'Lantern', ar: 'الفانوس' } },
   { id: 'zujaj', version: '1.0.0', name: { en: 'Zujaj', ar: 'زجاج' } },
   { id: 'nahas', version: '1.0.0', name: { en: 'Nahas', ar: 'نحاس' } },
-  { id: 'fawanees', version: '1.2.0', name: { en: 'Fawanees', ar: 'فوانيس' } },
+  { id: 'fawanees', version: '1.3.0', name: { en: 'Fawanees', ar: 'فوانيس' } },
 ];
 
 const THEME_REF = /^([a-z][a-z0-9-]{1,39})@((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*))$/;
