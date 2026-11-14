@@ -16,6 +16,7 @@ import { isPostHeldByReview } from '../video-review';
 import { VIDEO_CATEGORIES } from '../upload-defaults';
 import { isShort, type VideoFormatInput } from '../video-format';
 import { buildIndexText, detectTextLanguage } from './normalize';
+import { publicMp4Path } from '../media-delivery';
 
 export type SearchEntityType = 'video' | 'channel' | 'playlist' | 'post';
 
@@ -52,6 +53,8 @@ export interface SearchVideoPayload {
   channelNameLocalized?: Record<string, string>;
   channelAvatarUrl?: string;
   dateCreated?: string;
+  /** R2 key of the public MP4 (`pub/<id>/<rev>/video.mp4`, media-delivery publicMp4Path) for the video sitemap's content_loc */
+  mp4Path?: string;
 }
 
 export interface SearchChannelPayload {
@@ -283,6 +286,7 @@ export function projectVideo(raw: unknown): SearchRow<'video'> | null {
       channelName: str(obj.channelName) ?? str(obj.channel),
       channelAvatarUrl: str(obj.channelAvatarUrl),
       dateCreated: str(obj.publishedAt) ?? str(obj.dateCreated),
+      mp4Path: publicMp4Path(obj) ?? undefined,
     },
   };
 }

@@ -12,7 +12,7 @@ function seed() {
 	insert('search_channels', 'ch1', 'ch1', 1, { id: 'ch1', name: 'Channel One', handle: 'one' });
 	insert('search_channels', 'ch2', 'ch2', 0, { id: 'ch2', name: 'Hidden channel' });
 	insert('search_videos', 'v1', 'ch1', 1, { id: 'v1', title: 'Talk', description: 'About it', channelName: 'Channel One' }, { duration: 125, created: 1_750_000_000_000 });
-	insert('search_videos', 'v2', 'ch1', 1, { id: 'v2', title: 'Short one' }, { short: 1, duration: 40 });
+	insert('search_videos', 'v2', 'ch1', 1, { id: 'v2', title: 'Short one', mp4Path: 'pub/v2/e29db4ad6918a943/video.mp4' }, { short: 1, duration: 40 });
 	insert('search_videos', 'v3', 'ch2', 1, { id: 'v3', title: 'In a hidden channel' });
 	insert('search_videos', 'v4', 'ch1', 0, { id: 'v4', title: 'Not visible' });
 	insert('search_playlists', 'p1', 'ch1', 1, { id: 'p1', name: 'Series' });
@@ -36,6 +36,21 @@ describe('sitemap data', () => {
 		assert.equal(items[0].duration, 125);
 		assert.equal(items[0].publishedAt, new Date(1_750_000_000_000).toISOString());
 		assert.equal(items[1].isShort, true);
+	});
+
+	it('gives a video with a public MP4 its contentUrl on the media host, and nothing else one (#1200)', async () => {
+		const items = (await sitemapPage(seed() as never, 'videos', 0, 'media.alummahnow.net')) as SitemapVideo[];
+		assert.equal(items[0].contentUrl, undefined);
+		assert.equal(items[1].contentUrl, 'https://media.alummahnow.net/pub/v2/e29db4ad6918a943/video.mp4');
+		// No media host here: no URL
+		assert.equal(((await sitemapPage(seed() as never, 'videos', 0)) as SitemapVideo[])[1].contentUrl, undefined);
+		// A path that is not this video's public MP4 never becomes a URL
+		const db = seed();
+		for (const [id, mp4Path] of [['v5', 'priv/v5/abc/video.mp4'], ['v6', 'pub/other/abc/video.mp4'], ['v7', 'pub/v7/abc/../x.mp4'], ['v8', 42]] as const) {
+			db.db.prepare(`INSERT INTO search_videos (id, channel_id, visible, payload) VALUES (?, 'ch1', 1, ?)`).run(id, JSON.stringify({ id, title: id, mp4Path }));
+		}
+		const all = (await sitemapPage(db as never, 'videos', 0, 'media.alummahnow.net')) as SitemapVideo[];
+		assert.deepEqual(all.filter((v) => v.contentUrl).map((v) => v.id), ['v2']);
 	});
 
 	it('lists channels with their handle and playlists with their title', async () => {

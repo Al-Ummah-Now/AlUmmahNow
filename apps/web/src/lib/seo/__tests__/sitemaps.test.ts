@@ -38,6 +38,22 @@ describe('videos sitemaps (wiki AUN-SEO)', () => {
     expect(ar).toContain('<video:title>محاضرة</video:title>');
   });
 
+  it('adds content_loc only for a public MP4 the API sent, before player_loc (#1200, D-SEO-11)', () => {
+    const base = { title: 'Talk', duration: 60, isLive: false, publishedAt: null, lastModified: null };
+    const mp4 = 'https://media.alummahnow.net/pub/v1/e29db4ad6918a943/video.mp4';
+    const xml = videosSitemapXml(O, [
+      { ...base, id: 'v1', contentUrl: mp4 },
+      { ...base, id: 'v2' },
+      { ...base, id: 'v3', contentUrl: 'https://media.alummahnow.net/priv/v3/abc/video.mp4?token=x' },
+      { ...base, id: 'v4', contentUrl: 'http://media.alummahnow.net/pub/v4/abc/video.mp4' },
+    ]);
+    const line = (id: string) => xml.split('\n').find((l) => l.includes(`<loc>${O}/en/video/${id}</loc>`))!;
+    expect(line('v1')).toContain(`<video:content_loc>${mp4}</video:content_loc><video:player_loc>`);
+    expect(xml.split('\n').filter((l) => l.includes('<video:content_loc>'))).toHaveLength(2);
+    for (const id of ['v2', 'v3', 'v4']) expect(line(id)).not.toContain('content_loc');
+    expect(xml).not.toContain('priv/');
+  });
+
   it('uses channel handles and playlist ids', () => {
     expect(locs(channelsSitemapXml(O, [{ id: 'c1', handle: 'one', name: 'One', lastModified: null }, { id: 'c2', name: 'Two', lastModified: null }]))).toEqual([`${O}/en/@one`, `${O}/ar/@one`, `${O}/en/channels/c2`, `${O}/ar/channels/c2`]);
     expect(locs(playlistsSitemapXml(O, [{ id: 'p1', title: 'Series', lastModified: null }]))).toEqual([`${O}/en/playlist/p1`, `${O}/ar/playlist/p1`]);
