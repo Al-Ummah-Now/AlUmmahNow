@@ -1,5 +1,5 @@
 /**
- * Who uploaded each image on images.alummahnow.net (SEARCH_DB `image_owners`, migration 0034;
+ * Who uploaded each image on images.alummahnow.net (SEARCH_DB `image_owners`, migration 0037;
  * docs/specs/CSAM-RESPONSE.md §3). Avatar, cover and post-image paths carry only a random id, so a
  * matched URL reaches its uploader through this index: written on upload (recordImageOwner), and
  * for images uploaded before it by the images.index-owners job (backfillImageOwnersStep).
