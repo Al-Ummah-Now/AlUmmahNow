@@ -2486,7 +2486,8 @@ const en = {
       needsReport: 'Needs the CyberTipline report',
       hold: 'Legal hold',
       evidenceDeleted: 'Evidence deleted',
-      retainNever: 'Until reported (or held)',
+      retainHold: 'Kept while on legal hold',
+      retainUntilReported: 'Until the report',
     },
     intake: {
       title: 'Paste a Cloudflare CSAM alert',
@@ -2550,6 +2551,14 @@ const en = {
       none: 'Not started',
       phase: 'step: {phase}',
       attempts: 'attempts: {count}',
+      phases: {
+        plan: 'Planning',
+        copy_public: 'Copying public files',
+        purge_public: 'Removing public files',
+        copy_source: 'Copying the original',
+        purge: 'Removing every copy',
+        ban: 'Freezing the uploader',
+      },
       statuses: {
         queued: 'Queued',
         running: 'Running',

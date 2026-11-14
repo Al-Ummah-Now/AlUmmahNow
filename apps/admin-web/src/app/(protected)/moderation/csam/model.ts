@@ -101,13 +101,14 @@ export type CsamFactId = (typeof CSAM_FACT_IDS)[number];
  */
 export function csamFactRows(facts: CsamReportFacts, kindLabel: (kind: string) => string): CsamFactRow[] {
   const u = facts.uploader;
+  const utc = (value: string | null) => (value ? utcTime(value) : null);
   const rows: Array<[CsamFactId, string | null, boolean]> = [
-    ['incidentAt', facts.detectedAt, true],
+    ['incidentAt', utc(facts.detectedAt), true],
     ['timeZone', facts.incidentTimeZone, true],
     ['matchedUrl', facts.matchedUrl, true],
     ['itemKind', facts.itemKind ? kindLabel(facts.itemKind) : null, false],
     ['itemId', facts.itemId, true],
-    ['uploadedAt', facts.uploadedAt, true],
+    ['uploadedAt', utc(facts.uploadedAt), true],
     ['userId', u.userId, true],
     ['email', u.email, true],
     ['displayName', u.displayName, false],
@@ -118,6 +119,29 @@ export function csamFactRows(facts: CsamReportFacts, kindLabel: (kind: string) =
     ['files', facts.evidenceFiles.length ? facts.evidenceFiles.map((f) => f.name).join(', ') : null, true],
   ];
   return rows.map(([id, value, ltr]) => ({ id, value: value && value.trim() ? value : null, ltr }));
+}
+
+/** A time as the report form takes it: `2026-11-14 04:00:00` in UTC (the time zone field says UTC). */
+export function utcTime(value: string): string {
+  const ms = Date.parse(value);
+  return Number.isNaN(ms) ? value : new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
+}
+
+/** When the list says the evidence goes: a date, deleted, held (never), or not until the report. */
+export function retentionLabelKey(c: { evidenceDeletedAt: string | null; retainUntil: string | null; legalHold: boolean }): 'deleted' | 'date' | 'hold' | 'untilReported' {
+  if (c.evidenceDeletedAt) return 'deleted';
+  if (c.legalHold) return 'hold';
+  return c.retainUntil ? 'date' : 'untilReported';
+}
+
+/** An access log entry's details, readable: `retentionDays: 365 → 730`, `name: 01-matched-image.jpg`. */
+export function logDetailText(detail: Record<string, unknown> | null): string | null {
+  if (!detail) return null;
+  const parts = Object.entries(detail).map(([key, value]) => {
+    if (value && typeof value === 'object' && 'from' in value && 'to' in value) return `${key}: ${String((value as { from: unknown }).from)} → ${String((value as { to: unknown }).to)}`;
+    return `${key}: ${value !== null && typeof value === 'object' ? JSON.stringify(value) : String(value)}`;
+  });
+  return parts.length ? parts.join(' · ') : null;
 }
 
 /** "Label: value" lines for "Copy all" (empty fields are left out). */

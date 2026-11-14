@@ -5,7 +5,7 @@ import { getAdminSession } from '@/lib/auth';
 import { isSuperAdmin } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
 import type { Locale } from '@/i18n/config';
-import { formatDate, type MessageKey, type Translator } from '@/i18n/translate';
+import { formatDate, translateDynamic, type MessageKey, type Translator } from '@/i18n/translate';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { getCsamCaseLogSafe, getCsamCaseSafe } from '../load';
 import { CSAM_STATUS_TONE, CSAM_TONE_CLASS, caseActions, csamDownloadHref, csamFactRows } from '../model';
@@ -42,7 +42,7 @@ export default async function CsamCasePage({ params, searchParams }: { params: P
       <div>
         <Link href="/moderation/csam" className={linkClass}>{t('csamPage.back')}</Link>
         <h1 className="text-3xl font-bold text-fg mt-2">{t('csamPage.caseTitle')}</h1>
-        <p className="text-fg-muted break-all mt-1" dir="ltr" data-testid="csam-case-url">{c.matchedUrl}</p>
+        <p className="text-fg-muted break-all mt-1" data-testid="csam-case-url"><bdi dir="ltr">{c.matchedUrl}</bdi></p>
         <p className="mt-2 flex flex-wrap items-center gap-2">
           <span className={`inline-block rounded border px-2 py-0.5 text-sm font-medium ${CSAM_TONE_CLASS[CSAM_STATUS_TONE[c.status]]}`} data-testid="csam-case-status" data-status={c.status}>
             {t(`csamPage.statuses.${c.status}` as MessageKey)}
@@ -101,7 +101,7 @@ function Takedown({ c, t, locale }: { c: CsamCaseDetail; t: Translator; locale: 
         {r ? (
           <>
             {t(`csamPage.kinds.${r.kind}` as MessageKey)}
-            {(r.videoId || r.postId) && <span className="text-fg-muted" dir="ltr"> · {r.videoId ?? r.postId}</span>}
+            {(r.videoId || r.postId) && <span className="text-fg-muted"> · <bdi dir="ltr">{r.videoId ?? r.postId}</bdi></span>}
           </>
         ) : (
           t('csamPage.detail.unmapped')
@@ -109,7 +109,7 @@ function Takedown({ c, t, locale }: { c: CsamCaseDetail; t: Translator; locale: 
       </Row>
       <Row label={t('csamPage.detail.uploader')} testId="csam-uploader">
         {c.uploaderId ? (
-          <Link href={`/users/${encodeURIComponent(c.uploaderId)}`} className={linkClass} dir="ltr">{c.uploaderId}</Link>
+          <Link href={`/users/${encodeURIComponent(c.uploaderId)}`} className={linkClass}><bdi dir="ltr">{c.uploaderId}</bdi></Link>
         ) : (
           t('csamPage.detail.noUploader')
         )}
@@ -122,7 +122,7 @@ function Takedown({ c, t, locale }: { c: CsamCaseDetail; t: Translator; locale: 
             <li>{t('csamPage.freeze.ban')}: {freeze.ban ? t(`csamPage.freeze.banStates.${freeze.ban}` as MessageKey) : t('csamPage.freeze.pending')}</li>
             {c.authRequests.map((a) => (
               <li key={a.id} data-testid="csam-auth-request" data-action={a.action}>
-                {t(`csamPage.freeze.${a.action === 'revoke_sessions' ? 'revokeSessions' : 'suspendAccount'}`)}: {a.status ?? a.deliveryStatus}
+                {t(`csamPage.freeze.${a.action === 'revoke_sessions' ? 'revokeSessions' : 'suspendAccount'}`)}: {a.status ? translateDynamic(t, 'authRequests.status', a.status) : translateDynamic(t, 'authRequests.delivery', a.deliveryStatus)}
               </li>
             ))}
             {freeze.error && <li className="text-danger-fg">{t('csamPage.freeze.failed')}</li>}
@@ -135,15 +135,15 @@ function Takedown({ c, t, locale }: { c: CsamCaseDetail; t: Translator; locale: 
         ) : (
           <span data-status={job.status}>
             {t(`csamPage.job.statuses.${job.status}` as MessageKey)}
-            {job.phase && <span className="text-fg-muted"> · {t('csamPage.job.phase', { phase: job.phase })}</span>}
+            {job.phase && <span className="text-fg-muted"> · {t('csamPage.job.phase', { phase: translateDynamic(t, 'csamPage.job.phases', job.phase.replace(/-/g, '_')) })}</span>}
             <span className="text-fg-muted"> · {t('csamPage.job.attempts', { count: job.attempts })}</span>
-            {job.lastError && <span className="block text-danger-fg" dir="ltr">{job.lastError}</span>}
+            {job.lastError && <span className="block text-danger-fg"><bdi dir="ltr">{job.lastError}</bdi></span>}
           </span>
         )}
       </Row>
       {c.reportedAt && (
         <Row label={t('csamPage.detail.reported')} testId="csam-reported">
-          <span dir="ltr">{c.reportId}</span> · {formatDate(c.reportedAt, locale, true)}
+          <bdi dir="ltr">{c.reportId}</bdi> · {formatDate(c.reportedAt, locale, true)}
         </Row>
       )}
       <Row label={t('csamPage.detail.retainUntil')}>
@@ -177,10 +177,10 @@ function Evidence({ c, t, locale }: { c: CsamCaseDetail; t: Translator; locale: 
     <>
       <ul className="divide-y divide-border">
         {c.evidence.files.map((f) => (
-          <li key={f.name} className="flex flex-wrap items-center justify-between gap-2 py-2" data-testid="csam-evidence-file">
-            <span className="text-sm" dir="ltr">
-              <span className="font-mono text-fg">{f.name}</span>
-              <span className="text-fg-muted"> · {bytes(f.bytes, locale)}</span>
+          <li key={f.name} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 py-2" data-testid="csam-evidence-file">
+            <span className="text-sm break-all">
+              <bdi dir="ltr" className="font-mono text-fg">{f.name}</bdi>
+              <span className="text-fg-muted"> · <bdi dir="ltr">{bytes(f.bytes, locale)}</bdi></span>
             </span>
             {/* A plain link (no download attribute): a refused download sends the browser to sign in again */}
             <a href={csamDownloadHref(c.id, f.name)} className={linkClass} rel="noreferrer" data-testid="csam-evidence-download">
@@ -192,9 +192,9 @@ function Evidence({ c, t, locale }: { c: CsamCaseDetail; t: Translator; locale: 
       {c.evidence.missing.length > 0 && (
         <div className="mt-3" data-testid="csam-evidence-missing">
           <p className="text-sm font-medium text-fg">{t('csamPage.evidence.missing')}</p>
-          <ul className="list-disc ms-5 text-sm text-fg-muted" dir="ltr">
+          <ul className="list-disc ms-5 text-sm text-fg-muted">
             {c.evidence.missing.map((m) => (
-              <li key={m.name}>{m.name}: {m.reason}</li>
+              <li key={m.name}><bdi dir="ltr">{m.name}: {m.reason}</bdi></li>
             ))}
           </ul>
         </div>
