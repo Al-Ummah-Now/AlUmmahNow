@@ -72,6 +72,12 @@
   --scrollbar-thumb: var(--fanous-color-outline);
 }
 
+/* The Light / Dark toggle (PreferencesControls): the Moon in light mode, the Sun in dark */
+html.dark .mode-moon,
+html:not(.dark) .mode-sun {
+  display: none;
+}
+
 html.dark {
   color-scheme: dark;
 }

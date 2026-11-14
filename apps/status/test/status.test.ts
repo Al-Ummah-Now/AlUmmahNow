@@ -11,7 +11,9 @@ import { classify, componentChecks, host, httpProbe, playbackProbes, statuspageP
 import { advance, dayLevel, effectiveState, formatUptime, lastDays, overallState, uptime, type StoredState } from '../src/state';
 import { runOnce, type StatusEnv } from '../src/run';
 import { buildSummary, toJson } from '../src/model';
-import { renderIncidentPage, renderStatusPage } from '../src/render';
+import { renderIncidentPage, renderStatusPage, siteLinks } from '../src/render';
+import { readFileSync } from 'node:fs';
+import { MOON_ICON_BODY, SUN_ICON_BODY } from '../../../packages/fanous-tokens/nav/mode-toggle.js';
 import { atomFeed, rssFeed } from '../src/feed';
 import { loadFeedIncidents, loadIncident, prune, publicIncident, publicIncidents } from '../src/store';
 import { sqliteD1 } from './d1-sqlite';
@@ -404,5 +406,49 @@ describe('public model, page and feeds', () => {
     assert.equal((await db.prepare(`SELECT COUNT(*) AS n FROM daily WHERE day = '2026-07-01'`).first<{ n: number }>())!.n, 0);
     assert.equal((await db.prepare(`SELECT COUNT(*) AS n FROM incidents WHERE id = 'gone'`).first<{ n: number }>())!.n, 0);
     assert.equal((await db.prepare(`SELECT COUNT(*) AS n FROM incidents WHERE id = 'i1'`).first<{ n: number }>())!.n, 1);
+  });
+});
+
+describe('header: the way back and the Light / Dark control', () => {
+  const empty = { overall: 'operational', lastCheckedAt: null, components: [], active: [], upcoming: [], history: [] } as unknown as Parameters<typeof renderStatusPage>[0];
+  const page = (locale: 'en' | 'ar', environment: string) => renderStatusPage(empty, { locale, path: '', assetVersion: 'v', environment });
+
+  it("links the logo and the apps to this environment's own www and videos hosts, in the page language", () => {
+    assert.deepEqual(siteLinks('en', 'production'), { www: 'https://www.alummahnow.net/en/', videos: 'https://videos.alummahnow.net/en' });
+    assert.deepEqual(siteLinks('ar', 'stage'), { www: 'https://www.stage.alummahnow.net/ar/', videos: 'https://videos.stage.alummahnow.net/ar' });
+    assert.deepEqual(siteLinks('en', 'qa'), { www: 'https://www.qa.alummahnow.net/en/', videos: 'https://videos.qa.alummahnow.net/en' });
+    assert.deepEqual(siteLinks('en', 'development'), siteLinks('en', 'qa'), 'local dev links to QA, like its checks');
+    for (const [env, sub] of [['production', ''], ['stage', '.stage'], ['qa', '.qa']] as const) {
+      const html = page('en', env);
+      assert.match(html, new RegExp(`<a class="brand" href="https://www${sub.replace('.', '\\.')}\\.alummahnow\\.net/en/" aria-label="Al Ummah Now website"`));
+      assert.match(html, new RegExp(`href="https://www${sub.replace('.', '\\.')}\\.alummahnow\\.net/en/" data-testid="status-app-www"><img class="app-icon" src="/aun-nav/icons/www\\.webp"[^>]*alt=""[^>]*><span>Website</span>`));
+      assert.match(html, new RegExp(`href="https://videos${sub.replace('.', '\\.')}\\.alummahnow\\.net/en" data-testid="status-app-videos"><img class="app-icon" src="/aun-nav/icons/videos\\.webp"[^>]*><span>Videos</span>`));
+    }
+    const ar = page('ar', 'production');
+    assert.match(ar, /<nav class="apps" aria-label="تطبيقات الأمة الآن">/);
+    assert.match(ar, /aria-label="موقع الأمة الآن"/);
+    assert.match(ar, /href="https:\/\/www\.alummahnow\.net\/ar\/" data-testid="status-app-www"[^]*?<span>الموقع<\/span>/);
+    assert.match(ar, /href="https:\/\/videos\.alummahnow\.net\/ar" data-testid="status-app-videos"[^]*?<span>المرئيات<\/span>/);
+    assert.match(ar, /<a class="brand-sub" href="\/ar">الحالة<\/a>/, 'the "Status" label still leads to the status page');
+  });
+
+  it('serves the apps\' own favicons, byte-equal to the shared nav icons', () => {
+    for (const id of ['www', 'videos']) {
+      assert.deepEqual(readFileSync(new URL(`../public/aun-nav/icons/${id}.webp`, import.meta.url)), readFileSync(new URL(`../../../packages/fanous-tokens/nav/icons/${id}.webp`, import.meta.url)), id);
+    }
+  });
+
+  it('is the shared icon toggle: Moon and Sun, named for the mode it switches to, no aria-pressed, no text', () => {
+    const en = page('en', 'production');
+    const btn = en.match(/<button[^>]*id="mode-toggle"[^>]*>([^]*?)<\/button>/);
+    assert.ok(btn, 'toggle rendered');
+    assert.match(btn[0], /data-testid="theme-toggle"/);
+    assert.match(btn[0], /aria-label="Switch to dark mode" title="Switch to dark mode"/);
+    assert.match(btn[0], /data-label-dark="Switch to dark mode" data-label-light="Switch to light mode"/);
+    assert.doesNotMatch(btn[0], /aria-pressed|Dark mode</);
+    assert.ok(btn[1].includes(MOON_ICON_BODY) && btn[1].includes(SUN_ICON_BODY), 'both Lucide icons, CSS shows one');
+    assert.equal(btn[1].replace(/<svg[^>]*>[^]*?<\/svg>/g, ''), '', 'icons only, the name is the label');
+    const ar = page('ar', 'production');
+    assert.match(ar, /data-label-dark="التبديل إلى الوضع الداكن" data-label-light="التبديل إلى الوضع الفاتح" aria-label="التبديل إلى الوضع الداكن"/);
   });
 });

@@ -21,8 +21,15 @@ test.describe('theme', () => {
       expect(await page.evaluate(() => (window as unknown as { __darkAtBody: boolean }).__darkAtBody)).toBe(true);
       expect(isDark(await bodyBackground(page))).toBe(true);
       await openMainNav(page);
-      await expect(page.getByTestId('theme-dark')).toHaveAttribute('aria-pressed', 'true');
-      await expect(page.getByTestId('theme-light')).toHaveAttribute('aria-pressed', 'false');
+      // The videos site's toggle: one icon button, the Sun in dark mode, named for the mode it switches to
+      const toggle = page.getByTestId('theme-toggle');
+      await expect(toggle).toHaveAccessibleName('Switch to light mode');
+      await expect(toggle).toHaveAttribute('title', 'Switch to light mode');
+      await expect(toggle).not.toHaveAttribute('aria-pressed', /./);
+      await expect(toggle.locator('svg.lucide-sun')).toBeVisible();
+      await expect(toggle.locator('svg.lucide-moon')).toBeHidden();
+      await expect(page.getByTestId('theme-light')).toHaveCount(0);
+      await expect(page.getByTestId('theme-dark')).toHaveCount(0);
       await expect(page.getByTestId('theme-select')).toHaveCount(0);
       await expect(page.getByRole('button', { name: /^(System|النظام)$/ })).toHaveCount(0);
       await expect(page.getByRole('option', { name: /^(System|النظام)$/ })).toHaveCount(0);
@@ -73,11 +80,16 @@ test.describe('theme', () => {
       await setPreferences(page, { theme: 'dark' });
       await page.goto('/dashboard');
       await openMainNav(page);
-      const light = page.getByTestId('theme-light');
-      await light.focus();
+      const toggle = page.getByTestId('theme-toggle');
+      await expect(toggle).toHaveAccessibleName('Switch to light mode');
+      await toggle.focus();
       await page.keyboard.press('Enter');
       await expectColorMode(page, 'light');
       await expect.poll(async () => isDark(await bodyBackground(page))).toBe(false);
+      // Focus stays on the toggle, now naming the other mode and showing the Moon
+      await expect(toggle).toBeFocused();
+      await expect(toggle).toHaveAccessibleName('Switch to dark mode');
+      await expect(toggle.locator('svg.lucide-moon')).toBeVisible();
     });
   });
 });
