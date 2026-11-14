@@ -10,7 +10,12 @@
  * it varies on Cookie and Accept-Language, so a changed language choice is a different entry.
  * Shared caches never keep it (private).
  */
-import { LANGUAGE_PREFERENCE_COOKIE } from '@/lib/i18n/utils/localeHelpers';
+
+/**
+ * lib/i18n LANGUAGE_PREFERENCE_COOKIE, written out: worker.ts bundles this file, so it imports nothing
+ * (like the other modules worker.ts uses). A test keeps the two equal.
+ */
+export const ROOT_LOCALE_COOKIE = 'preferred-language';
 
 type Locale = 'en' | 'ar';
 const isLocale = (v: string | undefined | null): v is Locale => v === 'en' || v === 'ar';
@@ -18,7 +23,12 @@ const isLocale = (v: string | undefined | null): v is Locale => v === 'en' || v 
 function cookieValue(header: string | null, name: string): string | undefined {
   for (const part of (header ?? '').split(';')) {
     const [k, ...v] = part.trim().split('=');
-    if (k === name) return decodeURIComponent(v.join('='));
+    if (k !== name) continue;
+    try {
+      return decodeURIComponent(v.join('='));
+    } catch {
+      return undefined;
+    }
   }
   return undefined;
 }
@@ -39,7 +49,7 @@ export function acceptedLocale(header: string | null): Locale | null {
 }
 
 export function rootLocale(request: Request): Locale {
-  const saved = cookieValue(request.headers.get('cookie'), LANGUAGE_PREFERENCE_COOKIE);
+  const saved = cookieValue(request.headers.get('cookie'), ROOT_LOCALE_COOKIE);
   if (isLocale(saved)) return saved;
   return acceptedLocale(request.headers.get('accept-language')) ?? 'en';
 }
