@@ -48,6 +48,13 @@ export const HOSTS: Record<SmokeEnv, Hosts> = {
 	},
 };
 
+/** The self-hosted live edge host per env (LIVE_PUBLIC_HOST in apps/api-videos/wrangler*.jsonc). */
+export const LIVE_HOSTS: Record<SmokeEnv, string> = {
+	qa: 'live.qa.alummahnow.net',
+	stage: 'live.stage.alummahnow.net',
+	production: 'live.alummahnow.net',
+};
+
 /** Worker names per env (prod names are historical; stage adds -stage). */
 export const WORKERS: Record<'production' | 'stage', Record<string, string>> = {
 	production: {
@@ -138,6 +145,23 @@ export async function runSmoke(opts: SmokeOptions): Promise<CheckResult[]> {
 		assert(res.status === 200, `HTTP ${res.status}`);
 		assert((res.headers.get('content-type') ?? '').includes('application/json'), `content-type ${res.headers.get('content-type')}`);
 		return 'HTTP 200 JSON';
+	});
+
+	// The self-hosted live edge (lib/live/edge.ts on api-videos): encoders push HLS to it and players
+	// read from it. A host that answers with anything but the edge's clock is a failure. A host that
+	// does not answer at all passes with a note: the release attaches it as a new custom domain
+	// (custom-domains.ts) and its certificate can take minutes on the first release.
+	await check('api-videos: live edge host answers', async () => {
+		let res: Response;
+		try {
+			res = await get(`https://${LIVE_HOSTS[opts.env]}/time`);
+		} catch (error) {
+			return `not answering yet (${(error as Error).message}); a newly attached custom domain can take minutes`;
+		}
+		assert(res.status === 200, `HTTP ${res.status}`);
+		const body = (await res.json().catch(() => null)) as { now?: unknown } | null;
+		assert(typeof body?.now === 'number', 'no edge clock in the answer (is the host on the videos worker?)');
+		return 'HTTP 200 edge clock';
 	});
 
 	await check('web: home page renders', async () => {

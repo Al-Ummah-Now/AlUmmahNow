@@ -5,7 +5,7 @@ import { currentVersion, isMissingWorker, parseVersionId, promote, releaseApps, 
 import { parseRollbackArgs, rollbackCommands, rollbackTarget } from '../rollback.ts';
 import { runSmoke, type CheckResult } from '../smoke.ts';
 import { seoHostResponse } from './seo-host-fixture.ts';
-import { ensureCustomDomains, expectedDomains, type DomainRecord } from '../custom-domains.ts';
+import { attachWhenMissing, ensureCustomDomains, expectedDomains, type DomainRecord } from '../custom-domains.ts';
 import { CfApiError } from '../cf-api.ts';
 
 const ROOT = resolve(import.meta.dirname, '../../..');
@@ -193,7 +193,7 @@ describe('rollback', () => {
 });
 
 describe('smoke', () => {
-	const fakeFetch = (overrides: { health?: string; callback?: string } = {}) =>
+	const fakeFetch = (overrides: { health?: string; callback?: string; live?: 'down' | 'html' } = {}) =>
 		(async (input: string | URL | Request, init?: RequestInit) => {
 			const url = new URL(String(input));
 			const headers = (init?.headers ?? {}) as Record<string, string>;
@@ -203,6 +203,11 @@ describe('smoke', () => {
 				return json({ status: 'healthy', deployment: overrides.health ?? m?.[1] ?? V(9) });
 			}
 			if (url.pathname === '/api/videos') return json({ videos: [] });
+			if (url.hostname === 'live.stage.alummahnow.net') {
+				if (overrides.live === 'down') throw new TypeError('fetch failed');
+				if (overrides.live === 'html') return new Response('<html></html>', { status: 200 });
+				return json({ now: 1 });
+			}
 			if (url.pathname === '/api/callback') return new Response(null, { status: 307, headers: { location: overrides.callback ?? '/auth/error?error=access_denied' } });
 			if (url.hostname === 'videos.stage.alummahnow.net') {
 				const seo = seoHostResponse(url.origin, false, url.pathname);
@@ -214,7 +219,14 @@ describe('smoke', () => {
 	it('passes against a healthy env', async () => {
 		const results = await runSmoke({ env: 'stage', fetchImpl: fakeFetch() });
 		assert.deepEqual(results.filter((r) => !r.ok), []);
-		assert.equal(results.length, 10);
+		assert.equal(results.length, 11);
+	});
+	it('fails when the live host answers but is not the live edge, notes a host not answering yet', async () => {
+		const wrong = await runSmoke({ env: 'stage', fetchImpl: fakeFetch({ live: 'html' }) });
+		assert.equal(wrong.find((r) => r.name.includes('live edge'))!.ok, false);
+		const down = (await runSmoke({ env: 'stage', fetchImpl: fakeFetch({ live: 'down' }) })).find((r) => r.name.includes('live edge'))!;
+		assert.equal(down.ok, true);
+		assert.match(down.detail, /not answering yet/);
 	});
 	it('fails when the candidate did not answer through the override', async () => {
 		const results = await runSmoke({ env: 'stage', overrides: { 'videos-stage': V(3) }, fetchImpl: fakeFetch({ health: V(1) }) });
@@ -251,7 +263,9 @@ describe('custom domains', () => {
 		assert.deepEqual(expectedDomains('production', ['admin-api', 'api-videos', 'processor']), {
 			'videos.api.alummahnow.net': 'videos',
 			'admin.api.alummahnow.net': 'al-ummah-admin-api',
+			'live.alummahnow.net': 'videos',
 		});
+		assert.equal(expectedDomains('production', ['admin-api'])['live.alummahnow.net'], undefined);
 		assert.equal(expectedDomains('stage', ['admin-api'])['admin.api.stage.alummahnow.net'], 'al-ummah-admin-api-stage');
 	});
 
@@ -262,7 +276,11 @@ describe('custom domains', () => {
 				calls.push(`${method} ${path}${body ? ` ${body.hostname}->${body.service}@${body.zone_id}` : ''}`);
 				if (method === 'GET') return records.map((r) => ({ ...r })) as T;
 				if (method === 'PUT') {
-					const rec = records.find((r) => r.hostname === body!.hostname)!;
+					const rec = records.find((r) => r.hostname === body!.hostname);
+					if (!rec) {
+						records.push({ id: `id-${body!.hostname}`, hostname: body!.hostname, service: body!.service, zone_id: body!.zone_id });
+						return {} as T;
+					}
 					if (opts.refusePut && rec.service !== body!.service && records.includes(rec)) throw new CfApiError(409, 'hostname in use');
 					rec.service = body!.service;
 					return {} as T;
@@ -293,6 +311,19 @@ describe('custom domains', () => {
 		assert.deepEqual(await ensureCustomDomains(cf, expectedDomains('production', ['admin-api', 'api-videos']), (l) => lines.push(l)), []);
 		assert.deepEqual(calls, ['GET /workers/domains?per_page=500']);
 		assert.match(lines.join('\n'), /admin\.api\.alummahnow\.net: not attached/);
+	});
+
+	it('attaches the prod live host when no worker has it, in its sibling zone', async () => {
+		const { cf, calls } = fakeCf([rec('videos.api.alummahnow.net', 'videos')]);
+		const moved = await ensureCustomDomains(cf, expectedDomains('production', ['api-videos']), () => {}, attachWhenMissing('production'));
+		assert.deepEqual(moved, ['live.alummahnow.net']);
+		assert.deepEqual(calls.filter((c) => !c.startsWith('GET')), ['PUT /workers/domains live.alummahnow.net->videos@zone1']);
+	});
+
+	it('never attaches a missing host that is not release-attached', async () => {
+		const { cf, calls } = fakeCf([rec('videos.api.alummahnow.net', 'videos')]);
+		await ensureCustomDomains(cf, expectedDomains('production', ['admin-api', 'api-videos']), () => {}, []);
+		assert.deepEqual(calls.filter((c) => !c.startsWith('GET')), []);
 	});
 
 	it('detaches then attaches when the API refuses to move an attached hostname', async () => {
