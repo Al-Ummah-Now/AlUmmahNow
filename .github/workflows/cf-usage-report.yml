@@ -42,3 +42,6 @@ jobs:
         run: |
           set -o pipefail
           node --experimental-strip-types --no-warnings scripts/ops/usage-report.ts --days "$DAYS" | tee -a "$GITHUB_STEP_SUMMARY"
+          # Yesterday alone: the current run rate, without older spikes averaged in
+          echo; echo '---'; echo
+          node --experimental-strip-types --no-warnings scripts/ops/usage-report.ts --days 1 | tee -a "$GITHUB_STEP_SUMMARY"
