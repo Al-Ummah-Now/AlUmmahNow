@@ -25530,7 +25530,7 @@
           "Sitemap"
         ],
         "summary": "Sitemap index data",
-        "description": "🌐 **Public**: counts and pages (2000 items each) of the public videos, channels and playlists search engines may list. Unlisted, private, scheduled and removed items are never counted.",
+        "description": "🌐 **Public**: counts and pages (2000 items each) of the public videos, channels, playlists and community posts search engines may list. Unlisted, private, scheduled and removed items are never counted.",
         "operationId": "get_SitemapSummaryGet",
         "responses": {
           "200": {
@@ -25611,7 +25611,7 @@
           "Sitemap"
         ],
         "summary": "One sitemap page",
-        "description": "🌐 **Public**: up to 2000 public videos, channels or playlists (oldest first) for the videos site's sitemaps.",
+        "description": "🌐 **Public**: up to 2000 public videos, channels, playlists or community posts (oldest first) for the videos site's sitemaps.",
         "operationId": "get_SitemapPageGet",
         "parameters": [
           {
@@ -25620,7 +25620,8 @@
               "enum": [
                 "videos",
                 "channels",
-                "playlists"
+                "playlists",
+                "posts"
               ]
             },
             "required": true,
@@ -25765,10 +25766,32 @@
                               "title",
                               "lastModified"
                             ]
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "channelId": {
+                                "type": "string"
+                              },
+                              "lastModified": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "channelId",
+                              "lastModified"
+                            ]
                           }
                         ]
                       },
-                      "description": "Videos, channels or playlists, by `kind`"
+                      "description": "Videos, channels, playlists or community posts, by `kind`"
                     }
                   },
                   "required": [

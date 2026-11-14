@@ -25,3 +25,22 @@ export async function isChannelDeleted(channels: R2Bucket | undefined, channelId
 	const channel = (await object.json()) as { isDeleted?: boolean } | null;
 	return channel?.isDeleted === true;
 }
+
+/**
+ * Where a post lives, by its id alone (`post-locations/<postId>` → `{ channelId }`), for the post
+ * permalink /{locale}/post/{id} and short links (wiki AUN-SEO). The search index finds most posts;
+ * this also finds the ones it leaves out (an image, GIF or video with no text). Never a visibility
+ * answer: readers still check the post itself.
+ */
+export const postLocationKey = (postId: string) => `post-locations/${postId}`;
+
+export async function rememberPostLocation(bucket: R2Bucket, postId: string, channelId: string): Promise<void> {
+	await bucket.put(postLocationKey(postId), JSON.stringify({ channelId }), { httpMetadata: { contentType: 'application/json' } });
+}
+
+export async function readPostLocation(bucket: R2Bucket, postId: string): Promise<string | null> {
+	const object = await bucket.get(postLocationKey(postId));
+	const record = object ? ((await object.json().catch(() => null)) as { channelId?: unknown } | null) : null;
+	const channelId = record?.channelId;
+	return typeof channelId === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(channelId) ? channelId : null;
+}

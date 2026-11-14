@@ -16,6 +16,8 @@ function seed() {
 	insert('search_videos', 'v3', 'ch2', 1, { id: 'v3', title: 'In a hidden channel' });
 	insert('search_videos', 'v4', 'ch1', 0, { id: 'v4', title: 'Not visible' });
 	insert('search_playlists', 'p1', 'ch1', 1, { id: 'p1', name: 'Series' });
+	insert('search_posts', 'post1', 'ch1', 1, { id: 'post1', channelId: 'ch1', content: 'Hello' });
+	insert('search_posts', 'post2', 'ch2', 1, { id: 'post2', channelId: 'ch2', content: 'In a hidden channel' });
 	return db;
 }
 
@@ -26,6 +28,7 @@ describe('sitemap data', () => {
 		assert.deepEqual(summary.kinds.videos, { count: 2, pages: 1, lastModified: new Date(1_800_000_000_000).toISOString() });
 		assert.equal(summary.kinds.channels.count, 1);
 		assert.equal(summary.kinds.playlists.count, 1);
+		assert.equal(summary.kinds.posts.count, 1);
 	});
 
 	it('lists videos with what a video sitemap needs', async () => {
@@ -56,6 +59,10 @@ describe('sitemap data', () => {
 	it('lists channels with their handle and playlists with their title', async () => {
 		assert.deepEqual((await sitemapPage(seed() as never, 'channels', 0)).map((c) => ({ ...c, lastModified: undefined })), [{ id: 'ch1', handle: 'one', name: 'Channel One', lastModified: undefined }]);
 		assert.equal((await sitemapPage(seed() as never, 'playlists', 0))[0] && (await sitemapPage(seed() as never, 'playlists', 0)).length, 1);
+	});
+
+	it('lists public community posts with their channel (the permalink sitemap)', async () => {
+		assert.deepEqual(await sitemapPage(seed() as never, 'posts', 0), [{ id: 'post1', channelId: 'ch1', lastModified: new Date(1_800_000_000_000).toISOString() }]);
 	});
 
 	it('a page past the end is empty', async () => {

@@ -15,6 +15,7 @@ import ArticlePost from './types/ArticlePost';
 import CardsPost from './types/CardsPost';
 import LinkPost from './types/LinkPost';
 import Image from 'next/image';
+import Link from '@/components/common/AppLink';
 import { channelLabel } from '@/lib/channel-name';
 
 interface PostCardProps {
@@ -25,6 +26,10 @@ interface PostCardProps {
   userDisplayName?: string;
   channelId?: string;
   userId?: string;
+  /** Open with the comments shown (the post's own page) */
+  initialShowComments?: boolean;
+  /** The label of the time link that opens the post's own page */
+  openPostLabel?: string;
 }
 
 function getTimeAgo(date: Date, isRTL: boolean): string {
@@ -70,8 +75,10 @@ export default function PostCard({
   userDisplayName,
   channelId,
   userId,
+  initialShowComments = false,
+  openPostLabel,
 }: PostCardProps) {
-  const [showComments, setShowComments] = useState(false);
+  const [showComments, setShowComments] = useState(initialShowComments);
   const timeAgo = getTimeAgo(new Date(post.createdAt), isRTL);
 
   const handleToggleComments = () => {
@@ -149,7 +156,15 @@ export default function PostCard({
             )}
           </div>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            {timeAgo}
+            {/* The time opens the post's own page (its permalink, wiki AUN-SEO) */}
+            <Link
+              href={`/${locale === 'ar' ? 'ar' : 'en'}/post/${encodeURIComponent(post.id)}`}
+              className="hover:underline focus-visible:underline focus-visible:outline-none"
+              title={openPostLabel}
+              data-testid="post-permalink"
+            >
+              <time dateTime={post.createdAt}>{timeAgo}</time>
+            </Link>
           </p>
         </div>
 

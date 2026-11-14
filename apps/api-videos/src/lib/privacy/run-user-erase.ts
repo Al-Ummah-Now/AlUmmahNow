@@ -24,6 +24,7 @@
  * when the operation budget runs out. When the index is incomplete the step
  * throws, so the job is retried with backoff rather than falling back to a scan.
  */
+import { postLocationKey } from '../community-posts';
 import { defaultPointerPrefix } from '../uploadDefaultPointer';
 import { deleteVideoSideRecords } from '../videoSideRecords';
 import { watchLaterId } from '../library';
@@ -151,7 +152,9 @@ export async function eraseRunUserData(
 						}
 						bump('communityPosts', 1);
 					}
-					await deleteKeys(community, [key], budget);
+					// A post goes with its location record (lib/community-posts.ts) in one delete
+					const located = file && file !== 'index.json' ? [postLocationKey(file.replace(/\.json$/, ''))] : [];
+					await deleteKeys(community, [key, ...located], budget);
 				}
 			}
 		},

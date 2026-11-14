@@ -1513,6 +1513,12 @@ export interface AppTranslations {
     community: string;
     // Channel community feed
     noPostsDescription: string;
+    /** The post permalink page (/post/{id}): its heading, with {channel} */
+    postFrom: string;
+    /** Link from a post permalink to the channel's posts, with {channel} */
+    allPostsFrom: string;
+    /** The time link on a post card, which opens the post's own page */
+    openPost: string;
     loadPostsFailed: string;
     retry: string;
     loadMore: string;

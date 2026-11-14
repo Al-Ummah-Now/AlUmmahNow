@@ -35,7 +35,7 @@ function buckets() {
 			'upload-defaults': make('upload-defaults', { 'run1/t1': { title: 't' } }),
 			channel_sections: make('channel_sections', { 'ch1/s1': { id: 's1' } }),
 			channel_tabs: make('channel_tabs', { 'channel-handles/runone': { channelId: 'ch1' }, 'channel-tabs/ch1': {} }),
-			community_posts: make('community_posts', { 'posts/ch1/p1.json': { id: 'p1' }, 'likes/p1/u9.json': {}, 'posts/chX/p2.json': { id: 'p2' } }),
+			community_posts: make('community_posts', { 'posts/ch1/p1.json': { id: 'p1' }, 'post-locations/p1': { channelId: 'ch1' }, 'likes/p1/u9.json': {}, 'posts/chX/p2.json': { id: 'p2' } }),
 			playlists: make('playlists'),
 			reports: make('reports'),
 		},

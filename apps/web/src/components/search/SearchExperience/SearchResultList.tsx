@@ -26,7 +26,7 @@ function PostResultCard({ post }: { post: SearchPostPayload }) {
   const date = post.createdAt ? new Date(post.createdAt) : null;
   return (
     <Link
-      href={`/${lang}/channels/${post.channelId}?tab=community`}
+      href={`/${lang}/post/${encodeURIComponent(post.id)}`}
       data-testid="post-result-card"
       className="flex h-full flex-col gap-3 rounded-lg bg-white dark:bg-gray-900 p-4 shadow-md hover:shadow-lg transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
     >

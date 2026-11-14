@@ -14,7 +14,7 @@ export function SavedPostCard({ post }: { post: SavedPost }) {
   const { lang } = useLanguage();
   return (
     <Link
-      href={`/${lang}/channels/${encodeURIComponent(post.channelId)}?tab=community`}
+      href={`/${lang}/post/${encodeURIComponent(post.id)}`}
       className="block rounded-lg border border-gray-200 p-4 hover:border-[var(--fanous-color-accent)] dark:border-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
       data-testid="library-saved-post"
       data-post-id={post.id}

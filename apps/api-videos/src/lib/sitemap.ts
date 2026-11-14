@@ -7,10 +7,10 @@
 import { PUBLIC_MP4_PATH, type SearchDb } from '@al-ummah/shared-types';
 
 export const SITEMAP_PAGE_SIZE = 2000;
-export const SITEMAP_KINDS = ['videos', 'channels', 'playlists'] as const;
+export const SITEMAP_KINDS = ['videos', 'channels', 'playlists', 'posts'] as const;
 export type SitemapKind = (typeof SITEMAP_KINDS)[number];
 
-const TABLE: Record<SitemapKind, string> = { videos: 'search_videos', channels: 'search_channels', playlists: 'search_playlists' };
+const TABLE: Record<SitemapKind, string> = { videos: 'search_videos', channels: 'search_channels', playlists: 'search_playlists', posts: 'search_posts' };
 
 /** Rows of one kind, oldest first (stable pages), only visible ones in visible channels. */
 function visibleFrom(kind: SitemapKind): string {
@@ -53,6 +53,8 @@ export interface SitemapVideo {
 }
 export interface SitemapChannel { id: string; handle?: string; name: string; lastModified: string | null }
 export interface SitemapPlaylist { id: string; title: string; lastModified: string | null }
+/** A public community post (its permalink /{locale}/post/{id}); only public, published ones are indexed */
+export interface SitemapPost { id: string; channelId: string; lastModified: string | null }
 
 type Row = { id: string; payload: string; created_at: number | null; indexed_at: number | null; duration: number | null; is_short: number; is_live: number; views: number };
 
@@ -77,7 +79,7 @@ function contentUrl(mediaHost: string | undefined, id: string, path: unknown): s
 	return `https://${mediaHost}/${path}`;
 }
 
-export async function sitemapPage(db: SearchDb, kind: SitemapKind, page: number, mediaHost?: string): Promise<(SitemapVideo | SitemapChannel | SitemapPlaylist)[]> {
+export async function sitemapPage(db: SearchDb, kind: SitemapKind, page: number, mediaHost?: string): Promise<(SitemapVideo | SitemapChannel | SitemapPlaylist | SitemapPost)[]> {
 	const { results } = await db
 		.prepare(`SELECT d.id, d.payload, d.created_at, d.indexed_at, d.duration, d.is_short, d.is_live, d.views ${visibleFrom(kind)} ORDER BY d.rowid LIMIT ? OFFSET ?`)
 		.bind(SITEMAP_PAGE_SIZE, page * SITEMAP_PAGE_SIZE)
@@ -85,6 +87,7 @@ export async function sitemapPage(db: SearchDb, kind: SitemapKind, page: number,
 	return (results ?? []).map((r) => {
 		const p = parse(r.payload);
 		if (kind === 'channels') return { id: r.id, handle: text(p.handle), name: text(p.name) ?? '', lastModified: iso(r.indexed_at) };
+		if (kind === 'posts') return { id: r.id, channelId: text(p.channelId) ?? '', lastModified: iso(r.indexed_at) };
 		if (kind === 'playlists') return { id: r.id, title: text(p.title) ?? text(p.name) ?? '', lastModified: iso(r.indexed_at) };
 		return {
 			id: r.id,
