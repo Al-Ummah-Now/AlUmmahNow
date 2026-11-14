@@ -109,6 +109,7 @@ describe('anonymous channel edge cache', () => {
 
 		cache.store.clear();
 		assert.equal((await get(env, null, '/api/channels/missing/tabs')).status, 404);
+		for (const flag of ['isPrivate', 'isHidden', 'isDeleted']) await get(setup({ [flag]: true }), null, '/api/channels/ch/tabs');
 		await settle();
 		assert.equal(cache.store.size, 0);
 	});
