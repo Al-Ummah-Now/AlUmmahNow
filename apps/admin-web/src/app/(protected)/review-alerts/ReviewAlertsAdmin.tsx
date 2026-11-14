@@ -80,8 +80,9 @@ function StaffChip({ userId, role }: { userId: string; role: string }) {
       </span>
       <span className="flex min-w-0 flex-col">
         <span className="sr-only">{role}: </span>
-        <span className="truncate font-medium text-fg" dir="auto">{name}</span>
-        {item?.secondary && <span className="truncate text-xs text-fg-muted" dir="auto">{item.secondary}</span>}
+        {/* self-start: each line hugs the avatar, so an Arabic name on the English page (dir=auto) is not pushed to the far edge */}
+        <span className="max-w-full self-start truncate font-medium text-fg" dir="auto">{name}</span>
+        {item?.secondary && <span className="max-w-full self-start truncate text-xs text-fg-muted" dir="auto">{item.secondary}</span>}
       </span>
     </div>
   );
