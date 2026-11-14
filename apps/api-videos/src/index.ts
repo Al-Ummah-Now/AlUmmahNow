@@ -20,8 +20,12 @@ import { createCaptionJobsInternalRouter } from './endpoints/captions/captionJob
 
 /** Every 10 minutes: start a processing-check loop for any video stuck without one */
 const PROCESSING_SWEEP_CRON = '*/10 * * * *';
-/** Every minute: live sessions (idle timeout, Bunny polling); lib/live/service.ts */
-const LIVE_SWEEP_CRON = '* * * * *';
+/**
+ * Live sessions (idle timeout, Bunny polling; lib/live/service.ts) and scheduled community posts.
+ * Every minute on production; every 5 minutes on QA and stage, where nobody waits on them and each
+ * tick costs a community-posts listing (cost review 2026-11-14).
+ */
+const LIVE_SWEEP_CRONS = new Set(['* * * * *', '*/5 * * * *']);
 import { fromHono } from "chanfana";
 import { bunnySigningMiddleware } from './middleware/bunny-signing';
 import { Hono } from "hono";
@@ -517,8 +521,8 @@ app.get("/", async (c) => {
  * See src/lib/privacy/retention.ts and docs/compliance/GDPR.md.
  */
 async function scheduled(controller: ScheduledController, rawEnv: AppBindings, ctx: ExecutionContext): Promise<void> {
-	if (controller?.cron === LIVE_SWEEP_CRON) {
-		// Every minute: scheduled community posts whose time has come go live (lib/scheduled-posts.ts, #1218)
+	if (LIVE_SWEEP_CRONS.has(controller?.cron ?? '')) {
+		// Every minute (production) or 5 (QA, stage): scheduled community posts whose time has come go live (lib/scheduled-posts.ts, #1218)
 		ctx.waitUntil(
 			publishDuePosts(rawEnv as never)
 				.then((r) => (r.published || r.dropped ? logger.info('[ScheduledPosts] Run', r) : undefined))

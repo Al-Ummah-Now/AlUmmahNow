@@ -116,6 +116,8 @@
 		// Stage slot (docs/release-pipeline): same bindings as production, stage resources and hosts.
 		"stage": {
 			"name": "al-ummah-scheduler-stage",
+			// Every 5 minutes, not every minute: each tick lists scheduled-videos and writes a KV lock
+			"triggers": { "crons": ["*/5 * * * *"] },
 			"r2_buckets": [
 				{
 					"binding": "VIDEOS",

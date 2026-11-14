@@ -31,9 +31,10 @@ export function logEvent(event: PublishEvent | Record<string, unknown>): void {
  */
 export async function checkHealth(env: Env): Promise<HealthStatus> {
   try {
-    // Check if scheduler ran in last 2 minutes
+    // Ran within two ticks: every minute on production, every 5 minutes on QA and stage
     const lastRun = await getLastRun(env.SCHEDULER_LOCKS);
-    const isHealthy = lastRun !== null && (Date.now() - lastRun) < 120000;
+    const maxAgeMs = env.ENVIRONMENT === 'qa' || env.ENVIRONMENT === 'stage' ? 7 * 60_000 : 120_000;
+    const isHealthy = lastRun !== null && (Date.now() - lastRun) < maxAgeMs;
 
     // Get queue depth (approximate)
     const queueDepth = await getQueueDepth(env);

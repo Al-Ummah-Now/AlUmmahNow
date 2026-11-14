@@ -16,7 +16,8 @@ export { SchedulerLock } from './durable-objects/SchedulerLock';
 
 export default withLogging({
   /**
-   * Scheduled cron trigger - runs every minute. A tick with nothing due logs
+   * Scheduled cron trigger - every minute on production, every 5 minutes on QA and
+   * stage (overdue entries always publish, so a slower tick only adds lateness). A tick with nothing due logs
    * nothing; a tick with work logs one summary line (info at stage and below,
    * warn when a publish failed or the run was slow, error when the run threw).
    */

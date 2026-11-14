@@ -5,7 +5,7 @@
   "compatibility_date": "2025-01-20",
   "compatibility_flags": ["nodejs_compat"],
   "triggers": {
-    "crons": ["* * * * *"]
+    "crons": ["*/5 * * * *"]
   },
   "r2_buckets": [
     {
