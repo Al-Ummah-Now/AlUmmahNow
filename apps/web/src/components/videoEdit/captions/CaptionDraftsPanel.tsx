@@ -182,13 +182,28 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
   if (!drafts?.length && !transcript && !claims.length && !notice && !minutes) return <>{dialog}</>;
 
   return (
-    <section aria-labelledby="caption-drafts-title" data-testid="caption-drafts" className="space-y-3">
-      <div>
-        <h4 id="caption-drafts-title" className="text-base font-semibold text-foreground">
-          {tc.draftsTitle}
-        </h4>
-        <p className="text-xs text-muted-foreground">{tc.draftsHint}</p>
-      </div>
+    <section aria-label={tc.draftsTitle} data-testid="caption-drafts" className="space-y-3">
+      {minutes && (
+        <CaptionTranscribe
+          videoId={videoId}
+          spokenLanguage={spokenLanguage}
+          jobs={jobs}
+          minutes={minutes}
+          draftLanguages={(drafts ?? []).map((d) => d.language)}
+          t={tc.jobs}
+          lang={lang}
+          cancelLabel={t.common?.cancel ?? tc.quran.cancel}
+          confirm={confirm}
+          label={label}
+          reload={load}
+        />
+      )}
+      {(!!drafts?.length || transcript || claims.length > 0) && (
+        <div>
+          <h4 className="text-base font-semibold text-foreground">{tc.draftsTitle}</h4>
+          <p className="text-xs text-muted-foreground">{tc.draftsHint}</p>
+        </div>
+      )}
       {notice ? (
         <p role="status" className="text-sm text-foreground">
           {notice}
@@ -265,21 +280,6 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
             </div>
           )}
         </div>
-      )}
-      {minutes && (
-        <CaptionTranscribe
-          videoId={videoId}
-          spokenLanguage={spokenLanguage}
-          jobs={jobs}
-          minutes={minutes}
-          draftLanguages={(drafts ?? []).map((d) => d.language)}
-          t={tc.jobs}
-          lang={lang}
-          cancelLabel={t.common?.cancel ?? tc.quran.cancel}
-          confirm={confirm}
-          label={label}
-          reload={load}
-        />
       )}
       <ul className="grid grid-cols-1 gap-3">
         {(drafts ?? []).map((d) => {
