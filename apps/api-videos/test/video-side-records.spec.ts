@@ -44,6 +44,15 @@ describe('deleteVideoSideRecords', () => {
 		await deleteVideoSideRecords({ subtitles, global_settings: settings, SCHEDULED_VIDEOS: scheduled } as never, 'v1', { scheduledPublishDate: when.toISOString() });
 	});
 
+	it("deletes the upload marker under the video's Bunny GUID too (our own ids, providers B)", async () => {
+		const settings = new MemoryBucket();
+		for (const key of [`${UPLOAD_MARKER_PREFIX}our-1`, `${UPLOAD_MARKER_PREFIX}guid-1`, `${UPLOAD_MARKER_PREFIX}guid-2`]) settings.store.set(key, '{}');
+		const record = { id: 'our-1', media: { providers: { bunny: { ref: 'guid-1', status: 'pending', addedAt: 'x' } } } };
+		const deleted = await deleteVideoSideRecords({ global_settings: settings } as never, 'our-1', record);
+		assert.deepEqual([...settings.store.keys()], [`${UPLOAD_MARKER_PREFIX}guid-2`]);
+		assert.ok(deleted.includes(`global_settings/${UPLOAD_MARKER_PREFIX}guid-1`));
+	});
+
 	it('skips the schedule without a date and works with no bindings', async () => {
 		const { scheduled, when } = seed();
 		await deleteVideoSideRecords({ 'scheduled-videos': scheduled } as never, 'v1', null);

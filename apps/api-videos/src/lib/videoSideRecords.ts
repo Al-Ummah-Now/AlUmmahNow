@@ -2,8 +2,9 @@
  * What a video leaves outside its own record, removed when the video is deleted for good.
  *
  * - subtitles `<videoId>/…`: the tracks and their metadata (`uploadedBy` names the uploader).
- * - global_settings `ops/upload-reaper/created/<videoId>` (lib/uploads/reaper.ts): the upload
- *   marker `{ userId, channelId, at }`.
+ * - global_settings `ops/upload-reaper/created/<id>` (lib/uploads/reaper.ts): the upload
+ *   marker `{ userId, channelId, at }`. The upload flows key it by the Bunny GUID, which is no
+ *   longer the video id on new records (lib/media/ingest.ts), so both keys are deleted.
  * - scheduled-videos `<yyyy-mm-dd>/<hh>/<videoId>.json` (lib/videoSchedule.ts): the scheduler's
  *   entry `{ title, userId, … }` of a video still scheduled when it was deleted.
  * - global_settings `ops/playlist-adds/<videoId>/…` (lib/playlistUploadAdds.ts): the upload's
@@ -19,6 +20,7 @@
 import { UPLOAD_MARKER_PREFIX } from './uploads/reaper';
 import { releaseClaimFor } from './uploads/initiateOnce';
 import { PLAYLIST_ADD_PREFIX } from './playlistUploadAdds';
+import { bunnyRef } from './media/providers/bunny';
 
 interface ListableBucket {
 	list(options: { prefix: string; cursor?: string; limit?: number }): Promise<{ objects: { key: string }[]; truncated: boolean; cursor?: string }>;
@@ -57,7 +59,7 @@ export function scheduleKey(date: Date, videoId: string): string {
 export async function deleteVideoSideRecords(
 	env: VideoSideRecordsEnv,
 	videoId: string,
-	record?: { scheduledPublishDate?: unknown; uploadFingerprint?: unknown } | null,
+	record?: { scheduledPublishDate?: unknown; uploadFingerprint?: unknown; media?: unknown } | null,
 ): Promise<string[]> {
 	if (!videoId) return [];
 	const deleted: string[] = [];
@@ -65,8 +67,10 @@ export async function deleteVideoSideRecords(
 	if (subtitles) deleted.push(...(await deletePrefix(subtitles, `${videoId}/`)).map((k) => `subtitles/${k}`));
 	const settings = env.global_settings as (ListableBucket & { get(key: string): Promise<{ etag: string; json<T>(): Promise<T> } | null> }) | undefined;
 	if (settings) {
-		await settings.delete(`${UPLOAD_MARKER_PREFIX}${videoId}`);
-		deleted.push(`global_settings/${UPLOAD_MARKER_PREFIX}${videoId}`);
+		const guid = record ? bunnyRef({ ...(record as object), id: videoId } as never) : null;
+		const markers = [...new Set([videoId, guid].filter((id): id is string => !!id))].map((id) => `${UPLOAD_MARKER_PREFIX}${id}`);
+		await settings.delete(markers);
+		deleted.push(...markers.map((key) => `global_settings/${key}`));
 		deleted.push(...(await deletePrefix(settings, `${PLAYLIST_ADD_PREFIX}${videoId}/`)).map((k) => `global_settings/${k}`));
 		if (typeof record?.uploadFingerprint === 'string' && record.uploadFingerprint) {
 			if (await releaseClaimFor(settings as never, record.uploadFingerprint, videoId)) deleted.push(`global_settings/upload-fingerprint/${record.uploadFingerprint}`);

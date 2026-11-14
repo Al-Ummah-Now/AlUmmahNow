@@ -63,7 +63,8 @@ test.describe('Thumbnail Selection - Auto-generated', () => {
     await expect(options.first()).toBeVisible();
     expect(await options.count()).toBeGreaterThanOrEqual(1);
     expect(await options.count()).toBeLessThanOrEqual(5);
-    await expect(options.first().locator('img')).toHaveAttribute('src', new RegExp(`/${seed[SEED_TITLES.singleVideo].id}/thumbnail_1\\.jpg$`));
+    // Bunny's frame, under the video's Bunny GUID: our own video id on older videos, its own GUID on new ones (media providers)
+    await expect(options.first().locator('img')).toHaveAttribute('src', /\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/thumbnail_1\.jpg$/);
   });
 
   test('should select a frame', async ({ page }) => {

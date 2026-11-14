@@ -83,7 +83,7 @@ async function startUpload(page: Page, file: string, title: string): Promise<voi
 
 export interface ReuseFlowOptions {
   /** Runs once the first browser context is gone, before the retry (e.g. a fake Bunny blip) */
-  afterInterrupt?: (videoId: string) => Promise<void>;
+  afterInterrupt?: (videoId: string, title: string) => Promise<void>;
 }
 
 /** Interrupted, then retried in a fresh browser context: one video, resumed at its offset, no second TUS upload. */
@@ -121,7 +121,7 @@ export async function interruptedUploadIsReused(browser: Browser, testInfo: Test
       expect(ackedBefore, 'the interruption left part of the file at Bunny').toBeLessThan(fs.statSync(file).size);
       // Interrupt: the whole browser context goes away mid-upload
       await first.close();
-      await opts.afterInterrupt?.(videoId);
+      await opts.afterInterrupt?.(videoId, title);
 
       // Retry in a fresh context: no cookies, no localStorage
       const second = await browser.newContext();

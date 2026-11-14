@@ -18,8 +18,12 @@ test.describe('Release: a retried upload survives a Bunny HEAD blip', () => {
 
   test('interrupted, retried while Bunny answers HEAD 404 twice: one video, resumed at its offset', async ({ browser }, testInfo) => {
     await interruptedUploadIsReused(browser, testInfo, {
-      afterInterrupt: async (videoId) => {
-        const res = await fetch(`${LOCAL_CONTROL}/__fake/bunny/videos/${videoId}/tus-head-404?count=2`, { method: 'POST' });
+      afterInterrupt: async (_videoId, title) => {
+        // The video's Bunny GUID is not our video id (media providers): find it by the upload's title
+        const videos = (await (await fetch(`${LOCAL_CONTROL}/__fake/bunny/videos`)).json()) as Array<{ guid: string; title: string }>;
+        const guid = videos.find((v) => v.title.includes(title))?.guid;
+        expect(guid, 'the fake Bunny has the interrupted upload').toBeTruthy();
+        const res = await fetch(`${LOCAL_CONTROL}/__fake/bunny/videos/${guid}/tus-head-404?count=2`, { method: 'POST' });
         expect(res.status, 'the fake Bunny took the HEAD blip').toBe(200);
       },
     });
