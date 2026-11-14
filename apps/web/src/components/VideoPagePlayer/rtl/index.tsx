@@ -32,7 +32,7 @@ const VideoPlayerRTL: React.FC<WatchPlayerProps> = ({ options, startTime, onPlay
   const title = getLocalizedValue(options.titleLocalized, options.title, 'ar');
 
   // Bunny or R2 per the admin switch, one-time fallback to Bunny, QoE: same hook as the LTR player
-  const { videoSources, posterUrl, handlePlayerReady } = useDeliveryPlayback(options, onPlayerReady);
+  const { videoSources, posterUrl, handlePlayerReady, handlePlaybackError } = useDeliveryPlayback(options, onPlayerReady);
 
   return (
     <>
@@ -58,6 +58,7 @@ const VideoPlayerRTL: React.FC<WatchPlayerProps> = ({ options, startTime, onPlay
             title={removeUnwantedChars(title)}
             startTime={startTime}
             onPlayerReady={handlePlayerReady}
+            onPlaybackError={handlePlaybackError}
             autoplayIntent={autoplayIntent}
             autoplayedView={autoplayedView}
             offerResume={offerResume}

@@ -17,6 +17,7 @@ class FakePlayer {
   off(e: string, fn: Handler) { this.handlers.get(e)?.delete(fn); }
   one(e: string, fn: Handler) { const w: Handler = (...a) => { this.off(e, w); fn(...a); }; this.on(e, w); }
   emit(e: string) { for (const fn of [...(this.handlers.get(e) ?? [])]) fn(); }
+  trigger(e: string) { this.emit(e); }
   error(v?: null) { if (v === null) { this.err = null; return null; } return this.err; }
   src(s: { src: string; type: string }) { this.srcs.push(s); }
   currentTime(t?: number) { return t ?? 12; }
@@ -27,11 +28,23 @@ class FakePlayer {
 
 const seen: { sources: { src: string }[]; poster?: string }[] = [];
 let player: FakePlayer;
+/** What CustomVideoPlayer asks before it shows its error screen (the last render's) */
+let askPlayer: ((p: unknown) => boolean) | undefined;
+/** The player errors right as it is ready, before the hook's own effect ran (a fast 503) */
+let errorAtReady: { code?: number; status?: number } | null = null;
+let heldAtReady: boolean | undefined;
 jest.mock('@/components/VideoPagePlayer/VideoPlayerWithChapters', () => ({
-  VideoPlayerWithChapters: (props: { sources: { src: string }[]; poster?: string; onPlayerReady?: (p: unknown) => void }) => {
+  VideoPlayerWithChapters: (props: { sources: { src: string }[]; poster?: string; onPlayerReady?: (p: unknown) => void; onPlaybackError?: (p: unknown) => boolean }) => {
     seen.push({ sources: props.sources, poster: props.poster });
+    askPlayer = props.onPlaybackError;
     const ReactActual = jest.requireActual('react') as typeof React;
-    ReactActual.useEffect(() => { props.onPlayerReady?.(player); }, []);
+    ReactActual.useEffect(() => {
+      props.onPlayerReady?.(player);
+      if (errorAtReady) {
+        player.err = errorAtReady;
+        heldAtReady = props.onPlaybackError?.(player);
+      }
+    }, []);
     return null;
   },
 }));
@@ -73,6 +86,9 @@ describe.each([
     seen.length = 0;
     player = new FakePlayer();
     fetchFallbackPlayback.mockReset();
+    askPlayer = undefined;
+    errorAtReady = null;
+    heldAtReady = undefined;
   });
 
   it('plays exactly the playUrl and thumbnail it was given (R2 chosen by the API)', () => {
@@ -139,6 +155,43 @@ describe.each([
     render(<Player options={options(R2, R2_THUMB, 'r2')} />);
     player.err = { code: 2 };
     await act(async () => { player.emit('error'); });
+    expect(player.srcs).toEqual([]);
+  });
+
+  it('the player keeps itself (no error screen) while the next source takes over, and Bunny is not blamed', async () => {
+    fetchFallbackPlayback.mockResolvedValue(null);
+    render(<Player options={options(R2, R2_THUMB, 'r2', [{ provider: 'r2', src: R2 }, { provider: 'bunny', src: BUNNY }])} />);
+    player.err = { code: 2, status: 503 };
+    let held = false;
+    // CustomVideoPlayer asks first, then the hook's own listener sees the same error event
+    await act(async () => { held = askPlayer!(player); player.emit('error'); });
+    expect(held).toBe(true);
+    expect(player.srcs).toEqual([{ src: BUNNY, type: HLS }]);
+    expect(fetchFallbackPlayback).toHaveBeenCalledTimes(1);
+    expect(fetchFallbackPlayback).toHaveBeenCalledWith(ID, 'manifest_5xx', false, ['r2']);
+  });
+
+  it('an error before the hook is attached is held when another source exists, then handled', async () => {
+    fetchFallbackPlayback.mockResolvedValue(null);
+    errorAtReady = { code: 2, status: 503 };
+    await act(async () => { render(<Player options={options(R2, R2_THUMB, 'r2', [{ provider: 'r2', src: R2 }, { provider: 'bunny', src: BUNNY }])} />); });
+    expect(heldAtReady).toBe(true);
+    expect(player.srcs).toEqual([{ src: BUNNY, type: HLS }]);
+  });
+
+  it('a lone source holds the error screen while the API is asked; with nothing new the screen shows', async () => {
+    let reply: (v: unknown) => void = () => undefined;
+    fetchFallbackPlayback.mockImplementation(() => new Promise((resolve) => { reply = resolve; }));
+    render(<Player options={options(BUNNY, undefined, 'bunny')} />);
+    player.err = { code: 2, status: 403 };
+    let held = false;
+    act(() => { held = askPlayer!(player); });
+    expect(held).toBe(true);
+    // The player asks again when the hook gives the error back (trigger('error')): this time it shows
+    const answers: boolean[] = [];
+    player.on('error', () => answers.push(askPlayer!(player)));
+    await act(async () => { reply({ id: ID, delivery: { source: 'bunny' }, sources: [] }); });
+    expect(answers).toEqual([false]);
     expect(player.srcs).toEqual([]);
   });
 

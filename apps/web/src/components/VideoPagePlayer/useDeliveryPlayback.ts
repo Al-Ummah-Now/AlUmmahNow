@@ -8,6 +8,10 @@
  *       └─ list used up (or an older response with only playUrl): that answer's sources come next
  *
  * One QoE session per video load: requested source, the source it ended on, the first reason.
+ *
+ * The player (CustomVideoPlayer) asks handlePlaybackError before it shows its error screen: while
+ * this hook moves to another source, or waits for the API's, the screen stays away. Without that the
+ * error screen replaced the player on the first error and the next source never played (a fast 503).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Player } from "video.js";
@@ -84,6 +88,12 @@ export function useDeliveryPlayback(
   const videoSources = useMemo(() => [{ src: firstSrc, type: HLS }], [firstSrc]);
   const posterUrl = useMemo(() => posterFor(options), [options.poster, options.playUrl]); // eslint-disable-line react-hooks/exhaustive-deps
   const trackerRef = useRef<QoeTracker | null>(null);
+  /** This load's error handler (the effect below); true while a fallback is under way */
+  const walkerRef = useRef<{ player: Player; onError: () => boolean } | null>(null);
+  /** An error the player saw before the effect was attached, held because another source exists */
+  const pendingErrorRef = useRef(false);
+  const listRef = useRef(list);
+  listRef.current = list;
   const [player, setPlayer] = useState<Player | null>(null);
   const fetchFallback = opts.fetchFallback ?? fetchFallbackPlayback;
   const anonymous = opts.anonymous === true;
@@ -122,6 +132,8 @@ export function useDeliveryPlayback(
       if (stallTimer !== undefined) clearTimeout(stallTimer);
       stallTimer = undefined;
     };
+    /** The player shows its error screen for the error that is still set (nothing left to try) */
+    const surfaceError = () => (player as unknown as { trigger?: (e: string) => void }).trigger?.('error');
     const switchTo = (next: PlaybackSourceView, reason: PlaybackFallbackReason, at: number) => {
       tracker.markFallback(reason, next.provider);
       // Video.js accepts error(null) and a single source object; the local typings are narrower
@@ -133,10 +145,12 @@ export function useDeliveryPlayback(
         void player.play()?.catch(() => undefined);
       });
     };
-    const fallBack = (reason: PlaybackFallbackReason) => {
-      if (waitingForApi || disposed) return;
+    /** Moves on from the current source; true while that is under way (switched, or asking the API) */
+    const fallBack = (reason: PlaybackFallbackReason): boolean => {
+      if (disposed) return false;
+      if (waitingForApi) return true;
       const current = sources[index];
-      if (!current || failed.includes(current.provider)) return;
+      if (!current || failed.includes(current.provider)) return false;
       failed.push(current.provider);
       clearStall();
       const at = player.currentTime() || 0;
@@ -146,26 +160,38 @@ export function useDeliveryPlayback(
       if (next) {
         index += 1;
         switchTo(next, reason, at);
-        return;
+        return true;
       }
-      if (askedForMore) return;
+      if (askedForMore) return false;
       askedForMore = true;
       waitingForApi = true;
       void answer.then((reply) => {
         waitingForApi = false;
-        if (disposed || !reply) return;
+        if (disposed) return;
+        if (!reply) return surfaceError();
         const more = playbackSourcesOf(reply.sources).filter((x) => !failed.includes(x.provider));
         const single = reply.playUrl && reply.delivery?.source && !failed.includes(reply.delivery.source as MediaProviderId)
           ? playbackList({ playUrl: reply.playUrl, delivery: reply.delivery })
           : [];
         const extra = more.length ? more : single;
-        if (!extra.length) return;
+        if (!extra.length) return surfaceError();
         sources = [...sources.slice(0, index + 1), ...extra];
         index += 1;
         switchTo(sources[index]!, reason, at);
       });
+      return true;
     };
-    const onError = () => fallBack(playerErrorReason(player));
+    // The player asks first (handlePlaybackError); this listener covers players that do not. An error
+    // already moved past (error(null) on the switch) is not counted again.
+    const handleError = () => fallBack(playerErrorReason(player));
+    const onError = () => {
+      if ((player as unknown as { error?: () => unknown }).error?.()) handleError();
+    };
+    walkerRef.current = { player, onError: handleError };
+    if (pendingErrorRef.current) {
+      pendingErrorRef.current = false;
+      onError();
+    }
     const onWaiting = () => {
       if (stallTimer !== undefined || waitingForApi) return;
       stallTimer = setTimeout(() => {
@@ -188,6 +214,7 @@ export function useDeliveryPlayback(
       player.off('waiting', onWaiting);
       for (const e of stallEvents) player.off(e, clearStall);
       if (trackerRef.current === tracker) trackerRef.current = null;
+      if (walkerRef.current?.player === player) walkerRef.current = null;
     };
   }, [player, options.id, list, requested, anonymous, fetchFallback]);
 
@@ -203,5 +230,18 @@ export function useDeliveryPlayback(
     };
   }, []);
 
-  return { source: requested, videoSources, posterUrl, handlePlayerReady };
+  /**
+   * For the player, before it shows its error screen: true when this hook is moving to another
+   * source (or asking the API for one), so the screen must stay away. An error before this load's
+   * handler is attached is held when another source exists, and handled as soon as it is.
+   */
+  const handlePlaybackError = useCallback((errored: Player): boolean => {
+    const walker = walkerRef.current;
+    if (walker && walker.player === errored) return walker.onError();
+    if (listRef.current.length < 2) return false;
+    pendingErrorRef.current = true;
+    return true;
+  }, []);
+
+  return { source: requested, videoSources, posterUrl, handlePlayerReady, handlePlaybackError };
 }

@@ -131,6 +131,11 @@ export interface CustomVideoPlayerProps {
   textTracks?: PlayerTextTrack[];
   /** Called once the Video.js player is ready (e.g. for chapter integration) */
   onPlayerReady?: (player: Player) => void;
+  /**
+   * Asked before the error screen is shown: true when the caller is moving to another source for
+   * this error (the delivery fallback, VideoPagePlayer/useDeliveryPlayback.ts), so the player stays.
+   */
+  onPlaybackError?: (player: Player) => boolean;
   /** Start position in seconds (watch page ?t=, embed start=) */
   startTime?: number;
   /** Start muted, overriding the remembered volume (embed autoplay must be muted) */
@@ -172,6 +177,7 @@ export default function CustomVideoPlayer({
   onSourceChange,
   textTracks,
   onPlayerReady,
+  onPlaybackError,
   startTime,
   muted,
   analyticsContext,
@@ -194,6 +200,8 @@ export default function CustomVideoPlayer({
   const qualityLevelsCleanupRef = useRef<(() => void) | null>(null);
   const isInitializingRef = useRef(false);
   const onPlayerReadyRef = useRef(onPlayerReady);
+  const onPlaybackErrorRef = useRef(onPlaybackError);
+  onPlaybackErrorRef.current = onPlaybackError;
   const addedTextTracksRef = useRef<Array<{ track: unknown }>>([]);
   const [playerReady, setPlayerReady] = useState(false);
   const [currentError, setCurrentError] = useState<VideoError | null>(null);
@@ -781,6 +789,8 @@ export default function CustomVideoPlayer({
           // Get error from player using type guard for safety
           if (hasErrorMethod(player)) {
             const playerError = player.error();
+            // Another source is on its way (the delivery fallback): no error screen
+            if (playerError && onPlaybackErrorRef.current?.(player)) return;
             if (playerError && handleVideoErrorRef.current) {
               handleVideoErrorRef.current(playerError);
             }
@@ -792,7 +802,7 @@ export default function CustomVideoPlayer({
         // that is already set so the localized ErrorDisplay replaces the player.
         if (hasErrorMethod(player)) {
           const earlyError = player.error();
-          if (earlyError && handleVideoErrorRef.current) {
+          if (earlyError && !onPlaybackErrorRef.current?.(player) && handleVideoErrorRef.current) {
             logger.warn('[CustomVideoPlayer] Player errored before ready', { code: earlyError.code });
             handleVideoErrorRef.current(earlyError);
           }

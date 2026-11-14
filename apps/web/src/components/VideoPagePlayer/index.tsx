@@ -35,7 +35,7 @@ const VideoPlayer: React.FC<WatchPlayerProps> = ({ options, startTime, onPlayerR
   const channelName = playerChannelName(options, locale);
 
   // Bunny or R2, fallback and QoE: shared with the RTL player
-  const { videoSources, posterUrl, handlePlayerReady } = useDeliveryPlayback(options, onPlayerReady);
+  const { videoSources, posterUrl, handlePlayerReady, handlePlaybackError } = useDeliveryPlayback(options, onPlayerReady);
 
   return (
     <>
@@ -61,6 +61,7 @@ const VideoPlayer: React.FC<WatchPlayerProps> = ({ options, startTime, onPlayerR
             title={removeUnwantedChars(title)}
             startTime={startTime}
             onPlayerReady={handlePlayerReady}
+            onPlaybackError={handlePlaybackError}
             autoplayIntent={autoplayIntent}
             autoplayedView={autoplayedView}
             offerResume={offerResume}
