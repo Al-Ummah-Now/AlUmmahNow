@@ -7,7 +7,7 @@ import type { AdminUserRow, CreatorTier, CreatorTierBulkResult } from '@al-ummah
 import type { ActionResult } from '@/lib/api/errors';
 import { isUnexpectedFailure, tierActionMessage, tierChangeMessage, tiersHref } from '@/lib/creator-tiers';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatDate, formatNumber } from '@/i18n/translate';
+import { formatDate, formatNumber, type Translator } from '@/i18n/translate';
 import { ErrorAlert, fieldClass, linkClass } from '@/components/ui';
 import { Chip, MonoId, smallButtonClass, tableWrapClass, tdClass, thClass, wideOnly } from '@/components/content/parts';
 import { InviteStatusChip } from '@/components/invites/InviteStatusChip';
@@ -18,6 +18,17 @@ import { reportError } from '@/lib/errors/reporter';
 import { adminUserName } from '@/lib/user-name';
 
 const NONE = '__none__';
+
+/** Banned / active, profile deleted, and the invite's status when not signed in yet. */
+function StatusChips({ user, t }: { user: AdminUserRow; t: Translator }) {
+  return (
+    <div className="flex flex-wrap gap-1">
+      {user.isBanned ? <Chip tone="bad" testId="chip-banned">{t('users.banned')}</Chip> : <span className="text-fg-subtle text-sm">{t('users.active')}</span>}
+      {user.profileDeleted && <Chip tone="neutral">{t('users.profileDeleted')}</Chip>}
+      {user.invite && user.invite.status !== 'active' && <InviteStatusChip status={user.invite.status} t={t} />}
+    </div>
+  );
+}
 
 export type BulkSetTierAction = (userIds: string[], tierId: string | null) => Promise<ActionResult<CreatorTierBulkResult>>;
 
@@ -144,7 +155,7 @@ export function UsersTable({ items, tiers, canManage, setTier, bulkSetTier }: Us
               )}
               <th className={thClass} scope="col">{t('users.colUser')}</th>
               <th className={`${thClass} ${wideOnly}`} scope="col">{t('users.colEmail')}</th>
-              <th className={thClass} scope="col">{t('users.colStatus')}</th>
+              <th className={`${thClass} ${wideOnly}`} scope="col">{t('users.colStatus')}</th>
               <th className={thClass} scope="col">{t('creators.colTier')}</th>
               <th className={`${thClass} ${wideOnly}`} scope="col">{t('users.colCreated')}</th>
             </tr>
@@ -181,9 +192,9 @@ export function UsersTable({ items, tiers, canManage, setTier, bulkSetTier }: Us
                     <div className="flex items-center gap-3 min-w-0">
                       {u.avatarUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element -- remote avatars from the images CDN
-                        <img src={u.avatarUrl} alt="" className="h-10 w-10 rounded-full object-cover shrink-0 bg-surface-2" loading="lazy" />
+                        <img src={u.avatarUrl} alt="" className="hidden sm:block h-10 w-10 rounded-full object-cover shrink-0 bg-surface-2" loading="lazy" />
                       ) : (
-                        <span aria-hidden="true" className="h-10 w-10 rounded-full bg-surface-2 shrink-0" />
+                        <span aria-hidden="true" className="hidden sm:block h-10 w-10 rounded-full bg-surface-2 shrink-0" />
                       )}
                       <div className="min-w-0">
                         <Link href={`/users/${encodeURIComponent(u.id)}`} className={`${linkClass} font-medium break-words`} dir="auto" data-testid="user-link">
@@ -192,18 +203,16 @@ export function UsersTable({ items, tiers, canManage, setTier, bulkSetTier }: Us
                         {u.userName && <span className="block text-sm text-fg-muted" dir="ltr">@{u.userName}</span>}
                         <span className="block"><MonoId value={u.id} max={24} /></span>
                         {u.email && <span className="block md:hidden text-xs text-fg-muted break-all" dir="ltr">{u.email}</span>}
+                        {/* Phones: the status column is hidden, so its chips sit under the name */}
+                        <div className="md:hidden mt-1"><StatusChips user={u} t={t} /></div>
                       </div>
                     </div>
                   </td>
                   <td className={`${tdClass} ${wideOnly} text-sm text-fg break-all`} dir="ltr">{u.email ?? t('content.none')}</td>
-                  <td className={tdClass}>
-                    <div className="flex flex-wrap gap-1">
-                      {u.isBanned ? <Chip tone="bad" testId="chip-banned">{t('users.banned')}</Chip> : <span className="text-fg-subtle text-sm">{t('users.active')}</span>}
-                      {u.profileDeleted && <Chip tone="neutral">{t('users.profileDeleted')}</Chip>}
-                      {u.invite && u.invite.status !== 'active' && <InviteStatusChip status={u.invite.status} t={t} />}
-                    </div>
+                  <td className={`${tdClass} ${wideOnly}`}>
+                    <StatusChips user={u} t={t} />
                   </td>
-                  <td className={`${tdClass} text-sm min-w-52`} data-testid="user-tier-cell">
+                  <td className={`${tdClass} text-sm sm:min-w-52`} data-testid="user-tier-cell">
                     {creator && tiers ? (
                       <CreatorTierControl
                         userId={u.id}
@@ -223,7 +232,7 @@ export function UsersTable({ items, tiers, canManage, setTier, bulkSetTier }: Us
                         {limited && (
                           <>
                             {' · '}
-                            <Link href={tiersHref(limited.id)} className={linkClass} data-testid="user-raise-limit">
+                            <Link href={tiersHref(limited.id)} className={`${linkClass} underline`} data-testid="user-raise-limit">
                               {t('creators.raiseLimit', { tier: limited.name })}
                             </Link>
                           </>
