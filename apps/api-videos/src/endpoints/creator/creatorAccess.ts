@@ -9,7 +9,7 @@
  *                         reached -> 403 `channel_limit`
  */
 import type { Context, Next } from 'hono';
-import { CREATOR_ERROR_CODES, type CreatorAccess } from '@al-ummah/shared-types';
+import { CHANNEL_ACCESS_TABLE, CREATOR_ERROR_CODES, OWNERSHIP_TABLE, can, isChannelRole, type CreatorAccess } from '@al-ummah/shared-types';
 import { countChannelSlots, reserveChannelSlot, resolveCreator, settleChannelSlot } from '../../lib/creatorTiers';
 import { logger } from '../../lib/logger';
 import { cachedPendingUserDeletion } from '../../lib/admin/pendingUserDeletion';
@@ -41,15 +41,50 @@ export async function uploadUsage(db: D1Database, userId: string, nowMs = Date.n
 	return usage;
 }
 
+/**
+ * Channels `userId` helps run (a role that may upload, not owned) whose
+ * owner's tier allows uploads: the same rule the upload path applies, since
+ * channelIdMiddleware sets `channelOwnerId` and upload-limits resolves the
+ * owner's tier (#759). Read from the channel_access and ownership indexes; a
+ * hint for the picker only, as every upload is checked again.
+ */
+export async function memberUploadChannelIds(db: D1Database, userId: string, roles: readonly string[] | undefined): Promise<string[]> {
+	const { results } = await db
+		.prepare(
+			`SELECT a.channel_id AS channel_id, a.role AS role, o.owner_id AS owner_id
+			 FROM ${CHANNEL_ACCESS_TABLE} a
+			 JOIN ${OWNERSHIP_TABLE} o ON o.kind = 'channel' AND o.id = a.channel_id
+			 WHERE a.user_id = ? AND o.is_deleted = 0 AND o.is_hidden = 0 AND o.is_suspended = 0
+			 ORDER BY a.channel_id`,
+		)
+		.bind(userId)
+		.all<{ channel_id: string; role: string; owner_id: string | null }>();
+	const byOwner = new Map<string, string[]>();
+	for (const row of results ?? []) {
+		if (!row.owner_id || row.owner_id === userId) continue;
+		if (!isChannelRole(row.role) || !can(row.role, 'video.upload')) continue;
+		byOwner.set(row.owner_id, [...(byOwner.get(row.owner_id) ?? []), row.channel_id]);
+	}
+	const eligible = await Promise.all(
+		[...byOwner].map(async ([ownerId, channelIds]) => ((await resolveCreator(db, { userId, roles, channelOwnerId: ownerId })).tier ? channelIds : [])),
+	);
+	return eligible.flat();
+}
+
 export async function creatorAccess(db: D1Database, userId: string, roles: readonly string[] | undefined): Promise<CreatorAccess> {
 	const creator = await resolveCreator(db, { userId, roles });
-	const [channelsOwned, usage] = await Promise.all([countChannelSlots(db, userId), uploadUsage(db, userId)]);
+	const [channelsOwned, usage, uploadChannelIds] = await Promise.all([
+		countChannelSlots(db, userId),
+		uploadUsage(db, userId),
+		memberUploadChannelIds(db, userId, roles),
+	]);
 	const tier = creator.tier;
 	const maxChannels = !tier || tier.unlimited ? null : tier.maxChannels;
 	return {
 		tier: tier ? { id: tier.id, name: tier.name, unlimited: tier.unlimited } : null,
 		via: creator.via,
-		canUpload: !!tier,
+		canUpload: !!tier || uploadChannelIds.length > 0,
+		uploadChannelIds,
 		canCreateChannel: !!tier && (maxChannels === null || channelsOwned < maxChannels),
 		channelsOwned,
 		maxChannels: tier ? maxChannels : 0,
@@ -64,7 +99,7 @@ export async function handleCreatorAccess(c: Context) {
 	try {
 		const [access, deletion] = await Promise.all([creatorAccess(c.env.SEARCH_DB, userId, rolesOf(c)), cachedPendingUserDeletion(c.env.SEARCH_DB, userId)]);
 		// A pending admin deletion of their videos data refuses every upload and create (#701)
-		const result: CreatorAccess = deletion ? { ...access, canUpload: false, canCreateChannel: false, pendingDeletion: true } : access;
+		const result: CreatorAccess = deletion ? { ...access, canUpload: false, canCreateChannel: false, uploadChannelIds: [], pendingDeletion: true } : access;
 		return c.json({ success: true, result });
 	} catch (error) {
 		logger.error('[Creator] Access lookup failed', { userId, error: error instanceof Error ? error.message : String(error) });

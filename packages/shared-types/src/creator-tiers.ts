@@ -109,7 +109,18 @@ export interface CreatorTierAssignment {
 export interface CreatorAccess {
   tier: { id: string; name: string; unlimited: boolean } | null;
   via: 'tier' | 'super_admin' | 'none';
+  /**
+   * True when the user can upload somewhere: with their own tier (to the
+   * channels they own), or to a channel they help run whose owner has a tier
+   * (`uploadChannelIds`). Uploads to a channel run under its owner's tier.
+   */
   canUpload: boolean;
+  /**
+   * Channels the user holds an uploading role on (not owned) whose owner's
+   * tier allows uploads (#759). Owned channels follow `tier`. A hint for the
+   * upload page's picker: the server checks every upload again.
+   */
+  uploadChannelIds?: string[];
   canCreateChannel: boolean;
   channelsOwned: number;
   maxChannels: number | null;

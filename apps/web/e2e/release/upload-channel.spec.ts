@@ -10,16 +10,19 @@
  * 2. With the channel picker on QA: it starts on A (the header's channel),
  *    picking B uploads to B, a ?channel= link preselects its channel, and
  *    changing channel with a file queued asks first in the in-app dialog.
+ * 3. #759: an editor with no creator tier of their own uploads to a channel
+ *    whose owner has one (uploads there run under the owner's tier); once the
+ *    owner's tier is removed, /upload says uploads are by invitation.
  * Every video is deleted afterwards.
  */
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { randomBytes } from 'crypto';
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Browser, type Page } from '@playwright/test';
 import { target } from './targets';
 import { apiFetch, createProfile, signUpOnWeb, type WebUser } from './web-session';
-import { grantCreatorTier } from './creator-tier';
+import { grantCreatorTier, setCreatorTier } from './creator-tier';
 import { createChannelInMenu } from './account-menu';
 
 test.use({ trace: 'off' });
@@ -167,6 +170,71 @@ test.describe('Release: the upload page shows and follows the chosen channel', (
       for (const u of uploads) {
         if (u.videoId) await apiFetch(user, `/api/videos/${u.videoId}/permanent`, { method: 'DELETE', headers: { channelId: u.channelId } });
       }
+    }
+  });
+});
+
+async function newSignedInPage(browser: Browser, prefix: string): Promise<{ page: Page; user: WebUser; close: () => Promise<void> }> {
+  const context = await browser.newContext();
+  await context.addCookies([{ name: 'aun_consent', value: `v1.a0.e0.p0.${Date.now()}`, url: target().web, sameSite: 'Lax' }]);
+  const page = await context.newPage();
+  const user = await signUpOnWeb(page, prefix);
+  await createProfile(user);
+  return { page, user, close: () => context.close() };
+}
+
+test.describe('Release: channel editors upload under the owner\'s tier (#759)', () => {
+  test('an editor with no tier of their own uploads to a Creator\'s channel, and is refused once the owner has none', async ({ browser }) => {
+    test.setTimeout(10 * 60_000);
+    const owner = await newSignedInPage(browser, 'rel-759-owner');
+    const editor = await newSignedInPage(browser, 'rel-759-editor');
+    let videoId = '';
+    let channelId = '';
+    try {
+      await grantCreatorTier(owner.user);
+      const created = await apiFetch(owner.user, '/api/channels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: `Release E2E 759 ${Date.now().toString(36)}`, description: 'Created by the release E2E suite', isMain: true }),
+      });
+      const createdText = await created.text();
+      expect(created.status, `POST /api/channels: ${createdText}`).toBeLessThan(300);
+      channelId = (JSON.parse(createdText) as { result?: { channel?: { id?: string } } }).result?.channel?.id ?? '';
+      expect(channelId, 'channel create returned no id').toBeTruthy();
+      const grant = await apiFetch(owner.user, `/api/channels/${channelId}/members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: editor.user.userId, role: 'editor' }),
+      });
+      expect(grant.status, `grant: ${await grant.clone().text()}`).toBe(200);
+
+      // The API names the channel for the editor, who has no tier of their own
+      const access = async () =>
+        ((await (await apiFetch(editor.user, '/api/me/creator')).json().catch(() => ({}))) as { result?: { tier?: unknown; canUpload?: boolean; uploadChannelIds?: string[] } }).result;
+      const first = await access();
+      test.skip(!Array.isArray(first?.uploadChannelIds), 'the QA build predates per-channel upload eligibility (#759)');
+      expect(first?.tier ?? null).toBeNull();
+      await expect.poll(async () => (await access())?.uploadChannelIds ?? [], { message: 'the editor\'s channel is not listed', timeout: 30000 }).toContain(channelId);
+
+      // /upload shows the uploader on the owner's channel, and the upload lands there
+      await editor.page.goto(`${target().web}/en/upload`);
+      await expect(editor.page.getByTestId('upload-by-invitation')).toHaveCount(0);
+      const picker = editor.page.getByTestId('upload-channel-picker');
+      await expect(picker).toHaveAttribute('data-channel-id', channelId, { timeout: 30000 });
+      const upload = await uploadOnPage(editor.page, `Release E2E 759 editor ${Date.now().toString(36)}`);
+      videoId = upload.videoId;
+      expect(upload.headerChannelId).toBe(channelId);
+      expect(await storedChannel(editor.user, videoId, channelId), 'the editor\'s upload is not on the owner\'s channel').toBe(channelId);
+
+      // The owner loses the tier: the editor is told uploads are by invitation
+      await setCreatorTier(owner.user, null);
+      await expect.poll(async () => (await access())?.canUpload, { message: 'the editor can still upload', timeout: 30000 }).toBe(false);
+      await editor.page.goto(`${target().web}/en/upload`);
+      await expect(editor.page.getByTestId('upload-by-invitation')).toBeVisible({ timeout: 30000 });
+    } finally {
+      if (videoId) await apiFetch(owner.user, `/api/videos/${videoId}/permanent`, { method: 'DELETE', headers: { channelId } });
+      await owner.close();
+      await editor.close();
     }
   });
 });

@@ -10,6 +10,7 @@ import {
   readRememberedUploadChannel,
   rememberUploadChannel,
   roleOn,
+  tierAllowedChannels,
   uploadEligibleChannels,
 } from '../upload-channel';
 
@@ -25,6 +26,24 @@ const editor = { id: 'c-ed', userId: 'u-other', name: 'Edited', role: 'editor' a
 const admin = { id: 'c-adm', userId: 'u-other', name: 'Admined', role: 'admin' as const };
 const moderator = { id: 'c-mod', userId: 'u-other', name: 'Moderated', role: 'moderator' as const };
 const suspended = { id: 'c-sus', userId: ME, name: 'Suspended', role: 'owner' as const, isSuspended: true };
+
+describe('tierAllowedChannels (#759)', () => {
+  const all = [owned, second, editor, admin];
+  const ids = (list: Array<{ id: string }>) => list.map((c) => c.id);
+
+  it("lets an editor without a tier of their own upload to a channel whose owner has one, and blocks owned channels", () => {
+    expect(ids(tierAllowedChannels(all, ME, { tier: null, uploadChannelIds: ['c-ed'] }))).toEqual(['c-ed']);
+  });
+
+  it('keeps owned channels with their own tier, and member channels only where the owner has one', () => {
+    expect(ids(tierAllowedChannels(all, ME, { tier: { id: 'creator' }, uploadChannelIds: ['c-adm'] }))).toEqual(['c-own', 'c-own2', 'c-adm']);
+  });
+
+  it('drops nothing without an answer, and keeps member channels when the API sends no list', () => {
+    expect(ids(tierAllowedChannels(all, ME, null))).toEqual(ids(all));
+    expect(ids(tierAllowedChannels(all, ME, { tier: null }))).toEqual(['c-ed', 'c-adm']);
+  });
+});
 
 describe('uploadEligibleChannels', () => {
   it('keeps owned channels and roles that may upload, drops moderators and suspended channels', () => {
