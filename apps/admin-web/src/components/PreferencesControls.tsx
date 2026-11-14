@@ -12,6 +12,29 @@ import {
   isLocale,
   type Theme,
 } from '@/i18n/config';
+// The Light / Dark control every app shares (docs/design/NAV.md): Lucide sun/moon, action names
+import { MOON_ICON_BODY, SUN_ICON_BODY, modeToggleLabel } from '../../../../packages/fanous-tokens/nav/mode-toggle.js';
+
+/** A Lucide icon from the shared markup; CSS (globals.css) shows the one for the mode on screen. */
+function ModeIcon({ icon }: { icon: 'sun' | 'moon' }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={`lucide lucide-${icon} mode-icon mode-${icon} size-[18px]`}
+      aria-hidden="true"
+      focusable="false"
+      dangerouslySetInnerHTML={{ __html: icon === 'sun' ? SUN_ICON_BODY : MOON_ICON_BODY }}
+    />
+  );
+}
 
 function writeCookie(name: string, value: string) {
   const secure = window.location.protocol === 'https:' ? '; Secure' : '';
@@ -25,15 +48,15 @@ export function applyTheme(theme: Theme) {
 /**
  * Language and light/dark switchers. Preferences are persisted in cookies so the
  * server renders the right `lang`/`dir`/`data-color-mode` on the next request.
- * Light / Dark is two pressed-state buttons, no "System" (owner decision 2026-11-13): until the
- * first click the device decides, and the button for the mode on screen shows pressed.
+ * Light / Dark is the videos site's toggle (no "System", owner decision 2026-11-13): one icon
+ * button, the Moon in light mode and the Sun in dark, named for the mode it switches to. Until the
+ * first click the device decides; the icon follows html.dark through CSS, so it is right at first paint.
  */
 export function PreferencesControls({ className = '' }: { className?: string }) {
   const { t, locale, theme } = useLanguage();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const languageId = useId();
-  const themeId = useId();
   // The mode on screen: the saved choice, else the device's (only known in the browser)
   const [shown, setShown] = useState<Theme | null>(theme);
   useEffect(() => {
@@ -88,28 +111,18 @@ export function PreferencesControls({ className = '' }: { className?: string }) 
           </option>
         </select>
       </div>
-      <div className="flex items-center gap-2" role="group" aria-labelledby={themeId}>
-        <span id={themeId} className="text-fg-muted text-sm">
-          {t('preferences.theme')}
-        </span>
-        <div className="inline-flex rounded border border-border bg-surface-2 p-0.5">
-          {(['light', 'dark'] as const).map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              data-testid={`theme-${mode}`}
-              aria-pressed={shown === mode}
-              onClick={() => onThemeChange(mode)}
-              suppressHydrationWarning
-              className={`rounded px-2 py-0.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-focus ${
-                shown === mode ? 'bg-accent text-on-accent font-semibold' : 'text-fg'
-              }`}
-            >
-              {t(mode === 'light' ? 'preferences.themeLight' : 'preferences.themeDark')}
-            </button>
-          ))}
-        </div>
-      </div>
+      <button
+        type="button"
+        data-testid="theme-toggle"
+        aria-label={modeToggleLabel(locale, shown === 'dark')}
+        title={modeToggleLabel(locale, shown === 'dark')}
+        onClick={() => onThemeChange(currentColorMode() === 'dark' ? 'light' : 'dark')}
+        suppressHydrationWarning
+        className="inline-grid size-11 shrink-0 place-items-center rounded-full text-drawer-icon hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+      >
+        <ModeIcon icon="moon" />
+        <ModeIcon icon="sun" />
+      </button>
     </div>
   );
 }
