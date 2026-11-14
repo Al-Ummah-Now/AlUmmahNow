@@ -1,16 +1,15 @@
 import { loadChannelById } from '@/lib/channel-loaders';
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import { ChannelTabContent } from '@/components/ChannelTabs/ChannelTabContent';
 import { loadChannelFirstTab } from '@/lib/channels/first-tab';
+import { channelRedirectTarget } from '@/lib/channel-url';
 
 interface ChannelPageProps {
   params: Promise<{
     locale: string;
     id: string;
   }>;
-  searchParams?: Promise<{
-    tab?: string | string[];
-  }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
 
 /**
@@ -23,7 +22,7 @@ interface ChannelPageProps {
  * so the HTML carries its list (lib/channels/first-tab.ts).
  */
 export default async function ChannelPage({ params, searchParams }: ChannelPageProps) {
-  const [{ id }, query] = await Promise.all([params, searchParams ?? Promise.resolve({} as { tab?: string | string[] })]);
+  const [{ locale, id }, query] = await Promise.all([params, searchParams ?? Promise.resolve({} as Record<string, string | string[] | undefined>)]);
   const tab = typeof query.tab === 'string' ? query.tab : undefined;
   const [channel, first] = await Promise.all([
     loadChannelById(id),
@@ -33,6 +32,9 @@ export default async function ChannelPage({ params, searchParams }: ChannelPageP
   if (!channel) {
     notFound();
   }
+  // A channel with a handle has one URL: /{locale}/@{handle} (301, the query kept)
+  const canonical = channelRedirectTarget(locale, channel, null, query);
+  if (canonical) permanentRedirect(canonical);
 
   return <ChannelTabContent channelId={id} defaultTab={first.defaultTab} initial={first.initial} />;
 }

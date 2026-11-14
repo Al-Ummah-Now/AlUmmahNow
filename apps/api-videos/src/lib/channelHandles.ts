@@ -12,6 +12,12 @@ import { isSuperAdmin } from '@al-ummah/shared-types';
  * (The channels bucket is scanned by listings, so index objects can't live there.)
  * R2 is strongly consistent for read-after-write; a claim writes the index and
  * reads it back, so the loser of a simultaneous claim sees a conflict.
+ *
+ * Handle history (wiki AUN-SEO, phase 5): when a channel changes its handle, the old one is kept
+ * under `channel-handle-history/{lowercase handle}` -> { handle, channelId, dateReleased }, so
+ * links to the old @handle 301 to the channel's current one. Another channel may claim an old
+ * handle only after HANDLE_HOLD_DAYS (YouTube's window), so a released handle cannot be grabbed
+ * at once to catch the old links; once it is claimed, the redirect ends.
  */
 
 import { logger } from './logger';
@@ -19,6 +25,11 @@ import { logger } from './logger';
 export const HANDLE_MIN_LENGTH = 3;
 export const HANDLE_MAX_LENGTH = 30;
 export const HANDLE_INDEX_PREFIX = 'channel-handles/';
+export const HANDLE_HISTORY_PREFIX = 'channel-handle-history/';
+/** Per-channel markers of its old handles (`{prefix}{channelId}/{lowercase handle}`), so a deleted channel drops them */
+export const HANDLE_HISTORY_OF_PREFIX = 'channel-handle-history-of/';
+/** How long a replaced handle stays reserved for the channel that used it */
+export const HANDLE_HOLD_DAYS = 14;
 
 const HANDLE_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/;
 
@@ -65,6 +76,13 @@ export interface HandleIndexEntry {
 	dateClaimed: string;
 }
 
+export interface HandleHistoryEntry {
+	/** The old handle, as the channel wrote it */
+	handle: string;
+	channelId: string;
+	dateReleased: string;
+}
+
 /** Strip a leading `@` and surrounding whitespace. */
 export function normalizeHandleInput(input: string): string {
 	return String(input ?? '').trim().replace(/^@+/, '');
@@ -72,6 +90,10 @@ export function normalizeHandleInput(input: string): string {
 
 export function handleKey(handle: string): string {
 	return `${HANDLE_INDEX_PREFIX}${normalizeHandleInput(handle).toLowerCase()}`;
+}
+
+export function handleHistoryKey(handle: string): string {
+	return `${HANDLE_HISTORY_PREFIX}${normalizeHandleInput(handle).toLowerCase()}`;
 }
 
 /** Format-only validation (no uniqueness). */
@@ -132,6 +154,35 @@ export async function resolveHandle(bucket: R2Bucket, handle: string): Promise<s
 	return entry?.channelId || null;
 }
 
+export async function readHandleHistory(bucket: R2Bucket, handle: string): Promise<HandleHistoryEntry | null> {
+	const object = await bucket.get(handleHistoryKey(handle));
+	if (!object) return null;
+	try {
+		return await object.json<HandleHistoryEntry>();
+	} catch (error) {
+		logger.warn('[ChannelHandles] Unreadable handle history entry', { handle, error: error instanceof Error ? error.message : String(error) });
+		return null;
+	}
+}
+
+/**
+ * The channel an old handle belonged to, for the 301 to its current @handle. Null when the handle
+ * was never replaced or someone has claimed it since (the index then wins).
+ */
+export async function resolveHandleHistory(bucket: R2Bucket, handle: string): Promise<string | null> {
+	const problem = validateHandleFormat(handle);
+	if (problem === 'invalid_characters' || problem === 'too_long' || problem === 'too_short') return null;
+	const entry = await readHandleHistory(bucket, handle);
+	return entry?.channelId || null;
+}
+
+/** True while `entry` still reserves its handle for its own channel */
+export function isHandleOnHold(entry: HandleHistoryEntry | null, channelId: string | undefined, now = Date.now()): boolean {
+	if (!entry || entry.channelId === channelId) return false;
+	const released = Date.parse(entry.dateReleased);
+	return Number.isFinite(released) && now - released < HANDLE_HOLD_DAYS * 24 * 60 * 60 * 1000;
+}
+
 /** Availability for a channel (its own current handle counts as available). */
 export async function checkHandleAvailability(
 	bucket: R2Bucket,
@@ -142,8 +193,10 @@ export async function checkHandleAvailability(
 	const normalized = normalizeHandleInput(handle);
 	const problem = validateHandleFormat(normalized, options);
 	if (problem) return { available: false, handle: normalized, reason: problem };
-	const entry = await readHandleEntry(bucket, normalized);
+	const [entry, history] = await Promise.all([readHandleEntry(bucket, normalized), readHandleHistory(bucket, normalized)]);
 	if (entry && entry.channelId !== channelId) return { available: false, handle: normalized, reason: 'taken' };
+	// Recently replaced by another channel: held for it (its old links still redirect)
+	if (!entry && isHandleOnHold(history, channelId)) return { available: false, handle: normalized, reason: 'taken' };
 	return { available: true, handle: normalized };
 }
 
@@ -191,6 +244,10 @@ export async function claimHandle(
 			});
 		}
 	}
+	// Claimed: an old redirect for this handle ends (a channel taking an old handle back, or a new owner)
+	await bucket.delete(handleHistoryKey(entry.handle)).catch((error) => {
+		logger.warn('[ChannelHandles] Could not drop handle history after a claim', { handle: entry.handle, error: error instanceof Error ? error.message : String(error) });
+	});
 	return { ok: true, handle: entry.handle };
 }
 
@@ -218,7 +275,37 @@ export async function releaseReplacedHandle(
 	const channel = await channels.get(channelId);
 	const current = channel ? ((await channel.json()) as { handle?: string }).handle : undefined;
 	if (current && handleKey(current) === handleKey(handle)) return;
-	await releaseHandle(handles, handle, channelId);
+	const entry = await readHandleEntry(handles, handle);
+	if (!entry || entry.channelId !== channelId) return;
+	// Keep the old handle as a redirect to the channel (history) before freeing the index entry
+	const history: HandleHistoryEntry = { handle: entry.handle, channelId, dateReleased: new Date().toISOString() };
+	await handles.put(handleHistoryKey(handle), JSON.stringify(history), { httpMetadata: { contentType: 'application/json' } });
+	await handles.put(`${HANDLE_HISTORY_OF_PREFIX}${channelId}/${normalizeHandleInput(handle).toLowerCase()}`, '');
+	await handles.delete(handleKey(handle));
+}
+
+/**
+ * A deleted or erased channel's old handles stop redirecting and stop being held: each history
+ * entry that is still this channel's is removed, with the channel's markers.
+ */
+export async function dropHandleHistory(handles: R2Bucket, channelId: string): Promise<number> {
+	const prefix = `${HANDLE_HISTORY_OF_PREFIX}${channelId}/`;
+	let dropped = 0;
+	let cursor: string | undefined;
+	do {
+		const page = await handles.list({ prefix, cursor });
+		for (const object of page.objects) {
+			const lower = object.key.slice(prefix.length);
+			const entry = await readHandleHistory(handles, lower);
+			if (entry?.channelId === channelId) {
+				await handles.delete(handleHistoryKey(lower));
+				dropped++;
+			}
+			await handles.delete(object.key);
+		}
+		cursor = page.truncated ? page.cursor : undefined;
+	} while (cursor);
+	return dropped;
 }
 
 /** Claim the first available default handle for a channel. */

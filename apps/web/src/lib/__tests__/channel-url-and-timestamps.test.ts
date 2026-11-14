@@ -54,3 +54,33 @@ describe('comment timestamps', () => {
     expect((handler.mock.calls[0][0] as CustomEvent).detail).toEqual({ videoId: 'v1', seconds: 42 });
   });
 });
+
+describe('channel redirects (wiki AUN-SEO: one URL per channel, handle history)', () => {
+  const { channelRedirectTarget, legacyHandlePath, searchSuffix } = jest.requireActual('../channel-url') as typeof import('../channel-url');
+
+  it('/channels/{id} of a channel with a handle goes to /@handle, keeping the query', () => {
+    expect(channelRedirectTarget('ar', { id: 'c1', handle: 'Noor' }, null, { tab: 'videos' })).toBe('/ar/@Noor?tab=videos');
+    expect(channelRedirectTarget('en', { id: 'c1', handle: 'Noor' }, null)).toBe('/en/@Noor');
+    expect(channelRedirectTarget('en', { id: 'c1' }, null, { tab: 'videos' })).toBeNull();
+  });
+
+  it('an old @handle goes to the current one; the current one in any letter case renders', () => {
+    expect(channelRedirectTarget('en', { id: 'c1', handle: 'NewName' }, 'oldname', { tab: 'about', utm_source: 'x' })).toBe('/en/@NewName?tab=about&utm_source=x');
+    expect(channelRedirectTarget('en', { id: 'c1', handle: 'NewName' }, 'newname')).toBeNull();
+    expect(channelRedirectTarget('en', { id: 'c1', handle: 'NewName' }, 'NewName')).toBeNull();
+  });
+
+  it('/{locale}/c/{handle} opened directly goes to /{locale}/@{handle}; nothing else does', () => {
+    expect(legacyHandlePath('/en/c/Noor.tv')).toBe('/en/@Noor.tv');
+    expect(legacyHandlePath('/ar/c/noor/')).toBe('/ar/@noor');
+    expect(legacyHandlePath('/en/@noor')).toBeNull();
+    expect(legacyHandlePath('/en/channels/c1')).toBeNull();
+    expect(legacyHandlePath('/en/c/noor/videos')).toBeNull();
+  });
+
+  it('query strings survive, repeated keys included', () => {
+    expect(searchSuffix({ a: ['1', '2'], b: 'x y', c: undefined })).toBe('?a=1&a=2&b=x+y');
+    expect(searchSuffix({})).toBe('');
+    expect(searchSuffix(undefined)).toBe('');
+  });
+});

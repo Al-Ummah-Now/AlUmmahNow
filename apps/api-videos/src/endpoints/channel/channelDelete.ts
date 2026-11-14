@@ -5,7 +5,7 @@ import { z } from "zod";
 import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { Profile as BusinessProfile } from "../../lib/types";
-import { releaseHandle } from "../../lib/channelHandles";
+import { dropHandleHistory, releaseHandle } from "../../lib/channelHandles";
 import { pickNewMainChannel, removeChannelContent, OwnedChannelSummary } from "../../lib/channelDeletion";
 import { loadOwnedChannels } from "../../lib/analytics";
 import { inBackground } from "../../lib/websocket-notify";
@@ -130,6 +130,7 @@ export class ChannelDelete extends AuthenticatedRoute {
 		await repository.deleteObject(id);
 		try {
 			await releaseHandle(c.env.channel_tabs, channel.handle, id);
+			await dropHandleHistory(c.env.channel_tabs, id);
 			await c.env.channel_tabs.delete(`channel-tabs/${id}`);
 		} catch (error) {
 			logger.warn('[ChannelDelete] Could not release handle/tabs', { channelId: id, error: error instanceof Error ? error.message : String(error) });

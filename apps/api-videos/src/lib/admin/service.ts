@@ -33,7 +33,7 @@ import { logger } from '../logger';
 import { isSystemPlaylist } from '../library';
 import Queue, { MessageType } from '../queue';
 import { postLocationKey } from '../community-posts';
-import { claimHandle, handleKey, normalizeHandleInput, releaseHandle, releaseReplacedHandle } from '../channelHandles';
+import { claimHandle, dropHandleHistory, handleKey, normalizeHandleInput, releaseHandle, releaseReplacedHandle } from '../channelHandles';
 import { pickNewMainChannel, removeChannelPostsAndSections, softDeleteChannelObjectsStep, type OwnedChannelSummary } from '../channelDeletion';
 import { findStoredComment, removeStoredComment, type StoredComment } from '../comments';
 import { subscriberCounts, subscribedChannelIds } from '../subscription-store';
@@ -637,6 +637,7 @@ async function purgeChannel(env: AdminServiceEnv, job: AdminJob): Promise<JobOut
 		if (channel && env.channel_tabs) {
 			// The handle stayed reserved while the channel could be restored
 			await releaseHandle(env.channel_tabs, channel.handle, id);
+			await dropHandleHistory(env.channel_tabs, id);
 			await env.channel_tabs.delete(`channel-tabs/${id}`);
 		}
 		const videoIds = await idsOf(env, 'video', { channelId: id });
