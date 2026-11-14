@@ -67,6 +67,9 @@ export const PRICE = {
 	queueOpM: 0.4, // incl. 1M
 	logsM: 0.6, // incl. 20M
 	aiNeuronK: 0.011, // incl. 10k/day
+	containerGibSec: 0.0000025, // memory while running, incl. 25 GiB-h
+	containerVcpuSec: 0.00002, // CPU used, incl. 375 vCPU-min
+	containerGbSec: 0.00000007, // disk while running, incl. 200 GB-h
 };
 
 export const ALLOWANCE = {
@@ -83,6 +86,9 @@ export const ALLOWANCE = {
 	doGbSec: 400e3,
 	queueOp: 1e6,
 	logs: 20e6,
+	containerGibSec: 90e3,
+	containerVcpuSec: 22.5e3,
+	containerGbSec: 720e3,
 };
 
 const R2_CLASS_A = new Set([
@@ -206,7 +212,8 @@ export async function collect(token: string, account: string, start: Date, end: 
 	const buckets = (await safe('r2 list', () => rest(token, `/accounts/${account}/r2/buckets`), [])).filter((b) => isAlUmmah(b.name));
 	const dos = (await safe('do list', () => rest(token, `/accounts/${account}/workers/durable_objects/namespaces`), [])).filter((d) => isAlUmmah(d.script ?? ''));
 	const queues = (await safe('queues list', () => rest(token, `/accounts/${account}/queues`), [])).filter((q) => isAlUmmah(q.queue_name ?? ''));
-	const counts = { workers: scripts.length, d1: d1s.length, kv: kvs.length, r2: buckets.length, do: dos.length, queues: queues.length };
+	const containers = (await safe('containers list', () => rest(token, `/accounts/${account}/containers/applications`), [])).filter((c) => isAlUmmah(c.name ?? ''));
+	const counts = { workers: scripts.length, d1: d1s.length, kv: kvs.length, r2: buckets.length, do: dos.length, queues: queues.length, containers: containers.length };
 
 	const crons: { name: string; crons: string[] }[] = [];
 	for (const s of scripts) {
@@ -394,6 +401,26 @@ export async function collect(token: string, account: string, start: Date, end: 
 				charge(l, row.dimensions.date, (ops / 1e6) * PRICE.queueOpM);
 				t(l, row.dimensions.actionType, ops);
 				add('queueOp', ops);
+			}
+		}
+	}
+
+	// Containers: the usage dataset (container plus its VM) is what Cloudflare bills; memory and disk
+	// count while an instance runs, CPU only as used. Byte-seconds → GiB-s / GB-s.
+	const appName = new Map(containers.map((c) => [String(c.id), String(c.name)]));
+	if (containers.length) {
+		for (const [s, e] of wins) {
+			const r = await gql(token, `query($a:String!,$s:Time!,$e:Time!){viewer{accounts(filter:{accountTag:$a}){
+				c: containersUsageAdaptiveGroups(limit:10000, filter:{datetime_geq:$s, datetime_lt:$e}){ dimensions{applicationId date} sum{cpuTimeSec allocatedMemory allocatedDisk} } }}}`,
+				{ a: account, s, e });
+			if (r.error) errors.push(`containers ${s}: ${r.error}`);
+			for (const row of only(r.data?.c, new Set(appName.keys()), (x: any) => x.dimensions.applicationId)) {
+				const name = appName.get(row.dimensions.applicationId) ?? row.dimensions.applicationId;
+				const l = line('Containers', name, envOf(name));
+				const gibSec = row.sum.allocatedMemory / 1024 ** 3, gbSec = row.sum.allocatedDisk / 1e9, vcpuSec = row.sum.cpuTimeSec;
+				charge(l, row.dimensions.date, gibSec * PRICE.containerGibSec + vcpuSec * PRICE.containerVcpuSec + gbSec * PRICE.containerGbSec);
+				t(l, 'GiB-s', gibSec); t(l, 'vCPU-s', vcpuSec); t(l, 'GB-s', gbSec);
+				add('containerGibSec', gibSec); add('containerVcpuSec', vcpuSec); add('containerGbSec', gbSec);
 			}
 		}
 	}
