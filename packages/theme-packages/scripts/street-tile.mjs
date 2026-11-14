@@ -9,8 +9,8 @@
 // - Lanterns (the street's lantern art, unchanged; only resized) hang along the whole string,
 //   across the full width, at uneven gaps with uneven drops and sizes, like a street hung by hand;
 //   posts and cards simply cover whatever is behind them.
-// - VARIANTS tiles per mode (each its own street); the page picks one at random before first
-//   paint (fanous-street.js STREET_VARIANT_SCRIPT), and only that one downloads.
+// - VARIANTS tiles per mode (each its own street); the server picks one at random per response
+//   (fanous-street.js pickStreetVariant, <html data-fanous-street-variant>), and only that one downloads.
 // - Drawn at 2x, shown at its CSS size by image-set(… 2x): never stretched.
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, statSync } from 'node:fs';

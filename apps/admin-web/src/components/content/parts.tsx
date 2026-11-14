@@ -61,7 +61,7 @@ export function PageHeader({ title, subtitle, total, t, children, deletedKind }:
           {deletedKind && (
             <>
               {' · '}
-              <Link href={`/deleted?kind=${encodeURIComponent(deletedKind)}`} className={linkClass} data-testid="view-deleted">
+              <Link href={`/deleted?kind=${encodeURIComponent(deletedKind)}`} className={`${linkClass} underline underline-offset-2`} data-testid="view-deleted">
                 {t('deleted.viewDeleted')}
               </Link>
             </>

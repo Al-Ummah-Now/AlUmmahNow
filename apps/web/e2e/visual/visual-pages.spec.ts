@@ -47,9 +47,9 @@ const own = ownPublicVideos(test, 'visual', [{ title: 'E2E Visual lecture', titl
   playlist: true,
 });
 
-// The Fawanees street picks a random tile variant per load; snapshots pin variant 1
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => { (window as unknown as { __AUN_STREET_VARIANT__: number }).__AUN_STREET_VARIANT__ = 1; });
+// The server picks a random Fawanees street tile variant per request; snapshots pin variant 1
+test.beforeEach(async ({ context, baseURL }) => {
+  await context.addCookies([{ name: 'aun_street_variant', value: '1', url: baseURL! }]);
 });
 
 test.beforeAll(async () => {

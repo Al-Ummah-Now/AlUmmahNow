@@ -1,7 +1,11 @@
 /** How many street tile variants a theme may have. */
 export const STREET_VARIANTS: number;
-/** Inline <head> script that picks this load's street tile variant before first paint. */
-export const STREET_VARIANT_SCRIPT: string;
+/** The <html> attribute that names this load's street tile variant. */
+export const STREET_VARIANT_ATTR: 'data-fanous-street-variant';
+/** Cookie that pins the street variant (visual tests). */
+export const STREET_VARIANT_COOKIE: 'aun_street_variant';
+/** The street tile variant (1..STREET_VARIANTS) for one HTML response: the pinning cookie's, else random. */
+export function pickStreetVariant(cookieHeader?: string | null, random?: () => number): number;
 /** Whether the active theme and mode switch the lantern street on (--fanous-street-on: 1). */
 export function streetEnabled(doc?: Document): boolean;
 /** Sets or clears <html class="fanous-street"> for the current theme and mode. */
