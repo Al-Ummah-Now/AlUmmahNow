@@ -39,7 +39,8 @@ class MockPushServer {
         const [, host, ...rest] = (req.url ?? '').split('/');
         const seen: Seen = { host: host ?? '', path: `/${rest.join('/')}`, method: req.method ?? '', headers: req.headers, body };
         this.seen.push(seen);
-        const answer = (this.responders.get(seen.host) ?? (() => ({ status: 200, body: {} })))(seen);
+        const responder = this.responders.get(seen.host);
+        const answer = typeof responder === 'function' ? responder(seen) : { status: 200, body: {} };
         res.writeHead(answer.status, { 'content-type': 'application/json', ...(answer.headers ?? {}) });
         res.end(answer.body === undefined ? '' : typeof answer.body === 'string' ? answer.body : JSON.stringify(answer.body));
       });
