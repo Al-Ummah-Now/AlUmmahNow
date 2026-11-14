@@ -46,7 +46,7 @@ type Settings = { channels?: Record<string, unknown> } & Record<string, unknown>
 async function readSettings(): Promise<Settings> {
   const res = await internal('/providers');
   expect(res.ok, `GET providers: ${res.status}`).toBe(true);
-  return ((await res.json()) as { settings: Settings }).settings;
+  return ((await res.json()) as { result: { settings: Settings } }).result.settings;
 }
 
 async function writeSettings(settings: Settings): Promise<void> {
