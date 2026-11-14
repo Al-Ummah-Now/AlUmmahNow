@@ -47,6 +47,11 @@ const own = ownPublicVideos(test, 'visual', [{ title: 'E2E Visual lecture', titl
   playlist: true,
 });
 
+// The Fawanees street picks a random tile variant per load; snapshots pin variant 1
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => { (window as unknown as { __AUN_STREET_VARIANT__: number }).__AUN_STREET_VARIANT__ = 1; });
+});
+
 test.beforeAll(async () => {
   data = catalogFromOwnData({
     videoId: own.videos()[0].id,

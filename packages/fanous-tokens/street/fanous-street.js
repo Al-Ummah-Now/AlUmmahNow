@@ -4,9 +4,10 @@ export const STREET_VARIANTS = 4;
 /**
  * Inline <head> script: picks the street tile variant for this page load before first paint (so
  * the street never swaps), as <html data-fanous-street-variant="1".."4">. Runs for every theme;
- * it only matters where the theme has a street.
+ * it only matters where the theme has a street. Visual tests pin it with
+ * window.__AUN_STREET_VARIANT__ (set by an init script) so their snapshots are stable.
  */
-export const STREET_VARIANT_SCRIPT = `(function(){try{document.documentElement.setAttribute("data-fanous-street-variant",String(1+Math.floor(Math.random()*${STREET_VARIANTS})))}catch(e){}})();`;
+export const STREET_VARIANT_SCRIPT = `(function(){try{var v=window.__AUN_STREET_VARIANT__||1+Math.floor(Math.random()*${STREET_VARIANTS});document.documentElement.setAttribute("data-fanous-street-variant",String(v))}catch(e){}})();`;
 
 // Fanous lantern street: the shared module every Al Ummah Now app includes (videos, admin, www,
 // CMS, sign-in, profile, accounts admin). Plain JavaScript, no dependencies, so other repos can
