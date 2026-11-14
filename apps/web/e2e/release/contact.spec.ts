@@ -15,6 +15,7 @@ import { promoteToAdmin } from './sink';
 import { sinkEmail, target } from './targets';
 import { completeRegistration, createProfile, signUpOnWeb, type Locale, submitPasswordSignIn } from './web-session';
 import { fetchRetry } from './net';
+import { runId } from '../test-utils/run-users';
 
 // Signs in through the auth server: the trace would hold the password and code
 test.use({ trace: 'off' });
@@ -98,7 +99,8 @@ test.describe('Release: Contact us', () => {
     page.on('dialog', (dialog) => void dialog.accept());
 
     // Self-healing: earlier runs that died before their cleanup left messages behind.
-    // Delete this suite's own leftovers (sink senders, "Release rc…" names) older than an hour.
+    // Delete this suite's own leftovers (sink senders, "Release rc…" names) older than an hour,
+    // and this run's from an attempt that failed before it deleted them.
     await sweepLeftovers(page);
 
     const inbox = `${target().adminWeb}/contact?q=${RUN}`;
@@ -182,14 +184,22 @@ async function purgeDeleted(page: Page, ids: string[]): Promise<void> {
 async function sweepLeftovers(page: Page): Promise<void> {
   await page.goto(`${target().adminWeb}/contact?q=${encodeURIComponent('Release rc')}`);
   await expect(page.getByTestId('contact-total')).toBeVisible();
-  const cutoff = Date.now() - 3600_000;
+  // Also this CI run's messages from an earlier attempt of this group (a retry runs the whole serial
+  // group again with a new RUN marker; the failed attempt's signed-out messages, sent from sink
+  // addresses no run account owns, were left for the leftover check to fail the job). Never the
+  // current attempt's (they carry RUN) and never another run's (its own id).
+  const id = runId();
   const stale = await page.getByTestId('contact-row').evaluateAll(
-    (rows, before) =>
+    (rows, { before, ownRun, current }) =>
       rows
-        .filter((row) => /@e2e\.alummahnow\.net$/.test(row.querySelector('td span[dir="ltr"]')?.textContent?.trim() ?? ''))
-        .filter((row) => Date.parse(row.querySelector('time')?.getAttribute('datetime') ?? '') < before)
+        .filter((row) => {
+          const email = row.querySelector('td span[dir="ltr"]')?.textContent?.trim() ?? '';
+          if (!/@e2e\.alummahnow\.net$/.test(email)) return false;
+          if (ownRun && email.startsWith(ownRun) && !(row.textContent ?? '').includes(current)) return true;
+          return Date.parse(row.querySelector('time')?.getAttribute('datetime') ?? '') < before;
+        })
         .map((row) => row.getAttribute('data-message-id') as string),
-    cutoff,
+    { before: Date.now() - 3600_000, ownRun: id ? `e2e+${id}-` : '', current: RUN },
   );
   for (const id of stale.slice(0, 20)) {
     await page.goto(`${target().adminWeb}/contact/${id}`);
