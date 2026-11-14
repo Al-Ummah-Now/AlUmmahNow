@@ -6,6 +6,8 @@ import { homeMetadata, websiteLd } from '@/lib/seo/structured-data';
 import { fetchVideosWithPagination } from '@/lib/api/videos';
 import { withinBudget } from '@/lib/ssr/first-data';
 import { stableImages } from '@/lib/ssr/stable-images';
+import { NONCE_HEADER } from '@/lib/security/nonce-header';
+import { SIGN_IN_BANNER_SCRIPT } from '@/lib/home/sign-in-banner';
 import HomePageClient from './HomePageClient';
 
 /**
@@ -20,14 +22,17 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
 
 export default async function HomePage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
-  const [host, firstPage] = await Promise.all([
-    headers().then((h) => h.get('host')),
+  const [requestHeaders, firstPage] = await Promise.all([
+    headers(),
     withinBudget(() => fetchVideosWithPagination(null)),
   ]);
+  const host = requestHeaders.get('host');
   const stable = firstPage ? stableImages(firstPage) : undefined;
   return (
     <>
       {host ? <JsonLd data={websiteLd(locale, originFromHost(host))} /> : null}
+      {/* Before the sign-in banner in the HTML: hides a dismissed one before the first paint (CLS 0) */}
+      <script nonce={requestHeaders.get(NONCE_HEADER) ?? undefined} dangerouslySetInnerHTML={{ __html: SIGN_IN_BANNER_SCRIPT }} />
       <HomePageClient initialPage={stable?.value} initialPartial={stable?.partial} />
     </>
   );

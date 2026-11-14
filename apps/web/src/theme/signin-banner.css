@@ -1,0 +1,121 @@
+/* Home page sign-in banner (components/home/SignInBanner.tsx), signed-out visitors only.
+   Depth comes from each theme's materials (materials.css): the gradient border, the card fill and its edge,
+   the glow; a lantern drawn in the theme's colours sits on the start side. Per-theme accents follow. */
+
+/* A dismissed banner is hidden before the first paint (SIGN_IN_BANNER_SCRIPT marks <html>): never a flash, CLS 0 */
+html[data-signin-banner=hidden] .sib{display:none}
+
+.sib{
+  --sib-glow:var(--m-glow,color-mix(in srgb,var(--fanous-color-primary) 40%,transparent));
+  position:relative;isolation:isolate;overflow:hidden;
+  display:grid;grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"art body actions";align-items:center;
+  gap:clamp(16px,2.4vw,36px);
+  margin-block:var(--fanous-spacing-sm) var(--fanous-spacing-lg);
+  padding:clamp(20px,2.6vw,36px) clamp(20px,3vw,44px);
+  padding-inline-end:clamp(56px,5vw,72px);
+  border:1px solid transparent;border-radius:var(--r-xl,20px);
+  background:
+    radial-gradient(60% 140% at var(--sib-art-x,8%) 50%,color-mix(in srgb,var(--fanous-color-primary) 22%,transparent),transparent 70%) padding-box,
+    linear-gradient(var(--to-end,90deg),color-mix(in srgb,var(--fanous-color-hero-start) 70%,transparent),transparent 65%) padding-box,
+    var(--m-card,var(--fanous-color-surface-raised)) padding-box,
+    var(--m-border,linear-gradient(var(--fanous-color-divider),var(--fanous-color-divider))) border-box;
+  box-shadow:var(--m-card-edge,none),0 24px 60px -36px var(--sib-glow);
+  color:var(--fanous-color-text-primary);
+}
+[dir=rtl].sib{--sib-art-x:92%}
+/* A faint repeating star lattice under the content: the geometric pattern of a lantern's pierced brass */
+.sib::before{
+  content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;opacity:.5;
+  background:
+    radial-gradient(circle at 50% 50%,color-mix(in srgb,var(--fanous-color-primary) 22%,transparent) 1.2px,transparent 1.8px) 0 0/22px 22px,
+    radial-gradient(circle at 50% 50%,color-mix(in srgb,var(--fanous-color-primary) 12%,transparent) 1px,transparent 1.6px) 11px 11px/22px 22px;
+  -webkit-mask-image:linear-gradient(var(--to-end,90deg),black,transparent 55%);mask-image:linear-gradient(var(--to-end,90deg),black,transparent 55%);
+}
+
+/* The lantern */
+.sib-art{grid-area:art;position:relative;width:clamp(76px,7vw,104px);aspect-ratio:2/3;display:grid;place-items:center}
+.sib-art-halo{position:absolute;inset:-30% -60%;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--fanous-color-primary) 46%,transparent),color-mix(in srgb,var(--fanous-color-primary) 10%,transparent) 55%,transparent);filter:blur(6px)}
+.sib-art-lantern{position:relative;width:100%;height:100%;overflow:visible;filter:drop-shadow(0 10px 18px color-mix(in srgb,black 35%,transparent))}
+.sib-art-chain,.sib-art-ring,.sib-art-rib{fill:none;stroke:var(--fanous-color-primary);stroke-width:2.5;stroke-linecap:round}
+.sib-art-rib{stroke-width:1.5;opacity:.55}
+.sib-art-cap,.sib-art-base{fill:var(--fanous-color-primary)}
+.sib-art-body{fill:color-mix(in srgb,var(--fanous-color-primary) 26%,var(--fanous-color-surface));stroke:var(--fanous-color-primary);stroke-width:2.5;stroke-linejoin:round}
+.sib-art-pane{fill:color-mix(in srgb,var(--fanous-color-primary-sheen,var(--fanous-color-primary)) 55%,transparent)}
+.sib-art-flame{fill:var(--fanous-color-primary-sheen,var(--fanous-color-primary));filter:drop-shadow(0 0 10px var(--fanous-color-primary))}
+
+/* Copy */
+.sib-body{grid-area:body;display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0}
+.sib-eyebrow{margin:0;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--fanous-color-link)}
+html[lang=ar] .sib-eyebrow{letter-spacing:0;font-size:13px}
+.sib-title{margin:0;font-size:clamp(20px,2.1vw,28px);font-weight:700;line-height:1.25;color:var(--fanous-color-text-primary);text-wrap:balance}
+html[lang=ar] .sib-title{line-height:1.5}
+.sib-text{margin:0;max-width:62ch;color:var(--fanous-color-text-secondary);font-size:15px;line-height:1.55}
+.sib-perks{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
+.sib-perk{display:inline-flex;align-items:center;gap:6px;height:30px;padding-inline:10px 12px;border-radius:var(--r-pill,999px);font-size:13px;font-weight:600;color:var(--fanous-color-text-primary);
+  background:color-mix(in srgb,var(--fanous-color-primary) 10%,var(--fanous-color-surface));
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--fanous-color-primary) 30%,transparent)}
+.sib-perk svg{width:15px;height:15px;color:var(--fanous-color-primary);flex:none}
+
+/* Actions */
+.sib-actions{grid-area:actions;margin:0;display:flex}
+.sib-cta{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding-inline:22px;font-size:15px;font-weight:700;white-space:nowrap;cursor:pointer}
+.sib-cta-arrow{width:18px;height:18px;transition:transform .2s}
+[dir=rtl] .sib-cta-arrow{transform:scaleX(-1)}
+@media(hover:hover){.sib-cta:hover .sib-cta-arrow{transform:translateX(3px)}[dir=rtl] .sib-cta:hover .sib-cta-arrow{transform:scaleX(-1) translateX(3px)}}
+.sib-x{position:absolute;inset-block-start:10px;inset-inline-end:10px;display:grid;place-items:center;width:36px;height:36px;border:0;border-radius:50%;background:transparent;color:var(--fanous-color-text-secondary);cursor:pointer;transition:background-color .15s,color .15s}
+.sib-x svg{width:18px;height:18px}
+@media(hover:hover){.sib-x:hover{background:color-mix(in srgb,var(--fanous-color-text-primary) 10%,transparent);color:var(--fanous-color-text-primary)}}
+.sib-x:focus-visible{outline:2px solid var(--fanous-color-focus-ring);outline-offset:2px}
+
+/* Tablet: the button goes under the copy */
+@media(max-width:1023px){
+  .sib{grid-template-columns:auto minmax(0,1fr);grid-template-areas:"art body" "art actions";row-gap:16px}
+  .sib-actions{justify-self:start}
+}
+/* Phone: one column, the lantern a small mark beside the heading, a full-width button */
+@media(max-width:639px){
+  .sib{grid-template-columns:minmax(0,1fr);grid-template-areas:"body" "actions";row-gap:14px;padding:18px 20px 20px;padding-inline-end:20px;--sib-art-x:100%}
+  [dir=rtl].sib{--sib-art-x:0%}
+  .sib-art{position:absolute;inset-block-start:-14px;inset-inline-end:44px;width:58px;opacity:.9;z-index:-1}
+  .sib-body{padding-inline-end:84px}
+  .sib-title{font-size:20px}
+  /* The chips say what the paragraph says: one screen keeps room for the featured video */
+  .sib-text{display:none}
+  .sib-perks{margin-block-start:6px;margin-inline-end:-84px;gap:6px}
+  .sib-perk{height:28px;font-size:12.5px;padding-inline:8px 10px}
+  .sib-actions,.sib-cta{width:100%;justify-self:stretch}
+  .sib-x{inset-block-start:8px;inset-inline-end:8px}
+}
+@media(prefers-reduced-motion:reduce){.sib-cta-arrow,.sib-x{transition:none}}
+
+/* Fawanees: gold on night, the lantern glows */
+html[data-theme=fawanees].dark .sib{box-shadow:var(--m-card-edge,none),0 30px 70px -34px var(--sib-glow),inset 0 1px 0 color-mix(in srgb,var(--fanous-color-primary-sheen) 22%,transparent)}
+html[data-theme=fawanees]:not(.dark) .sib{
+  background:
+    radial-gradient(55% 140% at var(--sib-art-x,8%) 50%,color-mix(in srgb,var(--fanous-color-primary) 18%,transparent),transparent 70%) padding-box,
+    linear-gradient(var(--to-end,90deg),var(--fanous-color-hero-start),var(--fanous-color-surface) 70%) padding-box,
+    linear-gradient(120deg,var(--fanous-color-primary),color-mix(in srgb,var(--fanous-color-primary) 22%,var(--fanous-color-divider)) 45%,var(--fanous-color-divider)) border-box}
+html[data-theme=fawanees]:not(.dark) .sib-art-body{fill:color-mix(in srgb,var(--fanous-color-primary) 18%,var(--fanous-color-surface))}
+
+/* Lantern: night water and an orange flame */
+html[data-theme=lantern] .sib-art-flame{fill:var(--fanous-brand-glow,var(--fanous-color-primary))}
+html[data-theme=lantern].dark .sib{box-shadow:var(--m-card-edge,none),0 0 0 1px color-mix(in srgb,var(--fanous-color-primary) 18%,transparent),0 28px 60px -30px var(--sib-glow)}
+
+/* Nahas: hammered copper, an engraved edge, square-ish chips */
+html[data-theme=nahas] .sib{box-shadow:var(--m-card-edge,none),inset 0 0 0 1px color-mix(in srgb,black 18%,transparent),0 22px 44px -28px var(--sib-glow)}
+html[data-theme=nahas] .sib::before{opacity:.7;background:
+  repeating-radial-gradient(circle at 12% 40%,color-mix(in srgb,var(--fanous-color-primary-sheen) 10%,transparent) 0 2px,transparent 2px 9px),
+  radial-gradient(circle at 50% 50%,color-mix(in srgb,var(--fanous-color-motif) 26%,transparent) 1.2px,transparent 1.8px) 0 0/20px 20px}
+html[data-theme=nahas] .sib-perk{box-shadow:inset 0 1px 0 color-mix(in srgb,var(--fanous-color-primary-sheen) 40%,transparent),inset 0 0 0 1px color-mix(in srgb,var(--fanous-color-motif) 50%,transparent)}
+html[data-theme=nahas] .sib-art-body{fill:color-mix(in srgb,var(--fanous-color-motif) 40%,var(--fanous-color-surface))}
+
+/* Zujaj: frosted glass over coloured light */
+html[data-theme=zujaj] .sib{-webkit-backdrop-filter:var(--m-blur);backdrop-filter:var(--m-blur);
+  background:
+    radial-gradient(50% 120% at var(--sib-art-x,8%) 40%,color-mix(in srgb,var(--fanous-color-motif) 34%,transparent),transparent 70%) padding-box,
+    radial-gradient(40% 90% at 100% 100%,color-mix(in srgb,var(--fanous-color-primary) 22%,transparent),transparent 70%) padding-box,
+    var(--m-card) padding-box,linear-gradient(transparent,transparent) border-box}
+html[dir=rtl][data-theme=zujaj] .sib,html[data-theme=zujaj] [dir=rtl].sib{--sib-art-x:92%}
+html[data-theme=zujaj] .sib-perk{background:color-mix(in srgb,white 12%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,white 28%,transparent),inset 0 1px 0 color-mix(in srgb,white 40%,transparent)}
+html[data-theme=zujaj] .sib-art-body{fill:color-mix(in srgb,var(--fanous-color-motif) 30%,transparent)}
+html[data-theme=zujaj] .sib-art-halo{background:radial-gradient(closest-side,color-mix(in srgb,var(--fanous-color-motif) 50%,transparent),transparent)}
