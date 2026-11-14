@@ -33291,7 +33291,7 @@
                         "properties": {
                           "videoId": {
                             "type": "string",
-                            "description": "Video GUID for upload"
+                            "description": "Our id of the new video"
                           },
                           "tusSessionId": {
                             "type": "string",

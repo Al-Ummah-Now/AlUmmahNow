@@ -1,3 +1,4 @@
+import { bunnyRef } from '../../lib/media/providers';
 import { eraseUploadTraces } from '../../lib/privacy/upload-traces';
 import { removeCollectionsFor } from '../../lib/channelCollection';
 import { bunnyClientForVideo, type LibraryHints } from '../../lib/bunny/libraries';
@@ -114,10 +115,13 @@ export class PrivacyErase extends AuthenticatedRoute {
 
 		const env = c.env;
 		const onVideoDeleted = async (videoId: string, video?: LibraryHints) => {
+			// Bunny's id of the video; none when Bunny holds no copy (R2 copies go with the media purge)
+			const bunnyId = video ? bunnyRef({ id: videoId, ...video } as never) : videoId;
+			if (!bunnyId) return;
 			try {
 				// The video's own library (lib/bunny/libraries.ts)
 				const bunny = await bunnyClientForVideo(env as never, video);
-				await bunny.client.deleteVideo(bunny.libraryId, videoId);
+				await bunny.client.deleteVideo(bunny.libraryId, bunnyId);
 			} catch (error) {
 				// Media removal is best-effort: the R2 record is already gone, so the
 				// stream is unreachable from the app. Logged for manual follow-up.

@@ -35,6 +35,10 @@
  * queue dead-letters the message (processor DLQ consumer → dead_letters).
  */
 
+import { bunnyRef } from '../media/providers';
+import { readRecordByBunnyGuid, videoIdForRef } from '../media/refs';
+import { r2UploadOffset } from '../media/r2-tus';
+import { deleteOriginal } from '../media/originals';
 import { logger } from '../logger';
 import R2Repository from '../r2Repo';
 import { bunnyApi, bunnyLibraries, bunnyLibraryForVideo, primaryBunnyLibrary, type BunnyLibrariesEnv, type BunnyLibrary, type LibraryHints } from '../bunny/libraries';
@@ -147,7 +151,7 @@ export interface RecordView {
 	uploadFingerprint?: string;
 	originalFormat?: string;
 	processingIssue?: { kind: string; reason?: string; at: string } | null;
-	tusUpload?: { sessionId: string; bunnyUploadUrl: string; fileSize: number; createdAt: string };
+	tusUpload?: { sessionId: string; bunnyUploadUrl: string; fileSize: number; createdAt: string; target?: 'bunny' | 'r2' };
 	/** Bunny library hints (lib/bunny/libraries.ts) */
 	bunnyLibraryId?: number;
 	playUrl?: string;
@@ -286,6 +290,10 @@ export function decideReap(input: ReapInput): ReapDecision {
 export interface ReaperEnv extends ProcessingEnv {
 	global_settings: R2Bucket;
 	BUNNY_NAME_PREFIX?: string;
+	/** media_provider_refs: a new video's Bunny GUID → our id */
+	SEARCH_DB?: D1Database;
+	/** Our own TUS target's bytes */
+	MEDIA_ORIGINALS?: R2Bucket;
 }
 
 function settings(env: ReaperEnv): R2Repository<ReaperItem> {
@@ -362,18 +370,21 @@ export async function deleteBunnyVideo(env: ReaperEnv, videoId: string, record?:
 
 /** Bunny's TUS offset of the record's upload; null when Bunny no longer has it. Throws on transient trouble. */
 export async function fetchTusOffset(env: ReaperEnv, record: RecordView): Promise<number | null> {
+	// Our own TUS target (lib/media/r2-tus.ts): what the originals bucket holds
+	if (record.tusUpload?.target === 'r2') return r2UploadOffset(env as never, record.id, record.tusUpload.sessionId);
 	const url = record.tusUpload?.bunnyUploadUrl;
 	if (!url) return null;
 	const { key, libraryId } = await bunnySecrets(env, record as LibraryHints);
 	const expire = Math.floor(Date.now() / 1000) + 3600;
-	const signature = await generateTUSSignature(parseInt(libraryId, 10), key, expire, record.id);
+	const guid = bunnyRef(record as never) ?? record.id;
+	const signature = await generateTUSSignature(parseInt(libraryId, 10), key, expire, guid);
 	const response = await fetch(url, {
 		method: 'HEAD',
 		headers: {
 			AuthorizationSignature: signature,
 			AuthorizationExpire: String(expire),
 			LibraryId: libraryId,
-			VideoId: record.id,
+			VideoId: guid,
 			'Tus-Resumable': '1.0.0',
 		},
 	});
@@ -386,8 +397,8 @@ export async function fetchTusOffset(env: ReaperEnv, record: RecordView): Promis
 async function readRecord(env: ReaperEnv, videoId: string): Promise<RecordView | null> {
 	// Read the bucket directly: R2Repository.getObject turns an R2 error into
 	// "missing", and a missing record would make an orphan of a real video.
-	const object = await env.videos.get(videoId);
-	return object ? ((await object.json()) as RecordView) : null;
+	// A Bunny GUID of a new video finds its record through media_provider_refs (lib/media/refs.ts).
+	return (await readRecordByBunnyGuid<RecordView>(env as never, videoId))?.record ?? null;
 }
 
 function bunnyView(b: BunnyView | null): BunnyView | null {
@@ -519,7 +530,10 @@ async function performDelete(
 	// Audit row (with the backup) before anything is deleted
 	await env.global_settings.put(key, JSON.stringify(row), JSON_META);
 
-	const bunnyDeleted = decision.deleteBunny ? await deleteBunnyVideo(env, message.videoId, (rawRecord as LibraryHints | null) ?? undefined) : false;
+	const bunnyId = rawRecord ? bunnyRef(rawRecord as never) : message.videoId;
+	const bunnyDeleted = decision.deleteBunny && bunnyId ? await deleteBunnyVideo(env, bunnyId, (rawRecord as LibraryHints | null) ?? undefined) : false;
+	// An abandoned upload to our own target: its partial bytes in the originals bucket go too
+	if (message.target === 'abandoned' && rawRecord && !bunnyId) await deleteOriginal(env as never, message.videoId).catch(() => undefined);
 	let recordAbandoned = false;
 	let fingerprint: string | undefined;
 	if (message.target === 'abandoned') {
@@ -558,7 +572,9 @@ export async function runReaperCheck(env: ReaperEnv, message: ReaperMessage, now
 
 	const config = await readReaperConfig(env);
 	const record = await readRecord(env, message.videoId);
-	const rawBunny = await fetchBunnyVideo(env, message.videoId, (record as LibraryHints | null) ?? null);
+	// Bunny's id of the video: the record's ref (new videos), the message's id otherwise; none when Bunny holds no copy
+	const bunnyId = record ? bunnyRef(record as never) : message.videoId;
+	const rawBunny = bunnyId ? await fetchBunnyVideo(env, bunnyId, (record as LibraryHints | null) ?? null) : null;
 	const bunny = bunnyView(rawBunny as BunnyView | null);
 	let offsetNow: number | null = null;
 	if (message.target === 'abandoned' && record && !record.abandoned && record.uploadStatus !== 'ready' && record.uploadStatus !== 'processing') {
@@ -858,7 +874,8 @@ export async function sweepStaleUploads(
 				if (nowMs - (Date.parse(video.dateUploaded || '') || nowMs) < ORPHAN_MIN_AGE_MS) continue;
 				let exists: boolean;
 				try {
-					exists = !!(await env.videos.head(video.guid));
+					// A new video's record is under our id; media_provider_refs maps the GUID to it
+					exists = !!(await env.videos.head(video.guid)) || !!(await env.videos.head(await videoIdForRef(env as never, 'bunny', video.guid)));
 				} catch {
 					stats.errors++;
 					continue;

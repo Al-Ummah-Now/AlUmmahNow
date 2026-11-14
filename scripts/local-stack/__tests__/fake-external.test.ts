@@ -93,3 +93,55 @@ describe('fake Bunny', () => {
     assert.ok(refused.includes('GET https://videos.api.qa.alummahnow.net/api/videos'));
   });
 });
+
+describe('fake media pipeline (R2 transcode + media host)', () => {
+  before(() => registerFakes());
+  const VID = '912859ed-e618-4d04-8438-874a74a251dd';
+  const REV = 'abcdefgh12345678';
+
+  it('sends started then ready for the queued job, then the media host serves that rendition only', async () => {
+    const { fakeTranscode, setStackR2, FAKE_MEDIA_HOST, fakeMedia } = await import('../fake-external.ts');
+    setStackR2(async (bucket, key, method) => {
+      if (bucket === 'videos' && key === VID && method === 'GET') return { status: 200, body: JSON.stringify({ id: VID, r2: { jobId: 'job-1', rev: REV, access: 'pub', status: 'queued' } }) };
+      if (bucket === 'al-ummah-now-media-originals' && method === 'LIST') return { status: 200, body: JSON.stringify({ keys: [`src/${VID}/u1/0`] }) };
+      return { status: 404 };
+    });
+    const events: Array<{ url: string; key: string | null; body: { type: string; jobId: string; result?: unknown } }> = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      events.push({ url: String(url), key: new Headers(init?.headers).get('X-API-Key'), body: JSON.parse(String(init?.body)) });
+      return new Response('{}', { status: 200 });
+    }) as typeof fetch;
+    try {
+      // Before the transcode: nothing to serve
+      assert.equal((await call(`https://${FAKE_MEDIA_HOST}/pub/${VID}/${REV}/master.m3u8`)).status, 404);
+      const res = await fakeTranscode(VID, 'ready');
+      assert.equal(res.status, 200);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+    assert.deepEqual(events.map((e) => [e.body.type, e.body.jobId]), [['started', 'job-1'], ['ready', 'job-1']]);
+    assert.ok(events.every((e) => e.url.endsWith('/internal/media/events') && e.key === 'local-stack-internal-key'));
+    const master = await call(`https://${FAKE_MEDIA_HOST}/pub/${VID}/${REV}/master.m3u8`);
+    assert.equal(master.status, 200);
+    assert.match(await master.text(), /#EXTM3U/);
+    assert.equal((await call(`https://${FAKE_MEDIA_HOST}/pub/${VID}/${REV}/thumb.jpg`)).headers.get('content-type'), 'image/jpeg');
+    // Another rev, or the private path of a public rendition: not served
+    assert.equal((await call(`https://${FAKE_MEDIA_HOST}/pub/${VID}/zzzzzzzzzzzzzzzz/master.m3u8`)).status, 404);
+    assert.equal((await call(`https://${FAKE_MEDIA_HOST}/priv/1800000000.${'a'.repeat(32)}/${VID}/${REV}/master.m3u8`)).status, 404);
+    assert.equal((await call(`https://${FAKE_MEDIA_HOST}/priv/nope/${VID}/${REV}/master.m3u8`)).status, 403);
+    // Down (fallback specs): 503 for everything
+    fakeMedia.down = true;
+    assert.equal((await call(`https://${FAKE_MEDIA_HOST}/pub/${VID}/${REV}/master.m3u8`)).status, 503);
+    fakeMedia.down = false;
+  });
+
+  it('refuses a video with no queued transcode or no kept original', async () => {
+    const { fakeTranscode, setStackR2 } = await import('../fake-external.ts');
+    setStackR2(async (bucket, _key, method) => {
+      if (bucket === 'videos' && method === 'GET') return { status: 200, body: JSON.stringify({ id: VID }) };
+      return { status: 200, body: JSON.stringify({ keys: [] }) };
+    });
+    assert.equal((await fakeTranscode(VID, 'ready')).status, 409);
+  });
+});

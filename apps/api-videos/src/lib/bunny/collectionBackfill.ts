@@ -34,6 +34,8 @@
  * Bunny no longer has, owners without a profile.
  * State: global_settings `ops/bunny-collections/runs/<runId>.json` (+ latest.json).
  */
+import { bunnyRef } from '../media/providers';
+import { videoIdForRef } from '../media/refs';
 import { logger } from '../logger';
 import R2Repository from '../r2Repo';
 import { bunnyFileToken, tokenExpiry } from '../bunny-signing';
@@ -418,7 +420,10 @@ export async function runCollectionBackfillPage(
 	// 2. Parallel: Bunny's current collection of each video (gone at Bunny: nothing to file)
 	const present = await eachLimited(items, CONCURRENCY, async (item) => {
 		try {
-			const current = await bunnyCollectionOf(clientOf(item.library), item.library.libraryId, item.video.id);
+			// Bunny holds no copy (R2 only): nothing to file at Bunny
+			const guid = bunnyRef(item.video as never);
+			if (!guid) return false;
+			const current = await bunnyCollectionOf(clientOf(item.library), item.library.libraryId, guid);
 			if (!current) {
 				item.counts.missingInBunny++;
 				return false;
@@ -463,7 +468,7 @@ export async function runCollectionBackfillPage(
 		if (message.dryRun) return;
 		try {
 			if (!item.target) throw new Error('no collection for the owner');
-			await clientOf(item.library).updateVideo(item.library.libraryId, item.video.id, { collectionId: item.target });
+			await clientOf(item.library).updateVideo(item.library.libraryId, bunnyRef(item.video as never) ?? item.video.id, { collectionId: item.target });
 		} catch (error) {
 			c.moved--;
 			c.errors++;
@@ -499,7 +504,12 @@ export async function scanUnreferencedPage(
 		for (const o of listed.objects) liveText += (await (await env.videos.get(o.key))?.text()) ?? '';
 		cursor = listed.truncated ? listed.cursor : undefined;
 	} while (cursor);
-	const present = await eachLimited(items, CONCURRENCY, async (v) => !!(await env.videos.head(v.guid)) || liveText.includes(v.guid));
+	// A record holds it: under its own id (videos from before providers) or through media_provider_refs (new videos)
+	const present = await eachLimited(items, CONCURRENCY, async (v) => {
+		if ((await env.videos.head(v.guid)) || liveText.includes(v.guid)) return true;
+		const mapped = await videoIdForRef(env as never, 'bunny', v.guid);
+		return mapped !== v.guid && !!(await env.videos.head(mapped));
+	});
 	const unreferenced = items
 		.filter((_, i) => !present[i])
 		.map((v) => ({ guid: v.guid, title: v.title, status: v.status, storageSize: v.storageSize, dateUploaded: v.dateUploaded, collectionId: v.collectionId || undefined }));

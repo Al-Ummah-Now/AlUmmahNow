@@ -1,3 +1,4 @@
+import { bunnyRef } from '../../lib/media/providers';
 import { bunnyClientForVideo, type LibraryHints } from '../../lib/bunny/libraries';
 import { canOnVideo } from "../../lib/channelAccess";
 import { OpenAPIRoute, Str } from "chanfana";
@@ -152,13 +153,15 @@ export class VideoUploadStatus extends OptionalAuthRoute {
 
 		// Get status from Bunny Stream if possible
 		let bunnyStreamStatus = null;
+		// Bunny's id of the video; none when Bunny holds no copy (R2 only: the record's own status)
+		const bunnyId = bunnyRef(video as never);
 		try {
-			{
+			if (bunnyId) {
 				// The video's own library (lib/bunny/libraries.ts)
 				const { client: bunnyStream, libraryId } = await bunnyClientForVideo(c.env as never, video as LibraryHints);
 
 				// Get video details from Bunny Stream
-				bunnyStreamStatus = await bunnyStream.getVideo(libraryId, id);
+				bunnyStreamStatus = await bunnyStream.getVideo(libraryId, bunnyId);
 
 				// Log transcoding messages if video failed or has warnings
 				if (bunnyStreamStatus.status === 5 || bunnyStreamStatus.status === 6 || bunnyStreamStatus.transcodingMessages?.length) {

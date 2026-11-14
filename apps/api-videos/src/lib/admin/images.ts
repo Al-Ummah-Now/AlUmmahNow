@@ -2,6 +2,7 @@
  * Image uploads made by an admin (channel avatar/cover, video thumbnail), stored
  * like the owners' uploads (Bunny Storage zone, served from images.alummahnow.net).
  */
+import { bunnyRef } from '../media/providers';
 import BunnyStorageClient from '../bunny/storage';
 import { requireEnvVar, requireSecret } from '../env-helpers';
 import { AdminError } from './service';
@@ -33,10 +34,12 @@ export async function storeImage(env: Record<string, unknown>, file: File, suffi
  * owner's (lib/thumbnail/shape.ts); admin-web crops to it first.
  */
 export async function checkThumbnailShapeFor(env: Record<string, unknown>, videoId: string, file: File): Promise<void> {
-	const video = await new R2Repository<{ width?: number; height?: number; isDeleted?: boolean }>(env.videos as R2Bucket).getObject(videoId);
+	const video = await new R2Repository<{ width?: number; height?: number; isDeleted?: boolean; media?: unknown }>(env.videos as R2Bucket).getObject(videoId);
 	if (!video || video.isDeleted) throw new AdminError(404, 'video_not_found');
 	const head = new Uint8Array(await file.slice(0, 256 * 1024).arrayBuffer());
-	const videoSize = await resolveVideoSize(video, () => fetchBunnyVideo(env as never, videoId));
+	// Bunny's copy (new videos: its GUID) tells the size when the record does not
+	const bunnyId = bunnyRef(video as never);
+	const videoSize = await resolveVideoSize(video, async () => (bunnyId ? fetchBunnyVideo(env as never, bunnyId, video as never) : null));
 	const shape = checkThumbnailShape(imageSize(head), videoSize);
 	if (!shape.ok) throw new AdminError(422, shape.code, shape.error);
 }

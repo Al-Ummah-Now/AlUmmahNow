@@ -114,7 +114,9 @@ type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
  * Not a signing oracle: only known URL fields are considered (never free text
  * such as descriptions or comments), and a URL is signed only when its video
  * id is the id (or videoId) of the object that holds it, so a record cannot
- * obtain tokens for another video. Only the canonical playUrl
+ * obtain tokens for another video. A new video's Bunny copy lives under its own GUID
+ * (docs/media-delivery/PROVIDERS.md §IDs): `resolveOwner` maps such a GUID to our id, and the
+ * URL is signed only when that id owns the object. Only the canonical playUrl
  * (<id>/playlist.m3u8) gets a directory token; images get single-file tokens;
  * anything else stays unsigned. Non-JSON bodies are returned unchanged.
  */
@@ -123,6 +125,7 @@ export async function signBunnyUrlsInText(
 	host: string,
 	securityKey: string,
 	nowSeconds?: number,
+	resolveOwner?: (guid: string) => Promise<string | null>,
 ): Promise<string> {
 	if (!host || !securityKey || !text.includes(host)) return text;
 
@@ -138,14 +141,23 @@ export async function signBunnyUrlsInText(
 	const urlPattern = new RegExp(`^https://${escapeRegExp(host)}/(${VIDEO_ID})/([A-Za-z0-9_-][A-Za-z0-9_.-]*)$`);
 	const expires = tokenExpiry(nowSeconds);
 	const directoryTokens = new Map<string, string>();
+	const resolved = new Map<string, Promise<string | null>>();
 	let changed = false;
+
+	const owns = async (owners: Set<string>, guid: string): Promise<boolean> => {
+		if (owners.has(guid)) return true;
+		if (!resolveOwner) return false;
+		if (!resolved.has(guid)) resolved.set(guid, resolveOwner(guid).catch(() => null));
+		const id = await resolved.get(guid)!;
+		return !!id && owners.has(id);
+	};
 
 	// A stored URL may already carry a token (Studio once saved signed frame
 	// URLs): sign its unsigned form again, so an old token never reaches a client
 	const signImage = async (stored: string, owners: Set<string>): Promise<string> => {
 		const url = unsignedBunnyUrl(stored);
 		const match = urlPattern.exec(url);
-		if (!match || !owners.has(match[1]) || !IMAGE_FILE.test(match[2]) || match[2].includes('..')) return stored;
+		if (!match || !IMAGE_FILE.test(match[2]) || match[2].includes('..') || !(await owns(owners, match[1]))) return stored;
 		const path = `/${match[1]}/${match[2]}`;
 		changed = true;
 		return `https://${host}${path}?token=${await bunnyFileToken(securityKey, path, expires)}&expires=${expires}`;
@@ -154,7 +166,7 @@ export async function signBunnyUrlsInText(
 	const signPlaylist = async (stored: string, owners: Set<string>): Promise<string> => {
 		const url = unsignedBunnyUrl(stored);
 		const match = urlPattern.exec(url);
-		if (!match || !owners.has(match[1]) || match[2] !== PLAYLIST_FILE) return stored;
+		if (!match || match[2] !== PLAYLIST_FILE || !(await owns(owners, match[1]))) return stored;
 		const videoId = match[1];
 		if (!directoryTokens.has(videoId)) {
 			directoryTokens.set(videoId, await bunnyDirectoryToken(securityKey, videoId, expires));

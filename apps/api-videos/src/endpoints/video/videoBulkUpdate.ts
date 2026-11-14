@@ -1,3 +1,4 @@
+import { bunnyRef } from '../../lib/media/providers';
 import { bunnyClientForVideo, type LibraryHints } from '../../lib/bunny/libraries';
 import { Bool, Str } from "chanfana";
 import { z } from "zod";
@@ -330,11 +331,12 @@ export class VideoBulkUpdate extends AuthenticatedRoute {
 			const personChose = !!video.category && video.categorySource !== 'ai';
 			if (!personChose) requestVideoSuggestion(c, { videoId, userId, channelId: video.channelId, reason: 'edit' });
 		}
-		if (video.title && video.title !== previous.title) {
+		const bunnyId = bunnyRef(video as never);
+		if (bunnyId && video.title && video.title !== previous.title) {
 			inBackground(c, 'bulk-bunny-title', async () => {
-				// In the video's own library (lib/bunny/libraries.ts)
+				// In the video's own library (lib/bunny/libraries.ts), under Bunny's id of the video
 				const { client, libraryId } = await bunnyClientForVideo(c.env as never, video as LibraryHints);
-				await client.updateVideo(libraryId, videoId, { title: video.title });
+				await client.updateVideo(libraryId, bunnyId, { title: video.title });
 			});
 		}
 	}

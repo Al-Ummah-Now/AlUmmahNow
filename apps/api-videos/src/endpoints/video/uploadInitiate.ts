@@ -12,18 +12,21 @@ import R2Repository from "../../lib/r2Repo";
 import { fileReusedVideo, uploadCollection } from '../../lib/channelCollection';
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
 import Queue, { MessageType } from "../../lib/queue";
-import { requireSecret, requireEnvVar } from "../../lib/env-helpers";
+import { requireSecret } from "../../lib/env-helpers";
 import { fingerprintKey, initiateOnce, UploadClaimBusyError, UploadFingerprintSchema } from "../../lib/uploads/initiateOnce";
 import { checkReusable, issueTusSession, reuseFields, type PlaceholderRecord } from "../../lib/uploads/placeholder";
 import { patchVideo } from "../../lib/videoWrites";
 import { markUploadCreated } from "../../lib/uploads/reaper";
-import { thumbnailProcessor, thumbnailStorage } from "../../lib/thumbnail";
+import { thumbnailProcessor } from "../../lib/thumbnail";
 import { adoptOrRequestSuggestion } from '../../lib/categorySuggestions';
 import { logger } from '../../lib/logger';
 import { scanInBackground, videoScanText } from '../../lib/moderation-scan';
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { VIDEO_VISIBILITIES } from '@al-ummah/shared-types';
 import { uploadVisibility } from '../../lib/visibility';
+import { planIngest } from "../../lib/media/ingest";
+import { storeCustomThumbnail } from "../../lib/thumbnail/store";
+import { bunnyRef } from "../../lib/media/providers";
 
 export class UploadInitiateEndpoint extends AuthenticatedRoute {
 	schema = {
@@ -207,16 +210,20 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 			// Creates the Bunny video and its record (the claim, when there is
 			// one, guarantees this runs once per file).
 			const create = async (): Promise<string> => {
-				const collectionId = await uploadCollection(c.env, bunnyStream, libraryId, channelId, ownerId);
-				const bunnyVideo = await bunnyStream.createVideo(libraryId, {
-					title,
-					collectionId, // Add to collection if available
-					thumbnailTime: 0,
+				// Our own id; Bunny gets a video only when the Delivery settings send uploads there (lib/media/ingest.ts)
+				const plan = await planIngest(c.env as never, channelId, async () => {
+					const collectionId = await uploadCollection(c.env, bunnyStream, libraryId, channelId, ownerId);
+					const bunnyVideo = await bunnyStream.createVideo(libraryId, {
+						title,
+						collectionId, // Add to collection if available
+						thumbnailTime: 0,
+					});
+					// Ours: the reaper may remove it if its record never lands (lib/uploads/reaper.ts)
+					await markUploadCreated(c.env.global_settings, bunnyVideo.guid, { userId, channelId });
+					return { guid: bunnyVideo.guid, libraryId };
 				});
-				const videoId = bunnyVideo.guid;
-				// Ours: the reaper may remove it if its record never lands (lib/uploads/reaper.ts)
-				await markUploadCreated(c.env.global_settings, videoId, { userId, channelId });
-				const thumb = await this.processThumbnail(c, videoId, thumbnail);
+				const videoId = plan.videoId;
+				const thumb = await this.processThumbnail(c, videoId, thumbnail, plan.bunny?.guid);
 				const now = new Date().toISOString();
 				// Same record as a bulk upload (lib/upload/uploadRecord.ts). Without a
 				// stored thumbnail there is no thumbnail URL until Bunny's exists.
@@ -241,6 +248,7 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 						customThumbnail: thumb.custom ? { url: thumb.thumbnailUrl, type: thumb.thumbnailType, sizes: thumb.thumbnailSizes } : undefined,
 						bunnyHostname: c.env.bunny_hostname,
 						bunnyLibraryId: libraryId,
+						media: plan.media,
 						now: new Date(now),
 					}),
 					...(claimKey ? { uploadFingerprint: claimKey, lastInitiateAt: now } : {}),
@@ -301,8 +309,6 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 			let thumbnailUrl: string | undefined;
 			let thumbnailSizes: Record<string, string> | undefined;
 			if (reused) {
-				// The earlier initiate may have left it outside its collection
-				await fileReusedVideo(c.env, bunnyStream, libraryId, videoId, channelId, ownerId);
 				// Same video again: latest metadata (and thumbnail, when one was sent)
 				const thumb = thumbnail?.data ? await this.processThumbnail(c, videoId, thumbnail) : null;
 				const nowIso = new Date().toISOString();
@@ -317,6 +323,9 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 					return c.json({ success: false, error: 'Upload could not be started, retry' }, 503);
 				}
 				stored = result.video as unknown as PlaceholderRecord;
+				// The earlier initiate may have left its Bunny video outside its collection
+				const reusedGuid = bunnyRef(stored as never);
+				if (reusedGuid) await fileReusedVideo(c.env, bunnyStream, libraryId, reusedGuid, channelId, ownerId);
 				thumbnailUrl = stored.thumbnailUrl as string | undefined;
 				thumbnailSizes = stored.thumbnailSizes as Record<string, string> | undefined;
 			} else {
@@ -395,15 +404,17 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 
 	/**
 	 * Store a thumbnail sent with the initiate (custom image or an extracted
-	 * frame) in Bunny image storage; without one, point at the thumbnail Bunny
-	 * generates next to the playlist (signed per response).
+	 * frame) where the Delivery settings store custom thumbnails (lib/thumbnail/store.ts);
+	 * without one, the provider's automatic frame follows once the video is ready
+	 * (Bunny's next to its playlist, under its GUID; R2's from the transcode).
 	 */
 	private async processThumbnail(
 		c: AppContext,
 		videoId: string,
 		thumbnail: { type?: 'auto' | 'custom'; data?: string; position?: number; filename?: string; video?: { width?: number; height?: number } } | undefined,
+		bunnyGuid?: string | null,
 	): Promise<{ thumbnailUrl: string; thumbnailType: 'auto' | 'custom'; thumbnailSizes?: Record<string, string>; custom: boolean }> {
-		const fallback = { thumbnailUrl: `https://${c.env.bunny_hostname}/${videoId}/thumbnail.jpg`, thumbnailType: 'auto' as const, custom: false };
+		const fallback = { thumbnailUrl: bunnyGuid ? `https://${c.env.bunny_hostname}/${bunnyGuid}/thumbnail.jpg` : '', thumbnailType: 'auto' as const, custom: false };
 		if (!thumbnail?.data) return fallback;
 		try {
 			logger.debug('[UploadInitiate] Processing thumbnail', { videoId, thumbnailType: thumbnail.type, position: thumbnail.position });
@@ -412,15 +423,12 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 			// Never store a thumbnail of another shape than the video's: Bunny's own frame is used instead
 			const shape = checkThumbnailShape(imageSize(new Uint8Array(processed.original)), videoSizeOf(thumbnail.video));
 			if (!shape.ok) {
-				logger.warn('[UploadInitiate] Thumbnail dropped: wrong shape, using Bunny\'s frame', { videoId, expected: shape.expected, actual: shape.actual });
+				logger.warn('[UploadInitiate] Thumbnail dropped: wrong shape, using the automatic frame', { videoId, expected: shape.expected, actual: shape.actual });
 				return fallback;
 			}
-			const imageStorageKey = await requireSecret(c.env.image_storage_key, 'image_storage_key');
-			const zone = requireEnvVar(c.env, 'ZONE');
-			// Bunny.net Image Optimizer resizes on the fly using URL parameters
-			const storageResult = await thumbnailStorage.storeInBunny(videoId, processed.original, zone, imageStorageKey, 'https://images.alummahnow.net');
-			logger.debug('[UploadInitiate] Thumbnail saved to Bunny.net', { videoId, sizes: Object.keys(storageResult.thumbnailSizes) });
-			return { thumbnailUrl: storageResult.cdnUrl, thumbnailType: thumbnail.type ?? 'custom', thumbnailSizes: storageResult.thumbnailSizes, custom: true };
+			const stored = await storeCustomThumbnail(c.env as never, videoId, processed.original, { type: 'image/jpeg', extension: 'jpg' });
+			logger.debug('[UploadInitiate] Thumbnail stored', { videoId, store: stored.store, sizes: Object.keys(stored.thumbnailSizes) });
+			return { thumbnailUrl: stored.thumbnailUrl, thumbnailType: thumbnail.type ?? 'custom', thumbnailSizes: stored.thumbnailSizes, custom: true };
 		} catch (error) {
 			logger.error('[UploadInitiate] Thumbnail processing failed', {
 				videoId,

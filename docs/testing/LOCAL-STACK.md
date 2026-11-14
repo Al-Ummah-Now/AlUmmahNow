@@ -75,9 +75,17 @@ on its own port:
     videos), thumbnails and MP4s. Encoded videos only; before the encode it answers 404, like Bunny.
   - **Bunny Storage and the image host** (`images.alummahnow.net`).
   - **Resend**: emails are kept, never sent.
+  - **The R2 media pipeline** (the transcoder Container and the media Worker are not in the stack):
+    `POST /__fake/media/transcode/<videoId>` checks the record's queued job and its kept original, then
+    sends the job events a real transcode sends (`started`, then `ready` with the result, or with
+    `?outcome=fail` a final failure) to api-videos `/internal/media/events`. `media.local-stack.test`
+    serves the landscape player fixture for renditions it made ready (`/pub/…`, and `/priv/…` with a
+    token-shaped segment; the real token check is unit tested in `apps/media`).
+    `POST /__fake/media/down|up` makes the host answer 503, for fallback specs.
 - **Control API.** `http://127.0.0.1:3190` (loopback only) has:
   - `GET /__fake/bunny/videos[/<guid>]`;
   - `POST /__fake/bunny/videos/<guid>/encode|fail|hold`;
+  - `POST /__fake/media/transcode/<videoId>[?outcome=fail]`, `POST /__fake/media/down|up`;
   - `GET /__fake/resend/emails`;
   - `POST /__stack/d1/<database name>`, which runs the request body as SQL. The seed uses it for roles
     and creator tiers, and specs that are not about auth can use it as a fast path;

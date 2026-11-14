@@ -10,8 +10,10 @@
  *
  * Bunny is never touched here: every Bunny path works exactly as before.
  */
+import { r2ThumbnailPrefix } from '../thumbnail/store';
 import {
 	isVideoMediaPublic,
+	mediaFrameUrl,
 	mediaPlayUrl,
 	newMediaRev,
 	publicMp4Path,
@@ -36,12 +38,16 @@ import {
 	type TranscodeJobMessage,
 	type VideoR2State,
 	type VideoVisibilityFields,
+	ingestTargets,
+	type VideoMediaProviders,
 } from '@al-ummah/shared-types';
 import { queueReviewScan, reviewExtractionFor } from '../review/scan';
 import { getSecret } from '../env-helpers';
+import { markPublished } from '../published';
+import { bunnyRef } from './providers';
 import { fetchBunnyVideo } from '../processing/loop';
 import { deleteOriginal } from './originals';
-import { clearMediaSettingsCache, readLegacyDeliverySettings, writeLegacyDeliverySettings } from './settings';
+import { clearMediaSettingsCache, readLegacyDeliverySettings, readMediaSettings, writeLegacyDeliverySettings } from './settings';
 import { bunnyLibraryForVideo, type BunnyLibrariesEnv, type LibraryHints } from '../bunny/libraries';
 import { logger } from '../logger';
 import R2Repository from '../r2Repo';
@@ -210,9 +216,15 @@ export async function enqueueTranscode(
 ): Promise<{ queued: boolean; why?: string; jobId?: string }> {
 	try {
 		if (!env.TRANSCODE_QUEUE) return { queued: false, why: 'transcode queue not bound' };
-		const settings = await readDeliverySettings(env);
-		if (!settings.transcode && reason !== 'retry') return { queued: false, why: 'transcoding is off' };
-		if (reason === 'upload' && opts.uploaderId && (await isE2eUploader(env, opts.uploaderId))) return { queued: false, why: 'E2E run account' };
+		// A new video names its providers (lib/media/ingest.ts): R2 transcodes exactly when it holds one.
+		// Older rows follow the ingest settings (channel override included).
+		const current = (await repo(env).getObject(videoId)) as (MediaVideo & { channelId?: string; media?: VideoMediaProviders }) | null;
+		if (!current) return { queued: false, why: 'video not found' };
+		const wantsR2 = current.media ? !!current.media.providers.r2 : ingestTargets(await readMediaSettings(env), current.channelId).includes('r2');
+		if (!wantsR2 && reason !== 'retry') return { queued: false, why: 'R2 does not take this video' };
+		// E2E run accounts skip R2 to spare the transcoder, unless R2 is the video's only copy
+		const onlyCopy = !!current.media && !current.media.providers.bunny;
+		if (reason === 'upload' && !onlyCopy && opts.uploaderId && (await isE2eUploader(env, opts.uploaderId))) return { queued: false, why: 'E2E run account' };
 		const now = opts.now ?? new Date();
 		// Pre-publication review (docs/specs/VIDEO-REVIEW.md §5): the same pass extracts frames and audio
 		const review = reason === 'upload' ? await reviewExtractionFor(env as never) : undefined;
@@ -332,6 +344,100 @@ export function failureDetails(ev: Pick<TranscodeJobEvent, 'videoId' | 'jobId' |
 const needsActionKey = (videoId: string) => `media-transcode:${videoId}`;
 
 /** An event from apps/media. Events of an older job are ignored. */
+/**
+ * The stored form of a ready R2 rendition's frame: the public URL, or for a private one the /priv/
+ * path with a placeholder token (the signing middleware signs it per response for the video's
+ * owner object only; lib/bunny-signing.ts). Null when there is no ready rendition.
+ */
+export function storedR2Frame(host: string | undefined, video: { id: string; r2?: VideoR2State }): string | null {
+	const r2 = video.r2;
+	if (!host || !r2 || r2.status !== 'ready') return null;
+	return r2.access === 'pub' ? `https://${host}/pub/${video.id}/${r2.rev}/${MEDIA_THUMBNAIL}` : `https://${host}/priv/-/${video.id}/${r2.rev}/${MEDIA_THUMBNAIL}`;
+}
+
+type SoleCopyVideo = MediaVideo & {
+	media?: VideoMediaProviders;
+	uploadStatus?: string;
+	playableAt?: string;
+	thumbnailUrl?: string;
+	thumbnailType?: string;
+	thumbnailSizes?: Record<string, string>;
+	thumbnailPending?: boolean;
+	processingIssue?: { kind: string; reason?: string; at: string };
+	availableResolutions?: string[];
+	width?: number;
+	height?: number;
+	duration?: number;
+	publishedAt?: string;
+};
+
+/** R2 is the copy that decides the video's state: Bunny holds none, or Bunny's failed. */
+export function r2DecidesState(video: { media?: VideoMediaProviders }): boolean {
+	const m = video.media;
+	return !!m?.providers.r2 && (!m.providers.bunny || m.providers.bunny.status === 'failed');
+}
+
+/** Point a non-custom thumbnail that is (or should be) the R2 frame at the current rendition. */
+function refreshR2Frame(video: SoleCopyVideo, host: string | undefined): void {
+	if (video.thumbnailType === 'custom') return;
+	const frame = storedR2Frame(host, video);
+	if (!frame || video.thumbnailUrl === frame) return;
+	const current = video.thumbnailUrl;
+	const isR2Frame = !!current && /\/(pub|priv)\/.*\/thumb\.jpg$/.test(new URL(current, 'https://x').pathname) && current.includes(`/${video.id}/`);
+	if (!current || isR2Frame || r2DecidesState(video)) {
+		video.thumbnailUrl = frame;
+		video.thumbnailType = 'auto';
+		delete video.thumbnailSizes;
+		delete video.thumbnailPending;
+	}
+}
+
+/**
+ * R2 decides the video's state and its rendition is ready: the video turns ready the way Bunny's
+ * sync makes it ready (lib/processing/sync.ts). Mutates; true when it turned ready now.
+ */
+function readyFromR2(v: SoleCopyVideo, at: string, host: string | undefined): boolean {
+	if (!r2DecidesState(v) || v.r2?.status !== 'ready' || !v.r2.result) return false;
+	refreshR2Frame(v, host);
+	if (v.uploadStatus === 'ready') return false;
+	const result = v.r2.result;
+	const before = { ...v };
+	v.uploadStatus = 'ready';
+	v.playableAt ??= at;
+	delete v.processingIssue;
+	const src = result.source;
+	if (src?.width) v.width = src.width;
+	if (src?.height) v.height = src.height;
+	const seconds = result.durationSeconds || src?.durationSeconds;
+	if (seconds) v.duration = Math.round(seconds);
+	v.availableResolutions = result.rungs.map((rung) => rung.name);
+	markPublished(before as never, v as never, v.playableAt);
+	return true;
+}
+
+/**
+ * Bunny's copy just failed and R2's was already ready (Bunny's sync, lib/processing/loop.ts): the
+ * video turns ready from R2 now. Idempotent; never throws.
+ */
+export async function promoteR2Copy(env: MediaEnv, videoId: string): Promise<boolean> {
+	try {
+		let turned = false;
+		const saved = await repo(env).updateObject(videoId, (video) => {
+			turned = readyFromR2(video as SoleCopyVideo, new Date().toISOString(), env.MEDIA_PUBLIC_HOST);
+			return turned;
+		});
+		if (saved && turned) {
+			const { announceAndRecordProcessingResult } = await import('../notification-events');
+			await announceAndRecordProcessingResult(env as never, { ...(saved as object), id: videoId } as never, 'ready');
+			logger.warn('[Media] Bunny failed; the video plays from R2', { videoId });
+		}
+		return turned;
+	} catch (error) {
+		logger.error('[Media] Could not make the video ready from R2', { videoId, error: error instanceof Error ? error.message : String(error) });
+		return false;
+	}
+}
+
 export async function applyJobEvent(
 	env: MediaEnv & ErrorReporterEnv,
 	ctx: ExecutionContextLike | undefined,
@@ -339,8 +445,10 @@ export async function applyJobEvent(
 ): Promise<{ applied: boolean; why?: string }> {
 	let why: string | undefined;
 	let previous: { rev: string; access: MediaAccess } | undefined;
+	let transition: 'ready' | 'failed' | null = null;
 	const saved = await repo(env).updateObject(ev.videoId, (video) => {
 		why = undefined;
+		transition = null;
 		const r2 = video.r2;
 		if (!r2 || r2.jobId !== ev.jobId) {
 			why = 'stale job';
@@ -376,6 +484,9 @@ export async function applyJobEvent(
 			delete r2.progress;
 			previous = r2.previous;
 			delete r2.previous;
+			// R2 is the video's playable copy (docs/media-delivery/PROVIDERS.md §R2 only): it makes the
+			// video ready the way Bunny's sync does (lib/processing/sync.ts planSync/applyPlan)
+			if (readyFromR2(video as SoleCopyVideo, ev.at, env.MEDIA_PUBLIC_HOST)) transition = 'ready';
 		} else if (ev.type === 'failed') {
 			r2.error = scrubMediaText(ev.error ?? 'failed', 500);
 			if (ev.failure) r2.failure = sanitizeFailure(ev.failure);
@@ -383,13 +494,34 @@ export async function applyJobEvent(
 			if (ev.final) {
 				r2.status = 'failed';
 				r2.failedAt = ev.at;
+				// The only copy failed: the video failed (the uploader is told; Errors page has Retry)
+				const v = video as SoleCopyVideo;
+				if (r2DecidesState(v) && v.uploadStatus !== 'ready' && v.uploadStatus !== 'failed') {
+					v.uploadStatus = 'failed';
+					v.processingIssue = { kind: 'encode_failed', reason: 'The video could not be processed', at: ev.at };
+					transition = 'failed';
+				}
 			}
+		}
+		// The video's provider record mirrors the job (docs/media-delivery/PROVIDERS.md)
+		const ref = (video as SoleCopyVideo).media?.providers.r2;
+		if (ref) {
+			ref.status = r2.status === 'ready' ? 'ready' : r2.status === 'failed' ? 'failed' : 'processing';
+			if (r2.status === 'ready') {
+				ref.readyAt = ev.at;
+				delete ref.error;
+			} else if (r2.status === 'failed') ref.error = r2.error;
 		}
 		video.dateModified = new Date().toISOString();
 		return true;
 	});
 	if (!saved) return { applied: false, why: 'video not found' };
 	if (why) return { applied: false, why };
+	if (transition) {
+		// Same downstream path as Bunny's: uploader notification, subscriber fan-out (lib/notification-events.ts)
+		const { announceAndRecordProcessingResult } = await import('../notification-events');
+		await announceAndRecordProcessingResult(env as never, { ...(saved as object), id: ev.videoId } as never, transition);
+	}
 	// Live admin view (admin:media, docs/admin/LIVE_OPS.md): this job, then the transcoder figures
 	pushMediaLive(env, ctx, saved);
 	if (ev.type !== 'progress') await recordJob(env, saved);
@@ -419,7 +551,7 @@ export async function applyJobEvent(
 		reportNeedsAction('api-videos', env, ctx, {
 			key: needsActionKey(ev.videoId),
 			source: 'processing',
-			title: 'R2 transcode failed (Bunny unaffected)',
+			title: r2DecidesState(saved as SoleCopyVideo) ? 'Video processing failed (R2 is its only copy)' : 'R2 transcode failed (Bunny unaffected)',
 			message: details.summary,
 			// The Errors page shows this as the item's details (expandable)
 			error: details.error,
@@ -463,23 +595,26 @@ export function sourceFiles(bunny: { hasOriginal?: boolean | null; availableReso
  */
 export async function sourceCandidates(env: MediaEnv, videoId: string, record?: LibraryHints | null): Promise<string[]> {
 	// The video's own library (host and token key; lib/bunny/libraries.ts)
+	// Bunny's id of the video; none when Bunny holds no copy (the original is then the only source)
+	const guid = record ? bunnyRef({ id: videoId, ...record } as never) : videoId;
+	if (!guid) return [];
 	const library = await bunnyLibraryForVideo(env as BunnyLibrariesEnv, record);
 	const host = library.host;
 	if (!host) return [];
 	let bunny: { hasOriginal?: boolean | null; availableResolutions?: string | null } | null = null;
 	try {
 		// In the video's own library
-		bunny = (await fetchBunnyVideo(env as never, videoId, record ?? undefined)) as never;
+		bunny = (await fetchBunnyVideo(env as never, guid, record ?? undefined)) as never;
 	} catch (error) {
 		logger.warn('[Media] Bunny video lookup failed; trying every source', { videoId, error: error instanceof Error ? error.message : String(error) });
 	}
 	const files = sourceFiles(bunny);
 	if (library.tokenKey) {
 		const expires = tokenExpiry();
-		const token = await bunnyDirectoryToken(library.tokenKey, videoId, expires);
-		return files.map((f) => signedBunnyUrl(host, videoId, f, token, expires));
+		const token = await bunnyDirectoryToken(library.tokenKey, guid, expires);
+		return files.map((f) => signedBunnyUrl(host, guid, f, token, expires));
 	}
-	return files.map((f) => `https://${host}/${videoId}/${f}`);
+	return files.map((f) => `https://${host}/${guid}/${f}`);
 }
 
 /** The first candidate (the original): kept for callers that want one URL. */
@@ -495,7 +630,8 @@ export async function r2Urls(env: MediaEnv, video: Pick<MediaVideo, 'id' | 'r2'>
 	if (r2.access === 'priv' && !sign?.key) return null;
 	return {
 		playUrl: await mediaPlayUrl(env.MEDIA_PUBLIC_HOST, r2.access, video.id, r2.rev, MEDIA_MASTER, sign),
-		thumbnailUrl: await mediaPlayUrl(env.MEDIA_PUBLIC_HOST, r2.access, video.id, r2.rev, MEDIA_THUMBNAIL, sign),
+		// The frame alone: a file token (it may be shown where the playlist is not)
+		thumbnailUrl: sign ? await mediaFrameUrl(env.MEDIA_PUBLIC_HOST, video.id, r2.rev, sign.key) : await mediaPlayUrl(env.MEDIA_PUBLIC_HOST, 'pub', video.id, r2.rev, MEDIA_THUMBNAIL),
 	};
 }
 
@@ -643,6 +779,12 @@ export async function purgeVideoRenditions(env: MediaEnv, videoId: string, opts:
 /** Every R2 object of a video, both buckets (the 30-day purge, promote, erase). Idempotent. */
 export async function purgeVideoMedia(env: MediaEnv, videoId: string): Promise<number> {
 	let n = await purgeVideoRenditions(env, videoId);
+	// Custom thumbnails stored on R2 (lib/thumbnail/store.ts)
+	if (env.MEDIA) {
+		const thumbs = await listKeys(env.MEDIA, r2ThumbnailPrefix(videoId));
+		await deleteKeys(env.MEDIA, thumbs);
+		n += thumbs.length;
+	}
 	// The kept original (docs/media-delivery/ORIGINALS.md)
 	n += await deleteOriginal(env as never, videoId);
 	return n;
@@ -737,6 +879,8 @@ export async function moveMedia(env: MediaEnv, msg: MediaMoveMessage): Promise<'
 		if (!fresh.r2 || fresh.r2.rev !== r2.rev || fresh.r2.moving?.jobId !== msg.moveId) return false;
 		fresh.r2.access = msg.to;
 		delete fresh.r2.moving;
+		// The stored frame of an R2-only video follows its rendition to the other prefix
+		if (r2DecidesState(fresh as SoleCopyVideo)) refreshR2Frame(fresh as SoleCopyVideo, env.MEDIA_PUBLIC_HOST);
 		switched = true;
 		return true;
 	});

@@ -16,7 +16,8 @@ import { AuthenticatedRoute, AppContext } from '../../base';
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import R2Repository, { rethrowBusy } from "../../lib/r2Repo";
 import { patchVideo } from '../../lib/videoWrites';
-import BunnyStorageClient from "../../lib/bunny/storage";
+import { storeCustomThumbnail, type StoredThumbnail } from "../../lib/thumbnail/store";
+import { bunnyRef } from "../../lib/media/providers";
 import { validateImageBuffer, detectMimeType } from "../../lib/thumbnail/validator";
 import { checkThumbnailShape, imageSize, resolveVideoSize } from "../../lib/thumbnail/shape";
 import { fetchBunnyVideo } from "../../lib/processing/loop";
@@ -26,7 +27,6 @@ import { addAuthToSchema } from "../../lib/openapi-auth";
 import Queue, { MessageType } from "../../lib/queue";
 import { logger } from '../../lib/logger';
 
-const IMAGE_CDN_BASE_URL = 'https://images.alummahnow.net';
 
 const EXTENSIONS: Record<string, string> = {
 	'image/jpeg': 'jpg',
@@ -103,7 +103,9 @@ export class VideoThumbnailUpload extends AuthenticatedRoute {
 			}
 
 			// Never a thumbnail of another shape than the video's (cards would crop or letterbox it)
-			const videoSize = await resolveVideoSize(video, () => fetchBunnyVideo(c.env as never, id));
+			// Bunny's copy (new videos: its own GUID) tells the size when the record does not; no copy, the record's size
+			const bunnyId = bunnyRef(video as never);
+			const videoSize = await resolveVideoSize(video, async () => (bunnyId ? fetchBunnyVideo(c.env as never, bunnyId, video as never) : null));
 			const shape = checkThumbnailShape(imageSize(new Uint8Array(buffer)), videoSize);
 			if (!shape.ok) {
 				logger.info('[VideoThumbnailUpload] Refused: wrong shape', { videoId: id, expected: shape.expected, actual: shape.actual });
@@ -114,29 +116,15 @@ export class VideoThumbnailUpload extends AuthenticatedRoute {
 			const mimeType = detectMimeType(new Uint8Array(buffer)) || 'image/jpeg';
 			const extension = EXTENSIONS[mimeType] || 'jpg';
 
-			// Unique path per upload so CDN caches never serve a stale image
-			const path = `/thumbnails/${id}/${crypto.randomUUID()}.${extension}`;
-
-			const storageKey = await requireSecret(c.env.image_storage_key, 'image_storage_key');
-			const zone = requireEnvVar(c.env, 'ZONE');
-			const storage = new BunnyStorageClient(zone, storageKey);
-
-			const stream = new ReadableStream({
-				start(controller) {
-					controller.enqueue(new Uint8Array(buffer));
-					controller.close();
-				},
-			});
-
-			const uploaded = await storage.putFile(path, stream);
-			if (!uploaded) {
-				logger.error('[VideoThumbnailUpload] Bunny storage upload failed', { videoId: id, path });
+			// Where the Delivery settings store custom thumbnails (lib/thumbnail/store.ts); a unique path per upload
+			let stored: StoredThumbnail;
+			try {
+				stored = await storeCustomThumbnail(c.env as never, id, buffer, { type: mimeType, extension });
+			} catch (error) {
+				logger.error('[VideoThumbnailUpload] Thumbnail storage failed', { videoId: id, error: error instanceof Error ? error.message : String(error) });
 				return c.json({ success: false, error: "Failed to store thumbnail" }, 500);
 			}
-
-			const baseUrl = `${IMAGE_CDN_BASE_URL}${path}`;
-			const thumbnailSizes = thumbnailProcessor.generateBunnyUrls(baseUrl);
-			const thumbnailUrl = thumbnailSizes.hd || baseUrl;
+			const { thumbnailUrl, thumbnailSizes } = stored;
 
 			// Conditional write on the fresh video (SCALABILITY-AUDIT AV-3)
 			const saved = await patchVideo(repository, id, (fresh) => {

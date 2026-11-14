@@ -6,6 +6,7 @@ import { z } from "zod";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import R2Repository, { rethrowBusy } from "../../lib/r2Repo";
+import { bunnyRef } from "../../lib/media/providers";
 import { generateTUSConfig, createTusProxySession, TUS_PROXY_SESSION_TTL_SECONDS } from "../../lib/bunny/tus";
 import { buildTusUploadId, type VideoTusUpload } from "./tus/tusProxy";
 import { reopenForReupload, type UploadVideo } from "../../lib/uploads/lifecycle";
@@ -154,7 +155,7 @@ export class UploadResumeEndpoint extends AuthenticatedRoute {
 
 			// New proxy session for the same video (the proxy signs every Bunny
 			// request itself; this signature only fills the stored session).
-			const tusConfig = await generateTUSConfig(libraryId, bunnyKey, videoId, 1);
+			const tusConfig = await generateTUSConfig(libraryId, bunnyKey, bunnyRef(video as never) ?? videoId, 1);
 			let tusSessionId: string;
 			try {
 				tusSessionId = await createTusProxySession(c.env.TUS_SESSIONS, {
@@ -169,9 +170,9 @@ export class UploadResumeEndpoint extends AuthenticatedRoute {
 				return c.json({ success: false, error: 'Session store unavailable, retry' }, 503);
 			}
 
-			// The earlier upload, while Bunny may still hold its bytes
+			// The earlier upload, while Bunny (or our own target, lib/media/r2-tus.ts) may still hold its bytes
 			const durable = (video as VideoType & { tusUpload?: VideoTusUpload }).tusUpload;
-			const tusUploadId = durable?.sessionId && durable.bunnyUploadUrl ? buildTusUploadId(durable.sessionId, videoId) : undefined;
+			const tusUploadId = durable?.sessionId && (durable.bunnyUploadUrl || durable.target === 'r2') ? buildTusUploadId(durable.sessionId, videoId) : undefined;
 
 			// Record the resume attempt; best effort, never blocks the upload
 			// (conditional write on the fresh video, SCALABILITY-AUDIT AV-3)

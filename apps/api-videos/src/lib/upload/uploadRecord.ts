@@ -12,6 +12,7 @@
  *   Bunny call (processing check, delete, signing) uses that library.
  */
 import type { z } from 'zod';
+import type { VideoMediaProviders } from '@al-ummah/shared-types';
 import type { Video as BusinessVideo } from '../types';
 
 type VideoRecord = z.infer<typeof BusinessVideo>;
@@ -49,12 +50,16 @@ export interface UploadRecordInput {
 	bunnyHostname: string;
 	/** Bunny library the video is uploaded to (lib/bunny/libraries.ts) */
 	bunnyLibraryId?: number;
+	/** Which providers take the upload (lib/media/ingest.ts); absent on callers from before providers (Bunny under videoId) */
+	media?: VideoMediaProviders;
 	now?: Date;
 }
 
 export function createUploadRecord(input: UploadRecordInput): VideoRecord {
 	const at = (input.now ?? new Date()).toISOString();
 	const thumbnail = input.customThumbnail?.url ? input.customThumbnail : null;
+	// Bunny's playlist only when Bunny takes the upload, under its GUID (never our id)
+	const bunnyGuid = input.media ? input.media.providers.bunny?.ref : input.videoId;
 	return {
 		id: input.videoId,
 		title: input.title,
@@ -62,8 +67,9 @@ export function createUploadRecord(input: UploadRecordInput): VideoRecord {
 		userId: input.userId,
 		...(input.uploadedBy ? { uploadedBy: input.uploadedBy } : {}),
 		channelId: input.channelId,
-		...(Number.isFinite(input.bunnyLibraryId) ? { bunnyLibraryId: input.bunnyLibraryId } : {}),
-		playUrl: `https://${input.bunnyHostname}/${input.videoId}/playlist.m3u8`,
+		...(bunnyGuid && Number.isFinite(input.bunnyLibraryId) ? { bunnyLibraryId: input.bunnyLibraryId } : {}),
+		...(bunnyGuid ? { playUrl: `https://${input.bunnyHostname}/${bunnyGuid}/playlist.m3u8` } : {}),
+		...(input.media ? { media: input.media } : {}),
 		thumbnailType: thumbnail?.type ?? 'auto',
 		...(thumbnail ? { thumbnailUrl: thumbnail.url } : {}),
 		...(thumbnail?.sizes ? { thumbnailSizes: thumbnail.sizes } : {}),

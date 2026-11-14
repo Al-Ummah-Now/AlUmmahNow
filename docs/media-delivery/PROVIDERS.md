@@ -45,7 +45,7 @@ switch used), cached 30 s per isolate (`lib/media/settings.ts`):
 | `playback.strategy` | `priority` (try `order` in turn) or `weighted` (pick the first by `weights`, the rest follow in `order`) |
 | `playback.order` / `weights` | the provider order; weights are relative shares (0-100) |
 | `playback.assign` | `video`: a video's bucket is stable (FNV of its id); `view`: drawn per request |
-| `health` | `enabled`, `failureThreshold` fallbacks in `windowMinutes`, `probeFailures` in a row, `cooldownMinutes` |
+| `health` | `enabled`, `failureThreshold` distinct fallback reporters in `windowMinutes`, `probeFailures` in a row, `cooldownMinutes` |
 | `thumbnails.store` | where new custom thumbnails are stored |
 | `channels.<channelId>` | override: `ingest`, `strategy`, `order`, `weights`, `note` (at most 200 channels) |
 
@@ -110,6 +110,90 @@ with passing probes and fallback reporters under the threshold. The snapshot is 
 `media-provider-health:<id>` with **Check now** (`POST /internal/media/health/check`, registered in
 admin-api `SERVICE_RETRIES`); recovering resolves it.
 
+## IDs
+
+Every new video gets **our own id** (`newVideoId`, a UUID: the same shape as the Bunny GUIDs older
+videos use as their id, so every route, id check and URL pattern keeps working). A provider's id for
+its copy is stored on the record, `media.providers.<p>.ref`: Bunny's GUID, or for R2 our own id.
+Lookups from the provider's side (the reaper's orphan sweep, collection repair, the signing
+middleware) go through D1 `media_provider_refs` (`provider, ref → video_id`), written when the
+provider-side video is created (`recordProviderRef`).
+
+Legacy rows have no `media` field and are never rewritten: their id **is** their Bunny GUID.
+`bunnyRef(video)` is the one accessor (stored ref, else the id on a legacy row, else null: Bunny holds
+no copy). Every Bunny call (TUS signing, status, collections, title sync, thumbnails, delete, the
+processing loop, the reaper, privacy erase) asks it, and a video Bunny does not hold is never sent to
+Bunny. Old URLs and ids keep working because nothing about a legacy row changes.
+
+## Ingest
+
+Every upload path (single and bulk initiate, multipart, API create) asks `planIngest`
+(`lib/media/ingest.ts`):
+
+```
+planIngest(channel) ─► ingestTargets(settings, channel override)
+                    ─► our id
+                    ─► Bunny targeted: create the Bunny video, its GUID → media.providers.bunny.ref
+                    ─► media.providers: one pending entry per target
+```
+
+- **Bunny targeted:** the bytes stream to Bunny through our TUS proxy as before (signed with the
+  GUID). The proxy tees them into the originals bucket, and R2, when targeted, transcodes from that
+  original once the upload completes.
+- **Bunny not targeted:** our TUS proxy is the upload server (`lib/media/r2-tus.ts`). Each PATCH is
+  written to the originals bucket at `src/<id>/<uploadKey>/<offset>`, the keys the tee uses. The
+  offset is the contiguous coverage of stored parts, so a retried chunk rewrites the same key and a
+  resume continues where the bytes end. POST needs `Upload-Length` (at most 5 GiB, and equal to the
+  size announced at initiate). PATCH needs `Content-Length` (411), refuses a wrong offset with 409 and
+  the stored offset, and refuses anything once the upload finished (409). DELETE removes the parts of
+  an unfinished upload only. Completion runs the same `markUploadComplete`: the original is completed
+  with the upload's own key, then the transcode is queued. When the original cannot be completed and R2
+  is the only copy, the video is flagged for re-upload (Errors page).
+- **Readiness from R2:** when R2 decides the video's state (R2 holds a copy and Bunny none, or Bunny's
+  failed), the transcode's `ready` event makes the video ready the way Bunny's sync does: `uploadStatus`
+  ready, `playableAt`, size and duration from the job, R2's own frame as the thumbnail unless a custom one
+  is set, published, then the same uploader notification and subscriber fan-out
+  (`announceAndRecordProcessingResult`). A final transcode failure fails the video
+  (`processingIssue: encode_failed`), and the Errors page item offers Retry. `media.providers.<p>.status`
+  mirrors each provider (Bunny in the processing sync, R2 in the job events).
+- **Both targeted, Bunny fails:** the video does not fail while another copy is pending or ready
+  (`planSync` with `otherCopy`). R2's copy is promoted when ready.
+
+### R2 only on the Cloudflare stack
+
+Turning Bunny off for ingest (globally or per channel) makes the Cloudflare stack the whole pipeline:
+our Worker takes the upload into R2, the transcoder Container (FFmpeg, `apps/media`) builds the HLS
+ladder and the frame, and the media Worker and R2 custom domain serve it. Why this holds:
+
+- every piece is already in production for the dual write and proven end to end on stage by
+  `media-delivery.spec.ts` (queue → Container → R2 → signed `/priv/` playback);
+- the original is the master: retention never deletes the original of a video R2 alone holds
+  (`media_originals.keep = 'sole_copy'`, migration 0036), so a re-transcode can always start over;
+- no new vendor and no new secret; the transcoder's retries and DLQ, and the Errors page with Retry,
+  already cover failures.
+
+Day one does not change: the defaults keep Bunny as the ingest target and the first playback source,
+and production is not switched to R2 only.
+
+## Thumbnails
+
+- **Automatic frames** come from the provider that holds the copy: Bunny's `thumbnail.jpg` under its
+  GUID, or R2's `thumb.jpg` from the transcode. A stored frame of one provider becomes the playing
+  provider's frame only when it is a provider's automatic frame of this video (Playback above).
+- **Custom thumbnails** (uploaded, or a frame the uploader picked) are stored where
+  `thumbnails.store` says (`lib/thumbnail/store.ts`): Bunny image storage (`images.alummahnow.net`)
+  or the public media bucket under `pub/thumbs/<id>/` (purged with the video's media). Each upload gets
+  its own path.
+- **Never replaced automatically:** custom and legacy images stay as they are. Every path that sets a
+  thumbnail refuses an image of another shape than the video (422 on upload; dropped at initiate), and
+  the daily thumbnail check flags mismatches on the Errors page. For a video with no Bunny copy it flags
+  and never swaps in a frame.
+- **Signing per response:** stored URLs never carry a token. The response middleware signs Bunny
+  URLs (a new video's GUID counts as its own only through `media_provider_refs`, so a record cannot sign
+  another video's GUID) and private R2 frames (`lib/media/frame-signing.ts`). A private frame gets a
+  **file token** (`mediaFileToken`) that the media Worker accepts for that one file, never for the
+  playlist or segments. Folder tokens come only from the playback decision, after its visibility check.
+
 ## Our APIs only
 
 Clients never see provider internals: video views drop `r2`, `media`, `bunnyLibraryId`,
@@ -126,6 +210,12 @@ dropped. What leaves the API is our ids and server-signed playback and thumbnail
 | Settings store | `apps/api-videos/src/lib/media/settings.ts` |
 | Playback decision, view rewrite, fallback counting | `apps/api-videos/src/lib/media/playback.ts` |
 | Health | `apps/api-videos/src/lib/media/health.ts`, D1 `0036_media_providers.sql` |
+| Originals kept for a sole R2 copy | `apps/api-videos/src/lib/media/originals.ts`, D1 `0037_media_originals_keep.sql` |
 | Internal routes | `apps/api-videos/src/endpoints/media/mediaInternal.ts` |
 | Admin routes | `apps/admin-api/src/routers/media.router.ts` |
-| Tests | `apps/api-videos/test/media-providers-*.spec.ts`, `media-playback.spec.ts`, `apps/admin-api/test/media.test.ts` |
+| Our ids, refs, ingest plan | `apps/api-videos/src/lib/media/refs.ts`, `ingest.ts`, D1 `media_provider_refs` |
+| Our own TUS target | `apps/api-videos/src/lib/media/r2-tus.ts`, `endpoints/video/tus/tusProxy.ts` |
+| Readiness from R2 | `apps/api-videos/src/lib/media/r2-delivery.ts` (`readyFromR2`, `applyJobEvent`) |
+| Custom thumbnail store, frame signing | `apps/api-videos/src/lib/thumbnail/store.ts`, `lib/media/frame-signing.ts`, `apps/media/src/edge.ts` |
+| Local stack fake media pipeline | `scripts/local-stack/fake-external.ts` (`POST /__fake/media/transcode/<id>`, `media.local-stack.test`) |
+| Tests | `apps/api-videos/test/media-providers-*.spec.ts`, `media-playback.spec.ts`, `apps/admin-api/test/media.test.ts`, `apps/media/test/edge.test.ts`, E2E `apps/web/e2e/release/r2-only-upload.player.spec.ts` (local) |

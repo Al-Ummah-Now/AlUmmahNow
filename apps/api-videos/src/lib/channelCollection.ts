@@ -19,6 +19,7 @@
  * keeps it. The others delete the collection they created and use the
  * stored one, so the channel's videos never split across collections.
  */
+import { bunnyRef } from './media/providers';
 import R2Repository from './r2Repo';
 import { logger } from './logger';
 import { bunnyClient, bunnyLibraries, bunnyLibraryForVideo, type BunnyLibrariesEnv, type LibraryHints } from './bunny/libraries';
@@ -329,11 +330,14 @@ export async function placeVideoInCollection(
 ): Promise<PlacementOutcome> {
 	if (currentCollectionId) return 'already';
 	if (!video.userId) return 'no_collection';
+	// Bunny's id of the video (new videos: the stored ref); none: nothing to file at Bunny
+	const bunnyId = bunnyRef(video as never);
+	if (!bunnyId) return 'no_collection';
 	try {
 		const { client, libraryId } = bunnyClient(env, await bunnyLibraryForVideo(env, video));
 		const target = await resolveUploadCollection(env, client, libraryId, video.channelId || video.userId, video.userId);
 		if (!target) return 'no_collection';
-		await client.updateVideo(libraryId, video.id, { collectionId: target });
+		await client.updateVideo(libraryId, bunnyId, { collectionId: target });
 		logger.info('[ChannelCollection] Video filed into its collection', { videoId: video.id, libraryId, collectionId: target });
 		return 'placed';
 	} catch (error) {

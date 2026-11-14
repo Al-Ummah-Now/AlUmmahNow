@@ -14,6 +14,8 @@ import { fingerprintKey, initiateOnce, UploadClaimBusyError, UploadFingerprintSc
 import { checkReusable, issueTusSession, reuseFields, type PlaceholderRecord } from "../../lib/uploads/placeholder";
 import { patchVideo } from "../../lib/videoWrites";
 import { markUploadCreated } from "../../lib/uploads/reaper";
+import { planIngest } from "../../lib/media/ingest";
+import { bunnyRef } from "../../lib/media/providers";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import { requestVideoSuggestion } from '../../lib/categorySuggestions';
 import { logger } from '../../lib/logger';
@@ -98,7 +100,7 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 						schema: z.object({
 							success: z.boolean(),
 							result: z.array(z.object({
-								videoId: z.string().describe("Video GUID for upload"),
+								videoId: z.string().describe("Our id of the new video"),
 								tusSessionId: z.string().describe("Session ID for the TUS proxy (send as tusSessionId upload metadata)"),
 								expiresAt: z.string().describe("ISO 8601 datetime when the session expires"),
 								chunkSize: z.number().describe("Recommended chunk size in bytes"),
@@ -202,16 +204,20 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 				};
 
 				const create = async (): Promise<string> => {
-					// The channel's collection, like a single upload (one lookup per batch)
-					const collectionId = await (collection ??= uploadCollection(c.env, bunnyStream, libraryId, channelId, ownerId));
-					const bunnyVideo = await bunnyStream.createVideo(libraryId, {
-						title: videoData.title,
-						collectionId,
-						thumbnailTime: 0,
+					// Our own id; Bunny gets a video only when the Delivery settings send uploads there (lib/media/ingest.ts)
+					const plan = await planIngest(c.env as never, channelId, async () => {
+						// The channel's collection, like a single upload (one lookup per batch)
+						const collectionId = await (collection ??= uploadCollection(c.env, bunnyStream, libraryId, channelId, ownerId));
+						const bunnyVideo = await bunnyStream.createVideo(libraryId, {
+							title: videoData.title,
+							collectionId,
+							thumbnailTime: 0,
+						});
+						// Ours: the reaper may remove it if its record never lands (lib/uploads/reaper.ts)
+						await markUploadCreated(c.env.global_settings, bunnyVideo.guid, { userId, channelId });
+						return { guid: bunnyVideo.guid, libraryId };
 					});
-					const videoId = bunnyVideo.guid;
-					// Ours: the reaper may remove it if its record never lands (lib/uploads/reaper.ts)
-					await markUploadCreated(c.env.global_settings, videoId, { userId, channelId });
+					const videoId = plan.videoId;
 					const now = new Date().toISOString();
 
 					// Same record as a single upload (lib/upload/uploadRecord.ts)
@@ -237,6 +243,7 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 							mimeType: videoData.mimeType,
 							bunnyHostname: c.env.bunny_hostname,
 							bunnyLibraryId: libraryId,
+							media: plan.media,
 							now: new Date(now),
 						}),
 						...(claimKey ? { uploadFingerprint: claimKey, lastInitiateAt: now } : {}),
@@ -284,8 +291,6 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 
 				let stored: PlaceholderRecord | null = null;
 				if (reused) {
-					// The earlier initiate may have left it outside its collection (bulk uploads did until 2026-11-12)
-					await fileReusedVideo(c.env, bunnyStream, libraryId, videoId, channelId, ownerId, (collection ??= uploadCollection(c.env, bunnyStream, libraryId, channelId, ownerId)));
 					const nowIso = new Date().toISOString();
 					const result = await patchVideo(repository, videoId, (fresh) => {
 						const fields = reuseFields(fresh as unknown as PlaceholderRecord, metadata, nowIso);
@@ -293,6 +298,9 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 					}, { ownerId });
 					if (result.status !== 'ok') throw new UploadClaimBusyError(claimKey!);
 					stored = result.video as unknown as PlaceholderRecord;
+					// The earlier initiate may have left its Bunny video outside its collection (bulk uploads did until 2026-11-12)
+					const reusedGuid = bunnyRef(stored as never);
+					if (reusedGuid) await fileReusedVideo(c.env, bunnyStream, libraryId, reusedGuid, channelId, ownerId, (collection ??= uploadCollection(c.env, bunnyStream, libraryId, channelId, ownerId)));
 				}
 
 				const session = await issueTusSession(c.env.TUS_SESSIONS, {

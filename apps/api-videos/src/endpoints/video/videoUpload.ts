@@ -1,5 +1,9 @@
 import { completeOriginal, putWholeOriginal } from '../../lib/media/originals';
 import { enqueueTranscode } from '../../lib/media/r2-delivery';
+import { planIngest } from '../../lib/media/ingest';
+import { markUploadCreated } from '../../lib/uploads/reaper';
+import { flagNeedsReupload } from '../../lib/uploads/lifecycle';
+import { startProcessingLoop } from '../../lib/processing/loop';
 import { uploadCollection } from "../../lib/channelCollection";
 import { uploadIdentity } from "../../lib/channelAccess";
 import { OpenAPIRoute, Str } from "chanfana";
@@ -170,10 +174,29 @@ export class VideoUpload extends AuthenticatedRoute {
                 }, 413);
             }
 
-            const videoId = crypto.randomUUID();
             const channelId = c.req.header('channelId') || userId;
             // A channel member's upload belongs to the channel's owner (lib/channelAccess.ts)
             const { ownerId, uploadedBy } = uploadIdentity(c, userId);
+
+            // Our own id; Bunny gets a video only when the Delivery settings send uploads there (lib/media/ingest.ts)
+            let uploadResult = null;
+            let uploadUrl = null;
+            const bunnyKey = await requireSecret(c.env["bunny-stream-key"], 'bunny-stream-key');
+            const libraryId = parseInt(await requireSecret(c.env.bunny_stream_library_id, 'bunny_stream_library_id'), 10);
+            const bunnyStream = new stream(bunnyKey).forEnv(c.env);
+            const plan = await planIngest(c.env as never, channelId, async () => {
+                // The channel's (or owner's) Bunny collection (lib/channelCollection.ts)
+                const collectionId = await uploadCollection(c.env, bunnyStream, libraryId, channelId, ownerId);
+                const bunnyVideo = await bunnyStream.createVideo(libraryId, {
+                    title,
+                    thumbnailTime: 0,
+                    ...(collectionId ? { collectionId } : {}),
+                });
+                // Ours: the reaper may remove it if its record never lands (lib/uploads/reaper.ts)
+                await markUploadCreated(c.env.global_settings, bunnyVideo.guid, { userId, channelId });
+                return { guid: bunnyVideo.guid, libraryId };
+            });
+            const videoId = plan.videoId;
 
             // Create video metadata
             const video = {
@@ -196,6 +219,8 @@ export class VideoUpload extends AuthenticatedRoute {
                 fileSize: file.size,
                 originalFormat: file.type,
                 uploadStatus: 'uploading' as const,
+                ...(plan.bunny ? { bunnyLibraryId: plan.bunny.libraryId } : {}),
+                media: plan.media,
             };
 
             // Save metadata to R2
@@ -204,43 +229,25 @@ export class VideoUpload extends AuthenticatedRoute {
             const repository = new R2Repository<VideoType>(bucket);
             await repository.putObject(videoId, video);
 
-            // Upload to Bunny Stream
-            let uploadResult = null;
-            let uploadUrl = null;
-
-            try {
-                const bunnyKey = await requireSecret(c.env["bunny-stream-key"], 'bunny-stream-key');
-                if (bunnyKey) {
-                    const libraryIdStr = await requireSecret(c.env.bunny_stream_library_id, 'bunny_stream_library_id');
-                    const libraryId = parseInt(libraryIdStr);
-                    const bunnyStream = new stream(bunnyKey).forEnv(c.env);
-
-                    // Create video in Bunny Stream
-                    // The channel's (or owner's) Bunny collection (lib/channelCollection.ts)
-                    const collectionId = await uploadCollection(c.env, bunnyStream, libraryId, channelId, ownerId);
-                    const bunnyVideo = await bunnyStream.createVideo(libraryId, {
-                        title,
-                        thumbnailTime: 0,
-                        ...(collectionId ? { collectionId } : {}),
-                    });
-
-                    // Upload file to Bunny Stream
-                    const fileBuffer = await file.arrayBuffer();
-                    const fileBlob = new Blob([fileBuffer], { type: file.type });
-
-                    uploadResult = await bunnyStream.uploadVideo(libraryId, videoId, fileBlob);
-                    uploadUrl = `https://video.bunnycdn.com/library/${libraryId}/videos/${videoId}`;
-
-                    // Our own copy for the R2 transcode (docs/media-delivery/ORIGINALS.md); never fails the upload
-                    if (await putWholeOriginal(c.env as never, videoId, 'direct', fileBuffer)) {
-                        if (await completeOriginal(c.env as never, videoId, fileBuffer.byteLength)) {
-                            await enqueueTranscode(c.env as never, videoId, 'upload', { uploaderId: userId });
-                        }
-                    }
+            const fileBuffer = await file.arrayBuffer();
+            if (plan.bunny) {
+                try {
+                    // Bunny's copy is uploaded under its own GUID
+                    uploadResult = await bunnyStream.uploadVideo(libraryId, plan.bunny.guid, new Blob([fileBuffer], { type: file.type }));
+                    uploadUrl = `https://video.bunnycdn.com/library/${libraryId}/videos/${plan.bunny.guid}`;
+                    await startProcessingLoop(c.env as never, videoId, { reason: 'upload-complete' });
+                } catch (error) {
+                    logger.error('[VideoUpload] Bunny Stream upload failed', { videoId, error: error instanceof Error ? error.message : String(error) });
                 }
-            } catch (error) {
-                logger.error("Bunny Stream upload error:", error);
-                // Continue with local storage even if Bunny Stream fails
+            }
+            // Our own copy: the master for R2 (docs/media-delivery/ORIGINALS.md). When R2 is the only
+            // target it is the upload, so a failure here fails the video (flagged for the owner).
+            const kept = (await putWholeOriginal(c.env as never, videoId, 'direct', fileBuffer)) && (await completeOriginal(c.env as never, videoId, fileBuffer.byteLength));
+            if (kept) {
+                await enqueueTranscode(c.env as never, videoId, 'upload', { uploaderId: userId });
+            } else if (!plan.bunny) {
+                await flagNeedsReupload(c.env as never, videoId, { reason: 'original_not_stored', source: 'client', ownerId });
+                return c.json({ success: false, error: 'Upload failed, try again' }, 503);
             }
 
             // Send analytics event

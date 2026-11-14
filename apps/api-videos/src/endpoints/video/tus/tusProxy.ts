@@ -20,6 +20,9 @@ import { getAuthContext } from '../../../middleware/auth';
 import { bunnyTusRequestHeaders, tusUploadIndexKey } from '../../../lib/bunny/tus';
 import { markUploadComplete } from '../../../lib/uploads/lifecycle';
 import { teePatch } from '../../../lib/media/originals';
+import { uploadsToBunny } from '../../../lib/media/ingest';
+import { deleteR2Upload, MAX_R2_PATCH_BYTES, r2UploadOffset, writeR2Part } from '../../../lib/media/r2-tus';
+import type { VideoMediaProviders } from '@al-ummah/shared-types';
 import R2Repository, { rethrowBusy } from '../../../lib/r2Repo';
 import { Video as BusinessVideo } from '../../../lib/types';
 import Queue, { MessageType } from '../../../lib/queue';
@@ -27,6 +30,8 @@ import { logger } from '../../../lib/logger';
 
 // TUS Protocol Constants
 const TUS_VERSION = '1.0.0';
+/** Tus-Max-Size: 5 GB */
+const TUS_MAX_SIZE = 5368709120;
 const TUS_EXTENSIONS = ['creation', 'creation-with-upload', 'termination', 'concatenation'];
 const BUNNY_TUS_ENDPOINT = 'https://video.bunnycdn.com/tusupload';
 
@@ -47,6 +52,8 @@ interface TusUploadSession {
   videoId: string;
   userId: string;
   bunnyUploadUrl?: string;
+  /** 'r2': our own TUS target writes the bytes into the originals bucket (lib/media/r2-tus.ts) */
+  target?: 'bunny' | 'r2';
   fileSize: number;
   uploadOffset: number;
   createdAt: string;
@@ -223,12 +230,13 @@ export class TusProxy {
         const object = await this.env.videos.get(videoId);
         const video = object ? await object.json() as (z.infer<typeof BusinessVideo> & { tusUpload?: VideoTusUpload }) : null;
         const durable = video?.tusUpload;
-        if (video && durable && durable.sessionId === sessionId && durable.bunnyUploadUrl) {
+        if (video && durable && durable.sessionId === sessionId && (durable.bunnyUploadUrl || durable.target === 'r2')) {
           const session: TusUploadSession = {
             videoId,
             // The uploader: a channel member's upload is owned by the channel owner
             userId: video.uploadedBy ?? video.userId,
             bunnyUploadUrl: durable.bunnyUploadUrl,
+            ...(durable.target === 'r2' ? { target: 'r2' as const } : {}),
             fileSize: durable.fileSize,
             uploadOffset: 0,
             createdAt: durable.createdAt,
@@ -249,9 +257,98 @@ export class TusProxy {
     return storeFailed ? { kind: 'unavailable' } : { kind: 'missing' };
   }
 
-  /** Bunny holds every byte: lib/uploads/lifecycle.ts (idempotent, never throws). */
+  /**
+   * Our own target holds the only copy of the bytes: they may change only while the upload is
+   * unfinished (the same rule as POST). A finished, removed or abandoned video refuses.
+   */
+  private async ownTargetOpen(videoId: string): Promise<'open' | 'finished' | 'gone' | 'unavailable'> {
+    try {
+      const object = await this.env.videos.get(videoId);
+      if (!object) return 'gone';
+      const record = (await object.json()) as { uploadStatus?: string; abandoned?: unknown; isDeleted?: boolean };
+      if (record.abandoned || record.isDeleted) return 'gone';
+      return record.uploadStatus === 'initiated' || record.uploadStatus === 'uploading' || !record.uploadStatus ? 'open' : 'finished';
+    } catch (error) {
+      logger.warn('[TUS Proxy] Video record unavailable', { videoId, error: error instanceof Error ? error.message : String(error) });
+      return 'unavailable';
+    }
+  }
+
+  /** Our own target: the offset is what the originals bucket holds from byte 0. */
+  private async headR2(session: TusUploadSession, uploadId: string): Promise<Response> {
+    let offset: number;
+    try {
+      offset = await r2UploadOffset(this.env, session.videoId, parseTusUploadId(uploadId)?.sessionId ?? uploadId);
+    } catch (error) {
+      logger.warn('[TUS Proxy] Originals bucket unavailable on HEAD; client retries', { uploadId, error: error instanceof Error ? error.message : String(error) });
+      return this.headRetryLater();
+    }
+    if (session.fileSize > 0 && offset >= session.fileSize) await this.markUploaded(session, uploadId);
+    return new Response(null, {
+      status: 200,
+      headers: {
+        'Upload-Offset': String(Math.min(offset, session.fileSize || offset)),
+        'Upload-Length': String(session.fileSize),
+        'Tus-Resumable': TUS_VERSION,
+        'Cache-Control': 'no-store',
+        'Access-Control-Expose-Headers': 'Upload-Offset, Upload-Length, Tus-Resumable',
+      },
+    });
+  }
+
+  /**
+   * Our own target: one PATCH is one part at its offset. The offset must be where the stored bytes
+   * end (409 otherwise: the client asks HEAD and resumes); the length must be known (411).
+   */
+  private async patchR2(c: any, session: TusUploadSession, uploadId: string): Promise<Response> {
+    const uploadKey = parseTusUploadId(uploadId)?.sessionId ?? uploadId;
+    const offsetHeader = c.req.header('Upload-Offset');
+    const lengthHeader = c.req.header('Content-Length');
+    if (!offsetHeader || !/^\d+$/.test(offsetHeader)) return c.json({ error: 'Upload-Offset is required' }, 400);
+    if (!lengthHeader || !/^\d+$/.test(lengthHeader)) return c.json({ error: 'Content-Length is required' }, 411);
+    const offset = parseInt(offsetHeader, 10);
+    const length = parseInt(lengthHeader, 10);
+    if (length > MAX_R2_PATCH_BYTES) return c.json({ error: 'Chunk too large' }, 413);
+    if (offset + length > session.fileSize) return c.json({ error: 'Chunk goes past Upload-Length' }, 400);
+    const body = c.req.raw.body as ReadableStream<Uint8Array> | null;
+    if (!body && length > 0) return c.json({ error: 'No request body' }, 400);
+    const state = await this.ownTargetOpen(session.videoId);
+    if (state === 'unavailable') return this.retryLater('Video store unavailable, retry');
+    if (state === 'gone') return c.json({ error: 'Upload not found' }, 404);
+    if (state === 'finished') return c.json({ error: 'Upload already completed' }, 409);
+    let stored: number;
+    try {
+      stored = await r2UploadOffset(this.env, session.videoId, uploadKey);
+    } catch (error) {
+      logger.warn('[TUS Proxy] Originals bucket unavailable on PATCH; client retries', { uploadId, error: error instanceof Error ? error.message : String(error) });
+      return this.retryLater('Upload storage unavailable, retry');
+    }
+    if (offset !== stored) {
+      return new Response(JSON.stringify({ error: 'Offset mismatch' }), { status: 409, headers: { 'Content-Type': 'application/json', 'Tus-Resumable': TUS_VERSION, 'Upload-Offset': String(stored) } });
+    }
+    if (length > 0) {
+      try {
+        await writeR2Part(this.env, { videoId: session.videoId, uploadKey, offset, length, body: body! });
+      } catch (error) {
+        logger.warn('[TUS Proxy] Could not store a chunk; client retries', { uploadId, offset, length, error: error instanceof Error ? error.message : String(error) });
+        return this.retryLater('Upload storage unavailable, retry');
+      }
+    }
+    const newOffset = offset + length;
+    if (newOffset >= session.fileSize) await this.markUploaded(session, uploadId);
+    return new Response(null, {
+      status: 204,
+      headers: {
+        'Upload-Offset': String(newOffset),
+        'Tus-Resumable': TUS_VERSION,
+        'Access-Control-Expose-Headers': 'Upload-Offset, Tus-Resumable',
+      },
+    });
+  }
+
+  /** Every byte is stored (Bunny or our own target): lib/uploads/lifecycle.ts (idempotent, never throws). */
   private async markUploaded(session: TusUploadSession, uploadId: string): Promise<void> {
-    await markUploadComplete(this.env, { videoId: session.videoId, userId: session.userId, fileSize: session.fileSize, uploadId });
+    await markUploadComplete(this.env, { videoId: session.videoId, userId: session.userId, fileSize: session.fileSize, uploadId, uploadKey: parseTusUploadId(uploadId)?.sessionId });
   }
 
   /**
@@ -265,7 +362,7 @@ export class TusProxy {
       headers: {
         'Tus-Resumable': TUS_VERSION,
         'Tus-Version': TUS_VERSION,
-        'Tus-Max-Size': '5368709120', // 5GB max
+        'Tus-Max-Size': String(TUS_MAX_SIZE),
         'Tus-Extension': TUS_EXTENSIONS.join(','),
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'POST, HEAD, PATCH, DELETE, OPTIONS',
@@ -331,10 +428,15 @@ export class TusProxy {
       // Only an unfinished video takes a new upload: a long-lived session
       // must not let anyone replace a finished video's content at Bunny.
       let videoStatus: string | undefined;
+      let toBunny = true;
+      let declaredSize: number | undefined;
       try {
         const object = await this.env.videos.get(videoId);
         if (!object) return c.json({ error: 'Video not found' }, 404);
-        const record = (await object.json()) as { uploadStatus?: string; abandoned?: unknown; isDeleted?: boolean };
+        const record = (await object.json()) as { uploadStatus?: string; abandoned?: unknown; isDeleted?: boolean; media?: VideoMediaProviders; fileSize?: number };
+        declaredSize = record.fileSize;
+        // Bunny takes the bytes only when it holds this video (lib/media/ingest.ts); otherwise our own target does
+        toBunny = uploadsToBunny(record);
         // Abandoned by the upload reaper (deleted at Bunny): gone, like a deleted video
         if (record.abandoned || record.isDeleted) return c.json({ error: 'Video not found' }, 404);
         videoStatus = record.uploadStatus;
@@ -346,61 +448,73 @@ export class TusProxy {
         return c.json({ error: 'Upload already completed' }, 409);
       }
 
-      // Fresh Bunny signature: the one stored at initiate expires after an
-      // hour, and a queued file in a bulk batch can start later than that.
-      const requestHeaders: Record<string, string> = {
-        ...(await this.createBunnyHeaders(videoId)),
-        'Tus-Resumable': TUS_VERSION,
-        'Upload-Metadata': uploadMetadata || '',
-      };
+      let bunnyUploadUrl = '';
+      if (!toBunny) {
+        // Our own target stores parts by offset and needs the total size up front
+        if (!uploadLength || !/^\d+$/.test(uploadLength) || parseInt(uploadLength, 10) <= 0) {
+          return c.json({ error: 'Upload-Length is required' }, 400);
+        }
+        const length = parseInt(uploadLength, 10);
+        if (length > TUS_MAX_SIZE) return c.json({ error: 'File too large' }, 413);
+        // The file announced at initiate (the claim, the plan checks): the same size or nothing
+        if (declaredSize && length !== declaredSize) return c.json({ error: 'Upload-Length does not match the file started at initiate' }, 400);
+      } else {
+        // Fresh Bunny signature: the one stored at initiate expires after an
+        // hour, and a queued file in a bulk batch can start later than that.
+        const requestHeaders: Record<string, string> = {
+          ...(await this.createBunnyHeaders(videoId)),
+          'Tus-Resumable': TUS_VERSION,
+          'Upload-Metadata': uploadMetadata || '',
+        };
 
-      // Only include Upload-Length OR Upload-Defer-Length, never both
-      if (uploadLength) {
-        requestHeaders['Upload-Length'] = uploadLength;
-      } else if (uploadDeferLength) {
-        requestHeaders['Upload-Defer-Length'] = uploadDeferLength;
-      }
-
-      let bunnyResponse: Response;
-      try {
-        bunnyResponse = await fetch(storedSession.tusEndpoint || BUNNY_TUS_ENDPOINT, {
-          method: 'POST',
-          headers: requestHeaders,
-        });
-      } catch (error) {
-        logger.warn('[TUS Proxy] Bunny.net POST network error', { videoId, error: error instanceof Error ? error.message : String(error) });
-        return this.retryLater('Upload service unreachable, retry');
-      }
-
-      if (!bunnyResponse.ok) {
-        let errorBody: string | null = null;
-        try {
-          errorBody = await bunnyResponse.text();
-        } catch {
-          // Ignore if can't read body
+        // Only include Upload-Length OR Upload-Defer-Length, never both
+        if (uploadLength) {
+          requestHeaders['Upload-Length'] = uploadLength;
+        } else if (uploadDeferLength) {
+          requestHeaders['Upload-Defer-Length'] = uploadDeferLength;
         }
 
-        logger.error('[TUS Proxy] Bunny.net POST failed', {
-          status: bunnyResponse.status,
-          statusText: bunnyResponse.statusText,
-          responseBody: errorBody,
-          videoId,
-        });
-        if (isTransientUpstreamStatus(bunnyResponse.status)) return this.retryLater('Upload service busy, retry');
-        return c.json({ error: 'Upload creation failed', details: errorBody }, bunnyResponse.status);
-      }
+        let bunnyResponse: Response;
+        try {
+          bunnyResponse = await fetch(storedSession.tusEndpoint || BUNNY_TUS_ENDPOINT, {
+            method: 'POST',
+            headers: requestHeaders,
+          });
+        } catch (error) {
+          logger.warn('[TUS Proxy] Bunny.net POST network error', { videoId, error: error instanceof Error ? error.message : String(error) });
+          return this.retryLater('Upload service unreachable, retry');
+        }
 
-      // Get the Location header from Bunny's response
-      const bunnyLocation = bunnyResponse.headers.get('Location');
-      if (!bunnyLocation) {
-        logger.error('[TUS Proxy] No Location header in Bunny response', { videoId });
-        return this.retryLater('Upload service gave no upload URL, retry');
-      }
+        if (!bunnyResponse.ok) {
+          let errorBody: string | null = null;
+          try {
+            errorBody = await bunnyResponse.text();
+          } catch {
+            // Ignore if can't read body
+          }
 
-      // Convert relative URL to absolute URL if needed
-      const bunnyUploadUrl = bunnyLocation.startsWith('/')
-        ? `https://video.bunnycdn.com${bunnyLocation}`
-        : bunnyLocation;
+          logger.error('[TUS Proxy] Bunny.net POST failed', {
+            status: bunnyResponse.status,
+            statusText: bunnyResponse.statusText,
+            responseBody: errorBody,
+            videoId,
+          });
+          if (isTransientUpstreamStatus(bunnyResponse.status)) return this.retryLater('Upload service busy, retry');
+          return c.json({ error: 'Upload creation failed', details: errorBody }, bunnyResponse.status);
+        }
+
+        // Get the Location header from Bunny's response
+        const bunnyLocation = bunnyResponse.headers.get('Location');
+        if (!bunnyLocation) {
+          logger.error('[TUS Proxy] No Location header in Bunny response', { videoId });
+          return this.retryLater('Upload service gave no upload URL, retry');
+        }
+
+        // Convert relative URL to absolute URL if needed
+        bunnyUploadUrl = bunnyLocation.startsWith('/')
+          ? `https://video.bunnycdn.com${bunnyLocation}`
+          : bunnyLocation;
+      }
 
       const fileSize = parseInt(uploadLength || '0', 10);
       // A new key per created upload: a session is never overwritten, so no
@@ -411,6 +525,7 @@ export class TusProxy {
         videoId,
         userId,
         bunnyUploadUrl,
+        ...(toBunny ? {} : { target: 'r2' as const }),
         fileSize,
         uploadOffset: 0,
         createdAt,
@@ -432,7 +547,7 @@ export class TusProxy {
         new R2Repository<z.infer<typeof BusinessVideo> & { tusUpload?: VideoTusUpload }>(this.env.videos)
           .updateObject(videoId, (video) => {
             if (video.uploadStatus === 'ready' || video.uploadStatus === 'processing') return false;
-            video.tusUpload = { sessionId: uploadKey, bunnyUploadUrl, fileSize, createdAt };
+            video.tusUpload = { sessionId: uploadKey, bunnyUploadUrl, ...(toBunny ? {} : { target: 'r2' as const }), fileSize, createdAt };
             return true;
           }),
       ]);
@@ -482,6 +597,7 @@ export class TusProxy {
       if (session.userId !== this.authContext?.userId) {
         return new Response(null, { status: 403 });
       }
+      if (session.target === 'r2') return await this.headR2(session, uploadId);
       if (!session.bunnyUploadUrl) {
         return new Response(null, { status: 404, headers: { 'Tus-Resumable': TUS_VERSION, 'Cache-Control': 'no-store' } });
       }
@@ -565,6 +681,8 @@ export class TusProxy {
       if (session.userId !== this.authContext?.userId) {
         return c.json({ error: 'Unauthorized' }, 403);
       }
+
+      if (session.target === 'r2') return await this.patchR2(c, session, uploadId);
 
       if (!session.bunnyUploadUrl) {
         logger.error('[TUS Proxy] No bunnyUploadUrl in session', { uploadId });
@@ -684,15 +802,23 @@ export class TusProxy {
         return new Response(null, { status: 403 });
       }
 
-      // Forward DELETE to Bunny.net
-      const bunnyHeaders = await this.createBunnyHeaders(session.videoId);
-      await fetch(session.bunnyUploadUrl!, {
-        method: 'DELETE',
-        headers: {
-          ...bunnyHeaders,
-          'Tus-Resumable': TUS_VERSION,
-        },
-      });
+      if (session.target === 'r2') {
+        // Never the bytes of a finished upload: they are the video's only copy
+        const state = await this.ownTargetOpen(session.videoId);
+        if (state === 'unavailable') return this.retryLater('Video store unavailable, retry');
+        if (state === 'finished') return c.json({ error: 'Upload already completed' }, 409);
+        if (state === 'open') await deleteR2Upload(this.env, session.videoId, parseTusUploadId(uploadId)?.sessionId ?? uploadId);
+      } else {
+        // Forward DELETE to Bunny.net
+        const bunnyHeaders = await this.createBunnyHeaders(session.videoId);
+        await fetch(session.bunnyUploadUrl!, {
+          method: 'DELETE',
+          headers: {
+            ...bunnyHeaders,
+            'Tus-Resumable': TUS_VERSION,
+          },
+        });
+      }
 
       // Delete session from KV
       const parsed = parseTusUploadId(uploadId);
