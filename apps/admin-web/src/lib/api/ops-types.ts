@@ -85,14 +85,14 @@ export interface OpsCosts {
     targetUsd: number;
     byEnv: Partial<Record<OpsEnv, number>>;
     parts: Record<OpsCostPart, number>;
-    top: { id: string; env: string; name: string; kind: string; monthlyUsd: number }[];
+    top: { id: string; env: string; name: string; kind: OpsKind; monthlyUsd: number }[];
     days: string[];
   };
   trend: { days: string[]; series: { key: OpsTrendKey; values: number[] }[] };
   drivers: {
     id: string;
     env: OpsEnv;
-    kind: string;
+    kind: OpsKind;
     name: string;
     mtdUsd: number;
     idleMonthlyUsd: number;
