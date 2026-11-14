@@ -26,11 +26,16 @@ export function activeChannelTab(requested: string | undefined, defaultTab: Chan
  * them in time it shows the sections and loads them on the client.
  */
 export async function loadChannelFirstTab(channelId: string, requestedTab: string | undefined): Promise<{ defaultTab: ChannelTab; initial?: ChannelTabInitial }> {
+  // Home is the default for nearly every channel: unless ?tab= names another tab, its sections are
+  // read beside the tab configuration instead of after it (one API round trip less on the critical path)
+  const homeLikely = !requestedTab || requestedTab === 'home' || !TABS.has(requestedTab);
+  const readSections = () => withinBudget(() => listChannelSectionsPopulated(channelId)) as Promise<PopulatedChannelSection[] | undefined>;
+  const early = homeLikely ? readSections() : null;
   const config = await getChannelTabConfig(channelId).catch(() => null);
   const defaultTab = (config?.defaultTab as ChannelTab | undefined) || 'home';
   const tab = activeChannelTab(requestedTab, defaultTab);
   if (tab === 'home') {
-    const sections = (await withinBudget(() => listChannelSectionsPopulated(channelId))) as PopulatedChannelSection[] | undefined;
+    const sections = await (early ?? readSections());
     if (!sections) return { defaultTab };
     // No section to show: the uploads fallback (#1206), each list bounded by the same budget of its own
     const fallback = sections.some(sectionHasContent) ? undefined : (await loadChannelHomeFallback(channelId, FIRST_DATA_BUDGET_MS)) ?? undefined;
