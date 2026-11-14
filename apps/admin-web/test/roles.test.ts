@@ -62,7 +62,7 @@ describe('role checks', () => {
 });
 
 describe('creator tiers in the admin', () => {
-  it('admins and super admins change tiers; moderators see the Creators page read-only', async () => {
+  it('admins and super admins change tiers; moderators see tiers read-only', async () => {
     const { canManageCreators } = await import('../src/lib/roles');
     assert.equal(canManageCreators('admin'), true);
     assert.equal(canManageCreators('Super Admin'), true);
@@ -70,13 +70,17 @@ describe('creator tiers in the admin', () => {
     assert.equal(canManageCreators(undefined), false);
   });
 
-  it('the nav lists Creators, and its strings exist in English and Arabic', async () => {
-    const { readFileSync } = await import('node:fs');
-    const nav = readFileSync(new URL('../src/components/shell/nav-model.ts', import.meta.url), 'utf8');
-    assert.match(nav, /href: '\/creators', label: 'nav\.creators'/);
+  it('the nav lists Tiers (not Creators: tiers are set on Users), and its strings exist in English and Arabic', async () => {
+    const { NAV_ITEMS } = await import('../src/components/shell/nav-model');
+    const tiers = NAV_ITEMS.find((item) => item.href === '/tiers');
+    assert.equal(tiers?.label, 'nav.tiers');
+    assert.equal(tiers?.group, 'people', 'a top-level People item, not under Creators');
+    assert.equal(tiers?.requires, undefined, 'every admin reads it; changes need creators:manage');
+    assert.equal(NAV_ITEMS.some((item) => item.href === '/creators'), false, 'the Creators page is folded into Users');
     const en = (await import('../src/i18n/messages/en')).default;
     const ar = (await import('../src/i18n/messages/ar')).default;
     assert.deepEqual(Object.keys(ar.creators).sort(), Object.keys(en.creators).sort());
-    assert.ok(ar.nav.creators && en.nav.creators);
+    assert.equal(en.nav.tiers, 'Tiers');
+    assert.equal(ar.nav.tiers, 'الفئات');
   });
 });

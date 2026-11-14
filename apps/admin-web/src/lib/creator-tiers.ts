@@ -1,15 +1,15 @@
 /**
  * Creator tiers in the videos admin: the sentence that states what a tier
  * lets someone do (shown in every confirmation), the tier form's validation
- * (the same bounds and rules api-videos enforces), and the Creators list's
- * query. No imports from server-only modules, so it is unit tested directly.
+ * (the same bounds and rules api-videos enforces), and the Users list's
+ * tier filter. No imports from server-only modules, so it is unit tested directly.
  */
 import {
-  ADMIN_CREATOR_FILTERS,
+  ADMIN_USER_TIER_FILTERS,
   CREATOR_TIER_BOUNDS,
   CREATOR_TIER_IDS,
   NO_CREATOR_TIER,
-  type AdminCreatorFilter,
+  type AdminUserTierFilter,
   type CreatorTier,
   type CreatorTierOrigin,
 } from '@al-ummah/shared-types';
@@ -84,40 +84,42 @@ export function validateTierForm(form: TierFormValues, opts: { create?: boolean 
   return errors;
 }
 
-// --- Creators list query -----------------------------------------------------
+// --- Users list tier filter ---------------------------------------------------
 
-export interface CreatorsQuery {
-  q: string;
-  filter: AdminCreatorFilter;
-  /** '' = any tier, `none`, or a tier id */
-  tier: string;
-  page: number;
+/**
+ * The Users list's tier filter value: needs_tier, has_tier, hit_limit, `none`
+ * or a tier id; '' for anything else (filters nothing).
+ */
+export function parseUserTierFilter(value: string | undefined): string {
+  const tier = (value ?? '').trim();
+  if ((ADMIN_USER_TIER_FILTERS as readonly string[]).includes(tier)) return tier;
+  return tier === NO_CREATOR_TIER || /^[a-z0-9][a-z0-9-]{0,39}$/.test(tier) ? tier : '';
 }
+
+/** The old Creators page's "Show" filter as the Users list's tier filter. */
+const CREATORS_FILTER_TO_TIER: Record<string, AdminUserTierFilter> = { needs_tier: 'needs_tier', assigned: 'has_tier', limited: 'hit_limit' };
 
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? '';
 
-export function parseCreatorsQuery(params: Record<string, string | string[] | undefined>): CreatorsQuery {
-  const filter = one(params.filter);
-  const tier = one(params.tier).trim();
-  return {
-    q: one(params.q).trim().slice(0, 200),
-    filter: (ADMIN_CREATOR_FILTERS as readonly string[]).includes(filter) ? (filter as AdminCreatorFilter) : 'all',
-    tier: tier === NO_CREATOR_TIER || /^[a-z0-9][a-z0-9-]{0,39}$/.test(tier) ? tier : '',
-    page: Math.max(1, Math.floor(Number(one(params.page))) || 1),
-  };
+/**
+ * Where an old /creators?… link lands on the Users list: q and page carry
+ * over; a tier (or `none`) wins over the "Show" filter, which maps to
+ * needs_tier, has_tier or hit_limit.
+ */
+export function creatorsToUsersHref(params: Record<string, string | string[] | undefined>): string {
+  const search = new URLSearchParams();
+  const q = one(params.q).trim().slice(0, 200);
+  if (q) search.set('q', q);
+  const tier = parseUserTierFilter(one(params.tier)) || CREATORS_FILTER_TO_TIER[one(params.filter)] || '';
+  if (tier) search.set('tier', tier);
+  const page = Math.floor(Number(one(params.page)));
+  if (page > 1) search.set('page', String(Math.min(page, 10000)));
+  const s = search.toString();
+  return s ? `/users?${s}` : '/users';
 }
 
-/** The Creators page URL for `query` with `next` applied (page resets unless given). */
-export function creatorsHref(query: CreatorsQuery, next: Partial<CreatorsQuery> = {}): string {
-  const merged = { ...query, page: 1, ...next };
-  const search = new URLSearchParams();
-  if (merged.q) search.set('q', merged.q);
-  if (merged.filter !== 'all') search.set('filter', merged.filter);
-  if (merged.tier) search.set('tier', merged.tier);
-  if (merged.page > 1) search.set('page', String(merged.page));
-  const s = search.toString();
-  return s ? `/creators?${s}` : '/creators';
-}
+/** The Tiers page, or one tier's editor on it. */
+export const tiersHref = (tierId?: string) => (tierId ? `/tiers#tier-${encodeURIComponent(tierId)}` : '/tiers');
 
 // --- Action errors -----------------------------------------------------------
 

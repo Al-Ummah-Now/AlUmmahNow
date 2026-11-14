@@ -3,7 +3,6 @@ import type { AdminAuditEntry, CreatorTiersList } from '@al-ummah/shared-types';
 import type { Locale } from '@/i18n/config';
 import { formatDate, formatNumber, type MessageKey, type Translator } from '@/i18n/translate';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
-import { BackLink } from '@/components/content/parts';
 import { TierEditor, type TierActions } from './TierEditor';
 import { LimitHitsNotice } from './LimitHitsNotice';
 
@@ -40,7 +39,6 @@ export interface CreatorTiersViewProps {
 export function CreatorTiersView({ list, audit, canManage, t, locale, actions }: CreatorTiersViewProps) {
   return (
     <div>
-      <BackLink href="/creators" label={t('content.back', { section: t('creators.title') })} />
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-fg">{t('creators.tiersTitle')}</h1>
         <p className="text-fg-muted mt-1 max-w-3xl">{t('creators.tiersSubtitle')}</p>
@@ -50,7 +48,7 @@ export function CreatorTiersView({ list, audit, canManage, t, locale, actions }:
       {list && (
         <p className="mb-4 text-sm text-fg-muted" data-testid="tiers-none-count">
           {t('creators.tiersNone', { count: formatNumber(list.counts.none, locale) })}{' '}
-          <Link href="/creators?tier=none" className={`${linkClass} underline`}>{t('creators.noticeNeedsTierLink')}</Link>
+          <Link href="/users?tier=none" className={`${linkClass} underline`}>{t('creators.noticeNeedsTierLink')}</Link>
         </p>
       )}
       {!canManage && <p className="mb-4 text-sm text-fg-muted">{t('creators.noAccess')}</p>}

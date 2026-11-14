@@ -6,7 +6,8 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { MAX_BULK_CREATOR_TIER, SUPER_ADMIN_TIER_ASSIGNER } from '@al-ummah/shared-types';
 import { assignTier, readAssignment } from '../src/lib/creatorTiers';
-import { bulkAssignTier, limitHitsSince, listCreators, tierCounts } from '../src/lib/admin/creators';
+import { bulkAssignTier, limitHitsSince, listCreators, tierCounts, withCreatorInfo } from '../src/lib/admin/creators';
+import { toUserRow, userTierWhere } from '../src/lib/admin/directory';
 import { SqliteD1 } from './search-sqlite-d1';
 
 const NOW = Date.UTC(2026, 10, 10, 12, 0, 0);
@@ -109,5 +110,44 @@ describe('bulk tier change', () => {
     await assert.rejects(bulkAssignTier(d1, { userIds: [], tierId: 'creator' }, 'a'), /userIds/);
     const many = Array.from({ length: MAX_BULK_CREATOR_TIER + 1 }, (_, i) => `u${i}`);
     await assert.rejects(bulkAssignTier(d1, { userIds: many, tierId: 'creator' }, 'a'), /userIds/);
+  });
+});
+
+describe('admin Users list: the creator tier per user (the old Creators page)', () => {
+  /** The ids the Users list's tier filter keeps, over every profile (aliased `u` as in listUsers). */
+  async function filtered(db: SqliteD1, tier: string): Promise<string[]> {
+    const binds: unknown[] = [];
+    const where = userTierWhere(tier, binds, NOW);
+    const sql = `SELECT u.id FROM (SELECT id FROM content_ownership WHERE kind = 'profile' AND is_deleted = 0) u ${where ? `WHERE ${where}` : ''} ORDER BY u.id`;
+    const { results } = await (db as unknown as D1Database).prepare(sql).bind(...binds).all<{ id: string }>();
+    return (results ?? []).map((r) => r.id);
+  }
+
+  it('filters by needs a tier, has a tier, hit a limit this week, no tier and one tier', async () => {
+    const { db } = await seed();
+    assert.deepEqual(await filtered(db, 'needs_tier'), ['usr_migrated'], 'content but no tier');
+    assert.deepEqual(await filtered(db, 'has_tier'), ['usr_creator', 'usr_owner']);
+    assert.deepEqual(await filtered(db, 'hit_limit'), ['usr_creator'], 'hits older than 7 days do not count');
+    assert.deepEqual(await filtered(db, 'none'), ['usr_admin', 'usr_migrated', 'usr_viewer']);
+    assert.deepEqual(await filtered(db, 'unlimited'), ['usr_owner']);
+    assert.equal(userTierWhere('Bad Tier!', [], NOW), null, 'an invalid value filters nothing');
+    assert.equal(userTierWhere(undefined, [], NOW), null);
+  });
+
+  it('adds each row\'s tier, origin, assigner, needs-tier and limit hits, and the notices', async () => {
+    const { d1 } = await seed();
+    const ids = ['usr_owner', 'usr_creator', 'usr_viewer', 'usr_migrated'];
+    const page = { items: ids.map((id) => toUserRow(id, null, false)), total: 4, page: 1, pageSize: 20, indexComplete: true };
+    const result = await withCreatorInfo({ SEARCH_DB: d1, profiles }, page, NOW);
+    const byId = new Map(result.items.map((u) => [u.id, u.creator]));
+    assert.equal(byId.get('usr_owner')?.origin, 'super_admin');
+    assert.equal(byId.get('usr_creator')?.assignment?.tierId, 'creator');
+    assert.equal(byId.get('usr_creator')?.assignedByName, 'Amina Admin');
+    assert.equal(byId.get('usr_creator')?.limitHits7d, 2);
+    assert.equal(byId.get('usr_viewer')?.limitHits7d, 0);
+    assert.equal(byId.get('usr_viewer')?.needsTier, false, 'no content, so no tier is needed');
+    assert.equal(byId.get('usr_migrated')?.needsTier, true);
+    assert.deepEqual(result.creators, { needsTier: 1, limitHits7d: 1 });
+    assert.equal(result.total, 4, 'the page itself is unchanged');
   });
 });

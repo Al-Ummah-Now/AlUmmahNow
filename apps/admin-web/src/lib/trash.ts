@@ -11,7 +11,7 @@ import { normalizeRole } from './roles';
 export const TRASH_HOME: Record<TrashKind, string> = {
   'contact-message': '/contact',
   theme: '/site-theme',
-  'creator-tier': '/creators/tiers',
+  'creator-tier': '/tiers',
   invite: '/users/invites',
 };
 

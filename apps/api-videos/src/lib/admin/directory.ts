@@ -9,7 +9,7 @@
  * (the same lease the cron and self-heal use) before querying, and reports
  * `indexComplete: false` if the pass is still not done.
  */
-import { containsPattern } from '@al-ummah/shared-types';
+import { NO_CREATOR_TIER, containsPattern } from '@al-ummah/shared-types';
 import {
 	OWNERSHIP_ADMIN_COLS_VERSION,
 	OWNERSHIP_TABLE,
@@ -472,12 +472,14 @@ export async function listUsers(env: AdminEnv, query: AdminUserQuery, waitUntil?
 		where.push(`(lower(display_name) LIKE ?1 ESCAPE '\\' OR lower(user_name) LIKE ?1 ESCAPE '\\' OR lower(email) LIKE ?1 ESCAPE '\\' OR id = ?2)`);
 	}
 	if (query.banned) where.push(`banned = ${query.banned === 'yes' ? 1 : 0}`);
+	const tier = userTierWhere(query.tier, binds, Date.now());
+	if (tier) where.push(tier);
 	const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 	// noTotal: a picker's page never shows the total, so it skips the count
-	const total = query.noTotal ? -1 : await cachedCount(db, `users:${query.banned ?? ''}:${(query.q ?? '').trim().toLowerCase().slice(0, 80)}`, () =>
-		db.prepare(`SELECT COUNT(*) AS n FROM (${base}) ${whereSql}`).bind(...binds).first<{ n: number }>().then((r) => Number(r?.n) || 0));
+	const total = query.noTotal ? -1 : await cachedCount(db, `users:${query.banned ?? ''}:${query.tier ?? ''}:${(query.q ?? '').trim().toLowerCase().slice(0, 80)}`, () =>
+		db.prepare(`SELECT COUNT(*) AS n FROM (${base}) u ${whereSql}`).bind(...binds).first<{ n: number }>().then((r) => Number(r?.n) || 0));
 	const { results } = await db
-		.prepare(`SELECT * FROM (${base}) ${whereSql} ORDER BY ${USER_SORT[query.sort ?? 'newest'] ?? USER_SORT.newest} LIMIT ${pageSize} OFFSET ${offset}`)
+		.prepare(`SELECT * FROM (${base}) u ${whereSql} ORDER BY ${USER_SORT[query.sort ?? 'newest'] ?? USER_SORT.newest} LIMIT ${pageSize} OFFSET ${offset}`)
 		.bind(...binds)
 		.all<Row>();
 	const rows = results ?? [];
@@ -489,6 +491,28 @@ export async function listUsers(env: AdminEnv, query: AdminUserQuery, waitUntil?
 		pageSize,
 		indexComplete,
 	};
+}
+
+/**
+ * The Users list's tier filter (formerly the Creators page's): the SQL over a
+ * row's `id`, binding into `binds`. Each test is an indexed lookup per row
+ * (creator_tier_assignments' key, content_ownership (kind, owner_id),
+ * upload_limit_hits (user_id, hit_at)). The list's outer row is aliased `u`. Unknown values filter nothing.
+ */
+export function userTierWhere(tier: string | undefined, binds: unknown[], nowMs: number): string | null {
+	if (!tier) return null;
+	const assigned = 'EXISTS (SELECT 1 FROM creator_tier_assignments a WHERE a.user_id = u.id)';
+	if (tier === 'has_tier') return assigned;
+	if (tier === NO_CREATOR_TIER) return `NOT ${assigned}`;
+	if (tier === 'needs_tier')
+		return `NOT ${assigned} AND EXISTS (SELECT 1 FROM ${OWNERSHIP_TABLE} o WHERE o.kind IN ('channel', 'video') AND o.owner_id = u.id AND o.is_deleted = 0)`;
+	if (tier === 'hit_limit') {
+		binds.push(Math.floor(nowMs / 1000) - 7 * 86400);
+		return `EXISTS (SELECT 1 FROM upload_limit_hits h WHERE h.user_id = u.id AND h.hit_at >= ?${binds.length})`;
+	}
+	if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(tier)) return null;
+	binds.push(tier);
+	return `EXISTS (SELECT 1 FROM creator_tier_assignments a WHERE a.user_id = u.id AND a.tier_id = ?${binds.length})`;
 }
 
 export function toUserRow(id: string, profile: Row | null, isBanned: boolean, indexRow?: Row): AdminUserRow {

@@ -10,7 +10,7 @@
  * them (Auth and Videos are separate apps).
  */
 
-import type { CreatorTierAssignment } from './creator-tiers';
+import type { CreatorTierAssignment, CreatorTierOrigin } from './creator-tiers';
 import { normalizeRole } from './roles';
 import type { MediaRung, TranscodeResult, VideoR2State } from './media-delivery';
 import type { MediaOverride, MediaProviderId, PlaybackRules, ProviderMediaStatus } from './media-providers';
@@ -384,9 +384,18 @@ export interface AdminListQuery {
 export type AdminUserSort = 'newest' | 'oldest' | 'name';
 export const ADMIN_USER_SORTS: readonly AdminUserSort[] = ['newest', 'oldest', 'name'];
 
+/**
+ * The Users list's tier filter: a tier id, `none` (no tier), or one of these
+ * (underscores, so no tier id can collide: ids are [a-z0-9-]).
+ */
+export const ADMIN_USER_TIER_FILTERS = ['needs_tier', 'has_tier', 'hit_limit'] as const;
+export type AdminUserTierFilter = (typeof ADMIN_USER_TIER_FILTERS)[number];
+
 export interface AdminUserQuery {
   q?: string;
   banned?: 'yes' | 'no';
+  /** needs_tier: owns a channel or uploaded but holds no tier; has_tier; hit_limit: an upload limit in 7 days; `none`; or a tier id */
+  tier?: string;
   sort?: AdminUserSort;
   page?: number;
   pageSize?: number;
@@ -413,6 +422,26 @@ export interface AdminUserRow {
   invite?: { id: string; status: 'sending' | 'failed' | 'invited' | 'active' | 'expired' | 'revoked' } | null;
   /** Set by admin-api: the user's warnings so far (user_warnings); absent when it could not be read. */
   warningCount?: number;
+  /** Set on the Users list (api-videos): the user's creator tier, where it came from, and limit hits. */
+  creator?: AdminUserCreatorInfo;
+}
+
+/** A Users list row's creator tier (what the old Creators page showed per user). */
+export interface AdminUserCreatorInfo {
+  assignment: CreatorTierAssignment | null;
+  /** Where the tier comes from (null: no tier) */
+  origin: CreatorTierOrigin | null;
+  /** Display name of the admin who assigned it (videos profile), when known */
+  assignedByName: string | null;
+  /** Owns a channel or has uploaded, but holds no tier */
+  needsTier: boolean;
+  /** Upload-limit refusals in the last 7 days */
+  limitHits7d: number;
+}
+
+/** The Users list page: rows plus the creator notices (needs a tier, hit a limit this week). */
+export interface AdminUsersPage<T = AdminUserRow> extends AdminPage<T> {
+  creators?: { needsTier: number; limitHits7d: number };
 }
 
 /** User search for pickers (channel ownership transfer): 2+ characters, a few best matches. */

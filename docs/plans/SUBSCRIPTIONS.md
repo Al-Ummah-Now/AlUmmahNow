@@ -25,7 +25,7 @@
 
 | System | Where | What it holds | State |
 |---|---|---|---|
-| **Creator tiers** | `packages/shared-types/src/creator-tiers.ts`, `apps/api-videos/src/lib/creatorTiers.ts`, `middleware/upload-limits.ts`, migration `api-videos/migrations/search/0011_creator_tiers.sql`, admin-web `creators/tiers` | Per **user**. A user with no tier can't upload or create channels (403 `uploads_by_invitation`). Tier `creator`: 300 uploads/hour, 2,000/day, 20 concurrent, 3 channels. Tier `unlimited`: no limits. Super admins are always Unlimited. `source` is `admin`, or `subscription` (reserved for later) | **Shipped** (#623, #630, #659, #660, #675). Enforced in prod |
+| **Creator tiers** | `packages/shared-types/src/creator-tiers.ts`, `apps/api-videos/src/lib/creatorTiers.ts`, `middleware/upload-limits.ts`, migration `api-videos/migrations/search/0011_creator_tiers.sql`, admin-web `/tiers` (tier column and bulk change on `/users`) | Per **user**. A user with no tier can't upload or create channels (403 `uploads_by_invitation`). Tier `creator`: 300 uploads/hour, 2,000/day, 20 concurrent, 3 channels. Tier `unlimited`: no limits. Super admins are always Unlimited. `source` is `admin`, or `subscription` (reserved for later) | **Shipped** (#623, #630, #659, #660, #675). Enforced in prod |
 | **Epic 27 plans and entitlements** | Catalogue and resolver in `packages/shared-types/src/entitlements.ts`. Tables in `apps/admin-api/migrations/0004_plans_entitlements.sql` (`plans`, `plan_entitlements`, `subscriptions`, `entitlement_overrides`, `usage_counters`, `plan_audit_log`). Seeds in `0005`, `0015` and `0016` | Per **user, channel or organisation**. Resolution order: override > live subscription > default plan > catalogue fallback. Fails open | Schema and seeds **merged** (#385). Resolver/API #390, enforcement #391, admin-api #427, admin-web #428 and web #429 **open since 2026-11-08**. Today nothing reads plan values, so `lib/studioLimits.ts` allows everything |
 
 The wiki already records the conflict between them ([CHAT-CREATOR-TIERS](https://github.com/Al-Ummah-Now/AlUmmahNowWiki/blob/main/epics/CHAT-CREATOR-TIERS-creator-tiers.md), "Conflicts between sources").
@@ -202,7 +202,7 @@ Everything below exists or is specified in Epic 27 and the captions spec. This p
 - **Override** any key for a user, channel or organisation, with an expiry.
 - **Grant** an add-on amount, monthly or until used, with a reason and source `admin | purchase | promo | sponsored`.
 - Everything is audited (`plan_audit_log`) and picked with search boxes, never raw ids (admin-pickers rule).
-- The **admin Creators page** keeps its workflow ("Invite creator", "raise a limit"), but writes plan assignments and grants instead of creator-tier rows.
+- The **admin Users list** (tier column, filter, bulk change; formerly the Creators page) keeps its workflow ("Invite creator", "raise a limit"), but writes plan assignments and grants instead of creator-tier rows.
 - **Budgets:** one screen holds every global monthly budget per environment: captions, inline translation, CMS assist, moderation, live, transcode and X (§5.3).
 
 ### 3.7 Payment providers (listed; not decided: P1 stays open)
