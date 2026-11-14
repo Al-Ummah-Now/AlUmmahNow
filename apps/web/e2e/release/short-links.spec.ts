@@ -97,7 +97,8 @@ test.describe('short links', () => {
         .toBe(200);
       const postLink = `${short}/p/${postId}${lang}`;
       const landed = new URL(await follow(page, postLink));
-      expect(landed.pathname).toBe(`/${locale}/channels/${channelId}`);
+      // /channels/{id} 308s to the channel's @handle URL when it has one (handle history PR)
+      expect(landed.pathname).toBe(handle ? `/${locale}/@${handle}` : `/${locale}/channels/${channelId}`);
       expect(landed.searchParams.get('tab')).toBe('community');
       expect(landed.searchParams.get('post')).toBe(postId);
       await expect(page.locator(`#post-${postId}`)).toBeVisible({ timeout: 30000 });
