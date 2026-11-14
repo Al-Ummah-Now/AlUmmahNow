@@ -323,7 +323,7 @@ describe('buildWatchMetadata', () => {
   it('renders OG video, a Twitter player card, hreflang and the oEmbed link', () => {
     const meta = buildWatchMetadata(video, 'ar', HOST);
     expect(meta.title).toBe('العنوان');
-    expect((meta.description as string).length).toBeLessThanOrEqual(200);
+    expect((meta.description as string).length).toBeLessThanOrEqual(160);
     expect(meta.alternates?.canonical).toBe(`${HOST}/ar/video/v1`);
     expect(meta.alternates?.languages).toEqual({ en: `${HOST}/en/video/v1`, ar: `${HOST}/ar/video/v1`, "x-default": `${HOST}/en/video/v1` });
     expect(meta.alternates?.types).toEqual({

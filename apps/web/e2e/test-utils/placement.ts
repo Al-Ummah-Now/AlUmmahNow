@@ -152,6 +152,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/release/core-web.spec.ts': { placement: 'local', reason: 'i18n, 404, live comments via local websocket; auth-lang test needs issuer locale' },
   'apps/web/e2e/release/creator-tiers.spec.ts': { placement: 'local', reason: 'tier gating server+UI, admin-web tier control' },
   'apps/web/e2e/release/deploy-skew.spec.ts': { placement: 'local', reason: 'skew simulated by route interception against build under test' },
+  'apps/web/e2e/release/seo.spec.ts': { placement: 'local', reason: 'crawler view of this PR\'s build: canonical/hreflang/description/JSON-LD/og:image on watch, @handle, playlist and post pages (en/ar), 404/410/301/308 statuses, robots.txt and sitemaps; own creator/video/playlist/post' },
   'apps/web/e2e/release/short-links.spec.ts': { placement: 'local', reason: 'share buttons copy short links; the stack short-links Worker redirects them (en/ar), 404 for unknown/private; own creator/video/playlist/post' },
   'apps/web/e2e/release/display-name.spec.ts': { placement: 'local', reason: 'names-only profile shown by first + last in header, community comment author, admin user list; own creator/post' },
   'apps/web/e2e/release/embed-frame-sound.spec.ts': { placement: 'deployed', reason: 'media: own landscape/Short/square uploads encoded and played in a cross-origin embed (fill, night backdrop, sound after a click), Chrome + WebKit' },
