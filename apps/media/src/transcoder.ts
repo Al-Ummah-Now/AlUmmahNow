@@ -6,10 +6,10 @@
  * start to this job's video, prefix and id.
  */
 import { Container, type OutboundHandlerContext } from '@cloudflare/containers';
-import { failRungs, MEDIA_MP4, mediaPrefix, sanitizeFailure, sanitizeMp4, type LiveReviewJobMessage, type Mp4JobMessage, sanitizeRungs, type R2RungProgress, type TranscodeFailure, type TranscodeJobEvent, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
+import { failRungs, MEDIA_MP4, mediaPrefix, sanitizeFailure, sanitizeMp4, type CaptionAudioJobMessage, type LiveReviewJobMessage, type Mp4JobMessage, sanitizeRungs, type R2RungProgress, type TranscodeFailure, type TranscodeJobEvent, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
 import { bucketFor, errorText, log, type Env } from './env';
 import { containerSeconds, keyAllowed, liveReviewPrefix, liveVodSource, liveVodTarget, newJob, onFailure, onMessage, onProgressEvent, watchdogVerdict, WATCHDOG_SECONDS, type JobState } from './jobs';
-import { reportEvent, reportLiveReviewMedia, reportMp4Event, sourceCandidates } from './videos-api';
+import { reportCaptionAudio, reportEvent, reportLiveReviewMedia, reportMp4Event, sourceCandidates } from './videos-api';
 import { serveOriginal } from './originals';
 import { storeUpload } from './uploads';
 
@@ -399,6 +399,38 @@ export class Transcoder extends Container<Env> {
 			if (res.status === 409) return { outcome: 'busy' };
 			if (!res.ok || typeof body.manifestKey !== 'string' || !body.manifestKey.startsWith(reviewPrefix)) throw Object.assign(new Error(body.error || `review HTTP ${res.status}`), { fatal: !!body.fatal });
 			await reportLiveReviewMedia(this.env, msg.streamId, { reviewId: msg.reviewId, manifestKey: body.manifestKey });
+			result = { outcome: 'ready' };
+		} catch (error) {
+			result = { outcome: 'failed', error: errorText(error).slice(0, 300), fatal: !!(error as { fatal?: boolean })?.fatal };
+		} finally {
+			await this.stop().catch(() => undefined);
+		}
+		return result;
+	}
+
+	/**
+	 * Captions (AUN-CAPTIONS §5.2): a video's audio only, from the kept original or Bunny's source,
+	 * as 16 kHz chunks under captions-work/<jobId>/ (no transcode). The DO is named
+	 * `captions:<videoId>`, so it never holds a video's transcode state. api-videos then queues the
+	 * transcription.
+	 */
+	async extractCaptionAudio(msg: CaptionAudioJobMessage): Promise<Mp4Outcome> {
+		let result: Mp4Outcome;
+		try {
+			await this.setOutboundByHosts({
+				'source.internal': { method: 'source', params: { videoId: msg.videoId } },
+				'review.internal': { method: 'review', params: { prefix: msg.out } },
+			});
+			await this.startAndWaitForPorts();
+			const res = await this.containerFetch('http://container/audio', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ jobId: msg.jobId, videoId: msg.videoId, input: 'http://source.internal/src', prefix: msg.out }),
+			});
+			const body = (await res.json().catch(() => ({}))) as { manifestKey?: unknown; error?: string; fatal?: boolean };
+			if (res.status === 409) return { outcome: 'busy' };
+			if (!res.ok || typeof body.manifestKey !== 'string' || !body.manifestKey.startsWith(msg.out)) throw Object.assign(new Error(body.error || `audio HTTP ${res.status}`), { fatal: !!body.fatal });
+			await reportCaptionAudio(this.env, msg.jobId, { ok: true, manifestKey: body.manifestKey });
 			result = { outcome: 'ready' };
 		} catch (error) {
 			result = { outcome: 'failed', error: errorText(error).slice(0, 300), fatal: !!(error as { fatal?: boolean })?.fatal };

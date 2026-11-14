@@ -16,7 +16,7 @@ import { join, relative } from 'node:path';
 import { Readable } from 'node:stream';
 import { bandwidthOf, displaySize, ffmpegArgs, ladderFor, MP4_FILE, mp4Args, mp4Rung, playlistFiles, progressSeconds, stillsArgs } from './ladder.mjs';
 import { RungTracker, uploadByPlan, uploadPlan } from './rungs.mjs';
-import { audioArgs, frameInterval, frameTimes, framesArgs, manifestFor, reviewVariant, thinFrames } from './review.mjs';
+import { audioArgs, captionAudioManifestFor, frameInterval, frameTimes, framesArgs, manifestFor, reviewVariant, thinFrames } from './review.mjs';
 
 const PORT = 8080;
 const WORK = '/tmp/work';
@@ -455,6 +455,40 @@ const server = createServer(async (req, res) => {
 			return send(500, { error: String(error?.message || error).slice(0, 300), fatal: !!error?.fatal });
 		} finally {
 			reviewing = false;
+		}
+	}
+	// Captions (AUN-CAPTIONS §5.2): the audio only, read from source.internal, chunks under captions-work/<jobId>/
+	if (req.url === '/audio' && req.method === 'POST') {
+		let raw = '';
+		for await (const c of req) raw += c;
+		const job = JSON.parse(raw || '{}');
+		if (!/^[A-Za-z0-9-]{8,64}$/.test(job.jobId || '') || !/^[A-Za-z0-9_-]{1,80}$/.test(job.videoId || '') || job.input !== 'http://source.internal/src' || job.prefix !== `captions-work/${job.jobId}/`) {
+			return send(400, { error: 'bad job' });
+		}
+		if (reviewing || (current && ['starting', 'downloading', 'transcoding', 'uploading'].includes(current.status))) return send(409, { error: 'busy' });
+		reviewing = true;
+		const t0 = Date.now();
+		const dir = join(WORK, 'captions');
+		try {
+			await rm(dir, { recursive: true, force: true });
+			await mkdir(join(dir, 'audio'), { recursive: true });
+			const meta = JSON.parse(await run('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_streams', '-show_format', job.input]));
+			if (!(meta.streams || []).some((s) => s.codec_type === 'audio')) return send(422, { error: 'no_audio', fatal: true });
+			const durationSeconds = Number(meta.format?.duration) || 0;
+			await run('ffmpeg', audioArgs({ input: job.input, out: join(dir, 'audio') }));
+			const files = (await readdir(join(dir, 'audio'))).filter((f) => f.endsWith('.mp3')).sort();
+			for (const name of files) await put(`${job.prefix}audio/${name}`, join(dir, 'audio', name), 'review.internal');
+			const manifest = captionAudioManifestFor({ jobId: job.jobId, videoId: job.videoId, prefix: job.prefix, durationSeconds, audioCount: files.length, now: new Date().toISOString() });
+			await writeFile(join(dir, 'manifest.json'), JSON.stringify(manifest));
+			await put(`${job.prefix}manifest.json`, join(dir, 'manifest.json'), 'review.internal');
+			log('caption audio', { jobId: job.jobId, chunks: files.length, ms: Date.now() - t0 });
+			return send(200, { manifestKey: `${job.prefix}manifest.json` });
+		} catch (error) {
+			log('caption audio failed', { jobId: job.jobId, error: String(error?.message || error) });
+			return send(500, { error: String(error?.message || error).slice(0, 300), fatal: !!error?.fatal });
+		} finally {
+			reviewing = false;
+			await rm(dir, { recursive: true, force: true }).catch(() => undefined);
 		}
 	}
 	send(404, { error: 'not found' });

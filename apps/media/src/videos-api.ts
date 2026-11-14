@@ -5,8 +5,9 @@
  *   POST /internal/media/events            TranscodeJobEvent → the video record
  *   POST /internal/media/mp4               Mp4JobEvent (remux-only job) → the video record
  *   POST /internal/review/livestream/:id/media  a live recording's review media (VR9)
+ *   POST /internal/captions/jobs/:jobId/audio    a caption job's extracted audio (AUN-CAPTIONS §5.2)
  */
-import type { LiveVodReviewMediaRequest, Mp4JobEvent, TranscodeJobEvent } from '@al-ummah/shared-types';
+import type { CaptionAudioReport, LiveVodReviewMediaRequest, Mp4JobEvent, TranscodeJobEvent } from '@al-ummah/shared-types';
 import { secret, type Env } from './env';
 
 const ORIGIN = 'https://videos.internal';
@@ -64,4 +65,15 @@ export async function reportLiveReviewMedia(env: Env, streamId: string, body: Li
 	});
 	// 409: a newer recording replaced this review; nothing to do
 	if (!res.ok && res.status !== 409) throw new Error(`api-videos live review media for ${streamId}: HTTP ${res.status}`);
+}
+
+/** A caption job's audio is ready (or could not be extracted): api-videos queues the transcription or fails the job. */
+export async function reportCaptionAudio(env: Env, jobId: string, body: CaptionAudioReport): Promise<void> {
+	const res = await call(env, `/internal/captions/jobs/${encodeURIComponent(jobId)}/audio`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify(body),
+	});
+	// 409: the job was cancelled or already finished; nothing to do
+	if (!res.ok && res.status !== 409) throw new Error(`api-videos caption audio for ${jobId}: HTTP ${res.status}`);
 }

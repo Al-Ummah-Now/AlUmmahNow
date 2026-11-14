@@ -167,6 +167,10 @@ export enum MessageType {
   // The creator claimed the video review's transcript as a caption draft (#1296; processor
   // captions/claim.ts): the transcript and the Quran matcher become a draft. Payload: CaptionClaimPayload.
   CaptionClaimTranscript = 261,
+  // On-demand transcription (processor captions/job.ts): one step of a caption job (speech-to-text
+  // over the job's audio chunks, then the draft), on the videos queue with retry and the DLQ; the
+  // last attempt fails the job, refunds its minutes and flags the admin. Payload: CaptionJobPayload.
+  CaptionJob = 262,
 }
 
 /** Payload of MessageType.QuranContentSync. */

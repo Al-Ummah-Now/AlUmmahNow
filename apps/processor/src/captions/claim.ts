@@ -14,28 +14,21 @@ import type { Logger } from '@al-ummah/logger';
 import {
   MessageType,
   captionClaimKey,
-  captionCuesFromTranscript,
-  captionDraftKey,
-  matchQuran,
   reportNeedsAction,
   resolveNeedsAction,
-  transcriptWords,
-  validateCaptionCues,
   type CaptionClaimPayload,
   type CaptionClaimState,
-  type CaptionDraft,
   type ErrorReporterEnv,
   type ExecutionContextLike,
   type ReviewTranscriptFile,
 } from '@al-ummah/shared-types';
 import { loadQuranIndex } from '../quran/review-matcher';
+import { writeTranscriptDraft, type DraftBucket } from './draft';
 
 interface ReadBucket {
   get(key: string): Promise<{ text(): Promise<string> } | null>;
 }
-interface WriteBucket {
-  get(key: string): Promise<{ text(): Promise<string> } | null>;
-  put(key: string, value: string, options?: { httpMetadata?: { contentType?: string }; onlyIf?: { etagDoesNotMatch?: string } }): Promise<unknown>;
+interface WriteBucket extends DraftBucket {
   delete(keys: string | string[]): Promise<void>;
 }
 
@@ -108,37 +101,13 @@ export async function runCaptionClaim(env: CaptionClaimEnv, p: CaptionClaimPaylo
   const index = await loadQuranIndex(env.REVIEW_MEDIA, now.getTime());
   if (!index) throw new ClaimRetryableError('no fresh copy of the Quran text');
 
-  const matches = matchQuran(index, transcriptWords(segments));
-  const checked = validateCaptionCues(captionCuesFromTranscript(segments, matches));
-  if (!checked.ok) throw new Error(`draft failed validation: ${(checked as Extract<typeof checked, { ok: false }>).error}`);
-  const cues = (checked as Extract<typeof checked, { ok: true }>).cues;
-
-  const at = now.toISOString();
-  const draft: CaptionDraft = {
-    v: 1,
-    videoId: p.videoId,
-    language: p.language,
-    version: 1,
-    kind: 'source',
-    origin: 'review_transcript',
-    edited: false,
-    machine: { provider: 'review-transcript' },
-    cues,
-    createdAt: at,
-    updatedAt: at,
-    updatedBy: p.requestedBy,
-  };
-  const key = captionDraftKey(p.videoId, p.language);
-  if (p.replace) {
-    const existing = await subtitles.get(key);
-    if (existing) draft.version = ((JSON.parse(await existing.text()) as CaptionDraft).version ?? 0) + 1;
-    await subtitles.put(key, JSON.stringify(draft), { httpMetadata: { contentType: 'application/json' } });
-  } else {
-    const written = await subtitles.put(key, JSON.stringify(draft), { httpMetadata: { contentType: 'application/json' }, onlyIf: { etagDoesNotMatch: '*' } });
-    if (!written) return { status: 'failed', error: 'draft_exists' };
-  }
-  const quran = cues.reduce((n, c) => n + c.segments.filter((s) => s.type === 'quran').length, 0);
-  return { status: 'drafted', cues: cues.length, quran };
+  const written = await writeTranscriptDraft(
+    subtitles,
+    index,
+    { videoId: p.videoId, language: p.language, replace: !!p.replace, requestedBy: p.requestedBy, origin: 'review_transcript', machine: { provider: 'review-transcript' }, segments },
+    now,
+  );
+  return written.status === 'draft_exists' ? { status: 'failed', error: 'draft_exists' } : written;
 }
 
 async function markClaim(env: CaptionClaimEnv, p: CaptionClaimPayload, error: CaptionClaimState['error'] | null): Promise<void> {

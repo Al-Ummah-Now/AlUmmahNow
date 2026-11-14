@@ -42,6 +42,7 @@ import { SubtitlesList } from '../endpoints/video/subtitlesList';
 import { SubtitlesGet } from '../endpoints/video/subtitlesGet';
 import { SubtitlesDelete } from '../endpoints/video/subtitlesDelete';
 import { SubtitlesSetDefault } from '../endpoints/video/subtitlesSetDefault';
+import { CaptionJobCancel, CaptionJobCreate, CaptionJobsList, CaptionMinutesGet } from '../endpoints/captions/captionJobs';
 import { CaptionDraftDelete, CaptionDraftGet, CaptionDraftPublish, CaptionDraftSave, CaptionDraftsList, ReviewTranscriptClaim } from '../endpoints/captions/captionDrafts';
 
 // Video scheduling endpoints
@@ -184,6 +185,11 @@ videoRouter.put('/:videoId/captions/drafts/:language', CaptionDraftSave);
 videoRouter.delete('/:videoId/captions/drafts/:language', CaptionDraftDelete);
 videoRouter.post('/:videoId/captions/drafts/:language/publish', CaptionDraftPublish);
 videoRouter.post('/:videoId/review/transcript/claim', ReviewTranscriptClaim);
+// On-demand transcription jobs (AUN-CAPTIONS §5.1)
+videoRouter.post('/:videoId/captions/jobs', CaptionJobCreate);
+videoRouter.get('/:videoId/captions/jobs', CaptionJobsList);
+videoRouter.post('/:videoId/captions/jobs/:jobId/cancel', CaptionJobCancel);
+videoRouter.get('/:videoId/captions/minutes', CaptionMinutesGet);
 
 // ==========================================
 // VIDEO SCHEDULING

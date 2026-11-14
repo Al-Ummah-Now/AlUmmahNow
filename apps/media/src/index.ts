@@ -7,10 +7,10 @@
  * - fetch  media.<env>.alummahnow.net/priv/*: token-checked private renditions (edge.ts)
  * - fetch  /internal/jobs/:videoId (X-API-Key): the job as the container sees it (admin)
  */
-import type { LiveReviewJobMessage, Mp4JobMessage, TranscodeJobMessage } from '@al-ummah/shared-types';
-import { isLiveReviewJobMessage, isMediaRev, isMediaVideoId, isMp4JobMessage } from '@al-ummah/shared-types';
+import type { CaptionAudioJobMessage, LiveReviewJobMessage, Mp4JobMessage, TranscodeJobMessage } from '@al-ummah/shared-types';
+import { isCaptionAudioJobMessage, isLiveReviewJobMessage, isMediaRev, isMediaVideoId, isMp4JobMessage } from '@al-ummah/shared-types';
 import { liveReviewQueueAction, mp4QueueAction } from './jobs';
-import { reportLiveReviewMedia, reportMp4Event } from './videos-api';
+import { reportCaptionAudio, reportLiveReviewMedia, reportMp4Event } from './videos-api';
 import { handlePrivate } from './edge';
 import { errorText, log, secret, type Env } from './env';
 import { withNoIndex } from './crawlers';
@@ -74,6 +74,38 @@ async function handleMp4Job(msg: Message<Mp4JobMessage>, env: Env): Promise<void
 }
 
 /**
+ * A caption job's audio (AUN-CAPTIONS §5.2): Transcoder.extractCaptionAudio on the DO
+ * `captions:<videoId>`. When it gives up, api-videos fails the job (minutes refunded, admin flagged).
+ */
+async function handleCaptionAudioJob(msg: Message<CaptionAudioJobMessage>, env: Env): Promise<void> {
+	const job = msg.body;
+	let result: Mp4Outcome;
+	try {
+		result = await env.TRANSCODER.get(env.TRANSCODER.idFromName(`captions:${job.videoId}`)).extractCaptionAudio(job);
+	} catch (error) {
+		result = { outcome: 'failed', error: errorText(error).slice(0, 300), fatal: false };
+	}
+	const action = liveReviewQueueAction(result, msg.attempts);
+	if (!action.ack) {
+		if (result.outcome === 'failed') log.warn('[MediaQueue] Caption audio failed; retrying', { jobId: job.jobId, videoId: job.videoId, attempts: msg.attempts, error: result.error });
+		msg.retry({ delaySeconds: action.delaySeconds });
+		return;
+	}
+	if (action.giveUp && result.outcome === 'failed') {
+		log.error('[MediaQueue] Caption audio gave up', { jobId: job.jobId, videoId: job.videoId, attempts: msg.attempts, error: result.error });
+		try {
+			await reportCaptionAudio(env, job.jobId, { ok: false, error: result.error ?? 'extraction failed', retryable: !result.fatal });
+		} catch (error) {
+			// api-videos unreachable: keep the message so the job does not hang
+			log.warn('[MediaQueue] Could not report the caption audio failure; retrying', { jobId: job.jobId, error: errorText(error) });
+			msg.retry({ delaySeconds: 300 });
+			return;
+		}
+	}
+	msg.ack();
+}
+
+/**
  * A live recording's review media (VR9): Transcoder.extractLiveReview on the DO `live:<streamId>`.
  * When it gives up, api-videos is told so the check still runs on the title and thumbnail.
  */
@@ -113,6 +145,10 @@ export default {
 
 	async queue(batch: MessageBatch<unknown>, env: Env): Promise<void> {
 		for (const msg of batch.messages) {
+			if (isCaptionAudioJobMessage(msg.body)) {
+				await handleCaptionAudioJob(msg as Message<CaptionAudioJobMessage>, env);
+				continue;
+			}
 			if (isLiveReviewJobMessage(msg.body)) {
 				await handleLiveReviewJob(msg as Message<LiveReviewJobMessage>, env);
 				continue;

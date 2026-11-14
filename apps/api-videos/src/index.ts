@@ -16,6 +16,7 @@ import { createNotificationsInternalRouter } from './endpoints/notifications/not
 import { sweepRunUsers } from './lib/e2e/runUserSweep';
 import { handlePlaylistAddBatch, isPlaylistAddMessage } from './lib/playlistUploadAdds';
 import { createPlaylistAddsInternalRouter } from './endpoints/playlist/playlistAddsInternal';
+import { createCaptionJobsInternalRouter } from './endpoints/captions/captionJobsInternal';
 
 /** Every 10 minutes: start a processing-check loop for any video stuck without one */
 const PROCESSING_SWEEP_CRON = '*/10 * * * *';
@@ -282,6 +283,8 @@ app.route('/internal/video-format', createVideoFormatInternalRouter() as never);
 app.route('/internal/privacy/footprints', createFootprintsInternalRouter() as never);
 // New uploads → playlists: the admin Errors page's Retry on a failed add
 app.route('/internal/playlist-adds', createPlaylistAddsInternalRouter() as never);
+// Caption jobs: media audio reports, processor progress/finish, admin retry (AUN-CAPTIONS §5.1)
+app.route('/internal/captions', createCaptionJobsInternalRouter() as never);
 // Scholars (the CMS): their channels and their articles on the Community tab
 app.route('/internal/scholars', scholarsInternalRouter as never);
 // Community posts for the CMS (www scholar post pages; wiki AUN-SCHOLAR-SITES §6.3)

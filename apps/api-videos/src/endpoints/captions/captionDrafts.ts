@@ -54,7 +54,7 @@ const params = z.object({ videoId: Str({ description: 'Video ID' }), language: S
 
 type Access = { video: VideoObject } | { response: Response };
 
-async function editableVideo(c: AppContext, videoId: string, userId: string): Promise<Access> {
+export async function editableVideo(c: AppContext, videoId: string, userId: string): Promise<Access> {
 	const video = await new R2Repository<VideoObject>(c.env.videos).getObject(videoId);
 	if (!video) return { response: c.json({ success: false, error: 'video_not_found' }, 404) };
 	if (!(await canOnVideo(c.env as never, video, userId, 'video.edit'))) return { response: c.json({ success: false, error: 'forbidden' }, 403) };

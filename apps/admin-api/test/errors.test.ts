@@ -371,6 +371,9 @@ describe('retry runner', () => {
     const refused = await runRetry(env({ VIDEOS }), { kind: 'service', service: 'api-videos', path: '/internal/admin/videos/delete' }, '1');
     assert.equal(refused.ok, false);
     assert.equal(calls.length, 1);
+    const job = await runRetry(env({ VIDEOS }), { kind: 'service', service: 'api-videos', path: '/internal/captions/jobs/retry', body: { jobId: 'j1' } }, '1');
+    assert.equal(job.status, 'resolved');
+    assert.equal(calls[1].url, 'https://api-videos.internal/internal/captions/jobs/retry');
   });
 
   it('keeps the item open with the reason when the retry fails, dismisses a vanished item', async () => {
