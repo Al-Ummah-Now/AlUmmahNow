@@ -10,8 +10,10 @@ import { adminApi, readTokens } from './support/api';
 import { LOCAL_STACK, RUN_TAG } from './support/env';
 
 const STATUS_URL = process.env.STATUS_URL || 'http://localhost:3095';
-const TITLE_EN = `E2E status ${RUN_TAG}-${Date.now().toString(36)}`;
-const TITLE_AR = `اختبار الحالة ${RUN_TAG}`;
+/** Unique per worker: the specs run fully parallel, so two workers never share a title */
+const SUFFIX = `${RUN_TAG}-${Date.now().toString(36)}`;
+const TITLE_EN = `E2E status ${SUFFIX}`;
+const TITLE_AR = `اختبار الحالة ${SUFFIX}`;
 
 interface Incident { id: string; titleEn: string; status: string; deletedAt: string | null }
 interface Overview { open: Incident[]; recent: Incident[]; deleted: Incident[] }
@@ -118,7 +120,8 @@ test.describe('status page', () => {
     const pub = await page.context().newPage();
     await pub.goto(fresh('/'));
     await expect(pub.getByText(TITLE_EN)).toHaveCount(0);
-    await expect(pub.getByRole('heading', { name: 'Active incidents' })).toHaveCount(0);
+    // Scoped to this incident: tests run fully parallel, and STATUS-02's public incident may be open right now
+    await expect(pub.getByRole('region', { name: 'Active incidents' }).getByText(TITLE_EN)).toHaveCount(0);
     const json = await (await pub.request.get(fresh('/api/status.json'))).json();
     expect(JSON.stringify(json)).not.toContain(TITLE_EN);
     expect((await pub.request.get(fresh(`/incidents/${created.body.result!.id}`))).status()).toBe(404);
