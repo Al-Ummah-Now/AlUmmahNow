@@ -277,12 +277,20 @@ async function captureFacts(env: CsamEnv, matchedUrl: string, detectedAt: string
 }
 
 /** Bans on videos at once, and asks Auth to sign the account out everywhere and suspend it. */
+/**
+ * The ban and Auth request reasons are read by moderators who cannot open CSAM cases, so they never
+ * say why: the link between an account and a CSAM case lives only in csam_cases.
+ */
+function neutralReason(caseId: string): string {
+  return `Trust and safety action (ref ${caseId})`;
+}
+
 async function freezeUploader(env: CsamEnv, row: CaseRow, uploaderId: string, actorId: string): Promise<CsamFreezeState> {
   const state: CsamFreezeState = json<CsamFreezeState>(row.freeze) ?? {};
   try {
     if (!state.ban) {
       try {
-        await callVideos(env, `/users/${encodeURIComponent(uploaderId)}/ban`, { method: 'POST', json: { reason: `CSAM match (case ${row.id})` }, actorId });
+        await callVideos(env, `/users/${encodeURIComponent(uploaderId)}/ban`, { method: 'POST', json: { reason: neutralReason(row.id) }, actorId });
         state.ban = 'banned';
       } catch (error) {
         if (error instanceof VideosError && error.status === 409) state.ban = 'already_banned';
@@ -301,7 +309,7 @@ async function freezeUploader(env: CsamEnv, row: CaseRow, uploaderId: string, ac
           subject_user_id: uploaderId,
           action,
           reason_category: 'sexual_content',
-          reason: `CSAM match (case ${row.id}). The content was taken down and reported to NCMEC by the videos admin.`,
+          reason: neutralReason(row.id),
           // The user's admin page only: never a link to the matched content
           evidence: buildEvidence({ adminWebUrl: env.ADMIN_WEB_URL, subjectUserId: uploaderId }),
           requested_by_id: actorId,
@@ -405,7 +413,21 @@ export async function mapCase(env: CsamEnv, id: string, input: unknown, actorId:
   const row = await getCase(env.REPORTS_DB, id);
   if (row.status !== 'unmapped') throw new CsamError(409, 'already_mapped');
   const resolution = await callVideos<CsamResolution>(env, '/resolve-by-hand', { ...csam, method: 'POST', json: input });
-  await logAccess(env.REPORTS_DB, { caseId: id, actorId, action: 'case.mapped', detail: { kind: resolution.kind } });
+  // There is nothing to check the hand mapping against (the URL did not resolve), so the log keeps
+  // exactly what was chosen: which item and which account will be taken down and frozen
+  await logAccess(env.REPORTS_DB, {
+    caseId: id,
+    actorId,
+    action: 'case.mapped',
+    detail: {
+      kind: resolution.kind,
+      videoId: resolution.videoId ?? null,
+      postId: resolution.postId ?? null,
+      channelId: resolution.channelId ?? null,
+      imagePath: resolution.imagePath ?? null,
+      uploaderId: resolution.uploaderId,
+    },
+  });
   await containCase(env, row, resolution, actorId);
   return summaryOf(await getCase(env.REPORTS_DB, id), await retentionDays(env.REPORTS_DB));
 }
@@ -508,9 +530,17 @@ export async function markReported(env: CsamEnv, id: string, input: { reportId?:
   if (row.status === 'closed') throw new CsamError(409, 'closed');
   const reportId = typeof input.reportId === 'string' ? input.reportId.trim() : '';
   if (!REPORT_ID.test(reportId)) throw new CsamError(400, 'invalid_report_id');
-  const at = typeof input.reportedAt === 'string' && !Number.isNaN(Date.parse(input.reportedAt)) ? new Date(input.reportedAt) : new Date();
-  if (at.getTime() > Date.now() + 5 * 60_000 || at.getTime() < Date.parse(row.detected_at) - 86_400_000) throw new CsamError(400, 'invalid_reported_at');
-  await updateCase(env.REPORTS_DB, id, { status: 'reported', report_id: reportId, reported_at: at.toISOString(), reported_by: actorId });
+  // The report time starts the retention clock, so it is set once: a later call may only correct a
+  // mistyped report id, never move the time (which would bring the evidence deletion forward)
+  let at: Date;
+  if (row.reported_at) {
+    if (input.reportedAt !== undefined && input.reportedAt !== row.reported_at) throw new CsamError(409, 'reported_at_fixed', 'The report time cannot change once recorded');
+    at = new Date(row.reported_at);
+  } else {
+    at = typeof input.reportedAt === 'string' && !Number.isNaN(Date.parse(input.reportedAt)) ? new Date(input.reportedAt) : new Date();
+    if (at.getTime() > Date.now() + 5 * 60_000 || at.getTime() < Date.parse(row.detected_at) - 86_400_000) throw new CsamError(400, 'invalid_reported_at');
+  }
+  await updateCase(env.REPORTS_DB, id, { status: 'reported', report_id: reportId, reported_at: at.toISOString(), reported_by: row.reported_by ?? actorId });
   await logAccess(env.REPORTS_DB, { caseId: id, actorId, action: 'case.reported', detail: { reportId, reportedAt: at.toISOString(), ...(row.report_id ? { replaces: row.report_id } : {}) } });
   await resolveFlag(env, reportFlagKey(id));
   return summaryOf(await getCase(env.REPORTS_DB, id), await retentionDays(env.REPORTS_DB));
