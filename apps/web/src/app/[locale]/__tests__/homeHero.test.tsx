@@ -18,6 +18,7 @@ jest.mock('@/hooks/useLanguage', () => ({
 }));
 jest.mock('nuqs', () => ({ useQueryState: () => [null, jest.fn()] }));
 jest.mock('@/components/AuthProvider/authContext', () => ({ useAuth: () => ({ user: null }) }));
+jest.mock('@/components/home/SignInBanner', () => ({ SignInBanner: () => null }));
 jest.mock('@/components/history/ContinueWatchingShelf', () => ({ ContinueWatchingShelf: () => null }));
 jest.mock('@/components/videoCard/index', () => ({
   __esModule: true,

@@ -92,6 +92,7 @@ export * from './i18n-contact';
 export * from './i18n-human-check';
 export * from './i18n-help';
 export * from './i18n-upload-status';
+export * from './i18n-signin-banner';
 export * from './i18n-captions';
 export * from './i18n-audio-tracks';
 export * from './i18n-billing';
