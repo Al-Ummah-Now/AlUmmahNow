@@ -60,6 +60,10 @@ export const PERMISSIONS = {
   'ops:manage': ['super_admin'],
   /** Status page (docs/status-page/README.md): see checks and incidents; post, update, resolve and delete incidents and maintenance. */
   'status:manage': ADMIN_ROLE_IDS,
+  /** Review alerts (wiki AUN-ADMIN-NATIVE): change the on-call rota, escalation times and owners. Reading them and the timings needs any admin role. */
+  'review_alerts:manage': ADMIN_ROLE_IDS,
+  /** Staff push devices: list a staff member's devices and sign one out (lost device). */
+  'staff_devices:manage': ADMIN_ROLE_IDS,
 } as const satisfies Record<string, readonly string[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

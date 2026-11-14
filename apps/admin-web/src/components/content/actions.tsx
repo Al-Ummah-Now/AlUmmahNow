@@ -236,16 +236,18 @@ interface ConfirmProps extends ConfirmDialogContent {
   disabled?: boolean;
   busy?: boolean;
   onConfirm: (reason: string) => Promise<unknown> | unknown;
+  /** Extra classes for the opening button (e.g. a full-width, 44 px tap target on a phone card). */
+  buttonClassName?: string;
 }
 
 /** A button that opens a modal <dialog> to confirm (and optionally explain) a change. */
-export function ConfirmButton({ label, disabled, busy, onConfirm, dialogTestId, ...dialog }: ConfirmProps & ConfirmDialogTestIds) {
+export function ConfirmButton({ label, disabled, busy, onConfirm, dialogTestId, buttonClassName, ...dialog }: ConfirmProps & ConfirmDialogTestIds) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
 
   return (
     <>
-      <button type="button" className={dialog.danger ? dangerButtonClass : smallButtonClass} disabled={disabled || busy} onClick={() => setOpen(true)} data-testid={dialog.testId}>
+      <button type="button" className={`${dialog.danger ? dangerButtonClass : smallButtonClass}${buttonClassName ? ` ${buttonClassName}` : ''}`} disabled={disabled || busy} onClick={() => setOpen(true)} data-testid={dialog.testId}>
         {busy ? t('content.working') : label}
       </button>
       <ConfirmDialog

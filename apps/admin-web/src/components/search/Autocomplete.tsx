@@ -40,6 +40,9 @@ import {
   initialUrl,
   showInitial,
   keyDown,
+  avatarInitial,
+  isArabicInitial,
+  ARABIC_INITIAL_STYLE,
   received,
   resolveUrl,
   suggestUrl,
@@ -71,6 +74,8 @@ export interface AutocompleteProps {
   disabled?: boolean;
   /** Open with the newest items before anything is typed (default: pick mode yes, search mode no: the list below already shows them) */
   initialResults?: boolean;
+  /** Show each item's id beside it (default yes). Off on pages where internal ids mean nothing to the admin; the email then wraps instead of being cut. */
+  showIds?: boolean;
 }
 
 const KIND_LABEL: Record<AdminSuggestKind, MessageKey> = {
@@ -110,6 +115,7 @@ export function Autocomplete({
   className = '',
   disabled = false,
   initialResults,
+  showIds = true,
 }: AutocompleteProps) {
   const initialOn = initialResults ?? mode === 'pick';
   const { t } = useLanguage();
@@ -320,6 +326,7 @@ export function Autocomplete({
           }}
           onClear={() => setValue('', null)}
           testId={testId}
+          showIds={showIds}
         />
       ) : (
         <div className="relative">
@@ -395,7 +402,7 @@ export function Autocomplete({
                 data-option={option.type}
                 data-id={option.type === 'suggestion' ? option.suggestion.id : undefined}
               >
-                <OptionContent option={option} kind={kind} current={picked?.id} />
+                <OptionContent option={option} kind={kind} current={picked?.id} showIds={showIds} />
               </li>
             ))}
             {state.status === 'loading' && state.options.length === 0 &&
@@ -461,15 +468,20 @@ function Thumb({ suggestion }: { suggestion: Pick<AdminSuggestion, 'kind' | 'ima
   if (suggestion.imageUrl) {
     return <img src={suggestion.imageUrl} alt="" loading="lazy" className={`${size} shrink-0 bg-surface-2 object-cover ${round ? 'rounded-full' : 'rounded'}`} />;
   }
-  const initial = Array.from(suggestion.label.trim())[0]?.toUpperCase() ?? '?';
+  const initial = avatarInitial(suggestion.label);
+  const arabic = isArabicInitial(initial);
   return (
-    <span aria-hidden="true" className={`${size} flex shrink-0 items-center justify-center bg-surface-2 font-medium text-fg-muted ${round ? 'rounded-full' : 'rounded'}`}>
+    <span
+      aria-hidden="true"
+      style={arabic ? ARABIC_INITIAL_STYLE : undefined}
+      className={`${size} flex shrink-0 items-center justify-center bg-surface-2 font-medium text-fg-muted ${arabic ? 'text-xl leading-none' : ''} ${round ? 'rounded-full' : 'rounded'}`}
+    >
       {initial}
     </span>
   );
 }
 
-function OptionContent({ option, kind, current }: { option: AutocompleteOption; kind: AdminSuggestKind; current?: string }) {
+function OptionContent({ option, kind, current, showIds = true }: { option: AutocompleteOption; kind: AdminSuggestKind; current?: string; showIds?: boolean }) {
   const { t } = useLanguage();
   if (option.type === 'searchAll') {
     return (
@@ -507,13 +519,15 @@ function OptionContent({ option, kind, current }: { option: AutocompleteOption; 
         </span>
         <span className="flex min-w-0 gap-2 text-xs text-fg-muted">
           {s.secondary && (
-            <span className="truncate" dir="auto">
+            <span className={showIds ? 'truncate' : '[overflow-wrap:anywhere]'} dir="auto">
               {s.secondary}
             </span>
           )}
-          <bdi dir="ltr" className="shrink-0 font-mono">
-            {s.id}
-          </bdi>
+          {showIds && (
+            <bdi dir="ltr" className="shrink-0 font-mono">
+              {s.id}
+            </bdi>
+          )}
         </span>
       </span>
     </>
@@ -539,6 +553,7 @@ function PickedChip({
   onChange,
   onClear,
   testId,
+  showIds = true,
 }: {
   picked: { id: string; item: AdminSuggestion | null; missing: boolean };
   kindLabel: string;
@@ -547,6 +562,7 @@ function PickedChip({
   onChange: () => void;
   onClear: () => void;
   testId?: string;
+  showIds?: boolean;
 }) {
   const { t } = useLanguage();
   const { id, item, missing } = picked;
@@ -563,13 +579,15 @@ function PickedChip({
         </span>
         <span className="flex min-w-0 gap-2 text-xs text-fg-muted">
           {item?.secondary && (
-            <span className="truncate" dir="auto">
+            <span className={showIds ? 'truncate' : '[overflow-wrap:anywhere]'} dir="auto">
               {item.secondary}
             </span>
           )}
-          <bdi dir="ltr" className="shrink-0 font-mono">
-            {id}
-          </bdi>
+          {showIds && (
+            <bdi dir="ltr" className="shrink-0 font-mono">
+              {id}
+            </bdi>
+          )}
         </span>
       </span>
       <button
@@ -577,7 +595,7 @@ function PickedChip({
         id={inputId}
         onClick={onChange}
         disabled={disabled}
-        className="rounded px-2 py-1 text-sm text-link hover:text-link-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+        className="rounded px-2 py-1 text-sm text-link hover:text-link-hover max-sm:min-h-11 max-sm:min-w-11 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
         aria-label={t('autocomplete.changeLabel', { kind: kindLabel, name })}
         data-testid={testId ? `${testId}-change` : undefined}
       >
@@ -587,7 +605,7 @@ function PickedChip({
         type="button"
         onClick={onClear}
         disabled={disabled}
-        className="rounded px-2 py-1 text-sm text-fg-muted hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+        className="rounded px-2 py-1 text-sm text-fg-muted hover:text-fg max-sm:min-h-11 max-sm:min-w-11 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
         aria-label={t('autocomplete.clearLabel', { kind: kindLabel, name })}
         data-testid={testId ? `${testId}-clear` : undefined}
       >
