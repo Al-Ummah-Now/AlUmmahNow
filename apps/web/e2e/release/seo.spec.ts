@@ -21,6 +21,9 @@ import { test, ns, useOwnData, onLocalStack, type Creator, type CreatedVideo } f
 import { releaseEnv, target } from './targets';
 import { apiFetch } from './web-session';
 
+/** The local stack's control server (scripts/local-stack/fake-external.ts): runs a worker's cron on demand. */
+const LOCAL_CONTROL = process.env.LOCAL_STACK_CONTROL_URL || 'http://127.0.0.1:3190';
+
 // Signs a user up through the auth server: traces would hold the password and code
 test.use({ trace: 'off' });
 
@@ -297,12 +300,19 @@ test.describe.serial('SEO: what crawlers see', () => {
       expect(new URL(legacy.headers.get('location') ?? '', web).pathname).toBe(`/${locale}/video/${video.id}`);
     }
 
-    // Deleted for good: 410 so crawlers drop it
+    // Deleted for good: 410 so crawlers drop it. The purge job starts at once, but the tombstone the 410
+    // reads (purged_at) is written by api-videos' hourly deletion cleanup once that job succeeded; the
+    // local stack runs no crons, so each poll runs that hourly tick first (as run-teardown does).
     const purge = await apiFetch(creator.user, `/api/videos/${doomed.id}/permanent`, { method: 'DELETE', headers: { channelId } });
     expect(purge.status, 'permanent delete').toBeLessThan(300);
-    for (const locale of LOCALES) {
-      await expect.poll(async () => (await crawl(`${web}/${locale}/video/${doomed.id}`)).status, { message: `purged video (${locale})`, timeout: 60000 }).toBe(410);
-    }
+    const hourlyTick = async () => {
+      const res = await fetch(`${LOCAL_CONTROL}/__stack/scheduled/api-videos?cron=${encodeURIComponent('47 * * * *')}`, { method: 'POST' });
+      expect(res.status, 'api-videos hourly cron').toBeLessThan(300);
+    };
+    await expect
+      .poll(async () => (await hourlyTick(), (await crawl(`${web}/en/video/${doomed.id}`)).status), { message: 'purged video (en)', timeout: 60000, intervals: [1000, 2000, 5000] })
+      .toBe(410);
+    expect((await crawl(`${web}/ar/video/${doomed.id}`)).status, 'purged video (ar)').toBe(410);
   });
 
   test('robots.txt and sitemaps list this spec\'s own pages', async () => {
