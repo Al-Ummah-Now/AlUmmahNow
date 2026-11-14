@@ -11,6 +11,10 @@ on:
         description: Days to cover (1-31)
         type: string
         default: '30'
+      idle_since:
+        description: Start of the idle window (ISO time; no test traffic since). Empty = last 24 h
+        type: string
+        default: ''
   pull_request:
     paths:
       - scripts/ops/usage-report.ts
@@ -39,11 +43,14 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           DAYS: ${{ inputs.days || '30' }}
+          # Tests left the deployed QA on 2026-11-13 ~15:00 UTC (9e620c5db reached QA)
+          IDLE_SINCE: ${{ inputs.idle_since || '2026-11-13T16:00:00Z' }}
         run: |
           set -o pipefail
           node --experimental-strip-types --no-warnings scripts/ops/usage-report.ts --days "$DAYS" | tee -a "$GITHUB_STEP_SUMMARY"
-          # Yesterday alone: the current run rate, without older spikes averaged in
+          # The idle window: the run rate with no test traffic, up to the last full hour
+          until=$(date -u +%Y-%m-%dT%H:00:00Z)
           echo; echo '---'; echo
-          node --experimental-strip-types --no-warnings scripts/ops/usage-report.ts --days 1 | tee -a "$GITHUB_STEP_SUMMARY"
+          node --experimental-strip-types --no-warnings scripts/ops/usage-report.ts --since "$IDLE_SINCE" --until "$until" | tee -a "$GITHUB_STEP_SUMMARY"
           echo; echo '---'; echo
           node --experimental-strip-types --no-warnings scripts/ops/usage-report.ts --hourly 36 | tee -a "$GITHUB_STEP_SUMMARY"
