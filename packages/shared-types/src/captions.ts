@@ -202,7 +202,7 @@ export function formatVttTime(ms: number): string {
   return `${pad(h)}:${pad(m)}:${pad(s)}.${pad(ms % 1000, 3)}`;
 }
 
-const escapeVtt = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/-->/g, '→');
+const escapeVtt = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 /** A published Quran marker: filled when the track is served (fillCaptionQuranMarkers). */
 export function captionQuranMarker(range: string, mode: CaptionMarkerMode): string {
