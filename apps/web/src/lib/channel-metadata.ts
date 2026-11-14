@@ -1,3 +1,4 @@
+import { metaDescription } from '@/lib/seo/description';
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import type { Channel } from '@al-ummah/shared-types';
@@ -26,7 +27,7 @@ export async function buildChannelMetadata(channel: Channel | null, locale: stri
   if (!channel) return {};
   const title = channel.nameLocalized?.[locale] || channel.name;
   // A channel without a description gets one naming it, never the site's default text
-  const description = (channel.descriptionLocalized?.[locale] || channel.description || '').trim() || channelFallbackDescription(locale, title);
+  const description = metaDescription((channel.descriptionLocalized?.[locale] || channel.description || '').trim() || channelFallbackDescription(locale, title));
   const origin = await requestOrigin();
   const path = channelPath(locale, channel);
   const otherLocale = locale === 'ar' ? 'en' : 'ar';

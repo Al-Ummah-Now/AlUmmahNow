@@ -5,6 +5,7 @@ import { originFromHost } from '@/lib/embed/request-origin';
 import { loadPublicPlaylistResult } from '@/lib/embed/content';
 import { playlistFallbackDescription, siteName } from '@/lib/seo/structured-data';
 import { isValidContentId } from '@/lib/embed/params';
+import { metaDescription } from '@/lib/seo/description';
 import { ContentUnavailableError } from '@/lib/seo/availability';
 import { playlistAvailability } from '@/lib/seo/availability-server';
 
@@ -32,7 +33,8 @@ export async function generateMetadata({ params }: Pick<PlaylistLayoutProps, 'pa
   };
   const title = data.titleLocalized?.[lang] || data.title || data.name || '';
   const channel = data.channelNameLocalized?.[lang] || data.channelName;
-  const description = (data.descriptionLocalized?.[lang] || data.description || '').trim() || (title ? playlistFallbackDescription(lang, title, channel) : undefined);
+  const own = (data.descriptionLocalized?.[lang] || data.description || '').trim() || (title ? playlistFallbackDescription(lang, title, channel) : '');
+  const description = own ? metaDescription(own) : undefined;
   return {
     ...(title ? { title } : {}),
     ...(description ? { description } : {}),

@@ -10,10 +10,10 @@ import { canonicalWatchUrl, embedUrl, oembedEndpointUrl } from './snippets';
 import { shareImageUrl } from './share-image';
 import { watchFallbackDescription } from '@/lib/seo/structured-data';
 import type { siteWatchCanonical } from '@/lib/seo/site-link';
+import { metaDescription } from '@/lib/seo/description';
 
 const PLAYER_WIDTH = 1280;
 const PLAYER_HEIGHT = 720;
-const DESCRIPTION_MAX = 200;
 
 /**
  * The player size the cards declare: the video's own ratio (a Short is 405x720, 9:16), so X and
@@ -26,11 +26,6 @@ export function declaredPlayerSize(video: Pick<EmbedVideo, 'width' | 'height' | 
   return a > 1 ? { width: PLAYER_WIDTH, height: Math.round(PLAYER_WIDTH / a) } : { width: Math.round(PLAYER_HEIGHT * a), height: PLAYER_HEIGHT };
 }
 
-function truncate(text: string, max: number): string {
-  const clean = text.replace(/\s+/g, ' ').trim();
-  return clean.length > max ? `${clean.slice(0, max - 1).trimEnd()}…` : clean;
-}
-
 /**
  * `onSite`: the video's page on the channel's scholar site when that site, on the scholar's own
  * domain, holds the canonical (AUN-SCHOLAR-SITES §4.4, siteWatchCanonical); the cards still play here.
@@ -41,7 +36,7 @@ export function buildWatchMetadata(video: EmbedVideo | null, locale: string, ori
   const title = video.titleLocalized?.[lang] || video.title;
   const rawDescription = video.descriptionLocalized?.[lang] || video.description || '';
   // A video without a description gets one naming it and its channel, never the site's default text
-  const description = truncate(rawDescription || watchFallbackDescription(lang, title, video.channelName), DESCRIPTION_MAX);
+  const description = metaDescription(rawDescription || watchFallbackDescription(lang, title, video.channelName));
   // A Short's canonical page is /shorts/{id} (D-SEO-10)
   const ownUrl = canonicalWatchUrl(origin, lang, video);
   const pageUrl = onSite?.canonical ?? ownUrl;
