@@ -6,6 +6,14 @@ import { toPublicChannels } from "../../lib/public-views";
 import R2Repository from "../../lib/r2Repo";
 import { OptionalAuthRoute, AppContext } from "../../base";
 import { GONE_BODY, isPurged } from '../../lib/gone';
+import { edgeCacheUrl, readEdgeCache, writeEdgeCache } from '../../lib/edge-cache';
+import { waitUntilOf } from '../../lib/search/ownership';
+
+/**
+ * Anonymous channel reads (every channel page's server render, twice: metadata and page) are kept per
+ * colo this long. Signed-in viewers always read R2: the owner sees their own edits at once.
+ */
+export const CHANNEL_VIEW_TTL_SECONDS = 30;
 
 export class ChannelFetch extends OptionalAuthRoute {
 	schema = {
@@ -63,6 +71,11 @@ export class ChannelFetch extends OptionalAuthRoute {
 			// Retrieve the validated id
 			const { id } = request.params;
 			const userId = this.getUserId(c);
+			const cacheUrl = userId ? null : edgeCacheUrl(c.req.url, `channel-view/${encodeURIComponent(id)}`);
+			if (cacheUrl) {
+				const hit = await readEdgeCache<z.infer<typeof PublicChannelView>>(cacheUrl);
+				if (hit) return hit;
+			}
 
 			// Implement your own object fetch here
 			const bucket = c.env.channels;
@@ -126,6 +139,8 @@ export class ChannelFetch extends OptionalAuthRoute {
 			// No queue message per channel read: the processor only logged it (and
 			// rejected anonymous ones), at the cost of queue operations per page load.
 
+			// Only a channel everyone may see is stored (private ones already returned 404 above)
+			if (cacheUrl && channelView) writeEdgeCache(cacheUrl, channelView, CHANNEL_VIEW_TTL_SECONDS, waitUntilOf(c as never));
 			return channelView;
 		} catch (error) {
 			// Add context to error before re-throwing
