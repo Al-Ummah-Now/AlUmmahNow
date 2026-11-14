@@ -1092,30 +1092,55 @@ export function iconSvg(name: keyof typeof ICON_PATHS, cls = 'pb-ic'): string {
 
 /* ── Built-in safe markdown (headings, paragraphs, lists, quotes, rules, bold, italic, links) ─────── */
 
+/*
+ * Inline patterns, sticky (matched at lastIndex, no slicing) and bounded (a span is at most 600
+ * characters), so a long paragraph is linear: patterns are only tried at `*`, `_`, a backtick or `[`.
+ */
+const IL_BOLD = /\*\*([^*\n]{1,600}?)\*\*/y;
+const IL_EM = /\*([^*\s][^*\n]{0,600}?)\*/y;
+const IL_EM2 = /_([^_\s][^_\n]{0,600}?)_(?![\p{L}\p{N}])/uy;
+const IL_CODE = /`([^`\n]{1,600})`/y;
+const IL_LINK = /\[([^[\]\n]{1,600})\]\(([^()\s]{1,2048})\)/y;
+const at = (re: RegExp, s: string, i: number): RegExpExecArray | null => {
+   re.lastIndex = i;
+   return re.exec(s);
+};
+
 /** Inline markdown: **bold**, *italic*, `code`, [label](href). Everything else is text. */
 export function inlineMarkdown(s: string, href: (u: string) => string | null): string {
    let out = '';
+   let text = 0;
    let i = 0;
-   const src = s;
-   while (i < src.length) {
-      const rest = src.slice(i);
-      let m: RegExpMatchArray | null;
-      if ((m = rest.match(/^\*\*([^*]+?)\*\*/))) {
-         out += `<strong>${inlineMarkdown(m[1], href)}</strong>`;
-      } else if ((m = rest.match(/^\*([^*\s][^*]*?)\*/)) || (m = rest.match(/^_([^_\s][^_]*?)_(?![\p{L}\p{N}])/u))) {
-         out += `<em>${inlineMarkdown(m[1], href)}</em>`;
-      } else if ((m = rest.match(/^`([^`]+)`/))) {
-         out += `<code>${esc(m[1])}</code>`;
-      } else if ((m = rest.match(/^\[([^\]]+)\]\(([^)\s]+)\)/))) {
-         const target = safeHref(m[2], href);
-         out += target ? `<a href="${esc(target)}"${/^https:/i.test(target) ? ' rel="noopener"' : ''}>${inlineMarkdown(m[1], href)}</a>` : inlineMarkdown(m[1], href);
-      } else {
-         out += esc(src[i]);
+   const flush = (to: number) => {
+      if (to > text) out += esc(s.slice(text, to));
+   };
+   while (i < s.length) {
+      const ch = s.charCodeAt(i);
+      // * _ ` [
+      if (ch !== 42 && ch !== 95 && ch !== 96 && ch !== 91) {
          i += 1;
          continue;
       }
+      let m: RegExpExecArray | null = null;
+      let html = '';
+      if (ch === 42 && (m = at(IL_BOLD, s, i))) html = `<strong>${inlineMarkdown(m[1], href)}</strong>`;
+      else if (ch === 42 && (m = at(IL_EM, s, i))) html = `<em>${inlineMarkdown(m[1], href)}</em>`;
+      else if (ch === 95 && (i === 0 || !/[\p{L}\p{N}]/u.test(s[i - 1])) && (m = at(IL_EM2, s, i))) html = `<em>${inlineMarkdown(m[1], href)}</em>`;
+      else if (ch === 96 && (m = at(IL_CODE, s, i))) html = `<code>${esc(m[1])}</code>`;
+      else if (ch === 91 && (m = at(IL_LINK, s, i))) {
+         const target = safeHref(m[2], href);
+         html = target ? `<a href="${esc(target)}"${/^https:/i.test(target) ? ' rel="noopener"' : ''}>${inlineMarkdown(m[1], href)}</a>` : inlineMarkdown(m[1], href);
+      }
+      if (!m) {
+         i += 1;
+         continue;
+      }
+      flush(i);
+      out += html;
       i += m[0].length;
+      text = i;
    }
+   flush(s.length);
    return out;
 }
 
@@ -1176,10 +1201,16 @@ export function blockMarkdown(md: string, href: (u: string) => string | null, vi
          if (v) out.push(v);
          continue;
       }
-      if ((m = l.match(/^(#{1,4})\s+(.+?)\s*#*$/))) {
+      if ((m = l.match(/^(#{1,4})[ \t]+(\S.*)$/))) {
          flushAll();
          const level = Math.min(6, Math.max(headingBase, m[1].length + headingBase - 2));
-         out.push(`<h${level}>${inlineMarkdown(m[2], href)}</h${level}>`);
+         // Closing #s ("## Title ##") go, by scanning back (a trailing-space regex is quadratic).
+         let title = m[2];
+         let j = title.length;
+         while (j > 0 && title[j - 1] === '#') j -= 1;
+         if (j < title.length && j > 0 && (title[j - 1] === ' ' || title[j - 1] === '\t')) title = title.slice(0, j);
+         title = title.trim();
+         out.push(`<h${level}>${inlineMarkdown(title, href)}</h${level}>`);
          continue;
       }
       if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(l)) {
