@@ -94,9 +94,11 @@ Two signals per provider (`lib/media/health.ts`):
 
 - **Player fallbacks** away from it (`/playback?exclude=`), counted only when that provider was
   ready for the video, one row per provider, minute and reporter in D1 `media_provider_health`
-  (pruned after a day). The reporter is a daily-salted hash of the client IP and user id (never
-  stored raw), and the window counts **distinct reporters**: one client looping over many videos
-  counts once, so it cannot push a provider over the threshold.
+  (pruned after a day). The reporter is the client's network (its IPv6 /64, or its IPv4 address)
+  hashed with HMAC keyed by `MEDIA_SIGN_KEY` and the day, so a stored row cannot be turned back into
+  an address. The window counts **distinct reporters**: one client looping over many videos counts
+  once. Fallbacks alone can demote a provider, because players see failures a probe cannot (CORS,
+  decoding, one region), and demoting only reorders the sources; it never removes a way to play.
 - **Probes**, every minute from the api-videos cron: Bunny is a HEAD on the primary CDN host
   (anything below 500 is up); R2 is a HEAD of `pub/_health/probe.txt` through the public media
   domain (written through the binding only when the edge answers 404).
