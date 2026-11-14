@@ -28,6 +28,7 @@ export const ABOUT_FALLBACK: Record<'en' | 'ar', CmsPage> = {
     ].join('\n'),
     seo_title: null,
     seo_description: null,
+    blocks: [],
     alternates: [{ locale: 'ar', slug: 'about' }],
   },
   ar: {
@@ -52,6 +53,7 @@ export const ABOUT_FALLBACK: Record<'en' | 'ar', CmsPage> = {
     ].join('\n'),
     seo_title: null,
     seo_description: null,
+    blocks: [],
     alternates: [{ locale: 'en', slug: 'about' }],
   },
 };

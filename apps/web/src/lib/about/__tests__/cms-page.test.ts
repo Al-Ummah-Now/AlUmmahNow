@@ -96,4 +96,12 @@ describe('toCmsPage', () => {
     expect(toCmsPage(cmsPage({ body: null }))).toBeNull();
     expect(toCmsPage(cmsPage({ alternates: [{ locale: 'xx', slug: 'a' }, { locale: 'ar', slug: 'about' }] }))?.alternates).toEqual([{ locale: 'ar', slug: 'about' }]);
   });
+
+  it('keeps the page-builder blocks this build knows, and none when there are none', () => {
+    expect(toCmsPage(cmsPage({ blocks: undefined }))?.blocks).toEqual([]);
+    expect(toCmsPage(cmsPage({ blocks: 'nope' }))?.blocks).toEqual([]);
+    const md = { id: 'a', type: 'markdown', text: 'Hi', appearance: { align: 'start', width: 'content', tone: 'none', space: 'm' } };
+    const blocks = [md, { id: 'b', type: 'hologram' }, { type: 'markdown', text: 'no id' }, null];
+    expect(toCmsPage(cmsPage({ blocks }))?.blocks).toEqual([md]);
+  });
 });

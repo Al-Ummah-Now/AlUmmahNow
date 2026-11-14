@@ -1303,9 +1303,9 @@ export function renderPageBlocks(blocks: readonly unknown[], ctx: RenderContext)
       const title = titleOf(b.snapshot, '');
       const thumb = b.snapshot?.thumbnail_url;
       const dur = b.kind === 'video' ? fmtDuration(b.snapshot?.duration_seconds) : null;
-      const inner = `<span class="pb-vthumb">${thumb ? `<img src="${esc(thumb)}" alt="" loading="lazy" decoding="async" width="640" height="360">` : ''}<span class="pb-play">${iconSvg('playFill', 'pb-play-ic')}</span>${dur ? `<span class="pb-dur">${esc(dur)}</span>` : ''}${b.kind === 'playlist' ? `<span class="pb-dur">${esc(t.playlist)}</span>` : ''}</span>${title ? `<span class="pb-vtitle">${esc(title)}</span>` : ''}`;
-      const label = `${t.play}${title ? `: ${title}` : ''}`;
-      return link ? `<a class="pb-facade" href="${esc(link)}" aria-label="${esc(label)}">${inner}</a>` : `<div class="pb-facade">${inner}</div>`;
+      const inner = `<span class="pb-vthumb">${thumb ? `<img src="${esc(thumb)}" alt="" loading="lazy" decoding="async" width="640" height="360">` : ''}<span class="pb-play">${iconSvg('playFill', 'pb-play-ic')}<span class="pb-sr">${esc(t.play)}</span></span>${dur ? `<span class="pb-dur">${esc(dur)}</span>` : ''}${b.kind === 'playlist' ? `<span class="pb-dur">${esc(t.playlist)}</span>` : ''}</span>${title ? `<span class="pb-vtitle">${esc(title)}</span>` : ''}`;
+      // Named by its own text ("Play", duration, title): an aria-label would hide the visible words (WCAG 2.5.3).
+      return link ? `<a class="pb-facade" href="${esc(link)}">${inner}</a>` : `<div class="pb-facade">${inner}</div>`;
    }
 
    const button = (label: string, u: string, variant: string) => {

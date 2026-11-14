@@ -42,6 +42,9 @@ export const EN_TRANSLATIONS: AppTranslations = {
   contact: CONTACT_EN,
   humanCheck: HUMAN_CHECK_EN,
   help: HELP_EN,
+  aboutPage: {
+    cardsLink: 'See the card posts',
+  },
   uploadStatus: UPLOAD_STATUS_EN,
   captions: CAPTIONS_EN,
   audioTracks: AUDIO_TRACKS_EN,

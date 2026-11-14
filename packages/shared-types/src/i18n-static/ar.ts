@@ -42,6 +42,9 @@ export const AR_TRANSLATIONS: AppTranslations = {
   contact: CONTACT_AR,
   humanCheck: HUMAN_CHECK_AR,
   help: HELP_AR,
+  aboutPage: {
+    cardsLink: 'شاهد منشورات البطاقات',
+  },
   uploadStatus: UPLOAD_STATUS_AR,
   captions: CAPTIONS_AR,
   audioTracks: AUDIO_TRACKS_AR,

@@ -51,6 +51,33 @@ describe('About page', () => {
     expect(html).toContain('dir="ltr"');
   });
 
+  it('a page built from blocks: the shared renderer, the hero is the only h1, no header of its own', async () => {
+    const appearance = { align: 'start', width: 'content', tone: 'none', space: 'm' };
+    const blocks = [
+      { id: 'h', type: 'hero', eyebrow: null, title: 'Welcome', subtitle: null, background: 'gradient', image: null, height: 'm', buttons: [{ label: 'Watch', url: '/videos/', variant: 'primary' }], appearance },
+      { id: 'm', type: 'markdown', text: 'Hello **world** <script>x</script>', appearance },
+      { id: 'c', type: 'cards', heading: 'Card posts', tag: null, page_size: 6, filter: false, appearance },
+    ];
+    load.mockResolvedValue({ status: 'ok', source: 'cms', page: { ...ABOUT_FALLBACK.ar, blocks } });
+    const html = renderToStaticMarkup(await AboutRoute(params('ar')));
+    expect(html).not.toContain('ab-head');
+    expect(html.match(/<h1/g)).toHaveLength(1);
+    expect(html).toMatch(/<h1[^>]*>Welcome<\/h1>/);
+    expect(html).toContain('data-testid="about-body"');
+    expect(html).toContain('<strong>world</strong>');
+    expect(html).not.toContain('<script>x');
+    expect(html).toContain(`href="${WWW}/ar/videos/"`);
+    expect(html).toContain(`href="${WWW}/ar/about/"`);
+    expect(html).toContain('شاهد منشورات البطاقات');
+  });
+
+  it('a page that is only text (served as one markdown block) keeps the prose card', async () => {
+    load.mockResolvedValue({ status: 'ok', source: 'cms', page: { ...ABOUT_FALLBACK.en, body: 'Plain **text**', blocks: [{ id: 'body', type: 'markdown', text: 'Plain **text**' }] } });
+    const html = renderToStaticMarkup(await AboutRoute(params('en')));
+    expect(html).toContain('ab-head');
+    expect(html).toContain('<div class="ab-prose" data-testid="about-body"><p>Plain <strong>text</strong></p></div>');
+  });
+
   it('Arabic is right to left', async () => {
     load.mockResolvedValue({ status: 'ok', source: 'builtin', page: ABOUT_FALLBACK.ar });
     const html = renderToStaticMarkup(await AboutRoute(params('ar')));
