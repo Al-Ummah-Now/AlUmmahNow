@@ -117,7 +117,9 @@ function rowsMarkup(from, to, width) {
     let lamps = '';
     for (const l of lanterns) {
       const sc = l.h / 100;
-      lamps += `<path d="M${f(l.x)} ${f(l.top)}V${f(l.y)}"/><use class="fs-l" href="#fs-lantern" x="${f(l.x - 24 * sc)}" y="${f(l.y)}" width="${f(48 * sc)}" height="${f(100 * sc)}"/>`;
+      // The lit lantern's warm glow (a static gradient fill, no filter), then its cord and the lantern
+      lamps += `<circle class="fs-glow" cx="${f(l.x)}" cy="${f(l.y + 62 * sc)}" r="${f(30 * sc)}" fill="url(#fs-g)" stroke="none"/>`
+        + `<path d="M${f(l.x)} ${f(l.top)}V${f(l.y)}"/><use class="fs-l" href="#fs-lantern" x="${f(l.x - 24 * sc)}" y="${f(l.y)}" width="${f(48 * sc)}" height="${f(100 * sc)}"/>`;
     }
     out += `<g class="fs-row" data-row="${k}"><path d="${d}"/>${lamps}</g>`;
   }
@@ -171,7 +173,8 @@ export function renderStreet(doc = globalThis.document) {
   }
   const state = svg.__street || (svg.__street = {});
   if (state.width !== width) {
-    svg.innerHTML = `<defs><symbol id="fs-lantern" viewBox="-24 0 48 100" overflow="visible">${LANTERN}</symbol></defs>`
+    svg.innerHTML = '<defs><radialGradient id="fs-g"><stop offset="0" class="fs-g0"/><stop offset="1" class="fs-g1"/></radialGradient>'
+      + `<symbol id="fs-lantern" viewBox="-24 0 48 100" overflow="visible">${LANTERN}</symbol></defs>`
       + `<g class="fs-lines" stroke-width="${width < 640 ? 1.3 : 1.5}"><g class="fs-edges"></g><g class="fs-rows"></g></g>`;
     state.width = width;
     state.rows = 0;
