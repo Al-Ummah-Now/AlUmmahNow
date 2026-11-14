@@ -59,6 +59,27 @@ export function parseWhole(value: string, min: number, max: number): number | nu
   return n >= min && n <= max ? n : null;
 }
 
+/**
+ * The playback weights a form stands for, or null while a weighted, listed provider has no valid
+ * number. A provider without a stored weight is added only once it gets one: a missing weight
+ * counts as 0 everywhere (shared-types), and adding `r2: 0` to the stored `{ bunny: 100 }` would
+ * make an untouched form look changed.
+ */
+export function formWeights(
+  raw: Partial<Record<MediaProviderId, string>>,
+  stored: Partial<Record<MediaProviderId, number>>,
+  strategy: MediaSettings['playback']['strategy'],
+  order: MediaProviderId[],
+): Partial<Record<MediaProviderId, number>> | null {
+  const weights: Partial<Record<MediaProviderId, number>> = {};
+  for (const p of MEDIA_PROVIDER_IDS) {
+    const n = parseWhole(raw[p] ?? '0', 0, 100);
+    if (strategy === 'weighted' && order.includes(p) && n === null) return null;
+    if (n || p in stored) weights[p] = n ?? 0;
+  }
+  return weights;
+}
+
 /** Share of plays each provider gets with these weights, over the providers that play (whole percents). */
 export function weightShares(order: readonly MediaProviderId[], weights: Partial<Record<MediaProviderId, number>>): Partial<Record<MediaProviderId, number>> {
   const total = order.reduce((n, p) => n + Math.max(0, weights[p] ?? 0), 0);

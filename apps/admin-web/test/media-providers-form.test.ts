@@ -12,6 +12,7 @@ import {
   PROBLEM_LABEL,
   PROVIDER_LABEL,
   draftOf,
+  formWeights,
   moveProvider,
   overrideOf,
   parseWhole,
@@ -124,5 +125,21 @@ describe('labels exist in English and Arabic', () => {
       assert.ok(t(key).includes('مرئي'), key);
       assert.ok(!t(key).includes('فيديو'), key);
     }
+  });
+});
+
+describe('formWeights', () => {
+  it('gives back the stored weights for an untouched form, so a fresh page has nothing to save', () => {
+    const stored = DEFAULT_MEDIA_SETTINGS.playback.weights;
+    const raw = { bunny: String(stored.bunny ?? 0), r2: String(stored.r2 ?? 0) };
+    assert.deepEqual(formWeights(raw, stored, 'priority', DEFAULT_MEDIA_SETTINGS.playback.order), stored);
+  });
+  it('adds a provider only when it gets a weight, and keeps a stored one set to 0', () => {
+    assert.deepEqual(formWeights({ bunny: '60', r2: '40' }, { bunny: 100 }, 'weighted', ['bunny', 'r2']), { bunny: 60, r2: 40 });
+    assert.deepEqual(formWeights({ bunny: '100', r2: '0' }, { bunny: 70, r2: 30 }, 'weighted', ['bunny', 'r2']), { bunny: 100, r2: 0 });
+  });
+  it('is null while a weighted, listed provider has no valid number', () => {
+    assert.equal(formWeights({ bunny: 'x', r2: '0' }, { bunny: 100 }, 'weighted', ['bunny']), null);
+    assert.deepEqual(formWeights({ bunny: 'x', r2: '0' }, { bunny: 100 }, 'priority', ['bunny']), { bunny: 0 });
   });
 });
