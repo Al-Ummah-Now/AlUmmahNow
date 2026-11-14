@@ -2,6 +2,7 @@ import { Context, Next } from 'hono';
 import { AUTH_CONFIG, getAuthConfig } from './auth-config';
 import { getClient } from '../lib/openauth-client';
 import { logger } from '../lib/logger';
+import { audienceMode, checkAudience } from '@al-ummah/shared-types';
 import { normalizeRoles, hasAdminRole, hasModeratorRole } from '../lib/roles';
 import { isReviewer } from '@al-ummah/shared-types';
 import { decodeVerifiedClaims, isLegacyLongLivedToken, isTokenRevoked } from '../lib/token-revocation';
@@ -81,7 +82,7 @@ export async function authMiddleware(c: Context, next: Next) {
 
     // Always the issuer's signature, iss, exp, token type and revocation: there is no unverified
     // mode, in any environment (a forged or tampered token is a 401)
-    const payload = await validateJWTWithSignature(token, c.env);
+    const payload = await validateJWTWithSignature(token, c.env, `${c.req.method} ${c.req.path}`);
 
     if (!payload) {
       return c.json({
@@ -177,7 +178,7 @@ export async function adminMiddleware(c: Context, next: Next) {
   }
 }
 
-async function validateJWTWithSignature(token: string, env?: any): Promise<AuthPayload | null> {
+async function validateJWTWithSignature(token: string, env?: any, route?: string): Promise<AuthPayload | null> {
   try {
     if (!env) {
       logger.error('Environment not provided for JWT signature validation');
@@ -196,6 +197,11 @@ async function validateJWTWithSignature(token: string, env?: any): Promise<AuthP
     });
 
     if ('subject' in result && result.subject) {
+      // aud = the client the token was issued to: only this service's clients (AUD_MODE log|enforce|off)
+      const audience = checkAudience({ service: 'admin-api', aud: (result as { aud?: unknown }).aud, issuer: authConfig.JWT.ISSUER, mode: audienceMode(env.AUD_MODE), route });
+      if (audience.log) logger.warn('Access token audience is not one of this service\'s clients', audience.log);
+      if (!audience.ok) return null;
+
       const openAuthPayload = result.subject.properties as { id?: string; email?: string; roles?: string[] };
       // The token's own times (signature already verified above)
       const claims = decodeVerifiedClaims(token);
@@ -249,8 +255,8 @@ async function validateJWTWithSignature(token: string, env?: any): Promise<AuthP
  * revocation). Used by routes outside /api that accept an
  * optional user token. Returns null when the token is not valid.
  */
-export async function verifyAccessToken(token: string, env: unknown): Promise<AuthPayload | null> {
-  return validateJWTWithSignature(token, env);
+export async function verifyAccessToken(token: string, env: unknown, route?: string): Promise<AuthPayload | null> {
+  return validateJWTWithSignature(token, env, route);
 }
 
 export function getAuthContext(c: Context): AuthContext | null {

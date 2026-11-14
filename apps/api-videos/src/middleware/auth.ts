@@ -2,6 +2,7 @@ import { Context, Next } from 'hono';
 import { AUTH_CONFIG, getAuthConfig } from './auth-config';
 import { getClient } from '../lib/openauth-client';
 import { logger } from '../lib/logger';
+import { audienceMode, checkAudience } from '@al-ummah/shared-types';
 import { isUserScopedRoute } from '../lib/reactions';
 import { channelRoleOf } from '@al-ummah/shared-types';
 import { memberMayActAs } from '../lib/channelAccess';
@@ -52,7 +53,7 @@ export async function authMiddleware(c: Context, next: Next) {
     }
 
     // Validate the JWT token with signature verification
-    const payload = await validateJWTWithSignature(token, c.env);
+    const payload = await validateJWTWithSignature(token, c.env, `${c.req.method} ${c.req.path}`);
     
     if (!payload) {
       return c.json({
@@ -84,7 +85,7 @@ export async function authMiddleware(c: Context, next: Next) {
 /**
  * JWT validation that verifies signature with OpenAuth subjects
  */
-async function validateJWTWithSignature(token: string, env?: any): Promise<AuthPayload | null> {
+async function validateJWTWithSignature(token: string, env?: any, route?: string): Promise<AuthPayload | null> {
   try {
     if (!env) {
       logger.error('Environment not provided for JWT signature validation');
@@ -103,6 +104,11 @@ async function validateJWTWithSignature(token: string, env?: any): Promise<AuthP
     // Check if verification was successful (not an error)
     if ('subject' in result && result.subject) {
       // Successfully validated - convert OpenAuth payload to our AuthPayload format
+      // aud = the client the token was issued to: only this service's clients (AUD_MODE log|enforce|off)
+      const audience = checkAudience({ service: 'api-videos', aud: (result as { aud?: unknown }).aud, issuer: authConfig.JWT.ISSUER, mode: audienceMode(env.AUD_MODE), route });
+      if (audience.log) logger.warn('Access token audience is not one of this service\'s clients', audience.log);
+      if (!audience.ok) return null;
+
       const openAuthPayload = result.subject.properties;
       // The token's own times (signature already verified above)
       const claims = decodeVerifiedClaims(token);
@@ -158,7 +164,7 @@ export async function optionalAuthMiddleware(c: Context, next: Next) {
 
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
-      const payload = await validateJWTWithSignature(token, c.env);
+      const payload = await validateJWTWithSignature(token, c.env, `${c.req.method} ${c.req.path}`);
 
       if (payload) {
         c.set('auth', {

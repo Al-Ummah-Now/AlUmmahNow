@@ -56,7 +56,7 @@ export async function contactSubmit(c: Context<{ Bindings: AdminBindings }>): Pr
   let user: { id: string; email: string } | null = null;
   const authorization = c.req.header('Authorization');
   if (authorization?.startsWith('Bearer ')) {
-    const payload = await verifyAccessToken(authorization.slice(7), env);
+    const payload = await verifyAccessToken(authorization.slice(7), env, `${c.req.method} ${c.req.path}`);
     if (!payload?.sub) return c.json({ success: false, error: 'Invalid or expired authentication token' }, 401);
     user = { id: payload.sub, email: payload.email || '' };
   }
