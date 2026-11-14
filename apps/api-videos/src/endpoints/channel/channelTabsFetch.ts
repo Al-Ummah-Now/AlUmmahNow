@@ -4,6 +4,11 @@ import { ChannelTabConfig as BusinessChannelTabConfig, Channel as BusinessChanne
 import R2Repository from "../../lib/r2Repo";
 import { DEFAULT_CHANNEL_TABS } from '@al-ummah/shared-types';
 import { OptionalAuthRoute, AppContext } from "../../base";
+import { edgeCacheUrl, readEdgeCache, writeEdgeCache } from '../../lib/edge-cache';
+import { waitUntilOf } from '../../lib/search/ownership';
+
+/** Anonymous tab configs (the channel page's server render) are kept per colo this long; signed-in readers always read R2 */
+export const CHANNEL_TABS_TTL_SECONDS = 30;
 
 export class ChannelTabsFetch extends OptionalAuthRoute {
 	schema = {
@@ -54,11 +59,19 @@ export class ChannelTabsFetch extends OptionalAuthRoute {
 			// Retrieve the validated id
 			const { id } = request.params;
 
-			// Verify channel exists
-			const channelsBucket = c.env.channels;
+			const cacheUrl = this.getUserId(c) ? null : edgeCacheUrl(c.req.url, `channel-tabs/${encodeURIComponent(id)}`);
+			if (cacheUrl) {
+				const hit = await readEdgeCache<z.infer<typeof BusinessChannelTabConfig>>(cacheUrl);
+				if (hit) return hit;
+			}
+
+			// The channel (it must exist) and its tab configuration, read together
 			type ChannelType = z.infer<typeof BusinessChannel>;
-			const channelRepository = new R2Repository<ChannelType>(channelsBucket);
-			const channel = await channelRepository.getObject(id);
+			type ChannelTabConfigType = z.infer<typeof BusinessChannelTabConfig>;
+			const channelRepository = new R2Repository<ChannelType>(c.env.channels);
+			const tabsRepository = new R2Repository<ChannelTabConfigType>(c.env.channel_tabs);
+			const [channel, stored] = await Promise.all([channelRepository.getObject(id), tabsRepository.getObject(`channel-tabs/${id}`)]);
+			let config = stored;
 
 			if (!channel) {
 				return c.json(
@@ -69,12 +82,6 @@ export class ChannelTabsFetch extends OptionalAuthRoute {
 					404
 				);
 			}
-
-			// Fetch tab configuration
-			const tabsBucket = c.env.channel_tabs;
-			type ChannelTabConfigType = z.infer<typeof BusinessChannelTabConfig>;
-			const tabsRepository = new R2Repository<ChannelTabConfigType>(tabsBucket);
-			let config = await tabsRepository.getObject(`channel-tabs/${id}`);
 
 			// If no config exists, return ephemeral default (don't save to R2 on GET)
 			// This prevents side effects on GET requests (P1 fix)
@@ -90,6 +97,7 @@ export class ChannelTabsFetch extends OptionalAuthRoute {
 				};
 			}
 
+			if (cacheUrl) writeEdgeCache(cacheUrl, config, CHANNEL_TABS_TTL_SECONDS, waitUntilOf(c as never));
 			return config;
 		} catch (error) {
 			// Add context to error before re-throwing
