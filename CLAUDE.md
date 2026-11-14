@@ -605,7 +605,7 @@ Note: **scheduler**, **cost-monitor** and **media** have no dedicated validate j
   - **Admin API**: preview worker on workers.dev
   - **Admin Web**: preview worker on workers.dev
 - Each app posts separate PR comment with deployment info
-- Auto-cleanup when PR closes
+- Auto-cleanup when PR closes, plus a daily sweep of closed PRs (`cleanup-pr-previews.yml`); previews run no crons (cleared after deploy)
 - **Rationale**: Reduces unnecessary deployments, saves Cloudflare Workers quota
 
 **QA Deployment** (`deploy-qa` job): runs on every push to `main` (and by `workflow_dispatch` on `main`).
