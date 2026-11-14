@@ -139,10 +139,11 @@ describe('callback destinations', () => {
   it('an interactive sign-in error still shows the auth error page', () => {
     expect(callbackErrorDestination({ error: 'access_denied', silent: false, returnPath: '/en/x', locale: 'en' })).toBe('/en/auth/error');
   });
-  it('success returns to the page with session_updated', () => {
-    expect(successDestination('/en/video/x?t=3', 'en')).toBe('/en/video/x?t=3&session_updated=true');
-    expect(successDestination(null, 'ar')).toBe('/ar?session_updated=true');
-    expect(successDestination('https://evil.example', 'en')).toBe('/en?session_updated=true');
+  it('success returns to the page itself, with no marker in the URL', () => {
+    expect(successDestination('/en/video/x?t=3', 'en')).toBe('/en/video/x?t=3');
+    expect(successDestination('/en/watch?v=1&session_updated=true', 'en')).toBe('/en/watch?v=1');
+    expect(successDestination(null, 'ar')).toBe('/ar');
+    expect(successDestination('https://evil.example', 'en')).toBe('/en');
   });
 });
 

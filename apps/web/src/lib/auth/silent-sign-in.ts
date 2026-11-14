@@ -159,10 +159,13 @@ export function callbackErrorDestination(input: {
   return `/${input.locale}/auth/error`;
 }
 
-/** The page to land on after a successful sign-in (session_updated reloads the header). */
+/**
+ * The page to land on after a successful sign-in: the page it started from, or the locale's home.
+ * No ?session_updated=true marker any more: the landing is a full page load, so the header reads
+ * the new session on mount anyway, and removing the marker afterwards raced the router (Next's
+ * action queue committed the old URL back when the removal landed while a server action of the
+ * session load was in flight, and the page never settled; local release suite, 2026-11-14).
+ */
 export function successDestination(returnPath: string | null, locale: string): string {
-  const path = safeReturnPath(returnPath) ?? `/${locale}`;
-  const url = new URL(path, 'https://videos.invalid');
-  url.searchParams.set('session_updated', 'true');
-  return `${url.pathname}${url.search}`;
+  return safeReturnPath(returnPath) ?? `/${locale}`;
 }
