@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
-import { loadPublicVideo } from '@/lib/embed/content';
+import { loadPublicChapters, loadPublicVideo } from '@/lib/embed/content';
 import { isValidContentId } from '@/lib/embed/params';
 import { originFromHost } from '@/lib/embed/request-origin';
 import { buildWatchMetadata } from '@/lib/embed/watch-metadata';
@@ -61,7 +61,9 @@ async function WatchStructuredData({ id, locale }: { id: string; locale: string 
   if (!video || video.isUnlisted || !host) return null;
   const origin = originFromHost(host);
   const lang = locale === 'ar' ? 'ar' : 'en';
-  const ld = videoObjectLd(video, lang, origin);
+  // Chapters become the VideoObject's Clip parts (key moments); fetched only when the API says there are some
+  const chapters = video.hasChapters ? await loadPublicChapters(id) : [];
+  const ld = videoObjectLd(video, lang, origin, chapters);
   const crumbs = video.channelName && (video.channelHandle || video.channelId)
     ? [breadcrumbLd([
         { name: video.channelName, url: video.channelHandle ? `${origin}/${lang}/@${video.channelHandle}` : `${origin}/${lang}/channels/${video.channelId}` },

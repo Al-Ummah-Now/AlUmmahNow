@@ -208,6 +208,36 @@ export const loadPublicPlaylistResult = cache((playlistId: string): Promise<Anon
 export const loadPublicVideo = cache(async (videoId: string): Promise<EmbedVideo | null> =>
   toEmbedVideo((await loadPublicVideoResult(videoId)).data as ApiVideo | null));
 
+/** A chapter as search engines need it (the API's GET /api/videos/:id/chapters, public videos only) */
+export interface PublicChapter {
+  startTime: number;
+  endTime?: number;
+  title: string;
+  titleLocalized?: { en?: string; ar?: string };
+}
+
+/**
+ * Chapters of a public video for its VideoObject's Clip parts (wiki AUN-SEO phase 5), anonymous like
+ * every call here; [] when it has none or the API does not answer (the page renders without them).
+ */
+export const loadPublicChapters = cache(async (videoId: string): Promise<PublicChapter[]> => {
+  const data = await anonymousGet<{ chapters?: { chapters?: unknown }; result?: { chapters?: unknown } }>(
+    `/api/videos/${encodeURIComponent(videoId)}/chapters`,
+  );
+  const list = data?.chapters?.chapters ?? data?.result?.chapters;
+  if (!Array.isArray(list)) return [];
+  return list.flatMap((c): PublicChapter[] => {
+    const ch = c as Partial<PublicChapter> | null;
+    if (!ch || typeof ch.startTime !== 'number' || !Number.isFinite(ch.startTime) || typeof ch.title !== 'string') return [];
+    return [{
+      startTime: ch.startTime,
+      endTime: typeof ch.endTime === 'number' && Number.isFinite(ch.endTime) ? ch.endTime : undefined,
+      title: ch.title,
+      titleLocalized: ch.titleLocalized && typeof ch.titleLocalized === 'object' ? ch.titleLocalized : undefined,
+    }];
+  });
+});
+
 interface ApiPlaylist {
   id?: string;
   name?: string;
