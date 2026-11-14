@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { currentVersion, isMissingWorker, parseVersionId, promote, releaseApps, ReleaseError, type PromoteDeps, type ReleaseApp } from '../promote.ts';
 import { parseRollbackArgs, rollbackCommands, rollbackTarget } from '../rollback.ts';
 import { runSmoke, type CheckResult } from '../smoke.ts';
+import { seoHostResponse } from './seo-host-fixture.ts';
 import { ensureCustomDomains, expectedDomains, type DomainRecord } from '../custom-domains.ts';
 import { CfApiError } from '../cf-api.ts';
 
@@ -203,13 +204,17 @@ describe('smoke', () => {
 			}
 			if (url.pathname === '/api/videos') return json({ videos: [] });
 			if (url.pathname === '/api/callback') return new Response(null, { status: 307, headers: { location: overrides.callback ?? '/auth/error?error=access_denied' } });
+			if (url.hostname === 'videos.stage.alummahnow.net') {
+				const seo = seoHostResponse(url.origin, false, url.pathname);
+				if (seo) return seo;
+			}
 			return new Response('<html><body>ok</body></html>', { status: 200 });
 		}) as typeof fetch;
 
 	it('passes against a healthy env', async () => {
 		const results = await runSmoke({ env: 'stage', fetchImpl: fakeFetch() });
 		assert.deepEqual(results.filter((r) => !r.ok), []);
-		assert.equal(results.length, 7);
+		assert.equal(results.length, 10);
 	});
 	it('fails when the candidate did not answer through the override', async () => {
 		const results = await runSmoke({ env: 'stage', overrides: { 'videos-stage': V(3) }, fetchImpl: fakeFetch({ health: V(1) }) });
