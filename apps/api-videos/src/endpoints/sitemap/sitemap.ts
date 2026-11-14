@@ -1,8 +1,23 @@
 import { z } from "zod";
 import { PublicRoute, AppContext } from "../../base";
 import { ResponseError } from "../../lib/types";
-import { SITEMAP_KINDS, SITEMAP_PAGE_SIZE, sitemapPage, sitemapSummary, type SitemapKind } from "../../lib/sitemap";
+import { SITEMAP_KINDS, SITEMAP_PAGE_SIZE, sitemapPage, sitemapSummary, type SitemapExclusions, type SitemapKind } from "../../lib/sitemap";
+import { siteCanonicalChannels } from "../../lib/sites/canonical";
+import type { SitesEnv } from "../../lib/sites/store";
 import { logger } from "../../lib/logger";
+
+/**
+ * Posts and videos canonical on a scholar site are in that site's sitemap, not here (§4.4, #1215).
+ * Without the index (R2 down) nothing is left out: the pages' own canonicals still point at the site.
+ */
+async function siteExclusions(c: AppContext): Promise<SitemapExclusions> {
+	try {
+		return await siteCanonicalChannels(c.env as unknown as SitesEnv);
+	} catch (error) {
+		logger.warn("[Sitemap] site canonicals unavailable; nothing left out", { error: error instanceof Error ? error.message : String(error) });
+		return {};
+	}
+}
 
 /** Sitemaps change slowly; an hour at the edge keeps D1 reads to a few per hour. */
 const CACHE = "public, max-age=600, s-maxage=3600, stale-while-revalidate=86400";
@@ -32,7 +47,7 @@ export class SitemapSummaryGet extends PublicRoute {
 		const db = (c.env as { SEARCH_DB?: D1Database }).SEARCH_DB;
 		if (!db) return unavailable(c, new Error("SEARCH_DB not bound"));
 		try {
-			return c.json(await sitemapSummary(db as never), 200, { "Cache-Control": CACHE });
+			return c.json(await sitemapSummary(db as never, await siteExclusions(c)), 200, { "Cache-Control": CACHE });
 		} catch (error) {
 			return unavailable(c, error);
 		}
@@ -78,7 +93,7 @@ export class SitemapPageGet extends PublicRoute {
 		const db = (c.env as { SEARCH_DB?: D1Database }).SEARCH_DB;
 		if (!db) return unavailable(c, new Error("SEARCH_DB not bound"));
 		try {
-			const items = await sitemapPage(db as never, params.kind as SitemapKind, query.page ?? 0, (c.env as { MEDIA_PUBLIC_HOST?: string }).MEDIA_PUBLIC_HOST);
+			const items = await sitemapPage(db as never, params.kind as SitemapKind, query.page ?? 0, (c.env as { MEDIA_PUBLIC_HOST?: string }).MEDIA_PUBLIC_HOST, await siteExclusions(c));
 			return c.json({ items }, 200, { "Cache-Control": CACHE });
 		} catch (error) {
 			return unavailable(c, error);

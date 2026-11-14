@@ -17,6 +17,8 @@
  *
  * Public, for the sites Worker:
  *   GET /api/sites/by-host/:host[?preview=<token>]  → PublicSite | 301-style { redirectTo } | 404
+ * Public, for the platform's canonicals (videos web, www; §4.4, #1215):
+ *   GET /api/sites/by-channel/:channelId            → PublicSiteLink | 404 (no live site)
  *
  * Studio (signed in; the channel's owner and admins, `channel.edit`, SS2):
  *   GET  /api/sites/channel/:channelId          → { site, etag, themes }   (404 when the channel has no site)
@@ -40,6 +42,7 @@ import { logger } from '../lib/logger';
 import { rethrowBusy } from '../lib/r2Repo';
 import { roleOnChannel } from '../lib/channelAccess';
 import { CHANNEL_ID, SiteError, readSettings, siteEnvironment, writePreview, type SitesEnv } from '../lib/sites/store';
+import { publicSiteLink } from '../lib/sites/canonical';
 import { removeDomain, reserveDomain, setPrimaryHost, updateDomain } from '../lib/sites/domains';
 import { createPage, deletePage, listPages, publicPage, publicPageById, readPage, restorePageRevision, updatePage } from '../lib/sites/pages';
 import { adminUpdateSite, grantSite, pickUpdate, publicSiteForHost, restoreSite, revokeSite, slugAvailability, updateSiteSettings } from '../lib/sites/service';
@@ -184,6 +187,18 @@ sitesInternalRouter.post('/:channelId/restore', async (c) => {
 // Public + Studio
 // ---------------------------------------------------------------------------------------------
 export const sitesRouter = new Hono<Env>();
+
+sitesRouter.get('/by-channel/:channelId', async (c) => {
+	try {
+		const link = await publicSiteLink(c.env, c.req.param('channelId'));
+		// Cached like a page: a site going live or offline reaches the canonicals within one cache cycle (§4.4)
+		c.header('Cache-Control', 'public, max-age=300');
+		if (!link) return c.json({ error: 'site_not_found' }, 404);
+		return c.json(link);
+	} catch (error) {
+		return fail(c, error);
+	}
+});
 
 sitesRouter.get('/by-host/:host', async (c) => {
 	try {

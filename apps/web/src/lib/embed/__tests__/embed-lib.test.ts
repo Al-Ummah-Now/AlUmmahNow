@@ -340,6 +340,15 @@ describe('buildWatchMetadata', () => {
     expect(buildWatchMetadata(null, 'en', HOST)).toEqual({});
   });
 
+  it("a scholar site on its own domain holds the canonical; cards and oEmbed stay here (AUN-SCHOLAR-SITES §4.4)", () => {
+    const onSite = { canonical: 'https://scholar.example/ar/watch/v1/', languages: { ar: 'https://scholar.example/ar/watch/v1/' } };
+    const meta = buildWatchMetadata(video, 'ar', HOST, onSite);
+    expect(meta.alternates?.canonical).toBe('https://scholar.example/ar/watch/v1/');
+    expect(meta.alternates?.languages).toEqual({ ar: 'https://scholar.example/ar/watch/v1/' });
+    expect(meta.openGraph).toMatchObject({ url: 'https://scholar.example/ar/watch/v1/', videos: [{ url: `${HOST}/embed/v/v1?lang=ar` }] });
+    expect(meta.alternates?.types).toEqual({ 'application/json+oembed': [{ url: oembedEndpointUrl(HOST, `${HOST}/ar/video/v1`), title: 'العنوان' }] });
+  });
+
   it("declares the video's own ratio: a Short is 9:16, so X gives it a tall card (2026-11-12)", () => {
     const short = toEmbedVideo({ id: 's1', title: 'Short', playUrl: 'https://vz/t/s1/playlist.m3u8', isPublic: true, width: 720, height: 1280, isShort: true });
     const meta = buildWatchMetadata(short, 'en', HOST);
