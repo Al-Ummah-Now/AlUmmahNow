@@ -16,6 +16,7 @@ import { withPublicHost } from './src/lib/version-skew/skew-host';
 import { logger } from './src/lib/logger-server';
 import { asServiceUnavailable } from './src/lib/seo/unavailable';
 import { asGoneIfPurged } from './src/lib/seo/gone';
+import { rootLocaleRedirect } from './src/lib/seo/root-locale';
 
 interface Handler {
   fetch(request: Request, env: unknown, ctx: unknown): Promise<Response>;
@@ -26,6 +27,9 @@ const STATIC_PATH = /^\/(_next\/(static|image)|favicon|robots\.txt|sitemap|manif
 
 const worker: Handler = {
   async fetch(request, env, ctx) {
+    // `/` → `/en` or `/ar` before Next runs (no middleware, session refresh or render): the cheapest hop
+    const root = rootLocaleRedirect(request);
+    if (root) return root;
     configureLogging(env as LoggingEnv);
     const startedAt = Date.now();
     const route = new URL(request.url).pathname;
