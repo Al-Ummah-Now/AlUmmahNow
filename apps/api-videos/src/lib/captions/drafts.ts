@@ -139,7 +139,8 @@ export async function publishDraft(
 	if (existing && trackKind(existing) === 'upload' && !opts.replaceUpload) return { status: 'replaces_upload' };
 
 	const vtt = renderCaptionVtt(draft);
-	if (!/-->/.test(vtt)) return { status: 'empty' };
+	// A WebVTT cue timing line, so a draft whose cues all rendered empty is not published
+	if (!vtt.includes(' --> ')) return { status: 'empty' };
 	await bucket.put(`${videoId}/${language}.vtt`, vtt, {
 		httpMetadata: { contentType: 'text/vtt' },
 		customMetadata: hasCaptionQuranMarkers(vtt) ? { quran: '1' } : {},
