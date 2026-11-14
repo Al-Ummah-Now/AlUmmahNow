@@ -61,8 +61,20 @@ async function call<T>(path: string, init: { method?: string; body?: unknown; au
 
 const base = (videoId: string) => `/api/videos/${encodeURIComponent(videoId)}/captions/drafts`;
 
-export async function listCaptionDrafts(videoId: string): Promise<ActionResult<{ drafts: CaptionDraftSummary[] }>> {
+export interface CaptionClaim {
+  language: string;
+  status: 'queued' | 'failed';
+  requestedAt: string;
+  error?: 'transcript_gone' | 'draft_exists' | 'failed';
+}
+
+export async function listCaptionDrafts(videoId: string): Promise<ActionResult<{ drafts: CaptionDraftSummary[]; claims: CaptionClaim[]; transcriptAvailable: boolean }>> {
   return call(base(videoId));
+}
+
+/** Use the video review's automatic transcript as a caption draft (queued). */
+export async function claimReviewTranscript(videoId: string, language: string, replace = false): Promise<ActionResult<{ status: 'queued' }>> {
+  return call(`/api/videos/${encodeURIComponent(videoId)}/review/transcript/claim`, { method: 'POST', body: { language, ...(replace ? { replace: true } : {}) } });
 }
 
 export async function getCaptionDraft(videoId: string, language: string): Promise<ActionResult<CaptionDraftDetail>> {

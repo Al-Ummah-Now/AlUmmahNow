@@ -6,6 +6,7 @@
  *   PUT    /api/videos/:videoId/captions/drafts/:language            save edited cues over baseVersion
  *   DELETE /api/videos/:videoId/captions/drafts/:language            delete the draft (the live track stays)
  *   POST   /api/videos/:videoId/captions/drafts/:language/publish    publish baseVersion as the track
+ *   POST   /api/videos/:videoId/review/transcript/claim               the review transcript → a draft (queued)
  *
  * Owner or a channel role with `video.edit`. Drafts are never shown to viewers.
  */
@@ -21,6 +22,7 @@ import { SubtitleService } from '../../lib/subtitles';
 import Queue, { MessageType } from '../../lib/queue';
 import { logger } from '../../lib/logger';
 import { deleteDraft, listDrafts, publishDraft, readDraft, readTracks, saveDraftCues, summariseDraft } from '../../lib/captions/drafts';
+import { listClaims, queueClaim, reviewTranscriptKey, transcriptAvailable } from '../../lib/captions/claim';
 
 const Segment = z.union([
 	z.object({ type: z.literal('speech'), text: z.string() }),
@@ -68,7 +70,21 @@ export class CaptionDraftsList extends AuthenticatedRoute {
 			summary: 'List caption drafts of a video',
 			request: { params: z.object({ videoId: Str({ description: 'Video ID' }) }) },
 			responses: {
-				'200': { description: 'Drafts', content: { 'application/json': { schema: z.object({ success: z.literal(true), data: z.object({ drafts: z.array(Summary) }) }) } } },
+				'200': {
+					description: 'Drafts, claims of the review transcript in progress or failed, and whether a review transcript can be claimed',
+					content: {
+						'application/json': {
+							schema: z.object({
+								success: z.literal(true),
+								data: z.object({
+									drafts: z.array(Summary),
+									claims: z.array(z.object({ language: z.string(), status: z.enum(['queued', 'failed']), requestedAt: z.string(), error: z.string().optional() })),
+									transcriptAvailable: z.boolean(),
+								}),
+							}),
+						},
+					},
+				},
 				'403': { description: 'Not allowed', content: Err },
 				'404': { description: 'Video not found', content: Err },
 			},
@@ -80,8 +96,20 @@ export class CaptionDraftsList extends AuthenticatedRoute {
 		const { params } = await this.getValidatedData<typeof this.schema>();
 		const access = await editableVideo(c, params.videoId, this.getUserId(c));
 		if ('response' in access) return access.response;
-		const [drafts, tracks] = await Promise.all([listDrafts(c.env.subtitles, params.videoId), readTracks(c.env.subtitles, params.videoId)]);
-		return c.json({ success: true, data: { drafts: drafts.map((d) => summariseDraft(d, tracks.find((t) => t.language === d.language))) } });
+		const [drafts, tracks, claims, transcript] = await Promise.all([
+			listDrafts(c.env.subtitles, params.videoId),
+			readTracks(c.env.subtitles, params.videoId),
+			listClaims(c.env.subtitles, params.videoId),
+			transcriptAvailable(c.env.MEDIA_PRIVATE, reviewTranscriptKey(access.video as never)),
+		]);
+		return c.json({
+			success: true,
+			data: {
+				drafts: drafts.map((d) => summariseDraft(d, tracks.find((t) => t.language === d.language))),
+				claims: claims.map(({ language, status, requestedAt, error }) => ({ language, status, requestedAt, ...(error ? { error } : {}) })),
+				transcriptAvailable: transcript,
+			},
+		});
 	}
 }
 
@@ -242,5 +270,54 @@ export class CaptionDraftPublish extends AuthenticatedRoute {
 			language: params.language,
 		});
 		return c.json({ success: true, data: { draft: summariseDraft(ok.draft, ok.track), track: ok.track } });
+	}
+}
+
+export class ReviewTranscriptClaim extends AuthenticatedRoute {
+	schema = addAuthToSchema(
+		{
+			tags: ['Captions'],
+			summary: 'Use the automatic review transcript as a caption draft',
+			description:
+				'Opt-in (VR11). Queues a job that turns the video review\'s transcript into a caption draft of `language`, with Quran shown only as references to the official text. 202 when queued; 404 `transcript_not_found` when the review media no longer hold one; 409 `draft_exists` (pass `replace`) or `claim_pending`.',
+			request: {
+				params: z.object({ videoId: Str({ description: 'Video ID' }) }),
+				body: { content: { 'application/json': { schema: z.object({ language: z.string().describe('The language spoken in the video'), replace: z.boolean().optional() }) } } },
+			},
+			responses: {
+				'202': { description: 'Queued', content: { 'application/json': { schema: z.object({ success: z.literal(true), data: z.object({ status: z.literal('queued') }) }) } } },
+				'400': { description: 'Unsupported language', content: Err },
+				'403': { description: 'Not allowed', content: Err },
+				'404': { description: 'No such video or no transcript', content: Err },
+				'409': { description: 'A draft exists, or a claim is in progress', content: Err },
+				'503': { description: 'Could not queue the job', content: Err },
+			},
+		},
+		'required',
+	);
+
+	async handle(c: AppContext) {
+		const { params, body } = await this.getValidatedData<typeof this.schema>();
+		const userId = this.getUserId(c);
+		const access = await editableVideo(c, params.videoId, userId);
+		if ('response' in access) return access.response;
+		if (!validLanguage(body.language)) return c.json({ success: false, error: 'unsupported_language' }, 400);
+		const transcriptKey = reviewTranscriptKey(access.video as never);
+		if (!(await transcriptAvailable(c.env.MEDIA_PRIVATE, transcriptKey))) return c.json({ success: false, error: 'transcript_not_found' }, 404);
+		const exists = !!(await readDraft(c.env.subtitles, params.videoId, body.language));
+		let outcome;
+		try {
+			outcome = await queueClaim(
+				{ subtitles: c.env.subtitles, queue: c.env.queue },
+				{ videoId: params.videoId, language: body.language, transcriptKey: transcriptKey!, requestedBy: userId, ...(body.replace ? { replace: true } : {}) },
+				exists,
+			);
+		} catch (error) {
+			logger.error('[Captions] Claim could not be queued', { videoId: params.videoId, error: error instanceof Error ? error.message : String(error) });
+			return c.json({ success: false, error: 'queue_unavailable' }, 503);
+		}
+		if (outcome.status === 'draft_exists') return c.json({ success: false, error: 'draft_exists' }, 409);
+		if (outcome.status === 'pending') return c.json({ success: false, error: 'claim_pending' }, 409);
+		return c.json({ success: true, data: { status: 'queued' as const } }, 202);
 	}
 }

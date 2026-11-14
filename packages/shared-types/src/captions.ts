@@ -9,7 +9,7 @@
  *   served: the official text from our Quran Foundation copy for a span the creator accepted, a
  *   reference with a quran.com link for an unconfirmed one or when there is no fresh copy.
  */
-import { parseQuranRange, quranAyahLabel, quranComUrl, type QuranMatchClass } from './quran';
+import { formatQuranRange, parseQuranRange, quranAyahLabel, quranComUrl, type AsrWord, type QuranMatch, type QuranMatchClass } from './quran';
 
 /** A matcher class (a suggestion) or `accepted` (the creator confirmed it). */
 export type CaptionQuranStatus = QuranMatchClass | 'accepted';
@@ -83,6 +83,84 @@ export const captionDraftKey = (videoId: string, language: string) => `${videoId
 export const captionDraftVersionKey = (videoId: string, language: string, version: number) => `${videoId}/drafts/${language}/v${version}.json`;
 export const captionDraftsPrefix = (videoId: string) => `${videoId}/drafts/`;
 
+/** A claim of the review transcript being turned into a draft (#1296): `<videoId>/claims/<lang>.json`. */
+export const captionClaimKey = (videoId: string, language: string) => `${videoId}/claims/${language}.json`;
+export const captionClaimsPrefix = (videoId: string) => `${videoId}/claims/`;
+
+export interface CaptionClaimState {
+  language: string;
+  status: 'queued' | 'failed';
+  requestedAt: string;
+  requestedBy: string;
+  /** failed: `transcript_gone` (purged meanwhile), `draft_exists`, or `failed` (the job gave up; the admin is flagged) */
+  error?: 'transcript_gone' | 'draft_exists' | 'failed';
+}
+
+/** The review transcript as `processor` writes it (`review/…/transcript.json`). */
+export interface ReviewTranscriptFile {
+  videoId: string;
+  reviewId?: string;
+  segments: Array<{ startMs: number; endMs: number; text: string }>;
+}
+
+/** Transcript words with segment times spread evenly over them, and the segment each came from. */
+export function transcriptWords(segments: ReviewTranscriptFile['segments']): Array<AsrWord & { seg: number }> {
+  const words: Array<AsrWord & { seg: number }> = [];
+  segments.forEach((s, seg) => {
+    const parts = s.text.split(/\s+/).filter(Boolean);
+    const step = parts.length ? Math.max(0, s.endMs - s.startMs) / parts.length : 0;
+    parts.forEach((text, i) => words.push({ text, seg, startMs: Math.round(s.startMs + i * step), endMs: Math.round(s.startMs + (i + 1) * step) }));
+  });
+  return words;
+}
+
+/**
+ * The draft cues of a transcript: each matcher span becomes its own cue holding a Quran reference
+ * (what was heard is kept only for "Not Quran"); the speech around it stays in its segment's cue.
+ * `matches` must come from matchQuran over `transcriptWords(segments)`.
+ */
+export function captionCuesFromTranscript(segments: ReviewTranscriptFile['segments'], matches: QuranMatch[]): CaptionCue[] {
+  const words = transcriptWords(segments);
+  const spans = [...matches].sort((a, b) => a.asrStart - b.asrStart);
+  const cues: CaptionCue[] = [];
+  let n = 0;
+  const push = (startMs: number, endMs: number, segs: CaptionSegment[]) => {
+    const start = Math.max(0, Math.min(startMs, CAPTION_LIMITS.maxMs - 1));
+    const end = Math.min(Math.max(endMs, start + 1), start + CAPTION_LIMITS.cueMaxMs, CAPTION_LIMITS.maxMs);
+    cues.push({ id: `c${++n}`, startMs: start, endMs: end, segments: segs });
+  };
+  const clip = (text: string) => text.slice(0, CAPTION_LIMITS.textChars);
+  let i = 0;
+  let m = 0;
+  while (i < words.length) {
+    while (m < spans.length && spans[m]!.asrStart < i) m++;
+    const span = spans[m];
+    if (span && span.asrStart === i && span.asrEnd > i) {
+      const end = Math.min(span.asrEnd, words.length);
+      const own = formatQuranRange(span.range);
+      const alternatives = span.alternatives.map(formatQuranRange).filter((r) => r !== own).slice(0, CAPTION_LIMITS.alternatives);
+      const heard = clip(words.slice(i, end).map((w) => w.text).join(' ').replace(MARK_CHARS, ''));
+      push(words[i]!.startMs, words[end - 1]!.endMs, [{ type: 'quran', range: own, status: span.class, ...(alternatives.length ? { alternatives } : {}), ...(heard ? { heard } : {}) }]);
+      i = end;
+      m++;
+      continue;
+    }
+    // Speech up to the next span or the end of this segment, in pieces that fit a segment's limit
+    const stopAt = Math.min(span ? span.asrStart : words.length, words.length);
+    let j = i;
+    let text = '';
+    while (j < stopAt && words[j]!.seg === words[i]!.seg && (text + ' ' + words[j]!.text).length <= CAPTION_LIMITS.textChars - 1) {
+      text = text ? `${text} ${words[j]!.text}` : words[j]!.text;
+      j++;
+    }
+    if (j === i) j = i + 1;
+    const clean = clip(text || words[i]!.text).replace(MARK_CHARS, '').trim();
+    if (clean) push(words[i]!.startMs, words[j - 1]!.endMs, [{ type: 'speech', text: clean }]);
+    i = j;
+  }
+  return cues;
+}
+
 /** Languages written right to left: their cues get a right-to-left mark per line. */
 export const RTL_CAPTION_LANGUAGES = new Set(['ar', 'ur', 'fa', 'he', 'ps', 'sd', 'ug', 'yi', 'ckb', 'dv']);
 
@@ -91,10 +169,10 @@ export const CONFIDENT_QURAN_CLASSES: ReadonlySet<CaptionQuranStatus> = new Set(
 
 // Private-use characters frame a Quran marker in a published track. Speech text never contains
 // them (validation strips them), so a creator can't forge one.
-const MARK_OPEN = '';
-const MARK_CLOSE = '';
-const MARK_CHARS = /[]/g;
-const MARKER = /Q\|([tr])\|([0-9:-]{5,32})/g;
+const MARK_OPEN = '\uE000';
+const MARK_CLOSE = '\uE001';
+const MARK_CHARS = /[\uE000\uE001]/g;
+const MARKER = /\uE000Q\|([tr])\|([0-9:-]{5,32})\uE001/g;
 
 export type CaptionMarkerMode = 'text' | 'reference';
 

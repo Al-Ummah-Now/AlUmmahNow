@@ -22,6 +22,8 @@ import { resumeStalledImports } from './lib/post-counters';
 import { isCategorizeMessage, processCategorizeMessages, sweepCategorySuggestions, type CategorizeQueueMessage } from './categorize/queue';
 import type { CategorizeEnv } from './categorize/job';
 import { isQuranSyncMessage, processQuranSyncMessages, quranSyncMessage, runQuranDaily, type QuranQueueMessage, type QuranSyncEnv } from './quran/sync';
+import { captionClaimMessage, claimFromRetryBody, isCaptionClaimMessage, processCaptionClaimMessages, type CaptionClaimEnv, type CaptionClaimQueueMessage } from './captions/claim';
+import { captionClaimKey, type CaptionClaimState } from '@al-ummah/shared-types';
 import type { SearchDb } from '@al-ummah/shared-types';
 import { processReviewAlertBatch } from './review-alerts/consumer';
 import { handleReviewAlertsInternal } from './review-alerts/internal';
@@ -174,6 +176,21 @@ export async function handleQuranSyncRequest(request: Request, env: QueueEnviron
   const body = (await request.json().catch(() => ({}))) as { rebuild?: unknown } | null;
   await env.MESSAGE_QUEUE.send(quranSyncMessage({ reason: 'admin', rebuild: body?.rebuild !== false }) as unknown as AlUmmahMessage);
   logger.info('[Quran] Sync queued by an admin');
+  return json({ queued: true }, 202);
+}
+
+/** POST /internal/captions/claim (X-API-Key): the Errors page's Retry of a claim that gave up. Queued again. */
+export async function handleCaptionClaimRequest(request: Request, env: QueueEnvironment, logger: ReturnType<typeof createLogger>): Promise<Response> {
+  if (!(await isInternalCaller(request, env))) return json({ error: 'Unauthorized' }, 401);
+  if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+  if (!env.MESSAGE_QUEUE) return json({ error: 'MESSAGE_QUEUE not bound' }, 503);
+  const payload = claimFromRetryBody(await request.json().catch(() => null));
+  if (!payload) return json({ error: 'Invalid claim' }, 400);
+  const subtitles = env.subtitles as { put(key: string, value: string, o?: unknown): Promise<unknown> } | undefined;
+  const state: CaptionClaimState = { language: payload.language, status: 'queued', requestedAt: payload.requestedAt, requestedBy: payload.requestedBy };
+  await subtitles?.put(captionClaimKey(payload.videoId, payload.language), JSON.stringify(state), { httpMetadata: { contentType: 'application/json' } });
+  await env.MESSAGE_QUEUE.send(captionClaimMessage(payload) as unknown as AlUmmahMessage);
+  logger.info('[Captions] Claim queued again by an admin', { videoId: payload.videoId, language: payload.language });
   return json({ queued: true }, 202);
 }
 
@@ -373,6 +390,13 @@ async function handleQueue(batch: MessageBatch<AlUmmahMessage>, env: QueueEnviro
     batch = { ...batch, messages: batch.messages.filter((m) => !isQuranSyncMessage(m)) };
     if (batch.messages.length === 0) return;
   }
+  // A claimed review transcript becoming a caption draft (#1296): its own retries, then the admin is flagged
+  const claims = batch.messages.filter(isCaptionClaimMessage);
+  if (claims.length) {
+    await processCaptionClaimMessages(claims as unknown as CaptionClaimQueueMessage[], env as unknown as CaptionClaimEnv, ctx, logger);
+    batch = { ...batch, messages: batch.messages.filter((m) => !isCaptionClaimMessage(m)) };
+    if (batch.messages.length === 0) return;
+  }
   if (batch.queue?.includes('moderation')) {
     await processModerationBatch(batch, env, logger);
     return;
@@ -471,6 +495,11 @@ async function handleFetch(request: Request, env: QueueEnvironment, ctx?: Execut
   if (url.pathname.startsWith('/internal/review-alerts/') || url.pathname.startsWith('/internal/push-devices')) {
     if (!(await isInternalCaller(request, env))) return json({ error: 'Unauthorized' }, 401);
     return handleReviewAlertsInternal(request, url, env, logger);
+  }
+
+  // A caption claim that gave up, queued again (the Errors page's "Try again")
+  if (url.pathname === '/internal/captions/claim') {
+    return handleCaptionClaimRequest(request, env, logger);
   }
 
   // Health check endpoint

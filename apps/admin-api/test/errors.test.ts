@@ -359,7 +359,7 @@ describe('retry runner', () => {
     const refused = await runRetry(env({ PROCESSOR }), { kind: 'service', service: 'processor', path: '/admin/delete-everything' }, '1');
     assert.equal(refused.ok, false);
     assert.equal(calls.length, 1);
-    assert.deepEqual(SERVICE_RETRIES.processor.paths, ['/dlq/replay', '/internal/quran/sync']);
+    assert.deepEqual(SERVICE_RETRIES.processor.paths, ['/dlq/replay', '/internal/quran/sync', '/internal/captions/claim']);
   });
 
   it('retries a failed upload playlist add through the api-videos binding', async () => {
