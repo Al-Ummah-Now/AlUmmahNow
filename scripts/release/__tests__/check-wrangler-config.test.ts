@@ -293,3 +293,27 @@ describe('logging policy', () => {
 		assert.ok(has(checkLogPolicy('processor', resolveEnv(qa, null), 'qa'), 'QA config', 'LOG_LEVEL is not set'));
 	});
 });
+
+describe('PR previews (run 43572945300: backend previews on wrangler.qa.jsonc tried to consume QA queues)', async () => {
+	const { checkPreviewConfig, checkPreviewDeploys } = await import('../preview-config.ts');
+	const deploy = (command: string) => ({ source: 'deploy.yml', line: 1, command, dir: 'apps/api-videos' });
+
+	it('rejects a preview Worker deployed with the QA config', () => {
+		const errors = checkPreviewDeploys([deploy('pnpm wrangler deploy --config wrangler.qa.jsonc --name ${{ steps.preview-name.outputs.name }}')]);
+		assert.equal(errors.length, 1);
+		assert.match(errors[0], /wrangler\.preview\.jsonc/);
+		assert.equal(checkPreviewDeploys([deploy('pnpm wrangler deploy --env development --name al-ummah-processor-pr-12')]).length, 1);
+	});
+
+	it('accepts a preview on its preview config, and QA deploys untouched', () => {
+		assert.deepEqual(checkPreviewDeploys([deploy('pnpm wrangler deploy --config wrangler.preview.jsonc --name al-ummah-web-pr-12')]), []);
+		assert.deepEqual(checkPreviewDeploys([deploy('pnpm wrangler deploy --config wrangler.qa.jsonc')]), []);
+	});
+
+	it('rejects queue consumers or crons in a preview config, at the top level or in an env', () => {
+		assert.deepEqual(checkPreviewConfig('p.jsonc', { name: 'x', queues: { producers: [{ queue: 'q', binding: 'Q' }] }, triggers: { crons: [] } }), []);
+		const errors = checkPreviewConfig('p.jsonc', { queues: { consumers: [{ queue: 'al-ummah-now-errors-qa' }] }, env: { development: { triggers: { crons: ['* * * * *'] } } } });
+		assert.ok(has(errors, 'top level', 'consumes queues'));
+		assert.ok(has(errors, 'env.development', 'no crons'));
+	});
+});

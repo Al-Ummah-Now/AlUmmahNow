@@ -233,9 +233,7 @@ pnpm wrangler deploy
 - `ws-staging.alummahnow.net`
 
 #### Preview Environments
-- `al-ummah-web-pr-{number}.workers.dev`
-- `al-ummah-api-pr-{number}.workers.dev`
-- `al-ummah-comms-pr-{number}.workers.dev`
+- `al-ummah-web-pr-{number}.workers.dev` (the only PR preview; `deploy-preview` label, no queue consumers or crons, deleted when the PR closes)
 
 ## R2 Storage Configuration
 
