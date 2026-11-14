@@ -66,8 +66,18 @@ export async function mockApi(page: Page) {
  * different specs failed with "0 elements" each time (#1141).
  */
 export async function waitForApp(page: Page, timeout = 60_000) {
+  // The CI dev server can reload the page while a check runs (a webpack hot update): the
+  // evaluate then loses its context. That is "not hydrated yet", so the poll asks again on the
+  // reloaded page instead of failing the test (theme pass, retries: 0).
+  const hydrated = () =>
+    page
+      .evaluate(() => [...document.querySelectorAll('button')].some((b) => Object.keys(b).some((k) => k.startsWith('__reactProps$'))))
+      .catch((error: unknown) => {
+        if (/Execution context was destroyed|navigation/i.test(String(error))) return false;
+        throw error;
+      });
   await expect
-    .poll(() => page.evaluate(() => [...document.querySelectorAll('button')].some((b) => Object.keys(b).some((k) => k.startsWith('__reactProps$')))), {
+    .poll(hydrated, {
       message: 'the page never hydrated',
       timeout,
     })
