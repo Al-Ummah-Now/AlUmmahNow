@@ -20,6 +20,7 @@ export const METRICS = [
   'objects',
   'backlog_avg',
   'backlog_max',
+  'gb_seconds',
 ] as const;
 export type Metric = (typeof METRICS)[number];
 
@@ -36,6 +37,8 @@ const R2_CLASS_A = new Set([
   'PutBucketCors', 'PutBucketLifecycleConfiguration',
 ]);
 const R2_FREE = new Set(['DeleteObject', 'DeleteBucket', 'AbortMultipartUpload', 'DeleteObjects']);
+/** A Durable Object is billed as 128 MB of memory while it is active. */
+export const DO_GB_PER_OBJECT = 0.125;
 
 /** Normalizes a GraphQL hour to the stored form ('2026-11-12T14:00:00Z'). */
 export function hourOf(value: string): string {
@@ -154,6 +157,33 @@ export function normalize(data: OpsResponse, index: ManifestIndex): NormalizeRes
       add(r, 'writes', g.count);
       add(r, 'requests', g.count);
     } else if (g.dimensions.actionType === 'ReadMessage') add(r, 'reads', g.count);
+  }
+
+  // KV: reads are billed apart from writes, deletes and lists (all three at the write price)
+  for (const g of data.kv ?? []) {
+    const r = row(index.find('kv', g.dimensions.namespaceId), g.dimensions.datetimeHour);
+    if (!r) continue;
+    add(r, 'requests', g.sum.requests);
+    add(r, /read/i.test(g.dimensions.actionType) ? 'reads' : 'writes', g.sum.requests);
+  }
+  for (const g of data.kvStorage ?? []) {
+    const r = row(index.find('kv', g.dimensions.namespaceId), g.dimensions.datetimeHour);
+    if (!r) continue;
+    max(r, 'stored_bytes', g.max.byteCount);
+    max(r, 'objects', g.max.keyCount);
+  }
+
+  // Durable Objects: duration is billed per active object at 128 MB (activeTime is in µs)
+  for (const g of data.doPeriodic ?? []) {
+    const r = row(index.find('do', g.dimensions.namespaceId), g.dimensions.datetimeHour);
+    if (!r) continue;
+    add(r, 'gb_seconds', (g.sum.activeTime / 1e6) * DO_GB_PER_OBJECT);
+    add(r, 'reads', g.sum.storageReadUnits);
+    add(r, 'writes', g.sum.storageWriteUnits);
+  }
+  for (const g of data.doRequests ?? []) {
+    const r = row(index.find('do', g.dimensions.namespaceId), g.dimensions.datetimeHour);
+    if (r) add(r, 'requests', g.sum.requests);
   }
 
   return { rows: [...rows.values()], dropped };

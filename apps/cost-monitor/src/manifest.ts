@@ -11,7 +11,8 @@
 
 export const OPS_ENVS = ['production', 'stage', 'qa'] as const;
 export type OpsEnv = (typeof OPS_ENVS)[number];
-export type ResourceKind = 'worker' | 'd1' | 'r2' | 'queue';
+export const RESOURCE_KINDS = ['worker', 'd1', 'r2', 'queue', 'kv', 'do'] as const;
+export type ResourceKind = (typeof RESOURCE_KINDS)[number];
 
 export interface Resource {
   /** '<kind>:<name>' */
@@ -19,7 +20,7 @@ export interface Resource {
   kind: ResourceKind;
   env: OpsEnv;
   name: string;
-  /** Cloudflare id for D1 databases and queues (the GraphQL filter key). */
+  /** Cloudflare id for D1 databases, queues, KV namespaces and DO namespaces (the GraphQL filter key). */
   cfId?: string;
   /** Dead-letter queue: any message in it is an alert. */
   dlq?: boolean;
@@ -151,13 +152,54 @@ export function manifestFor(envs: readonly OpsEnv[]): Resource[] {
   return out;
 }
 
+/**
+ * Al-ummah names on the shared account (the four repos' wrangler configs): Workers, D1 and KV
+ * start with al-ummah; buckets and queues are these bases with an env suffix. Discovery
+ * (discover.ts) keeps only names that pass, so nothing of another project is ever queried.
+ */
+const NAME_BASES = [
+  'videos', 'channels', 'profiles', 'playlists', 'community-posts', 'subtitles', 'watch-history', 'scheduled-videos',
+  'admin-backups', 'channel-sections', 'channel-tabs', 'global-settings', 'reports', 'theme-packages', 'upload-defaults',
+  'audit-events', 'auth-moderation-requests', 'moderation-actions',
+];
+const NAME_RE = new RegExp(`^(${NAME_BASES.join('|')})(-(qa|stage|staging|preview|dev|pr-\\d+))*(-dlq)?(-(qa|stage|dev))?$`);
+
+export function isAlUmmahName(name: string): boolean {
+  const n = name.toLowerCase();
+  return /^(al-?ummah|alummah)/.test(n) || NAME_RE.test(n);
+}
+
+/** The env a resource name belongs to; null for previews, dev and local copies (not collected). */
+export function envOfName(name: string): OpsEnv | null {
+  const n = name.toLowerCase();
+  if (/(^|-)(pr-?\d+|preview|dev|local)($|-)/.test(n)) return null;
+  if (/(-|_)qa($|-|_)/.test(n)) return 'qa';
+  if (/(-|_)(stage|staging)($|-|_)/.test(n)) return 'stage';
+  return 'production';
+}
+
 /** Parses COLLECT_ENVS ("production,stage,qa"); unknown names are ignored. */
 export function parseEnvs(value: string | undefined): OpsEnv[] {
   const wanted = (value ?? '').split(',').map((s) => s.trim());
   return OPS_ENVS.filter((env) => wanted.includes(env));
 }
 
-/** Looks up resources by the key GraphQL groups them by (worker/bucket name, D1/queue id). */
+/** The static manifest plus discovered resources, deduplicated by their GraphQL key (static wins). */
+export function mergeResources(base: Resource[], discovered: Resource[]): Resource[] {
+  const key = (r: Resource) => (r.slice ? `slice|${r.id}` : `${r.kind}|${r.cfId ?? r.name}`);
+  const seen = new Set(base.map(key));
+  const ids = new Set(base.map((r) => r.id));
+  const out = [...base];
+  for (const r of discovered) {
+    if (seen.has(key(r)) || ids.has(r.id)) continue;
+    seen.add(key(r));
+    ids.add(r.id);
+    out.push(r);
+  }
+  return out;
+}
+
+/** Looks up resources by the key GraphQL groups them by (worker/bucket name, D1/queue/KV/DO id). */
 export class ManifestIndex {
   readonly resources: Resource[];
   private byKey = new Map<string, Resource>();

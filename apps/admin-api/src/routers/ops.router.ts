@@ -8,6 +8,7 @@
  *   GET /overview?env=            tiles: 24h vs previous 24h, worst latency/backlog, MTD cost vs the cap, data age, open alerts
  *   GET /series?env&kind&metric&resource&range=24h|7d|30d|13m   points for the shared chart (hourly ≤ 7d, daily beyond)
  *   GET /resources?env&kind       one row per resource: today's numbers, a 7-day sparkline, month-to-date cost
+ *   GET /costs?env=all|<env>      spend: $500 budget meter (all sources), projected idle cost, daily trend per env, top drivers
  *   GET /thresholds               rules and open alerts
  *   PUT /thresholds/:id           { value?, enabled?, windowHours? }
  */
@@ -15,20 +16,35 @@ import { Hono, type Context } from 'hono';
 import { hasPermission, normalizeRoles } from '../lib/roles';
 import { logger } from '../lib/logger';
 import type { AdminBindings, AuthContext } from '../base/types';
+import {
+  BUDGET_USD,
+  budgetStatus,
+  costWindowStart,
+  findSpikes,
+  fullDays,
+  idleProjection,
+  loadExtraDays,
+  loadResourceDays,
+  projectMonth,
+  sumByDay,
+} from '../lib/opsCost';
+
+export { projectMonth, type Projection } from '../lib/opsCost';
 
 type Env = { Bindings: AdminBindings; Variables: { auth?: AuthContext } };
 type C = Context<Env>;
 
 export const OPS_ENVS = ['production', 'stage', 'qa'] as const;
-export const OPS_KINDS = ['worker', 'd1', 'r2', 'queue'] as const;
+export const OPS_KINDS = ['worker', 'd1', 'r2', 'queue', 'kv', 'do'] as const;
+const KINDS_TEXT = OPS_KINDS.join(', ');
 /** Columns a series may read (never interpolated from input without this list). */
-export const OPS_METRICS = ['requests', 'errors', 'cpu_p50', 'cpu_p99', 'latency_p50', 'latency_p99', 'reads', 'writes', 'bytes', 'stored_bytes', 'objects', 'backlog_avg', 'backlog_max', 'cost_usd'] as const;
+export const OPS_METRICS = ['requests', 'errors', 'cpu_p50', 'cpu_p99', 'latency_p50', 'latency_p99', 'reads', 'writes', 'bytes', 'stored_bytes', 'objects', 'backlog_avg', 'backlog_max', 'gb_seconds', 'cost_usd'] as const;
 type Metric = (typeof OPS_METRICS)[number];
 /** Summed across resources for a total; the rest take the worst (max). */
-const SUMMED = new Set<Metric>(['requests', 'errors', 'reads', 'writes', 'bytes', 'stored_bytes', 'objects', 'backlog_avg', 'cost_usd']);
+const SUMMED = new Set<Metric>(['requests', 'errors', 'reads', 'writes', 'bytes', 'stored_bytes', 'objects', 'backlog_avg', 'gb_seconds', 'cost_usd']);
 export const RANGES = { '24h': { hours: 24 }, '7d': { hours: 168 }, '30d': { days: 30 }, '13m': { days: 396 } } as const;
-/** The owner's infrastructure cap (docs/admin/LIVE_OPS.md §A.4). */
-export const MONTHLY_CAP_USD = 500;
+/** The owner's budget for everything: Cloudflare, Bunny, Workers AI (docs/admin/LIVE_OPS.md §A.4). */
+export const MONTHLY_CAP_USD = BUDGET_USD;
 /** Data older than this is shown as stale (the collector runs hourly). */
 export const STALE_AFTER_MS = 2 * 3_600_000;
 export const THRESHOLD_AUDIT_PREFIX = 'ops:threshold:';
@@ -70,34 +86,6 @@ const hourFloor = (d: Date) => {
   return h;
 };
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
-
-export interface Projection {
-  mtd: number;
-  linear: number;
-  trailing: number;
-  daysElapsed: number;
-  daysInMonth: number;
-}
-
-/** Month-end projections (cost spec §4.4): linear over the month so far, and trailing 7 full days. */
-export function projectMonth(daily: { day: string; cost: number }[], now: Date): Projection {
-  const monthStart = `${now.toISOString().slice(0, 7)}-01`;
-  const daysInMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).getUTCDate();
-  const today = now.toISOString().slice(0, 10);
-  const daysElapsed = now.getUTCDate() - 1 + (now.getUTCHours() * 60 + now.getUTCMinutes()) / 1440;
-  const mtd = daily.filter((d) => d.day >= monthStart).reduce((s, d) => s + d.cost, 0);
-  const full = daily.filter((d) => d.day < today).sort((a, b) => (a.day < b.day ? 1 : -1)).slice(0, 7);
-  const avg = full.length ? full.reduce((s, d) => s + d.cost, 0) / full.length : 0;
-  const daysLeft = Math.max(0, daysInMonth - daysElapsed);
-  const round = (v: number) => Math.round(v * 100) / 100;
-  return {
-    mtd: round(mtd),
-    linear: round(daysElapsed > 0 ? (mtd / daysElapsed) * daysInMonth : mtd),
-    trailing: round(mtd + avg * daysLeft),
-    daysElapsed: Math.round(daysElapsed * 10) / 10,
-    daysInMonth,
-  };
-}
 
 app.get('/overview', async (c) => {
   const env = envParam(c);
@@ -176,14 +164,14 @@ app.get('/series', async (c) => {
   const env = envParam(c);
   if (!env) return bad(c, 'env must be production, stage or qa');
   const kind = c.req.query('kind') ?? '';
-  if (!(OPS_KINDS as readonly string[]).includes(kind)) return bad(c, 'kind must be worker, d1, r2 or queue');
+  if (!(OPS_KINDS as readonly string[]).includes(kind)) return bad(c, `kind must be one of ${KINDS_TEXT}`);
   const metric = (c.req.query('metric') ?? '') as Metric;
   if (!(OPS_METRICS as readonly string[]).includes(metric)) return bad(c, `metric must be one of ${OPS_METRICS.join(', ')}`);
   const rangeKey = (c.req.query('range') ?? '24h') as keyof typeof RANGES;
   const range = RANGES[rangeKey];
   if (!range) return bad(c, 'range must be 24h, 7d, 30d or 13m');
   const resource = c.req.query('resource');
-  if (resource !== undefined && !/^(worker|d1|r2|queue):[a-z0-9-]{1,80}$/.test(resource)) return bad(c, 'resource must be <kind>:<name>');
+  if (resource !== undefined && !/^(worker|d1|r2|queue|kv|do):[A-Za-z0-9_.-]{1,100}(\/[A-Za-z0-9_]{1,80})?$/.test(resource)) return bad(c, 'resource must be <kind>:<name>');
 
   const hourly = 'hours' in range;
   if (hourly && metric === 'cost_usd') return bad(c, 'cost is daily: use range 30d or 13m');
@@ -202,13 +190,13 @@ app.get('/series', async (c) => {
 });
 
 /** The metric a resource table sparkline shows, per kind. */
-export const SPARK_METRIC: Record<(typeof OPS_KINDS)[number], Metric> = { worker: 'requests', d1: 'reads', r2: 'requests', queue: 'backlog_max' };
+export const SPARK_METRIC: Record<(typeof OPS_KINDS)[number], Metric> = { worker: 'requests', d1: 'reads', r2: 'requests', queue: 'backlog_max', kv: 'reads', do: 'gb_seconds' };
 
 app.get('/resources', async (c) => {
   const env = envParam(c);
   if (!env) return bad(c, 'env must be production, stage or qa');
   const kind = (c.req.query('kind') ?? '') as (typeof OPS_KINDS)[number];
-  if (!(OPS_KINDS as readonly string[]).includes(kind)) return bad(c, 'kind must be worker, d1, r2 or queue');
+  if (!(OPS_KINDS as readonly string[]).includes(kind)) return bad(c, `kind must be one of ${KINDS_TEXT}`);
   const now = new Date();
   const from = new Date(now.getTime() - 6 * 86_400_000).toISOString().slice(0, 10);
   const monthStart = `${now.toISOString().slice(0, 7)}-01`;
@@ -240,6 +228,71 @@ app.get('/resources', async (c) => {
   });
   resources.sort((a, b) => num(b.metrics[spark]) - num(a.metrics[spark]) || a.name.localeCompare(b.name));
   return c.json({ success: true, result: { env, kind, resources } });
+});
+
+/** Top drivers listed on the cost tab (by month-to-date cost). */
+export const COST_DRIVERS = 25;
+
+app.get('/costs', async (c) => {
+  const envFilter = c.req.query('env') ?? 'all';
+  if (envFilter !== 'all' && !(OPS_ENVS as readonly string[]).includes(envFilter)) return bad(c, 'env must be all, production, stage or qa');
+  const now = new Date();
+  const since = costWindowStart(now);
+  const [resourceDays, extras] = await Promise.all([loadResourceDays(c.env, since), loadExtraDays(c.env, since)]);
+  const budget = budgetStatus({ cloudflare: sumByDay(resourceDays), ...extras }, now);
+  const idle = idleProjection(resourceDays, extras, now);
+  const spikes = findSpikes(resourceDays, now);
+
+  // Daily trend: 30 days, one value per env plus the non-Cloudflare sources
+  const trendDays = [...fullDays(now, 29), now.toISOString().slice(0, 10)];
+  const perEnv = new Map<string, Map<string, number>>();
+  for (const r of resourceDays) {
+    const m = perEnv.get(r.env) ?? new Map<string, number>();
+    m.set(r.day, (m.get(r.day) ?? 0) + num(r.cost));
+    perEnv.set(r.env, m);
+  }
+  const series = (m: Map<string, number> | undefined) => trendDays.map((d) => Math.round((m?.get(d) ?? 0) * 100) / 100);
+  const fromList = (list: { day: string; cost: number }[]) => new Map(list.map((x) => [x.day, x.cost]));
+  const trend = {
+    days: trendDays,
+    series: [
+      ...OPS_ENVS.map((e) => ({ key: e, values: series(perEnv.get(e)) })),
+      { key: 'bunny', values: series(fromList(extras.bunny)) },
+      { key: 'containers', values: series(fromList(extras.containers)) },
+      { key: 'ai', values: series(fromList(extras.ai)) },
+    ],
+  };
+
+  // Drivers: each resource's month-to-date cost, its 14-day daily cost and the idle floor
+  const monthStart = `${now.toISOString().slice(0, 7)}-01`;
+  const sparkDays = trendDays.slice(-14);
+  const drivers = new Map<string, { id: string; env: string; kind: string; name: string; mtd: number; byDay: Map<string, number> }>();
+  for (const r of resourceDays) {
+    if (envFilter !== 'all' && r.env !== envFilter) continue;
+    const d = drivers.get(r.resource_id) ?? { id: r.resource_id, env: r.env, kind: r.kind, name: r.name, mtd: 0, byDay: new Map<string, number>() };
+    if (r.day >= monthStart) d.mtd += num(r.cost);
+    d.byDay.set(r.day, (d.byDay.get(r.day) ?? 0) + num(r.cost));
+    drivers.set(r.resource_id, d);
+  }
+  const idleById = new Map(idle.top.map((t) => [t.id, t.monthlyUsd]));
+  const top = [...drivers.values()]
+    .sort((a, b) => b.mtd - a.mtd)
+    .slice(0, COST_DRIVERS)
+    .map((d) => ({
+      id: d.id,
+      env: d.env,
+      kind: d.kind,
+      name: d.name,
+      mtdUsd: Math.round(d.mtd * 100) / 100,
+      idleMonthlyUsd: idleById.get(d.id) ?? 0,
+      spike: spikes.find((s) => s.resourceId === d.id) ?? null,
+      daily: { days: sparkDays, values: sparkDays.map((day) => Math.round((d.byDay.get(day) ?? 0) * 1000) / 1000) },
+    }));
+
+  return c.json({
+    success: true,
+    result: { env: envFilter, budget, idle, trend, drivers: top, spikes, estimated: true, sources: { bunny: extras.bunny.length > 0, ai: extras.ai.length > 0 } },
+  });
 });
 
 app.get('/thresholds', async (c) => {

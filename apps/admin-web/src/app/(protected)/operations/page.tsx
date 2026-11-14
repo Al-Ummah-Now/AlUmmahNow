@@ -1,7 +1,7 @@
 import Link from '@/components/AppLink';
-import { getOpsOverview, getOpsSeries, listOpsResources } from '@/lib/api/ops';
+import { getOpsCosts, getOpsOverview, getOpsSeries, listOpsResources } from '@/lib/api/ops';
 import { AdminApiError } from '@/lib/api/errors';
-import { OPS_RANGES, type OpsEnv, type OpsKind, type OpsOverview, type OpsRange, type OpsResource } from '@/lib/api/ops-types';
+import { OPS_KINDS, OPS_RANGES, type OpsCosts, type OpsEnv, type OpsKind, type OpsOverview, type OpsRange, type OpsResource } from '@/lib/api/ops-types';
 import { getAdminSession } from '@/lib/auth';
 import { canReadOps } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
@@ -9,7 +9,8 @@ import type { Translator } from '@/i18n/translate';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { TimeSeriesChart } from '@/components/charts/TimeSeriesChart';
 import { logger } from '@/lib/logger';
-import { TAB_CHARTS, capShare, fillSeries, opsFormats, parseEnv, parseRange, parseTab, type OpsFormats } from './model';
+import { TAB_CHARTS, fillSeries, opsFormats, parseEnv, parseRange, parseTab, type OpsFormats } from './model';
+import { SpendSection } from './SpendSection';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,7 +19,7 @@ interface PageProps {
 }
 
 const ENV_ORDER: OpsEnv[] = ['production', 'stage', 'qa'];
-const TABS: OpsKind[] = ['worker', 'd1', 'r2', 'queue'];
+const TABS: readonly OpsKind[] = OPS_KINDS;
 
 function pillClass(active: boolean) {
   return `block rounded px-3 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-focus ${
@@ -47,41 +48,6 @@ function Tiles({ o, t, f }: { o: OpsOverview; t: Translator; f: OpsFormats }) {
       <Tile label={t('operations.tiles.worstQueue')} value={o.queues.worst ? f.count(o.queues.worst.backlog) : t('operations.tiles.none')} sub={o.queues.worst?.name} testId="ops-tile-queue" />
       <Tile label={t('operations.tiles.dlq')} value={f.count(o.queues.dlqMessages)} testId="ops-tile-dlq" />
     </dl>
-  );
-}
-
-function CostCard({ o, t, f }: { o: OpsOverview; t: Translator; f: OpsFormats }) {
-  const cap = o.cost.capUsd;
-  const bar = capShare(o.cost.all.trailing, cap);
-  return (
-    <section className={`${cardClass} mb-6`} aria-labelledby="ops-cost-title" data-testid="ops-cost">
-      <h2 id="ops-cost-title" className="text-lg font-semibold text-fg">{t('operations.cost.title')}</h2>
-      <p className="text-sm text-fg-muted mb-4">{t('operations.cost.note')}</p>
-      <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Tile label={t('operations.cost.envMtd')} value={f.usd(o.cost.env.mtd)} testId="ops-cost-env" />
-        <Tile label={t('operations.cost.allMtd')} value={f.usd(o.cost.all.mtd)} testId="ops-cost-all" />
-        <Tile label={t('operations.cost.projected')} value={f.usd(o.cost.all.trailing)} sub={t('operations.cost.linear', { value: f.usd(o.cost.all.linear) })} testId="ops-cost-projected" />
-      </dl>
-      <div className="mt-4">
-        <div className="mb-1 flex justify-between text-sm text-fg-muted">
-          <span>{f.usd(0)}</span>
-          <span>{t('operations.cost.cap', { cap: f.usd(cap) })}</span>
-        </div>
-        <div
-          role="meter"
-          aria-label={t('operations.cost.capBar')}
-          aria-valuemin={0}
-          aria-valuemax={cap}
-          aria-valuenow={Math.round(o.cost.all.trailing * 100) / 100}
-          aria-valuetext={`${f.usd(o.cost.all.trailing)} / ${f.usd(cap)}`}
-          className="h-3 w-full overflow-hidden rounded bg-surface-2 border border-border"
-          data-testid="ops-cap-bar"
-          data-over={bar.over ? 'true' : 'false'}
-        >
-          <div className={`h-full ${bar.over || bar.warn ? 'bg-danger-fg' : 'bg-accent'}`} style={{ width: `${(bar.share * 100).toFixed(1)}%` }} />
-        </div>
-      </div>
-    </section>
   );
 }
 
@@ -135,7 +101,7 @@ function loadError(error: unknown, t: Translator): string {
 /**
  * Operations (docs/admin/LIVE_OPS.md Part A): platform health and usage per
  * environment from the hourly collector's rollups (admin-api /api/ops, ops:read),
- * with estimated cost against the $500/month cap and open threshold alerts.
+ * with spend against the $500/month budget (every source), the projected idle cost and open alerts.
  */
 export default async function OperationsPage({ searchParams }: PageProps) {
   const params = await searchParams;
@@ -149,7 +115,8 @@ export default async function OperationsPage({ searchParams }: PageProps) {
   }
   const f = opsFormats(locale);
   const specs = TAB_CHARTS[tab];
-  const [overviewResult, resourcesResult, ...seriesResults] = await Promise.allSettled([
+  const [costsResult, overviewResult, resourcesResult, ...seriesResults] = await Promise.allSettled([
+    getOpsCosts('all'),
     getOpsOverview(env),
     listOpsResources(env, tab),
     ...specs.map((s) => getOpsSeries(env, tab, s.metric, range)),
@@ -157,7 +124,11 @@ export default async function OperationsPage({ searchParams }: PageProps) {
   if (overviewResult.status === 'rejected') {
     logger.error('[operations] Failed to load the overview', { env, error: overviewResult.reason instanceof Error ? overviewResult.reason.message : String(overviewResult.reason) });
   }
-  const overview = overviewResult.status === 'fulfilled' ? overviewResult.value : null;
+  if (costsResult.status === 'rejected') {
+    logger.error('[operations] Failed to load spend', { error: costsResult.reason instanceof Error ? costsResult.reason.message : String(costsResult.reason) });
+  }
+  const overview = overviewResult.status === 'fulfilled' ? (overviewResult.value as OpsOverview) : null;
+  const costs = costsResult.status === 'fulfilled' ? (costsResult.value as OpsCosts) : null;
   const resources = resourcesResult.status === 'fulfilled' ? (resourcesResult.value as OpsResource[]) : null;
   const now = new Date();
   const href = (next: Partial<{ env: OpsEnv; tab: OpsKind; range: OpsRange }>) => `?${new URLSearchParams({ env, tab, range, ...next })}`;
@@ -186,12 +157,17 @@ export default async function OperationsPage({ searchParams }: PageProps) {
         </nav>
       </div>
 
+      {costs ? (
+        <SpendSection c={costs} t={t} f={f} locale={locale} />
+      ) : (
+        <div className="mb-6"><ErrorAlert testId="ops-spend-error">{loadError(costsResult.status === 'rejected' ? costsResult.reason : null, t)}</ErrorAlert></div>
+      )}
+
       {!overview ? (
         <div className="mb-6"><ErrorAlert testId="ops-overview-error">{loadError(overviewResult.status === 'rejected' ? overviewResult.reason : null, t)}</ErrorAlert></div>
       ) : (
         <>
           <Tiles o={overview} t={t} f={f} />
-          <CostCard o={overview} t={t} f={f} />
           <section className={`${cardClass} mb-6`} aria-labelledby="ops-alerts-title" data-testid="ops-alerts">
             <h2 id="ops-alerts-title" className="text-lg font-semibold text-fg mb-2">{t('operations.alerts.title')}</h2>
             {overview.alerts.length === 0 ? (
