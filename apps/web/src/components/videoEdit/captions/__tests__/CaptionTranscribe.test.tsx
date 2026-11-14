@@ -175,7 +175,7 @@ describe('CaptionDraftsPanel: Transcribe', () => {
     });
     expect(screen.getByTestId('caption-job')).toHaveTextContent('Arabic: Waiting');
     expect(screen.getByText(/capacity is used up/)).toBeInTheDocument();
-    expect(screen.getByTestId('caption-transcribe-action')).toBeDisabled();
+    expect(screen.queryByTestId('caption-transcribe-action')).toBeNull();
     listCaptionJobs.mockResolvedValue({ ok: true, data: { jobs: [job({ status: 'ready', minutesCharged: 17 })] } });
     listCaptionDrafts.mockResolvedValue({ ok: true, data: { drafts: [arDraft], claims: [], transcriptAvailable: false } });
     await act(async () => {
