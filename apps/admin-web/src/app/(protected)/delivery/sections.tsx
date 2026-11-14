@@ -93,7 +93,7 @@ export function PlaybackSection({ summary, t, locale }: SectionProps) {
       <h2 id="delivery-playback-title" className="text-lg font-semibold text-fg mb-1">{t('mediaDelivery.playbackTitle')}</h2>
       <p className="text-fg-muted text-sm mb-4">{t('mediaDelivery.playbackIntro')}</p>
       {empty && <p className="mb-4 text-fg-muted" data-testid="delivery-playback-empty">{t('mediaDelivery.playbackEmpty')}</p>}
-      <div className="relative overflow-x-auto mb-6">
+      <div className="relative overflow-x-auto mb-6 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-focus" tabIndex={0} role="region" aria-labelledby="delivery-playback-title">
         <table className="w-full text-sm" data-testid="delivery-playback-table">
           <caption className="sr-only">{t('mediaDelivery.playbackCaption')}</caption>
           <thead className="border-b border-border">
@@ -194,7 +194,7 @@ export function CostSection({ summary, t, locale }: SectionProps) {
 
       <h3 className="font-semibold text-fg mb-1">{t('mediaDelivery.projectionTitle', { cap: f.usd(MONTHLY_CAP_USD) })}</h3>
       <p className="text-fg-muted text-sm mb-3">{t('mediaDelivery.projectionIntro')}</p>
-      <div className="relative overflow-x-auto mb-4">
+      <div className="relative overflow-x-auto mb-4 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-focus" tabIndex={0} role="region" aria-labelledby="delivery-cost-title">
         <table className="w-full text-sm" data-testid="delivery-projection">
           <caption className="sr-only">{t('mediaDelivery.projectionCaption')}</caption>
           <thead className="border-b border-border">
