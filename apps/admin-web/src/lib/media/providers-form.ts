@@ -1,6 +1,6 @@
 /**
- * The provider settings forms (Delivery page, video page), as pure functions (docs/media-delivery/PROVIDERS.md):
- * list edits, problem labels, and which changes need a confirmation. ProviderSettings.tsx and VideoProvidersPanel.tsx render
+ * The provider settings forms (Video providers page, video page), as pure functions (docs/media-delivery/PROVIDERS.md):
+ * list edits, problem labels, and which changes need a confirmation. media-providers/ProviderSettings.tsx and VideoProvidersPanel.tsx render
  * them; test/media-providers-form.test.ts covers them.
  */
 import { MEDIA_PROVIDER_IDS, type MediaOverride, type MediaProviderId, type MediaSettings, type SettingsProblem } from '@al-ummah/shared-types';

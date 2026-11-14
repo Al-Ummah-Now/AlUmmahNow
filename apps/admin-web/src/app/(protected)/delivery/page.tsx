@@ -1,13 +1,12 @@
 import Link from '@/components/AppLink';
-import { getMediaProviders, getMediaQoeLive, getMediaSummary, listMediaJobs } from '@/lib/api/admin';
-import type { MediaJob, MediaProvidersView, MediaSummary } from '@/lib/api/types';
+import { getMediaQoeLive, getMediaSummary, listMediaJobs } from '@/lib/api/admin';
+import type { MediaJob, MediaSummary } from '@/lib/api/types';
 import { getAdminSession } from '@/lib/auth';
 import { canManageMedia } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
 import type { MessageKey } from '@/i18n/translate';
-import { ErrorAlert, cardClass, fieldClass, secondaryButtonClass } from '@/components/ui';
+import { ErrorAlert, cardClass, fieldClass, linkClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
-import { ProviderSettings } from './ProviderSettings';
 import { JobsTable } from './JobsTable';
 import { LiveTranscodes } from './LiveTranscodes';
 import { LiveQoe } from './LiveQoe';
@@ -30,9 +29,10 @@ function settled<T>(result: PromiseSettledResult<T>, what: string): T | null {
 
 /**
  * Delivery comparison (epic #687, docs/media-delivery/R2-DELIVERY-PLAN.md
- * Phase 3): the provider settings (docs/media-delivery/PROVIDERS.md), time to playable, playback quality per
- * source, cost with the projection against the monthly cap, and recent
- * R2 transcodes with "Transcode again".
+ * Phase 3), measurements only: live transcodes and playback quality, then (under the period
+ * buttons that filter them) time to playable, playback quality per source and cost with the
+ * projection against the monthly cap, and recent R2 transcodes with "Transcode again". The provider
+ * settings have their own page (media-providers/page.tsx), linked from the header.
  */
 export default async function DeliveryComparisonPage({ searchParams }: PageProps) {
   const params = await searchParams;
@@ -44,16 +44,14 @@ export default async function DeliveryComparisonPage({ searchParams }: PageProps
     return <ErrorAlert testId="delivery-no-access">{t('mediaDelivery.noAccess')}</ErrorAlert>;
   }
 
-  const [summaryResult, jobsResult, providersResult, qoeLiveResult] = await Promise.allSettled([
+  const [summaryResult, jobsResult, qoeLiveResult] = await Promise.allSettled([
     getMediaSummary(days),
     listMediaJobs({ status: filter === 'all' ? undefined : filter, limit: 50 }),
-    getMediaProviders(),
     getMediaQoeLive(),
   ]);
   const qoeLive = qoeLiveResult.status === 'fulfilled' && qoeLiveResult.value.ok ? qoeLiveResult.value.data : null;
   const summary: MediaSummary | null = settled(summaryResult, 'summary');
   const jobs: MediaJob[] | null = settled(jobsResult, 'jobs');
-  const providers: MediaProvidersView | null = settled(providersResult, 'provider settings');
   const query = (next: Record<string, string>) => `?${new URLSearchParams({ days: String(days), ...(filter === 'all' ? {} : { status: filter }), ...next })}`;
 
   return (
@@ -63,7 +61,22 @@ export default async function DeliveryComparisonPage({ searchParams }: PageProps
           <h1 className="text-3xl font-bold text-fg">{t('mediaDelivery.title')}</h1>
           <p className="text-fg-muted mt-1">{t('mediaDelivery.subtitle')}</p>
         </div>
-        <nav aria-label={t('mediaDelivery.periodLabel')} data-testid="delivery-period">
+        <Link href="/media-providers" className={`${linkClass} text-sm`} data-testid="delivery-providers-link">
+          {t('mediaDelivery.providersLink')}
+        </Link>
+      </div>
+
+      {summary && (
+        <>
+          <LiveTranscodes initial={summary.live ?? null} />
+          <LiveQoe initial={qoeLive} />
+        </>
+      )}
+
+      {/* The period filters only the sections under it, so its buttons sit right above them */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-6">
+        <h2 className="text-lg font-semibold text-fg" id="delivery-period-title">{t('mediaDelivery.periodTitle')}</h2>
+        <nav aria-labelledby="delivery-period-title" data-testid="delivery-period">
           <ul className="flex flex-wrap gap-1">
             {PERIODS.map((p) => (
               <li key={p}>
@@ -82,12 +95,8 @@ export default async function DeliveryComparisonPage({ searchParams }: PageProps
         </nav>
       </div>
 
-      {providers ? <ProviderSettings view={providers} /> : <div className="mb-6"><ErrorAlert testId="providers-load-error">{t('mediaProviders.loadFailed')}</ErrorAlert></div>}
-
       {summary ? (
         <>
-          <LiveTranscodes initial={summary.live ?? null} />
-          <LiveQoe initial={qoeLive} />
           <SpeedSection summary={summary} t={t} locale={locale} />
           <PlaybackSection summary={summary} t={t} locale={locale} />
           <CostSection summary={summary} t={t} locale={locale} />

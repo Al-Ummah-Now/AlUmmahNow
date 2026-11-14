@@ -1,6 +1,6 @@
 /**
  * Video providers in the admin (docs/media-delivery/PROVIDERS.md), on the local stack:
- * - Delivery page: an unsafe change (every provider off) lists its problems and cannot be saved;
+ * - Video providers page (/media-providers, linked from Delivery): an unsafe change (every provider off) lists its problems and cannot be saved;
  *   putting R2 first asks in the in-app dialog, saves through admin-api and survives a reload;
  *   a channel override (uploads to R2 only) is added and saved.
  * - Video page: the run's own video shows its Bunny and R2 copies; pinning it to R2 first is
@@ -73,8 +73,13 @@ test.describe('video providers', () => {
     if (channelId) await adminApi(`/api/content/channels/${encodeURIComponent(channelId)}`, { method: 'DELETE', token: superToken() }).catch(() => undefined);
   });
 
-  test('the Delivery page refuses unsafe settings, asks before moving playback, and saves overrides', async ({ page }) => {
+  test('the Video providers page refuses unsafe settings, asks before moving playback, and saves overrides', async ({ page }) => {
+    // Delivery is measurements only now; its header links to the settings page
     await page.goto('/delivery');
+    await expect(page.getByTestId('providers-settings')).toHaveCount(0);
+    await page.getByTestId('delivery-providers-link').click();
+    await expect(page).toHaveURL(/\/media-providers$/);
+    await expect(page.getByTestId('providers-delivery-link')).toHaveAttribute('href', '/delivery');
     const form = page.getByTestId('providers-settings');
     await expect(form).toBeVisible();
     const save = page.getByTestId('providers-save');

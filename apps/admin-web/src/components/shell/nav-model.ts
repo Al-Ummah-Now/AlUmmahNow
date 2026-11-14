@@ -23,7 +23,7 @@ export interface NavAccess {
   manageUsers: boolean;
   /** videos:uploads */
   staleUploads: boolean;
-  /** media:manage (Delivery: Bunny vs R2 comparison) */
+  /** media:manage (Delivery: Bunny vs R2 comparison, and the Video providers settings) */
   media: boolean;
   /** ops:read (Operations: platform analytics per environment) */
   ops: boolean;
@@ -105,6 +105,8 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/indices', label: 'nav.indices', icon: 'database', group: 'operations' },
   { href: '/video-formats', label: 'nav.videoFormats', icon: 'file', group: 'operations', requires: (a) => a.contact },
   { href: '/delivery', label: 'nav.delivery', icon: 'film', group: 'operations', requires: (a) => a.media },
+  // Video providers (docs/media-delivery/PROVIDERS.md): uploads, playback order, overrides; same media:manage gate as Delivery
+  { href: '/media-providers', label: 'nav.mediaProviders', icon: 'sliders', group: 'operations', requires: (a) => a.media },
   // Live providers (D3): routing, providers, overrides, sessions, comparison; every admin reads, live:manage changes
   { href: '/live-streaming', label: 'nav.liveStreaming', icon: 'activity', group: 'operations' },
   // Public status page: incidents and maintenance (docs/status-page/README.md); admins (status:manage)

@@ -76,7 +76,7 @@ Routes: api-videos `GET|PUT /internal/media/providers`, admin-api `GET|PUT /api/
 override: api-videos `PUT /internal/media/videos/:id/override`, admin-api
 `PUT /api/media/videos/:id/override` (`{ override | null }`, audited as `media:video:<id>`).
 
-**Admin.** The videos admin **Delivery** page edits all of it (`ProviderSettings.tsx`): providers
+**Admin.** The videos admin **Video providers** page (`/media-providers`, next to Delivery in the nav) edits all of it (`ProviderSettings.tsx`): providers
 on/off with their health and "Check now", upload targets, strategy, order (also the fallback order)
 and weights with each provider's share, the draw, the health fallback numbers, the custom thumbnail
 store and channel overrides. The same `settingsProblems` run as the admin edits, so an unsafe
@@ -250,7 +250,7 @@ dropped. What leaves the API is our ids and server-signed playback and thumbnail
 | Internal routes | `apps/api-videos/src/endpoints/media/mediaInternal.ts` |
 | Admin routes | `apps/admin-api/src/routers/media.router.ts` |
 | Per-video override | `apps/api-videos/src/lib/media/video-override.ts` |
-| Admin UI | `apps/admin-web/src/app/(protected)/delivery/ProviderSettings.tsx`, `videos/[id]/VideoProvidersPanel.tsx`, `src/components/media/ProviderOrderEditor.tsx`, `src/lib/media/providers-form.ts` |
+| Admin UI | `apps/admin-web/src/app/(protected)/media-providers/` (the Video providers page, `ProviderSettings.tsx`), `videos/[id]/VideoProvidersPanel.tsx`, `src/components/media/ProviderOrderEditor.tsx`, `src/lib/media/providers-form.ts` |
 | Our ids, refs, ingest plan | `apps/api-videos/src/lib/media/refs.ts`, `ingest.ts`, D1 `media_provider_refs` |
 | Our own TUS target | `apps/api-videos/src/lib/media/r2-tus.ts`, `endpoints/video/tus/tusProxy.ts` |
 | Readiness from R2 | `apps/api-videos/src/lib/media/r2-delivery.ts` (`readyFromR2`, `applyJobEvent`) |
