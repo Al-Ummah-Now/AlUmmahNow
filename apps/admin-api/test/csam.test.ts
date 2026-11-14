@@ -34,8 +34,9 @@ function fakeVideos() {
       const reply = (result: unknown, status = 200) => new Response(JSON.stringify(status < 400 ? { success: true, result } : { success: false, code: result }), { status, headers: { 'content-type': 'application/json' } });
       const p = call.path;
       if (p === '/internal/csam/resolve') {
-        if (call.body.url.includes('media.alummahnow.net')) return reply({ ok: true, resolution: { kind: 'video_thumbnail', videoId: 'vid-synth-01', channelId: 'chan-synth-01', uploaderId: 'usr_uploader' } });
-        if (call.body.url.includes('images.alummahnow')) return reply({ ok: false, reason: 'not_found', target: { kind: 'image', path: '/x' } });
+        const host = new URL(call.body.url).hostname;
+        if (host === 'media.alummahnow.net') return reply({ ok: true, resolution: { kind: 'video_thumbnail', videoId: 'vid-synth-01', channelId: 'chan-synth-01', uploaderId: 'usr_uploader' } });
+        if (host === 'images.alummahnow.net') return reply({ ok: false, reason: 'not_found', target: { kind: 'image', path: '/x' } });
         return reply({ ok: false, reason: 'not_ours' });
       }
       if (p === '/internal/csam/resolve-by-hand') return reply({ kind: 'profile_image', imageField: 'avatarUrl', imagePath: '/synthetic-placeholder_avatar.jpeg', channelId: null, uploaderId: call.body.id });
