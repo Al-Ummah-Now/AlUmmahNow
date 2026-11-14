@@ -2,15 +2,16 @@
  * Playback fallback across providers (docs/media-delivery/PROVIDERS.md §Playback), local stack only:
  * a video held by both Bunny and R2, on a channel whose override plays R2 first. The view lists both
  * sources, R2 first. With the media host down (the stack's fake media pipeline answers 503), the
- * watch page's player moves to Bunny by itself and plays, never showing an error; its QoE report
- * says it started on R2 and fell back to Bunny, with the failure's class as the reason. With the media
- * host up again it plays from R2.
+ * watch page's player moves to Bunny by itself and plays, never showing an error; its QoE reports
+ * (the live heartbeat once it plays) say it started on R2 and fell back to Bunny, with the failure's
+ * class as the reason. With the media host up again it plays from R2.
  *
  * The transcoder Container and the media Worker are not in the stack: POST /__fake/media/transcode
  * sends the job events and the fake media host serves the player fixture. The channel override is
- * this spec's only and removed afterwards; /__fake/media/up is always restored.
+ * this spec's only and removed afterwards. The media host goes down for this spec's video only
+ * (?video=), so specs running beside it keep theirs, and /__fake/media/up is always restored.
  */
-import { test, expect, type Page, type Request } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { target } from './targets';
 import { apiFetch, createProfile, signUpOnWeb } from './web-session';
 import { grantCreatorTier } from './creator-tier';
@@ -23,23 +24,28 @@ test.use({ trace: 'off', video: 'off' });
 type View = { uploadStatus?: string; playUrl?: string; delivery?: { source?: string }; sources?: Array<{ provider: string; src: string }> };
 type Qoe = { videoId?: string; requested?: string; actual?: string; fallback?: boolean; fallbackReason?: string; started?: boolean };
 
-/** QoE reports the page sends for this video (sendBeacon and fetch both reach the network layer) */
-function collectQoe(page: Page, videoId: string): Qoe[] {
-  const out: Qoe[] = [];
-  page.on('request', (req: Request) => {
-    if (!req.url().endsWith('/api/analytics/qoe')) return;
-    try {
-      const body = JSON.parse(req.postData() ?? '{}') as Qoe;
-      if (body.videoId === videoId) out.push(body);
-    } catch {
-      // not a report
-    }
+/**
+ * Records the QoE reports the page sends for this video, in the page: a sendBeacon body is a Blob,
+ * which Playwright's request events do not carry, so the reports never reached a request listener.
+ */
+async function recordQoe(page: Page, videoId: string): Promise<() => Promise<Qoe[]>> {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __qoe?: string[] };
+    w.__qoe = [];
+    const send = navigator.sendBeacon.bind(navigator);
+    navigator.sendBeacon = (url: string | URL, data?: BodyInit | null) => {
+      if (String(url).endsWith('/api/analytics/qoe') && data instanceof Blob) void data.text().then((t) => w.__qoe!.push(t));
+      return send(url, data);
+    };
   });
-  return out;
+  return async () => {
+    const raw = await page.evaluate(() => (window as unknown as { __qoe?: string[] }).__qoe ?? []).catch(() => [] as string[]);
+    return raw.map((t) => JSON.parse(t) as Qoe).filter((r) => r.videoId === videoId);
+  };
 }
 
-async function mediaHost(state: 'down' | 'up'): Promise<void> {
-  const res = await fetch(`${CONTROL}/__fake/media/${state}`, { method: 'POST' });
+async function mediaHost(state: 'down' | 'up', videoId: string): Promise<void> {
+  const res = await fetch(`${CONTROL}/__fake/media/${state}?video=${encodeURIComponent(videoId)}`, { method: 'POST' });
   expect(res.ok, `media host ${state}: ${res.status}`).toBe(true);
 }
 
@@ -104,8 +110,8 @@ test.describe('Media providers: playback falls back to the next provider', () =>
       expect(v.delivery?.source).toBe('r2');
 
       // Media host down: the player starts on R2, gets a 503, moves to Bunny and plays
-      await mediaHost('down');
-      const qoe = collectQoe(page, videoId);
+      await mediaHost('down', videoId);
+      const qoe = await recordQoe(page, videoId);
       const mediaRequests: number[] = [];
       const bunnyPlaylists: string[] = [];
       page.on('response', (res) => {
@@ -120,16 +126,15 @@ test.describe('Media providers: playback falls back to the next provider', () =>
       expect(bunnyPlaylists.length, 'then Bunny served the playlist').toBeGreaterThan(0);
       await expect(page.getByTestId('video-error')).toHaveCount(0);
 
-      // The session's report (sent when the page is left): requested R2, ended on Bunny, and why.
+      // The session's reports (the heartbeat once it plays): requested R2, ended on Bunny, and why.
       // A 503 master playlist reads as manifest_5xx when VHS exposes the status, else as network.
-      await page.goto('about:blank');
-      await expect.poll(() => qoe.some((r) => r.fallback), { message: 'the QoE report names the fallback', timeout: 15000 }).toBe(true);
-      const report = qoe.find((r) => r.fallback)!;
+      await expect.poll(async () => (await qoe()).some((r) => r.fallback), { message: 'the QoE report names the fallback', timeout: 15000 }).toBe(true);
+      const report = (await qoe()).find((r) => r.fallback)!;
       expect(report).toMatchObject({ requested: 'r2', actual: 'bunny', started: true });
       expect(['manifest_5xx', 'network']).toContain(report.fallbackReason);
 
       // Media host up: R2 plays again
-      await mediaHost('up');
+      await mediaHost('up', videoId);
       const r2Playlists: number[] = [];
       page.on('response', (res) => {
         if (new URL(res.url()).host === MEDIA_HOST && res.url().includes('.m3u8')) r2Playlists.push(res.status());
@@ -138,7 +143,7 @@ test.describe('Media providers: playback falls back to the next provider', () =>
       expect(await playFor(page, 2)).toBeGreaterThan(2);
       expect(r2Playlists, 'R2 served the playlist').toContain(200);
     } finally {
-      await mediaHost('up').catch(() => undefined);
+      if (videoId) await mediaHost('up', videoId).catch(() => undefined);
       if (videoId) await apiFetch(user, `/api/videos/${videoId}/permanent`, { method: 'DELETE', headers: { channelId } });
       await removeChannelOverride(channelId);
     }

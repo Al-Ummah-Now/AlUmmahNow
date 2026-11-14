@@ -134,6 +134,13 @@ describe('fake media pipeline (R2 transcode + media host)', () => {
     fakeMedia.down = true;
     assert.equal((await call(`https://${FAKE_MEDIA_HOST}/pub/${VID}/${REV}/master.m3u8`)).status, 503);
     fakeMedia.down = false;
+    // One video down: only its renditions answer 503, the health probe and other videos are served
+    fakeMedia.downVideos.add(VID);
+    assert.equal((await call(`https://${FAKE_MEDIA_HOST}/pub/${VID}/${REV}/master.m3u8`)).status, 503);
+    assert.equal((await call(`https://${FAKE_MEDIA_HOST}/pub/_health/probe.txt`)).status, 200);
+    assert.equal((await call(`https://${FAKE_MEDIA_HOST}/pub/other-video/${REV}/master.m3u8`)).status, 404);
+    fakeMedia.downVideos.delete(VID);
+    assert.equal((await call(`https://${FAKE_MEDIA_HOST}/pub/${VID}/${REV}/master.m3u8`)).status, 200);
   });
 
   it('refuses a video with no queued transcode or no kept original', async () => {

@@ -282,12 +282,13 @@ async function resend(request: Request): Promise<Response> {
  *   media.local-stack.test/pub/<id>/<rev>/<file> and /priv/<token>/<id>/<rev>/<file>
  *     ─► the player's HLS fixture for a rendition this fake made ready (404 otherwise); /priv/ needs a
  *        token-shaped segment (the real check is apps/media/src/edge.ts, unit tested there)
- *   POST /__fake/media/down | /up: the media host answers 503 (fallback specs)
+ *   POST /__fake/media/down | /up [?video=<id>]: the media host answers 503 (fallback specs), for that
+ *     one video's renditions when `video` is given, so specs running beside it are not affected
  */
 export const FAKE_MEDIA_HOST = 'media.local-stack.test';
 const VIDEOS_BUCKET = 'videos';
 const ORIGINALS_BUCKET = 'al-ummah-now-media-originals';
-export const fakeMedia = { renditions: new Map<string, { rev: string; access: string }>(), down: false };
+export const fakeMedia = { renditions: new Map<string, { rev: string; access: string }>(), down: false, downVideos: new Set<string>() };
 
 export async function fakeTranscode(videoId: string, outcome: string): Promise<Response> {
   if (!stackR2) return json({ error: 'R2 is available once the stack is up' }, 405);
@@ -339,6 +340,7 @@ function mediaHost(method: string, pathname: string): Response {
   const scope = parts.shift();
   if (scope === 'priv' && !/^f?\d{10}\.[A-Za-z0-9_-]{32}$/.test(parts.shift() ?? '')) return new Response('Link expired', { status: 403, headers: CORS });
   const [videoId, rev, ...rest] = parts;
+  if (videoId && fakeMedia.downVideos.has(videoId)) return new Response('media host down for this video (fake)', { status: 503, headers: CORS });
   const rendition = fakeMedia.renditions.get(videoId ?? '');
   if ((scope !== 'pub' && scope !== 'priv') || !rendition || rendition.rev !== rev || rendition.access !== scope) return new Response(null, { status: 404, headers: CORS });
   const file = rest.join('/');
@@ -406,7 +408,7 @@ async function readBody(req: IncomingMessage): Promise<string> {
 /**
  * Control API (loopback only):
  * - GET /__fake/bunny/videos[/<guid>], POST /__fake/bunny/videos/<guid>/encode|fail|hold|tus-head-404[?count=n]
- * - POST /__fake/media/transcode/<videoId>[?outcome=fail], POST /__fake/media/down | /up (the R2 media pipeline)
+ * - POST /__fake/media/transcode/<videoId>[?outcome=fail], POST /__fake/media/down | /up[?video=<id>] (the R2 media pipeline)
  * - GET /__fake/resend/emails
  * - POST /__stack/d1/<database name> with SQL as the body: { results } (seed, fast-path fixtures)
  * - GET | PUT | DELETE /__stack/r2/<bucket name>/<key>: one object (fixtures a spec seeds in R2)
@@ -482,6 +484,12 @@ async function control(req: IncomingMessage, url: URL): Promise<Response> {
     const [, , , step, videoId] = url.pathname.split('/');
     if (req.method !== 'POST') return json({ error: 'POST /__fake/media/transcode/<videoId> | /down | /up' }, 405);
     if (step === 'down' || step === 'up') {
+      const only = url.searchParams.get('video');
+      if (only) {
+        if (step === 'down') fakeMedia.downVideos.add(only);
+        else fakeMedia.downVideos.delete(only);
+        return json({ video: only, down: fakeMedia.downVideos.has(only) });
+      }
       fakeMedia.down = step === 'down';
       return json({ down: fakeMedia.down });
     }
