@@ -27,6 +27,7 @@ import {
   PROBLEM_LABEL,
   PROVIDER_LABEL,
   draftOf,
+  formWeights,
   overrideOf,
   parseWhole,
   riskyChanges,
@@ -82,12 +83,8 @@ function formOf(s: MediaSettings): FormState {
 
 /** The settings a form stands for, or null while a number field is not a valid number. */
 function settingsOf(f: FormState, base: MediaSettings): MediaSettings | null {
-  const weights: Partial<Record<MediaProviderId, number>> = {};
-  for (const p of MEDIA_PROVIDER_IDS) {
-    const n = parseWhole(f.weights[p] ?? '0', 0, 100);
-    if (f.strategy === 'weighted' && f.order.includes(p) && n === null) return null;
-    weights[p] = n ?? 0;
-  }
+  const weights = formWeights(f.weights, base.playback.weights, f.strategy, f.order);
+  if (!weights) return null;
   const health = { ...base.health, enabled: f.healthEnabled };
   for (const field of HEALTH_FIELDS) {
     const n = parseWhole(f.health[field.key], field.min, field.max);
