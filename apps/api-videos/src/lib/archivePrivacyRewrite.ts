@@ -102,10 +102,16 @@ export interface ArchivePrivacyLane {
 	 * its pages had already sent their next message (an invocation over its limits, say) used to
 	 * fork the lane into two chains that each read the rest of the archive again (QA, 2026-11-13:
 	 * GetObject on al-ummah-now-messages-qa climbing to 560k an hour). A message for any other page
-	 * is a duplicate and is dropped. A retried page still matches: the lane is written only after
-	 * a page succeeds.
+	 * is a duplicate and is dropped. A page that failed before saving the lane is retried as is (it
+	 * still matches).
 	 */
 	expect?: { prefixIndex: number; cursor: string | null };
+	/**
+	 * The page that set `expect`. Its retry (the lane was saved but sending the next message failed)
+	 * sends `expect` again instead of being dropped, so the lane never stalls; a first delivery of it
+	 * is a plain duplicate.
+	 */
+	last?: { prefixIndex: number; cursor: string | null };
 }
 
 interface Env {
@@ -359,7 +365,13 @@ export async function handleArchivePrivacyMessage(env: Env, msg: QueueMessageLik
 			msg.ack();
 			return;
 		}
-		if (lane.expect && (lane.expect.prefixIndex !== body.prefixIndex || lane.expect.cursor !== (body.cursor ?? null))) {
+		const at = (p?: { prefixIndex: number; cursor: string | null }) => !!p && p.prefixIndex === body.prefixIndex && p.cursor === (body.cursor ?? null);
+		if (lane.expect && !at(lane.expect)) {
+			if (at(lane.last) && msg.attempts > 1) {
+				await env.PROCESSING_CHECK_QUEUE!.send({ kind: ARCHIVE_PRIVACY_REWRITE_KIND, runId: body.runId, lane: body.lane, ...lane.expect } satisfies ArchivePrivacyMessage);
+				msg.ack();
+				return;
+			}
 			logger.debug('[ArchivePrivacy] Duplicate page dropped', { runId: body.runId, lane: body.lane, prefixIndex: body.prefixIndex, expected: lane.expect.prefixIndex });
 			msg.ack();
 			return;
@@ -382,8 +394,10 @@ export async function handleArchivePrivacyMessage(env: Env, msg: QueueMessageLik
 			lane.status = 'done';
 			lane.finishedAt = now.toISOString();
 			delete lane.expect;
+			delete lane.last;
 		} else {
 			lane.expect = { prefixIndex: next.prefixIndex, cursor: next.cursor };
+			lane.last = { prefixIndex: body.prefixIndex, cursor: body.cursor ?? null };
 		}
 		// State first, then the next page: a retried page adds its counts again but never skips one
 		await putJson(settings, laneKey(body.runId, body.lane), lane);
