@@ -103,10 +103,8 @@ describe('Contact us page', () => {
     expect(input.parentElement?.querySelector('.ct-input-icon')).not.toBeNull();
   });
 
-  it('does not promise a reply in the writer’s language', () => {
-    for (const c of [CONTACT_EN, CONTACT_AR]) expect(c.aside.reply).not.toMatch(/language|اللغة/);
-    expect(CONTACT_EN.aside.reply).toContain('two working days');
-    expect(CONTACT_AR.aside.reply).toContain('يومي عمل');
+  it('makes no reply-time promise', () => {
+    for (const c of [CONTACT_EN, CONTACT_AR]) expect(c.aside).not.toHaveProperty('reply');
   });
 
   it('sends the message with the spam fields and shows the success state', async () => {
