@@ -24,8 +24,10 @@ jest.mock('@/hooks/useLanguage', () => ({
     };
   },
 }));
-const mockLogin = jest.fn();
-jest.mock('@/lib/actions', () => ({ login: { bind: (_: unknown, locale: string) => (fd: unknown) => mockLogin(locale, fd) } }));
+const mockBind = jest.fn();
+jest.mock('@/lib/actions', () => ({
+  login: { bind: (...args: unknown[]) => { mockBind(...args); return () => undefined; } },
+}));
 
 beforeEach(() => {
   mockAuth.user = null;
@@ -49,6 +51,8 @@ describe('SignInBanner', () => {
     const signIn = screen.getByRole('button', { name: 'Sign in' });
     expect(signIn).toHaveAttribute('type', 'submit');
     expect(signIn.closest('form')).not.toBeNull();
+    // The normal sign-in action, back to this locale's home page
+    expect(mockBind).toHaveBeenCalledWith(null, 'en', '/en');
     expect(screen.getByRole('button', { name: 'Hide this message' })).toBeInTheDocument();
   });
 
@@ -67,6 +71,7 @@ describe('SignInBanner', () => {
     expect(region).toHaveTextContent('اطلب صلاحية صانع المحتوى');
     expect(region).not.toHaveTextContent('فيديو');
     expect(screen.getByRole('button', { name: 'تسجيل الدخول' })).toBeInTheDocument();
+    expect(mockBind).toHaveBeenCalledWith(null, 'ar', '/ar');
   });
 
   it('dismisses with the X, stores the time and stays hidden on the next render', () => {
