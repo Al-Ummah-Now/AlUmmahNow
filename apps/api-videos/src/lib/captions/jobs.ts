@@ -283,14 +283,19 @@ export async function cancelJob(env: CaptionJobsEnv, videoId: string, jobId: str
 	const row = await readRow(env, jobId);
 	if (!row || row.video_id !== videoId) throw new CaptionJobHttpError(404, 'job_not_found');
 	if (!isCaptionJobActive(row.status)) return toJob(row);
+	// Writing the draft: too late to cancel (the draft would be free). The processor's
+	// `postprocessing` report and this update are both conditional, so exactly one wins.
 	const changed = await db(env)
-		.prepare("UPDATE caption_jobs SET status = 'cancelled', finished_at = ?, updated_at = ? WHERE id = ? AND status NOT IN ('ready', 'failed', 'cancelled')")
+		.prepare("UPDATE caption_jobs SET status = 'cancelled', finished_at = ?, updated_at = ? WHERE id = ? AND status NOT IN ('ready', 'failed', 'cancelled', 'postprocessing')")
 		.bind(now.toISOString(), now.toISOString(), jobId)
 		.run();
-	if ((changed.meta?.changes ?? 0) > 0) {
-		await releaseMinutes(db(env), jobId, now);
-		await clearJobWork(env, jobId);
+	if ((changed.meta?.changes ?? 0) === 0) {
+		const fresh = (await readRow(env, jobId))!;
+		if (fresh.status === 'postprocessing') throw new CaptionJobHttpError(409, 'job_finishing');
+		return toJob(fresh);
 	}
+	await releaseMinutes(db(env), jobId, now);
+	await clearJobWork(env, jobId);
 	return (await readJob(env, jobId))!;
 }
 

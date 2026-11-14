@@ -995,9 +995,10 @@ export async function eraseUserData(
 				if (removed > 0) bump(summary.deleted, 'subscriptions', removed);
 			}
 			if (db) {
-				ctx.budget.spend(2);
+				ctx.budget.spend(3);
 				await forgetFootprints(db, userId);
-				await eraseCaptionMinutes(db, userId);
+				// The search binding is the D1 database; the minutes need its batch and all()
+				await eraseCaptionMinutes(db as unknown as D1Database, userId);
 			}
 			const profiles = asBucket(env.profiles);
 			ctx.budget.spend();

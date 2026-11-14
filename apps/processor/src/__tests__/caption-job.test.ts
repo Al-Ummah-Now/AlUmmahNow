@@ -48,6 +48,12 @@ class Bucket {
     const v = this.store.get(key);
     return v ? (JSON.parse(v.value) as T) : null;
   }
+  async list({ prefix }: { prefix: string }) {
+    return { objects: [...this.store.keys()].filter((k) => k.startsWith(prefix)).map((key) => ({ key })), truncated: false };
+  }
+  async delete(keys: string | string[]) {
+    for (const k of [keys].flat()) this.store.delete(k);
+  }
 }
 
 function setup(chunks = 2, videosStatus: (path: string) => number = () => 200) {
@@ -168,8 +174,8 @@ describe('caption job consumer', () => {
     expect(globalThis.fetch).toHaveBeenCalled();
   });
 
-  it('stops quietly once api-videos says the job was cancelled', async () => {
-    const { env, sent } = setup(1, () => 409);
+  it('stops quietly once api-videos says the job was cancelled or erased, deleting its work', async () => {
+    const { env, sent, REVIEW_MEDIA } = setup(1, () => 409);
     const asr = speech(() => [{ offset: 0, text: 'كلام' }]);
     const m = message();
     await processCaptionJobMessages([m], env, undefined, logger, deps(asr));
@@ -177,6 +183,7 @@ describe('caption job consumer', () => {
     expect(m.retry).not.toHaveBeenCalled();
     expect(sent).toHaveLength(0);
     expect(asr.prompts).toHaveLength(0);
+    expect([...REVIEW_MEDIA.store.keys()].filter((k) => k.startsWith(`captions-work/${JOB}/`))).toEqual([]);
   });
 
   it('only silence or phantom phrases → no_speech; a draft written meanwhile → draft_exists', async () => {
