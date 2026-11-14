@@ -242,14 +242,14 @@ describe('caption minutes on the user page: overdraft and ledger', () => {
 
   it('shows the overdraft in red instead of a negative "available", the held minutes, and each step with its signed balance', () => {
     assert.equal(usage.remaining, -7);
-    const html = render(React.createElement(CaptionGrantControls, { userId: 'u1', usage, grants: [], ledger, canManage: false, grant: noop, revoke: noop }));
+    const html = render(el(CaptionGrantControls, { userId: 'u1', usage, grants: [], ledger, canManage: false, grant: noop, revoke: noop }));
     assert.match(html, /data-testid="caption-minutes-overdraft"[^>]*>Over by 7 minutes\./);
     assert.doesNotMatch(html, /minutes available now/);
     assert.match(html, /17 minutes are charged to transcriptions still running/);
     assert.match(html, /Job finished · <bdi dir="ltr">\u22122<\/bdi>/);
     assert.match(html, /text-danger-fg">balance <bdi dir="ltr">\u22127<\/bdi>/);
     assert.match(html, /Job started · <bdi dir="ltr">\+17<\/bdi>/);
-    const ar = render(React.createElement(CaptionGrantControls, { userId: 'u1', usage, grants: [], ledger, canManage: false, grant: noop, revoke: noop }), 'ar');
+    const ar = render(el(CaptionGrantControls, { userId: 'u1', usage, grants: [], ledger, canManage: false, grant: noop, revoke: noop }), 'ar');
     assert.match(ar, /تجاوز الرصيد بـ 7 من الدقائق/);
     assert.match(ar, /بدأ التفريغ/);
   });
