@@ -3528,6 +3528,7 @@ const en = {
     shiftStart: 'From',
     shiftEnd: 'To',
     crossesMidnight: 'Ends the next day.',
+    endsEndOfDay: 'Ends at midnight (end of day).',
     remove: 'Remove from rota',
     save: 'Save',
     saving: 'Saving…',
