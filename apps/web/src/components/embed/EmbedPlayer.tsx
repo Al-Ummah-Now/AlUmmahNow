@@ -305,6 +305,7 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
               className="w-full"
               ariaLabel={fill(s.playVideo, { title })}
               onPlayerReady={delivery.handlePlayerReady}
+              onPlaybackError={delivery.handlePlaybackError}
             />
           ) : (
             <button
