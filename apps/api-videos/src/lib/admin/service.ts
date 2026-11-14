@@ -32,6 +32,7 @@ import R2Repository from '../r2Repo';
 import { logger } from '../logger';
 import { isSystemPlaylist } from '../library';
 import Queue, { MessageType } from '../queue';
+import { postLocationKey } from '../community-posts';
 import { claimHandle, handleKey, normalizeHandleInput, releaseHandle, releaseReplacedHandle } from '../channelHandles';
 import { pickNewMainChannel, removeChannelPostsAndSections, softDeleteChannelObjectsStep, type OwnedChannelSummary } from '../channelDeletion';
 import { findStoredComment, removeStoredComment, type StoredComment } from '../comments';
@@ -1546,6 +1547,7 @@ export async function purgeDeletion(env: AdminServiceEnv, d: AdminDeletion): Pro
 			if (!post) return { state: 'skipped', reason: 'post_gone' };
 			if (post.status !== 'deleted') return { state: 'skipped', reason: 'post_not_deleted' };
 			await env.community_posts.delete(key);
+			await env.community_posts.delete(postLocationKey(d.id));
 			return { state: 'purged' };
 		}
 	}

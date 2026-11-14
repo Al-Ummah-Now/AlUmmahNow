@@ -41,6 +41,7 @@ import { isReportClaimOf, reportClaimKey } from '../report-claims';
 import { isOwnershipComplete } from '../search/ownership';
 import { logger } from '../logger';
 import type { SearchDb } from '@al-ummah/shared-types';
+import { postLocationKey } from '../community-posts';
 import { footprintTargets, footprintsComplete, forgetFootprints } from './footprints';
 import { eraseCaptionMinutes } from '../captions/minutes';
 
@@ -749,7 +750,8 @@ export async function eraseUserData(
 		for (const prefix of [`comments/${postId}/`, `likes/${postId}/`, `votes/${postId}/`, `comment-likes/${postId}/`]) {
 			await deleteKeys(community, await allKeys(community, prefix, ctx.budget), ctx.budget);
 		}
-		await deleteKeys(community, [key], ctx.budget);
+		// The post and its location record (lib/community-posts.ts) in one delete
+		await deleteKeys(community, [key, postLocationKey(postId)], ctx.budget);
 		bump(summary.deleted, 'communityPosts');
 	};
 

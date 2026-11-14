@@ -27,6 +27,12 @@ function env() {
 			'posts/ch/delflag.json': { ...base, id: 'delflag', isDeleted: true },
 			'posts/dead/dc.json': { ...base, id: 'dc', channelId: 'dead' },
 			'posts/ch/unindexed.json': { ...base, id: 'unindexed' },
+			// Not in the search index (no text) but with its location record
+			'posts/ch/photo.json': { ...base, id: 'photo', type: 'image', content: '' },
+			'post-locations/photo': { channelId: 'ch' },
+			'posts/ch/photogone.json': { ...base, id: 'photogone', type: 'image', content: '', status: 'deleted' },
+			'post-locations/photogone': { channelId: 'ch' },
+			'post-locations/badloc': { channelId: '../x' },
 		}),
 		channels: new MemoryBucket({ ch: { id: 'ch', name: 'C' }, dead: { id: 'dead', isDeleted: true } }),
 	};
@@ -41,7 +47,13 @@ describe('LocateCommunityPost', () => {
 		assert.deepEqual(await res.json(), { id: 'p1', channelId: 'ch' });
 	});
 
-	for (const id of ['draft', 'sched', 'hidden', 'gone', 'delflag', 'orphan', 'dc', 'unindexed', 'bad.id']) {
+	it('finds a post the search index leaves out by its location record', async () => {
+		const res = await app.request('/api/community/posts/photo', {}, env());
+		assert.equal(res.status, 200);
+		assert.deepEqual(await res.json(), { id: 'photo', channelId: 'ch' });
+	});
+
+	for (const id of ['draft', 'sched', 'hidden', 'gone', 'delflag', 'orphan', 'dc', 'unindexed', 'photogone', 'badloc', 'bad.id']) {
 		it(`${id} → 404 without the post`, async () => {
 			const res = await app.request(`/api/community/posts/${id}`, {}, env());
 			assert.equal(res.status, 404);

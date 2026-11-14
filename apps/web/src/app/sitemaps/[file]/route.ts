@@ -3,18 +3,20 @@ import {
   channelsSitemapXml,
   parseSitemapFile,
   playlistsSitemapXml,
+  postsSitemapXml,
   SITEMAP_HEADERS,
   staticSitemapXml,
   videosSitemapXml,
   type SitemapChannel,
   type SitemapPlaylist,
+  type SitemapPost,
   type SitemapVideo,
 } from '@/lib/seo/sitemaps';
 import { sitemapPageData, unavailable } from '@/lib/seo/sitemap-data';
 
 export const dynamic = 'force-dynamic';
 
-/** One sitemap file: static.xml, videos-{n}.xml, channels-{n}.xml or playlists-{n}.xml. */
+/** One sitemap file: static.xml, videos-{n}.xml, channels-{n}.xml, playlists-{n}.xml or posts-{n}.xml. */
 export async function GET(request: Request, { params }: { params: Promise<{ file: string }> }): Promise<Response> {
   const { file } = await params;
   const parsed = parseSitemapFile(file);
@@ -34,6 +36,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ file
     if (!data) return unavailable();
     if (data.items.length === 0 && parsed.page > 0) return new Response('Not found', { status: 404 });
     return new Response(channelsSitemapXml(origin, data.items), { headers: SITEMAP_HEADERS });
+  }
+  if (parsed.kind === 'posts') {
+    const data = await sitemapPageData<SitemapPost>('posts', parsed.page);
+    if (!data) return unavailable();
+    if (data.items.length === 0 && parsed.page > 0) return new Response('Not found', { status: 404 });
+    return new Response(postsSitemapXml(origin, data.items), { headers: SITEMAP_HEADERS });
   }
   const data = await sitemapPageData<SitemapPlaylist>('playlists', parsed.page);
   if (!data) return unavailable();

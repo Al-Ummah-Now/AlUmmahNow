@@ -18,7 +18,7 @@ export class SitemapSummaryGet extends PublicRoute {
 	schema = {
 		tags: ["Sitemap"],
 		summary: "Sitemap index data",
-		description: `🌐 **Public**: counts and pages (${SITEMAP_PAGE_SIZE} items each) of the public videos, channels and playlists search engines may list. Unlisted, private, scheduled and removed items are never counted.`,
+		description: `🌐 **Public**: counts and pages (${SITEMAP_PAGE_SIZE} items each) of the public videos, channels, playlists and community posts search engines may list. Unlisted, private, scheduled and removed items are never counted.`,
 		responses: {
 			"200": {
 				description: "Counts per kind",
@@ -55,19 +55,20 @@ const SitemapVideoItem = z.object({
 });
 const SitemapChannelItem = z.object({ id: z.string(), handle: z.string().optional(), name: z.string(), lastModified: z.string().nullable() });
 const SitemapPlaylistItem = z.object({ id: z.string(), title: z.string(), lastModified: z.string().nullable() });
+const SitemapPostItem = z.object({ id: z.string(), channelId: z.string(), lastModified: z.string().nullable() });
 
 /** GET /api/sitemap/:kind?page=N: one page of public items, oldest first. */
 export class SitemapPageGet extends PublicRoute {
 	schema = {
 		tags: ["Sitemap"],
 		summary: "One sitemap page",
-		description: `🌐 **Public**: up to ${SITEMAP_PAGE_SIZE} public videos, channels or playlists (oldest first) for the videos site's sitemaps.`,
+		description: `🌐 **Public**: up to ${SITEMAP_PAGE_SIZE} public videos, channels, playlists or community posts (oldest first) for the videos site's sitemaps.`,
 		request: {
 			params: z.object({ kind: z.enum(SITEMAP_KINDS) }),
 			query: z.object({ page: z.coerce.number().int().min(0).max(10_000).optional().describe("0-based page") }),
 		},
 		responses: {
-			"200": { description: "The page", content: { "application/json": { schema: z.object({ items: z.array(z.union([SitemapVideoItem, SitemapChannelItem, SitemapPlaylistItem])).describe("Videos, channels or playlists, by `kind`") }) } } },
+			"200": { description: "The page", content: { "application/json": { schema: z.object({ items: z.array(z.union([SitemapVideoItem, SitemapChannelItem, SitemapPlaylistItem, SitemapPostItem])).describe("Videos, channels, playlists or community posts, by `kind`") }) } } },
 			"503": { description: "The search index is not available", content: { "application/json": { schema: ResponseError } } },
 		},
 	};

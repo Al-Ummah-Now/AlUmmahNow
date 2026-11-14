@@ -183,6 +183,7 @@ export default function CommunityPosts({ channelId, isRTL = false, locale = 'en'
           locale={locale}
           channelId={viewerChannelId}
           userId={viewerUserId}
+          openPostLabel={t.community.openPost}
           // With a channel active, comments are that channel's; without one, the member's own (#1151)
           userAvatar={activeChannel ? activeChannel.avatarUrl : profile?.avatarUrl}
           userDisplayName={activeChannel ? channelName || undefined : userDisplayName(profile, lang, user?.email) || undefined}

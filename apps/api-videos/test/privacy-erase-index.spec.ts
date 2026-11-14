@@ -75,6 +75,8 @@ function fixture() {
 		watch_history: { [`${ME}:v-other`]: { userId: ME, videoId: 'v-other' }, [`${OTHER}:v-mine`]: { userId: OTHER, videoId: 'v-mine' } },
 		community_posts: {
 			'posts/ch-me/p-mine.json': { id: 'p-mine', channelId: 'ch-me', userId: ME, content: 'my post' },
+			'post-locations/p-mine': { channelId: 'ch-me' },
+			'post-locations/p-guest': { channelId: 'ch-other' },
 			'posts/ch-me/index.json': { posts: ['p-mine'] },
 			'comments/p-mine/top-level/pc-x.json': { id: 'pc-x', postId: 'p-mine', userId: OTHER, content: 'on my post' },
 			// Written by the user on a channel they do not own (e.g. as a channel editor)
@@ -220,6 +222,8 @@ describe('account erasure through the indexes (#1073)', () => {
 		assert.equal(b.reports.read(`claims/v-other/${ME}`), null);
 		assert.ok(b.reports.read(`claims/v-mine/${OTHER}`));
 		assert.equal(b.channel_tabs.read('channel-handles/mine'), null);
+		assert.equal(b.community_posts.read('post-locations/p-mine'), null, 'an erased post\'s location record goes with it');
+		assert.equal(b.community_posts.read('post-locations/p-guest'), null);
 		assertNoTrace(b, db);
 	});
 

@@ -1,15 +1,15 @@
 /**
  * @jest-environment node
  */
-import { channelsSitemapXml, parseSitemapFile, playlistsSitemapXml, sitemapIndexXml, staticSitemapXml, videosSitemapXml } from '../sitemaps';
+import { channelsSitemapXml, parseSitemapFile, playlistsSitemapXml, postsSitemapXml, sitemapIndexXml, staticSitemapXml, videosSitemapXml } from '../sitemaps';
 
 const O = 'https://videos.alummahnow.net';
 const locs = (xml: string) => [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
 
 describe('videos sitemaps (wiki AUN-SEO)', () => {
   it('the index lists static.xml and one file per page of each kind', () => {
-    const xml = sitemapIndexXml(O, { pageSize: 2000, kinds: { videos: { count: 2500, pages: 2, lastModified: '2026-11-13T10:00:00.000Z' }, channels: { count: 3, pages: 1, lastModified: null }, playlists: { count: 0, pages: 0, lastModified: null } } });
-    expect(locs(xml)).toEqual([`${O}/sitemaps/static.xml`, `${O}/sitemaps/videos-0.xml`, `${O}/sitemaps/videos-1.xml`, `${O}/sitemaps/channels-0.xml`]);
+    const xml = sitemapIndexXml(O, { pageSize: 2000, kinds: { videos: { count: 2500, pages: 2, lastModified: '2026-11-13T10:00:00.000Z' }, channels: { count: 3, pages: 1, lastModified: null }, playlists: { count: 0, pages: 0, lastModified: null }, posts: { count: 4, pages: 1, lastModified: null } } });
+    expect(locs(xml)).toEqual([`${O}/sitemaps/static.xml`, `${O}/sitemaps/videos-0.xml`, `${O}/sitemaps/videos-1.xml`, `${O}/sitemaps/channels-0.xml`, `${O}/sitemaps/posts-0.xml`]);
     expect(xml).toContain('<lastmod>2026-11-13T10:00:00.000Z</lastmod>');
   });
 
@@ -57,11 +57,16 @@ describe('videos sitemaps (wiki AUN-SEO)', () => {
   it('uses channel handles and playlist ids', () => {
     expect(locs(channelsSitemapXml(O, [{ id: 'c1', handle: 'one', name: 'One', lastModified: null }, { id: 'c2', name: 'Two', lastModified: null }]))).toEqual([`${O}/en/@one`, `${O}/ar/@one`, `${O}/en/channels/c2`, `${O}/ar/channels/c2`]);
     expect(locs(playlistsSitemapXml(O, [{ id: 'p1', title: 'Series', lastModified: null }]))).toEqual([`${O}/en/playlist/p1`, `${O}/ar/playlist/p1`]);
+    // Community posts: their permalinks, each language its own canonical
+    const posts = postsSitemapXml(O, [{ id: 'post1', channelId: 'c1', lastModified: '2026-11-14T00:00:00.000Z' }]);
+    expect(locs(posts)).toEqual([`${O}/en/post/post1`, `${O}/ar/post/post1`]);
+    expect(posts).toContain(`hreflang="x-default" href="${O}/en/post/post1"`);
   });
 
   it('parses sitemap file names', () => {
     expect(parseSitemapFile('static.xml')).toEqual({ kind: 'static' });
     expect(parseSitemapFile('videos-3.xml')).toEqual({ kind: 'videos', page: 3 });
+    expect(parseSitemapFile('posts-0.xml')).toEqual({ kind: 'posts', page: 0 });
     expect(parseSitemapFile('users-0.xml')).toBeNull();
     expect(parseSitemapFile('videos-x.xml')).toBeNull();
   });

@@ -1,3 +1,4 @@
+import { rememberPostLocation } from '../../lib/community-posts';
 import { z } from 'zod';
 import sanitizeHtml from 'sanitize-html';
 import {
@@ -276,6 +277,8 @@ export class CreateCommunityPost extends AuthenticatedRoute {
       // Save to R2
       const postKey = `posts/${channelId}/${post.id}.json`;
       await c.env.community_posts.put(postKey, JSON.stringify(post));
+      // Its permalink finds it by id alone (lib/community-posts.ts)
+      await rememberPostLocation(c.env.community_posts, post.id, channelId);
 
       // Update channel index
       await this.updateChannelIndex(c, channelId, post.id);

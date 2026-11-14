@@ -6,6 +6,7 @@
  *   /sitemaps/videos-{n}.xml     public videos and Shorts, with the video extension
  *   /sitemaps/channels-{n}.xml   public channels
  *   /sitemaps/playlists-{n}.xml  public playlists
+ *   /sitemaps/posts-{n}.xml      public community posts (their permalinks /{locale}/post/{id})
  *
  * Data: the api's GET /api/sitemap and /api/sitemap/:kind (public items only: never unlisted,
  * private, scheduled or removed). Every page is listed in both languages, each its own canonical
@@ -13,7 +14,7 @@
  */
 import { watchFallbackDescription } from './structured-data';
 
-export const SITEMAP_KINDS = ['videos', 'channels', 'playlists'] as const;
+export const SITEMAP_KINDS = ['videos', 'channels', 'playlists', 'posts'] as const;
 export type SitemapKind = (typeof SITEMAP_KINDS)[number];
 
 export interface SitemapSummary {
@@ -36,6 +37,7 @@ export interface SitemapVideo {
 }
 export interface SitemapChannel { id: string; handle?: string; name: string; lastModified: string | null }
 export interface SitemapPlaylist { id: string; title: string; lastModified: string | null }
+export interface SitemapPost { id: string; channelId?: string; lastModified: string | null }
 
 const LOCALES = ['en', 'ar'] as const;
 /** Static pages listed in static.xml ('' is the home page). */
@@ -131,10 +133,15 @@ export function playlistsSitemapXml(origin: string, playlists: SitemapPlaylist[]
   return `${URLSET_OPEN}\n${urls.join('\n')}\n</urlset>\n`;
 }
 
+export function postsSitemapXml(origin: string, posts: SitemapPost[]): string {
+  const urls = posts.flatMap((p) => urlEntries((l) => `${origin}/${l}/post/${encodeURIComponent(p.id)}`, p.lastModified));
+  return `${URLSET_OPEN}\n${urls.join('\n')}\n</urlset>\n`;
+}
+
 /** A sitemap file name: static.xml or <kind>-<page>.xml; null for anything else. */
 export function parseSitemapFile(file: string): { kind: 'static' } | { kind: SitemapKind; page: number } | null {
   if (file === 'static.xml') return { kind: 'static' };
-  const match = /^(videos|channels|playlists)-(\d{1,5})\.xml$/.exec(file);
+  const match = /^(videos|channels|playlists|posts)-(\d{1,5})\.xml$/.exec(file);
   return match ? { kind: match[1] as SitemapKind, page: Number(match[2]) } : null;
 }
 

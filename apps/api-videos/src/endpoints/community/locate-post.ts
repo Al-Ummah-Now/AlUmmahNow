@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { CommunityPost, PostStatus } from '@al-ummah/shared-types';
 import { OptionalAuthRoute, AppContext } from '../../base';
-import { isChannelDeleted } from '../../lib/community-posts';
+import { isChannelDeleted, readPostLocation } from '../../lib/community-posts';
 import { logger } from '../../lib/logger';
 
 const NOT_FOUND = { error: 'Post not found' };
@@ -10,7 +10,8 @@ const NOT_FOUND = { error: 'Post not found' };
  * GET /api/community/posts/:postId
  * Where a community post lives: its id and channel only, for short links (alummahnow.link/p/<id>,
  * wiki AUN-SHORT-LINKS), which carry the post id alone. The channel comes from the search index
- * (search_posts, unique on id); the post itself is then read so a draft, scheduled, hidden or deleted
+ * (search_posts, unique on id), else from the post's location record (posts the index leaves out:
+ * an image, GIF or video with no text); the post itself is then read so a draft, scheduled, hidden or deleted
  * post, or one of a deleted channel, is "not found" as it is everywhere else. Not a view.
  */
 export class LocateCommunityPost extends OptionalAuthRoute {
@@ -37,10 +38,9 @@ export class LocateCommunityPost extends OptionalAuthRoute {
     const { postId } = c.req.param();
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(postId)) return c.json(NOT_FOUND, 404);
     const db = (c.env as { SEARCH_DB?: D1Database }).SEARCH_DB;
-    if (!db) return c.json(NOT_FOUND, 404);
     try {
-      const row = await db.prepare('SELECT channel_id FROM search_posts WHERE id = ?1').bind(postId).first<{ channel_id: string | null }>();
-      const channelId = row?.channel_id;
+      const row = db ? await db.prepare('SELECT channel_id FROM search_posts WHERE id = ?1').bind(postId).first<{ channel_id: string | null }>() : null;
+      const channelId = row?.channel_id || (await readPostLocation(c.env.community_posts, postId));
       if (!channelId) return c.json(NOT_FOUND, 404);
       const object = await c.env.community_posts.get(`posts/${channelId}/${postId}.json`);
       if (!object) return c.json(NOT_FOUND, 404);
