@@ -19,6 +19,9 @@ import {
 } from './test-utils/channel-content';
 import { ownPublicVideos } from './test-utils/own-public-video';
 
+/** A channel's page: /{locale}/@{handle} for a channel with a handle (/channels/{id} 308s there), else /channels/{id} */
+const channelPageUrl = (locale: string, id: string, rest = '') => new RegExp(`/${locale}/(channels/${id}|@[^/?#]+)${rest}`);
+
 /**
  * Channel page (/[locale]/channels/[id]): header, subscribe button and the
  * home/videos/shorts/live/playlists/community/channels tabs (About is covered
@@ -303,7 +306,7 @@ test.describe('Channel tabs', () => {
   test('CHTAB-016 unknown ?tab= falls back to the default tab', async ({ page }) => {
     const config = await getTabConfig(lectures.id);
     await page.goto(`/en/channels/${lectures.id}?tab=not-a-tab`);
-    await expect(page).toHaveURL(new RegExp(`/en/channels/${lectures.id}$`));
+    await expect(page).toHaveURL(channelPageUrl('en', lectures.id, '$'));
     await expectTabSelected(page, config.defaultTab);
   });
 
