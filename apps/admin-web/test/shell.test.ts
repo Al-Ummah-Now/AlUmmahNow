@@ -14,7 +14,7 @@ const hrefs = (access: NavAccess) => visibleItems(access).map((i) => i.href);
 
 describe('nav model', () => {
   it('keeps every section of the old top nav', () => {
-    for (const href of ['/dashboard', '/moderation', '/moderation/ai', '/channels', '/videos', '/comments', '/playlists', '/community', '/deleted', '/users', '/category-suggestions', '/translations', '/indices', '/site-theme', '/contact', '/processing', '/stale-uploads', '/errors', '/jobs', '/creators', '/auth-requests', '/legacy-profiles', '/video-formats', '/delivery', '/operations']) {
+    for (const href of ['/dashboard', '/moderation', '/moderation/ai', '/channels', '/videos', '/comments', '/playlists', '/community', '/deleted', '/users', '/category-suggestions', '/translations', '/indices', '/site-theme', '/contact', '/processing', '/stale-uploads', '/errors', '/jobs', '/tiers', '/auth-requests', '/legacy-profiles', '/video-formats', '/delivery', '/operations']) {
       assert.ok(NAV_ITEMS.some((i) => i.href === href), href);
     }
   });
@@ -49,6 +49,18 @@ describe('nav model', () => {
     assert.deepEqual(breadcrumbs('/videos', items), [{ label: 'nav.groupContent' }, { label: 'nav.videos' }]);
     assert.deepEqual(breadcrumbs('/channels/ch_1', items), [{ label: 'nav.groupContent' }, { label: 'nav.channels', href: '/channels' }]);
     assert.deepEqual(breadcrumbs('/dashboard', items), [{ label: 'nav.dashboard' }]);
+  });
+
+  it('lists Tiers as its own People item for every admin, after Users, and no Creators page', () => {
+    for (const access of [admin, moderator]) {
+      const people = groupedItems(access).find((g) => g.id === 'people')!.items.map((i) => i.href);
+      assert.equal(people[0], '/users');
+      assert.equal(people[1], '/tiers');
+      assert.ok(!people.includes('/creators'));
+    }
+    const items = visibleItems(admin);
+    assert.deepEqual(breadcrumbs('/tiers', items), [{ label: 'nav.groupPeople' }, { label: 'nav.tiers' }]);
+    assert.equal(NAV_ITEMS.find((i) => i.href === '/tiers')?.icon, 'crown');
   });
 
   it('shows badges as 1–99, then 99+, and nothing for zero', () => {

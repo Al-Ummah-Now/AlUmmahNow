@@ -8,6 +8,7 @@
  */
 import type { ActionResult } from './errors';
 import { fetchAdmin, toResult } from './request';
+import type { AdminUsersPage } from '@al-ummah/shared-types';
 import type {
   AdminChannelRow,
   AdminCommentRow,
@@ -17,7 +18,6 @@ import type {
   AdminPage,
   AdminPlaylistRow,
   AdminPostRow,
-  AdminUserRow,
   AdminUserSearchItem,
   AdminVideoRow,
   ChannelDetailView,
@@ -171,7 +171,7 @@ export async function deletePost(channelId: string, postId: string, reason?: str
 
 // Users (videos profiles; never the Auth account)
 
-export async function listUsers(params: ListParams): Promise<AdminPage<AdminUserRow>> {
+export async function listUsers(params: ListParams): Promise<AdminUsersPage> {
   return fetchAdmin(withQuery('/users', params));
 }
 

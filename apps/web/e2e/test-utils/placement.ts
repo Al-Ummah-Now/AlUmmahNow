@@ -40,7 +40,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/admin-web/e2e/11-site-theme.spec.ts': { placement: 'local', reason: 'Admin site theme reaches web first HTML; web is local' },
   'apps/admin-web/e2e/12-auth-requests.spec.ts': { placement: 'local', reason: 'auth admin app (Auth repo, local) decides the requests; issuer code sink' },
   'apps/admin-web/e2e/12-legacy-profiles.spec.ts': { placement: 'local', reason: 'Restore job via admin-api queue; R2 seed helper swappable to local R2' },
-  'apps/admin-web/e2e/13-creators.spec.ts': { placement: 'local', reason: 'Creator tier assign/remove, tiers validation, audit' },
+  'apps/admin-web/e2e/13-users-tiers.spec.ts': { placement: 'local', reason: 'Creator tiers on the Users list (assign/remove, filter, bulk), Tiers nav + page validation, redirects, audit' },
   'apps/admin-web/e2e/14-channel-transfer.spec.ts': { placement: 'local', reason: 'Owner picker, confirm dialog, transfer job, permissions' },
   'apps/admin-web/e2e/14-recently-deleted.spec.ts': { placement: 'local', reason: 'Recently deleted list and type-to-confirm dialog' },
   'apps/admin-web/e2e/15-invites.spec.ts': { placement: 'local', reason: 'invite link and sign-up on the real issuer (local), lands signed in on web' },

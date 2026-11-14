@@ -1,11 +1,13 @@
 /**
- * Creator tiers, end to end on QA: the seeded QA viewer is found on the
- * Creators list by email, given the Creator tier from its row (the
- * confirmation states the effect), the change is in the audit log, then the
- * tier is removed (the confirmation warns about in-progress uploads). The
- * tiers page shows users per tier and refuses a daily limit under the hourly
- * one without saving. Arabic renders right to left. The viewer's tier is put
- * back as it was afterwards.
+ * Creator tiers on the Users list and the Tiers page: the viewer is found on
+ * the Users list, given the Creator tier from its row (the confirmation
+ * states the effect), the change is in the audit log and the tier filter
+ * finds it, then the tier is removed (the confirmation warns about
+ * in-progress uploads) and given again with the bulk change. Tiers is its own
+ * People nav item; the old /creators URLs redirect. The Tiers page shows
+ * users per tier and refuses a daily limit under the hourly one without
+ * saving. Arabic renders right to left. The viewer's tier is put back as it
+ * was afterwards.
  *
  * One project only: it changes one shared QA user's tier. In run mode the
  * viewer is this job's own run account (global-setup.ts), which has no videos
@@ -18,16 +20,16 @@ import { createVideosProfile } from './support/profiles';
 import { expectDirection, expectNoAxeViolations, setPreferences } from './support/ui';
 
 interface Assignment { tierId: string; source: string; assignedBy: string }
-interface CreatorsPage { items: { userId: string; email: string | null; assignment: Assignment | null }[] }
+interface UsersPage { items: { id: string; email: string | null; creator?: { assignment: Assignment | null } }[] }
 interface UserTier { assignment: Assignment | null; audit: { details: { tierId: string | null } | null; actorId: string }[] }
 
 const state: { userId?: string; previous?: Assignment | null } = {};
 
-/** The Creators search for the viewer: its user id in run mode (exact match; a new profile's email may not be indexed yet). */
+/** The Users search for the viewer: its user id in run mode (exact match; a new profile's email may not be indexed yet). */
 const searchTerm = () => (RUN_ID ? state.userId! : accounts.nonadmin.email);
 
 /**
- * Gives the run viewer a videos profile (the Creators list only has users with
+ * Gives the run viewer a videos profile (the Users list only has users with
  * one) and waits until the list has it. Returns its user id. Looked up by id,
  * not email: the list takes the email from the search index's profile row,
  * which a brand-new profile may not carry yet.
@@ -36,8 +38,8 @@ async function ensureRunViewerProfile(email: string): Promise<string> {
   const userId = (await createVideosProfile(readTokens().reporter, email, 'Admin E2E viewer')).id;
   await expect
     .poll(async () => {
-      const { body } = await adminApi<CreatorsPage>(`/api/content/creators?q=${encodeURIComponent(userId!)}`);
-      return body.result?.items.some((item) => item.userId === userId) ?? false;
+      const { body } = await adminApi<UsersPage>(`/api/content/users?q=${encodeURIComponent(userId!)}`);
+      return body.result?.items.some((item) => item.id === userId) ?? false;
     }, { timeout: 90_000, intervals: [2_000, 5_000] })
     .toBe(true);
   return userId!;
@@ -45,7 +47,7 @@ async function ensureRunViewerProfile(email: string): Promise<string> {
 
 test.describe.configure({ mode: 'serial' });
 
-test.describe('creator tiers', () => {
+test.describe('creator tiers on Users and Tiers', () => {
   test.beforeAll(async ({}, testInfo) => {
     test.skip(testInfo.project.name !== 'chromium', 'One project only: it changes a shared QA user');
     // PR runs hit QA, which follows main: skip until admin-api has the bulk route there
@@ -58,13 +60,14 @@ test.describe('creator tiers', () => {
       runViewerId = await ensureRunViewerProfile(accounts.nonadmin.email);
     }
     const q = runViewerId ?? accounts.nonadmin.email;
-    const { body } = await adminApi<CreatorsPage>(`/api/content/creators?q=${encodeURIComponent(q)}`);
+    const { body } = await adminApi<UsersPage>(`/api/content/users?q=${encodeURIComponent(q)}`);
     const row = body.result?.items.find((item) =>
-      runViewerId ? item.userId === runViewerId : item.email?.toLowerCase() === accounts.nonadmin.email.toLowerCase(),
+      runViewerId ? item.id === runViewerId : item.email?.toLowerCase() === accounts.nonadmin.email.toLowerCase(),
     );
     test.skip(!row, 'The seeded QA viewer has no videos profile');
-    state.userId = row!.userId;
-    state.previous = row!.assignment;
+    test.skip(row!.creator === undefined, 'api-videos does not return the tier on the Users list yet');
+    state.userId = row!.id;
+    state.previous = row!.creator!.assignment;
     if (state.previous) {
       // Start from no tier, so the row shows the full assign flow
       await adminApi(`/api/content/users/${encodeURIComponent(state.userId)}/creator-tier`, { method: 'PUT', body: JSON.stringify({ tierId: null }) });
@@ -77,9 +80,9 @@ test.describe('creator tiers', () => {
     await adminApi(`/api/content/users/${encodeURIComponent(state.userId)}/creator-tier`, { method: 'PUT', body: JSON.stringify({ tierId }) });
   });
 
-  test('CRE-01 give the Creator tier from the row: the confirmation states the effect, the change is audited', async ({ page }) => {
-    await page.goto(`/creators?q=${encodeURIComponent(searchTerm())}`);
-    const row = page.locator(`[data-testid="creator-row"][data-user-id="${state.userId}"]`);
+  test('CRE-01 give the Creator tier from the Users row: the confirmation states the effect, the change is audited', async ({ page }) => {
+    await page.goto(`/users?q=${encodeURIComponent(searchTerm())}`);
+    const row = page.locator(`[data-testid="user-row"][data-user-id="${state.userId}"]`);
     await expect(row).toBeVisible();
     await row.getByTestId('creator-tier-select').selectOption('creator');
     const dialog = row.getByTestId('creator-tier-change-dialog');
@@ -93,11 +96,18 @@ test.describe('creator tiers', () => {
     const { body } = await adminApi<UserTier>(`/api/content/users/${encodeURIComponent(state.userId!)}/creator-tier`);
     expect(body.result?.assignment?.tierId).toBe('creator');
     expect(body.result?.audit[0]?.details?.tierId).toBe('creator');
+
+    // The tier filter: the one tier and "has a tier" find them; "no tier" does not
+    for (const [tier, found] of [['creator', true], ['has_tier', true], ['none', false]] as const) {
+      await page.goto(`/users?q=${encodeURIComponent(searchTerm())}&tier=${tier}`);
+      await expect(page.getByTestId('users-filters').locator('select[name="tier"]')).toHaveValue(tier);
+      await expect(page.locator(`[data-testid="user-row"][data-user-id="${state.userId}"]`)).toHaveCount(found ? 1 : 0);
+    }
   });
 
   test('CRE-02 removing the tier warns that started uploads finish and new ones are refused; Cancel changes nothing', async ({ page }) => {
-    await page.goto(`/creators?q=${encodeURIComponent(searchTerm())}`);
-    const row = page.locator(`[data-testid="creator-row"][data-user-id="${state.userId}"]`);
+    await page.goto(`/users?q=${encodeURIComponent(searchTerm())}`);
+    const row = page.locator(`[data-testid="user-row"][data-user-id="${state.userId}"]`);
     const select = row.getByTestId('creator-tier-select');
     await select.selectOption('');
     const dialog = row.getByTestId('creator-tier-change-dialog');
@@ -111,15 +121,48 @@ test.describe('creator tiers', () => {
     await expect(row.getByTestId('creator-tier')).toHaveAttribute('data-tier', '');
   });
 
-  test('CRE-03 the tiers page counts users per tier and refuses a daily limit under the hourly one without saving', async ({ page }) => {
+  test('CRE-06 the bulk tier change on the Users list: select the row, choose a tier, confirm with its effect', async ({ page }) => {
+    await page.goto(`/users?q=${encodeURIComponent(searchTerm())}`);
+    const row = page.locator(`[data-testid="user-row"][data-user-id="${state.userId}"]`);
+    await expect(row.getByTestId('creator-tier')).toHaveAttribute('data-tier', '');
+    const apply = page.getByTestId('users-bulk-apply');
+    await expect(apply).toBeDisabled();
+    await row.getByTestId('user-select').check();
+    await expect(page.getByTestId('users-selected')).toHaveText('1 selected');
+    await page.getByTestId('users-bulk-tier').selectOption('creator');
+    await apply.click();
+    const dialog = page.getByTestId('users-bulk-change-dialog');
+    await expect(dialog.getByTestId('users-bulk-change-effect')).toContainText(/Give 1 selected users the .+ tier\? They can upload up to/);
+    await dialog.getByTestId('users-bulk-change-confirm').click();
+    await expect(page.getByTestId('users-bulk-notice')).toContainText('Changed 1.');
+    await expect(row.getByTestId('creator-tier')).toHaveAttribute('data-tier', 'creator');
+    await expectNoAxeViolations(page, '/users (tier column, bulk change)');
+  });
+
+  test('CRE-07 Tiers is its own People nav item, and the old Creators URLs redirect', async ({ page }) => {
+    await page.goto('/users');
+    const sidebar = page.getByTestId('admin-sidebar');
+    await expect(sidebar.getByRole('link', { name: 'Creators', exact: true })).toHaveCount(0);
+    await sidebar.getByRole('link', { name: 'Tiers', exact: true }).click();
+    await expect(page).toHaveURL(/\/tiers$/);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Tiers');
+
     await page.goto('/creators/tiers');
+    await expect(page).toHaveURL(/\/tiers$/);
+    await page.goto('/creators?filter=limited&q=abc');
+    await expect(page).toHaveURL(/\/users\?q=abc&tier=hit_limit$/);
+    await expect(page.getByTestId('users-filters').locator('select[name="tier"]')).toHaveValue('hit_limit');
+  });
+
+  test('CRE-03 the Tiers page counts users per tier and refuses a daily limit under the hourly one without saving', async ({ page }) => {
+    await page.goto('/tiers');
     await expect(page.getByTestId('tier-creator-users')).toContainText(/users/);
     await page.getByTestId('tier-creator-perDay').fill('1');
     await page.getByTestId('tier-creator-perHour').fill('5');
     await page.getByTestId('tier-creator-save').click();
     await expect(page.getByTestId('tier-creator-perDay-error')).toContainText('at least the hourly limit');
     await expect(page.getByTestId('tier-creator-confirm-dialog')).toBeHidden();
-    await expectNoAxeViolations(page, '/creators/tiers');
+    await expectNoAxeViolations(page, '/tiers');
   });
 
   test('CRE-05 caption minutes on the user page: a grant needs a reason, adds minutes, is audited, and a revoke takes them back', async ({ page }) => {
@@ -157,13 +200,19 @@ test.describe('creator tiers', () => {
     expect(body.result?.audit.map((e) => e.action)).toEqual(['caption-grant-revoke', 'caption-grant']);
   });
 
-  test('CRE-04 Arabic: the Creators page is right to left and translated', async ({ page }) => {
-    await page.goto('/creators');
+  test('CRE-04 Arabic: the Users tier column and the Tiers page are right to left and translated', async ({ page }) => {
+    await page.goto('/users');
     await setPreferences(page, { locale: 'ar' });
-    await page.goto(`/creators?q=${encodeURIComponent(searchTerm())}`);
+    await page.goto(`/users?q=${encodeURIComponent(searchTerm())}`);
     await expectDirection(page, 'ar');
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('صنّاع المحتوى');
-    await expectNoAxeViolations(page, '/creators (ar)');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('المستخدمون');
+    await expect(page.getByRole('columnheader', { name: 'الفئة' })).toBeVisible();
+    await expectNoAxeViolations(page, '/users (ar)');
+    await page.getByTestId('admin-sidebar').getByRole('link', { name: 'الفئات', exact: true }).click();
+    await expect(page).toHaveURL(/\/tiers$/);
+    await expectDirection(page, 'ar');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('الفئات');
+    await expectNoAxeViolations(page, '/tiers (ar)');
     await setPreferences(page, { locale: 'en' });
   });
 });

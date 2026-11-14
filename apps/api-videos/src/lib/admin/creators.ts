@@ -20,6 +20,10 @@ import {
 	creatorTierOrigin,
 	type AdminCreatorFilter,
 	type AdminCreatorRow,
+	type AdminPage,
+	type AdminUserCreatorInfo,
+	type AdminUserRow,
+	type AdminUsersPage,
 	type AdminCreatorsPage,
 	type CreatorTier,
 	type CreatorTierBulkResult,
@@ -107,7 +111,7 @@ export async function listCreators(env: CreatorsEnv, query: CreatorsQuery, nowMs
 	// filter (cachedCount, as the users list), so a page load costs one scan, not three. Under suite
 	// load the three scans overloaded the search database and the Creators page failed to load (CRE-02).
 	const filterKey = `creators:${query.filter ?? ''}:${query.tierId ?? ''}:${(q ?? '').toLowerCase().slice(0, 80)}`;
-	const [total, rows, notices, needsTier] = await Promise.all([
+	const [total, rows, notices] = await Promise.all([
 		cachedCount(db as never, filterKey, () =>
 			db.prepare(`SELECT COUNT(*) AS n FROM (${CREATORS_SQL}) ${whereSql}`).bind(...binds).first<{ n: number }>().then((r) => Number(r?.n) || 0), nowMs),
 		db
@@ -122,12 +126,10 @@ export async function listCreators(env: CreatorsEnv, query: CreatorsQuery, nowMs
 		Promise.all([
 			cachedCount(db as never, 'creators:hits24h', () =>
 				db.prepare('SELECT COUNT(DISTINCT user_id) AS n FROM upload_limit_hits WHERE hit_at >= ?').bind(now - 86400).first<{ n: number }>().then((r) => Number(r?.n) || 0), nowMs),
-			cachedCount(db as never, 'creators:hits7d', () =>
-				db.prepare('SELECT COUNT(DISTINCT user_id) AS n FROM upload_limit_hits WHERE hit_at >= ?').bind(weekAgo).first<{ n: number }>().then((r) => Number(r?.n) || 0), nowMs),
-		]).then(([hits24h, hits7d]) => ({ hits24h, hits7d })),
-		cachedCount(db as never, 'creators:needs-tier', () =>
-			db.prepare(`SELECT COUNT(*) AS n FROM (${CREATORS_SQL}) WHERE ${NEEDS_TIER}`).bind(weekAgo).first<{ n: number }>().then((r) => Number(r?.n) || 0), nowMs),
+			creatorNotices(db, nowMs),
+		]).then(([hits24h, n]) => ({ hits24h, hits7d: n.limitHits7d, needsTier: n.needsTier })),
 	]);
+	const needsTier = notices.needsTier;
 	const list = rows.results ?? [];
 	const ids = list.map((r) => String(r.user_id));
 	const [profiles, assignments, tiers, usage] = await Promise.all([
@@ -171,6 +173,64 @@ export async function listCreators(env: CreatorsEnv, query: CreatorsQuery, nowMs
 		limitHits7d: Number(notices?.hits7d) || 0,
 		needsTier,
 	};
+}
+
+/** The creator notices: users who need a tier, and who hit an upload limit in 7 days (each cached a minute). */
+async function creatorNotices(db: D1Database, nowMs: number): Promise<{ needsTier: number; limitHits7d: number }> {
+	const weekAgo = Math.floor(nowMs / 1000) - 7 * 86400;
+	const [needsTier, limitHits7d] = await Promise.all([
+		cachedCount(db as never, 'creators:needs-tier', () =>
+			db.prepare(`SELECT COUNT(*) AS n FROM (${CREATORS_SQL}) WHERE ${NEEDS_TIER}`).bind(weekAgo).first<{ n: number }>().then((r) => Number(r?.n) || 0), nowMs),
+		cachedCount(db as never, 'creators:hits7d', () =>
+			db.prepare('SELECT COUNT(DISTINCT user_id) AS n FROM upload_limit_hits WHERE hit_at >= ?').bind(weekAgo).first<{ n: number }>().then((r) => Number(r?.n) || 0), nowMs),
+	]);
+	return { needsTier, limitHits7d };
+}
+
+/**
+ * The Users list with each row's creator tier (where it came from, who
+ * assigned it, needs a tier, limit hits this week) and the creator notices:
+ * the tier is a property of a user, so the Users list carries what the
+ * Creators page used to. Reads only the page's users (indexed lookups).
+ */
+export async function withCreatorInfo(env: CreatorsEnv, page: AdminPage<AdminUserRow>, nowMs = Date.now()): Promise<AdminUsersPage> {
+	const db = env.SEARCH_DB as D1Database;
+	const ids = page.items.map((u) => u.id);
+	const weekAgo = Math.floor(nowMs / 1000) - 7 * 86400;
+	const [assignments, owners, hits, notices] = await Promise.all([
+		readAssignments(db, ids),
+		ids.length
+			? db
+					.prepare(
+						`SELECT DISTINCT owner_id FROM content_ownership
+						 WHERE kind IN ('channel', 'video') AND is_deleted = 0 AND owner_id IN (SELECT value FROM json_each(?))`,
+					)
+					.bind(JSON.stringify(ids))
+					.all<{ owner_id: string }>()
+					.then((r) => new Set((r.results ?? []).map((row) => row.owner_id)))
+			: Promise.resolve(new Set<string>()),
+		ids.length
+			? db
+					.prepare('SELECT user_id, COUNT(*) AS n FROM upload_limit_hits WHERE hit_at >= ? AND user_id IN (SELECT value FROM json_each(?)) GROUP BY user_id')
+					.bind(weekAgo, JSON.stringify(ids))
+					.all<{ user_id: string; n: number }>()
+					.then((r) => new Map((r.results ?? []).map((row) => [row.user_id, Number(row.n) || 0])))
+			: Promise.resolve(new Map<string, number>()),
+		creatorNotices(db, nowMs),
+	]);
+	const assigners = await namesOf(db, [...new Set([...assignments.values()].map((a) => a.assignedBy))]);
+	const items = page.items.map((u) => {
+		const assignment = assignments.get(u.id) ?? null;
+		const creator: AdminUserCreatorInfo = {
+			assignment,
+			origin: creatorTierOrigin(assignment),
+			assignedByName: assignment ? assigners.get(assignment.assignedBy) ?? null : null,
+			needsTier: !assignment && owners.has(u.id),
+			limitHits7d: hits.get(u.id) ?? 0,
+		};
+		return { ...u, creator };
+	});
+	return { ...page, items, creators: notices };
 }
 
 /** Display names (videos profiles) of the admins who assigned tiers. */

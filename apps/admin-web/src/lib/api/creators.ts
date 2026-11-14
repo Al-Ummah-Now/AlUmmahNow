@@ -4,7 +4,7 @@
  * Creator tiers (admin-api /api/content/creators, /creator-tiers,
  * /users/:id/creator-tier). Videos-side data: never the Auth admin or Auth RBAC.
  */
-import type { AdminAuditEntry, AdminCreatorFilter, CaptionGrantScope, CaptionLedgerEntry, CaptionMinuteGrant, CaptionMinutesUsage, AdminCreatorsPage, CreatorTierAssignment, CreatorTierBulkResult, CreatorTiersList } from '@al-ummah/shared-types';
+import type { AdminAuditEntry, CaptionGrantScope, CaptionLedgerEntry, CaptionMinuteGrant, CaptionMinutesUsage, CreatorTierAssignment, CreatorTierBulkResult, CreatorTiersList } from '@al-ummah/shared-types';
 import { AdminApiError, type ActionResult } from './errors';
 import { requestAdmin, navigateForPasskey } from './request';
 
@@ -24,16 +24,6 @@ async function mutate<T>(endpoint: string, method: string, body?: unknown): Prom
   }
 }
 
-export async function listCreators(params: { q?: string; filter?: AdminCreatorFilter; tier?: string; page?: number } = {}): Promise<AdminCreatorsPage> {
-  const query = new URLSearchParams();
-  if (params.q) query.set('q', params.q);
-  if (params.filter && params.filter !== 'all') query.set('filter', params.filter);
-  if (params.tier) query.set('tierId', params.tier);
-  if (params.page && params.page > 1) query.set('page', String(params.page));
-  query.set('pageSize', '50');
-  return fetchAdmin<AdminCreatorsPage>(`/api/content/creators?${query}`);
-}
-
 /** The tier definitions, how many users hold each, and the week's limit hits. */
 export async function listCreatorTiers(): Promise<CreatorTiersList> {
   return fetchAdmin<CreatorTiersList>('/api/content/creator-tiers');
@@ -41,7 +31,7 @@ export async function listCreatorTiers(): Promise<CreatorTiersList> {
 
 /**
  * The tier definitions only (?counts=0), for pages that pick a tier: the counts scan every
- * profile and assignment and only the Creators overview and Tiers pages show them.
+ * profile and assignment and only the Tiers page shows them.
  */
 export async function listCreatorTierDefinitions(): Promise<CreatorTiersList['items']> {
   return (await fetchAdmin<{ items: CreatorTiersList['items'] }>('/api/content/creator-tiers?counts=0')).items;

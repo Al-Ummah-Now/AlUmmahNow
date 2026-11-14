@@ -9,11 +9,11 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { renderToStaticMarkup } from 'react-dom/server';
 import * as React from 'react';
-import { CREATOR_TIER_BOUNDS, type AdminCreatorRow, type CreatorTier } from '@al-ummah/shared-types';
+import { CREATOR_TIER_BOUNDS, type AdminUserRow, type CreatorTier } from '@al-ummah/shared-types';
 import {
-  creatorsHref,
+  creatorsToUsersHref,
   isUnexpectedFailure,
-  parseCreatorsQuery,
+  parseUserTierFilter,
   tierActionMessage,
   tierChangeMessage,
   tierEffect,
@@ -25,7 +25,7 @@ import { I18nProvider } from '../src/i18n/I18nProvider';
 import { CaptionGrantControls } from '../src/components/creators/CaptionGrantControls';
 import { captionUsageFrom } from '@al-ummah/shared-types';
 import { CreatorTierControl } from '../src/components/creators/CreatorTierControl';
-import { CreatorsTable } from '../src/components/creators/CreatorsTable';
+import { UsersTable } from '../src/components/users/UsersTable';
 import { LimitHitsNotice } from '../src/components/creators/LimitHitsNotice';
 import { TierEditor } from '../src/components/creators/TierEditor';
 import en from '../src/i18n/messages/en';
@@ -98,17 +98,21 @@ describe('tier form validation (same bounds and rules as api-videos)', () => {
   });
 });
 
-describe('Creators list query', () => {
-  it('keeps valid search, filter, tier and page values and drops the rest', () => {
-    assert.deepEqual(parseCreatorsQuery({ q: '  amina ', filter: 'limited', tier: 'creator', page: '3' }), { q: 'amina', filter: 'limited', tier: 'creator', page: 3 });
-    assert.deepEqual(parseCreatorsQuery({ filter: 'everyone', tier: 'Drop Table', page: '-1' }), { q: '', filter: 'all', tier: '', page: 1 });
-    assert.equal(parseCreatorsQuery({ tier: 'none' }).tier, 'none');
+describe('Users list tier filter (the old Creators page)', () => {
+  it('keeps needs_tier, has_tier, hit_limit, none and tier ids and drops the rest', () => {
+    for (const value of ['needs_tier', 'has_tier', 'hit_limit', 'none', 'creator', 'gold-2']) assert.equal(parseUserTierFilter(value), value);
+    for (const value of ['Drop Table', '', undefined, 'assigned_', '-x']) assert.equal(parseUserTierFilter(value), '');
   });
 
-  it('builds page links that keep the filters', () => {
-    const q = parseCreatorsQuery({ q: 'a b', tier: 'none', filter: 'needs_tier' });
-    assert.equal(creatorsHref(q, { page: 2 }), '/creators?q=a+b&filter=needs_tier&tier=none&page=2');
-    assert.equal(creatorsHref(parseCreatorsQuery({})), '/creators');
+  it('old /creators links land on the matching Users list', () => {
+    assert.equal(creatorsToUsersHref({}), '/users');
+    assert.equal(creatorsToUsersHref({ q: ' amina ', page: '3' }), '/users?q=amina&page=3');
+    assert.equal(creatorsToUsersHref({ filter: 'needs_tier' }), '/users?tier=needs_tier');
+    assert.equal(creatorsToUsersHref({ filter: 'assigned' }), '/users?tier=has_tier');
+    assert.equal(creatorsToUsersHref({ filter: 'limited' }), '/users?tier=hit_limit');
+    assert.equal(creatorsToUsersHref({ filter: 'all', tier: 'none' }), '/users?tier=none');
+    assert.equal(creatorsToUsersHref({ filter: 'limited', tier: 'creator' }), '/users?tier=creator', 'a tier wins over the Show filter');
+    assert.equal(creatorsToUsersHref({ filter: 'everyone', tier: 'Drop Table', page: '-1' }), '/users');
   });
 });
 
@@ -134,23 +138,16 @@ describe('friendly errors', () => {
   });
 });
 
-const row = (over: Partial<AdminCreatorRow>): AdminCreatorRow => ({
-  userId: 'usr_1',
+const row = (over: Omit<Partial<AdminUserRow>, 'creator'> & { creator?: Partial<NonNullable<AdminUserRow['creator']>> } = {}): AdminUserRow => ({
+  id: 'usr_1',
   displayName: 'Amina',
   userName: 'amina',
   email: 'amina@example.com',
   avatarUrl: null,
-  assignment: null,
-  origin: null,
-  assignedByName: null,
-  tierName: null,
-  needsTier: false,
-  channels: 0,
-  videos: 0,
-  usage: { hour: 0, day: 0 },
-  limitHits7d: 0,
-  lastLimitHitAt: null,
+  createdAt: '2026-11-01T00:00:00Z',
+  isBanned: false,
   ...over,
+  creator: { assignment: null, origin: null, assignedByName: null, needsTier: false, limitHits7d: 0, ...over.creator },
 });
 
 describe('rendered components', () => {
@@ -189,12 +186,13 @@ describe('rendered components', () => {
     assert.doesNotMatch(assigned, /<select/, 'read-only for moderators');
   });
 
-  it('the table disables selecting super admins, shows usage against the limits and links a limit hit to the tier', () => {
+  it('the Users table shows each tier, disables selecting super admins, and links a limit hit to the tier on the Tiers page', () => {
     const html = render(
-      el(CreatorsTable, {
+      el(UsersTable, {
         items: [
-          row({ userId: 'usr_owner', displayName: 'Owner', origin: 'super_admin', assignment: { userId: 'usr_owner', tierId: 'unlimited', source: 'admin', assignedBy: 'system:super-admin', assignedAt: '2026-11-10T00:00:00Z' } }),
-          row({ userId: 'usr_c', origin: 'admin', assignment: { userId: 'usr_c', tierId: 'creator', source: 'admin', assignedBy: 'a', assignedAt: '2026-11-10T00:00:00Z' }, usage: { hour: 300, day: 1200 }, limitHits7d: 2 }),
+          row({ id: 'usr_owner', displayName: 'Owner', creator: { origin: 'super_admin', assignment: { userId: 'usr_owner', tierId: 'unlimited', source: 'admin', assignedBy: 'system:super-admin', assignedAt: '2026-11-10T00:00:00Z' } } }),
+          row({ id: 'usr_c', creator: { origin: 'admin', assignment: { userId: 'usr_c', tierId: 'creator', source: 'admin', assignedBy: 'a', assignedAt: '2026-11-10T00:00:00Z' }, limitHits7d: 2 } }),
+          row({ id: 'usr_new', displayName: 'New', creator: { needsTier: true } }),
         ],
         tiers: TIERS,
         canManage: true,
@@ -203,19 +201,27 @@ describe('rendered components', () => {
       }),
     );
     const owner = html.slice(html.indexOf('data-user-id="usr_owner"'), html.indexOf('data-user-id="usr_c"'));
-    assert.match(owner, /data-testid="creator-select"[^>]*disabled|disabled[^>]*data-testid="creator-select"/);
-    assert.match(html, /300 of 300 this hour/);
-    assert.match(html, /1,200 of 2,000 today/);
-    assert.match(html, /href="\/creators\/tiers#tier-creator"/);
+    assert.match(owner, /data-testid="user-select"[^>]*disabled|disabled[^>]*data-testid="user-select"/);
+    assert.match(html, /data-testid="users-bulk"/, 'the bulk tier change for managers');
+    assert.match(html, /2 limit hits this week/);
+    assert.match(html, /href="\/tiers#tier-creator"/);
+    assert.match(html, /data-user-id="usr_new" data-needs-tier="true"/);
+    assert.match(html, /Make Creator/);
     assert.match(html, /href="\/users\/usr_c"/, 'rows open the videos user page');
     assert.doesNotMatch(html, /auth-requests/, 'never the Auth admin');
+  });
+
+  it('the Users table is read-only without creators:manage: no selection, no bulk change, no tier select', () => {
+    const html = render(el(UsersTable, { items: [row({ id: 'usr_c' })], tiers: TIERS, canManage: false, setTier, bulkSetTier }));
+    assert.doesNotMatch(html, /users-bulk|user-select|creator-tier-select/);
+    assert.match(html, /data-testid="user-tier-cell"/);
   });
 
   it('the limit-hit notice counts this week and links to who and to the limits; nothing when nobody hit one', () => {
     const notice = renderToStaticMarkup(el(LimitHitsNotice, { count: 3, t: tEn, locale: 'en' }) as never);
     assert.match(notice, /3 creators hit their upload limit this week\./);
-    assert.match(notice, /href="\/creators\?filter=limited"/);
-    assert.match(notice, /href="\/creators\/tiers"/);
+    assert.match(notice, /href="\/users\?tier=hit_limit"/);
+    assert.match(notice, /href="\/tiers"/);
     assert.equal(renderToStaticMarkup(el(LimitHitsNotice, { count: 0, t: tEn, locale: 'en' }) as never), '');
   });
 

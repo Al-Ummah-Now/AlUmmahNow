@@ -89,7 +89,8 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/translations', label: 'nav.translations', icon: 'globe', group: 'content' },
 
   { href: '/users', label: 'nav.users', icon: 'user', group: 'people' },
-  { href: '/creators', label: 'nav.creators', icon: 'crown', group: 'people' },
+  // Creator tier limits (a user's tier is set on the Users list and the user page); every admin reads, creators:manage changes
+  { href: '/tiers', label: 'nav.tiers', icon: 'crown', group: 'people' },
   { href: '/auth-requests', label: 'nav.authRequests', icon: 'key', group: 'people' },
   { href: '/legacy-profiles', label: 'nav.legacyProfiles', icon: 'archive', group: 'people', requires: (a) => a.manageUsers },
 

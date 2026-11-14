@@ -35,7 +35,7 @@ import { providerUsage } from '../lib/live/service';
 import { listChannelOverrides, readLiveRouting, readSession, removeChannelOverride, resetLiveRouting, setChannelOverride, writeLiveRouting } from '../lib/live/store';
 import { compareProviders } from '../lib/live/qoe';
 import { readStream, streamEnd, type LiveStreamRecord } from '../lib/live/streams';
-import { bulkAssignTier, limitHitsSince, listCreators, tierCounts } from '../lib/admin/creators';
+import { bulkAssignTier, limitHitsSince, listCreators, tierCounts, withCreatorInfo } from '../lib/admin/creators';
 import { createChannelFor, lookupAccount, provisionProfile } from '../lib/admin/invites';
 import { addGrant, CaptionMinutesError, listGrants, listLedger, readUsage, revokeGrant, subjectOfUser } from '../lib/captions/minutes';
 import { assignTier, CreatorTierError, deleteTier, purgeTiers, readAssignment, readDeletedTiers, readTiers, requestTierPurge, restoreTier, saveTier } from '../lib/creatorTiers';
@@ -98,6 +98,8 @@ const VideoQuery = z.object({
 const UserQuery = z.object({
 	q: z.string().max(200).optional(),
 	banned: yesNo,
+	/** a tier id, `none`, needs_tier, has_tier or hit_limit (lib/admin/directory.ts userTierWhere) */
+	tier: z.string().max(40).optional(),
 	sort: z.enum(ADMIN_USER_SORTS as [string, ...string[]]).optional(),
 	...page,
 });
@@ -251,7 +253,12 @@ app.delete('/posts/:channelId/:postId', async (c) => {
 });
 
 // Users (videos profiles)
-app.get('/users', async (c) => ok(c, await listUsers(c.env, parse(UserQuery, c.req.query()) as never, waitUntilOf(c))));
+app.get('/users', async (c) => {
+	const query = parse(UserQuery, c.req.query());
+	const page = await listUsers(c.env, query as never, waitUntilOf(c));
+	// The Users list carries each user's creator tier (the old Creators page); pickers (noTotal) do not need it
+	return ok(c, query.noTotal ? page : await withCreatorInfo(c.env as never, page));
+});
 app.get('/users/search', async (c) => ok(c, await searchUsers(c.env, parse(UserSearchQuery, c.req.query()) as never)));
 // Invited creators (docs/admin/INVITES.md): who has an email, the invited user's
 // profile (create-only) and channels made for them
