@@ -10,8 +10,9 @@ type Bucket = any;
 const PENDING_MS = 30 * 60_000;
 
 /** The review transcript of a video, if the review media still hold one. */
-export function reviewTranscriptKey(video: { review?: { manifestKey?: string } | null; r2?: { review?: { manifestKey?: string } } | null }): string | null {
-	const manifest = video.review?.manifestKey ?? video.r2?.review?.manifestKey;
+export function reviewTranscriptKey(video: { review?: { manifestKey?: string } | null; r2?: { result?: { review?: { manifestKey?: string } | null } | null } | null }): string | null {
+	// The review state names the manifest; the transcoder's own result holds it too (a review not yet queued)
+	const manifest = video.review?.manifestKey ?? video.r2?.result?.review?.manifestKey;
 	return manifest && /^review\/.+manifest\.json$/.test(manifest) ? manifest.replace(/manifest\.json$/, 'transcript.json') : null;
 }
 
