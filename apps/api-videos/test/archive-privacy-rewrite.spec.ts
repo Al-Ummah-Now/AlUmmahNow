@@ -142,4 +142,27 @@ describe('archive privacy rewrite', () => {
 		assert.equal(lane.prefixes['2026-11-12'].listed, 12, 'each object listed once, not once per fork');
 		assert.equal(reads, 12, 'each object read once');
 	});
+	it('a page whose next message failed to send is retried into the next page, never stalled', async () => {
+		const bucket = new ArchiveBucket();
+		const now = new Date('2026-11-13T12:00:00Z');
+		for (let i = 0; i < 12; i++) bucket.set(`2026-11-12T10-00-${String(i).padStart(2, '0')}.x`, { id: String(i), type: MessageType.VideoView, payload: { viewerId: ALICE, videoId: 'v1' } });
+		const settings = new ArchiveBucket();
+		const queue: ArchivePrivacyMessage[] = [];
+		let failSends = 1;
+		const send = async (m: ArchivePrivacyMessage) => {
+			// The first continuation of the day's prefix fails once, after the lane was saved
+			if (m.prefixIndex === 0 && m.cursor && failSends-- > 0) throw new Error('queue unavailable');
+			queue.push(m);
+		};
+		const env = { analytics_rollups: bucket, global_settings: settings, PROCESSING_CHECK_QUEUE: { send } };
+		const work: { body: ArchivePrivacyMessage; attempts: number }[] = [{ body: { kind: ARCHIVE_PRIVACY_REWRITE_KIND, runId: 'archive-privacy-retry-1', lane: 0, prefixIndex: 0, cursor: null, start: { dryRun: true, lanes: 1, limit: 5 } }, attempts: 1 }];
+		let steps = 0;
+		while ((work.length || queue.length) && steps++ < 2000) {
+			const item = work.shift() ?? { body: queue.shift()!, attempts: 1 };
+			await handleArchivePrivacyMessage(env as never, { body: item.body, attempts: item.attempts, ack: () => undefined, retry: () => void work.push({ body: item.body, attempts: item.attempts + 1 }) }, now);
+		}
+		const lane = settings.json('ops/archive-privacy/runs/archive-privacy-retry-1/lane-0.json');
+		assert.equal(lane.status, 'done', 'the lane finished');
+		assert.equal(lane.prefixes['2026-11-12'].listed, 12);
+	});
 });
