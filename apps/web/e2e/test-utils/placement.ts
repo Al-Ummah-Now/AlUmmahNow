@@ -148,6 +148,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/release/channel-roles.spec.ts': { placement: 'local', reason: 'account menu channel roles via members API, two users' },
   'apps/web/e2e/release/channel-shorts.spec.ts': { placement: 'local', reason: 'API lists seeded Short on channel Shorts tab' },
   'apps/web/e2e/release/chapters.player.spec.ts': { placement: 'local', reason: 'chapter bar navigation on seeded video with chapters' },
+  'apps/web/e2e/release/about.spec.ts': { placement: 'deployed', reason: 'cross-app: the About page comes from the deployed CMS (AlUmmahNowCMS migration 0021), canonical to the deployed www' },
   'apps/web/e2e/release/community-guidelines.spec.ts': { placement: 'local', reason: 'static page render en/ar' },
   'apps/web/e2e/release/contact.spec.ts': { placement: 'local', reason: 'contact form + admin inbox; mail queue sinks locally' },
   'apps/web/e2e/release/core-web.spec.ts': { placement: 'local', reason: 'i18n, 404, live comments via local websocket; auth-lang test needs issuer locale' },

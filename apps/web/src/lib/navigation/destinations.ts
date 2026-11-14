@@ -12,6 +12,7 @@ export const SIDEBAR_PATHS = {
   watchLater: '/library/watch-later',
   liked: '/library/liked',
   privacy: '/settings/privacy',
+  about: '/about',
   guidelines: '/community-guidelines',
   contact: '/contact',
 } as const;
