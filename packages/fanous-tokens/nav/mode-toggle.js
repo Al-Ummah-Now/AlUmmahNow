@@ -1,5 +1,5 @@
 /**
- * The Light / Dark control, the same in every app (docs/design/NAV.md "Theme switch"): one icon
+ * The Light / Dark control, the same in every app (docs/design/NAV.md "Header", Light/dark): one icon
  * button that switches to the other mode, as in the videos site's header (apps/web
  * ThemeDemo/AppShell `theme-toggle`).
  *
