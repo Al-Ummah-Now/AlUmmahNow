@@ -134,6 +134,9 @@
 .pb-prose h4 { font-size: 1.05rem; font-weight: 700; }
 .pb-prose ul,
 .pb-prose ol { padding-inline-start: 1.35em; }
+/* Hosts with a CSS reset (Tailwind preflight on www and the videos site) strip list markers: set them. */
+.pb-prose ul { list-style: disc; }
+.pb-prose ol { list-style: decimal; }
 .pb-a-center .pb-prose ul,
 .pb-a-center .pb-prose ol { display: inline-block; text-align: start; }
 .pb-prose li { margin-block: 0.3em; }
