@@ -244,17 +244,22 @@ test('street: tokens per mode, the lights inlined when asked, otherwise by URL; 
   assert.doesNotMatch(compilePackage(none).tokens, /--fanous-street-line/);
 });
 
-test('street tile: a built-in tile served by the apps at /fanous/street/, an uploaded package by its asset URL, shown at 2x (no stretch)', () => {
+test('street tile: built-in variants served by the apps at /fanous/street/, an uploaded package by its asset URL, shown at 2x (no stretch)', () => {
   const { theme } = fawanees();
   const builtIn = compilePackage(theme).tokens;
   const dark = builtIn.slice(0, builtIn.indexOf(':not(.dark) {'));
   const light = builtIn.slice(builtIn.indexOf(':not(.dark) {'));
-  assert.match(dark, /--fanous-street-tile: image-set\(url\("\/fanous\/street\/street-tile-dark\.webp"\) 2x\);/);
-  assert.match(light, /--fanous-street-tile: image-set\(url\("\/fanous\/street\/street-tile\.webp"\) 2x\);/);
+  assert.match(dark, /--fanous-street-tile: image-set\(url\("\/fanous\/street\/street-tile-dark-1\.webp"\) 2x\);/);
+  assert.match(light, /--fanous-street-tile: image-set\(url\("\/fanous\/street\/street-tile-1\.webp"\) 2x\);/);
+  // Every variant has its own token for the page to pick from
+  for (let n = 1; n <= 4; n++) {
+    assert.match(dark, new RegExp(`--fanous-street-tile-${n}: image-set\\(url\\("/fanous/street/street-tile-dark-${n}\\.webp"\\) 2x\\);`));
+    assert.match(light, new RegExp(`--fanous-street-tile-${n}: image-set\\(url\\("/fanous/street/street-tile-${n}\\.webp"\\) 2x\\);`));
+  }
   assert.match(dark, /--fanous-street-faint: 0\.35;/);
   assert.match(light, /--fanous-street-faint: 1;/);
   const uploaded = compilePackage(theme, { assetUrl: (p) => `/t/${p}` }).tokens;
-  assert.match(uploaded, /--fanous-street-tile: image-set\(url\("\/t\/assets\/street-tile-dark\.webp"\) 2x\);/);
+  assert.match(uploaded, /--fanous-street-tile-3: image-set\(url\("\/t\/assets\/street-tile-dark-3\.webp"\) 2x\);/);
   const plain = clone(theme); delete plain.street!.tile;
   assert.match(compilePackage(plain).tokens, /--fanous-street-tile: none;/);
 });

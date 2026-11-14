@@ -2019,13 +2019,19 @@
         },
         "tile": {
           "type": "object",
-          "description": "One wide image tile of strings (edge to edge) and lit lanterns (in the page margins), drawn at 2x and repeated in both directions behind the page without a seam.",
+          "description": "Wide image tiles of strings and lit lanterns, drawn at 2x and repeated in both directions behind the page; each wraps like a cylinder (left edge meets right, top meets bottom) so no joint shows. Up to 4 variants per mode: the page picks one at random before first paint and downloads only that one. A light and a dark tile at the same position are the same street.",
           "properties": {
             "light": {
-              "$ref": "#/$defs/imageAsset"
+              "type": "array",
+              "items": { "$ref": "#/$defs/imageAsset" },
+              "minItems": 1,
+              "maxItems": 4
             },
             "dark": {
-              "$ref": "#/$defs/imageAsset"
+              "type": "array",
+              "items": { "$ref": "#/$defs/imageAsset" },
+              "minItems": 1,
+              "maxItems": 4
             }
           },
           "additionalProperties": false,

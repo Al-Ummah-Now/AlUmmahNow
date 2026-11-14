@@ -133,15 +133,19 @@ ${modeBlock('light')}
  * switches it on; a theme without a street sets 0.
  */
 /**
- * The street's tile (raster, so never inlined): a built-in theme's is served by every app at
+ * The street's tiles (raster, so never inlined): a built-in theme's are served by every app at
  * /fanous/street/<file>; an uploaded package's comes from its own asset URL. image-set(… 2x) shows
  * the 2x tile at its CSS size, with no background-size.
  */
 function tileTokens(street: NonNullable<ThemePackage['street']>, mode: Mode, opts: CompileOptions): string[] {
   const url = (p: string) => (opts.assetUrl ? opts.assetUrl(p) : `/fanous/street/${p.split('/').pop()}`);
-  const file = street.tile?.[mode];
+  const files = street.tile?.[mode] ?? [];
+  const tile = (file: string) => `image-set(url("${url(file)}") 2x)`;
   return [
-    `  --fanous-street-tile: ${file ? `image-set(url("${url(file)}") 2x)` : 'none'};`,
+    // The first variant is the default; --fanous-street-tile-<n> are the variants the page picks
+    // from (fanous-street.css). An unused custom property never fetches its image.
+    `  --fanous-street-tile: ${files[0] ? tile(files[0]) : 'none'};`,
+    ...files.map((file, i) => `  --fanous-street-tile-${i + 1}: ${tile(file)};`),
     `  --fanous-street-faint: ${street.faint?.[mode] ?? 1};`,
     `  --fanous-street-lights-opacity: ${street.lightsOpacity?.[mode] ?? 1};`,
   ];

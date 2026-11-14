@@ -1,3 +1,7 @@
+/** How many street tile variants a theme may have. */
+export const STREET_VARIANTS: number;
+/** Inline <head> script that picks this load's street tile variant before first paint. */
+export const STREET_VARIANT_SCRIPT: string;
 /** Whether the active theme and mode switch the lantern street on (--fanous-street-on: 1). */
 export function streetEnabled(doc?: Document): boolean;
 /** Sets or clears <html class="fanous-street"> for the current theme and mode. */

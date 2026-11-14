@@ -1,16 +1,19 @@
 // Draws the Fawanees street tile: one wide image of lantern strings that repeats in both directions
 // with no seam, painted behind the whole page (centred, repeat). Run once when the art changes;
 // the WebP files are committed:
-//   node packages/theme-packages/scripts/street-tile.mjs   (needs @playwright/test and cwebp)
+//   node packages/theme-packages/scripts/street-tile.mjs   -> street-tile[-dark]-<n>.webp (needs @playwright/test and cwebp)
 // - Every row is one string from the tile's left edge to its right edge, tied at uneven hang
 //   points; the string leaves the right edge at the height it enters on the left, so rows run on
 //   across tiles. Row spacing is uneven and adds up to the tile height, and every row is drawn
 //   again one tile up and down, so the vertical seam does not show either.
-// - Lanterns (the street's lantern art, unchanged; only resized) hang along the whole string at
-//   even spacing, across the full width; posts and cards simply cover whatever is behind them.
+// - Lanterns (the street's lantern art, unchanged; only resized) hang along the whole string,
+//   across the full width, at uneven gaps with uneven drops and sizes, like a street hung by hand;
+//   posts and cards simply cover whatever is behind them.
+// - VARIANTS tiles per mode (each its own street); the page picks one at random before first
+//   paint (fanous-street.js STREET_VARIANT_SCRIPT), and only that one downloads.
 // - Drawn at 2x, shown at its CSS size by image-set(… 2x): never stretched.
 import { execFileSync } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -23,8 +26,14 @@ const { chromium } = require('@playwright/test');
 
 /** Tile size in CSS pixels: as wide as a large desktop, tall enough that the repeat is hard to spot. */
 const W = 1920, H = 1560;
-/** Distance between lanterns along a string; divides W so the pattern runs on across tiles. */
-const SPACING = 160;
+/** Gap between neighbouring lanterns along a string, picked at random in this range. */
+const GAP = [90, 270];
+/** How many variants to draw; the page picks one at random before first paint. */
+const VARIANTS = 4;
+/** No lantern (with its glow) hangs closer than this to the tile's left or right edge. */
+const EDGE = 32;
+/** Per-file weight budget: one variant downloads per load, no heavier than the single tile was. */
+const MAX_BYTES = 300_000;
 const LANTERN = '<circle cx="0" cy="4" r="3"/><path d="M0 7V12"/><path d="M-14 34C-18 24-6 20 0 12C6 20 18 24 14 34Z"/><path d="M-17 34H17V38H-17Z"/><path d="M-15 38H15L18 44V74L15 80H-15L-18 74V44Z"/><path class="w" d="M-5 74V55C-5 50-1 49 0 45C1 49 5 50 5 55V74Z"/><path class="w" d="M-14 73V58C-14 55-12 54-11 51C-10 54-9 55-9 58V73Z"/><path class="w" d="M14 73V58C14 55 12 54 11 51C10 54 9 55 9 58V73Z"/><path d="M-17 80H17L12 88H-12Z"/><path d="M-4 88L0 96L4 88"/>';
 /** The street's colours per mode (the theme's street tokens; dark is prod's lit look). */
 const MODES = {
@@ -38,33 +47,49 @@ function seeded(seed) {
 }
 
 /** The rows: uneven spacing that adds up to exactly H; each row's hang points, swags and lanterns. */
-function rows() {
-  const rnd = seeded(0x5f7ee7);
+function rows(seed) {
+  const rnd = seeded(seed);
   const r = (lo, hi) => lo + (hi - lo) * rnd();
   const gaps = [];
   while (gaps.reduce((a, b) => a + b, 0) < H - 250) gaps.push(r(185, 255));
   const scale = H / gaps.reduce((a, b) => a + b, 0);
   let y = r(30, 80);
-  let rowIndex = 0;
   return gaps.map((g) => {
-    // Hang points across the tile; the first and last share their height (the row runs on)
-    const xs = [0];
-    while (xs[xs.length - 1] < W - 300) xs.push(xs[xs.length - 1] + r(240, 400));
-    xs[xs.length - 1] = W;
-    const edgeY = y + r(-5, 5);
-    const pts = xs.map((x, i) => ({ x, y: i === 0 || i === xs.length - 1 ? edgeY : y + r(-7, 7) }));
-    const swags = [];
-    for (let i = 0; i < pts.length - 1; i++) swags.push({ a: pts[i], b: pts[i + 1], sag: r(8, 18) });
-    // Lanterns along the whole string, evenly spaced (SPACING divides W, so the spacing holds
-    // across the tile edge too); each row is shifted by half a step from the last so the
-    // lanterns do not line up in columns.
+    // Hang points laid around the tile's width as a circle, so the tile wraps like a cylinder:
+    // the last swag runs from the last hang point across the right edge to the first hang point
+    // one tile over. The edge falls in the middle of that one curve, so the string leaves the
+    // right edge at the height and slope it enters on the left (no kink, no tie point at the edge).
+    const n = Math.round(W / 320);
+    const gaps = Array.from({ length: n }, () => r(240, 400));
+    const k = W / gaps.reduce((s, v) => s + v, 0);
+    const pts = [];
+    let x = r(80, 300);
+    for (const gap of gaps) { pts.push({ x, y: y + r(-7, 7) }); x += gap * k; }
+    const swags = pts.map((p, i) => ({
+      a: p,
+      b: i < n - 1 ? pts[i + 1] : { x: pts[0].x + W, y: pts[0].y },
+      sag: r(8, 18),
+    }));
+    /** The string's top at x (0 <= x < W), on the swag that holds it (the wrap swag left of pts[0]). */
+    const at = (x) => {
+      const xx = x < pts[0].x ? x + W : x;
+      const { a, b, sag } = swags.find((w) => xx >= w.a.x && xx < w.b.x);
+      const t = (xx - a.x) / (b.x - a.x);
+      return a.y + (b.y - a.y) * t + sag * 4 * t * (1 - t);
+    };
+    // Lanterns along the whole string, hung by hand: uneven gaps, drops and sizes. None hangs
+    // within EDGE of the left or right edge (so none is drawn in halves), and the gap that runs
+    // across the edge into the next tile is no shorter than the others.
     const lanterns = [];
-    const shift = (rowIndex++ % 2) * SPACING / 2 + SPACING / 4;
-    for (let x = shift; x < W; x += SPACING) {
-      const { a, b, sag } = swags.find((w) => x >= w.a.x && x < w.b.x);
-      const t = (x - a.x) / (b.x - a.x);
-      const top = a.y + (b.y - a.y) * t + sag * 4 * t * (1 - t);
-      lanterns.push({ x, top, y: top + r(8, 22), h: r(38, 46) });
+    const xs = [EDGE + r(0, GAP[1] - GAP[0])];
+    while (true) {
+      const next = xs[xs.length - 1] + r(GAP[0], GAP[1]);
+      if (next > W - EDGE || W - next + xs[0] < GAP[0]) break;
+      xs.push(next);
+    }
+    for (const lx of xs) {
+      const top = at(lx);
+      lanterns.push({ x: lx, top, y: top + r(4, 42), h: r(32, 54) });
     }
     y += g * scale;
     return { swags, lanterns };
@@ -96,8 +121,8 @@ function rowSvg(row, dx, dy) {
   return `<path class="s" d="${d}"/>${bulbs}${lamps}`;
 }
 
-function tileSvg(c) {
-  const all = rows();
+function tileSvg(c, seed) {
+  const all = rows(seed);
   let body = '';
   for (const dy of [-H, 0, H]) for (const dx of [-W, 0, W]) for (const row of all) body += rowSvg(row, dx, dy);
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
@@ -118,12 +143,25 @@ const tmp = join(tmpdir(), `street-tile-${process.pid}`);
 mkdirSync(tmp, { recursive: true });
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 2 });
-for (const [mode, c] of Object.entries(MODES)) {
-  await page.setContent(`<html><body style="margin:0;background:transparent">${tileSvg(c)}</body></html>`);
-  const png = join(tmp, `${mode}.png`);
-  await page.screenshot({ path: png, omitBackground: true, clip: { x: 0, y: 0, width: W, height: H } });
-  const name = `street-tile${mode === 'dark' ? '-dark' : ''}.webp`;
-  execFileSync('cwebp', ['-quiet', ...(process.env.LOSSLESS ? ['-lossless', '-z', '9'] : ['-q', process.env.Q || '85', '-alpha_q', '100', '-m', '6']), png, '-o', join(OUT, name)]);
-  console.log(name);
+for (let v = 1; v <= VARIANTS; v++) {
+  // Same seed for both modes: the light and dark tiles of a variant hang the same street
+  const seed = 0x5f7ee7 + v * 0x9e3779b1;
+  for (const [mode, c] of Object.entries(MODES)) {
+    await page.setContent(`<html><body style="margin:0;background:transparent">${tileSvg(c, seed)}</body></html>`);
+    const png = join(tmp, `${mode}-${v}.png`);
+    await page.screenshot({ path: png, omitBackground: true, clip: { x: 0, y: 0, width: W, height: H } });
+    const lowest = Math.max(...rows(seed).flatMap((row) => row.lanterns.map((l) => l.y + l.h + 16)));
+    if (lowest > H) throw new Error(`variant ${v}: a lantern crosses the bottom edge (${lowest.toFixed(0)} > ${H})`);
+    const name = `street-tile${mode === 'dark' ? '-dark' : ''}-${v}.webp`;
+    // Highest quality that keeps the file within the per-load budget (one variant downloads per load)
+    const out = join(OUT, name);
+    let q = Number(process.env.Q || 85);
+    do {
+      execFileSync('cwebp', ['-quiet', '-q', String(q), '-alpha_q', '100', '-m', '6', png, '-o', out]);
+      q -= 5;
+    } while (statSync(out).size > MAX_BYTES && q >= 60);
+    if (statSync(out).size > MAX_BYTES) throw new Error(`${name} is over ${MAX_BYTES} bytes even at q60`);
+    console.log(name, `q${q + 5}`, statSync(out).size);
+  }
 }
 await browser.close();
