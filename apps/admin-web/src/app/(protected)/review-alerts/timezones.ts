@@ -114,6 +114,8 @@ export function zoneOffset(timeZone: string, at: Date = new Date()): { label: st
   if (!m) return { label: 'UTC', minutes: 0 };
   const sign = m[1] === '-' ? -1 : 1;
   const minutes = sign * (Number(m[2]) * 60 + Number(m[3] ?? 0));
+  // Newer ICU writes UTC itself as "GMT+0": a zero offset is plain "UTC" on every runtime.
+  if (minutes === 0) return { label: 'UTC', minutes: 0 };
   return { label: `UTC${sign < 0 ? '−' : '+'}${Number(m[2])}${m[3] && m[3] !== '00' ? `:${m[3]}` : ''}`, minutes };
 }
 
