@@ -55,6 +55,7 @@ function createCsp(isDevelopment: boolean, embed = false, insecureOrigin = false
       apiUrl: process.env.API_URL || process.env.NEXT_PUBLIC_API_URL,
       websocketUrl: process.env.WEBSOCKET_URL || process.env.NEXT_PUBLIC_WEBSOCKET_URL,
       bunnyPullZone: process.env.NEXT_PUBLIC_BUNNY_PULL_ZONE_URL,
+      mediaHost: process.env.MEDIA_PUBLIC_HOST,
       authUrl: process.env.OPENAUTH_ISSUER || process.env.Issuer,
     },
   });

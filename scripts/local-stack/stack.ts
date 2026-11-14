@@ -241,6 +241,8 @@ export const WORKERS: StackWorker[] = [
       INTERNAL_API_KEY: LOCAL_SECRETS.INTERNAL_API_KEY,
       // Share buttons copy short links of the stack's short-links Worker (wiki AUN-SHORT-LINKS)
       SHORT_LINK_URL: url('short-links'),
+      // The CSP lets the player fetch the fake R2 media host's HLS (fake-external.ts FAKE_MEDIA_HOST)
+      MEDIA_PUBLIC_HOST: 'media.local-stack.test',
     },
   },
   {
