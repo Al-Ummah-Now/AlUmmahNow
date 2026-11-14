@@ -66,7 +66,7 @@ in the gaps fixes both.
 | Videos web (AlUmmahNow `apps/web`) | `html.dark` | `FanousStreet` component; `src/theme/fawanees.css` makes the watch pills, details and comment sort opaque, makes the watch block, comments and related videos cards, and gives garlands room |
 | Videos admin (`apps/admin-web`) | `html.dark` | `FanousStreet` component |
 | www (AlUmmahNowUI) | `html[data-mode]` or the system setting | vendored module; timeline gaps widened on phones |
-| CMS (AlUmmahNowCMS) | `html.dark` | vendored module |
+| CMS (AlUmmahNowCMS) | `html.dark` | vendored module; on phones every fourth list item opens a 76 px gap for a garland |
 | Sign-in, profile, accounts admin (AlUmmahNowAuth) | the system setting | vendored module; the sign-in root wrapper becomes transparent |
 
 ## Checks
