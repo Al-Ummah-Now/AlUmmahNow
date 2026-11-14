@@ -3538,6 +3538,8 @@ const en = {
     lastChanged: 'Last changed {date} by {actor}.',
     neverChanged: 'Never changed: the defaults apply.',
     unknownUser: 'Unknown user ({id})',
+    owner: 'Owner',
+    reviewer: 'Reviewer',
     timingsTitle: 'Time to decision',
     timingsHint: 'Per day (UTC), from the moment a video is held: median / 90th percentile.',
     timingsEmpty: 'No video has been held for review in the last 14 days.',
