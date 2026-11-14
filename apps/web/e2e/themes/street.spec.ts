@@ -2,22 +2,23 @@ import { test, expect, type Page } from '@playwright/test';
 import { applyTheme, mockApi, signIn, THEMES, type Mode } from './harness';
 
 /**
- * THEME-STREET: the Fawanees lantern street (packages/fanous-tokens/street, owner-approved
- * 2026-11-13). In Fawanees light and dark, English and Arabic, desktop and phone:
+ * THEME-STREET: the Fawanees lantern street (packages/fanous-tokens/street). The street is
+ * pre-made art: two tall image tiles of strings and lit lanterns repeated down the sides of the
+ * page (repeat-y, seamless, shown at 2x) over the distant lights tile, painted by CSS behind the
+ * page. In Fawanees light and dark, English and Arabic, desktop and phone:
+ *   - the street's layers are there, with the theme's tiles, repeated vertically and never
+ *     stretched, and the tile files load;
+ *   - this app keeps the bands at the theme's faint opacity (its content spans the page, so the
+ *     bands lie behind text);
  *   - no control or text block on the page is see-through (the street must never show through one);
- *   - every lantern on screen is drawn whole: the screen is compared with and without the street,
- *     and a lantern drawn less than 85% of its height is cut by something in front of it
- *     (lanterns under fixed or sticky things, the header, bottom bar or a sticky player, count as off
- *     screen, like the window edge);
- *   - scrolled pages still show the street (garlands in the gaps);
- * the other themes draw no street; Studio's work area stays plain; with reduced motion the distant
- * lights stand still; and the street runs no animations (nothing may wait forever on getAnimations). Contrast in every theme is the pages spec's job.
+ * the other themes have no street; the street adds no element, fixed layer or animation (nothing
+ * to do on scroll, nothing may wait forever on getAnimations), so the watch page keeps it.
+ * Contrast in every theme is the pages spec's job.
  */
 const MODES: Mode[] = ['light', 'dark'];
 const LANGS = ['en', 'ar'];
-// The watch page keeps the street off (player smoothness); see the last test
-const PAGES = [{ id: 'home', path: '' }];
 const DEPTHS = [0, 900, 1800];
+const TILES = /street-band-left(-dark)?\.webp[\s\S]*street-band-right(-dark)?\.webp/;
 // Transitions and time-based animations off
 const STILL = '*,*::before,*::after{transition:none!important;animation-duration:0s!important;animation-delay:0s!important}';
 
@@ -28,7 +29,7 @@ async function open(page: Page, path: string) {
   await page.addStyleTag({ content: STILL });
 }
 
-/** Re-draws now (the module also follows the theme by itself, after a short debounce). */
+/** Waits until the module has followed the theme (html.fanous-street matches --fanous-street-on). */
 async function settle(page: Page) {
   await page.waitForTimeout(400);
   await page.waitForFunction(() => document.documentElement.classList.contains('fanous-street') === (getComputedStyle(document.documentElement).getPropertyValue('--fanous-street-on').trim() === '1'));
@@ -56,84 +57,61 @@ async function seeThrough(page: Page) {
   });
 }
 
-async function lanterns(page: Page) {
-  // The module re-measures after layout changes: wait until the drawing stops changing. It waits for a
-  // quiet second and measures at most every 2 s, so a reading only counts as settled when it holds for
-  // longer than that; compare the markup itself, since a garland that moves keeps its length.
-  let last = '';
-  for (let i = 0; i < 10; i++) {
-    const now = await page.evaluate(() => document.getElementById('fanous-street')?.innerHTML + ':' + document.documentElement.scrollHeight);
-    if (now === last) break;
-    last = now;
-    await page.waitForTimeout(2_200);
-  }
-  const boxes = await page.evaluate(() => {
-    // Fixed and sticky things (header, bottom bar, a sticky player) slide over the page like the window edge
-    const paints = (e: Element) => { const st = getComputedStyle(e); return !((st.backgroundColor === 'transparent' || /rgba\([^)]*,\s*0\)$/.test(st.backgroundColor)) && st.backgroundImage === 'none'); };
-    const chrome = Array.from(document.querySelectorAll('body *')).filter((e) => !e.closest('#fanous-street, #fanous-street-lights') && ['fixed', 'sticky'].includes(getComputedStyle(e).position) && paints(e))
-      .map((e) => e.getBoundingClientRect()).filter((r) => r.width && r.height && r.right > 0 && r.left < innerWidth && r.bottom > 0 && r.top < innerHeight);
-    const hit = (b: { x: number; y: number; w: number; h: number }) => chrome.some((r) => b.x < r.right && b.x + b.w > r.left && b.y < r.bottom && b.y + b.h > r.top);
-    return Array.from(document.querySelectorAll('#fanous-street .fs-l use')).map((u) => { const r = u.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; })
-      .filter((b) => b.y >= 0 && b.y + b.h <= innerHeight && b.x >= 0 && b.x + b.w <= innerWidth && !hit(b));
+/** The street's two layers as the browser computes them. */
+async function layers(page: Page) {
+  return page.evaluate(() => {
+    const before = getComputedStyle(document.body, '::before'), after = getComputedStyle(document.body, '::after');
+    const css = getComputedStyle(document.documentElement);
+    return {
+      lights: before.content !== 'none' ? before.backgroundImage : 'none',
+      bands: after.content !== 'none' ? after.backgroundImage : 'none',
+      repeat: after.backgroundRepeat,
+      size: after.backgroundSize,
+      opacity: after.opacity,
+      faint: css.getPropertyValue('--fanous-street-faint').trim(),
+      position: after.position,
+    };
   });
-  if (!boxes.length) return { inView: 0, cut: [] as string[] };
-  const on = (await page.screenshot()).toString('base64');
-  await page.evaluate(() => { document.getElementById('fanous-street')!.style.visibility = 'hidden'; });
-  const off = (await page.screenshot()).toString('base64');
-  await page.evaluate(() => { document.getElementById('fanous-street')!.style.visibility = ''; });
-  const cut = await page.evaluate(async ({ on, off, boxes }) => {
-    const load = (b: string) => new Promise<HTMLImageElement>((res) => { const i = new Image(); i.onload = () => res(i); i.src = `data:image/png;base64,${b}`; });
-    const [a, b] = await Promise.all([load(on), load(off)]);
-    const px = (img: HTMLImageElement) => { const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const g = c.getContext('2d')!; g.drawImage(img, 0, 0); return g.getImageData(0, 0, c.width, c.height).data; };
-    const A = px(a), B = px(b), W = a.width, k = a.width / innerWidth;
-    const out: string[] = [];
-    for (const bx of boxes) {
-      const x0 = Math.round(bx.x * k), x1 = Math.round((bx.x + bx.w) * k), y0 = Math.round(bx.y * k), y1 = Math.round((bx.y + bx.h) * k);
-      let rows = 0;
-      for (let y = y0; y < y1; y++) {
-        for (let x = x0; x < x1; x++) { const i = (y * W + x) * 4; if (Math.abs(A[i] - B[i]) + Math.abs(A[i + 1] - B[i + 1]) + Math.abs(A[i + 2] - B[i + 2]) > 18) { rows++; break; } }
+}
+
+for (const lang of LANGS) {
+  test(`street home ${lang}: the theme's tiles down both sides, repeated not stretched, faint here; no see-through controls`, async ({ page, context, baseURL }) => {
+    test.setTimeout(180_000);
+    await signIn(context, baseURL!);
+    await mockApi(page);
+    await open(page, `/${lang}`);
+    const problems: string[] = [];
+    for (const mode of MODES) {
+      await applyTheme(page, 'fawanees', mode);
+      await settle(page);
+      await expect(page.locator('html')).toHaveClass(/fanous-street/);
+      const l = await layers(page);
+      expect(l.bands, `${mode}: band tiles`).toMatch(TILES);
+      expect(l.bands.includes('-dark.webp'), `${mode}: the ${mode} tiles`).toBe(mode === 'dark');
+      expect(l.lights, `${mode}: distant lights`).toMatch(/url\(/);
+      expect(l.repeat, `${mode}: repeat-y`).toBe('repeat-y, repeat-y');
+      expect(l.size, `${mode}: shown at the tile's own size`).toBe('auto, auto');
+      expect(l.position, `${mode}: scrolls with the page`).toBe('absolute');
+      expect(Number(l.opacity), `${mode}: faint where it lies behind text`).toBeCloseTo(Number(l.faint), 2);
+      // The tile files themselves are served
+      for (const url of l.bands.match(/\/fanous\/street\/[\w-]+\.webp/g) ?? []) {
+        const res = await page.request.get(url);
+        expect(res.status(), url).toBe(200);
+        expect(res.headers()['content-type'], url).toContain('image/webp');
       }
-      if (rows / (y1 - y0) < 0.85) out.push(`lantern at ${Math.round(bx.x)},${Math.round(bx.y)}: ${Math.round((100 * rows) / (y1 - y0))}% drawn`);
+      const maxY = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
+      for (const depth of DEPTHS.filter((d) => d <= maxY)) {
+        await page.evaluate((y) => window.scrollTo(0, y), depth);
+        await page.waitForTimeout(300);
+        for (const s of await seeThrough(page)) problems.push(`${mode} @${depth}px see-through: ${s}`);
+      }
+      await page.evaluate(() => window.scrollTo(0, 0));
     }
-    return out;
-  }, { on, off, boxes });
-  return { inView: boxes.length, cut };
+    expect(problems, problems.join('\n')).toEqual([]);
+  });
 }
 
-for (const pg of PAGES) {
-  for (const lang of LANGS) {
-    test(`street ${pg.id} ${lang}: no see-through controls, whole lanterns, street when scrolled`, async ({ page, context, baseURL }) => {
-      test.setTimeout(240_000);
-      await signIn(context, baseURL!);
-      await mockApi(page);
-      await open(page, `/${lang}${pg.path}`);
-      const problems: string[] = [];
-      for (const mode of MODES) {
-        await applyTheme(page, 'fawanees', mode);
-        await settle(page);
-        await expect(page.locator('html')).toHaveClass(/fanous-street/);
-        let checked = 0;
-        const maxY = await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
-        for (const depth of DEPTHS.filter((d) => d <= maxY)) {
-          await page.evaluate((y) => window.scrollTo(0, y), depth);
-          await page.waitForTimeout(300);
-          for (const s of await seeThrough(page)) problems.push(`${mode} @${depth}px see-through: ${s}`);
-          const l = await lanterns(page);
-          checked += l.inView;
-          for (const c of l.cut) problems.push(`${mode} @${depth}px ${c}`);
-        }
-        await page.evaluate(() => window.scrollTo(0, 0));
-        // Garlands hang in the page's gaps (somewhere on the page, not necessarily at these depths)
-        expect(await page.locator('#fanous-street .fs-l').count(), `${mode}: lanterns on the page`).toBeGreaterThan(0);
-        // The whole-lantern check must have looked at real lanterns (home has garlands on every screen)
-        if (pg.id === 'home') expect(checked, `${mode}: lanterns checked on screen`).toBeGreaterThan(0);
-      }
-      expect(problems, problems.join('\n')).toEqual([]);
-    });
-  }
-}
-
-test('street: only Fawanees draws it', async ({ page, context, baseURL }) => {
+test('street: only Fawanees has it', async ({ page, context, baseURL }) => {
   test.setTimeout(180_000);
   await signIn(context, baseURL!);
   await mockApi(page);
@@ -143,74 +121,28 @@ test('street: only Fawanees draws it', async ({ page, context, baseURL }) => {
       await applyTheme(page, theme, mode);
       await settle(page);
       await expect(page.locator('html'), `${theme} ${mode}`).not.toHaveClass(/fanous-street/);
-      await expect(page.locator('#fanous-street'), `${theme} ${mode}`).toHaveCount(0);
+      expect((await layers(page)).bands, `${theme} ${mode}`).toBe('none');
     }
   }
 });
 
-test("street: Studio's work area stays plain", async ({ page, context, baseURL }) => {
-  await signIn(context, baseURL!, { channel: true });
-  await mockApi(page);
-  await open(page, '/en/studio/go/content/videos');
-  await expect(page.getByRole('table')).toBeVisible();
-  for (const mode of MODES) {
-    await applyTheme(page, 'fawanees', mode);
-    await settle(page);
-    await expect(page.locator('#fanous-street .fs-l'), `Studio ${mode}`).toHaveCount(0);
-  }
-});
-
-for (const motion of ['reduce', 'no-preference'] as const) {
-  test(`street: distant lights ${motion === 'reduce' ? 'stand still with reduced motion' : 'drift at 0.2x the scroll'}; no animations`, async ({ browser, baseURL }, info) => {
-    test.skip(info.project.name !== 'desktop', 'one viewport is enough');
-    const context = await browser.newContext({ reducedMotion: motion, viewport: { width: 1280, height: 800 } });
-    const page = await context.newPage();
-    await signIn(context, baseURL!);
-    await mockApi(page);
-    await page.goto('/en');
-    await page.waitForLoadState('networkidle').catch(() => {});
-    await applyTheme(page, 'fawanees', 'light');
-    await settle(page);
-    await expect(page.locator('#fanous-street-lights')).toHaveCount(1);
-    // The lights move by a transform (no repaint), within one 260px tile
-    const pos = () => page.evaluate(() => {
-      const t = getComputedStyle(document.getElementById('fanous-street-lights')!).transform;
-      return t === 'none' ? 0 : Math.round(new DOMMatrix(t).m42 * 10) / 10;
-    });
-    expect(await pos()).toBe(0);
-    await page.evaluate(() => window.scrollTo(0, 700));
-    // However far the page could scroll (CI's mock data may make it shorter than 700px)
-    const y = await page.evaluate(() => window.scrollY);
-    expect(y).toBeGreaterThan(0);
-    const want = motion === 'reduce' ? 0 : Math.round(-((0.2 * y) % 260) * 10) / 10;
-    await expect.poll(pos).toBeCloseTo(want, 0);
-    // The background itself never moves (moving it would repaint the whole window every frame)
-    expect(await page.evaluate(() => getComputedStyle(document.getElementById('fanous-street-lights')!).backgroundPositionY)).toBe('0px');
-    // No CSS animations of its own: tests and pages that wait for every animation to finish must not hang
-    const ours = await page.evaluate(() => document.getAnimations().filter((a) => {
-      const t = (a.effect as KeyframeEffect | null)?.target as Element | null;
-      return !!t && (t === document.documentElement || !!t.closest('#fanous-street, #fanous-street-lights'));
-    }).length);
-    expect(ours).toBe(0);
-    await context.close();
-  });
-}
-
-test('street: off on the watch page, so the player stays smooth', async ({ page, context, baseURL }) => {
+test('street: no elements, fixed layers or animations of its own; the watch page keeps it', async ({ page, context, baseURL }, info) => {
+  test.skip(info.project.name !== 'desktop', 'one viewport is enough');
   await signIn(context, baseURL!);
   await mockApi(page);
-  await open(page, '/en');
-  for (const mode of MODES) {
-    await applyTheme(page, 'fawanees', mode);
-    await settle(page);
-    await expect(page.locator('html'), `home ${mode}`).toHaveClass(/fanous-street/);
-  }
-  // Watch pages (Shorts open there too) mark the page and the module removes the street at once
-  await page.goto('/en/video/v1');
-  await expect(page.locator('html')).toHaveAttribute('data-fanous-street', 'off');
-  for (const mode of MODES) {
-    await applyTheme(page, 'fawanees', mode);
-    await expect(page.locator('html'), `watch ${mode}`).not.toHaveClass(/fanous-street/);
-    await expect(page.locator('#fanous-street, #fanous-street-lights'), `watch ${mode}`).toHaveCount(0);
+  for (const path of ['/en', '/en/video/v1']) {
+    await open(page, path);
+    for (const mode of MODES) {
+      await applyTheme(page, 'fawanees', mode);
+      await settle(page);
+      await expect(page.locator('html'), `${path} ${mode}`).toHaveClass(/fanous-street/);
+      await expect(page.locator('#fanous-street, #fanous-street-lights'), `${path} ${mode}`).toHaveCount(0);
+      // Nothing to wait for: tests and pages that wait for every animation to finish must not hang
+      const ours = await page.evaluate(() => document.getAnimations().filter((a) => {
+        const t = (a.effect as KeyframeEffect | null)?.target as Element | null;
+        return t === document.documentElement || t === document.body;
+      }).length);
+      expect(ours, `${path} ${mode}`).toBe(0);
+    }
   }
 });

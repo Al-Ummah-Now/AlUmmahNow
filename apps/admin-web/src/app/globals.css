@@ -254,3 +254,8 @@ body:lang(ar) {
   background: var(--scrollbar-thumb);
   border-radius: 4px;
 }
+
+/* The lantern street: this app's content spans the page width (no side gutters), so the street's
+   bands lie behind text everywhere and stay at the theme's faint opacity (every text colour keeps
+   4.5:1 over them). */
+html.fanous-street { --fanous-street-band-opacity: var(--fanous-street-faint); }

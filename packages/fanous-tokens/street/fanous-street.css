@@ -1,58 +1,46 @@
-/* Fanous lantern street: styles for the shared street module (fanous-street.js), which adds
-   html.fanous-street, a fixed #fanous-street-lights layer and the #fanous-street drawing when the
-   active theme switches the street on (--fanous-street-on: 1). Colours and art come from the theme
-   tokens, so light and dark need nothing here. The street is the page background: the body
-   becomes its own stacking layer, so the lights and lanterns paint above the body's background
-   and below every element. Apps that paint their page colour on a wrapper
-   inside the body make it transparent under html.fanous-street in their own stylesheet.
-   No CSS animations: the module moves the lights on scroll with a transform (0.2x; still with
-   reduced motion and in Firefox). No filters or blur anywhere. */
+/* Fanous lantern street: pre-made art behind the page, when <html> has the class fanous-street
+   (set by fanous-street.js when the active theme switches the street on).
+   - body::before: the soft distant lights (--fanous-street-lights), a small tile over the page;
+   - body::after: the street, two tall image tiles of strings and lit lanterns, one down each side
+     of the page (--fanous-street-band-left/-right). Each tile closes on itself, so repeat-y shows
+     no seam; the tiles are drawn at 2x and shown at their CSS size by image-set(… 2x), never
+     stretched. The two sides have different heights, so they rarely line up.
+   Both layers are as tall as the body and scroll with it: no fixed layers, no script, no
+   animation, no filters, nothing to repaint on scroll.
+   Where the bands lie behind text an app sets --fanous-street-band-opacity to
+   var(--fanous-street-faint) (the theme's opacity at which every text colour keeps 4.5:1);
+   apps with real side gutters keep the bands at full strength there.
+   The body becomes its own stacking layer, so both paint above the body's background and below
+   every element. Apps that paint their page colour on a wrapper inside the body make it
+   transparent under html.fanous-street in their own stylesheet. */
 
 html.fanous-street body {
-  /* The street's own layer: the drawing below spans the whole body, under every element */
   position: relative;
   isolation: isolate;
 }
 
-/* Far: soft distant lights */
-#fanous-street-lights {
-  position: fixed;
-  left: 0;
-  right: 0;
-  top: 0;
-  /* One tile taller than the window: the module moves it up to one tile with a transform */
-  height: calc(100% + 260px);
-  z-index: -2;
-  pointer-events: none;
-  background: var(--fanous-street-lights) 0 0 / 300px 260px repeat;
-  will-change: transform;
-}
-
-/* Near: the street itself, one static drawing as tall as the page (it scrolls with the page) */
-#fanous-street {
+html.fanous-street body::before,
+html.fanous-street body::after {
+  content: '';
   position: absolute;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
+  inset: 0;
   z-index: -1;
   pointer-events: none;
-  overflow: hidden;
 }
 
-#fanous-street .fs-lines {
-  fill: none;
-  stroke: var(--fanous-street-line);
-  stroke-linecap: round;
-  stroke-linejoin: round;
+html.fanous-street body::before {
+  background: var(--fanous-street-lights) 0 0 repeat;
+  opacity: var(--fanous-street-lights-opacity, 1);
 }
 
-#fanous-street .fs-w { fill: var(--fanous-street-window); }
-#fanous-street .fs-g0 { stop-color: var(--fanous-color-primary); }
-#fanous-street .fs-g1 { stop-color: var(--fanous-color-primary); stop-opacity: 0; }
-#fanous-street .fs-glow { opacity: var(--fanous-street-glow); }
+html.fanous-street body::after {
+  background-image: var(--fanous-street-band-left), var(--fanous-street-band-right);
+  background-position: left top, right top;
+  background-repeat: repeat-y, repeat-y;
+  opacity: var(--fanous-street-band-opacity, 1);
+}
 
 @media print {
-  #fanous-street,
-  #fanous-street-lights { display: none; }
+  html.fanous-street body::before,
+  html.fanous-street body::after { display: none; }
 }

@@ -828,6 +828,12 @@
     "glow": {
       "light": 0.1,
       "dark": 0.6
-    }
+    },
+    "bands": {
+      "left": { "light": "assets/street-band-left.webp", "dark": "assets/street-band-left-dark.webp" },
+      "right": { "light": "assets/street-band-right.webp", "dark": "assets/street-band-right-dark.webp" }
+    },
+    "faint": { "light": 1, "dark": 0.35 },
+    "lightsOpacity": { "light": 1, "dark": 0.85 }
   }
 }
