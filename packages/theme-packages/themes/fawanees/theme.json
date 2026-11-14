@@ -819,15 +819,15 @@
     },
     "line": {
       "light": "#dfd4c8ff",
-      "dark": "#f5cf921a"
+      "dark": "#f5cf9242"
     },
     "window": {
       "light": "#f4ae3a4d",
-      "dark": "#fbc66124"
+      "dark": "#fbc661b8"
     },
     "glow": {
       "light": 0.1,
-      "dark": 0
+      "dark": 0.6
     }
   }
 }
