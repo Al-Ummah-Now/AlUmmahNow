@@ -51,7 +51,7 @@ Each URL becomes one **case**. A URL that already has an open case is attached t
 
 Optimizer URLs (`/_next/image?url=…`, `/cdn-cgi/image/<opts>/…`) are unwrapped first. An encoded slash or dot segment makes a URL unmappable.
 
-**The image index.** `image_owners` lives in SEARCH_DB (migration 0034). Avatar and cover paths carry only a random id, so every upload records who uploaded the image: profile and channel avatars and covers, post images, GIFs and link-preview copies.
+**The image index.** `image_owners` lives in SEARCH_DB (migration 0037). Avatar and cover paths carry only a random id, so every upload records who uploaded the image: profile and channel avatars and covers, post images, GIFs and link-preview copies.
 - The `images.index-owners` job fills the index from the images already stored.
 - Account erasure deletes the account's rows.
 - A takedown deletes the row of each image it deletes.
