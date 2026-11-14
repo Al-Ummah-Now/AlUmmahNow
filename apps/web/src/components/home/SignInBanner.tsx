@@ -91,7 +91,8 @@ export function SignInBanner() {
           ))}
         </ul>
       </div>
-      <form className="sib-actions" action={login.bind(null, lang)}>
+      {/* Back to this home page in this language (lib/auth/sign-in-return.ts safeSignInReturn) */}
+      <form className="sib-actions" action={login.bind(null, lang, `/${lang}`)}>
         <button type="submit" className="b b-primary sib-cta" data-testid="signin-banner-signin">
           <span>{copy.signIn}</span>
           <ArrowRight className="sib-cta-arrow" aria-hidden="true" />
