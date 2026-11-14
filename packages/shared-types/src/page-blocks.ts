@@ -1399,7 +1399,9 @@ export function renderPageBlocks(blocks: readonly unknown[], ctx: RenderContext)
          case 'cta': {
             const btn = button(b.label, b.url, b.tone === 'quiet' ? 'ghost' : 'primary');
             if (!btn) return '';
-            return section(b, `<div class="pb-cta-box"><div class="pb-cta-copy">${heading(b.id, b.heading, 'pb-heading pb-cta-h')}${b.text ? `<p>${esc(b.text)}</p>` : ''}</div><div class="pb-actions">${btn}</div></div>`, { labelled: !!b.heading });
+            // A button alone (no heading, no text) gets no empty copy column beside it.
+            const copy = b.heading || b.text ? `<div class="pb-cta-copy">${heading(b.id, b.heading, 'pb-heading pb-cta-h')}${b.text ? `<p>${esc(b.text)}</p>` : ''}</div>` : '';
+            return section(b, `<div class="pb-cta-box${copy ? '' : ' pb-cta-solo'}">${copy}<div class="pb-actions">${btn}</div></div>`, { labelled: !!b.heading });
          }
          case 'quote': {
             if (!str(b.text) || !b.text.trim()) return '';
