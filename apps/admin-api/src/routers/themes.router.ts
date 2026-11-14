@@ -8,7 +8,8 @@ import type { AdminBindings } from '../base/types';
 import type { AuthContext } from '../middleware/auth';
 import { hasAdminRole } from '../lib/roles';
 import { logger } from '../lib/logger';
-import { NEW_THEME_ID, ThemeError, ThemeStore } from '../lib/themePackages';
+import { ART_PATH, NEW_THEME_ID, ThemeError, ThemeStore } from '../lib/themePackages';
+import { themeCssWithArt } from '../lib/theme-art';
 import { writeTrashAudit } from '../lib/trash-audit';
 
 type Env = { Bindings: AdminBindings };
@@ -197,17 +198,33 @@ app.delete('/:id', async (c) => {
 
 export default app;
 
-/** Public, immutable files of published versions: theme.css, theme.json and assets. */
+/** Public, immutable files of published versions: theme.css, theme.json, assets and the art files. */
 export const publicThemes = new Hono<Env>();
 const IMMUTABLE = 'public, max-age=31536000, immutable';
 publicThemes.get('/:id/:version/*', async (c) => {
   const { id, version } = c.req.param();
   if (!/^[a-z][a-z0-9-]{1,39}$/.test(id) || !/^\d+\.\d+\.\d+$/.test(version)) return c.text('Not found', 404);
   const rest = decodeURIComponent(c.req.path.slice(`/public/themes/${id}/${version}/`.length));
-  if (!(rest === 'theme.css' || rest === 'theme.json' || /^assets\/(?!.*\.\.)[A-Za-z0-9_-][A-Za-z0-9._/-]*$/.test(rest))) return c.text('Not found', 404);
+  if (!(rest === 'theme.css' || rest === 'theme.json' || ART_PATH.test(rest) || /^assets\/(?!.*\.\.)[A-Za-z0-9_-][A-Za-z0-9._/-]*$/.test(rest))) return c.text('Not found', 404);
   const themes = new ThemeStore(c.env.REPORTS_DB, c.env.theme_packages);
   // A soft-deleted theme is never the site theme (refused on delete), so it stops being served
-  const obj = (await themes.isLive(id)) ? await themes.getObject(id, version, rest) : null;
+  if (!(await themes.isLive(id))) return c.text('Not found', 404, { 'Cache-Control': 'public, max-age=30' });
+  if (rest === 'theme.css') {
+    // Versions published before the art part existed get it on this read (lib/theme-art.ts)
+    const out = await themeCssWithArt(c.env, id, version, (p) => { try { c.executionCtx.waitUntil(p); } catch { void p; } });
+    if (!out) return c.text('Not found', 404, { 'Cache-Control': 'public, max-age=30' });
+    return new Response(out.css, {
+      headers: {
+        'Content-Type': 'text/css; charset=utf-8',
+        // Without its art it is not final: a short cache, so the next read can build it
+        'Cache-Control': out.art === 'failed' ? 'public, max-age=300' : IMMUTABLE,
+        'Access-Control-Allow-Origin': '*',
+        'X-Content-Type-Options': 'nosniff',
+        ETag: out.etag,
+      },
+    });
+  }
+  const obj = await themes.getObject(id, version, rest);
   if (!obj) return c.text('Not found', 404, { 'Cache-Control': 'public, max-age=30' });
   return new Response(obj.body, {
     headers: {

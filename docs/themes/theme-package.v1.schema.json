@@ -1716,6 +1716,13 @@
           ],
           "description": "Header art for sign-in style cards."
         },
+        "headerGraphicFrame": {
+          "enum": [
+            "inset",
+            "band"
+          ],
+          "description": "How the header art sits in a box it heads (the sign-in card, the home page's sign-in banner). inset (the default): inside the box's padding. band: drawn as a band rising out of the box, so it meets the box's top edge, clipped by its corners, and its bottom fades into the box."
+        },
         "backdrop": {
           "$ref": "#/$defs/imageAsset"
         },

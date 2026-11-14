@@ -231,6 +231,10 @@ on players under 540px wide; `bar-pad` when absent), `bar-inset`, `bar-radius`, 
 Image slots, each a path under `assets/`: `pattern` (SVG or `"none"`), `loader` (SVG),
 `logo.light|dark`, `wordmark.light|dark`, `favicon` (ICO), `icon192`, `icon512`, `iconMaskable512`,
 `appleTouchIcon`, `ogImage`, `headerGraphic.light|dark` (SVG), `backdrop`, `ornament` (SVG), `hero`.
+`headerGraphicFrame` (not a file) says how a box that shows the header art frames it: `inset` (the
+default, inside its padding) or `band` (drawn as a band rising out of the box, as Lantern's: flush with
+the box's top edge, clipped by its corners, its bottom and ends fading into the box). The builder sets
+it under Imagery.
 Any style field can also place an image with `{asset:assets/<file>}`, for example a page backdrop or
 an ornament in a hero gradient.
 
@@ -298,7 +302,16 @@ Unused asset files are a warning, not an error.
   properties. Without a header graphic it is the package's SVG `imagery.pattern`, tiled; with
   neither, `none`. The compiler needs the SVG text (`svgText(path)`). Built-in themes are served
   as content-hashed files (`apps/web/public/fanous/art/`, `apps/web/src/theme/theme-art.css`);
-  uploaded packages carry it inline in their published CSS. The home page's sign-in banner shows it.
+  published custom versions as `themes/<id>/<version>/art/<mode>.svg` in R2, served by admin-api
+  (`/public/themes/…/art/<mode>.svg`) and the videos site (`/api/theme-packages/…/art/<mode>.svg`),
+  so a large drawing never swells the stylesheet (the site refuses one over 1 MB). A `band` frame
+  adds `--fanous-header-graphic-bleed`, `-ratio` (the SVG's viewBox), `-align`, `-position`, `-fit`,
+  `-fade` and `-mask`, which the box reads; inset adds nothing. The home page's sign-in banner shows
+  it, and so does the theme builder's preview (it fetches the draft's SVG files for `svgText`).
+  Versions published before the art part existed get it on the first read of their `theme.css`
+  (admin-api `ThemeStore.publishedCss`: built from the version's own files and written back, once);
+  if that fails the CSS is served without it and the admin gets a needs-action item on the Errors
+  page whose Retry (`theme-art`) builds it.
 
 Asset references become `url()`s through the caller's `assetUrl(path)`, so the same package can be
 served from a build, a CDN or an admin API. The apps' component CSS reads only these properties.

@@ -3,11 +3,27 @@ html[data-theme='lantern'].dark {
   --fanous-header-graphic: url("/fanous/art/lantern-dark.c6a29d1903.svg");
   --fanous-header-graphic-size: contain;
   --fanous-header-graphic-repeat: no-repeat;
+  --fanous-header-graphic-frame: band;
+  --fanous-header-graphic-bleed: 1;
+  --fanous-header-graphic-ratio: 400 / 110;
+  --fanous-header-graphic-align: start;
+  --fanous-header-graphic-position: center bottom;
+  --fanous-header-graphic-fit: 100% auto;
+  --fanous-header-graphic-fade: linear-gradient(black 72%, transparent);
+  --fanous-header-graphic-mask: linear-gradient(black 72%, transparent), linear-gradient(90deg, transparent, black 12%, black 88%, transparent);
 }
 html[data-theme='lantern']:not(.dark) {
   --fanous-header-graphic: url("/fanous/art/lantern-light.ac6971af41.svg");
   --fanous-header-graphic-size: contain;
   --fanous-header-graphic-repeat: no-repeat;
+  --fanous-header-graphic-frame: band;
+  --fanous-header-graphic-bleed: 1;
+  --fanous-header-graphic-ratio: 400 / 110;
+  --fanous-header-graphic-align: start;
+  --fanous-header-graphic-position: center bottom;
+  --fanous-header-graphic-fit: 100% auto;
+  --fanous-header-graphic-fade: linear-gradient(black 72%, transparent);
+  --fanous-header-graphic-mask: linear-gradient(black 72%, transparent), linear-gradient(90deg, transparent, black 12%, black 88%, transparent);
 }
 html[data-theme='zujaj'].dark {
   --fanous-header-graphic: url("/fanous/art/zujaj-dark.53f96854a0.svg");

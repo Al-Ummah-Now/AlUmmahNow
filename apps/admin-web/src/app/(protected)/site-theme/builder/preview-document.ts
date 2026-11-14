@@ -5,6 +5,8 @@
 // builds the brand, language and light/dark pieces, styled by aun-nav.css (also in site.css).
 import { brandHtml, langButtonHtml, modeButtonHtml } from '../../../../../../../packages/fanous-tokens/nav/header.js';
 
+import { SIGN_IN_BANNER_AR, SIGN_IN_BANNER_EN } from '@al-ummah/shared-types';
+
 export type PreviewPage = 'home' | 'watch' | 'settings' | 'components';
 export interface PreviewOptions { themeId: string; css: string; page: PreviewPage; mode: 'light' | 'dark'; lang: 'en' | 'ar' }
 
@@ -29,6 +31,10 @@ const ICON = {
   share: I('<path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7M16 6l-4-4-4 4M12 2v14"/>'),
   check: I('<path d="m5 12 5 5L20 7"/>'),
   info: I('<circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v5h1"/>'),
+  comment: I('<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/>'),
+  clapper: I('<path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3zM6.2 5.3l3.1 3.9M12.4 3.4l3.1 4M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'),
+  arrow: I('<path d="M5 12h14M12 5l7 7-7 7"/>'),
+  close: I('<path d="M18 6 6 18M6 6l12 12"/>'),
 };
 
 const T = {
@@ -58,8 +64,21 @@ function shell(t: (typeof T)['en'], current: string, body: string): string {
 
 const card = (t: (typeof T)['en'], n: number) => `<div class="vc video-card"><div class="vc-t pv-thumb pv-thumb-${n % 6}"><span class="bdg bdg-dur">${n % 2 ? '12:04' : '3:41'}</span>${n === 1 ? `<span class="bdg bdg-live pv-live">${esc(t.live)}</span>` : ''}</div><b>${esc(t.video(n))}</b><small>${esc(t.channel)}<br>${esc(t.views)}</small></div>`;
 
-function home(t: (typeof T)['en']) {
-  return shell(t, 'home', `<div class="pv-pad"><section class="home-hero"><div class="home-hero-t pv-thumb pv-thumb-2"></div><div class="home-hero-b"><span class="home-hero-tag">${esc(t.featured)}</span><h2>${esc(t.heroTitle)}</h2><p>${esc(t.heroSub)}</p><a class="b b-primary">${ICON.play}${esc(t.watch)}</a></div></section>
+/** The home page's sign-in banner (apps/web SignInBanner, signed-out visitors), with the site's own
+ * copy and stylesheet: its art is the theme's header graphic, from the compiled CSS
+ * (--fanous-header-graphic), so the preview shows the art of the theme being edited, per mode. */
+function signInBanner(lang: 'en' | 'ar') {
+  const c = lang === 'ar' ? SIGN_IN_BANNER_AR : SIGN_IN_BANNER_EN;
+  const perks: [keyof typeof c.perks, string][] = [['comment', ICON.comment], ['like', ICON.like], ['subscribe', ICON.bell], ['save', ICON.bookmark], ['creatorAccess', ICON.clapper]];
+  return `<section class="sib" aria-label="${esc(c.regionLabel)}" dir="${lang === 'ar' ? 'rtl' : 'ltr'}" data-testid="signin-banner"><div class="sib-art" aria-hidden="true" data-testid="signin-banner-art"></div>
+<div class="sib-body"><p class="sib-eyebrow">${esc(c.eyebrow)}</p><h2 class="sib-title">${esc(c.title)}</h2><p class="sib-text">${esc(c.body)}</p>
+<ul class="sib-perks" aria-label="${esc(c.perksLabel)}">${perks.map(([k, icon]) => `<li class="sib-perk">${icon}<span>${esc(c.perks[k])}</span></li>`).join('')}</ul></div>
+<div class="sib-actions"><button type="button" class="b b-primary sib-cta"><span>${esc(c.signIn)}</span>${ICON.arrow.replace('<svg ', '<svg class="sib-cta-arrow" ')}</button></div>
+<button type="button" class="sib-x" aria-label="${esc(c.dismiss)}">${ICON.close}</button></section>`;
+}
+
+function home(t: (typeof T)['en'], lang: 'en' | 'ar') {
+  return shell(t, 'home', `<div class="pv-pad">${signInBanner(lang)}<section class="home-hero"><div class="home-hero-t pv-thumb pv-thumb-2"></div><div class="home-hero-b"><span class="home-hero-tag">${esc(t.featured)}</span><h2>${esc(t.heroTitle)}</h2><p>${esc(t.heroSub)}</p><a class="b b-primary">${ICON.play}${esc(t.watch)}</a></div></section>
 <div class="gal-row pv-chips">${t.chips.map((c, i) => `<button class="chip" type="button" aria-pressed="${i === 0}">${esc(c)}</button>`).join('')}</div>
 <h2 class="home-h">${esc(t.videos)}</h2><div data-testid="video-grid">${[0, 1, 2, 3, 4, 5].map((n) => card(t, n)).join('')}</div></div>`);
 }
@@ -136,7 +155,7 @@ body{margin:0;min-height:100vh;font-family:Inter,'Noto Kufi Arabic',system-ui,sa
 
 export function previewDocument({ themeId, css, page, mode, lang }: PreviewOptions): string {
   const t = T[lang];
-  const body = page === 'home' ? home(t) : page === 'watch' ? watch(t) : page === 'settings' ? settings(t) : components(t);
+  const body = page === 'home' ? home(t, lang) : page === 'watch' ? watch(t) : page === 'settings' ? settings(t) : components(t);
   // The compiled CSS is the package's own, validated: it cannot leave this <style>.
   // `only <mode>` and darkreader-lock keep browser dark modes (Chrome's auto dark, Dark Reader) from
   // repainting the preview: they lightened the light preview's text and darkened its fills, so it

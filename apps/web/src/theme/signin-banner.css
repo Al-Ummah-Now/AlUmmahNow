@@ -24,11 +24,19 @@ html[data-signin-banner=hidden] .sib{display:none}
   color:var(--fanous-color-text-primary);
 }
 [dir=rtl].sib{--sib-art-x:92%}
-/* The theme's art: a fixed box (no shift when the file arrives), painted only while the banner is shown */
-.sib-art{grid-area:art;position:relative;width:clamp(200px,17vw,260px);aspect-ratio:8/3;
-  background:var(--fanous-header-graphic,none) center/var(--fanous-header-graphic-size,contain) var(--fanous-header-graphic-repeat,no-repeat)}
-/* The theme's glow behind its art */
-.sib-art::before{content:"";position:absolute;inset:-20% -10%;z-index:-1;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--fanous-color-primary) 26%,transparent),transparent)}
+/* The theme's art: a fixed box (no shift when the file arrives), painted only while the banner is shown.
+   How it sits is the theme's (imagery.headerGraphicFrame, compiled into theme-art.css): inset by default;
+   a "band" (Lantern, and any copy of it) meets the banner's top edge as on Auth's sign-in card, wider,
+   its filled bottom and its ends fading into the banner. */
+.sib-art{grid-area:art;position:relative;--sib-bleed:var(--fanous-header-graphic-bleed,0);
+  align-self:var(--fanous-header-graphic-align,center);
+  width:calc(clamp(200px,17vw,260px) + var(--sib-bleed) * clamp(40px,7vw,100px));aspect-ratio:var(--fanous-header-graphic-ratio,8/3);
+  margin-block-start:calc(var(--sib-bleed) * -1 * clamp(20px,2.6vw,36px));
+  background:var(--fanous-header-graphic,none) var(--fanous-header-graphic-position,center)/var(--fanous-header-graphic-fit,var(--fanous-header-graphic-size,contain)) var(--fanous-header-graphic-repeat,no-repeat);
+  -webkit-mask-image:var(--fanous-header-graphic-mask,none);-webkit-mask-composite:source-in;
+  mask-image:var(--fanous-header-graphic-mask,none);mask-composite:intersect}
+/* The theme's glow behind its art (a band carries its own light) */
+.sib-art::before{content:"";position:absolute;inset:-20% -10%;z-index:-1;border-radius:50%;opacity:calc(1 - var(--sib-bleed));background:radial-gradient(closest-side,color-mix(in srgb,var(--fanous-color-primary) 26%,transparent),transparent)}
 
 /* Copy */
 .sib-body{grid-area:body;display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0}
@@ -57,14 +65,18 @@ html[lang=ar] .sib-title{line-height:1.5}
 /* Tablet: the button goes under the copy, the art beside both */
 @media(max-width:1023px){
   .sib{grid-template-columns:auto minmax(0,1fr);grid-template-areas:"art body" "art actions";row-gap:16px}
-  .sib-art{width:180px}
+  .sib-art{width:calc(180px + var(--sib-bleed) * 60px)}
   .sib-actions{justify-self:start}
 }
 /* Phone: one column; the art is a band across the top, as the theme's header graphic is drawn to be */
 @media(max-width:639px){
   .sib{grid-template-columns:minmax(0,1fr);grid-template-areas:"art" "body" "actions";row-gap:12px;padding:14px 20px 20px;padding-inline-end:20px;--sib-art-x:50%}
   [dir=rtl].sib{--sib-art-x:50%}
-  .sib-art{width:auto;height:72px;aspect-ratio:auto;justify-self:stretch;margin-inline:28px}
+  /* Inset: a 72px strip. A band runs the banner's full width, edge to edge under its rounded top, at its
+     own proportions, its bottom fading in */
+  .sib-art{width:auto;justify-self:stretch;height:auto;min-height:calc(72px * (1 - var(--sib-bleed)));aspect-ratio:var(--fanous-header-graphic-ratio,auto);
+    margin:calc(var(--sib-bleed) * -14px) calc(28px - var(--sib-bleed) * 48px) 0;
+    -webkit-mask-image:var(--fanous-header-graphic-fade,none);mask-image:var(--fanous-header-graphic-fade,none)}
   .sib-title{font-size:20px}
   /* The chips say what the paragraph says: one screen keeps room for the featured video */
   .sib-text{display:none}

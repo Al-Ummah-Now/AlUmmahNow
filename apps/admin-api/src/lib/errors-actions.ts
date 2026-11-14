@@ -27,6 +27,7 @@ import { enqueueDeviceRevocation } from './deviceTokenRevocation';
 import { getIssue, getSubscriber, renewConfirmToken, requeueFailed, setDelivery } from './newsletter-store';
 import { confirmJob, enqueueNewsletterMail, fanoutJob, sendJob } from './newsletter-mail';
 import { COST_MAIL_VERSION } from './cost-alert-mail';
+import { ThemeStore } from './themePackages';
 
 export interface RetryOutcome {
   ok: boolean;
@@ -72,7 +73,17 @@ export function retryPermissions(spec: NeedsActionRetry | null): AdminContentPer
 }
 
 export const BUILTIN_RETRIES: Record<string, (env: AdminBindings, args: Record<string, string>, attempt: string) => Promise<RetryOutcome>> = {
-  /** Queues a Contact us email that failed for good again (as the inbox's Retry does); a new failure reopens the item. */
+  /** Builds the art of a custom theme version published before the art existed (lib/theme-art.ts). */
+  'theme-art': async (env, args) => {
+    const { id, version } = args;
+    if (!id || !version || !/^[a-z][a-z0-9-]{1,39}$/.test(id) || !/^\d+\.\d+\.\d+$/.test(version)) return { ok: false, status: 'open', result: 'Not a theme version' };
+    const store = new ThemeStore(env.REPORTS_DB, env.theme_packages);
+    if (!(await store.isLive(id))) return { ok: true, status: 'dismissed', result: 'The theme was deleted' };
+    const out = await store.publishedCss(id, version);
+    if (!out) return { ok: true, status: 'dismissed', result: 'The version no longer exists' };
+    if (out.art === 'failed') return { ok: false, status: 'open', result: `Still failing: ${out.error ?? 'unknown error'}`.slice(0, 300) };
+    return { ok: true, status: 'resolved', result: out.art === 'added' ? 'Art built' : 'The art was already built' };
+  },
   /** Runs a revoked invite's erase again (#716, lib/invite-erase.ts); a new failure reopens the item. */
   'invite-videos-erase': async (env, args) => {
     const { getInvite } = await import('./invites');
@@ -87,6 +98,7 @@ export const BUILTIN_RETRIES: Record<string, (env: AdminBindings, args: Record<s
     if (out.waiting.length) return { ok: false, status: 'open', result: 'Auth still holds the invite; erased once auth purges it' };
     return { ok: true, status: 'resolved', result: out.erased.length ? 'Videos data erased and the invite purged' : 'Nothing left on the videos side; the invite purged' };
   },
+  /** Queues a Contact us email that failed for good again (as the inbox's Retry does); a new failure reopens the item. */
   'contact-email': async (env, args) => {
     const kind = args.kind as MailKind;
     const id = args.id;

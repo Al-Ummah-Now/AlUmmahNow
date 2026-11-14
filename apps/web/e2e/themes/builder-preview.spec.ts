@@ -10,12 +10,13 @@ import { test, expect, type Page } from '@playwright/test';
  * must reach the element it paints: night is the header.
  */
 const ROOT = join(__dirname, '../../../..');
-// The same files in the same order as admin-kit.ts: font faces, the shared header (aun-nav.css), system.css, pages.css
+// The same files in the same order as admin-kit.ts: font faces, the shared header (aun-nav.css), system.css, pages.css, signin-banner.css
 const SITE_CSS = [
   join(ROOT, 'apps/web/src/theme/font-faces.css'),
   join(ROOT, 'packages/fanous-tokens/nav/aun-nav.css'),
   join(ROOT, 'apps/web/src/theme/system.css'),
   join(ROOT, 'apps/web/src/theme/pages.css'),
+  join(ROOT, 'apps/web/src/theme/signin-banner.css'),
 ].map((f) => readFileSync(f, 'utf8')).join('\n');
 const lantern = JSON.parse(readFileSync(join(ROOT, 'packages/theme-packages/themes/lantern/theme.json'), 'utf8')) as ThemePackage;
 
@@ -23,7 +24,7 @@ const lantern = JSON.parse(readFileSync(join(ROOT, 'packages/theme-packages/them
 // static import would require(), and outside this tsconfig
 interface ThemePackage { id: string; tokens: { brand: Record<string, string>; color: Record<'light' | 'dark', Record<string, string>> }; components: Record<string, { colors?: Record<'light' | 'dark', Record<string, string>> }> }
 interface ThemePackages {
-  compilePackage: (t: ThemePackage) => { css: string };
+  compilePackage: (t: ThemePackage, o?: { svgText?: (path: string) => string | undefined }) => { css: string };
   duplicatePackage: (t: ThemePackage, id: string, name: { en: string; ar: string }, author: string) => ThemePackage;
 }
 type PreviewDocument = (o: { themeId: string; css: string; page: 'home'; mode: 'light' | 'dark'; lang: 'en' }) => string;
@@ -35,7 +36,10 @@ let tp: ThemePackages;
 test.beforeAll(async () => {
   tp = await import(join(ROOT, 'packages/theme-packages/dist/index.js'));
 });
-const compilePackage = (t: ThemePackage) => tp.compilePackage(t);
+/** As Preview.tsx compiles: the art's SVG files handed in (it fetches the draft's), here from the package dir */
+const LANTERN_DIR = join(ROOT, 'packages/theme-packages/themes/lantern');
+const svgText = (path: string) => (path.endsWith('.svg') ? readFileSync(join(LANTERN_DIR, path), 'utf8') : undefined);
+const compilePackage = (t: ThemePackage) => tp.compilePackage(t, { svgText });
 const duplicatePackage = (...args: Parameters<ThemePackages['duplicatePackage']>) => tp.duplicatePackage(...args);
 
 const rgb = (hex: string) => `rgb(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(', ')})`;
@@ -90,4 +94,28 @@ test.describe('theme builder preview', () => {
     await expect(page.locator('meta[name="color-scheme"]')).toHaveAttribute('content', 'only light');
     await expect(page.locator('meta[name="darkreader-lock"]')).toHaveCount(1);
   });
+
+  for (const mode of ['light', 'dark'] as const) {
+    test(`the home preview's sign-in banner shows the edited theme's art (${mode})`, async ({ page }) => {
+      const theme = duplicatePackage(lantern, 'lantern-copy', { en: 'Lantern copy', ar: 'نسخة الفانوس' }, 'e2e');
+      await openPreview(page, theme, mode);
+      const banner = page.getByRole('region', { name: 'Join Al Ummah Now' });
+      await expect(banner).toBeVisible();
+      const art = page.getByTestId('signin-banner-art');
+      const bg = () => art.evaluate((el) => decodeURIComponent(getComputedStyle(el).backgroundImage));
+      // The header graphic for this mode, with this theme's colours written in
+      const before = await bg();
+      expect(before).toContain('data:image/svg+xml,<svg');
+      expect(before).not.toContain('var(--fanous');
+      const box = await art.boundingBox();
+      expect(box!.width).toBeGreaterThan(100);
+      expect(box!.height).toBeGreaterThan(30);
+      // An edit to the colour the art is drawn with redraws it
+      const edited = structuredClone(theme);
+      edited.tokens.color[mode].primary = '#3a1d5c';
+      await setCss(page, edited);
+      await expect.poll(bg).not.toBe(before);
+      expect((await bg()).toLowerCase()).toContain('#3a1d5c');
+    });
+  }
 });

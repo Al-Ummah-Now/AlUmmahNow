@@ -3,6 +3,8 @@
 // R2 (binding theme_packages):
 //   themes/<id>/draft/theme.json, themes/<id>/draft/assets/...      the editable draft
 //   themes/<id>/<version>/theme.json, assets/..., theme.css         a published version, never changed
+//   themes/<id>/<version>/art/<light|dark>.svg                      its art (imagery.headerGraphic) with its colours
+//                                                                   written in, which theme.css names
 // D1 (REPORTS_DB): theme_packages and theme_package_versions hold the metadata the lists read.
 // Every create, import, publish, delete, restore and purge appends a row to site_settings_log (key theme.package).
 // Delete is a soft delete (migration 0013): the theme leaves every list, the editor, the public files and the
@@ -11,6 +13,7 @@
 import {
   BUILT_IN_IDS,
   ID_PATTERN,
+  artSvgPaths,
   MAX_ASSET_BYTES,
   sniff,
   svgProblem,
@@ -27,6 +30,7 @@ import {
 import { SITE_THEME_SETTING_KEY, parseSiteThemeValue } from '@al-ummah/shared-types';
 import type { AdminBindings } from '../base/types';
 import { auditOriginJson } from './request-origin';
+import { logger } from './logger';
 
 type Db = AdminBindings['REPORTS_DB'];
 
@@ -88,6 +92,27 @@ export class ThemeError extends Error {
 
 const prefix = (id: string, version: 'draft' | string) => `themes/${id}/${version}/`;
 const bytesOf = (s: string) => new TextEncoder().encode(s);
+const IMMUTABLE_FILE = 'public, max-age=31536000, immutable';
+const CSS_TYPE = 'text/css; charset=utf-8';
+/** The published files theme.css names for the art, one per mode (served beside the assets) */
+export const ART_PATH = /^art\/(light|dark)\.svg$/;
+/** theme.css carries the art part (compile.ts artCss) once this is in it */
+export const ART_MARKER = '--fanous-header-graphic:';
+
+/**
+ * A version's CSS with its art: the art is compiled from the package's own SVG with the theme's colours
+ * written in, and kept as files (art/<mode>.svg) the CSS links, so a large drawing never swells the
+ * stylesheet (the videos site refuses one over 1 MB) and is fetched only where it is painted.
+ */
+export function compileVersion(theme: ThemePackage, id: string, version: string, svgText: (path: string) => string | undefined) {
+  const art: Record<string, string> = {};
+  const compiled = compilePackage(theme, {
+    assetUrl: publicAssetUrl(id, version),
+    svgText,
+    artUrl: (mode, svg) => { art[`art/${mode}.svg`] = svg; return publicAssetUrl(id, version)(`art/${mode}.svg`); },
+  });
+  return { css: compiled.css, artCss: compiled.art, art };
+}
 
 export class ThemeStore {
   constructor(private readonly db: Db, private readonly bucket: R2Bucket) {}
@@ -174,6 +199,42 @@ export class ThemeStore {
 
   async getObject(id: string, version: 'draft' | string, path: string): Promise<R2ObjectBody | null> {
     return this.bucket.get(`${prefix(id, version)}${path}`);
+  }
+
+  /**
+   * A published version's theme.css. Versions published before the art part existed have none: it is
+   * built here, from the version's own theme.json and SVG files, on the first read, and written back
+   * (art files first, then the CSS), so every later read is a plain file read. Idempotent: two reads at
+   * once write the same bytes, and a CSS that has the art is never touched. If building fails the stored
+   * CSS is served as it is (the banner shows no art), `art` says so (the caller flags the admin), and the
+   * next read or the admin's Retry tries again.
+   */
+  async publishedCss(id: string, version: string): Promise<{ css: string; etag: string; art: 'present' | 'added' | 'failed'; error?: string } | null> {
+    const at = prefix(id, version);
+    const obj = await this.bucket.get(`${at}theme.css`);
+    if (!obj) return null;
+    const stored = await obj.text();
+    if (stored.includes(ART_MARKER)) return { css: stored, etag: obj.httpEtag, art: 'present' };
+    try {
+      const json = await this.bucket.get(`${at}theme.json`);
+      if (!json) throw new Error('theme.json is missing');
+      const theme = (await json.json()) as ThemePackage;
+      const svgs: Record<string, string> = {};
+      for (const path of artSvgPaths(theme)) {
+        const file = ASSET_PATH.test(path) ? await this.bucket.get(`${at}${path}`) : null;
+        if (file) svgs[path] = await file.text();
+      }
+      const { artCss, art } = compileVersion(theme, id, version, (path) => svgs[path]);
+      for (const [path, svg] of Object.entries(art)) await this.bucket.put(`${at}${path}`, bytesOf(svg), { httpMetadata: { contentType: 'image/svg+xml', cacheControl: IMMUTABLE_FILE } });
+      const css = `${stored.replace(/\n*$/, '\n')}${artCss}`;
+      const put = await this.bucket.put(`${at}theme.css`, bytesOf(css), { httpMetadata: { contentType: CSS_TYPE, cacheControl: IMMUTABLE_FILE } });
+      logger.info('[Themes] Added the art to a version published before it existed', { id, version, files: Object.keys(art) });
+      return { css, etag: put?.httpEtag ?? obj.httpEtag, art: 'added' };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error('[Themes] Could not add the art to a published version; serving its CSS without it', { id, version, error: message });
+      return { css: stored, etag: obj.httpEtag, art: 'failed', error: message };
+    }
   }
 
   private log(id: string, entry: string, actor: string, now: string) {
@@ -273,18 +334,18 @@ export class ThemeStore {
     const theme: ThemePackage = { ...files.theme, id, kind: 'custom', version };
     const validation = validatePackage(theme, { assets: files.assets });
     if (!validation.ok) throw new ThemeError(422, 'The draft has errors; fix them before publishing', validation.errors);
-    // The art (imagery.headerGraphic) is compiled from the package's own SVG with its colours, inline
     const svgText = (path: string) => (path.endsWith('.svg') && files.assets[path] ? new TextDecoder().decode(files.assets[path]) : undefined);
-    const css = compilePackage(theme, { assetUrl: publicAssetUrl(id, version), svgText }).css;
+    const { css, art } = compileVersion(theme, id, version, svgText);
     const at = prefix(id, version);
     let size = 0;
     for (const [path, bytes] of Object.entries(files.assets)) {
       size += bytes.byteLength;
       await this.bucket.put(`${at}${path}`, bytes, { httpMetadata: { contentType: contentTypeOf(path), cacheControl: 'public, max-age=31536000, immutable' } });
     }
+    for (const [path, svg] of Object.entries(art)) await this.bucket.put(`${at}${path}`, bytesOf(svg), { httpMetadata: { contentType: 'image/svg+xml', cacheControl: IMMUTABLE_FILE } });
     await this.bucket.put(`${at}theme.json`, bytesOf(JSON.stringify(theme, null, 2)), { httpMetadata: { contentType: 'application/json' } });
     // theme.css last: a version is served only once its CSS exists
-    await this.bucket.put(`${at}theme.css`, bytesOf(css), { httpMetadata: { contentType: 'text/css; charset=utf-8', cacheControl: 'public, max-age=31536000, immutable' } });
+    await this.bucket.put(`${at}theme.css`, bytesOf(css), { httpMetadata: { contentType: CSS_TYPE, cacheControl: IMMUTABLE_FILE } });
     await this.bucket.put(`${prefix(id, 'draft')}theme.json`, bytesOf(JSON.stringify(theme, null, 2)), { httpMetadata: { contentType: 'application/json' } });
     await this.db.batch([
       this.db.prepare('INSERT INTO theme_package_versions (theme_id, version, size_bytes, published_by, published_at) VALUES (?, ?, ?, ?, ?)').bind(id, version, size, actor, now),

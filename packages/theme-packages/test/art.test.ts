@@ -2,7 +2,7 @@
 // drawn as an image cannot read the page's custom properties, so they are written in.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { compilePackage, compiledArt, resolvedColors } from '../src/compile.ts';
+import { artSvgPaths, compilePackage, compiledArt, resolvedColors } from '../src/compile.ts';
 import { BUILT_IN, THEMES_DIR, loadPackageDir, svgTextOf } from '../scripts/load.ts';
 import type { ThemePackage } from '../src/types.ts';
 
@@ -50,4 +50,44 @@ test('a package without a header graphic uses its pattern, tiled; with neither t
   assert.match(compilePackage(bare, { svgText: svgTextOf(files) }).art, /--fanous-header-graphic: none;/);
   // No asset text (a compile that cannot read files): none, never a raw SVG with unresolved colours
   assert.match(compilePackage(files.theme).art, /--fanous-header-graphic: none;/);
+});
+
+test('artSvgPaths names exactly the SVG files the art reads, for callers that fetch them', () => {
+  const files = load('lantern');
+  const paths = artSvgPaths(files.theme);
+  assert.deepEqual(paths.sort(), ['assets/auth-header.dark.svg', 'assets/auth-header.light.svg']);
+  for (const p of paths) assert.ok(files.assets[p], p);
+  const noArt = { ...files.theme, imagery: { pattern: 'none' } } as ThemePackage;
+  assert.deepEqual(artSvgPaths(noArt), []);
+  const tiled = { ...files.theme, imagery: { pattern: 'assets/p.svg' } } as ThemePackage;
+  assert.deepEqual(artSvgPaths(tiled), ['assets/p.svg']);
+});
+
+test('a "band" header graphic (imagery.headerGraphicFrame) carries its framing as values, kept by a copy', async () => {
+  const { duplicatePackage } = await import('../src/edit.ts');
+  const { validatePackage } = await import('../src/validate.ts');
+  const lantern = load('lantern');
+  const { art } = compilePackage(lantern.theme, { svgText: svgTextOf(lantern) });
+  for (const mode of ['.dark', ':not(.dark)']) {
+    const block = art.slice(art.indexOf(`html[data-theme='lantern']${mode} {`));
+    assert.match(block, /--fanous-header-graphic-bleed: 1;/, mode);
+    assert.match(block, /--fanous-header-graphic-ratio: 400 \/ 110;/, `${mode}: the drawing's own proportions`);
+    assert.match(block, /--fanous-header-graphic-align: start;/);
+    assert.match(block, /--fanous-header-graphic-fade: linear-gradient\(black 72%, transparent\);/);
+  }
+  // Keyed on nothing but the package: a copy under another id frames its art the same way
+  const copy = duplicatePackage(lantern.theme, 'my-lantern', { en: 'Mine', ar: 'لي' }, 'a@b');
+  assert.match(compilePackage(copy, { svgText: svgTextOf(lantern) }).art, /html\[data-theme='my-lantern'\]\.dark \{[^}]*--fanous-header-graphic-bleed: 1;/);
+  // Inset (the default) adds nothing: the banner's defaults apply
+  for (const id of ['fawanees', 'nahas', 'zujaj']) {
+    const files = load(id);
+    assert.doesNotMatch(compilePackage(files.theme, { svgText: svgTextOf(files) }).art, /--fanous-header-graphic-(bleed|frame)/, id);
+  }
+  // No art, no framing
+  assert.doesNotMatch(compilePackage(lantern.theme).art, /bleed/);
+  // Only the two values
+  const bad = structuredClone(copy) as ThemePackage;
+  (bad.imagery as Record<string, unknown>).headerGraphicFrame = 'edge';
+  assert.ok(validatePackage(bad).errors.some((e) => e.path.includes('headerGraphicFrame')), JSON.stringify(validatePackage(bad).errors));
+  assert.equal(validatePackage(copy).ok, true);
 });
