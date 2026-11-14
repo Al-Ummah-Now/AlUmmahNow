@@ -353,11 +353,32 @@ export async function revokeGrant(db: D1Database, userId: string, grantId: strin
 	return toGrant({ ...row, revoked_at: at, revoked_by: actorId, revoke_reason: reason });
 }
 
-/** Account erasure: the user's caption-minute usage, holds and grants go with the account. */
-export async function eraseCaptionMinutes(db: { prepare(sql: string): { bind(...values: unknown[]): { run(): Promise<unknown> } } }, userId: string): Promise<void> {
+/**
+ * Account erasure: the user's caption-minute usage, holds, grants and the jobs they paid for go
+ * with the account. Jobs they asked for on someone else's minutes (a channel editor on the
+ * owner's) stay with the payer, anonymised; one still running is cancelled and its minutes go
+ * back to the payer (one already writing its draft finishes and is charged as usual).
+ */
+export async function eraseCaptionMinutes(db: D1Database, userId: string, now = new Date()): Promise<void> {
+	const at = now.toISOString();
+	const running =
+		(
+			await db
+				.prepare("SELECT id FROM caption_jobs WHERE requested_by = ? AND subject_id != ? AND status NOT IN ('ready', 'failed', 'cancelled', 'postprocessing')")
+				.bind(userId, userId)
+				.all<{ id: string }>()
+		).results ?? [];
+	for (const { id } of running) {
+		const changed = await db
+			.prepare("UPDATE caption_jobs SET status = 'cancelled', finished_at = ?, updated_at = ? WHERE id = ? AND status NOT IN ('ready', 'failed', 'cancelled', 'postprocessing')")
+			.bind(at, at, id)
+			.run();
+		if ((changed.meta?.changes ?? 0) > 0) await releaseMinutes(db, id, now);
+	}
+	await db.prepare("UPDATE caption_jobs SET requested_by = 'erased-user' WHERE requested_by = ? AND subject_id != ?").bind(userId, userId).run();
 	for (const table of ['caption_minute_usage', 'caption_minute_holds', 'caption_minute_grants']) {
 		await db.prepare(`DELETE FROM ${table} WHERE user_id = ?`).bind(userId).run();
 	}
-	// Their transcription jobs (0033); a running one then ends at the processor's next report (404)
-	await db.prepare('DELETE FROM caption_jobs WHERE subject_id = ? OR requested_by = ?').bind(userId, userId).run();
+	// The jobs they paid for; a running one ends at the processor's next report (404)
+	await db.prepare('DELETE FROM caption_jobs WHERE subject_id = ?').bind(userId).run();
 }

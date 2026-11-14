@@ -55,6 +55,8 @@ interface MediaObject {
   etag?: string;
 }
 interface MediaBucket {
+  list?(options: { prefix: string; cursor?: string }): Promise<{ objects: Array<{ key: string }>; truncated: boolean; cursor?: string }>;
+  delete?(keys: string | string[]): Promise<void>;
   get(key: string): Promise<MediaObject | null>;
   put(key: string, value: string, options?: { httpMetadata?: { contentType?: string }; onlyIf?: { etagMatches?: string; etagDoesNotMatch?: string } }): Promise<unknown>;
 }
@@ -400,6 +402,18 @@ export async function runCaptionJobStep(env: CaptionJobEnv, p: CaptionJobPayload
   return { status: 'ready', cues: written.cues, quran: written.quran, minutes: Math.max(1, Math.ceil(audioMs / 60_000)) };
 }
 
+/** A stopped job's audio and partial transcript (api-videos cannot see an erased job's work). */
+async function clearWork(env: CaptionJobEnv, jobId: string): Promise<void> {
+  const media = env.REVIEW_MEDIA;
+  if (!media?.list || !media.delete) return;
+  let cursor: string | undefined;
+  do {
+    const page = await media.list({ prefix: captionWorkPrefix(jobId), ...(cursor ? { cursor } : {}) });
+    if (page.objects.length) await media.delete(page.objects.map((o) => o.key));
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
+}
+
 function flagFailed(env: CaptionJobEnv, ctx: ExecutionContextLike | undefined, p: CaptionJobPayload, reason: string, attempts: number): void {
   reportNeedsAction('processor', env, ctx, {
     key: captionJobNeedsActionKey(p.jobId),
@@ -445,6 +459,7 @@ export async function processCaptionJobMessages(messages: CaptionJobQueueMessage
     } catch (error) {
       if (error instanceof JobStopped) {
         logger.info('[Captions] Caption job stopped', { jobId: p.jobId, reason: error.message });
+        await clearWork(env, p.jobId).catch((e) => logger.warn('[Captions] Could not delete a stopped job work', { jobId: p.jobId, error: e instanceof Error ? e.message : String(e) }));
         message.ack();
         continue;
       }

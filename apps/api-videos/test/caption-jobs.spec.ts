@@ -246,6 +246,29 @@ describe('caption jobs: erase', () => {
 		await eraseCaptionMinutes(d1, 'alice');
 		assert.equal((await listJobs(asEnv, 'v1')).length, 0);
 	});
+
+	it("erasing an editor keeps the owner's job record, cancels a running one and gives the owner the minutes back", async () => {
+		const { asEnv, d1, remaining } = await setup(10);
+		const out = await ask(asEnv, { userId: 'editor' });
+		assert.ok('job' in out);
+		assert.equal(await remaining(), 7, "the owner's minutes pay for the editor's job");
+		const { eraseCaptionMinutes } = await import('../src/lib/captions/minutes');
+		await eraseCaptionMinutes(d1, 'editor', NOV);
+		const [job] = await listJobs(asEnv, 'v1');
+		assert.equal(job.status, 'cancelled');
+		assert.equal(job.requestedBy, 'erased-user');
+		assert.equal(await remaining(), 10);
+	});
+
+	it('a job writing its draft can no longer be cancelled (no free draft)', async () => {
+		const { asEnv, remaining } = await setup(10);
+		const out = await ask(asEnv);
+		assert.ok('job' in out);
+		assert.equal(await onProgress(asEnv, out.job.id, { status: 'postprocessing', done: 1, total: 1 }, NOV), true);
+		await assert.rejects(cancelJob(asEnv, 'v1', out.job.id, NOV), /job_finishing/);
+		assert.equal((await finishJob(asEnv, out.job.id, { outcome: 'ready', minutesUsed: 3 }, undefined, NOV)).minutesCharged, 3);
+		assert.equal(await remaining(), 7);
+	});
 });
 
 describe('caption jobs: internal routes', () => {

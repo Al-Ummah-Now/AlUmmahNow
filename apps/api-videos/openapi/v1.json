@@ -43343,7 +43343,7 @@
           "Captions"
         ],
         "summary": "Cancel a transcription job",
-        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nGives back its reserved minutes. A job that already ended is returned unchanged.",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nGives back its reserved minutes. A job that already ended is returned unchanged; one already writing its draft is 409 `job_finishing`.",
         "operationId": "post_CaptionJobCancel",
         "parameters": [
           {
@@ -43549,6 +43549,31 @@
           },
           "404": {
             "description": "No such video or job",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`job_finishing`: the draft is being written",
             "content": {
               "application/json": {
                 "schema": {
