@@ -25,6 +25,7 @@
 --   apps/admin-api/migrations/0024_content_reviews.sql
 --   apps/admin-api/migrations/0025_review_alert_subscribers.sql
 --   apps/admin-api/migrations/0026_erase_tombstones.sql
+--   apps/admin-api/migrations/0027_csam_cases.sql
 
 CREATE TABLE admin_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, actor_email TEXT, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, metadata TEXT, created_at TEXT NOT NULL);
 CREATE TABLE ai_budget_daily (day TEXT NOT NULL, feature TEXT NOT NULL, reserved REAL NOT NULL DEFAULT 0, PRIMARY KEY (day, feature));
@@ -36,6 +37,9 @@ CREATE TABLE contact_notes (id TEXT PRIMARY KEY, message_id TEXT NOT NULL REFERE
 CREATE TABLE content_review_findings (id TEXT PRIMARY KEY, review_id TEXT NOT NULL, source TEXT NOT NULL, category TEXT NOT NULL, score REAL NOT NULL, at_ms INTEGER, end_ms INTEGER, media_key TEXT, text TEXT, quran_ref TEXT, model TEXT NOT NULL, rationale TEXT, created_at TEXT NOT NULL);
 CREATE TABLE content_reviews (id TEXT PRIMARY KEY, subject_type TEXT NOT NULL, subject_id TEXT NOT NULL, channel_id TEXT, owner_id TEXT, status TEXT NOT NULL, mode TEXT NOT NULL, timing TEXT NOT NULL DEFAULT 'pre', trigger TEXT, route TEXT, risk REAL, nsfw INTEGER NOT NULL DEFAULT 0, escalate INTEGER NOT NULL DEFAULT 0, hold_cause TEXT, top_category TEXT, findings_count INTEGER NOT NULL DEFAULT 0, partial INTEGER NOT NULL DEFAULT 0, models TEXT, prompt_version TEXT, cost_usd REAL NOT NULL DEFAULT 0, created_at TEXT NOT NULL, checked_at TEXT, sla_due_at TEXT, assigned_to TEXT, decided_at TEXT, decided_by TEXT, decision TEXT, reason_code TEXT, note TEXT, undo_until TEXT, appeal_of TEXT, appeal_message TEXT, media_purge_after TEXT, updated_at TEXT NOT NULL);
 CREATE TABLE creator_invites (id TEXT PRIMARY KEY, user_id TEXT NOT NULL UNIQUE, email TEXT NOT NULL, name TEXT, locale TEXT NOT NULL DEFAULT 'en', note TEXT, role TEXT NOT NULL DEFAULT 'creator', tier_id TEXT, auth_roles TEXT NOT NULL DEFAULT '[]', channels TEXT NOT NULL DEFAULT '[]', expires_in_days INTEGER NOT NULL DEFAULT 14, continue_url TEXT, delivery_status TEXT NOT NULL, delivery_attempts INTEGER NOT NULL DEFAULT 0, delivery_error TEXT, email_sent INTEGER NOT NULL DEFAULT 0, status TEXT, expires_at TEXT, accepted_at TEXT, last_sent_at TEXT, send_count INTEGER NOT NULL DEFAULT 0, pending_op TEXT, op_error TEXT, sync_requested_at TEXT, synced_at TEXT, created_by TEXT NOT NULL, created_by_email TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, deleted_at TEXT, deleted_by TEXT, deleted_reason TEXT, purge_requested_at TEXT);
+CREATE TABLE csam_access_log (id TEXT PRIMARY KEY, case_id TEXT, actor_id TEXT NOT NULL, action TEXT NOT NULL, detail TEXT, created_at TEXT NOT NULL);
+CREATE TABLE csam_cases (id TEXT PRIMARY KEY, matched_url TEXT NOT NULL, url_key TEXT NOT NULL, source TEXT NOT NULL CHECK (source IN ('paste', 'webhook')), status TEXT NOT NULL CHECK (status IN ('unmapped', 'containing', 'contained', 'containment_failed', 'reported', 'closed')), item_kind TEXT, resolution TEXT, uploader_id TEXT, job_id TEXT, freeze TEXT, facts TEXT, detected_at TEXT NOT NULL, created_by TEXT NOT NULL, report_id TEXT, reported_at TEXT, reported_by TEXT, legal_hold INTEGER NOT NULL DEFAULT 0, legal_hold_reason TEXT, evidence_deleted_at TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE TABLE csam_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE entitlement_overrides (id TEXT PRIMARY KEY, subject_type TEXT NOT NULL CHECK (subject_type IN ('channel', 'organisation', 'user')), subject_id TEXT NOT NULL, key TEXT NOT NULL, value_json TEXT NOT NULL, expires_at TEXT, reason TEXT NOT NULL, created_by TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), UNIQUE (subject_type, subject_id, key));
 CREATE TABLE erased_users (user_key TEXT PRIMARY KEY, erased_at INTEGER NOT NULL) WITHOUT ROWID;
 CREATE TABLE error_actions (id TEXT PRIMARY KEY, group_id TEXT NOT NULL REFERENCES error_groups(id) ON DELETE CASCADE, environment TEXT NOT NULL, item_key TEXT NOT NULL, app TEXT NOT NULL, source TEXT NOT NULL, title TEXT NOT NULL, detail TEXT, item_type TEXT, item_id TEXT, item_url TEXT, retry_json TEXT, retry_label TEXT, status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'retrying', 'resolved', 'dismissed')), occurrences INTEGER NOT NULL DEFAULT 1, attempts INTEGER NOT NULL DEFAULT 0, last_attempt_at TEXT, last_attempt_result TEXT, last_attempt_by TEXT, last_ref TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, resolved_at TEXT, UNIQUE (environment, item_key));
@@ -89,6 +93,10 @@ CREATE INDEX idx_content_reviews_subject ON content_reviews(subject_type, subjec
 CREATE INDEX idx_creator_invites_created ON creator_invites(created_at);
 CREATE INDEX idx_creator_invites_email ON creator_invites(email);
 CREATE INDEX idx_creator_invites_status ON creator_invites(status, created_at);
+CREATE INDEX csam_access_log_case ON csam_access_log (case_id, created_at);
+CREATE UNIQUE INDEX csam_cases_open_url ON csam_cases (url_key) WHERE status != 'closed';
+CREATE INDEX csam_cases_retention ON csam_cases (reported_at) WHERE evidence_deleted_at IS NULL AND legal_hold = 0;
+CREATE INDEX csam_cases_status ON csam_cases (status, created_at);
 CREATE INDEX idx_entitlement_overrides_key ON entitlement_overrides(key, subject_type, created_at);
 CREATE INDEX idx_erased_users_erased_at ON erased_users (erased_at);
 CREATE INDEX idx_error_actions_group ON error_actions (group_id, status, updated_at DESC);
@@ -141,3 +149,5 @@ CREATE UNIQUE INDEX idx_subscriptions_live ON subscriptions(subject_type, subjec
 CREATE INDEX idx_subscriptions_plan ON subscriptions(plan_id, plan_version);
 CREATE INDEX idx_theme_packages_deleted ON theme_packages (deleted_at) WHERE deleted_at IS NOT NULL;
 CREATE INDEX idx_user_warnings_user ON user_warnings(user_id, created_at DESC, id DESC);
+CREATE TRIGGER csam_access_log_no_delete BEFORE DELETE ON csam_access_log BEGIN SELECT RAISE(ABORT, 'csam_access_log is append-only'); END;
+CREATE TRIGGER csam_access_log_no_update BEFORE UPDATE ON csam_access_log BEGIN SELECT RAISE(ABORT, 'csam_access_log is append-only'); END;

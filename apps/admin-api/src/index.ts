@@ -33,6 +33,8 @@ import vitalsRouter from './routers/vitals.router';
 import statusRouter from './routers/status.router';
 import staleUploadsRouter from './routers/staleUploads.router';
 import trashRouter from './routers/trash.router';
+import csamRouter from './routers/csam.router';
+import { handleCloudflareWebhook, isCsamRetentionTick, runCsamRetention } from './lib/csam';
 import { isHourlyTick, runTrashCleanup } from './lib/trash';
 import type { AdminBindings } from './base/types';
 import { contactSubmit } from './endpoints/contact/ContactSubmit';
@@ -144,6 +146,11 @@ app.post('/internal/contact', (c) => contactSubmit(c as never));
 app.route('/public/themes', publicThemes as never);
 // Error events from every app (X-API-Key; endpoints/errors/ErrorsIngest.ts)
 app.post('/internal/errors', (c) => errorsIngest(c as never));
+// Cloudflare Notifications (docs/specs/CSAM-RESPONSE.md §9): signed with cf-webhook-auth; our URLs open CSAM cases
+app.post('/webhooks/cloudflare/notifications', async (c) => {
+  const out = await handleCloudflareWebhook(c.env as never, { secret: c.req.header('cf-webhook-auth'), body: await c.req.text() });
+  return c.json({ success: out.status === 200, ...(out.opened !== undefined ? { opened: out.opened } : {}) }, out.status);
+});
 // Studio → Site → Domains from the videos site's server (X-API-Key + the user's token; channel.edit)
 app.route('/internal/site-domains', studioSiteDomainsRouter as never);
 
@@ -227,6 +234,9 @@ app.route('/api/uploads/stale', staleUploadsRouter as never);
 // Recently deleted (contact messages, themes, creator tiers): restore, delete permanently now
 app.route('/api/trash', trashRouter as never);
 
+// CSAM cases (docs/specs/CSAM-RESPONSE.md): super admins only, audited
+app.route('/api/csam', csamRouter as never);
+
 // ==========================================
 // HEALTH CHECK
 // ==========================================
@@ -278,6 +288,14 @@ async function scheduled(controller: ScheduledController, env: AdminBindings, ct
       syncCostAlerts(env as never, errorsPipelineSink(env), new Date(controller.scheduledTime))
         .then(() => undefined)
         .catch((error) => logger.error('[OpsCost] Spend alert check failed', { error: String(error) })),
+    );
+  }
+  // CSAM evidence past its retention (never before the report + retention days, never under a hold)
+  if (isCsamRetentionTick(controller.scheduledTime)) {
+    ctx.waitUntil(
+      runCsamRetention(env as never)
+        .then((out) => { if (out.deleted || out.failed) logger.info('[CSAM] Retention sweep', out); })
+        .catch((error) => logger.error('[CSAM] Retention sweep failed', { error: String(error) })),
     );
   }
   ctx.waitUntil(scheduledReportMetaSync(env as never));

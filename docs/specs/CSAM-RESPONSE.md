@@ -30,8 +30,13 @@ Only **super admins** (`isSuperAdmin`, shared `roles.ts`) can see the CSAM pages
 
 **Paste.** The super admin pastes the email, a list of paths or URLs, or one URL at `/moderation/csam`. `extractCsamUrls` (shared-types `csam.ts`) pulls out up to 200 of our URLs.
 
-**Webhook.** `POST /webhooks/cloudflare/notifications` on admin-api, which is public. The request must carry `cf-webhook-auth`, and its value must match `CF_NOTIFICATIONS_WEBHOOK_SECRET` (a constant-time compare). Anything else gets a 401.
-- A payload that names one of our URLs opens cases exactly as a paste does.
+**Webhook.** `POST /webhooks/cloudflare/notifications` on admin-api, which is public. The request must carry `cf-webhook-auth` with the webhook secret, and anything else gets a 401.
+- A super admin generates the secret on the CSAM settings page (step-up, audited). It is shown once.
+- admin-api keeps only its SHA-256 (`csam_settings.webhook_secret_sha256`) and compares in constant time. Generating a new secret replaces the old one.
+- No Worker secret is involved, so the owner can rotate it from the page.
+
+What the webhook does with a payload:
+- If the payload names one of our URLs, it opens cases exactly as a paste does.
 - Any other payload, of an unknown type or carrying no URL, opens no case. It only flags the admin (Errors page, `csam-webhook:<hash>`) with the payload's alert type and size, never its body.
 
 Each URL becomes one **case**. A URL that already has an open case is attached to that case and starts nothing new. The case id is a random UUID.
@@ -136,7 +141,7 @@ Webhook destination (once per account):
 1. Cloudflare dashboard → **Manage Account → Notifications → Destinations**.
 2. **Webhooks → Create**.
 3. **Name**: `Al Ummah Now CSAM intake`. **URL**: `https://admin.api.alummahnow.net/webhooks/cloudflare/notifications`.
-4. **Secret**: paste the value stored as admin-api's `CF_NOTIFICATIONS_WEBHOOK_SECRET`. Cloudflare sends it in the `cf-webhook-auth` header.
+4. **Secret**: on the videos admin go to **Moderation → CSAM → Settings → Generate webhook secret** (super admin, fresh sign-in). Copy the secret it shows once and paste it here. Cloudflare sends it in the `cf-webhook-auth` header.
 5. **Save and Test**. The test payload has no URL, so it shows up as a flag on the Errors page ("Cloudflare notification without a match"). That is the signal that the webhook works. Dismiss it.
 
 Notification (once per account):

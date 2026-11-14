@@ -24,6 +24,8 @@ export interface VideosCall {
   json?: unknown;
   form?: FormData;
   actorId?: string;
+  /** Path prefix on api-videos (default /internal/admin; the CSAM routes are /internal/csam) */
+  base?: '/internal/admin' | '/internal/csam';
 }
 
 async function internalKey(env: VideosClientEnv): Promise<string> {
@@ -43,6 +45,16 @@ export function queryString(query: VideosCall['query']): string {
   return text ? `?${text}` : '';
 }
 
+/** The raw response of an api-videos internal route (streams: CSAM evidence downloads). */
+export async function fetchVideosRaw(env: VideosClientEnv, path: string, call: Pick<VideosCall, 'actorId' | 'base'> = {}): Promise<Response> {
+  const headers: Record<string, string> = { 'X-API-Key': await internalKey(env) };
+  if (call.actorId) headers['X-Admin-Actor'] = call.actorId;
+  const suffix = `${call.base ?? '/internal/admin'}${path}`;
+  if (env.VIDEOS) return env.VIDEOS.fetch(`https://videos.internal${suffix}`, { headers });
+  if (env.VIDEOS_API_URL) return fetch(`${env.VIDEOS_API_URL.replace(/\/$/, '')}${suffix}`, { headers });
+  throw new VideosError(500, 'not_configured', 'The VIDEOS service binding is not configured');
+}
+
 export async function callVideos<T>(env: VideosClientEnv, path: string, call: VideosCall = {}): Promise<T> {
   const headers: Record<string, string> = { 'X-API-Key': await internalKey(env) };
   if (call.actorId) headers['X-Admin-Actor'] = call.actorId;
@@ -53,7 +65,7 @@ export async function callVideos<T>(env: VideosClientEnv, path: string, call: Vi
     body = JSON.stringify(call.json);
   }
   const init: RequestInit = { method: call.method ?? 'GET', headers, body };
-  const suffix = `/internal/admin${path}${queryString(call.query)}`;
+  const suffix = `${call.base ?? '/internal/admin'}${path}${queryString(call.query)}`;
 
   let response: Response;
   if (env.VIDEOS) response = await env.VIDEOS.fetch(`https://videos.internal${suffix}`, init);
