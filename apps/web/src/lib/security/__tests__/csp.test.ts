@@ -56,6 +56,13 @@ describe('buildContentSecurityPolicy (production)', () => {
     expect(d['media-src']).toEqual(expect.arrayContaining(['https://live.stage.alummahnow.net']));
   });
 
+  it("allows the environment's configured R2 media host (the local stack's) for HLS, beside the fixed ones", () => {
+    const local = directives(buildContentSecurityPolicy({ isDevelopment: false, nonce, env: { ...env, mediaHost: 'media.local-stack.test' } }));
+    expect(local['connect-src']).toEqual(expect.arrayContaining(['https://media.local-stack.test', 'https://media.alummahnow.net']));
+    expect(local['media-src']).toEqual(expect.arrayContaining(['https://media.local-stack.test']));
+    expect(d['connect-src'].join(' ')).not.toContain('local-stack');
+  });
+
   it('allows a plain ws:// WebSocket only on this machine (the local E2E stack)', () => {
     const local = directives(buildContentSecurityPolicy({ isDevelopment: false, nonce, env: { ...env, websocketUrl: 'ws://localhost:3087/ws' } }));
     expect(local['connect-src']).toEqual(expect.arrayContaining(['ws://localhost:3087', 'http://localhost:3087']));

@@ -28,6 +28,8 @@ export interface CspEnv {
   apiUrl?: string;
   websocketUrl?: string;
   bunnyPullZone?: string;
+  /** This environment's R2 media host (MEDIA_PUBLIC_HOST, e.g. the local stack's media.local-stack.test) */
+  mediaHost?: string;
   authUrl?: string;
 }
 
@@ -88,12 +90,13 @@ export function buildContentSecurityPolicy({ isDevelopment, insecureOrigin = fal
   const apiOrigin = origin(env.apiUrl);
   const authOrigin = origin(env.authUrl);
   const bunny = env.bunnyPullZone ? `https://${env.bunnyPullZone.replace(/^https?:\/\//, '')}` : '';
+  const mediaHosts = Array.from(new Set([...MEDIA_HOSTS, ...(env.mediaHost ? [`https://${env.mediaHost.replace(/^https?:\/\//, '').replace(/\/.*$/, '')}`] : [])]));
 
   const connectSrc = [
     "'self'",
     'https://*.b-cdn.net',
     // R2 + Cloudflare CDN renditions beside Bunny (epic #687): HLS playlists and segments
-    ...MEDIA_HOSTS,
+    ...mediaHosts,
     bunny,
     apiOrigin,
     authOrigin,
@@ -117,7 +120,7 @@ export function buildContentSecurityPolicy({ isDevelopment, insecureOrigin = fal
     // Inline event-handler attributes are never needed: React attaches handlers via addEventListener.
     "script-src-attr 'none'",
     "style-src 'self' 'unsafe-inline' https://vjs.zencdn.net",
-    `media-src 'self' https://cdn.bunny.net https://bunny-cdn.b-cdn.net https://*.b-cdn.net ${MEDIA_HOSTS.join(' ')} ${LIVE_EDGE_ORIGINS.join(' ')} blob:`,
+    `media-src 'self' https://cdn.bunny.net https://bunny-cdn.b-cdn.net https://*.b-cdn.net ${mediaHosts.join(' ')} ${LIVE_EDGE_ORIGINS.join(' ')} blob:`,
     `connect-src ${Array.from(new Set(connectSrc)).join(' ')}`,
     "img-src 'self' data: https: blob:",
     "font-src 'self' data:",
