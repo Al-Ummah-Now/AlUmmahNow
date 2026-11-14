@@ -1,0 +1,44 @@
+name: Cloudflare usage report
+
+# Read-only: al-ummah's Cloudflare usage over the last N days, priced at list prices, per product,
+# resource and env (scripts/ops/usage-report.ts). Only GET list calls and GraphQL Analytics reads;
+# other projects on the shared account are filtered out before anything is fetched or printed.
+# Runs by hand and on PRs that change the report itself.
+on:
+  workflow_dispatch:
+    inputs:
+      days:
+        description: Days to cover (1-31)
+        type: string
+        default: '30'
+  pull_request:
+    paths:
+      - scripts/ops/usage-report.ts
+      - .github/workflows/cf-usage-report.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cf-usage-report-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  report:
+    # Fork PRs get no secrets
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Usage report
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DAYS: ${{ inputs.days || '30' }}
+        run: |
+          set -o pipefail
+          node --experimental-strip-types --no-warnings scripts/ops/usage-report.ts --days "$DAYS" | tee -a "$GITHUB_STEP_SUMMARY"
