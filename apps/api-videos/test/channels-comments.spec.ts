@@ -116,7 +116,10 @@ describe('channel handle endpoints', () => {
 		res = await owner.request('/api/channels/c1', json({ handle: 'NoorTV' }), e);
 		assert.equal(res.status, 200);
 		assert.equal(e.channel_tabs.read('channel-handles/noor'), null, 'old handle released');
-		assert.equal((await owner.request('/api/channels/by-handle/noor', {}, e)).status, 404);
+		// The old handle now leads to the channel under its new handle (handle history; the page 308s)
+		const old = await owner.request('/api/channels/by-handle/noor', {}, e);
+		assert.equal(old.status, 200);
+		assert.equal(((await old.json()) as any).handle, 'NoorTV');
 
 		// Someone else can't take it
 		const other = buildApp(routes, { userId: 'other' });

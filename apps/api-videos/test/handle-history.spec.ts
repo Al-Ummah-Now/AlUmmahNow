@@ -8,7 +8,8 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { ChannelUpdate } from '../src/endpoints/channel/channelUpdate';
 import { ChannelByHandleFetch } from '../src/endpoints/channel/channelHandle';
-import { HANDLE_HOLD_DAYS, claimHandle, dropHandleHistory, handleHistoryKey, isHandleOnHold } from '../src/lib/channelHandles';
+import { HANDLE_HOLD_DAYS, checkHandleAvailability, claimHandle, dropHandleHistory, handleHistoryKey, isHandleOnHold, releaseReplacedHandle } from '../src/lib/channelHandles';
+import { eraseChannelHandleHistory } from '../src/lib/privacy/handle-history';
 import { MemoryBucket, MemoryQueue, buildApp } from './helpers';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -122,5 +123,41 @@ describe('handle history', () => {
 		// A default handle claim (new channel) respects the hold too
 		const bucket = new MemoryBucket({ [handleHistoryKey('held')]: { handle: 'held', channelId: 'c1', dateReleased: new Date().toISOString() } });
 		assert.deepEqual(await claimHandle(bucket as never, 'held', { id: 'c9', userId: 'u9' }), { ok: false, reason: 'taken' });
+	});
+
+	it('a channel holds one old handle at a time: renaming again cannot squat more handles', async () => {
+		const env = setup();
+		await rename(env, 'u1', 'c1', 'second');
+		await rename(env, 'u1', 'c1', 'third');
+		await rename(env, 'u1', 'c1', 'fourth');
+		// Every old handle still redirects
+		for (const old of ['oldname', 'second', 'third']) assert.equal((await byHandle(env, old)).body.handle, 'fourth', old);
+		// Only the first is held; the others are free for anyone
+		assert.equal((await checkHandleAvailability(env.channel_tabs as never, 'oldname', 'c2')).available, false);
+		assert.equal((await checkHandleAvailability(env.channel_tabs as never, 'second', 'c2')).available, true);
+		assert.equal((await checkHandleAvailability(env.channel_tabs as never, 'third', 'c2')).available, true);
+		// Once the held one expires, the next rename is held again
+		const first = env.channel_tabs.read(handleHistoryKey('oldname'));
+		env.channel_tabs.store.set(handleHistoryKey('oldname'), JSON.stringify({ ...first, dateReleased: new Date(Date.now() - (HANDLE_HOLD_DAYS + 1) * DAY).toISOString() }));
+		await rename(env, 'u1', 'c1', 'fifth');
+		assert.equal((await checkHandleAvailability(env.channel_tabs as never, 'fourth', 'c2')).available, false);
+	});
+
+	it('a claim whose write never landed is given back with no redirect and no hold', async () => {
+		const env = setup();
+		assert.deepEqual(await claimHandle(env.channel_tabs as never, 'neverused', { id: 'c1', userId: 'u1' }), { ok: true, handle: 'neverused' });
+		await releaseReplacedHandle(env.channel_tabs as never, env.channels as never, 'neverused', 'c1', false);
+		assert.ok(!env.channel_tabs.read('channel-handles/neverused'));
+		assert.ok(!env.channel_tabs.read(handleHistoryKey('neverused')));
+		assert.equal((await checkHandleAvailability(env.channel_tabs as never, 'neverused', 'c2')).available, true);
+	});
+
+	it('privacy erase drops the channel\'s history with the budgeted helper', async () => {
+		const env = setup();
+		await rename(env, 'u1', 'c1', 'second');
+		const budget = { spend() {} };
+		assert.equal(await eraseChannelHandleHistory(env.channel_tabs as never, 'c1', budget as never), 1);
+		assert.ok(!env.channel_tabs.read(handleHistoryKey('oldname')));
+		assert.deepEqual([...env.channel_tabs.store.keys()].filter((k) => k.startsWith('channel-handle-history')), []);
 	});
 });

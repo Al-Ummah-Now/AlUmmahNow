@@ -25,6 +25,7 @@
  * throws, so the job is retried with backoff rather than falling back to a scan.
  */
 import { postLocationKey } from '../community-posts';
+import { eraseChannelHandleHistory } from './handle-history';
 import { defaultPointerPrefix } from '../uploadDefaultPointer';
 import { deleteVideoSideRecords } from '../videoSideRecords';
 import { watchLaterId } from '../library';
@@ -196,13 +197,7 @@ export async function eraseRunUserData(
 					if (entry?.channelId === channelId) await deleteKeys(tabs, [handleKey], budget);
 				}
 				// Its old handles (handle history) stop redirecting to it
-				const markers = await prefixKeys(tabs, `channel-handle-history-of/${channelId}/`, budget);
-				for (const marker of markers) {
-					const historyKey = `channel-handle-history/${marker.slice(`channel-handle-history-of/${channelId}/`.length)}`;
-					const history = await readJson<Json>(tabs, historyKey, budget);
-					if (history?.channelId === channelId) await deleteKeys(tabs, [historyKey], budget);
-				}
-				await deleteKeys(tabs, markers, budget);
+				await eraseChannelHandleHistory(tabs, channelId, budget);
 				// Its Bunny collections (lib/channelCollection.ts) go with the record
 				if (channel && hooks.onChannelDeleted) await hooks.onChannelDeleted(channelId, channel);
 				bump('channels', await deleteKeys(channelsBucket, [channelId], budget));
