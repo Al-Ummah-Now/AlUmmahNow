@@ -33,18 +33,15 @@ describe('PR preview deploys', () => {
 	const deploys = previewDeploys();
 
 	it('finds the preview deploys', () => {
-		assert.deepEqual(deploys.map((d) => d.app).sort(), ['admin-api', 'admin-web', 'api-videos', 'processor', 'web', 'websocket-server']);
+		// Only the web preview (2026-11-14): the backend previews on wrangler.qa.jsonc tried to consume QA's queues
+		assert.deepEqual(deploys.map((d) => d.app).sort(), ['web']);
 	});
 
 	for (const { app, command } of deploys) {
-		it(`${app}: never deploys the production config under a preview name`, () => {
+		it(`${app}: deploys its preview config (no routes, queue consumers or crons)`, () => {
 			const config = command.match(/--config\s+(\S+)/)?.[1];
-			if (!config) {
-				// An env block inherits no routes or bindings from the top level
-				assert.match(command, /--env\s+(development|qa)\b/, `${app} preview must pass --config <qa/preview config> or a non-prod --env`);
-				return;
-			}
-			assert.match(config, /^wrangler\.(qa|preview)\.jsonc$/, `${app} preview uses ${config}`);
+			assert.ok(config, `${app} preview must pass --config wrangler.preview.jsonc`);
+			assert.match(config, /^wrangler\.preview\.jsonc$/, `${app} preview uses ${config}`);
 			const parsed = parseJsonc(readFileSync(resolve(ROOT, 'apps', app, config), 'utf8')) as Record<string, unknown>;
 			assert.equal(parsed.routes ?? parsed.route, undefined, `${app}/${config} declares routes; a preview would take them`);
 		});
