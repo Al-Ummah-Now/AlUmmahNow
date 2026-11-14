@@ -130,14 +130,14 @@ export function samplePageBlocks(locale: L): Raw[] {
    return [
       { id: 'hero', type: 'hero', eyebrow: c.eyebrow, title: c.title, subtitle: c.subtitle, background: 'gradient', height: 'm', buttons: [{ label: c.b1, url: '/videos/', variant: 'primary' }, { label: c.b2, url: '/account/', variant: 'secondary' }] },
       { id: 'intro', type: 'markdown', text: c.intro },
-      { id: 'features', type: 'stats', variant: 'features', heading: c.featH, style: { align: 'start', width: 'wide', tone: 'none', space: 'm' }, items: c.feats.map(([icon, label, text]) => ({ icon, label, text })) },
-      { id: 'image', type: 'image', media_id: 1, alt: c.imgAlt, caption: c.imgCap, style: { width: 'wide' } },
+      { id: 'features', type: 'stats', variant: 'features', heading: c.featH, appearance: { align: 'start', width: 'wide', tone: 'none', space: 'm' }, items: c.feats.map(([icon, label, text]) => ({ icon, label, text })) },
+      { id: 'image', type: 'image', media_id: 1, alt: c.imgAlt, caption: c.imgCap, appearance: { width: 'wide' } },
       { id: 'layout3', type: 'layout', columns: 3, items: c.cols.map(([heading, text, label], i) => ({ heading, text, label, url: ['/videos/', '/articles/', '/videos/'][i], media_id: i + 2, alt: '' })) },
-      { id: 'split', type: 'columns', text: c.split, media_id: 5, alt: c.imgAlt, image_side: 'start', style: { tone: 'soft' } },
+      { id: 'split', type: 'columns', text: c.split, media_id: 5, alt: c.imgAlt, image_side: 'start', appearance: { tone: 'soft' } },
       { id: 'cards', type: 'cardgrid', heading: c.cardsH, intro: c.cardsI, columns: 3, items: c.cards.map(([title, text, label], i) => ({ title, text, label, url: ['/videos/', '/videos/', '/scholars/'][i], media_id: [6, 7, 1][i], alt: '' })) },
       { id: 'stats', type: 'stats', variant: 'stats', heading: c.statsH, items: c.stats.map(([value, label, text]) => ({ value, label, text })) },
       { id: 'gallery', type: 'gallery', columns: 4, items: c.g.map((alt, i) => ({ media_id: [2, 3, 4, 6][i], alt, caption: '' })) },
-      { id: 'quote', type: 'quote', variant: 'quote', text: c.quote, cite: c.cite, style: { align: 'center' } },
+      { id: 'quote', type: 'quote', variant: 'quote', text: c.quote, cite: c.cite, appearance: { align: 'center' } },
       { id: 'video', type: 'video', kind: 'video', ref_id: 'sampleVideo1', caption: c.vcap },
       { id: 'shelf', type: 'videos', heading: c.shelfH, items: [{ kind: 'video', ref_id: 'sampleVideo1' }, { kind: 'video', ref_id: 'sampleVideo2' }, { kind: 'playlist', ref_id: 'samplePlaylist1' }, { kind: 'video', ref_id: 'sampleVideo3' }] },
       { id: 'divider', type: 'divider', style_kind: 'line', size: 'm' },
@@ -146,7 +146,7 @@ export function samplePageBlocks(locale: L): Raw[] {
       { id: 'callout', type: 'quote', variant: 'callout', text: c.callout },
       { id: 'faq', type: 'faq', heading: c.faqH, items: c.faq.map(([q, a]) => ({ q, a })) },
       { id: 'spacer', type: 'divider', style_kind: 'space', size: 's' },
-      { id: 'cta', type: 'cta', heading: c.ctaH, text: c.ctaT, label: c.ctaL, url: '/account/', style: { width: 'full', tone: 'night', align: 'center' } },
+      { id: 'cta', type: 'cta', heading: c.ctaH, text: c.ctaT, label: c.ctaL, url: '/account/', appearance: { width: 'full', tone: 'night', align: 'center' } },
       { id: 'contact', type: 'contact', heading: c.contactH, text: c.contactT, label: c.contactL, kind: 'page' },
    ];
 }

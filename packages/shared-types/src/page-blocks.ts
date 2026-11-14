@@ -184,7 +184,7 @@ export interface StatItem {
    icon: FeatureIcon | '';
 }
 
-type B<T extends string, F> = { id: string; type: T; style: BlockStyle } & F;
+type B<T extends string, F> = { id: string; type: T; appearance: BlockStyle } & F;
 
 export type PageBlock =
    | B<'hero', { eyebrow: string; title: string; subtitle: string; background: 'gradient' | 'image' | 'plain'; media_id: number | null; alt: string; height: 's' | 'm' | 'l'; buttons: HeroButton[] }>
@@ -331,7 +331,7 @@ function normalizeOne(raw: unknown, i: number): PageBlock {
          return {
             id,
             type,
-            style: styleOf(type, raw.style, i),
+            appearance: styleOf(type, raw.appearance, i),
             eyebrow: line(raw.eyebrow, LABEL_TEXT, i, 'eyebrow'),
             title: line(raw.title, SHORT_TEXT, i, 'title'),
             subtitle: text(raw.subtitle, CTA_TEXT, i, 'subtitle').trim(),
@@ -347,19 +347,19 @@ function normalizeOne(raw: unknown, i: number): PageBlock {
          };
       }
       case 'markdown':
-         return { id, type, style: styleOf(type, raw.style, i), text: text(raw.text, LONG_TEXT, i, 'text') };
+         return { id, type, appearance: styleOf(type, raw.appearance, i), text: text(raw.text, LONG_TEXT, i, 'text') };
       case 'image': {
          const size = oneOf(raw.size, ['content', 'wide'] as const, 'content', i, 'size');
-         const style = styleOf(type, raw.style, i, size === 'wide' ? 'wide' : undefined);
-         return { id, type, style, ...imageRef(raw, i), size: style.width === 'content' ? 'content' : 'wide' };
+         const appearance = styleOf(type, raw.appearance, i, size === 'wide' ? 'wide' : undefined);
+         return { id, type, appearance, ...imageRef(raw, i), size: appearance.width === 'content' ? 'content' : 'wide' };
       }
       case 'gallery':
-         return { id, type, style: styleOf(type, raw.style, i), columns: oneOf(raw.columns, [2, 3, 4] as const, 3, i, 'columns'), items: list(raw.items, MAX_GALLERY, i, 'images', (x) => imageRef(x, i)) };
+         return { id, type, appearance: styleOf(type, raw.appearance, i), columns: oneOf(raw.columns, [2, 3, 4] as const, 3, i, 'columns'), items: list(raw.items, MAX_GALLERY, i, 'images', (x) => imageRef(x, i)) };
       case 'layout':
          return {
             id,
             type,
-            style: styleOf(type, raw.style, i),
+            appearance: styleOf(type, raw.appearance, i),
             columns: oneOf(raw.columns, [2, 3] as const, 2, i, 'columns'),
             items: list(raw.items, 3, i, 'columns', (x) => ({
                media_id: mediaId(x.media_id, i),
@@ -371,12 +371,12 @@ function normalizeOne(raw: unknown, i: number): PageBlock {
             })),
          };
       case 'columns':
-         return { id, type, style: styleOf(type, raw.style, i), text: text(raw.text, LONG_TEXT, i, 'text'), ...imageRef(raw, i), image_side: oneOf(raw.image_side, ['start', 'end'] as const, 'end', i, 'image side') };
+         return { id, type, appearance: styleOf(type, raw.appearance, i), text: text(raw.text, LONG_TEXT, i, 'text'), ...imageRef(raw, i), image_side: oneOf(raw.image_side, ['start', 'end'] as const, 'end', i, 'image side') };
       case 'cardgrid':
          return {
             id,
             type,
-            style: styleOf(type, raw.style, i),
+            appearance: styleOf(type, raw.appearance, i),
             heading: line(raw.heading, SHORT_TEXT, i, 'heading'),
             intro: text(raw.intro, CTA_TEXT, i, 'intro').trim(),
             columns: oneOf(raw.columns, [2, 3, 4] as const, 3, i, 'columns'),
@@ -393,7 +393,7 @@ function normalizeOne(raw: unknown, i: number): PageBlock {
          return {
             id,
             type,
-            style: styleOf(type, raw.style, i),
+            appearance: styleOf(type, raw.appearance, i),
             heading: line(raw.heading, SHORT_TEXT, i, 'heading'),
             text: text(raw.text, CTA_TEXT, i, 'text').trim(),
             label: line(raw.label, LABEL_TEXT, i, 'button label'),
@@ -401,22 +401,22 @@ function normalizeOne(raw: unknown, i: number): PageBlock {
             tone: oneOf(raw.tone, ['primary', 'quiet'] as const, 'primary', i, 'button style'),
          };
       case 'quote':
-         return { id, type, style: styleOf(type, raw.style, i), variant: oneOf(raw.variant, ['quote', 'callout'] as const, 'quote', i, 'style'), text: text(raw.text, QUOTE_TEXT, i, 'text').trim(), cite: line(raw.cite, SHORT_TEXT, i, 'source') };
+         return { id, type, appearance: styleOf(type, raw.appearance, i), variant: oneOf(raw.variant, ['quote', 'callout'] as const, 'quote', i, 'style'), text: text(raw.text, QUOTE_TEXT, i, 'text').trim(), cite: line(raw.cite, SHORT_TEXT, i, 'source') };
       case 'faq':
          return {
             id,
             type,
-            style: styleOf(type, raw.style, i),
+            appearance: styleOf(type, raw.appearance, i),
             heading: line(raw.heading, SHORT_TEXT, i, 'heading'),
             items: list(raw.items, MAX_FAQ, i, 'questions', (x) => ({ q: line(x.q, SHORT_TEXT, i, 'question'), a: text(x.a, FAQ_ANSWER, i, 'answer').trim() })),
          };
       case 'video':
-         return { id, type, style: styleOf(type, raw.style, i), kind: oneOf(raw.kind, ['video', 'playlist'] as const, 'video', i, 'kind'), ref_id: refId(raw.ref_id, i, true), caption: line(raw.caption, SHORT_TEXT, i, 'caption') };
+         return { id, type, appearance: styleOf(type, raw.appearance, i), kind: oneOf(raw.kind, ['video', 'playlist'] as const, 'video', i, 'kind'), ref_id: refId(raw.ref_id, i, true), caption: line(raw.caption, SHORT_TEXT, i, 'caption') };
       case 'videos':
          return {
             id,
             type,
-            style: styleOf(type, raw.style, i),
+            appearance: styleOf(type, raw.appearance, i),
             heading: line(raw.heading, SHORT_TEXT, i, 'heading'),
             items: list(raw.items, MAX_SHELF, i, 'videos', (x) => ({
                kind: oneOf(x.kind, ['video', 'playlist', 'channel'] as const, 'video', i, 'kind'),
@@ -432,7 +432,7 @@ function normalizeOne(raw: unknown, i: number): PageBlock {
          return {
             id,
             type,
-            style: styleOf(type, raw.style, i),
+            appearance: styleOf(type, raw.appearance, i),
             heading: line(raw.heading, SHORT_TEXT, i, 'heading'),
             mode: oneOf(raw.mode, ['latest', 'tag', 'picked'] as const, 'latest', i, 'mode'),
             limit: int(raw.limit, 3, 1, MAX_POSTS_LIMIT, i, 'the number of posts'),
@@ -444,7 +444,7 @@ function normalizeOne(raw: unknown, i: number): PageBlock {
          return {
             id,
             type,
-            style: styleOf(type, raw.style, i),
+            appearance: styleOf(type, raw.appearance, i),
             heading: line(raw.heading, SHORT_TEXT, i, 'heading'),
             tag: line(raw.tag, 40, i, 'tag'),
             page_size: int(raw.page_size, 12, 3, MAX_CARDS_PAGE, i, 'cards per page'),
@@ -454,7 +454,7 @@ function normalizeOne(raw: unknown, i: number): PageBlock {
          return {
             id,
             type,
-            style: styleOf(type, raw.style, i),
+            appearance: styleOf(type, raw.appearance, i),
             heading: line(raw.heading, SHORT_TEXT, i, 'heading'),
             variant: oneOf(raw.variant, ['stats', 'features'] as const, 'features', i, 'style'),
             items: list(raw.items, MAX_STATS, i, 'items', (x) => ({
@@ -469,7 +469,7 @@ function normalizeOne(raw: unknown, i: number): PageBlock {
          return {
             id,
             type,
-            style: styleOf(type, isObj(raw.style) ? raw.style : undefined, i),
+            appearance: styleOf(type, raw.appearance, i),
             style_kind: oneOf(raw.style_kind ?? (typeof raw.style === 'string' ? raw.style : undefined), ['line', 'space'] as const, 'line', i, 'style'),
             size: oneOf(raw.size, ['s', 'm', 'l'] as const, 'm', i, 'size'),
          };
@@ -477,7 +477,7 @@ function normalizeOne(raw: unknown, i: number): PageBlock {
          const kind = oneOf(raw.kind, ['page', 'email'] as const, 'page', i, 'kind');
          const email = line(raw.email, 254, i, 'email');
          if (email && !validEmail(email)) throw new BlockError('bad_email', i, 'the email address is not valid');
-         return { id, type, style: styleOf(type, raw.style, i), heading: line(raw.heading, SHORT_TEXT, i, 'heading'), text: text(raw.text, CTA_TEXT, i, 'text').trim(), label: line(raw.label, LABEL_TEXT, i, 'button label'), kind, email };
+         return { id, type, appearance: styleOf(type, raw.appearance, i), heading: line(raw.heading, SHORT_TEXT, i, 'heading'), text: text(raw.text, CTA_TEXT, i, 'text').trim(), label: line(raw.label, LABEL_TEXT, i, 'button label'), kind, email };
       }
    }
 }
@@ -564,7 +564,7 @@ export function isBlockComplete(b: PageBlock): boolean {
 
 /** One rich-text block holding a legacy body. */
 export function bodyAsPageBlocks(body: unknown, id = 'body'): PageBlock[] {
-   return typeof body === 'string' && body.trim() !== '' ? [{ id, type: 'markdown', style: DEFAULT_STYLE.markdown, text: body }] : [];
+   return typeof body === 'string' && body.trim() !== '' ? [{ id, type: 'markdown', appearance: DEFAULT_STYLE.markdown, text: body }] : [];
 }
 
 /** The site path of the contact page (www and the scholar sites); hosts map it like any "/…" link. */
@@ -807,7 +807,7 @@ export const PAGE_BLOCK_PRESETS = [
    { key: 'stats', group: 'sections', type: 'stats', init: { variant: 'stats', items: [{}, {}, {}] } },
    { key: 'faq', group: 'sections', type: 'faq', init: { items: [{}, {}] } },
    { key: 'cta', group: 'sections', type: 'cta', init: {} },
-   { key: 'ctaband', group: 'sections', type: 'cta', init: { style: { width: 'full', tone: 'night', align: 'center' } } },
+   { key: 'ctaband', group: 'sections', type: 'cta', init: { appearance: { width: 'full', tone: 'night', align: 'center' } } },
    { key: 'contact', group: 'sections', type: 'contact', init: {} },
    { key: 'video', group: 'media', type: 'video', init: {} },
    { key: 'videos', group: 'media', type: 'videos', init: {} },
@@ -861,7 +861,7 @@ export interface PostSummaryLite {
    [k: string]: unknown;
 }
 
-type S<T extends string, F> = { id: string; type: T; style: BlockStyle } & F;
+type S<T extends string, F> = { id: string; type: T; appearance: BlockStyle } & F;
 export type ServedBlock =
    | S<'hero', { eyebrow: string | null; title: string | null; subtitle: string | null; background: 'gradient' | 'image' | 'plain'; image: MediaRef | null; height: 's' | 'm' | 'l'; buttons: { label: string; url: string; variant: 'primary' | 'secondary' }[] }>
    | S<'markdown', { text: string }>
@@ -878,7 +878,7 @@ export type ServedBlock =
    | S<'posts', { heading: string | null; mode: 'latest' | 'tag' | 'picked'; items: PostSummaryLite[] }>
    | S<'cards', { heading: string | null; tag: string | null; page_size: number; filter: boolean }>
    | S<'stats', { heading: string | null; variant: 'stats' | 'features'; items: { value: string | null; label: string; text: string | null; icon: FeatureIcon | null }[] }>
-   | S<'divider', { style_kind: 'line' | 'space'; size: 's' | 'm' | 'l' }>
+   | S<'divider', { style_kind: 'line' | 'space'; size: 's' | 'm' | 'l'; /** v1 readers: the same as style_kind. */ style: 'line' | 'space' }>
    | S<'contact', { heading: string | null; text: string | null; label: string; href: string }>;
 
 export type ServedBlockOf<T extends PageBlockType> = Extract<ServedBlock, { type: T }>;
@@ -898,9 +898,9 @@ const orNull = (s: string) => (s.trim() ? s : null);
 /**
  * Stored blocks → served blocks. Incomplete blocks are left out, and so is a block whose references
  * are all gone, so no host ever renders an empty frame. The block's own alt text wins over the
- * library's. v1 fields stay (image `size`, divider `style` as a string is NOT served: v2 serves
- * `style` as the style object and the line/space choice as `style_kind`, plus `style` for v1 readers
- * would clash, so v1 readers see a divider as a line, its default).
+ * library's. Strictly additive over v1 (the public API contract www checks): every block gains
+ * `appearance`; v1 fields stay as they were (image `size`, and a divider's `style` string, which v2
+ * readers take from `style_kind`).
  */
 export function servePageBlocks(blocks: PageBlock[], refs: ServeRefs): ServedBlock[] {
    const img = (id: number | null, alt: string): MediaRef | null => {
@@ -910,7 +910,7 @@ export function servePageBlocks(blocks: PageBlock[], refs: ServeRefs): ServedBlo
    const out: ServedBlock[] = [];
    for (const b of blocks) {
       if (!isBlockComplete(b)) continue;
-      const base = { id: b.id, style: b.style };
+      const base = { id: b.id, appearance: b.appearance };
       switch (b.type) {
          case 'hero': {
             const image = b.background === 'image' ? img(b.media_id, b.alt) : null;
@@ -992,7 +992,7 @@ export function servePageBlocks(blocks: PageBlock[], refs: ServeRefs): ServedBlo
             out.push({ ...base, type: 'stats', heading: orNull(b.heading), variant: b.variant, items: b.items.filter((x) => x.label).map((x) => ({ value: orNull(x.value), label: x.label, text: orNull(x.text), icon: x.icon || null })) });
             break;
          case 'divider':
-            out.push({ ...base, type: 'divider', style_kind: b.style_kind, size: b.size });
+            out.push({ ...base, type: 'divider', style: b.style_kind, style_kind: b.style_kind, size: b.size });
             break;
          case 'contact':
             out.push({ ...base, type: 'contact', heading: orNull(b.heading), text: orNull(b.text), label: b.label, href: b.kind === 'email' ? `mailto:${b.email}` : CONTACT_PATH });
@@ -1311,7 +1311,7 @@ export function renderPageBlocks(blocks: readonly unknown[], ctx: RenderContext)
    };
    const heading = (id: string, s: string | null, cls = 'pb-heading') => (s ? `<h2 class="${cls}" id="pb-${esc(id)}-h">${esc(s)}</h2>` : '');
    const section = (b: ServedBlock, inner: string, opts: { cls?: string; labelled?: boolean; tag?: string; bg?: string } = {}) => {
-      const st = b.style && isObj(b.style) ? b.style : DEFAULT_STYLE[b.type];
+      const st = b.appearance && isObj(b.appearance) ? b.appearance : DEFAULT_STYLE[b.type];
       const w = WIDTHS.includes(st.width) ? st.width : 'content';
       const tone = TONES.includes(st.tone) ? st.tone : 'none';
       const a = ALIGNS.includes(st.align) ? st.align : 'start';
@@ -1355,7 +1355,7 @@ export function renderPageBlocks(blocks: readonly unknown[], ctx: RenderContext)
             return body.trim() ? section(b, `<div class="pb-prose">${body}</div>`, { tag: 'div' }) : '';
          }
          case 'image': {
-            const w = b.style?.width ?? (b.size === 'wide' ? 'wide' : 'content');
+            const w = b.appearance?.width ?? (b.size === 'wide' ? 'wide' : 'content');
             const pic = image(b.image, { sizes: SIZES[w === 'full' ? 'full' : w === 'wide' ? 'wide' : 'content'], priority: takeLcp(), className: 'pb-img' });
             return pic ? section(b, `<figure class="pb-figure">${pic}${b.caption ? `<figcaption>${esc(b.caption)}</figcaption>` : ''}</figure>`, { tag: 'div' }) : '';
          }
@@ -1460,7 +1460,8 @@ export function renderPageBlocks(blocks: readonly unknown[], ctx: RenderContext)
          }
          case 'divider': {
             const size = ['s', 'm', 'l'].includes(b.size) ? b.size : 'm';
-            return b.style_kind === 'space'
+            // style_kind (v2); a CMS that predates the page builder serves only `style` (v1).
+            return (b.style_kind ?? b.style) === 'space'
                ? `<div class="pb-b pb-k-divider pb-spacer pb-gap-${size}" data-block="${esc(b.id)}" data-block-type="divider" aria-hidden="true"></div>`
                : section(b, '<hr class="pb-rule">', { cls: `pb-gap-${size}`, tag: 'div' });
          }
