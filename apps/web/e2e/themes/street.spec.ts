@@ -95,7 +95,7 @@ for (const lang of LANGS) {
       expect(l.street.includes('-dark.webp'), `${mode}: the ${mode} tile`).toBe(mode === 'dark');
       expect(l.lights, `${mode}: distant lights`).toMatch(/url\(/);
       expect(l.repeat, `${mode}: repeated both ways`).toBe('repeat');
-      expect(l.at, `${mode}: centred on the page`).toBe('50% 0%');
+      expect(l.at, `${mode}: centred on the page`).toMatch(/^50% 0(%|px)?$/);
       expect(l.size, `${mode}: shown at the tile's own size`).toBe('auto');
       expect(l.position, `${mode}: scrolls with the page`).toBe('absolute');
       expect(l.covers, `${mode}: down the whole page`).toBe(true);
