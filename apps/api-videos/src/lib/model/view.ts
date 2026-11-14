@@ -1,3 +1,4 @@
+import { MEDIA_PROVIDER_IDS } from '@al-ummah/shared-types';
 import { Bool, DateTime, Str } from "chanfana";
 import { z } from "zod";
 
@@ -71,7 +72,13 @@ export const VideoView = z.object({
     description: Str().optional(),
     thumbnailUrl: Str().optional(),
     videoUrl: Str().optional(),
-    playUrl: Str().optional(), // HLS streaming URL from Bunny.net
+    playUrl: Str().optional().describe("Signed HLS master playlist to play first (sources[0]); clients that try one URL use this"),
+    sources: z.array(z.object({
+        provider: z.enum(MEDIA_PROVIDER_IDS).describe("Provider label (never a provider-side id)"),
+        src: Str().describe("Signed HLS master playlist"),
+        type: z.literal('application/x-mpegURL'),
+    })).optional().describe("Every playable source in the order to try: play the first, move to the next when one fails (docs/media-delivery/PROVIDERS.md)"),
+    delivery: z.object({ source: z.enum(MEDIA_PROVIDER_IDS) }).optional().describe("The provider that plays first (a label)"),
     userId: Str(),
     channelId: Str(),
     channelName: Str(), // Denormalized for client convenience

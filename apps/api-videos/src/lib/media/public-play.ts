@@ -18,13 +18,15 @@
  * scheduled videos, live streams, videos of a removed or private channel, and videos of
  * E2E test accounts (@e2e.alummahnow.net).
  */
-import { isShort, classifyVideoFormat, type VideoFormat, type VideoR2State } from '@al-ummah/shared-types';
+import { isShort, classifyVideoFormat, type MediaProviderId, type VideoFormat, type VideoR2State } from '@al-ummah/shared-types';
 import { bunnyLibraryForVideo, type BunnyLibrariesEnv, type BunnyLibrary } from '../bunny/libraries';
 import { bunnyDirectoryToken, bunnyFileToken, signedBunnyUrl, tokenExpiry, unsignedBunnyUrl } from '../bunny-signing';
 import { isVideoPubliclyVisible } from '../visibility';
 import { logger } from '../logger';
 import R2Repository from '../r2Repo';
 import { choosePlayback, logDecision } from './playback';
+import { allProviders, bunnyRef } from './providers';
+import { publicMp4Url } from './r2-delivery';
 import type { MediaEnv } from './r2-delivery';
 import { channelNameFields } from '../channelName';
 
@@ -180,33 +182,38 @@ export async function buildPublicPlay(
 ): Promise<PublicPlayItem> {
 	const expires = tokenExpiry(nowSeconds);
 	const library = await bunnyLibraryForVideo(env, video);
-	const bunny = await bunnySigner(library, video.id, expires);
+	const bunnyId = bunnyRef(video as never);
+	// Signed under Bunny's own id of the video (legacy rows: the video id itself)
+	const bunny = await bunnySigner(library, bunnyId ?? video.id, expires);
 
 	let hls: string | null = null;
 	let poster: string | null = null;
 	const ownThumbnail = video.thumbnailType === 'custom' || !video.thumbnailPending ? video.thumbnailUrl ?? null : null;
 
-	// The adaptive stream: the delivery switch decides (R2 or Bunny), as on the watch page
-	let source: 'bunny' | 'r2' = 'bunny';
+	// The adaptive stream: the provider rules decide, as on the watch page (lib/media/playback.ts)
+	let source: MediaProviderId | null = null;
 	try {
-		if (env.MEDIA_PUBLIC_HOST) {
-			const choice = await choosePlayback(env, video, { context: 'public-play' });
-			logDecision(choice.decision);
-			if (choice.source === 'r2' && choice.r2) {
-				source = 'r2';
-				hls = choice.r2.playUrl;
-				poster = video.thumbnailType === 'custom' && ownThumbnail ? ownThumbnail : choice.r2.thumbnailUrl;
-			}
+		const choice = await choosePlayback(env, video as never, { context: 'public-play', nowSeconds });
+		logDecision(choice.decision);
+		const first = choice.sources[0];
+		if (first) {
+			source = first.provider;
+			hls = first.playUrl;
+			// A custom or legacy image stays; a provider's own frame follows the provider that plays
+			const replaceable = video.thumbnailType !== 'custom' && !!ownThumbnail && allProviders().some((p) => p.isOwnAutoThumbnail(video as never, ownThumbnail));
+			// thumbnailPending is Bunny's sync saying its frame does not exist yet
+			const frameExists = first.provider !== 'bunny' || !video.thumbnailPending;
+			poster = replaceable || (!ownThumbnail && frameExists) ? first.thumbnailUrl ?? null : null;
 		}
 	} catch (error) {
 		logger.warn('[PublicPlay] Delivery choice failed; serving Bunny', { videoId: video.id, error: error instanceof Error ? error.message : String(error) });
 	}
-	if (source === 'bunny') {
-		hls = await bunny.file('playlist.m3u8');
-		poster = ownThumbnail ? await bunny.image(ownThumbnail) : null;
-	}
+	const onBunny = !!bunnyId;
+	if (!source && onBunny) hls = await bunny.file('playlist.m3u8');
+	if (!poster && ownThumbnail) poster = await bunny.image(ownThumbnail);
 
-	const mp4Url = await bunny.file(`play_${pickPreviewMp4(video.availableResolutions)}.mp4`);
+	// Preview MP4: Bunny's MP4 fallback when Bunny holds the video, else R2's public MP4
+	const mp4Url = onBunny ? await bunny.file(`play_${pickPreviewMp4(video.availableResolutions)}.mp4`) : publicMp4Url(env, video as never);
 	const id = video.id;
 	const format = classifyVideoFormat(video).format;
 	return {

@@ -66,6 +66,7 @@ import scholarsInternalRouter from "./routers/scholars-internal.router";
 import postsInternalRouter from "./routers/posts-internal.router";
 import { sitesInternalRouter, sitesRouter } from "./routers/sites.router";
 import { publishDuePosts } from "./lib/scheduled-posts";
+import { runHealthCheck } from "./lib/media/health";
 import { createUploadsInternalRouter } from "./endpoints/video/uploadsInternal";
 import { createVideoFormatInternalRouter } from "./endpoints/video/videoFormatInternal";
 import { createFootprintsInternalRouter } from "./endpoints/privacy/footprintsInternal";
@@ -526,6 +527,9 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 				.then((r) => (r.idleEnded || r.bunnyPolled ? logger.info('[Live] Sweep', r) : undefined))
 				.catch((error) => logger.error('[Live] Sweep failed', { error: error instanceof Error ? error.message : String(error) })),
 		);
+		// Every minute: probe each enabled media provider; playback moves off a failing one (lib/media/health.ts).
+		// Never throws; the next minute is the retry, and a provider turning unhealthy is an Errors page item.
+		ctx.waitUntil(runHealthCheck(rawEnv as never, ctx).then(() => undefined));
 		return;
 	}
 	if (controller?.cron === PROCESSING_SWEEP_CRON) {

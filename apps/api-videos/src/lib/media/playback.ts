@@ -1,46 +1,73 @@
 /**
- * One playback URL per response (epic #687, owner decision 2026-11-12): the API decides the source and
- * the player never chooses.
+ * Playback across providers (docs/media-delivery/PROVIDERS.md). The API decides; players follow the
+ * list they are given:
  *
  *   GET /api/videos/:id, playlist videoItems ─► choosePlayback ─► applyPlayback
- *       playUrl / thumbnailUrl = the chosen source's (R2 signed here, Bunny signed by the middleware)
- *       delivery = { source } (a label only; no second URL anywhere)
- *   player error on R2 ─► GET /api/videos/:id/playback?exclude=r2&reason=<code> ─► Bunny's URLs
+ *       sources  = every ready provider's signed playlist, in the order to try (rules + health)
+ *       playUrl  = sources[0] (clients that only know one URL), thumbnailUrl = its frame unless the
+ *                  stored thumbnail is a custom or legacy image (those are never replaced)
+ *       delivery = { source } (a label only)
+ *   player error ─► next entry of `sources`, or GET /api/videos/:id/playback?exclude=<provider>[,…]
+ *       (players that keep one URL): decided again without the failed providers, counted as a
+ *       failure of the provider that failed (health) and in playback_fallback_daily.
  *
  * Every decision writes one log line, the single source of truth for "why did this play come from X":
- *   { videoId, mode, r2Percent, bucket, r2Status, chosen, reason }
- * Decisions are info (stage and QA; production runs at warn), fallbacks are warn (always kept) and
- * are also counted per day and reason in playback_fallback_daily (migrations/search/0024).
+ *   { videoId, strategy, order, ready, unhealthy, bucket, sources, chosen, reason }
+ * Decisions are info (stage and QA; production runs at warn), fallbacks are warn (always kept).
  */
-import { deliveryBucket, isPlaybackFallbackReason, type PlaybackFallbackReason, type PlaybackSource } from '@al-ummah/shared-types';
+import {
+	effectiveRules,
+	isMediaProviderId,
+	isPlaybackFallbackReason,
+	planSources,
+	playBucket,
+	unhealthyProviders,
+	MEDIA_PROVIDER_IDS,
+	type MediaProviderId,
+	type PlaybackFallbackReason,
+	type PlaybackSource,
+	type PlaybackSourceView,
+	type PlaybackStrategy,
+	type PlanReason,
+} from '@al-ummah/shared-types';
 import { logger } from '../logger';
-import { publicMp4Url, readDeliverySettings, r2Urls, type MediaEnv, type MediaVideo } from './r2-delivery';
+import { readHealth } from './health';
+import { allProviders, provider, videoProviderRecords, type ProviderVideo, type ProvidersEnv } from './providers';
+import { publicMp4Url } from './r2-delivery';
+import { readMediaSettings } from './settings';
 
-export type DecisionReason =
-	| 'mode_bunny'
-	| 'mode_r2'
-	| 'split_r2'
-	| 'split_bunny'
-	| 'r2_not_ready'
-	| 'r2_url_failed'
-	| `excluded_r2:${PlaybackFallbackReason}`;
+export type DecisionReason = PlanReason | 'url_failed' | `excluded:${PlaybackFallbackReason}`;
 
 export interface PlaybackDecision {
 	videoId: string;
-	mode: 'bunny' | 'r2' | 'split';
-	r2Percent: number;
-	/** 0..99: the video's bucket (assign = video) or this request's draw (assign = view); split only */
-	bucket?: number;
-	r2Status: string;
-	chosen: PlaybackSource;
+	strategy: PlaybackStrategy;
+	/** The effective provider order (settings, then channel and video overrides) */
+	order: MediaProviderId[];
+	/** Providers whose copy is ready */
+	ready: MediaProviderId[];
+	unhealthy: MediaProviderId[];
+	excluded?: MediaProviderId[];
+	/** 0..99: the video's bucket (assign = video) or this request's draw (assign = view) */
+	bucket: number;
+	/** Providers in the order the player tries them */
+	sources: MediaProviderId[];
+	chosen: MediaProviderId | null;
 	reason: DecisionReason;
+	/** Providers that were ready but whose URLs could not be built */
+	failed?: MediaProviderId[];
 	context?: string;
 }
 
+export interface ResolvedSource {
+	provider: MediaProviderId;
+	playUrl: string;
+	thumbnailUrl?: string;
+}
+
 export interface PlaybackChoice {
+	/** The provider that plays first (a label); with nothing ready, the provider the video is on */
 	source: PlaybackSource;
-	/** Set when the source is R2: its signed master playlist and thumbnail */
-	r2?: { playUrl: string; thumbnailUrl: string };
+	sources: ResolvedSource[];
 	decision: PlaybackDecision;
 }
 
@@ -53,42 +80,69 @@ function drawBucket(): number {
 	return byte[0]! % 100;
 }
 
-export async function choosePlayback(
-	env: MediaEnv,
-	video: Pick<MediaVideo, 'id' | 'r2'>,
-	opts: { exclude?: PlaybackSource; reason?: PlaybackFallbackReason; context?: string; draw?: () => number } = {},
-): Promise<PlaybackChoice> {
-	const settings = await readDeliverySettings(env);
-	const base = { videoId: video.id, mode: settings.mode, r2Percent: settings.r2Percent, r2Status: video.r2?.status ?? 'none', ...(opts.context ? { context: opts.context } : {}) };
-	const bunny = (reason: DecisionReason, bucket?: number): PlaybackChoice => ({
-		source: 'bunny',
-		decision: { ...base, ...(bucket !== undefined ? { bucket } : {}), chosen: 'bunny', reason },
-	});
+export type PlaybackEnv = ProvidersEnv & { SEARCH_DB?: D1Database };
 
-	if (opts.exclude === 'r2') return bunny(`excluded_r2:${opts.reason ?? 'other'}`);
-	if (settings.mode === 'bunny') return bunny('mode_bunny');
-	let bucket: number | undefined;
-	if (settings.mode === 'split') {
-		bucket = settings.assign === 'view' ? (opts.draw ?? drawBucket)() : deliveryBucket(video.id);
-		if (bucket >= settings.r2Percent) return bunny('split_bunny', bucket);
+/** Parse `exclude=r2` / `exclude=r2,bunny` (unknown ids are ignored). */
+export function parseExclude(value: string | string[] | undefined | null): MediaProviderId[] {
+	const parts = (Array.isArray(value) ? value : [value ?? '']).flatMap((v) => String(v).split(','));
+	const out: MediaProviderId[] = [];
+	for (const p of parts.map((s) => s.trim())) if (isMediaProviderId(p) && !out.includes(p)) out.push(p);
+	return out;
+}
+
+export async function choosePlayback(
+	env: PlaybackEnv,
+	video: ProviderVideo,
+	opts: { exclude?: MediaProviderId | MediaProviderId[]; reason?: PlaybackFallbackReason; context?: string; draw?: () => number; nowSeconds?: number } = {},
+): Promise<PlaybackChoice> {
+	const settings = await readMediaSettings(env);
+	const rules = effectiveRules(settings, video.channelId ? settings.channels[video.channelId] : undefined, video.media?.override);
+	const records = videoProviderRecords(video);
+	const ready = records.filter((r) => r.status === 'ready').map((r) => r.provider);
+	const enabled = MEDIA_PROVIDER_IDS.filter((p) => settings.providers[p].enabled);
+	const unhealthy = unhealthyProviders(await readHealth(env), settings.health);
+	const exclude = opts.exclude === undefined ? [] : Array.isArray(opts.exclude) ? opts.exclude : [opts.exclude];
+	const bucket = playBucket(rules, video.id, opts.draw ?? drawBucket);
+	const plan = planSources({ rules, enabled, ready, unhealthy, exclude, bucket });
+
+	const sources: ResolvedSource[] = [];
+	const failed: MediaProviderId[] = [];
+	for (const id of plan.order) {
+		const record = records.find((r) => r.provider === id)!;
+		try {
+			const urls = await provider(id).playback(env, video, record, { nowSeconds: opts.nowSeconds });
+			if (urls) sources.push({ provider: id, ...urls });
+			else failed.push(id);
+		} catch (error) {
+			failed.push(id);
+			logger.warn('[Media] Could not build playback URLs; trying the next provider', { videoId: video.id, provider: id, error: error instanceof Error ? error.message : String(error) });
+		}
 	}
-	if (video.r2?.status !== 'ready') return bunny('r2_not_ready', bucket);
-	let urls: { playUrl: string; thumbnailUrl: string } | null = null;
-	try {
-		urls = await r2Urls(env, video);
-	} catch (error) {
-		logger.warn('[Media] Could not build R2 URLs; serving Bunny', { videoId: video.id, error: error instanceof Error ? error.message : String(error) });
-	}
-	if (!urls) return bunny('r2_url_failed', bucket);
+	// Nothing playable yet: the label names the provider the video is on (the view keeps its stored URLs)
+	const holder = rules.order.find((p) => records.some((r) => r.provider === p)) ?? records[0]?.provider ?? 'bunny';
+	const reason: DecisionReason = exclude.length ? `excluded:${opts.reason ?? 'other'}` : !sources.length && failed.length ? 'url_failed' : plan.reason;
 	return {
-		source: 'r2',
-		r2: urls,
-		decision: { ...base, ...(bucket !== undefined ? { bucket } : {}), chosen: 'r2', reason: settings.mode === 'r2' ? 'mode_r2' : 'split_r2' },
+		source: sources[0]?.provider ?? holder,
+		sources,
+		decision: {
+			videoId: video.id,
+			strategy: rules.strategy,
+			order: rules.order,
+			ready,
+			unhealthy,
+			...(exclude.length ? { excluded: exclude } : {}),
+			bucket,
+			sources: sources.map((s) => s.provider),
+			chosen: sources[0]?.provider ?? null,
+			reason,
+			...(failed.length ? { failed } : {}),
+			...(opts.context ? { context: opts.context } : {}),
+		},
 	};
 }
 
 export function logDecision(d: PlaybackDecision): void {
-	if (d.reason.startsWith('excluded_r2:')) logger.warn('[Media] Playback fell back to Bunny', { ...d });
+	if (d.excluded?.length || d.failed?.length) logger.warn('[Media] Playback fell back', { ...d });
 	else logger.info('[Media] Playback decision', { ...d });
 }
 
@@ -99,48 +153,58 @@ interface PlayableView {
 	contentUrl?: string;
 	thumbnailUrl?: string;
 	thumbnailType?: string;
-	delivery?: { source: PlaybackSource };
+	thumbnailSizes?: Record<string, string>;
+	delivery?: { source?: PlaybackSource };
+	sources?: PlaybackSourceView[];
 }
 
 /**
- * Point the view at the chosen source: one playUrl, one thumbnail, and `delivery.source` as a label.
- * A creator's custom thumbnail (image CDN, thumbnailType 'custom') is kept whatever the source.
+ * The stored thumbnail may be swapped for the playing provider's frame only when it is one of the
+ * providers' automatic frames of this video. Custom thumbnails and legacy (imported) images are
+ * never replaced (owner, 2026-11-10).
  */
-export function applyPlayback<T extends PlayableView>(view: T, choice: PlaybackChoice): T {
-	const v = view as PlayableView;
-	if (choice.source === 'r2' && choice.r2) {
-		v.playUrl = choice.r2.playUrl;
-		if (v.thumbnailType !== 'custom') v.thumbnailUrl = choice.r2.thumbnailUrl;
+function replaceableThumbnail(video: ProviderVideo, url: string | undefined): boolean {
+	if (video.thumbnailType === 'custom' || !url) return false;
+	return allProviders().some((p) => p.isOwnAutoThumbnail(video, url));
+}
+
+/** Point the view at the chosen sources: the list, playUrl = the first, and its frame when replaceable. */
+export function applyPlayback<T extends object>(view: T, choice: PlaybackChoice, video?: ProviderVideo): T {
+	const v = view as unknown as PlayableView;
+	const first = choice.sources[0];
+	if (first) {
+		v.playUrl = first.playUrl;
+		const subject = video ?? (view as unknown as ProviderVideo);
+		if (first.thumbnailUrl && replaceableThumbnail(subject, v.thumbnailUrl)) {
+			v.thumbnailUrl = first.thumbnailUrl;
+			// Size variants of another provider's frame would show a different image
+			delete v.thumbnailSizes;
+		}
 	}
+	v.sources = choice.sources.map((s) => ({ provider: s.provider, src: s.playUrl, type: 'application/x-mpegURL' as const }));
 	v.delivery = { source: choice.source };
 	return view;
 }
 
-/** Choose, log and apply (the read paths). Never throws: on any error the view keeps Bunny. */
-export async function withPlayback<T extends PlayableView>(
-	env: MediaEnv,
-	video: Pick<MediaVideo, 'id' | 'r2'>,
-	view: T,
-	context?: string,
-): Promise<T> {
-	if (!env.MEDIA_PUBLIC_HOST) return view;
+/** Choose, log and apply (the read paths). Never throws: on any error the view keeps its stored URLs. */
+export async function withPlayback<T extends object>(env: PlaybackEnv, video: ProviderVideo, view: T, context?: string): Promise<T> {
 	// Whatever source plays, a public video with an R2 MP4 names it for search engines
-	const mp4 = publicMp4Url(env, video);
-	if (mp4) (view as PlayableView).contentUrl = mp4;
+	const mp4 = env.MEDIA_PUBLIC_HOST ? publicMp4Url(env, video) : null;
+	if (mp4) (view as unknown as PlayableView).contentUrl = mp4;
 	try {
 		const choice = await choosePlayback(env, video, { context });
 		logDecision(choice.decision);
-		return applyPlayback(view, choice);
+		return applyPlayback(view, choice, video);
 	} catch (error) {
-		logger.warn('[Media] Playback choice failed; serving Bunny', { videoId: video.id, error: error instanceof Error ? error.message : String(error) });
-		(view as PlayableView).delivery = { source: 'bunny' };
+		logger.warn('[Media] Playback choice failed; serving the stored URLs', { videoId: video.id, error: error instanceof Error ? error.message : String(error) });
+		(view as unknown as PlayableView).delivery = { source: 'bunny' };
 		return view;
 	}
 }
 
 /** One count per fallback in playback_fallback_daily (best effort). */
 export async function countFallback(
-	env: Pick<MediaEnv, 'SEARCH_DB'>,
+	env: Pick<PlaybackEnv, 'SEARCH_DB'>,
 	row: { day: string; requested: PlaybackSource; actual: PlaybackSource; reason: PlaybackFallbackReason; column: 'server_fallbacks' | 'qoe_sessions' },
 ): Promise<void> {
 	if (!env.SEARCH_DB) return;

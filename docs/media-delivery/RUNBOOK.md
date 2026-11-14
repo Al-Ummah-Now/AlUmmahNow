@@ -64,24 +64,36 @@ Or run the **Media CDN settings** workflow (Actions → manual dispatch: env, ap
 
 ## Which source a play got
 
-The API decides and returns one URL (owner decision 2026-11-12; `apps/api-videos/src/lib/media/playback.ts`):
+The API decides the order and returns every ready provider's signed playlist in it (providers:
+[PROVIDERS.md](./PROVIDERS.md); `apps/api-videos/src/lib/media/playback.ts`):
 
-- `GET /api/videos/:id` and playlist `videoItems`: `playUrl` and `thumbnailUrl` are the chosen source's
-  (R2 signed by the API, Bunny by the URL-signing middleware); `delivery` is `{ source }`, a label only.
-  A creator's custom thumbnail stays as it is.
-- Split mode: assign `video` uses the video's bucket (stable), assign `view` draws on the server per request.
-- Players (watch pages in both directions, embeds, native apps) play `playUrl` and nothing else. On a
-  fatal error or a 15 s stall on R2 they call `GET /api/videos/:id/playback?exclude=r2&reason=<code>`
-  once and play the Bunny URL it returns. Reasons: `manifest_4xx`, `manifest_5xx`, `network`, `cors`,
+- `GET /api/videos/:id`, playlist `videoItems` and the playlist queue: `sources` is the ordered list
+  (`{ provider, src, type }`), `playUrl` is its first entry, and `thumbnailUrl` is that provider's frame
+  only when the stored thumbnail is a provider's automatic frame of the video. Custom and legacy
+  (imported) thumbnails are never replaced. `delivery` is `{ source }`, a label only.
+- The order comes from the Delivery settings (strategy `priority` or `weighted`, the provider order and
+  weights, assign `video` = the video's stable bucket or `view` = drawn per request), then the
+  channel's override, then the video's. A provider that is off is never offered. With health-based
+  fallback on, an unhealthy provider moves behind the healthy ones (never dropped).
+- Players try `sources` in order. One that keeps a single URL calls
+  `GET /api/videos/:id/playback?exclude=<provider>[,<provider>]&reason=<code>` and plays what it returns
+  (`sources: []` when nothing is left). Reasons: `manifest_4xx`, `manifest_5xx`, `network`, `cors`,
   `decode`, `unsupported`, `stall_timeout`, `other`.
 
 **Decision log** (Workers Logs, api-videos): `[Media] Playback decision` with
-`{ videoId, mode, r2Percent, bucket, r2Status, chosen, reason, context }`. It is `info`, so it shows on
-stage and QA; production runs at `warn` (docs/operations/logging.md), so raise `LOG_LEVEL` there to see
-every decision. Fallbacks are `[Media] Playback fell back to Bunny` at `warn` (always kept), and are
-counted per day in `playback_fallback_daily`: `server_fallbacks` from the endpoint, `qoe_sessions` from
-the players' QoE beacons (`requested`, `actual`, `fallbackReason`). The Delivery summary returns them as
-`fallbacks`.
+`{ videoId, strategy, order, ready, unhealthy, bucket, sources, chosen, reason, context }` (reason:
+`priority`, `weighted`, `weighted_zero_weights`, `unhealthy_moved`, `none_ready`, `url_failed`). It is
+`info`, so it shows on stage and QA; production runs at `warn` (docs/operations/logging.md), so raise
+`LOG_LEVEL` there to see every decision. Fallbacks are `[Media] Playback fell back` at `warn` (always
+kept) with `excluded` and reason `excluded:<code>`. Each one is counted per day in
+`playback_fallback_daily` (`server_fallbacks` from the endpoint, `qoe_sessions` from the players' QoE
+beacons) and per provider per minute in `media_provider_health` (the health signal). The Delivery
+summary returns them as `fallbacks`, plus `providers` (the settings) and `health`.
+
+**Provider health**: the every-minute cron probes each enabled provider and writes
+`global_settings/ops/media-health.json`. A provider turning unhealthy is an Errors page item
+(`media-provider-health:<provider>`, **Check now** = `POST /internal/media/health/check`), resolved when
+it recovers. To see the state: `GET /api/media/providers` on admin-api.
 
 ## Checks
 

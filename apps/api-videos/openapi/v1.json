@@ -6044,7 +6044,56 @@
                                 "type": "string"
                               },
                               "playUrl": {
-                                "type": "string"
+                                "type": "string",
+                                "description": "Signed HLS master playlist to play first (sources[0]); clients that try one URL use this"
+                              },
+                              "sources": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "provider": {
+                                      "type": "string",
+                                      "enum": [
+                                        "bunny",
+                                        "r2"
+                                      ],
+                                      "description": "Provider label (never a provider-side id)"
+                                    },
+                                    "src": {
+                                      "type": "string",
+                                      "description": "Signed HLS master playlist"
+                                    },
+                                    "type": {
+                                      "type": "string",
+                                      "enum": [
+                                        "application/x-mpegURL"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "provider",
+                                    "src",
+                                    "type"
+                                  ]
+                                },
+                                "description": "Every playable source in the order to try: play the first, move to the next when one fails (docs/media-delivery/PROVIDERS.md)"
+                              },
+                              "delivery": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "type": "string",
+                                    "enum": [
+                                      "bunny",
+                                      "r2"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "source"
+                                ],
+                                "description": "The provider that plays first (a label)"
                               },
                               "userId": {
                                 "type": "string"
@@ -6554,7 +6603,56 @@
                             "type": "string"
                           },
                           "playUrl": {
-                            "type": "string"
+                            "type": "string",
+                            "description": "Signed HLS master playlist to play first (sources[0]); clients that try one URL use this"
+                          },
+                          "sources": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "provider": {
+                                  "type": "string",
+                                  "enum": [
+                                    "bunny",
+                                    "r2"
+                                  ],
+                                  "description": "Provider label (never a provider-side id)"
+                                },
+                                "src": {
+                                  "type": "string",
+                                  "description": "Signed HLS master playlist"
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "application/x-mpegURL"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "provider",
+                                "src",
+                                "type"
+                              ]
+                            },
+                            "description": "Every playable source in the order to try: play the first, move to the next when one fails (docs/media-delivery/PROVIDERS.md)"
+                          },
+                          "delivery": {
+                            "type": "object",
+                            "properties": {
+                              "source": {
+                                "type": "string",
+                                "enum": [
+                                  "bunny",
+                                  "r2"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "source"
+                            ],
+                            "description": "The provider that plays first (a label)"
                           },
                           "userId": {
                             "type": "string"
@@ -8199,7 +8297,56 @@
                             "type": "string"
                           },
                           "playUrl": {
-                            "type": "string"
+                            "type": "string",
+                            "description": "Signed HLS master playlist to play first (sources[0]); clients that try one URL use this"
+                          },
+                          "sources": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "provider": {
+                                  "type": "string",
+                                  "enum": [
+                                    "bunny",
+                                    "r2"
+                                  ],
+                                  "description": "Provider label (never a provider-side id)"
+                                },
+                                "src": {
+                                  "type": "string",
+                                  "description": "Signed HLS master playlist"
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "application/x-mpegURL"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "provider",
+                                "src",
+                                "type"
+                              ]
+                            },
+                            "description": "Every playable source in the order to try: play the first, move to the next when one fails (docs/media-delivery/PROVIDERS.md)"
+                          },
+                          "delivery": {
+                            "type": "object",
+                            "properties": {
+                              "source": {
+                                "type": "string",
+                                "enum": [
+                                  "bunny",
+                                  "r2"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "source"
+                            ],
+                            "description": "The provider that plays first (a label)"
                           },
                           "userId": {
                             "type": "string"
@@ -9593,7 +9740,56 @@
                             "type": "string"
                           },
                           "playUrl": {
-                            "type": "string"
+                            "type": "string",
+                            "description": "Signed HLS master playlist to play first (sources[0]); clients that try one URL use this"
+                          },
+                          "sources": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "provider": {
+                                  "type": "string",
+                                  "enum": [
+                                    "bunny",
+                                    "r2"
+                                  ],
+                                  "description": "Provider label (never a provider-side id)"
+                                },
+                                "src": {
+                                  "type": "string",
+                                  "description": "Signed HLS master playlist"
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "application/x-mpegURL"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "provider",
+                                "src",
+                                "type"
+                              ]
+                            },
+                            "description": "Every playable source in the order to try: play the first, move to the next when one fails (docs/media-delivery/PROVIDERS.md)"
+                          },
+                          "delivery": {
+                            "type": "object",
+                            "properties": {
+                              "source": {
+                                "type": "string",
+                                "enum": [
+                                  "bunny",
+                                  "r2"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "source"
+                            ],
+                            "description": "The provider that plays first (a label)"
                           },
                           "userId": {
                             "type": "string"
@@ -27347,7 +27543,56 @@
                             "type": "string"
                           },
                           "playUrl": {
-                            "type": "string"
+                            "type": "string",
+                            "description": "Signed HLS master playlist to play first (sources[0]); clients that try one URL use this"
+                          },
+                          "sources": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "provider": {
+                                  "type": "string",
+                                  "enum": [
+                                    "bunny",
+                                    "r2"
+                                  ],
+                                  "description": "Provider label (never a provider-side id)"
+                                },
+                                "src": {
+                                  "type": "string",
+                                  "description": "Signed HLS master playlist"
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "application/x-mpegURL"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "provider",
+                                "src",
+                                "type"
+                              ]
+                            },
+                            "description": "Every playable source in the order to try: play the first, move to the next when one fails (docs/media-delivery/PROVIDERS.md)"
+                          },
+                          "delivery": {
+                            "type": "object",
+                            "properties": {
+                              "source": {
+                                "type": "string",
+                                "enum": [
+                                  "bunny",
+                                  "r2"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "source"
+                            ],
+                            "description": "The provider that plays first (a label)"
                           },
                           "userId": {
                             "type": "string"
@@ -27878,7 +28123,56 @@
                               "type": "string"
                             },
                             "playUrl": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "Signed HLS master playlist to play first (sources[0]); clients that try one URL use this"
+                            },
+                            "sources": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "provider": {
+                                    "type": "string",
+                                    "enum": [
+                                      "bunny",
+                                      "r2"
+                                    ],
+                                    "description": "Provider label (never a provider-side id)"
+                                  },
+                                  "src": {
+                                    "type": "string",
+                                    "description": "Signed HLS master playlist"
+                                  },
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "application/x-mpegURL"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "provider",
+                                  "src",
+                                  "type"
+                                ]
+                              },
+                              "description": "Every playable source in the order to try: play the first, move to the next when one fails (docs/media-delivery/PROVIDERS.md)"
+                            },
+                            "delivery": {
+                              "type": "object",
+                              "properties": {
+                                "source": {
+                                  "type": "string",
+                                  "enum": [
+                                    "bunny",
+                                    "r2"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "source"
+                              ],
+                              "description": "The provider that plays first (a label)"
                             },
                             "userId": {
                               "type": "string"
@@ -30700,7 +30994,56 @@
                             "type": "string"
                           },
                           "playUrl": {
-                            "type": "string"
+                            "type": "string",
+                            "description": "Signed HLS master playlist to play first (sources[0]); clients that try one URL use this"
+                          },
+                          "sources": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "provider": {
+                                  "type": "string",
+                                  "enum": [
+                                    "bunny",
+                                    "r2"
+                                  ],
+                                  "description": "Provider label (never a provider-side id)"
+                                },
+                                "src": {
+                                  "type": "string",
+                                  "description": "Signed HLS master playlist"
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "application/x-mpegURL"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "provider",
+                                "src",
+                                "type"
+                              ]
+                            },
+                            "description": "Every playable source in the order to try: play the first, move to the next when one fails (docs/media-delivery/PROVIDERS.md)"
+                          },
+                          "delivery": {
+                            "type": "object",
+                            "properties": {
+                              "source": {
+                                "type": "string",
+                                "enum": [
+                                  "bunny",
+                                  "r2"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "source"
+                            ],
+                            "description": "The provider that plays first (a label)"
                           },
                           "userId": {
                             "type": "string"
@@ -34146,7 +34489,56 @@
                       "type": "string"
                     },
                     "playUrl": {
-                      "type": "string"
+                      "type": "string",
+                      "description": "Signed HLS master playlist to play first (sources[0]); clients that try one URL use this"
+                    },
+                    "sources": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "provider": {
+                            "type": "string",
+                            "enum": [
+                              "bunny",
+                              "r2"
+                            ],
+                            "description": "Provider label (never a provider-side id)"
+                          },
+                          "src": {
+                            "type": "string",
+                            "description": "Signed HLS master playlist"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "application/x-mpegURL"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "provider",
+                          "src",
+                          "type"
+                        ]
+                      },
+                      "description": "Every playable source in the order to try: play the first, move to the next when one fails (docs/media-delivery/PROVIDERS.md)"
+                    },
+                    "delivery": {
+                      "type": "object",
+                      "properties": {
+                        "source": {
+                          "type": "string",
+                          "enum": [
+                            "bunny",
+                            "r2"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "source"
+                      ],
+                      "description": "The provider that plays first (a label)"
                     },
                     "userId": {
                       "type": "string"
@@ -34741,7 +35133,56 @@
                               "type": "string"
                             },
                             "playUrl": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "Signed HLS master playlist to play first (sources[0]); clients that try one URL use this"
+                            },
+                            "sources": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "provider": {
+                                    "type": "string",
+                                    "enum": [
+                                      "bunny",
+                                      "r2"
+                                    ],
+                                    "description": "Provider label (never a provider-side id)"
+                                  },
+                                  "src": {
+                                    "type": "string",
+                                    "description": "Signed HLS master playlist"
+                                  },
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "application/x-mpegURL"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "provider",
+                                  "src",
+                                  "type"
+                                ]
+                              },
+                              "description": "Every playable source in the order to try: play the first, move to the next when one fails (docs/media-delivery/PROVIDERS.md)"
+                            },
+                            "delivery": {
+                              "type": "object",
+                              "properties": {
+                                "source": {
+                                  "type": "string",
+                                  "enum": [
+                                    "bunny",
+                                    "r2"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "source"
+                              ],
+                              "description": "The provider that plays first (a label)"
                             },
                             "userId": {
                               "type": "string"
@@ -38181,8 +38622,8 @@
         "tags": [
           "Videos"
         ],
-        "summary": "Playback URL without a failed source",
-        "description": "🔓 **Authentication Optional**: The one URL to play when the source the API chose failed in the player. `exclude=r2` returns Bunny's URL; `reason` (the player's error class) is logged and counted.",
+        "summary": "Playback sources without the failed ones",
+        "description": "🔓 **Authentication Optional**: What to play when a source failed in the player. `exclude` lists the providers that failed (comma separated, the latest last); `reason` (the player's error class) is logged and counted.",
         "operationId": "get_VideoPlayback",
         "parameters": [
           {
@@ -38198,13 +38639,11 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "r2"
-              ],
-              "description": "The source that failed"
+              "maxLength": 64,
+              "description": "Providers that failed, comma separated, the latest last (bunny, r2)"
             },
             "required": true,
-            "description": "The source that failed",
+            "description": "Providers that failed, comma separated, the latest last (bunny, r2)",
             "name": "exclude",
             "in": "query"
           },
@@ -38251,11 +38690,42 @@
                       "required": [
                         "source"
                       ]
+                    },
+                    "sources": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "provider": {
+                            "type": "string",
+                            "enum": [
+                              "bunny",
+                              "r2"
+                            ]
+                          },
+                          "src": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "application/x-mpegURL"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "provider",
+                          "src",
+                          "type"
+                        ]
+                      },
+                      "description": "Remaining sources in the order to try"
                     }
                   },
                   "required": [
                     "id",
-                    "delivery"
+                    "delivery",
+                    "sources"
                   ]
                 }
               }

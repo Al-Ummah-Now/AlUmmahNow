@@ -20,10 +20,23 @@ import { PUBLIC_DISLIKES_COUNT } from './reactions';
  * is PUBLIC_DISLIKES_COUNT (0). Embedded comments lose their dislikes the
  * same way (comment dislikes hidden 2026-11-12).
  */
-export function publicVideoFields<T extends Record<string, any>>(video: T): Omit<T, 'processingCheck' | 'processingIssue' | 'thumbnailPending'> & { processingIssueKind?: 'encode_failed' | 'needs_reupload' | 'stalled' } {
+/** Stored fields no video view returns (server-only state). */
+type PrivateVideoField =
+    | 'processingCheck' | 'processingIssue' | 'thumbnailPending' | 'reviewShadow'
+    | 'r2' | 'media' | 'bunnyLibraryId' | 'tusUpload' | 'uploadFingerprint' | 'lastInitiateAt' | 'abandoned' | 'processingAnnounced' | 'thumbnailCheck';
+
+export function publicVideoFields<T extends Record<string, any>>(video: T): Omit<T, PrivateVideoField> & { processingIssueKind?: 'encode_failed' | 'needs_reupload' | 'stalled' } {
     // Review internals (hold cause, ids, the shadow marker) never leave the server; the creator-safe
     // part goes out (docs/specs/VIDEO-REVIEW.md §3): status, ETA, reason, appeal
-    const { processingCheck: _check, processingIssue, thumbnailPending, review: storedReview, reviewShadow: _shadow, ...rest } = video as Record<string, any>;
+    // Provider internals stay server-side too (docs/media-delivery/PROVIDERS.md §Our APIs only): which
+    // providers hold the video, their ids and libraries, transcode state and upload bookkeeping. Clients
+    // play the signed `sources` / playUrl the API adds, never a provider id.
+    const {
+        processingCheck: _check, processingIssue, thumbnailPending, review: storedReview, reviewShadow: _shadow,
+        r2: _r2, media: _media, bunnyLibraryId: _library, tusUpload: _tus, uploadFingerprint: _fingerprint, lastInitiateAt: _initiate,
+        abandoned: _abandoned, processingAnnounced: _announced, thumbnailCheck: _thumbCheck,
+        ...rest
+    } = video as Record<string, any>;
     const review = creatorReviewView(storedReview);
     const hideThumbnail = (thumbnailPending || !isVideoReady(video)) && video.thumbnailType !== 'custom';
     return {

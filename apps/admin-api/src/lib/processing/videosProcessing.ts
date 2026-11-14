@@ -13,7 +13,8 @@ export interface ProcessingClientEnv {
 }
 
 export class ProcessingApiError extends Error {
-  constructor(readonly status: number, message: string) {
+  /** `problems`: why api-videos refused a settings change (shared-types settingsProblems) */
+  constructor(readonly status: number, message: string, readonly problems?: unknown) {
     super(message);
   }
 }
@@ -48,9 +49,9 @@ export async function callVideosInternal<T>(env: ProcessingClientEnv, path: stri
   if (env.VIDEOS) response = await env.VIDEOS.fetch(`https://videos.internal${suffix}`, request);
   else if (env.VIDEOS_API_URL) response = await fetch(`${env.VIDEOS_API_URL.replace(/\/$/, '')}${suffix}`, request);
   else throw new ProcessingApiError(500, 'The VIDEOS service binding is not configured');
-  const payload = (await response.json().catch(() => null)) as { success?: boolean; result?: T; error?: string } | null;
+  const payload = (await response.json().catch(() => null)) as { success?: boolean; result?: T; error?: string; problems?: unknown } | null;
   if (!response.ok || !payload?.success) {
-    throw new ProcessingApiError(response.ok ? 502 : response.status, payload?.error ?? `api-videos answered ${response.status}`);
+    throw new ProcessingApiError(response.ok ? 502 : response.status, payload?.error ?? `api-videos answered ${response.status}`, payload?.problems);
   }
   return payload.result as T;
 }
