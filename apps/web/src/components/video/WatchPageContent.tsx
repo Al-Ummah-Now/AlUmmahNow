@@ -6,6 +6,7 @@ import type { Player } from "video.js";
 import Link from '@/components/common/AppLink';
 import { Edit, Flag, MoreHorizontal, VideoOff } from "lucide-react";
 import { logger } from '@/lib/logger-client';
+import { keepDocumentTitle } from '@/lib/seo/document-title';
 import VideoPlayer from "@/components/VideoPagePlayer/index";
 import VideoPlayerRTL from "@/components/VideoPagePlayer/rtl/index";
 import RelatedVideosSection from "@/components/related/index";
@@ -264,17 +265,9 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
   // The tab title follows the video shown. /video/[id] sets it from the server's metadata too; the
   // legacy /video?vid= route has none, and either way it must not lag behind a seamless next.
   const shownTitle = videoDetails && videoDetails.id === videoId ? getLocalizedValue(videoDetails.titleLocalized, videoDetails.title, lang) : null;
-  useEffect(() => {
-    if (!shownTitle) return undefined;
-    document.title = shownTitle;
-    // The router applies a route's metadata after its own commit, which can land after this
-    // effect (the legacy route's default title): put the video's title back when that happens
-    const keep = new MutationObserver(() => {
-      if (document.title !== shownTitle) document.title = shownTitle;
-    });
-    keep.observe(document.head, { childList: true, subtree: true, characterData: true });
-    return () => keep.disconnect();
-  }, [shownTitle]);
+  // The router applies a route's metadata after its own commit, which can land after this effect
+  // (the legacy route's default title): keepDocumentTitle puts the video's title back then
+  useEffect(() => (shownTitle ? keepDocumentTitle(document, shownTitle) : undefined), [shownTitle]);
   // A processing video swaps in the player once its check sees it ready
   const handleProcessed = useCallback((fresh: PlayerOptions) => setState({ status: 'ready', video: fresh }), []);
   const isOwnVideo = !!user && !!videoDetails?.userId && videoDetails.userId === user.id;
