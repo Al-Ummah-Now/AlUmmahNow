@@ -73,17 +73,16 @@ Every touched record keeps a `csamTakedown` mark (case id, time, the removed URL
 |---|---|
 | `plan` | Seals snapshots of the records (video, post, channel, the uploader's profile) and lists the files to keep. |
 | `copy-public` | Copies the files viewers could fetch, encrypted: the matched file, the R2 thumbnail, the custom thumbnail, the post's images. |
-| `purge-public` | Deletes every R2 rendition (both buckets) and every image file of the item. Purges the Cloudflare cache (prefix and URLs), and Bunny's edge when `BUNNY_API_KEY` is set. Removes the index rows. |
+| `purge-public` | Deletes every R2 rendition (both buckets) and every image file of the item. That means the matched file plus the item's own uploads: `/community-posts/<channel>/…` for a post, `/thumbnails/<video>/…` for a video. A record can name another account's file, and that file is never deleted. Purges the Cloudflare cache (prefix and URLs), and Bunny's edge when `BUNNY_API_KEY` is set. Removes the index rows. |
 | `copy-source` | Copies the original upload (from our kept original, else Bunny's best file), encrypted, up to 96 MiB per delivery. |
 | `purge` | Deletes the video record, its side records, the original, the Bunny Stream video and its notifications. A post is deleted for good. |
 | `ban` | Bans the uploader on videos (`videos_bans` and the holds job) and writes the final manifest. |
 
 The order guarantees that nothing is destroyed before it is kept. The public copies go first, so the window during which a stray public URL still answers stays short. A takedown never goes through `admin_deletions`, so no admin can restore it. Nothing lifts the `csam` hold.
 
-The job's last failed attempt flags the admin on the Errors page:
-- key `csam-contain:<caseId>`;
-- Retry runs `POST /internal/csam/retry` (registered in admin-api `SERVICE_RETRIES`);
-- a success resolves the flag.
+The job's last failed attempt flags the admin on the Errors page, key `csam-contain:<caseId>`.
+- The flag links to the case page. The flag itself has no Retry, because any admin can open the Errors page. A super admin retries from the case page (audited), and a success resolves the flag.
+- `SERVICE_RETRIES` never lists a CSAM path.
 
 The case page shows the job's phase and result.
 

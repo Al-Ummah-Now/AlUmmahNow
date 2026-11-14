@@ -35,9 +35,9 @@ export const SERVICE_RETRIES: Record<string, { binding: keyof AdminBindings; pat
   scheduler: { binding: 'SCHEDULER', paths: ['/failed/retry'] },
   // A new upload that could not be added to its playlist (api-videos lib/playlistUploadAdds.ts);
   // a failed transcription job, run again free of charge (api-videos lib/captions/jobs.ts); a media
-  // provider turned unhealthy: "Check now" runs a health pass (api-videos lib/media/health.ts);
-  // a CSAM takedown that failed after every retry (api-videos lib/csam/contain.ts)
-  'api-videos': { binding: 'VIDEOS', paths: ['/internal/playlist-adds/retry', '/internal/captions/jobs/retry', '/internal/media/health/check', '/internal/csam/retry'] },
+  // provider turned unhealthy: "Check now" runs a health pass (api-videos lib/media/health.ts).
+  // Never a CSAM path: those retry from the case page, super admins only (docs/specs/CSAM-RESPONSE.md)
+  'api-videos': { binding: 'VIDEOS', paths: ['/internal/playlist-adds/retry', '/internal/captions/jobs/retry', '/internal/media/health/check'] },
 };
 
 export const BUILTIN_RETRIES: Record<string, (env: AdminBindings, args: Record<string, string>, attempt: string) => Promise<RetryOutcome>> = {

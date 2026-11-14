@@ -137,14 +137,14 @@ export async function planEvidence(env: EvidenceEnv, keys: EvidenceKeys, caseId:
 		const access = video?.r2?.access === 'priv' ? 'priv' : 'pub';
 		if (rev && !media) files.push({ name: '03-thumbnail.jpg', source: { type: 'r2', bucket: access === 'priv' ? 'MEDIA_PRIVATE' : 'MEDIA', key: `${access}/${r.videoId}/${rev}/${MEDIA_THUMBNAIL}` }, contentType: 'image/jpeg' });
 		const custom = imagePathOf(video?.thumbnailUrl);
-		if (custom?.startsWith('/thumbnails/')) files.push({ name: `04-custom-thumbnail.${extOf(custom, 'jpg')}`, source: { type: 'image', path: custom }, contentType: typeOf(extOf(custom, 'jpg')) });
+		if (custom?.startsWith(`/thumbnails/${r.videoId}/`)) files.push({ name: `04-custom-thumbnail.${extOf(custom, 'jpg')}`, source: { type: 'image', path: custom }, contentType: typeOf(extOf(custom, 'jpg')) });
 	}
 	if (r.postId && r.channelId) {
 		const post = await json<{ images?: Array<{ url?: string }> }>(env.community_posts, `posts/${r.channelId}/${r.postId}.json`);
 		await snapshot('record-post.json', `community_posts/posts/${r.channelId}/${r.postId}`, post);
 		(post?.images ?? []).forEach((image, i) => {
 			const path = imagePathOf(image.url);
-			if (path && path !== r.imagePath) files.push({ name: `05-post-image-${i + 1}.${extOf(path, 'jpg')}`, source: { type: 'image', path }, contentType: typeOf(extOf(path, 'jpg')) });
+			if (path && path !== r.imagePath && path.startsWith(`/community-posts/${r.channelId}/`)) files.push({ name: `05-post-image-${i + 1}.${extOf(path, 'jpg')}`, source: { type: 'image', path }, contentType: typeOf(extOf(path, 'jpg')) });
 		});
 	}
 	if (r.channelId) await snapshot('record-channel.json', `channels/${r.channelId}`, await json(env.channels, r.channelId));
