@@ -15,9 +15,42 @@ import { waitUntilOf } from "../../lib/search/ownership";
 import { playlistSortOf } from "@al-ummah/shared-types";
 import { channelNameFields } from "../../lib/channelName";
 import { GONE_BODY, isPurged } from '../../lib/gone';
+import { edgeCacheUrl, readEdgeCache, writeEdgeCache } from '../../lib/edge-cache';
 
 // Upper bound on videos resolved for a single playlist page
 const MAX_EXPANDED_VIDEOS = 200;
+
+/**
+ * An anonymous expanded playlist is reused on the edge this long (per colo, lib/edge-cache.ts), like
+ * the anonymous first page of GET /api/videos: its R2 reads (playlist, channel, every video) are most
+ * of the playlist page's time to first byte. Signed-in viewers (owners included) always read fresh,
+ * so an edit is seen at once by its author and by everyone else within the TTL. Only the R2 data is
+ * kept: the playback choice (R2 or Bunny, signing) still runs for each request.
+ */
+export const EXPANDED_PLAYLIST_TTL_SECONDS = 30;
+
+type PlaylistView = ReturnType<typeof transformVideoToView>;
+type PlaylistBody = ReturnType<typeof toPlaylistResponse> & {
+    channelName?: string;
+    channelNameLocalized?: Record<string, string>;
+    cover?: PlaylistCover;
+    videoItems?: PlaylistView[];
+};
+/** What the anonymous edge entry holds: the response before playback, and each item's view + R2 state */
+interface ExpandedEntry {
+    body: PlaylistBody;
+    items: { view: PlaylistView; video: Pick<VideoType, 'id'> & { r2?: unknown } }[];
+    hasOwnThumbnail: boolean;
+}
+
+/** Each item gets the one URL its player plays (lib/media/playback.ts), then the cover if the playlist has none */
+async function finishExpanded(env: never, entry: ExpandedEntry): Promise<PlaylistBody> {
+    const body: PlaylistBody = { ...entry.body };
+    body.videoItems = await Promise.all(entry.items.map(({ view, video }) => withPlayback(env, video as never, { ...view }, 'playlist')));
+    const first = entry.hasOwnThumbnail ? undefined : body.videoItems.find((video) => video.thumbnailUrl);
+    if (first?.thumbnailUrl) body.cover = { videoId: first.id, thumbnailUrl: first.thumbnailUrl };
+    return body;
+}
 
 export class PlaylistFetch extends OptionalAuthRoute {
     schema = {
@@ -77,6 +110,13 @@ export class PlaylistFetch extends OptionalAuthRoute {
         const includeVideos = request.query?.includeVideos === "true";
         const userId = this.getUserId(c);
 
+        // Anonymous expanded reads (the playlist page's server render) may come from the edge
+        const cacheUrl = !userId && includeVideos ? edgeCacheUrl(c.req.url, `playlist-expanded/${encodeURIComponent(id)}`) : null;
+        if (cacheUrl) {
+            const hit = await readEdgeCache<ExpandedEntry>(cacheUrl);
+            if (hit) return finishExpanded(c.env as never, hit);
+        }
+
         const repository = new R2Repository<PlaylistType>(c.env.playlists);
         const playlist = await repository.getObject(id);
 
@@ -91,28 +131,20 @@ export class PlaylistFetch extends OptionalAuthRoute {
             return c.json({ success: false, error: "Playlist not found" }, 404);
         }
 
-        const response: ReturnType<typeof toPlaylistResponse> & {
-            channelName?: string;
-            channelNameLocalized?: Record<string, string>;
-            cover?: PlaylistCover;
-            videoItems?: ReturnType<typeof transformVideoToView>[];
-        } = toPlaylistResponse(playlist);
+        const response: PlaylistBody = toPlaylistResponse(playlist);
 
-        // A system playlist (Watch later) belongs to its user, not to a channel
-        if (playlist.channelId && !isSystemPlaylist(playlist)) {
-            try {
-                const channelRepo = new R2Repository<z.infer<typeof BusinessChannel>>(c.env.channels);
-                const channel = await channelRepo.getObject(playlist.channelId);
-                // Every language's name (lib/channelName.ts)
-                Object.assign(response, channelNameFields(channel));
-            } catch (error) {
+        // A system playlist (Watch later) belongs to its user, not to a channel. Read alongside the
+        // order and the videos below, not before them: it is one R2 round trip off the critical path.
+        const channelRead = playlist.channelId && !isSystemPlaylist(playlist)
+            ? new R2Repository<z.infer<typeof BusinessChannel>>(c.env.channels).getObject(playlist.channelId).catch((error) => {
                 logger.warn("[PlaylistFetch] Failed to load channel", {
                     playlistId: id,
                     channelId: playlist.channelId,
                     error: error instanceof Error ? error.message : String(error),
                 });
-            }
-        }
+                return null;
+            })
+            : Promise.resolve(null);
 
         // The playlist's order, applied before anything is cut (automatic
         // orders sort from fresh video data; a changed order is stored back)
@@ -124,25 +156,30 @@ export class PlaylistFetch extends OptionalAuthRoute {
         if (includeVideos) {
             const videoRepo = new R2Repository<VideoType>(c.env.videos);
             const ids = ordered.ids.slice(0, MAX_EXPANDED_VIDEOS);
-            const videos = await Promise.all(ids.map((videoId) => ordered.videos.get(videoId) ?? videoRepo.getObject(videoId)));
-            // Each item carries the one URL its player plays (lib/media/playback.ts)
-            response.videoItems = await Promise.all(videos
-                .filter((video): video is VideoType => !!video && canViewVideo(video, userId))
-                .map((video) => withPlayback(c.env as never, video as never, transformVideoToView(video), 'playlist')));
-
-            logger.debug("[PlaylistFetch] Expanded playlist videos", {
-                playlistId: id,
-                requested: ids.length,
-                returned: response.videoItems.length,
-            });
-
-            // The expanded list is already filtered for this viewer
-            const first = playlist.thumbnailUrl ? undefined : response.videoItems.find((video) => video.thumbnailUrl);
-            if (first?.thumbnailUrl) response.cover = { videoId: first.id, thumbnailUrl: first.thumbnailUrl };
-        } else {
-            const cover = (await resolvePlaylistCovers(c.env, [{ ...playlist, videos: ordered.ids }], userId)).get(id);
-            if (cover) response.cover = cover;
+            const [videos, channel] = await Promise.all([
+                Promise.all(ids.map((videoId) => ordered.videos.get(videoId) ?? videoRepo.getObject(videoId))),
+                channelRead,
+            ]);
+            // Every language's name (lib/channelName.ts)
+            if (channel) Object.assign(response, channelNameFields(channel));
+            const entry: ExpandedEntry = {
+                body: response,
+                items: videos
+                    .filter((video): video is VideoType => !!video && canViewVideo(video, userId))
+                    .map((video) => ({ view: transformVideoToView(video), video: { id: video.id, r2: (video as { r2?: unknown }).r2 } })),
+                // The expanded list is already filtered for this viewer
+                hasOwnThumbnail: !!playlist.thumbnailUrl,
+            };
+            logger.debug("[PlaylistFetch] Expanded playlist videos", { playlistId: id, requested: ids.length, returned: entry.items.length });
+            // Stored before playback, so each later request still makes its own choice and signs its own URLs
+            if (cacheUrl) writeEdgeCache(cacheUrl, entry, EXPANDED_PLAYLIST_TTL_SECONDS, waitUntilOf(c as never));
+            return finishExpanded(c.env as never, entry);
         }
+
+        const [channel, covers] = await Promise.all([channelRead, resolvePlaylistCovers(c.env, [{ ...playlist, videos: ordered.ids }], userId)]);
+        if (channel) Object.assign(response, channelNameFields(channel));
+        const cover = covers.get(id);
+        if (cover) response.cover = cover;
 
         return response;
     }
