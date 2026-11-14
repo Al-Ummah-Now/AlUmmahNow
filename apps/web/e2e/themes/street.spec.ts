@@ -60,7 +60,9 @@ async function seeThrough(page: Page) {
 /** The street's two layers as the browser computes them. */
 async function layers(page: Page) {
   return page.evaluate(() => {
-    const before = getComputedStyle(document.body, '::before'), after = getComputedStyle(document.body, '::after');
+    // This app hangs the street on its page wrapper (html/body are height: 100%)
+    const host = document.querySelector('.demo-layer') ?? document.body;
+    const before = getComputedStyle(host, '::before'), after = getComputedStyle(host, '::after');
     const css = getComputedStyle(document.documentElement);
     return {
       lights: before.content !== 'none' ? before.backgroundImage : 'none',
@@ -71,6 +73,8 @@ async function layers(page: Page) {
       opacity: after.opacity,
       faint: css.getPropertyValue('--fanous-street-faint').trim(),
       position: after.position,
+      // The street reaches the bottom of the page, not just the first screen
+      covers: Math.round(parseFloat(after.height)) >= document.documentElement.scrollHeight - 2,
     };
   });
 }
@@ -94,6 +98,7 @@ for (const lang of LANGS) {
       expect(l.at, `${mode}: centred on the page`).toBe('50% 0%');
       expect(l.size, `${mode}: shown at the tile's own size`).toBe('auto');
       expect(l.position, `${mode}: scrolls with the page`).toBe('absolute');
+      expect(l.covers, `${mode}: down the whole page`).toBe(true);
       expect(Number(l.opacity), `${mode}: faint where it lies behind text`).toBeCloseTo(Number(l.faint), 2);
       // The tile files themselves are served
       for (const url of l.street.match(/\/fanous\/street\/[\w-]+\.webp/g) ?? []) {

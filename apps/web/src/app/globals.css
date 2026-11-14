@@ -499,3 +499,25 @@
    lanterns lie behind text and the street stays at the theme's faint opacity (every text colour
    keeps 4.5:1 over it). */
 html.fanous-street { --fanous-street-opacity: var(--fanous-street-faint); }
+/* html and body are height: 100% here and the page scrolls past the body, so the street's layers
+   (absolute, inset 0 on their host) would end after the first screen. They hang on the page wrapper
+   instead, which grows with the content; the body keeps its height (full-height layouts). */
+html.fanous-street body::before,
+html.fanous-street body::after { content: none; }
+html.fanous-street .demo-layer { position: relative; isolation: isolate; }
+html.fanous-street .demo-layer::before,
+html.fanous-street .demo-layer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+html.fanous-street .demo-layer::before {
+  background: var(--fanous-street-lights) 0 0 repeat;
+  opacity: var(--fanous-street-lights-opacity, 1);
+}
+html.fanous-street .demo-layer::after {
+  background: var(--fanous-street-tile) 50% 0 repeat;
+  opacity: var(--fanous-street-opacity, 1);
+}
