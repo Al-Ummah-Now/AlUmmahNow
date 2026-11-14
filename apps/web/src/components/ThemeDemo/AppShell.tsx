@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import Link from '@/components/common/AppLink';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { ChevronLeft, ChevronRight, CircleHelp, CircleUserRound, Clock, Compass, Heart, History, Home, Languages, Menu, Moon, ShieldCheck, Sun, Tv, BookOpen, Mail, Activity, X, type LucideIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CircleHelp, CircleUserRound, Clock, Compass, Heart, History, Home, Languages, Menu, Moon, ShieldCheck, Sun, Tv, BookOpen, Mail, Activity, Info, X, type LucideIcon } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { saveLanguagePreference } from '@/lib/i18n/utils';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
@@ -18,8 +18,8 @@ import { statusPageUrl } from '@/lib/navigation/destinations';
 import { IdentityTour } from '@/components/help/IdentityTour';
 
 const L = {
-  en: { status: 'Status', browse: 'Browse', create: 'Create', more: 'More', history: 'History', watchLater: 'Watch later', liked: 'Liked videos', settings: 'Settings', search: 'Search videos', lightMode: 'Switch to light mode', darkMode: 'Switch to dark mode', other: 'العربية', otherLabel: 'التبديل إلى العربية', menu: 'Menu', close: 'Close menu' },
-  ar: { status: 'حالة الخدمات', browse: 'تصفّح', create: 'إنشاء', more: 'المزيد', history: 'السجل', watchLater: 'المشاهدة لاحقًا', liked: 'المرئيات التي أعجبتك', settings: 'الإعدادات', search: 'ابحث عن مرئيات', lightMode: 'التبديل إلى الوضع الفاتح', darkMode: 'التبديل إلى الوضع الداكن', other: 'English', otherLabel: 'Switch to English', menu: 'القائمة', close: 'إغلاق القائمة' },
+  en: { about: 'About', status: 'Status', browse: 'Browse', create: 'Create', more: 'More', history: 'History', watchLater: 'Watch later', liked: 'Liked videos', settings: 'Settings', search: 'Search videos', lightMode: 'Switch to light mode', darkMode: 'Switch to dark mode', other: 'العربية', otherLabel: 'التبديل إلى العربية', menu: 'Menu', close: 'Close menu' },
+  ar: { about: 'من نحن', status: 'حالة الخدمات', browse: 'تصفّح', create: 'إنشاء', more: 'المزيد', history: 'السجل', watchLater: 'المشاهدة لاحقًا', liked: 'المرئيات التي أعجبتك', settings: 'الإعدادات', search: 'ابحث عن مرئيات', lightMode: 'التبديل إلى الوضع الفاتح', darkMode: 'التبديل إلى الوضع الداكن', other: 'English', otherLabel: 'Switch to English', menu: 'القائمة', close: 'إغلاق القائمة' },
 };
 
 /** `hub`: the "You" entry. In the collapsed rail it is an icon item; in the open rail and the drawer it reads as
@@ -64,6 +64,8 @@ export function AppShell() {
       { label: c.liked, href: `${base}/library/liked`, icon: Heart },
     ] },
     { title: c.more, items: [
+      // The CMS About page (the one www serves), app/[locale]/about
+      { label: c.about, href: `${base}/about`, icon: Info },
       { label: t.help.navLabel, href: `${base}/help`, icon: CircleHelp },
       { label: t.navigation.privacyAndCookies, href: `${base}/settings/privacy`, icon: ShieldCheck },
       { label: t.communityGuidelines.navLabel, href: `${base}/community-guidelines`, icon: BookOpen },

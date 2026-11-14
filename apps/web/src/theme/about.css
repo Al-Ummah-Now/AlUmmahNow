@@ -1,0 +1,37 @@
+/* About (components/about/AboutPage.tsx): the CMS About page in the site's theme. Theme tokens and the
+   theme's materials (materials.css) only, so every theme and mode restyles it; the header matches Help
+   and Contact us. Logical properties: one stylesheet for English and Arabic. */
+/* main is sized by the shell (#page-content main); the reading width is the article's */
+.ab{width:100%;padding:clamp(20px,4vw,48px) 16px 64px;color:var(--fanous-color-text-primary)}
+.ab-article{width:100%;max-width:880px;margin-inline:auto;display:flex;flex-direction:column;gap:clamp(20px,3vw,32px)}
+.ab-head{display:flex;align-items:flex-start;gap:var(--fanous-spacing-md,16px)}
+.ab-badge{flex:none;display:grid;place-items:center;width:52px;height:52px;border-radius:var(--r-lg,14px);background:var(--m-primary);box-shadow:var(--m-primary-edge);color:var(--fanous-color-on-primary)}
+.ab-badge svg{width:26px;height:26px}
+.ab-title{margin:0;font-size:clamp(26px,3.2vw,36px);font-weight:700;line-height:1.2;text-wrap:balance}
+html[lang=ar] .ab-title{line-height:1.45}
+.ab-lead{margin:6px 0 0;max-width:62ch;color:var(--fanous-color-text-secondary);line-height:1.6}
+
+/* The body: the theme's card material with its gradient hairline border */
+.ab-card{border:1px solid transparent;border-radius:var(--r-xl,20px);background:var(--m-card) padding-box,var(--m-border) border-box;box-shadow:var(--m-card-edge);backdrop-filter:var(--m-blur);-webkit-backdrop-filter:var(--m-blur);padding:clamp(20px,3.4vw,40px)}
+.ab-prose{display:flex;flex-direction:column;gap:14px;max-width:68ch}
+.ab-prose>:first-child{margin-block-start:0}
+.ab-prose p,.ab-prose li{margin:0;font-size:17px;line-height:1.75;color:var(--fanous-color-text-secondary)}
+html[lang=ar] .ab-prose p,html[lang=ar] .ab-prose li{line-height:1.95}
+.ab-prose>p:first-child{font-size:clamp(18px,2vw,20px);color:var(--fanous-color-text-primary)}
+.ab-prose h2,.ab-prose h3,.ab-prose h4{margin:18px 0 0;font-weight:700;line-height:1.35;text-wrap:balance;color:var(--fanous-color-text-primary)}
+.ab-prose h2{display:flex;align-items:center;gap:10px;font-size:21px}
+.ab-prose h2::before{content:"";flex:none;width:4px;height:1.05em;border-radius:var(--r-pill,999px);background:var(--m-primary)}
+.ab-prose h3{font-size:18px}
+.ab-prose h4{font-size:16px}
+.ab-prose strong{color:var(--fanous-color-text-primary);font-weight:600}
+.ab-prose a{color:var(--fanous-color-link);text-decoration:underline;text-underline-offset:2px}
+.ab-prose a:focus-visible{outline:2px solid var(--fanous-color-focus-ring);outline-offset:2px;border-radius:2px}
+.ab-prose code{font-size:.92em;padding:1px 6px;border-radius:var(--r-sm,6px);background:var(--m-control)}
+.ab-prose ul,.ab-prose ol{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+.ab-prose ul>li{position:relative;padding-inline-start:26px}
+.ab-prose ul>li::before{content:"";position:absolute;inset-inline-start:6px;top:.72em;width:8px;height:8px;border-radius:50%;background:var(--fanous-color-primary);box-shadow:0 0 0 4px color-mix(in srgb,var(--fanous-color-primary) 18%,transparent)}
+.ab-prose ol{counter-reset:ab}
+.ab-prose ol>li{position:relative;padding-inline-start:34px;counter-increment:ab}
+.ab-prose ol>li::before{content:counter(ab);position:absolute;inset-inline-start:0;top:.2em;display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--m-primary);color:var(--fanous-color-on-primary);font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}
+.ab-prose blockquote{margin:0;padding:12px 16px;border-inline-start:3px solid var(--fanous-color-primary);border-radius:var(--r-md,10px);background:color-mix(in srgb,var(--fanous-color-primary) 8%,var(--fanous-color-surface))}
+.ab-prose hr{width:100%;margin:8px 0;border:0;border-top:1px solid var(--fanous-color-divider)}
