@@ -54,6 +54,8 @@ export interface CaptionsTranslations {
     cost: string;
     /** {minutes}: no monthly limit */
     costUnlimited: string;
+    /** {minutes} {remaining} {over}: the job costs more than is left */
+    costOver: string;
     /** The video's length isn't known yet */
     notReady: string;
     /** {used} {limit} {date} */
@@ -61,11 +63,17 @@ export interface CaptionsTranslations {
     meterUnlimited: string;
     /** Accessible name of the meter */
     meterLabel: string;
+    /** {used} {limit} {over}: the balance is below 0 */
+    meterOver: string;
+    /** {count}: minutes charged to a job still running */
+    meterHeld: string;
     /** {count} minutes left on extra grants */
     meterPacks: string;
     meterWarning: string;
-    /** 402 or a cost above what is left: {minutes} {remaining} {date} */
-    notEnough: string;
+    /** Balance 0 or below, with an overdraft: {over} {date} */
+    outOver: string;
+    /** Balance exactly 0: {date} */
+    outUsed: string;
     noPlan: string;
     contact: string;
     replaceTitle: string;
@@ -211,13 +219,17 @@ export const CAPTIONS_EN: CaptionsTranslations = {
     confirmTitle: 'Transcribe this video?',
     cost: 'This uses {minutes} of your {remaining} remaining caption minutes.',
     costUnlimited: 'This uses {minutes} caption minutes. Your plan has no monthly limit.',
+    costOver: "This uses {minutes} minutes and you have {remaining} left. You'll go {over} minutes over, and that comes off next month's minutes.",
     notReady: 'You can transcribe the video once it has finished processing.',
     meter: 'Caption minutes: {used} / {limit} this month · resets {date}',
     meterUnlimited: 'Caption minutes: no monthly limit',
     meterLabel: 'Caption minutes used this month',
+    meterOver: 'Caption minutes: {used} / {limit} this month · {over} over',
+    meterHeld: 'Includes {count} minutes for the transcription in progress.',
     meterPacks: '+{count} extra minutes',
     meterWarning: "You've used most of this month's caption minutes.",
-    notEnough: 'Transcribing this video takes {minutes} caption minutes and you have {remaining} left. Your minutes reset on {date}.',
+    outOver: "You're {over} minutes over this month's caption minutes. You can transcribe again when your minutes reset on {date}, and the overdraft comes off them first.",
+    outUsed: "You've used all of this month's caption minutes. They reset on {date}.",
     noPlan: "Your plan doesn't include caption minutes.",
     contact: 'Ask our team for more minutes',
     replaceTitle: 'Replace your draft?',
@@ -357,13 +369,17 @@ export const CAPTIONS_AR: CaptionsTranslations = {
     confirmTitle: 'تفريغ هذا المرئي؟',
     cost: 'يستهلك هذا {minutes} من دقائق الترجمة، ويبقى لك {remaining} منها.',
     costUnlimited: 'يستهلك هذا {minutes} من دقائق الترجمة. ليس لخطتك حد شهري.',
+    costOver: 'يستهلك هذا {minutes} من الدقائق ويبقى لك {remaining} منها، فتتجاوز رصيدك بـ {over} من الدقائق تُخصم من دقائق الشهر القادم.',
     notReady: 'يمكنك تفريغ المرئي بعد انتهاء معالجته.',
     meter: 'دقائق الترجمة: {used} من {limit} هذا الشهر · تتجدد في {date}',
     meterUnlimited: 'دقائق الترجمة: بلا حد شهري',
     meterLabel: 'دقائق الترجمة المستهلكة هذا الشهر',
+    meterOver: 'دقائق الترجمة: {used} من {limit} هذا الشهر · تجاوز بـ {over}',
+    meterHeld: 'يشمل {count} من الدقائق للتفريغ الجاري.',
     meterPacks: '+{count} من الدقائق الإضافية',
     meterWarning: 'استهلكت معظم دقائق الترجمة لهذا الشهر.',
-    notEnough: 'يحتاج تفريغ هذا المرئي إلى {minutes} من دقائق الترجمة، ويبقى لك {remaining} منها. تتجدد دقائقك في {date}.',
+    outOver: 'تجاوزت دقائق الترجمة لهذا الشهر بـ {over} من الدقائق. يمكنك التفريغ مجددًا حين تتجدد دقائقك في {date}، ويُخصم التجاوز منها أولًا.',
+    outUsed: 'استهلكت كل دقائق الترجمة لهذا الشهر. تتجدد في {date}.',
     noPlan: 'لا تشمل خطتك دقائق للترجمة.',
     contact: 'اطلب دقائق إضافية من فريقنا',
     replaceTitle: 'استبدال مسودتك؟',

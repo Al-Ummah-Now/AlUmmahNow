@@ -48,8 +48,10 @@ const Usage = z.object({
 	monthLimit: z.number().nullable().describe('tierMinutes + monthGranted; null when unlimited'),
 	monthUsed: z.number().describe('Spent or held by running jobs this month'),
 	packsRemaining: z.number().describe('Minutes left on "until used" grants'),
-	remaining: z.number().nullable().describe('What a new job may spend now; null when unlimited'),
-	warning: z.boolean().describe("80% of the month's allowance is spent"),
+	overdraft: z.number().describe('Minutes charged past the allowance and grants; the next month and grants pay it down'),
+	held: z.number().describe('Minutes charged to jobs still running (included above)'),
+	remaining: z.number().nullable().describe('The balance, below 0 by the overdraft; a job may start while it is above 0; null when unlimited'),
+	warning: z.boolean().describe("80% of the month's allowance is spent, or the balance is below 0"),
 });
 const Err = { 'application/json': { schema: z.object({ success: z.literal(false), error: z.string() }) } };
 const videoParams = z.object({ videoId: Str({ description: 'Video ID' }) });
@@ -77,7 +79,8 @@ export class CaptionJobCreate extends AuthenticatedRoute {
 				'Starts a background job that transcribes the language spoken in the video; Quran recitation is written from the official text. ' +
 				'Asking again while a job of the same language runs returns that job (200). ' +
 				'Reserves `ceil(duration in minutes)` caption minutes; a failed or cancelled job gives them back. ' +
-				'409 `draft_exists` unless `replace`; 402 `upgrade_required` when the minutes would run out.',
+				'409 `draft_exists` unless `replace`; 402 `upgrade_required` when the balance is 0 or below. ' +
+				'The estimate is charged at the start and may take the balance below 0: a started job always runs to the end.',
 			request: {
 				params: videoParams,
 				body: { content: { 'application/json': { schema: z.object({ language: Str({ description: 'ISO 639-1 code of the speech' }), replace: z.boolean().optional() }) } } },

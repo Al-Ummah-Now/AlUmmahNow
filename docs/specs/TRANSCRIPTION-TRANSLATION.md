@@ -476,9 +476,15 @@ The owner chose **a tier allowance plus admin grants**, both in the videos admin
 - **Metering (SEARCH_DB, migration 0032):**
   - `caption_minute_usage` holds the minutes of the month's allowance per subject and month (UTC).
   - `caption_minute_grants` holds the grants.
-  - `caption_minute_holds` holds one reservation per job: what it took from the month and from each grant.
+  - `caption_minute_holds` holds one charge per job: what its estimate took from the month and from each grant (the rest went on the overdraft).
+  - `caption_minute_overdraft` and `caption_minute_ledger` (search migration 0035).
 - **Who pays:** the subject is the tier holder that `resolveCreator` names: the channel owner, or a super admin themselves.
-- **Reserve, commit, release:** a job's minutes are reserved when it is requested, from the month first and then from "until used" grants, oldest first. Each update is conditional, and a lost race is undone and retried, so a subject is never charged past a limit or twice for the same job. When the job finishes, the minutes used stand and the rest is given back (grants first). A failed or cancelled job gives back everything, once.
+- **Charged at the start, settled at the end (owner decisions 2026-11-14: "balance updates before job finishes", "when mins end, complete the running video and they get a negative balance"):**
+  - A job's estimate (`ceil(duration/60)`) is charged when it starts: from the month first, then "until used" grants (oldest first), then the **overdraft**. The meter and the next start see it at once (`usage.held` is the part charged to jobs still running).
+  - A start needs a balance above 0: balance = `max(0, month limit − month used) + grant minutes left − overdraft`. A job that costs more than is left starts anyway and the balance goes below 0. 402 `upgrade_required` only when the balance is already 0 or below (a tier with no minutes and no grants is 0).
+  - A started job always runs to the end and is never failed for minutes. When it finishes it costs the minutes it used: the difference from the estimate is charged (into the overdraft if needed) or given back (the overdraft first, then its grants, then its month). A failed job is refunded in full. A job cancelled before its draft is written costs what it had transcribed (`ceil(estimate × chunks done / total)`) and the rest comes back; one stuck writing its draft is our failure and is refunded in full.
+  - The overdraft (`caption_minute_overdraft`) is paid down by the next month's allowance (the new month starts with it already used) and by grants (a grant pays it first). Studio shows "127 / 120 this month · 7 over" in red, and the confirm says how far over a job goes.
+  - Every step is one D1 batch guarded by the figures it was planned from (a compare-and-swap; a lost race applies nothing and is planned again) and writes one `caption_minute_ledger` row whose id is the step (`<jobId>:start|settle|cancel|refund`, `paydown:<uuid>`) with the balance after it, so a retry never charges twice. The admin's user page lists the ledger and shows an overdraft in red.
 - **Account erasure** deletes the user's usage, holds and grants.
 - Code: `packages/shared-types/src/caption-minutes.ts`, `apps/api-videos/src/lib/captions/minutes.ts`.
 

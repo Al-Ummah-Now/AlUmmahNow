@@ -1,4 +1,4 @@
-import type { AdminAuditEntry, CaptionMinuteGrant, CaptionMinutesUsage } from '@al-ummah/shared-types';
+import type { AdminAuditEntry, CaptionLedgerEntry, CaptionMinuteGrant, CaptionMinutesUsage } from '@al-ummah/shared-types';
 import { getUserCaptionMinutes, grantCaptionMinutes, revokeCaptionGrant } from '@/lib/api/creators';
 import { getI18n } from '@/i18n/server';
 import { ErrorAlert, cardClass } from '@/components/ui';
@@ -12,7 +12,7 @@ import { CaptionGrantControls } from './CaptionGrantControls';
  */
 export async function UserCaptionMinutesPanel({ userId, canManage }: { userId: string; canManage: boolean }) {
   const { t } = await getI18n();
-  let data: { usage: CaptionMinutesUsage; grants: CaptionMinuteGrant[]; audit: AdminAuditEntry[] } | null = null;
+  let data: { usage: CaptionMinutesUsage; grants: CaptionMinuteGrant[]; ledger?: CaptionLedgerEntry[]; audit: AdminAuditEntry[] } | null = null;
   try {
     data = await getUserCaptionMinutes(userId);
   } catch (e) {
@@ -25,7 +25,7 @@ export async function UserCaptionMinutesPanel({ userId, canManage }: { userId: s
       {!data ? (
         <ErrorAlert testId="user-caption-minutes-failed">{t('captionMinutes.loadFailed')}</ErrorAlert>
       ) : (
-        <CaptionGrantControls userId={userId} usage={data.usage} grants={data.grants} canManage={canManage} grant={grantCaptionMinutes} revoke={revokeCaptionGrant} />
+        <CaptionGrantControls userId={userId} usage={data.usage} grants={data.grants} ledger={data.ledger ?? []} canManage={canManage} grant={grantCaptionMinutes} revoke={revokeCaptionGrant} />
       )}
     </section>
   );

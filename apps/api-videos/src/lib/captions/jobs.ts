@@ -30,7 +30,7 @@ import {
 	type VideoObject,
 } from '@al-ummah/shared-types';
 import { logger } from '../logger';
-import { captionSubject, commitMinutes, readUsage, releaseMinutes, reserveMinutes } from './minutes';
+import { cancelMinutes, captionSubject, commitMinutes, readUsage, releaseMinutes, reserveMinutes } from './minutes';
 
 export const CAPTION_PROVIDER = 'workers-ai';
 export const CAPTION_MODEL = '@cf/openai/whisper-large-v3-turbo';
@@ -303,9 +303,22 @@ export async function cancelJob(env: CaptionJobsEnv, videoId: string, jobId: str
 		if (fresh.status === 'postprocessing') throw new CaptionJobHttpError(409, 'job_finishing');
 		return toJob(fresh);
 	}
-	await releaseMinutes(db(env), jobId, now);
+	// It costs what it had transcribed (chunks done of the total) and the rest comes back; one
+	// stuck writing its draft is our failure and comes back in full
+	if (Number(row.waived) !== 1) {
+		const hold = row.status === 'postprocessing' ? await releaseMinutes(db(env), jobId, now) : await cancelMinutes(db(env), jobId, minutesTranscribed(row), now);
+		await db(env).prepare('UPDATE caption_jobs SET minutes_charged = ? WHERE id = ?').bind(hold?.charged ?? 0, jobId).run();
+	}
 	await clearJobWork(env, jobId);
 	return (await readJob(env, jobId))!;
+}
+
+/** The part of the estimate a job had transcribed when it stopped. */
+export function minutesTranscribed(row: Pick<JobRow, 'minutes_reserved' | 'progress_done' | 'progress_total'>): number {
+	const total = Number(row.progress_total ?? 0);
+	if (!total) return 0;
+	const done = Math.min(total, Math.max(0, Number(row.progress_done ?? 0)));
+	return Math.ceil((Number(row.minutes_reserved) * done) / total);
 }
 
 export async function minutesForVideo(env: CaptionJobsEnv, video: VideoObject, userId: string, roles?: readonly string[] | null, now = new Date()): Promise<CaptionMinutesUsage> {

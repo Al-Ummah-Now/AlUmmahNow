@@ -3,13 +3,14 @@
 /**
  * Transcribe on request (AUN-CAPTIONS §3.1): the caption minutes meter, the spoken language
  * (from the video's language), the cost line before confirming, each language's running job with
- * its step and Cancel, and why a job failed with the minutes given back. A 402 or a cost above
- * what is left shows the plan's minutes and the contact path instead of starting anything.
+ * its step and Cancel, and why a job failed with the minutes given back. A job that costs more
+ * than is left still starts (the balance goes below 0, said plainly before confirming); at a
+ * balance of 0 or below the plan's minutes and the contact path show instead of the button.
  * CaptionDraftsPanel loads the jobs and minutes and polls while a job runs.
  */
 import React, { useId, useState } from 'react';
 import { AlertTriangle, AudioLines, Loader2, X } from 'lucide-react';
-import { isCaptionJobActive, type CaptionMinutesUsage, type CaptionsTranslations } from '@al-ummah/shared-types';
+import { captionMinutesCanStart, isCaptionJobActive, type CaptionMinutesUsage, type CaptionsTranslations } from '@al-ummah/shared-types';
 import { reportError } from '@/lib/errors/reporter';
 import { SUPPORTED_LANGUAGES } from '@/lib/api/subtitles-types';
 import { cancelCaptionJob, startCaptionJob, type CaptionJobView } from '@/lib/api/caption-drafts';
@@ -78,8 +79,15 @@ export default function CaptionTranscribe({ videoId, spokenLanguage, jobs, minut
   /** One job at a time: while one runs, its chip replaces the form */
   const running = shown.some((j) => isCaptionJobActive(j.status));
   const retry = shown.some((j) => j.language === language && j.status === 'failed');
-  const noPlan = !usage.unlimited && usage.via === 'none' && (usage.remaining ?? 0) <= 0;
-  const short = !usage.unlimited && !noPlan && minutesNeeded !== null && usage.remaining !== null && minutesNeeded > usage.remaining;
+  /** A start needs a balance above 0; a job that costs more starts and goes over */
+  const out = !captionMinutesCanStart(usage);
+  const noPlan = out && usage.overdraft === 0 && (usage.monthLimit ?? 0) === 0 && usage.packsRemaining === 0;
+  const over = usage.overdraft;
+  const costText = (needed: number) => {
+    if (usage.unlimited) return fill(t.costUnlimited, { minutes: needed });
+    const remaining = usage.remaining ?? 0;
+    return needed > remaining ? fill(t.costOver, { minutes: needed, remaining, over: needed - remaining }) : fill(t.cost, { minutes: needed, remaining });
+  };
 
   const report = (what: string, status: number, error: string) => {
     if (status >= 500 || status === 0) reportError(new Error(`caption job ${what} failed: ${error}`), { shown: true, status, extra: { videoId, language } });
@@ -89,12 +97,11 @@ export default function CaptionTranscribe({ videoId, spokenLanguage, jobs, minut
     setNotice(null);
     if (minutesNeeded === null) return;
     if (!replace && draftLanguages.includes(code)) {
-      const yes = await confirm({ title: t.replaceTitle, description: fill(t.replaceBody, { language: label(code) }), confirmLabel: t.action, cancelLabel, danger: true });
+      const yes = await confirm({ title: t.replaceTitle, description: `${fill(t.replaceBody, { language: label(code) })} ${costText(minutesNeeded)}`, confirmLabel: t.action, cancelLabel, danger: true });
       if (!yes) return;
       replace = true;
     } else {
-      const description = usage.unlimited ? fill(t.costUnlimited, { minutes: minutesNeeded }) : fill(t.cost, { minutes: minutesNeeded, remaining: usage.remaining ?? 0 });
-      const yes = await confirm({ title: t.confirmTitle, description, confirmLabel: t.action, cancelLabel, danger: false });
+      const yes = await confirm({ title: t.confirmTitle, description: costText(minutesNeeded), confirmLabel: t.action, cancelLabel, danger: false });
       if (!yes) return;
     }
     setBusy(`start-${code}`);
@@ -105,7 +112,7 @@ export default function CaptionTranscribe({ videoId, spokenLanguage, jobs, minut
         setRefusal({ usage: res.details.usage as CaptionMinutesUsage, minutesNeeded: typeof res.details.minutesNeeded === 'number' ? res.details.minutesNeeded : minutesNeeded });
       } else if (res.error === 'draft_exists' && !replace) {
         // A draft appeared since the list loaded
-        const yes = await confirm({ title: t.replaceTitle, description: fill(t.replaceBody, { language: label(code) }), confirmLabel: t.action, cancelLabel, danger: true });
+        const yes = await confirm({ title: t.replaceTitle, description: `${fill(t.replaceBody, { language: label(code) })} ${costText(minutesNeeded)}`, confirmLabel: t.action, cancelLabel, danger: true });
         if (yes) await start(code, true);
         else await reload();
       } else {
@@ -145,8 +152,12 @@ export default function CaptionTranscribe({ videoId, spokenLanguage, jobs, minut
       </div>
 
       <div data-testid="caption-minutes" className="space-y-1">
-        <p className="text-xs font-medium text-foreground">
-          {usage.unlimited ? t.meterUnlimited : fill(t.meter, { used: usage.monthUsed, limit: usage.monthLimit ?? 0, date: resets })}
+        <p className={`text-xs font-medium ${over > 0 ? 'text-[var(--fanous-color-error-text)]' : 'text-foreground'}`}>
+          {usage.unlimited
+            ? t.meterUnlimited
+            : over > 0
+              ? fill(t.meterOver, { used: usage.monthUsed + over, limit: usage.monthLimit ?? 0, over })
+              : fill(t.meter, { used: usage.monthUsed, limit: usage.monthLimit ?? 0, date: resets })}
           {!usage.unlimited && usage.packsRemaining > 0 && <span className="text-muted-foreground"> · {fill(t.meterPacks, { count: usage.packsRemaining })}</span>}
         </p>
         {!usage.unlimited && usage.monthLimit ? (
@@ -155,16 +166,22 @@ export default function CaptionTranscribe({ videoId, spokenLanguage, jobs, minut
             aria-label={t.meterLabel}
             aria-valuemin={0}
             aria-valuemax={usage.monthLimit}
-            aria-valuenow={Math.min(usage.monthUsed, usage.monthLimit)}
+            aria-valuenow={Math.min(usage.monthUsed + over, usage.monthLimit)}
+            aria-valuetext={over > 0 ? fill(t.meterOver, { used: usage.monthUsed + over, limit: usage.monthLimit, over }) : undefined}
             className="h-2 max-w-md overflow-hidden rounded-full bg-muted-foreground/25"
           >
             <div
-              className={`h-full rounded-full ${(usage.remaining ?? 1) <= 0 ? 'bg-[var(--fanous-color-error-fill)]' : usage.warning ? 'bg-brand-ink' : 'bg-brand'}`}
+              className={`h-full rounded-full ${out || over > 0 ? 'bg-[var(--fanous-color-error-fill)]' : usage.warning ? 'bg-brand-ink' : 'bg-brand'}`}
               style={{ width: `${Math.min(100, (usage.monthUsed / usage.monthLimit) * 100)}%` }}
             />
           </div>
         ) : null}
-        {usage.warning && !usage.unlimited && (
+        {usage.held > 0 && !usage.unlimited && (
+          <p data-testid="caption-minutes-held" className="text-xs text-muted-foreground">
+            {fill(t.meterHeld, { count: usage.held })}
+          </p>
+        )}
+        {usage.warning && !usage.unlimited && !out && (
           <p data-testid="caption-minutes-warning" className="inline-flex items-center gap-1 text-xs font-medium text-brand-ink">
             <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
             {t.meterWarning}
@@ -213,9 +230,9 @@ export default function CaptionTranscribe({ videoId, spokenLanguage, jobs, minut
         </ul>
       )}
 
-      {noPlan || short ? (
+      {out ? (
         <div data-testid="caption-minutes-short" className="space-y-1 rounded-lg border border-border bg-muted p-3 text-sm text-foreground">
-          <p>{noPlan ? t.noPlan : fill(t.notEnough, { minutes: minutesNeeded ?? 0, remaining: usage.remaining ?? 0, date: resets })}</p>
+          <p>{noPlan ? t.noPlan : over > 0 ? fill(t.outOver, { over, date: resets }) : fill(t.outUsed, { date: resets })}</p>
           <a href={`/${lang === 'ar' ? 'ar' : 'en'}/contact`} className="font-medium text-brand-ink underline underline-offset-2 hover:no-underline">
             {t.contact}
           </a>
@@ -247,7 +264,7 @@ export default function CaptionTranscribe({ videoId, spokenLanguage, jobs, minut
             </button>
           </div>
           <p data-testid="caption-transcribe-cost" className="text-xs text-muted-foreground">
-            {minutesNeeded === null ? t.notReady : usage.unlimited ? fill(t.costUnlimited, { minutes: minutesNeeded }) : fill(t.cost, { minutes: minutesNeeded, remaining: usage.remaining ?? 0 })}
+            {minutesNeeded === null ? t.notReady : costText(minutesNeeded)}
           </p>
         </div>
       )}

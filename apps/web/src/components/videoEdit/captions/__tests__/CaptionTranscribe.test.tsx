@@ -38,6 +38,8 @@ const usage = (over: Record<string, unknown> = {}) => ({
   monthLimit: 120,
   monthUsed: 34,
   packsRemaining: 0,
+  overdraft: 0,
+  held: 0,
   remaining: 86,
   warning: false,
   ...over,
@@ -123,31 +125,52 @@ describe('CaptionDraftsPanel: Transcribe', () => {
     await waitFor(() => expect(startCaptionJob).toHaveBeenCalledWith('v1', 'ar', true));
   });
 
-  it('a 402 shows the minutes left and the contact path instead of the button', async () => {
+  it('a 402 (balance 0 or below) shows the minutes and the contact path instead of the button', async () => {
     setup();
     startCaptionJob.mockResolvedValue({
       ok: false,
       status: 402,
       error: 'upgrade_required',
-      details: { entitlement: 'captions.monthlyMinutes', minutesNeeded: 17, usage: usage({ monthUsed: 110, remaining: 10, warning: true }) },
+      details: { entitlement: 'captions.monthlyMinutes', minutesNeeded: 17, usage: usage({ monthUsed: 120, remaining: 0, warning: true }) },
     });
     render(<CaptionDraftsPanel videoId="v1" />);
     fireEvent.click(await screen.findByTestId('caption-transcribe-action'));
     fireEvent.click(await screen.findByRole('button', { name: 'Transcribe' }));
-    expect(await screen.findByTestId('caption-minutes-short')).toHaveTextContent('Transcribing this video takes 17 caption minutes and you have 10 left. Your minutes reset on Dec 1.');
+    expect(await screen.findByTestId('caption-minutes-short')).toHaveTextContent("You've used all of this month's caption minutes. They reset on Dec 1.");
     expect(screen.getByRole('link', { name: 'Ask our team for more minutes' })).toHaveAttribute('href', '/en/contact');
     expect(screen.queryByTestId('caption-transcribe-action')).toBeNull();
-    expect(screen.getByTestId('caption-minutes-warning')).toBeInTheDocument();
+    expect(screen.queryByTestId('caption-minutes-warning')).toBeNull();
   });
 
-  it('a cost above what is left never offers Transcribe; no plan says so', async () => {
-    setup({ minutes: { usage: usage({ remaining: 5 }), minutesNeeded: 17 } });
+  it('a job that costs more than is left still starts, and the confirm says how far over it goes', async () => {
+    setup({ minutes: { usage: usage({ monthUsed: 110, remaining: 10, warning: true }), minutesNeeded: 17 } });
+    render(<CaptionDraftsPanel videoId="v1" />);
+    const overText = "This uses 17 minutes and you have 10 left. You'll go 7 minutes over, and that comes off next month's minutes.";
+    expect(await screen.findByTestId('caption-transcribe-cost')).toHaveTextContent(overText);
+    expect(screen.queryByTestId('caption-minutes-short')).toBeNull();
+    fireEvent.click(screen.getByTestId('caption-transcribe-action'));
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent(overText);
+    fireEvent.click(screen.getByRole('button', { name: 'Transcribe' }));
+    await waitFor(() => expect(startCaptionJob).toHaveBeenCalledWith('v1', 'ar', false));
+  });
+
+  it('a negative balance shows the overdraft in red and stops new starts; no plan says so', async () => {
+    setup({ minutes: { usage: usage({ monthUsed: 120, overdraft: 7, remaining: -7, warning: true }), minutesNeeded: 17 } });
     const { unmount } = render(<CaptionDraftsPanel videoId="v1" />);
-    expect(await screen.findByTestId('caption-minutes-short')).toHaveTextContent('you have 5 left');
+    expect(await screen.findByTestId('caption-minutes')).toHaveTextContent('Caption minutes: 127 / 120 this month · 7 over');
+    expect(screen.getByRole('meter')).toHaveAttribute('aria-valuetext', 'Caption minutes: 127 / 120 this month · 7 over');
+    expect(screen.getByTestId('caption-minutes-short')).toHaveTextContent("You're 7 minutes over this month's caption minutes.");
+    expect(screen.queryByTestId('caption-transcribe-action')).toBeNull();
     unmount();
     setup({ minutes: { usage: usage({ via: 'none', tierMinutes: 0, monthLimit: 0, monthUsed: 0, remaining: 0 }), minutesNeeded: 17 } });
     render(<CaptionDraftsPanel videoId="v1" />);
     expect(await screen.findByTestId('caption-minutes-short')).toHaveTextContent("Your plan doesn't include caption minutes.");
+  });
+
+  it('while a job runs, the meter says its minutes are already counted', async () => {
+    setup({ jobs: [job()], minutes: { usage: usage({ monthUsed: 51, remaining: 69, held: 17 }), minutesNeeded: 17 } });
+    render(<CaptionDraftsPanel videoId="v1" />);
+    expect(await screen.findByTestId('caption-minutes-held')).toHaveTextContent('Includes 17 minutes for the transcription in progress.');
   });
 
   it('unlimited plans see no meter limit and the unlimited cost', async () => {
