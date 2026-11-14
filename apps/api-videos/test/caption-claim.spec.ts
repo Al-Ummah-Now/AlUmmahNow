@@ -79,3 +79,11 @@ describe('claim the review transcript', () => {
 		assert.equal(e.subtitles.read(captionClaimKey('v1', 'ar')), null);
 	});
 });
+
+it('the transcript key comes from the review state, else from the transcoder result', async () => {
+	const { reviewTranscriptKey } = await import('../src/lib/captions/claim');
+	assert.equal(reviewTranscriptKey({ review: { manifestKey: 'review/v1/r1/manifest.json' } }), 'review/v1/r1/transcript.json');
+	assert.equal(reviewTranscriptKey({ r2: { result: { review: { manifestKey: 'review/v1/r2/manifest.json' } } } }), 'review/v1/r2/transcript.json');
+	assert.equal(reviewTranscriptKey({ r2: { result: { review: { manifestKey: 'quran/x.json' } } } }), null);
+	assert.equal(reviewTranscriptKey({}), null);
+});
