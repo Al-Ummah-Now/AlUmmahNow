@@ -268,6 +268,14 @@ describe('CSAM URLs (shared-types)', () => {
 		assert.deepEqual(extractCsamUrls(text), ['images.alummahnow.net/community-posts/chan-synth-01/a.jpg', 'https://media.alummahnow.net/pub/vid-synth-01/r1/thumb.jpg']);
 	});
 
+	it('finds URLs after other text in a token, and stays fast on long runs of - and ,', () => {
+		assert.deepEqual(extractCsamUrls('URL:https://alummahnow.net/video/vid-synth-01, (images.alummahnow.org/x/y.jpg).'), ['https://alummahnow.net/video/vid-synth-01', 'images.alummahnow.org/x/y.jpg']);
+		const started = Date.now();
+		assert.deepEqual(extractCsamUrls('-'.repeat(200_000) + ','.repeat(200_000) + 'x'), []);
+		assert.deepEqual(extractCsamUrls(`alummahnow.net/a${','.repeat(200_000)}x`), [`alummahnow.net/a${','.repeat(200_000)}x`]);
+		assert.ok(Date.now() - started < 1000);
+	});
+
 	it('keeps evidence a year after the report at least, forever under a hold, and never before a report', () => {
 		assert.equal(csamRetainUntil({ reportedAt: null, legalHold: false }, 365), null);
 		assert.equal(csamRetainUntil({ reportedAt: '2026-01-01T00:00:00.000Z', legalHold: true }, 365), null);
