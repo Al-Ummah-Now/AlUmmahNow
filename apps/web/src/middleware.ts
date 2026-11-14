@@ -13,6 +13,7 @@
  * - Access-token refresh ahead of expiry (see lib/auth/middleware-refresh.ts)
  */
 
+import { rootLocaleRedirect } from '@/lib/seo/root-locale';
 import { NextResponse } from 'next/server';
 import type { NextFetchEvent, NextRequest } from 'next/server';
 import { recordServerVisit } from '@/lib/analytics/site-visit';
@@ -133,11 +134,9 @@ function routeRequest(request: NextRequest): NextResponse {
   // Determine environment
   const isDevelopment = process.env.NODE_ENV === 'development';
 
-  // Handle root path - redirect to preferred locale or default
-  if (pathname === '/') {
-    const preferredLocale = getLanguagePreferenceFromCookie(request) || DEFAULT_LOCALE;
-    return NextResponse.redirect(new URL(`/${preferredLocale}`, request.url));
-  }
+  // Root path: deployed, worker.ts answers it before Next runs; this covers `next dev` with the same rule
+  const root = rootLocaleRedirect(request);
+  if (root) return root as NextResponse;
 
   // The old watch URL (/<locale>/video?vid=<id>) moved for good to /<locale>/video/<id>
   const legacyWatch = legacyWatchRedirect(pathname, request.nextUrl.searchParams, getLanguagePreferenceFromCookie(request) || DEFAULT_LOCALE);
