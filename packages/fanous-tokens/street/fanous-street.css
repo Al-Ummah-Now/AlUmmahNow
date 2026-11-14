@@ -5,8 +5,8 @@
      It wraps both ways like a cylinder (left edge meets right, top meets bottom), so it repeats
      with no joint at any width; it is centred on the page and shown at its CSS size by
      image-set(… 2x), never stretched. A theme gives up to 4 variants (--fanous-street-tile-<n>);
-     STREET_VARIANT_SCRIPT (fanous-street.js) picks one per load before first paint
-     (<html data-fanous-street-variant>), and only that one is fetched.
+     the server picks one per response (fanous-street.js pickStreetVariant) and sends it as
+     <html data-fanous-street-variant>, and only that one is fetched.
    Both layers are as tall as the body and scroll with it: no fixed layers, no script, no
    animation, no filters, nothing to repaint on scroll. Opaque cards simply cover the street; page
    wrappers between the body and the cards stay transparent so it shows everywhere else.

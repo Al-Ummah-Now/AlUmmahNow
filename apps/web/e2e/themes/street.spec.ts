@@ -6,7 +6,7 @@ import { applyTheme, mockApi, signIn, THEMES, type Mode } from './harness';
  * pre-made art: a wide image tile of strings and lit lanterns across the full width, repeated
  * behind the whole page (it wraps both ways, shown at 2x) over the distant lights tile, painted by
  * CSS. In Fawanees light and dark, English and Arabic, desktop and phone:
- *   - the page picked one of the theme's tile variants before first paint, the street shows that
+ *   - the server picked one of the theme's tile variants (in the HTML), the street shows that
  *     variant, and no other variant is fetched;
  *   - the street's layers are there, repeated, centred and never stretched, and the tile loads;
  *   - this app keeps the street at the theme's faint opacity (its content spans the page, so the
@@ -97,7 +97,7 @@ for (const lang of LANGS) {
       const l = await layers(page);
       expect(l.street, `${mode}: street tile`).toMatch(TILE);
       expect(l.street.includes('-dark-'), `${mode}: the ${mode} tile`).toBe(mode === 'dark');
-      // The variant picked before first paint is the one shown, and the only one fetched
+      // The variant the server picked is the one shown, and the only one fetched
       expect(l.variant, `${mode}: a variant picked`).toMatch(/^[1-4]$/);
       expect(l.street, `${mode}: the picked variant`).toContain(`-${l.variant}.webp`);
       expect(l.lights, `${mode}: distant lights`).toMatch(/url\(/);
@@ -161,4 +161,22 @@ test('street: no elements, fixed layers or animations of its own; the watch page
       expect(ours, `${path} ${mode}`).toBe(0);
     }
   }
+});
+
+test('street: the server sends the variant in the HTML (random per request, pinned by the test cookie), no inline picker', async ({ page, context, baseURL }, info) => {
+  test.skip(info.project.name !== 'desktop', 'one viewport is enough');
+  await signIn(context, baseURL!);
+  const variantOf = (html: string) => /<html[^>]*\sdata-fanous-street-variant="([^"]*)"/.exec(html)?.[1];
+  const seen = new Set<string>();
+  for (let i = 0; i < 16 && seen.size < 2; i++) {
+    const html = await (await page.request.get('/en')).text();
+    const v = variantOf(html);
+    expect(v, 'server HTML names a variant').toMatch(/^[1-4]$/);
+    expect(html, 'no inline variant script').not.toContain('__AUN_STREET_VARIANT__');
+    seen.add(v!);
+  }
+  expect(seen.size, 'requests get different variants').toBeGreaterThan(1);
+  await context.addCookies([{ name: 'aun_street_variant', value: '3', url: baseURL! }]);
+  for (let i = 0; i < 3; i++) expect(variantOf(await (await page.request.get('/en')).text()), 'pinned').toBe('3');
+  await context.clearCookies({ name: 'aun_street_variant' });
 });

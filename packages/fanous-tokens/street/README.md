@@ -16,6 +16,13 @@ it on (theme package `street` section; Fawanees). Design record: `docs/design/FA
 2. `fanous-street.css` after the theme stylesheet.
 3. Call `startStreet()` once on the client after the page loads (the videos apps use a
    `FanousStreet` component in the root layout).
+4. Send `<html data-fanous-street-variant="N">` in every HTML response, with
+   `N = pickStreetVariant(request.headers.get('cookie'))`: the server picks one of the theme's tile
+   variants at random per response, so the page never swaps after paint and there is no inline
+   script. A dynamic page sets it while rendering (videos web and admin: the root layout). An
+   edge-cached page must not bake one variant into the cached copy: it sets the attribute after the
+   cache read with `HTMLRewriter`, per response. Visual tests pin a variant with the cookie
+   `aun_street_variant=<1-4>` (`STREET_VARIANT_COOKIE`).
 
 Inside this monorepo, import both files by relative path. Other repos vendor them at a pinned
 commit with their `sync-fanous` script, like the theme tokens.

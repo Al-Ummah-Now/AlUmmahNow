@@ -38,8 +38,8 @@ import { FanousStreet } from "@/components/FanousStreet";
 import { EMBED_REQUEST_HEADER } from "@/lib/embed/routes";
 import { getSiteTheme } from "@/lib/theme/site-theme";
 import { MODE_MIGRATE_SCRIPT } from "@/lib/theme/color-mode";
-// The lantern street picks its tile variant for this load before first paint (shared street module)
-import { STREET_VARIANT_SCRIPT } from "../../../../packages/fanous-tokens/street/fanous-street.js";
+// The lantern street's tile variant, picked per request on the server (shared street module)
+import { pickStreetVariant } from "../../../../packages/fanous-tokens/street/fanous-street.js";
 import { VersionSkewProvider } from "@/lib/version-skew/VersionSkewProvider";
 import { ErrorReportingProvider } from "@/lib/errors/ErrorReportingProvider";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
@@ -224,14 +224,15 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
   const reporting = await errorReportingContext();
   // A first visit (no valid choice stored) gets the consent bar in the server HTML, not after hydration (#1205)
   const consentPending = parseConsent((await cookies()).get(CONSENT_COOKIE)?.value) === null;
+  // Lantern street: one of the theme's tile variants at random per request, in the server HTML so it
+  // never swaps after paint (the aun_street_variant cookie pins it for visual tests)
+  const streetVariant = pickStreetVariant(requestHeaders.get('cookie'));
 
   return (
-    <html lang={locale} dir={getTextDirection(locale)} data-theme={theme} suppressHydrationWarning>
+    <html lang={locale} dir={getTextDirection(locale)} data-theme={theme} data-fanous-street-variant={streetVariant} suppressHydrationWarning>
       <head>
         {/* Light / Dark: an old saved "system" becomes the device's mode once (src/lib/theme/color-mode.ts) */}
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: MODE_MIGRATE_SCRIPT }} />
-        {/* Lantern street: one of the theme's tile variants at random per load, set before first paint so it never swaps */}
-        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: STREET_VARIANT_SCRIPT }} />
         {/* No third-party stylesheet or script in the critical path (wiki AUN-SEO, phase 4): icons are
             inline SVG (lucide), fonts are self-hosted (theme/font-faces.css) */}
         <ThemePackageStyle css={themeCss} nonce={nonce} />

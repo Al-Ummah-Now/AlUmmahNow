@@ -9,6 +9,9 @@ import { appIcons } from '@/lib/favicon';
 import { getSiteTheme } from '@/lib/site-theme';
 import { MODE_SCRIPT } from '@/lib/color-mode';
 import { FanousStreet } from '@/components/FanousStreet';
+// The lantern street's tile variant, picked per request on the server (shared street module)
+import { pickStreetVariant } from '../../../../packages/fanous-tokens/street/fanous-street.js';
+import { headers } from 'next/headers';
 
 export async function generateMetadata(): Promise<Metadata> {
   const { t } = await getI18n();
@@ -40,12 +43,15 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const { locale, dir } = await getI18n();
-  const [theme, siteTheme] = await Promise.all([getTheme(), getSiteTheme()]);
+  const [theme, siteTheme, requestHeaders] = await Promise.all([getTheme(), getSiteTheme(), headers()]);
+  // Lantern street: one of the theme's tile variants at random per request, in the server HTML so it
+  // never swaps after paint (the aun_street_variant cookie pins it for visual tests)
+  const streetVariant = pickStreetVariant(requestHeaders.get('cookie'));
 
   // data-theme: the site's theme (the admin follows it). data-color-mode: the admin's light/dark
   // preference; MODE_SCRIPT turns it into the .dark class before first paint (src/lib/color-mode.ts).
   return (
-    <html lang={locale} dir={dir} data-theme={siteTheme.id} data-color-mode={theme ?? undefined} suppressHydrationWarning>
+    <html lang={locale} dir={dir} data-theme={siteTheme.id} data-color-mode={theme ?? undefined} data-fanous-street-variant={streetVariant} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: MODE_SCRIPT }} />
         {siteTheme.css && <style data-site-theme={siteTheme.id} dangerouslySetInnerHTML={{ __html: siteTheme.css }} />}
