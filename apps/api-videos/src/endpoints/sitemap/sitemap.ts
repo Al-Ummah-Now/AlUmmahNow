@@ -39,6 +39,23 @@ export class SitemapSummaryGet extends PublicRoute {
 	}
 }
 
+const SitemapVideoItem = z.object({
+	id: z.string(),
+	title: z.string(),
+	titleLocalized: z.record(z.string()).optional(),
+	description: z.string().optional(),
+	duration: z.number().nullable(),
+	isShort: z.boolean(),
+	isLive: z.boolean(),
+	publishedAt: z.string().nullable(),
+	lastModified: z.string().nullable(),
+	views: z.number(),
+	channelName: z.string().optional(),
+	contentUrl: z.string().optional().describe("Stable public MP4 (480p) for `<video:content_loc>`; public R2 videos only (D-SEO-11), never private or unlisted ones"),
+});
+const SitemapChannelItem = z.object({ id: z.string(), handle: z.string().optional(), name: z.string(), lastModified: z.string().nullable() });
+const SitemapPlaylistItem = z.object({ id: z.string(), title: z.string(), lastModified: z.string().nullable() });
+
 /** GET /api/sitemap/:kind?page=N: one page of public items, oldest first. */
 export class SitemapPageGet extends PublicRoute {
 	schema = {
@@ -50,7 +67,7 @@ export class SitemapPageGet extends PublicRoute {
 			query: z.object({ page: z.coerce.number().int().min(0).max(10_000).optional().describe("0-based page") }),
 		},
 		responses: {
-			"200": { description: "The page", content: { "application/json": { schema: z.object({ items: z.array(z.record(z.unknown())) }) } } },
+			"200": { description: "The page", content: { "application/json": { schema: z.object({ items: z.array(z.union([SitemapVideoItem, SitemapChannelItem, SitemapPlaylistItem])).describe("Videos, channels or playlists, by `kind`") }) } } },
 			"503": { description: "The search index is not available", content: { "application/json": { schema: ResponseError } } },
 		},
 	};
@@ -60,7 +77,7 @@ export class SitemapPageGet extends PublicRoute {
 		const db = (c.env as { SEARCH_DB?: D1Database }).SEARCH_DB;
 		if (!db) return unavailable(c, new Error("SEARCH_DB not bound"));
 		try {
-			const items = await sitemapPage(db as never, params.kind as SitemapKind, query.page ?? 0);
+			const items = await sitemapPage(db as never, params.kind as SitemapKind, query.page ?? 0, (c.env as { MEDIA_PUBLIC_HOST?: string }).MEDIA_PUBLIC_HOST);
 			return c.json({ items }, 200, { "Cache-Control": CACHE });
 		} catch (error) {
 			return unavailable(c, error);

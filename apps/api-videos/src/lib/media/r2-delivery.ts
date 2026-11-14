@@ -15,6 +15,7 @@ import {
 	isVideoMediaPublic,
 	mediaPlayUrl,
 	newMediaRev,
+	publicMp4Path,
 	normaliseDeliverySettings,
 	publishAdminLive,
 	type AdminLiveEvent,
@@ -521,11 +522,8 @@ export async function r2Urls(env: MediaEnv, video: Pick<MediaVideo, 'id' | 'r2'>
  * and stable for the rendition's rev (cached immutable by the CDN). Bunny-only videos: null.
  */
 export function publicMp4Url(env: Pick<MediaEnv, 'MEDIA_PUBLIC_HOST'>, video: Pick<MediaVideo, 'id' | 'r2'> & { isPublic?: boolean; isDeleted?: boolean; isHidden?: boolean }): string | null {
-	const r2 = video.r2;
-	if (!env.MEDIA_PUBLIC_HOST || !r2 || r2.status !== 'ready' || r2.access !== 'pub' || !r2.result?.mp4?.file) return null;
-	if (video.isPublic === false || video.isDeleted === true || video.isHidden === true) return null;
-	if (!/^[A-Za-z0-9._-]+$/.test(r2.result.mp4.file)) return null;
-	return `https://${env.MEDIA_PUBLIC_HOST}/pub/${video.id}/${r2.rev}/${r2.result.mp4.file}`;
+	const path = env.MEDIA_PUBLIC_HOST ? publicMp4Path(video) : null;
+	return path ? `https://${env.MEDIA_PUBLIC_HOST}/${path}` : null;
 }
 
 /**

@@ -4,7 +4,7 @@
  * ready, published, not removed; lib/search, shared-types search/documents.ts), and an item of a
  * hidden channel is left out, the same rule as search. Unlisted and private videos are never here.
  */
-import type { SearchDb } from '@al-ummah/shared-types';
+import { PUBLIC_MP4_PATH, type SearchDb } from '@al-ummah/shared-types';
 
 export const SITEMAP_PAGE_SIZE = 2000;
 export const SITEMAP_KINDS = ['videos', 'channels', 'playlists'] as const;
@@ -48,6 +48,8 @@ export interface SitemapVideo {
 	lastModified: string | null;
 	views: number;
 	channelName?: string;
+	/** The stable public 480p MP4 (D-SEO-11, the watch page's VideoObject contentUrl); public R2 videos only */
+	contentUrl?: string;
 }
 export interface SitemapChannel { id: string; handle?: string; name: string; lastModified: string | null }
 export interface SitemapPlaylist { id: string; title: string; lastModified: string | null }
@@ -65,7 +67,17 @@ function parse(payload: string): Record<string, unknown> {
 const text = (v: unknown) => (typeof v === 'string' && v.trim() ? v : undefined);
 const record = (v: unknown) => (v && typeof v === 'object' ? (v as Record<string, string>) : undefined);
 
-export async function sitemapPage(db: SearchDb, kind: SitemapKind, page: number): Promise<(SitemapVideo | SitemapChannel | SitemapPlaylist)[]> {
+/**
+ * The public MP4 of an indexed video: its `mp4Path` (set only for a ready pub/ rendition with an MP4,
+ * media-delivery publicMp4Path) on the media host. The row itself is already public; the path is
+ * re-checked so a stale or foreign value never becomes a URL.
+ */
+function contentUrl(mediaHost: string | undefined, id: string, path: unknown): string | undefined {
+	if (!mediaHost || typeof path !== 'string' || !PUBLIC_MP4_PATH.test(path) || !path.startsWith(`pub/${id}/`)) return undefined;
+	return `https://${mediaHost}/${path}`;
+}
+
+export async function sitemapPage(db: SearchDb, kind: SitemapKind, page: number, mediaHost?: string): Promise<(SitemapVideo | SitemapChannel | SitemapPlaylist)[]> {
 	const { results } = await db
 		.prepare(`SELECT d.id, d.payload, d.created_at, d.indexed_at, d.duration, d.is_short, d.is_live, d.views ${visibleFrom(kind)} ORDER BY d.rowid LIMIT ? OFFSET ?`)
 		.bind(SITEMAP_PAGE_SIZE, page * SITEMAP_PAGE_SIZE)
@@ -86,6 +98,7 @@ export async function sitemapPage(db: SearchDb, kind: SitemapKind, page: number)
 			lastModified: iso(r.indexed_at),
 			views: Number(r.views ?? 0),
 			channelName: text(p.channelName),
+			contentUrl: contentUrl(mediaHost, r.id, p.mp4Path),
 		};
 	});
 }

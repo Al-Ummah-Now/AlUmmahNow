@@ -112,6 +112,22 @@ describe('search document projection', () => {
 		assert.equal(projectVideo({ id: 'index:recent-videos', title: 'x' }), null);
 	});
 
+	it('carries the public MP4 key for the sitemap only for a ready pub/ rendition with an MP4 (#1200)', () => {
+		const mp4 = { file: 'video.mp4', rung: '480p', width: 854, height: 480, bytes: 1000 };
+		const r2 = (over: object = {}) => ({ status: 'ready', jobId: 'j', rev: 'e29db4ad6918a943', access: 'pub', attempts: 1, queuedAt: 'x', result: { mp4 }, ...over });
+		const path = (video: object) => projectVideo(videoFixture(video))?.payload.mp4Path;
+		const id = videoFixture().id;
+		assert.equal(path({ r2: r2() }), `pub/${id}/e29db4ad6918a943/video.mp4`);
+		assert.equal(path({ r2: r2({ access: 'priv' }) }), undefined);
+		assert.equal(path({ r2: r2({ status: 'transcoding' }) }), undefined);
+		assert.equal(path({ r2: r2({ result: {} }) }), undefined);
+		assert.equal(path({ r2: r2({ rev: '../x' }) }), undefined);
+		assert.equal(path({ r2: r2({ result: { mp4: { ...mp4, file: '../../x.mp4' } } }) }), undefined);
+		assert.equal(path({}), undefined);
+		// Unlisted and private videos have no search row at all
+		assert.equal(projectVideo(videoFixture({ isPublic: false, r2: r2() })), null);
+	});
+
 	it('includes localized titles, tags and bilingual category labels in the text', () => {
 		const row = projectVideo(videoFixture({
 			title: 'Tafsir of Surah Al-Fatiha',

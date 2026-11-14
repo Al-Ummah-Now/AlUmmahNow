@@ -25654,9 +25654,121 @@
                     "items": {
                       "type": "array",
                       "items": {
-                        "type": "object",
-                        "additionalProperties": {}
-                      }
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "titleLocalized": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "string"
+                                }
+                              },
+                              "description": {
+                                "type": "string"
+                              },
+                              "duration": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "isShort": {
+                                "type": "boolean"
+                              },
+                              "isLive": {
+                                "type": "boolean"
+                              },
+                              "publishedAt": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "lastModified": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "views": {
+                                "type": "number"
+                              },
+                              "channelName": {
+                                "type": "string"
+                              },
+                              "contentUrl": {
+                                "type": "string",
+                                "description": "Stable public MP4 (480p) for `<video:content_loc>`; public R2 videos only (D-SEO-11), never private or unlisted ones"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "title",
+                              "duration",
+                              "isShort",
+                              "isLive",
+                              "publishedAt",
+                              "lastModified",
+                              "views"
+                            ]
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "handle": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "lastModified": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "lastModified"
+                            ]
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "lastModified": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "title",
+                              "lastModified"
+                            ]
+                          }
+                        ]
+                      },
+                      "description": "Videos, channels or playlists, by `kind`"
                     }
                   },
                   "required": [

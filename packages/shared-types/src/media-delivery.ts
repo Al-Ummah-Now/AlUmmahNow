@@ -321,6 +321,27 @@ export const MEDIA_PREVIEW = 'preview.webp';
 export const MEDIA_MP4 = 'video.mp4';
 export const MEDIA_MANIFEST = 'manifest.json';
 
+/**
+ * R2 key of a public video's stable MP4 (D-SEO-11), `pub/<id>/<rev>/<file>`, or null. The one rule
+ * behind the watch page's VideoObject contentUrl (api-videos publicMp4Url) and the video sitemap's
+ * `<video:content_loc>` (search payload `mp4Path`): a ready rendition under pub/ whose transcode made
+ * the MP4; never private, unlisted, hidden or removed videos (their media is under priv/ or gone).
+ */
+export function publicMp4Path(video: { id?: unknown; r2?: unknown; isPublic?: unknown; isDeleted?: unknown; isHidden?: unknown }): string | null {
+	const r2 = video.r2 as Partial<VideoR2State> | null | undefined;
+	if (!r2 || typeof r2 !== 'object' || r2.status !== 'ready' || r2.access !== 'pub') return null;
+	if (video.isPublic === false || video.isDeleted === true || video.isHidden === true) return null;
+	const file = r2.result?.mp4?.file;
+	const id = video.id;
+	if (typeof id !== 'string' || typeof r2.rev !== 'string' || typeof file !== 'string') return null;
+	if (!MEDIA_PATH_PART.test(id) || !MEDIA_PATH_PART.test(r2.rev) || !SAFE_FILE.test(file)) return null;
+	return `pub/${id}/${r2.rev}/${file}`;
+}
+
+/** A public MP4 key as publicMp4Path makes it, for re-checking one read back from storage */
+export const PUBLIC_MP4_PATH = /^pub\/[A-Za-z0-9_-]{1,64}\/[A-Za-z0-9_-]{1,64}\/[A-Za-z0-9._-]{1,64}$/;
+const MEDIA_PATH_PART = /^[A-Za-z0-9_-]{1,64}$/;
+
 /** Signed URLs live 6 h, rounded up to the hour, so a URL is stable (cacheable) for an hour. */
 export const MEDIA_TOKEN_TTL_SECONDS = 6 * 60 * 60;
 

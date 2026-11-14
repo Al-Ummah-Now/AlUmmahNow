@@ -31,6 +31,8 @@ export interface SitemapVideo {
   publishedAt: string | null;
   lastModified: string | null;
   channelName?: string;
+  /** Stable public MP4 (api-videos, D-SEO-11): public R2 videos only, absent otherwise */
+  contentUrl?: string;
 }
 export interface SitemapChannel { id: string; handle?: string; name: string; lastModified: string | null }
 export interface SitemapPlaylist { id: string; title: string; lastModified: string | null }
@@ -75,6 +77,18 @@ export function staticSitemapXml(origin: string): string {
   return `${URLSET_OPEN}\n${urls.join('\n')}\n</urlset>\n`;
 }
 
+/** `<video:content_loc>` for a public https MP4 the API vouched for; nothing for anything else */
+function contentLoc(url: string | undefined): string {
+  if (!url) return '';
+  try {
+    const u = new URL(url);
+    if (u.protocol !== 'https:' || !/^\/pub\/[^/]+\/[^/]+\/[^/]+\.mp4$/.test(u.pathname) || u.search) return '';
+  } catch {
+    return '';
+  }
+  return `<video:content_loc>${xml(url)}</video:content_loc>`;
+}
+
 export function videosSitemapXml(origin: string, videos: SitemapVideo[]): string {
   const urls = videos.flatMap((v) =>
     urlEntries(
@@ -91,6 +105,7 @@ export function videosSitemapXml(origin: string, videos: SitemapVideo[]): string
           `<video:thumbnail_loc>${xml(`${origin}/thumb/${encodeURIComponent(v.id)}.jpg`)}</video:thumbnail_loc>`,
           `<video:title>${clean(title.slice(0, 100))}</video:title>`,
           `<video:description>${clean(description)}</video:description>`,
+          contentLoc(v.contentUrl),
           `<video:player_loc>${xml(`${origin}/embed/v/${encodeURIComponent(v.id)}`)}</video:player_loc>`,
           duration ? `<video:duration>${duration}</video:duration>` : '',
           day(v.publishedAt) ? `<video:publication_date>${v.publishedAt}</video:publication_date>` : '',
