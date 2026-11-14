@@ -195,12 +195,31 @@ export function parseCsamUrl(input: string | URL): CsamUrlTarget | null {
   return null;
 }
 
-/** Every URL-looking string in a pasted email or a webhook body (deduplicated, at most 200). */
+const CSAM_URL_START = /^(?:https?:\/\/)?(?:[a-z0-9-]+\.)*alummahnow\.(?:net|org)\/./i;
+const BUNNY_URL_START = /^https?:\/\/vz-[a-z0-9-]+\.b-cdn\.net\/./i;
+const TRAILING_PUNCTUATION = '.,;';
+
+/**
+ * Every URL-looking string in a pasted email or a webhook body (deduplicated, at most 200).
+ * Linear in the input: split on delimiters, then one anchored test per token (an unanchored
+ * pattern with nested quantifiers backtracks on long runs of '-' or ',').
+ */
 export function extractCsamUrls(text: string): string[] {
   const found = new Set<string>();
-  const pattern = /(?:https?:\/\/)?(?:[a-z0-9-]+\.)*alummahnow\.(?:net|org)\/[^\s"'<>)\]]+|https?:\/\/vz-[a-z0-9-]+\.b-cdn\.net\/[^\s"'<>)\]]+/gi;
-  for (const match of text.matchAll(pattern)) {
-    found.add(match[0].replace(/[.,;]+$/, ''));
+  for (const raw of text.slice(0, 1_000_000).split(/[\s"'<>)\]]+/)) {
+    const lower = raw.toLowerCase();
+    // A URL may follow other text in the same token ("URL:https://…", "(alummahnow.net/…")
+    let start = lower.indexOf('http');
+    if (start < 0) {
+      start = lower.indexOf('alummahnow.');
+      if (start < 0) continue;
+      while (start > 0 && /[a-z0-9.-]/.test(lower[start - 1])) start--;
+    }
+    const token = raw.slice(start);
+    if (!CSAM_URL_START.test(token) && !BUNNY_URL_START.test(token)) continue;
+    let end = token.length;
+    while (end > 0 && TRAILING_PUNCTUATION.includes(token[end - 1])) end--;
+    found.add(token.slice(0, end));
     if (found.size >= 200) break;
   }
   return [...found];
