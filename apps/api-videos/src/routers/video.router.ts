@@ -42,7 +42,7 @@ import { SubtitlesList } from '../endpoints/video/subtitlesList';
 import { SubtitlesGet } from '../endpoints/video/subtitlesGet';
 import { SubtitlesDelete } from '../endpoints/video/subtitlesDelete';
 import { SubtitlesSetDefault } from '../endpoints/video/subtitlesSetDefault';
-import { CaptionDraftDelete, CaptionDraftGet, CaptionDraftPublish, CaptionDraftSave, CaptionDraftsList } from '../endpoints/captions/captionDrafts';
+import { CaptionDraftDelete, CaptionDraftGet, CaptionDraftPublish, CaptionDraftSave, CaptionDraftsList, ReviewTranscriptClaim } from '../endpoints/captions/captionDrafts';
 
 // Video scheduling endpoints
 import { VideoScheduleCreate } from '../endpoints/video/scheduleCreate';
@@ -183,6 +183,7 @@ videoRouter.get('/:videoId/captions/drafts/:language', CaptionDraftGet);
 videoRouter.put('/:videoId/captions/drafts/:language', CaptionDraftSave);
 videoRouter.delete('/:videoId/captions/drafts/:language', CaptionDraftDelete);
 videoRouter.post('/:videoId/captions/drafts/:language/publish', CaptionDraftPublish);
+videoRouter.post('/:videoId/review/transcript/claim', ReviewTranscriptClaim);
 
 // ==========================================
 // VIDEO SCHEDULING

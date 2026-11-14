@@ -3,15 +3,16 @@
 /**
  * Caption drafts in Studio's Subtitles section (AUN-CAPTIONS §3.1): each language's draft with
  * where it came from, Quran suggestions left to check and whether it is published, with Edit,
- * Publish and Delete. Renders nothing while the video has no drafts.
+ * Publish and Delete; and, while the video review's automatic transcript is available, the offer
+ * to use it as a draft (#1296). Renders nothing when there is neither.
  */
-import React, { useCallback, useEffect, useState } from 'react';
-import { BookOpen, FilePenLine, Loader2, Trash2, UploadCloud } from 'lucide-react';
+import React, { useCallback, useEffect, useId, useState } from 'react';
+import { AudioLines, BookOpen, FilePenLine, Loader2, Trash2, UploadCloud } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { reportError } from '@/lib/errors/reporter';
 import { SUPPORTED_LANGUAGES } from '@/lib/api/subtitles-types';
-import { deleteCaptionDraft, listCaptionDrafts, publishCaptionDraft, type CaptionDraftSummary } from '@/lib/api/caption-drafts';
+import { claimReviewTranscript, deleteCaptionDraft, listCaptionDrafts, publishCaptionDraft, type CaptionClaim, type CaptionDraftSummary } from '@/lib/api/caption-drafts';
 import CaptionDraftEditor from './CaptionDraftEditor';
 
 export interface CaptionDraftsPanelProps {
@@ -33,6 +34,10 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
+  const [claims, setClaims] = useState<CaptionClaim[]>([]);
+  const [transcript, setTranscript] = useState(false);
+  const [claimLang, setClaimLang] = useState('ar');
+  const claimLangId = useId();
 
   const load = useCallback(async () => {
     const res = await listCaptionDrafts(videoId);
@@ -42,7 +47,42 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
     }
     setFailed(false);
     setDrafts(res.data.drafts);
+    setClaims(res.data.claims ?? []);
+    setTranscript(!!res.data.transcriptAvailable);
   }, [videoId]);
+
+  // While a draft is being prepared, check back until it is there
+  const preparing = claims.some((c) => c.status === 'queued');
+  useEffect(() => {
+    if (!preparing) return;
+    const timer = setInterval(() => void load(), 8000);
+    return () => clearInterval(timer);
+  }, [preparing, load]);
+
+  const claim = async (language: string, replace = false) => {
+    setNotice(null);
+    if (!replace && drafts?.some((d) => d.language === language)) {
+      const yes = await confirm({
+        title: tc.claim.replaceTitle,
+        description: tc.claim.replaceBody.replace('{language}', label(language)),
+        confirmLabel: tc.replace,
+        cancelLabel: t.common?.cancel ?? tc.quran.cancel,
+        danger: true,
+      });
+      if (!yes) return;
+      replace = true;
+    }
+    setBusy(`claim-${language}`);
+    const res = await claimReviewTranscript(videoId, language, replace);
+    setBusy(null);
+    if (!res.ok && res.error !== 'claim_pending') {
+      if (res.error === 'transcript_not_found') setTranscript(false);
+      setNotice(res.error === 'transcript_not_found' ? tc.claim.failed.transcript_gone : tc.claim.requestFailed);
+      if (res.status >= 500 || res.status === 0) reportError(new Error(`caption claim failed: ${res.error}`), { shown: true, status: res.status, extra: { videoId, language } });
+      return;
+    }
+    await load();
+  };
 
   useEffect(() => {
     void load();
@@ -107,7 +147,7 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
   };
 
   if (failed) return <p className="text-sm text-[var(--fanous-color-error-text)]">{tc.loadFailed}</p>;
-  if (!drafts?.length) return dialog ? <>{dialog}</> : null;
+  if (!drafts?.length && !transcript && !claims.length && !notice) return <>{dialog}</>;
 
   return (
     <section aria-labelledby="caption-drafts-title" data-testid="caption-drafts" className="space-y-3">
@@ -122,8 +162,74 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
           {notice}
         </p>
       )}
+      {(transcript || claims.length > 0) && (
+        <div data-testid="caption-claim" className="rounded-xl border border-dashed border-brand-edge bg-brand-soft p-4 space-y-3">
+          <div className="flex items-start gap-3">
+            <AudioLines className="mt-0.5 h-5 w-5 shrink-0 text-brand-ink" aria-hidden />
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-foreground">{tc.claim.title}</p>
+              <p className="text-xs text-muted-foreground">{tc.claim.body}</p>
+            </div>
+          </div>
+          {claims.map((c) =>
+            c.status === 'queued' ? (
+              <p key={c.language} role="status" data-testid="caption-claim-preparing" className="flex items-center gap-2 text-sm text-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                {tc.claim.preparing.replace('{language}', label(c.language))}
+              </p>
+            ) : (
+              <div key={c.language} role="alert" data-testid="caption-claim-failed" className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="text-[var(--fanous-color-error-text)]">
+                  {label(c.language)}: {tc.claim.failed[c.error ?? 'failed']}
+                </span>
+                {transcript && (
+                  <button
+                    type="button"
+                    onClick={() => void claim(c.language, c.error === 'draft_exists')}
+                    disabled={!!busy}
+                    className="inline-flex h-9 items-center rounded-md border border-border bg-background px-3 text-sm text-foreground hover:bg-muted disabled:opacity-50"
+                  >
+                    {c.error === 'draft_exists' ? tc.replace : tc.claim.tryAgain}
+                  </button>
+                )}
+              </div>
+            ),
+          )}
+          {transcript && (
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="flex flex-col gap-1">
+                <label htmlFor={claimLangId} className="text-xs font-medium text-foreground">
+                  {tc.claim.languageLabel}
+                </label>
+                <select
+                  id={claimLangId}
+                  value={claimLang}
+                  onChange={(e) => setClaimLang(e.target.value)}
+                  className="h-10 rounded-md border border-border bg-background px-2 text-sm text-foreground"
+                >
+                  {SUPPORTED_LANGUAGES.map((l) => (
+                    <option key={l.code} value={l.code}>
+                      {lang === 'ar' ? l.nameAr : l.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="button"
+                data-testid="caption-claim-action"
+                onClick={() => void claim(claimLang)}
+                disabled={!!busy || claims.some((c) => c.language === claimLang && c.status === 'queued')}
+                className="inline-flex h-10 items-center gap-1.5 rounded-md bg-brand px-4 text-sm font-medium text-on-brand hover:bg-brand-hover disabled:opacity-50"
+              >
+                {busy?.startsWith('claim-') && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
+                {tc.claim.action}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
       <ul className="grid grid-cols-1 gap-3">
-        {drafts.map((d) => {
+        {(drafts ?? []).map((d) => {
           const isPublished = d.track === 'machine' && d.publishedVersion !== undefined;
           const outdated = isPublished && d.publishedVersion !== d.version;
           const statusLabel = !isPublished ? tc.status.draft : outdated ? tc.status.outdated : tc.status.published;

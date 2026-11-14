@@ -163,6 +163,9 @@ export enum MessageType {
   // Quran Foundation Content Sync of the Quran text and the matcher's index (processor quran/sync.ts),
   // on the videos queue (retry with backoff, then the DLQ). Payload: QuranContentSyncPayload.
   QuranContentSync = 260,
+  // The creator claimed the video review's transcript as a caption draft (#1296; processor
+  // captions/claim.ts): the transcript and the Quran matcher become a draft. Payload: CaptionClaimPayload.
+  CaptionClaimTranscript = 261,
 }
 
 /** Payload of MessageType.QuranContentSync. */
@@ -171,6 +174,19 @@ export interface QuranContentSyncPayload {
   reason: 'cron' | 'admin' | 'bootstrap';
   /** Refetch the snapshot even when QF reports no change */
   rebuild?: boolean;
+}
+
+/** Payload of MessageType.CaptionClaimTranscript. */
+export interface CaptionClaimPayload {
+  videoId: string;
+  /** The language the creator says the speech is in (the transcript was auto-detected) */
+  language: string;
+  /** The review transcript in the private media bucket (`review/…/transcript.json`) */
+  transcriptKey: string;
+  requestedBy: string;
+  /** Replace an existing draft of that language */
+  replace?: boolean;
+  requestedAt: string;
 }
 
 /** Payload of MessageType.ArchiveTitlesErase. */

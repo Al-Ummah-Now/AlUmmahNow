@@ -28,6 +28,21 @@ export interface CaptionsTranslations {
   /** The draft changed elsewhere since it was opened */
   conflict: string;
   reload: string;
+  /** Claiming the video review's automatic transcript as a draft (#1296) */
+  claim: {
+    title: string;
+    body: string;
+    languageLabel: string;
+    action: string;
+    /** {language} */
+    preparing: string;
+    replaceTitle: string;
+    /** {language} */
+    replaceBody: string;
+    failed: { transcript_gone: string; draft_exists: string; failed: string };
+    tryAgain: string;
+    requestFailed: string;
+  };
   editor: {
     /** {language} */
     title: string;
@@ -115,6 +130,22 @@ export const CAPTIONS_EN: CaptionsTranslations = {
   loadFailed: "Couldn't load the caption drafts.",
   conflict: 'This draft was changed in another window. Reload it to continue.',
   reload: 'Reload',
+  claim: {
+    title: 'Automatic transcript',
+    body: 'Your video was transcribed automatically when it was checked. Use the transcript as a caption draft, check it and publish it. Quran in it is shown as the official text once you confirm it.',
+    languageLabel: 'Language spoken in the video',
+    action: 'Use as caption draft',
+    preparing: 'Preparing the {language} draft…',
+    replaceTitle: 'Replace your draft?',
+    replaceBody: 'You already have a {language} draft. Using the automatic transcript replaces it and your edits.',
+    failed: {
+      transcript_gone: 'The automatic transcript is no longer available.',
+      draft_exists: 'A draft in this language already exists.',
+      failed: "Couldn't prepare the draft. Our team has been told.",
+    },
+    tryAgain: 'Try again',
+    requestFailed: "Couldn't start the draft. Try again.",
+  },
   editor: {
     title: 'Edit {language} captions',
     banner: "Viewers don't see this draft until you publish it.",
@@ -194,6 +225,22 @@ export const CAPTIONS_AR: CaptionsTranslations = {
   loadFailed: 'تعذّر تحميل مسودات الترجمة.',
   conflict: 'عُدّلت هذه المسودة في نافذة أخرى. أعد تحميلها للمتابعة.',
   reload: 'إعادة التحميل',
+  claim: {
+    title: 'النص التلقائي',
+    body: 'فُرِّغ مرئيك تلقائيًا عند فحصه. استخدم النص مسودةً للترجمة، وراجعه ثم انشره. ويظهر القرآن فيه بالنص الرسمي بعد أن تؤكده.',
+    languageLabel: 'لغة الكلام في المرئي',
+    action: 'استخدامه مسودةً للترجمة',
+    preparing: 'جارٍ تجهيز مسودة {language}…',
+    replaceTitle: 'استبدال مسودتك؟',
+    replaceBody: 'لديك مسودة {language} بالفعل. استخدام النص التلقائي يستبدلها مع تعديلاتك.',
+    failed: {
+      transcript_gone: 'لم يعد النص التلقائي متاحًا.',
+      draft_exists: 'توجد مسودة بهذه اللغة بالفعل.',
+      failed: 'تعذّر تجهيز المسودة، وأُبلغ فريقنا.',
+    },
+    tryAgain: 'حاول مرة أخرى',
+    requestFailed: 'تعذّر بدء المسودة. حاول مرة أخرى.',
+  },
   editor: {
     title: 'تعديل ترجمة {language}',
     banner: 'لا يرى المشاهدون هذه المسودة حتى تنشرها.',
