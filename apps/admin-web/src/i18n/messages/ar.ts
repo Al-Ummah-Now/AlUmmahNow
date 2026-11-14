@@ -3527,6 +3527,7 @@ const ar: Messages = {
     shiftStart: 'من',
     shiftEnd: 'إلى',
     crossesMidnight: 'تنتهي في اليوم التالي.',
+    endsEndOfDay: 'تنتهي عند منتصف الليل (نهاية اليوم).',
     remove: 'إزالة من الجدول',
     save: 'حفظ',
     saving: 'جارٍ الحفظ…',

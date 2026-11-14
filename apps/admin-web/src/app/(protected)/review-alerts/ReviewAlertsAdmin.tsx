@@ -259,6 +259,7 @@ function RotaSettings({ view }: { view: ReviewAlertsView }) {
                         {/* "24:00" (end of day) shows as 00:00, and 00:00 is stored as 24:00 */}
                         <TimeField label={t('reviewAlerts.shiftEnd')} value={shift.end === '24:00' ? '00:00' : shift.end} onChange={(end) => setShift(entry.userId, i, { ...shift, end: end === '00:00' ? '24:00' : end })} />
                         {crossesMidnight(shift) && <span className="text-xs text-fg-muted">{t('reviewAlerts.crossesMidnight')}</span>}
+                        {shift.end === '24:00' && <span className="text-xs text-fg-muted">{t('reviewAlerts.endsEndOfDay')}</span>}
                         <button type="button" className={secondaryButtonClass} onClick={() => setShift(entry.userId, i, null)}>{t('reviewAlerts.removeShift')}</button>
                       </div>
                     ))}
