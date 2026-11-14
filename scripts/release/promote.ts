@@ -222,6 +222,12 @@ export async function promote(apps: ReleaseApp[], env: ReleaseEnv, message: stri
 	} catch (error) {
 		log(`::warning::could not snapshot the serving builds, skew protection is not checked: ${(error as Error).message}`);
 	}
+	// Every smoke result is printed, passes too, so a green run shows what each check saw
+	const smokeFailures = async (overrides?: Record<string, string>) => {
+		const results = await deps.smoke(env, overrides);
+		for (const r of results) log(`${r.ok ? 'PASS' : 'FAIL'}  ${r.name}${overrides ? ' (candidate at 0%)' : ''}: ${r.detail}`);
+		return failures(results);
+	};
 	const skewFailures = async (overrides?: Record<string, string>) => {
 		const results = (await deps.checkSkew?.(env, snapshots, overrides)) ?? [];
 		for (const r of results) log(`${r.ok ? 'PASS' : 'FAIL'}  ${r.name}${overrides ? ' (candidate at 0%)' : ''}: ${r.detail}`);
@@ -235,7 +241,7 @@ export async function promote(apps: ReleaseApp[], env: ReleaseEnv, message: stri
 		}
 		const overrides = Object.fromEntries(released.map((r) => [r.worker, r.candidate]));
 		await deps.waitForVersions(env, versioned(promoted.map((p) => p.r)), true);
-		const pre = failures(await deps.smoke(env, overrides));
+		const pre = await smokeFailures(overrides);
 		if (pre.length) throw new Error(`pre-traffic smoke failed: ${pre.join('; ')}`);
 		log('Pre-traffic smoke passed on the candidates');
 		// The candidate must reach the version serving now before anyone moves to
@@ -254,7 +260,7 @@ export async function promote(apps: ReleaseApp[], env: ReleaseEnv, message: stri
 			run(a.cwd, ['triggers', 'deploy', ...a.configArgs]);
 		}
 		await deps.waitForVersions(env, versioned(released), false);
-		const post = failures(await deps.smoke(env));
+		const post = await smokeFailures();
 		if (post.length) throw new Error(`post-promote smoke failed: ${post.join('; ')}`);
 		log('Promoted; smoke passed');
 		// Pages opened before the promote must keep loading the old build's chunks.

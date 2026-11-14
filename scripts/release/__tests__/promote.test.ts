@@ -397,6 +397,15 @@ describe('promote: skew protection check', () => {
 		assert.ok(lines.some((l) => l.includes('PASS  skew protection (web) (candidate at 0%)')));
 	});
 
+	it('prints every smoke result, passes included, at 0% and at 100%', async () => {
+		const { run } = fakeRun({ 'api-videos': V(1), web: V(2) });
+		const lines: string[] = [];
+		const smoke: PromoteDeps['smoke'] = async () => [{ name: 'web: robots.txt', ok: true, detail: 'indexable, sitemap listed' }];
+		await promote(twoApps('stage'), 'stage', 'r', { ...deps(run, smoke), log: (l) => lines.push(l) });
+		assert.ok(lines.includes('PASS  web: robots.txt (candidate at 0%): indexable, sitemap listed'));
+		assert.ok(lines.includes('PASS  web: robots.txt: indexable, sitemap listed'));
+	});
+
 	it('a snapshot failure does not block the release', async () => {
 		const { run } = fakeRun({ 'api-videos': V(1), web: V(2) });
 		const lines: string[] = [];
