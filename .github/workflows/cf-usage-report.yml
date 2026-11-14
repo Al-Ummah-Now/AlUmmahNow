@@ -15,6 +15,10 @@ on:
         description: Start of the idle window (ISO time; no test traffic since). Empty = last 24 h
         type: string
         default: ''
+      idle_until:
+        description: End of the idle window (ISO time), e.g. before a release's test traffic. Empty = the last full hour
+        type: string
+        default: ''
   pull_request:
     paths:
       - scripts/ops/usage-report.ts
@@ -45,11 +49,12 @@ jobs:
           DAYS: ${{ inputs.days || '30' }}
           # Tests left the deployed QA on 2026-11-13 ~15:00 UTC (9e620c5db reached QA)
           IDLE_SINCE: ${{ inputs.idle_since || '2026-11-13T16:00:00Z' }}
+          IDLE_UNTIL: ${{ inputs.idle_until }}
         run: |
           set -o pipefail
           node --experimental-strip-types --no-warnings scripts/ops/usage-report.ts --days "$DAYS" | tee -a "$GITHUB_STEP_SUMMARY"
           # The idle window: the run rate with no test traffic, up to the last full hour
-          until=$(date -u +%Y-%m-%dT%H:00:00Z)
+          until=${IDLE_UNTIL:-$(date -u +%Y-%m-%dT%H:00:00Z)}
           echo; echo '---'; echo
           node --experimental-strip-types --no-warnings scripts/ops/usage-report.ts --since "$IDLE_SINCE" --until "$until" | tee -a "$GITHUB_STEP_SUMMARY"
           echo; echo '---'; echo
