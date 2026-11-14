@@ -39,9 +39,12 @@ describe('SignInBanner', () => {
     render(<SignInBanner />);
     const region = screen.getByRole('region', { name: 'Join Al Ummah Now' });
     expect(region).toHaveAttribute('dir', 'ltr');
-    expect(region).toHaveTextContent('Sign in to take part, create and share');
-    expect(screen.getByRole('list', { name: 'What you can do with an account' }).querySelectorAll('li')).toHaveLength(6);
+    expect(screen.getByRole('heading', { name: 'Sign in to take part, and request creator access to share your own videos' })).toBeInTheDocument();
+    expect(screen.getByRole('list', { name: 'What you can do with an account' }).querySelectorAll('li')).toHaveLength(5);
     expect(region).toHaveTextContent('Subscribe');
+    // Uploading is by request during the beta: offered as a request, never as instant access
+    expect(region).toHaveTextContent('Request creator access');
+    expect(region).toHaveTextContent('by request during the beta');
     expect(region).not.toHaveTextContent(/follow/i);
     const signIn = screen.getByRole('button', { name: 'Sign in' });
     expect(signIn).toHaveAttribute('type', 'submit');
@@ -61,6 +64,7 @@ describe('SignInBanner', () => {
     const region = screen.getByRole('region', { name: 'انضم إلى الأمة الآن' });
     expect(region).toHaveAttribute('dir', 'rtl');
     expect(region).toHaveTextContent('مرئيات');
+    expect(region).toHaveTextContent('اطلب صلاحية صانع المحتوى');
     expect(region).not.toHaveTextContent('فيديو');
     expect(screen.getByRole('button', { name: 'تسجيل الدخول' })).toBeInTheDocument();
   });

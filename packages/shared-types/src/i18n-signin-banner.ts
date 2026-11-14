@@ -5,6 +5,9 @@
  *
  * Tone (wiki "Copy Tone Guide"): subscribe to channels, never "follow" them;
  * Arabic says «مرئي / مرئيات», never «فيديو».
+ *
+ * Uploading is by request during the beta (creator tiers, requested on /upgrade): the copy
+ * offers creating and sharing videos through a creator-access request, never as instant access.
  */
 
 export interface SignInBannerTranslations {
@@ -20,8 +23,8 @@ export interface SignInBannerTranslations {
     like: string;
     subscribe: string;
     save: string;
-    create: string;
-    share: string;
+    /** Uploading is requested, not granted on sign-in */
+    creatorAccess: string;
   };
   /** Accessible name of the perks list */
   perksLabel: string;
@@ -33,15 +36,14 @@ export interface SignInBannerTranslations {
 export const SIGN_IN_BANNER_EN: SignInBannerTranslations = {
   regionLabel: 'Join Al Ummah Now',
   eyebrow: 'Join the community',
-  title: 'Sign in to take part, create and share',
-  body: 'Comment, like, subscribe to channels and save videos for later. With an account you can also create your own channel and share your videos.',
+  title: 'Sign in to take part, and request creator access to share your own videos',
+  body: 'Comment, like, subscribe to channels and save videos for later. Uploading is by request during the beta: once signed in, request creator access to create and share your own videos.',
   perks: {
     comment: 'Comment',
     like: 'Like',
     subscribe: 'Subscribe',
     save: 'Save',
-    create: 'Create',
-    share: 'Share',
+    creatorAccess: 'Request creator access',
   },
   perksLabel: 'What you can do with an account',
   signIn: 'Sign in',
@@ -51,15 +53,14 @@ export const SIGN_IN_BANNER_EN: SignInBannerTranslations = {
 export const SIGN_IN_BANNER_AR: SignInBannerTranslations = {
   regionLabel: 'انضم إلى الأمة الآن',
   eyebrow: 'انضم إلى المجتمع',
-  title: 'سجّل الدخول لتشارك وتنشئ وتنشر',
-  body: 'علّق وأعجب واشترك في القنوات واحفظ المرئيات لوقت لاحق. ومع الحساب يمكنك أيضًا إنشاء قناتك ونشر مرئياتك.',
+  title: 'سجّل الدخول لتشارك، واطلب صلاحية صانع المحتوى لتنشر مرئياتك',
+  body: 'علّق وأعجب واشترك في القنوات واحفظ المرئيات لوقت لاحق. الرفع بطلب خلال المرحلة التجريبية: بعد تسجيل الدخول اطلب صلاحية صانع المحتوى لتنشئ مرئياتك وتنشرها.',
   perks: {
     comment: 'تعليق',
     like: 'إعجاب',
     subscribe: 'اشتراك',
     save: 'حفظ',
-    create: 'إنشاء',
-    share: 'نشر',
+    creatorAccess: 'اطلب صلاحية صانع المحتوى',
   },
   perksLabel: 'ما يمكنك فعله بالحساب',
   signIn: 'تسجيل الدخول',

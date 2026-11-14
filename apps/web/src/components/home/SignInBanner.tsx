@@ -2,7 +2,8 @@
 
 /**
  * The invitation at the top of the videos home page for signed-out visitors: sign in to
- * comment, like, subscribe and save, and to create a channel and share videos.
+ * comment, like, subscribe and save, and request creator access to share their own videos
+ * (uploading is by request during the beta; never promised as instant).
  *
  * - Signed in: nothing, and nothing flashes. The viewer is known on the server
  *   (AuthProvider in the root layout), so the server HTML already has or lacks the banner.
@@ -14,7 +15,7 @@
  */
 
 import React, { useState, useSyncExternalStore } from 'react';
-import { ArrowRight, Bell, Bookmark, Clapperboard, MessageCircle, Share2, ThumbsUp, X } from 'lucide-react';
+import { ArrowRight, Bell, Bookmark, Clapperboard, MessageCircle, ThumbsUp, X } from 'lucide-react';
 import { login } from '@/lib/actions';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useOptionalAuth } from '@/components/AuthProvider/authContext';
@@ -26,8 +27,8 @@ const PERKS = [
   { key: 'like', Icon: ThumbsUp },
   { key: 'subscribe', Icon: Bell },
   { key: 'save', Icon: Bookmark },
-  { key: 'create', Icon: Clapperboard },
-  { key: 'share', Icon: Share2 },
+  // Uploading is by request during the beta (creator tiers): the chip says so
+  { key: 'creatorAccess', Icon: Clapperboard },
 ] as const;
 
 /** A lantern drawn in the theme's colours: the site's mark, purely decorative */
