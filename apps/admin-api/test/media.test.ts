@@ -8,6 +8,8 @@ import assert from 'node:assert/strict';
 import { Hono } from 'hono';
 import mediaRouter, { MEDIA_SETTINGS_AUDIT_KEY, MEDIA_VIDEO_AUDIT_PREFIX, parseSettingsInput } from '../src/routers/media.router';
 import { hasPermission } from '../src/lib/roles';
+import { SERVICE_RETRIES } from '../src/lib/errors-actions';
+import { DEFAULT_MEDIA_SETTINGS } from '@al-ummah/shared-types';
 import { sqliteD1 } from './d1-sqlite';
 
 const ID = '912859ed-e618-4d04-8438-874a74a251dd';
@@ -148,5 +150,62 @@ describe('parseSettingsInput', () => {
     assert.equal(parseSettingsInput({ r2Percent: 12.5 }).ok, false);
     assert.equal(parseSettingsInput({ assign: 'user' }).ok, false);
     assert.equal(parseSettingsInput({ transcode: 'yes' }).ok, false);
+  });
+});
+
+describe('/api/media/providers (provider settings)', () => {
+  const PROVIDERS = { ...DEFAULT_MEDIA_SETTINGS };
+  const answer: Answer = (path, method, body) => {
+    if (path === '/internal/media/providers') return ok(method === 'PUT' ? { settings: body.settings, problems: [] } : { settings: PROVIDERS, health: null, problems: [] });
+    if (path === '/internal/media/health/check') return ok({ providers: {}, checkedAt: 'x' });
+    return ok({});
+  };
+
+  it('a change is audited (old and new settings) and forwarded with the admin as the actor', async () => {
+    const { req, calls, audit } = setup(['Admin'], answer);
+    const next = { ...PROVIDERS, playback: { ...PROVIDERS.playback, order: ['r2', 'bunny'] } };
+    const res = await req('/api/media/providers', send('PUT', { settings: next, actorId: 'spoofed' }));
+    assert.equal(res.status, 200);
+    const put = calls.find((c) => c.method === 'PUT')!;
+    assert.equal(put.body.actorId, 'admin-1');
+    assert.deepEqual(put.body.settings.playback.order, ['r2', 'bunny']);
+    const rows = await audit();
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].key, MEDIA_SETTINGS_AUDIT_KEY);
+    assert.deepEqual(JSON.parse(rows[0].old_value).playback.order, ['bunny']);
+    assert.deepEqual(JSON.parse(rows[0].new_value).playback.order, ['r2', 'bunny']);
+  });
+
+  it('unsafe settings are refused with their problems before reaching api-videos', async () => {
+    const { req, calls } = setup(['Admin'], answer);
+    const res = await req('/api/media/providers', send('PUT', { settings: { ...PROVIDERS, providers: { bunny: { enabled: false }, r2: { enabled: false } } } }));
+    assert.equal(res.status, 400);
+    const body = (await res.json()) as { problems: { problem: string }[] };
+    assert.ok(body.problems.some((p) => p.problem === 'no_provider_enabled'));
+    assert.equal(calls.length, 0);
+    assert.equal((await req('/api/media/providers', send('PUT', { settings: 'r2' }))).status, 400);
+  });
+
+  it('api-videos refusing passes its problems through and leaves no audit row', async () => {
+    const refusing: Answer = (path, method) =>
+      method === 'PUT' ? { status: 400, json: { success: false, error: 'Settings refused', problems: [{ problem: 'ingest_not_playable' }] } } : answer(path, method, null);
+    const { req, audit } = setup(['Admin'], refusing);
+    const res = await req('/api/media/providers', send('PUT', { settings: PROVIDERS }));
+    assert.equal(res.status, 400);
+    assert.deepEqual(((await res.json()) as { problems: unknown }).problems, [{ problem: 'ingest_not_playable' }]);
+    assert.equal((await audit()).length, 0);
+  });
+
+  it('health check is forwarded; moderators get neither route', async () => {
+    const { req, calls } = setup(['Admin'], answer);
+    assert.equal((await req('/api/media/health/check', { method: 'POST' })).status, 200);
+    assert.equal(calls[0]!.path, '/internal/media/health/check');
+    const mod = setup(['Moderator'], answer);
+    assert.equal((await mod.req('/api/media/providers')).status, 403);
+    assert.equal((await mod.req('/api/media/health/check', { method: 'POST' })).status, 403);
+  });
+
+  it('the Errors page "Check now" may call the health check', () => {
+    assert.ok(SERVICE_RETRIES['api-videos']!.paths.includes('/internal/media/health/check'));
   });
 });

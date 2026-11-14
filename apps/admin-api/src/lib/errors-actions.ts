@@ -34,8 +34,9 @@ export const SERVICE_RETRIES: Record<string, { binding: keyof AdminBindings; pat
   processor: { binding: 'PROCESSOR', paths: ['/dlq/replay', '/internal/quran/sync', '/internal/captions/claim'] },
   scheduler: { binding: 'SCHEDULER', paths: ['/failed/retry'] },
   // A new upload that could not be added to its playlist (api-videos lib/playlistUploadAdds.ts);
-  // a failed transcription job, run again free of charge (api-videos lib/captions/jobs.ts)
-  'api-videos': { binding: 'VIDEOS', paths: ['/internal/playlist-adds/retry', '/internal/captions/jobs/retry'] },
+  // a failed transcription job, run again free of charge (api-videos lib/captions/jobs.ts); a media
+  // provider turned unhealthy: "Check now" runs a health pass (api-videos lib/media/health.ts)
+  'api-videos': { binding: 'VIDEOS', paths: ['/internal/playlist-adds/retry', '/internal/captions/jobs/retry', '/internal/media/health/check'] },
 };
 
 export const BUILTIN_RETRIES: Record<string, (env: AdminBindings, args: Record<string, string>, attempt: string) => Promise<RetryOutcome>> = {

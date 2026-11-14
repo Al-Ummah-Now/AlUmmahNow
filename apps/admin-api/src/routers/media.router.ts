@@ -12,13 +12,17 @@
  *   GET  /qoe-live?minutes= playback quality per provider per minute (last 60 by default) and plays now
  *   GET  /jobs?status=&limit=  recent R2 transcode jobs
  *   POST /retry { ids }     transcode again (audited per video, key media:video:<id>)
- *   GET  /settings          the delivery switch
+ *   GET  /settings          the legacy delivery switch view (old admin builds)
  *   PUT  /settings          change it (audited, key media:delivery, old and new value)
+ *   GET  /providers         provider settings, health and problems (docs/media-delivery/PROVIDERS.md)
+ *   PUT  /providers { settings }  replace them (audited, key media:delivery); 400 { problems } when unsafe
+ *   POST /health/check      one provider health pass now
  *
  * Every change writes its audit row (site_settings_log) before calling
  * api-videos and removes it again if the call fails, so no change goes unaudited.
  */
 import { Hono, type Context } from 'hono';
+import { normaliseMediaSettings, settingsProblems } from '@al-ummah/shared-types';
 import { hasPermission, normalizeRoles } from '../lib/roles';
 import { callVideosInternal, ProcessingApiError, type ProcessingClientEnv } from '../lib/processing/videosProcessing';
 import { logger } from '../lib/logger';
@@ -48,7 +52,7 @@ app.use('*', async (c, next) => {
 
 app.onError((error, c) => {
   if (error instanceof ProcessingApiError) {
-    return c.json({ success: false, code: 'videos_error', error: error.message }, error.status as 400);
+    return c.json({ success: false, code: 'videos_error', error: error.message, ...(error.problems ? { problems: error.problems } : {}) }, error.status as 400);
   }
   logger.error('[Media] Request failed', { path: c.req.path, error: error instanceof Error ? error.message : String(error) });
   return c.json({ success: false, code: 'internal_error', error: 'Internal error' }, 500);
@@ -160,6 +164,40 @@ app.put('/settings', async (c) => {
     callVideosInternal(c.env, '/internal/media/settings', { method: 'PUT', json: { ...parsed.value, actorId: actorOf(c) } }),
   );
   logger.info('[Media] Delivery settings changed', { actorId: actorOf(c), ...parsed.value });
+  return c.json({ success: true, result });
+});
+
+app.get('/providers', async (c) => {
+  const result = await callVideosInternal(c.env, '/internal/media/providers');
+  return c.json({ success: true, result });
+});
+
+/**
+ * Checks a provider settings document before it reaches api-videos (which checks again): an object,
+ * and nothing that leaves new uploads unplayable or uses a provider that is off.
+ */
+export function parseProvidersInput(body: unknown): { ok: true; value: Record<string, unknown> } | { ok: false; error: string; problems?: unknown } {
+  const settings = (body as { settings?: unknown } | null)?.settings;
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return { ok: false, error: 'settings must be an object' };
+  if (JSON.stringify(settings).length > 64_000) return { ok: false, error: 'settings are too large' };
+  const problems = settingsProblems(normaliseMediaSettings({ ...(settings as object), version: 2 }));
+  if (problems.length) return { ok: false, error: 'These settings would leave videos unplayable', problems };
+  return { ok: true, value: settings as Record<string, unknown> };
+}
+
+app.put('/providers', async (c) => {
+  const parsed = parseProvidersInput(await c.req.json().catch(() => null));
+  if ('error' in parsed) return c.json({ success: false, code: 'bad_request', error: parsed.error, ...(parsed.problems ? { problems: parsed.problems } : {}) }, 400);
+  const current = await callVideosInternal<{ settings: Record<string, unknown> }>(c.env, '/internal/media/providers');
+  const result = await audited(c, [{ key: MEDIA_SETTINGS_AUDIT_KEY, oldValue: current.settings, newValue: parsed.value }], () =>
+    callVideosInternal(c.env, '/internal/media/providers', { method: 'PUT', json: { settings: parsed.value, actorId: actorOf(c) } }),
+  );
+  logger.info('[Media] Provider settings changed', { actorId: actorOf(c) });
+  return c.json({ success: true, result });
+});
+
+app.post('/health/check', async (c) => {
+  const result = await callVideosInternal(c.env, '/internal/media/health/check', { method: 'POST', json: {} });
   return c.json({ success: true, result });
 });
 

@@ -28,6 +28,7 @@
 --   apps/api-videos/migrations/search/0032_caption_minutes.sql
 --   apps/api-videos/migrations/search/0033_caption_jobs.sql
 --   apps/api-videos/migrations/search/0035_caption_overdraft.sql
+--   apps/api-videos/migrations/search/0036_media_providers.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -56,6 +57,8 @@ CREATE TABLE live_sessions (id TEXT PRIMARY KEY, stream_id TEXT NOT NULL, channe
 CREATE TABLE live_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_by TEXT, updated_at TEXT) WITHOUT ROWID;
 CREATE TABLE media_jobs (video_id TEXT PRIMARY KEY, job_id TEXT NOT NULL, status TEXT NOT NULL, access TEXT NOT NULL, reason TEXT, attempts INTEGER NOT NULL DEFAULT 0, queued_at TEXT NOT NULL, started_at TEXT, ready_at TEXT, failed_at TEXT, error TEXT, duration_seconds REAL, bytes INTEGER, objects INTEGER, rungs TEXT, container_seconds INTEGER, instance_type TEXT, bunny_ready_at TEXT, updated_at TEXT NOT NULL);
 CREATE TABLE media_originals (video_id TEXT PRIMARY KEY, upload_id TEXT NOT NULL, bytes INTEGER NOT NULL, parts INTEGER NOT NULL, completed_at TEXT NOT NULL, deleted_at TEXT);
+CREATE TABLE media_provider_health (provider TEXT NOT NULL, minute TEXT NOT NULL, failures INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (provider, minute));
+CREATE TABLE media_provider_refs (provider TEXT NOT NULL, ref TEXT NOT NULL, video_id TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY (provider, ref));
 CREATE TABLE playback_fallback_daily (day TEXT NOT NULL, requested TEXT NOT NULL, actual TEXT NOT NULL, reason TEXT NOT NULL, server_fallbacks INTEGER NOT NULL DEFAULT 0, qoe_sessions INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, requested, actual, reason));
 CREATE TABLE playback_qoe_daily (day TEXT NOT NULL, provider TEXT NOT NULL, device TEXT NOT NULL, country TEXT NOT NULL, sessions INTEGER NOT NULL DEFAULT 0, started INTEGER NOT NULL DEFAULT 0, startup_ms_sum INTEGER NOT NULL DEFAULT 0, rebuffers INTEGER NOT NULL DEFAULT 0, rebuffer_ms INTEGER NOT NULL DEFAULT 0, watch_ms INTEGER NOT NULL DEFAULT 0, kbps_watch_s REAL NOT NULL DEFAULT 0, peak_kbps_sum INTEGER NOT NULL DEFAULT 0, switches INTEGER NOT NULL DEFAULT 0, errors INTEGER NOT NULL DEFAULT 0, fallbacks INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, provider, device, country));
 CREATE TABLE privacy_footprint_sigs (kind TEXT NOT NULL, target_id TEXT NOT NULL, sig TEXT NOT NULL, PRIMARY KEY (kind, target_id)) WITHOUT ROWID;
@@ -141,6 +144,7 @@ CREATE INDEX idx_live_sessions_stream ON live_sessions (stream_id, created_at);
 CREATE INDEX idx_media_jobs_queued ON media_jobs (queued_at);
 CREATE INDEX idx_media_jobs_status ON media_jobs (status, updated_at);
 CREATE INDEX idx_media_originals_due ON media_originals (deleted_at, completed_at);
+CREATE INDEX idx_media_provider_refs_video ON media_provider_refs (video_id);
 CREATE INDEX idx_privacy_footprints_target ON privacy_footprints (kind, target_id);
 CREATE INDEX idx_search_channels_created ON search_channels (visible, created_at);
 CREATE INDEX idx_search_channels_indexed ON search_channels (indexed_at);

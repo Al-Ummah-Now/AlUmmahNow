@@ -13,20 +13,26 @@
  *                                          ?only=live returns just `live` (the Delivery page polls it)
  *   GET  /internal/media/qoe-live?minutes= playback quality per provider per minute (default the last
  *                                          60) and the plays now, from the realtime worker's live object
- *   GET  /internal/media/settings          delivery switch
- *   PUT  /internal/media/settings          { mode, r2Percent, assign, transcode, actorId }
+ *   GET  /internal/media/settings          the legacy delivery switch view of the provider settings
+ *   PUT  /internal/media/settings          { mode, r2Percent, assign, transcode, actorId } (kept for old admin builds)
+ *   GET  /internal/media/providers         { settings, health, problems } provider settings (docs/media-delivery/PROVIDERS.md)
+ *   PUT  /internal/media/providers         { settings, actorId } → 400 { problems } when unsafe
+ *   POST /internal/media/health/check      one provider health pass now (the Errors page "Check now")
  */
 import { Hono } from 'hono';
-import { isMediaRev, isMediaVideoId, type DeliverySettings, type Mp4JobEvent, type TranscodeJobEvent } from '@al-ummah/shared-types';
+import { isMediaRev, isMediaVideoId, settingsProblems, type DeliverySettings, type ErrorReporterEnv, type ExecutionContextLike, type Mp4JobEvent, type TranscodeJobEvent } from '@al-ummah/shared-types';
 import R2Repository from '../../lib/r2Repo';
 import { pushMediaLive, type MediaVideo } from '../../lib/media/r2-delivery';
 import { readQoeLive } from '../../lib/media/qoe-live';
+import { readHealth, runHealthCheck } from '../../lib/media/health';
+import { MediaSettingsError, readMediaSettings, saveMediaSettings } from '../../lib/media/settings';
 import type { LibraryHints } from '../../lib/bunny/libraries';
 import { applyJobEvent, applyMp4Event, enqueueTranscode, readDeliverySettings, sourceCandidates, writeDeliverySettings, type MediaEnv } from '../../lib/media/r2-delivery';
 
 const MAX_IDS = 50;
 
-type Env = MediaEnv & {
+type Env = MediaEnv & ErrorReporterEnv & {
+	BUNNY_SIGN_URLS?: string;
 	/** Max concurrent transcodes: max_instances of apps/media's transcoder container ("4" production, "2" stage and QA) */
 	MEDIA_MAX_TRANSCODES?: string;
 };
@@ -191,7 +197,7 @@ export function createMediaInternalRouter() {
 			.bind(since.slice(0, 10))
 			.all()
 			.catch(() => ({ results: [] }));
-		return c.json({ success: true, result: { days, jobs, qoe: qoe.results ?? [], costs: costs.results ?? [], fallbacks: fallbacks.results ?? [], live, settings: await readDeliverySettings(c.env) } });
+		return c.json({ success: true, result: { days, jobs, qoe: qoe.results ?? [], costs: costs.results ?? [], fallbacks: fallbacks.results ?? [], live, settings: await readDeliverySettings(c.env), providers: await readMediaSettings(c.env), health: await readHealth(c.env) } });
 	});
 
 	app.get('/settings', async (c) => c.json({ success: true, result: await readDeliverySettings(c.env, true) }));
@@ -200,7 +206,42 @@ export function createMediaInternalRouter() {
 		const body = (await c.req.json().catch(() => null)) as (Partial<DeliverySettings> & { actorId?: string }) | null;
 		if (!body || typeof body.actorId !== 'string' || !body.actorId) return c.json({ success: false, error: 'actorId is required' }, 400);
 		const { actorId, ...input } = body;
-		return c.json({ success: true, result: await writeDeliverySettings(c.env, input, actorId) });
+		try {
+			return c.json({ success: true, result: await writeDeliverySettings(c.env, input, actorId) });
+		} catch (error) {
+			if (error instanceof MediaSettingsError) return c.json({ success: false, error: error.message, problems: error.problems }, 400);
+			throw error;
+		}
+	});
+
+	app.get('/providers', async (c) => {
+		const settings = await readMediaSettings(c.env, true);
+		return c.json({ success: true, result: { settings, health: await readHealth(c.env, true), problems: settingsProblems(settings) } });
+	});
+
+	app.put('/providers', async (c) => {
+		const body = (await c.req.json().catch(() => null)) as { settings?: unknown; actorId?: string } | null;
+		if (!body || typeof body.actorId !== 'string' || !body.actorId) return c.json({ success: false, error: 'actorId is required' }, 400);
+		if (!body.settings || typeof body.settings !== 'object') return c.json({ success: false, error: 'settings is required' }, 400);
+		try {
+			const settings = await saveMediaSettings(c.env, body.settings, body.actorId);
+			return c.json({ success: true, result: { settings, health: await readHealth(c.env), problems: [] } });
+		} catch (error) {
+			if (error instanceof MediaSettingsError) return c.json({ success: false, error: error.message, problems: error.problems }, 400);
+			throw error;
+		}
+	});
+
+	app.post('/health/check', async (c) => {
+		let ctx: ExecutionContextLike | undefined;
+		try {
+			ctx = c.executionCtx;
+		} catch {
+			ctx = undefined;
+		}
+		const snapshot = await runHealthCheck(c.env, ctx);
+		if (!snapshot) return c.json({ success: false, error: 'The health check failed; see the logs' }, 500);
+		return c.json({ success: true, result: snapshot });
 	});
 
 	return app;

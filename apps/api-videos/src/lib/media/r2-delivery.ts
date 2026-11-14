@@ -11,12 +11,10 @@
  * Bunny is never touched here: every Bunny path works exactly as before.
  */
 import {
-	DEFAULT_DELIVERY_SETTINGS,
 	isVideoMediaPublic,
 	mediaPlayUrl,
 	newMediaRev,
 	publicMp4Path,
-	normaliseDeliverySettings,
 	publishAdminLive,
 	type AdminLiveEvent,
 	reportNeedsAction,
@@ -43,6 +41,7 @@ import { queueReviewScan, reviewExtractionFor } from '../review/scan';
 import { getSecret } from '../env-helpers';
 import { fetchBunnyVideo } from '../processing/loop';
 import { deleteOriginal } from './originals';
+import { clearMediaSettingsCache, readLegacyDeliverySettings, writeLegacyDeliverySettings } from './settings';
 import { bunnyLibraryForVideo, type BunnyLibrariesEnv, type LibraryHints } from '../bunny/libraries';
 import { logger } from '../logger';
 import R2Repository from '../r2Repo';
@@ -153,39 +152,24 @@ export function isMediaMoveMessage(body: unknown): body is MediaMoveMessage {
 	return !!b && b.kind === MEDIA_MOVE_KIND && typeof b.videoId === 'string' && (b.to === 'pub' || b.to === 'priv');
 }
 
-export const SETTINGS_KEY = 'ops/media-delivery.json';
+export { SETTINGS_KEY } from './settings';
 const ZONE_ID = 'fada86a0f215bda23dbe19de7226b49f';
 
 // ---------------------------------------------------------------------------
-// Settings (admin, per environment): global_settings/ops/media-delivery.json
+// Settings: provider settings (./settings.ts). These two keep the legacy delivery-switch shape for
+// code and clients that only know it; they read and write the same object.
 // ---------------------------------------------------------------------------
 
-let settingsCache: { at: number; value: DeliverySettings } | null = null;
-const SETTINGS_TTL_MS = 30_000;
-
 export function clearDeliverySettingsCache(): void {
-	settingsCache = null;
+	clearMediaSettingsCache();
 }
 
 export async function readDeliverySettings(env: Pick<MediaEnv, 'global_settings'>, fresh = false): Promise<DeliverySettings> {
-	if (!fresh && settingsCache && Date.now() - settingsCache.at < SETTINGS_TTL_MS) return settingsCache.value;
-	let value = DEFAULT_DELIVERY_SETTINGS;
-	try {
-		const obj = await env.global_settings?.get(SETTINGS_KEY);
-		if (obj) value = normaliseDeliverySettings(await obj.json<Partial<DeliverySettings>>());
-	} catch (error) {
-		logger.warn('[Media] Could not read delivery settings; using defaults', { error: error instanceof Error ? error.message : String(error) });
-	}
-	settingsCache = { at: Date.now(), value };
-	return value;
+	return readLegacyDeliverySettings(env, fresh);
 }
 
 export async function writeDeliverySettings(env: Pick<MediaEnv, 'global_settings'>, input: Partial<DeliverySettings>, actorId: string): Promise<DeliverySettings> {
-	if (!env.global_settings) throw new Error('global_settings is not bound');
-	const value = normaliseDeliverySettings({ ...(await readDeliverySettings(env, true)), ...input, updatedAt: new Date().toISOString(), updatedBy: actorId });
-	await env.global_settings.put(SETTINGS_KEY, JSON.stringify(value), { httpMetadata: { contentType: 'application/json' } });
-	settingsCache = { at: Date.now(), value };
-	return value;
+	return writeLegacyDeliverySettings(env, input, actorId);
 }
 
 // ---------------------------------------------------------------------------
