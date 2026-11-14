@@ -18,6 +18,7 @@ import reviewRouter from './routers/review.router';
 import { purgeReviewMedia, reviewStats } from './lib/review/queue';
 import { writeReviewQueueMinutes } from '@al-ummah/shared-types';
 import { scheduledReportMetaSync } from './lib/moderation/reportMeta';
+import { errorsPipelineSink, syncCostAlerts } from './lib/opsCost';
 import invitesRouter from './routers/invites.router';
 import sitesRouter from './routers/sites.router';
 import { staffSiteDomainsRouter, studioSiteDomainsRouter } from './routers/siteDomains.router';
@@ -251,7 +252,8 @@ app.get('/health', (c) => {
  *   - 03:17 UTC daily: retention of error data and old source maps (lib/errors-retention.ts)
  *   - hourly (the 5-minute tick at the top of each UTC hour): soft-delete cleanup, the only hard
  *     delete of contact messages, themes and creator tiers (lib/trash.ts); on QA/stage also the
- *     admin E2E suite's old reports (lib/report-stats.ts purgeE2eReports)
+ *     admin E2E suite's old reports (lib/report-stats.ts purgeE2eReports); spend alerts: the $500 budget
+ *     at 50/80/100% and a projected overrun (production), daily spend jumps per env and driver (lib/opsCost.ts)
  */
 async function scheduled(controller: ScheduledController, env: AdminBindings, ctx: ExecutionContext): Promise<void> {
   if (controller.cron === '17 3 * * *') {
@@ -271,6 +273,11 @@ async function scheduled(controller: ScheduledController, env: AdminBindings, ct
       purgeE2eReports(env.REPORTS_DB as never, env.ENVIRONMENT)
         .then((purged) => { if (purged > 0) logger.info('[Reports] Purged E2E reports', { purged }); })
         .catch((error) => logger.error('[Reports] E2E report purge failed', { error: String(error) })),
+    );
+    ctx.waitUntil(
+      syncCostAlerts(env as never, errorsPipelineSink(env), new Date(controller.scheduledTime))
+        .then(() => undefined)
+        .catch((error) => logger.error('[OpsCost] Spend alert check failed', { error: String(error) })),
     );
   }
   ctx.waitUntil(scheduledReportMetaSync(env as never));

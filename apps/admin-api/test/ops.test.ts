@@ -10,6 +10,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { Hono } from 'hono';
 import opsRouter, { MONTHLY_CAP_USD, parseThresholdInput, projectMonth, THRESHOLD_AUDIT_PREFIX } from '../src/routers/ops.router';
+import { budgetStatus, findSpikes, idleProjection, levelOf, syncCostAlerts, wantedAlerts, PLAN_BASE_USD, type AlertSink, type ResourceDay } from '../src/lib/opsCost';
 import { hasPermission } from '../src/lib/roles';
 import { sqliteD1 } from './d1-sqlite';
 
@@ -31,7 +32,10 @@ function costsD1(withTables = true): D1Database {
     all: async () => exec(sql, args),
     run: async () => exec(sql, args),
   });
-  return { prepare: (sql: string) => st(sql) } as unknown as D1Database;
+  return {
+    prepare: (sql: string) => st(sql),
+    batch: async (list: { run: () => Promise<unknown> }[]) => Promise.all(list.map((x) => x.run())),
+  } as unknown as D1Database;
 }
 
 const hoursAgo = (h: number) => {
@@ -120,7 +124,7 @@ describe('/api/ops reads', () => {
   it('rejects unknown env, kind, metric, range and resource', async () => {
     const { req } = setup(['Admin']);
     assert.equal((await req('/api/ops/overview?env=dev')).status, 400);
-    assert.equal((await req('/api/ops/series?env=qa&kind=kv&metric=requests')).status, 400);
+    assert.equal((await req('/api/ops/series?env=qa&kind=lambda&metric=requests')).status, 400);
     assert.equal((await req('/api/ops/series?env=qa&kind=worker&metric=requests;DROP')).status, 400);
     assert.equal((await req('/api/ops/series?env=qa&kind=worker&metric=requests&range=1y')).status, 400);
     assert.equal((await req("/api/ops/series?env=qa&kind=worker&metric=requests&resource=x'")).status, 400);
@@ -193,5 +197,111 @@ describe('projectMonth', () => {
     assert.equal(p.daysInMonth, 30);
     assert.equal(p.linear, 51);
     assert.equal(p.trailing, 17 + 2 * 20);
+  });
+});
+
+describe('spend: budget, idle cost, jumps (lib/opsCost.ts)', () => {
+  const now = new Date('2026-11-15T12:00:00Z');
+  const day = (n: number) => new Date(Date.parse('2026-11-15T00:00:00Z') - n * 86_400_000).toISOString().slice(0, 10);
+  const rd = (n: number, id: string, cost: number, env = 'qa'): ResourceDay => ({ day: day(n), env, resource_id: id, name: id.split(':')[1], kind: id.split(':')[0], cost });
+
+  it('levels: warnings at 50% and 80%, over at 100%', () => {
+    assert.deepEqual([0.49, 0.5, 0.79, 0.8, 1, 1.4].map(levelOf), ['ok', 'warn50', 'warn50', 'warn80', 'over', 'over']);
+  });
+
+  it('budget: every source plus the plan, month to date and projected to the end of the month', () => {
+    const cloudflare = Array.from({ length: 15 }, (_, i) => ({ day: day(i), cost: 10 }));
+    const b = budgetStatus({ cloudflare, bunny: [{ day: day(1), cost: 1 }], containers: [], ai: [{ day: day(2), cost: 0.5 }] }, now);
+    assert.equal(b.capUsd, 500);
+    assert.equal(b.month, '2026-11');
+    // 15 days of $10 (1st..15th), $1 Bunny, $0.50 AI, the plan's 14.5/30 of $5
+    assert.equal(b.parts.cloudflare.mtd, 150);
+    assert.equal(b.parts.plan.projected, PLAN_BASE_USD);
+    assert.equal(b.mtd, Math.round((150 + 1 + 0.5 + (5 * 14.5) / 30) * 100) / 100);
+    // Trailing 7 full days of $10 for the 15.5 days left
+    assert.equal(b.parts.cloudflare.projected, 305);
+    assert.ok(b.projected > b.mtd);
+    assert.equal(b.level, 'ok');
+    assert.equal(b.projectedLevel, 'warn50');
+  });
+
+  it('idle: each driver at its quietest of the last 7 full days, a missing day is $0, plus the plan', () => {
+    const rows = [
+      ...Array.from({ length: 7 }, (_, i) => rd(i + 1, 'worker:videos-qa', 0.2 + i * 0.1)),
+      rd(1, 'r2:al-ummah-now-messages-qa', 9), // a one-off drain: no floor
+      ...Array.from({ length: 7 }, (_, i) => rd(i + 1, 'd1:al-ummah-now-reports', 0.05, 'production')),
+    ];
+    const idle = idleProjection(rows, { bunny: Array.from({ length: 7 }, (_, i) => ({ day: day(i + 1), cost: 0.1 })), containers: [], ai: [] }, now);
+    assert.equal(idle.parts.cloudflare, Math.round((0.2 * 30 + 0.05 * 30) * 100) / 100);
+    assert.equal(idle.parts.bunny, 3);
+    assert.equal(idle.parts.plan, 5);
+    assert.equal(idle.monthlyUsd, 6 + 1.5 + 3 + 5);
+    assert.deepEqual(idle.byEnv, { qa: 6, production: 1.5 });
+    assert.equal(idle.top[0].id, 'worker:videos-qa');
+    assert.ok(!idle.top.some((t) => t.id.includes('messages')));
+    assert.equal(idle.targetUsd, 50);
+  });
+
+  it('jumps: a driver or env total at 2x its 7-day average and enough dollars above it, yesterday or today', () => {
+    const steady = Array.from({ length: 8 }, (_, i) => rd(i + 2, 'worker:videos-qa', 1));
+    const spikes = findSpikes([...steady, rd(1, 'worker:videos-qa', 1), rd(0, 'r2:al-ummah-now-messages-qa', 6), rd(0, 'worker:tiny-qa', 0.4)], now);
+    const keys = spikes.map((s) => s.key);
+    assert.ok(keys.includes('ops-cost:spike:qa:r2:al-ummah-now-messages-qa'));
+    assert.ok(keys.includes('ops-cost:spike:qa:total'));
+    assert.ok(!keys.includes('ops-cost:spike:qa:worker:videos-qa'));
+    // Under $0.50 above its baseline: not a jump, whatever the ratio
+    assert.ok(!keys.includes('ops-cost:spike:qa:worker:tiny-qa'));
+    assert.equal(spikes[0].key, 'ops-cost:spike:qa:r2:al-ummah-now-messages-qa');
+    assert.equal(spikes[0].day, day(0));
+  });
+
+  it('alerts: budget levels crossed and a projected overrun, keyed by month; jumps keyed by env and driver', () => {
+    const b = budgetStatus({ cloudflare: Array.from({ length: 15 }, (_, i) => ({ day: day(i), cost: 20 })), bunny: [], containers: [], ai: [] }, now);
+    const keys = wantedAlerts(b, []).map((a) => a.key);
+    assert.deepEqual(keys, ['ops-cost:budget:2026-11:50', 'ops-cost:projected:2026-11']);
+    assert.deepEqual(wantedAlerts(null, []), []);
+  });
+
+  it('sync: reports a new alert once, resolves it when it clears; budget only on production', async () => {
+    const db = costsD1();
+    const ins = (row: Record<string, unknown>) =>
+      db.prepare(`INSERT INTO ops_daily (${Object.keys(row).join(', ')}) VALUES (${Object.keys(row).map(() => '?').join(', ')})`).bind(...Object.values(row)).run();
+    for (let i = 1; i <= 15; i++) await ins({ day: day(i), resource_id: 'worker:videos', kind: 'worker', env: 'production', name: 'videos', cost_usd: 20, updated_at: 'x' });
+    const reported: string[] = [];
+    const resolved: string[] = [];
+    const sink: AlertSink = {
+      report: async (events) => void reported.push(...events.map((e) => (e as { action: { key: string } }).action.key)),
+      resolve: async (keys) => void resolved.push(...keys),
+    };
+    await syncCostAlerts({ COSTS_DB: db, ENVIRONMENT: 'qa' }, sink, now);
+    assert.deepEqual(reported, []);
+    await syncCostAlerts({ COSTS_DB: db, ENVIRONMENT: 'production' }, sink, now);
+    assert.deepEqual(reported.sort(), ['ops-cost:budget:2026-11:50', 'ops-cost:projected:2026-11']);
+    await syncCostAlerts({ COSTS_DB: db, ENVIRONMENT: 'production' }, sink, now);
+    assert.equal(reported.length, 2);
+    // Next month: last month's keys resolve
+    await syncCostAlerts({ COSTS_DB: db, ENVIRONMENT: 'production' }, sink, new Date('2026-12-01T01:00:00Z'));
+    assert.deepEqual(resolved.sort(), ['ops-cost:budget:2026-11:50', 'ops-cost:projected:2026-11']);
+  });
+});
+
+describe('/api/ops/costs', () => {
+  it('budget across sources, idle projection, 30-day trend per env and the top drivers', async () => {
+    const { req, env } = setup(['Admin']);
+    await seed(env.COSTS_DB!);
+    const r = await req('/api/ops/costs');
+    assert.equal(r.status, 200);
+    const { result } = (await r.json()) as { result: any };
+    assert.equal(result.budget.capUsd, 500);
+    assert.deepEqual(result.budget.levels, [0.5, 0.8, 1]);
+    assert.equal(result.trend.days.length, 30);
+    assert.deepEqual(result.trend.series.map((s: any) => s.key), ['production', 'stage', 'qa', 'bunny', 'containers', 'ai']);
+    assert.deepEqual(result.drivers.map((d: any) => d.id).sort(), ['worker:videos', 'worker:videos-qa']);
+    assert.equal(result.drivers[0].daily.days.length, 14);
+    assert.equal(typeof result.idle.monthlyUsd, 'number');
+    assert.equal(result.idle.targetUsd, 50);
+    const qa = (await (await req('/api/ops/costs?env=production')).json()) as { result: any };
+    assert.deepEqual(qa.result.drivers.map((d: any) => d.id), ['worker:videos']);
+    assert.equal((await req('/api/ops/costs?env=dev')).status, 400);
   });
 });

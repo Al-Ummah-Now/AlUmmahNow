@@ -87,7 +87,8 @@ All reads are guarded by a new permission `ops:read` (admins and super admins; m
 | --- | --- |
 | `GET /api/ops/overview?env=prod` | Tiles: requests and error rate for 24h vs the previous 24h, CPU p99, D1 p99 latency, worst queue backlog, cache-hit ratio, MTD cost estimate + linear and trailing projection against the **$500/month cap**, data age |
 | `GET /api/ops/series?env&kind&resource&metric&range=24h\|7d\|30d\|13m` | Hourly points for ≤7 days, daily points beyond, ready for the shared chart (§A.4) |
-| `GET /api/ops/resources?env&kind` | One row per resource with latest-day numbers and a 7-day sparkline |
+| `GET /api/ops/resources?env&kind` | One row per resource with latest-day numbers and a 7-day sparkline (`kind` also `kv`, `do`) |
+| `GET /api/ops/costs?env=all\|<env>` | Spend (owner, 2026-11-14): the **$500/month budget** across every source (Cloudflare in every env from `ops_daily`, Bunny and transcoding from `delivery_cost_daily`, Workers AI from `ai_usage_daily`, the $5 plan) with month to date, projected month end and the 50/80/100% level; the **projected idle cost** (each driver at its quietest of the last 7 full days × 30, a missing day $0, plus the plan) against the $50 target; 30 days of daily spend per env and source; the top 25 drivers with month to date, idle per month, 14 days of daily cost and any jump (`lib/opsCost.ts`) |
 | `GET/PUT /api/ops/thresholds` | Threshold rules (PUT needs `ops:manage`, super admin; audited) |
 
 ### A.4 Pages
@@ -98,7 +99,8 @@ All reads are guarded by a new permission `ops:read` (admins and super admins; m
   - Tabs: Workers · Databases · Storage · Queues · CDN · Media (containers + Bunny).
   - Each tab has a chart per metric and a resource table.
   - Charts use the shared value-axis rules (`niceScale`, `compactNumber`, `chartLocale` from `packages/shared-types/src/chart-scale.ts`). The existing server-rendered SVG style of the Errors and Delivery charts is lifted into one shared admin chart component (`components/charts/TimeSeriesChart.tsx`), with the value axis on the reading side, time running from it, and a `<details>` table alternative.
-  - **Cost next to usage:** each tab shows estimated $ for the month next to usage, plus a cap bar (MTD + projection against $500). Prices come from the vendored pricing (cost spec §1.1). Until that lands, the same list prices as `media/costs.ts` `PRICES` are used.
+  - **Spend** (`SpendSection.tsx`, `/api/ops/costs`): the budget meter (spent, hatched projection, ticks at 50% and 80%), spent / projected month end / projected idle cost (vs $50, per env) / budget left, where it goes per source, a stacked daily chart per env and source with the daily budget line, and the drivers table. Alerts link to `/operations#spend`.
+  - **Cost next to usage:** each tab shows estimated $ for the month next to usage. Prices come from the vendored pricing (cost spec §1.1). Until that lands, the same list prices as `media/costs.ts` `PRICES` are used.
   - **Product analytics:** a "Product" tab links to the existing views, watch time, uploads and sign-ups numbers (Studio analytics and the Delivery QoE), and shows cost per 1K views. They aren't duplicated.
 - **Delivery page** (the R2 agent's): reads the live `admin:media` and `admin:queues` topics (Part B) for the per-video R2 status badge, "transcoding now: N of max_instances" and the transcode backlog. This doc supplies the data and the live layer. The page and its badges stay that agent's work.
 - **Alerts** when a metric crosses a threshold. Defaults:
@@ -106,7 +108,12 @@ All reads are guarded by a new permission `ops:read` (admins and super admins; m
   - D1 p99 > 500 ms for 1 hour;
   - queue backlog > 1,000 or any DLQ message;
   - cache-hit ratio on the media host < 80% for 6 hours;
-  - projected month > $400 (80% of the cap).
+  - spend (admin-api hourly tick, `lib/opsCost.ts` `syncCostAlerts`, open set in `ops_cost_alerts`):
+    the month's spend at 50%, 80% and 100% of the $500 budget and a projected month end over it
+    (production admin only, keys `ops-cost:budget:<month>:<level>` / `ops-cost:projected:<month>`,
+    resolved when the month turns); a daily spend jump per env total or per driver (yesterday or
+    today so far at ≥ 2× the previous 7 days' average and ≥ $0.50 above it, $2 for a total; key
+    `ops-cost:spike:<env>:<resource|total>`, every env), resolved when it clears.
 
   Each crossing becomes:
   1. an **Errors page item**: the collector posts a needs-action event to admin-api `/internal/errors` (`kind: 'action'`, `source: 'ops'`, `key: ops:<rule>:<resource>`) and resolves it with `resolveActionItems` when the metric recovers. This reuses the Errors page's Action needed queue (#821), dedupe and email limits;

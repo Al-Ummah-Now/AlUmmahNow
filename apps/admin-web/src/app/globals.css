@@ -60,6 +60,14 @@
   /* Two chart series (Delivery comparison: Bunny vs R2), from tokens that meet 4.5:1 on --surface in both themes */
   --chart-1: var(--link);
   --chart-2: var(--warning-fg);
+  /* Spend series (Operations): theme roles that differ in hue and lightness in every theme and
+     mode, since the themes' link, accent and primary are all one gold */
+  --spend-production: var(--success-fg);
+  --spend-stage: var(--fg-muted);
+  --spend-qa: var(--warning-fg);
+  --spend-bunny: color-mix(in srgb, var(--fanous-color-secondary) 70%, var(--fg));
+  --spend-containers: color-mix(in srgb, var(--fg-subtle) 55%, var(--surface));
+  --spend-ai: var(--danger-fg);
   --scrollbar-track: var(--fanous-color-surface);
   --scrollbar-thumb: var(--fanous-color-outline);
 }

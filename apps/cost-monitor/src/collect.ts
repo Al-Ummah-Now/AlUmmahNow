@@ -4,7 +4,8 @@
  * midnight), check thresholds. One GraphQL request per run.
  */
 import { reportNeedsAction, resolveNeedsAction, type ErrorReporterEnv, type ExecutionContextLike } from '@al-ummah/shared-types';
-import { ManifestIndex, manifestFor, parseEnvs, type OpsEnv } from './manifest';
+import { ManifestIndex, manifestFor, mergeResources, parseEnvs, type OpsEnv, type Resource } from './manifest';
+import { DISCOVERY_MAX_AGE_MS, discoverResources, loadDiscovered, storeDiscovered } from './discover';
 import { queryVariables, runOpsQuery } from './graphql';
 import { normalize } from './normalize';
 import { finishRun, prune, rollupDay, startRun, upsertHourly } from './store';
@@ -65,6 +66,37 @@ function reportChange(change: ThresholdChange, env: CollectorEnv, ctx: Execution
   }, fetchImpl);
 }
 
+/**
+ * The resources this run collects: the static manifest plus what discovery stored. Discovers again
+ * when the stored set is empty or older than DISCOVERY_MAX_AGE_MS (or `force`); a failed listing
+ * keeps the stored set and is returned as `error` (recorded in the run's detail).
+ */
+export async function resourcesFor(
+  env: CollectorEnv,
+  token: string,
+  envs: OpsEnv[],
+  now: Date,
+  fetchImpl: typeof fetch,
+  force = false,
+): Promise<{ resources: Resource[]; discovered: number; refreshed: boolean; error?: string }> {
+  const stored = await loadDiscovered(env.COSTS_DB, envs);
+  let found = stored.resources;
+  let refreshed = false;
+  let error: string | undefined;
+  const stale = !stored.refreshedAt || now.getTime() - Date.parse(stored.refreshedAt) > DISCOVERY_MAX_AGE_MS;
+  if (force || stale) {
+    try {
+      found = await discoverResources(token, env.CLOUDFLARE_ACCOUNT_ID ?? '', envs, fetchImpl);
+      await storeDiscovered(env.COSTS_DB, found, now);
+      refreshed = true;
+    } catch (e) {
+      error = e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200);
+      logger.warn('[ops] Resource discovery failed; using the stored set', { error, stored: stored.resources.length });
+    }
+  }
+  return { resources: mergeResources(manifestFor(envs), found), discovered: found.length, refreshed, ...(error ? { error } : {}) };
+}
+
 export interface HourlyOutcome {
   status: 'ok' | 'partial' | 'failed';
   queries: number;
@@ -82,7 +114,12 @@ export async function runHourly(env: CollectorEnv, ctx: ExecutionContextLike | u
   try {
     const token = await secretValue(env.CF_ANALYTICS_TOKEN);
     if (!token || !env.CLOUDFLARE_ACCOUNT_ID || envs.length === 0) throw new Error('collector is not configured (token, account id or COLLECT_ENVS missing)');
-    const index = new ManifestIndex(manifestFor(envs));
+    const scope = await resourcesFor(env, token, envs, now, fetchImpl);
+    detail.resources = scope.resources.length;
+    // A failed listing (e.g. a token without list access) keeps the static manifest and the stored
+    // set; it is recorded, not a partial run, so a standing permission gap cannot mask real gaps
+    if (scope.error) detail.discovery = scope.error;
+    const index = new ManifestIndex(scope.resources);
     const end = hourStart(now);
     const start = new Date(end.getTime() - WINDOW_HOURS * 3_600_000);
     outcome.queries = 1;
@@ -115,13 +152,20 @@ export async function runHourly(env: CollectorEnv, ctx: ExecutionContextLike | u
   return outcome;
 }
 
-/** Daily: final rollup of yesterday, retention. */
-export async function runDaily(env: CollectorEnv, now = new Date()): Promise<{ rolled: number; pruned: number }> {
+/** Daily: resource discovery, final rollup of yesterday, retention. */
+export async function runDaily(env: CollectorEnv, now = new Date(), fetchImpl: typeof fetch = fetch): Promise<{ rolled: number; pruned: number; discovered: number }> {
   const runId = await startRun(env.COSTS_DB, 'daily', now);
   let rolled = 0;
   let pruned = 0;
+  let discovered = 0;
   let status: 'ok' | 'failed' = 'ok';
   try {
+    const token = await secretValue(env.CF_ANALYTICS_TOKEN);
+    const envs = parseEnvs(env.COLLECT_ENVS);
+    if (token && env.CLOUDFLARE_ACCOUNT_ID && envs.length) {
+      const scope = await resourcesFor(env, token, envs, now, fetchImpl, true);
+      discovered = scope.discovered;
+    }
     const yesterday = new Date(now.getTime() - 86_400_000).toISOString().slice(0, 10);
     rolled = await rollupDay(env.COSTS_DB, yesterday, now);
     pruned = await prune(env.COSTS_DB, now);
@@ -129,6 +173,6 @@ export async function runDaily(env: CollectorEnv, now = new Date()): Promise<{ r
     status = 'failed';
     logger.error('[ops] Daily rollup failed', { error: error instanceof Error ? error.message : String(error) });
   }
-  await finishRun(env.COSTS_DB, runId, { status, queries: 0, rowsWritten: rolled, detail: { pruned } }, new Date());
-  return { rolled, pruned };
+  await finishRun(env.COSTS_DB, runId, { status, queries: 0, rowsWritten: rolled, detail: { pruned, discovered } }, new Date());
+  return { rolled, pruned, discovered };
 }

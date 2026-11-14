@@ -17,7 +17,18 @@ export const PRICES = {
   r2ClassBPerMillion: 0.36,
   /** A delivered message is a write, a read and a delete: three billable operations. */
   queueOperationsPerMillion: 0.4,
+  kvReadsPerMillion: 0.5,
+  /** Writes, deletes and lists are all billed at this price. */
+  kvWritesPerMillion: 5,
+  kvGbMonth: 0.5,
+  doRequestsPerMillion: 0.15,
+  doGbSecondsPerMillion: 12.5,
+  doStorageReadUnitsPerMillion: 0.2,
+  doStorageWriteUnitsPerMillion: 1,
 } as const;
+
+/** Workers Paid: the monthly subscription every account pays, whatever the usage. */
+export const PLAN_BASE_USD = 5;
 
 /** The monthly infrastructure cap the admin shows usage against (owner constraint). */
 export const MONTHLY_CAP_USD = 500;
@@ -32,6 +43,8 @@ export interface DayUsage {
   reads?: number | null;
   writes?: number | null;
   stored_bytes?: number | null;
+  /** Durable Object duration. */
+  gb_seconds?: number | null;
 }
 
 /** Estimated cost of one resource for one day. */
@@ -55,6 +68,14 @@ export function dayCost(kind: ResourceKind, u: DayUsage): number {
       break;
     case 'queue':
       usd += ((n(u.writes) * 3) / 1e6) * PRICES.queueOperationsPerMillion;
+      break;
+    case 'kv':
+      usd += (n(u.reads) / 1e6) * PRICES.kvReadsPerMillion + (n(u.writes) / 1e6) * PRICES.kvWritesPerMillion;
+      usd += ((n(u.stored_bytes) / GB) * PRICES.kvGbMonth) / DAYS_PER_MONTH;
+      break;
+    case 'do':
+      usd += (n(u.requests) / 1e6) * PRICES.doRequestsPerMillion + (n(u.gb_seconds) / 1e6) * PRICES.doGbSecondsPerMillion;
+      usd += (n(u.reads) / 1e6) * PRICES.doStorageReadUnitsPerMillion + (n(u.writes) / 1e6) * PRICES.doStorageWriteUnitsPerMillion;
       break;
   }
   return Math.round(usd * 1e6) / 1e6;
