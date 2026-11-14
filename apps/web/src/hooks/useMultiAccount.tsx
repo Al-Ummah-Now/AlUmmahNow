@@ -447,19 +447,14 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
 
     logger.debug('[MultiAccountProvider] Session updated parameter detected');
 
-    // Clean up URL immediately
+    // Drop the parameter through the router, never history.replaceState: the App Router keeps its
+    // own copy of the URL, and the next commit (the refresh below, a server action) wrote the old
+    // one back, so the page stayed on ?session_updated=true. The replace also fetches the page
+    // again with the new session cookie, which is the refresh the header needs.
     const newUrl = new URL(window.location.href);
     newUrl.searchParams.delete('session_updated');
-    window.history.replaceState({}, '', newUrl.toString());
-
-    // The session will load via the normal loadSessionData on mount
-    // Just trigger a router refresh after a short delay to ensure everything is ready
-    const timeoutId = setTimeout(() => {
-      logger.debug('[MultiAccountProvider] Calling router.refresh() after OAuth callback');
-      router.refresh();
-    }, 200);
-
-    return () => clearTimeout(timeoutId);
+    logger.debug('[MultiAccountProvider] Replacing the OAuth callback URL and refreshing');
+    router.replace(`${newUrl.pathname}${newUrl.search}${newUrl.hash}`, { scroll: false });
   }, [router]);
 
   // Add a new account
