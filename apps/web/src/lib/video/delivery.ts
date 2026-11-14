@@ -1,13 +1,42 @@
 /**
- * Delivery on the web (epic #687, owner decision 2026-11-12): the API decides the source and returns
- * ONE playUrl; players never choose. `delivery.source` is only a label (QoE, the admin Source row).
- * When the URL fails in the player, it asks the API once for a URL without R2
- * (fetchFallbackPlayback → GET /api/videos/:id/playback?exclude=r2&reason=<code>).
+ * Delivery on the web (epic #687, docs/media-delivery/PROVIDERS.md): the API decides the order and
+ * returns every playable source, signed, in that order (`sources`; `playUrl` is the first). Players
+ * never choose: they play the first and, when it fails, the next one, reporting each failure to
+ * GET /api/videos/:id/playback?exclude=<failed…>&reason=<code> (provider health). When the list runs
+ * out (or an older response had none), that request's answer is the next thing to play.
  */
-import type { PlaybackFallbackReason, PlaybackSource } from '@al-ummah/shared-types';
+import { isMediaProviderId, type MediaProviderId, type PlaybackFallbackReason, type PlaybackSource, type PlaybackSourceView } from '@al-ummah/shared-types';
 
 export interface DeliveryView {
   source: PlaybackSource;
+}
+
+const HLS_TYPE = 'application/x-mpegURL';
+const MAX_SOURCES = 8;
+
+/** The `sources` of an API response, keeping only well-formed entries (https, known provider, once each). */
+export function playbackSourcesOf(value: unknown): PlaybackSourceView[] {
+  if (!Array.isArray(value)) return [];
+  const out: PlaybackSourceView[] = [];
+  for (const item of value) {
+    const s = item as { provider?: unknown; src?: unknown } | null;
+    if (!s || !isMediaProviderId(s.provider) || typeof s.src !== 'string' || !s.src.startsWith('https://')) continue;
+    if (out.some((o) => o.provider === s.provider)) continue;
+    out.push({ provider: s.provider, src: s.src, type: HLS_TYPE });
+    if (out.length >= MAX_SOURCES) break;
+  }
+  return out;
+}
+
+/**
+ * What a player plays, in order: the API's `sources`, else the single `playUrl` labelled with
+ * `delivery.source` (older responses).
+ */
+export function playbackList(o: { playUrl?: string; sources?: PlaybackSourceView[]; delivery?: { source?: string } }): PlaybackSourceView[] {
+  if (o.sources?.length) return o.sources;
+  if (!o.playUrl) return [];
+  const provider: MediaProviderId = isMediaProviderId(o.delivery?.source) ? o.delivery.source : 'bunny';
+  return [{ provider, src: o.playUrl, type: HLS_TYPE }];
 }
 
 /** The parts of a Video.js MediaError and VHS state the classifier reads. */

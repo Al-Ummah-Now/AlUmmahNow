@@ -1,7 +1,8 @@
 /**
- * Every web player plays only the one URL the API chose (epic #687, owner decision 2026-11-12):
- * no second URL, no client-side choice. On an R2 failure it asks the API for Bunny's URL once,
- * with the failure's class as the reason. 2026-11-12: the RTL player once ignored delivery entirely.
+ * Every web player plays the API's sources in the API's order (docs/media-delivery/PROVIDERS.md):
+ * no client-side choice. When a source fails it moves to the next at once and reports the failure
+ * (GET /playback?exclude=<failed so far>&reason=<class>); when the list is used up, that answer's
+ * sources come next. 2026-11-12: the RTL player once ignored delivery entirely.
  */
 import React from 'react';
 import { act, render } from '@testing-library/react';
@@ -53,10 +54,14 @@ const BUNNY = 'https://vz-215a1ffd-a5a.b-cdn.net/bcdn_token=t&expires=1&token_pa
 const R2 = 'https://media.alummahnow.net/pub/37bcecd3-2449-4c8d-b4f8-f7af7367d95c/e29db4ad6918a943/master.m3u8';
 const R2_THUMB = 'https://media.alummahnow.net/pub/37bcecd3-2449-4c8d-b4f8-f7af7367d95c/e29db4ad6918a943/thumb.jpg';
 
-function options(playUrl: string, poster: string | undefined, source?: 'bunny' | 'r2'): PlayerOptions {
+const ID = '37bcecd3-2449-4c8d-b4f8-f7af7367d95c';
+const HLS = 'application/x-mpegURL' as const;
+
+function options(playUrl: string, poster: string | undefined, source?: 'bunny' | 'r2', sources?: { provider: 'bunny' | 'r2'; src: string }[]): PlayerOptions {
   return {
-    id: '37bcecd3-2449-4c8d-b4f8-f7af7367d95c', title: 'وقفة', channel: 'c', channelName: 'c', channelAvatar: '', description: '', views: '0',
+    id: ID, title: 'وقفة', channel: 'c', channelName: 'c', channelAvatar: '', description: '', views: '0',
     url: '', playUrl, poster, autoplay: false, type: 'video/mp4', dateCreated: new Date(0), ...(source ? { delivery: { source } } : {}),
+    ...(sources ? { sources: sources.map((x) => ({ ...x, type: HLS })) } : {}),
   } as PlayerOptions;
 }
 
@@ -76,22 +81,65 @@ describe.each([
     expect(seen.at(-1)?.poster).toBe(R2_THUMB);
   });
 
-  it('plays exactly the playUrl it was given (Bunny), and never asks for a fallback', () => {
+  it('a lone source that fails is reported once; with nothing left it stays where it is', async () => {
+    fetchFallbackPlayback.mockResolvedValue({ id: ID, delivery: { source: 'bunny' }, sources: [] });
     render(<Player options={options(BUNNY, undefined, 'bunny')} />);
-    expect(seen.at(-1)?.sources).toEqual([{ src: BUNNY, type: 'application/x-mpegURL' }]);
+    expect(seen.at(-1)?.sources).toEqual([{ src: BUNNY, type: HLS }]);
     player.err = { code: 2, status: 403 };
-    act(() => player.emit('error'));
-    expect(fetchFallbackPlayback).not.toHaveBeenCalled();
+    await act(async () => { player.emit('error'); player.emit('error'); });
+    expect(fetchFallbackPlayback).toHaveBeenCalledTimes(1);
+    expect(fetchFallbackPlayback).toHaveBeenCalledWith(ID, 'manifest_4xx', false, ['bunny']);
+    expect(player.srcs).toEqual([]);
   });
 
-  it('on an R2 error asks the API once, with the reason, and plays the Bunny URL it returns', async () => {
+  it('an older response (playUrl only): an R2 error asks the API once and plays the Bunny URL it returns', async () => {
     fetchFallbackPlayback.mockResolvedValue({ playUrl: BUNNY, delivery: { source: 'bunny' } });
     render(<Player options={options(R2, R2_THUMB, 'r2')} />);
     player.err = { code: 2, status: 403 };
     await act(async () => { player.emit('error'); player.emit('error'); });
     expect(fetchFallbackPlayback).toHaveBeenCalledTimes(1);
-    expect(fetchFallbackPlayback).toHaveBeenCalledWith('37bcecd3-2449-4c8d-b4f8-f7af7367d95c', 'manifest_4xx', false);
-    expect(player.srcs).toEqual([{ src: BUNNY, type: 'application/x-mpegURL' }]);
+    expect(fetchFallbackPlayback).toHaveBeenCalledWith(ID, 'manifest_4xx', false, ['r2']);
+    expect(player.srcs).toEqual([{ src: BUNNY, type: HLS }]);
+  });
+
+  it('with sources it moves to the next at once, reports each failure, and asks for more only at the end', async () => {
+    let reply: (v: unknown) => void = () => undefined;
+    fetchFallbackPlayback.mockImplementation(() => new Promise((resolve) => { reply = resolve; }));
+    render(<Player options={options(R2, R2_THUMB, 'r2', [{ provider: 'r2', src: R2 }, { provider: 'bunny', src: BUNNY }])} />);
+    expect(seen.at(-1)?.sources).toEqual([{ src: R2, type: HLS }]);
+    player.err = { code: 4 };
+    act(() => player.emit('error'));
+    // Bunny plays before the report is answered
+    expect(player.srcs).toEqual([{ src: BUNNY, type: HLS }]);
+    expect(fetchFallbackPlayback).toHaveBeenLastCalledWith(ID, 'unsupported', false, ['r2']);
+    await act(async () => { reply({ playUrl: BUNNY, delivery: { source: 'bunny' }, sources: [{ provider: 'bunny', src: BUNNY, type: HLS }] }); });
+    expect(player.srcs).toHaveLength(1);
+    // Bunny fails too: both are reported, and the API has nothing new
+    player.err = { code: 2, status: 503 };
+    act(() => player.emit('error'));
+    expect(fetchFallbackPlayback).toHaveBeenLastCalledWith(ID, 'manifest_5xx', false, ['r2', 'bunny']);
+    await act(async () => { reply({ id: ID, delivery: { source: 'bunny' }, sources: [] }); });
+    expect(player.srcs).toHaveLength(1);
+    act(() => player.emit('error'));
+    expect(fetchFallbackPlayback).toHaveBeenCalledTimes(2);
+  });
+
+  it('follows the API order whatever it is: Bunny first, R2 next', async () => {
+    fetchFallbackPlayback.mockResolvedValue(null);
+    render(<Player options={options(BUNNY, undefined, 'bunny', [{ provider: 'bunny', src: BUNNY }, { provider: 'r2', src: R2 }])} />);
+    expect(seen.at(-1)?.sources).toEqual([{ src: BUNNY, type: HLS }]);
+    player.err = { code: 2, status: 0 };
+    await act(async () => { player.emit('error'); });
+    expect(player.srcs).toEqual([{ src: R2, type: HLS }]);
+    expect(fetchFallbackPlayback).toHaveBeenCalledWith(ID, 'cors', false, ['bunny']);
+  });
+
+  it('a source from the API that already failed is never played again', async () => {
+    fetchFallbackPlayback.mockResolvedValue({ playUrl: R2, delivery: { source: 'r2' }, sources: [{ provider: 'r2', src: R2, type: HLS }] });
+    render(<Player options={options(R2, R2_THUMB, 'r2')} />);
+    player.err = { code: 2 };
+    await act(async () => { player.emit('error'); });
+    expect(player.srcs).toEqual([]);
   });
 
   it('falls back with stall_timeout when R2 stalls too long', async () => {
@@ -101,7 +149,7 @@ describe.each([
       render(<Player options={options(R2, R2_THUMB, 'r2')} />);
       act(() => player.emit('waiting'));
       await act(async () => { jest.advanceTimersByTime(15_000); });
-      expect(fetchFallbackPlayback).toHaveBeenCalledWith(expect.any(String), 'stall_timeout', false);
+      expect(fetchFallbackPlayback).toHaveBeenCalledWith(expect.any(String), 'stall_timeout', false, ['r2']);
     } finally {
       jest.useRealTimers();
     }

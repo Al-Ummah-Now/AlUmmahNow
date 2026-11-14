@@ -4,6 +4,7 @@ import { VideoObject, VideoInfo } from "@/interfaces";
 import { parseLimitRefusal, type LimitRefusal } from '@/lib/studio/limits';
 import { loadRelated, readLastGoodShelf, RELATED_LIMIT, saveLastGoodShelf, toVideoInfo } from "@/lib/video/related";
 import { PlayerOptions } from "@/components/VideoPagePlayer/interface";
+import { playbackSourcesOf } from "@/lib/video/delivery";
 import {
   ApiResponse,
   PaginationResponse,
@@ -1011,6 +1012,7 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
             uploadStatus: (video as { uploadStatus?: PlayerOptions['uploadStatus'] }).uploadStatus,
             processingIssueKind: (video as { processingIssueKind?: PlayerOptions['processingIssueKind'] }).processingIssueKind,
             delivery: (video as { delivery?: PlayerOptions['delivery'] }).delivery,
+            sources: playbackSourcesOf((video as { sources?: unknown }).sources),
             hasChapters: (video as { hasChapters?: boolean }).hasChapters === true,
         };
 
@@ -1107,11 +1109,13 @@ export async function fetchFallbackPlayback(
   id: string,
   reason: string,
   anonymous = false,
-): Promise<{ playUrl?: string; thumbnailUrl?: string; delivery?: { source: 'bunny' | 'r2' } } | null> {
-  if (!/^[A-Za-z0-9-]{8,64}$/.test(id) || !/^[a-z0-9_]{1,32}$/.test(reason)) return null;
-  return apiRequestServer<{ playUrl?: string; thumbnailUrl?: string; delivery?: { source: 'bunny' | 'r2' } }>({
+  exclude: readonly string[] = ['r2'],
+): Promise<{ playUrl?: string; thumbnailUrl?: string; delivery?: { source: string }; sources?: unknown } | null> {
+  const failed = exclude.filter((p) => /^[a-z0-9]{1,16}$/.test(p)).slice(0, 8);
+  if (!/^[A-Za-z0-9-]{8,64}$/.test(id) || !/^[a-z0-9_]{1,32}$/.test(reason) || !failed.length) return null;
+  return apiRequestServer<{ playUrl?: string; thumbnailUrl?: string; delivery?: { source: string }; sources?: unknown }>({
     method: 'GET',
-    url: buildApiUrl(`/api/videos/${encodeURIComponent(id)}/playback?exclude=r2&reason=${reason}`),
+    url: buildApiUrl(`/api/videos/${encodeURIComponent(id)}/playback?exclude=${failed.join(',')}&reason=${reason}`),
     functionName: 'fetchFallbackPlayback',
     timeoutMs: 8000,
   }, async () => (anonymous ? null : { accessToken: (await getServerAuthContext())?.accessToken || '' }), false);

@@ -65,6 +65,16 @@ describe('QoeTracker', () => {
     expect(sent[0]).toMatchObject({ source: 'r2', fallback: true, errors: 1, started: true, requested: 'r2', actual: 'bunny', fallbackReason: 'manifest_4xx' });
   });
 
+  it('a Bunny-first session that moves to R2 counts against Bunny and keeps the first reason', () => {
+    const { player, tracker, sent, at } = setup('bunny');
+    at(0); player.emit('play'); player.emit('error');
+    tracker.markFallback('cors', 'r2');
+    tracker.markFallback('stall_timeout', 'bunny');
+    at(900); player.emit('playing');
+    at(1900); tracker.flush();
+    expect(sent[0]).toMatchObject({ source: 'bunny', fallback: true, requested: 'bunny', actual: 'bunny', fallbackReason: 'cors' });
+  });
+
   it('sends nothing for a player nobody pressed play on, and detaches its listeners', () => {
     const { player, tracker, sent } = setup('bunny');
     tracker.flush();

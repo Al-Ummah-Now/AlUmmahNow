@@ -105,6 +105,16 @@ frame of this video. Custom and legacy images, and their size variants, stay. Em
 (`lib/media/public-play.ts`) sign at a pinned hour so their URLs stay cacheable. The decision log
 and the fallback endpoint are described in the [RUNBOOK](./RUNBOOK.md#which-source-a-play-got).
 
+**The web player** (`apps/web/src/components/VideoPagePlayer/useDeliveryPlayback.ts`, every watch
+page and embed) plays `sources[0]`. On a fatal error, or a stall of 15 s, it moves to the next source
+at once, from the same position, and reports the failure with
+`GET /api/videos/:id/playback?exclude=<every provider that failed so far>&reason=<class>`, which feeds
+provider health. Only when the list is used up does it wait for that answer and play the sources it
+names (never one that already failed). A response with only `playUrl` (older API) is a one-source
+list labelled by `delivery.source`. One QoE session per load records the provider the API asked
+for, the one it ended on and the first reason. E2E: `apps/web/e2e/release/provider-fallback.player.spec.ts`
+(local stack, `POST /__fake/media/down`).
+
 ## Health
 
 Two signals per provider (`lib/media/health.ts`):

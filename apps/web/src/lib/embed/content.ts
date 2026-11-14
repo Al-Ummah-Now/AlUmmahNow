@@ -10,6 +10,7 @@
 
 import { cache } from 'react';
 import { logger } from '@/lib/logger-server';
+import { playbackSourcesOf } from '@/lib/video/delivery';
 import { getLocalizedValue, isVideoOpenToAnyone } from '@al-ummah/shared-types';
 import { shareImagePath } from './share-image';
 
@@ -37,6 +38,8 @@ export interface EmbedVideo {
   hasChapters?: boolean;
   /** Which source the API chose for playUrl (a label; the player only plays playUrl) */
   delivery?: { source: 'bunny' | 'r2' };
+  /** Every playable source, signed, in the API's order */
+  sources?: import('@al-ummah/shared-types').PlaybackSourceView[];
   /** Encoded size (the player box and the declared card / oEmbed sizes follow its ratio) */
   width?: number;
   height?: number;
@@ -89,6 +92,7 @@ interface ApiVideo {
   scheduledPublishStatus?: string;
   hasChapters?: boolean;
   delivery?: { source?: string };
+  sources?: unknown;
   width?: number;
   height?: number;
   isShort?: boolean;
@@ -127,6 +131,7 @@ export function toEmbedVideo(video: ApiVideo | null | undefined): EmbedVideo | n
   if (!isVideoOpenToAnyone(video)) return null;
   const duration = Number(video.duration);
   const thumbnailSource = posterFor(video.playUrl, video.thumbnailUrl);
+  const sources = playbackSourcesOf(video.sources);
   return {
     id: video.id,
     title: video.title || '',
@@ -149,6 +154,7 @@ export function toEmbedVideo(video: ApiVideo | null | undefined): EmbedVideo | n
     ...(typeof video.views === 'number' && video.views >= 0 ? { views: video.views } : {}),
     ...(video.isLive === true ? { isLive: true } : {}),
     ...(video.delivery?.source === 'r2' || video.delivery?.source === 'bunny' ? { delivery: { source: video.delivery.source } } : {}),
+    ...(sources.length ? { sources } : {}),
     ...(video.isPublic !== false && isPublicMp4(video.contentUrl) ? { contentUrl: video.contentUrl } : {}),
   };
 }
