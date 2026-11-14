@@ -24358,7 +24358,7 @@
           "Quran"
         ],
         "summary": "Official text of a Quran range",
-        "description": "🌐 Public. The Uthmani text of `range` (surah:ayah:word-surah:ayah:word, one surah) from the Quran Foundation copy. 503 while no fresh copy is available.",
+        "description": "🌐 Public. The Uthmani text of `range` (surah:ayah:word-surah:ayah:word, one surah; or whole ayat `3:166-167`) from the Quran Foundation copy. `range` in the response is always the full word range. 503 while no fresh copy is available.",
         "operationId": "get_QuranPassageGet",
         "parameters": [
           {
@@ -41242,6 +41242,1134 @@
                     }
                   },
                   "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/videos/{videoId}/captions/drafts": {
+      "get": {
+        "tags": [
+          "Captions"
+        ],
+        "summary": "List caption drafts of a video",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).",
+        "operationId": "get_CaptionDraftsList",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video ID"
+            },
+            "required": true,
+            "description": "Video ID",
+            "name": "videoId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Drafts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "drafts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "language": {
+                                "type": "string"
+                              },
+                              "version": {
+                                "type": "number"
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "source",
+                                  "translation"
+                                ]
+                              },
+                              "origin": {
+                                "type": "string",
+                                "enum": [
+                                  "review_transcript",
+                                  "transcription",
+                                  "translation"
+                                ]
+                              },
+                              "edited": {
+                                "type": "boolean"
+                              },
+                              "cues": {
+                                "type": "number"
+                              },
+                              "pendingQuran": {
+                                "type": "number",
+                                "description": "Quran suggestions not yet accepted"
+                              },
+                              "updatedAt": {
+                                "type": "string"
+                              },
+                              "publishedVersion": {
+                                "type": "number"
+                              },
+                              "publishedAt": {
+                                "type": "string"
+                              },
+                              "track": {
+                                "type": "string",
+                                "enum": [
+                                  "none",
+                                  "machine",
+                                  "upload"
+                                ],
+                                "description": "The live track of this language, if any"
+                              }
+                            },
+                            "required": [
+                              "language",
+                              "version",
+                              "kind",
+                              "origin",
+                              "edited",
+                              "cues",
+                              "pendingQuran",
+                              "updatedAt",
+                              "track"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "drafts"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Video not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/videos/{videoId}/captions/drafts/{language}": {
+      "get": {
+        "tags": [
+          "Captions"
+        ],
+        "summary": "Get a caption draft with its cues",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).",
+        "operationId": "get_CaptionDraftGet",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video ID"
+            },
+            "required": true,
+            "description": "Video ID",
+            "name": "videoId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "ISO 639-1 code"
+            },
+            "required": true,
+            "description": "ISO 639-1 code",
+            "name": "language",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The draft",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "language": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "number"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "source",
+                            "translation"
+                          ]
+                        },
+                        "origin": {
+                          "type": "string",
+                          "enum": [
+                            "review_transcript",
+                            "transcription",
+                            "translation"
+                          ]
+                        },
+                        "edited": {
+                          "type": "boolean"
+                        },
+                        "cues": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "startMs": {
+                                "type": "integer"
+                              },
+                              "endMs": {
+                                "type": "integer"
+                              },
+                              "segments": {
+                                "type": "array",
+                                "items": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
+                                          "enum": [
+                                            "speech"
+                                          ]
+                                        },
+                                        "text": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "type",
+                                        "text"
+                                      ]
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
+                                          "enum": [
+                                            "quran"
+                                          ]
+                                        },
+                                        "range": {
+                                          "type": "string",
+                                          "description": "surah:ayah:word-surah:ayah:word"
+                                        },
+                                        "status": {
+                                          "type": "string",
+                                          "enum": [
+                                            "confirmed",
+                                            "context",
+                                            "basmala",
+                                            "review",
+                                            "accepted"
+                                          ]
+                                        },
+                                        "alternatives": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "heard": {
+                                          "type": "string",
+                                          "description": "What speech-to-text heard; never shown, kept for \"Not Quran\""
+                                        }
+                                      },
+                                      "required": [
+                                        "type",
+                                        "range",
+                                        "status"
+                                      ]
+                                    }
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "startMs",
+                              "endMs",
+                              "segments"
+                            ]
+                          }
+                        },
+                        "pendingQuran": {
+                          "type": "number",
+                          "description": "Quran suggestions not yet accepted"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        },
+                        "publishedVersion": {
+                          "type": "number"
+                        },
+                        "publishedAt": {
+                          "type": "string"
+                        },
+                        "track": {
+                          "type": "string",
+                          "enum": [
+                            "none",
+                            "machine",
+                            "upload"
+                          ],
+                          "description": "The live track of this language, if any"
+                        },
+                        "cueCount": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "language",
+                        "version",
+                        "kind",
+                        "origin",
+                        "edited",
+                        "cues",
+                        "pendingQuran",
+                        "updatedAt",
+                        "track",
+                        "cueCount"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such video or draft",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Captions"
+        ],
+        "summary": "Save edited cues of a caption draft",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nSaves over `baseVersion`, the version the editor loaded. 409 `draft_conflict` with the current version when it changed meanwhile.",
+        "operationId": "put_CaptionDraftSave",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video ID"
+            },
+            "required": true,
+            "description": "Video ID",
+            "name": "videoId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "ISO 639-1 code"
+            },
+            "required": true,
+            "description": "ISO 639-1 code",
+            "name": "language",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "baseVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "cues": {
+                    "type": "array",
+                    "items": {}
+                  }
+                },
+                "required": [
+                  "baseVersion",
+                  "cues"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "language": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "number"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "source",
+                            "translation"
+                          ]
+                        },
+                        "origin": {
+                          "type": "string",
+                          "enum": [
+                            "review_transcript",
+                            "transcription",
+                            "translation"
+                          ]
+                        },
+                        "edited": {
+                          "type": "boolean"
+                        },
+                        "cues": {
+                          "type": "number"
+                        },
+                        "pendingQuran": {
+                          "type": "number",
+                          "description": "Quran suggestions not yet accepted"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        },
+                        "publishedVersion": {
+                          "type": "number"
+                        },
+                        "publishedAt": {
+                          "type": "string"
+                        },
+                        "track": {
+                          "type": "string",
+                          "enum": [
+                            "none",
+                            "machine",
+                            "upload"
+                          ],
+                          "description": "The live track of this language, if any"
+                        }
+                      },
+                      "required": [
+                        "language",
+                        "version",
+                        "kind",
+                        "origin",
+                        "edited",
+                        "cues",
+                        "pendingQuran",
+                        "updatedAt",
+                        "track"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid cues",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such video or draft",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The draft changed since it was loaded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Captions"
+        ],
+        "summary": "Delete a caption draft",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nThe published track of the language, if any, stays (delete it with DELETE /subtitles/:language).",
+        "operationId": "delete_CaptionDraftDelete",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video ID"
+            },
+            "required": true,
+            "description": "Video ID",
+            "name": "videoId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "ISO 639-1 code"
+            },
+            "required": true,
+            "description": "ISO 639-1 code",
+            "name": "language",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such video or draft",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/videos/{videoId}/captions/drafts/{language}/publish": {
+      "post": {
+        "tags": [
+          "Captions"
+        ],
+        "summary": "Publish a caption draft as the video's track",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nPublishes `baseVersion` (409 `draft_conflict` if the draft changed). Quran the creator accepted shows the official text from Quran Foundation when served; unconfirmed suggestions show a reference with a quran.com link. 409 `replaces_upload` when a track the creator uploaded exists in that language and `replaceUpload` is not set.",
+        "operationId": "post_CaptionDraftPublish",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video ID"
+            },
+            "required": true,
+            "description": "Video ID",
+            "name": "videoId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "ISO 639-1 code"
+            },
+            "required": true,
+            "description": "ISO 639-1 code",
+            "name": "language",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "baseVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "replaceUpload": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "baseVersion"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Published",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "draft": {
+                          "type": "object",
+                          "properties": {
+                            "language": {
+                              "type": "string"
+                            },
+                            "version": {
+                              "type": "number"
+                            },
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "source",
+                                "translation"
+                              ]
+                            },
+                            "origin": {
+                              "type": "string",
+                              "enum": [
+                                "review_transcript",
+                                "transcription",
+                                "translation"
+                              ]
+                            },
+                            "edited": {
+                              "type": "boolean"
+                            },
+                            "cues": {
+                              "type": "number"
+                            },
+                            "pendingQuran": {
+                              "type": "number",
+                              "description": "Quran suggestions not yet accepted"
+                            },
+                            "updatedAt": {
+                              "type": "string"
+                            },
+                            "publishedVersion": {
+                              "type": "number"
+                            },
+                            "publishedAt": {
+                              "type": "string"
+                            },
+                            "track": {
+                              "type": "string",
+                              "enum": [
+                                "none",
+                                "machine",
+                                "upload"
+                              ],
+                              "description": "The live track of this language, if any"
+                            }
+                          },
+                          "required": [
+                            "language",
+                            "version",
+                            "kind",
+                            "origin",
+                            "edited",
+                            "cues",
+                            "pendingQuran",
+                            "updatedAt",
+                            "track"
+                          ]
+                        },
+                        "track": {}
+                      },
+                      "required": [
+                        "draft"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Nothing to publish",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such video or draft",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Draft changed, or would replace an uploaded track",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
                     "error"
                   ]
                 }

@@ -42,6 +42,7 @@ import { SubtitlesList } from '../endpoints/video/subtitlesList';
 import { SubtitlesGet } from '../endpoints/video/subtitlesGet';
 import { SubtitlesDelete } from '../endpoints/video/subtitlesDelete';
 import { SubtitlesSetDefault } from '../endpoints/video/subtitlesSetDefault';
+import { CaptionDraftDelete, CaptionDraftGet, CaptionDraftPublish, CaptionDraftSave, CaptionDraftsList } from '../endpoints/captions/captionDrafts';
 
 // Video scheduling endpoints
 import { VideoScheduleCreate } from '../endpoints/video/scheduleCreate';
@@ -175,6 +176,13 @@ videoRouter.put('/:videoId/subtitles/:language/default', SubtitlesSetDefault);
 
 // Delete subtitle track (authenticated)
 videoRouter.delete('/:videoId/subtitles/:language', SubtitlesDelete);
+
+// Caption drafts (AUN-CAPTIONS; owner or video.edit)
+videoRouter.get('/:videoId/captions/drafts', CaptionDraftsList);
+videoRouter.get('/:videoId/captions/drafts/:language', CaptionDraftGet);
+videoRouter.put('/:videoId/captions/drafts/:language', CaptionDraftSave);
+videoRouter.delete('/:videoId/captions/drafts/:language', CaptionDraftDelete);
+videoRouter.post('/:videoId/captions/drafts/:language/publish', CaptionDraftPublish);
 
 // ==========================================
 // VIDEO SCHEDULING

@@ -5,6 +5,7 @@ import type { ContactTranslations } from './i18n-contact';
 import type { HumanCheckTranslations } from './i18n-human-check';
 import type { HelpTranslations } from './i18n-help';
 import type { UploadStatusTranslations } from './i18n-upload-status';
+import type { CaptionsTranslations } from './i18n-captions';
 import type { ChannelRolesTranslations } from './i18n-channel-roles';
 import type { ChannelSectionsTranslations } from './i18n-channel-sections';
 /**
@@ -204,6 +205,8 @@ export interface AppTranslations {
   help: HelpTranslations;
   /** After-upload processing status on the upload page (single and batch) */
   uploadStatus: UploadStatusTranslations;
+  /** Caption drafts in Studio: list, editor, Quran review (AUN-CAPTIONS) */
+  captions: CaptionsTranslations;
   /** Channel Home sections: add/edit flow, manager, rendering (docs/specs/CHANNEL-SECTIONS.md) */
   channelSections: ChannelSectionsTranslations;
   /** Notification center, settings and per-channel bell (Story 29.10) */

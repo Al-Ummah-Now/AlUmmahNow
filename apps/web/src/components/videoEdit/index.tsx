@@ -516,6 +516,8 @@ export default function VideoEdit({
         <SubtitleUploadSection
           videoId={video.id}
           channelId={channelId}
+          videoUrl={video.videoUrl}
+          posterUrl={video.thumbnailUrl}
         />
 
         {/* Video Chapters Section */}

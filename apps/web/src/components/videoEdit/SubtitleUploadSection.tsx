@@ -12,6 +12,7 @@ import { upsertSubtitleTrack } from '@/lib/api/subtitle-utils';
 import type { SubtitleTrack } from '@/lib/api/subtitles-types';
 import { SUPPORTED_LANGUAGES } from '@/lib/api/subtitles-types';
 import SubtitleUploadModal from './SubtitleUploadModal';
+import CaptionDraftsPanel from './captions/CaptionDraftsPanel';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -21,6 +22,9 @@ interface SubtitleUploadSectionProps {
   videoId: string;
   channelId: string;
   className?: string;
+  /** For the caption draft editor's player */
+  videoUrl?: string;
+  posterUrl?: string;
 }
 
 /**
@@ -39,6 +43,8 @@ export default function SubtitleUploadSection({
   videoId,
   channelId,
   className = '',
+  videoUrl,
+  posterUrl,
 }: SubtitleUploadSectionProps) {
   const { t, lang } = useLanguage();
 
@@ -202,6 +208,9 @@ export default function SubtitleUploadSection({
           {t.subtitle?.addSubtitle || 'Add Subtitle'}
         </Button>
       </div>
+
+      {/* Caption drafts (AUN-CAPTIONS): machine captions to review and publish */}
+      <CaptionDraftsPanel videoId={videoId} videoUrl={videoUrl} posterUrl={posterUrl} onPublished={loadSubtitles} />
 
       {/* Loading State */}
       {isLoading && (
