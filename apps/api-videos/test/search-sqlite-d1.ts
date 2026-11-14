@@ -32,12 +32,12 @@ class Statement {
 		return { success: true, meta: { changes: Number(info.changes) } };
 	}
 
-	/** Used by batch(): reads return rows, writes return an empty result. */
-	execute(): { results: unknown[]; success: true } {
+	/** Used by batch(): reads return rows, writes return an empty result with `meta.changes` (as D1 does). */
+	execute(): { results: unknown[]; success: true; meta: { changes: number } } {
 		const stmt = this.db.prepare(this.sql);
-		if (/^\s*(SELECT|WITH)/i.test(this.sql)) return { results: stmt.all(...this.params()), success: true };
-		stmt.run(...this.params());
-		return { results: [], success: true };
+		if (/^\s*(SELECT|WITH)/i.test(this.sql)) return { results: stmt.all(...this.params()), success: true, meta: { changes: 0 } };
+		const info = stmt.run(...this.params());
+		return { results: [], success: true, meta: { changes: Number(info.changes) } };
 	}
 }
 

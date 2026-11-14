@@ -4,7 +4,7 @@
  * Creator tiers (admin-api /api/content/creators, /creator-tiers,
  * /users/:id/creator-tier). Videos-side data: never the Auth admin or Auth RBAC.
  */
-import type { AdminAuditEntry, AdminCreatorFilter, AdminCreatorsPage, CreatorTierAssignment, CreatorTierBulkResult, CreatorTiersList } from '@al-ummah/shared-types';
+import type { AdminAuditEntry, AdminCreatorFilter, CaptionGrantScope, CaptionMinuteGrant, CaptionMinutesUsage, AdminCreatorsPage, CreatorTierAssignment, CreatorTierBulkResult, CreatorTiersList } from '@al-ummah/shared-types';
 import { AdminApiError, type ActionResult } from './errors';
 import { requestAdmin, navigateForPasskey } from './request';
 
@@ -77,6 +77,7 @@ export interface TierForm {
   perDay: number;
   maxConcurrent: number;
   maxChannels: number | null;
+  captionMinutesMonth: number;
 }
 
 export async function saveCreatorTier(tier: TierForm, create: boolean): Promise<ActionResult<unknown>> {
@@ -87,4 +88,19 @@ export async function saveCreatorTier(tier: TierForm, create: boolean): Promise<
 
 export async function deleteCreatorTier(id: string): Promise<ActionResult<unknown>> {
   return mutate(`/api/content/creator-tiers/${encodeURIComponent(id)}`, 'DELETE');
+}
+
+/** A user's caption minutes this month, their grants and the grant history (admin-api /users/:id/caption-minutes). */
+export async function getUserCaptionMinutes(userId: string): Promise<{ usage: CaptionMinutesUsage; grants: CaptionMinuteGrant[]; audit: AdminAuditEntry[] }> {
+  return fetchAdmin(`/api/content/users/${encodeURIComponent(userId)}/caption-minutes`);
+}
+
+/** Grant extra caption minutes (creators:manage; a reason is required and audited). */
+export async function grantCaptionMinutes(userId: string, grant: { minutes: number; scope: CaptionGrantScope; reason: string }): Promise<ActionResult<{ grant: CaptionMinuteGrant }>> {
+  return mutate(`/api/content/users/${encodeURIComponent(userId)}/caption-minutes/grants`, 'POST', grant);
+}
+
+/** Revoke a grant: unused minutes stop counting; used ones stay used. */
+export async function revokeCaptionGrant(userId: string, grantId: string, reason: string): Promise<ActionResult<{ grant: CaptionMinuteGrant }>> {
+  return mutate(`/api/content/users/${encodeURIComponent(userId)}/caption-minutes/grants/${encodeURIComponent(grantId)}/revoke`, 'POST', { reason });
 }

@@ -122,6 +122,41 @@ test.describe('creator tiers', () => {
     await expectNoAxeViolations(page, '/creators/tiers');
   });
 
+  test('CRE-05 caption minutes on the user page: a grant needs a reason, adds minutes, is audited, and a revoke takes them back', async ({ page }) => {
+    // Grants stay as rows (revoked, never deleted): only on this run's own account, erased with it
+    test.skip(!RUN_ID, 'Run accounts only: grants are kept in the history');
+    const probe = await adminApi(`/api/content/users/${encodeURIComponent(state.userId!)}/caption-minutes`);
+    test.skip(probe.status === 404, 'admin-api does not have caption minutes yet');
+    await page.goto(`/users/${encodeURIComponent(state.userId!)}`);
+    const panel = page.getByTestId('user-caption-minutes');
+    await expect(panel).toBeVisible();
+    const form = panel.getByTestId('caption-grant-form');
+    await form.getByTestId('caption-grant-minutes').fill('45');
+    await form.getByTestId('caption-grant-scope-until_used').check();
+    await form.getByTestId('caption-grant-submit').click();
+    await expect(form.getByText('Enter a reason of up to 500 characters.')).toBeVisible();
+    await form.getByTestId('caption-grant-reason').fill('E2E invoice 1');
+    await form.getByTestId('caption-grant-submit').click();
+    await expect(panel.getByTestId('caption-grant-status')).toHaveText('Minutes granted. They can be used now.');
+    await expect(panel.getByTestId('caption-minutes-remaining')).toContainText('45 minutes available now');
+    const grant = panel.getByTestId('caption-grant').first();
+    await expect(grant).toContainText('45 minutes until used (0 used)');
+    await expect(grant).toContainText('E2E invoice 1');
+    await expectNoAxeViolations(page, '/users/:id caption minutes');
+
+    await grant.getByTestId('caption-grant-revoke').click();
+    const confirm = grant.getByTestId('caption-grant-revoke-confirm');
+    await expect(confirm.getByTestId('caption-grant-revoke-submit')).toBeDisabled();
+    await confirm.getByTestId('caption-grant-revoke-reason').fill('E2E done');
+    await confirm.getByTestId('caption-grant-revoke-submit').click();
+    await expect(panel.getByTestId('caption-grant-status')).toHaveText('Grant revoked.');
+    await expect(panel.getByTestId('caption-grant').first()).toContainText('E2E done');
+    await expect(panel.getByTestId('caption-minutes-remaining')).toContainText('0 minutes available now');
+
+    const { body } = await adminApi<{ audit: { action: string }[] }>(`/api/content/users/${encodeURIComponent(state.userId!)}/caption-minutes`);
+    expect(body.result?.audit.map((e) => e.action)).toEqual(['caption-grant-revoke', 'caption-grant']);
+  });
+
   test('CRE-04 Arabic: the Creators page is right to left and translated', async ({ page }) => {
     await page.goto('/creators');
     await setPreferences(page, { locale: 'ar' });

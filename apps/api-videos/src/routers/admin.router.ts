@@ -37,6 +37,7 @@ import { compareProviders } from '../lib/live/qoe';
 import { readStream, streamEnd, type LiveStreamRecord } from '../lib/live/streams';
 import { bulkAssignTier, limitHitsSince, listCreators, tierCounts } from '../lib/admin/creators';
 import { createChannelFor, lookupAccount, provisionProfile } from '../lib/admin/invites';
+import { addGrant, CaptionMinutesError, listGrants, readUsage, revokeGrant, subjectOfUser } from '../lib/captions/minutes';
 import { assignTier, CreatorTierError, deleteTier, purgeTiers, readAssignment, readDeletedTiers, readTiers, requestTierPurge, restoreTier, saveTier } from '../lib/creatorTiers';
 import { shortLinkClicksReport, siteVisitsReport } from '../lib/site-visits';
 
@@ -165,6 +166,9 @@ const body = async (c: Context<Env>) => c.req.json().catch(() => ({}));
 const ok = (c: Context<Env>, result: unknown) => c.json({ success: true, result });
 
 app.onError((error, c) => {
+	if (error instanceof CaptionMinutesError) {
+		return c.json({ success: false, code: error.code, error: error.message }, error.status as 400);
+	}
 	if (error instanceof CreatorTierError) {
 		return c.json({ success: false, code: error.code, error: error.message }, error.status as 400);
 	}
@@ -320,6 +324,7 @@ const TierBody = z
 		perDay: z.coerce.number().optional(),
 		maxConcurrent: z.coerce.number().optional(),
 		maxChannels: z.coerce.number().nullable().optional(),
+		captionMinutesMonth: z.coerce.number().optional(),
 	})
 	.strict();
 const searchDb = (c: Context<Env>) => c.env.SEARCH_DB as D1Database;
@@ -366,6 +371,20 @@ app.put('/users/:id/creator-tier', async (c) => {
 	const input = parse(TierAssign, await body(c));
 	return ok(c, await assignTier(searchDb(c), c.req.param('id'), input.tierId, actor(c), input.source ?? 'admin'));
 });
+
+// Caption minutes (AUN-CAPTIONS §6): the user's month and the admin's grants; admin-api audits each change
+app.get('/users/:id/caption-minutes', async (c) => {
+	const db = searchDb(c);
+	const userId = c.req.param('id');
+	const [usage, grants] = await Promise.all([subjectOfUser(db, userId).then((s) => readUsage(db, s)), listGrants(db, userId)]);
+	return ok(c, { usage, grants });
+});
+const GrantBody = z.object({ minutes: z.coerce.number(), scope: z.enum(['month', 'until_used']), reason: z.string().max(500) }).strict();
+app.post('/users/:id/caption-minutes/grants', async (c) => ok(c, { grant: await addGrant(searchDb(c), c.req.param('id'), parse(GrantBody, await body(c)), actor(c)) }));
+const GrantRevoke = z.object({ reason: z.string().max(500) }).strict();
+app.post('/users/:id/caption-minutes/grants/:grantId/revoke', async (c) =>
+	ok(c, { grant: await revokeGrant(searchDb(c), c.req.param('id'), c.req.param('grantId'), parse(GrantRevoke, await body(c)).reason, actor(c)) }),
+);
 
 // Admin jobs (heavy actions run from the admin-jobs queue; see lib/admin/jobs.ts)
 const JobQuery = z.object({

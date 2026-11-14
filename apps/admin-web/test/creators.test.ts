@@ -36,8 +36,8 @@ const ARABIC = /[؀-ۿ]/;
 const tEn = createTranslator('en');
 const tAr = createTranslator('ar');
 
-const CREATOR: CreatorTier = { id: 'creator', name: 'Creator', unlimited: false, perHour: 300, perDay: 2000, maxConcurrent: 20, maxChannels: 3, updatedAt: null, updatedBy: null };
-const UNLIMITED: CreatorTier = { id: 'unlimited', name: 'Unlimited', unlimited: true, perHour: 0, perDay: 0, maxConcurrent: 0, maxChannels: null, updatedAt: null, updatedBy: null };
+const CREATOR: CreatorTier = { id: 'creator', name: 'Creator', unlimited: false, perHour: 300, perDay: 2000, maxConcurrent: 20, maxChannels: 3, captionMinutesMonth: 0, updatedAt: null, updatedBy: null };
+const UNLIMITED: CreatorTier = { id: 'unlimited', name: 'Unlimited', unlimited: true, perHour: 0, perDay: 0, maxConcurrent: 0, maxChannels: null, captionMinutesMonth: 0, updatedAt: null, updatedBy: null };
 const TIERS = [CREATOR, UNLIMITED];
 
 const setTier = async () => ({ ok: true as const, data: null });
@@ -58,6 +58,8 @@ describe('tier effect (stated in every confirmation)', () => {
   it('states the limits, with numbers formatted for the locale', () => {
     assert.equal(tierEffect(CREATOR, tEn, 'en'), 'They can upload up to 300 videos per hour and 2,000 per day (20 starting at once), and own up to 3 channels.');
     assert.equal(tierEffect({ ...CREATOR, maxChannels: null }, tEn, 'en').endsWith('own any number of channels.'), true);
+    // Caption minutes join the sentence only when the tier gives some
+    assert.equal(tierEffect({ ...CREATOR, captionMinutesMonth: 600 }, tEn, 'en').endsWith('Caption minutes: 600 a month.'), true);
     assert.equal(tierEffect(UNLIMITED, tEn, 'en'), 'They can upload and create channels with no limits.');
     assert.equal(tierEffect(null, tEn, 'en'), 'They will not be able to upload or create channels.');
     const arabic = tierEffect(CREATOR, tAr, 'ar');
@@ -72,12 +74,13 @@ describe('tier effect (stated in every confirmation)', () => {
 });
 
 describe('tier form validation (same bounds and rules as api-videos)', () => {
-  const base: TierFormValues = { id: 'gold', name: 'Gold', unlimited: false, perHour: 10, perDay: 100, maxConcurrent: 5, maxChannels: 2 };
+  const base: TierFormValues = { id: 'gold', name: 'Gold', unlimited: false, perHour: 10, perDay: 100, maxConcurrent: 5, maxChannels: 2, captionMinutesMonth: 0 };
 
   it('accepts a valid tier and an unlimited one without limits', () => {
     assert.deepEqual(validateTierForm(base, { create: true }), {});
     assert.deepEqual(validateTierForm({ ...base, unlimited: true, perHour: NaN }), {});
     assert.deepEqual(validateTierForm({ ...base, maxChannels: null }), {}, 'empty channels = no limit');
+    assert.deepEqual(validateTierForm({ ...base, captionMinutesMonth: -1 }).captionMinutesMonth?.key, 'creators.errorRange');
   });
 
   it('flags each field outside CREATOR_TIER_BOUNDS, a daily limit under the hourly one, and bad ids or names', () => {

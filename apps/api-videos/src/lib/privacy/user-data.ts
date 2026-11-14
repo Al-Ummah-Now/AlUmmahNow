@@ -42,6 +42,7 @@ import { isOwnershipComplete } from '../search/ownership';
 import { logger } from '../logger';
 import type { SearchDb } from '@al-ummah/shared-types';
 import { footprintTargets, footprintsComplete, forgetFootprints } from './footprints';
+import { eraseCaptionMinutes } from '../captions/minutes';
 
 /** Tombstone written in place of a user id on content kept after erasure. */
 export const DELETED_USER_ID = 'deleted-user';
@@ -994,8 +995,9 @@ export async function eraseUserData(
 				if (removed > 0) bump(summary.deleted, 'subscriptions', removed);
 			}
 			if (db) {
-				ctx.budget.spend();
+				ctx.budget.spend(2);
 				await forgetFootprints(db, userId);
+				await eraseCaptionMinutes(db, userId);
 			}
 			const profiles = asBucket(env.profiles);
 			ctx.budget.spend();

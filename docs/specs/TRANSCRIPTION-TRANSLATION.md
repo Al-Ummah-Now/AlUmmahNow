@@ -453,6 +453,20 @@ Owner decisions 2026-11-13: build with **mode A**; the **Arabic text is served f
 
   Optional-provider jobs should count at a multiple of the default that matches their cost ratio (§7.4). The multiple is for the plan to set.
 
+### 6.3.1 As built: caption minutes (owner decision 2026-11-14)
+
+The owner chose **a tier allowance plus admin grants**, both in the videos admin (never Auth RBAC). This replaces the `entitlement_grants` table proposed above until site-wide subscriptions exist.
+- **Tier:** each creator tier has **Caption minutes per month** (`creator_tiers.caption_minutes_month`). The shipped Creator tier starts at 0. Unlimited tiers, and the super admin, have no limit. It is edited on the admin's Creators → Tiers page.
+- **Grants:** on the admin's user page → **Caption minutes**. An admin with `creators:manage` grants N minutes either for **this month only** or **until used** (spent after the monthly allowance, in any month). A reason is required. Revoking also needs a reason: unused minutes stop counting, and used ones stay used. Every grant and revoke is audited (`site_settings_log`, `content:user:<id>`, actions `caption-grant` / `caption-grant-revoke`).
+- **Metering (SEARCH_DB, migration 0032):**
+  - `caption_minute_usage` holds the minutes of the month's allowance per subject and month (UTC).
+  - `caption_minute_grants` holds the grants.
+  - `caption_minute_holds` holds one reservation per job: what it took from the month and from each grant.
+- **Who pays:** the subject is the tier holder that `resolveCreator` names: the channel owner, or a super admin themselves.
+- **Reserve, commit, release:** a job's minutes are reserved when it is requested, from the month first and then from "until used" grants, oldest first. Each update is conditional, and a lost race is undone and retried, so a subject is never charged past a limit or twice for the same job. When the job finishes, the minutes used stand and the rest is given back (grants first). A failed or cancelled job gives back everything, once.
+- **Account erasure** deletes the user's usage, holds and grants.
+- Code: `packages/shared-types/src/caption-minutes.ts`, `apps/api-videos/src/lib/captions/minutes.ts`.
+
 ### 6.4 Inline title translation: free with fair use (decided O5)
 - **What it costs us:**
   - a title is about 73 characters and costs about $0.00002 (Gemma) to $0.00007 (DeepSeek);
