@@ -13,6 +13,9 @@ import {
 import { useOwnData, type CreatedVideo, type Creator } from './release/builders';
 import { apiFetch, expectHydrated } from './release/web-session';
 
+/** A channel's page: /{locale}/@{handle} for a channel with a handle (/channels/{id} 308s there), else /channels/{id} */
+const channelPageUrl = (locale: string, id: string, rest = '') => new RegExp(`/${locale}/(channels/${id}|@[^/?#]+)${rest}`);
+
 /**
  * Channel settings: overview (/settings/channel/[id]), the ownership guard on
  * every settings page, edit (/edit), videos (now Studio: /videos 301s to
@@ -146,7 +149,7 @@ test.describe('Ownership guard', () => {
       const main = channel();
       for (const suffix of SETTINGS_PAGES) {
         await page.goto(`/en/settings/channel/${main.id}${suffix}`);
-        await expect(page, `settings${suffix || ' overview'}`).toHaveURL(new RegExp(`/en/channels/${main.id}$`));
+        await expect(page, `settings${suffix || ' overview'}`).toHaveURL(channelPageUrl('en', main.id, '$'));
         await expect(page.getByTestId('channel-tabs')).toBeVisible();
       }
       // The old videos page is a permanent redirect to Studio, which signs visitors in first
@@ -164,7 +167,7 @@ test.describe('Ownership guard', () => {
         const main = channel();
         for (const suffix of SETTINGS_PAGES) {
           await page.goto(`/${locale}/settings/channel/${main.id}${suffix}`);
-          await expect(page, `settings${suffix || ' overview'}`).toHaveURL(new RegExp(`/${locale}/channels/${main.id}$`));
+          await expect(page, `settings${suffix || ' overview'}`).toHaveURL(channelPageUrl(locale, main.id, '$'));
         }
         // No management UI leaked on the public page
         await expect(page.getByTestId('channel-settings-link')).toHaveCount(0);
@@ -335,7 +338,7 @@ test.describe('Tab management', () => {
       await expect(page.getByTestId(`tab-${hide}`)).toHaveCount(0);
       // A hidden tab requested by URL falls back to the default tab
       await page.goto(`/en/channels/${target().id}?tab=${hide}`);
-      await expect(page).toHaveURL(new RegExp(`/en/channels/${target().id}$`));
+      await expect(page).toHaveURL(channelPageUrl('en', target().id, '$'));
       await expect(page.getByTestId(`tab-${original.defaultTab}`)).toHaveAttribute('aria-selected', 'true');
     });
   });

@@ -5,6 +5,9 @@ import { centerX, clickUntil, expectRtl, fillStable, tempName } from './test-uti
 import { useOwnData, type Creator } from './release/builders';
 import { apiFetch, expectHydrated } from './release/web-session';
 
+/** A channel's page: /{locale}/@{handle} for a channel with a handle (/channels/{id} 308s there), else /channels/{id} */
+const channelPageUrl = (locale: string, id: string, rest = '') => new RegExp(`/${locale}/(channels/${id}|@[^/?#]+)${rest}`);
+
 /**
  * Community posts: the owner's post manager
  * (/settings/channel/[id]/community and /community/new: text, poll and quiz
@@ -157,7 +160,7 @@ test.describe('Post manager', () => {
     await card.getByTestId('post-actions').click();
     await expect(page.getByRole('menuitem', { name: 'Edit' })).toHaveCount(0);
     await page.getByRole('menuitem', { name: 'View' }).click();
-    await expect(page).toHaveURL(new RegExp(`/en/channels/${channelId()}\\?tab=community$`));
+    await expect(page).toHaveURL(channelPageUrl('en', channelId(), '\\?tab=community$'));
     await expect(postCard(page, marker)).toBeVisible();
   });
 
