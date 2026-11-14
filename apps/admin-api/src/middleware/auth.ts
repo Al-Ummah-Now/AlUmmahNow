@@ -79,12 +79,9 @@ export async function authMiddleware(c: Context, next: Next) {
       }, 401);
     }
 
-    // Get dynamic auth config based on environment
-    const authConfig = getAuthConfig(c.env);
-
-    const payload = authConfig.VERIFY_JWT_SIGNATURE
-      ? await validateJWTWithSignature(token, c.env)
-      : await validateJWTBasic(token);
+    // Always the issuer's signature, iss, exp, token type and revocation: there is no unverified
+    // mode, in any environment (a forged or tampered token is a 401)
+    const payload = await validateJWTWithSignature(token, c.env);
 
     if (!payload) {
       return c.json({
@@ -180,41 +177,6 @@ export async function adminMiddleware(c: Context, next: Next) {
   }
 }
 
-async function validateJWTBasic(token: string): Promise<AuthPayload | null> {
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) {
-      return null;
-    }
-
-    const payload = JSON.parse(atob(parts[1])) as AuthPayload;
-
-    // Log non-sensitive JWT data only
-    logger.debug('JWT basic validation', {
-      userId: payload.sub,
-      email: maskEmail(payload.email),
-      roles: payload.roles,
-      iat: payload.iat,
-      exp: payload.exp
-    });
-
-    const now = Math.floor(Date.now() / 1000);
-    if (payload.exp && payload.exp < now) {
-      logger.debug('JWT token expired', { exp: payload.exp, now });
-      return null;
-    }
-    if (isLegacyLongLivedToken(payload)) {
-      logger.debug('Rejected a legacy long-lived token', { userId: payload.sub });
-      return null;
-    }
-
-    return { ...payload, ...passkeyFields(token, payload) };
-  } catch (error) {
-    logger.error('JWT validation error:', error);
-    return null;
-  }
-}
-
 async function validateJWTWithSignature(token: string, env?: any): Promise<AuthPayload | null> {
   try {
     if (!env) {
@@ -284,12 +246,11 @@ async function validateJWTWithSignature(token: string, env?: any): Promise<AuthP
 
 /**
  * Verifies an access token the same way the middleware does (signature and
- * revocation when configured). Used by routes outside /api that accept an
+ * revocation). Used by routes outside /api that accept an
  * optional user token. Returns null when the token is not valid.
  */
 export async function verifyAccessToken(token: string, env: unknown): Promise<AuthPayload | null> {
-  const authConfig = getAuthConfig(env);
-  return authConfig.VERIFY_JWT_SIGNATURE ? validateJWTWithSignature(token, env) : validateJWTBasic(token);
+  return validateJWTWithSignature(token, env);
 }
 
 export function getAuthContext(c: Context): AuthContext | null {

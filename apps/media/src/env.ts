@@ -1,4 +1,5 @@
 import type { Transcoder } from './transcoder';
+import { constantTimeEqual } from '@al-ummah/shared-types';
 
 export interface SecretBinding {
 	get(): Promise<string>;
@@ -51,3 +52,9 @@ export function bucketFor(env: Pick<Env, 'MEDIA' | 'MEDIA_PRIVATE'>, key: string
 }
 
 export const errorText = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+
+/** Whether the request's X-API-Key is INTERNAL_API_KEY (constant time; an unbound or empty key never matches). */
+export async function hasInternalKey(request: Request, binding: SecretBinding | string | undefined): Promise<boolean> {
+	if (!binding) return false;
+	return constantTimeEqual(request.headers.get('X-API-Key'), await secret(binding, 'INTERNAL_API_KEY'));
+}

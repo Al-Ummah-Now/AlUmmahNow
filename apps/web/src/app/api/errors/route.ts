@@ -1,6 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { ERROR_LIMITS } from '@al-ummah/shared-types';
+import { subjects } from '@/interfaces/subjects';
+import { getOpenAuthClient } from '@/lib/auth/openauth-client';
+import { verifiedUserId } from '@/lib/auth/verify-result';
 
 /**
  * Browser error reports (lib/errors/reporter.ts) → admin-api POST /internal/errors.
@@ -42,11 +45,17 @@ async function internalApiKey(cf: Ctx | null): Promise<string> {
   return process.env.INTERNAL_API_KEY || '';
 }
 
-/** The signed-in account from the session cookie (no network call); none when signed out. */
+/**
+ * The signed-in account, from the session's access token verified against the issuer (the
+ * cookie itself is editable JSON, so its userId alone is never vouched for); none when signed
+ * out or the token does not verify. JWKS is cached per isolate (lib/auth/openauth-client.ts).
+ */
 async function sessionUserId(): Promise<string | null> {
   try {
     const { SessionManager } = await import('@/lib/auth/session-manager');
-    return (await SessionManager.getActiveSession())?.userId ?? null;
+    const session = await SessionManager.getActiveSession();
+    const client = getOpenAuthClient();
+    return await verifiedUserId(session?.accessToken, (token) => client.verify(subjects, token));
   } catch {
     return null;
   }

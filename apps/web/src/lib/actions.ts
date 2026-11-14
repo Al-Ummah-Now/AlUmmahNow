@@ -7,6 +7,7 @@ import { subjects, setTokens } from "./auth"
 import { AuthSubject } from "@/interfaces"
 import { startSingleSignOut } from "./auth/single-sign-out"
 import { sessionRoles } from "./auth/session-roles"
+import { verificationFailed } from "./auth/verify-result"
 import { newStateNonce, pkceCookieValue, stateCookieOptions, withState, PKCE_COOKIE, STATE_COOKIE } from "./auth/oauth-state"
 import { RETURN_COOKIE, returnPathFromReferer } from "./auth/silent-sign-in"
 import { safeStudioReturn } from "@/lib/studio/resolve"
@@ -58,10 +59,9 @@ export async function authenticated(): Promise<AuthSubject | false> {
       return false;
     }
 
-    // Check if verification has an actual error (not just empty object)
-    const hasError = verified.err && Object.keys(verified.err).length > 0;
-
-    if (hasError) {
+    // Any error is a failed verification. (openauth's errors are Error subclasses with no
+    // enumerable keys, so the old `Object.keys(err).length > 0` test never saw one.)
+    if (verificationFailed(verified)) {
       return false;
     }
 
@@ -69,21 +69,9 @@ export async function authenticated(): Promise<AuthSubject | false> {
       await setTokens(verified.tokens!.access, verified.tokens!.refresh);
     }
 
-    if ('subject' in verified) {
+    // Only the verified subject: never the token's payload read without its signature
+    if ('subject' in verified && verified.subject) {
       return verified.subject;
-    }
-
-    // If no subject but verification succeeded, try manual extraction
-    try {
-      const payload = JSON.parse(atob(accessToken.value.split('.')[1]));
-      if (payload.type === "user" && payload.properties) {
-        return {
-          type: "user",
-          properties: payload.properties
-        } as AuthSubject;
-      }
-    } catch (_manualError) {
-      // Silent fallback failure
     }
 
     return false;
@@ -126,7 +114,7 @@ export async function login(locale: string = 'en', returnTo?: unknown) {
         refresh: refreshToken?.value,
       });
 
-      const hasError = verified.err && Object.keys(verified.err).length > 0;
+      const hasError = verificationFailed(verified);
 
       if (!hasError && 'tokens' in verified) {
         await setTokens(verified.tokens!.access, verified.tokens!.refresh);

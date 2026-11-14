@@ -14,9 +14,18 @@ let cfEnv: Record<string, unknown> = {};
 jest.mock('@opennextjs/cloudflare', () => ({ getCloudflareContext: async () => ({ env: cfEnv, ctx: { waitUntil } }) }));
 
 let sessionUser: string | null = null;
+/** The id the session's access token proves (null: it does not verify, e.g. forged or tampered). */
+let tokenUser: string | null = null;
 jest.mock('@/lib/auth/session-manager', () => ({
-  SessionManager: { getActiveSession: async () => (sessionUser ? { userId: sessionUser } : null) },
+  SessionManager: { getActiveSession: async () => (sessionUser ? { userId: sessionUser, accessToken: 'session-access-token' } : null) },
 }));
+jest.mock('@/lib/auth/openauth-client', () => ({
+  getOpenAuthClient: () => ({
+    verify: async (_subjects: unknown, token: string) =>
+      token === 'session-access-token' && tokenUser ? { subject: { type: 'user', properties: { id: tokenUser } } } : { err: new Error('Invalid access token') },
+  }),
+}));
+jest.mock('@/interfaces/subjects', () => ({ subjects: {} }));
 
 import { POST } from '../route';
 
@@ -33,6 +42,7 @@ describe('POST /api/errors', () => {
     cfEnv = { ADMIN_API_URL: 'https://admin.api.example/', INTERNAL_API_KEY: { get: async () => 'k-1' } };
     global.fetch = fetchMock as unknown as typeof fetch;
     sessionUser = null;
+    tokenUser = null;
   });
 
   it('forwards in the background and answers 202', async () => {
@@ -47,12 +57,30 @@ describe('POST /api/errors', () => {
     expect(init.body).toBe(body);
   });
 
-  it('vouches for the signed-in account from the server session, never the page', async () => {
+  it('vouches for the signed-in account its verified token proves, never the page', async () => {
     sessionUser = 'usr_session1';
+    tokenUser = 'usr_session1';
     const body = JSON.stringify({ events: [{ app: 'web', kind: 'upload', ref: 'ERR-AAAA-BBBB', message: 'x', userId: 'usr_forged99' }] });
     await POST(request(body));
     const [, init] = fetchMock.mock.calls[0] as unknown as [string, { headers: Record<string, string> }];
     expect(init.headers['X-Client-User-Id']).toBe('usr_session1');
+  });
+
+  it('vouches for nobody when the session cookie names an account its token does not prove', async () => {
+    // The session cookie is editable JSON: a userId there alone is never vouched for
+    sessionUser = 'usr_victim';
+    tokenUser = null;
+    await POST(request(JSON.stringify({ events: [{ app: 'web', kind: 'upload', ref: 'ERR-AAAA-BBBB', message: 'x' }] })));
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, { headers: Record<string, string> }];
+    expect(init.headers['X-Client-User-Id']).toBeUndefined();
+  });
+
+  it('vouches for the verified token id, not the cookie userId, when they differ', async () => {
+    sessionUser = 'usr_victim';
+    tokenUser = 'usr_real';
+    await POST(request(JSON.stringify({ events: [{ app: 'web', kind: 'upload', ref: 'ERR-AAAA-BBBB', message: 'x' }] })));
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, { headers: Record<string, string> }];
+    expect(init.headers['X-Client-User-Id']).toBe('usr_real');
   });
 
   it('accepts sendBeacon bodies (any content type) and refuses other sites, junk and huge bodies', async () => {

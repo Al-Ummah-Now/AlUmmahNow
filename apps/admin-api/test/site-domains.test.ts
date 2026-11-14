@@ -11,6 +11,8 @@ import { staffSiteDomainsRouter, studioSiteDomainsRouter } from '../src/routers/
 import { recordsOf, statusOf } from '../src/lib/sites/saas';
 import { runDomainChecks } from '../src/lib/sites/domains';
 import { sqliteD1 } from './d1-sqlite';
+import { SignJWT, exportJWK, generateKeyPair } from 'jose';
+import { __resetClientForTests } from '../src/lib/openauth-client';
 
 const json = (v: unknown, status = 200) => new Response(JSON.stringify(v), { status, headers: { 'content-type': 'application/json' } });
 
@@ -159,16 +161,44 @@ describe('site domains (admin-api)', () => {
 
   it('Studio route: needs the internal key, a signed-in user and channel.edit', async () => {
     const t = setup();
+    const ISSUER = 'https://auth.test';
+    const { publicKey, privateKey } = await generateKeyPair('ES256');
+    const jwk = { ...(await exportJWK(publicKey)), kid: 'k1', alg: 'ES256', use: 'sig' };
+    const saas = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+      if (url.origin === ISSUER && url.pathname === '/.well-known/oauth-authorization-server') return json({ issuer: ISSUER, jwks_uri: `${ISSUER}/.well-known/jwks.json` });
+      if (url.origin === ISSUER && url.pathname === '/.well-known/jwks.json') return json({ keys: [jwk] });
+      return saas(input, init);
+    }) as typeof fetch;
+    __resetClientForTests();
     try {
       const app = new Hono();
       app.route('/internal/site-domains', studioSiteDomainsRouter as never);
-      const token = (sub: string) => `x.${btoa(JSON.stringify({ sub, exp: Math.floor(Date.now() / 1000) + 600 })).replace(/=+$/, '')}.y`;
-      const req = (headers: Record<string, string>) => app.request('/internal/site-domains/ch_1/domains', { headers }, { ...t.env, ENVIRONMENT: 'local' } as never);
-      assert.equal((await req({})).status, 401);
-      assert.equal((await req({ 'X-API-Key': 'k' })).status, 401);
-      assert.equal((await req({ 'X-API-Key': 'k', Authorization: `Bearer ${token('usr_other')}` })).status, 403);
-      assert.equal((await req({ 'X-API-Key': 'k', Authorization: `Bearer ${token('usr_owner')}` })).status, 200);
+      const signed = (id: string, key: CryptoKey = privateKey as CryptoKey) =>
+        new SignJWT({ mode: 'access', type: 'user', properties: { id, email: `${id}@example.com` } })
+          .setProtectedHeader({ alg: 'ES256', kid: 'k1' })
+          .setIssuer(ISSUER)
+          .setAudience('client-1')
+          .setSubject(`user:${id}`)
+          .setIssuedAt()
+          .setExpirationTime('15m')
+          .sign(key);
+      const unsigned = (id: string) => `x.${btoa(JSON.stringify({ sub: id, mode: 'access', type: 'user', properties: { id }, exp: Math.floor(Date.now() / 1000) + 600 })).replace(/=+$/, '')}.y`;
+      // Every environment verifies: 'local' used to read an unsigned token as is
+      for (const ENVIRONMENT of ['production', 'local', 'development']) {
+        const req = (headers: Record<string, string>) =>
+          app.request('/internal/site-domains/ch_1/domains', { headers }, { ...t.env, Issuer: ISSUER, ClientId: 'client-1', ENVIRONMENT } as never);
+        assert.equal((await req({})).status, 401);
+        assert.equal((await req({ 'X-API-Key': 'k' })).status, 401);
+        assert.equal((await req({ 'X-API-Key': 'k', Authorization: `Bearer ${unsigned('usr_owner')}` })).status, 401, `${ENVIRONMENT}: an unsigned token is refused`);
+        const forged = (await generateKeyPair('ES256')).privateKey as CryptoKey;
+        assert.equal((await req({ 'X-API-Key': 'k', Authorization: `Bearer ${await signed('usr_owner', forged)}` })).status, 401, `${ENVIRONMENT}: a token signed with another key is refused`);
+        assert.equal((await req({ 'X-API-Key': 'k', Authorization: `Bearer ${await signed('usr_other')}` })).status, 403);
+        assert.equal((await req({ 'X-API-Key': 'k', Authorization: `Bearer ${await signed('usr_owner')}` })).status, 200);
+      }
     } finally {
+      globalThis.fetch = saas;
       t.restore();
     }
   });
