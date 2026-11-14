@@ -43343,7 +43343,7 @@
           "Captions"
         ],
         "summary": "Cancel a transcription job",
-        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nGives back its reserved minutes. A job that already ended is returned unchanged; one already writing its draft is 409 `job_finishing`.",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nGives back its reserved minutes. A job that already ended is returned unchanged; one writing its draft is 409 `job_finishing` (cancellable after 90 minutes without progress).",
         "operationId": "post_CaptionJobCancel",
         "parameters": [
           {

@@ -269,6 +269,18 @@ describe('caption jobs: erase', () => {
 		assert.equal((await finishJob(asEnv, out.job.id, { outcome: 'ready', minutesUsed: 3 }, undefined, NOV)).minutesCharged, 3);
 		assert.equal(await remaining(), 7);
 	});
+
+	it('a job stuck writing its draft may be cancelled once stale; progress never moves it back', async () => {
+		const { asEnv, remaining } = await setup(10);
+		const out = await ask(asEnv);
+		assert.ok('job' in out);
+		await onProgress(asEnv, out.job.id, { status: 'postprocessing', done: 1, total: 1 }, NOV);
+		assert.equal(await onProgress(asEnv, out.job.id, { status: 'transcribing', done: 0, total: 1 }, NOV), false);
+		const later = new Date(NOV.getTime() + 91 * 60_000);
+		assert.equal((await cancelJob(asEnv, 'v1', out.job.id, later)).status, 'cancelled');
+		assert.equal(await remaining(), 10);
+		assert.equal(await onProgress(asEnv, out.job.id, { status: 'postprocessing', done: 1, total: 1 }, later), false, 'a late retry stops before writing');
+	});
 });
 
 describe('caption jobs: internal routes', () => {
