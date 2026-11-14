@@ -13,6 +13,8 @@
  *   videos' fields before and after), alive for 24 hours. Deleted by prefix.
  * - HUMAN_VERIFIED `h:<userId>` (middleware/bot-protection.ts): the account passed the bot check,
  *   kept for 180 days. Deleted.
+ * - global_settings `ops/media-delivery.json` (lib/media/settings.ts): the provider settings name the
+ *   admin who saved them last (`updatedBy`). Set to null when that admin is erased; the settings stay.
  *
  * Idempotent; called after every erasure pass by both callers (DELETE /api/privacy/data and the
  * admin erasure job).
@@ -21,6 +23,7 @@ import { UPLOAD_MARKER_PREFIX } from '../uploads/reaper';
 import { undoUserPrefix } from '../bulkEditUndo';
 import { humanVerifiedKey } from '../../middleware/bot-protection';
 import { getTusSessionKey, tusUserIndexPrefix, TUS_UPLOAD_INDEX_MARK } from '../bunny/tus';
+import { SETTINGS_KEY as MEDIA_SETTINGS_KEY } from '../media/settings';
 
 interface KvLike {
 	list(o: { prefix: string; cursor?: string }): Promise<{ keys: { name: string }[]; list_complete: boolean; cursor?: string }>;
@@ -28,6 +31,8 @@ interface KvLike {
 }
 interface BucketLike {
 	delete(key: string | string[]): Promise<void>;
+	get?(key: string): Promise<{ json<T>(): Promise<T> } | null>;
+	put?(key: string, value: string, options?: { httpMetadata?: { contentType?: string } }): Promise<unknown>;
 }
 
 export interface UploadTracesEnv {
@@ -73,5 +78,13 @@ export async function eraseUploadTraces(env: UploadTracesEnv, userId: string, de
 		for (const name of undo) await env.TUS_SESSIONS.delete(name);
 	}
 	if (env.HUMAN_VERIFIED && userId) await env.HUMAN_VERIFIED.delete(humanVerifiedKey(userId));
+	if (env.global_settings?.get && env.global_settings.put && userId) {
+		// The settings stay as they are (no re-validation): only who saved them last is forgotten
+		const stored = await env.global_settings.get(MEDIA_SETTINGS_KEY);
+		const doc = stored ? await stored.json<Record<string, unknown>>().catch(() => null) : null;
+		if (doc && doc.updatedBy === userId) {
+			await env.global_settings.put(MEDIA_SETTINGS_KEY, JSON.stringify({ ...doc, updatedBy: null }), { httpMetadata: { contentType: 'application/json' } });
+		}
+	}
 	return { markers, sessions };
 }
