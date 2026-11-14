@@ -210,7 +210,7 @@ dropped. What leaves the API is our ids and server-signed playback and thumbnail
 | Settings store | `apps/api-videos/src/lib/media/settings.ts` |
 | Playback decision, view rewrite, fallback counting | `apps/api-videos/src/lib/media/playback.ts` |
 | Health | `apps/api-videos/src/lib/media/health.ts`, D1 `0036_media_providers.sql` |
-| Originals kept for a sole R2 copy | `apps/api-videos/src/lib/media/originals.ts`, D1 `0037_media_originals_keep.sql` |
+| Originals kept for a sole R2 copy | `apps/api-videos/src/lib/media/originals.ts`, D1 `0038_media_originals_keep.sql` |
 | Internal routes | `apps/api-videos/src/endpoints/media/mediaInternal.ts` |
 | Admin routes | `apps/admin-api/src/routers/media.router.ts` |
 | Our ids, refs, ingest plan | `apps/api-videos/src/lib/media/refs.ts`, `ingest.ts`, D1 `media_provider_refs` |

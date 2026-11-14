@@ -30,7 +30,7 @@
 --   apps/api-videos/migrations/search/0035_caption_overdraft.sql
 --   apps/api-videos/migrations/search/0036_media_providers.sql
 --   apps/api-videos/migrations/search/0037_image_owners.sql
---   apps/api-videos/migrations/search/0037_media_originals_keep.sql
+--   apps/api-videos/migrations/search/0038_media_originals_keep.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
