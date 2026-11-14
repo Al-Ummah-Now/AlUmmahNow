@@ -14,6 +14,10 @@ import { choosePlayback } from '../src/lib/media/playback';
 import { bunnyRef } from '../src/lib/media/providers';
 import { adminVideoMedia, setVideoOverride } from '../src/lib/media/video-override';
 import { createMediaInternalRouter } from '../src/endpoints/media/mediaInternal';
+import { VideoFetch } from '../src/endpoints/video/videoFetch';
+import { errorHandler } from '../src/middleware/error-handler';
+import { fromHono } from 'chanfana';
+import { publicVideoFields } from '../src/lib/transformations';
 import { MemoryBucket, videoFixture } from './helpers';
 
 const ID = '912859ed-e618-4d04-8438-874a74a251dd';
@@ -94,6 +98,19 @@ describe('per-video playback override', () => {
 		assert.deepEqual(await setVideoOverride(env, '00000000-0000-4000-8000-000000000000', { order: ['bunny'] }, 'admin-1'), { ok: false, problem: 'not_found' });
 		await raw.videos.put(ID, JSON.stringify({ ...(await read()), isDeleted: true }));
 		assert.deepEqual(await setVideoOverride(env, ID, { order: ['bunny'] }, 'admin-1'), { ok: false, problem: 'deleted' });
+	});
+
+	it('the pin (who set it, why) never leaves the server in a video response', async () => {
+		const { env, raw, read } = setup();
+		await setVideoOverride(env, ID, { order: ['r2', 'bunny'], note: 'secret ops note' }, 'admin-7');
+		assert.equal('mediaOverride' in publicVideoFields(await read()), false);
+		const app = new Hono();
+		app.onError(errorHandler);
+		fromHono(app).get('/api/videos/:id', VideoFetch);
+		const res = await app.request(`/api/videos/${ID}`, { headers: { 'CF-Connecting-IP': '203.0.113.7' } }, { ...raw, channels: new MemoryBucket() } as never);
+		assert.equal(res.status, 200);
+		const text = await res.text();
+		assert.ok(!text.includes('mediaOverride') && !text.includes('admin-7') && !text.includes('secret ops note'), text.slice(0, 300));
 	});
 
 	it('an override with nothing meaningful clears instead of storing noise', async () => {
