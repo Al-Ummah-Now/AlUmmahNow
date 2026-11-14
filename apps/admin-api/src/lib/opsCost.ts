@@ -14,6 +14,7 @@
  */
 import { newErrorRef, scrubEvent, type ErrorEventInput } from '@al-ummah/shared-types';
 import { logger } from './logger';
+import type { D1Database } from './types';
 
 export const BUDGET_USD = 500;
 /** Shares of the month's budget that open a warning. */
