@@ -1903,7 +1903,7 @@ export const SCHEMA: Record<string, any> = {
     },
     "street": {
       "type": "object",
-      "description": "The lantern street: strings of lit lanterns down the sides of the page (image tiles repeated vertically) and soft distant lights behind the content. No code in the package; the package switches it on and gives its art.",
+      "description": "The lantern street: one wide image tile of strings and lit lanterns repeated behind the whole page, over soft distant lights. No code in the package; the package switches it on and gives its art.",
       "properties": {
         "enabled": {
           "type": "boolean"
@@ -1976,49 +1976,6 @@ export const SCHEMA: Record<string, any> = {
             "dark"
           ]
         },
-        "bands": {
-          "type": "object",
-          "description": "Tall image tiles of strings and lit lanterns (drawn at 2x) for the left and right side of the page, repeated vertically without a seam.",
-          "properties": {
-            "left": {
-              "type": "object",
-              "properties": {
-                "light": {
-                  "$ref": "#/$defs/imageAsset"
-                },
-                "dark": {
-                  "$ref": "#/$defs/imageAsset"
-                }
-              },
-              "additionalProperties": false,
-              "required": [
-                "light",
-                "dark"
-              ]
-            },
-            "right": {
-              "type": "object",
-              "properties": {
-                "light": {
-                  "$ref": "#/$defs/imageAsset"
-                },
-                "dark": {
-                  "$ref": "#/$defs/imageAsset"
-                }
-              },
-              "additionalProperties": false,
-              "required": [
-                "light",
-                "dark"
-              ]
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "left",
-            "right"
-          ]
-        },
         "faint": {
           "type": "object",
           "properties": {
@@ -2038,7 +1995,7 @@ export const SCHEMA: Record<string, any> = {
             "light",
             "dark"
           ],
-          "description": "Opacity of the bands where they lie behind text, chosen so every text colour keeps 4.5:1."
+          "description": "Opacity of the street where its lanterns lie behind text, chosen so every text colour keeps 4.5:1."
         },
         "lightsOpacity": {
           "type": "object",
@@ -2060,6 +2017,23 @@ export const SCHEMA: Record<string, any> = {
             "dark"
           ],
           "description": "Opacity of the distant lights layer."
+        },
+        "tile": {
+          "type": "object",
+          "description": "One wide image tile of strings (edge to edge) and lit lanterns (in the page margins), drawn at 2x and repeated in both directions behind the page without a seam.",
+          "properties": {
+            "light": {
+              "$ref": "#/$defs/imageAsset"
+            },
+            "dark": {
+              "$ref": "#/$defs/imageAsset"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "light",
+            "dark"
+          ]
         }
       },
       "additionalProperties": false,

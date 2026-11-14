@@ -2,11 +2,11 @@
 // CMS, sign-in, profile, accounts admin). Plain JavaScript, no dependencies, so other repos can
 // vendor this file as is (with fanous-street.css).
 //
-// The street is pre-made art, not drawn by script: the theme's tokens give two tall image tiles
-// of strings and lit lanterns (--fanous-street-band-left/-right, repeated down the sides of the
-// page with no seam) and the soft distant lights (--fanous-street-lights). fanous-street.css
-// paints them behind every element when <html> has the class fanous-street. This module only
-// sets that class when the active theme switches the street on (--fanous-street-on: 1) and keeps
+// The street is pre-made art, not drawn by script: the theme's tokens give one wide image tile of
+// strings and lit lanterns (--fanous-street-tile, repeated behind the whole page with no seam) and
+// the soft distant lights (--fanous-street-lights). fanous-street.css paints them behind every
+// element when <html> has the class fanous-street. This module only sets that class when the
+// active theme switches the street on (--fanous-street-on: 1) and keeps
 // it in step with theme and mode changes. Nothing runs on scroll or resize, there is no drawing,
 // no measuring and no animation, so the street costs nothing after the first paint.
 // <html data-fanous-street="off"> switches it off for a page.

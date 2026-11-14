@@ -495,7 +495,7 @@
   }
 }
 
-/* The lantern street: this app's content spans the page width (no side gutters), so the street's
-   bands lie behind text everywhere and stay at the theme's faint opacity (every text colour keeps
-   4.5:1 over them). */
-html.fanous-street { --fanous-street-band-opacity: var(--fanous-street-faint); }
+/* The lantern street: this app's content spans the page width (no margins), so the street's
+   lanterns lie behind text and the street stays at the theme's faint opacity (every text colour
+   keeps 4.5:1 over it). */
+html.fanous-street { --fanous-street-opacity: var(--fanous-street-faint); }

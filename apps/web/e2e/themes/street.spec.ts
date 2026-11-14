@@ -3,13 +3,13 @@ import { applyTheme, mockApi, signIn, THEMES, type Mode } from './harness';
 
 /**
  * THEME-STREET: the Fawanees lantern street (packages/fanous-tokens/street). The street is
- * pre-made art: two tall image tiles of strings and lit lanterns repeated down the sides of the
- * page (repeat-y, seamless, shown at 2x) over the distant lights tile, painted by CSS behind the
- * page. In Fawanees light and dark, English and Arabic, desktop and phone:
- *   - the street's layers are there, with the theme's tiles, repeated vertically and never
- *     stretched, and the tile files load;
- *   - this app keeps the bands at the theme's faint opacity (its content spans the page, so the
- *     bands lie behind text);
+ * pre-made art: one wide image tile of strings (edge to edge) and lit lanterns (in the page
+ * margins) repeated behind the whole page (seamless, shown at 2x) over the distant lights tile,
+ * painted by CSS. In Fawanees light and dark, English and Arabic, desktop and phone:
+ *   - the street's layers are there, with the theme's tile, repeated, centred and never
+ *     stretched, and the tile file loads;
+ *   - this app keeps the street at the theme's faint opacity (its content spans the page, so the
+ *     lanterns lie behind text);
  *   - no control or text block on the page is see-through (the street must never show through one);
  * the other themes have no street; the street adds no element, fixed layer or animation (nothing
  * to do on scroll, nothing may wait forever on getAnimations), so the watch page keeps it.
@@ -18,7 +18,7 @@ import { applyTheme, mockApi, signIn, THEMES, type Mode } from './harness';
 const MODES: Mode[] = ['light', 'dark'];
 const LANGS = ['en', 'ar'];
 const DEPTHS = [0, 900, 1800];
-const TILES = /street-band-left(-dark)?\.webp[\s\S]*street-band-right(-dark)?\.webp/;
+const TILE = /street-tile(-dark)?\.webp/;
 // Transitions and time-based animations off
 const STILL = '*,*::before,*::after{transition:none!important;animation-duration:0s!important;animation-delay:0s!important}';
 
@@ -64,8 +64,9 @@ async function layers(page: Page) {
     const css = getComputedStyle(document.documentElement);
     return {
       lights: before.content !== 'none' ? before.backgroundImage : 'none',
-      bands: after.content !== 'none' ? after.backgroundImage : 'none',
+      street: after.content !== 'none' ? after.backgroundImage : 'none',
       repeat: after.backgroundRepeat,
+      at: after.backgroundPosition,
       size: after.backgroundSize,
       opacity: after.opacity,
       faint: css.getPropertyValue('--fanous-street-faint').trim(),
@@ -75,7 +76,7 @@ async function layers(page: Page) {
 }
 
 for (const lang of LANGS) {
-  test(`street home ${lang}: the theme's tiles down both sides, repeated not stretched, faint here; no see-through controls`, async ({ page, context, baseURL }) => {
+  test(`street home ${lang}: the theme's tile behind the page, repeated not stretched, faint here; no see-through controls`, async ({ page, context, baseURL }) => {
     test.setTimeout(180_000);
     await signIn(context, baseURL!);
     await mockApi(page);
@@ -86,15 +87,16 @@ for (const lang of LANGS) {
       await settle(page);
       await expect(page.locator('html')).toHaveClass(/fanous-street/);
       const l = await layers(page);
-      expect(l.bands, `${mode}: band tiles`).toMatch(TILES);
-      expect(l.bands.includes('-dark.webp'), `${mode}: the ${mode} tiles`).toBe(mode === 'dark');
+      expect(l.street, `${mode}: street tile`).toMatch(TILE);
+      expect(l.street.includes('-dark.webp'), `${mode}: the ${mode} tile`).toBe(mode === 'dark');
       expect(l.lights, `${mode}: distant lights`).toMatch(/url\(/);
-      expect(l.repeat, `${mode}: repeat-y`).toBe('repeat-y, repeat-y');
-      expect(l.size, `${mode}: shown at the tile's own size`).toBe('auto, auto');
+      expect(l.repeat, `${mode}: repeated both ways`).toBe('repeat');
+      expect(l.at, `${mode}: centred on the page`).toBe('50% 0%');
+      expect(l.size, `${mode}: shown at the tile's own size`).toBe('auto');
       expect(l.position, `${mode}: scrolls with the page`).toBe('absolute');
       expect(Number(l.opacity), `${mode}: faint where it lies behind text`).toBeCloseTo(Number(l.faint), 2);
       // The tile files themselves are served
-      for (const url of l.bands.match(/\/fanous\/street\/[\w-]+\.webp/g) ?? []) {
+      for (const url of l.street.match(/\/fanous\/street\/[\w-]+\.webp/g) ?? []) {
         const res = await page.request.get(url);
         expect(res.status(), url).toBe(200);
         expect(res.headers()['content-type'], url).toContain('image/webp');
@@ -121,7 +123,7 @@ test('street: only Fawanees has it', async ({ page, context, baseURL }) => {
       await applyTheme(page, theme, mode);
       await settle(page);
       await expect(page.locator('html'), `${theme} ${mode}`).not.toHaveClass(/fanous-street/);
-      expect((await layers(page)).bands, `${theme} ${mode}`).toBe('none');
+      expect((await layers(page)).street, `${theme} ${mode}`).toBe('none');
     }
   }
 });

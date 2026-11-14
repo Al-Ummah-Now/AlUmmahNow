@@ -27,11 +27,11 @@ export interface StreetSection {
   /** Opacity of the glow behind each lantern, 0–1. */
   glow: ByMode<number>;
   /**
-   * The street itself: tall image tiles (strings and lit lanterns, drawn at 2x) for the left and
-   * the right side of the page, repeated down the page (repeat-y, seamless).
+   * The street itself: one wide image tile (strings edge to edge, lit lanterns in the page margins,
+   * drawn at 2x) repeated in both directions behind the whole page, with no seam.
    */
-  bands?: { left: ByMode<string>; right: ByMode<string> };
-  /** Opacity of the bands where they lie behind text (every text colour keeps 4.5:1), 0–1. */
+  tile?: ByMode<string>;
+  /** Opacity of the street where its lanterns lie behind text (every text colour keeps 4.5:1), 0–1. */
   faint?: ByMode<number>;
   /** Opacity of the distant lights layer, 0–1 (default 1). */
   lightsOpacity?: ByMode<number>;
