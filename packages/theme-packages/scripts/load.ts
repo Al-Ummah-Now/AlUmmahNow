@@ -28,3 +28,11 @@ export function inlineSvg(files: PackageFiles): (path: string) => string | undef
     return `data:image/svg+xml,${encodeURIComponent(new TextDecoder().decode(bytes).trim())}`;
   };
 }
+
+/** A package's SVG asset as text (the compiler writes the theme's colours into its art). */
+export function svgTextOf(files: PackageFiles): (path: string) => string | undefined {
+  return (path) => {
+    const bytes = files.assets[path];
+    return bytes && path.endsWith('.svg') ? new TextDecoder().decode(bytes) : undefined;
+  };
+}

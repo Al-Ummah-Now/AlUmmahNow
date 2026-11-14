@@ -56,6 +56,15 @@ describe('SignInBanner', () => {
     expect(screen.getByRole('button', { name: 'Hide this message' })).toBeInTheDocument();
   });
 
+  it("shows the theme's own art (painted by the theme CSS), never a drawing of its own", () => {
+    render(<SignInBanner />);
+    const art = screen.getByTestId('signin-banner-art');
+    expect(art).toHaveAttribute('aria-hidden', 'true');
+    expect(art).toHaveClass('sib-art');
+    expect(art).toBeEmptyDOMElement();
+    expect(screen.getByTestId('signin-banner').querySelectorAll('svg:not(.lucide)')).toHaveLength(0);
+  });
+
   it('renders nothing for a signed-in user', () => {
     mockAuth.user = { id: 'u1' };
     const { container } = render(<SignInBanner />);

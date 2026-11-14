@@ -5,7 +5,10 @@
 //                                          apps/web/src/theme/materials.css     (materials per component)
 //                                          apps/web/src/theme/fonts.css         (body fonts)
 //                                          apps/web/src/theme/player-themes.css (player chrome)
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+//                                          apps/web/src/theme/theme-art.css     (each theme's art, per mode)
+//                                          apps/web/public/fanous/art/<id>-<mode>.<hash>.svg
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { baseModule } from './base-data.ts';
@@ -13,6 +16,9 @@ import { baseModule } from './base-data.ts';
 const PKG = fileURLToPath(new URL('..', import.meta.url));
 const ROOT = join(PKG, '../..');
 const WEB_THEME = join(ROOT, 'apps/web/src/theme');
+/** Each built-in theme's art with its colours written in: static files, fetched only where painted */
+const WEB_ART = join(ROOT, 'apps/web/public/fanous/art');
+const ART_PATH = '/fanous/art';
 const check = process.argv.includes('--check');
 
 const outputs: Record<string, string> = {};
@@ -27,18 +33,30 @@ for (const [file, content] of Object.entries(outputs)) {
   else writeFileSync(file, content);
 }
 
-const { loadPackageDir, BUILT_IN, inlineSvg } = await import('./load.ts');
+const { loadPackageDir, BUILT_IN, inlineSvg, svgTextOf } = await import('./load.ts');
 const { validatePackage } = await import('../src/validate.ts');
 const { compilePackage } = await import('../src/compile.ts');
 
 const errors: string[] = [];
+const artFiles: Record<string, string> = {};
 const compiled = BUILT_IN.ids.map((id: string) => {
   const files = loadPackageDir(join(PKG, 'themes', id));
   if (files.theme.id !== id) errors.push(`${id}: theme.json id is "${files.theme.id}"`);
   const result = validatePackage(files.theme, { assets: files.assets, builtIn: true });
   for (const e of result.errors) errors.push(`${id}: ${e.path}: ${e.message}`);
   if (result.errors.length) return undefined;
-  return compilePackage(files.theme, { isDefault: id === BUILT_IN.default, rootFallback: true, inlineAsset: inlineSvg(files) });
+  return compilePackage(files.theme, {
+    isDefault: id === BUILT_IN.default,
+    rootFallback: true,
+    inlineAsset: inlineSvg(files),
+    svgText: svgTextOf(files),
+    // Content-hashed names: the files can be cached for good, and a changed drawing gets a new URL
+    artUrl: (mode: string, svg: string) => {
+      const name = `${id}-${mode}.${createHash('sha256').update(svg).digest('hex').slice(0, 10)}.svg`;
+      artFiles[name] = `${svg}\n`;
+      return `${ART_PATH}/${name}`;
+    },
+  });
 });
 if (errors.length) {
   for (const e of errors) console.error(`THEME PACKAGE ${e}`);
@@ -65,7 +83,18 @@ const web: Record<string, string> = {
   [join(WEB_THEME, 'materials.css')]: header('materials') + all.map((c) => c.materials).join(''),
   [join(WEB_THEME, 'fonts.css')]: header('body fonts') + all.map((c) => c.fonts).join(''),
   [join(WEB_THEME, 'player-themes.css')]: header('player chrome') + all.map((c) => c.player).join(''),
+  [join(WEB_THEME, 'theme-art.css')]: header('art: imagery.headerGraphic per mode, served from /fanous/art') + all.map((c) => c.art).join(''),
 };
+// The art files: exactly the current set (old hashes removed)
+const artNow = existsSync(WEB_ART) ? readdirSync(WEB_ART).filter((f) => f.endsWith('.svg')) : [];
+if (check) {
+  for (const [name, svg] of Object.entries(artFiles)) if (!artNow.includes(name) || readFileSync(join(WEB_ART, name), 'utf8') !== svg) stale.push(join(WEB_ART, name));
+  for (const name of artNow) if (!(name in artFiles)) stale.push(join(WEB_ART, name));
+} else {
+  mkdirSync(WEB_ART, { recursive: true });
+  for (const name of artNow) if (!(name in artFiles)) rmSync(join(WEB_ART, name));
+  for (const [name, svg] of Object.entries(artFiles)) writeFileSync(join(WEB_ART, name), svg);
+}
 for (const [file, content] of Object.entries(web)) {
   if (check) { if (!existsSync(file) || readFileSync(file, 'utf8') !== content) stale.push(file); }
   else writeFileSync(file, content);

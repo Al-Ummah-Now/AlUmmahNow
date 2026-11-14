@@ -12,6 +12,8 @@ import "@/theme/fonts.css";
 import "@/theme/materials.css";
 // pb-glass (static info pages' section boxes) and the page-builder panels: one shared stylesheet
 import "@al-ummah/shared-types/page-blocks.css";
+// Each theme's art per mode (--fanous-header-graphic), from the theme packages; files load only where painted
+import "@/theme/theme-art.css";
 import "@/theme/bridge.css";
 import "@/theme/demo-motion.css";
 import "@/theme/system.css";

@@ -273,7 +273,9 @@ export class ThemeStore {
     const theme: ThemePackage = { ...files.theme, id, kind: 'custom', version };
     const validation = validatePackage(theme, { assets: files.assets });
     if (!validation.ok) throw new ThemeError(422, 'The draft has errors; fix them before publishing', validation.errors);
-    const css = compilePackage(theme, { assetUrl: publicAssetUrl(id, version) }).css;
+    // The art (imagery.headerGraphic) is compiled from the package's own SVG with its colours, inline
+    const svgText = (path: string) => (path.endsWith('.svg') && files.assets[path] ? new TextDecoder().decode(files.assets[path]) : undefined);
+    const css = compilePackage(theme, { assetUrl: publicAssetUrl(id, version), svgText }).css;
     const at = prefix(id, version);
     let size = 0;
     for (const [path, bytes] of Object.entries(files.assets)) {

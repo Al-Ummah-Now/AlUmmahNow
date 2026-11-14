@@ -1,6 +1,7 @@
 /* Home page sign-in banner (components/home/SignInBanner.tsx), signed-out visitors only.
    Depth comes from each theme's materials (materials.css): the gradient border, the card fill and its edge,
-   the glow; a lantern drawn in the theme's colours sits on the start side. Per-theme accents follow. */
+   the glow. The art is the active theme's own: its package's header graphic, compiled per mode into
+   --fanous-header-graphic (theme-art.css), so nothing here draws a picture. Per-theme accents follow. */
 
 /* A dismissed banner is hidden before the first paint (SIGN_IN_BANNER_SCRIPT marks <html>): never a flash, CLS 0 */
 html[data-signin-banner=hidden] .sib{display:none}
@@ -23,25 +24,11 @@ html[data-signin-banner=hidden] .sib{display:none}
   color:var(--fanous-color-text-primary);
 }
 [dir=rtl].sib{--sib-art-x:92%}
-/* A faint repeating star lattice under the content: the geometric pattern of a lantern's pierced brass */
-.sib::before{
-  content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;opacity:.5;
-  background:
-    radial-gradient(circle at 50% 50%,color-mix(in srgb,var(--fanous-color-primary) 22%,transparent) 1.2px,transparent 1.8px) 0 0/22px 22px,
-    radial-gradient(circle at 50% 50%,color-mix(in srgb,var(--fanous-color-primary) 12%,transparent) 1px,transparent 1.6px) 11px 11px/22px 22px;
-  -webkit-mask-image:linear-gradient(var(--to-end,90deg),black,transparent 55%);mask-image:linear-gradient(var(--to-end,90deg),black,transparent 55%);
-}
-
-/* The lantern */
-.sib-art{grid-area:art;position:relative;width:clamp(76px,7vw,104px);aspect-ratio:2/3;display:grid;place-items:center}
-.sib-art-halo{position:absolute;inset:-30% -60%;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--fanous-color-primary) 46%,transparent),color-mix(in srgb,var(--fanous-color-primary) 10%,transparent) 55%,transparent);filter:blur(6px)}
-.sib-art-lantern{position:relative;width:100%;height:100%;overflow:visible;filter:drop-shadow(0 10px 18px color-mix(in srgb,black 35%,transparent))}
-.sib-art-chain,.sib-art-ring,.sib-art-rib{fill:none;stroke:var(--fanous-color-primary);stroke-width:2.5;stroke-linecap:round}
-.sib-art-rib{stroke-width:1.5;opacity:.55}
-.sib-art-cap,.sib-art-base{fill:var(--fanous-color-primary)}
-.sib-art-body{fill:color-mix(in srgb,var(--fanous-color-primary) 26%,var(--fanous-color-surface));stroke:var(--fanous-color-primary);stroke-width:2.5;stroke-linejoin:round}
-.sib-art-pane{fill:color-mix(in srgb,var(--fanous-color-primary-sheen,var(--fanous-color-primary)) 55%,transparent)}
-.sib-art-flame{fill:var(--fanous-color-primary-sheen,var(--fanous-color-primary));filter:drop-shadow(0 0 10px var(--fanous-color-primary))}
+/* The theme's art: a fixed box (no shift when the file arrives), painted only while the banner is shown */
+.sib-art{grid-area:art;position:relative;width:clamp(200px,17vw,260px);aspect-ratio:8/3;
+  background:var(--fanous-header-graphic,none) center/var(--fanous-header-graphic-size,contain) var(--fanous-header-graphic-repeat,no-repeat)}
+/* The theme's glow behind its art */
+.sib-art::before{content:"";position:absolute;inset:-20% -10%;z-index:-1;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--fanous-color-primary) 26%,transparent),transparent)}
 
 /* Copy */
 .sib-body{grid-area:body;display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-width:0}
@@ -67,47 +54,41 @@ html[lang=ar] .sib-title{line-height:1.5}
 @media(hover:hover){.sib-x:hover{background:color-mix(in srgb,var(--fanous-color-text-primary) 10%,transparent);color:var(--fanous-color-text-primary)}}
 .sib-x:focus-visible{outline:2px solid var(--fanous-color-focus-ring);outline-offset:2px}
 
-/* Tablet: the button goes under the copy */
+/* Tablet: the button goes under the copy, the art beside both */
 @media(max-width:1023px){
   .sib{grid-template-columns:auto minmax(0,1fr);grid-template-areas:"art body" "art actions";row-gap:16px}
+  .sib-art{width:180px}
   .sib-actions{justify-self:start}
 }
-/* Phone: one column, the lantern a small mark beside the heading, a full-width button */
+/* Phone: one column; the art is a band across the top, as the theme's header graphic is drawn to be */
 @media(max-width:639px){
-  .sib{grid-template-columns:minmax(0,1fr);grid-template-areas:"body" "actions";row-gap:14px;padding:18px 20px 20px;padding-inline-end:20px;--sib-art-x:100%}
-  [dir=rtl].sib{--sib-art-x:0%}
-  .sib-art{position:absolute;inset-block-start:-14px;inset-inline-end:44px;width:58px;opacity:.9;z-index:-1}
-  .sib-body{padding-inline-end:84px}
+  .sib{grid-template-columns:minmax(0,1fr);grid-template-areas:"art" "body" "actions";row-gap:12px;padding:14px 20px 20px;padding-inline-end:20px;--sib-art-x:50%}
+  [dir=rtl].sib{--sib-art-x:50%}
+  .sib-art{width:auto;height:72px;aspect-ratio:auto;justify-self:stretch;margin-inline:28px}
   .sib-title{font-size:20px}
   /* The chips say what the paragraph says: one screen keeps room for the featured video */
   .sib-text{display:none}
-  .sib-perks{margin-block-start:6px;margin-inline-end:-84px;gap:6px}
+  .sib-perks{margin-block-start:6px;gap:6px}
   .sib-perk{height:28px;font-size:12.5px;padding-inline:8px 10px}
   .sib-actions,.sib-cta{width:100%;justify-self:stretch}
   .sib-x{inset-block-start:8px;inset-inline-end:8px}
 }
 @media(prefers-reduced-motion:reduce){.sib-cta-arrow,.sib-x{transition:none}}
 
-/* Fawanees: gold on night, the lantern glows */
+/* Fawanees: gold on night */
 html[data-theme=fawanees].dark .sib{box-shadow:var(--m-card-edge,none),0 30px 70px -34px var(--sib-glow),inset 0 1px 0 color-mix(in srgb,var(--fanous-color-primary-sheen) 22%,transparent)}
 html[data-theme=fawanees]:not(.dark) .sib{
   background:
     radial-gradient(55% 140% at var(--sib-art-x,8%) 50%,color-mix(in srgb,var(--fanous-color-primary) 18%,transparent),transparent 70%) padding-box,
     linear-gradient(var(--to-end,90deg),var(--fanous-color-hero-start),var(--fanous-color-surface) 70%) padding-box,
     linear-gradient(120deg,var(--fanous-color-primary),color-mix(in srgb,var(--fanous-color-primary) 22%,var(--fanous-color-divider)) 45%,var(--fanous-color-divider)) border-box}
-html[data-theme=fawanees]:not(.dark) .sib-art-body{fill:color-mix(in srgb,var(--fanous-color-primary) 18%,var(--fanous-color-surface))}
 
-/* Lantern: night water and an orange flame */
-html[data-theme=lantern] .sib-art-flame{fill:var(--fanous-brand-glow,var(--fanous-color-primary))}
+/* Lantern: night water */
 html[data-theme=lantern].dark .sib{box-shadow:var(--m-card-edge,none),0 0 0 1px color-mix(in srgb,var(--fanous-color-primary) 18%,transparent),0 28px 60px -30px var(--sib-glow)}
 
-/* Nahas: hammered copper, an engraved edge, square-ish chips */
+/* Nahas: copper, an engraved edge */
 html[data-theme=nahas] .sib{box-shadow:var(--m-card-edge,none),inset 0 0 0 1px color-mix(in srgb,black 18%,transparent),0 22px 44px -28px var(--sib-glow)}
-html[data-theme=nahas] .sib::before{opacity:.7;background:
-  repeating-radial-gradient(circle at 12% 40%,color-mix(in srgb,var(--fanous-color-primary-sheen) 10%,transparent) 0 2px,transparent 2px 9px),
-  radial-gradient(circle at 50% 50%,color-mix(in srgb,var(--fanous-color-motif) 26%,transparent) 1.2px,transparent 1.8px) 0 0/20px 20px}
 html[data-theme=nahas] .sib-perk{box-shadow:inset 0 1px 0 color-mix(in srgb,var(--fanous-color-primary-sheen) 40%,transparent),inset 0 0 0 1px color-mix(in srgb,var(--fanous-color-motif) 50%,transparent)}
-html[data-theme=nahas] .sib-art-body{fill:color-mix(in srgb,var(--fanous-color-motif) 40%,var(--fanous-color-surface))}
 
 /* Zujaj: frosted glass over coloured light */
 html[data-theme=zujaj] .sib{-webkit-backdrop-filter:var(--m-blur);backdrop-filter:var(--m-blur);
@@ -117,5 +98,4 @@ html[data-theme=zujaj] .sib{-webkit-backdrop-filter:var(--m-blur);backdrop-filte
     var(--m-card) padding-box,linear-gradient(transparent,transparent) border-box}
 html[dir=rtl][data-theme=zujaj] .sib,html[data-theme=zujaj] [dir=rtl].sib{--sib-art-x:92%}
 html[data-theme=zujaj] .sib-perk{background:color-mix(in srgb,white 12%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,white 28%,transparent),inset 0 1px 0 color-mix(in srgb,white 40%,transparent)}
-html[data-theme=zujaj] .sib-art-body{fill:color-mix(in srgb,var(--fanous-color-motif) 30%,transparent)}
-html[data-theme=zujaj] .sib-art-halo{background:radial-gradient(closest-side,color-mix(in srgb,var(--fanous-color-motif) 50%,transparent),transparent)}
+html[data-theme=zujaj] .sib-art::before{background:radial-gradient(closest-side,color-mix(in srgb,var(--fanous-color-motif) 40%,transparent),transparent)}

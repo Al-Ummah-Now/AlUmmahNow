@@ -22,9 +22,19 @@ export interface CompileOptions {
    * Falls back to assetUrl.
    */
   inlineAsset?: (path: string) => string | undefined;
+  /**
+   * The text of an SVG asset. The header graphic is compiled from it with this theme's colours
+   * for each mode (see artCss); without it the art is `none`.
+   */
+  svgText?: (path: string) => string | undefined;
+  /**
+   * Where a compiled art file is served. Built-in themes: a static file per theme and mode
+   * (build-themes.ts), fetched only by an element that paints it. Default: an inline data: URL.
+   */
+  artUrl?: (mode: Mode, svg: string) => string;
 }
 
-export interface CompiledTheme { tokens: string; materials: string; fonts: string; player: string; css: string }
+export interface CompiledTheme { tokens: string; materials: string; fonts: string; player: string; art: string; css: string }
 
 export const scopeOf = (id: string) => `html[data-theme='${id}']`;
 
@@ -207,6 +217,52 @@ function playerCss(pkg: ThemePackage, assetUrl: (p: string) => string): string {
   return `${scopeOf(pkg.id)} {\n${lines.join('\n')}\n}\n`;
 }
 
+/** `var(--fanous-color-x)` / `var(--fanous-c-x)` (with or without a fallback) in an SVG asset */
+const SVG_VAR = /var\(\s*(--fanous-(?:color|c)-[a-z0-9-]+)\s*(?:,\s*([^()]*(?:\([^()]*\)[^()]*)*))?\)/g;
+
+/**
+ * The theme's own artwork for one mode, with the page colours it references (var(--fanous-…))
+ * written in. An SVG drawn as an image cannot read the page's custom properties, so it is
+ * compiled per theme and mode; the CSS then picks it by html[data-theme] and html.dark, like
+ * every other token, and switching theme switches the art. The source is imagery.headerGraphic;
+ * a package without one uses its imagery.pattern (tiled), and with neither the art is none.
+ */
+export function compiledArt(pkg: ThemePackage, mode: Mode, svgText: (path: string) => string | undefined, colors = resolvedColors(pkg)): { svg: string; tiled: boolean } | null {
+  const imagery = (pkg.imagery ?? {}) as Record<string, string | { light?: string; dark?: string } | undefined>;
+  const header = imagery.headerGraphic;
+  const pattern = imagery.pattern;
+  const source = typeof header === 'object' && header?.[mode]
+    ? { path: header[mode] as string, tiled: false }
+    : typeof pattern === 'string' && pattern !== 'none' && pattern.endsWith('.svg') ? { path: pattern, tiled: true } : null;
+  if (!source) return null;
+  const text = svgText(source.path);
+  if (!text) return null;
+  const values = new Map<string, string>([
+    ...BASE.roles.map((r) => [`--fanous-color-${kebab(r.name)}`, colors[mode].roles[r.name]] as [string, string]),
+    ...BASE.parts.map(({ part }) => [`--fanous-c-${part.split('.').map(kebab).join('-')}`, colors[mode].parts[part]] as [string, string]),
+  ]);
+  const svg = text.trim().replace(SVG_VAR, (whole, name: string, fallback?: string) => values.get(name) ?? fallback?.trim() ?? whole);
+  return { svg, tiled: source.tiled };
+}
+
+function artCss(pkg: ThemePackage, opts: CompileOptions): string {
+  const scope = scopeOf(pkg.id);
+  const dark = opts.isDefault ? `.dark, ${scope}.dark` : `${scope}.dark`;
+  const light = opts.isDefault ? `html:not(.dark), ${scope}:not(.dark)` : `${scope}:not(.dark)`;
+  const colors = resolvedColors(pkg);
+  const block = (mode: Mode) => {
+    const art = opts.svgText ? compiledArt(pkg, mode, opts.svgText, colors) : null;
+    if (!art) return '  --fanous-header-graphic: none;';
+    const url = opts.artUrl ? opts.artUrl(mode, art.svg) : `data:image/svg+xml,${encodeURIComponent(art.svg)}`;
+    return [
+      `  --fanous-header-graphic: url("${url}");`,
+      `  --fanous-header-graphic-size: ${art.tiled ? '96px auto' : 'contain'};`,
+      `  --fanous-header-graphic-repeat: ${art.tiled ? 'repeat' : 'no-repeat'};`,
+    ].join('\n');
+  };
+  return `${dark} {\n${block('dark')}\n}\n${light} {\n${block('light')}\n}\n`;
+}
+
 /** The package's CSS. Validate first: compiling an invalid package throws or emits broken CSS. */
 export function compilePackage(pkg: ThemePackage, opts: CompileOptions = {}): CompiledTheme {
   const assetUrl = opts.assetUrl ?? ((p: string) => p);
@@ -214,5 +270,6 @@ export function compilePackage(pkg: ThemePackage, opts: CompileOptions = {}): Co
   const materials = materialsCss(pkg, assetUrl);
   const fonts = fontsCss(pkg, assetUrl);
   const player = playerCss(pkg, assetUrl);
-  return { tokens, materials, fonts, player, css: [tokens, fonts, materials, player].join('\n') };
+  const art = artCss(pkg, opts);
+  return { tokens, materials, fonts, player, art, css: [tokens, fonts, materials, player, art].join('\n') };
 }

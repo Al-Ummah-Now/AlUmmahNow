@@ -291,7 +291,14 @@ Unused asset files are a warning, not an error.
   `--fanous-color-*` and `--fanous-c-*`;
 - materials: `--r-*` and `--m-*`;
 - body fonts and `@font-face` rules for bundled fonts;
-- player chrome: `--fanous-player-*`.
+- player chrome: `--fanous-player-*`;
+- art (`art`): per mode, `--fanous-header-graphic` (with `-size` and `-repeat`), the package's
+  `imagery.headerGraphic` with the `var(--fanous-color-*)` / `var(--fanous-c-*)` it references
+  written in as that mode's colours, since an SVG painted as an image cannot read the page's
+  properties. Without a header graphic it is the package's SVG `imagery.pattern`, tiled; with
+  neither, `none`. The compiler needs the SVG text (`svgText(path)`). Built-in themes are served
+  as content-hashed files (`apps/web/public/fanous/art/`, `apps/web/src/theme/theme-art.css`);
+  uploaded packages carry it inline in their published CSS. The home page's sign-in banner shows it.
 
 Asset references become `url()`s through the caller's `assetUrl(path)`, so the same package can be
 served from a build, a CDN or an admin API. The apps' component CSS reads only these properties.
