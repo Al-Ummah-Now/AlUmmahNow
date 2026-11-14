@@ -33,6 +33,8 @@ let askPlayer: ((p: unknown) => boolean) | undefined;
 /** The player errors right as it is ready, before the hook's own effect ran (a fast 503) */
 let errorAtReady: { code?: number; status?: number } | null = null;
 let heldAtReady: boolean | undefined;
+/** Video.js fires loadstart right after a fast 503 and loadstart clears player.error() */
+let clearedAfterHold = false;
 jest.mock('@/components/VideoPagePlayer/VideoPlayerWithChapters', () => ({
   VideoPlayerWithChapters: (props: { sources: { src: string }[]; poster?: string; onPlayerReady?: (p: unknown) => void; onPlaybackError?: (p: unknown) => boolean }) => {
     seen.push({ sources: props.sources, poster: props.poster });
@@ -43,6 +45,7 @@ jest.mock('@/components/VideoPagePlayer/VideoPlayerWithChapters', () => ({
       if (errorAtReady) {
         player.err = errorAtReady;
         heldAtReady = props.onPlaybackError?.(player);
+        if (clearedAfterHold) player.err = null;
       }
     }, []);
     return null;
@@ -89,6 +92,7 @@ describe.each([
     askPlayer = undefined;
     errorAtReady = null;
     heldAtReady = undefined;
+    clearedAfterHold = false;
   });
 
   it('plays exactly the playUrl and thumbnail it was given (R2 chosen by the API)', () => {
@@ -177,6 +181,17 @@ describe.each([
     await act(async () => { render(<Player options={options(R2, R2_THUMB, 'r2', [{ provider: 'r2', src: R2 }, { provider: 'bunny', src: BUNNY }])} />); });
     expect(heldAtReady).toBe(true);
     expect(player.srcs).toEqual([{ src: BUNNY, type: HLS }]);
+  });
+
+  it('a held error is handled even when video.js cleared it before the hook attached (fast 503, then loadstart)', async () => {
+    fetchFallbackPlayback.mockResolvedValue(null);
+    errorAtReady = { code: 2, status: 503 };
+    clearedAfterHold = true;
+    await act(async () => { render(<Player options={options(R2, R2_THUMB, 'r2', [{ provider: 'r2', src: R2 }, { provider: 'bunny', src: BUNNY }])} />); });
+    expect(heldAtReady).toBe(true);
+    // Straight to Bunny with the 503's reason, not a stall timeout 15 s later
+    expect(player.srcs).toEqual([{ src: BUNNY, type: HLS }]);
+    expect(fetchFallbackPlayback).toHaveBeenCalledWith(ID, 'manifest_5xx', false, ['r2']);
   });
 
   it('a lone source holds the error screen while the API is asked; with nothing new the screen shows', async () => {
