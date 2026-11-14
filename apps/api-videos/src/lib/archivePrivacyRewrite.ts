@@ -97,6 +97,15 @@ export interface ArchivePrivacyLane {
 	updatedAt: string;
 	finishedAt?: string;
 	prefixes: Record<string, PrefixCounts>;
+	/**
+	 * The one page this lane runs next. Queue delivery is at least once: a batch redelivered after
+	 * its pages had already sent their next message (an invocation over its limits, say) used to
+	 * fork the lane into two chains that each read the rest of the archive again (QA, 2026-11-13:
+	 * GetObject on al-ummah-now-messages-qa climbing to 560k an hour). A message for any other page
+	 * is a duplicate and is dropped. A retried page still matches: the lane is written only after
+	 * a page succeeds.
+	 */
+	expect?: { prefixIndex: number; cursor: string | null };
 }
 
 interface Env {
@@ -350,6 +359,11 @@ export async function handleArchivePrivacyMessage(env: Env, msg: QueueMessageLik
 			msg.ack();
 			return;
 		}
+		if (lane.expect && (lane.expect.prefixIndex !== body.prefixIndex || lane.expect.cursor !== (body.cursor ?? null))) {
+			logger.debug('[ArchivePrivacy] Duplicate page dropped', { runId: body.runId, lane: body.lane, prefixIndex: body.prefixIndex, expected: lane.expect.prefixIndex });
+			msg.ack();
+			return;
+		}
 		const titles = meta.mode === 'titles';
 		if (!titles && !meta.dryRun && !meta.key) throw new Error(`run ${body.runId} has no key left (finished?)`);
 		const result = titles
@@ -367,6 +381,9 @@ export async function handleArchivePrivacyMessage(env: Env, msg: QueueMessageLik
 		if (!next) {
 			lane.status = 'done';
 			lane.finishedAt = now.toISOString();
+			delete lane.expect;
+		} else {
+			lane.expect = { prefixIndex: next.prefixIndex, cursor: next.cursor };
 		}
 		// State first, then the next page: a retried page adds its counts again but never skips one
 		await putJson(settings, laneKey(body.runId, body.lane), lane);

@@ -115,4 +115,31 @@ describe('archive privacy rewrite', () => {
 		assert.equal(rewritten, 3);
 		assert.ok(!JSON.stringify([...bucket.store.values()]).includes(ALICE));
 	});
+	it('a redelivered page never forks its lane: every object is read once (QA 2026-11-13, GetObject climbing hourly)', async () => {
+		const bucket = new ArchiveBucket();
+		const now = new Date('2026-11-13T12:00:00Z');
+		for (let i = 0; i < 12; i++) bucket.set(`2026-11-12T10-00-${String(i).padStart(2, '0')}.x`, { id: String(i), type: MessageType.VideoView, payload: { viewerId: ALICE, videoId: 'v1' } });
+		let reads = 0;
+		const get = bucket.get.bind(bucket);
+		bucket.get = async (key: string) => (reads++, get(key));
+		const settings = new ArchiveBucket();
+		const queue: ArchivePrivacyMessage[] = [];
+		const env = { analytics_rollups: bucket, global_settings: settings, PROCESSING_CHECK_QUEUE: { send: async (m: ArchivePrivacyMessage) => void queue.push(m) } };
+		queue.push({ kind: ARCHIVE_PRIVACY_REWRITE_KIND, runId: 'archive-privacy-dup-1', lane: 0, prefixIndex: 0, cursor: null, start: { dryRun: true, lanes: 1, limit: 5 } });
+		let steps = 0;
+		while (queue.length && steps++ < 5000) {
+			const body = queue.shift()!;
+			// At-least-once delivery: every message arrives twice, the copy after the original was handled
+			for (let copy = 0; copy < 2; copy++) {
+				let acked = false;
+				await handleArchivePrivacyMessage(env as never, { body, attempts: 1, ack: () => void (acked = true), retry: () => assert.fail('no retry expected') }, now);
+				assert.ok(acked, 'a duplicate is acked, never retried');
+			}
+		}
+		assert.equal(queue.length, 0);
+		const lane = settings.json('ops/archive-privacy/runs/archive-privacy-dup-1/lane-0.json');
+		assert.equal(lane.status, 'done');
+		assert.equal(lane.prefixes['2026-11-12'].listed, 12, 'each object listed once, not once per fork');
+		assert.equal(reads, 12, 'each object read once');
+	});
 });
