@@ -1253,7 +1253,9 @@ const SIZES = {
 /** The built-in <img>: width/height reserve the box; srcset from the CMS variants when present. */
 export function defaultImage(ref: MediaRef, o: ImageOptions): string {
    const v = ref.variants;
-   const dims = ref.width && ref.height ? ` width="${ref.width}" height="${ref.height}"` : '';
+   // Only whole positive numbers reach the markup: served data is checked, never trusted.
+   const px = (n: unknown): n is number => typeof n === 'number' && Number.isInteger(n) && n > 0 && n <= 20_000;
+   const dims = px(ref.width) && px(ref.height) ? ` width="${ref.width}" height="${ref.height}"` : '';
    const srcset = v && v.webp ? ` srcset="${esc(v.webp)}" sizes="${esc(o.sizes)}"` : '';
    const load = o.priority ? ' loading="eager" fetchpriority="high"' : ' loading="lazy"';
    return `<img${o.className ? ` class="${esc(o.className)}"` : ''} src="${esc(ref.url)}"${srcset} alt="${esc(ref.alt ?? '')}"${dims}${load} decoding="async">`;

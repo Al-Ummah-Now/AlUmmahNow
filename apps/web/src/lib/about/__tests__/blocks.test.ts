@@ -53,6 +53,14 @@ describe('renderAboutBlocks', () => {
     expect(renderAboutBlocks([image('http://cms.example/a.png')], ctx('en')).html).not.toContain('<img');
   });
 
+  it('writes image dimensions only when they are whole numbers (no attribute injection)', () => {
+    const bad = { id: 'i', type: 'image', image: { id: 1, url: 'https://cms.example/a.png', alt: 'A', width: '1" onerror="alert(1)', height: 10, mime: 'image/png' }, caption: null, size: 'content', appearance: { align: 'start', width: 'content', tone: 'none', space: 'm' } } as unknown as ServedBlock;
+    const html = renderAboutBlocks([bad], ctx('en')).html;
+    expect(html).toContain('src="https://cms.example/a.png"');
+    expect(html).not.toContain('onerror');
+    expect(html).not.toContain('width="1');
+  });
+
   it('a page that does not open with a hero keeps its own header', () => {
     const out = renderAboutBlocks(sample('en').filter((b) => b.type !== 'hero'), ctx('en'));
     expect(out.hero).toBe(false);
