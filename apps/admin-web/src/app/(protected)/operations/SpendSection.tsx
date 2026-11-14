@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react';
 import Link from '@/components/AppLink';
 import type { Translator } from '@/i18n/translate';
 import { cardClass, linkClass } from '@/components/ui';
@@ -25,7 +24,7 @@ const PART_COLOR: Record<OpsCostPart, string> = {
 const TONE_FILL: Record<MeterTone, string> = { ok: 'var(--accent)', warn: 'var(--warning-fg)', danger: 'var(--danger-fg)' };
 const TONE_TEXT: Record<MeterTone, string> = { ok: 'text-fg', warn: 'text-warning-fg', danger: 'text-danger-fg' };
 
-function Stat({ label, value, sub, tone = 'ok', testId }: { label: string; value: string; sub?: ReactNode; tone?: MeterTone; testId: string }) {
+function Stat({ label, value, sub, tone = 'ok', testId }: { label: string; value: string; sub?: React.ReactNode; tone?: MeterTone; testId: string }) {
   return (
     <div className="rounded-lg border border-border bg-surface-2 p-4">
       <dt className="text-sm text-fg-muted">{label}</dt>
