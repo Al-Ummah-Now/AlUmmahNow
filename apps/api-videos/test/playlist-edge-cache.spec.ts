@@ -65,13 +65,29 @@ describe('anonymous expanded playlist edge cache', () => {
 		const stored = JSON.parse(entry!.body) as { items: { video: Record<string, unknown> }[] };
 		assert.equal(stored.items[0].video.isPublic, true);
 
-		// R2 changes are not seen by anonymous viewers until the entry expires...
+		// A video changed in R2 is not seen by anonymous viewers until the entry expires...
 		env.videos.store.set('v1', JSON.stringify(videoFixture({ id: 'v1', userId: OWNER, channelId: 'ch', title: 'Renamed' })));
-		env.playlists.store.delete('pl');
 		const second = await get(env, null);
 		assert.equal(second.status, 200);
 		assert.deepEqual(second.body.videoItems?.map((v) => v.title), ['One', 'Two']);
 		assert.equal(second.body.channelName, 'Channel');
+	});
+
+	it('the playlist itself is read every time: an edit is seen at once, a suspension or deletion is a 404 at once', async () => {
+		const env = setup();
+		await get(env, null);
+		await new Promise((r) => setTimeout(r, 0));
+		assert.equal(cache.store.size, 1);
+		const stored = JSON.parse(env.playlists.store.get('pl') as string);
+		env.videos.store.set('v1', JSON.stringify(videoFixture({ id: 'v1', userId: OWNER, channelId: 'ch', title: 'Renamed' })));
+		env.playlists.store.set('pl', JSON.stringify({ ...stored, title: 'Series 2', dateModified: '2026-02-01T00:00:00.000Z' }));
+		const edited = await get(env, null);
+		assert.equal(edited.body.title, 'Series 2');
+		assert.deepEqual(edited.body.videoItems?.map((v) => v.title), ['Renamed', 'Two']);
+		env.playlists.store.set('pl', JSON.stringify({ ...stored, isHidden: true }));
+		assert.equal((await get(env, null)).status, 404);
+		env.playlists.store.delete('pl');
+		assert.equal((await get(env, null)).status, 404);
 	});
 
 	it('signed-in viewers always read R2 and never fill the cache', async () => {

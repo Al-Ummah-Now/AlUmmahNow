@@ -10,8 +10,11 @@ import { edgeCacheUrl, readEdgeCache, writeEdgeCache } from '../../lib/edge-cach
 import { waitUntilOf } from '../../lib/search/ownership';
 
 /**
- * Anonymous channel reads (every channel page's server render, twice: metadata and page) are kept per
- * colo this long. Signed-in viewers always read R2: the owner sees their own edits at once.
+ * Anonymous channel reads (every channel page's server render) reuse the built view for this long:
+ * it saves the D1 count queries, not the R2 read. The channel itself is read and its visibility
+ * checked on every request, so a suspension, deletion or private switch applies at once; a cached
+ * view is used only while the stored channel's dateModified still matches. Signed-in viewers always
+ * build it fresh.
  */
 export const CHANNEL_VIEW_TTL_SECONDS = 30;
 
@@ -71,11 +74,6 @@ export class ChannelFetch extends OptionalAuthRoute {
 			// Retrieve the validated id
 			const { id } = request.params;
 			const userId = this.getUserId(c);
-			const cacheUrl = userId ? null : edgeCacheUrl(c.req.url, `channel-view/${encodeURIComponent(id)}`);
-			if (cacheUrl) {
-				const hit = await readEdgeCache<z.infer<typeof PublicChannelView>>(cacheUrl);
-				if (hit) return hit;
-			}
 
 			// Implement your own object fetch here
 			const bucket = c.env.channels;
@@ -130,6 +128,14 @@ export class ChannelFetch extends OptionalAuthRoute {
 				);
 			}
 
+			// Anonymous: reuse the view built for this exact version of the channel (saves the D1 counts)
+			const cacheUrl = userId ? null : edgeCacheUrl(c.req.url, `channel-view/${encodeURIComponent(id)}`);
+			const version = String(channel.dateModified ?? channel.dateCreated ?? '');
+			if (cacheUrl) {
+				const hit = await readEdgeCache<{ version: string; view: z.infer<typeof PublicChannelView> }>(cacheUrl);
+				if (hit && hit.version === version && hit.view) return hit.view;
+			}
+
 			// Transform to view model for response
 			const [channelView] = await toPublicChannels(c.env.NOTIFICATIONS_DB, [channel], c.env as never);
 
@@ -139,8 +145,8 @@ export class ChannelFetch extends OptionalAuthRoute {
 			// No queue message per channel read: the processor only logged it (and
 			// rejected anonymous ones), at the cost of queue operations per page load.
 
-			// Only a channel everyone may see is stored (private ones already returned 404 above)
-			if (cacheUrl && channelView) writeEdgeCache(cacheUrl, channelView, CHANNEL_VIEW_TTL_SECONDS, waitUntilOf(c as never));
+			// Only a channel everyone may see gets here (deleted, hidden and private ones returned 404 above)
+			if (cacheUrl && channelView) writeEdgeCache(cacheUrl, { version, view: channelView }, CHANNEL_VIEW_TTL_SECONDS, waitUntilOf(c as never));
 			return channelView;
 		} catch (error) {
 			// Add context to error before re-throwing

@@ -11,9 +11,6 @@ import R2Repository, { rethrowBusy } from "../../lib/r2Repo";
 import { DEFAULT_CHANNEL_TABS } from '@al-ummah/shared-types';
 import { logger } from '../../lib/logger';
 import { AuthenticatedRoute, AppContext } from "../../base";
-import { channelTabsCacheUrl } from './channelTabsFetch';
-import { deleteEdgeCache } from '../../lib/edge-cache';
-import { waitUntilOf } from '../../lib/search/ownership';
 
 export class ChannelTabsUpdate extends AuthenticatedRoute {
 	schema = {
@@ -209,9 +206,6 @@ export class ChannelTabsUpdate extends AuthenticatedRoute {
 		if (rejected) {
 			return c.json({ success: false, error: rejected }, 400);
 		}
-
-		// Anonymous readers in this colo see the new tabs at once (other colos within the cache TTL)
-		deleteEdgeCache(channelTabsCacheUrl(c.req.url, id), waitUntilOf(c as never));
 
 		// No queue message: tabs are frontend-only and the processor has no tab handler
 		// (every ChannelTabUpdate used to be retried and dead-lettered).
