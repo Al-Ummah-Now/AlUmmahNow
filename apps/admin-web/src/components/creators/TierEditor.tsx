@@ -247,7 +247,7 @@ function TierCard({ tier, users, canManage, actions, create = false }: { tier?: 
         <TierChangeDialog
           open={pending !== null}
           title={pending === 'delete' ? t('creators.tierDeleteTitle', { name: tier.name }) : t('creators.tierSaveTitle', { name: form.name.trim() || tier.name })}
-          body={pending === 'delete' ? t('creators.tierDeleteBody') : `${t('creators.tierSaveBody', { count: n(users) })} ${tierEffect(form, t, locale)}`}
+          body={pending === 'delete' ? t('creators.tierDeleteBody') : `${(users === 1 ? t('creators.tierSaveBodyOne') : t('creators.tierSaveBody', { count: n(users) }))} ${tierEffect(form, t, locale)}`}
           confirmLabel={pending === 'delete' ? t('creators.tierDelete') : t('creators.tierSave')}
           danger={pending === 'delete'}
           testId={`tier-${key}-confirm`}
@@ -272,7 +272,7 @@ export function TierEditor({ tiers, counts, canManage, actions }: { tiers: Creat
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <h2 id={`tier-${tier.id}-title`} className="text-lg font-semibold text-fg">{tier.name}</h2>
             <Chip tone={tier.unlimited ? 'info' : 'good'} testId={`tier-${tier.id}-users`}>
-              {t('creators.tierUsers', { count: formatNumber(counts[tier.id] ?? 0, locale) })}
+              {(counts[tier.id] ?? 0) === 1 ? t('creators.tierUsersOne') : t('creators.tierUsers', { count: formatNumber(counts[tier.id] ?? 0, locale) })}
             </Chip>
           </div>
           <TierCard tier={tier} users={counts[tier.id] ?? 0} canManage={canManage} actions={actions} />

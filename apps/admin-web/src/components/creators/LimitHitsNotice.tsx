@@ -12,7 +12,7 @@ export function LimitHitsNotice({ count, t, locale, showWho = true }: { count: n
   if (count <= 0) return null;
   return (
     <div role="status" data-testid="creators-notice-limited" className="mb-4 rounded border border-border border-s-4 border-s-accent bg-surface px-4 py-3 text-sm text-fg">
-      {t('creators.noticeLimited', { count: formatNumber(count, locale) })}{' '}
+      {count === 1 ? t('creators.noticeLimitedOne') : t('creators.noticeLimited', { count: formatNumber(count, locale) })}{' '}
       <span className="inline-flex flex-wrap gap-x-3">
         {showWho && <Link href="/users?tier=hit_limit" className={linkClass} data-testid="creators-notice-limited-who">{t('creators.noticeLimitedLink')}</Link>}
         <Link href={tiersHref()} className={linkClass} data-testid="creators-notice-limited-raise">{t('creators.noticeLimitedRaise')}</Link>

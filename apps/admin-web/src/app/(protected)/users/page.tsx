@@ -59,7 +59,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
       {data?.creators && <LimitHitsNotice count={data.creators.limitHits7d} t={t} locale={locale} />}
       {data?.creators && data.creators.needsTier > 0 && (
         <div role="status" data-testid="users-notice-needs-tier" className="mb-4 rounded border border-border border-s-4 border-s-accent bg-surface px-4 py-3 text-sm text-fg">
-          {t('creators.noticeNeedsTier', { count: n(data.creators.needsTier) })}{' '}
+          {data.creators.needsTier === 1 ? t('creators.noticeNeedsTierOne') : t('creators.noticeNeedsTier', { count: n(data.creators.needsTier) })}{' '}
           <Link href="/users?tier=needs_tier" className={`${linkClass} underline`} data-testid="users-notice-needs-tier-link">{t('creators.noticeNeedsTierLink')}</Link>
         </div>
       )}
