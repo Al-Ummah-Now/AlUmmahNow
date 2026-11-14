@@ -5,7 +5,7 @@
  * from the root layout (D-SEO-6, the copy PR); nothing here sets one.
  */
 import type { Metadata } from 'next';
-import type { EmbedVideo } from '@/lib/embed/content';
+import type { EmbedVideo, PublicChapter } from '@/lib/embed/content';
 import { canonicalWatchUrl, embedUrl } from '@/lib/embed/snippets';
 import { shareImageUrl } from '@/lib/embed/share-image';
 
@@ -55,14 +55,38 @@ export function isoDuration(seconds?: number): string | undefined {
   return `PT${h ? `${h}H` : ''}${m ? `${m}M` : ''}${s || (!h && !m) ? `${s}S` : ''}`;
 }
 
+/**
+ * A video's chapters as schema.org Clips (Google's key moments), each linking to the watch page at its
+ * start (`?t=`, which the player honours). Sorted, inside the video, at least 1 s long, with a title in
+ * the page's language; fewer than two usable chapters give none (one chapter is just the video).
+ */
+export function chapterClips(chapters: PublicChapter[], page: string, locale: string, duration?: number) {
+  const lang = locale === 'ar' ? 'ar' : 'en';
+  const end = duration && duration > 0 ? Math.floor(duration) : Infinity;
+  const usable = chapters
+    .map((c) => ({ start: Math.max(0, Math.floor(c.startTime)), end: c.endTime, name: (c.titleLocalized?.[lang] || c.title).replace(/\s+/g, ' ').trim() }))
+    .filter((c) => c.name && c.start < end)
+    .sort((a, b) => a.start - b.start)
+    .filter((c, i, all) => i === 0 || c.start > all[i - 1].start);
+  const clips = usable.flatMap((c, i) => {
+    // Ends where the next chapter starts, else at its own end, else at the video's end (unknown: none)
+    const stop = Math.min(usable[i + 1]?.start ?? (c.end && c.end > c.start ? Math.floor(c.end) : end), end);
+    if (stop - c.start < 1) return [];
+    const clip = { '@type': 'Clip', name: c.name.slice(0, 200), startOffset: c.start, url: `${page}?t=${c.start}` };
+    return [Number.isFinite(stop) ? { ...clip, endOffset: stop } : clip];
+  });
+  return clips.length >= 2 ? clips : [];
+}
+
 /** A watch page's VideoObject. Only for public videos: never for unlisted or private ones. */
-export function videoObjectLd(video: EmbedVideo, locale: string, origin: string) {
+export function videoObjectLd(video: EmbedVideo, locale: string, origin: string, chapters: PublicChapter[] = []) {
   const lang = locale === 'ar' ? 'ar' : 'en';
   const name = video.titleLocalized?.[lang] || video.title;
   const own = (video.descriptionLocalized?.[lang] || video.description || '').replace(/\s+/g, ' ').trim();
   // A Short's page is /shorts/{id} (D-SEO-10)
   const page = canonicalWatchUrl(origin, lang, video);
   const duration = isoDuration(video.duration);
+  const clips = chapterClips(chapters, page, lang, video.duration);
   return {
     '@context': 'https://schema.org',
     '@type': 'VideoObject',
@@ -85,6 +109,7 @@ export function videoObjectLd(video: EmbedVideo, locale: string, origin: string)
       : {}),
     publisher: { '@id': WWW_ORGANIZATION_ID },
     ...(video.isLive ? { publication: { '@type': 'BroadcastEvent', isLiveBroadcast: true } } : {}),
+    ...(clips.length && !video.isLive ? { hasPart: clips } : {}),
   };
 }
 
