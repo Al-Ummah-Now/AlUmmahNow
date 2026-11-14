@@ -8,6 +8,7 @@ import type { Metadata } from 'next';
 import type { EmbedVideo, PublicChapter } from '@/lib/embed/content';
 import { canonicalWatchUrl, embedUrl } from '@/lib/embed/snippets';
 import { shareImageUrl } from '@/lib/embed/share-image';
+import { ogImages, twitterImages } from './site-share-image';
 
 export const WWW_ORGANIZATION_ID = 'https://www.alummahnow.net/#organization';
 
@@ -41,7 +42,8 @@ export function listPageMetadata(locale: string, path: string, name: string, des
     title: { absolute: title },
     description,
     alternates: { canonical: at(locale), languages: { en: at('en'), ar: at('ar'), 'x-default': at('en') } },
-    openGraph: { title, description, type: 'website', url: at(locale), siteName: siteName(locale) },
+    openGraph: { title, description, type: 'website', url: at(locale), siteName: siteName(locale), images: ogImages(null, title) },
+    twitter: { card: 'summary', title, description, images: twitterImages(null) },
   };
 }
 

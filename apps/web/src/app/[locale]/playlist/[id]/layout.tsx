@@ -6,6 +6,7 @@ import { loadPublicPlaylistResult } from '@/lib/embed/content';
 import { playlistFallbackDescription, siteName } from '@/lib/seo/structured-data';
 import { isValidContentId } from '@/lib/embed/params';
 import { metaDescription } from '@/lib/seo/description';
+import { ogImages, twitterImages } from '@/lib/seo/site-share-image';
 import { ContentUnavailableError } from '@/lib/seo/availability';
 import { playlistAvailability } from '@/lib/seo/availability-server';
 
@@ -42,7 +43,9 @@ export async function generateMetadata({ params }: Pick<PlaylistLayoutProps, 'pa
       canonical: url(lang),
       languages: { en: url('en'), ar: url('ar'), 'x-default': url('en') },
     },
-    openGraph: { type: 'website', siteName: siteName(lang), url: url(lang), ...(title ? { title } : {}), ...(description ? { description } : {}) },
+    // Replaces the root layout's openGraph, so it names the site's image itself
+    openGraph: { type: 'website', siteName: siteName(lang), url: url(lang), ...(title ? { title } : {}), ...(description ? { description } : {}), images: ogImages(null, title || undefined) },
+    twitter: { card: 'summary', ...(title ? { title } : {}), ...(description ? { description } : {}), images: twitterImages(null) },
   };
 }
 

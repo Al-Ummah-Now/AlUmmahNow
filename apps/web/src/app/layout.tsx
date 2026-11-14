@@ -46,6 +46,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { appIcons } from "@/lib/favicon";
 import { WebVitalsBeacon } from "@/components/analytics/WebVitalsBeacon";
 import { originFromHost } from '@/lib/embed/request-origin';
+import { SITE_SHARE_IMAGE } from '@/lib/seo/site-share-image';
 
 /** Worker version id and environment for client error reports (admin Errors page). */
 async function errorReportingContext(): Promise<{ workerVersion?: string; environment?: string }> {
@@ -87,14 +88,14 @@ function siteMetadata(locale: string): Metadata {
       title: copy.title,
       description: copy.description,
       // The share image is the app icon at full size; url and metadataBase are set per request.
-      images: [{ url: '/icon-512.png', width: 512, height: 512, alt: copy.imageAlt }],
+      images: [{ ...SITE_SHARE_IMAGE, alt: copy.imageAlt }],
       type: 'website',
     },
     twitter: {
       card: 'summary',
       title: copy.title,
       description: copy.description,
-      images: ['/icon-512.png'],
+      images: [SITE_SHARE_IMAGE.url],
       site: '@alummahnow',
       creator: '@alummahnow',
     },

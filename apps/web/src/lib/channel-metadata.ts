@@ -4,10 +4,8 @@ import { headers } from 'next/headers';
 import type { Channel } from '@al-ummah/shared-types';
 import { channelPath } from '@/lib/channel-url';
 import { originFromHost } from '@/lib/embed/request-origin';
+import { ogImages, twitterImages } from '@/lib/seo/site-share-image';
 import { channelFallbackDescription, channelLd, siteName } from '@/lib/seo/structured-data';
-
-/** The site's share image (as in the root layout), for a channel with no avatar of its own. */
-const SITE_SHARE_IMAGE = { url: '/icon-512.png', width: 512, height: 512 };
 
 /** Absolute origin of the current request (canonical links need absolute URLs). */
 async function requestOrigin(): Promise<string | null> {
@@ -53,10 +51,10 @@ export async function buildChannelMetadata(channel: Channel | null, locale: stri
       description,
       siteName: siteName(locale),
       ...(origin ? { url: `${origin}${path}` } : {}),
-      // This object replaces the root layout's openGraph, so a channel without an avatar keeps the site's card image
-      images: [image ? { url: image, alt: title } : { ...SITE_SHARE_IMAGE, alt: title }],
+      // This object replaces the root layout's openGraph: a channel without an avatar gets the site's image
+      images: ogImages(image, title),
     },
-    twitter: { card: 'summary', title, description, images: [image || SITE_SHARE_IMAGE.url] },
+    twitter: { card: 'summary', title, description, images: twitterImages(image) },
   };
 }
 
