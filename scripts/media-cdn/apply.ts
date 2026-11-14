@@ -2,7 +2,7 @@
  * The media host's Cloudflare settings as code (epic #687, docs/media-delivery/RUNBOOK.md):
  *
  *   node --experimental-strip-types scripts/media-cdn/apply.ts --env qa|stage|production [--apply]
- *        [--only domain,cors,cache,tiered,ratelimit,purge,analytics] [--store-secret]
+ *        [--only domain,cors,cache,tiered,ratelimit,rum,purge,analytics] [--store-secret]
  *
  * Without --apply it reads the current state and prints what it would change
  * (and the exact Cache Rule, for pasting in the dashboard). With --apply it
@@ -13,13 +13,16 @@
  *   - Tiered Cache: Smart topology on (zone-wide; free, lowers R2 reads)
  *   - one rate-limit rule in the zone's http_ratelimit phase, found by its ref: public MP4
  *     downloads (#1182, D-SEO-11) per IP; zone-wide, so the same rule for every env
+ *   - one Configuration Rule in the zone's http_config_settings phase, found by its ref, that turns
+ *     Cloudflare Web Analytics (the auto-injected RUM beacon) off on every QA and stage host and for
+ *     headless browsers, so the zone's Web Analytics measures production visitors only (step rum)
  * and checks (never changes anything) that the token can purge the media host's
  * cache and read Account Analytics, which api-videos needs at runtime. With
  * --store-secret (and --apply) it also stores the token in Secrets Store as
  * media-cdn-api-token, the binding api-videos purges and reads analytics with.
  *
  * Token: CLOUDFLARE_API_TOKEN for everything (account R2 calls and the zone's
- * Cache Settings, Cache Purge, DNS, and Zone WAF Edit for the rate-limit rule; Account Analytics Read). MEDIA_CDN_API_TOKEN,
+ * Cache Settings, Cache Purge, DNS, Zone WAF Edit for the rate-limit rule and Config Rules Edit for the rum rule; Account Analytics Read). MEDIA_CDN_API_TOKEN,
  * when set, overrides it for the zone calls. Locally the wrangler login works for
  * the account calls only.
  */
@@ -85,6 +88,31 @@ export const MP4_RATE_LIMIT = {
 	expression: '(http.request.uri.path wildcard "/pub/*/video.mp4")',
 	action: 'block',
 	ratelimit: { characteristics: ['ip.src', 'cf.colo.id'], period: 10, requests_per_period: 10, mitigation_timeout: 10 },
+	enabled: true,
+};
+
+/**
+ * Cloudflare Web Analytics measures production visitors only. The zone injects the RUM beacon into
+ * every proxied HTML response, so without this the dashboard is mostly QA, stage and CI: QA hosts
+ * (`qa.`, `*.qa.`, auth's `*.auth.qa.`), stage hosts, and the headless browsers of the E2E suites
+ * that run against them (and the release suite's embed host). A Configuration Rule wins over the
+ * Web Analytics site rules (Cloudflare docs), and unlike them it can match the user agent.
+ * `wildcard` is case-insensitive and its `*` spans dots, so `*.qa.alummahnow.net` covers
+ * www.qa, videos.qa, admin.auth.qa and profile.auth.qa.
+ */
+export const NON_PROD_HOSTS = ['qa.alummahnow.net', 'stage.alummahnow.net'] as const;
+export const RUM_OFF_RULE = {
+	ref: 'al-ummah-rum-production-only',
+	description: 'Al Ummah Now: Web Analytics (RUM) on production visitors only: off on QA/stage hosts and headless browsers',
+	expression: [
+		`(http.host in {${NON_PROD_HOSTS.map((h) => `"${h}"`).join(' ')}})`,
+		...NON_PROD_HOSTS.map((h) => `(http.host wildcard "*.${h}")`),
+		'(lower(http.user_agent) contains "headless")',
+		'(lower(http.user_agent) contains "playwright")',
+		'(lower(http.user_agent) contains "lighthouse")',
+	].join(' or '),
+	action: 'set_config',
+	action_parameters: { disable_rum: true },
 	enabled: true,
 };
 
@@ -217,6 +245,31 @@ export async function planRateLimit(zone: ReturnType<typeof zoneClient>): Promis
 	return [{ what: `rate    add       rule ${want.ref} (other rules in the phase untouched)`, apply: () => zone('POST', `/rulesets/${entry!.id}/rules`, want) }];
 }
 
+export async function planRumOff(zone: ReturnType<typeof zoneClient>): Promise<Change[]> {
+	const want = RUM_OFF_RULE;
+	let entry: { id: string; rules?: Rule[] } | null = null;
+	try {
+		entry = await zone('GET', '/rulesets/phases/http_config_settings/entrypoint');
+	} catch (error) {
+		if (!(error instanceof CfApiError && error.status === 404)) throw error;
+	}
+	if (!entry) {
+		return [
+			{
+				what: `rum     create    phase entrypoint with rule ${want.ref}`,
+				apply: () => zone('POST', '/rulesets', { name: 'default', kind: 'zone', phase: 'http_config_settings', rules: [want] }),
+			},
+		];
+	}
+	const live = entry.rules?.find((r) => r.ref === want.ref);
+	if (!ruleDiffers(live, want)) {
+		console.log(`rum     ok        rule ${want.ref}`);
+		return [];
+	}
+	if (live?.id) return [{ what: `rum     update    rule ${want.ref}`, apply: () => zone('PATCH', `/rulesets/${entry!.id}/rules/${live.id}`, want) }];
+	return [{ what: `rum     add       rule ${want.ref} (other rules in the phase untouched)`, apply: () => zone('POST', `/rulesets/${entry!.id}/rules`, want) }];
+}
+
 export async function planTiered(zone: ReturnType<typeof zoneClient>): Promise<Change[]> {
 	const changes: Change[] = [];
 	const tiered = await zone<{ value: string }>('GET', '/argo/tiered_caching');
@@ -292,10 +345,10 @@ if (isMain) {
 	};
 	const env = arg('--env') as MediaEnv;
 	const apply = process.argv.includes('--apply');
-	const only = new Set((arg('--only') ?? 'domain,cors,cache,tiered,ratelimit,purge,analytics').split(','));
+	const only = new Set((arg('--only') ?? 'domain,cors,cache,tiered,ratelimit,rum,purge,analytics').split(','));
 	const storeSecret = process.argv.includes('--store-secret');
 	if (!['qa', 'stage', 'production'].includes(env)) {
-		process.stderr.write('usage: apply.ts --env qa|stage|production [--apply] [--only domain,cors,cache,tiered,ratelimit,purge,analytics] [--store-secret]\n');
+		process.stderr.write('usage: apply.ts --env qa|stage|production [--apply] [--only domain,cors,cache,tiered,ratelimit,rum,purge,analytics] [--store-secret]\n');
 		process.exit(2);
 	}
 	const main = async () => {
@@ -309,6 +362,7 @@ if (isMain) {
 			['cache', () => planCache(zone, env)],
 			['tiered', () => planTiered(zone)],
 			['ratelimit', () => planRateLimit(zone)],
+			['rum', () => planRumOff(zone)],
 			['purge', () => checkPurge(zone, env)],
 			['analytics', () => checkAnalytics(zoneToken!, cf.accountId)],
 		];
@@ -325,6 +379,11 @@ if (isMain) {
 					console.log('        → the token needs Zone: Cache Settings Edit (or apply by hand in the dashboard):');
 					if (name === 'cache') console.log(JSON.stringify(cacheRule(env), null, 2).replace(/^/gm, '          '));
 					else console.log('          Caching → Tiered Cache → Smart Tiered Caching Topology: on');
+				}
+				if (denied && name === 'rum') {
+					console.log('        → the token needs Zone: Config Rules Edit on alummahnow.net (or add it by hand: Rules → Configuration Rules → Create rule,');
+					console.log('          "Edit expression" with the expression below, then "Disable Real User Monitoring (RUM)": on):');
+					console.log(JSON.stringify(RUM_OFF_RULE, null, 2).replace(/^/gm, '          '));
 				}
 				if (denied && name === 'ratelimit') {
 					console.log('        → the token needs Zone: Zone WAF Edit on alummahnow.net (or add it by hand: Security → WAF → Rate limiting rules):');

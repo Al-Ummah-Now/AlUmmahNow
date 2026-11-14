@@ -13,7 +13,9 @@ const ENDPOINT = '/api/rum';
  */
 export function WebVitalsBeacon(): null {
   useEffect(() => {
-    if (Math.random() >= RUM_SAMPLE_RATE || typeof navigator.sendBeacon !== 'function') return undefined;
+    // Automated browsers (E2E suites, Lighthouse) are not visitors: navigator.webdriver is true under
+    // WebDriver/CDP automation, and the server drops headless user agents too (app/api/rum)
+    if (Math.random() >= RUM_SAMPLE_RATE || typeof navigator.sendBeacon !== 'function' || navigator.webdriver) return undefined;
     const lang = document.documentElement.lang === 'ar' ? 'ar' : 'en';
     const values: Partial<Record<RumMetric, number>> = {};
     const base = { k: pageKind(window.location.pathname), d: deviceClass(window.innerWidth), l: lang } as const;
