@@ -1,9 +1,13 @@
 name: Cleanup PR Preview Deployments
 
-# Deletes the preview workers a PR's `deploy-preview` label created
-# (deploy.yml: al-ummah-{web,api,processor,comms,admin-api,admin-web}-pr-<N>).
-# Runs when a PR closes, daily for any closed PR whose preview is still there (a close-time run that
-# failed or predates this workflow left PR 466's six workers deployed for days), and by hand. A preview that owns a custom
+# Deletes PR preview Workers (any al-ummah `*-pr-<N>` Worker on the shared account).
+# Only the web preview is still deployed (deploy.yml `deploy-preview` label, al-ummah-web-pr-<N>):
+# the backend and admin previews were dropped on 2026-11-14 (nothing used them, admin-web's did not
+# build, and on wrangler.qa.jsonc they tried to consume QA's queues and run QA's crons, run
+# 43572945300). Any other `*-pr-<N>` Worker is a leftover and is deleted even while its PR is open;
+# a web preview is deleted when its PR closes.
+# Runs when a PR closes, daily (a close-time run that failed or predates this workflow left PR 466's
+# six workers deployed for days), and by hand. A preview that owns a custom
 # domain is never deleted: deleting it would detach that hostname (on 2026-11-09
 # a preview owned admin.api.alummahnow.net; the release re-attaches such domains).
 
@@ -54,7 +58,9 @@ jobs:
 
           scripts=$(cf "$api/workers/scripts" | jq -r '.result[].id')
           domains=$(cf "$api/workers/domains?per_page=500" | jq -r '.result[] | "\(.service) \(.hostname)"')
-          previews=$(grep -E '^al-ummah-(web|api|processor|comms|admin-api|admin-web)-pr-[0-9]+$' <<<"$scripts" || true)
+          previews=$(grep -E '^al-ummah(-now)?-[a-z0-9-]+-pr-[0-9]+$' <<<"$scripts" || true)
+          # Not deployed any more: deleted whatever their PR's state (only on the daily or manual sweep)
+          leftovers=$(grep -vE '^al-ummah-web-pr-[0-9]+$' <<<"$previews" || true)
 
           if [ "$EVENT" = "pull_request" ]; then
             prs="$PR_NUMBER"
@@ -69,9 +75,14 @@ jobs:
           fi
           echo "PRs: ${prs:-none}"
 
+          targets=""
+          for n in $prs; do targets="$targets $(grep -E -- "-pr-${n}\$" <<<"$previews" | tr '\n' ' ' || true)"; done
+          if [ "$EVENT" != "pull_request" ] && [ -z "$PR_INPUT" ]; then targets="$targets $(tr '\n' ' ' <<<"$leftovers")"; fi
+          targets=$(tr ' ' '\n' <<<"$targets" | grep -v '^$' | sort -u || true)
+          echo "Workers: $(tr '\n' ' ' <<<"${targets:-none}")"
+
           failed=0
-          for n in $prs; do
-            for w in $(grep -E -- "-pr-${n}\$" <<<"$previews" || true); do
+          for w in $targets; do
               owned=$(awk -v w="$w" '$1 == w { print $2 }' <<<"$domains")
               if [ -n "$owned" ]; then
                 echo "::error::$w owns custom domain(s) $(tr "\n" " " <<<"$owned"); not deleting it (re-attach them to the right worker first)"
@@ -85,6 +96,5 @@ jobs:
                 echo "::error::could not delete $w"
                 failed=1
               fi
-            done
           done
           exit $failed

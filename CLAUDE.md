@@ -597,15 +597,9 @@ Note: **scheduler**, **cost-monitor** and **media** have no dedicated validate j
 **Pull Request Previews** (opt-in only):
 - **Disabled by default** - preview deployments only run when requested
 - **To deploy previews**: Add `deploy-preview` label to your PR
-- **Workers deployed** (when label is present) — all 6 CI-managed apps:
-  - **Web**: preview worker on workers.dev
-  - **API**: preview worker on workers.dev (with Swagger UI)
-  - **Processor**: preview worker (development env)
-  - **WebSocket**: preview worker on workers.dev
-  - **Admin API**: preview worker on workers.dev
-  - **Admin Web**: preview worker on workers.dev
-- Each app posts separate PR comment with deployment info
-- Auto-cleanup when PR closes, plus a daily sweep of closed PRs (`cleanup-pr-previews.yml`); previews run no crons (cleared after deploy)
+- **Worker deployed** (when label is present): **web only**, `al-ummah-web-pr-<N>` on workers.dev with `wrangler.preview.jsonc` (it talks to the real APIs). The api, processor, websocket, admin-api and admin-web previews were dropped on 2026-11-14: nothing used them, admin-web's did not build, and on `wrangler.qa.jsonc` they tried to consume QA's queues (a queue has one consumer) and run QA's crons (run 43572945300)
+- A preview never consumes queues or runs crons: `pnpm check:config` fails when a `*-pr-*` deploy uses anything but a `wrangler.preview.jsonc`, or a preview config has queue consumers or crons (`scripts/release/preview-config.ts`)
+- Deleted when the PR closes; a daily sweep (`cleanup-pr-previews.yml`) deletes web previews of closed PRs and any other al-ummah `*-pr-<N>` Worker at once
 - **Rationale**: Reduces unnecessary deployments, saves Cloudflare Workers quota
 
 **QA Deployment** (`deploy-qa` job): runs on every push to `main` (and by `workflow_dispatch` on `main`).
