@@ -11,7 +11,7 @@ import { webAuthConfig } from './session-login';
  * verifies the locale and the page to return to, and that the auth server's
  * sign-in page opened in that language.
  */
-export function watchSignInRedirect(page: Page, expected: { locale: 'en' | 'ar'; returnPath: string }) {
+export function watchSignInRedirect(page: Page, expected: { locale: 'en' | 'ar'; returnPath: string | RegExp }) {
   const seen: URL[] = [];
   const onRequest = (request: { url(): string; isNavigationRequest(): boolean }) => {
     const url = new URL(request.url());
@@ -27,7 +27,9 @@ export function watchSignInRedirect(page: Page, expected: { locale: 'en' | 'ar';
       page.off('request', onRequest);
       const login = seen[0];
       expect(login.searchParams.get('locale')).toBe(expected.locale);
-      expect(login.searchParams.get('return')).toBe(expected.returnPath);
+      const returned = login.searchParams.get('return') ?? '';
+      if (typeof expected.returnPath === 'string') expect(returned).toBe(expected.returnPath);
+      else expect(returned).toMatch(expected.returnPath);
       // Ends on the auth server's sign-in page, in the page's language
       const authOrigin = new URL(webAuthConfig().openAuthUrl).origin;
       await expect
