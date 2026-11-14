@@ -251,6 +251,7 @@ Small, fast, no sign-up, safe against prod:
 - auth clients: for each registered prod client, `GET /authorize?client_id=…&redirect_uri=<registered>&response_type=code` renders the login page (200, not an error page).
 - web: `/en` and `/ar` return 200 with the expected `<html lang dir>`. `/api/callback` with no code redirects to `/<locale>/auth/error`, and the response is HTML, not `{}`. The login action's authorize URL has `redirect_uri` exactly equal to what `/api/callback` will exchange with.
 - api-videos: `/health` 200.
+- web, what crawlers see (wiki AUN-SEO; `seo.spec.ts` covers every page type on the local stack, these are the parts only a real host shows). Production: `robots.txt` lets `User-agent: *` crawl (Cloudflare's managed block allowed) and lists `Sitemap: <host>/sitemap.xml`; `/en` sends no `X-Robots-Tag: noindex`. Other envs: `robots.txt` disallows everything and `/en` is noindex. Every env: `/sitemap.xml` is a sitemap index whose every `<loc>` is on the env's own host; `/en` has one canonical, exactly `https://<host>/en`, absolute en/ar/x-default hreflang on the host, and an absolute https `og:image`. Prod is checked only this way (and by the release E2E), never by hand.
 
 ## 8. Config checks
 
