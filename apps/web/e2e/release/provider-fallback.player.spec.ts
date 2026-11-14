@@ -128,8 +128,13 @@ test.describe('Media providers: playback falls back to the next provider', () =>
 
       // The session's reports (the heartbeat once it plays): requested R2, ended on Bunny, and why.
       // A 503 master playlist reads as manifest_5xx when VHS exposes the status, else as network.
-      await expect.poll(async () => (await qoe()).some((r) => r.fallback), { message: 'the QoE report names the fallback', timeout: 15000 }).toBe(true);
-      const report = (await qoe()).find((r) => r.fallback)!;
+      // The fallback sends its own heartbeat at once; when play was already
+      // requested it goes out before the first frame (honestly `started: false`).
+      // The first-frame heartbeat that follows is the one that proves the
+      // fallback played, so wait for a report that says both.
+      const playedAfterFallback = (r: Qoe) => r.fallback === true && r.started === true;
+      await expect.poll(async () => (await qoe()).some(playedAfterFallback), { message: 'a QoE report names the fallback and the first frame', timeout: 15000 }).toBe(true);
+      const report = (await qoe()).filter(playedAfterFallback).at(-1)!;
       expect(report).toMatchObject({ requested: 'r2', actual: 'bunny', started: true });
       expect(['manifest_5xx', 'network']).toContain(report.fallbackReason);
 
