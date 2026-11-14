@@ -572,6 +572,10 @@ jobs:
           pnpm wrangler deploy --config wrangler.qa.jsonc \
             --name ${{ steps.preview-name.outputs.name }} \
             --compatibility-date $(date +%Y-%m-%d)
+          # A preview runs no crons: on QA's bindings they would repeat QA's jobs on QA's data
+          curl -fsS -X PUT -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/${{ steps.preview-name.outputs.name }}/schedules" \
+            --data '[]' > /dev/null
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -667,6 +671,10 @@ jobs:
           pnpm wrangler deploy --env development \
             --name ${{ steps.preview-name.outputs.name }} \
             --compatibility-date $(date +%Y-%m-%d)
+          # A preview runs no crons: on QA's bindings they would repeat QA's jobs on QA's data
+          curl -fsS -X PUT -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/${{ steps.preview-name.outputs.name }}/schedules" \
+            --data '[]' > /dev/null
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -862,6 +870,10 @@ jobs:
           pnpm wrangler deploy --config wrangler.qa.jsonc \
             --name ${{ steps.preview-name.outputs.name }} \
             --compatibility-date $(date +%Y-%m-%d)
+          # A preview runs no crons: on QA's bindings they would repeat QA's jobs on QA's data
+          curl -fsS -X PUT -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/${{ steps.preview-name.outputs.name }}/schedules" \
+            --data '[]' > /dev/null
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
