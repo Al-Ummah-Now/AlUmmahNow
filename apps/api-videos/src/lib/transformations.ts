@@ -23,17 +23,18 @@ import { PUBLIC_DISLIKES_COUNT } from './reactions';
 /** Stored fields no video view returns (server-only state). */
 type PrivateVideoField =
     | 'processingCheck' | 'processingIssue' | 'thumbnailPending' | 'reviewShadow'
-    | 'r2' | 'media' | 'bunnyLibraryId' | 'tusUpload' | 'uploadFingerprint' | 'lastInitiateAt' | 'abandoned' | 'processingAnnounced' | 'thumbnailCheck';
+    | 'r2' | 'media' | 'mediaOverride' | 'bunnyLibraryId' | 'tusUpload' | 'uploadFingerprint' | 'lastInitiateAt' | 'abandoned' | 'processingAnnounced' | 'thumbnailCheck';
 
 export function publicVideoFields<T extends Record<string, any>>(video: T): Omit<T, PrivateVideoField> & { processingIssueKind?: 'encode_failed' | 'needs_reupload' | 'stalled' } {
     // Review internals (hold cause, ids, the shadow marker) never leave the server; the creator-safe
     // part goes out (docs/specs/VIDEO-REVIEW.md §3): status, ETA, reason, appeal
     // Provider internals stay server-side too (docs/media-delivery/PROVIDERS.md §Our APIs only): which
-    // providers hold the video, their ids and libraries, transcode state and upload bookkeeping. Clients
+    // providers hold the video, their ids and libraries, an admin's playback pin (who set it, why),
+    // transcode state and upload bookkeeping. Clients
     // play the signed `sources` / playUrl the API adds, never a provider id.
     const {
         processingCheck: _check, processingIssue, thumbnailPending, review: storedReview, reviewShadow: _shadow,
-        r2: _r2, media: _media, bunnyLibraryId: _library, tusUpload: _tus, uploadFingerprint: _fingerprint, lastInitiateAt: _initiate,
+        r2: _r2, media: _media, mediaOverride: _override, bunnyLibraryId: _library, tusUpload: _tus, uploadFingerprint: _fingerprint, lastInitiateAt: _initiate,
         abandoned: _abandoned, processingAnnounced: _announced, thumbnailCheck: _thumbCheck,
         ...rest
     } = video as Record<string, any>;
