@@ -17,13 +17,22 @@ const API = 'https://api.cloudflare.com/client/v4';
 
 export type Env = 'production' | 'stage' | 'qa' | 'preview' | 'dev';
 
-/** Al-ummah names: every app's Worker, D1, KV, R2 and queue starts with one of these. */
+/**
+ * Al-ummah names, taken from the wrangler configs of AlUmmahNow, AlUmmahNowAuth, AlUmmahNowUI and
+ * AlUmmahNowCMS: Workers, D1 and KV start with al-ummah; the rest are the bucket and queue bases
+ * below with an env suffix.
+ */
+const BASES = [
+	'videos', 'channels', 'profiles', 'playlists', 'community-posts', 'subtitles', 'watch-history', 'scheduled-videos',
+	'admin-backups', 'channel-sections', 'channel-tabs', 'global-settings', 'reports', 'theme-packages', 'upload-defaults',
+	'audit-events', 'auth-moderation-requests', 'moderation-actions',
+];
+const SUFFIX = '(-(qa|stage|staging|preview|dev|pr-\\d+))*(-dlq)?(-(qa|stage|dev))?';
+const BASE_RE = new RegExp(`^(${BASES.join('|')})${SUFFIX}$`);
+
 export function isAlUmmah(name: string): boolean {
 	const n = name.toLowerCase();
-	if (/^(al-?ummah|alummah)/.test(n)) return true;
-	if (/^videos(-qa|-stage|-preview.*|-pr-\d+)?$/.test(n)) return true;
-	// R2 buckets of the videos app (cost-monitor manifest)
-	return /^(channels|profiles|playlists|community-posts|subtitles|watch-history|scheduled-videos|admin-backups)(-qa|-stage)?$/.test(n);
+	return /^(al-?ummah|alummah)/.test(n) || BASE_RE.test(n);
 }
 
 export function envOf(name: string): Env {
@@ -120,16 +129,19 @@ async function gql(token: string, query: string, variables: Json): Promise<{ dat
 	return { data: body.data?.viewer?.accounts?.[0], error };
 }
 
-/** Windows of at most `step` days covering [start, end). */
+/** Windows of at most `step` days covering [start, end), as GraphQL Time values. */
 function windows(start: Date, end: Date, step: number): [string, string][] {
 	const out: [string, string][] = [];
 	for (let s = new Date(start); s < end; ) {
 		const e = new Date(Math.min(end.getTime(), s.getTime() + step * 86_400_000));
-		out.push([s.toISOString().slice(0, 10), e.toISOString().slice(0, 10)]);
+		out.push([s.toISOString(), e.toISOString()]);
 		s = e;
 	}
 	return out;
 }
+
+/** Keeps only rows whose key is in the al-ummah set (second guard after the `_in` filter). */
+const only = <T>(rows: T[] | undefined, allowed: Set<string>, key: (r: T) => string): T[] => (rows ?? []).filter((r) => allowed.has(key(r)));
 
 const fmt = (n: number) => (n >= 1e9 ? `${(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}k` : `${Math.round(n)}`);
 const usd = (n: number) => `$${n.toFixed(2)}`;
@@ -142,11 +154,34 @@ export interface Report {
 	crons: { name: string; crons: string[] }[];
 	counts: Record<string, number>;
 	usage: Record<string, number>;
+	topQueries: { db: string; query: string; rowsRead: number; rowsWritten: number; count: number }[];
+	start: string;
+	end: string;
 }
 
-export async function collect(token: string, account: string, days: number, now = new Date()): Promise<Report> {
-	const end = new Date(now.toISOString().slice(0, 10) + 'T00:00:00Z');
-	const start = new Date(end.getTime() - days * 86_400_000);
+/** The statements behind each al-ummah database's rows read and written (normalized SQL, no values). */
+async function d1TopQueries(token: string, account: string, d1Name: Map<string, string>, start: Date, end: Date) {
+	if (!d1Name.size) return [];
+	const out: { db: string; query: string; rowsRead: number; rowsWritten: number; count: number }[] = [];
+	for (const [s, e] of windows(start, end, 1)) {
+		const r = await gql(token, `query($a:String!,$s:Time!,$e:Time!,$d:[String!]){viewer{accounts(filter:{accountTag:$a}){
+			q: d1QueriesAdaptiveGroups(limit:2000, filter:{datetime_geq:$s, datetime_lt:$e, databaseId_in:$d}){ dimensions{databaseId query} sum{rowsRead rowsWritten} count } }}}`,
+			{ a: account, s, e, d: [...d1Name.keys()] });
+		if (r.error) throw new Error(r.error);
+		for (const row of only(r.data?.q as any[], new Set(d1Name.keys()), (x) => x.dimensions.databaseId)) {
+			const db = d1Name.get(row.dimensions.databaseId)!;
+			const query = String(row.dimensions.query).replace(/\s+/g, ' ').slice(0, 160);
+			const hit = out.find((o) => o.db === db && o.query === query);
+			if (hit) {
+				hit.rowsRead += row.sum.rowsRead; hit.rowsWritten += row.sum.rowsWritten; hit.count += row.count;
+			} else out.push({ db, query, rowsRead: row.sum.rowsRead, rowsWritten: row.sum.rowsWritten, count: row.count });
+		}
+	}
+	return out;
+}
+
+export async function collect(token: string, account: string, start: Date, end: Date): Promise<Report> {
+	const days = (end.getTime() - start.getTime()) / 86_400_000;
 	const errors: string[] = [];
 	const lines: Line[] = [];
 	const usage: Record<string, number> = {};
@@ -209,11 +244,11 @@ export async function collect(token: string, account: string, days: number, now 
 	// Workers
 	if (scriptNames.length) {
 		for (const [s, e] of wins) {
-			const r = await gql(token, `query($a:String!,$s:Date!,$e:Date!,$w:[String!]){viewer{accounts(filter:{accountTag:$a}){
-				w: workersInvocationsAdaptive(limit:10000, filter:{date_geq:$s, date_lt:$e, scriptName_in:$w}){ dimensions{scriptName date} sum{requests subrequests errors cpuTimeUs} } }}}`,
+			const r = await gql(token, `query($a:String!,$s:Time!,$e:Time!,$w:[String!]){viewer{accounts(filter:{accountTag:$a}){
+				w: workersInvocationsAdaptive(limit:10000, filter:{datetime_geq:$s, datetime_lt:$e, scriptName_in:$w}){ dimensions{scriptName date} sum{requests subrequests errors cpuTimeUs} } }}}`,
 				{ a: account, s, e, w: scriptNames });
 			if (r.error) errors.push(`workers ${s}: ${r.error}`);
-			for (const row of r.data?.w ?? []) {
+			for (const row of only(r.data?.w, new Set(scriptNames), (x: any) => x.dimensions.scriptName)) {
 				const name = row.dimensions.scriptName;
 				const l = line('Workers', name, envOf(name));
 				const req = row.sum.requests, cpuMs = row.sum.cpuTimeUs / 1000;
@@ -228,19 +263,19 @@ export async function collect(token: string, account: string, days: number, now 
 	const d1Name = new Map(d1s.map((d) => [d.uuid, d.name]));
 	if (d1s.length) {
 		for (const [s, e] of wins) {
-			const r = await gql(token, `query($a:String!,$s:Date!,$e:Date!,$d:[String!]){viewer{accounts(filter:{accountTag:$a}){
-				q: d1AnalyticsAdaptiveGroups(limit:10000, filter:{date_geq:$s, date_lt:$e, databaseId_in:$d}){ dimensions{databaseId date} sum{readQueries writeQueries rowsRead rowsWritten} }
-				st: d1StorageAdaptiveGroups(limit:10000, filter:{date_geq:$s, date_lt:$e, databaseId_in:$d}){ dimensions{databaseId date} max{databaseSizeBytes} } }}}`,
+			const r = await gql(token, `query($a:String!,$s:Time!,$e:Time!,$d:[String!]){viewer{accounts(filter:{accountTag:$a}){
+				q: d1AnalyticsAdaptiveGroups(limit:10000, filter:{datetime_geq:$s, datetime_lt:$e, databaseId_in:$d}){ dimensions{databaseId date} sum{readQueries writeQueries rowsRead rowsWritten} }
+				st: d1StorageAdaptiveGroups(limit:10000, filter:{datetime_geq:$s, datetime_lt:$e, databaseId_in:$d}){ dimensions{databaseId date} max{databaseSizeBytes} } }}}`,
 				{ a: account, s, e, d: [...d1Name.keys()] });
 			if (r.error) errors.push(`d1 ${s}: ${r.error}`);
-			for (const row of r.data?.q ?? []) {
+			for (const row of only(r.data?.q, new Set(d1Name.keys()), (x: any) => x.dimensions.databaseId)) {
 				const name = d1Name.get(row.dimensions.databaseId) ?? row.dimensions.databaseId;
 				const l = line('D1', name, envOf(name));
 				charge(l, row.dimensions.date, (row.sum.rowsRead / 1e6) * PRICE.d1ReadM + (row.sum.rowsWritten / 1e6) * PRICE.d1WriteM);
 				t(l, 'rowsRead', row.sum.rowsRead); t(l, 'rowsWritten', row.sum.rowsWritten); t(l, 'queries', row.sum.readQueries + row.sum.writeQueries);
 				add('d1Read', row.sum.rowsRead); add('d1Write', row.sum.rowsWritten);
 			}
-			for (const row of r.data?.st ?? []) {
+			for (const row of only(r.data?.st, new Set(d1Name.keys()), (x: any) => x.dimensions.databaseId)) {
 				const name = d1Name.get(row.dimensions.databaseId) ?? row.dimensions.databaseId;
 				const l = line('D1 storage', name, envOf(name));
 				const gb = row.max.databaseSizeBytes / 1024 ** 3;
@@ -254,12 +289,12 @@ export async function collect(token: string, account: string, days: number, now 
 	const kvName = new Map(kvs.map((k) => [k.id, k.title]));
 	if (kvs.length) {
 		for (const [s, e] of wins) {
-			const r = await gql(token, `query($a:String!,$s:Date!,$e:Date!,$k:[String!]){viewer{accounts(filter:{accountTag:$a}){
-				o: kvOperationsAdaptiveGroups(limit:10000, filter:{date_geq:$s, date_lt:$e, namespaceId_in:$k}){ dimensions{namespaceId actionType date} sum{requests} }
-				st: kvStorageAdaptiveGroups(limit:10000, filter:{date_geq:$s, date_lt:$e, namespaceId_in:$k}){ dimensions{namespaceId date} max{byteCount keyCount} } }}}`,
+			const r = await gql(token, `query($a:String!,$s:Time!,$e:Time!,$k:[String!]){viewer{accounts(filter:{accountTag:$a}){
+				o: kvOperationsAdaptiveGroups(limit:10000, filter:{datetime_geq:$s, datetime_lt:$e, namespaceId_in:$k}){ dimensions{namespaceId actionType date} sum{requests} }
+				st: kvStorageAdaptiveGroups(limit:10000, filter:{datetime_geq:$s, datetime_lt:$e, namespaceId_in:$k}){ dimensions{namespaceId date} max{byteCount keyCount} } }}}`,
 				{ a: account, s, e, k: [...kvName.keys()] });
 			if (r.error) errors.push(`kv ${s}: ${r.error}`);
-			for (const row of r.data?.o ?? []) {
+			for (const row of only(r.data?.o, new Set(kvName.keys()), (x: any) => x.dimensions.namespaceId)) {
 				const name = kvName.get(row.dimensions.namespaceId) ?? row.dimensions.namespaceId;
 				const l = line('KV', name, envOf(name));
 				const read = row.dimensions.actionType === 'read';
@@ -267,7 +302,7 @@ export async function collect(token: string, account: string, days: number, now 
 				t(l, row.dimensions.actionType, row.sum.requests);
 				add(read ? 'kvRead' : 'kvWrite', row.sum.requests);
 			}
-			for (const row of r.data?.st ?? []) {
+			for (const row of only(r.data?.st, new Set(kvName.keys()), (x: any) => x.dimensions.namespaceId)) {
 				const name = kvName.get(row.dimensions.namespaceId) ?? row.dimensions.namespaceId;
 				const l = line('KV storage', name, envOf(name));
 				charge(l, row.dimensions.date, ((row.max.byteCount / 1024 ** 3) * PRICE.kvGbMonth) / 30);
@@ -282,12 +317,12 @@ export async function collect(token: string, account: string, days: number, now 
 	const bucketNames = buckets.map((b) => b.name);
 	if (bucketNames.length) {
 		for (const [s, e] of wins) {
-			const r = await gql(token, `query($a:String!,$s:Date!,$e:Date!,$b:[String!]){viewer{accounts(filter:{accountTag:$a}){
-				o: r2OperationsAdaptiveGroups(limit:10000, filter:{date_geq:$s, date_lt:$e, bucketName_in:$b}){ dimensions{bucketName actionType date} sum{requests} }
-				st: r2StorageAdaptiveGroups(limit:10000, filter:{date_geq:$s, date_lt:$e, bucketName_in:$b}){ dimensions{bucketName date} max{payloadSize metadataSize objectCount} } }}}`,
+			const r = await gql(token, `query($a:String!,$s:Time!,$e:Time!,$b:[String!]){viewer{accounts(filter:{accountTag:$a}){
+				o: r2OperationsAdaptiveGroups(limit:10000, filter:{datetime_geq:$s, datetime_lt:$e, bucketName_in:$b}){ dimensions{bucketName actionType date} sum{requests} }
+				st: r2StorageAdaptiveGroups(limit:10000, filter:{datetime_geq:$s, datetime_lt:$e, bucketName_in:$b}){ dimensions{bucketName date} max{payloadSize metadataSize objectCount} } }}}`,
 				{ a: account, s, e, b: bucketNames });
 			if (r.error) errors.push(`r2 ${s}: ${r.error}`);
-			for (const row of r.data?.o ?? []) {
+			for (const row of only(r.data?.o, new Set(bucketNames), (x: any) => x.dimensions.bucketName)) {
 				const name = row.dimensions.bucketName, act = row.dimensions.actionType;
 				if (R2_FREE.has(act)) continue;
 				const l = line('R2 ops', name, envOf(name));
@@ -297,7 +332,7 @@ export async function collect(token: string, account: string, days: number, now 
 				t(l, `op:${act}`, row.sum.requests);
 				add(a ? 'r2A' : 'r2B', row.sum.requests);
 			}
-			for (const row of r.data?.st ?? []) {
+			for (const row of only(r.data?.st, new Set(bucketNames), (x: any) => x.dimensions.bucketName)) {
 				const name = row.dimensions.bucketName;
 				const l = line('R2 storage', name, envOf(name));
 				const gb = (row.max.payloadSize + row.max.metadataSize) / 1024 ** 3;
@@ -314,12 +349,12 @@ export async function collect(token: string, account: string, days: number, now 
 	const doName = new Map(dos.map((d) => [d.id, `${d.script}/${d.class}`]));
 	if (dos.length) {
 		for (const [s, e] of wins) {
-			const r = await gql(token, `query($a:String!,$s:Date!,$e:Date!,$n:[String!]){viewer{accounts(filter:{accountTag:$a}){
-				p: durableObjectsPeriodicGroups(limit:10000, filter:{date_geq:$s, date_lt:$e, namespaceId_in:$n}){ dimensions{namespaceId date} sum{activeTime cpuTime storageReadUnits storageWriteUnits inboundWebsocketMsgCount outboundWebsocketMsgCount subrequests} }
-				i: durableObjectsInvocationsAdaptiveGroups(limit:10000, filter:{date_geq:$s, date_lt:$e, namespaceId_in:$n}){ dimensions{namespaceId date} sum{requests} } }}}`,
+			const r = await gql(token, `query($a:String!,$s:Time!,$e:Time!,$n:[String!]){viewer{accounts(filter:{accountTag:$a}){
+				p: durableObjectsPeriodicGroups(limit:10000, filter:{datetime_geq:$s, datetime_lt:$e, namespaceId_in:$n}){ dimensions{namespaceId date} sum{activeTime cpuTime storageReadUnits storageWriteUnits inboundWebsocketMsgCount outboundWebsocketMsgCount subrequests} }
+				i: durableObjectsInvocationsAdaptiveGroups(limit:10000, filter:{datetime_geq:$s, datetime_lt:$e, namespaceId_in:$n}){ dimensions{namespaceId date} sum{requests} } }}}`,
 				{ a: account, s, e, n: [...doName.keys()] });
 			if (r.error) errors.push(`do ${s}: ${r.error}`);
-			for (const row of r.data?.p ?? []) {
+			for (const row of only(r.data?.p, new Set(doName.keys()), (x: any) => x.dimensions.namespaceId)) {
 				const name = doName.get(row.dimensions.namespaceId) ?? row.dimensions.namespaceId;
 				const l = line('Durable Objects', name, envOf(name.split('/')[0]));
 				const gbSec = (row.sum.activeTime / 1e6) * 0.125; // activeTime is µs
@@ -329,7 +364,7 @@ export async function collect(token: string, account: string, days: number, now 
 				t(l, 'gbSec', gbSec); t(l, 'wsIn', row.sum.inboundWebsocketMsgCount); t(l, 'readUnits', row.sum.storageReadUnits); t(l, 'writeUnits', row.sum.storageWriteUnits);
 				add('doGbSec', gbSec); add('doReq', wsReq);
 			}
-			for (const row of r.data?.i ?? []) {
+			for (const row of only(r.data?.i, new Set(doName.keys()), (x: any) => x.dimensions.namespaceId)) {
 				const name = doName.get(row.dimensions.namespaceId) ?? row.dimensions.namespaceId;
 				const l = line('Durable Objects', name, envOf(name.split('/')[0]));
 				charge(l, row.dimensions.date, (row.sum.requests / 1e6) * PRICE.doReqM);
@@ -343,11 +378,11 @@ export async function collect(token: string, account: string, days: number, now 
 	const qName = new Map(queues.map((q) => [q.queue_id, q.queue_name]));
 	if (queues.length) {
 		for (const [s, e] of wins) {
-			const r = await gql(token, `query($a:String!,$s:Date!,$e:Date!,$q:[String!]){viewer{accounts(filter:{accountTag:$a}){
-				o: queueMessageOperationsAdaptiveGroups(limit:10000, filter:{date_geq:$s, date_lt:$e, queueId_in:$q}){ count dimensions{queueId actionType date} sum{billableOperations} } }}}`,
+			const r = await gql(token, `query($a:String!,$s:Time!,$e:Time!,$q:[String!]){viewer{accounts(filter:{accountTag:$a}){
+				o: queueMessageOperationsAdaptiveGroups(limit:10000, filter:{datetime_geq:$s, datetime_lt:$e, queueId_in:$q}){ count dimensions{queueId actionType date} sum{billableOperations} } }}}`,
 				{ a: account, s, e, q: [...qName.keys()] });
 			if (r.error) errors.push(`queues ${s}: ${r.error}`);
-			for (const row of r.data?.o ?? []) {
+			for (const row of only(r.data?.o, new Set(qName.keys()), (x: any) => x.dimensions.queueId)) {
 				const name = qName.get(row.dimensions.queueId) ?? row.dimensions.queueId;
 				const l = line('Queues', name, envOf(name));
 				const ops = row.sum?.billableOperations ?? row.count;
@@ -360,8 +395,8 @@ export async function collect(token: string, account: string, days: number, now 
 
 	// Workers AI (account-wide dataset; models are not per project, so it is reported as one line)
 	for (const [s, e] of wins) {
-		const r = await gql(token, `query($a:String!,$s:Date!,$e:Date!){viewer{accounts(filter:{accountTag:$a}){
-			ai: aiInferenceAdaptiveGroups(limit:10000, filter:{date_geq:$s, date_lt:$e}){ dimensions{date modelId} sum{totalNeurons} count } }}}`,
+		const r = await gql(token, `query($a:String!,$s:Time!,$e:Time!){viewer{accounts(filter:{accountTag:$a}){
+			ai: aiInferenceAdaptiveGroups(limit:10000, filter:{datetime_geq:$s, datetime_lt:$e}){ dimensions{date modelId} sum{totalNeurons} count } }}}`,
 			{ a: account, s, e });
 		if (r.error) { errors.push(`ai ${s}: ${r.error}`); break; }
 		for (const row of r.data?.ai ?? []) {
@@ -380,14 +415,15 @@ export async function collect(token: string, account: string, days: number, now 
 		const ops = Object.entries(m).filter(([k]) => k.startsWith('op:')).sort((a, b) => b[1] - a[1]).slice(0, 3);
 		if (ops.length) l.usage += ` (${ops.map(([k, v]) => `${k.slice(3)} ${fmt(v)}`).join(', ')})`;
 	}
-	return { lines, errors, days, staleWorkers, crons, counts, usage };
+	const topQueries = await safe('d1 queries', () => d1TopQueries(token, account, d1Name, start, end), []);
+	return { lines, errors, days, staleWorkers, crons, counts, usage, topQueries, start: start.toISOString(), end: end.toISOString() };
 }
 
 export function render(r: Report): string {
 	const scale = 30 / r.days;
 	const out: string[] = [];
 	const total = r.lines.reduce((s, l) => s + l.usd, 0);
-	out.push(`# al-ummah Cloudflare usage, last ${r.days} days (list prices, before account allowances)`);
+	out.push(`# al-ummah Cloudflare usage, ${r.start.slice(0, 16)}Z → ${r.end.slice(0, 16)}Z (${r.days.toFixed(2)} days, scaled to 30; list prices before account allowances)`);
 	out.push('');
 	out.push(`Resources: ${Object.entries(r.counts).map(([k, v]) => `${v} ${k}`).join(', ')}. Total ≈ **${usd(total * scale)}/month** + $5 Workers Paid base.`);
 	out.push('');
@@ -413,6 +449,12 @@ export function render(r: Report): string {
 		const by = (e: Env) => r.lines.filter((l) => l.env === e).reduce((s, l) => s + (l.daily[d] ?? 0), 0);
 		out.push(`| ${d} | ${(['production', 'stage', 'qa', 'preview', 'dev'] as Env[]).map((e) => by(e).toFixed(2)).join(' | ')} |`);
 	}
+	out.push('\n## Top D1 statements by rows written\n\n| DB | Rows written | Rows read | Runs | Statement |\n|---|---|---|---|---|');
+	for (const q of [...r.topQueries].sort((a, b) => b.rowsWritten - a.rowsWritten).slice(0, 25)) out.push(`| ${q.db} | ${fmt(q.rowsWritten)} | ${fmt(q.rowsRead)} | ${fmt(q.count)} | \`${q.query.replace(/\|/g, '\\|')}\` |`);
+	out.push('\n## Top D1 statements by rows read\n\n| DB | Rows read | Rows written | Runs | Statement |\n|---|---|---|---|---|');
+	for (const q of [...r.topQueries].sort((a, b) => b.rowsRead - a.rowsRead).slice(0, 15)) out.push(`| ${q.db} | ${fmt(q.rowsRead)} | ${fmt(q.rowsWritten)} | ${fmt(q.count)} | \`${q.query.replace(/\|/g, '\\|')}\` |`);
+	out.push('\n## Top D1 statements by runs\n\n| DB | Runs | Rows read | Rows written | Statement |\n|---|---|---|---|---|');
+	for (const q of [...r.topQueries].sort((a, b) => b.count - a.count).slice(0, 15)) out.push(`| ${q.db} | ${fmt(q.count)} | ${fmt(q.rowsRead)} | ${fmt(q.rowsWritten)} | \`${q.query.replace(/\|/g, '\\|')}\` |`);
 	out.push('\n## Cron triggers\n\n| Worker | Crons |\n|---|---|');
 	for (const c of r.crons) out.push(`| ${c.name} | ${c.crons.join(', ')} |`);
 	out.push('\n## Preview / dev Workers still deployed\n');
@@ -432,6 +474,8 @@ export async function hourly(token: string, account: string, hours: number, now 
 	const d1s = (await rest(token, `/accounts/${account}/d1/database`)).filter((d) => isAlUmmah(d.name));
 	const buckets = (await rest(token, `/accounts/${account}/r2/buckets`)).filter((b) => isAlUmmah(b.name)).map((b) => b.name);
 	const d1Name = new Map(d1s.map((d) => [d.uuid, d.name]));
+	// An empty `_in` list would not filter at all: never query with one
+	if (!scripts.length || !d1Name.size || !buckets.length) return '## Hourly\n\nNo al-ummah resources listed (token scope?)\n';
 	const r = await gql(token, `query($a:String!,$s:Time!,$e:Time!,$w:[String!],$d:[String!],$b:[String!]){viewer{accounts(filter:{accountTag:$a}){
 		w: workersInvocationsAdaptive(limit:10000, filter:{datetime_geq:$s, datetime_lt:$e, scriptName_in:$w}){ dimensions{scriptName datetimeHour} sum{requests} }
 		d: d1AnalyticsAdaptiveGroups(limit:10000, filter:{datetime_geq:$s, datetime_lt:$e, databaseId_in:$d}){ dimensions{databaseId datetimeHour} sum{rowsRead rowsWritten} }
@@ -443,13 +487,13 @@ export async function hourly(token: string, account: string, hours: number, now 
 		m.set(h, (m.get(h) ?? 0) + v);
 		series.set(k, m);
 	};
-	for (const x of r.data?.w ?? []) put(`req ${x.dimensions.scriptName}`, x.dimensions.datetimeHour, x.sum.requests);
-	for (const x of r.data?.d ?? []) {
+	for (const x of only(r.data?.w as any[], new Set(scripts), (y) => y.dimensions.scriptName)) put(`req ${x.dimensions.scriptName}`, x.dimensions.datetimeHour, x.sum.requests);
+	for (const x of only(r.data?.d as any[], new Set(d1Name.keys()), (y) => y.dimensions.databaseId)) {
 		const n = d1Name.get(x.dimensions.databaseId) ?? x.dimensions.databaseId;
 		put(`d1w ${n}`, x.dimensions.datetimeHour, x.sum.rowsWritten);
 		put(`d1r ${n}`, x.dimensions.datetimeHour, x.sum.rowsRead);
 	}
-	for (const x of r.data?.r ?? []) if (!R2_FREE.has(x.dimensions.actionType)) put(`r2 ${x.dimensions.bucketName} ${x.dimensions.actionType}`, x.dimensions.datetimeHour, x.sum.requests);
+	for (const x of only(r.data?.r as any[], new Set(buckets), (y) => y.dimensions.bucketName)) if (!R2_FREE.has(x.dimensions.actionType)) put(`r2 ${x.dimensions.bucketName} ${x.dimensions.actionType}`, x.dimensions.datetimeHour, x.sum.requests);
 	const total = (m: Map<string, number>) => [...m.values()].reduce((a, b) => a + b, 0);
 	const top = [...series.entries()].sort((a, b) => total(b[1]) - total(a[1])).slice(0, 14);
 	const hoursList: string[] = [];
@@ -464,14 +508,20 @@ async function main() {
 	const token = process.env.CLOUDFLARE_API_TOKEN ?? '';
 	const account = process.env.CLOUDFLARE_ACCOUNT_ID ?? '';
 	if (!token || !account) throw new Error('CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are required');
-	const i = process.argv.indexOf('--days');
-	const days = i > 0 ? Math.max(1, Math.min(31, Number(process.argv[i + 1]) || 30)) : 30;
+	const arg = (name: string) => {
+		const i = process.argv.indexOf(name);
+		return i > 0 ? process.argv[i + 1] : undefined;
+	};
+	const days = Math.max(1, Math.min(31, Number(arg('--days')) || 30));
+	const today = new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00Z');
+	const end = arg('--until') ? new Date(arg('--until')!) : today;
+	const start = arg('--since') ? new Date(arg('--since')!) : new Date(end.getTime() - days * 86_400_000);
 	const h = process.argv.indexOf('--hourly');
 	if (h > 0) {
 		process.stdout.write(await hourly(token, account, Math.max(1, Math.min(72, Number(process.argv[h + 1]) || 24))));
 		return;
 	}
-	const report = await collect(token, account, days);
+	const report = await collect(token, account, start, end);
 	process.stdout.write(render(report));
 	if (process.argv.includes('--json')) {
 		const { writeFileSync } = await import('node:fs');
