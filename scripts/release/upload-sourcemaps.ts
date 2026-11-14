@@ -67,10 +67,46 @@ export function keyPath(key: string): string {
 	return key.split('/').map((segment) => encodeURIComponent(segment).replace(/\./g, '%2E')).join('/');
 }
 
-async function put(token: string, accountId: string, bucket: string, key: string, body: Uint8Array): Promise<void> {
+/** Concurrent PUTs: enough to finish quickly, few enough to stay under the R2 API's rate limit. */
+export const PUT_CONCURRENCY = 4;
+export const PUT_ATTEMPTS = 6;
+const BACKOFF_BASE_MS = 1000;
+const BACKOFF_CAP_MS = 30_000;
+
+/** 408, 429 and 5xx are transient. 401/403 (bad or rolling token) and other 4xx are not: retrying cannot fix them. */
+export function isRetryableStatus(status: number): boolean {
+	return status === 408 || status === 429 || status >= 500;
+}
+
+/**
+ * Wait before retry number `attempt` (1-based): Retry-After when the API sends
+ * one, else exponential backoff with full jitter, both capped.
+ */
+export function backoffMs(attempt: number, retryAfter: string | null, random = Math.random): number {
+	const seconds = retryAfter === null ? NaN : Number(retryAfter);
+	if (Number.isFinite(seconds) && seconds >= 0) return Math.min(seconds * 1000, BACKOFF_CAP_MS);
+	const ceiling = Math.min(BACKOFF_BASE_MS * 2 ** (attempt - 1), BACKOFF_CAP_MS);
+	return Math.round(ceiling / 2 + random() * (ceiling / 2));
+}
+
+export type PutDeps = { fetch: typeof fetch; sleep: (ms: number) => Promise<void>; attempts: number };
+const defaultPutDeps: PutDeps = { fetch: (...args) => fetch(...args), sleep: (ms) => new Promise((r) => setTimeout(r, ms)), attempts: PUT_ATTEMPTS };
+
+export async function put(token: string, accountId: string, bucket: string, key: string, body: Uint8Array, deps: PutDeps = defaultPutDeps): Promise<void> {
 	const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/r2/buckets/${bucket}/objects/${keyPath(key)}`;
 	for (let attempt = 1; ; attempt++) {
-		const res = await fetch(url, { method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body });
+		let res: Response;
+		try {
+			res = await deps.fetch(url, { method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: body as BodyInit });
+		} catch (error) {
+			// Network failure ("fetch failed", reset, DNS): transient
+			const reason = error instanceof Error ? (error.cause instanceof Error ? `${error.message}: ${error.cause.message}` : error.message) : String(error);
+			if (attempt >= deps.attempts) throw new Error(`PUT ${bucket}/${key} -> ${reason} (after ${attempt} attempts)`);
+			const wait = backoffMs(attempt, null);
+			process.stderr.write(`PUT ${bucket}/${key} -> ${reason}; retry ${attempt}/${deps.attempts - 1} in ${wait} ms\n`);
+			await deps.sleep(wait);
+			continue;
+		}
 		if (res.ok) return;
 		// A catch-all route's map the API still refuses: skip it (that route's stacks stay
 		// unsymbolicated) rather than fail the deploy
@@ -78,8 +114,12 @@ async function put(token: string, accountId: string, bucket: string, key: string
 			process.stderr.write(`Skipped ${bucket}/${key}: refused by the R2 API (403)\n`);
 			return;
 		}
-		if (attempt >= 3 || (res.status < 500 && res.status !== 429)) throw new Error(`PUT ${bucket}/${key} -> ${res.status}`);
-		await new Promise((r) => setTimeout(r, attempt * 1000));
+		if (!isRetryableStatus(res.status)) throw new Error(`PUT ${bucket}/${key} -> ${res.status}`);
+		if (attempt >= deps.attempts) throw new Error(`PUT ${bucket}/${key} -> ${res.status} (after ${attempt} attempts)`);
+		const wait = backoffMs(attempt, res.headers.get('retry-after'));
+		process.stderr.write(`PUT ${bucket}/${key} -> ${res.status}; retry ${attempt}/${deps.attempts - 1} in ${wait} ms\n`);
+		await res.body?.cancel().catch(() => {});
+		await deps.sleep(wait);
 	}
 }
 
@@ -89,13 +129,20 @@ export async function uploadSourceMaps(opts: { env: ResourceEnv; app: string; re
 	if (!deps.token) throw new Error('No Cloudflare credentials (CLOUDFLARE_API_TOKEN)');
 	const bucket = resourcesFor(opts.env).buckets[0];
 	let next = 0;
+	let failed = false;
 	const worker = async () => {
-		while (next < files.length) {
+		// Stop taking new files once one has failed for good: the deploy fails anyway
+		while (!failed && next < files.length) {
 			const file = files[next++];
-			await deps.put(deps.token!, deps.accountId, bucket, objectKey(opts.app, opts.release, opts.dir, file), readFileSync(file));
+			try {
+				await deps.put(deps.token!, deps.accountId, bucket, objectKey(opts.app, opts.release, opts.dir, file), readFileSync(file));
+			} catch (error) {
+				failed = true;
+				throw error;
+			}
 		}
 	};
-	await Promise.all(Array.from({ length: 8 }, worker));
+	await Promise.all(Array.from({ length: Math.min(PUT_CONCURRENCY, files.length) }, worker));
 	// Never served: the maps exist only in the private bucket
 	for (const file of files) unlinkSync(file);
 	return { uploaded: files.length, removed: files.length, bucket };
