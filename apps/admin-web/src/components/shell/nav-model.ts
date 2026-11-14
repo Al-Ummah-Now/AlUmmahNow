@@ -29,6 +29,8 @@ export interface NavAccess {
   ops: boolean;
   /** A content or senior reviewer with no admin role (VR7): only the review queue is shown */
   reviewOnly?: boolean;
+  /** Super admin: CSAM cases (docs/specs/CSAM-RESPONSE.md), which no other role may open */
+  superAdmin?: boolean;
 }
 
 /** Live counts shown on nav items; null hides the badge. */
@@ -69,6 +71,8 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/moderation', label: 'nav.moderation', icon: 'flag', group: 'moderation' },
   { href: '/moderation/review', label: 'nav.videoReview', icon: 'flag', group: 'moderation', reviewers: true },
   { href: '/moderation/ai', label: 'nav.aiModeration', icon: 'spark', group: 'moderation' },
+  // CSAM cases: takedown, evidence, NCMEC report (docs/specs/CSAM-RESPONSE.md); super admins only
+  { href: '/moderation/csam', label: 'nav.csam', icon: 'flag', group: 'moderation', requires: (a) => a.superAdmin === true },
   { href: '/comments', label: 'nav.comments', icon: 'chat', group: 'moderation' },
   { href: '/community', label: 'nav.community', icon: 'people', group: 'moderation' },
   {
