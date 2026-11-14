@@ -30,7 +30,7 @@ function Stat({ label, value, sub, tone = 'ok', testId }: { label: string; value
     <div className="rounded-lg border border-border bg-surface-2 p-4">
       <dt className="text-sm text-fg-muted">{label}</dt>
       <dd className={`mt-1 text-2xl font-semibold tabular-nums ${TONE_TEXT[tone]}`} data-testid={testId}>{value}</dd>
-      {sub && <dd className="mt-1 text-xs text-fg-muted tabular-nums">{sub}</dd>}
+      {sub != null && sub !== false && sub !== '' ? <dd className="mt-1 text-xs text-fg-muted tabular-nums">{sub}</dd> : null}
     </div>
   );
 }
