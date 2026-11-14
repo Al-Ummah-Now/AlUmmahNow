@@ -87,7 +87,7 @@ describe('grant and hosts', () => {
 		const e = env();
 		const site = await grantSite(e, CH, { slug: 'mustafa-elbadry', tier: 'white-label', actor: 'adm' });
 		assert.equal(site.status, 'setup');
-		assert.equal(site.themeRef, 'fawanees@1.2.0');
+		assert.equal(site.themeRef, 'fawanees@1.3.0');
 		assert.deepEqual(site.hosts, [{ host: 'mustafa-elbadry.qa.alummahnow.org', kind: 'subdomain', primary: true }]);
 		assert.deepEqual(site.limits, SITE_TIER_SEEDS['white-label'].limits);
 		assert.ok((e as any).channel_tabs.store.has('site-hosts/mustafa-elbadry.qa.alummahnow.org.json'));
@@ -123,7 +123,7 @@ describe('host lookup (sites Worker)', () => {
 		const found = await publicSiteForHost(e, 'MUSTAFA-ELBADRY.qa.alummahnow.org:443', null);
 		assert.equal(found.kind, 'site');
 		if (found.kind !== 'site') return;
-		assert.equal(found.site.site.themeRef, 'fawanees@1.2.0');
+		assert.equal(found.site.site.themeRef, 'fawanees@1.3.0');
 		assert.equal(found.site.site.primaryKind, 'subdomain');
 		assert.equal(found.site.channel.name, 'Mustafa Elbadry');
 		assert.equal(found.site.preview, false);
