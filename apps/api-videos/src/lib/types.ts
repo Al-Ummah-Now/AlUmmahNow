@@ -1,6 +1,6 @@
 import { Bool, DateTime, Str } from "chanfana";
 import { z } from "zod";
-import { PLAYLIST_SORT_DIRECTIONS, PLAYLIST_SORT_FIELDS, PLAYLIST_SORT_MODES, VideoCategory } from "@al-ummah/shared-types";
+import { PLAYLIST_SORT_DIRECTIONS, PLAYLIST_SORT_FIELDS, PLAYLIST_SORT_MODES, VideoCategory, type VideoMediaProviders } from "@al-ummah/shared-types";
 
 // Pure business/database models - represent data as stored in R2
 
@@ -83,6 +83,8 @@ export const Video = z.object({
     playUrl: Str().optional(),
     /** Bunny Stream library the video lives in (lib/bunny/libraries.ts). Private. */
     bunnyLibraryId: z.number().optional(),
+    /** Which media providers hold the video and their ids (docs/media-delivery/PROVIDERS.md). Private. */
+    media: z.custom<VideoMediaProviders>().optional(),
     userId: Str(),
     /** The channel member who uploaded it, when not the owner (spec CHANNEL-ROLES §8). Private. */
     uploadedBy: Str().optional(),

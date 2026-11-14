@@ -14,6 +14,8 @@
  *
  * Re-uploading the same video (uploadResume) clears the flag; completing does too.
  */
+import { bunnyRef } from '../media/providers';
+import { r2UploadOffset } from '../media/r2-tus';
 import { z } from 'zod';
 import R2Repository from '../r2Repo';
 import { Video as BusinessVideo } from '../types';
@@ -30,7 +32,10 @@ import { queueReviewScan } from '../review/scan';
 
 export interface VideoTusUpload {
   sessionId: string;
+  /** Bunny's upload URL; empty when the upload goes to our own TUS server (target r2) */
   bunnyUploadUrl: string;
+  /** Where the bytes go: Bunny's TUS (default, also every upload from before providers) or ours, into R2 */
+  target?: 'bunny' | 'r2';
   fileSize: number;
   createdAt: string;
 }
@@ -78,7 +83,8 @@ function clearUploadFlags(video: UploadVideo): void {
  */
 export async function markUploadComplete(
   env: UploadLifecycleEnv,
-  upload: { videoId: string; userId: string; fileSize: number; uploadId?: string },
+  /** uploadKey: the TUS upload that finished (its parts are the original; lib/media/originals.ts) */
+  upload: { videoId: string; userId: string; fileSize: number; uploadId?: string; uploadKey?: string },
 ): Promise<boolean> {
   try {
     const repository = new R2Repository<UploadVideo>(env.videos);
@@ -118,17 +124,28 @@ export async function markUploadComplete(
     // Dual write: the same upload transcoded to R2 by apps/media (lib/media/r2-delivery.ts; never throws)
     // Our own original (TUS PATCH copies, docs/media-delivery/ORIGINALS.md): when it covers the file, the
     // R2 transcode reads it now instead of waiting for Bunny's encode
-    await completeOriginal(env as never, upload.videoId, upload.fileSize);
+    const original = await completeOriginal(env as never, upload.videoId, upload.fileSize, upload.uploadKey);
+    // R2 the only copy (Bunny does not take this upload): the original is the upload, so a gap in it
+    // means bytes never arrived; the uploader re-uploads (no other copy to transcode from)
+    const onBunny = !!current && !!bunnyRef(current as never);
+    if (!onBunny && !original) {
+      logger.warn('[Uploads] Upload marked complete but our copy has a gap; asking for a re-upload', { videoId: upload.videoId, fileSize: upload.fileSize });
+      await flagNeedsReupload(env, upload.videoId, { reason: 'The uploaded file did not arrive complete', source: 'sweep', ownerId: upload.userId });
+      return true;
+    }
     const transcode = await enqueueTranscode(env as unknown as MediaEnv, upload.videoId, 'upload', { uploaderId: upload.userId });
     // Not transcoded (R2 delivery off, an E2E account): the review cannot wait for frames, so a gated
     // or shadow upload is checked now on its metadata and thumbnail (partial: held for a person)
     if (!transcode.queued && (gate?.state || gate?.mode === 'shadow')) {
       await queueReviewScan(env as never, upload.videoId, { trigger: 'upload' });
     }
-    // Check Bunny until the encode finishes (lib/processing/loop.ts)
-    await startProcessingLoop(env as unknown as ProcessingEnv, upload.videoId, { reason: 'upload-complete' }).catch((error) =>
-      logger.error('[Uploads] Could not start the processing check loop', { videoId: upload.videoId, error: error instanceof Error ? error.message : String(error) }),
-    );
+    // Check Bunny until the encode finishes (lib/processing/loop.ts). Without a Bunny copy the R2
+    // transcode's job events make the video ready (lib/media/r2-delivery.ts applyJobEvent)
+    if (onBunny) {
+      await startProcessingLoop(env as unknown as ProcessingEnv, upload.videoId, { reason: 'upload-complete' }).catch((error) =>
+        logger.error('[Uploads] Could not start the processing check loop', { videoId: upload.videoId, error: error instanceof Error ? error.message : String(error) }),
+      );
+    }
     logger.info('[Uploads] Upload completed', { videoId: upload.videoId, fileSize: upload.fileSize });
     return true;
   } catch (error) {
@@ -278,31 +295,42 @@ export async function sweepStalledUploads(
       if (video.uploadStatus !== 'initiated' && video.uploadStatus !== 'uploading') { stats.skipped++; continue; }
 
       const upload = video.tusUpload;
-      if (!upload?.bunnyUploadUrl) {
+      const ownTarget = upload?.target === 'r2';
+      if (!upload || (!ownTarget && !upload.bunnyUploadUrl)) {
         if (ageMs(video.dateModified || video.dateCreated, now) < NEVER_STARTED_AFTER_MS) { stats.skipped++; continue; }
         const r = await flagNeedsReupload(env, videoId, { reason: 'The upload never started. Upload the video file again.', source: 'sweep', now });
         if (r === 'flagged') stats.flagged++; else stats.skipped++;
         continue;
       }
 
-      let res: Response;
-      try {
-        res = await doFetch(upload.bunnyUploadUrl, {
-          method: 'HEAD',
-          headers: { ...(await bunnyTusRequestHeaders(env, videoId)), 'Tus-Resumable': '1.0.0' },
-        });
-      } catch {
-        stats.skipped++; // Bunny unreachable: next run
-        continue;
+      let offset: number;
+      if (ownTarget) {
+        // Our own TUS target: the bytes stored in the originals bucket (lib/media/r2-tus.ts)
+        try {
+          offset = await r2UploadOffset(env as never, videoId, upload.sessionId);
+        } catch {
+          stats.skipped++; // bucket unavailable: next run
+          continue;
+        }
+      } else {
+        let res: Response;
+        try {
+          res = await doFetch(upload.bunnyUploadUrl, {
+            method: 'HEAD',
+            headers: { ...(await bunnyTusRequestHeaders(env, videoId)), 'Tus-Resumable': '1.0.0' },
+          });
+        } catch {
+          stats.skipped++; // Bunny unreachable: next run
+          continue;
+        }
+        if (res.status === 404 || res.status === 410) {
+          const r = await flagNeedsReupload(env, videoId, { reason: 'The upload stopped and the upload service no longer has its data. Upload the video file again.', source: 'sweep', now });
+          if (r === 'flagged') stats.flagged++; else stats.skipped++;
+          continue;
+        }
+        if (!res.ok) { stats.skipped++; continue; }
+        offset = Number(res.headers.get('Upload-Offset') ?? NaN);
       }
-      if (res.status === 404 || res.status === 410) {
-        const r = await flagNeedsReupload(env, videoId, { reason: 'The upload stopped and the upload service no longer has its data. Upload the video file again.', source: 'sweep', now });
-        if (r === 'flagged') stats.flagged++; else stats.skipped++;
-        continue;
-      }
-      if (!res.ok) { stats.skipped++; continue; }
-
-      const offset = Number(res.headers.get('Upload-Offset') ?? NaN);
       if (!Number.isFinite(offset)) { stats.skipped++; continue; }
       if (upload.fileSize > 0 && offset >= upload.fileSize) {
         if (await markUploadComplete(env, { videoId, userId: video.userId, fileSize: upload.fileSize })) stats.completed++;

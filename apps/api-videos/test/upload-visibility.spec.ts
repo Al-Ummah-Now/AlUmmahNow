@@ -78,8 +78,10 @@ function env() {
 
 /** The parts of a record that differ by nature: id and time */
 function comparable(record: Record<string, unknown>) {
-	const { id: _id, dateCreated: _c, dateModified: _m, playUrl, title: _t, ...rest } = record;
-	return { ...rest, playUrlHost: new URL(String(playUrl)).host };
+	const { id: _id, dateCreated: _c, dateModified: _m, playUrl, title: _t, media, ...rest } = record;
+	// Provider refs differ per video; which providers hold it and their state must not
+	const providers = Object.fromEntries(Object.entries((media as { providers: Record<string, { status: string; libraryId?: number }> }).providers).map(([p, r]) => [p, { status: r.status, libraryId: r.libraryId }]));
+	return { ...rest, providers, playUrlHost: new URL(String(playUrl)).host };
 }
 
 describe('single and bulk initiate write the same record', () => {

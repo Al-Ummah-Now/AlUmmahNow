@@ -6,6 +6,7 @@
  */
 
 import { logger } from '../logger';
+import { bunnyRef } from '../media/providers';
 import { fetchBunnyVideo, ProcessingEnv } from '../processing/loop';
 import { bunnyLibraries, pickLibrary, type BunnyLibrariesEnv, type LibraryHints } from '../bunny/libraries';
 import { bunnyPhase } from '../processing/sync';
@@ -48,11 +49,15 @@ export async function checkReusable(
 	}
 	if (video.isDeleted || video.abandoned) return { kind: 'replace', why: 'abandoned' };
 	if (video.uploadStatus === 'ready' || video.uploadStatus === 'processing') return { kind: 'replace', why: 'finished' };
+	// Bunny's id of the video (new videos: the stored GUID). None: the upload goes to our own
+	// target (lib/media/r2-tus.ts), which keeps its bytes until the video is removed
+	const bunnyId = bunnyRef(video as never);
+	if (!bunnyId) return { kind: 'reuse' };
 	// New uploads go to the primary library: an unfinished video left in another
 	// (legacy) library is not resumed there (lib/bunny/libraries.ts)
 	const libraries = await bunnyLibraries(env as BunnyLibrariesEnv);
 	if (pickLibrary(libraries, video as LibraryHints)?.libraryId !== libraries[0].libraryId) return { kind: 'replace', why: 'other library' };
-	const bunny = await fetchBunnyVideo(env as ProcessingEnv, videoId, video as LibraryHints);
+	const bunny = await fetchBunnyVideo(env as ProcessingEnv, bunnyId, video as LibraryHints);
 	if (!bunny) return { kind: 'replace', why: 'deleted at Bunny' };
 	const phase = bunnyPhase(bunny);
 	if (phase === 'ready' || phase === 'encoding') return { kind: 'replace', why: 'finished at Bunny' };
@@ -102,7 +107,7 @@ export async function issueTusSession(
 	// Same file (the fingerprint includes its size), so the earlier Bunny upload
 	// is resumable at its offset; a different size would be a different claim.
 	const tusUploadId =
-		durable?.sessionId && durable.bunnyUploadUrl && (!opts.video?.fileSize || durable.fileSize === opts.video.fileSize)
+		durable?.sessionId && (durable.bunnyUploadUrl || durable.target === 'r2') && (!opts.video?.fileSize || durable.fileSize === opts.video.fileSize)
 			? buildTusUploadId(durable.sessionId, opts.videoId)
 			: undefined;
 	if (opts.video && !tusUploadId) logger.info('[UploadInitiate] Reused video has no resumable upload; starting it from byte 0', { videoId: opts.videoId });

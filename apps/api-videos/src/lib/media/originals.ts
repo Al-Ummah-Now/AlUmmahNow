@@ -11,6 +11,7 @@
  */
 import { originalManifestKey, originalPartKey, originalPrefix, partsCover, partsFromKeys, type OriginalManifest } from '@al-ummah/shared-types';
 import { logger } from '../logger';
+import { bunnyRef } from './providers';
 
 export interface OriginalsEnv {
 	MEDIA_ORIGINALS?: R2Bucket;
@@ -19,6 +20,8 @@ export interface OriginalsEnv {
 	ORIGINALS_RETENTION_DAYS?: string;
 	/** Hard ceiling for originals whose transcode never succeeds (default 90) */
 	ORIGINALS_MAX_DAYS?: string;
+	/** Video records: retention keeps the original of a video R2 alone holds */
+	videos?: R2Bucket;
 }
 
 /** Copy a PATCH only when its length is known and small enough to buffer safely in a tee. */
@@ -84,7 +87,7 @@ async function listAll(bucket: R2Bucket, prefix: string): Promise<{ key: string;
  * Upload done (Bunny holds every byte): if our parts of the newest upload id cover the file, write
  * the manifest the media worker reads. Returns whether an original is available.
  */
-export async function completeOriginal(env: OriginalsEnv, videoId: string, size: number): Promise<boolean> {
+export async function completeOriginal(env: OriginalsEnv, videoId: string, size: number, knownUploadId?: string): Promise<boolean> {
 	const bucket = env.MEDIA_ORIGINALS;
 	if (!bucket || !(size > 0)) return false;
 	try {
@@ -95,7 +98,8 @@ export async function completeOriginal(env: OriginalsEnv, videoId: string, size:
 			const uploadId = o.key.slice(originalPrefix(videoId).length).split('/')[0]!;
 			byUpload.set(uploadId, Math.max(byUpload.get(uploadId) ?? 0, o.uploaded.getTime()));
 		}
-		const uploadId = [...byUpload.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+		// The upload that just finished when the caller knows it; else the newest
+		const uploadId = knownUploadId && byUpload.has(knownUploadId) ? knownUploadId : [...byUpload.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
 		if (!uploadId) return false;
 		const parts = partsFromKeys(objects, videoId, uploadId);
 		const cover = partsCover(parts, size);
@@ -132,6 +136,18 @@ export async function deleteOriginal(env: OriginalsEnv, videoId: string): Promis
 	return keys.length;
 }
 
+/**
+ * Is this original the master of the video's only copy? The record decides: no Bunny copy
+ * (bunnyRef null) means R2 plays it alone. A missing record keeps today's rule (the purge removes
+ * originals of removed videos). Throws when the bucket fails (the sweep skips the row this run).
+ */
+async function isSoleCopyMaster(env: OriginalsEnv, videoId: string): Promise<boolean> {
+	if (!env.videos) return false;
+	const object = await env.videos.get(videoId);
+	if (!object) return false;
+	return !bunnyRef((await object.json()) as never);
+}
+
 const days = (v: string | undefined, d: number) => {
 	const n = Number(v);
 	return Number.isFinite(n) && n > 0 ? n : d;
@@ -139,7 +155,8 @@ const days = (v: string | undefined, d: number) => {
 
 /**
  * Daily: delete originals kept at least ORIGINALS_RETENTION_DAYS whose R2 rendition is ready, and
- * any older than ORIGINALS_MAX_DAYS. Bounded per run.
+ * any older than ORIGINALS_MAX_DAYS. Bounded per run. Never the original of a video Bunny holds no
+ * copy of: R2 is its only copy and the original its master (marked `keep`, skipped from then on).
  */
 export async function sweepOriginals(env: OriginalsEnv, now = Date.now()): Promise<{ deleted: number }> {
 	if (!env.SEARCH_DB || !env.MEDIA_ORIGINALS) return { deleted: 0 };
@@ -147,7 +164,7 @@ export async function sweepOriginals(env: OriginalsEnv, now = Date.now()): Promi
 	const maxUntil = new Date(now - days(env.ORIGINALS_MAX_DAYS, 90) * 86400_000).toISOString();
 	const { results } = await env.SEARCH_DB.prepare(
 		`SELECT o.video_id FROM media_originals o LEFT JOIN media_jobs j ON j.video_id = o.video_id
-		 WHERE o.deleted_at IS NULL AND ((o.completed_at < ?1 AND j.status = 'ready') OR o.completed_at < ?2)
+		 WHERE o.deleted_at IS NULL AND o.keep IS NULL AND ((o.completed_at < ?1 AND j.status = 'ready') OR o.completed_at < ?2)
 		 ORDER BY o.completed_at LIMIT 200`,
 	)
 		.bind(keepUntil, maxUntil)
@@ -155,6 +172,10 @@ export async function sweepOriginals(env: OriginalsEnv, now = Date.now()): Promi
 	let deleted = 0;
 	for (const r of results ?? []) {
 		try {
+			if (await isSoleCopyMaster(env, r.video_id)) {
+				await env.SEARCH_DB.prepare("UPDATE media_originals SET keep = 'sole_copy' WHERE video_id = ?1").bind(r.video_id).run();
+				continue;
+			}
 			await deleteOriginal(env, r.video_id);
 			deleted++;
 		} catch (error) {

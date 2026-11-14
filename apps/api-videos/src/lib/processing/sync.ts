@@ -89,6 +89,13 @@ export interface SyncOptions {
 	loopStartedAt?: string;
 	/** Bunny's auto thumbnail answered (true) / 404'd (false); undefined: not checked */
 	thumbnailExists?: boolean;
+	/** Bunny's GUID of the video (new videos: the stored ref; older ones: their id) */
+	bunnyId?: string;
+	/**
+	 * Another provider's copy is still coming or ready (docs/media-delivery/PROVIDERS.md): a Bunny
+	 * failure then fails only Bunny's copy, never the video.
+	 */
+	otherCopy?: boolean;
 }
 
 export interface SyncPlan {
@@ -229,10 +236,10 @@ export function planSync(video: SyncableVideo, bunny: BunnyVideoState | null, op
 		// Dimensions decide what is a short (<= 180 s and height >= width)
 		if (bunny.width && video.width !== bunny.width) patch.width = bunny.width;
 		if (bunny.height && video.height !== bunny.height) patch.height = bunny.height;
-		const playUrl = canonicalUrl(video.playUrl, opts.host, video.id, 'playlist.m3u8');
+		const playUrl = canonicalUrl(video.playUrl, opts.host, opts.bunnyId ?? video.id, 'playlist.m3u8');
 		if (playUrl) patch.playUrl = playUrl;
 		if (video.thumbnailType !== 'custom') {
-			const thumb = canonicalUrl(video.thumbnailUrl, opts.host, video.id, bunny.thumbnailFileName || 'thumbnail.jpg');
+			const thumb = canonicalUrl(video.thumbnailUrl, opts.host, opts.bunnyId ?? video.id, bunny.thumbnailFileName || 'thumbnail.jpg');
 			if (thumb) patch.thumbnailUrl = thumb;
 			if (opts.thumbnailExists === false && !video.thumbnailPending) patch.thumbnailPending = true;
 			if (opts.thumbnailExists === true && video.thumbnailPending) unset.push('thumbnailPending');
@@ -245,6 +252,11 @@ export function planSync(video: SyncableVideo, bunny: BunnyVideoState | null, op
 			return finish('playable');
 		}
 		return finish('ready');
+	}
+
+	if (opts.otherCopy && (phase === 'failed' || phase === 'missing')) {
+		// Only Bunny's copy failed; the video follows its other provider (lib/media/r2-delivery.ts)
+		return finish('failed', phase === 'failed' && bunny ? failureReason(bunny) : 'Video not found at Bunny');
 	}
 
 	if (phase === 'failed' && bunny) {
@@ -265,6 +277,7 @@ export function planSync(video: SyncableVideo, bunny: BunnyVideoState | null, op
 		const timeout = opts.uploadTimeoutMs ?? DEFAULT_UPLOAD_TIMEOUT_MS;
 		if (now - created >= timeout) {
 			const reason = 'Upload never reached Bunny';
+			if (opts.otherCopy) return finish('failed', reason);
 			setStatus('failed');
 			setIssue('needs_reupload', reason);
 			return finish('needs_reupload', reason);

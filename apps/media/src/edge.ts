@@ -6,7 +6,7 @@
  * The edge cache is keyed by object key, not by token, so all viewers of a
  * private video share one cached copy and a new token never misses the cache.
  */
-import { mediaContentType, mediaCacheControl, parsePrivatePath, verifyMediaToken } from '@al-ummah/shared-types';
+import { mediaContentType, mediaCacheControl, parsePrivatePath, verifyMediaFileToken, verifyMediaToken } from '@al-ummah/shared-types';
 import { secret, type Env } from './env';
 
 const CORS: Record<string, string> = {
@@ -28,7 +28,11 @@ export async function handlePrivate(request: Request, env: Env, ctx: ExecutionCo
 	const parsed = parsePrivatePath(url.pathname);
 	if (!parsed) return text(404, 'Not found');
 	const key = await secret(env.MEDIA_SIGN_KEY, 'MEDIA_SIGN_KEY');
-	if (!(await verifyMediaToken(key, parsed.token, parsed.videoId, parsed.rev))) return text(403, 'Link expired');
+	// A folder token (playback) opens the rendition; a file token (a frame on a card) only its own file
+	const allowed = parsed.token.startsWith('f')
+		? await verifyMediaFileToken(key, parsed.token, parsed.videoId, parsed.rev, parsed.rest)
+		: await verifyMediaToken(key, parsed.token, parsed.videoId, parsed.rev);
+	if (!allowed) return text(403, 'Link expired');
 
 	const objectKey = `priv/${parsed.videoId}/${parsed.rev}/${parsed.rest}`;
 	const cacheKey = new Request(`https://${url.host}/__media/${objectKey}`, { method: 'GET', headers: request.headers.get('range') ? { range: request.headers.get('range')! } : {} });

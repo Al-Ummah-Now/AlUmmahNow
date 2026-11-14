@@ -141,6 +141,31 @@ export function isBunnyFrameOf(url: string, videoId: string, bunnyHostname?: str
 	}
 }
 
+/**
+ * A frame our transcode rendered from this video (lib/media/r2-delivery.ts storedR2Frame), public or
+ * private (any token segment): its shape is the video's.
+ */
+export function isR2FrameOf(url: string, videoId: string, mediaHost?: string): boolean {
+	if (!mediaHost) return false;
+	try {
+		const u = new URL(url);
+		return u.hostname === mediaHost && new RegExp(`^/(?:pub|priv/[^/]+)/${videoId}/[A-Za-z0-9_-]{1,64}/thumb\\.jpg$`).test(u.pathname);
+	} catch {
+		return false;
+	}
+}
+
+/** A custom thumbnail of this video stored on R2 (lib/thumbnail/store.ts) */
+export function isR2ThumbnailOf(url: string, videoId: string, mediaHost?: string): boolean {
+	if (!mediaHost) return false;
+	try {
+		const u = new URL(url);
+		return u.hostname === mediaHost && new RegExp(`^/pub/thumbs/${videoId}/[A-Za-z0-9_-]+\\.(?:jpe?g|png|webp)$`).test(u.pathname);
+	} catch {
+		return false;
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Image size from the first bytes (JPEG, PNG, WebP)
 // ---------------------------------------------------------------------------

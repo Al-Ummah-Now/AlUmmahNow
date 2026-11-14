@@ -46,6 +46,8 @@ import {
 import { logger } from '../logger';
 import R2Repository from '../r2Repo';
 import { bunnyDirectoryToken, signedBunnyUrl, tokenExpiry } from '../bunny-signing';
+import { bunnyRef } from '../media/providers';
+import type { VideoMediaProviders } from '@al-ummah/shared-types';
 import { fetchBunnyVideo, startProcessingLoop, type ProcessingEnv } from '../processing/loop';
 import { bunnyLibraryForHost, type BunnyLibrariesEnv, type LibraryHints } from '../bunny/libraries';
 import { backfillOwnershipPage, ownershipIdForKey } from '../search/ownership';
@@ -61,6 +63,8 @@ export interface VideoFormatEnv extends ProcessingEnv {
 
 interface FormatVideo {
 	id: string;
+	/** Which providers hold it (docs/media-delivery/PROVIDERS.md): Bunny's copy is under its own GUID */
+	media?: VideoMediaProviders;
 	title?: string;
 	channelId?: string;
 	uploadStatus?: string;
@@ -79,8 +83,8 @@ export interface EncodedSize {
 	width?: number;
 	height?: number;
 	duration?: number;
-	/** Where it came from (for the log) */
-	source: 'bunny-api' | 'playlist';
+	/** Where it came from (for the log); `transcode`: R2's job result on the record (no Bunny copy) */
+	source: 'bunny-api' | 'playlist' | 'transcode';
 }
 
 /** Delivery attempt from which a failing video is flagged instead of retried. */
@@ -126,11 +130,16 @@ export function firstMediaPlaylist(master: string): string | null {
 	return null;
 }
 
-/** The Bunny CDN host and video id a record plays from (its playUrl, else the configured library). */
-export function playlistLocation(env: Pick<VideoFormatEnv, 'bunny_hostname'>, video: Pick<FormatVideo, 'id' | 'playUrl'>): { host: string; id: string } | null {
+/**
+ * The Bunny CDN host and Bunny's id of the video (its playUrl, else the configured library). Bunny's
+ * id is bunnyRef: the id on a legacy row, the stored GUID on a new one; null when Bunny holds no copy.
+ */
+export function playlistLocation(env: Pick<VideoFormatEnv, 'bunny_hostname'>, video: Pick<FormatVideo, 'id' | 'playUrl' | 'media'>): { host: string; id: string } | null {
+	const bunnyId = bunnyRef(video as never);
+	if (!bunnyId) return null;
 	const match = /^https:\/\/([^/]+)\/([A-Za-z0-9-]+)\/playlist\.m3u8$/.exec(video.playUrl ?? '');
-	if (match) return match[2] === video.id ? { host: match[1], id: match[2] } : null;
-	return env.bunny_hostname ? { host: env.bunny_hostname, id: video.id } : null;
+	if (match) return match[2] === bunnyId ? { host: match[1], id: match[2] } : null;
+	return env.bunny_hostname ? { host: env.bunny_hostname, id: bunnyId } : null;
 }
 
 async function fetchText(url: string, what: string): Promise<string | null> {
@@ -176,10 +185,16 @@ async function sizeFromPlaylist(env: VideoFormatEnv, video: FormatVideo, opts: {
  * Throws on transient errors (the page is retried).
  */
 export async function readEncodedSize(env: VideoFormatEnv, video: FormatVideo): Promise<EncodedSize | null> {
+	const bunnyId = bunnyRef(video as never);
+	// No Bunny copy: R2's transcode wrote the encoded size and length on the record (lib/media/r2-delivery.ts readyFromR2)
+	if (!bunnyId) {
+		if (!positive(video.width) && !positive(video.duration)) return null;
+		return { width: video.width, height: video.height, duration: video.duration, source: 'transcode' };
+	}
 	const where = playlistLocation(env, video);
 	// Any configured library (primary or legacy) answers through its Stream API
 	const configuredLibrary = !where || !!(await bunnyLibraryForHost(env as BunnyLibrariesEnv, where.host));
-	const bunny = configuredLibrary ? await fetchBunnyVideo(env, video.id, video as LibraryHints) : null;
+	const bunny = configuredLibrary ? await fetchBunnyVideo(env, bunnyId, video as LibraryHints) : null;
 	const apiSize = bunny && positive(bunny.width) && positive(bunny.height) ? { width: bunny.width, height: bunny.height } : null;
 	const apiDuration = positive(bunny?.length);
 	if (apiSize && (apiDuration || positive(video.duration))) return { ...apiSize, duration: apiDuration, source: 'bunny-api' };

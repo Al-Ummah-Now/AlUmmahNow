@@ -341,7 +341,7 @@ describe('every path that sets a thumbnail refuses another shape', () => {
 		const res = await initiate(jpeg(1280, 720));
 		assert.equal(res.status, 200);
 		assert.equal(stored.length, 0, 'the squashed frame was not stored');
-		const record = env.videos.read(ID);
+		const record = env.videos.read(((await res.json()) as any).result.videoId);
 		assert.equal(record.thumbnailUrl, undefined, 'no stored thumbnail: Bunny\'s frame comes when the video plays');
 		assert.equal(record.thumbnailType, 'auto');
 	});

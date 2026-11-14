@@ -39,8 +39,11 @@ import { fetchBunnyVideo, type ProcessingEnv } from '../processing/loop';
 import { signBunnyUrlsInText } from '../bunny-signing';
 import { bunnyHosts, bunnyLibraries, bunnyLibraryForVideo, type BunnyLibrariesEnv, type LibraryHints } from '../bunny/libraries';
 import Queue from '../queue';
+import { bunnyRef } from '../media/providers';
+import { signMediaFramesInText } from '../media/frame-signing';
+import { getSecret } from '../env-helpers';
 import { MessageType } from '@al-ummah/shared-types';
-import { absoluteImageUrl, aspectMismatch, checkThumbnailShape, imageSize, isBunnyFrameOf, isLetterboxedArt, isOnHost, isOwnImageHost, resolveVideoSize, type Size } from './shape';
+import { absoluteImageUrl, aspectMismatch, checkThumbnailShape, imageSize, isBunnyFrameOf, isLetterboxedArt, isR2FrameOf, isR2ThumbnailOf, isOnHost, isOwnImageHost, resolveVideoSize, type Size } from './shape';
 import { createJob, listJobs, type JobEnv } from '../admin/jobs';
 import type { AdminJob } from '@al-ummah/shared-types';
 
@@ -74,6 +77,8 @@ export interface ThumbnailCheck {
 export interface ThumbnailRepairEnv extends ProcessingEnv {
 	BUNNY_TOKEN_KEY?: unknown;
 	BUNNY_SIGN_URLS?: string;
+	MEDIA_PUBLIC_HOST?: string;
+	MEDIA_SIGN_KEY?: unknown;
 }
 
 interface RepairVideo {
@@ -131,22 +136,29 @@ export function planThumbnailRepair(input: {
 // ---------------------------------------------------------------------------
 
 /** Sign a Bunny Stream image URL of `videoId` when the library needs tokens. */
-async function fetchableUrl(env: ThumbnailRepairEnv, videoId: string, url: string): Promise<string> {
-	if (env.BUNNY_SIGN_URLS !== 'true' || url.includes('token=')) return url;
+async function fetchableUrl(env: ThumbnailRepairEnv, videoId: string, url: string, bunnyId: string | null): Promise<string> {
+	// A private R2 frame of the video (lib/media/frame-signing.ts)
+	if (env.MEDIA_PUBLIC_HOST && isR2FrameOf(url, videoId, env.MEDIA_PUBLIC_HOST) && url.includes('/priv/')) {
+		const key = await getSecret(env.MEDIA_SIGN_KEY as never, 'MEDIA_SIGN_KEY').catch(() => '');
+		if (!key) return url;
+		return (JSON.parse(await signMediaFramesInText(JSON.stringify({ id: videoId, thumbnailUrl: url }), env.MEDIA_PUBLIC_HOST, key)) as { thumbnailUrl: string }).thumbnailUrl;
+	}
+	if (env.BUNNY_SIGN_URLS !== 'true' || url.includes('token=') || !bunnyId) return url;
 	// Only a configured library's own host is signed, with that library's key
 	// (exact hostname, never a look-alike URL; lib/bunny/libraries.ts)
 	const library = (await bunnyLibraries(env as BunnyLibrariesEnv)).find((l) => l.host && isOnHost(url, l.host));
 	if (!library?.host || !library.tokenKey) return url;
-	const signed = await signBunnyUrlsInText(JSON.stringify({ id: videoId, thumbnailUrl: url }), library.host, library.tokenKey);
+	// Bunny serves the video's copy under its own id (new videos: the stored GUID)
+	const signed = await signBunnyUrlsInText(JSON.stringify({ id: bunnyId, thumbnailUrl: url }), library.host, library.tokenKey);
 	return (JSON.parse(signed) as { thumbnailUrl: string }).thumbnailUrl;
 }
 
 /** Size of the image at `url`; null when it is not an image we can read. Throws on network/5xx (retried). */
-export async function fetchImageSize(env: ThumbnailRepairEnv, videoId: string, url: string): Promise<Size | null> {
+export async function fetchImageSize(env: ThumbnailRepairEnv, videoId: string, url: string, bunnyId: string | null = videoId): Promise<Size | null> {
 	const absolute = absoluteImageUrl(url);
 	if (!absolute) return null;
 	// No redirects: a redirect is treated as unreadable, never followed to another address
-	const response = await fetch(await fetchableUrl(env, videoId, absolute), { headers: { Range: `bytes=0-${HEADER_BYTES - 1}` }, redirect: 'manual' });
+	const response = await fetch(await fetchableUrl(env, videoId, absolute, bunnyId), { headers: { Range: `bytes=0-${HEADER_BYTES - 1}` }, redirect: 'manual' });
 	if (response.status >= 500) throw new Error(`GET thumbnail failed: HTTP ${response.status}`);
 	if (!response.ok) return null;
 	const reader = response.body?.getReader();
@@ -192,12 +204,14 @@ export async function repairVideoThumbnail(
 
 	let videoSize: Size | null = video.width && video.height ? { width: video.width, height: video.height } : null;
 	let bunny: Awaited<ReturnType<typeof fetchBunnyVideo>> = null;
+	// Bunny's id of the video (new videos: the stored GUID); none when Bunny holds no copy
+	const bunnyId = bunnyRef(video as never);
 	const needsBunny = () => !videoSize || !isBunnyStreamUrl(video.thumbnailUrl);
-	if (needsBunny()) {
-		bunny = await fetchBunnyVideo(env, videoId, video as LibraryHints);
+	if (bunnyId && needsBunny()) {
+		bunny = await fetchBunnyVideo(env, bunnyId, video as LibraryHints);
 		if (!videoSize && bunny?.width && bunny?.height) videoSize = { width: bunny.width, height: bunny.height };
 	}
-	const thumbnail = video.thumbnailUrl ? await fetchImageSize(env, videoId, video.thumbnailUrl) : null;
+	const thumbnail = video.thumbnailUrl ? await fetchImageSize(env, videoId, video.thumbnailUrl, bunnyId) : null;
 	const plan = planThumbnailRepair({ thumbnailUrl: video.thumbnailUrl, thumbnailType: video.thumbnailType, video: videoSize, thumbnail });
 
 	let outcome: RepairOutcome;
@@ -216,9 +230,13 @@ export async function repairVideoThumbnail(
 		case 'use_bunny': {
 			// The video's own library host
 			const host = (await bunnyLibraryForVideo(env as BunnyLibrariesEnv, video as LibraryHints)).host;
-			const candidate = host ? `https://${host}/${videoId}/${bunny?.thumbnailFileName || 'thumbnail.jpg'}` : undefined;
-			const candidateSize = candidate ? await fetchImageSize(env, videoId, candidate) : null;
-			if (!candidate || !candidateSize || aspectMismatch(candidateSize, videoSize!)) {
+			const candidate = host && bunnyId ? `https://${host}/${bunnyId}/${bunny?.thumbnailFileName || 'thumbnail.jpg'}` : undefined;
+			const candidateSize = candidate ? await fetchImageSize(env, videoId, candidate, bunnyId) : null;
+			if (!bunnyId) {
+				// No Bunny copy to take a frame from: flagged for the owner, never replaced
+				outcome = 'flagged';
+				reason = `${plan.reason}; the video has no Bunny copy, so nothing was replaced`;
+			} else if (!candidate || !candidateSize || aspectMismatch(candidateSize, videoSize!)) {
 				outcome = 'flagged';
 				reason = `${plan.reason}; Bunny's thumbnail ${candidateSize ? `is ${candidateSize.width}x${candidateSize.height}` : 'could not be read'}, so nothing was replaced`;
 			} else {
@@ -471,13 +489,17 @@ export async function verifyThumbnailUrl(
 ): Promise<ThumbnailUrlVerdict> {
 	if (!url.trim()) return { ok: true };
 	const own = await bunnyLibraryForVideo(env as BunnyLibrariesEnv, video);
-	if (isBunnyFrameOf(url, video.id, own.host)) return { ok: true, type: 'auto' };
-	if (!isOwnImageHost(url, await bunnyHosts(env as BunnyLibrariesEnv))) {
+	const bunnyId = bunnyRef(video as never);
+	if (bunnyId && isBunnyFrameOf(url, bunnyId, own.host)) return { ok: true, type: 'auto' };
+	// Our transcode's frame of this video
+	if (isR2FrameOf(url, video.id, env.MEDIA_PUBLIC_HOST)) return { ok: true, type: 'auto' };
+	const onR2 = isR2ThumbnailOf(url, video.id, env.MEDIA_PUBLIC_HOST);
+	if (!onR2 && !isOwnImageHost(url, await bunnyHosts(env as BunnyLibrariesEnv))) {
 		return { ok: false, code: 'thumbnail_host', error: 'The thumbnail must be one of the video\'s frames or an uploaded image. Upload it instead.' };
 	}
-	const image = await fetchImageSize(env, video.id, url).catch(() => null);
+	const image = await fetchImageSize(env, video.id, url, bunnyId).catch(() => null);
 	if (!image) return { ok: false, code: 'thumbnail_unreadable', error: 'The thumbnail image could not be read. Upload it instead.' };
-	const videoSize = await resolveVideoSize(video, () => fetchBunnyVideo(env, video.id, video));
+	const videoSize = await resolveVideoSize(video, async () => (bunnyId ? fetchBunnyVideo(env, bunnyId, video) : null));
 	const shape = checkThumbnailShape(image, videoSize);
 	return shape.ok ? { ok: true, type: 'custom' } : shape;
 }

@@ -15,6 +15,7 @@
  *   POST /internal/processing/mark-failed  { ids: string[], reason?: string }
  */
 
+import { bunnyRef } from '../../lib/media/providers';
 import { Hono } from 'hono';
 import { readErasureDeadLetters, type ErasureDeadLetter } from '../../lib/privacy/erasure-dead-letters';
 import { logger } from '../../lib/logger';
@@ -161,7 +162,9 @@ export function createProcessingInternalRouter() {
 				let bunny: unknown = undefined;
 				if (withBunny) {
 					try {
-						const b = await fetchBunnyVideo(c.env, video.id, video as never);
+						// Bunny's copy is under its own id (new videos: the stored GUID); none, nothing to read
+						const bunnyId = bunnyRef(video as never);
+						const b = bunnyId ? await fetchBunnyVideo(c.env, bunnyId, video as never) : null;
 						bunny = b
 							? { status: b.status, encodeProgress: b.encodeProgress, availableResolutions: b.availableResolutions, length: b.length, storageSize: b.storageSize, width: b.width, height: b.height }
 							: null;

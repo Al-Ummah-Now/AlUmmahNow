@@ -1,3 +1,4 @@
+import { bunnyRef } from '../../lib/media/providers';
 import { bunnyClientForVideo, type LibraryHints } from '../../lib/bunny/libraries';
 import { verifyThumbnailUrl } from "../../lib/thumbnail/repair";
 import { unsignedBunnyUrl } from "../../lib/bunny-signing";
@@ -197,12 +198,13 @@ export class VideoUpdate extends AuthenticatedRoute {
 		});
 
 		// Update the video in Bunny Stream if title changed
-		if (videoUpdateInput.title && videoUpdateInput.title !== existingVideo.title) {
+		const bunnyId = bunnyRef(existingVideo as never);
+		if (bunnyId && videoUpdateInput.title && videoUpdateInput.title !== existingVideo.title) {
 			try {
-				// In the video's own library (lib/bunny/libraries.ts)
+				// In the video's own library (lib/bunny/libraries.ts), under Bunny's id of the video
 				const { client: bunnyStream, libraryId } = await bunnyClientForVideo(c.env as never, existingVideo as LibraryHints);
 
-				await bunnyStream.updateVideo(libraryId, id, {
+				await bunnyStream.updateVideo(libraryId, bunnyId, {
 					title: videoUpdateInput.title,
 				});
 			} catch (error) {

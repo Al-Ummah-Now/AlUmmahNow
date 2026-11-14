@@ -150,7 +150,6 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
   const lastProgressTimeRef = useRef<number>(0);
   const lastBytesUploadedRef = useRef<number>(0);
   const videoIdRef = useRef<string>('');
-  const libraryIdRef = useRef<number>(0);
   const thumbnailUrlRef = useRef<string>('');
 
   const auth = useAuth();
@@ -366,7 +365,6 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
           videoId = targetVideoId;
           tusSessionId = resumed.tusSessionId;
           uploadUrl = grantedUploadUrl(endpoint, resumed, selectedFile);
-          libraryIdRef.current = 0;
           thumbnailUrlRef.current = '';
           rememberUpload(selectedFile, channelId, videoId);
         } else if (resumeVideoId) {
@@ -435,13 +433,12 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
           throw Object.assign(new Error(initiateResult.error || VIDEO_UPLOAD_ERRORS.UPLOAD_FAILED), { status: initiateResult.status, serverRef: initiateResult.serverRef });
         }
 
-        const { videoId: newVideoId, tusSessionId: newSessionId, libraryId, authToken, thumbnailUrl: returnedThumbnailUrl, tusUploadId } = initiateResult.result;
+        const { videoId: newVideoId, tusSessionId: newSessionId, authToken, thumbnailUrl: returnedThumbnailUrl, tusUploadId } = initiateResult.result;
         videoId = newVideoId;
         tusSessionId = newSessionId || '';
         uploadUrl = tusUploadId ? `${endpoint}/${tusUploadId}` : undefined;
         if (initiateResult.result.reused) logger.info('[VideoUpload] Reusing the unfinished upload of this file', { videoId, resumable: !!tusUploadId });
         fallbackAuthorization = authToken ? `Bearer ${authToken}` : undefined;
-        libraryIdRef.current = libraryId || 0;
         thumbnailUrlRef.current = returnedThumbnailUrl || '';
 
         if (!newSessionId) {
@@ -610,7 +607,8 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
             title: metadata.title,
             description: metadata.description || null,
             thumbnailUrl: thumbnailUrlRef.current,
-            videoUrl: `${VIDEO_UPLOAD_CONFIG.BUNNY_CDN_BASE_URL}/library/${libraryIdRef.current}/videos/${videoId}`,
+            // Playback comes from our API (GET /api/videos/:id/playback), never a provider URL built here
+            videoUrl: '',
             userId: auth.user?.id || '',
             channel: channelId,
             channelId: channelId,
@@ -700,7 +698,6 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
     onProgress(0);
     tusUploadRef.current = null;
     videoIdRef.current = '';
-    libraryIdRef.current = 0;
     setSelectedThumbnail(null);
     setScheduleData(null);
     setScheduleError(null);

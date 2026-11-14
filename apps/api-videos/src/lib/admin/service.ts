@@ -7,6 +7,7 @@
  * goes through the env's wrapped buckets, so the search, ownership and
  * comment indexes follow (lib/search/sync.ts).
  */
+import { bunnyRef } from '../media/providers';
 import { eraseUploadTraces } from '../privacy/upload-traces';
 import {
 	applySuspensionHold,
@@ -491,11 +492,13 @@ async function purgeVideo(
 		logger.warn('[Admin] R2 media delete failed', { videoId, error: error instanceof Error ? error.message : String(error) });
 		if (opts.strict) throw error;
 	}
-	const b = bunnyClient === undefined ? await bunny(env, hints) : bunnyClient;
-	if (!b && opts.strict) throw new Error('Bunny Stream is unavailable');
-	if (b) {
+	// Bunny's id of the video; none when Bunny holds no copy (nothing to delete there)
+	const bunnyId = bunnyRef({ id: videoId, ...((stored ?? video ?? {}) as object) } as never);
+	const b = !bunnyId ? null : bunnyClient === undefined ? await bunny(env, hints) : bunnyClient;
+	if (bunnyId && !b && opts.strict) throw new Error('Bunny Stream is unavailable');
+	if (b && bunnyId) {
 		try {
-			await b.client.deleteVideo(b.libraryId, videoId);
+			await b.client.deleteVideo(b.libraryId, bunnyId);
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			// Already gone from Bunny: nothing left to erase there
@@ -687,10 +690,11 @@ export async function videoDetail(env: AdminServiceEnv, id: string): Promise<Adm
 	if (!video || id.includes(':')) throw new AdminError(404, 'video_not_found');
 	const channel = video.channelId ? await repo(env.channels).getObject(video.channelId) : null;
 	let processing: AdminVideoDetail['processing'] = null;
-	const b = await bunny(env, video);
-	if (b) {
+	const bunnyId = bunnyRef(video as never);
+	const b = bunnyId ? await bunny(env, video) : null;
+	if (b && bunnyId) {
 		try {
-			const model = (await b.client.getVideo(b.libraryId, id)) as Row;
+			const model = (await b.client.getVideo(b.libraryId, bunnyId)) as Row;
 			const STATUS = ['created', 'uploaded', 'processing', 'transcoding', 'finished', 'error', 'upload_failed', 'jit_segmenting', 'jit_playlists_created'];
 			processing = {
 				status: STATUS[Number(model.status)] ?? String(model.status ?? 'unknown'),
@@ -827,10 +831,13 @@ export async function setVideoPublished(env: AdminServiceEnv, id: string, publis
 export async function reprocessVideo(env: AdminServiceEnv, id: string): Promise<Row> {
 	const video = await repo(env.videos).getObject(id);
 	if (!video) throw new AdminError(404, 'video_not_found');
+	// Bunny's copy is encoded again; an R2-only video is transcoded again instead (Delivery "Transcode again")
+	const bunnyId = bunnyRef(video as never);
+	if (!bunnyId) throw new AdminError(409, 'not_on_bunny');
 	const b = await bunny(env, video);
 	if (!b) throw new AdminError(409, 'processor_unavailable');
 	try {
-		await b.client.reencodeVideo(b.libraryId, id);
+		await b.client.reencodeVideo(b.libraryId, bunnyId);
 	} catch (error) {
 		logger.warn('[Admin] Reencode refused', { id, error: error instanceof Error ? error.message : String(error) });
 		throw new AdminError(409, 'reprocess_refused', error instanceof Error ? error.message : String(error));
@@ -1390,11 +1397,14 @@ async function runRunUserErase(env: AdminServiceEnv, job: AdminJob): Promise<Job
 		new OperationBudget(900),
 		{
 			onVideoDeleted: async (videoId: string, video?: LibraryHints) => {
+				// Bunny's id of the video; none when Bunny holds no copy
+				const bunnyId = video ? bunnyRef({ id: videoId, ...video } as never) : videoId;
+				if (!bunnyId) return;
 				// The video's own library (lib/bunny/libraries.ts)
 				const b = await bunny(env, video);
 				if (!b) return;
 				try {
-					await b.client.deleteVideo(b.libraryId, videoId);
+					await b.client.deleteVideo(b.libraryId, bunnyId);
 				} catch (error) {
 					logger.warn('[Admin] Bunny Stream delete failed', { videoId, error: error instanceof Error ? error.message : String(error) });
 				}
@@ -1427,11 +1437,14 @@ async function eraseUserStep(env: AdminServiceEnv & Record<string, unknown>, use
 		budget,
 		{
 			onVideoDeleted: async (videoId: string, video?: LibraryHints) => {
+				// Bunny's id of the video; none when Bunny holds no copy
+				const bunnyId = video ? bunnyRef({ id: videoId, ...video } as never) : videoId;
+				if (!bunnyId) return;
 				// The video's own library (lib/bunny/libraries.ts)
 				const b = await bunny(env, video);
 				if (!b) return;
 				try {
-					await b.client.deleteVideo(b.libraryId, videoId);
+					await b.client.deleteVideo(b.libraryId, bunnyId);
 				} catch (error) {
 					logger.warn('[Admin] Bunny Stream delete failed', { videoId, error: error instanceof Error ? error.message : String(error) });
 				}

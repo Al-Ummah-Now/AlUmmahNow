@@ -379,6 +379,33 @@ export async function verifyMediaToken(key: string, token: string, videoId: stri
 	return diff === 0;
 }
 
+/**
+ * File token for exactly one file under priv/<videoId>/<rev>/ (a still frame on a card, in a
+ * listing). Unlike the folder token it never opens the playlist or segments: "f" prefix, its own
+ * HMAC domain, and the media Worker checks the file it was issued for.
+ */
+export async function mediaFileToken(key: string, videoId: string, rev: string, file: string, expires: number): Promise<string> {
+	return `f${expires}.${await hmac(key, `file:priv/${videoId}/${rev}/${file}:${expires}`)}`;
+}
+
+/** Constant-time check of a file token for `file`; false when expired, malformed or for another file. */
+export async function verifyMediaFileToken(key: string, token: string, videoId: string, rev: string, file: string, nowSeconds: number = Math.floor(Date.now() / 1000)): Promise<boolean> {
+	const m = /^f(\d{10})\.([A-Za-z0-9_-]{32})$/.exec(token);
+	if (!m) return false;
+	const expires = Number(m[1]);
+	if (!(expires > nowSeconds) || expires > nowSeconds + MEDIA_TOKEN_TTL_SECONDS + 3600) return false;
+	const want = await hmac(key, `file:priv/${videoId}/${rev}/${file}:${expires}`);
+	const got = m[2]!;
+	let diff = 0;
+	for (let i = 0; i < want.length; i++) diff |= want.charCodeAt(i) ^ got.charCodeAt(i);
+	return diff === 0;
+}
+
+/** Signed URL of one private still (the frame): a file token, never the folder's. */
+export async function mediaFrameUrl(host: string, videoId: string, rev: string, key: string, expires: number = mediaTokenExpiry(), file: string = MEDIA_THUMBNAIL): Promise<string> {
+	return `https://${host}/priv/${await mediaFileToken(key, videoId, rev, file, expires)}/${videoId}/${rev}/${file}`;
+}
+
 /** Play URL of a rendition set; private ones need the signing key. */
 export async function mediaPlayUrl(
 	host: string,

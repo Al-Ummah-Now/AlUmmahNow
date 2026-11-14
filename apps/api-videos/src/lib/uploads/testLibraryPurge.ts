@@ -42,6 +42,7 @@
  * "production".
  */
 
+import { readRecordByBunnyGuid } from '../media/refs';
 import { logger } from '../logger';
 import R2Repository from '../r2Repo';
 import { belongsToEnv, deleteBunnyVideo, listBunnyVideos, type BunnyView, type ReaperEnv } from './reaper';
@@ -297,15 +298,19 @@ async function liveStreamTexts(env: Pick<PurgeEnv, 'videos'>): Promise<string[]>
  * The record of a Bunny video: undefined when there is none; null when it
  * exists but cannot be parsed (counts as live: never delete what we cannot read).
  */
-async function readRecord(env: Pick<PurgeEnv, 'videos'>, id: string): Promise<RecordView | undefined> {
-	const object = await env.videos.get(id);
-	if (!object) return undefined;
+/** The record of a Bunny GUID: by id (legacy videos), else through media_provider_refs (lib/media/refs.ts). */
+async function readRecord(env: Pick<PurgeEnv, 'videos' | 'SEARCH_DB'>, id: string): Promise<RecordView | undefined> {
+	let found: { record: unknown } | null;
 	try {
-		const parsed = (await object.json()) as RecordView;
-		return parsed && typeof parsed === 'object' ? parsed : {};
-	} catch {
-		return {};
+		found = await readRecordByBunnyGuid<unknown>(env as never, id);
+	} catch (error) {
+		// An unreadable record is a record: never delete a video whose record could not be read
+		if (error instanceof SyntaxError) return {};
+		throw error;
 	}
+	if (!found) return undefined;
+	const parsed = found.record as RecordView;
+	return parsed && typeof parsed === 'object' ? parsed : {};
 }
 
 /**

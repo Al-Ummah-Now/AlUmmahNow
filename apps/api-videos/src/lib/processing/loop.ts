@@ -17,6 +17,8 @@
  * a record that is already in the target state is not written again.
  */
 
+import { bunnyRef, videoProviderRecords } from '../media/providers';
+import type { VideoMediaProviders } from '@al-ummah/shared-types';
 import { logger } from '../logger';
 import R2Repository from '../r2Repo';
 import { bunnyApi, bunnyLibraries, bunnyLibraryForVideo, type BunnyLibrariesEnv, type BunnyLibrary, type LibraryHints } from '../bunny/libraries';
@@ -193,6 +195,18 @@ function summary(video: LoopVideo) {
 	};
 }
 
+/** Bunny's copy state on a new-style record (media.providers.bunny), from the sync's phase. */
+function syncBunnyRefStatus(video: { media?: VideoMediaProviders }, plan: SyncPlan, now: Date): boolean {
+	const ref = video.media?.providers.bunny;
+	if (!ref) return false;
+	const status = plan.phase === 'ready' || plan.phase === 'playable' ? 'ready' : plan.phase === 'failed' || plan.phase === 'missing' || (plan.outcome === 'failed' || plan.outcome === 'needs_reupload') ? 'failed' : plan.phase === 'encoding' ? 'processing' : 'pending';
+	if (ref.status === status) return false;
+	ref.status = status;
+	if (status === 'ready') ref.readyAt ??= now.toISOString();
+	if (status === 'failed' && plan.reason) ref.error = plan.reason.slice(0, 300);
+	return true;
+}
+
 /**
  * Re-read Bunny for one video and fix its record (the admin "Sync from Bunny"
  * action, the loop's check and the sweep all come here). `dryRun` returns the
@@ -210,17 +224,22 @@ export async function syncVideoFromBunny(
 	const library = await bunnyLibraryForVideo(env as BunnyLibrariesEnv, video);
 	const host = library.host;
 	if (!host) return { videoId, found: true, dryRun: !!opts.dryRun, changed: false, error: 'bunny_hostname is not configured' };
+	// Bunny's id of the video (new videos: the stored ref); none: Bunny holds no copy to sync from
+	const bunnyId = bunnyRef(video as never);
+	if (!bunnyId) return { videoId, found: true, dryRun: !!opts.dryRun, changed: false, error: 'Bunny holds no copy of this video' };
 
-	const bunny = opts.bunny !== undefined ? opts.bunny : await fetchBunnyVideo(env, videoId, video);
+	const bunny = opts.bunny !== undefined ? opts.bunny : await fetchBunnyVideo(env, bunnyId, video);
 	const now = opts.now ?? new Date();
 	// The thumbnail is checked once the video plays (Bunny makes it from
 	// thumbnailTime after the first resolution); custom thumbnails are ours
 	const phase = bunnyPhase(bunny);
 	const thumbnailExists =
 		(phase === 'ready' || phase === 'playable') && video.thumbnailType !== 'custom'
-			? await bunnyThumbnailExists(env, videoId, bunny?.thumbnailFileName || 'thumbnail.jpg', video)
+			? await bunnyThumbnailExists(env, bunnyId, bunny?.thumbnailFileName || 'thumbnail.jpg', video)
 			: undefined;
-	const syncOpts = { host, now, loopStartedAt: opts.loopStartedAt, thumbnailExists };
+	// Another provider still coming or ready: a Bunny failure fails only Bunny's copy
+	const otherCopy = videoProviderRecords(video as never).some((r) => r.provider !== 'bunny' && r.status !== 'failed');
+	const syncOpts = { host, now, loopStartedAt: opts.loopStartedAt, thumbnailExists, bunnyId, otherCopy };
 	const plan = planSync(video, bunny, syncOpts);
 	const bunnyView = bunny
 		? { status: bunny.status, encodeProgress: bunny.encodeProgress, availableResolutions: bunny.availableResolutions, length: bunny.length }
@@ -236,7 +255,8 @@ export async function syncVideoFromBunny(
 	const saved = await repo.updateObject(videoId, (fresh) => {
 		const freshPlan = planSync(fresh, bunny, syncOpts);
 		transition = freshPlan.terminalTransition;
-		if (!applyPlan(fresh, freshPlan)) return false;
+		const statusChanged = syncBunnyRefStatus(fresh as never, freshPlan, now);
+		if (!applyPlan(fresh, freshPlan) && !statusChanged) return false;
 		fresh.dateModified = now.toISOString();
 		return true;
 	});
@@ -246,6 +266,11 @@ export async function syncVideoFromBunny(
 		bunnyStatus: bunny?.status,
 		transition,
 	});
+	// Bunny's copy failed while another provider's was ready: that copy makes the video ready now
+	if (saved && otherCopy && (saved as { media?: VideoMediaProviders }).media?.providers.bunny?.status === 'failed') {
+		const { promoteR2Copy } = await import('../media/r2-delivery');
+		await promoteR2Copy(env as never, videoId);
+	}
 	if (saved && transition) {
 		// Same downstream path as the uploader's status poll: uploader
 		// notification, subscriber fan-out (processor de-duplicates per video).
@@ -285,6 +310,11 @@ export async function startProcessingLoop(
 	const repo = new R2Repository<LoopVideo>(env.videos);
 	const saved = await repo.updateObject(videoId, (fresh) => {
 		why = undefined;
+		// Checks Bunny's encode: a video Bunny holds no copy of is made ready by its R2 transcode
+		if (!bunnyRef(fresh as never)) {
+			why = 'Bunny holds no copy';
+			return false;
+		}
 		const check = fresh.processingCheck;
 		const nextAt = Date.parse(check?.nextCheckAt || '');
 		const alive = check && !check.finishedAt && Number.isFinite(nextAt) && nextAt + STALE_LOOP_MS > now.getTime();
@@ -373,7 +403,9 @@ export async function runProcessingCheck(env: ProcessingEnv, message: Processing
 	const unannounced = pendingProcessingResult(video);
 	if (unannounced) await announceAndRecordProcessingResult(env as never, video, unannounced);
 
-	const bunny = await fetchBunnyVideo(env, message.videoId, video);
+	// Bunny's id of the video (new videos: the stored GUID); syncVideoFromBunny ends the loop when Bunny holds no copy
+	const loopBunnyId = bunnyRef(video as never);
+	const bunny = loopBunnyId ? await fetchBunnyVideo(env, loopBunnyId, video) : null;
 	// A video Bunny still has at the library root goes into its channel's (or
 	// owner's) collection: the upload's collection step failed or was skipped
 	if (bunny && !bunny.collectionId && env.channels) await placeVideoInCollection(env as never, video, bunny.collectionId);

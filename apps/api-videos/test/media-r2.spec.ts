@@ -100,7 +100,8 @@ describe('R2 dual write', () => {
 		const { env, raw } = setup();
 		assert.equal((await enqueueTranscode({ ...env, TRANSCODE_QUEUE: undefined }, ID, 'upload')).queued, false);
 		await writeDeliverySettings(env, { transcode: false }, 'admin-1');
-		assert.equal((await enqueueTranscode(env, ID, 'upload')).why, 'transcoding is off');
+		// The legacy switch's transcode: false migrates to ingest [bunny] (lib/media/settings.ts)
+		assert.equal((await enqueueTranscode(env, ID, 'upload')).why, 'R2 does not take this video');
 		assert.equal(raw.TRANSCODE_QUEUE.messages.length, 0);
 	});
 

@@ -20,7 +20,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { existsSync, readFileSync } from 'node:fs';
 import { extname, join, normalize } from 'node:path';
 import { FAKES } from './outbound.ts';
-import { PORTS, ROOT } from './stack.ts';
+import { LOCAL_SECRETS, PORTS, ROOT, url as stackUrl } from './stack.ts';
 
 /** The CDN hostname api-videos signs and the browser loads (Playwright routes it to the fake CDN). */
 export const FAKE_CDN_HOST = 'vz-local-stack.b-cdn.net';
@@ -272,6 +272,83 @@ async function resend(request: Request): Promise<Response> {
   return json({ id });
 }
 
+/**
+ * The R2 media pipeline (apps/media's transcoder Container and private edge are not in the stack):
+ *
+ *   POST /__fake/media/transcode/<videoId>[?outcome=fail]
+ *     ─► reads the record's queued job (r2.jobId/rev/access) and checks the kept original exists
+ *     ─► POSTs the job events a real transcode sends (started, then ready with the result, or a
+ *        final failure) to api-videos /internal/media/events
+ *   media.local-stack.test/pub/<id>/<rev>/<file> and /priv/<token>/<id>/<rev>/<file>
+ *     ─► the player's HLS fixture for a rendition this fake made ready (404 otherwise); /priv/ needs a
+ *        token-shaped segment (the real check is apps/media/src/edge.ts, unit tested there)
+ *   POST /__fake/media/down | /up: the media host answers 503 (fallback specs)
+ */
+export const FAKE_MEDIA_HOST = 'media.local-stack.test';
+const VIDEOS_BUCKET = 'videos';
+const ORIGINALS_BUCKET = 'al-ummah-now-media-originals';
+export const fakeMedia = { renditions: new Map<string, { rev: string; access: string }>(), down: false };
+
+export async function fakeTranscode(videoId: string, outcome: string): Promise<Response> {
+  if (!stackR2) return json({ error: 'R2 is available once the stack is up' }, 405);
+  const stored = await stackR2(VIDEOS_BUCKET, videoId, 'GET');
+  if (stored.status !== 200 || !stored.body) return json({ error: 'no such video' }, 404);
+  const r2 = (JSON.parse(stored.body) as { r2?: { jobId?: string; rev?: string; access?: string; status?: string } }).r2;
+  if (!r2?.jobId || !r2.rev || !r2.access) return json({ error: 'no transcode queued for this video' }, 409);
+  const original = JSON.parse((await stackR2(ORIGINALS_BUCKET, '', 'LIST', JSON.stringify({ prefix: `src/${videoId}/` }))).body ?? '{}') as { keys?: string[] };
+  if (!original.keys?.length) return json({ error: 'the original was not kept' }, 409);
+  const send = async (event: Record<string, unknown>) => {
+    const res = await fetch(`${stackUrl('api-videos')}/internal/media/events`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'X-API-Key': LOCAL_SECRETS.INTERNAL_API_KEY },
+      body: JSON.stringify({ videoId, jobId: r2.jobId, attempt: 1, at: new Date().toISOString(), ...event }),
+    });
+    if (!res.ok) throw new Error(`job event ${event.type}: HTTP ${res.status} ${await res.text()}`);
+  };
+  await send({ type: 'started' });
+  if (outcome === 'fail') {
+    await send({ type: 'failed', final: true, error: 'fake transcode failed' });
+    return json({ videoId, outcome: 'failed' });
+  }
+  // The landscape fixture (apps/web/e2e/player/fixtures/bright): 360p + 720p, 90 s
+  await send({
+    type: 'ready',
+    containerSeconds: 1,
+    result: {
+      rungs: [
+        { name: '360p', width: 640, height: 360, maxrate: 800000, bytes: 1, segments: 9 },
+        { name: '720p', width: 1280, height: 720, maxrate: 2500000, bytes: 1, segments: 9 },
+      ],
+      objects: 20,
+      bytes: 2,
+      durationSeconds: 90,
+      source: { width: 1280, height: 720, durationSeconds: 90, bytes: 1, hasAudio: true },
+      timings: { downloadMs: 1, transcodeMs: 1, uploadMs: 1, totalMs: 3 },
+      thumbnail: 'thumb.jpg',
+    },
+  });
+  fakeMedia.renditions.set(videoId, { rev: r2.rev, access: r2.access });
+  return json({ videoId, outcome: 'ready', rev: r2.rev, access: r2.access });
+}
+
+function mediaHost(method: string, pathname: string): Response {
+  if (fakeMedia.down) return new Response('media host down (fake)', { status: 503, headers: CORS });
+  const head = method === 'HEAD';
+  if (pathname === '/pub/_health/probe.txt') return new Response(head ? null : 'ok', { status: 200, headers: CORS });
+  const parts = pathname.split('/').filter(Boolean);
+  const scope = parts.shift();
+  if (scope === 'priv' && !/^f?\d{10}\.[A-Za-z0-9_-]{32}$/.test(parts.shift() ?? '')) return new Response('Link expired', { status: 403, headers: CORS });
+  const [videoId, rev, ...rest] = parts;
+  const rendition = fakeMedia.renditions.get(videoId ?? '');
+  if ((scope !== 'pub' && scope !== 'priv') || !rendition || rendition.rev !== rev || rendition.access !== scope) return new Response(null, { status: 404, headers: CORS });
+  const file = rest.join('/');
+  const send = (body: Buffer, type: string) => new Response(head ? null : body, { status: 200, headers: { 'content-type': type, 'access-control-allow-origin': '*', 'cache-control': 'no-store' } });
+  if (file === 'thumb.jpg') return send(readFileSync(THUMBNAIL), 'image/jpeg');
+  const path = normalize(join(PLAYER_FIXTURES, 'bright', file));
+  if (!path.startsWith(join(PLAYER_FIXTURES, 'bright')) || !existsSync(path)) return new Response(null, { status: 404, headers: CORS });
+  return send(readFileSync(path), TYPES[extname(path)] ?? 'application/octet-stream');
+}
+
 /** Registers the fakes with the outbound router. */
 export function registerFakes(): void {
   FAKES.set('video.bunnycdn.com', bunnyStream);
@@ -280,6 +357,7 @@ export function registerFakes(): void {
   FAKES.set('.storage.bunnycdn.com', images);
   FAKES.set(IMAGE_HOST, images);
   FAKES.set('api.resend.com', resend);
+  FAKES.set(FAKE_MEDIA_HOST, (request, url) => mediaHost(request.method, url.pathname));
 }
 
 
@@ -328,6 +406,7 @@ async function readBody(req: IncomingMessage): Promise<string> {
 /**
  * Control API (loopback only):
  * - GET /__fake/bunny/videos[/<guid>], POST /__fake/bunny/videos/<guid>/encode|fail|hold|tus-head-404[?count=n]
+ * - POST /__fake/media/transcode/<videoId>[?outcome=fail], POST /__fake/media/down | /up (the R2 media pipeline)
  * - GET /__fake/resend/emails
  * - POST /__stack/d1/<database name> with SQL as the body: { results } (seed, fast-path fixtures)
  * - GET | PUT | DELETE /__stack/r2/<bucket name>/<key>: one object (fixtures a spec seeds in R2)
@@ -399,6 +478,22 @@ async function control(req: IncomingMessage, url: URL): Promise<Response> {
   }
   const [, , kind, , guid, action] = url.pathname.split('/');
   if (kind === 'resend') return json(emails);
+  if (kind === 'media') {
+    const [, , , step, videoId] = url.pathname.split('/');
+    if (req.method !== 'POST') return json({ error: 'POST /__fake/media/transcode/<videoId> | /down | /up' }, 405);
+    if (step === 'down' || step === 'up') {
+      fakeMedia.down = step === 'down';
+      return json({ down: fakeMedia.down });
+    }
+    if (step === 'transcode' && videoId) {
+      try {
+        return await fakeTranscode(decodeURIComponent(videoId), url.searchParams.get('outcome') ?? 'ready');
+      } catch (error) {
+        return json({ error: (error as Error).message }, 502);
+      }
+    }
+    return json({ error: 'unknown media control path' }, 404);
+  }
   if (kind !== 'bunny') return json({ error: 'unknown control path' }, 404);
   if (!guid) return json([...bunny.videos.values()].map(publicVideo));
   const video = bunny.videos.get(guid);

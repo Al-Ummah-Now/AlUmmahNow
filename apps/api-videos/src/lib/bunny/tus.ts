@@ -291,42 +291,51 @@ export async function createTusProxySession(
 }
 interface SecretLike { text?(): Promise<string>; get?(): Promise<string> }
 
-/** Library of recent uploads (a video never changes library): one record read per video and isolate, not per TUS chunk */
-const uploadLibraries = new Map<string, number>();
-function rememberUploadLibrary(videoId: string, libraryId: number): void {
+/** Library and Bunny GUID of recent uploads (neither ever changes): one record read per video and isolate, not per TUS chunk */
+const uploadLibraries = new Map<string, { libraryId: number; guid: string }>();
+function rememberUploadLibrary(videoId: string, libraryId: number, guid: string): void {
   if (uploadLibraries.size >= 500) uploadLibraries.delete(uploadLibraries.keys().next().value as string);
-  uploadLibraries.set(videoId, libraryId);
+  uploadLibraries.set(videoId, { libraryId, guid });
 }
+
+type UploadHints = LibraryHints & { media?: { providers?: { bunny?: { ref?: string; libraryId?: number } } } };
 
 /**
  * Headers for a server-side request to a Bunny TUS upload URL (HEAD, PATCH,
  * POST, DELETE): a fresh 1-hour signature each time, so nothing signed
- * earlier can expire under a long upload.
+ * earlier can expire under a long upload. `videoId` is ours; the signature
+ * names Bunny's GUID of the video (the same id on videos from before providers).
  */
 export async function bunnyTusRequestHeaders(
   env: { 'bunny-stream-key': SecretLike | string; bunny_stream_library_id: SecretLike | string; videos?: R2Bucket },
   videoId: string,
-  record?: LibraryHints | null,
+  record?: UploadHints | null,
 ): Promise<Record<string, string>> {
   // Signed for the library the video was created in (an upload started
   // before a library switch finishes there; lib/bunny/libraries.ts)
   let hints = record;
+  let guid = record?.media?.providers?.bunny?.ref;
   if (hints === undefined) {
     const known = uploadLibraries.get(videoId);
-    if (known !== undefined) hints = { bunnyLibraryId: known };
-    else if (env.videos) {
+    if (known !== undefined) {
+      hints = { bunnyLibraryId: known.libraryId };
+      guid = known.guid;
+    } else if (env.videos) {
       const stored = await env.videos.get(videoId).catch(() => null);
-      hints = stored ? ((await stored.json().catch(() => null)) as LibraryHints | null) : null;
+      hints = stored ? ((await stored.json().catch(() => null)) as UploadHints | null) : null;
+      guid = hints?.media?.providers?.bunny?.ref;
     }
   }
-  const { libraryId, apiKey: bunnyKey } = bunnyApi(await bunnyLibraryForVideo(env as BunnyLibrariesEnv, hints));
-  if (hints) rememberUploadLibrary(videoId, libraryId);
+  const bunnyLibraryId = hints?.media?.providers?.bunny?.libraryId ?? hints?.bunnyLibraryId;
+  const { libraryId, apiKey: bunnyKey } = bunnyApi(await bunnyLibraryForVideo(env as BunnyLibrariesEnv, hints ? { ...hints, bunnyLibraryId } : hints));
+  const bunnyId = guid ?? videoId;
+  if (hints) rememberUploadLibrary(videoId, libraryId, bunnyId);
   const expirationTime = Math.floor(Date.now() / 1000) + 3600;
-  const signature = await generateTUSSignature(libraryId, bunnyKey, expirationTime, videoId);
+  const signature = await generateTUSSignature(libraryId, bunnyKey, expirationTime, bunnyId);
   return {
     AuthorizationSignature: signature,
     AuthorizationExpire: expirationTime.toString(),
     LibraryId: libraryId.toString(),
-    VideoId: videoId,
+    VideoId: bunnyId,
   };
 }

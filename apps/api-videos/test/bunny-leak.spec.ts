@@ -447,6 +447,20 @@ describe('test-library purge run', () => {
 		assert.equal(state?.kept['has-record'], 2);
 	});
 
+	it('a new video\'s Bunny copy (record under our own id, GUID in media_provider_refs) is kept', async () => {
+		const bunny = bunnyStub();
+		const env = makeEnv({ SEARCH_DB: new SqliteD1() });
+		const guid = uuid(1);
+		const ourId = '912859ed-e618-4d04-8438-874a74a251dd';
+		bunny.videos.push({ guid, title: 'E2E', status: 4, dateUploaded: new Date(Date.now() - 3 * H).toISOString() });
+		bunny.videos.push({ guid: uuid(2), title: 'E2E', status: 4, dateUploaded: new Date(Date.now() - 3 * H).toISOString() });
+		await env.videos.put(ourId, JSON.stringify(videoFixture({ id: ourId, media: { providers: { bunny: { ref: guid, status: 'ready', addedAt: 'x' } } } } as never)));
+		await env.SEARCH_DB.prepare('INSERT INTO media_provider_refs (provider, ref, video_id, created_at) VALUES (?1, ?2, ?3, ?4)').bind('bunny', guid, ourId, 'x').run();
+		await startPurge(env, { actor: 'a', dryRun: false });
+		await drain(env);
+		assert.deepEqual(bunny.deleted, [uuid(2)], 'only the recordless one');
+	});
+
 	it('hourly cron starts a live run unless one is running; supersedes a run idle for 3 hours; never on production', async () => {
 		bunnyStub();
 		const env = makeEnv();

@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mediaPlayUrl } from '@al-ummah/shared-types';
+import { mediaFileToken, mediaFrameUrl, mediaPlayUrl, mediaToken, mediaTokenExpiry, verifyMediaFileToken } from '@al-ummah/shared-types';
 import { handlePrivate } from '../src/edge';
 import type { Env } from '../src/env';
 
@@ -45,6 +45,31 @@ function setup(objects: Record<string, string>) {
 }
 
 describe('/priv/ edge', () => {
+	it('a frame\'s file token serves that frame only, never the playlist or a segment', async () => {
+		const s = setup({ [`priv/${VID}/${REV}/thumb.jpg`]: 'jpeg', [`priv/${VID}/${REV}/master.m3u8`]: '#EXTM3U', [`priv/${VID}/${REV}/720p/seg_00001.m4s`]: 'seg' });
+		const frame = await mediaFrameUrl(HOST, VID, REV, 'k');
+		const ok = await handlePrivate(new Request(frame), s.env, s.ctx, s.cache as unknown as Cache);
+		assert.equal(ok.status, 200);
+		assert.equal(await ok.text(), 'jpeg');
+		for (const file of ['master.m3u8', '720p/seg_00001.m4s']) {
+			const res = await handlePrivate(new Request(frame.replace('/thumb.jpg', `/${file}`)), s.env, s.ctx, s.cache as unknown as Cache);
+			assert.equal(res.status, 403, `${file} with a frame token`);
+		}
+	});
+
+	it('file tokens are their own domain: a folder token is not a file token and back', async () => {
+		const now = 1_800_000_000;
+		const expires = mediaTokenExpiry(now);
+		const file = await mediaFileToken('k', VID, REV, 'thumb.jpg', expires);
+		assert.ok(await verifyMediaFileToken('k', file, VID, REV, 'thumb.jpg', now));
+		assert.ok(!(await verifyMediaFileToken('k', file, VID, REV, 'master.m3u8', now)));
+		assert.ok(!(await verifyMediaFileToken('other', file, VID, REV, 'thumb.jpg', now)));
+		assert.ok(!(await verifyMediaFileToken('k', file, VID, REV, 'thumb.jpg', now + 8 * 3600)), 'expired');
+		const folder = await mediaToken('k', VID, REV, expires);
+		assert.ok(!(await verifyMediaFileToken('k', folder, VID, REV, 'thumb.jpg', now)));
+		assert.ok(!(await verifyMediaFileToken('k', `f${folder}`, VID, REV, 'thumb.jpg', now)));
+	});
+
 	it('serves a signed private file from the private bucket only, then from the edge cache for any token', async () => {
 		const s = setup({ [`priv/${VID}/${REV}/master.m3u8`]: '#EXTM3U' });
 		const url = await mediaPlayUrl(HOST, 'priv', VID, REV, 'master.m3u8', { key: 'k' });

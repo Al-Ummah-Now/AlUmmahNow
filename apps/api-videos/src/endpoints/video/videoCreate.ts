@@ -12,6 +12,8 @@ import Queue, { MessageType } from "../../lib/queue";
 import { requireSecret } from "../../lib/env-helpers";
 import { logger } from '../../lib/logger';
 import { AuthenticatedRoute, AppContext } from '../../base';
+import { planIngest } from "../../lib/media/ingest";
+import { markUploadCreated } from "../../lib/uploads/reaper";
 import { scanInBackground, videoScanText } from '../../lib/moderation-scan';
 
 export class VideoCreate extends AuthenticatedRoute {
@@ -85,10 +87,30 @@ export class VideoCreate extends AuthenticatedRoute {
 		// A channel member's video belongs to the channel's owner (lib/channelAccess.ts)
 		const { ownerId, uploadedBy } = uploadIdentity(c, effectiveUserId);
 
+		// Our own id; Bunny gets a video (its GUID kept as the ref) only when the Delivery settings
+		// send uploads there (lib/media/ingest.ts)
+		const key = await requireSecret(c.env["bunny-stream-key"], 'bunny-stream-key');
+		const libraryId = parseInt(await requireSecret(c.env.bunny_stream_library_id, 'bunny_stream_library_id'), 10);
+		const bunnyStream = new stream(key).forEnv(c.env);
+		const plan = await planIngest(c.env as never, channelId, async () => {
+			// The channel's (or, for a user-level video, the owner's) Bunny collection
+			// (lib/channelCollection.ts). The channel id itself is not a collection id.
+			const collectionId = await uploadCollection(c.env, bunnyStream, libraryId, channelId, ownerId);
+			const bunnyVideo = await bunnyStream.createVideo(libraryId, {
+				title: inputVideo.title,
+				...(collectionId ? { collectionId } : {}),
+			});
+			// Ours: the reaper may remove it if its record never lands (lib/uploads/reaper.ts)
+			await markUploadCreated(c.env.global_settings, bunnyVideo.guid, { userId: effectiveUserId, channelId });
+			return { guid: bunnyVideo.guid, libraryId };
+		});
+
 		// Create the business video object
 		const video = {
 			...inputVideo,
-			id: crypto.randomUUID(), // Generate a unique ID for the video
+			id: plan.videoId,
+			media: plan.media,
+			...(plan.bunny ? { bunnyLibraryId: plan.bunny.libraryId } : {}),
 			userId: ownerId,
 			...(uploadedBy ? { uploadedBy } : {}),
 			channelId,
@@ -107,21 +129,6 @@ export class VideoCreate extends AuthenticatedRoute {
 			// Upload as Short / as video; 'auto' (or absent) leaves it to detection
 			...(format === 'short' || format === 'video' ? { format } : {}),
 		};
-
-		// create the video in Bunny Stream
-		const key = await requireSecret(c.env["bunny-stream-key"], 'bunny-stream-key');
-		const libraryIdStr = await requireSecret(c.env.bunny_stream_library_id, 'bunny_stream_library_id');
-		const libraryId = parseInt(libraryIdStr);
-		const bunnyStream = new stream(key).forEnv(c.env);
-
-		// The channel's (or, for a user-level video, the owner's) Bunny collection
-		// (lib/channelCollection.ts). The channel id itself is not a collection id.
-		const collectionId = await uploadCollection(c.env, bunnyStream, libraryId, channelId, ownerId);
-
-		const videoId = await bunnyStream.createVideo(libraryId, {
-			title: video.title,
-			...(collectionId ? { collectionId } : {}),
-		});
 
 		// Save the video to the repository
 		const bucket = c.env.videos;

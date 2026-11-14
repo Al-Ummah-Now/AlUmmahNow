@@ -206,7 +206,8 @@ describe('POST /api/videos/upload/initiate with a fingerprint', () => {
 		await h.env.videos.delete(first.body.result.videoId);
 		const second = await h.initiate({ fingerprint: FP });
 		assert.notEqual(second.body.result.videoId, first.body.result.videoId);
-		bunny.status.delete(second.body.result.videoId);
+		// Bunny holds the video under its own GUID (the record's ref), not our id
+		bunny.status.delete(h.env.videos.read(second.body.result.videoId).media.providers.bunny.ref);
 		const third = await h.initiate({ fingerprint: FP });
 		assert.notEqual(third.body.result.videoId, second.body.result.videoId);
 		assert.equal(bunny.created.length, 3);
@@ -348,12 +349,15 @@ describe('uploads go into the channel collection (2026-11-12: bulk uploads lande
 		await h.env.channels.put('ch1', JSON.stringify({ id: 'ch1', userId: 'alice', name: 'Lessons', bunnyCollections: { '123': 'col-1' } }));
 		const again = await h.initiate({ fingerprint: FP });
 		assert.equal(again.body.result?.reused ?? again.body.reused, true);
-		assert.deepEqual(stub.updates, [{ id: videoId, body: { collectionId: 'col-1' } }]);
+		// Filed at Bunny under its GUID, never our id
+		const guid = h.env.videos.read(videoId).media.providers.bunny.ref;
+		assert.notEqual(guid, videoId);
+		assert.deepEqual(stub.updates, [{ id: guid, body: { collectionId: 'col-1' } }]);
 		// Bulk reuse too
 		stub.updates.length = 0;
 		const bulk = await h.batch([{ fingerprint: FP }]);
 		assert.equal(bulk.status, 200);
-		assert.deepEqual(stub.updates, [{ id: videoId, body: { collectionId: 'col-1' } }]);
+		assert.deepEqual(stub.updates, [{ id: guid, body: { collectionId: 'col-1' } }]);
 	});
 
 	it('an unfinished upload left in another (legacy) library is not reused', async () => {
