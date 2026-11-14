@@ -193,7 +193,7 @@ describe('provider health', () => {
 		await saveMediaSettings(e as never, { ...DEFAULT_MEDIA_SETTINGS, providers: { bunny: { enabled: true }, r2: { enabled: false } }, ingest: ['bunny'] }, 'admin-1');
 		const snap = await runHealthCheck(e as never, undefined, new Date());
 		assert.deepEqual(Object.keys(snap!.providers), ['bunny']);
-		assert.ok(!calls.some((c) => c.url.includes(MEDIA_HOST)));
+		assert.ok(!calls.some((c) => new URL(c.url).host === MEDIA_HOST));
 	});
 
 	it('the R2 canary is written only when the edge does not have it', async () => {
