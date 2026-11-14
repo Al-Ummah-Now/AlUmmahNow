@@ -2594,6 +2594,7 @@
           "Channels"
         ],
         "summary": "Get a channel by its @handle",
+        "description": "Also answers for a handle the channel used before (handle history): the channel comes back with its current `handle`, which differs from the one asked for, so the caller can redirect.",
         "operationId": "get_ChannelByHandleFetch",
         "parameters": [
           {

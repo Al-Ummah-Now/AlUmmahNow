@@ -25,6 +25,7 @@ import {
 	readHandleEntry,
 	releaseHandle,
 	resolveHandle,
+	resolveHandleHistory,
 } from "../../lib/channelHandles";
 import { buildChannelAbout, computeChannelTotals, isChannelVisibleTo } from "../../lib/channelAbout";
 import { channelTotalsFromIndex, scheduleOwnershipHeal, waitUntilOf } from "../../lib/search/ownership";
@@ -74,6 +75,7 @@ export class ChannelByHandleFetch extends OptionalAuthRoute {
 	schema = {
 		tags: ["Channels"],
 		summary: "Get a channel by its @handle",
+		description: "Also answers for a handle the channel used before (handle history): the channel comes back with its current `handle`, which differs from the one asked for, so the caller can redirect.",
 		request: {
 			params: z.object({ handle: Str({ description: "Handle, with or without a leading @ (case-insensitive)" }) }),
 		},
@@ -89,9 +91,17 @@ export class ChannelByHandleFetch extends OptionalAuthRoute {
 		const userId = this.getUserId(c);
 
 		const channelId = await resolveHandle(c.env.channel_tabs, handle);
-		const channel = channelId ? await loadVisibleChannel(c, channelId, userId) : null;
+		let channel = channelId ? await loadVisibleChannel(c, channelId, userId) : null;
 		// The index entry must still match the channel (it may have changed handle meanwhile)
-		if (!channel || (channel.handle || '').toLowerCase() !== handle.toLowerCase()) {
+		if (channel && (channel.handle || '').toLowerCase() !== handle.toLowerCase()) channel = null;
+		if (!channel && !channelId) {
+			// An old handle (handle history): the channel is returned with its current `handle`, and the
+			// page 301s to it
+			const previousOwner = await resolveHandleHistory(c.env.channel_tabs, handle);
+			const moved = previousOwner ? await loadVisibleChannel(c, previousOwner, userId) : null;
+			if (moved?.handle && moved.handle.toLowerCase() !== handle.toLowerCase()) channel = moved;
+		}
+		if (!channel) {
 			logger.debug('[ChannelByHandle] Not found', { handle, channelId });
 			return c.json({ success: false, error: "Object not found" }, 404);
 		}

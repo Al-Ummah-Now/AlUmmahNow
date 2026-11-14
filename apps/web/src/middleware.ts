@@ -34,7 +34,7 @@ import {
 import { EMBED_REQUEST_HEADER, isEmbedPath, isOEmbedPath, isShareImagePath } from '@/lib/embed/routes';
 import { parseEmbedLang } from '@/lib/embed/params';
 import { NONCE_HEADER } from '@/lib/security/nonce-header';
-import { handleRewritePath } from '@/lib/channel-url';
+import { handleRewritePath, legacyHandlePath } from '@/lib/channel-url';
 import { refreshSessionCookie } from '@/lib/auth/middleware-refresh';
 import { presentSessionCookieNames, sessionCookieOptions, writeSessionValue } from '@/lib/auth/session-cookie';
 import { isProductionDeployment, legacyWatchRedirect, robotsHeaderFor } from '@/lib/seo/robots';
@@ -161,6 +161,15 @@ function routeRequest(request: NextRequest): NextResponse {
     response.headers.set('X-Locale', locale);
     response.headers.set('X-Text-Direction', getTextDirection(locale));
     return response;
+  }
+
+  // /{locale}/c/{handle} opened directly: the channel's URL is /{locale}/@{handle} (the @ form is
+  // rewritten to /c/ below, internally, so this only sees direct requests)
+  const legacyHandle = legacyHandlePath(pathname);
+  if (legacyHandle) {
+    const target = new URL(legacyHandle, request.url);
+    target.search = request.nextUrl.search;
+    return NextResponse.redirect(target, 301);
   }
 
   // Channel @handle URLs (Story 29.1): handles may contain `.`, so this runs

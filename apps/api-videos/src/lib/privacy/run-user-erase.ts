@@ -195,6 +195,14 @@ export async function eraseRunUserData(
 					const entry = await readJson<Json>(tabs, handleKey, budget);
 					if (entry?.channelId === channelId) await deleteKeys(tabs, [handleKey], budget);
 				}
+				// Its old handles (handle history) stop redirecting to it
+				const markers = await prefixKeys(tabs, `channel-handle-history-of/${channelId}/`, budget);
+				for (const marker of markers) {
+					const historyKey = `channel-handle-history/${marker.slice(`channel-handle-history-of/${channelId}/`.length)}`;
+					const history = await readJson<Json>(tabs, historyKey, budget);
+					if (history?.channelId === channelId) await deleteKeys(tabs, [historyKey], budget);
+				}
+				await deleteKeys(tabs, markers, budget);
 				// Its Bunny collections (lib/channelCollection.ts) go with the record
 				if (channel && hooks.onChannelDeleted) await hooks.onChannelDeleted(channelId, channel);
 				bump('channels', await deleteKeys(channelsBucket, [channelId], budget));
