@@ -61,6 +61,9 @@ describe('anonymous expanded playlist edge cache', () => {
 		const [entry] = [...cache.store.values()];
 		assert.equal(entry?.cacheControl, `public, max-age=${EXPANDED_PLAYLIST_TTL_SECONDS}`);
 		assert.ok(EXPANDED_PLAYLIST_TTL_SECONDS <= 60);
+		// publicMp4Url still sees the visibility flags on a cached item
+		const stored = JSON.parse(entry!.body) as { items: { video: Record<string, unknown> }[] };
+		assert.equal(stored.items[0].video.isPublic, true);
 
 		// R2 changes are not seen by anonymous viewers until the entry expires...
 		env.videos.store.set('v1', JSON.stringify(videoFixture({ id: 'v1', userId: OWNER, channelId: 'ch', title: 'Renamed' })));

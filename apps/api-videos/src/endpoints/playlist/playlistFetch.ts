@@ -39,11 +39,17 @@ type PlaylistBody = ReturnType<typeof toPlaylistResponse> & {
 /** What the anonymous edge entry holds: the response before playback, and each item's view + R2 state */
 interface ExpandedEntry {
     body: PlaylistBody;
-    items: { view: PlaylistView; video: Pick<VideoType, 'id'> & { r2?: unknown } }[];
+    /** What withPlayback reads: id, r2 and the visibility flags publicMp4Url checks before naming an MP4 */
+    items: { view: PlaylistView; video: Pick<VideoType, 'id'> & { r2?: unknown; isPublic?: boolean; isDeleted?: boolean; isHidden?: boolean } }[];
     hasOwnThumbnail: boolean;
 }
 
 /** Each item gets the one URL its player plays (lib/media/playback.ts), then the cover if the playlist has none */
+function playbackFields(video: VideoType): ExpandedEntry['items'][number]['video'] {
+    const v = video as VideoType & { r2?: unknown; isDeleted?: boolean; isHidden?: boolean };
+    return { id: v.id, r2: v.r2, isPublic: v.isPublic, isDeleted: v.isDeleted, isHidden: v.isHidden };
+}
+
 async function finishExpanded(env: never, entry: ExpandedEntry): Promise<PlaylistBody> {
     const body: PlaylistBody = { ...entry.body };
     body.videoItems = await Promise.all(entry.items.map(({ view, video }) => withPlayback(env, video as never, { ...view }, 'playlist')));
@@ -166,7 +172,7 @@ export class PlaylistFetch extends OptionalAuthRoute {
                 body: response,
                 items: videos
                     .filter((video): video is VideoType => !!video && canViewVideo(video, userId))
-                    .map((video) => ({ view: transformVideoToView(video), video: { id: video.id, r2: (video as { r2?: unknown }).r2 } })),
+                    .map((video) => ({ view: transformVideoToView(video), video: playbackFields(video) })),
                 // The expanded list is already filtered for this viewer
                 hasOwnThumbnail: !!playlist.thumbnailUrl,
             };
