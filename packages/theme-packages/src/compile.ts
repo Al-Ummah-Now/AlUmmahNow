@@ -133,20 +133,18 @@ ${modeBlock('light')}
  * switches it on; a theme without a street sets 0.
  */
 /**
- * The street's band tiles (raster, so never inlined): a built-in theme's are served by every app
- * at /fanous/street/<file>; an uploaded package's come from its own asset URL. image-set(… 2x)
- * shows the 2x tile at its CSS size, with no background-size.
+ * The street's tile (raster, so never inlined): a built-in theme's is served by every app at
+ * /fanous/street/<file>; an uploaded package's comes from its own asset URL. image-set(… 2x) shows
+ * the 2x tile at its CSS size, with no background-size.
  */
-function bandTokens(street: NonNullable<ThemePackage['street']>, mode: Mode, opts: CompileOptions): string[] {
-  const out: string[] = [];
+function tileTokens(street: NonNullable<ThemePackage['street']>, mode: Mode, opts: CompileOptions): string[] {
   const url = (p: string) => (opts.assetUrl ? opts.assetUrl(p) : `/fanous/street/${p.split('/').pop()}`);
-  for (const side of ['left', 'right'] as const) {
-    const file = street.bands?.[side][mode];
-    out.push(`  --fanous-street-band-${side}: ${file ? `image-set(url("${url(file)}") 2x)` : 'none'};`);
-  }
-  out.push(`  --fanous-street-faint: ${street.faint?.[mode] ?? 1};`);
-  out.push(`  --fanous-street-lights-opacity: ${street.lightsOpacity?.[mode] ?? 1};`);
-  return out;
+  const file = street.tile?.[mode];
+  return [
+    `  --fanous-street-tile: ${file ? `image-set(url("${url(file)}") 2x)` : 'none'};`,
+    `  --fanous-street-faint: ${street.faint?.[mode] ?? 1};`,
+    `  --fanous-street-lights-opacity: ${street.lightsOpacity?.[mode] ?? 1};`,
+  ];
 }
 
 function streetTokens(pkg: ThemePackage, mode: Mode, opts: CompileOptions): string[] {
@@ -160,7 +158,7 @@ function streetTokens(pkg: ThemePackage, mode: Mode, opts: CompileOptions): stri
     `  --fanous-street-window: ${street.window[mode].toLowerCase()};`,
     `  --fanous-street-glow: ${street.glow[mode]};`,
     `  --fanous-street-lights: url("${lights}");`,
-    ...bandTokens(street, mode, opts),
+    ...tileTokens(street, mode, opts),
   ];
 }
 
