@@ -42,6 +42,7 @@ import { isOwnershipComplete } from '../search/ownership';
 import { logger } from '../logger';
 import type { SearchDb } from '@al-ummah/shared-types';
 import { postLocationKey } from '../community-posts';
+import { eraseChannelHandleHistory } from './handle-history';
 import { footprintTargets, footprintsComplete, forgetFootprints } from './footprints';
 import { eraseCaptionMinutes } from '../captions/minutes';
 
@@ -678,6 +679,8 @@ export async function eraseUserData(
 				const entry = await readJson<Json>(asBucket(env.channel_tabs), handleKey, ctx.budget);
 				if (entry?.channelId === channelId) await deleteKeys(asBucket(env.channel_tabs), [handleKey], ctx.budget);
 			}
+			// Its old handles (handle history) stop redirecting to it and stop being held
+			await eraseChannelHandleHistory(asBucket(env.channel_tabs), channelId, ctx.budget);
 			return;
 		}
 		if (stripUserReactions(channel.subscriptions, userId).removed === 0) return;

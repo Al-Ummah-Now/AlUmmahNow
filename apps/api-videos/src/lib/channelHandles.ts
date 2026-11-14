@@ -81,6 +81,11 @@ export interface HandleHistoryEntry {
 	handle: string;
 	channelId: string;
 	dateReleased: string;
+	/**
+	 * false: the handle redirects but is not held. A channel holds one old handle at a time, so
+	 * renaming over and over cannot reserve a pile of handles (squatting).
+	 */
+	held?: boolean;
 }
 
 /** Strip a leading `@` and surrounding whitespace. */
@@ -178,7 +183,7 @@ export async function resolveHandleHistory(bucket: R2Bucket, handle: string): Pr
 
 /** True while `entry` still reserves its handle for its own channel */
 export function isHandleOnHold(entry: HandleHistoryEntry | null, channelId: string | undefined, now = Date.now()): boolean {
-	if (!entry || entry.channelId === channelId) return false;
+	if (!entry || entry.channelId === channelId || entry.held === false) return false;
 	const released = Date.parse(entry.dateReleased);
 	return Number.isFinite(released) && now - released < HANDLE_HOLD_DAYS * 24 * 60 * 60 * 1000;
 }
@@ -270,6 +275,8 @@ export async function releaseReplacedHandle(
 	channels: R2Bucket,
 	handle: string | undefined | null,
 	channelId: string,
+	/** false for a claim whose write never landed: it was never the channel's handle, so no redirect and no hold */
+	keepHistory = true,
 ): Promise<void> {
 	if (!handle) return;
 	const channel = await channels.get(channelId);
@@ -277,11 +284,36 @@ export async function releaseReplacedHandle(
 	if (current && handleKey(current) === handleKey(handle)) return;
 	const entry = await readHandleEntry(handles, handle);
 	if (!entry || entry.channelId !== channelId) return;
-	// Keep the old handle as a redirect to the channel (history) before freeing the index entry
-	const history: HandleHistoryEntry = { handle: entry.handle, channelId, dateReleased: new Date().toISOString() };
+	if (!keepHistory) {
+		await handles.delete(handleKey(handle));
+		return;
+	}
+	// Keep the old handle as a redirect to the channel (history) before freeing the index entry.
+	// Held only when none of the channel's other old handles is held right now.
+	const held = !(await holdsAnotherHandle(handles, channelId, handle));
+	const history: HandleHistoryEntry = { handle: entry.handle, channelId, dateReleased: new Date().toISOString(), ...(held ? {} : { held: false }) };
 	await handles.put(handleHistoryKey(handle), JSON.stringify(history), { httpMetadata: { contentType: 'application/json' } });
 	await handles.put(`${HANDLE_HISTORY_OF_PREFIX}${channelId}/${normalizeHandleInput(handle).toLowerCase()}`, '');
 	await handles.delete(handleKey(handle));
+}
+
+/** Whether another of the channel's old handles is still held against other channels. */
+async function holdsAnotherHandle(handles: R2Bucket, channelId: string, except: string): Promise<boolean> {
+	const prefix = `${HANDLE_HISTORY_OF_PREFIX}${channelId}/`;
+	const skip = normalizeHandleInput(except).toLowerCase();
+	let cursor: string | undefined;
+	do {
+		const page = await handles.list({ prefix, cursor });
+		for (const object of page.objects) {
+			const lower = object.key.slice(prefix.length);
+			if (lower === skip) continue;
+			const entry = await readHandleHistory(handles, lower);
+			// Held against anyone else: the same test with a channel id that is never this one
+			if (entry?.channelId === channelId && isHandleOnHold(entry, `${channelId}:other`)) return true;
+		}
+		cursor = page.truncated ? page.cursor : undefined;
+	} while (cursor);
+	return false;
 }
 
 /**

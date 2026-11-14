@@ -177,7 +177,7 @@ export class ChannelUpdate extends AuthenticatedRoute {
                 }
             } else {
                 // Our write did not land: give back the handle we claimed for it
-                await releaseReplacedHandle(c.env.channel_tabs, c.env.channels, claimed, id);
+                await releaseReplacedHandle(c.env.channel_tabs, c.env.channels, claimed, id, false);
             }
         }
         if (saved.status === 'missing') {
