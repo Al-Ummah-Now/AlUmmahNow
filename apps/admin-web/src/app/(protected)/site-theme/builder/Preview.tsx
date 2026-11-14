@@ -2,7 +2,7 @@
 // The live preview: the package compiled in the browser on every edit, rendered into an iframe with
 // the videos site's own component stylesheets. Phone or desktop, light or dark, English or Arabic.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { compilePackage, type ThemePackage } from '@al-ummah/theme-packages';
+import { artSvgPaths, compilePackage, type ThemePackage } from '@al-ummah/theme-packages';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { previewDocument, type PreviewPage } from './preview-document';
 
@@ -32,14 +32,31 @@ export function Preview({ theme, assetUrl, followMode }: { theme: ThemePackage; 
   const box = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0.5);
 
+  // The theme's art (the sign-in banner's, from imagery.headerGraphic) is compiled from the SVG text with the
+  // theme's colours written in, as publishing does: fetch the files it names, once per file
+  const [svgs, setSvgs] = useState<Record<string, string>>({});
+  const artPaths = artSvgPaths(theme).join('\n');
+  useEffect(() => {
+    let live = true;
+    const wanted = artPaths ? artPaths.split('\n') : [];
+    Promise.all(wanted.map(async (path) => {
+      const url = assetUrl(path);
+      try {
+        const res = await fetch(url);
+        return [url, res.ok ? await res.text() : ''] as const;
+      } catch { return [url, ''] as const; }
+    })).then((loaded) => { if (live) setSvgs(Object.fromEntries(loaded)); });
+    return () => { live = false; };
+  }, [artPaths, assetUrl]);
+
   // Compiling may throw on a half-typed value; keep the last good CSS
   const [css, setCss] = useState('');
   useEffect(() => {
     const timer = setTimeout(() => {
-      try { setCss(compilePackage(theme, { assetUrl }).css); } catch { /* the validator names the problem */ }
+      try { setCss(compilePackage(theme, { assetUrl, svgText: (path) => svgs[assetUrl(path)] || undefined }).css); } catch { /* the validator names the problem */ }
     }, 120);
     return () => clearTimeout(timer);
-  }, [theme, assetUrl]);
+  }, [theme, assetUrl, svgs]);
 
   const width = device === 'phone' ? 390 : 1280;
   const height = device === 'phone' ? 844 : 860;

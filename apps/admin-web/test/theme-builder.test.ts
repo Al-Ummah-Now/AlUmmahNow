@@ -5,7 +5,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { COMPONENT_PARTS, compilePackage, duplicatePackage, validatePackage, type ThemePackage } from '@al-ummah/theme-packages';
+import { COMPONENT_PARTS, artSvgPaths, compilePackage, duplicatePackage, validatePackage, type ThemePackage } from '@al-ummah/theme-packages';
 import en from '../src/i18n/messages/en';
 import ar from '../src/i18n/messages/ar';
 import { previewDocument } from '../src/app/(protected)/site-theme/builder/preview-document';
@@ -40,6 +40,31 @@ describe('theme builder preview', () => {
       assert.ok(html.includes(`<meta name="color-scheme" content="only ${mode}">`), mode);
       assert.ok(html.includes('<meta name="darkreader-lock">'), mode);
     }
+  });
+
+  it('shows the home page\'s sign-in banner, in the preview\'s language, with the box its art paints', () => {
+    const en = previewDocument({ themeId: 'x', css: '', page: 'home', mode: 'dark', lang: 'en' });
+    assert.ok(en.includes('<section class="sib" aria-label="Join Al Ummah Now" dir="ltr"'));
+    assert.ok(en.includes('class="sib-art" aria-hidden="true"'));
+    assert.ok(en.includes('Request creator access'));
+    const ar = previewDocument({ themeId: 'x', css: '', page: 'home', mode: 'light', lang: 'ar' });
+    assert.ok(ar.includes('dir="rtl"') && ar.includes('مرئيات'));
+    // The banner's stylesheet ships in the kit the preview loads
+    const kit = readFileSync(new URL('../../../packages/theme-packages/scripts/admin-kit.ts', import.meta.url), 'utf8');
+    assert.ok(kit.includes("'src/theme/signin-banner.css'"));
+  });
+
+  it('compiles the edited theme\'s banner art for light and dark from the SVG files it names', () => {
+    // What Preview.tsx does: fetch artSvgPaths(theme) from the draft, hand the text to compilePackage
+    const dir = new URL('../../../packages/theme-packages/themes/fawanees/', import.meta.url);
+    const copy = duplicatePackage(fawanees, 'my-theme', { en: 'Mine', ar: 'لي' }, 'admin@test');
+    const files = Object.fromEntries(artSvgPaths(copy).map((p) => [p, readFileSync(new URL(p, dir), 'utf8')]));
+    assert.ok(Object.keys(files).length >= 2);
+    const css = compilePackage(copy, { svgText: (p) => files[p] }).css;
+    assert.match(css, /html\[data-theme='my-theme'\]\.dark \{\n {2}--fanous-header-graphic: url\("data:image\/svg\+xml,/);
+    assert.match(css, /html\[data-theme='my-theme'\]:not\(\.dark\) \{\n {2}--fanous-header-graphic: url\("data:image\/svg\+xml,/);
+    // Until the files arrive the banner has no art rather than a broken image
+    assert.match(compilePackage(copy).css, /--fanous-header-graphic: none;/);
   });
 
   it('keeps the CSS inside its <style> and escapes the id', () => {

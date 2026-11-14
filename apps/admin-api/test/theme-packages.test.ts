@@ -273,3 +273,95 @@ describe('Duplicate makes the theme id from the name (#1479)', () => {
     assert.equal(res.status, 422);
   });
 });
+
+describe('theme art (the sign-in banner\'s, imagery.headerGraphic)', () => {
+  const ENV_ROLES = { roles: '' };
+  async function publishCopy(call: ReturnType<typeof setup>['call']) {
+    await importCopy(call);
+    const res = await call('/api/themes/eid-lights/publish', { method: 'POST' });
+    assert.equal(res.status, 200);
+  }
+  /** A version as published before the art part existed: theme.css with no art, no art files */
+  function makeLegacy(bucket: BinaryR2) {
+    const at = 'themes/eid-lights/1.0.0/';
+    const css = new TextDecoder().decode(bucket.objects.get(`${at}theme.css`)!.bytes);
+    const legacy = css.slice(0, css.indexOf("html[data-theme='eid-lights'].dark {\n  --fanous-header-graphic"));
+    assert.ok(legacy.length > 1000 && !legacy.includes('--fanous-header-graphic:'));
+    bucket.objects.set(`${at}theme.css`, { bytes: new TextEncoder().encode(legacy), contentType: 'text/css; charset=utf-8' });
+    for (const mode of ['light', 'dark']) bucket.objects.delete(`${at}art/${mode}.svg`);
+    return legacy;
+  }
+
+  it('publishing writes the art per mode as files the CSS links, with the theme\'s colours written in', async () => {
+    const { call, bucket } = setup();
+    await publishCopy(call);
+    const css = await (await call('/public/themes/eid-lights/1.0.0/theme.css', ENV_ROLES)).text();
+    assert.ok(css.includes("html[data-theme='eid-lights'].dark {\n  --fanous-header-graphic: url(\"/api/theme-packages/eid-lights/1.0.0/art/dark.svg\");"));
+    assert.ok(css.includes("html[data-theme='eid-lights']:not(.dark) {\n  --fanous-header-graphic: url(\"/api/theme-packages/eid-lights/1.0.0/art/light.svg\");"));
+    assert.ok(!css.includes('data:image/svg+xml'), 'a large drawing never swells the stylesheet');
+    for (const mode of ['light', 'dark']) {
+      const art = await call(`/public/themes/eid-lights/1.0.0/art/${mode}.svg`, ENV_ROLES);
+      assert.equal(art.status, 200);
+      assert.equal(art.headers.get('content-type'), 'image/svg+xml');
+      assert.match(art.headers.get('content-security-policy')!, /default-src 'none'/);
+      const svg = await art.text();
+      assert.match(svg, /^<svg[\s>]/);
+      assert.doesNotMatch(svg, /var\(--fanous/);
+    }
+    assert.equal((await call('/public/themes/eid-lights/1.0.0/art/other.svg', ENV_ROLES)).status, 404);
+    // Not part of the package: an export carries the source files only
+    const zip = await zipToPackage(new Uint8Array(await (await call('/api/themes/eid-lights/export?version=1.0.0')).arrayBuffer()));
+    assert.ok(!Object.keys(zip.assets).some((p) => p.startsWith('art/')));
+    assert.ok(bucket.objects.has('themes/eid-lights/1.0.0/art/dark.svg'));
+  });
+
+  it('a version published before the art existed gets it on its first read, once (idempotent)', async () => {
+    const { call, bucket, sqlite } = setup();
+    await publishCopy(call);
+    const legacy = makeLegacy(bucket);
+
+    const first = await call('/public/themes/eid-lights/1.0.0/theme.css', ENV_ROLES);
+    assert.equal(first.status, 200);
+    assert.match(first.headers.get('cache-control')!, /immutable/);
+    const css = await first.text();
+    assert.ok(css.startsWith(legacy.trimEnd()), 'the stored CSS is kept as it was, the art added after it');
+    assert.ok(css.includes('--fanous-header-graphic: url("/api/theme-packages/eid-lights/1.0.0/art/dark.svg");'));
+    assert.equal(new TextDecoder().decode(bucket.objects.get('themes/eid-lights/1.0.0/theme.css')!.bytes), css, 'written back');
+    assert.ok(bucket.objects.has('themes/eid-lights/1.0.0/art/light.svg') && bucket.objects.has('themes/eid-lights/1.0.0/art/dark.svg'));
+
+    // Later reads change nothing
+    const writes = new Map([...bucket.objects].map(([k, o]) => [k, o.bytes]));
+    const again = await (await call('/public/themes/eid-lights/1.0.0/theme.css', ENV_ROLES)).text();
+    assert.equal(again, css);
+    for (const [k, o] of bucket.objects) assert.equal(o.bytes, writes.get(k), k);
+    assert.equal(sqlite.prepare("SELECT COUNT(*) AS n FROM error_actions WHERE item_key LIKE 'theme-art:%'").get()!.n, 0);
+  });
+
+  it('when the art cannot be built: served without it on a short cache, the admin flagged, Retry builds it', async () => {
+    const { call, bucket, db, sqlite } = setup();
+    await publishCopy(call);
+    const legacy = makeLegacy(bucket);
+    const json = bucket.objects.get('themes/eid-lights/1.0.0/theme.json')!;
+    bucket.objects.set('themes/eid-lights/1.0.0/theme.json', { bytes: new TextEncoder().encode('{ not json'), contentType: 'application/json' });
+
+    const res = await call('/public/themes/eid-lights/1.0.0/theme.css', ENV_ROLES);
+    assert.equal(res.status, 200);
+    assert.equal(await res.text(), legacy);
+    assert.equal(res.headers.get('cache-control'), 'public, max-age=300');
+    const item = () => sqlite.prepare("SELECT status, source, title, item_url, retry_json FROM error_actions WHERE item_key = 'theme-art:eid-lights@1.0.0'").get() as Record<string, string> | undefined;
+    // The flag is reported after the response (waitUntil); give it a turn
+    for (let i = 0; i < 20 && !item(); i++) await new Promise((r) => setTimeout(r, 10));
+    assert.deepEqual({ ...item()!, retry_json: JSON.parse(item()!.retry_json) }, { status: 'open', source: 'admin-job', title: 'Theme art not built', item_url: '/site-theme/themes/eid-lights', retry_json: { kind: 'builtin', handler: 'theme-art', args: { id: 'eid-lights', version: '1.0.0' } } });
+
+    // Still broken: Retry says so; fixed: Retry builds it and the item is resolved
+    const { BUILTIN_RETRIES } = await import('../src/lib/errors-actions');
+    const env = { REPORTS_DB: db, theme_packages: bucket } as never;
+    assert.deepEqual((await BUILTIN_RETRIES['theme-art'](env, { id: 'eid-lights', version: '1.0.0' }, 'a1')).status, 'open');
+    bucket.objects.set('themes/eid-lights/1.0.0/theme.json', json);
+    assert.deepEqual(await BUILTIN_RETRIES['theme-art'](env, { id: 'eid-lights', version: '1.0.0' }, 'a2'), { ok: true, status: 'resolved', result: 'Art built' });
+    assert.ok(new TextDecoder().decode(bucket.objects.get('themes/eid-lights/1.0.0/theme.css')!.bytes).includes('--fanous-header-graphic: url('));
+    assert.deepEqual(await BUILTIN_RETRIES['theme-art'](env, { id: 'eid-lights', version: '1.0.0' }, 'a3'), { ok: true, status: 'resolved', result: 'The art was already built' });
+    assert.equal((await BUILTIN_RETRIES['theme-art'](env, { id: 'eid-lights', version: '9.9.9' }, 'a4')).status, 'dismissed');
+    assert.equal((await BUILTIN_RETRIES['theme-art'](env, { id: '../x', version: '1.0.0' }, 'a5')).ok, false);
+  });
+});

@@ -227,6 +227,19 @@ const SVG_VAR = /var\(\s*(--fanous-(?:color|c)-[a-z0-9-]+)\s*(?:,\s*([^()]*(?:\(
  * every other token, and switching theme switches the art. The source is imagery.headerGraphic;
  * a package without one uses its imagery.pattern (tiled), and with neither the art is none.
  */
+/** The SVG files the art can come from (imagery.headerGraphic per mode, else an SVG pattern): what a
+ * caller must hand `svgText`, e.g. the builder preview fetching a draft's assets. */
+export function artSvgPaths(pkg: ThemePackage): string[] {
+  const imagery = (pkg.imagery ?? {}) as Record<string, string | { light?: string; dark?: string } | undefined>;
+  const header = imagery.headerGraphic;
+  const pattern = imagery.pattern;
+  const paths = typeof header === 'object' && header ? [header.light, header.dark] : [];
+  // The pattern is read only for a mode with no header graphic
+  const bothModes = typeof header === 'object' && header?.light && header?.dark;
+  if (!bothModes && typeof pattern === 'string' && pattern.endsWith('.svg')) paths.push(pattern);
+  return [...new Set(paths.filter((p): p is string => typeof p === 'string' && p.endsWith('.svg')))];
+}
+
 export function compiledArt(pkg: ThemePackage, mode: Mode, svgText: (path: string) => string | undefined, colors = resolvedColors(pkg)): { svg: string; tiled: boolean } | null {
   const imagery = (pkg.imagery ?? {}) as Record<string, string | { light?: string; dark?: string } | undefined>;
   const header = imagery.headerGraphic;
@@ -245,6 +258,29 @@ export function compiledArt(pkg: ThemePackage, mode: Mode, svgText: (path: strin
   return { svg, tiled: source.tiled };
 }
 
+/**
+ * imagery.headerGraphicFrame "band": the art is drawn as a band rising out of the box it heads (Auth's
+ * sign-in card shows it flush with the card's top edge, clipped by its corners, the card continuing
+ * below). Boxes that show the art (the home page's sign-in banner) read these to frame it that way;
+ * without them they inset it. Values, not selectors, so a copy of the theme keeps its framing.
+ */
+function frameVars(pkg: ThemePackage, svg: string): string[] {
+  if ((pkg.imagery as Record<string, unknown> | undefined)?.headerGraphicFrame !== 'band') return [];
+  const box = /viewBox="\s*[-\d.]+[\s,]+[-\d.]+[\s,]+([\d.]+)[\s,]+([\d.]+)\s*"/.exec(svg);
+  const ratio = box && Number(box[1]) > 0 && Number(box[2]) > 0 ? `${Number(box[1])} / ${Number(box[2])}` : '400 / 110';
+  return [
+    '  --fanous-header-graphic-frame: band;',
+    '  --fanous-header-graphic-bleed: 1;',
+    `  --fanous-header-graphic-ratio: ${ratio};`,
+    '  --fanous-header-graphic-align: start;',
+    '  --fanous-header-graphic-position: center bottom;',
+    '  --fanous-header-graphic-fit: 100% auto;',
+    // Alpha masks: the band's filled bottom fades into the box; beside other content its ends fade too
+    '  --fanous-header-graphic-fade: linear-gradient(black 72%, transparent);',
+    '  --fanous-header-graphic-mask: linear-gradient(black 72%, transparent), linear-gradient(90deg, transparent, black 12%, black 88%, transparent);',
+  ];
+}
+
 function artCss(pkg: ThemePackage, opts: CompileOptions): string {
   const scope = scopeOf(pkg.id);
   const dark = opts.isDefault ? `.dark, ${scope}.dark` : `${scope}.dark`;
@@ -258,6 +294,7 @@ function artCss(pkg: ThemePackage, opts: CompileOptions): string {
       `  --fanous-header-graphic: url("${url}");`,
       `  --fanous-header-graphic-size: ${art.tiled ? '96px auto' : 'contain'};`,
       `  --fanous-header-graphic-repeat: ${art.tiled ? 'repeat' : 'no-repeat'};`,
+      ...(art.tiled ? [] : frameVars(pkg, art.svg)),
     ].join('\n');
   };
   return `${dark} {\n${block('dark')}\n}\n${light} {\n${block('light')}\n}\n`;
