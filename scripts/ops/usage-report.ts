@@ -421,12 +421,56 @@ export function render(r: Report): string {
 	return out.join('\n') + '\n';
 }
 
+/**
+ * The last `hours` hours, hour by hour, for the costliest Workers, D1 databases and R2 buckets of
+ * the al-ummah set: shows whether a cost is a steady idle loop or bursts of test runs.
+ */
+export async function hourly(token: string, account: string, hours: number, now = new Date()): Promise<string> {
+	const end = new Date(Math.floor(now.getTime() / 3_600_000) * 3_600_000);
+	const start = new Date(end.getTime() - hours * 3_600_000);
+	const scripts = (await rest(token, `/accounts/${account}/workers/scripts`)).filter((x) => isAlUmmah(x.id)).map((x) => x.id);
+	const d1s = (await rest(token, `/accounts/${account}/d1/database`)).filter((d) => isAlUmmah(d.name));
+	const buckets = (await rest(token, `/accounts/${account}/r2/buckets`)).filter((b) => isAlUmmah(b.name)).map((b) => b.name);
+	const d1Name = new Map(d1s.map((d) => [d.uuid, d.name]));
+	const r = await gql(token, `query($a:String!,$s:Time!,$e:Time!,$w:[String!],$d:[String!],$b:[String!]){viewer{accounts(filter:{accountTag:$a}){
+		w: workersInvocationsAdaptive(limit:10000, filter:{datetime_geq:$s, datetime_lt:$e, scriptName_in:$w}){ dimensions{scriptName datetimeHour} sum{requests} }
+		d: d1AnalyticsAdaptiveGroups(limit:10000, filter:{datetime_geq:$s, datetime_lt:$e, databaseId_in:$d}){ dimensions{databaseId datetimeHour} sum{rowsRead rowsWritten} }
+		r: r2OperationsAdaptiveGroups(limit:10000, filter:{datetime_geq:$s, datetime_lt:$e, bucketName_in:$b}){ dimensions{bucketName datetimeHour actionType} sum{requests} } }}}`,
+		{ a: account, s: start.toISOString(), e: end.toISOString(), w: scripts, d: [...d1Name.keys()], b: buckets });
+	const series = new Map<string, Map<string, number>>();
+	const put = (k: string, h: string, v: number) => {
+		const m = series.get(k) ?? new Map<string, number>();
+		m.set(h, (m.get(h) ?? 0) + v);
+		series.set(k, m);
+	};
+	for (const x of r.data?.w ?? []) put(`req ${x.dimensions.scriptName}`, x.dimensions.datetimeHour, x.sum.requests);
+	for (const x of r.data?.d ?? []) {
+		const n = d1Name.get(x.dimensions.databaseId) ?? x.dimensions.databaseId;
+		put(`d1w ${n}`, x.dimensions.datetimeHour, x.sum.rowsWritten);
+		put(`d1r ${n}`, x.dimensions.datetimeHour, x.sum.rowsRead);
+	}
+	for (const x of r.data?.r ?? []) if (!R2_FREE.has(x.dimensions.actionType)) put(`r2 ${x.dimensions.bucketName} ${x.dimensions.actionType}`, x.dimensions.datetimeHour, x.sum.requests);
+	const total = (m: Map<string, number>) => [...m.values()].reduce((a, b) => a + b, 0);
+	const top = [...series.entries()].sort((a, b) => total(b[1]) - total(a[1])).slice(0, 14);
+	const hoursList: string[] = [];
+	for (let t = start.getTime(); t < end.getTime(); t += 3_600_000) hoursList.push(new Date(t).toISOString().replace('.000Z', 'Z'));
+	const out = [`## Hourly, last ${hours} h (UTC), top series`, '', `| Hour | ${top.map(([k]) => k).join(' | ')} |`, `|---|${top.map(() => '---').join('|')}|`];
+	for (const h of hoursList) out.push(`| ${h.slice(5, 13)} | ${top.map(([, m]) => fmt(m.get(h) ?? 0)).join(' | ')} |`);
+	if (r.error) out.push('', `Errors: ${r.error}`);
+	return out.join('\n') + '\n';
+}
+
 async function main() {
 	const token = process.env.CLOUDFLARE_API_TOKEN ?? '';
 	const account = process.env.CLOUDFLARE_ACCOUNT_ID ?? '';
 	if (!token || !account) throw new Error('CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are required');
 	const i = process.argv.indexOf('--days');
 	const days = i > 0 ? Math.max(1, Math.min(31, Number(process.argv[i + 1]) || 30)) : 30;
+	const h = process.argv.indexOf('--hourly');
+	if (h > 0) {
+		process.stdout.write(await hourly(token, account, Math.max(1, Math.min(72, Number(process.argv[h + 1]) || 24))));
+		return;
+	}
 	const report = await collect(token, account, days);
 	process.stdout.write(render(report));
 	if (process.argv.includes('--json')) {
