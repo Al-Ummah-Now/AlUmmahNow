@@ -92,15 +92,18 @@ and the fallback endpoint are described in the [RUNBOOK](./RUNBOOK.md#which-sour
 
 Two signals per provider (`lib/media/health.ts`):
 
-- **Player fallbacks** away from it (`/playback?exclude=`), one row per provider per minute in D1
-  `media_provider_health` (pruned after a day).
+- **Player fallbacks** away from it (`/playback?exclude=`), counted only when that provider was
+  ready for the video, one row per provider, minute and reporter in D1 `media_provider_health`
+  (pruned after a day). The reporter is a daily-salted hash of the client IP and user id (never
+  stored raw), and the window counts **distinct reporters**: one client looping over many videos
+  counts once, so it cannot push a provider over the threshold.
 - **Probes**, every minute from the api-videos cron: Bunny is a HEAD on the primary CDN host
   (anything below 500 is up); R2 is a HEAD of `pub/_health/probe.txt` through the public media
   domain (written through the binding only when the edge answers 404).
 
 `nextProviderHealth` turns them into `healthy` / `unhealthy`: unhealthy after `probeFailures` failed
-probes in a row or `failureThreshold` fallbacks in the window, healthy again after `cooldownMinutes`
-with passing probes and fallbacks under the threshold. The snapshot is stored at
+probes in a row or `failureThreshold` distinct fallback reporters in the window, healthy again after `cooldownMinutes`
+with passing probes and fallback reporters under the threshold. The snapshot is stored at
 `global_settings/ops/media-health.json`. Turning unhealthy raises the Errors page item
 `media-provider-health:<id>` with **Check now** (`POST /internal/media/health/check`, registered in
 admin-api `SERVICE_RETRIES`); recovering resolves it.

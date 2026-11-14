@@ -242,6 +242,13 @@ describe('GET /api/videos/:id/playback?exclude=…', () => {
 		assert.deepEqual({ ...health }, { provider: 'r2', failures: 1 });
 	});
 
+	it('excluding a provider that was never ready for the video is no health signal', async () => {
+		const { env, get, db } = setup({ r2: { ...READY, status: 'transcoding' } });
+		await writeDeliverySettings(env, { mode: 'r2' }, 'admin-1');
+		assert.equal((await get(`/api/videos/${ID}/playback?exclude=r2&reason=network`)).status, 200);
+		assert.equal(((await db.prepare('SELECT COUNT(*) AS n FROM media_provider_health').first()) as { n: number }).n, 0);
+	});
+
 	it('every provider excluded: no sources, nothing to play (the player shows its error)', async () => {
 		const { env, get } = setup();
 		await writeDeliverySettings(env, { mode: 'r2' }, 'admin-1');

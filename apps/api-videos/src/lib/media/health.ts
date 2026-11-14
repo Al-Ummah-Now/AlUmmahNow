@@ -1,8 +1,10 @@
 /**
  * Provider health (docs/media-delivery/PROVIDERS.md §Health). Two signals per provider:
  *
- *   player fallback away from it (GET /api/videos/:id/playback?exclude=…) ─► media_provider_health
- *       (one row per provider per minute, failures += 1; already rate limited per video)
+ *   player fallback away from it (GET /api/videos/:id/playback?exclude=…, only when that provider
+ *       was ready for the video) ─► media_provider_health, one row per provider, minute and reporter
+ *       (a daily-salted client hash); the window counts distinct reporters, so one client cannot
+ *       push a provider over the threshold by looping over videos
  *   cron, every minute ─► probe each enabled provider (adapter.probe) + sum failures in the window
  *       ─► nextProviderHealth ─► global_settings/ops/media-health.json
  *
@@ -40,15 +42,25 @@ export function clearHealthCache(): void {
 
 const minuteOf = (ms: number) => new Date(Math.floor(ms / 60_000) * 60_000).toISOString().slice(0, 16);
 
-/** One player fallback away from `provider` (best effort, never throws). */
-export async function countProviderFailure(env: Pick<HealthEnv, 'SEARCH_DB'>, provider: MediaProviderId, now = Date.now()): Promise<void> {
+/**
+ * Who reported a fallback, as a health signal: SHA-256 of the UTC day, the client IP and the user id,
+ * truncated. Not linkable across days and never stored raw.
+ */
+export async function reporterKey(ip: string | null | undefined, userId: string | null | undefined, now = Date.now()): Promise<string> {
+	const day = new Date(now).toISOString().slice(0, 10);
+	const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`media-health|${day}|${ip ?? ''}|${userId ?? ''}`)));
+	return [...bytes.slice(0, 8)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** One player fallback away from `provider` by `reporter` (best effort, never throws). */
+export async function countProviderFailure(env: Pick<HealthEnv, 'SEARCH_DB'>, provider: MediaProviderId, reporter: string, now = Date.now()): Promise<void> {
 	if (!env.SEARCH_DB) return;
 	try {
 		await env.SEARCH_DB.prepare(
-			`INSERT INTO media_provider_health (provider, minute, failures) VALUES (?1, ?2, 1)
-			 ON CONFLICT (provider, minute) DO UPDATE SET failures = failures + 1`,
+			`INSERT INTO media_provider_health (provider, minute, reporter, failures) VALUES (?1, ?2, ?3, 1)
+			 ON CONFLICT (provider, minute, reporter) DO UPDATE SET failures = failures + 1`,
 		)
-			.bind(provider, minuteOf(now))
+			.bind(provider, minuteOf(now), reporter)
 			.run();
 	} catch (error) {
 		logger.warn('[Media] Could not count a provider failure', { provider, error: error instanceof Error ? error.message : String(error) });
@@ -69,7 +81,7 @@ export async function readHealth(env: Pick<HealthEnv, 'global_settings'>, fresh 
 
 async function recentFailures(env: HealthEnv, windowMinutes: number, now: number): Promise<Partial<Record<MediaProviderId, number>>> {
 	if (!env.SEARCH_DB) return {};
-	const { results } = await env.SEARCH_DB.prepare('SELECT provider, SUM(failures) AS n FROM media_provider_health WHERE minute >= ?1 GROUP BY provider')
+	const { results } = await env.SEARCH_DB.prepare('SELECT provider, COUNT(DISTINCT reporter) AS n FROM media_provider_health WHERE minute >= ?1 GROUP BY provider')
 		.bind(minuteOf(now - (windowMinutes - 1) * 60_000))
 		.all<{ provider: MediaProviderId; n: number }>();
 	return Object.fromEntries((results ?? []).map((r) => [r.provider, Number(r.n) || 0]));
