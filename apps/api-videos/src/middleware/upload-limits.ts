@@ -28,9 +28,11 @@
  * the limits; the tier gate itself applies everywhere.
  */
 import type { Context } from 'hono';
-import { CREATOR_ERROR_CODES, type CreatorTier } from '@al-ummah/shared-types';
+import { channelRoleOf, CREATOR_ERROR_CODES, type CreatorTier } from '@al-ummah/shared-types';
 import { logger } from '../lib/logger';
 import { recordLimitHit, resolveCreator, type ResolvedCreator } from '../lib/creatorTiers';
+import { getTusSessionKey, type TusProxySession } from '../lib/bunny/tus';
+import { loadChannelRecord, memberMayActAs } from '../lib/channelAccess';
 import {
   checkRateLimit,
   RATE_LIMIT_UNAVAILABLE_RETRY_SECONDS,
@@ -113,11 +115,46 @@ export function countReused(value: unknown, depth = 0): number {
 
 type RolesAuth = { payload?: { roles?: string[] } } | undefined;
 
+/** The `tusSessionId` of a TUS create's Upload-Metadata (`key base64,key base64`), or null. */
+export function tusSessionIdOf(metadata: string | undefined): string | null {
+  for (const pair of (metadata ?? '').split(',')) {
+    const [key, value] = pair.trim().split(' ');
+    if (key !== 'tusSessionId' || !value) continue;
+    try {
+      const id = atob(value);
+      return /^[A-Za-z0-9-]{1,64}$/.test(id) ? id : null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+/**
+ * The channel owner a TUS create uploads for (#759). tus-js-client sends no
+ * `channelId` header, so channelIdMiddleware sets no `channelOwnerId`: the
+ * initiate session names the channel, and the caller must still hold a role
+ * on it that may upload. Null: the caller's own upload (their own tier).
+ */
+async function tusCreateChannelOwner(c: Context, userId: string): Promise<string | null> {
+  if (c.req.method !== 'POST' || c.req.path !== '/api/videos/tus') return null;
+  const sessionId = tusSessionIdOf(c.req.header('Upload-Metadata'));
+  const kv = c.env?.TUS_SESSIONS as KVNamespace | undefined;
+  if (!sessionId || !kv) return null;
+  const raw = await kv.get(getTusSessionKey(sessionId));
+  if (!raw) return null;
+  const session = JSON.parse(raw) as Partial<TusProxySession>;
+  if (session.userId !== userId || !session.channelId || session.channelId === userId) return null;
+  const channel = await loadChannelRecord(c.env, session.channelId);
+  if (!channel?.userId || channel.userId === userId) return null;
+  return memberMayActAs(channelRoleOf(channel, userId), 'POST', c.req.path) ? channel.userId : null;
+}
+
 /** The tier that applies to this request (the channel owner's for a channel upload). */
 export async function creatorOf(c: Context): Promise<ResolvedCreator> {
   const userId = c.get('userId') as string;
   const roles = (c.get('auth') as RolesAuth)?.payload?.roles;
-  const channelOwnerId = (c.get('channelOwnerId') as string | undefined) ?? null;
+  const channelOwnerId = (c.get('channelOwnerId') as string | undefined) ?? (await tusCreateChannelOwner(c, userId));
   return resolveCreator(c.env.SEARCH_DB as D1Database, { userId, roles, channelOwnerId });
 }
 
