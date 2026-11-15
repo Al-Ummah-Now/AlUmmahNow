@@ -34,6 +34,7 @@ export const LOCAL_WEB_SPECS: readonly string[] = [
   '30-watch-page.spec.ts',
   '78-shorts.spec.ts',
   '79-server-rendered.spec.ts',
+  '80-studio-social.spec.ts',
   '32-comments.spec.ts',
   '33-watch-history.spec.ts',
   '60-home-videos.spec.ts',

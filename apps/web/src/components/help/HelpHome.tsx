@@ -2,7 +2,7 @@
 /** Help home (/[locale]/help): search, the tour, every topic. */
 import '@/theme/help.css';
 import Link from '@/components/common/AppLink';
-import { ArrowRight, BookOpen, Compass, Languages, PlayCircle, ShieldCheck, Upload, Users, UserRound, type LucideIcon } from 'lucide-react';
+import { ArrowRight, BookOpen, Compass, Languages, PlayCircle, Share2, ShieldCheck, Upload, Users, UserRound, type LucideIcon } from 'lucide-react';
 import { HELP_TOPIC_IDS, type HelpTopicId } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { MAIN_CONTENT_ID } from '@/components/SkipLinks';
@@ -15,6 +15,7 @@ export const HELP_TOPIC_ICONS: Record<HelpTopicId, LucideIcon> = {
   watching: PlayCircle,
   identity: UserRound,
   creating: Upload,
+  social: Share2,
   community: Users,
   privacy: ShieldCheck,
   appearance: Languages,

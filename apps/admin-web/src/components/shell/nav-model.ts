@@ -137,6 +137,8 @@ export const NAV_ITEMS: NavItem[] = [
   // Universal links / App Links files and app attestation (NAT-REL): every admin reads, admins change
   { href: '/mobile-apps', label: 'nav.mobileApps', icon: 'phone', group: 'site' },
   { href: '/app-config', label: 'nav.appConfig', icon: 'sliders', group: 'site', requires: (a) => a.settings === true },
+  // Social auto-post (wiki AUN-SOCIAL): kill switches, X spend cap, network setup; every admin reads, settings:manage changes
+  { href: '/social', label: 'nav.socialPosting', icon: 'globe', group: 'site' },
   // White-label scholar sites (wiki AUN-SCHOLAR-SITES §8): every admin reads, creators:manage changes
   { href: '/sites', label: 'nav.scholarSites', icon: 'globe', group: 'site' },
   // Newsletter (AlUmmahNowUI#6): www sign-ups, issues in en + ar; newsletter:manage = admins and super admins, as contact:read

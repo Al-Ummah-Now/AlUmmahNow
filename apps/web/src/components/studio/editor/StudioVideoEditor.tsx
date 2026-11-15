@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import SaveToPlaylist from '@/components/SaveToPlaylist';
 import VideoEdit from '@/components/videoEdit/index';
+import { ShareKit } from '@/components/studio/social/ShareKit';
 import { useLanguage } from '@/hooks/useLanguage';
 import type { VideoObject } from '@/interfaces';
 
@@ -71,6 +72,9 @@ export function StudioVideoEditor({ locale, channelId, userId, video, canViewAna
         <SaveToPlaylist videoId={video.id} channelId={channelId} />
       </div>
       <VideoEdit video={video} userId={userId} channelId={channelId} onSave={onSaved} onCancel={backToList} />
+      <div className="mt-6">
+        <ShareKit channelId={channelId} videoId={video.id} />
+      </div>
     </div>
   );
 }
