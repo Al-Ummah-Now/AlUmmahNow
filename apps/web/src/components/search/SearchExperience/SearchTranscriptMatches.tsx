@@ -67,7 +67,7 @@ export function SearchTranscriptMatches({ matches, query }: { matches: SearchTra
               >
                 <div className="relative w-36 shrink-0 overflow-hidden rounded-md sm:w-44">
                   <VideoThumbnail src={m.video.thumbnailUrl ?? ''} alt="" className="aspect-video h-auto w-full" />
-                  <span dir="ltr" className="absolute bottom-1 end-1 inline-flex items-center gap-1 rounded bg-black/80 px-1.5 py-0.5 text-xs font-medium text-white">
+                  <span dir="ltr" className="absolute bottom-1 end-1 inline-flex items-center gap-1 rounded bg-background/90 px-1.5 py-0.5 text-xs font-medium tabular-nums text-foreground">
                     <Play className="h-3 w-3" aria-hidden="true" />
                     {time}
                   </span>

@@ -34,7 +34,7 @@ test.describe('transcript search', () => {
       const vtt = ['WEBVTT', '', '00:00:01.000 --> 00:00:04.000', `Welcome ${ns()}`, '', '00:01:15.000 --> 00:01:19.000', phrase, ''].join('\n');
 
       const shown = await ownData.createVideo(creator.user, channelId, { title: `Friday reminder ${ns()} ${Date.now().toString(36)}` });
-      const hidden = await ownData.createVideo(creator.user, channelId, { title: `Private reminder ${ns()} ${Date.now().toString(36)}`, isPublic: false });
+      const hidden = await ownData.createVideo(creator.user, channelId, { title: `Private reminder ${ns()} ${Date.now().toString(36)}`, isPublic: false, waitReady: false });
       for (const video of [shown, hidden]) {
         const form = new FormData();
         form.append('file', new Blob([vtt], { type: 'text/vtt' }), 'en.vtt');
