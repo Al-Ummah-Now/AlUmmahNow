@@ -20,6 +20,8 @@ import { enqueueWarningMail } from './warning-mail';
 import { enqueueRejectionMail, rejectionMailJob } from './review/rejection-mail';
 import { logger } from './logger';
 import { enqueueDeviceRevocation } from './deviceTokenRevocation';
+import { getIssue, getSubscriber, renewConfirmToken, requeueFailed, setDelivery } from './newsletter-store';
+import { confirmJob, enqueueNewsletterMail, fanoutJob, sendJob } from './newsletter-mail';
 
 export interface RetryOutcome {
   ok: boolean;
@@ -98,6 +100,37 @@ export const BUILTIN_RETRIES: Record<string, (env: AdminBindings, args: Record<s
       return { ok: false, status: 'open', result: 'Could not queue the email' };
     }
     return { ok: true, status: 'resolved', result: 'Queued again' };
+  },
+  /**
+   * Newsletter mail that failed for good: a sign-up's confirmation (a new link, while still
+   * pending), or an issue (its failed deliveries queued again; the fan-out again when it never
+   * finished, which skips subscribers who already have a delivery).
+   */
+  'newsletter-email': async (env, args) => {
+    const id = args.id;
+    if (!id || (args.kind !== 'confirm' && args.kind !== 'issue')) return { ok: false, status: 'open', result: 'Not a newsletter email' };
+    const now = new Date();
+    if (args.kind === 'confirm') {
+      const sub = await getSubscriber(env.REPORTS_DB, id);
+      if (!sub) return { ok: false, status: 'dismissed', result: 'Subscriber no longer exists' };
+      if (sub.status !== 'pending') return { ok: true, status: 'resolved', result: `Nothing to send (${sub.status})` };
+      const token = await renewConfirmToken(env.REPORTS_DB, id, now);
+      if (!token) return { ok: true, status: 'resolved', result: 'Nothing to send' };
+      if (!(await enqueueNewsletterMail(env, [confirmJob(id, token)]))) return { ok: false, status: 'open', result: 'Could not queue the email' };
+      return { ok: true, status: 'resolved', result: 'Queued again' };
+    }
+    const issue = await getIssue(env.REPORTS_DB, id);
+    if (!issue) return { ok: false, status: 'dismissed', result: 'Issue no longer exists' };
+    if (issue.status === 'draft') return { ok: true, status: 'resolved', result: 'Nothing to send (draft)' };
+    const failed = await requeueFailed(env.REPORTS_DB, id, now);
+    const jobs = [...failed.map((sid) => sendJob(id, sid)), ...(issue.fanned_out_at ? [] : [fanoutJob(id)])];
+    if (!jobs.length) return { ok: true, status: 'resolved', result: 'Nothing to resend' };
+    if (!(await enqueueNewsletterMail(env, jobs))) {
+      // Back to failed, so the next Retry finds them again
+      for (const sid of failed) await setDelivery(env.REPORTS_DB, id, sid, 'failed', now, { error: 'could not queue the email' });
+      return { ok: false, status: 'open', result: 'Could not queue the emails' };
+    }
+    return { ok: true, status: 'resolved', result: `Queued again (${failed.length} email${failed.length === 1 ? '' : 's'})` };
   },
   'warning-email': async (env, args) => {
     const id = args.id;

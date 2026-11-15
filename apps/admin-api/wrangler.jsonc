@@ -185,7 +185,9 @@
 		// Moderation requests to auth: this app's auth client (secret: worker secret
 		// AUTH_MODERATION_CLIENT_SECRET) and the admin web for evidence links
 		"AUTH_MODERATION_CLIENT_ID": "d7464de8-363d-4fc1-b1af-7c71653f0afc",
-		"ADMIN_WEB_URL": "https://admin.alummahnow.net"
+		"ADMIN_WEB_URL": "https://admin.alummahnow.net",
+		// Newsletter (lib/newsletter.ts): www origin of the confirm and unsubscribe links
+		"NEWSLETTER_SITE_URL": "https://www.alummahnow.net"
 	},
 
 	// Abuse counters (Turnstile outcomes on Contact us, rate-limit hits; no personal data)
@@ -360,7 +362,8 @@
 				"AI_MODERATION_DAILY_NEURON_CAP": "10000",
 				"CONTACT_INBOX": "support@alummahnow.net",
 				"AUTH_MODERATION_CLIENT_ID": "d7464de8-363d-4fc1-b1af-7c71653f0afc",
-				"ADMIN_WEB_URL": "https://admin.stage.alummahnow.net"
+				"ADMIN_WEB_URL": "https://admin.stage.alummahnow.net",
+				"NEWSLETTER_SITE_URL": "https://www.stage.alummahnow.net"
 			},
 			// Abuse counters (Turnstile outcomes on Contact us, rate-limit hits; no personal data)
 			"analytics_engine_datasets": [{ "binding": "ABUSE_EVENTS", "dataset": "al_ummah_now_abuse_stage" }],
@@ -390,7 +393,8 @@
 				"WEBSOCKET_URL": "http://localhost:3087",
 				"VIDEOS_API_URL": "http://127.0.0.1:3086",
 				"INTERNAL_API_KEY": "dev-internal-api-key",
-				"ADMIN_WEB_URL": "http://localhost:3091"
+				"ADMIN_WEB_URL": "http://localhost:3091",
+				"NEWSLETTER_SITE_URL": "http://localhost:4321"
 			}
 		},
 		"staging": {

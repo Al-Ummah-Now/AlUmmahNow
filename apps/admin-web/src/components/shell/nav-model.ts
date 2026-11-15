@@ -122,6 +122,8 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/platform-settings', label: 'nav.platformSettings', icon: 'sliders', group: 'site' },
   // White-label scholar sites (wiki AUN-SCHOLAR-SITES §8): every admin reads, creators:manage changes
   { href: '/sites', label: 'nav.scholarSites', icon: 'globe', group: 'site' },
+  // Newsletter (AlUmmahNowUI#6): www sign-ups, issues in en + ar; newsletter:manage = admins and super admins, as contact:read
+  { href: '/newsletter', label: 'nav.newsletter', icon: 'inbox', group: 'site', requires: (a) => a.contact },
   { href: '/deleted', label: 'nav.deleted', icon: 'trash', group: 'site' },
 ];
 
