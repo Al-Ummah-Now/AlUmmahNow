@@ -8,7 +8,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { DEFAULT_CREATOR_TIER, LIVE_TIER_ERROR_CODES } from '@al-ummah/shared-types';
 import { assignTier, readTier, saveTier, validateTier } from '../src/lib/creatorTiers';
-import { checkLiveTier, liveAccess, liveUsage } from '../src/lib/live/tier-gate';
+import { checkLiveTier, liveAccess, liveUsage, streamTierContext } from '../src/lib/live/tier-gate';
 import { endOverTierLimit } from '../src/lib/live/service';
 import { insertSession, readSession, updateSession } from '../src/lib/live/store';
 import { SqliteD1 } from './search-sqlite-d1';
@@ -138,5 +138,40 @@ describe('live in creator tiers', () => {
 		assert.equal(ended.end_reason, 'tier_limit');
 		assert.equal((await readSession(d1, within))!.status, 'live');
 		assert.equal((await readSession(d1, unlimited))!.status, 'live');
+	});
+
+	it('the sweep ends the newest streams over the at-once cap, even ones that went live without Go live', async () => {
+		const d1 = await setup();
+		const first = await session(d1, 'alice', { status: 'live', firstSegmentAt: NOW - 5 * 60_000, limitMinutes: 30 });
+		// The edge took this one live on its first segment, no start ever checked it
+		const second = await session(d1, 'alice', { status: 'live', firstSegmentAt: NOW - 2 * 60_000, limitMinutes: 30 });
+		assert.equal(await endOverTierLimit({ SEARCH_DB: d1 } as never, NOW), 1);
+		assert.equal((await readSession(d1, first))!.status, 'live');
+		assert.equal((await readSession(d1, second))!.end_reason, 'tier_limit');
+	});
+
+	it('the sweep ends every live stream once their hours together use the month, or the tier drops live', async () => {
+		const d1 = await setup();
+		await saveTier(d1, 'small', { liveMaxConcurrent: 2 }, 'admin-1');
+		// Two 61-minute streams, each within its own limit, use the 2-hour month together
+		const a = await session(d1, 'alice', { status: 'live', firstSegmentAt: NOW - 61 * 60_000, limitMinutes: 120 });
+		const b = await session(d1, 'alice', { status: 'live', firstSegmentAt: NOW - 61 * 60_000, limitMinutes: 120 });
+		assert.equal(await endOverTierLimit({ SEARCH_DB: d1 } as never, NOW), 2);
+		assert.equal((await readSession(d1, a))!.status, 'ended');
+		assert.equal((await readSession(d1, b))!.status, 'ended');
+
+		const c = await session(d1, 'carol', { status: 'live', firstSegmentAt: NOW - 60_000, limitMinutes: 240 });
+		await saveTier(d1, 'creator', { live: false }, 'admin-1');
+		assert.equal(await endOverTierLimit({ SEARCH_DB: d1 } as never, NOW), 1);
+		assert.equal((await readSession(d1, c))!.end_reason, 'tier_limit');
+	});
+
+	it('a member removed from the channel may not go live under the owner\'s tier', async () => {
+		const channel = { userId: 'alice', members: [{ userId: 'bob', role: 'admin' }] };
+		const bucket = (record: unknown) => ({ get: async () => ({ json: async () => record }) }) as unknown as R2Bucket;
+		const stream = { channelId: 'ch-1', userId: 'bob' };
+		assert.deepEqual(await streamTierContext({ channels: bucket(channel) }, stream, 'bob'), { ownerId: 'alice', callerMayGoLive: true });
+		assert.deepEqual(await streamTierContext({ channels: bucket({ userId: 'alice', members: [] }) }, stream, 'bob'), { ownerId: 'alice', callerMayGoLive: false });
+		assert.equal((await streamTierContext({ channels: bucket(channel) }, stream, 'alice')).callerMayGoLive, true);
 	});
 });

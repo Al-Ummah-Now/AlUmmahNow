@@ -14,7 +14,9 @@ import {
 	type LiveRoutingSettings,
 	type LiveStreamState,
 } from '@al-ummah/shared-types';
-import { reportNeedsAction } from '@al-ummah/shared-types';
+import { reportNeedsAction, tierAllowsLive } from '@al-ummah/shared-types';
+import { readAssignment, readTier } from '../creatorTiers';
+import { liveUsage } from './tier-gate';
 import { logger } from '../logger';
 import { LIVE_ADAPTERS, LiveProviderError, type LiveEnv } from './providers';
 import { vodReady } from './vod-ready';
@@ -309,39 +311,72 @@ export async function sweepLiveSessions(env: LiveEnv, now = Date.now()): Promise
 }
 
 /**
- * Sessions live past their tier limit (limit_minutes, lib/live/tier-gate.ts: the tier's longest
- * stream, or what was left of the month's hours) are ended; the recording is kept. The sweep is
- * the retry loop (every 5 minutes, so a stream may run up to one sweep past its limit). A provider
- * that would not stop is an Errors page item (resolved once a later end works).
+ * The creator tier's limits, enforced by the sweep (every 5 min) for sessions
+ * provisioned under a limited tier (`limit_minutes` set; Unlimited and super
+ * admins have none):
+ *   - a session past its own limit (longest stream, or the month left when it started);
+ *   - owner-wide, because the self-hosted edge goes live on the first segment
+ *     whether or not Go live was pressed and two starts can race: more streams
+ *     live than the tier allows at once (the newest ones end), the month's
+ *     hours used by all of them together, or a tier that no longer includes live.
+ * Ends with reason 'tier_limit'; a provider that does not stop flags the Errors page.
  */
 export async function endOverTierLimit(env: LiveEnv, now = Date.now()): Promise<number> {
 	const d1 = db(env);
-	const { results } = await d1
-		.prepare(
-			"SELECT * FROM live_sessions WHERE status = 'live' AND limit_minutes IS NOT NULL AND first_segment_at IS NOT NULL AND first_segment_at + limit_minutes * 60000 <= ? LIMIT 20",
-		)
-		.bind(now)
-		.all<LiveSessionRow>();
-	let ended = 0;
-	for (const s of results ?? []) {
+	const ended = new Set<string>();
+	const end = async (s: LiveSessionRow, why: string) => {
+		if (ended.has(s.id)) return;
+		ended.add(s.id);
 		const after = await endSession(env, s, 'tier_limit', now);
 		await onSessionEnded?.(env, s);
-		ended++;
-		logger.info('[Live] Ended at the creator tier limit', { sessionId: s.id, streamId: s.stream_id, ownerId: s.owner_id ?? null, limitMinutes: s.limit_minutes });
+		logger.info('[Live] Ended at the creator tier limit', { sessionId: s.id, streamId: s.stream_id, ownerId: s.owner_id ?? null, limitMinutes: s.limit_minutes, why });
 		if (after.error) {
 			reportNeedsAction('api-videos', env as never, undefined, {
 				key: `live-tier-stop:${s.id}`,
 				source: 'processing',
 				title: 'A live stream past its tier limit did not stop at the provider',
-				message: `Session ${s.id} (${s.provider}) was ended at its creator tier limit of ${s.limit_minutes} minutes, but stopping it at the provider failed (${after.error}). Stop it on the Live streaming page.`,
+				message: `Session ${s.id} (${s.provider}) was ended at its creator tier limit (${why}), but stopping it at the provider failed (${after.error}). Stop it on the Live streaming page.`,
 				itemType: 'live_session',
 				itemId: s.id,
 				itemUrl: '/live-streaming',
-				extra: { sessionId: s.id, streamId: s.stream_id, provider: s.provider, error: after.error },
+				extra: { sessionId: s.id, streamId: s.stream_id, provider: s.provider, why, error: after.error },
 			});
 		}
+	};
+
+	const { results: overLength } = await d1
+		.prepare(
+			"SELECT * FROM live_sessions WHERE status = 'live' AND limit_minutes IS NOT NULL AND first_segment_at IS NOT NULL AND first_segment_at + limit_minutes * 60000 <= ? LIMIT 20",
+		)
+		.bind(now)
+		.all<LiveSessionRow>();
+	for (const s of overLength ?? []) await end(s, 'longest stream');
+
+	const { results: owners } = await d1
+		.prepare("SELECT DISTINCT owner_id FROM live_sessions WHERE status = 'live' AND limit_minutes IS NOT NULL AND owner_id IS NOT NULL LIMIT 50")
+		.all<{ owner_id: string }>();
+	for (const { owner_id: ownerId } of owners ?? []) {
+		// The stored tier only (never resolveCreator: without the owner's roles it would drop a super admin's row)
+		const assignment = await readAssignment(d1, ownerId);
+		const tier = assignment ? await readTier(d1, assignment.tierId) : null;
+		if (tier?.unlimited) continue;
+		const { results } = await d1
+			.prepare("SELECT * FROM live_sessions WHERE status = 'live' AND owner_id = ? ORDER BY COALESCE(first_segment_at, created_at) ASC, id ASC")
+			.bind(ownerId)
+			.all<LiveSessionRow>();
+		const live = (results ?? []).filter((s) => !ended.has(s.id));
+		if (!live.length) continue;
+		if (!tier || !tierAllowsLive(tier)) {
+			for (const s of live) await end(s, 'tier without live');
+			continue;
+		}
+		if ((await liveUsage(d1, ownerId, now)).usedMinutes >= tier.liveHoursMonth * 60) {
+			for (const s of live) await end(s, 'month hours used');
+			continue;
+		}
+		for (const s of live.slice(tier.liveMaxConcurrent)) await end(s, 'streams at once');
 	}
-	return ended;
+	return ended.size;
 }
 
 /** Hook set by the API layer so an idle end also ends the stream record (lib/live/streams.ts). */

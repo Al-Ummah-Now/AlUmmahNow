@@ -26,7 +26,7 @@ import { signLiveVodUrl } from '../../lib/live/vod-sign';
 import { canManageLiveStream } from '../../lib/channelAccess';
 import { beatLiveViewer, countLiveViewers, isViewerId, viewerNet } from '../../lib/live/viewers';
 import { isLiveVodWithheld } from '@al-ummah/shared-types';
-import { checkLiveTier, streamTierOwner, type LiveTierOp } from '../../lib/live/tier-gate';
+import { checkLiveTier, streamTierContext, type LiveTierOp } from '../../lib/live/tier-gate';
 import type { SessionTier } from '../../lib/live/service';
 
 const Params = z.object({ id: Str({ description: 'Live stream id' }) });
@@ -97,8 +97,12 @@ export async function liveTierGate(c: AppContext, stream: Pick<LiveStreamRecord,
 	const db = env(c).SEARCH_DB;
 	if (!db) return {};
 	try {
-		const owner = await streamTierOwner(env(c), stream);
-		const result = await checkLiveTier(db, { userId, roles: rolesOf(c), channelOwnerId: owner }, op, { sessionId: stream.sessionId ?? null });
+		const { ownerId, callerMayGoLive } = await streamTierContext(env(c), stream, userId);
+		if (!callerMayGoLive) {
+			logger.info('[Live] Caller no longer manages live on the stream\'s channel', { streamId: stream.id, op, channelId: stream.channelId ?? null });
+			return c.json({ success: false, code: 'forbidden', error: 'You no longer manage live streams on this channel' }, 403);
+		}
+		const result = await checkLiveTier(db, { userId, roles: rolesOf(c), channelOwnerId: ownerId }, op, { sessionId: stream.sessionId ?? null });
 		if ('code' in result) {
 			logger.info('[Live] Refused by the creator tier', { streamId: stream.id, op, code: result.code, subjectId: result.subjectId });
 			return c.json({ success: false, code: result.code, error: result.error, ...result.details }, result.status);

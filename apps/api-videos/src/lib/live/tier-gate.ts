@@ -15,7 +15,8 @@
  * (lib/live/service.ts sweepLiveSessions, end_reason 'tier_limit'), so the
  * cron never needs the owner's roles.
  */
-import { LIVE_TIER_ERROR_CODES, tierAllowsLive, type CreatorTier, type LiveAccess, type LiveTierErrorCode } from '@al-ummah/shared-types';
+import { LIVE_TIER_ERROR_CODES, can, channelRoleOf, tierAllowsLive, type CreatorTier, type LiveAccess, type LiveTierErrorCode } from '@al-ummah/shared-types';
+import { loadChannelRecord } from '../channelAccess';
 import { resolveCreator } from '../creatorTiers';
 import { logger } from '../logger';
 
@@ -107,17 +108,22 @@ export async function liveAccess(db: D1Database, userId: string, roles: readonly
 	};
 }
 
-/** The owner of a stream's channel, from the channel record; the stream's creator when it has none. */
-export async function streamTierOwner(env: { channels?: R2Bucket }, stream: { channelId?: string | null; userId?: string | null }): Promise<string | null> {
-	if (stream.channelId && env.channels) {
-		try {
-			const obj = await env.channels.get(stream.channelId);
-			const owner = obj ? ((await obj.json()) as { userId?: string }).userId : undefined;
-			if (owner) return owner;
-		} catch (error) {
-			logger.warn('[Live] Could not read the stream\'s channel owner', { channelId: stream.channelId, error: error instanceof Error ? error.message : String(error) });
-			throw error;
-		}
+/**
+ * Whose tier applies to a stream (its channel's owner) and the caller's role on that channel
+ * now: a member removed since creating the stream holds none and may not go live under the
+ * owner's tier. A stream without a channel falls back to its creator. Throws when R2 cannot answer.
+ */
+export async function streamTierContext(
+	env: { channels?: R2Bucket },
+	stream: { channelId?: string | null; userId?: string | null },
+	callerId: string,
+): Promise<{ ownerId: string | null; callerMayGoLive: boolean }> {
+	if (!stream.channelId) return { ownerId: stream.userId ?? null, callerMayGoLive: !!callerId && stream.userId === callerId };
+	try {
+		const channel = await loadChannelRecord(env, stream.channelId);
+		return { ownerId: channel?.userId ?? null, callerMayGoLive: !!channel && can(channelRoleOf(channel, callerId), 'live.manage') };
+	} catch (error) {
+		logger.warn('[Live] Could not read the stream\'s channel', { channelId: stream.channelId, error: error instanceof Error ? error.message : String(error) });
+		throw error;
 	}
-	return stream.userId ?? null;
 }
