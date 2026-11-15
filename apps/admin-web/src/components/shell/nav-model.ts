@@ -115,6 +115,8 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/delivery', label: 'nav.delivery', icon: 'film', group: 'operations', requires: (a) => a.media },
   // Video providers (docs/media-delivery/PROVIDERS.md): uploads, playback order, overrides; same media:manage gate as Delivery
   { href: '/media-providers', label: 'nav.mediaProviders', icon: 'sliders', group: 'operations', requires: (a) => a.media },
+  // R2 backfill of existing videos, R2-first flips and Bunny library retirement (docs/media-delivery/BACKFILL.md); media:manage
+  { href: '/backfill', label: 'nav.backfill', icon: 'database', group: 'operations', requires: (a) => a.media },
   // Live providers (D3): routing, providers, overrides, sessions, comparison; every admin reads, live:manage changes
   { href: '/live-streaming', label: 'nav.liveStreaming', icon: 'activity', group: 'operations' },
   // Public status page: incidents and maintenance (docs/status-page/README.md); admins (status:manage)

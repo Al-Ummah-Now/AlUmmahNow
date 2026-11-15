@@ -21,7 +21,7 @@ describe('nav model', () => {
 
   it('hides from moderators exactly what the old nav hid', () => {
     const hidden = hrefs(admin).filter((h) => !hrefs(moderator).includes(h)).sort();
-    assert.deepEqual(hidden, ['/audit', '/contact', '/delivery', '/media-providers', '/errors', '/legacy-profiles', '/operations', '/processing', '/stale-uploads', '/status', '/abuse', '/web-vitals', '/video-formats', '/newsletter', '/app-config'].sort());
+    assert.deepEqual(hidden, ['/audit', '/backfill', '/contact', '/delivery', '/media-providers', '/errors', '/legacy-profiles', '/operations', '/processing', '/stale-uploads', '/status', '/abuse', '/web-vitals', '/video-formats', '/newsletter', '/app-config'].sort());
   });
 
   it('shows Remote config only with settings:manage (#413)', () => {
