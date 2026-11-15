@@ -8,6 +8,7 @@ import liveRouter from './live.router';
 import analyticsRouter from './analytics.router';
 import moderationRouter from './moderation.router';
 import settingsRouter from './settings.router';
+import studioRouter from './studio.router';
 import sectionsRouter from './sections.router';
 import monitoringRouter from './monitoring.router';
 import i18nRouter from './i18n.router';
@@ -77,6 +78,9 @@ export function registerAllRouters(openapi: any) {
 
   // Settings domain - upload defaults (templates)
   openapi.route('/api/upload-defaults', settingsRouter);
+
+  // Studio account: brand kit and shared assets (institution mode, E19 19.9)
+  openapi.route('/api/studio', studioRouter);
 
   // Sections domain - video sections (recent, popular, trending, recommended)
   openapi.route('/api/videos/sections', sectionsRouter);

@@ -172,6 +172,10 @@ const MEMBER_WRITE_ROUTES: ReadonlyArray<{ methods: ReadonlyArray<string>; path:
 	{ methods: ['POST'], path: /^\/api\/videos\/[^/]+\/thumbnail\/?$/, capability: 'video.edit' },
 	{ methods: ['PUT'], path: /^\/api\/videos\/[^/]+\/chapters\/?$/, capability: 'video.edit' },
 	{ methods: ['POST', 'PUT', 'DELETE'], path: /^\/api\/videos\/[^/]+\/subtitles(?:\/|$)/, capability: 'video.edit' },
+	// Caption drafts, transcription jobs and on-device transcripts (the handlers check video.edit on the video too)
+	{ methods: ['POST', 'PUT', 'DELETE'], path: /^\/api\/videos\/[^/]+\/captions(?:\/|$)/, capability: 'video.edit' },
+	// Renditions pre-encoded in desktop Studio belong to the upload (D11)
+	{ methods: ['POST', 'PUT', 'DELETE'], path: /^\/api\/videos\/[^/]+\/renditions(?:\/|$)/, capability: 'video.upload' },
 	{ methods: ['POST', 'PATCH', 'DELETE'], path: /^\/api\/videos\/[^/]+\/(?:schedule|publish-now)\/?$/, capability: 'video.schedule' },
 	{ methods: ['DELETE'], path: /^\/api\/videos\/(?!bulk-|upload|tus)[^/]+\/?$/, capability: 'video.delete' },
 	// Restoring a deleted video (bulk-restore and DELETE …/permanent stay owner only)
