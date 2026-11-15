@@ -55,8 +55,9 @@ describe('local configs', () => {
     const worker = videosWorkers.find((w) => w.app === 'api-videos')!;
     const { secrets } = localConfig(raw(worker.dir, worker.config), worker, names);
     assert.ok(secrets.length > 0);
-    // Local values, or Cloudflare's documented always-pass Turnstile test secret
-    for (const value of Object.values(LOCAL_SECRETS)) assert.match(value, /^(local-stack-|\d+$|1x0{31}AA$)/, 'local values only');
+    // Local values (a key in `<version>:<base64>` form encodes one: "bG9jYWwtc3RhY2st" is "local-stack-"), or
+    // Cloudflare's documented always-pass Turnstile test secret
+    for (const value of Object.values(LOCAL_SECRETS)) assert.match(value, /^(local-stack-|\d+$|1x0{31}AA$|\d+:bG9jYWwtc3RhY2st)/, 'local values only');
   });
 
   it('bot protection: Turnstile enforced with the test site key, bot-protection limits lifted, older limits kept', () => {
