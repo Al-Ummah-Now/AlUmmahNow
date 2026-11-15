@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { ladderFor } from '../container/ladder.mjs';
-import { avcCodec, contentMatches, correlation, envelope, frameDistance, masterPlaylist, matchTimes, mediaPlaylist, parseMediaPlaylist, stagedPathAllowed, verifyRenditions } from '../container/prebuilt.mjs';
+import { avcCodec, bestCorrelation, contentMatches, correlation, envelope, frameDistance, masterPlaylist, matchTimes, mediaPlaylist, parseMediaPlaylist, stagedPathAllowed, verifyRenditions } from '../container/prebuilt.mjs';
 
 function playlist(segs: number[], extra = '') {
 	return ['#EXTM3U', '#EXT-X-VERSION:7', '#EXT-X-TARGETDURATION:6', '#EXT-X-PLAYLIST-TYPE:VOD', '#EXT-X-MAP:URI="init.mp4"', ...segs.flatMap((s, i) => [`#EXTINF:${s},`, `seg_${String(i + 1).padStart(5, '0')}.m4s`]), extra, '#EXT-X-ENDLIST'].filter(Boolean).join('\n');
@@ -77,7 +77,7 @@ describe('content match (renditions must be the source, not just well formed)', 
 			assert.ok(low[i] > i * 10 && high[i] < (i + 1) * 10, `stretch ${i}: ${low[i]}..${high[i]}`);
 			assert.ok(high[i] - low[i] > 8, 'the instant can fall anywhere in the stretch');
 		}
-		assert.ok(high[11] <= 120 - 0.05);
+		assert.ok(high[11] <= 120 - 0.5, 'never in the last half second');
 		assert.equal(matchTimes(120).length, 24);
 		assert.notDeepEqual(matchTimes(120), matchTimes(120), 'a new set every time');
 		assert.deepEqual(matchTimes(0), []);
@@ -108,6 +108,23 @@ describe('content match (renditions must be the source, not just well formed)', 
 		assert.deepEqual(contentMatches({ frameDistances: Array(12).fill(3), sourceEnvelope: env, renditionEnvelope: env.slice(0, 40) }), { ok: false, reason: 'audio_mismatch' });
 		assert.deepEqual(contentMatches({ frameDistances: Array(12).fill(3), sourceEnvelope: Array(50).fill(0), renditionEnvelope: Array(50).fill(0.3) }), { ok: false, reason: 'audio_mismatch' });
 		assert.deepEqual(contentMatches({ frameDistances: Array(12).fill(3), sourceEnvelope: Array(50).fill(0), renditionEnvelope: Array(50).fill(0) }), { ok: true });
+	});
+	it('steady sound is judged by level, not by the noise in its shape', () => {
+		// A tone re-encoded: flat envelopes whose tiny wobble does not correlate
+		const tone = Array.from({ length: 200 }, (_, i) => 0.35 + ((i * 7919) % 13) / 2000);
+		const reencoded = Array.from({ length: 200 }, (_, i) => 0.35 + ((i * 104729) % 11) / 2000);
+		assert.ok((correlation(tone, reencoded) ?? 1) < 0.8, 'shape alone would refuse it');
+		assert.deepEqual(contentMatches({ frameDistances: Array(12).fill(2), sourceEnvelope: tone, renditionEnvelope: reencoded }), { ok: true });
+		// Same steady source, but the rendition carries speech or a much louder track
+		const speechy = Array.from({ length: 200 }, (_, i) => (Math.floor(i / 5) % 2 ? 0.6 : 0.05));
+		assert.deepEqual(contentMatches({ frameDistances: Array(12).fill(2), sourceEnvelope: tone, renditionEnvelope: speechy }), { ok: false, reason: 'audio_mismatch' });
+		assert.deepEqual(contentMatches({ frameDistances: Array(12).fill(2), sourceEnvelope: tone, renditionEnvelope: tone.map((v) => v * 2) }), { ok: false, reason: 'audio_mismatch' });
+	});
+	it('tolerates a few windows of encoder delay', () => {
+		const speech = Array.from({ length: 200 }, (_, i) => (Math.floor(i / 7) % 3 === 0 ? 0.5 : 0.05) + (i % 5) / 100);
+		const delayed = [0.05, 0.05, ...speech.slice(0, -2)];
+		assert.ok((bestCorrelation(speech, delayed) ?? 0) > 0.99);
+		assert.deepEqual(contentMatches({ frameDistances: Array(12).fill(2), sourceEnvelope: speech, renditionEnvelope: delayed }), { ok: true });
 	});
 });
 

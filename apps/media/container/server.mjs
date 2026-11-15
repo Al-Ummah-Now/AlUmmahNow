@@ -281,11 +281,15 @@ async function probeRendition(dir, pl) {
 	}
 }
 
-/** One frame at `t` seconds as a tiny grey thumbnail (MATCH_FRAME_SIZE), or null. */
-async function greyFrame(input, t) {
+/**
+ * One frame at `t` seconds as a tiny grey thumbnail (MATCH_FRAME_SIZE), or null. Seeks on the input
+ * first (fast); `exact` decodes from the start instead, for files whose index does not seek there.
+ */
+async function greyFrame(input, t, exact = false) {
 	const { width, height } = MATCH_FRAME_SIZE;
+	const seek = ['-ss', String(t)];
 	try {
-		const buf = await runBuffer('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', '-ss', String(t), '-i', input, '-frames:v', '1', '-vf', `scale=${width}:${height}:flags=area,format=gray`, '-f', 'rawvideo', 'pipe:1']);
+		const buf = await runBuffer('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', ...(exact ? [] : seek), '-i', input, ...(exact ? seek : []), '-frames:v', '1', '-vf', `scale=${width}:${height}:flags=area,format=gray`, '-f', 'rawvideo', 'pipe:1']);
 		return buf.length === width * height ? buf : null;
 	} catch {
 		return null;
@@ -315,7 +319,15 @@ async function compareRungs(src, playlists, info) {
 	}
 	for (const [name, playlist] of Object.entries(playlists)) {
 		const frameDistances = [];
-		for (let i = 0; i < times.length; i++) frameDistances.push(frameDistance(sourceFrames[i], await greyFrame(playlist, times[i])));
+		for (let i = 0; i < times.length; i++) {
+			let frame = await greyFrame(playlist, times[i]);
+			let reference = sourceFrames[i];
+			// Some files do not seek everywhere (e.g. some muxers' last segment): decode up to the instant
+			// before calling it a mismatch
+			if (!frame) frame = await greyFrame(playlist, times[i], true);
+			if (!reference) reference = await greyFrame(src, times[i], true);
+			frameDistances.push(frameDistance(reference, frame));
+		}
 		let renditionEnvelope = null;
 		if (sourceEnvelope) {
 			try {
