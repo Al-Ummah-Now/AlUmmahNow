@@ -222,6 +222,30 @@ export interface TusProxySession {
   createdAt: string;
 }
 
+/**
+ * Parse TUS `Upload-Metadata` (`key base64,key base64`). Keys must be unique
+ * (TUS 1.0.0): a repeated key returns null, so the tier gate
+ * (middleware/upload-limits.ts) and the proxy can never read different
+ * values from one header. Values that are not valid base64 are skipped.
+ */
+export function parseTusMetadata(header: string | null | undefined): Record<string, string> | null {
+  const metadata: Record<string, string> = {};
+  const seen = new Set<string>();
+  for (const pair of (header ?? '').split(',')) {
+    const [key, base64Value] = pair.trim().split(' ');
+    if (!key) continue;
+    if (seen.has(key)) return null;
+    seen.add(key);
+    if (!base64Value) continue;
+    try {
+      metadata[key] = atob(base64Value);
+    } catch {
+      // not base64: ignored, as before
+    }
+  }
+  return metadata;
+}
+
 /** KV key the TUS proxy uses to resolve a session ID. */
 export function getTusSessionKey(tusSessionId: string): string {
   return `tus:session:${tusSessionId}`;

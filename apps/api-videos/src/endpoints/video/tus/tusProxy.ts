@@ -17,7 +17,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { getAuthContext } from '../../../middleware/auth';
-import { bunnyTusRequestHeaders, tusUploadIndexKey } from '../../../lib/bunny/tus';
+import { bunnyTusRequestHeaders, parseTusMetadata, tusUploadIndexKey } from '../../../lib/bunny/tus';
 import { markUploadComplete } from '../../../lib/uploads/lifecycle';
 import { teePatch } from '../../../lib/media/originals';
 import { uploadsToBunny } from '../../../lib/media/ingest';
@@ -396,6 +396,8 @@ export class TusProxy {
 
       // Parse metadata (base64 encoded key-value pairs)
       const metadata = this.parseUploadMetadata(uploadMetadata || '');
+      // A repeated key could mean different things to the tier gate and here
+      if (!metadata) return c.json({ error: 'Upload-Metadata keys must be unique' }, 400);
       const tusSessionId = metadata.tusSessionId;
 
       if (!tusSessionId || !/^[A-Za-z0-9-]{1,64}$/.test(tusSessionId)) {
@@ -854,26 +856,8 @@ export class TusProxy {
    * Parse TUS Upload-Metadata header
    * Format: key1 base64value1,key2 base64value2
    */
-  private parseUploadMetadata(metadataHeader: string): Record<string, string> {
-    const metadata: Record<string, string> = {};
-
-    if (!metadataHeader) return metadata;
-
-    const pairs = metadataHeader.split(',');
-    for (const pair of pairs) {
-      const [key, base64Value] = pair.trim().split(' ');
-      if (key && base64Value) {
-        try {
-          // Decode base64 value
-          const value = atob(base64Value);
-          metadata[key] = value;
-        } catch (e) {
-          logger.warn('[TUS Proxy] Failed to decode metadata', { key });
-        }
-      }
-    }
-
-    return metadata;
+  private parseUploadMetadata(metadataHeader: string): Record<string, string> | null {
+    return parseTusMetadata(metadataHeader);
   }
 }
 

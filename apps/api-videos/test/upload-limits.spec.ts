@@ -397,6 +397,19 @@ describe('creator tiers: who may upload', () => {
     assert.equal((await h.tusCreate('editor', meta('sess-2'))).status, 403);
   });
 
+  it('a TUS create repeating an Upload-Metadata key never borrows a channel owner\'s tier', async () => {
+    const h = await harness({ tiers: { owner: 'small', alice: 'small' } });
+    h.channelRecords.set('ch-1', { id: 'ch-1', userId: 'owner', members: [{ userId: 'editor', role: 'editor' }] });
+    await h.issueSession('sess-1', 'editor', 'ch-1');
+    await h.issueSession('sess-own', 'editor', 'editor');
+    // The owner's channel session first, the editor's own (untiered) upload second
+    const twice = { 'upload-metadata': `tusSessionId ${btoa('sess-1')},tusSessionId ${btoa('sess-own')}` };
+    assert.equal((await h.tusCreate('editor', twice)).status, 403, 'the gate reads no session: the editor\'s own (missing) tier');
+    assert.equal(h.continueHour('owner'), 0);
+    // A tiered caller gets past the gate; the proxy refuses the header
+    assert.equal((await h.tusCreate('alice', { 'upload-metadata': `tusSessionId ${btoa('a')},tusSessionId ${btoa('b')}` })).status, 400);
+  });
+
   it('a D1 failure on the tier lookup refuses (503), never lets the upload through', async () => {
     const broken = { prepare: () => { throw new Error('D1 unavailable'); }, batch: async () => { throw new Error('D1 unavailable'); } };
     const app = new Hono();
