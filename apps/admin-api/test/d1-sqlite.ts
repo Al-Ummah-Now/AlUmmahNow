@@ -13,6 +13,11 @@ export function sqliteD1(migrations: string[] = readdirSync(MIGRATIONS).filter((
   const db = new DatabaseSync(':memory:');
   for (const file of migrations) db.exec(readFileSync(join(MIGRATIONS, file), 'utf8'));
   const exec = (sql: string, args: unknown[]) => {
+    // D1 refuses LIKE/GLOB patterns over 50 bytes (SQLITE_MAX_LIKE_PATTERN_LENGTH); node:sqlite allows
+    // 50,000, so a bound pattern that only works here would fail in production
+    if (/\b(LIKE|GLOB)\s+\?/i.test(sql) && args.some((a) => typeof a === 'string' && Buffer.byteLength(a) > 50 && /[%_*?]/.test(a))) {
+      throw new Error('D1_ERROR: LIKE or GLOB pattern too complex: SQLITE_ERROR');
+    }
     const stmt = db.prepare(sql);
     const params = args.map((a) => (a === undefined ? null : a)) as never[];
     if (/^\s*(SELECT|WITH)/i.test(sql)) return { results: stmt.all(...params), success: true, meta: { changes: 0 } };

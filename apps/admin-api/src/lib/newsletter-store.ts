@@ -163,8 +163,10 @@ export async function listSubscribers(
     args.push(opts.status);
   }
   if (opts.q) {
-    where.push("email LIKE ? ESCAPE '\\'");
-    args.push(`%${opts.q.toLowerCase().replace(/[\\%_]/g, (m) => `\\${m}`)}%`);
+    // A substring match: D1 refuses LIKE patterns over 50 bytes, and a full address is often longer.
+    // Addresses are stored lower-cased (parseSignup).
+    where.push('instr(email, ?) > 0');
+    args.push(opts.q.toLowerCase());
   }
   const w = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const [rows, total] = await Promise.all([
