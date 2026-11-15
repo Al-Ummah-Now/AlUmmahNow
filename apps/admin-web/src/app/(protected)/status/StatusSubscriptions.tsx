@@ -21,7 +21,7 @@ const STATE_CLASS: Record<string, string> = { sent: 'text-success-fg', sunk: 'te
 function Stat({ label, value, testId }: { label: string; value: number; testId: string }) {
   const { locale } = useLanguage();
   return (
-    <div className="rounded-lg border border-border bg-surface-2 px-4 py-3 min-w-36" data-testid={testId} data-value={value}>
+    <div className="flex-1 rounded-lg border border-border bg-surface-2 px-4 py-3 min-w-32" data-testid={testId} data-value={value}>
       <p className="text-2xl font-bold tabular-nums text-fg">{value.toLocaleString(locale)}</p>
       <p className="text-sm text-fg-muted">{label}</p>
     </div>
@@ -77,8 +77,8 @@ function Webhooks({ items }: { items: Subs['webhooks'] }) {
       ) : (
         <ul className="mb-3 divide-y divide-border rounded-lg border border-border">
           {items.map((w) => (
-            <li key={w.id} className="flex flex-wrap items-center justify-between gap-3 p-3" data-testid="status-webhook-row" data-id={w.id}>
-              <div className="min-w-0">
+            <li key={w.id} className="flex items-start justify-between gap-3 p-3" data-testid="status-webhook-row" data-id={w.id}>
+              <div className="min-w-0 flex-1">
                 <p className="font-medium text-fg" dir="auto">{w.name}</p>
                 <p className="text-sm text-fg-muted break-all" dir="ltr">{w.url}</p>
                 <p className="text-sm text-fg-muted">
@@ -86,13 +86,14 @@ function Webhooks({ items }: { items: Subs['webhooks'] }) {
                   {w.last ? (
                     <>
                       <span className={`font-medium ${STATE_CLASS[w.last.status] ?? ''}`} data-testid="status-webhook-last">{t(`statusPage.subs.deliveryStates.${w.last.status}` as MessageKey)}</span> · {formatDate(w.last.at, locale, true)}
-                      {w.last.error && w.last.status === 'failed' && <span dir="ltr"> · {w.last.error}</span>}
+                      {w.last.error && w.last.status === 'failed' && <> · <bdi dir="ltr">{w.last.error}</bdi></>}
                     </>
                   ) : (
                     t('statusPage.subs.never')
                   )}
                 </p>
               </div>
+              <div className="shrink-0">
               <ConfirmButton
                 label={t('statusPage.subs.deleteWebhook')}
                 title={t('statusPage.subs.deleteTitle', { name: w.name })}
@@ -104,6 +105,7 @@ function Webhooks({ items }: { items: Subs['webhooks'] }) {
                 testId={`status-webhook-delete-${w.id}`}
                 onConfirm={() => run(`del:${w.id}`, () => deleteStatusWebhook(w.id), { success: t('statusPage.subs.webhookDeleted') })}
               />
+              </div>
             </li>
           ))}
         </ul>
@@ -163,9 +165,33 @@ function History({ items }: { items: Subs['notifications'] }) {
   const { t, locale } = useLanguage();
   const { run, busy, error, message } = useContentAction();
   if (!items.length) return <p className="text-fg-muted" data-testid="status-notifications-empty">{t('statusPage.subs.historyEmpty')}</p>;
+  const retryButton = (n: Subs['notifications'][number], testId = true) =>
+    (n.failed > 0 || !n.fannedOutAt) && (
+      <button type="button" className={smallButtonClass} disabled={busy !== null} data-testid={testId ? `status-notification-retry-${n.id}` : undefined} onClick={() => void run(`retry:${n.id}`, () => retryStatusNotification(n.id), { success: t('statusPage.subs.retried') })}>
+        {busy === `retry:${n.id}` ? t('content.working') : t('statusPage.subs.retry')}
+      </button>
+    );
+  const titleOf = (n: Subs['notifications'][number]) => (locale === 'ar' ? n.titleAr : n.titleEn) ?? t('statusPage.subs.deletedIncident');
   return (
-    <div className="overflow-x-auto">
+    <div>
       <ActionFeedback error={error} message={message} />
+      {/* Phones: one card per notification (the table needs more width than a phone has) */}
+      <ul className="space-y-3 md:hidden" aria-label={t('statusPage.subs.historyTitle')}>
+        {items.map((n) => (
+          <li key={n.id} className="rounded-lg border border-border bg-surface-2 p-3 text-sm">
+            <p className="font-medium text-fg" dir="auto">{titleOf(n)}</p>
+            <p className="text-fg-muted">{t(`statusPage.subs.events.${n.event}` as MessageKey)} · {formatDate(n.createdAt, locale, true)}</p>
+            <dl className="mt-2 grid grid-cols-3 gap-2">
+              <div><dt className="text-fg-muted">{t('statusPage.subs.recipients')}</dt><dd className="tabular-nums text-fg">{n.fannedOutAt ? (n.recipients ?? 0).toLocaleString(locale) : t('statusPage.subs.sending')}</dd></div>
+              <div><dt className="text-fg-muted">{t('statusPage.subs.delivered')}</dt><dd className="tabular-nums text-fg">{n.sent.toLocaleString(locale)}</dd></div>
+              <div><dt className="text-fg-muted">{t('statusPage.subs.failed')}</dt><dd className={`tabular-nums ${n.failed ? 'font-semibold text-danger-fg' : 'text-fg'}`}>{n.failed.toLocaleString(locale)}</dd></div>
+            </dl>
+            {n.queued > 0 && <p className="mt-1 text-xs text-fg-muted">{t('statusPage.subs.waiting')}: {n.queued.toLocaleString(locale)}</p>}
+            {(n.failed > 0 || !n.fannedOutAt) && <div className="mt-2">{retryButton(n, false)}</div>}
+          </li>
+        ))}
+      </ul>
+      <div className="hidden overflow-x-auto md:block">
       <table className="w-full text-sm" data-testid="status-notifications">
         <caption className="sr-only">{t('statusPage.subs.historyTitle')}</caption>
         <thead>
@@ -180,7 +206,7 @@ function History({ items }: { items: Subs['notifications'] }) {
         </thead>
         <tbody>
           {items.map((n) => {
-            const title = (locale === 'ar' ? n.titleAr : n.titleEn) ?? t('statusPage.subs.deletedIncident');
+            const title = titleOf(n);
             return (
               <tr key={n.id} className="border-t border-border align-top" data-testid="status-notification-row" data-id={n.id} data-incident={n.incidentId} data-sent={n.sent} data-failed={n.failed}>
                 <th scope="row" className="p-2 text-start font-normal">
@@ -194,18 +220,13 @@ function History({ items }: { items: Subs['notifications'] }) {
                   {n.queued > 0 && <span className="block text-xs text-fg-muted">{t('statusPage.subs.waiting')}: {n.queued.toLocaleString(locale)}</span>}
                 </td>
                 <td className={`p-2 text-end tabular-nums ${n.failed ? 'font-semibold text-danger-fg' : 'text-fg-muted'}`}>{n.failed.toLocaleString(locale)}</td>
-                <td className="p-2 text-end">
-                  {(n.failed > 0 || !n.fannedOutAt) && (
-                    <button type="button" className={smallButtonClass} disabled={busy !== null} data-testid={`status-notification-retry-${n.id}`} onClick={() => void run(`retry:${n.id}`, () => retryStatusNotification(n.id), { success: t('statusPage.subs.retried') })}>
-                      {busy === `retry:${n.id}` ? t('content.working') : t('statusPage.subs.retry')}
-                    </button>
-                  )}
-                </td>
+                <td className="p-2 text-end">{retryButton(n)}</td>
               </tr>
             );
           })}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
