@@ -1561,6 +1561,7 @@ const en = {
     lookingUp: 'Looking up…',
     notFound: 'No {kind} has this ID',
     change: 'Change',
+    selected: 'Selected: {name}',
     changeLabel: 'Change the {kind} ({name})',
     clearLabel: 'Remove the chosen {kind} ({name})',
     kinds: {
@@ -1740,10 +1741,7 @@ const en = {
     newOwnerPlaceholder: 'Email, name, @handle or ID',
     pickerTeam: '{count} people on this channel. Type to search all users.',
     pickerNoTeam: 'Nobody else is on this channel’s team. Type a name, email or @handle to search all users.',
-    pickerMinChars: 'Type at least {count} characters to search.',
-    pickerLoading: 'Searching…',
     pickerEmpty: 'No videos user matches “{query}”.',
-    pickerError: 'The search failed. Try again.',
     pickerResultsOne: '1 result. Use the up and down arrow keys to choose, Enter to select.',
     pickerResults: '{count} results. Use the up and down arrow keys to choose, Enter to select.',
     pickerOwnsNone: 'Owns no channels',
@@ -1751,7 +1749,6 @@ const en = {
     pickerOwnsMany: 'Owns {count} channels',
     pickerRole: 'Channel {role} here',
     pickerBanned: 'Banned: cannot receive a channel',
-    pickerSelected: 'Selected: {name}',
     pickerChange: 'Choose someone else',
     pickerNoEmail: 'no email',
     memberRoles: {

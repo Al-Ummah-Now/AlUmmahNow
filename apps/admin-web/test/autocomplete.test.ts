@@ -25,9 +25,12 @@ import {
   keyDown,
   looksLikeId,
   optionsFor,
+  phaseOf,
   received,
+  step,
   showInitial,
   typed,
+  type AutocompleteItem,
   type AutocompleteState,
   type InitialList,
 } from '../src/components/search/autocomplete-model';
@@ -188,6 +191,50 @@ describe('autocomplete: keyboard (ARIA 1.2 combobox, manual selection)', () => {
 
   it('other keys (letters, Home, End) are left to the input', () => {
     for (const key of ['a', 'Home', 'End', 'ArrowLeft']) assert.equal(keyDown(withResults('search', 'most'), 'search', key).preventDefault, false, key);
+  });
+});
+
+describe('autocomplete: own source items (channel transfer, #713)', () => {
+  const person = (id: string, over: Partial<AutocompleteItem> = {}): AutocompleteItem => ({ kind: 'user', id, label: `Name ${id}`, secondary: `${id}@example.com`, imageUrl: null, meta: 'Owns no channels', ...over });
+  const people = [person('usr_a'), person('usr_banned', { disabled: true, meta: 'Banned' }), person('usr_c')];
+
+  it('arrows skip items that cannot be chosen, wrapping; Enter on them does nothing', () => {
+    const s = withResults('pick', 'name', people);
+    assert.equal(press(s, 'pick', 'ArrowDown').state.active, 0);
+    assert.equal(press(s, 'pick', 'ArrowDown', 'ArrowDown').state.active, 2, 'the banned user is skipped');
+    assert.equal(press(s, 'pick', 'ArrowDown', 'ArrowDown', 'ArrowDown').state.active, 0, 'wraps');
+    assert.equal(press(s, 'pick', 'ArrowUp').state.active, 2);
+    assert.deepEqual(keyDown({ ...s, active: 1 }, 'pick', 'Enter').effect, { type: 'none' });
+    assert.equal(step([{ type: 'suggestion', suggestion: people[1] }], -1, 1), -1, 'nothing to choose');
+  });
+
+  it('pick Enter takes the first item that can be chosen', () => {
+    const s = withResults('pick', 'name', [people[1], people[2]]);
+    assert.deepEqual(press(s, 'pick', 'Enter').effect, { type: 'choose', option: { type: 'suggestion', suggestion: people[2] } });
+  });
+
+  it('allowIds off: a pasted id is never offered or taken (only listed users may receive a channel)', () => {
+    const rules = { allowIds: false };
+    assert.deepEqual(optionsFor('pick', 'usr_9z9z9z', [], rules), []);
+    const s = received(typed(initialState(), 'usr_9z9z9z'), 'pick', 'usr_9z9z9z', [], rules);
+    assert.deepEqual(keyDown(s, 'pick', 'Enter', false, rules).effect, { type: 'none' });
+  });
+
+  it('says what the box is doing in one word: idle, short, loading, done, error', () => {
+    assert.equal(phaseOf(initialState()), 'idle');
+    assert.equal(phaseOf(typed(initialState(), 'q')), 'short');
+    assert.equal(phaseOf(typed(initialState(), 'qa')), 'loading');
+    assert.equal(phaseOf(withResults('pick', 'qa', [])), 'done');
+    assert.equal(phaseOf(failed(typed(initialState(), 'qa'), 'pick', 'qa')), 'error');
+  });
+
+  it('the transfer field is the shared Autocomplete (no raw-id input)', () => {
+    const file = readFileSync(new URL('../src/app/(protected)/channels/[id]/ChannelTransfer.tsx', import.meta.url), 'utf8');
+    assert.match(file, /<Autocomplete/);
+    assert.match(file, /testId="channel-transfer-owner"/);
+    assert.doesNotMatch(file, /<input/, 'no hand-made field asks for an id');
+    assert.doesNotMatch(en.channels.newOwner, /\bID\b/);
+    assert.doesNotMatch(ar.channels.newOwner, /معرّف|رقم/);
   });
 });
 

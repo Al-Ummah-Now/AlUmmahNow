@@ -1560,6 +1560,7 @@ const ar: Messages = {
     lookingUp: 'جارٍ البحث عنه…',
     notFound: 'لا يوجد {kind} بهذا الرقم التعريفي',
     change: 'تغيير',
+    selected: 'المختار: {name}',
     changeLabel: 'تغيير الاختيار ({kind}): {name}',
     clearLabel: 'إزالة الاختيار ({kind}): {name}',
     kinds: {
@@ -1739,10 +1740,7 @@ const ar: Messages = {
     newOwnerPlaceholder: 'البريد أو الاسم أو @المعرّف أو الرقم',
     pickerTeam: '{count} من فريق هذه القناة. اكتب للبحث في كل المستخدمين.',
     pickerNoTeam: 'لا أحد غيره في فريق هذه القناة. اكتب اسمًا أو بريدًا أو @معرّفًا للبحث في كل المستخدمين.',
-    pickerMinChars: 'اكتب {count} أحرف على الأقل للبحث.',
-    pickerLoading: 'جارٍ البحث…',
     pickerEmpty: 'لا يوجد مستخدم مرئيات يطابق «{query}».',
-    pickerError: 'تعذّر البحث. حاول مرة أخرى.',
     pickerResultsOne: 'نتيجة واحدة. استخدم مفتاحَي السهم للأعلى وللأسفل للتنقل، وEnter للاختيار.',
     pickerResults: 'النتائج: {count}. استخدم مفتاحَي السهم للأعلى وللأسفل للتنقل، وEnter للاختيار.',
     pickerOwnsNone: 'لا يملك قنوات',
@@ -1750,7 +1748,6 @@ const ar: Messages = {
     pickerOwnsMany: 'عدد القنوات التي يملكها: {count}',
     pickerRole: '{role} في هذه القناة',
     pickerBanned: 'محظور: لا يمكنه استلام قناة',
-    pickerSelected: 'المختار: {name}',
     pickerChange: 'اختر شخصًا آخر',
     pickerNoEmail: 'بلا بريد',
     memberRoles: {

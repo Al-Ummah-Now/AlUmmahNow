@@ -17,8 +17,25 @@ import type { AdminSuggestion, AdminSuggestKind } from '@al-ummah/shared-types';
  */
 export type AutocompleteMode = 'search' | 'pick';
 
+/**
+ * A suggestion as the box shows it. A box with its own search source (the channel
+ * transfer) adds a line of facts under the name and can list items that cannot be
+ * chosen (banned users: shown, so the admin knows why, but skipped by the keys).
+ */
+export interface AutocompleteItem extends AdminSuggestion {
+  /** A line under the name ("Owns 2 channels · Channel editor here") */
+  meta?: string | null;
+  /** Listed but cannot be chosen */
+  disabled?: boolean;
+}
+
+/** Options of a box that change its rules. allowIds: offer "Use this ID" for a pasted id (default yes). */
+export interface AutocompleteRules {
+  allowIds?: boolean;
+}
+
 export type AutocompleteOption =
-  | { type: 'suggestion'; suggestion: AdminSuggestion }
+  | { type: 'suggestion'; suggestion: AutocompleteItem }
   /** pick mode: the typed text looks like an id and no suggestion has it exactly */
   | { type: 'useId'; id: string }
   /** search mode: run the full-text filter for the typed text (what Enter does) */
@@ -33,7 +50,7 @@ export type AutocompleteStatus = 'idle' | 'loading' | 'ready' | 'error';
  * loaded; from MIN_QUERY the server is asked as before.
  */
 export interface InitialList {
-  items: AdminSuggestion[];
+  items: AutocompleteItem[];
   /** Cursor of the next page; null after the last */
   next: string | null;
   status: 'loading' | 'more' | 'ready' | 'error';
@@ -66,13 +83,42 @@ export function looksLikeId(text: string): boolean {
 }
 
 /** The options shown for a query: the suggestions, then the fallback for the mode. */
-export function optionsFor(mode: AutocompleteMode, query: string, suggestions: AdminSuggestion[]): AutocompleteOption[] {
+export function optionsFor(mode: AutocompleteMode, query: string, suggestions: AutocompleteItem[], rules: AutocompleteRules = {}): AutocompleteOption[] {
   const options: AutocompleteOption[] = suggestions.map((suggestion) => ({ type: 'suggestion', suggestion }));
   const q = query.trim();
   if (!q) return options;
   if (mode === 'search') options.push({ type: 'searchAll', query: q });
-  else if (looksLikeId(q) && !suggestions.some((s) => s.id === q)) options.push({ type: 'useId', id: q });
+  else if (rules.allowIds !== false && looksLikeId(q) && !suggestions.some((s) => s.id === q)) options.push({ type: 'useId', id: q });
   return options;
+}
+
+/** Whether an option can be chosen (a disabled suggestion is only shown). */
+export const selectable = (option: AutocompleteOption | undefined): boolean => !!option && !(option.type === 'suggestion' && option.suggestion.disabled);
+
+/** The next option that can be chosen from `from` in direction `by`, wrapping; -1 when none can. From -1, Down starts at the first and Up at the last. */
+export function step(options: AutocompleteOption[], from: number, by: 1 | -1): number {
+  const n = options.length;
+  let i = from;
+  for (let k = 0; k < n; k++) {
+    i = i < 0 ? (by === 1 ? 0 : n - 1) : (i + by + n) % n;
+    if (selectable(options[i])) return i;
+  }
+  return -1;
+}
+
+/**
+ * The box's state in one word, for tests and the status line: idle (nothing typed), short (one
+ * character, which only filters the opening list), loading, done (an answer is shown) or error.
+ */
+export type AutocompletePhase = 'idle' | 'short' | 'loading' | 'done' | 'error';
+
+export function phaseOf(state: AutocompleteState): AutocompletePhase {
+  const q = state.query.trim();
+  if (q.length > 0 && q.length < MIN_QUERY) return 'short';
+  if (state.status === 'loading') return 'loading';
+  if (state.status === 'error') return 'error';
+  if (state.status === 'ready') return 'done';
+  return 'idle';
 }
 
 /** Where choosing a suggestion in a search box goes. Kinds without a page of their own open their list filtered to them. */
@@ -130,15 +176,15 @@ export function typed(state: AutocompleteState, query: string, initial?: Initial
 }
 
 /** Suggestions arrived. Answers for an older query are dropped. */
-export function received(state: AutocompleteState, mode: AutocompleteMode, query: string, suggestions: AdminSuggestion[]): AutocompleteState {
+export function received(state: AutocompleteState, mode: AutocompleteMode, query: string, suggestions: AutocompleteItem[], rules: AutocompleteRules = {}): AutocompleteState {
   if (query.trim() !== state.query.trim()) return state;
-  return { ...state, options: optionsFor(mode, query, suggestions), status: 'ready', active: -1 };
+  return { ...state, options: optionsFor(mode, query, suggestions, rules), status: 'ready', active: -1 };
 }
 
 /** The request failed: the fallback option still works (Enter searches, a pasted id can be used). */
-export function failed(state: AutocompleteState, mode: AutocompleteMode, query: string): AutocompleteState {
+export function failed(state: AutocompleteState, mode: AutocompleteMode, query: string, rules: AutocompleteRules = {}): AutocompleteState {
   if (query.trim() !== state.query.trim()) return state;
-  return { ...state, options: optionsFor(mode, query, []), status: 'error', active: -1 };
+  return { ...state, options: optionsFor(mode, query, [], rules), status: 'error', active: -1 };
 }
 
 export const closed = (state: AutocompleteState): AutocompleteState => ({ ...state, open: false, active: -1 });
@@ -161,7 +207,7 @@ export function showInitial(state: AutocompleteState, initial: InitialList | nul
 }
 
 /** A page of the initial list arrived (the first replaces, later ones append; duplicates dropped). */
-export function addPage(initial: InitialList | null, page: { items: AdminSuggestion[]; next: string | null }, append: boolean): InitialList {
+export function addPage(initial: InitialList | null, page: { items: AutocompleteItem[]; next: string | null }, append: boolean): InitialList {
   const base = append && initial ? initial.items : [];
   const seen = new Set(base.map((s) => s.id));
   return { items: [...base, ...page.items.filter((s) => !seen.has(s.id))], next: page.next, status: 'ready' };
@@ -184,31 +230,32 @@ export interface KeyResult {
 const NONE: KeyEffect = { type: 'none' };
 
 /** One key press in the input. */
-export function keyDown(state: AutocompleteState, mode: AutocompleteMode, key: string, alt = false): KeyResult {
-  const last = state.options.length - 1;
+export function keyDown(state: AutocompleteState, mode: AutocompleteMode, key: string, alt = false, rules: AutocompleteRules = {}): KeyResult {
   switch (key) {
+    // Arrows move over the options that can be chosen (disabled ones are skipped), wrapping
     case 'ArrowDown': {
       if (alt) return { state: { ...state, open: state.options.length > 0 || state.status === 'loading' }, effect: NONE, preventDefault: true };
       if (state.options.length === 0) return { state, effect: NONE, preventDefault: true };
-      if (!state.open) return { state: { ...state, open: true, active: 0 }, effect: NONE, preventDefault: true };
-      return { state: { ...state, active: state.active >= last ? 0 : state.active + 1 }, effect: NONE, preventDefault: true };
+      if (!state.open) return { state: { ...state, open: true, active: step(state.options, -1, 1) }, effect: NONE, preventDefault: true };
+      return { state: { ...state, active: step(state.options, state.active, 1) }, effect: NONE, preventDefault: true };
     }
     case 'ArrowUp': {
       if (alt) return { state: closed(state), effect: NONE, preventDefault: true };
       if (state.options.length === 0) return { state, effect: NONE, preventDefault: true };
-      if (!state.open) return { state: { ...state, open: true, active: last }, effect: NONE, preventDefault: true };
-      return { state: { ...state, active: state.active <= 0 ? last : state.active - 1 }, effect: NONE, preventDefault: true };
+      if (!state.open) return { state: { ...state, open: true, active: step(state.options, -1, -1) }, effect: NONE, preventDefault: true };
+      return { state: { ...state, active: step(state.options, state.active, -1) }, effect: NONE, preventDefault: true };
     }
     case 'Enter': {
       if (state.open && state.active >= 0 && state.options[state.active]) {
+        if (!selectable(state.options[state.active])) return { state, effect: NONE, preventDefault: true };
         return { state: closed(state), effect: { type: 'choose', option: state.options[state.active] }, preventDefault: true };
       }
       if (mode === 'search') return { state: closed(state), effect: { type: 'default' }, preventDefault: false };
-      // pick: an empty box applies the rest of the form; typed text takes the top match (or the pasted id)
+      // pick: an empty box applies the rest of the form; typed text takes the top match that can be chosen (or the pasted id)
       if (!state.query.trim()) return { state: closed(state), effect: { type: 'default' }, preventDefault: false };
-      const first = state.options[0];
-      if (first && first.type !== 'searchAll') return { state: closed(state), effect: { type: 'choose', option: first }, preventDefault: true };
-      if (looksLikeId(state.query)) return { state: closed(state), effect: { type: 'choose', option: { type: 'useId', id: state.query.trim() } }, preventDefault: true };
+      const first = state.options.find((o) => o.type !== 'searchAll' && selectable(o));
+      if (first) return { state: closed(state), effect: { type: 'choose', option: first }, preventDefault: true };
+      if (rules.allowIds !== false && looksLikeId(state.query)) return { state: closed(state), effect: { type: 'choose', option: { type: 'useId', id: state.query.trim() } }, preventDefault: true };
       return { state, effect: NONE, preventDefault: true };
     }
     case 'Escape': {

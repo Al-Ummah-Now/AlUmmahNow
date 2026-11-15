@@ -3,13 +3,14 @@
 /**
  * Transfer a channel's ownership (super admins only; admin-api checks it too).
  *
- * The admin finds the new owner with the user picker (email, name, @handle or
- * id), confirms in the app's own dialog by typing the channel's @handle or the
+ * The admin finds the new owner with the shared Autocomplete (email, name,
+ * @handle or id; the channel's team before anything is typed; the current owner
+ * never offered; banned users listed but not choosable), confirms in the app's own dialog by typing the channel's @handle or the
  * new owner's email, and then follows the queued job here until it succeeds
  * (the page refreshes and shows the new owner) or fails (its error is shown).
  * Outcomes are shown in this section, next to the button that caused them.
  */
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { AdminJob, AdminUserSearchItem } from '@/lib/api/content-types';
 import { readJob, searchTransferCandidates, transferChannel } from '@/lib/api/content';
@@ -18,8 +19,9 @@ import { formatNumber, type MessageKey } from '@/i18n/translate';
 import { ActionFeedback, ConfirmButton, useContentAction } from '@/components/content/actions';
 import { JobStatusChip } from '@/components/content/jobs';
 import { SectionCard } from '@/components/content/parts';
-import { UserPicker } from '@/components/content/UserPicker';
-import { bidiIsolate, transferConfirmValues, userName } from '@/components/content/userPickerModel';
+import { Autocomplete, type AutocompleteSource } from '@/components/search/Autocomplete';
+import type { AutocompleteItem } from '@/components/search/autocomplete-model';
+import { bidiIsolate, transferConfirmValues, transferItem, userName } from '@/components/content/transfer-model';
 import { logger } from '@/lib/logger-client';
 import { useAdminLive } from '@/lib/live/useAdminLive';
 
@@ -48,9 +50,20 @@ export function ChannelTransfer({ channel }: Props) {
   const [target, setTarget] = useState<AdminUserSearchItem | null>(null);
   const [followed, setFollowed] = useState<Followed | null>(null);
 
-  const search = useCallback(
-    (q: string) => searchTransferCandidates(channel.id, q, channel.ownerId ? [channel.ownerId] : []),
-    [channel.id, channel.ownerId],
+  // The transfer's own search (super admins only): the current owner left out, each user with
+  // their channel count and role here; the full rows are kept for the confirm dialog
+  const found = useRef(new Map<string, AdminUserSearchItem>());
+  const source = useCallback<AutocompleteSource>(
+    async (q) => {
+      const result = await searchTransferCandidates(channel.id, q, channel.ownerId ? [channel.ownerId] : []);
+      if (!result.ok) {
+        logger.warn('[ChannelTransfer] Search failed', { status: result.status, code: result.code });
+        throw new Error(`Transfer search answered ${result.status}`);
+      }
+      for (const user of result.data.items) found.current.set(user.id, user);
+      return { items: result.data.items.map((user): AutocompleteItem => transferItem(user, t)), next: null };
+    },
+    [channel.id, channel.ownerId, t],
   );
 
   // Follow the started job until it finishes, then show the new owner: re-read
@@ -110,22 +123,37 @@ export function ChannelTransfer({ channel }: Props) {
       <p className="text-sm text-fg-muted mb-3">{t('channels.transferHint')}</p>
       <ActionFeedback error={error} message={message} testId="channel-transfer-feedback" />
       {followed && <TransferStatus followed={followed} />}
-      <div className="flex flex-col sm:flex-row sm:items-end gap-2">
-        <div className="flex-1 min-w-0">
-          <UserPicker
+      <div className="flex flex-col items-start gap-3">
+        <div className="w-full min-w-0">
+          <Autocomplete
+            // A started transfer empties the box for the next one
+            key={followed?.job.id ?? 'new'}
+            kind="user"
+            mode="pick"
             label={t('channels.newOwner')}
             hint={t('channels.newOwnerHint')}
-            search={search}
-            value={target}
-            onChange={(user) => {
-              setTarget(user);
+            placeholder={t('channels.newOwnerPlaceholder')}
+            source={source}
+            allowIds={false}
+            showIds={false}
+            chosen="card"
+            changeLabel={t('channels.pickerChange')}
+            showStatus
+            messages={{
+              recent: (count) => t('channels.pickerTeam', { count }),
+              emptyList: t('channels.pickerNoTeam'),
+              noMatches: (query) => t('channels.pickerEmpty', { query }),
+              count: (count) => (count === 1 ? t('channels.pickerResultsOne') : t('channels.pickerResults', { count })),
+            }}
+            onChange={(id) => {
+              setTarget(id ? (found.current.get(id) ?? null) : null);
               setError(null);
             }}
             disabled={!!busy}
             testId="channel-transfer-owner"
           />
         </div>
-        <div className="sm:mb-5">
+        <div>
           <ConfirmButton
             label={t('channels.transfer')}
             title={t('channels.transferConfirm', { name: iso(name), email: email ? iso(email) : t('channels.pickerNoEmail') })}
