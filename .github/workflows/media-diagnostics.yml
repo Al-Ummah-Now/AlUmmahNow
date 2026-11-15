@@ -1,0 +1,50 @@
+name: Media diagnostics
+
+# Read-only: the R2 transcode pipeline (apps/media) of one environment, as Cloudflare sees it:
+# media Worker deployments, transcode queue + DLQ backlog, the Transcoder container application and
+# its instances, and the warn/error logs of media, videos and admin-api (scripts/ops/media-diagnostics.ts).
+# GET reads, the GraphQL Analytics read and the Observability query only; no app endpoint is called
+# and nothing is changed. Prints no secrets.
+on:
+  workflow_dispatch:
+    inputs:
+      env:
+        description: Environment
+        type: choice
+        options: [production, stage, qa]
+        default: production
+      hours:
+        description: Hours back (1-72)
+        type: string
+        default: '6'
+      search:
+        description: Only log lines containing this text (empty = all warn/error lines)
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: media-diagnostics
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Diagnostics
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ENV_NAME: ${{ inputs.env }}
+          HOURS: ${{ inputs.hours }}
+          SEARCH: ${{ inputs.search }}
+        run: |
+          set -o pipefail
+          node --experimental-strip-types --no-warnings scripts/ops/media-diagnostics.ts --env "$ENV_NAME" --hours "$HOURS" --search "$SEARCH" | tee -a "$GITHUB_STEP_SUMMARY"
