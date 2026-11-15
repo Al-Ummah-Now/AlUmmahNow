@@ -435,6 +435,8 @@ export interface StackHooks {
   /** Sends one message through a worker's queue producer binding (teardowns re-run a queued step). */
   queue?: (app: string, binding: string, body: unknown) => Promise<void>;
   scheduled?: (app: string, cron: string, time: Date) => Promise<unknown>;
+  /** Deletes one key of a stack KV namespace by its binding (teardowns remove a run's sign-up residue). */
+  kvDelete?: (binding: string, key: string) => Promise<void>;
 }
 const hooks: StackHooks = {};
 export function setStackHooks(next: StackHooks): void {
@@ -468,6 +470,7 @@ async function readBody(req: IncomingMessage): Promise<string> {
  * - POST /__stack/d1/<database name> with SQL as the body: { results } (seed, fast-path fixtures)
  * - GET | PUT | DELETE /__stack/r2/<bucket name>/<key>: one object (fixtures a spec seeds in R2)
  * - GET /__stack/r2/<bucket name>?prefix=<p>[&cursor=<c>]: { keys, cursor } (teardowns find what a run wrote)
+ * - DELETE /__stack/kv/<binding>/<key>: one KV key (run-teardown.ts removes an abandoned sign-up's code-sink entry)
  * - GET /__stack/leftovers?marker=<run id>: every row, object, key or fake video that still holds the
  *   marker or the id of a run user (leftovers.ts)
  * - POST /__stack/queue/<app>/<binding> with a JSON message: sends it through that worker's queue
@@ -501,6 +504,17 @@ async function control(req: IncomingMessage, url: URL): Promise<Response> {
     try {
       const out = await stackR2(decodeURIComponent(bucket), key, req.method!, req.method === 'PUT' ? await readBody(req) : undefined);
       return out.body === undefined ? json({}, out.status) : new Response(out.body, { status: out.status, headers: { 'content-type': 'application/json' } });
+    } catch (error) {
+      return json({ error: (error as Error).message }, 400);
+    }
+  }
+  if (url.pathname.startsWith('/__stack/kv/')) {
+    const [binding, ...rest] = url.pathname.slice('/__stack/kv/'.length).split('/');
+    const key = decodeURIComponent(rest.join('/'));
+    if (req.method !== 'DELETE' || !hooks.kvDelete || !binding || !key) return json({ error: 'DELETE /__stack/kv/<binding>/<key> once the stack is up' }, 405);
+    try {
+      await hooks.kvDelete(decodeURIComponent(binding), key);
+      return json({ deleted: key });
     } catch (error) {
       return json({ error: (error as Error).message }, 400);
     }
