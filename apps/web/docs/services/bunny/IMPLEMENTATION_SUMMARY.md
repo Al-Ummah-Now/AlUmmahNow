@@ -96,7 +96,6 @@ NEXT_PUBLIC_BUNNY_LIBRARY_ID=12345
 
 Optional:
 ```bash
-NEXT_PUBLIC_BUNNY_API_KEY=your-api-key
 NEXT_PUBLIC_BUNNY_TOKEN_AUTH=true
 ```
 
@@ -200,7 +199,7 @@ function VideoPlayer({ videoId }: { videoId: string }) {
 - All URLs use HTTPS protocol
 - Service is stateless and can be instantiated multiple times
 - Configuration can be provided manually or via environment variables
-- API key is accepted but not stored in the service instance for security
+- No API key: the service only builds CDN URLs, and a `NEXT_PUBLIC_*` key would ship in the browser bundle
 
 ## References
 

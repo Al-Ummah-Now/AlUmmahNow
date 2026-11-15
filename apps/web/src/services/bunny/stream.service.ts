@@ -26,6 +26,14 @@ import type {
 } from './types';
 import { QualityResolutionMap } from './types';
 
+/**
+ * Browser-safe configuration. There is no API key: this service only builds
+ * public CDN URLs, and Next inlines every NEXT_PUBLIC_* value into the browser
+ * bundle, so a key here would leak. Server code that calls the Bunny API reads
+ * a server-only secret instead.
+ */
+export type BunnyStreamConfig = Omit<BunnyConfig, 'apiKey'>;
+
 export class BunnyStreamService {
   private readonly pullZoneUrl: string;
   private readonly libraryId: string;
@@ -37,7 +45,7 @@ export class BunnyStreamService {
    * @param config - Configuration for Bunny.net Stream service
    * @throws {Error} If required configuration is missing
    */
-  constructor(config: BunnyConfig) {
+  constructor(config: BunnyStreamConfig) {
     if (!config.pullZoneUrl) {
       throw new Error('BunnyStreamService: pullZoneUrl is required');
     }
@@ -48,8 +56,6 @@ export class BunnyStreamService {
     this.pullZoneUrl = config.pullZoneUrl;
     this.libraryId = config.libraryId;
     this.tokenAuthEnabled = config.tokenAuthEnabled ?? false;
-    
-    // Note: apiKey is accepted in config for future use but not currently stored
   }
 
   /**
@@ -395,7 +401,7 @@ export class BunnyStreamService {
    * 
    * @returns Current service configuration (without sensitive data)
    */
-  getConfig(): Omit<BunnyConfig, 'apiKey'> {
+  getConfig(): BunnyStreamConfig {
     return {
       pullZoneUrl: this.pullZoneUrl,
       libraryId: this.libraryId,
@@ -438,7 +444,6 @@ export function createBunnyStreamService(): BunnyStreamService {
   return new BunnyStreamService({
     pullZoneUrl,
     libraryId,
-    apiKey: process.env.NEXT_PUBLIC_BUNNY_API_KEY,
     tokenAuthEnabled: process.env.NEXT_PUBLIC_BUNNY_TOKEN_AUTH === 'true',
   });
 }

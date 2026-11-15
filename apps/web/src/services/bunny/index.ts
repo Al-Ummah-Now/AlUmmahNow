@@ -6,6 +6,7 @@
  */
 
 export { BunnyStreamService, createBunnyStreamService } from './stream.service';
+export type { BunnyStreamConfig } from './stream.service';
 export type {
   BunnyConfig,
   BunnyVideoUrls,

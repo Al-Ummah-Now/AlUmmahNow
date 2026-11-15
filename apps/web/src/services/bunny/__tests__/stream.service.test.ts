@@ -158,12 +158,6 @@ describe('BunnyStreamService', () => {
       );
     });
 
-    it('should accept optional apiKey', () => {
-      const configWithKey = { ...mockConfig, apiKey: 'test-api-key' };
-      const service = new BunnyStreamService(configWithKey);
-      expect(service).toBeInstanceOf(BunnyStreamService);
-    });
-
     it('should accept optional tokenAuthEnabled', () => {
       const configWithToken = { ...mockConfig, tokenAuthEnabled: true };
       const service = new BunnyStreamService(configWithToken);
@@ -418,7 +412,7 @@ describe('BunnyStreamService', () => {
     });
 
     it('should not expose apiKey', () => {
-      const service = new BunnyStreamService({ ...mockConfig, apiKey: 'secret-key' });
+      const service = new BunnyStreamService(mockConfig);
       const config = service.getConfig();
 
       expect(config).not.toHaveProperty('apiKey');
@@ -485,16 +479,21 @@ describe('createBunnyStreamService', () => {
     );
   });
 
-  it('should include optional apiKey from environment', () => {
+  it('never reads a NEXT_PUBLIC_* Bunny API key (it would ship in the browser bundle)', () => {
     process.env.NEXT_PUBLIC_BUNNY_PULL_ZONE_URL = 'vz-env-test.b-cdn.net';
     process.env.NEXT_PUBLIC_BUNNY_LIBRARY_ID = '67890';
-    process.env.NEXT_PUBLIC_BUNNY_API_KEY = 'env-api-key';
+    const reads: string[] = [];
+    process.env = new Proxy(process.env, {
+      get(target, key, receiver) {
+        if (typeof key === 'string') reads.push(key);
+        return Reflect.get(target, key, receiver);
+      },
+    });
 
-    const service = createBunnyStreamService();
-    expect(service).toBeInstanceOf(BunnyStreamService);
-    // API key should be set but not exposed in config
-    const config = service.getConfig();
+    const config = createBunnyStreamService().getConfig();
+
     expect(config).not.toHaveProperty('apiKey');
+    expect(reads.filter((key) => /^NEXT_PUBLIC_BUNNY.*KEY/.test(key))).toEqual([]);
   });
 
   it('should set tokenAuthEnabled from environment', () => {

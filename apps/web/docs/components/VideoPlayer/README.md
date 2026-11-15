@@ -167,8 +167,9 @@ Ensure these environment variables are set in your `.env.local`:
 NEXT_PUBLIC_BUNNY_PULL_ZONE_URL=vz-xxxxx.b-cdn.net
 NEXT_PUBLIC_BUNNY_LIBRARY_ID=12345
 NEXT_PUBLIC_BUNNY_TOKEN_AUTH=false  # Optional
-NEXT_PUBLIC_BUNNY_API_KEY=your-api-key  # Optional
 ```
+
+Never set a Bunny API key under `NEXT_PUBLIC_*`: Next inlines those into the browser bundle.
 
 ## Examples
 
