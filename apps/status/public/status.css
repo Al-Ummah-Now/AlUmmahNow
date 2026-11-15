@@ -33,8 +33,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--focus); outline
 .skip { position: absolute; inset-inline-start: 8px; top: -60px; background: var(--card); color: var(--ink); padding: 8px 12px; z-index: 10; border-radius: 6px; }
 .skip:focus { top: 8px; }
 /* The shared header (docs/design/NAV.md "Header"): /aun-nav/aun-nav.css on the Fawanees tokens
-   (/fanous/tokens.css, picked by data-fanous-theme from mode.js), centred like the page. */
-.aun-header { --aun-header-max: 828px; }
+   (/fanous/tokens.css, picked by data-fanous-theme from mode.js), full width as in every app. */
 /* `hidden` wins over the shared button's display (the toggle needs JS, mode.js shows it) */
 [hidden] { display: none !important; }
 /* both icons are in the cached page; the one for the mode on screen shows */

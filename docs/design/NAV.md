@@ -41,11 +41,21 @@ environment badge, app links, language, light/dark, Sign in). Worker, Hono and A
 the builders, or a byte-identical copy checked by the repo's Fanous sync check. React apps render
 the same elements as JSX and their tests compare the result with the builders.
 
-**Bar** (`.aun-header`, `.aun-header-row` inside it when centred in a max width):
+**Bar** (`.aun-header`; `.aun-header-row` inside it only when an app's markup wraps the groups):
 - 4rem (64px) tall; 3.5rem (56px) below 640px, the 1px bottom border included, with or without a
   `.aun-header-row` inside (the row is the height less the border). Sticky at the top.
 - Background `--aun-header-bg` (an app's header material) else `--fanous-c-nav-bg`; 1px bottom
   border `--fanous-c-nav-border`; text `--fanous-c-nav-text`.
+- **Full width in every app.** The bar's groups are never centred in a max width: the brand is
+  16px from the screen's edge (12px on phones) in www, scholar sites, status and profile exactly as
+  in videos web and the admins, so every header lines up.
+- **One typeface** in every header, set by the contract whatever the page uses: system-ui
+  (`--aun-header-font`), Arabic 'Noto Naskh Arabic' then Geeza Pro / Tahoma (`--aun-header-font-ar`).
+- **One line on every screen.** The bar never wraps to a second row. Sites whose own links sit in
+  the bar (www, scholar sites, the dev site) mark that group `.aun-header-primary.aun-collapse`:
+  below 1024px it leaves the bar and the menu button (`menuButtonHtml`, slot 1) opens an
+  `.aun-header-panel` popover right under the bar with those links and the search. It opens
+  without script (`popovertarget`), Escape and a tap outside close it.
 - Padding-inline 16px (12px below 640px). Gap between groups 16px, 12px below 1024px, 8px below
   640px, 4px below 400px. Inside the tools group 8px (4px below 640px).
 
@@ -53,7 +63,7 @@ the same elements as JSX and their tests compare the result with the builders.
 
 | # | Slot | Class | Notes |
 |---|---|---|---|
-| 1 | Drawer toggle | `.aun-icon-btn` | Only apps with a side rail or drawer. 40×40. |
+| 1 | Menu | `.aun-icon-btn.aun-menu` | Lucide `menu`, named "Menu" / "القائمة", 40×40. Apps with a side rail or drawer (always shown), and sites with a panel (`.aun-menu-collapse`, below 1024px only). |
 | 2 | Brand | `.aun-brand` | Logo, wordmark, app name (below). Links to the app's own home. |
 | 3 | Environment badge | `.aun-env` | "QA" / "STAGE" right after the brand; never in production. |
 | 4 | The app's own links or search | `.aun-header-primary` | www links, the videos/CMS search, the admin ⌘K search. Takes only the room the other groups leave (`flex: 1 1 0%`), so a long primary area never pushes the tools to a second line. Present (empty) when an app has none. |

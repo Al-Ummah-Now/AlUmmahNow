@@ -98,7 +98,7 @@
 
 /* ---------- the header bar (docs/design/NAV.md "Header") ----------
    One frame in every app. Markup: nav/header.js. Reading order, mirrored in Arabic:
-   [drawer toggle] brand [env] [.aun-header-primary: the app's links / search] .aun-header-tools:
+   [menu] brand [env] [.aun-header-primary: the app's links / search] .aun-header-tools:
    [app actions] [.aun-apps] .aun-lang .aun-mode [.aun-acct-btn | .aun-signin]
    Breakpoints: 1280px (app links lose their names), 1024px, 768px (account name hidden),
    640px (phone: 56px bar, app links leave the bar), 400px (the wordmark is hidden, the logo stays). */
@@ -120,8 +120,14 @@
   background: var(--aun-header-bg, var(--fanous-c-nav-bg));
   border-block-end: 1px solid var(--fanous-c-nav-border);
   color: var(--fanous-c-nav-text);
+  /* one typeface in every app's header, whatever the page uses */
+  font-family: var(--aun-header-font, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif);
 }
-/* the row inside, for headers centred in a max width (www, sites, status, profile) */
+.aun-header:lang(ar) {
+  font-family: var(--aun-header-font-ar, 'Noto Naskh Arabic', 'Geeza Pro', 'Segoe UI', Tahoma, sans-serif);
+}
+/* the row inside, for apps whose markup wraps the groups in one element; the bar is full width in
+   every app (the brand always 16px from the edge, 12px on phones), never centred in a max width */
 .aun-header-row {
   box-sizing: border-box;
   display: flex;
@@ -132,8 +138,6 @@
   width: 100%;
   /* the bar's 1px bottom border is inside its height: the bar is 64px (56px) with or without a row */
   min-height: calc(var(--aun-header-height) - 1px);
-  max-width: var(--aun-header-max, none);
-  margin-inline: auto;
 }
 .aun-header-primary {
   display: flex;
@@ -153,6 +157,65 @@
 @media (max-width: 63.99rem) {
   .aun-header {
     --aun-header-gap: var(--fanous-spacing-md, 12px);
+  }
+  /* a site's own links and search leave the bar for the menu panel below 1024px */
+  .aun-header-primary.aun-collapse {
+    display: none;
+  }
+}
+/* the menu button of a site with a panel (menuButtonHtml): only where the links have left the bar */
+@media (min-width: 64rem) {
+  .aun-menu-collapse {
+    display: none;
+  }
+}
+/* the menu panel: a popover right under the bar, full width, the header's material */
+.aun-header-panel {
+  position: fixed;
+  inset-block-start: var(--aun-header-height, 4rem);
+  inset-inline: 0;
+  inset-block-end: auto;
+  box-sizing: border-box;
+  width: 100%;
+  max-height: calc(100dvh - var(--aun-header-height, 4rem));
+  margin: 0;
+  overflow-y: auto;
+  padding: var(--fanous-spacing-md, 12px) var(--aun-header-pad, 16px) var(--fanous-spacing-lg, 16px);
+  border: 0;
+  border-block-end: 1px solid var(--fanous-c-nav-border);
+  background: var(--aun-header-bg, var(--fanous-c-nav-bg));
+  color: var(--fanous-c-nav-text);
+  font-family: inherit;
+}
+.aun-header-panel:not(:popover-open) {
+  display: none;
+}
+.aun-header-panel:popover-open {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fanous-spacing-sm, 8px);
+}
+.aun-header-panel a {
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding-inline: var(--fanous-spacing-md, 12px);
+  border-radius: var(--fanous-radius-md, 8px);
+  color: var(--fanous-c-nav-text);
+  font-size: 1rem;
+  font-weight: 500;
+  text-decoration: none;
+}
+.aun-header-panel a:hover {
+  background: var(--fanous-c-nav-hover);
+}
+.aun-header-panel a:focus-visible {
+  outline: 2px solid var(--fanous-c-nav-active-text);
+  outline-offset: -2px;
+}
+@media (min-width: 64rem) {
+  .aun-header-panel {
+    display: none !important;
   }
 }
 @media (max-width: 39.99rem) {
