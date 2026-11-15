@@ -15,6 +15,9 @@
  *   - playback token on an image: a path-form directory token (bcdn_token) on an image URL;
  *   - signed share image: og:image, twitter:image, oEmbed thumbnail_url, embed posters or
  *     JSON-LD thumbnailUrl that carry a token (crawlers cache them for days);
+ *   - share image not a stable share URL: a watch page's og:image / twitter:image is not the web
+ *     origin's own unsigned /og/v|c|i/<x>.jpg card (#1442) or /thumb/<id>.jpg;
+ *   - share card broken: that card, fetched as a link-preview crawler, is not 200 image/jpeg 1200x630;
  *   - stable share image broken: /thumb/<id>.jpg of a public video is not an image, or an
  *     unknown id is not 404;
  *   - unreachable: a sampled thumbnail answers 403/404;
@@ -155,6 +158,45 @@ export function judge(surface: string, kind: 'api' | 'share' | 'stored', urls: s
  * scripts), so the whole body is scanned. Returned shortened, token values hidden.
  */
 const SIGNED_IN_HTML = /(?:https?:\/\/|\/\/)[^"'\s<>\\]*?(?:bcdn_token=[^"'\s<>\\&]*|[?&](?:amp;|\\u0026)?token=[^&"'\\\s]+(?:&|&amp;|\\u0026)expires=\d+|\/priv\/\d{9,}\.[^/"'\s]*)/g;
+/** Width and height of a JPEG (its first SOF marker), or null */
+export function jpegSize(bytes: Uint8Array): { width: number; height: number } | null {
+	if (bytes[0] !== 0xff || bytes[1] !== 0xd8) return null;
+	let i = 2;
+	while (i + 9 < bytes.length) {
+		if (bytes[i] !== 0xff) { i++; continue; }
+		const marker = bytes[i + 1];
+		if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) { i += 2; continue; }
+		const len = (bytes[i + 2] << 8) | bytes[i + 3];
+		if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+			return { height: (bytes[i + 5] << 8) | bytes[i + 6], width: (bytes[i + 7] << 8) | bytes[i + 8] };
+		}
+		i += 2 + len;
+	}
+	return null;
+}
+
+/**
+ * A stable share image of a watch page (#1442, 2026-11-15): the 1200x630 card `/og/v|c|i/<x>.jpg`
+ * (optional `?lang=ar`) or the older `/thumb/<id>.jpg`, both on the web origin itself and unsigned.
+ * Returns the kind, or null for anything else (another host, a CDN URL, a signed URL).
+ */
+export function stableShareKind(url: string, web: string): 'card' | 'thumb' | null {
+	let u: URL;
+	try {
+		u = new URL(url);
+	} catch {
+		return null;
+	}
+	if (u.origin !== new URL(web).origin || tokenOf(url).form) return null;
+	const query = u.search === '' || u.search === '?lang=ar';
+	if (query && /^\/og\/[vci]\/[A-Za-z0-9_-]+\.jpg$/.test(u.pathname)) return 'card';
+	if (u.search === '' && /^\/thumb\/[A-Za-z0-9_-]+\.jpg$/.test(u.pathname)) return 'thumb';
+	return null;
+}
+
+/** The User-Agent the share-card fetch uses: a real link-preview crawler, as WhatsApp/Facebook fetch it */
+export const CRAWLER_UA = 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)';
+
 export function signedUrlsInHtml(html: string): string[] {
 	return [...new Set([...html.matchAll(SIGNED_IN_HTML)].map((m) => m[0].replace(/(bcdn_token=|token=)[^&\\]+/g, '$1…').replace(/\/priv\/(\d+)\.[^/]*/, '/priv/$1.…').slice(0, 140)))];
 }
@@ -233,12 +275,29 @@ export async function thumbnailCheck(env: CheckEnv, deps: Deps, opts: { strictSt
 	if (playlistId) await json('api playlist', `${h.api}/api/playlists/${playlistId}?includeVideos=true`, 'api');
 
 	// Share surfaces on the videos web app
+	const cardsChecked = new Set<string>();
 	for (const id of ids.slice(0, 2)) {
 		const watch = await text(deps, `${h.web}/en/video/${id}`, 'text/html');
 		checked.push(`web watch ${id.slice(0, 8)}`);
 		const meta = metaImages(watch.body);
 		findings.push(...judge(`web watch ${id.slice(0, 8)} meta`, 'share', meta, now(), opts.strictStored));
-		for (const m of meta) if (m !== `${h.web}/thumb/${id}.jpg`) findings.push({ level: 'fail', rule: 'share image not the stable /thumb URL', surface: `web watch ${id.slice(0, 8)}`, detail: m.slice(0, 120) });
+		for (const m of meta) {
+			const kind = stableShareKind(m, h.web);
+			if (!kind) {
+				findings.push({ level: 'fail', rule: 'share image not a stable share URL', surface: `web watch ${id.slice(0, 8)}`, detail: m.slice(0, 120) });
+				continue;
+			}
+			if (kind !== 'card' || cardsChecked.has(m)) continue;
+			cardsChecked.add(m);
+			// The card must really be what crawlers get: 200, a JPEG, 1200x630
+			const card = await deps.fetch(m, { headers: { 'User-Agent': CRAWLER_UA } }).catch(() => null);
+			checked.push(`share card ${new URL(m).pathname.slice(0, 24)}`);
+			const ctype = card?.headers.get('content-type') ?? '';
+			const size = card && card.status === 200 ? jpegSize(new Uint8Array(await card.arrayBuffer())) : null;
+			if (!card || card.status !== 200 || !ctype.startsWith('image/jpeg') || !size || size.width !== 1200 || size.height !== 630) {
+				findings.push({ level: 'fail', rule: 'share card broken', surface: `web watch ${id.slice(0, 8)}`, detail: `${m.slice(0, 100)}: HTTP ${card?.status ?? 0} ${ctype} ${size ? `${size.width}x${size.height}` : 'not a JPEG'}` });
+			}
+		}
 		const oembed = await json(`oembed ${id.slice(0, 8)}`, `${h.web}/oembed?url=${encodeURIComponent(`${h.web}/en/video/${id}`)}`, 'api');
 		const tu = (oembed as { thumbnail_url?: string } | null)?.thumbnail_url;
 		if (tu) findings.push(...judge(`oembed ${id.slice(0, 8)}`, 'share', [tu], now(), opts.strictStored));

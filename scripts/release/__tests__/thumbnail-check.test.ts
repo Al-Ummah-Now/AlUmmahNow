@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { htmlImages, jsonImageUrls, jsonLdImages, judge, metaImages, sharedCacheable, signedUrlsInHtml, thumbnailCheck, tokenOf } from '../thumbnail-check.ts';
+import { htmlImages, jpegSize, jsonImageUrls, jsonLdImages, judge, metaImages, sharedCacheable, signedUrlsInHtml, stableShareKind, thumbnailCheck, tokenOf } from '../thumbnail-check.ts';
 
 const ID = '0174501b-cbc9-41b4-b386-93f9bb8429a7';
 const NOW = 1_794_500_000;
@@ -66,8 +66,32 @@ describe('thumbnail check: server-rendered HTML (#1209)', () => {
 	});
 });
 
+/** A minimal JPEG: SOI, SOF0 with the given size, EOI */
+const jpeg = (width: number, height: number) =>
+	new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0x00, 0x00, 0xff, 0xc0, 0x00, 0x11, 0x08, height >> 8, height & 0xff, width >> 8, width & 0xff, 0x03, 0x01, 0x22, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01, 0xff, 0xd9]);
+
+describe('share cards (#1442): /og/v|c|i on the web origin are stable share images', () => {
+	const WEB = 'https://videos.stage.alummahnow.net';
+	it('reads a JPEG size', () => {
+		assert.deepEqual(jpegSize(jpeg(1200, 630)), { width: 1200, height: 630 });
+		assert.equal(jpegSize(new Uint8Array([0x89, 0x50, 0x4e, 0x47])), null);
+	});
+	it('accepts the web origin\'s own unsigned cards and /thumb, nothing else', () => {
+		assert.equal(stableShareKind(`${WEB}/og/v/${ID}.jpg`, WEB), 'card');
+		assert.equal(stableShareKind(`${WEB}/og/c/c1.jpg?lang=ar`, WEB), 'card');
+		assert.equal(stableShareKind(`${WEB}/og/i/aHR0cHM6Ly9pbWFnZXMuYWx1bW1haG5vdy5uZXQvYS5qcGc.jpg`, WEB), 'card');
+		assert.equal(stableShareKind(`${WEB}/thumb/${ID}.jpg`, WEB), 'thumb');
+		assert.equal(stableShareKind(`https://videos.alummahnow.net/og/v/${ID}.jpg`, WEB), null);
+		assert.equal(stableShareKind(`${WEB}/og/v/${ID}.jpg?token=t&expires=1`, WEB), null);
+		assert.equal(stableShareKind(`${WEB}/og/x/${ID}.jpg`, WEB), null);
+		assert.equal(stableShareKind(file(NOW + 3600), WEB), null);
+		assert.equal(stableShareKind('not a url', WEB), null);
+	});
+});
+
 describe('thumbnail check: end to end with a fake site', () => {
 	const stable = `https://videos.alummahnow.net/thumb/${ID}.jpg`;
+	const card = `https://videos.alummahnow.net/og/v/${ID}.jpg`;
 	const site = (overrides: Record<string, () => Response> = {}) =>
 		(async (input: string | URL | Request) => {
 			const url = String(input);
@@ -78,12 +102,13 @@ describe('thumbnail check: end to end with a fake site', () => {
 			const j = (b: unknown) => new Response(JSON.stringify(b), { status: 200, headers: { 'content-type': 'application/json' } });
 			if (url.includes('/thumb/00000000')) return new Response('nf', { status: 404 });
 			if (url.includes('/thumb/')) return new Response('img', { status: 200, headers: { 'content-type': 'image/jpeg' } });
+			if (url.includes('/og/')) return new Response(jpeg(1200, 630), { status: 200, headers: { 'content-type': 'image/jpeg' } });
 			if (url.includes('/oembed')) return j({ thumbnail_url: stable });
 			if (url.includes('/api/videos?')) return j({ data: [{ id: ID, channelId: 'c1', thumbnailUrl: file(NOW + 6 * 3600) }] });
 			if (url.includes('/api/playlists?')) return j({ data: [{ id: 'p1' }] });
 			if (url.includes('videos.api')) return j({ id: ID, thumbnailUrl: file(NOW + 6 * 3600) });
 			const page = (body: string) => new Response(body, { status: 200, headers: { 'content-type': 'text/html', 'cache-control': 'private, no-cache, no-store, max-age=0, must-revalidate' } });
-			if (url.includes('/video/')) return page(`<meta property="og:image" content="${stable}"><img src="/thumb/${ID}.jpg" srcset="/thumb/${ID}.jpg?w=320 320w">`);
+			if (url.includes('/video/')) return page(`<meta property="og:image" content="${card}"><meta name="twitter:image" content="${card}"><img src="/thumb/${ID}.jpg" srcset="/thumb/${ID}.jpg?w=320 320w">`);
 			if (url.includes('/embed/')) return new Response(`<img src="${stable}">`, { status: 200 });
 			if (url.includes('cms.')) return j({ items: [] });
 			if (new URL(url).hostname.endsWith('.b-cdn.net')) return new Response('x', { status: 206 });
@@ -93,6 +118,38 @@ describe('thumbnail check: end to end with a fake site', () => {
 	it('passes a healthy site', async () => {
 		const { findings } = await thumbnailCheck('production', { fetch: site(), now: () => NOW * 1000 }, { strictStored: false });
 		assert.deepEqual(findings.filter((f) => f.level === 'fail'), []);
+	});
+	it('passes a watch page still sharing the older stable /thumb URL', async () => {
+		const { findings } = await thumbnailCheck('production', {
+			fetch: site({ '/en/video/': () => new Response(`<meta property="og:image" content="${stable}">`, { status: 200, headers: { 'cache-control': 'private, no-store' } }) }),
+			now: () => NOW * 1000,
+		}, { strictStored: false });
+		assert.deepEqual(findings.filter((f) => f.level === 'fail'), []);
+	});
+	it('fetches each share card once as a crawler and fails when it is not a 1200x630 JPEG', async () => {
+		const seen: string[] = [];
+		const base = site();
+		const spy = (async (input: string | URL | Request, init?: RequestInit) => {
+			if (String(input).includes('/og/')) seen.push(new Headers(init?.headers).get('user-agent') ?? '');
+			return base(input, init);
+		}) as typeof fetch;
+		await thumbnailCheck('production', { fetch: spy, now: () => NOW * 1000 }, { strictStored: false });
+		assert.ok(seen.length >= 1 && seen.every((ua) => ua.startsWith('facebookexternalhit')));
+		for (const bad of [
+			() => new Response(jpeg(1280, 720), { status: 200, headers: { 'content-type': 'image/jpeg' } }),
+			() => new Response('png', { status: 200, headers: { 'content-type': 'image/png' } }),
+			() => new Response('nf', { status: 404 }),
+		]) {
+			const { findings } = await thumbnailCheck('production', { fetch: site({ '/og/': bad }), now: () => NOW * 1000 }, { strictStored: false });
+			assert.ok(findings.some((f) => f.level === 'fail' && f.rule === 'share card broken'), 'a broken card fails');
+		}
+	});
+	it('fails when the watch page shares a card on another host', async () => {
+		const { findings } = await thumbnailCheck('production', {
+			fetch: site({ '/en/video/': () => new Response(`<meta property="og:image" content="https://evil.example/og/v/${ID}.jpg">`, { status: 200 }) }),
+			now: () => NOW * 1000,
+		}, { strictStored: false });
+		assert.ok(findings.some((f) => f.level === 'fail' && f.rule === 'share image not a stable share URL'));
 	});
 	it('fails when the watch page shares a signed thumbnail, or /thumb leaks an unknown id', async () => {
 		const { findings } = await thumbnailCheck('production', {
@@ -104,7 +161,7 @@ describe('thumbnail check: end to end with a fake site', () => {
 		}, { strictStored: false });
 		const rules = new Set(findings.filter((f) => f.level === 'fail').map((f) => f.rule));
 		assert.ok(rules.has('signed share image'));
-		assert.ok(rules.has('share image not the stable /thumb URL'));
+		assert.ok(rules.has('share image not a stable share URL'));
 		assert.ok(rules.has('stable share image leaks or errors'));
 	});
 	it('fails when a server-rendered page carries a signed thumbnail or is publicly cacheable', async () => {
