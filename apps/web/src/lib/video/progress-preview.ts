@@ -18,7 +18,6 @@ import { logger } from '@/lib/logger-client';
 /**
  * Constants for progress preview behavior
  */
-const DEFAULT_BUNNY_LIBRARY_ID = 239863;
 const DEFAULT_THUMBNAIL_INTERVAL_SECONDS = 5;
 const DEFAULT_THUMBNAIL_WIDTH = 160;
 const DEFAULT_THUMBNAIL_HEIGHT = 90;
@@ -33,8 +32,11 @@ const READY_STATE_HAVE_METADATA = 1;
 export interface SpriteThumbnailConfig {
   /** Bunny.net video ID (GUID) */
   bunnyVideoId: string;
-  /** CDN library ID */
-  libraryId?: number;
+  /**
+   * Bunny Stream library the video lives in, taken from that video's own data. Libraries differ per
+   * environment and are admin-managed, so there is no default: without one, no preview is shown.
+   */
+  libraryId: number | null | undefined;
   /** Thumbnail interval in seconds */
   interval?: number;
   /** Thumbnail width in pixels */
@@ -57,14 +59,16 @@ export interface WatchedSegment {
  * Get Bunny.net preview URL for sprite thumbnails
  *
  * @param bunnyVideoId - Bunny.net video GUID
- * @param libraryId - CDN library ID
- * @returns Preview sprite sheet URL
+ * @param libraryId - The video's own Bunny Stream library id
+ * @returns Preview sprite sheet URL, or null when the video or its library is unknown
  *
  * @example
- * const previewUrl = getBunnyPreviewUrl('abc-def-123');
- * // Returns: https://vz-d3f23d76-a73.b-cdn.net/abc-def-123/preview.webp
+ * const previewUrl = getBunnyPreviewUrl('abc-def-123', video.libraryId);
  */
-export function getBunnyPreviewUrl(bunnyVideoId: string, libraryId: number = DEFAULT_BUNNY_LIBRARY_ID): string {
+export function getBunnyPreviewUrl(bunnyVideoId: string, libraryId: number | null | undefined): string | null {
+  if (!bunnyVideoId || typeof libraryId !== 'number' || !Number.isInteger(libraryId) || libraryId <= 0) {
+    return null;
+  }
   // Bunny.net preview sprite format
   // Format: https://vz-{library-hex}.b-cdn.net/{video-guid}/preview.webp
   const libraryHex = libraryId.toString(16).padStart(8, '0');
@@ -85,6 +89,7 @@ export function getBunnyPreviewUrl(bunnyVideoId: string, libraryId: number = DEF
  * @example
  * initializeSpriteThumbnails(player, {
  *   bunnyVideoId: 'abc-def-123',
+ *   libraryId: video.libraryId,
  *   interval: 5,
  *   rtl: false
  * });
@@ -109,15 +114,20 @@ export function initializeSpriteThumbnails(
 
   const {
     bunnyVideoId,
-    libraryId = DEFAULT_BUNNY_LIBRARY_ID,
+    libraryId,
     interval = DEFAULT_THUMBNAIL_INTERVAL_SECONDS,
     width = DEFAULT_THUMBNAIL_WIDTH,
     height = DEFAULT_THUMBNAIL_HEIGHT,
     rtl = false
   } = config;
 
+  const previewUrl = getBunnyPreviewUrl(bunnyVideoId, libraryId);
+  if (!previewUrl) {
+    logger.debug('[ProgressPreview] No Bunny library id for this video; skipping sprite thumbnails.');
+    return;
+  }
+
   try {
-    const previewUrl = getBunnyPreviewUrl(bunnyVideoId, libraryId);
 
     // Initialize sprite thumbnails plugin
     interface PlayerWithSpriteThumbnails extends ExtendedPlayer {
