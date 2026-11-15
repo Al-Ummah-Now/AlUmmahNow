@@ -123,6 +123,60 @@ describe('inviting (§4.1, §4.2)', () => {
 		assert.ok(performance.now() - started < 50);
 	});
 
+	it('an email invitation never names its account to the inviter: Activity, duplicate checks, declines', async () => {
+		const { env, db } = teamEnv();
+		await invite(env, 'owner', { email: 'sara@test.local', role: 'moderator' });
+		await myInvites(env, 'sara'); // tied to sara's account on first sight
+		// A handle invitation to the same account is not refused: refusing would confirm who owns the email
+		assert.equal((await invite(env, 'owner', { handle: 'SaraTalks', role: 'editor' })).status, 200);
+		const listed = await myInvites(env, 'sara');
+		assert.equal(listed.length, 1, 'one invitation per channel is listed');
+		assert.equal(listed[0].role, 'editor', 'the @handle one first');
+
+		const emailRow = inviteRows(db).find((r) => r.by_email === 1)!;
+		assert.equal((await as('owner').request(`/api/channels/team/invites/${emailRow.id}`, { method: 'DELETE' }, env as never)).status, 200);
+		const audit = ((await (await as('owner').request('/api/channels/team/audit', {}, env as never)).json()) as any).data.entries as any[];
+		const emailEntries = audit.filter((e) => e.action === 'invite_cancelled' || (e.action === 'invite_sent' && e.newRole === 'moderator'));
+		assert.equal(emailEntries.length, 2);
+		assert.ok(emailEntries.every((e) => !e.targetUserId && !e.targetName), 'no account on the email invitation\'s rows');
+
+		// Declining an email invitation is "someone declined"
+		await invite(env, 'admin1', { email: 'ed@test.local', role: 'moderator' });
+		const { env: env2, db: db2 } = teamEnv();
+		await invite(env2, 'owner', { email: 'sara@test.local', role: 'moderator' });
+		const [mine] = await myInvites(env2, 'sara');
+		assert.equal((await respond(env2, 'sara', mine.id, 'decline')).status, 200);
+		const declined = auditRows(db2).find((r) => r.action === 'invite_declined')!;
+		assert.notEqual(declined.actor_id, 'sara');
+		assert.equal(declined.target_user_id, null);
+	});
+
+	it('a removed member\'s older invitations cannot bring them back', async () => {
+		const withSara = () => teamEnv({ team: channel('team', { members: [member('admin1', 'admin'), member('ed', 'editor'), member('sara', 'moderator')] }) });
+		// An email invitation sent while she was on the team, already seen (tied): cancelled on removal
+		const { env, db } = withSara();
+		await invite(env, 'owner', { email: 'sara@test.local', role: 'admin' });
+		await myInvites(env, 'sara');
+		assert.equal((await as('owner').request('/api/channels/team/members/sara', { method: 'DELETE' }, env as never)).status, 200);
+		assert.equal(inviteRows(db)[0].status, 'cancelled');
+		assert.deepEqual(await myInvites(env, 'sara'), []);
+
+		// One not yet seen (not tied) still lists, but accepting is refused
+		const { env: env2, db: db2 } = withSara();
+		await invite(env2, 'owner', { email: 'sara@test.local', role: 'admin' });
+		assert.equal((await as('owner').request('/api/channels/team/members/sara', { method: 'DELETE' }, env2 as never)).status, 200);
+		const [left] = await myInvites(env2, 'sara');
+		assert.equal(await codeOf(await respond(env2, 'sara', left.id, 'accept')), 'invite_not_found');
+		assert.equal(channelRoleOf(env2.channels.read('team'), 'sara'), null);
+		assert.equal(inviteRows(db2)[0].status, 'cancelled');
+
+		// A new invitation after the removal works
+		await invite(env2, 'owner', { handle: 'SaraTalks', role: 'moderator' });
+		const [fresh] = await myInvites(env2, 'sara');
+		assert.equal((await respond(env2, 'sara', fresh.id, 'accept')).status, 200);
+		assert.equal(channelRoleOf(env2.channels.read('team'), 'sara'), 'moderator');
+	});
+
 	it('refuses with the spec codes', async () => {
 		const { env } = teamEnv();
 		assert.equal(await codeOf(await invite(env, 'owner', { email: 'owner@test.local', role: 'editor' })), 'cannot_invite_owner');
@@ -431,6 +485,10 @@ describe('daily sweep, erasure, export (§9, §11, §12)', () => {
 		assert.deepEqual(exported.channelMemberships.map((m) => [m.channelId, m.role]), [['team', 'admin']]);
 		assert.deepEqual(exported.channelInvites.map((i) => [i.direction, i.channelId, i.status]), [['sent', 'team', 'pending']]);
 		assert.equal(JSON.stringify(exported.channelInvites).includes('friend@example.com'), false, 'the invitee\'s email is theirs, not in my export');
+		await myInvites(env, 'friend'); // no account has that email: still untied
+		db.db.prepare(`UPDATE channel_invites SET invitee_user_id = 'friend'`).run();
+		const again = await collectUserData(full as never, 'admin1', new OperationBudget(10_000));
+		assert.equal(again.channelInvites[0].inviteeUserId, null, 'a sent email invitation never names the account it reached');
 
 		await eraseUserData(full as never, 'admin1', new OperationBudget(10_000));
 		assert.equal(channelRoleOf(env.channels.read('team'), 'admin1'), null);

@@ -38,7 +38,9 @@ import {
 	AlreadyInvited,
 	claimInvite,
 	closeInvite,
+	EMAIL_INVITEE_ACTOR,
 	insertInvite,
+	inviteAuditTarget,
 	inviteRateUse,
 	invitesFor,
 	listTeamActivity,
@@ -47,6 +49,7 @@ import {
 	pendingChannelInvites,
 	readInvite,
 	recordTeamActivity,
+	removedSince,
 	settleClaim,
 	teamSeatLimit,
 	type InviteRow,
@@ -191,7 +194,7 @@ export class ChannelInviteCancel extends AuthenticatedRoute {
 		if (!invite || invite.channel_id !== channel.id || (invite.status !== 'pending' && invite.status !== 'claimed')) return fail(c, 404, 'invite_not_found', 'This invitation is no longer open');
 		if (!canManageRole(channelRoleOf(channel, actorId), invite.role)) return fail(c, 403, 'forbidden', 'You cannot cancel this invitation');
 		if (await closeInvite(db, invite.id, 'cancelled')) {
-			await recordTeamActivity(c.env as never, executionCtx(c), [{ channelId: channel.id, actorId, action: 'invite_cancelled', targetUserId: invite.invitee_user_id, newRole: invite.role }]);
+			await recordTeamActivity(c.env as never, executionCtx(c), [{ channelId: channel.id, actorId, action: 'invite_cancelled', targetUserId: inviteAuditTarget(invite), newRole: invite.role }]);
 		}
 		return c.json({ success: true, data: await teamState(c, channel, actorId) }, 200, NO_STORE);
 	}
@@ -345,6 +348,12 @@ export class ChannelInviteAccept extends AuthenticatedRoute {
 			return fail(c, 409, 'shared_limit', 'You already help run the most channels allowed');
 		}
 
+		// Removed from the channel after this was sent: the removal outranks it
+		if (await removedSince(db, invite.channel_id, userId, invite.created_at)) {
+			await closeInvite(db, invite.id, 'cancelled');
+			return fail(c, 404, 'invite_not_found', 'This invitation is no longer open');
+		}
+
 		// Claim it first: a cancel that races this accept finds it closed (spec §4.2)
 		if (!(await claimInvite(db, invite.id, userId))) return fail(c, 404, 'invite_not_found', 'This invitation is no longer open');
 
@@ -429,7 +438,9 @@ export class ChannelInviteDecline extends AuthenticatedRoute {
 		const invite = await openInviteFor(c, db, params.id, userId);
 		if (!invite) return fail(c, 404, 'invite_not_found', 'This invitation is no longer open');
 		if (await closeInvite(db, invite.id, 'declined')) {
-			await recordTeamActivity(c.env as never, executionCtx(c), [{ channelId: invite.channel_id, actorId: userId, action: 'invite_declined', targetUserId: userId, newRole: invite.role }]);
+			// Declining an email invitation doesn't name the account to the inviter
+			const who = invite.by_email ? EMAIL_INVITEE_ACTOR : userId;
+			await recordTeamActivity(c.env as never, executionCtx(c), [{ channelId: invite.channel_id, actorId: who, action: 'invite_declined', targetUserId: invite.by_email ? null : userId, newRole: invite.role }]);
 		}
 		return c.json({ success: true }, 200, NO_STORE);
 	}

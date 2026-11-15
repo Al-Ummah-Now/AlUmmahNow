@@ -35,7 +35,7 @@ import R2Repository from "../../lib/r2Repo";
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { logger } from "../../lib/logger";
 import { FALLBACK_SCAN_OBJECTS } from "../../lib/scanBudget";
-import { cancelInvitesSentBy, notifyTeam, pendingChannelInvites, recordTeamActivity, rotateChannelLiveKeys, teamSeatLimit } from "../../lib/channelTeam";
+import { cancelInvitesSentBy, cancelInvitesTo, inviteAuditTarget, notifyTeam, pendingChannelInvites, recordTeamActivity, rotateChannelLiveKeys, teamSeatLimit } from "../../lib/channelTeam";
 import { memberChannelRoles, ownedChannelIds, scheduleOwnershipHeal, waitUntilOf } from "../../lib/search/ownership";
 import { resolveDisplayName, type NameFields } from '@al-ummah/shared-types';
 
@@ -214,7 +214,7 @@ async function inviteViews(c: AppContext, channelId: string): Promise<ChannelInv
 		// An email invitation shows only the email the inviter typed, even once
 		// the invitee has seen it: naming the account would tell the inviter who
 		// owns that address (§4.1). Only @handle invitations show the person.
-		if (row.invitee_email) {
+		if (row.by_email) {
 			return { id: row.id, role: row.role, inviteeEmail: row.invitee_email, invitedBy: row.invited_by, createdAt: row.created_at, expiresAt: row.expires_at };
 		}
 		const profile = row.invitee_user_id ? await profileSummary(c, row.invitee_user_id) : {};
@@ -322,7 +322,7 @@ export async function afterRoleLoss(c: AppContext, channelId: string, actorId: s
 		try {
 			const cancelled = await cancelInvitesSentBy(db, channelId, memberId);
 			if (cancelled.length) {
-				await recordTeamActivity(c.env as never, ctx, cancelled.map((row) => ({ channelId, actorId, action: 'invite_cancelled' as const, targetUserId: row.invitee_user_id, newRole: row.role })));
+				await recordTeamActivity(c.env as never, ctx, cancelled.map((row) => ({ channelId, actorId, action: 'invite_cancelled' as const, targetUserId: inviteAuditTarget(row), newRole: row.role })));
 			}
 		} catch (error) {
 			logger.error('[ChannelMembers] Cancelling the member\'s invitations failed', { channelId, memberId, error: error instanceof Error ? error.message : String(error) });
@@ -416,6 +416,16 @@ export class ChannelMemberRemove extends AuthenticatedRoute {
 		if (rejected) return fail(c, rejected.status, rejected.code, rejected.message);
 		if (removedRole && channel) {
 			await recordTeamActivity(c.env as never, executionCtx(c), [{ channelId: params.id, actorId, action: leaving ? 'member_left' : 'member_removed', targetUserId: params.userId, oldRole: removedRole }]);
+			// Their own open invitations to this channel can't bring them back (an
+			// email one not yet tied is refused at accept: removedSince)
+			if (!leaving && c.env.SEARCH_DB) {
+				try {
+					await cancelInvitesTo(c.env.SEARCH_DB as D1Database, params.id, params.userId);
+				} catch (error) {
+					logger.error('[ChannelMembers] Cancelling invitations to a removed member failed', { channelId: params.id, error: error instanceof Error ? error.message : String(error) });
+					reportServerError('api-videos', c.env as never, executionCtx(c), error, { route: c.req.path, method: c.req.method, extra: { step: 'cancel-invites-to', channelId: params.id } });
+				}
+			}
 			if (leaving) {
 				const { displayName } = await profileSummary(c, actorId);
 				await notifyTeam(c.env as never, channel.userId, actorId, {
