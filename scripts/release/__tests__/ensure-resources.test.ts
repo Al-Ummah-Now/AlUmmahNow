@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { CfApiError, type CfClient } from '../cf-api.ts';
-import { ensureResources, resourcesFor, SECRETS_STORE_ID } from '../ensure-resources.ts';
+import { coveredBy, ensureResources, ensureTurnstileHostnames, resourcesFor, SECRETS_STORE_ID, TURNSTILE_SITEKEY } from '../ensure-resources.ts';
 
 function fakeCf(queues: string[], buckets: string[], lifecycle: Record<string, unknown[]> = {}, secrets: string[] = ['google-oauth-client-secret', 'google-oauth-client-secret-qa', 'google-oauth-client-secret-stage']) {
 	const calls: string[] = [];
@@ -9,6 +9,7 @@ function fakeCf(queues: string[], buckets: string[], lifecycle: Record<string, u
 		accountId: 'a',
 		async request<T>(method: string, path: string, body?: unknown): Promise<T> {
 			calls.push(`${method} ${path}${body ? ` ${JSON.stringify(body)}` : ''}`);
+			if (method === 'GET' && path.startsWith('/challenges/widgets/')) return { sitekey: TURNSTILE_SITEKEY, name: 'w', mode: 'managed', domains: ['alummahnow.net'] } as T;
 			if (method === 'GET' && path.startsWith('/secrets_store/')) return secrets.map((name) => ({ name })) as T;
 			if (method === 'GET' && path.startsWith('/queues')) return queues.map((queue_name) => ({ queue_name })) as T;
 			if (method === 'GET' && path.endsWith('/lifecycle')) return { rules: lifecycle[decodeURIComponent(path.split('/')[3])] ?? [] } as T;
@@ -28,7 +29,10 @@ describe('ensure-resources', () => {
 			queues: ['al-ummah-now-errors', 'al-ummah-now-errors-dlq', 'al-ummah-now-transcode', 'al-ummah-now-transcode-dlq', 'al-ummah-now-yt-import'],
 			buckets: ['al-ummah-now-sourcemaps', 'al-ummah-now-media', 'al-ummah-now-media-private', 'al-ummah-now-media-originals', 'al-ummah-now-csam-evidence'],
 			placeholderSecrets: { [SECRETS_STORE_ID]: ['google-oauth-client-secret'] },
+			turnstileHostnames: { sitekey: TURNSTILE_SITEKEY, hostnames: ['alummahnow.net', 'www.alummahnow.net'] },
 		});
+		assert.deepEqual(resourcesFor('qa').turnstileHostnames?.hostnames, ['qa.alummahnow.net', 'www.qa.alummahnow.net']);
+		assert.deepEqual(resourcesFor('stage').turnstileHostnames?.hostnames, ['stage.alummahnow.net', 'www.stage.alummahnow.net']);
 		assert.deepEqual(resourcesFor('qa').queues, ['al-ummah-now-errors-qa', 'al-ummah-now-errors-dlq-qa', 'al-ummah-now-transcode-qa', 'al-ummah-now-transcode-dlq-qa', 'al-ummah-now-yt-import-qa']);
 		assert.deepEqual(resourcesFor('stage').buckets, ['al-ummah-now-sourcemaps-stage', 'al-ummah-now-media-stage', 'al-ummah-now-media-private-stage', 'al-ummah-now-media-originals-stage', 'al-ummah-now-csam-evidence-stage']);
 	});
@@ -84,5 +88,66 @@ describe('ensure-resources', () => {
 	it('refuses a lifecycle rule on CSAM evidence', async () => {
 		const { cf } = fakeCf([], ['al-ummah-now-csam-evidence-qa']);
 		await assert.rejects(ensureResources(cf, { queues: [], buckets: [], expireAfterDays: { 'al-ummah-now-csam-evidence-qa': 1 } }, () => undefined), /never gets a lifecycle rule/);
+	});
+
+	describe('Turnstile hostnames', () => {
+		function widgetCf(widget: Record<string, unknown> | Error) {
+			const calls: { method: string; path: string; body?: unknown }[] = [];
+			const cf: CfClient = {
+				accountId: 'a',
+				async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+					calls.push({ method, path, body });
+					if (!path.startsWith('/challenges/')) return [] as T;
+					if (widget instanceof Error) throw widget;
+					return (method === 'GET' ? widget : {}) as T;
+				},
+			};
+			return { cf, calls };
+		}
+		const base = { sitekey: TURNSTILE_SITEKEY, name: 'al-ummah-now-production', mode: 'managed', clearance_level: 'no_clearance', bot_fight_mode: false, region: 'world', offlabel: false, secret: 'never-sent', created_on: 'x' };
+
+		it('a domain covers itself and its subdomains, nothing else', () => {
+			assert.ok(coveredBy('www.qa.alummahnow.net', 'alummahnow.net'));
+			assert.ok(coveredBy('alummahnow.net', 'AlUmmahNow.net'));
+			assert.ok(!coveredBy('alummahnow.net', 'www.alummahnow.net'));
+			assert.ok(!coveredBy('evilalummahnow.net', 'alummahnow.net'));
+		});
+
+		it('changes nothing when every host is covered', async () => {
+			const { cf, calls } = widgetCf({ ...base, domains: ['alummahnow.net', 'alummahnow.org'] });
+			assert.deepEqual(await ensureTurnstileHostnames(cf, TURNSTILE_SITEKEY, ['qa.alummahnow.net', 'www.qa.alummahnow.net']), []);
+			assert.deepEqual(calls.map((c) => c.method), ['GET']);
+		});
+
+		it('appends the missing hosts, keeps every listed domain and setting, never sends the secret', async () => {
+			const { cf, calls } = widgetCf({ ...base, domains: ['alummahnow.org', 'alummahnow.com'] });
+			const added = await ensureTurnstileHostnames(cf, TURNSTILE_SITEKEY, ['stage.alummahnow.net', 'www.stage.alummahnow.net']);
+			assert.deepEqual(added, ['stage.alummahnow.net', 'www.stage.alummahnow.net']);
+			assert.equal(calls[1]!.method, 'PUT');
+			assert.equal(calls[1]!.path, `/challenges/widgets/${TURNSTILE_SITEKEY}`);
+			assert.deepEqual(calls[1]!.body, {
+				domains: ['alummahnow.org', 'alummahnow.com', 'stage.alummahnow.net', 'www.stage.alummahnow.net'],
+				name: 'al-ummah-now-production', mode: 'managed', bot_fight_mode: false, clearance_level: 'no_clearance', offlabel: false, region: 'world',
+			});
+		});
+
+		it('is idempotent: a second run after the append is a no-op', async () => {
+			const { cf, calls } = widgetCf({ ...base, domains: ['alummahnow.org', 'stage.alummahnow.net', 'www.stage.alummahnow.net'] });
+			assert.deepEqual(await ensureTurnstileHostnames(cf, TURNSTILE_SITEKEY, ['stage.alummahnow.net', 'www.stage.alummahnow.net']), []);
+			assert.equal(calls.length, 1);
+		});
+
+		it('a token without Turnstile access warns with the permission and ensures the rest', async () => {
+			const lines: string[] = [];
+			const { cf } = widgetCf(new CfApiError(403, 'GET /challenges/widgets/x -> 403 10000: Authentication error'));
+			const { created } = await ensureResources(cf, { queues: [], buckets: [], turnstileHostnames: { sitekey: TURNSTILE_SITEKEY, hostnames: ['qa.alummahnow.net'] } }, (l) => lines.push(l));
+			assert.deepEqual(created, []);
+			assert.match(lines.join('\n'), /::warning::Turnstile hostnames not checked .*Account > Turnstile > Edit/);
+		});
+
+		it('any other error fails the run', async () => {
+			const { cf } = widgetCf(new CfApiError(500, 'boom'));
+			await assert.rejects(ensureResources(cf, { queues: [], buckets: [], turnstileHostnames: { sitekey: TURNSTILE_SITEKEY, hostnames: ['qa.alummahnow.net'] } }, () => undefined), /boom/);
+		});
 	});
 });
