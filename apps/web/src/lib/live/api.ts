@@ -161,3 +161,33 @@ export async function getPublicChannel(id: string, signal?: AbortSignal): Promis
   const channel = body?.result ?? body;
   return channel?.id ? channel : null;
 }
+
+/**
+ * The watch page's heartbeat (AlUmmahNow#30): who is watching now, or null when the count is
+ * unavailable. No sign-in and no user data: `viewerId` is a random id kept for the tab.
+ */
+export async function beatViewer(id: string, viewerId: string, signal?: AbortSignal): Promise<number | null> {
+  const res = await fetch(`${getApiUrl().replace(/\/$/, '')}/api/live-streams/${encodeURIComponent(id)}/viewers`, {
+    method: 'POST',
+    // text/plain: a simple request, no CORS preflight
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({ viewerId }),
+    cache: 'no-store',
+    signal,
+  });
+  if (!res.ok) return null;
+  const body = (await res.json().catch(() => null)) as { result?: { viewers?: unknown } } | null;
+  return typeof body?.result?.viewers === 'number' ? body.result.viewers : null;
+}
+
+/** The tab is leaving the stream: counted out at once instead of after the time to live. Never holds the page. */
+export function leaveViewer(id: string, viewerId: string): void {
+  const url = `${getApiUrl().replace(/\/$/, '')}/api/live-streams/${encodeURIComponent(id)}/viewers`;
+  const body = JSON.stringify({ viewerId, leaving: true });
+  try {
+    if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function' && navigator.sendBeacon(url, new Blob([body], { type: 'text/plain' }))) return;
+  } catch {
+    // fall through to a keepalive fetch
+  }
+  void fetch(url, { method: 'POST', body, keepalive: true, headers: { 'Content-Type': 'text/plain' } }).catch(() => undefined);
+}

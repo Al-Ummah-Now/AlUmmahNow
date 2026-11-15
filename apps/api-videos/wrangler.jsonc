@@ -194,7 +194,9 @@
 		// Searches per user or IP (not Worker subrequests)
 		{ "name": "SEARCH_LIMITER", "namespace_id": "2281", "simple": { "limit": 120, "period": 60 } },
 		// Native app attestation challenges and proofs (routers/attestation.router.ts)
-		{ "name": "ATTEST_LIMITER", "namespace_id": "2291", "simple": { "limit": 20, "period": 60 } }
+		{ "name": "ATTEST_LIMITER", "namespace_id": "2291", "simple": { "limit": 20, "period": 60 } },
+		// Live watching heartbeats per IP (one tab beats 3 a minute; room for a shared network); AlUmmahNow#30
+		{ "name": "LIVE_VIEWER_LIMITER", "namespace_id": "2321", "simple": { "limit": 60, "period": 60 } }
 	],
 	// Abuse counters for the admin Abuse panel (Turnstile outcomes, rate-limit hits; no personal data)
 	"analytics_engine_datasets": [{ "binding": "ABUSE_EVENTS", "dataset": "al_ummah_now_abuse" }],
@@ -570,7 +572,9 @@
 				// Searches per user or IP (not Worker subrequests)
 				{ "name": "SEARCH_LIMITER", "namespace_id": "2282", "simple": { "limit": 120, "period": 60 } },
 				// Native app attestation challenges and proofs (routers/attestation.router.ts)
-				{ "name": "ATTEST_LIMITER", "namespace_id": "2292", "simple": { "limit": 20, "period": 60 } }
+				{ "name": "ATTEST_LIMITER", "namespace_id": "2292", "simple": { "limit": 20, "period": 60 } },
+				// Live watching heartbeats per IP; AlUmmahNow#30
+				{ "name": "LIVE_VIEWER_LIMITER", "namespace_id": "2322", "simple": { "limit": 60, "period": 60 } }
 			],
 			"analytics_engine_datasets": [{ "binding": "ABUSE_EVENTS", "dataset": "al_ummah_now_abuse_stage" }],
 			"kv_namespaces": [

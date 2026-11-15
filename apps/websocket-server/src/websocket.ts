@@ -22,6 +22,7 @@ import { ViewCounter, type CounterStorage, type VideoBucket } from './view-count
 import { PostViewCounter, type CounterDb, type PostCounterStorage } from './post-view-counter';
 import { AdminCoalescer, coalescerName, eventsOf } from './admin-coalescer';
 import { QoeLive, type QoeStorage } from './qoe-live';
+import { LiveViewers, isNet, isViewerId } from './live-viewers';
 import { adminLevelOf, adminLiveChannel, adminLiveItem, canSubscribeAdminLive, isAdminLiveChannel, type AdminLiveLevel } from '@al-ummah/shared-types';
 import { SHARD_HEADER, isSocketShardName, routeBroadcast, shardRequest, topicName, type BroadcastItem, type FanOutResult } from './shards';
 
@@ -148,6 +149,14 @@ export class WebSocketDurableObject extends DurableObject {
     }
     if (url.pathname === '/qoe/recent' && request.method === 'GET') {
       return Response.json(await this.getQoeLive().recent(Number(url.searchParams.get('minutes')) || 60));
+    }
+
+    // Live viewers role (objects named liveviewers:<streamId>, see live-viewers.ts); api-videos' DO binding only
+    if (url.pathname === '/live-viewers/beat' && request.method === 'POST') {
+      return await this.handleLiveViewerBeat(request);
+    }
+    if (url.pathname === '/live-viewers/count' && request.method === 'GET') {
+      return Response.json({ viewers: this.getLiveViewers().count(Date.now()) });
     }
 
     // Admin topic coalescer role (objects named coalesce:admin:<topic>, see admin-coalescer.ts)
@@ -593,6 +602,25 @@ export class WebSocketDurableObject extends DurableObject {
     if (!Array.isArray(beats) || beats.length === 0 || beats.length > 500) return Response.json({ error: 'beats: 1 to 500 required' }, { status: 400 });
     const accepted = await this.getQoeLive().addBeats(beats);
     return Response.json({ success: true, accepted });
+  }
+
+  private liveViewers?: LiveViewers;
+
+  private getLiveViewers(): LiveViewers {
+    if (!this.liveViewers) this.liveViewers = new LiveViewers();
+    return this.liveViewers;
+  }
+
+  /** `{ viewerId, net, leaving? }` from api-videos: one watch-page heartbeat. Answers who is watching now. */
+  private async handleLiveViewerBeat(request: Request): Promise<Response> {
+    let body: { viewerId?: unknown; leaving?: unknown; net?: unknown };
+    try {
+      body = (await request.json()) as { viewerId?: unknown; leaving?: unknown; net?: unknown };
+    } catch {
+      return Response.json({ error: 'Invalid JSON' }, { status: 400 });
+    }
+    if (!isViewerId(body.viewerId)) return Response.json({ error: 'viewerId required' }, { status: 400 });
+    return Response.json({ viewers: this.getLiveViewers().beat(body.viewerId, Date.now(), body.leaving === true, isNet(body.net) ? body.net : 'none') });
   }
 
   /** Coalescer side of an admin broadcast: `{ channel, events }` from the Worker. */

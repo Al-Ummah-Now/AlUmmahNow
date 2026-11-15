@@ -15,6 +15,7 @@ export const LIVE_WATCH_EN = {
   retry: 'Try again',
   playerLabel: 'Live stream player',
   startedAt: 'Started {time}',
+  watching: 'Watching now: {count}',
   allStreams: 'All live streams',
 };
 
@@ -35,5 +36,6 @@ export const LIVE_WATCH_AR: LiveWatchTranslations = {
   retry: 'حاول مرة أخرى',
   playerLabel: 'مشغّل البث المباشر',
   startedAt: 'بدأ {time}',
+  watching: 'المشاهدون الآن: {count}',
   allStreams: 'كل البثوث المباشرة',
 };

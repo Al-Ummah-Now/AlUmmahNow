@@ -179,6 +179,8 @@ export interface LiveStreamState {
   startedAt: string | null;
   endedAt: string | null;
   bitrateKbps: number | null;
+  /** People watching now while live (AlUmmahNow#30); null when unknown or not live. Newer servers only. */
+  viewers?: number | null;
 }
 
 // ---------------------------------------------------------------------------

@@ -24,6 +24,7 @@ import { readLiveRouting } from '../../lib/live/store';
 import { parseBeacon, QoeRejected, recordBeacon } from '../../lib/live/qoe';
 import { signLiveVodUrl } from '../../lib/live/vod-sign';
 import { canManageLiveStream } from '../../lib/channelAccess';
+import { beatLiveViewer, countLiveViewers, isViewerId, viewerNet } from '../../lib/live/viewers';
 import { isLiveVodWithheld } from '@al-ummah/shared-types';
 
 const Params = z.object({ id: Str({ description: 'Live stream id' }) });
@@ -135,11 +136,14 @@ export class LiveStreamStateGet extends OptionalAuthRoute {
 		const state = await streamState(env(c), stream);
 		const hideRecording = recordingHidden(stream, await canManageLiveStream(c.env as never, stream, this.getUserId(c)));
 		const settings = env(c).SEARCH_DB ? await readLiveRouting(env(c).SEARCH_DB!) : null;
+		// People watching now (AlUmmahNow#30), only while live: Studio polls this every 5 s
+		const live = state.status === 'live' || state.sessionStatus === 'live';
+		const viewers = live ? await countLiveViewers(c.env as never, stream.id) : null;
 		c.header('cache-control', 'no-store');
 		return {
 			success: true,
 			// serverNow: the player's clock offset for glass-to-glass latency (QoE beacons)
-			result: { ...state, vodUrl: hideRecording ? null : await signVod(c, state.vodUrl), provider: stream.provider ?? null, qoe: { sampleRate: settings?.qoeSampleRate ?? 0 }, serverNow: Date.now() },
+			result: { ...state, vodUrl: hideRecording ? null : await signVod(c, state.vodUrl), provider: stream.provider ?? null, qoe: { sampleRate: settings?.qoeSampleRate ?? 0 }, viewers, serverNow: Date.now() },
 		};
 	}
 }
@@ -219,6 +223,40 @@ export class LiveStreamDelete extends AuthenticatedRoute {
 		if (stream instanceof Response) return stream;
 		await deleteStream(env(c), stream);
 		return { success: true, result: { deleted: true } };
+	}
+}
+
+export class LiveStreamViewers extends PublicRoute {
+	schema = {
+		tags: ['Live Streams'],
+		summary: 'Watching heartbeat',
+		description:
+			'The watch page sends this every 20 s while it plays a live stream, with a random id kept for the tab (no user data), and `leaving: true` when the tab closes. Answers how many people are watching now (`viewers`, null when the count is briefly unavailable). The body is JSON; it may be sent as text/plain (navigator.sendBeacon, no CORS preflight).',
+		request: { params: Params },
+		responses: {
+			'200': Ok(z.object({ viewers: z.number().int().nullable() }), 'Counted'),
+			'400': Err('Rejected'),
+			'404': Err('Not found'),
+			'409': Err('The stream is not live'),
+		},
+	};
+	async handle(c: AppContext) {
+		const { params } = await this.getValidatedData<typeof this.schema>();
+		const raw = await c.req.text().catch(() => '');
+		let body: { viewerId?: unknown; leaving?: unknown } = {};
+		try {
+			body = raw.length <= 1024 ? (JSON.parse(raw) as typeof body) : {};
+		} catch {
+			body = {};
+		}
+		if (!isViewerId(body?.viewerId)) return fail(c, 400, 'rejected', 'viewerId required');
+		const stream = await visibleStream(c, params.id, undefined);
+		if (stream instanceof Response) return stream;
+		const leaving = body.leaving === true;
+		// Only a stream that can be live is counted (bounds the objects anyone can create); a leaving tab always is
+		if (!leaving && (stream.status === 'ended' || stream.status === 'cancelled')) return fail(c, 409, 'not_live', 'The stream is not live');
+		c.header('cache-control', 'no-store');
+		return { success: true, result: { viewers: await beatLiveViewer(c.env as never, stream.id, body.viewerId, leaving, await viewerNet(c.req.header('CF-Connecting-IP'), stream.id)) } };
 	}
 }
 

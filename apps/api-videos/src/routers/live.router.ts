@@ -3,7 +3,7 @@ import { fromHono } from 'chanfana';
 import { LiveStreamCreate } from '../endpoints/live/liveStreamCreate';
 import { LiveStreamsList } from '../endpoints/live/liveStreamsList';
 import { LiveStreamUpdate } from '../endpoints/live/liveStreamUpdate';
-import { LiveStreamDelete, LiveStreamEnd, LiveStreamGet, LiveStreamIngestGet, LiveStreamQoe, LiveStreamStart, LiveStreamStateGet } from '../endpoints/live/liveSession';
+import { LiveStreamDelete, LiveStreamEnd, LiveStreamGet, LiveStreamIngestGet, LiveStreamQoe, LiveStreamStart, LiveStreamStateGet, LiveStreamViewers } from '../endpoints/live/liveSession';
 
 const app = new Hono();
 export const liveRouter = fromHono(app, { base: '/api/live-streams' });
@@ -13,6 +13,7 @@ liveRouter.get('/', LiveStreamsList);
 liveRouter.get('/:id', LiveStreamGet);
 liveRouter.get('/:id/state', LiveStreamStateGet);
 liveRouter.post('/:id/qoe', LiveStreamQoe);
+liveRouter.post('/:id/viewers', LiveStreamViewers);
 
 // Authenticated endpoints
 liveRouter.post('/', LiveStreamCreate);

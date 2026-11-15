@@ -102,10 +102,12 @@ describe('GoLive', () => {
     expect(screen.getByTestId('studio-golive-server')).toHaveValue(rtmp.url);
     expect(screen.queryByTestId('studio-golive-preview')).toBeNull();
 
-    getState.mockResolvedValue({ state: state({ status: 'live', sessionStatus: 'live', receiving: true, startedAt: '2026-11-11T10:00:00.000Z', bitrateKbps: 4500 }), sentAt: 0, receivedAt: 0, dateHeader: null });
+    getState.mockResolvedValue({ state: state({ status: 'live', sessionStatus: 'live', receiving: true, startedAt: '2026-11-11T10:00:00.000Z', bitrateKbps: 4500, viewers: 1234 }), sentAt: 0, receivedAt: 0, dateHeader: null });
     await act(async () => { jest.advanceTimersByTime(STUDIO_POLL_MS); });
     await waitFor(() => expect(screen.getByTestId('studio-golive-status')).toHaveTextContent(text.live));
     expect(screen.getByTestId('studio-golive-details')).toHaveTextContent('4500 kbps');
+    // People watching now (AlUmmahNow#30), from the polled state
+    expect(screen.getByTestId('studio-golive-viewers')).toHaveTextContent(text.watching.replace('{count}', '1,234'));
     expect(screen.getByTestId('studio-golive-preview')).toHaveAttribute('data-src', state().playbackUrl);
   });
 
