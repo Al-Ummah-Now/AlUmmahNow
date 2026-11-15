@@ -154,6 +154,13 @@ test('the stylesheet defines every class the builders use, one control height an
   assert.match(bar, /font-family: var\(--aun-header-font, system-ui/);
   assert.match(css, /\.aun-header:lang\(ar\) \{\n  font-family: var\(--aun-header-font-ar, 'Noto Naskh Arabic'/);
   assert.doesNotMatch(row, /max-width/);
+  // one line at every width: nothing wraps, the brand is the group that shrinks, its name truncates
+  assert.match(bar, /flex-wrap: nowrap;/);
+  assert.match(row, /flex-wrap: nowrap;/);
+  const brand = css.slice(css.indexOf('.aun-brand {'), css.indexOf('}', css.indexOf('.aun-brand {')));
+  assert.match(brand, /flex: 0 1 auto;/);
+  const name = css.slice(css.indexOf('.aun-brand-name {'), css.indexOf('}', css.indexOf('.aun-brand-name {')));
+  assert.match(name, /text-overflow: ellipsis;/);
   assert.doesNotMatch(css, /--aun-header-max/);
   // below 1024px a site's own links leave the bar for the panel; the menu button shows only there
   assert.match(css, /@media \(max-width: 63\.99rem\) \{[^@]*\.aun-header-primary\.aun-collapse \{\n    display: none;/);
