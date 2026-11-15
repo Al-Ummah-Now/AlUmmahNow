@@ -171,7 +171,7 @@ export async function listSubscribers(
   const w = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const [rows, total] = await Promise.all([
     db
-      .prepare(`SELECT id, email, locale, status, confirm_status, confirm_error, unsubscribe_token, created_at, updated_at, confirmed_at, unsubscribed_at FROM newsletter_subscribers ${w} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`)
+      .prepare(`SELECT id, email, locale, status, confirm_status, confirm_error, unsubscribe_token, created_at, updated_at, confirmed_at, unsubscribed_at FROM newsletter_subscribers ${w} ORDER BY created_at DESC, rowid DESC LIMIT ? OFFSET ?`)
       .bind(...args, opts.limit, opts.offset)
       .all<SubscriberRow>(),
     db.prepare(`SELECT COUNT(*) AS n FROM newsletter_subscribers ${w}`).bind(...args).first<{ n: number }>(),
@@ -220,7 +220,7 @@ export async function deliveryCounts(db: D1Database, issueId: string): Promise<D
 
 export async function listIssues(db: D1Database, opts: { limit: number; offset: number }): Promise<{ items: (IssueRow & { counts: DeliveryCounts })[]; total: number }> {
   const [rows, total] = await Promise.all([
-    db.prepare(`SELECT ${ISSUE_COLS} FROM newsletter_issues ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`).bind(opts.limit, opts.offset).all<IssueRow>(),
+    db.prepare(`SELECT ${ISSUE_COLS} FROM newsletter_issues ORDER BY created_at DESC, rowid DESC LIMIT ? OFFSET ?`).bind(opts.limit, opts.offset).all<IssueRow>(),
     db.prepare('SELECT COUNT(*) AS n FROM newsletter_issues').first<{ n: number }>(),
   ]);
   const items = await Promise.all(((rows.results ?? []) as IssueRow[]).map(async (r) => ({ ...r, counts: r.status === 'draft' ? { queued: 0, sent: 0, sunk: 0, skipped: 0, failed: 0 } : await deliveryCounts(db, r.id) })));

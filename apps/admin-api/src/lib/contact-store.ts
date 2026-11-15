@@ -153,7 +153,7 @@ export async function listContactMessages(db: D1Database, f: ContactListFilters)
   }
   const clause = `WHERE ${where.join(' AND ')}`;
   const [rows, count] = await db.batch([
-    db.prepare(`SELECT ${MESSAGE_COLUMNS} FROM contact_messages ${clause} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`).bind(...args, f.limit, f.offset),
+    db.prepare(`SELECT ${MESSAGE_COLUMNS} FROM contact_messages ${clause} ORDER BY created_at DESC, rowid DESC LIMIT ? OFFSET ?`).bind(...args, f.limit, f.offset),
     db.prepare(`SELECT COUNT(*) AS total FROM contact_messages ${clause}`).bind(...args),
   ]);
   return {

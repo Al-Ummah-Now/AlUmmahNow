@@ -96,7 +96,7 @@ app.put('/settings', async (c) => {
 app.get('/history', async (c) => {
   const limit = Math.min(Math.max(parseInt(c.req.query('limit') || '10', 10) || 10, 1), 50);
   const { results } = await c.env.REPORTS_DB
-    .prepare('SELECT id, actor_id, created_at FROM site_settings_log WHERE key = ? ORDER BY created_at DESC, id DESC LIMIT ?')
+    .prepare('SELECT id, actor_id, created_at FROM site_settings_log WHERE key = ? ORDER BY created_at DESC, rowid DESC LIMIT ?')
     .bind(REVIEW_ALERT_SETTINGS_KEY, limit)
     .all<{ id: string; actor_id: string; created_at: string }>();
   return c.json({ success: true, result: { entries: (results ?? []).map((r) => ({ id: r.id, actorId: r.actor_id, createdAt: r.created_at })) } });

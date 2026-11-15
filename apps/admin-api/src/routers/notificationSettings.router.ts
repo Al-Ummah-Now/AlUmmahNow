@@ -41,7 +41,7 @@ app.get('/', async (c) => {
 app.get('/history', async (c) => {
   const limit = Math.min(Math.max(parseInt(c.req.query('limit') || '10', 10) || 10, 1), 50);
   const { results } = await c.env.REPORTS_DB
-    .prepare('SELECT id, old_value, new_value, actor_id, created_at FROM site_settings_log WHERE key = ? ORDER BY created_at DESC, id DESC LIMIT ?')
+    .prepare('SELECT id, old_value, new_value, actor_id, created_at FROM site_settings_log WHERE key = ? ORDER BY created_at DESC, rowid DESC LIMIT ?')
     .bind(NOTIFICATION_MENU_AUDIT_KEY, limit)
     .all<{ id: string; old_value: string | null; new_value: string; actor_id: string; created_at: string }>();
   const entries = (results ?? []).map((r) => ({ id: r.id, oldValue: r.old_value, newValue: r.new_value, actorId: r.actor_id, createdAt: r.created_at }));

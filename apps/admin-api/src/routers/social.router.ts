@@ -91,7 +91,7 @@ app.get('/', async (c) => c.json({ success: true, result: await callSocial(c.env
 app.get('/history', async (c) => {
   const limit = Math.min(Math.max(parseInt(c.req.query('limit') || '20', 10) || 20, 1), 100);
   const { results } = await c.env.REPORTS_DB
-    .prepare("SELECT id, key, old_value, new_value, actor_id, created_at FROM site_settings_log WHERE key >= 'social:' AND key < 'social;' ORDER BY created_at DESC, id DESC LIMIT ?")
+    .prepare("SELECT id, key, old_value, new_value, actor_id, created_at FROM site_settings_log WHERE key >= 'social:' AND key < 'social;' ORDER BY created_at DESC, rowid DESC LIMIT ?")
     .bind(limit)
     .all<{ id: string; key: string; old_value: string | null; new_value: string; actor_id: string; created_at: string }>();
   const entries = (results ?? []).map((r) => ({ id: r.id, key: r.key, oldValue: r.old_value, newValue: r.new_value, actorId: r.actor_id, createdAt: r.created_at }));

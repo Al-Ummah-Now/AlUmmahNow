@@ -152,7 +152,7 @@ export async function listWarnings(db: D1Database, userId: string, limit = WARNI
   const [count, { results = [] }] = await Promise.all([
     countWarnings(db, userId),
     db
-      .prepare('SELECT * FROM user_warnings WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT ?')
+      .prepare('SELECT * FROM user_warnings WHERE user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?')
       .bind(userId, Math.min(Math.max(1, limit), WARNING_HISTORY_MAX))
       .all<WarningRow>(),
   ]);
