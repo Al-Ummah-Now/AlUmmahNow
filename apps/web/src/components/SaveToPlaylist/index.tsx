@@ -242,7 +242,7 @@ export default function SaveToPlaylist({ videoId, channelId: channelIdProp, clas
               <div className="px-3 pt-3" role="search">
                 <label className="sr-only" htmlFor={`playlist-search-${videoId}`}>{t.playlist.searchYourPlaylists}</label>
                 <div className="relative">
-                  <Search className="pointer-events-none absolute start-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+                  <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--fanous-color-text-muted)]" aria-hidden="true" />
                   <input
                     id={`playlist-search-${videoId}`}
                     type="search"
@@ -251,7 +251,7 @@ export default function SaveToPlaylist({ videoId, channelId: channelIdProp, clas
                     placeholder={t.playlist.searchYourPlaylists}
                     autoComplete="off"
                     data-testid="save-to-playlist-search"
-                    className="w-full ps-8 pe-3 py-1.5 text-sm border dark:border-gray-600 rounded-lg dark:bg-gray-800 dark:text-white"
+                    className="f-input f-icon-start w-full py-1.5 text-sm"
                   />
                 </div>
               </div>
@@ -259,12 +259,12 @@ export default function SaveToPlaylist({ videoId, channelId: channelIdProp, clas
                 {loading && playlists.length === 0 ? (
                   <p className="px-4 py-2 text-sm text-gray-500">{t.common.loading}</p>
                 ) : pages.failed && playlists.length === 0 ? (
-                  <p role="alert" className="px-4 py-2 text-sm text-red-600 dark:text-red-400">
+                  <p role="alert" className="px-4 py-2 text-sm text-[var(--fanous-color-error-text)]">
                     {t.playlist.loadFailed}{' '}
                     <button type="button" className="underline" onClick={pages.retry}>{t.playlistTools.tryAgain}</button>
                   </p>
                 ) : playlists.length === 0 ? (
-                  <p className="px-4 py-2 text-sm text-gray-500">{pages.searched ? t.playlist.noMatchingPlaylists : t.playlist.noPlaylists}</p>
+                  <p className="px-4 py-2 text-sm text-[var(--fanous-color-text-muted)]">{pages.searched ? t.playlist.noMatchingPlaylists : t.playlist.noPlaylists}</p>
                 ) : (
                   playlists.map((playlist) => {
                     const checked = (playlist.videos || []).includes(videoId);
@@ -293,13 +293,13 @@ export default function SaveToPlaylist({ videoId, channelId: channelIdProp, clas
                 )}
                 {!loading && (pages.hasMore || pages.moreFailed) && (
                   <div className="px-4 pt-1">
-                    {pages.moreFailed && <p role="alert" className="text-xs text-red-600 dark:text-red-400">{t.playlist.morePlaylistsFailed}</p>}
+                    {pages.moreFailed && <p role="alert" className="text-xs text-[var(--fanous-color-error-text)]">{t.playlist.morePlaylistsFailed}</p>}
                     <button
                       type="button"
                       onClick={pages.loadMore}
                       disabled={pages.loadingMore}
                       data-testid="save-to-playlist-more"
-                      className="text-sm text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50"
+                      className="b b-ghost b-sm"
                     >
                       {pages.loadingMore ? t.common.loading : t.playlist.showMorePlaylists}
                     </button>
