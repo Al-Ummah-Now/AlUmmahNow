@@ -16,6 +16,7 @@ import { edgeCacheUrl, readEdgeCache, writeEdgeCache } from "../../lib/edge-cach
 import { FIRST_PAGE_TTL_SECONDS, videoListGeneration } from "../../lib/videoListCache";
 import { PUBLIC_DISLIKES_COUNT } from "../../lib/reactions";
 import { channelNameFields } from '../../lib/channelName';
+import { publicCommentsCount } from '../../lib/comments';
 
 /** Seconds the anonymous first page of the general feed is reused. */
 
@@ -278,7 +279,7 @@ export class VideosList extends OptionalAuthRoute {
 				likesCount: video.likes?.length || 0,
 				dislikesCount: PUBLIC_DISLIKES_COUNT,
 				isShort: isShort(video),
-				commentsCount: video.comments?.length || 0,
+				commentsCount: publicCommentsCount(video.comments),
 			};
 		};
 

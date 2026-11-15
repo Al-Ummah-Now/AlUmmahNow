@@ -31,6 +31,7 @@
 --   apps/api-videos/migrations/search/0036_media_providers.sql
 --   apps/api-videos/migrations/search/0037_image_owners.sql
 --   apps/api-videos/migrations/search/0038_media_originals_keep.sql
+--   apps/api-videos/migrations/search/0039_channel_comments.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -45,6 +46,10 @@ CREATE TABLE caption_minute_overdraft (user_id TEXT PRIMARY KEY, minutes INTEGER
 CREATE TABLE caption_minute_usage (user_id TEXT NOT NULL, period TEXT NOT NULL, minutes INTEGER NOT NULL DEFAULT 0 CHECK (minutes >= 0), updated_at TEXT NOT NULL, PRIMARY KEY (user_id, period)) WITHOUT ROWID;
 CREATE TABLE category_suggestions (subject_id TEXT PRIMARY KEY, subject_type TEXT NOT NULL, user_id TEXT, channel_id TEXT, reason TEXT NOT NULL, status TEXT NOT NULL, input_hash TEXT, category TEXT, confidence REAL, options_json TEXT, model TEXT, prompt_version TEXT, threshold REAL, applied INTEGER NOT NULL DEFAULT 0, previous_category TEXT, previous_source TEXT, outcome TEXT NOT NULL DEFAULT 'pending', final_category TEXT, reviewed_by TEXT, reviewed_at INTEGER, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
 CREATE TABLE channel_access (channel_id TEXT NOT NULL, user_id TEXT NOT NULL, role TEXT NOT NULL, source_version INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (channel_id, user_id));
+CREATE TABLE channel_blocks (channel_id TEXT NOT NULL, user_id TEXT NOT NULL, blocked_by TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY (channel_id, user_id)) WITHOUT ROWID;
+CREATE TABLE channel_comment_sigs (target_kind TEXT NOT NULL, target_id TEXT NOT NULL, sig TEXT NOT NULL, PRIMARY KEY (target_kind, target_id)) WITHOUT ROWID;
+CREATE TABLE channel_comments (comment_id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, target_kind TEXT NOT NULL CHECK (target_kind IN ('video', 'post')), target_id TEXT NOT NULL, parent_id TEXT, author_user_id TEXT NOT NULL, author_channel_id TEXT, status TEXT NOT NULL CHECK (status IN ('published', 'held', 'removed')), held_by TEXT CHECK (held_by IS NULL OR held_by IN ('moderation', 'channel_block')), removed_by_user_id TEXT, removed_at TEXT, has_link INTEGER NOT NULL DEFAULT 0, has_channel_reply INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL) WITHOUT ROWID;
+CREATE TABLE channel_comments_index_state (channel_id TEXT PRIMARY KEY, indexed_at TEXT, status TEXT NOT NULL CHECK (status IN ('building', 'ready', 'stale', 'failed')), updated_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE content_ownership (kind TEXT NOT NULL, id TEXT NOT NULL, owner_id TEXT, channel_id TEXT, is_public INTEGER NOT NULL DEFAULT 1, is_hidden INTEGER NOT NULL DEFAULT 0, is_deleted INTEGER NOT NULL DEFAULT 0, is_live INTEGER NOT NULL DEFAULT 0, duration REAL, schedule_status TEXT, upload_status TEXT, views INTEGER NOT NULL DEFAULT 0, created_at INTEGER, updated_at INTEGER, indexed_at INTEGER NOT NULL DEFAULT 0, studio_status TEXT, title TEXT, category TEXT, language TEXT, source_version INTEGER NOT NULL DEFAULT 0, admin_title TEXT, handle TEXT, email TEXT, is_verified INTEGER NOT NULL DEFAULT 0, is_suspended INTEGER NOT NULL DEFAULT 0, subscribers INTEGER NOT NULL DEFAULT 0, admin_cols INTEGER NOT NULL DEFAULT 0, is_short INTEGER NOT NULL DEFAULT 0, needs_format INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (kind, id));
 CREATE TABLE creator_tier_assignments (user_id TEXT PRIMARY KEY, tier_id TEXT NOT NULL, source TEXT NOT NULL DEFAULT 'admin' CHECK (source IN ('admin', 'subscription')), assigned_by TEXT NOT NULL, assigned_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE creator_tiers (id TEXT PRIMARY KEY, name TEXT NOT NULL, unlimited INTEGER NOT NULL DEFAULT 0, per_hour INTEGER NOT NULL, per_day INTEGER NOT NULL, max_concurrent INTEGER NOT NULL, max_channels INTEGER, updated_at TEXT, updated_by TEXT, deleted_at TEXT, deleted_by TEXT, delete_reason TEXT, purge_requested_at TEXT, purge_requested_by TEXT, caption_minutes_month INTEGER NOT NULL DEFAULT 0) WITHOUT ROWID;
@@ -124,6 +129,11 @@ CREATE INDEX idx_catsug_review ON category_suggestions (subject_type, outcome, c
 CREATE INDEX idx_catsug_status ON category_suggestions (status, updated_at);
 CREATE INDEX idx_catsug_user ON category_suggestions (user_id, created_at);
 CREATE INDEX idx_channel_access_user ON channel_access (user_id);
+CREATE INDEX idx_channel_blocks_user ON channel_blocks (user_id);
+CREATE INDEX idx_channel_comments_author ON channel_comments (author_user_id);
+CREATE INDEX idx_channel_comments_list ON channel_comments (channel_id, status, created_at DESC);
+CREATE INDEX idx_channel_comments_removed ON channel_comments (status, removed_at);
+CREATE INDEX idx_channel_comments_target ON channel_comments (target_kind, target_id);
 CREATE INDEX idx_content_ownership_admin_cols ON content_ownership (kind, admin_cols);
 CREATE INDEX idx_content_ownership_channel ON content_ownership (kind, channel_id, created_at);
 CREATE INDEX idx_content_ownership_channel_short ON content_ownership (kind, channel_id, is_short, created_at);

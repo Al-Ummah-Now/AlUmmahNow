@@ -61,6 +61,7 @@ import { CommentDelete } from '../endpoints/video/commentDelete';
 import { CommentList } from '../endpoints/video/commentList';
 import { CommentRepliesList } from '../endpoints/video/commentRepliesList';
 import { CommentApprove } from '../endpoints/video/commentApprove';
+import { CommentHeart, CommentHold, CommentPin, CommentRestore } from '../endpoints/video/commentModeration';
 
 // Video like/dislike endpoints
 import { LikeCreate } from '../endpoints/video/videoLikeCreate';
@@ -244,6 +245,12 @@ videoRouter.get('/:id/comments/:cid/replies', CommentRepliesList);
 
 // Approve a held comment (video owner)
 videoRouter.post('/:id/comments/:cid/approve', CommentApprove);
+
+// Channel moderation (comment.moderate; Studio Comments, #771)
+videoRouter.post('/:id/comments/:cid/restore', CommentRestore);
+videoRouter.post('/:id/comments/:cid/hold', CommentHold);
+videoRouter.post('/:id/comments/:cid/pin', CommentPin);
+videoRouter.post('/:id/comments/:cid/heart', CommentHeart);
 
 // Update comment (authenticated)
 videoRouter.put('/:id/comments/:cid', CommentUpdate);

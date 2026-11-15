@@ -7,6 +7,7 @@ import { addAuthToSchema } from '../../lib/openapi-auth';
 import Queue, { MessageType } from '../../lib/queue';
 import type { PostComment } from '@al-ummah/shared-types';
 import { scanInBackground } from '../../lib/moderation-scan';
+import { executionCtxOf, indexPostComment } from '../../lib/channelComments';
 
 const updateCommentRequestSchema = z.object({
   content: z
@@ -132,7 +133,8 @@ export class UpdatePostComment extends AuthenticatedRoute {
     // likes, replies or a heart that land meanwhile are kept, and a comment
     // deleted meanwhile is not edited
     const { data: saved, rejected } = await patchComment<'deleted'>(bucket, commentKey, (fresh) => {
-      if (fresh.deletedAt) return { reject: 'deleted' };
+      // A comment the channel removed is treated as deleted for its author too
+      if (fresh.deletedAt || fresh.removedBy === 'channel') return { reject: 'deleted' };
       fresh.content = requestBody.content;
       fresh.isEdited = true;
       fresh.updatedAt = new Date().toISOString();
@@ -145,6 +147,9 @@ export class UpdatePostComment extends AuthenticatedRoute {
       return c.json({ success: false, error: 'Cannot update deleted comment' }, 400);
     }
     Object.assign(comment, saved);
+
+    // Studio's comment list (has-link filter; lib/channelComments)
+    await indexPostComment(c.env as never, executionCtxOf(c as never), postId, postChannelId, saved);
 
     // 5. Send queue event
     const queue = new Queue(c.env.queue);

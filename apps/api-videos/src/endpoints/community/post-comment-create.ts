@@ -18,6 +18,9 @@ import { findPostComment, getChannelObject, topLevelCommentKey, recordReplyParen
 import { notifyUserInBackground } from '../../lib/websocket-notify';
 import { scanInBackground } from '../../lib/moderation-scan';
 import { can, channelRoleOf, resolveDisplayName, type NameFields } from '@al-ummah/shared-types';
+import { executionCtxOf, indexPostComment } from '../../lib/channelComments';
+import { isBlocked } from '../../lib/channelComments/blocks';
+import { logger } from '../../lib/logger';
 
 // Sanitization configuration for comments
 // Allows basic formatting while preventing XSS attacks
@@ -174,8 +177,8 @@ export class CreatePostComment extends AuthenticatedRoute {
         );
       }
 
-      // Cannot reply to deleted comment
-      if (parentComment.deletedAt) {
+      // Cannot reply to a deleted comment, or one the channel removed
+      if (parentComment.deletedAt || parentComment.removedBy === 'channel') {
         return c.json(
           {
             success: false,
@@ -194,12 +197,12 @@ export class CreatePostComment extends AuthenticatedRoute {
       const channelObj = await getChannelObject(c.env.channels, userChannelId);
       if (channelObj) {
         const channel = await channelObj.json<Channel>();
-        // The owner, or a member of the channel (every channel role may speak as it)
+        // The owner, or a member who may speak as the channel (channel roles, never site roles)
         if (!can(channelRoleOf(channel as never, userId), 'channel.speak')) {
           return c.json(
             {
               success: false,
-              error: 'You can only comment as a channel you own or help run',
+              error: 'You can only comment as a channel you own or manage',
             },
             403
           );
@@ -214,6 +217,10 @@ export class CreatePostComment extends AuthenticatedRoute {
       const profileObj = await c.env.profiles?.get(userId).catch(() => null);
       profileName = profileObj ? resolveDisplayName((await profileObj.json().catch(() => null)) as NameFields | null) : '';
     }
+
+    // A person the post's channel blocked is held silently: only they see it (#771).
+    // A member of the channel is never blocked (the block route refuses them).
+    const blocked = await isBlocked(c.env.SEARCH_DB as never, postChannelId, userId);
 
     const comment: PostComment = {
       id: crypto.randomUUID(),
@@ -231,6 +238,7 @@ export class CreatePostComment extends AuthenticatedRoute {
       isEdited: false,
       isHeartedByCreator: false,
       createdAt: new Date().toISOString(),
+      ...(blocked ? { status: 'held' as const, heldBy: 'channel_block' as const } : {}),
     };
 
     // 4. Store comment
@@ -269,6 +277,15 @@ export class CreatePostComment extends AuthenticatedRoute {
 
       // Update top-level comments index
       await this.updateTopLevelIndex(bucket, postId, comment.id);
+    }
+
+    // Studio's comment list (lib/channelComments)
+    await indexPostComment(c.env as never, executionCtxOf(c as never), postId, postChannelId, comment);
+
+    // A held comment is not public: no count, no notifications (the blocked person is not told either)
+    if (blocked) {
+      logger.debug('[CreatePostComment] Held for a channel block', { postId, commentId: comment.id });
+      return c.json({ success: true, comment: { ...comment, status: undefined, heldBy: undefined } } as PostCommentCreateResponse, 201);
     }
 
     // 5. Increment post's comments count

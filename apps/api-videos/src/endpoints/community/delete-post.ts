@@ -1,5 +1,7 @@
 import { z } from 'zod';
-import { CommunityPost, PostStatus } from '@al-ummah/shared-types';
+import { can, CommunityPost, PostStatus } from '@al-ummah/shared-types';
+import { roleOnChannel } from '../../lib/channelAccess';
+import { deletePostCommentRows, executionCtxOf, reportIndexFailure } from '../../lib/channelComments';
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import Queue, { MessageType } from '../../lib/queue';
@@ -16,7 +18,7 @@ export class DeleteCommunityPost extends AuthenticatedRoute {
         postId: z.string().describe('Post ID to delete'),
       }),
       headers: z.object({
-        channelId: z.string().describe('Actor channel ID (must own the post)'),
+        channelId: z.string().describe('Actor channel ID (the channel, as its owner or a member with post.manage)'),
       }),
     },
     responses: {
@@ -61,9 +63,9 @@ export class DeleteCommunityPost extends AuthenticatedRoute {
     const request: any = await this.getValidatedData<typeof this.schema>();
     const userChannelId = request.headers?.channelId;
 
-    // Verify user owns the channel they're trying to delete from
-    if (userChannelId !== postChannelId) {
-      return c.json({ error: 'You can only delete posts from your own channel' }, 403);
+    // The owner, or a member whose channel role grants post.manage (admin, editor); never a site role
+    if (!can(await roleOnChannel(c.env as never, postChannelId, userId).catch(() => null), 'post.manage')) {
+      return c.json({ error: 'You may not delete posts on this channel' }, 403);
     }
 
     try {
@@ -97,6 +99,13 @@ export class DeleteCommunityPost extends AuthenticatedRoute {
 
       // Remove from channel index
       await this.removeFromChannelIndex(c, postChannelId, postId);
+
+      // Its comments leave Studio's comment list (lib/channelComments)
+      if (c.env.SEARCH_DB) {
+        await deletePostCommentRows(c.env.SEARCH_DB as never, postId).catch((error) =>
+          reportIndexFailure(c.env as never, executionCtxOf(c as never), error, { channelId: postChannelId, targetKind: 'post', targetId: postId }),
+        );
+      }
 
       // Send deletion event to queue
       const queue = new Queue(c.env.queue);

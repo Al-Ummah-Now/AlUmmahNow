@@ -19,6 +19,7 @@ import { toCommentListItems } from "../../lib/commentAuthors";
 import { CommentListItemSchema } from "./commentList";
 import { scanInBackground } from '../../lib/moderation-scan';
 import { reactorId } from "../../lib/reactions";
+import { blockedChannelsOf } from "../../lib/channelComments/blocks";
 
 
 export class CommentCreate extends AuthenticatedRoute {
@@ -100,6 +101,9 @@ export class CommentCreate extends AuthenticatedRoute {
 		let comment = undefined as StoredComment | undefined;
 		let parent = undefined as StoredComment | undefined;
 		let held = false;
+		let blocked = false;
+		// Channels that blocked the commenter (silent: the comment is held for them alone, #771)
+		const blockedBy = await blockedChannelsOf(c.env.SEARCH_DB as never, userId);
 
 		// Conditional write (SCALABILITY-AUDIT AV-2): the checks and the append
 		// run on the fresh video each attempt, so a concurrent comment, like or
@@ -134,8 +138,9 @@ export class CommentCreate extends AuthenticatedRoute {
 				parent = target;
 			}
 
-			// The owner's own comments are never held
-			held = settings === 'held' && !isVideoOwner;
+			// The owner's own comments are never held; a person the channel blocked is held silently
+			blocked = !isVideoOwner && !!fresh.channelId && blockedBy.has(fresh.channelId);
+			held = blocked || (settings === 'held' && !isVideoOwner);
 			comment = {
 				id: commentId,
 				videoId: id,
@@ -152,6 +157,7 @@ export class CommentCreate extends AuthenticatedRoute {
 				dateModified: now,
 				...(parent ? { parentCommentId: parent.id } : {}),
 				...(held ? { status: 'held' as const } : {}),
+				...(blocked ? { heldBy: 'channel_block' as const } : {}),
 			};
 
 			if (parent) {
@@ -198,7 +204,7 @@ export class CommentCreate extends AuthenticatedRoute {
 				comment: { ...item, isLiked: false, isDisliked: false },
 			});
 		}
-		if (video.userId && video.userId !== userId) {
+		if (video.userId && video.userId !== userId && !blocked) {
 			notifyUserInBackground(c, video.userId, {
 				notificationType: 'comment',
 				notificationKey: 'newComment',

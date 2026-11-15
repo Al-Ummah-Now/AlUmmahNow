@@ -131,11 +131,12 @@ export class ListPostComments extends OptionalAuthRoute {
       idsToFetch.unshift(pinnedCommentId);
     }
 
+    const viewerUserId = this.getUserId(c);
     const comments: PostComment[] = [];
     const fetchedComments = await Promise.all(
       idsToFetch.map(async (commentId) => {
         const commentObj = await bucket.get(topLevelCommentKey(postId, commentId));
-        return commentObj ? presentComment(await commentObj.json<PostComment>()) : null;
+        return commentObj ? presentComment(await commentObj.json<PostComment>(), viewerUserId) : null;
       })
     );
     comments.push(...fetchedComments.filter((c): c is PostComment => c !== null));
@@ -167,7 +168,7 @@ export class ListPostComments extends OptionalAuthRoute {
 
     const response: PostCommentListResponse = {
       success: true,
-      comments: await withViewerLikes(bucket, postId, comments, this.getUserId(c)),
+      comments: await withViewerLikes(bucket, postId, comments, viewerUserId),
       pagination: {
         limit,
         cursor: paginatedIds.length > 0 ? paginatedIds[paginatedIds.length - 1] : undefined,

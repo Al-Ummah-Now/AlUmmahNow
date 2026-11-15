@@ -1,5 +1,4 @@
-import type { Channel, CommunityPost, PostComment } from '@al-ummah/shared-types';
-import { can, channelRoleOf } from '@al-ummah/shared-types';
+import { can, channelRoleOf, type Channel, type CommunityPost, type PostComment } from '@al-ummah/shared-types';
 
 /**
  * Shared helpers for community post comment endpoints.
@@ -103,10 +102,11 @@ export type PostOwnerCheck =
   | { ok: false; status: 403 | 404; error: string };
 
 /**
- * Load a post and verify the user may moderate its comments: the owner of
- * the post's channel, or a member holding comment.moderate on it.
+ * Load a post and verify the user may moderate its comments: the channel's
+ * owner, or a member whose channel role grants `comment.moderate` (owner,
+ * admin, moderator). Roles come from the channel record, never site roles.
  */
-export async function loadPostForChannelOwner(
+export async function loadPostForModeration(
   env: { community_posts: R2Bucket; channels: R2Bucket },
   postChannelId: string,
   postId: string,
@@ -124,13 +124,11 @@ export async function loadPostForChannelOwner(
   }
   const channel = await channelObj.json<Channel>();
 
-  // The owner, or a member whose channel role grants comment.moderate
-  // (docs/specs/CHANNEL-ROLES.md: channel admins and channel moderators)
   if (!can(channelRoleOf(channel as never, userId), 'comment.moderate')) {
     return {
       ok: false,
       status: 403,
-      error: 'Only the channel owner or a channel moderator can perform this action',
+      error: 'You may not moderate comments on this channel',
     };
   }
 
@@ -142,8 +140,16 @@ export async function loadPostForChannelOwner(
  * deleted comments without replies, masks deleted comments that still have
  * replies, and normalises status flags that older records may lack.
  */
-export function presentComment(comment: PostComment): PostComment | null {
+export function presentComment(comment: PostComment, viewerUserId?: string): PostComment | null {
   if (comment.isHidden) {
+    return null;
+  }
+  // Removed by the channel: gone for everyone, its author included (restorable from Studio, #771)
+  if (comment.removedBy === 'channel' && !comment.deletedAt) {
+    return null;
+  }
+  // Held (for review, or silently for a channel block): only its author sees it
+  if (comment.status === 'held' && !comment.deletedAt && (!viewerUserId || viewerUserId !== comment.userId)) {
     return null;
   }
 
@@ -152,8 +158,10 @@ export function presentComment(comment: PostComment): PostComment | null {
     return null;
   }
 
+  // Moderation bookkeeping stays server side; a held comment shows as a normal one to its author
+  const { status: _status, heldBy: _heldBy, removedBy: _removedBy, removedAt: _removedAt, removedByUserId: _removedByUserId, removedCount: _removedCount, moderation: _moderation, ...visible } = comment;
   const normalised: PostComment = {
-    ...comment,
+    ...visible,
     likes: comment.likes || 0,
     repliesCount: comment.repliesCount || 0,
     isPinned: Boolean(comment.isPinned),

@@ -5,6 +5,13 @@
 
 import { SoftDelete, Moderation } from './common';
 
+/** Who last moderated a comment for its channel, and how (stored on the comment). */
+export interface CommentModerationRecord {
+  action: string;
+  userId: string;
+  at: string;
+}
+
 export interface PostComment extends SoftDelete, Moderation {
   id: string;                        // UUID
   postId: string;                    // Parent post ID
@@ -31,6 +38,20 @@ export interface PostComment extends SoftDelete, Moderation {
 
   // Viewer state (computed per request, never stored)
   isLikedByViewer?: boolean;         // Present when the request is authenticated
+
+  // Review state (Studio Comments, #771). Absent = published.
+  /** 'held': seen only by its author (and in Studio) until approved */
+  status?: 'published' | 'held';
+  /** Who holds it: platform moderation or a channel block (silent); absent = the channel's review */
+  heldBy?: 'moderation' | 'channel_block';
+  /** Set when the post's channel removed it (soft: restorable for 90 days, then purged) */
+  removedBy?: 'channel';
+  removedAt?: string;
+  removedByUserId?: string;
+  /** Comments the removal took off the post's count (itself and its replies), given back on restore */
+  removedCount?: number;
+  /** The last channel moderation action on it (audit) */
+  moderation?: CommentModerationRecord;
 
   // Timestamps
   createdAt: string;                 // ISO timestamp

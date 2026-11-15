@@ -123,12 +123,17 @@ describe('comment ownership', () => {
 		assert.equal(videos.read('v1').comments.length, 1);
 	});
 
-	it('lets the video owner delete a comment', async () => {
+	it("lets the video owner remove a comment: the channel's soft removal (#771)", async () => {
 		const videos = new MemoryBucket({ v1: videoFixture({ comments: [commentFixture('c1', { userId: 'author' })] }) });
 		const app = buildApp(commentRoutes, { userId: 'owner' });
 		const del = await app.request('/api/videos/v1/comments/c1', { method: 'DELETE', headers: { channelId: 'owner-ch' } }, env({ videos }));
 		assert.equal(del.status, 200);
-		assert.equal(videos.read('v1').comments.length, 0);
+		assert.equal(((await del.json()) as { removed?: boolean }).removed, true);
+		const [kept] = videos.read('v1').comments;
+		assert.equal(kept.id, 'c1', 'kept for a restore');
+		assert.equal(kept.isDeleted, true);
+		assert.equal(kept.removedBy, 'channel');
+		assert.equal(kept.removedByUserId, 'owner');
 	});
 });
 

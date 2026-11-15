@@ -3,6 +3,8 @@ import { fromHono } from 'chanfana';
 import { ChannelContentList, ChannelContentSummary } from '../endpoints/channel/channelContent';
 import { ChannelDeletedVideos } from '../endpoints/video/videoTrash';
 import { ChannelTopContent } from '../endpoints/channel/channelTopContent';
+import { ChannelCommentsBulk, ChannelCommentsList, ChannelCommentsSummary } from '../endpoints/channel/channelComments';
+import { ChannelBlockAdd, ChannelBlockRemove, ChannelBlocksList } from '../endpoints/channel/channelBlocks';
 
 // Channel CRUD endpoints
 import { ChannelsList } from '../endpoints/channel/channelList';
@@ -95,6 +97,13 @@ channelRouter.get('/:id/content/summary', ChannelContentSummary);
 channelRouter.get('/:id/content/deleted', ChannelDeletedVideos);
 channelRouter.get('/:id/content', ChannelContentList);
 channelRouter.get('/:id/analytics/top-content', ChannelTopContent);
+// Studio: Comments (comment.moderate; #771)
+channelRouter.get('/:id/comments/summary', ChannelCommentsSummary);
+channelRouter.get('/:id/comments', ChannelCommentsList);
+channelRouter.post('/:id/comments/bulk', ChannelCommentsBulk);
+channelRouter.get('/:id/blocks', ChannelBlocksList);
+channelRouter.post('/:id/blocks', ChannelBlockAdd);
+channelRouter.delete('/:id/blocks/:userId', ChannelBlockRemove);
 
 // Get channel shorts (public)
 channelRouter.get('/:id/shorts', ChannelShortsList);

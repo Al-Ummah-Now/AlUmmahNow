@@ -5,7 +5,7 @@ import { AuthenticatedRoute, AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { logger } from '../../lib/logger';
 import type { PostCommentHeartResponse } from '@al-ummah/shared-types';
-import { findPostComment, loadPostForChannelOwner } from './post-comment-helpers';
+import { findPostComment, loadPostForModeration } from './post-comment-helpers';
 
 const errorSchema = z.object({ success: z.boolean(), error: z.string() });
 
@@ -36,7 +36,7 @@ function buildHeartSchema(summary: string, description: string) {
           },
         },
         '400': { description: 'Comment cannot be hearted', content: { 'application/json': { schema: errorSchema } } },
-        '403': { description: 'No comment.moderate role on the channel', content: { 'application/json': { schema: errorSchema } } },
+        '403': { description: 'No comment moderation role on this channel', content: { 'application/json': { schema: errorSchema } } },
         '404': { description: 'Post or comment not found', content: { 'application/json': { schema: errorSchema } } },
       },
     },
@@ -52,7 +52,7 @@ abstract class SetCommentHeartRoute extends AuthenticatedRoute {
     const { channelId: postChannelId, postId, commentId } = c.req.param();
     const bucket = c.env.community_posts;
 
-    const ownerCheck = await loadPostForChannelOwner(c.env, postChannelId, postId, userId);
+    const ownerCheck = await loadPostForModeration(c.env, postChannelId, postId, userId);
     if (ownerCheck.ok === false) {
       return c.json({ success: false, error: ownerCheck.error }, ownerCheck.status);
     }
@@ -85,17 +85,17 @@ abstract class SetCommentHeartRoute extends AuthenticatedRoute {
 }
 
 /**
- * Heart a comment or reply ("loved by creator"). Channel owner, channel admin or channel moderator. Idempotent.
+ * Heart a comment or reply ("loved by creator"). Comment moderators only. Idempotent.
  */
 export class HeartPostComment extends SetCommentHeartRoute {
   protected readonly hearted = true;
-  schema = buildHeartSchema('Heart a comment (channel owner, channel admin or channel moderator)', 'Marks a comment as hearted by the post creator.');
+  schema = buildHeartSchema('Heart a comment (comment moderators)', 'Marks a comment as hearted by the post creator.');
 }
 
 /**
- * Remove the creator heart from a comment or reply. Channel owner, channel admin or channel moderator. Idempotent.
+ * Remove the creator heart from a comment or reply. Comment moderators only. Idempotent.
  */
 export class UnheartPostComment extends SetCommentHeartRoute {
   protected readonly hearted = false;
-  schema = buildHeartSchema('Remove heart from a comment (channel owner, channel admin or channel moderator)', 'Removes the creator heart from a comment.');
+  schema = buildHeartSchema('Remove heart from a comment (comment moderators)', 'Removes the creator heart from a comment.');
 }

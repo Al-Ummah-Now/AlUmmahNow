@@ -15,7 +15,8 @@ import { logger } from '../../lib/logger';
 import Queue, { MessageType } from '../../lib/queue';
 import { scanInBackground, communityPostScanText } from '../../lib/moderation-scan';
 import { markScheduled } from '../../lib/scheduled-posts';
-import { parsePostFields, type PostV2Fields } from '@al-ummah/shared-types';
+import { can, parsePostFields, type PostV2Fields } from '@al-ummah/shared-types';
+import { roleOnChannel } from '../../lib/channelAccess';
 import { platformMediaHost, postFieldsMessage } from '../../lib/post-v2';
 
 const mediaSchema = z.object({
@@ -70,7 +71,7 @@ export class UpdateCommunityPost extends AuthenticatedRoute {
         postId: z.string().describe('Post ID to update'),
       }),
       headers: z.object({
-        channelId: z.string().describe('Actor channel ID (must own the post)'),
+        channelId: z.string().describe('Actor channel ID (the channel, as its owner or a member with post.manage)'),
       }),
       body: {
         content: {
@@ -137,9 +138,9 @@ export class UpdateCommunityPost extends AuthenticatedRoute {
       return c.json({ error: 'Request body is required' }, 400);
     }
 
-    // Verify user owns the channel they're trying to update from
-    if (userChannelId !== postChannelId) {
-      return c.json({ error: 'You can only update posts from your own channel' }, 403);
+    // The owner, or a member whose channel role grants post.manage (admin, editor); never a site role
+    if (!can(await roleOnChannel(c.env as never, postChannelId, userId).catch(() => null), 'post.manage')) {
+      return c.json({ error: 'You may not edit posts on this channel' }, 403);
     }
 
     const auth = this.getAuth(c);

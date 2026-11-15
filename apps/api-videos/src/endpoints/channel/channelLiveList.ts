@@ -12,6 +12,7 @@ import { channelVideosFromIndex } from "../../lib/search/channelVideoIndex";
 import { scanFill } from "../../lib/listFill";
 import { PUBLIC_DISLIKES_COUNT } from "../../lib/reactions";
 import { channelNameFields } from '../../lib/channelName';
+import { publicCommentsCount } from '../../lib/comments';
 
 export class ChannelLiveList extends OptionalAuthRoute {
 	schema = {
@@ -175,7 +176,7 @@ export class ChannelLiveList extends OptionalAuthRoute {
 				likesCount: video.likes?.length || 0,
 				dislikesCount: PUBLIC_DISLIKES_COUNT,
 				isShort: isShort(video),
-				commentsCount: video.comments?.length || 0,
+				commentsCount: publicCommentsCount(video.comments),
 			});
 
 			const response: PaginationResponse<ReturnType<typeof transformToView>> = {

@@ -106,6 +106,8 @@ export * from './error-reporting';
 export * from './legacy-profiles';
 // Per-channel roles (owner/admin/editor/moderator), separate from site roles
 export * from './channel-roles';
+// Studio Comments page: one comment row across a channel's videos and posts (#771)
+export * from './studio-comments';
 export * from './playlist-bulk';
 // Creator tiers: who may upload and create channels (videos admin)
 export * from './creator-tiers';
