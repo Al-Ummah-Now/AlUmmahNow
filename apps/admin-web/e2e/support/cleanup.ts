@@ -167,9 +167,10 @@ async function eraseLocalCopies(users: LedgerUser[]): Promise<void> {
 
 /**
  * The processor's longest queue batch wait (max_batch_timeout 30 s, apps/processor/wrangler.jsonc)
- * plus a second: a message sent as the last spec ended is archived by then.
+ * plus time to write the batch, counted from the teardown's last action (its report clean-up sends
+ * messages too): a message sent by then is archived before the wait may end.
  */
-const ARCHIVE_SETTLE_MS = 31_000;
+const ARCHIVE_SETTLE_MS = 36_000;
 
 /** Revocations outlive the tokens on purpose (the job's leftover check allows them too). */
 const KEPT_ON_PURPOSE = (h: { store: string; location: string }) =>
@@ -207,7 +208,6 @@ async function waitForErasure(users: LedgerUser[], log: (line: string) => void, 
  */
 export async function teardownRun(log: (line: string) => void = () => undefined): Promise<void> {
   if (!RUN_ID) return;
-  const started = Date.now();
   const users = ledgerUsers();
   if (process.env.E2E_RUN_USER_IDS_FILE) writeRunUserIds(process.env.E2E_RUN_USER_IDS_FILE);
   const problems: string[] = [];
@@ -242,7 +242,9 @@ export async function teardownRun(log: (line: string) => void = () => undefined)
     await eraseLocalCopies(users).catch((error) => problems.push(`local copies: ${(error as Error).message}`));
     // The erasure's processor steps (UserDataErased: invites, error rows, category suggestions) run
     // from the queue: wait until they are done before the job's leftover check looks
-    await waitForErasure(users, log, started + ARCHIVE_SETTLE_MS).catch((error) => log(`[teardown] could not wait for the erasure: ${(error as Error).message}`));
+    // From now, not from the teardown's start: its own report clean-up sends ReportResolve messages,
+    // and those are archived up to a batch later (run 43712470164: sent 12:25:18, the wait ended 12:25:50)
+    await waitForErasure(users, log, Date.now() + ARCHIVE_SETTLE_MS).catch((error) => log(`[teardown] could not wait for the erasure: ${(error as Error).message}`));
   }
   if (problems.length) throw new Error(`teardown left things behind:\n${problems.join('\n')}`);
 }
