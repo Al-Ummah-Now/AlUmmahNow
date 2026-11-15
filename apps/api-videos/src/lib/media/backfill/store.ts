@@ -5,6 +5,8 @@
 import {
 	addCosts,
 	backfillCost,
+	backfillCostAt,
+	ceilingBasis,
 	emptyCost,
 	emptyCounts,
 	type BackfillChecks,
@@ -274,16 +276,15 @@ export async function summariseEstimate(db: Db, runId: string, basis: BackfillEs
 			videoSeconds += Number(r.secs);
 		}
 	}
-	const secs = Number(parts?.secs) || 0;
-	const egress = Number(parts?.egress) || 0;
-	const renditionBytes = basis.assumed ? Number(parts?.assumedBytes) || 0 : secs * basis.renditionBytesPerVideoSecond;
-	const cost = backfillCost(BACKFILL_PRICES, {
-		egressBytes: egress,
-		transcodeSeconds: secs * basis.containerPerVideoSecond,
-		storageBytes: egress + renditionBytes,
-		classAOps: (Number(parts?.copyOps) || 0) + secs * basis.objectsPerVideoSecond,
-	});
-	return { ...cost, videos, skipped, videoSeconds: Math.round(videoSeconds), basis, at: now.toISOString() };
+	const input = {
+		copyBytes: Number(parts?.egress) || 0,
+		copyOps: Number(parts?.copyOps) || 0,
+		transcodeVideoSeconds: Number(parts?.secs) || 0,
+		assumedRenditionBytes: Number(parts?.assumedBytes) || 0,
+	};
+	const cost = backfillCostAt(BACKFILL_PRICES, basis, input);
+	const ceiling = backfillCostAt(BACKFILL_PRICES, ceilingBasis(basis), input);
+	return { ...cost, videos, skipped, videoSeconds: Math.round(videoSeconds), basis, ceiling, at: now.toISOString() };
 }
 
 export { addCosts };

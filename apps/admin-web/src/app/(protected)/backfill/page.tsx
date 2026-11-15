@@ -1,6 +1,6 @@
 import Link from '@/components/AppLink';
-import type { BackfillRun, MediaProviderId } from '@al-ummah/shared-types';
-import { getBackfillRun, getMediaProviders, listBackfillRuns, listBunnyLibraries, type BunnyLibraryView } from '@/lib/api/admin';
+import type { BackfillOverview, BackfillRun, MediaProviderId } from '@al-ummah/shared-types';
+import { getBackfillOverview, getBackfillRun, getMediaProviders, listBackfillRuns, listBunnyLibraries, type BunnyLibraryView } from '@/lib/api/admin';
 import { getAdminSession } from '@/lib/auth';
 import { canManageMedia } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
@@ -9,6 +9,7 @@ import { Chip } from '@/components/content/parts';
 import { ErrorAlert, cardClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { NewRun } from './NewRun';
+import { Overview } from './Overview';
 import { RunPanel } from './RunPanel';
 import { FlipSection } from './FlipSection';
 import { RetireSection } from './RetireSection';
@@ -31,6 +32,21 @@ function settled<T>(result: PromiseSettledResult<T>, what: string): T | null {
  * the estimate from real sizes, set the cap and press Start; then play R2 first (per video, channel or
  * everywhere) and, as its own action, retire a legacy Bunny library after a grace period.
  */
+/** The environment this admin runs in (NEXTJS_ENV, the same switch as the tab icon). */
+function environmentLabel(env: string | undefined) {
+  switch ((env ?? '').toLowerCase()) {
+    case 'production':
+      return 'mediaBackfill.envProduction' as const;
+    case 'stage':
+    case 'staging':
+      return 'mediaBackfill.envStage' as const;
+    case 'qa':
+      return 'mediaBackfill.envQa' as const;
+    default:
+      return 'mediaBackfill.envDevelopment' as const;
+  }
+}
+
 export default async function BackfillPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const { t, locale } = await getI18n();
@@ -39,7 +55,8 @@ export default async function BackfillPage({ searchParams }: PageProps) {
     return <ErrorAlert testId="backfill-no-access">{t('mediaBackfill.noAccess')}</ErrorAlert>;
   }
 
-  const [runsResult, librariesResult, providersResult] = await Promise.allSettled([listBackfillRuns(), listBunnyLibraries(), getMediaProviders()]);
+  const [runsResult, librariesResult, providersResult, overviewResult] = await Promise.allSettled([listBackfillRuns(), listBunnyLibraries(), getMediaProviders(), getBackfillOverview()]);
+  const overview: BackfillOverview | null = settled(overviewResult, 'overview');
   const runs: BackfillRun[] | null = settled(runsResult, 'runs');
   const libraries: BunnyLibraryView[] | null = settled(librariesResult, 'libraries');
   const providers = settled(providersResult, 'provider settings');
@@ -58,6 +75,8 @@ export default async function BackfillPage({ searchParams }: PageProps) {
         <h1 className="text-3xl font-bold text-fg">{t('mediaBackfill.title')}</h1>
         <p className="text-fg-muted mt-1">{t('mediaBackfill.subtitle')}</p>
       </div>
+
+      {overview ? <Overview overview={overview} environment={t(environmentLabel(process.env.NEXTJS_ENV))} /> : <ErrorAlert testId="backfill-overview-error">{t('mediaBackfill.overviewFailed')}</ErrorAlert>}
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <NewRun />

@@ -98,7 +98,7 @@ export function metricsFromRecords(input: {
 	return out;
 }
 
-async function bunnyStoredBytes(env: CostEnv): Promise<number | undefined> {
+export async function bunnyStoredBytes(env: CostEnv): Promise<number | undefined> {
 	try {
 		// Every library this env stores videos in (primary and legacy; lib/bunny/libraries.ts)
 		let total = 0;
