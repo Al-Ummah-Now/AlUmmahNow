@@ -49,7 +49,7 @@ import {
 	pendingChannelInvites,
 	readInvite,
 	recordTeamActivity,
-	membershipChangedSince,
+	memberChangedAfter,
 	settleClaim,
 	teamSeatLimit,
 	type InviteRow,
@@ -348,12 +348,6 @@ export class ChannelInviteAccept extends AuthenticatedRoute {
 			return fail(c, 409, 'shared_limit', 'You already help run the most channels allowed');
 		}
 
-		// Removed, left or re-roled after this was sent: the later change outranks it
-		if (await membershipChangedSince(db, invite.channel_id, userId, invite.created_at)) {
-			await closeInvite(db, invite.id, 'cancelled');
-			return fail(c, 404, 'invite_not_found', 'This invitation is no longer open');
-		}
-
 		// Claim it first: a cancel that races this accept finds it closed (spec §4.2)
 		if (!(await claimInvite(db, invite.id, userId))) return fail(c, 404, 'invite_not_found', 'This invitation is no longer open');
 
@@ -368,6 +362,11 @@ export class ChannelInviteAccept extends AuthenticatedRoute {
 				if (!canManageRole(channelRoleOf(fresh, invite.invited_by), invite.role)) {
 					return { status: 404, code: 'inviter_lost_role', message: 'This invitation is no longer open' };
 				}
+				// Removed, left or re-roled after this was sent: the later change outranks it
+				// (checked on the fresh record, in the same put as the grant)
+				if (memberChangedAfter(fresh as never, userId, invite.created_at)) {
+					return { status: 404, code: 'invite_superseded', message: 'This invitation is no longer open' };
+				}
 				if (fresh.userId === userId || members.some(m => m.userId === userId)) return false;
 				joined = true;
 				if (members.length >= teamSeatLimit(fresh.userId)) return { status: 409, code: 'member_limit', message: 'This channel\'s team is full' };
@@ -380,7 +379,7 @@ export class ChannelInviteAccept extends AuthenticatedRoute {
 		}
 		const { channel, rejected } = outcome;
 		if (rejected) {
-			if (rejected.code === 'channel_not_found' || rejected.code === 'inviter_lost_role') {
+			if (rejected.code === 'channel_not_found' || rejected.code === 'inviter_lost_role' || rejected.code === 'invite_superseded') {
 				await settleClaim(db, invite.id, 'cancelled');
 				return fail(c, 404, 'invite_not_found', 'This invitation is no longer open');
 			}

@@ -108,12 +108,13 @@ export function transformChannelToView(channel: z.infer<typeof BusinessChannel>)
     // checks members.view
     // Bunny collection ids are internal too (lib/channelCollection.ts)
     // Images waiting for pre-publication review (VR16): never their URL, only that one is being checked
-    const { suspension, suspensionHolds: _holds, hiddenBeforeSuspension: _before, members: _members, bunnyCollectionId: _collection, bunnyCollections: _collections, pendingImages, ...rest } = channel as typeof channel & {
+    const { suspension, suspensionHolds: _holds, hiddenBeforeSuspension: _before, members: _members, memberChangedAt: _changed, bunnyCollectionId: _collection, bunnyCollections: _collections, pendingImages, ...rest } = channel as typeof channel & {
         pendingImages?: Record<string, { status?: string }>;
         suspension?: { at?: string; reason?: string; by?: string };
         suspensionHolds?: unknown;
         hiddenBeforeSuspension?: unknown;
         members?: unknown;
+        memberChangedAt?: unknown;
         bunnyCollectionId?: unknown;
         bunnyCollections?: unknown;
     };

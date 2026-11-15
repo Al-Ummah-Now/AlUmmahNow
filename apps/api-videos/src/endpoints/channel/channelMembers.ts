@@ -35,7 +35,7 @@ import R2Repository from "../../lib/r2Repo";
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { logger } from "../../lib/logger";
 import { FALLBACK_SCAN_OBJECTS } from "../../lib/scanBudget";
-import { cancelInvitesSentBy, cancelInvitesTo, inviteAuditTarget, notifyTeam, pendingChannelInvites, recordTeamActivity, rotateChannelLiveKeys, teamSeatLimit } from "../../lib/channelTeam";
+import { cancelInvitesSentBy, cancelInvitesTo, inviteAuditTarget, stampMemberChanges, notifyTeam, pendingChannelInvites, recordTeamActivity, rotateChannelLiveKeys, teamSeatLimit } from "../../lib/channelTeam";
 import { memberChannelRoles, ownedChannelIds, scheduleOwnershipHeal, waitUntilOf } from "../../lib/search/ownership";
 import { resolveDisplayName, type NameFields } from '@al-ummah/shared-types';
 
@@ -289,9 +289,13 @@ export async function changeMembers(
 	const repository = new R2Repository<ChannelType>(c.env.channels);
 	const { data, rejected } = await repository.updateObjectOrReject<Rejection>(channelId, (fresh) => {
 		if (fresh.isDeleted) return { reject: { status: 404, code: 'channel_not_found', message: 'Channel not found' } };
-		const outcome = mutate(fresh, channelRoleOf(fresh, actorId), channelMembersOf(fresh));
+		const before = channelMembersOf(fresh);
+		const outcome = mutate(fresh, channelRoleOf(fresh, actorId), before);
 		if (outcome === false) return false;
 		if (!Array.isArray(outcome)) return { reject: outcome };
+		// Removals, leaves and role changes are stamped on the record in this same
+		// put: an invitation from before can't undo them (memberChangedAfter)
+		stampMemberChanges(fresh as never, before, outcome);
 		fresh.members = outcome;
 		fresh.dateModified = new Date().toISOString();
 		return true;
@@ -417,7 +421,7 @@ export class ChannelMemberRemove extends AuthenticatedRoute {
 		if (removedRole && channel) {
 			await recordTeamActivity(c.env as never, executionCtx(c), [{ channelId: params.id, actorId, action: leaving ? 'member_left' : 'member_removed', targetUserId: params.userId, oldRole: removedRole }]);
 			// Their @handle invitations to this channel are cancelled; email ones stay
-			// visibly pending and are refused at accept (membershipChangedSince)
+			// visibly pending and are refused at accept (memberChangedAfter)
 			if (!leaving && c.env.SEARCH_DB) {
 				try {
 					await cancelInvitesTo(c.env.SEARCH_DB as D1Database, params.id, params.userId);

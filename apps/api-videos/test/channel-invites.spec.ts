@@ -10,6 +10,7 @@ import { ChannelAuditList, ChannelInviteAccept, ChannelInviteCancel, ChannelInvi
 import { ChannelMemberRemove, ChannelMemberUpdate, ChannelMembersList } from '../src/endpoints/channel/channelMembers';
 import { STALE_CLAIM_MS, anonymizeTeamActivity, cancelInvitesOfUser, expireInvites, pruneTeamActivity, resolveStaleClaims, teamSeatLimit } from '../src/lib/channelTeam';
 import { memberMayActAs, roleOnChannel } from '../src/lib/channelAccess';
+import { transformChannelToView } from '../src/lib/transformations';
 import { runOwnershipPass } from '../src/lib/search/ownership';
 import { collectUserData, eraseUserData, DELETED_USER_ID } from '../src/lib/privacy/user-data';
 import { OperationBudget } from '../src/lib/privacy/scan';
@@ -160,9 +161,22 @@ describe('inviting (§4.1, §4.2)', () => {
 		await myInvites(env, 'sara');
 		assert.equal((await as('owner').request('/api/channels/team/members/sara', { method: 'DELETE' }, env as never)).status, 200);
 		assert.equal(inviteRows(db)[0].status, 'pending');
+		assert.ok(env.channels.read('team').memberChangedAt?.sara, 'the removal is stamped on the channel record, in the same write');
+		const view = transformChannelToView(env.channels.read('team') as never) as Record<string, unknown>;
+		assert.equal('memberChangedAt' in view, false, 'never in a channel view');
+		assert.equal('members' in view, false);
 		const [tied] = await myInvites(env, 'sara');
 		assert.equal(await codeOf(await respond(env, 'sara', tied.id, 'accept')), 'invite_not_found');
 		assert.equal(channelRoleOf(env.channels.read('team'), 'sara'), null);
+
+		// The stamp holds even when the activity log can't be written
+		const { env: env4 } = withSara();
+		await invite(env4, 'owner', { email: 'sara@test.local', role: 'admin' });
+		(env4 as any).SEARCH_DB.db.exec('DROP TABLE channel_audit');
+		assert.equal((await as('owner').request('/api/channels/team/members/sara', { method: 'DELETE' }, env4 as never)).status, 200);
+		const [stale] = await myInvites(env4, 'sara');
+		assert.equal(await codeOf(await respond(env4, 'sara', stale.id, 'accept')), 'invite_not_found');
+		assert.equal(channelRoleOf(env4.channels.read('team'), 'sara'), null);
 
 		// Leaving outranks an older invitation too
 		const { env: env3 } = withSara();

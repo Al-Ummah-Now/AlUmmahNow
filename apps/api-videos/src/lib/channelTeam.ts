@@ -263,16 +263,36 @@ export function inviteAuditTarget(row: Pick<InviteRow, 'by_email' | 'invitee_use
 export const EMAIL_INVITEE_ACTOR = 'email-invitee';
 
 /**
- * Whether `userId`'s membership changed after `since` (removed, left, or their
- * role changed): an invitation from before that can't bring them back or give
- * back a role they lost; the later change outranks it.
+ * When each person last lost or changed a role on the channel, kept on the
+ * channel record itself (`memberChangedAt`) and written in the same
+ * conditional put as the change, so it can't be skipped the way a log write
+ * can. Entries older than an invitation's life are dropped.
  */
-export async function membershipChangedSince(db: D1Database, channelId: string, userId: string, since: string): Promise<boolean> {
-	const row = await db
-		.prepare(`SELECT 1 FROM channel_audit WHERE channel_id = ? AND target_user_id = ? AND action IN ('member_removed', 'member_left', 'role_changed') AND created_at > ? LIMIT 1`)
-		.bind(channelId, userId, since)
-		.first();
-	return Boolean(row);
+export function stampMemberChanges(
+	channel: { memberChangedAt?: Record<string, string> | null },
+	before: ReadonlyArray<{ userId: string; role: string }>,
+	after: ReadonlyArray<{ userId: string; role: string }>,
+	now = new Date(),
+): void {
+	const stamps: Record<string, string> = { ...(channel.memberChangedAt ?? {}) };
+	const cutoff = new Date(now.getTime() - CHANNEL_INVITE_DAYS * DAY_MS).toISOString();
+	for (const [id, at] of Object.entries(stamps)) if (typeof at !== 'string' || at < cutoff) delete stamps[id];
+	for (const was of before) {
+		const is = after.find((m) => m.userId === was.userId);
+		if (!is || is.role !== was.role) stamps[was.userId] = now.toISOString();
+	}
+	if (Object.keys(stamps).length) channel.memberChangedAt = stamps;
+	else delete channel.memberChangedAt;
+}
+
+/**
+ * Whether `userId` was removed, left, or had their role changed on the channel
+ * after `since`: an invitation from before that can't bring them back or give
+ * back a role they lost. Reads the fresh channel record (stampMemberChanges).
+ */
+export function memberChangedAfter(channel: { memberChangedAt?: Record<string, string> | null }, userId: string, since: string): boolean {
+	const at = channel.memberChangedAt?.[userId];
+	return typeof at === 'string' && at > since;
 }
 
 /** Cancel the open invitations (pending, or claimed by an accept in flight) matching `where`. Returns the closed rows. */
@@ -294,7 +314,7 @@ export const cancelInvitesSentBy = (db: D1Database, channelId: string, inviterId
 /**
  * A removed member's @handle invitations to the channel. Email ones stay
  * visibly pending (closing them would tell the inviter who owns the address);
- * accept refuses them via membershipChangedSince.
+ * accept refuses them via memberChangedAfter.
  */
 export const cancelInvitesTo = (db: D1Database, channelId: string, userId: string, now?: Date) =>
 	cancelWhere(db, 'channel_id = ? AND invitee_user_id = ? AND by_email = 0', [channelId, userId], now);

@@ -773,6 +773,7 @@ export async function eraseUserData(
 			if (removed === 0 && !membership) return false;
 			if (removed > 0) fresh.subscriptions = stripped.list;
 			if (membership) fresh.members = (fresh.members as Json[]).filter((m) => m?.userId !== userId);
+			if (fresh.memberChangedAt && typeof fresh.memberChangedAt === 'object') delete (fresh.memberChangedAt as Json)[userId];
 			return true;
 		}, ctx.budget);
 		if (removed > 0) bump(summary.deleted, 'subscriptions', removed);
