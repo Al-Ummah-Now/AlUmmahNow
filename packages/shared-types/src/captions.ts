@@ -40,7 +40,7 @@ export interface CaptionCue {
 }
 
 /** Where a draft came from. */
-export type CaptionDraftOrigin = 'review_transcript' | 'transcription' | 'translation';
+export type CaptionDraftOrigin = 'review_transcript' | 'transcription' | 'translation' | 'on_device';
 
 export interface CaptionDraft {
   v: 1;
@@ -86,6 +86,53 @@ export const captionDraftsPrefix = (videoId: string) => `${videoId}/drafts/`;
 /** A claim of the review transcript being turned into a draft (#1296): `<videoId>/claims/<lang>.json`. */
 export const captionClaimKey = (videoId: string, language: string) => `${videoId}/claims/${language}.json`;
 export const captionClaimsPrefix = (videoId: string) => `${videoId}/claims/`;
+
+/**
+ * A transcript made on the creator's computer (D10: desktop Studio's free on-device option, Core's
+ * whisper.cpp). It waits here, in the subtitles bucket so it goes with the video, until the claim
+ * job runs the Quran matcher over it and writes the draft; the job deletes it once drafted.
+ */
+export const onDeviceTranscriptKey = (videoId: string, language: string) => `${videoId}/on-device/${language}.json`;
+
+/** Limits of an on-device transcript (POST …/captions/drafts/:language/transcript). */
+export const ON_DEVICE_TRANSCRIPT_LIMITS = {
+  /** Segments per transcript (a 6-hour lecture is about 7,000) */
+  maxSegments: 20_000,
+  /** Characters per segment */
+  maxSegmentChars: 2_000,
+  /** Characters in the whole transcript */
+  maxTotalChars: 2_000_000,
+  /** The latest end time accepted (24 hours) */
+  maxEndMs: 24 * 60 * 60 * 1000,
+} as const;
+
+export type OnDeviceTranscriptCheck =
+  | { ok: true; segments: ReviewTranscriptFile['segments'] }
+  | { ok: false; error: 'empty' | 'too_many_segments' | 'invalid_segment' | 'too_long'; segment?: number };
+
+/** Checks and normalises an on-device transcript: times are whole ms, in order, and inside the limits. */
+export function validateOnDeviceTranscript(input: unknown): OnDeviceTranscriptCheck {
+  if (!Array.isArray(input) || input.length === 0) return { ok: false, error: 'empty' };
+  const L = ON_DEVICE_TRANSCRIPT_LIMITS;
+  if (input.length > L.maxSegments) return { ok: false, error: 'too_many_segments' };
+  const segments: ReviewTranscriptFile['segments'] = [];
+  let total = 0;
+  let previousStart = 0;
+  for (let i = 0; i < input.length; i++) {
+    const s = input[i] as { startMs?: unknown; endMs?: unknown; text?: unknown } | null;
+    const startMs = typeof s?.startMs === 'number' ? Math.round(s.startMs) : NaN;
+    const endMs = typeof s?.endMs === 'number' ? Math.round(s.endMs) : NaN;
+    const text = typeof s?.text === 'string' ? s.text.replace(/\s+/g, ' ').trim() : null;
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || text === null) return { ok: false, error: 'invalid_segment', segment: i };
+    if (startMs < 0 || endMs <= startMs || endMs > L.maxEndMs || startMs < previousStart) return { ok: false, error: 'invalid_segment', segment: i };
+    if (text.length > L.maxSegmentChars) return { ok: false, error: 'invalid_segment', segment: i };
+    total += text.length;
+    if (total > L.maxTotalChars) return { ok: false, error: 'too_long' };
+    previousStart = startMs;
+    if (text) segments.push({ startMs, endMs, text });
+  }
+  return segments.length ? { ok: true, segments } : { ok: false, error: 'empty' };
+}
 
 export interface CaptionClaimState {
   language: string;

@@ -21,6 +21,7 @@ import {
   type ErrorReporterEnv,
   type ExecutionContextLike,
   type ReviewTranscriptFile,
+  onDeviceTranscriptKey,
 } from '@al-ummah/shared-types';
 import { loadQuranIndex } from '../quran/review-matcher';
 import { writeTranscriptDraft, type DraftBucket } from './draft';
@@ -73,13 +74,22 @@ export function isClaimPayload(p: unknown): p is CaptionClaimPayload {
     typeof x.language === 'string' &&
     LANGUAGE.test(x.language) &&
     typeof x.transcriptKey === 'string' &&
-    // Only a review transcript of this video
+    transcriptKeyAllowed(x as CaptionClaimPayload) &&
+    (x.engine === undefined || (typeof x.engine?.provider === 'string' && x.engine.provider.length <= 40 && (x.engine.model === undefined || (typeof x.engine.model === 'string' && x.engine.model.length <= 80)))) &&
+    typeof x.requestedBy === 'string' &&
+    typeof x.requestedAt === 'string'
+  );
+}
+
+/** Only this video's own transcript: its review transcript, or the on-device one Studio uploaded. */
+function transcriptKeyAllowed(x: CaptionClaimPayload): boolean {
+  if (x.source === 'on_device') return x.transcriptKey === onDeviceTranscriptKey(x.videoId, x.language);
+  if (x.source !== undefined && x.source !== 'review') return false;
+  return (
     x.transcriptKey.startsWith('review/') &&
     x.transcriptKey.endsWith('/transcript.json') &&
     x.transcriptKey.includes(`/${x.videoId}/`) &&
-    !x.transcriptKey.includes('..') &&
-    typeof x.requestedBy === 'string' &&
-    typeof x.requestedAt === 'string'
+    !x.transcriptKey.includes('..')
   );
 }
 
@@ -92,7 +102,9 @@ type Outcome = { status: 'drafted'; cues: number; quran: number } | { status: 'f
 export async function runCaptionClaim(env: CaptionClaimEnv, p: CaptionClaimPayload, now = new Date()): Promise<Outcome> {
   const subtitles = env.subtitles as WriteBucket | undefined;
   if (!env.REVIEW_MEDIA || !subtitles) throw new ClaimRetryableError('buckets not bound');
-  const object = await env.REVIEW_MEDIA.get(p.transcriptKey);
+  const onDevice = p.source === 'on_device';
+  // An on-device transcript waits in the subtitles bucket (it goes with the video); a review one in private media
+  const object = await (onDevice ? subtitles : env.REVIEW_MEDIA).get(p.transcriptKey);
   if (!object) return { status: 'failed', error: 'transcript_gone' };
   const transcript = JSON.parse(await object.text()) as ReviewTranscriptFile;
   const segments = (transcript.segments ?? []).filter((s) => Number.isFinite(s.startMs) && Number.isFinite(s.endMs) && typeof s.text === 'string');
@@ -104,10 +116,21 @@ export async function runCaptionClaim(env: CaptionClaimEnv, p: CaptionClaimPaylo
   const written = await writeTranscriptDraft(
     subtitles,
     index,
-    { videoId: p.videoId, language: p.language, replace: !!p.replace, requestedBy: p.requestedBy, origin: 'review_transcript', machine: { provider: 'review-transcript' }, segments },
+    {
+      videoId: p.videoId,
+      language: p.language,
+      replace: !!p.replace,
+      requestedBy: p.requestedBy,
+      origin: onDevice ? 'on_device' : 'review_transcript',
+      machine: onDevice ? { provider: p.engine?.provider ?? 'on-device', ...(p.engine?.model ? { model: p.engine.model } : {}) } : { provider: 'review-transcript' },
+      segments,
+    },
     now,
   );
-  return written.status === 'draft_exists' ? { status: 'failed', error: 'draft_exists' } : written;
+  if (written.status === 'draft_exists') return { status: 'failed', error: 'draft_exists' };
+  // Drafted: the uploaded transcript has done its job (the draft holds the text now)
+  if (onDevice) await subtitles.delete(p.transcriptKey).catch(() => undefined);
+  return written;
 }
 
 async function markClaim(env: CaptionClaimEnv, p: CaptionClaimPayload, error: CaptionClaimState['error'] | null): Promise<void> {
@@ -157,7 +180,7 @@ export async function processCaptionClaimMessages(messages: CaptionClaimQueueMes
       reportNeedsAction('processor', env, ctx, {
         key: claimNeedsActionKey(p.videoId, p.language),
         source: 'queue',
-        title: 'Caption draft from the review transcript failed',
+        title: p.source === 'on_device' ? 'Caption draft from an on-device transcript failed' : 'Caption draft from the review transcript failed',
         message: reason,
         itemType: 'video',
         itemId: p.videoId,
@@ -165,7 +188,14 @@ export async function processCaptionClaimMessages(messages: CaptionClaimQueueMes
           kind: 'service',
           service: 'processor',
           path: '/internal/captions/claim',
-          body: { videoId: p.videoId, language: p.language, transcriptKey: p.transcriptKey, requestedBy: p.requestedBy, replace: p.replace ? 1 : 0 },
+          body: {
+            videoId: p.videoId,
+            language: p.language,
+            transcriptKey: p.transcriptKey,
+            requestedBy: p.requestedBy,
+            replace: p.replace ? 1 : 0,
+            ...(p.source === 'on_device' ? { source: 'on_device', ...(p.engine ? { engineProvider: p.engine.provider, engineModel: p.engine.model ?? '' } : {}) } : {}),
+          },
         },
         retryLabel: 'Try again',
         extra: { language: p.language, attempts },
@@ -186,6 +216,12 @@ export function claimFromRetryBody(body: unknown, now = new Date()): CaptionClai
     // Retry bodies carry strings: replace arrives as "1" / "0"
     replace: b?.replace === 1 || b?.replace === '1' || b?.replace === true,
     requestedAt: now.toISOString(),
+    ...(b?.source === 'on_device'
+      ? {
+          source: 'on_device' as const,
+          ...(typeof b.engineProvider === 'string' ? { engine: { provider: b.engineProvider, ...(typeof b.engineModel === 'string' && b.engineModel ? { model: b.engineModel } : {}) } } : {}),
+        }
+      : {}),
   };
   return isClaimPayload(payload) ? payload : null;
 }

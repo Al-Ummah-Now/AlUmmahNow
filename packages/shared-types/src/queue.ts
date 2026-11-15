@@ -186,8 +186,15 @@ export interface CaptionClaimPayload {
   videoId: string;
   /** The language the creator says the speech is in (the transcript was auto-detected) */
   language: string;
-  /** The review transcript in the private media bucket (`review/…/transcript.json`) */
+  /**
+   * `review` (default): the review transcript in the private media bucket (`review/…/transcript.json`).
+   * `on_device`: a transcript made in desktop Studio, in the subtitles bucket (onDeviceTranscriptKey).
+   */
   transcriptKey: string;
+  /** Where the transcript came from; absent means `review` */
+  source?: 'review' | 'on_device';
+  /** The on-device engine, recorded on the draft (e.g. whisper.cpp, large-v3-turbo-q5_0) */
+  engine?: { provider: string; model?: string };
   requestedBy: string;
   /** Replace an existing draft of that language */
   replace?: boolean;
