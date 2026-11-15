@@ -84,12 +84,23 @@ Adding a provider means adding one adapter, plus its entry in `PAYMENT_PROVIDERS
    - **Hourly**, any subscription whose renewal never arrived is checked with the provider
      (`billing.reconcile`).
 
-Users see their subscriptions and billing history on `/settings/billing`. From there they can
-cancel (at period end where the provider supports it) and, for Paddle, open the provider's
-portal.
+After checkout the user lands back on `/upgrade?checkout=<id>`. The page polls
+`GET /api/me/billing/checkouts/:id` (open, completed or expired, and whether the subscription is
+active yet) until the tier is assigned. A checkout the user left unpaid reads `expired` (Paddle's
+overlay closed, the test page's Cancel: `POST /api/me/billing/checkouts/:id/abandon`), and the page
+says nothing was charged. A payment that still arrives later completes it.
+
+A tier on sale appears on `/upgrade` even if it can't be requested.
+
+Users see their subscriptions and billing history on `/settings/billing`. From there they can:
+- cancel (at period end where the provider supports it)
+- open the provider's portal, for Paddle
+- open receipts. Paddle's receipts are short-lived links, fetched when asked for
+  (`GET /api/me/billing/payments/:id/receipt`) and never stored.
 
 Account deletion keeps payment records as bookkeeping, but under the erased placeholder
-instead of the user id. It empties webhook payloads and deletes customer links and checkouts
+instead of the user id, with provider customer ids and receipt links dropped. It empties webhook
+payloads and deletes customer links and checkouts
 (`apps/processor/src/erasure/user-traces.ts`).
 
 ## Going live (production)

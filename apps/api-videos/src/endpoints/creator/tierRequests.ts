@@ -13,6 +13,7 @@ import { TIER_REQUEST_ERRORS, type TierRequestInput } from '@al-ummah/shared-typ
 import { createTierRequest, ownRequest, TierRequestError, upgradeOverview, withdrawTierRequest } from '../../lib/tierRequests';
 import { logger } from '../../lib/logger';
 import { turnstileMode } from '../../lib/bot-guard';
+import { soldTierIds, type ServiceEnv } from '../../lib/billing/service';
 
 type RolesAuth = { payload?: { roles?: string[] } } | undefined;
 const rolesOf = (c: Context) => (c.get('auth') as RolesAuth)?.payload?.roles;
@@ -27,7 +28,8 @@ export async function handleUpgradeOverview(c: Context) {
 	const userId = c.get('userId') as string | undefined;
 	try {
 		const siteKey = turnstileMode(c.env) === 'off' ? null : (c.env.TURNSTILE_SITE_KEY as string | undefined) || null;
-		const result = await upgradeOverview(c.env.SEARCH_DB, userId ? { userId, roles: rolesOf(c) } : null, siteKey);
+		const sold = await soldTierIds(c.env as ServiceEnv);
+		const result = await upgradeOverview(c.env.SEARCH_DB, userId ? { userId, roles: rolesOf(c) } : null, siteKey, sold);
 		// Per viewer when signed in; the tier list alone is the same for everyone
 		return c.json({ success: true, result }, 200, { 'Cache-Control': userId ? 'private, no-store' : 'public, max-age=60' });
 	} catch (error) {
