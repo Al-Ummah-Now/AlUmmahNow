@@ -73,7 +73,7 @@ test.afterAll(async () => {
 async function signInToCms(page: Page) {
   await page.goto(`${CMS}/sso/login?return=%2F`);
   // The issuer may ask which account to continue with: the run account is the only one
-  const chooser = page.getByRole('button', { name: new RegExp(admin!.email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') });
+  const chooser = page.getByRole('button', { name: admin!.email });
   await expect(async () => {
     if (new URL(page.url()).origin !== new URL(CMS).origin && (await chooser.count())) await chooser.first().click();
     expect(new URL(page.url()).origin).toBe(new URL(CMS).origin);
