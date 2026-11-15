@@ -218,6 +218,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/release/site-theme.spec.ts': { placement: 'local', reason: 'admin-web theme switch + builder, web renders it' },
   'apps/web/e2e/release/sso-journey.spec.ts': { placement: 'deployed', reason: 'cross-app: CMS and www are not in the local stack yet (#1003); back to local once they are' },
   'apps/web/e2e/release/studio-analytics.spec.ts': { placement: 'local', reason: 'Studio analytics empty state and range' },
+  'apps/web/e2e/release/studio-comments.spec.ts': { placement: 'local', reason: 'Studio Comments moderation (reply, remove/restore, block), roles, dashboard card' },
   'apps/web/e2e/release/studio-dashboard.spec.ts': { placement: 'local', reason: 'Studio dashboard welcome' },
   'apps/web/e2e/release/studio-draft-path.spec.ts': { placement: 'local', reason: 'Studio draft/schedule/publish lifecycle; encode only gates Drafts listing' },
   'apps/web/e2e/release/studio-frame.spec.ts': { placement: 'local', reason: 'Studio routing, nav, 404, RTL' },
