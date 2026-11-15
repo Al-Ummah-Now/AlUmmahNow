@@ -13,7 +13,7 @@ import { saveLanguagePreference } from '@/lib/i18n/utils';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { UnifiedNavigation } from '@/components/UnifiedNavigation';
 import { UploadAction } from '@/components/Header/UploadAction';
-import { HeaderAppLinks, HeaderBrand, HeaderEnvBadge, HeaderLangButton, HeaderMenuButton, HeaderModeButton, langSwitchHref } from '@/components/Header/HeaderParts';
+import { HeaderBrand, HeaderEnvBadge, HeaderLangButton, HeaderMenuButton, HeaderModeButton, langSwitchHref } from '@/components/Header/HeaderParts';
 import { BRAND_LOGO } from '@/components/brand/BrandLogo';
 import { useRailMotion } from './rail-breakpoint';
 import { statusPageUrl } from '@/lib/navigation/destinations';
@@ -27,7 +27,7 @@ const L = {
 
 /** `hub`: the "You" entry. In the collapsed rail it is an icon item; in the open rail and the drawer it reads as
  * the section's heading link ("You ›") over History, Watch later and Liked videos (owner, 2026-11-13). */
-interface Item { label: string; href: string; icon: LucideIcon; tab?: boolean; hub?: boolean; external?: boolean; /** only in the phone drawer */ phone?: boolean }
+interface Item { label: string; href: string; icon: LucideIcon; tab?: boolean; hub?: boolean; external?: boolean; testId?: string }
 
 export function AppShell() {
   const { t, lang, oppositeLanguage } = useLanguage();
@@ -43,7 +43,7 @@ export function AppShell() {
 
   // One build serves stage and production: the env's status host is known only in the browser
   const [statusHref, setStatusHref] = useState(() => statusPageUrl('', lang));
-  // The public sites other than this one (Website), on this environment's hosts (shared-types app-links)
+  // www on this environment's hosts (shared-types app-links): the rail and drawer's Website link (never in the header)
   const sites = appLinks({ current: 'videos', lang, urls: { www: getWwwUrl() } }).filter((a) => a.id === 'www');
   const wwwHref = sites[0]?.href;
   useEffect(() => { setMounted(true); setStatusHref(statusPageUrl(window.location.hostname, lang)); }, [lang]);
@@ -77,9 +77,10 @@ export function AppShell() {
       { label: t.communityGuidelines.navLabel, href: `${base}/community-guidelines`, icon: BookOpen },
       { label: t.contact.navLabel, href: `${base}/contact`, icon: Mail },
       // The public status page (apps/status): its own host, so it opens even when this site is down
-      { label: c.status, href: statusHref, icon: Activity, external: true },
-      // On phones the header's app links leave the bar (docs/design/NAV.md): the website stays one tap away here
-      ...(wwwHref ? [{ label: t.navigation.appWww, href: wwwHref, icon: Globe, external: true, phone: true }] : []),
+      { label: c.status, href: statusHref, icon: Activity, external: true, testId: 'nav-status' },
+      // The header has no links to other sites (owner, 2026-11-15; docs/design/NAV.md): the website is
+      // here at every width, for signed-out visitors too (the account menu's apps need a sign-in)
+      ...(wwwHref ? [{ label: t.navigation.appWww, href: wwwHref, icon: Globe, external: true, testId: 'nav-www' }] : []),
     ] },
   ];
 
@@ -109,7 +110,7 @@ export function AppShell() {
     <div dir={rtl ? 'rtl' : 'ltr'}>
       {/* The shared header (docs/design/NAV.md "Header"; pieces in Header/HeaderParts.tsx, checked against
           packages/fanous-tokens/nav/header.js): drawer toggle, brand, env badge, search, then Upload, the
-          bell, the Website link, language, light/dark and the account (or Sign in); mirrored in RTL */}
+          bell, language, light/dark and the account (or Sign in); mirrored in RTL */}
       <header className="ah aun-header">
         <HeaderMenuButton lang={lang} label={open ? c.close : undefined} className="ah-menu" aria-expanded={open} data-testid="nav-drawer-toggle" onClick={() => setOpen(!open)} />
         <HeaderBrand lang={lang} href={`${base}/`} app={t.navigation.appVideos} link={Link} img={{ srcSet: BRAND_LOGO.srcSet, loading: 'eager', fetchPriority: 'high', decoding: 'async', 'data-testid': 'brand-logo' }} />
@@ -118,7 +119,6 @@ export function AppShell() {
         <div className="aun-header-tools ah-end">
           <UploadAction />
           <NotificationBell dir={rtl ? 'rtl' : 'ltr'} />
-          {wwwHref && <HeaderAppLinks lang={lang} links={sites} />}
           <HeaderLangButton lang={lang} href={langHref} onClick={switchLanguage} />
           <HeaderModeButton lang={lang} dark={dark} onClick={() => setTheme(dark ? 'light' : 'dark')} />
           <UnifiedNavigation />
@@ -132,7 +132,7 @@ export function AppShell() {
             <div className="nv-group" key={g.title ?? i}>
               {g.title && <div className="nv-heading">{g.title}</div>}
               {g.items.map((it) => it.external ? (
-                <a key={it.label} href={it.href} className={it.phone ? 'nv nv-phone' : 'nv'} data-testid={it.phone ? 'nav-www' : 'nav-status'} title={it.label}>
+                <a key={it.label} href={it.href} className="nv" data-testid={it.testId} title={it.label}>
                   <it.icon aria-hidden="true" /><span>{it.label}</span>
                 </a>
               ) : (

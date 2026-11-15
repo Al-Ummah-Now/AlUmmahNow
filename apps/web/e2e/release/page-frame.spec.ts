@@ -1,7 +1,7 @@
 /**
  * Release regression: the page frame (#525) with the unified header (docs/design/NAV.md
  * "Header"). The top bar holds the menu button, the logo lockup, the header search (#475), then
- * Upload, the bell, Website, language, light/dark and the account (Sign in when signed out);
+ * Upload, the bell, language, light/dark and the account (Sign in when signed out);
  * desktop has a sidebar the menu button widens; phones have a drawer and a bottom tab bar that
  * also carries Upload and More (the drawer). Upload is a link for signed-out visitors
  * (the upload page asks them to sign in), disabled for a signed-in user with

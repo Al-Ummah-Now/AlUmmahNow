@@ -37,7 +37,7 @@ a bug). Based on www and the videos web, which the owner reviewed. The wiki's de
 (E10, "Header") carries the same spec.
 
 **Shared code.** `nav/aun-nav.css` styles it and `nav/header.js` builds the markup (brand,
-environment badge, app links, language, light/dark, Sign in). Worker, Hono and Astro apps render
+environment badge, menu button, language, light/dark, Sign in). Worker, Hono and Astro apps render
 the builders, or a byte-identical copy checked by the repo's Fanous sync check. React apps render
 the same elements as JSX and their tests compare the result with the builders.
 
@@ -61,7 +61,12 @@ the same elements as JSX and their tests compare the result with the builders.
 - Padding-inline 16px (12px below 640px). Gap between groups 16px, 12px below 1024px, 8px below
   640px, 4px below 400px. Inside the tools group 8px (4px below 640px).
 
-**Order** (reading order; it mirrors in Arabic):
+**Order** (reading order; it mirrors in Arabic; `HEADER_ORDER` in `nav/header.js`: menu, brand, env,
+primary, actions, lang, mode, account):
+
+**No links to other sites in the header** (owner, 2026-11-15): no Website / Videos pills. The logo
+leads to the app's own home; the other apps are in the account menu's "Al Ummah Now apps" (and, on
+status, which has no account menu, the page footer).
 
 | # | Slot | Class | Notes |
 |---|---|---|---|
@@ -70,10 +75,9 @@ the same elements as JSX and their tests compare the result with the builders.
 | 3 | Environment badge | `.aun-env` | "QA" / "STAGE" right after the brand; never in production. |
 | 4 | The app's own links or search | `.aun-header-primary` | www links, the videos/CMS search, the admin ⌘K search. Takes only the room the other groups leave (`flex: 1 1 0%`), so a long primary area never pushes the tools to a second line. Present (empty) when an app has none. |
 | 5 | App actions | in `.aun-header-tools` | Upload, notifications, Create/New. 2.5rem tall pills. |
-| 6 | App links | `.aun-apps` › `.aun-app` | Website and Videos: the public sites other than this one. |
-| 7 | Language | `.aun-lang` | The other language's own name. |
-| 8 | Light/dark | `.aun-icon-btn.aun-mode` | Sun in dark mode, moon in light. |
-| 9 | Account | `.aun-acct-btn`, or `.aun-signin` | Signed out: a solid "Sign in", never hidden in a menu. |
+| 6 | Language | `.aun-lang` | The other language's own name. |
+| 7 | Light/dark | `.aun-icon-btn.aun-mode` | Sun in dark mode, moon in light. |
+| 8 | Account | `.aun-acct-btn`, or `.aun-signin` | Signed out: a solid "Sign in", never hidden in a menu. |
 
 **Language first, then sun/moon** in every app (settled 2026-11-14; www and the dev site change to
 match). Language and light/dark sit in the header in every app, next to each other in this order. They are
@@ -94,10 +98,6 @@ Focus everywhere is a 2px outline in `--fanous-c-nav-active-text`, offset 2px.
   background with `--fanous-c-nav-bg` text. Its name is "QA environment" / "بيئة الاختبار QA".
   Below 400px it sits on the logo's lower inline-end corner (ringed in `--fanous-c-nav-bg`), so it
   takes no room of its own.
-- **App links.** The app icon (`/aun-nav/icons/<id>.webp`, 22px round) and the name ("Website" /
-  "الموقع", "Videos" / "المرئيات"). Below 1280px the icon alone, at 40×40; the name stays the
-  accessible name. Below 640px they leave the bar; on phones they are in the account menu's "Al Ummah
-  Now apps", the drawer, or (apps with neither) the page footer.
 - **Language** (`.aun-lang`). Shows the other language's own name in its own `lang`
   (`<span lang="ar">العربية</span>`), `hreflang` on the link. Its name starts with the action in the
   page's language and contains the visible label: "Switch to Arabic: العربية" /
@@ -118,7 +118,7 @@ Focus everywhere is a 2px outline in `--fanous-c-nav-active-text`, offset 2px.
 - **Sign in** (`.aun-signin`). Solid pill, `--fanous-c-nav-active-text` background, `--fanous-c-nav-bg`
   text, 15px/600, padding-inline 16px.
 
-**Phone** (below 640px): 56px bar, the app links leave the bar, the account name is hidden (from
+**Phone** (below 640px): 56px bar, the account name is hidden (from
 768px), the brand logo shrinks to 32px; below 400px only the logo shows. Apps with a long primary
 area (www links, search) move it to its own row or an icon that opens a sheet; the tools group never
 wraps or hides the language, light/dark or account controls.
@@ -128,11 +128,10 @@ width from 320px (the language, light/dark and account controls never move):
 - *Videos web.* Below 1024px the brand is the logo alone, the search is an icon that opens a sheet,
   and Upload is a 40px icon (its label stays its name). Below 640px the drawer toggle and Upload
   leave the bar for the bottom tab bar (Home, Explore, Upload, Subscriptions, You, More; More opens
-  the drawer), and the drawer carries the Website link.
-- *Videos admin.* Beside the 264px sidebar: the ⌘K search is an icon below 1280px and the
-  breadcrumbs show from 1024px; below 1024px the brand is the logo alone and the account button the
-  avatar and caret (the name stays its accessible name). Public pages (sign-in, access denied) have the same bar, with Sign in when signed out.
-- *Status.* No drawer and no account: below 640px the app links are in the page footer.
+  the drawer).
+- *Videos admin.* Full width over the sidebar: the ⌘K search is an icon below 1280px and the
+  breadcrumbs show from 1024px; below 640px, beside the drawer button, the brand is the logo alone. Public pages (sign-in, access denied) have the same bar, with Sign in when signed out.
+- *Status.* No drawer and no account: the page footer links Website and Videos.
 
 There is one sign-out entry, inside the account menu. The header has no separate "Log out" button.
 

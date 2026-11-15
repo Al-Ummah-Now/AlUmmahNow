@@ -52,24 +52,6 @@ export function HeaderEnvBadge({ environment, lang }: { environment: string | un
   );
 }
 
-/** Website and Videos (the public sites other than this one), each with its app icon. */
-export function HeaderAppLinks({ lang, links }: { lang: string; links: { id: string; href: string }[] }) {
-  const l = labels(lang);
-  const items = links.filter((a) => a.href && (a.id === 'www' || a.id === 'videos')) as { id: 'www' | 'videos'; href: string }[];
-  if (items.length === 0) return null;
-  return (
-    <nav className="aun-apps" aria-label={l.apps}>
-      {items.map((a) => (
-        <a key={a.id} className="aun-app" href={a.href} data-testid={`header-app-${a.id}`}>
-          {/* eslint-disable-next-line @next/next/no-img-element -- the shared 22px app icon */}
-          <img className="aun-app-mark" src={`/aun-nav/icons/${a.id}.webp`} alt="" width={22} height={22} />
-          <span className="aun-app-name">{l[a.id]}</span>
-        </a>
-      ))}
-    </nav>
-  );
-}
-
 /**
  * The language button's link: this page and its query (the admin keeps one URL in both languages; the
  * language is a cookie). The path goes through the shared samePath, so a request path such as

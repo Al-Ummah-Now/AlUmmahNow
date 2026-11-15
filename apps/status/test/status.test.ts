@@ -12,7 +12,7 @@ import { advance, dayLevel, effectiveState, formatUptime, lastDays, overallState
 import { runOnce, type StatusEnv } from '../src/run';
 import { buildSummary, toJson } from '../src/model';
 import { modeToggle, renderIncidentPage, renderStatusPage, siteLinks } from '../src/render';
-import { appLinksHtml, brandHtml, envBadgeHtml, langButtonHtml, modeButtonHtml } from '../../../packages/fanous-tokens/nav/header.js';
+import { brandHtml, envBadgeHtml, langButtonHtml, modeButtonHtml } from '../../../packages/fanous-tokens/nav/header.js';
 import { readFileSync } from 'node:fs';
 import { MOON_ICON_BODY, SUN_ICON_BODY } from '../../../packages/fanous-tokens/nav/mode-toggle.js';
 import { atomFeed, rssFeed } from '../src/feed';
@@ -423,11 +423,11 @@ describe('header: the shared builders, the way back and the Light / Dark control
       assert.match(h, /^<header class="aun-header">\s*<div class="aun-header-row">/);
       assert.ok(h.includes(brandHtml({ lang: locale, href: prefix || '/', app: locale === 'ar' ? 'الحالة' : 'Status' })), 'brand: the status home, "Status" on the second line');
       assert.ok(h.includes(envBadgeHtml('qa', locale)));
-      assert.ok(h.includes(appLinksHtml({ lang: locale, links: [{ id: 'www', href: siteLinks(locale, 'qa').www }, { id: 'videos', href: siteLinks(locale, 'qa').videos }] })));
+      assert.doesNotMatch(h, /aun-app|alummahnow\.net/, 'no links to other sites in the header (owner, 2026-11-15)');
       assert.ok(h.includes(langButtonHtml({ lang: locale, href: locale === 'ar' ? '/' : '/ar' })));
-      // reading order: brand, env, primary, tools (apps, language, light/dark)
+      // reading order: brand, env, primary, tools (language, light/dark)
       const at = (re: RegExp) => h.search(re);
-      assert.ok(at(/class="aun-brand"/) < at(/class="aun-env"/) && at(/class="aun-env"/) < at(/aun-header-primary/) && at(/aun-header-primary/) < at(/class="aun-apps"/) && at(/class="aun-apps"/) < at(/class="aun-lang"/) && at(/class="aun-lang"/) < at(/id="mode-toggle"/));
+      assert.ok(at(/class="aun-brand"/) < at(/class="aun-env"/) && at(/class="aun-env"/) < at(/aun-header-primary/) && at(/aun-header-primary/) < at(/class="aun-lang"/) && at(/class="aun-lang"/) < at(/id="mode-toggle"/));
       assert.doesNotMatch(h, /aun-acct-btn|aun-signin/, 'no account here: the status page has no sign-in');
     }
     assert.doesNotMatch(header(page('en', 'production')), /aun-env/, 'no badge in production');
@@ -442,14 +442,11 @@ describe('header: the shared builders, the way back and the Light / Dark control
     assert.deepEqual(siteLinks('en', 'qa'), { www: 'https://www.qa.alummahnow.net/en/', videos: 'https://videos.qa.alummahnow.net/en' });
     assert.deepEqual(siteLinks('en', 'development'), siteLinks('en', 'qa'), 'local dev links to QA, like its checks');
     for (const [env, sub] of [['production', ''], ['stage', '.stage'], ['qa', '.qa']] as const) {
-      const h = header(page('en', env));
       const d = sub.replace('.', '\\.');
-      assert.match(h, new RegExp(`<a class="aun-app" href="https://www${d}\\.alummahnow\\.net/en/"><img class="aun-app-mark" src="/aun-nav/icons/www\\.webp"[^>]*><span class="aun-app-name">Website</span>`));
-      assert.match(h, new RegExp(`<a class="aun-app" href="https://videos${d}\\.alummahnow\\.net/en"><img class="aun-app-mark" src="/aun-nav/icons/videos\\.webp"[^>]*><span class="aun-app-name">Videos</span>`));
+      assert.match(page('en', env), new RegExp(`<footer[^]*<a href="https://www${d}\\.alummahnow\\.net/en/"><img src="/aun-nav/icons/www\\.webp"[^>]*>Website</a> <a href="https://videos${d}\\.alummahnow\\.net/en"><img src="/aun-nav/icons/videos\\.webp"[^>]*>Videos</a>`));
     }
     const ar = page('ar', 'production');
-    assert.match(header(ar), /<nav class="aun-apps" aria-label="تطبيقات الأمة الآن">/);
-    // phones: the bar drops the app links, the footer carries them
+    // the header has none: the footer carries them
     assert.match(ar, /<footer[^]*<nav class="foot-apps" aria-label="تطبيقات الأمة الآن"><a href="https:\/\/www\.alummahnow\.net\/ar\/">[^]*الموقع<\/a> <a href="https:\/\/videos\.alummahnow\.net\/ar">[^]*المرئيات<\/a><\/nav>/);
   });
 

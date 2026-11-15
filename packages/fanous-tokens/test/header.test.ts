@@ -4,7 +4,6 @@ import { test } from 'node:test';
 import {
   HEADER_LABELS,
   HEADER_ORDER,
-  appLinksHtml,
   brandHtml,
   envBadgeHtml,
   langButtonHtml,
@@ -13,6 +12,7 @@ import {
   samePath,
   signInHtml,
 } from '../nav/header.js';
+import * as header from '../nav/header.js';
 import { modeIconSvg } from '../nav/mode-toggle.js';
 
 /**
@@ -23,7 +23,7 @@ import { modeIconSvg } from '../nav/mode-toggle.js';
 const css = readFileSync(new URL('../nav/aun-nav.css', import.meta.url), 'utf8');
 
 test('the slots keep one order', () => {
-  assert.deepEqual(HEADER_ORDER, ['menu', 'brand', 'env', 'primary', 'actions', 'apps', 'lang', 'mode', 'account']);
+  assert.deepEqual(HEADER_ORDER, ['menu', 'brand', 'env', 'primary', 'actions', 'lang', 'mode', 'account']);
 });
 
 test('brand: the logo, the wordmark and the app name, in both languages', () => {
@@ -63,16 +63,10 @@ test('environment badge: QA and STAGE only', () => {
   for (const env of ['production', 'development', '', undefined, null]) assert.equal(envBadgeHtml(env, 'en'), '');
 });
 
-test('app links: Website and Videos with their icons, nothing else', () => {
-  assert.equal(
-    appLinksHtml({ lang: 'en', links: [{ id: 'www', href: 'https://www.alummahnow.net/en/' }] }),
-    '<nav class="aun-apps" aria-label="Al Ummah Now apps"><a class="aun-app" href="https://www.alummahnow.net/en/">' +
-      '<img class="aun-app-mark" src="/aun-nav/icons/www.webp" alt="" width="22" height="22"><span class="aun-app-name">Website</span></a></nav>'
-  );
-  const ar = appLinksHtml({ lang: 'ar', links: [{ id: 'www', href: '/w' }, { id: 'videos', href: '/v' }, { id: 'cms', href: '/c' }] });
-  assert.match(ar, /الموقع.*المرئيات/);
-  assert.doesNotMatch(ar, /cms/);
-  assert.equal(appLinksHtml({ lang: 'en', links: [] }), '');
+test('no links to other sites in the header (owner, 2026-11-15)', () => {
+  assert.equal(typeof (header as Record<string, unknown>).appLinksHtml, 'undefined');
+  assert.ok(!(HEADER_ORDER as readonly string[]).includes('apps'));
+  assert.doesNotMatch(css, /\.aun-apps?[\s,{:]|\.aun-app-(mark|name)/);
 });
 
 test('language button: the other language, marked with its lang; the name holds the visible label', () => {
@@ -132,12 +126,12 @@ test('labels exist in both languages', () => {
 
 test('the stylesheet defines every class the builders use, one control height and the breakpoints', () => {
   for (const cls of ['aun-header', 'aun-header-row', 'aun-header-primary', 'aun-header-tools', 'aun-brand', 'aun-brand-mark', 'aun-brand-text',
-    'aun-brand-name', 'aun-brand-app', 'aun-env', 'aun-apps', 'aun-app', 'aun-app-mark', 'aun-app-name', 'aun-lang', 'aun-icon-btn',
+    'aun-brand-name', 'aun-brand-app', 'aun-env', 'aun-lang', 'aun-icon-btn',
     'aun-signin', 'aun-acct-btn', 'aun-visually-hidden', 'aun-menu-collapse', 'aun-header-panel', 'aun-collapse']) {
     assert.match(css, new RegExp(`\\.${cls}[\\s,{:]`), `.${cls} is styled`);
   }
   // every control is 2.5rem (40px) tall; the bar 4rem, 3.5rem on phones
-  for (const sel of ['.aun-lang,\n.aun-app {', '.aun-brand {', '.aun-signin {']) {
+  for (const sel of ['.aun-lang {\n  display', '.aun-brand {', '.aun-signin {']) {
     const block = css.slice(css.indexOf(sel), css.indexOf('}', css.indexOf(sel)));
     assert.match(block, /min-height: 2\.5rem;/, `${sel} is 2.5rem tall`);
   }
@@ -165,9 +159,9 @@ test('the stylesheet defines every class the builders use, one control height an
   // below 1024px a site's own links leave the bar for the panel; the menu button shows only there
   assert.match(css, /@media \(max-width: 63\.99rem\) \{[^@]*\.aun-header-primary\.aun-collapse \{\n    display: none;/);
   assert.match(css, /@media \(min-width: 64rem\) \{\n  \.aun-menu-collapse \{\n    display: none;/);
-  for (const bp of ['79.99rem', '63.99rem', '47.99rem', '39.99rem', '24.99rem']) assert.ok(css.includes(`(max-width: ${bp})`), bp);
+  for (const bp of ['63.99rem', '47.99rem', '39.99rem', '24.99rem']) assert.ok(css.includes(`(max-width: ${bp})`), bp);
   // below 400px language and Sign in narrow after their own rules, so the Arabic Sign in fits a 320px bar
   const tight = css.indexOf('@media (max-width: 24.99rem) {\n  .aun-lang {');
-  assert.ok(tight > css.indexOf('.aun-signin {') && tight > css.indexOf('.aun-lang,\n.aun-app {'), 'the 400px Sign in / language rule comes after theirs');
+  assert.ok(tight > css.indexOf('.aun-signin {') && tight > css.indexOf('.aun-lang {\n  display'), 'the 400px Sign in / language rule comes after theirs');
   assert.match(css.slice(tight, css.indexOf('\n}\n', tight)), /\.aun-signin \{\n    padding-inline: var\(--fanous-spacing-md, 12px\);/);
 });

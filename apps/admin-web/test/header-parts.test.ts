@@ -8,9 +8,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import * as React from 'react';
-import { appLinksHtml, brandHtml, envBadgeHtml, langButtonHtml, menuButtonHtml, modeButtonHtml, signInHtml } from '../../../packages/fanous-tokens/nav/header.js';
+import { brandHtml, envBadgeHtml, langButtonHtml, menuButtonHtml, modeButtonHtml, signInHtml } from '../../../packages/fanous-tokens/nav/header.js';
 import { modeIconSvg } from '../../../packages/fanous-tokens/nav/mode-toggle.js';
-import { HeaderAppLinks, HeaderBrand, HeaderEnvBadge, HeaderLangButton, HeaderMenuButton, HeaderModeButton, HeaderSignIn, selfHref } from '../src/components/shell/HeaderParts';
+import { HeaderBrand, HeaderEnvBadge, HeaderLangButton, HeaderMenuButton, HeaderModeButton, HeaderSignIn, selfHref } from '../src/components/shell/HeaderParts';
 
 // tsx compiles the components' JSX in classic mode (tsconfig jsx: preserve): they read the global React
 (globalThis as unknown as { React: unknown }).React = React;
@@ -37,11 +37,6 @@ for (const lang of ['en', 'ar'] as const) {
       for (const env of ['qa', 'stage', 'production', 'development', '']) {
         assert.equal(norm(renderToStaticMarkup(h('span', null, h(HeaderEnvBadge, { environment: env, lang })))), `<span>${envBadgeHtml(env, lang)}</span>`, env);
       }
-    });
-
-    it('app links: Website and Videos', () => {
-      const links = [{ id: 'www', href: 'https://www.qa.alummahnow.net/en/' }, { id: 'videos', href: 'https://videos.qa.alummahnow.net/en' }];
-      assert.equal(r(HeaderAppLinks, { lang, links }), norm(appLinksHtml({ lang, links })));
     });
 
     it('language button: the current page and query (the language is a cookie)', () => {

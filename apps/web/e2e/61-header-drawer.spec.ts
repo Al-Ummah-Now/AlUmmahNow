@@ -14,7 +14,7 @@ import { AxeBuilder } from '@axe-core/playwright';
 const HOME_LINK = { en: /Al Ummah Now/, ar: /الأمة الآن/ } as const;
 
 /**
- * The top bar reads: menu button, logo, search, then the tools: Upload, bell, Website, language,
+ * The top bar reads: menu button, logo, search, then the tools: Upload, bell, language,
  * light/dark, account (docs/design/NAV.md "Header"). Upload is the first of the tools, after the
  * search: to its right in LTR, to its left in RTL. Below 640px Upload is in the tab bar instead.
  */
@@ -217,7 +217,7 @@ test.describe('Side drawer', () => {
     const box = await drawer.boundingBox();
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
-    // The Website link leaves the bar on phones: the drawer carries it
+    // No links to other sites in the header: the drawer carries the Website link
     await expect(drawer.getByTestId('nav-www')).toBeInViewport();
   });
 });
