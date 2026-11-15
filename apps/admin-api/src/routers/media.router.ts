@@ -23,6 +23,11 @@
  *   PUT  /videos/:id/override { override | null }  pin one video's playback providers (audited, key
  *                           media:video:<id>); 400 { problems } when it would leave the video unplayable
  *
+ *   GET  /transcode-limit   concurrent R2 transcodes range (autoscaled min–max): the setting, what is
+ *                           enforced, the ceiling and the cost of a slot (media:read: moderators too)
+ *   PUT  /transcode-limit { min, max, undo? }  change it, 1 ≤ min ≤ max ≤ ceiling (audited, key media:transcode-limit);
+ *                           the admin's field is Video providers → Cloudflare R2 settings
+ *   GET  /summary?only=live is media:read too (the live figures)
  *   /troubleshoot/*         transcode troubleshooting: per-job view, containers, queues, logs, Retry now,
  *                           Cancel, the read-only Cloudflare token (mediaTroubleshoot.router.ts)
  *
@@ -30,7 +35,7 @@
  * api-videos and removes it again if the call fails, so no change goes unaudited.
  */
 import { Hono, type Context } from 'hono';
-import { normaliseMediaSettings, settingsProblems } from '@al-ummah/shared-types';
+import { normaliseMediaSettings, settingsProblems, TRANSCODE_LIMIT_AUDIT_KEY, transcodeRangeProblem } from '@al-ummah/shared-types';
 import { hasPermission, normalizeRoles } from '../lib/roles';
 import { callVideosInternal, ProcessingApiError, type ProcessingClientEnv } from '../lib/processing/videosProcessing';
 import { logger } from '../lib/logger';
@@ -51,10 +56,22 @@ const app = new Hono<Env>();
 
 const actorOf = (c: C) => c.get('auth')?.userId ?? 'unknown';
 
+/**
+ * What moderators may read (media:read): the max concurrent transcodes and the live figures. Everything
+ * else, and every change, needs media:manage.
+ */
+export function mediaPermissionFor(method: string, path: string, query: (name: string) => string | undefined): 'media:read' | 'media:manage' {
+  if (method !== 'GET') return 'media:manage';
+  if (path.endsWith('/transcode-limit')) return 'media:read';
+  if (path.endsWith('/summary') && query('only') === 'live') return 'media:read';
+  return 'media:manage';
+}
+
 app.use('*', async (c, next) => {
-  if (!hasPermission(normalizeRoles(c.get('auth')?.roles), 'media:manage')) {
+  const needed = mediaPermissionFor(c.req.method, c.req.path, (n) => c.req.query(n));
+  if (!hasPermission(normalizeRoles(c.get('auth')?.roles), needed)) {
     logger.warn('[Media] Permission denied', { userId: actorOf(c), path: c.req.path });
-    return c.json({ success: false, code: 'forbidden', error: 'The media:manage permission is required' }, 403);
+    return c.json({ success: false, code: 'forbidden', error: `The ${needed} permission is required` }, 403);
   }
   return next();
 });
@@ -134,6 +151,42 @@ app.post('/retry', async (c) => {
     () => callVideosInternal(c.env, '/internal/media/retry', { method: 'POST', json: { ids: unique } }),
   );
   logger.info('[Media] Transcode again', { count: unique.length, actorId: actorOf(c) });
+  return c.json({ success: true, result });
+});
+
+// ---------------------------------------------------------------------------
+// Concurrent R2 transcodes range, autoscaled (apps/media enforces it; shared-types transcode-limit.ts)
+// ---------------------------------------------------------------------------
+
+app.get('/transcode-limit', async (c) => {
+  const result = await callVideosInternal(c.env, '/internal/media/transcode-limit');
+  return c.json({ success: true, result });
+});
+
+/**
+ * { min, max } whole numbers with 1 ≤ min ≤ max (api-videos checks max against the ceiling too);
+ * `undo` marks an Undo of the last change.
+ */
+export function parseTranscodeLimitInput(body: unknown): { ok: true; min: number; max: number; undo: boolean } | { ok: false; error: string; field?: 'min' | 'max' } {
+  const b = (body ?? {}) as { min?: unknown; max?: unknown; undo?: unknown };
+  const problem = transcodeRangeProblem(b.min, b.max, null);
+  if (problem) return { ok: false, error: `${problem.field}: ${problem.problem}`, field: problem.field };
+  // A sanity bound only: api-videos checks max against Cloudflare's limit (MEDIA_TRANSCODE_CEILING)
+  if ((b.max as number) > 100_000) return { ok: false, error: 'max: above_ceiling', field: 'max' };
+  if (b.undo !== undefined && typeof b.undo !== 'boolean') return { ok: false, error: 'undo must be true or false' };
+  return { ok: true, min: b.min as number, max: b.max as number, undo: b.undo === true };
+}
+
+app.put('/transcode-limit', async (c) => {
+  const parsed = parseTranscodeLimitInput(await c.req.json().catch(() => null));
+  if ('error' in parsed) return c.json({ success: false, code: 'bad_request', error: parsed.error, ...(parsed.field ? { field: parsed.field } : {}) }, 400);
+  const current = await callVideosInternal<{ min: number; max: number; isDefault: boolean }>(c.env, '/internal/media/transcode-limit');
+  const result = await audited(
+    c,
+    [{ key: TRANSCODE_LIMIT_AUDIT_KEY, oldValue: { min: current.min, max: current.max, isDefault: current.isDefault }, newValue: { min: parsed.min, max: parsed.max, ...(parsed.undo ? { undo: true } : {}) } }],
+    () => callVideosInternal(c.env, '/internal/media/transcode-limit', { method: 'PUT', json: { min: parsed.min, max: parsed.max, actorId: actorOf(c) } }),
+  );
+  logger.info('[Media] Concurrent transcodes range changed', { actorId: actorOf(c), from: `${current.min}-${current.max}`, to: `${parsed.min}-${parsed.max}`, undo: parsed.undo });
   return c.json({ success: true, result });
 });
 

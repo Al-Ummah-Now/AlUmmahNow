@@ -1,6 +1,6 @@
 'use server';
 
-import type { AdminJob, AdminJobStatus, AdminVideoMedia, BackfillItem, BackfillItemState, BackfillOverview, BackfillRun, BackfillScope, BackfillSettings, BunnyLibrarySummary, BunnyRemoval, ErrorStatus, LegacyRestorePlan, MediaHealthSnapshot, MediaOverride, MediaSettings, Report, ReportStats, TroubleshootLogs, TroubleshootTokenView } from '@al-ummah/shared-types';
+import type { AdminJob, AdminJobStatus, AdminVideoMedia, BackfillItem, BackfillItemState, BackfillOverview, BackfillRun, BackfillScope, BackfillSettings, BunnyLibrarySummary, BunnyRemoval, ErrorStatus, LegacyRestorePlan, MediaHealthSnapshot, MediaOverride, MediaSettings, Report, ReportStats, TranscodeLimitView, TroubleshootLogs, TroubleshootTokenView } from '@al-ummah/shared-types';
 import { AdminApiError, type ActionResult } from './errors';
 import { fetchAdmin, requestAdmin, navigateForPasskey } from './request';
 import type { TranscodeTroubleshoot, TroubleshootTokenTest } from './types';
@@ -377,6 +377,16 @@ export async function getTranscodeLogs(params: { q?: string; hours: number; sour
   const query = new URLSearchParams({ hours: String(params.hours), source: params.source });
   if (params.q) query.set('q', params.q);
   return readResult<TroubleshootLogs>(`/api/media/troubleshoot/logs?${query}`);
+}
+
+/** Concurrent R2 transcodes range: the setting, what is enforced, the ceiling, the cost of a slot (moderators read it too). */
+export async function getTranscodeLimit(): Promise<ActionResult<TranscodeLimitView>> {
+  return readResult<TranscodeLimitView>('/api/media/transcode-limit');
+}
+
+/** Change the range (admins; audited). `undo` marks the Undo of the previous change. */
+export async function setTranscodeLimit(range: { min: number; max: number }, undo = false): Promise<ActionResult<TranscodeLimitView>> {
+  return mutate('/api/media/transcode-limit', 'PUT', { min: range.min, max: range.max, ...(undo ? { undo: true } : {}) });
 }
 
 /** Retry now / Cancel: queued admin jobs, audited per video. */

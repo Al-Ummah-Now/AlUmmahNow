@@ -3,7 +3,7 @@
  */
 import { beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { MessageType, VIDEO_REVIEW_SETTINGS_KEY, clearVideoReviewSettingsCache, type TranscodeJobEvent, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
+import { MessageType, VIDEO_REVIEW_SETTINGS_KEY, clearVideoReviewSettingsCache, transcodeCeilingOf, type TranscodeJobEvent, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
 import {
 	accessDrift,
 	applyJobEvent,
@@ -20,7 +20,7 @@ import {
 	writeDeliverySettings,
 	type MediaMoveMessage,
 } from '../src/lib/media/r2-delivery';
-import { createMediaInternalRouter, maxTranscodesOf, readMediaLive } from '../src/endpoints/media/mediaInternal';
+import { createMediaInternalRouter, readMediaLive } from '../src/endpoints/media/mediaInternal';
 import { adminR2Badge, adminR2Detail } from '../src/lib/admin/directory';
 import { SqliteD1 } from './search-sqlite-d1';
 import { MemoryBucket, MemoryQueue, videoFixture } from './helpers';
@@ -258,6 +258,9 @@ describe('access follows visibility', () => {
 		assert.equal(sweepVerdict({ id: ID, r2: { ...base, status: 'queued', queuedAt: '2026-11-11T10:00:00Z' } }, now), 'requeue');
 		assert.equal(sweepVerdict({ id: ID, r2: { ...base, status: 'queued', queuedAt: '2026-11-11T11:30:00Z' } }, now), null);
 		assert.equal(sweepVerdict({ id: ID, isPublic: false, r2: { ...base, status: 'ready', queuedAt: 'x' } }, now), 'move');
+		// Every slot of the admin's limit busy: a long wait is its turn coming, not a lost job
+		assert.equal(sweepVerdict({ id: ID, r2: { ...base, status: 'queued', queuedAt: '2026-11-11T10:00:00Z' } }, now, true), null);
+		assert.equal(sweepVerdict({ id: ID, r2: { ...base, status: 'transcoding', queuedAt: '2026-11-11T02:00:00Z', startedAt: '2026-11-11T03:00:00Z' } }, now, true), 'requeue');
 	});
 });
 
@@ -309,13 +312,15 @@ describe('/internal/media/summary live figures', () => {
 
 	it('counts transcoding and queued jobs, the max, and the oldest wait', async () => {
 		const now = Date.parse('2026-11-11T12:00:00.000Z');
-		const live = await readMediaLive({ SEARCH_DB: jobsDb(rows), MEDIA_MAX_TRANSCODES: '2' } as never, now);
+		const live = await readMediaLive({ SEARCH_DB: jobsDb(rows), MEDIA_TRANSCODE_CEILING: '2' } as never, now);
 		assert.equal(live.startTimes?.samples, 0, 'no start times recorded in this fake');
 		assert.deepEqual({ ...live, startTimes: undefined }, {
 			startTimes: undefined,
 			transcoding: 1,
 			queued: 3,
-			maxTranscodes: 2,
+			rangeMin: 2,
+			rangeMax: 2,
+			ceiling: 2,
 			oldestQueuedAt: '2026-11-11T11:45:00.000Z',
 			oldestQueuedSeconds: 900,
 			at: '2026-11-11T12:00:00.000Z',
@@ -323,30 +328,31 @@ describe('/internal/media/summary live figures', () => {
 	});
 
 	it('is zero with nothing running, and without the database', async () => {
-		const empty = await readMediaLive({ SEARCH_DB: jobsDb([rows[3]!]), MEDIA_MAX_TRANSCODES: '4' } as never);
-		assert.deepEqual([empty.transcoding, empty.queued, empty.maxTranscodes, empty.oldestQueuedAt, empty.oldestQueuedSeconds], [0, 0, 4, null, null]);
+		const empty = await readMediaLive({ SEARCH_DB: jobsDb([rows[3]!]), MEDIA_TRANSCODE_CEILING: '4' } as never);
+		assert.deepEqual([empty.transcoding, empty.queued, empty.rangeMin, empty.rangeMax, empty.oldestQueuedAt, empty.oldestQueuedSeconds], [0, 0, 4, 4, null, null]);
 		const unbound = await readMediaLive({} as never);
-		assert.deepEqual([unbound.transcoding, unbound.queued, unbound.maxTranscodes], [0, 0, null]);
+		// No setting and no ceiling: the default limit
+		assert.deepEqual([unbound.transcoding, unbound.queued, unbound.rangeMin, unbound.rangeMax, unbound.ceiling], [0, 0, 4, 4, null]);
 	});
 
-	it('reads the max from MEDIA_MAX_TRANSCODES, null when unset or not a positive whole number', () => {
-		assert.equal(maxTranscodesOf('4'), 4);
-		for (const bad of [undefined, '', '0', '-1', '2.5', 'two']) assert.equal(maxTranscodesOf(bad), null, String(bad));
+	it('reads the ceiling from MEDIA_TRANSCODE_CEILING, null when unset or not a positive whole number', () => {
+		assert.equal(transcodeCeilingOf('4'), 4);
+		for (const bad of [undefined, '', '0', '-1', '2.5', 'two']) assert.equal(transcodeCeilingOf(bad), null, String(bad));
 	});
 
 	it('returns live with the summary, and alone with ?only=live', async () => {
 		const { env } = setup();
-		const full = { ...env, SEARCH_DB: jobsDb(rows), MEDIA_MAX_TRANSCODES: '2' };
+		const full = { ...env, SEARCH_DB: jobsDb(rows), MEDIA_TRANSCODE_CEILING: '2' };
 		const app = createMediaInternalRouter();
 		const res = (await (await app.request('/summary?days=7', {}, full as never)).json()) as { result: Record<string, any> };
 		assert.equal(res.result.days, 7);
 		assert.equal(res.result.jobs.jobs, 6);
-		assert.deepEqual([res.result.live.transcoding, res.result.live.queued, res.result.live.maxTranscodes], [1, 3, 2]);
+		assert.deepEqual([res.result.live.transcoding, res.result.live.queued, res.result.live.rangeMin, res.result.live.rangeMax], [1, 3, 2, 2]);
 		const only = (await (await app.request('/summary?only=live', {}, full as never)).json()) as { result: Record<string, any> };
 		assert.deepEqual(Object.keys(only.result), ['live']);
 		assert.equal(only.result.live.queued, 3);
-		const none = (await (await app.request('/summary', {}, { ...env, MEDIA_MAX_TRANSCODES: '4' } as never)).json()) as { result: Record<string, any> };
-		assert.deepEqual([none.result.jobs, none.result.live.transcoding, none.result.live.maxTranscodes], [null, 0, 4]);
+		const none = (await (await app.request('/summary', {}, { ...env, MEDIA_TRANSCODE_CEILING: '4' } as never)).json()) as { result: Record<string, any> };
+		assert.deepEqual([none.result.jobs, none.result.live.transcoding, none.result.live.rangeMin, none.result.live.rangeMax], [null, 0, 4, 4]);
 	});
 });
 
@@ -500,7 +506,7 @@ describe('live admin updates (admin:media)', () => {
 		}) as typeof fetch;
 		try {
 			const db = { prepare: () => ({ first: async () => ({ transcoding: 1, queued: 2, oldest: '2026-11-12T16:00:00Z' }) }) };
-			const env = { WEBSOCKET_URL: 'https://realtime.qa.alummahnow.net', INTERNAL_API_KEY: 'k', SEARCH_DB: db, MEDIA_MAX_TRANSCODES: '2', videos: {} } as never;
+			const env = { WEBSOCKET_URL: 'https://realtime.qa.alummahnow.net', INTERNAL_API_KEY: 'k', SEARCH_DB: db, MEDIA_TRANSCODE_CEILING: '2', videos: {} } as never;
 			const waits: Promise<unknown>[] = [];
 			const ctx = { waitUntil: (p: Promise<unknown>) => waits.push(p) };
 			const video = { id: ID, r2: { status: 'transcoding' as const, jobId: 'j', rev: 'r', access: 'pub' as const, attempts: 1, queuedAt: 'q', progress: 0.5 } };
@@ -514,7 +520,7 @@ describe('live admin updates (admin:media)', () => {
 			assert.deepEqual(posted.map((p) => events(p.body).join('+')).sort(), ['job', 'job+live'], 'live figures throttled to one');
 			const withLive = posted.find((p) => events(p.body).includes('live'))!;
 			const live = withLive.body.items[0].message.data.events[1];
-			assert.deepEqual([live.transcoding, live.queued, live.maxTranscodes], [1, 2, 2]);
+			assert.deepEqual([live.transcoding, live.queued, live.rangeMin, live.rangeMax], [1, 2, 2, 2]);
 			assert.equal(withLive.body.items[0].channel, 'admin:media');
 		} finally {
 			globalThis.fetch = realFetch;

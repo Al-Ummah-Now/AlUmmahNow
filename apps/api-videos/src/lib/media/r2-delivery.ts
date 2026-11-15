@@ -57,6 +57,8 @@ import { deleteOriginal } from './originals';
 import { clearMediaSettingsCache, readLegacyDeliverySettings, readMediaSettings, writeLegacyDeliverySettings } from './settings';
 import { bunnyLibraryForVideo, type BunnyLibrariesEnv, type LibraryHints } from '../bunny/libraries';
 import { logger } from '../logger';
+import { transcodeCeilingOf } from '@al-ummah/shared-types';
+import { effectiveTranscodes } from './transcode-limit';
 import R2Repository from '../r2Repo';
 import { bunnyDirectoryToken, signedBunnyUrl, tokenExpiry } from '../bunny-signing';
 
@@ -973,10 +975,14 @@ export async function handleMediaMoveBatch(batch: { messages: readonly { body: u
 const STUCK_QUEUED_MS = 60 * 60 * 1000;
 const STUCK_TRANSCODING_MS = 6 * 60 * 60 * 1000;
 
-export function sweepVerdict(video: MediaVideo, now: number): 'requeue' | 'move' | null {
+/**
+ * `slotsFull`: the dispatcher is busy at the admin's range (transcodeSlotsFull), so a queued job is
+ * waiting its turn (apps/media sends it again every minute), not stuck.
+ */
+export function sweepVerdict(video: MediaVideo, now: number, slotsFull = false): 'requeue' | 'move' | null {
 	const r2 = video.r2;
 	if (!r2 || video.isDeleted) return null;
-	if (r2.status === 'queued' && now - Date.parse(r2.queuedAt) > STUCK_QUEUED_MS) return 'requeue';
+	if (r2.status === 'queued' && !slotsFull && now - Date.parse(r2.queuedAt) > STUCK_QUEUED_MS) return 'requeue';
 	if (r2.status === 'transcoding' && now - Date.parse(r2.startedAt ?? r2.queuedAt) > STUCK_TRANSCODING_MS) return 'requeue';
 	if (accessDrift(video)) return 'move';
 	return null;
@@ -1006,13 +1012,13 @@ export function stuckJobNotice(video: Pick<MediaVideo, 'id' | 'r2'>, now: number
 }
 
 /** Bounded: looks at the given candidates only (the caller lists them from the ownership index). */
-export async function sweepMedia(env: MediaEnv, ids: string[], now = Date.now(), ctx?: ExecutionContextLike): Promise<{ requeued: number; moved: number }> {
+export async function sweepMedia(env: MediaEnv, ids: string[], now = Date.now(), ctx?: ExecutionContextLike, slotsFull = false): Promise<{ requeued: number; moved: number }> {
 	let requeued = 0;
 	let moved = 0;
 	for (const id of ids.slice(0, 200)) {
 		const video = await repo(env).getObject(id);
 		if (!video) continue;
-		const verdict = sweepVerdict(video, now);
+		const verdict = sweepVerdict(video, now, slotsFull);
 		if (verdict === 'requeue' && (await enqueueTranscode(env, id, 'sweep', { force: true })).queued) {
 			requeued++;
 			logger.warn('[MediaSweep] Stuck transcode queued again', { videoId: id, status: video.r2?.status, jobId: video.r2?.jobId });
@@ -1044,7 +1050,18 @@ export async function sweepMediaJobs(env: MediaEnv, now = Date.now(), ctx?: Exec
 	)
 		.bind(new Date(now - STUCK_QUEUED_MS).toISOString(), new Date(now - STUCK_TRANSCODING_MS).toISOString())
 		.all<{ video_id: string }>();
-	return sweepMedia(env, (results ?? []).map((r) => r.video_id), now, ctx);
+	if (!results?.length) return { requeued: 0, moved: 0 };
+	return sweepMedia(env, results.map((r) => r.video_id), now, ctx, await transcodeSlotsFull(env, now));
+}
+
+/**
+ * Whether the dispatcher is busy at the admin's range: at least `min` transcoding (media_jobs). Above
+ * min it opens one slot per start or finish while jobs wait, so a queued job there is its turn coming.
+ */
+export async function transcodeSlotsFull(env: MediaEnv & { MEDIA_TRANSCODE_CEILING?: string }, now = Date.now()): Promise<boolean> {
+	if (!env.SEARCH_DB) return false;
+	const row = await env.SEARCH_DB.prepare(`SELECT COUNT(*) AS n FROM media_jobs WHERE status = 'transcoding'`).first<{ n: number }>();
+	return (Number(row?.n) || 0) >= (await effectiveTranscodes(env, now)).min;
 }
 
 /**
@@ -1073,8 +1090,8 @@ export async function requeueAfterBunnyReady(env: MediaEnv, videoId: string): Pr
 export interface MediaLiveEnv extends MediaEnv {
 	WEBSOCKET_URL?: string;
 	INTERNAL_API_KEY?: { get(): Promise<string> } | string;
-	/** max_instances of the transcoder container */
-	MEDIA_MAX_TRANSCODES?: string;
+	/** max_instances of the transcoder container: the ceiling of the admin's setting */
+	MEDIA_TRANSCODE_CEILING?: string;
 }
 
 /** The job as the admin pages show it. */
@@ -1106,13 +1123,16 @@ export async function mediaLiveEvent(env: MediaLiveEnv, now = Date.now()): Promi
 	const row = await env.SEARCH_DB.prepare(
 		`SELECT SUM(status = 'transcoding') AS transcoding, SUM(status = 'queued') AS queued, MIN(CASE WHEN status = 'queued' THEN queued_at END) AS oldest FROM media_jobs`,
 	).first<{ transcoding: number | null; queued: number | null; oldest: string | null }>();
-	const max = Number(env.MEDIA_MAX_TRANSCODES);
+	const range = await effectiveTranscodes(env, now);
+	const ceiling = transcodeCeilingOf(env.MEDIA_TRANSCODE_CEILING);
 	return {
 		kind: 'live',
 		key: 'live',
 		transcoding: row?.transcoding ?? 0,
 		queued: row?.queued ?? 0,
-		...(Number.isFinite(max) && max > 0 ? { maxTranscodes: max } : {}),
+		rangeMin: range.min,
+		rangeMax: range.max,
+		...(ceiling ? { ceiling } : {}),
 		...(row?.oldest ? { oldestQueuedAt: row.oldest } : {}),
 		at: new Date(now).toISOString(),
 	};

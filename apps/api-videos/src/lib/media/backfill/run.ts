@@ -45,6 +45,7 @@ import {
 } from './store';
 import { verifyItem } from './verify';
 import { BACKFILL_KIND, BACKFILL_MAX_DELIVERIES, type BackfillEnv, type BackfillMessage, type Ctx } from './types';
+import { effectiveTranscodes } from '../transcode-limit';
 
 export const TICK_SECONDS = 20;
 /** A copy or verify step that has not moved in this long is sent again by the tick */
@@ -101,8 +102,9 @@ export async function changeSettings(env: BackfillEnv, runId: string, settings: 
 	const row = await getRunRow(db(env), runId);
 	if (!row) throw new BackfillStateError('No such run', 'not_found');
 	if (!['estimated', 'running', 'paused', 'stopped_budget'].includes(row.status)) throw new BackfillStateError(`The run is ${row.status}`, 'bad_state');
-	const maxTranscodes = Number(env.MEDIA_MAX_TRANSCODES) || 0;
-	const capped = { ...settings, concurrency: maxTranscodes > 0 ? Math.min(settings.concurrency, maxTranscodes) : settings.concurrency };
+	// Never more than the admin's concurrent transcodes max (Video providers → Cloudflare R2 settings)
+	const maxTranscodes = (await effectiveTranscodes(env)).max;
+	const capped = { ...settings, concurrency: Math.min(settings.concurrency, maxTranscodes) };
 	await updateRun(db(env), runId, { settings: JSON.stringify(capped) });
 	return (await readRun(db(env), runId))!;
 }
@@ -377,8 +379,7 @@ export async function tick(env: BackfillEnv, ctx: Ctx, runId: string, now = new 
 	}
 
 	// Start new videos within concurrency and spacing
-	const maxTranscodes = Number(env.MEDIA_MAX_TRANSCODES) || 0;
-	const concurrency = maxTranscodes > 0 ? Math.min(settings.concurrency, maxTranscodes) : settings.concurrency;
+	const concurrency = Math.min(settings.concurrency, (await effectiveTranscodes(env, now.getTime())).max);
 	let free = concurrency - inFlight.length;
 	const lastStart = row.last_start_at ? Date.parse(row.last_start_at) : 0;
 	const spacingMs = settings.spacingSeconds * 1000;

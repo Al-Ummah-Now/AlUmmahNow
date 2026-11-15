@@ -187,11 +187,15 @@ const minutesSince = (iso: string | null | undefined, now: number): number | nul
   return Number.isFinite(t) ? Math.max(0, Math.floor((now - t) / 60_000)) : null;
 };
 
-/** Whether a job (media_jobs row + the transcoder's view) is stalled now. Pure. */
+/**
+ * Whether a job (media_jobs row + the transcoder's view) is stalled now. Pure. `slotsFull`: every slot
+ * of the admin's max concurrent transcodes is busy, so a job that never started is waiting its turn.
+ */
 export function transcodeStall(
   row: { status: string; job_id: string; queued_at: string | null },
   job: TranscoderJobView | null,
   now: number,
+  opts: { slotsFull?: boolean } = {},
 ): TranscodeStall | null {
   if (row.status !== 'queued' && row.status !== 'transcoding') return null;
   const mine = job && job.jobId === row.job_id ? job : null;
@@ -207,7 +211,8 @@ export function transcodeStall(
     return null;
   }
   if (mine) return null;
-  // Never started (no job on the transcoder, or an older one)
+  // Never started (no job on the transcoder, or an older one); waiting for a slot is not a stall
+  if (opts.slotsFull) return null;
   const t = row.queued_at ? Date.parse(row.queued_at) : NaN;
   if (Number.isFinite(t) && now - t > STALL_QUEUED_MS) return { kind: 'queued_too_long', minutes: minutesSince(row.queued_at, now)! };
   return null;

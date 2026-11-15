@@ -1,4 +1,6 @@
 import type { Transcoder } from './transcoder';
+import type { TranscodeSlots } from './slots';
+import type { TranscodeJobMessage } from '@al-ummah/shared-types';
 import { constantTimeEqual } from '@al-ummah/shared-types';
 
 export interface SecretBinding {
@@ -13,6 +15,14 @@ export interface Env {
 	/** al-ummah-now-media-originals[-env]: uploads as received (read only here) */
 	MEDIA_ORIGINALS?: R2Bucket;
 	TRANSCODER: DurableObjectNamespace<Transcoder>;
+	/** One object ('global'): the slots that enforce the admin's max concurrent transcodes (slot-state.ts) */
+	TRANSCODE_SLOTS: DurableObjectNamespace<TranscodeSlots>;
+	/** This environment's transcode queue (producer): a job with no free slot is sent again later */
+	TRANSCODE_QUEUE?: Queue<TranscodeJobMessage>;
+	/** global-settings[-env] (read only here): the admin's max concurrent transcodes */
+	GLOBAL_SETTINGS?: R2Bucket;
+	/** The transcoder container's max_instances: the hard ceiling of the admin's setting */
+	MEDIA_TRANSCODE_CEILING?: string;
 	/** api-videos (service binding): source URL, job events */
 	VIDEOS: Fetcher;
 	/** HMAC key of /priv/ path tokens (shared with api-videos) */

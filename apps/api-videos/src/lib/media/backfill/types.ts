@@ -6,8 +6,8 @@ export type BackfillEnv = MediaEnv &
 	BunnyLibrariesEnv &
 	ErrorReporterEnv & {
 		MEDIA_ORIGINALS?: R2Bucket;
-		/** Max concurrent transcodes (apps/media max_instances) */
-		MEDIA_MAX_TRANSCODES?: string;
+		/** Ceiling of the admin's max concurrent transcodes (apps/media max_instances); the setting is in global_settings */
+		MEDIA_TRANSCODE_CEILING?: string;
 		image_storage_key?: unknown;
 		ZONE?: string;
 	};

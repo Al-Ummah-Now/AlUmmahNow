@@ -102,7 +102,7 @@ All reads are guarded by a new permission `ops:read` (admins and super admins; m
   - **Spend** (`SpendSection.tsx`, `/api/ops/costs`): the budget meter (spent, hatched projection, ticks at 50% and 80%), spent / projected month end / projected idle cost (vs $50, per env) / budget left, where it goes per source, a stacked daily chart per env and source with the daily budget line, and the drivers table. Alerts link to `/operations#spend`.
   - **Cost next to usage:** each tab shows estimated $ for the month next to usage. Prices come from the vendored pricing (cost spec §1.1). Until that lands, the same list prices as `media/costs.ts` `PRICES` are used.
   - **Product analytics:** a "Product" tab links to the existing views, watch time, uploads and sign-ups numbers (Studio analytics and the Delivery QoE), and shows cost per 1K views. They aren't duplicated.
-- **Delivery page** (the R2 agent's): reads the live `admin:media` and `admin:queues` topics (Part B) for the per-video R2 status badge, "transcoding now: N of max_instances" and the transcode backlog. This doc supplies the data and the live layer. The page and its badges stay that agent's work.
+- **Delivery page** (the R2 agent's): reads the live `admin:media` and `admin:queues` topics (Part B) for the per-video R2 status badge, "N running · M waiting · range min–max" (the admin's autoscaling range, with the `max_instances` ceiling beside it) and the transcode backlog. This doc supplies the data and the live layer. The page and its badges stay that agent's work.
 - **Alerts** when a metric crosses a threshold. Defaults:
   - Worker error rate > 2% for 1 hour;
   - D1 p99 > 500 ms for 1 hour;

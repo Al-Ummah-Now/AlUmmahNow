@@ -106,6 +106,11 @@ describe('stall rules', () => {
 		assert.deepEqual(transcodeStall(row({ status: 'queued', queued_at: iso(T - 31 * 60_000) }), null, T), { kind: 'queued_too_long', minutes: 31 });
 		assert.equal(transcodeStall(row({ status: 'ready' }), null, T), null);
 	});
+	it('a job waiting for a slot (every slot of the admin limit busy) is not stalled', () => {
+		assert.equal(transcodeStall(row({ status: 'queued', queued_at: iso(T - 90 * 60_000) }), null, T, { slotsFull: true }), null);
+		// A running job without word is still stalled when the slots are full
+		assert.deepEqual(transcodeStall(row(), view({ lastSeenAt: iso(T - 12 * 60_000) }), T, { slotsFull: true }), { kind: 'no_progress', minutes: 12 });
+	});
 	it('is reported by the first sweep that sees it only', () => {
 		assert.equal(stallIsNew({ kind: 'no_progress', minutes: 12 }), true);
 		assert.equal(stallIsNew({ kind: 'no_progress', minutes: 21 }), false);

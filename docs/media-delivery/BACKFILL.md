@@ -39,7 +39,7 @@ admin: Play R2 first (video / channel / global)      │   admin: Retire library
    the page says so. The estimate also carries a `ceiling` (the same videos at the ceiling ratios). The cap starts at
    the likely estimate (rounded up to the cent); the admin may raise it toward the ceiling.
 3. **Start** needs a cap above 0. A tick (`op: tick`, every 20 s while running) starts videos up to the concurrency
-   (capped by `MEDIA_MAX_TRANSCODES`) and the spacing between starts, and only when spent + what the videos in
+   (capped by the max of the admin's concurrent transcodes range in Video providers → Cloudflare R2 settings, RUNBOOK.md Capacity) and the spacing between starts, and only when spent + what the videos in
    progress may still cost + the next video's estimate stays within the cap. Otherwise the run stops as **Stopped at
    the budget cap** and flags the admin. Resuming needs a cap that covers the spend and the next video.
 4. **Copy** (`op: copy`, 2 × 64 MiB ranges per message) — each range: Bunny `Range` GET on a signed directory-token URL

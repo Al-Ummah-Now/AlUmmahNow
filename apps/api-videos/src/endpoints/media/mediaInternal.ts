@@ -42,14 +42,16 @@ import type { LibraryHints } from '../../lib/bunny/libraries';
 import { readTroubleshootJobs, type TroubleshootEnv } from '../../lib/media/troubleshoot';
 import { createJob, getJob, retryJob, type JobEnv } from '../../lib/admin/jobs';
 import { readStartTimes, type StartTimeStats } from '../../lib/media/start-times';
+import { transcodeCeilingOf } from '@al-ummah/shared-types';
+import { effectiveTranscodes, readTranscodeLimitView, saveTranscodeLimit, TranscodeLimitError } from '../../lib/media/transcode-limit';
 import { applyJobEvent, applyMp4Event, enqueueTranscode, readDeliverySettings, sourceCandidates, writeDeliverySettings, type MediaEnv } from '../../lib/media/r2-delivery';
 
 const MAX_IDS = 50;
 
 type Env = MediaEnv & ErrorReporterEnv & {
 	BUNNY_SIGN_URLS?: string;
-	/** Max concurrent transcodes: max_instances of apps/media's transcoder container ("4" production, "2" stage and QA) */
-	MEDIA_MAX_TRANSCODES?: string;
+	/** Hard ceiling of the admin's max concurrent transcodes: apps/media's container max_instances ("10" production, "2" stage and QA) */
+	MEDIA_TRANSCODE_CEILING?: string;
 };
 
 /** What the transcoder is doing now (media_jobs is our own record of the backlog). */
@@ -58,8 +60,11 @@ export interface MediaLive {
 	transcoding: number;
 	/** Jobs waiting for a container */
 	queued: number;
-	/** MEDIA_MAX_TRANSCODES; null when unset */
-	maxTranscodes: number | null;
+	/** The concurrent transcodes range the dispatcher enforces now (the admin's setting under the ceiling) */
+	rangeMin: number;
+	rangeMax: number;
+	/** The ceiling (the container's max_instances); null when not configured */
+	ceiling: number | null;
 	/** queued_at of the oldest waiting job, and its age in seconds (server clock) */
 	oldestQueuedAt: string | null;
 	oldestQueuedSeconds: number | null;
@@ -68,16 +73,12 @@ export interface MediaLive {
 	at: string;
 }
 
-export function maxTranscodesOf(value: string | undefined): number | null {
-	const n = Number(value);
-	return value && Number.isInteger(n) && n > 0 ? n : null;
-}
-
 export async function readMediaLive(env: Env, now: number = Date.now()): Promise<MediaLive> {
 	const at = new Date(now).toISOString();
-	const maxTranscodes = maxTranscodesOf(env.MEDIA_MAX_TRANSCODES);
+	const ceiling = transcodeCeilingOf(env.MEDIA_TRANSCODE_CEILING);
+	const range = await effectiveTranscodes(env, now);
 	const db = env.SEARCH_DB;
-	if (!db) return { transcoding: 0, queued: 0, maxTranscodes, oldestQueuedAt: null, oldestQueuedSeconds: null, startTimes: null, at };
+	if (!db) return { transcoding: 0, queued: 0, rangeMin: range.min, rangeMax: range.max, ceiling, oldestQueuedAt: null, oldestQueuedSeconds: null, startTimes: null, at };
 	const row = await db
 		.prepare(
 			`SELECT SUM(status = 'transcoding') AS transcoding, SUM(status = 'queued') AS queued,
@@ -92,7 +93,9 @@ export async function readMediaLive(env: Env, now: number = Date.now()): Promise
 	return {
 		transcoding: Number(row?.transcoding) || 0,
 		queued: Number(row?.queued) || 0,
-		maxTranscodes,
+		rangeMin: range.min,
+		rangeMax: range.max,
+		ceiling,
 		oldestQueuedAt: oldest,
 		oldestQueuedSeconds: Number.isFinite(oldestMs) ? Math.max(0, Math.round((now - oldestMs) / 1000)) : null,
 		startTimes,
@@ -253,6 +256,19 @@ export function createMediaInternalRouter() {
 			.all()
 			.catch(() => ({ results: [] }));
 		return c.json({ success: true, result: { days, jobs, qoe: qoe.results ?? [], costs: costs.results ?? [], fallbacks: fallbacks.results ?? [], live, settings: await readDeliverySettings(c.env), providers: await readMediaSettings(c.env), health: await readHealth(c.env) } });
+	});
+
+	// Concurrent R2 transcodes range (admin-api: everyone with an admin role reads, admins change it, audited)
+	app.get('/transcode-limit', async (c) => c.json({ success: true, result: await readTranscodeLimitView(c.env, true) }));
+	app.put('/transcode-limit', async (c) => {
+		const body = (await c.req.json().catch(() => null)) as { min?: unknown; max?: unknown; actorId?: unknown } | null;
+		const actorId = typeof body?.actorId === 'string' ? body.actorId : 'unknown';
+		try {
+			return c.json({ success: true, result: await saveTranscodeLimit(c.env, { min: body?.min, max: body?.max }, actorId) });
+		} catch (error) {
+			if (error instanceof TranscodeLimitError) return c.json({ success: false, code: error.problem, field: error.field, ceiling: error.ceiling, error: error.message }, 400);
+			throw error;
+		}
 	});
 
 	app.get('/settings', async (c) => c.json({ success: true, result: await readDeliverySettings(c.env, true) }));

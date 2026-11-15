@@ -19,9 +19,10 @@ describe('nav model', () => {
     }
   });
 
-  it('hides from moderators exactly what the old nav hid', () => {
+  it('hides from moderators what the old nav hid, apart from Delivery (read only)', () => {
     const hidden = hrefs(admin).filter((h) => !hrefs(moderator).includes(h)).sort();
-    assert.deepEqual(hidden, ['/audit', '/backfill', '/contact', '/costs', '/delivery', '/media-providers', '/errors', '/legacy-profiles', '/operations', '/processing', '/stale-uploads', '/status', '/abuse', '/web-vitals', '/video-formats', '/newsletter', '/app-config'].sort());
+    // Delivery opens for moderators too, read only (the live transcodes)
+    assert.deepEqual(hidden, ['/audit', '/backfill', '/contact', '/costs', '/media-providers', '/errors', '/legacy-profiles', '/operations', '/processing', '/stale-uploads', '/status', '/abuse', '/web-vitals', '/video-formats', '/newsletter', '/app-config'].sort());
   });
 
   it('shows Remote config only with settings:manage (#413)', () => {
@@ -38,7 +39,7 @@ describe('nav model', () => {
   it('drops groups with nothing visible and keeps their order', () => {
     const ids = groupedItems(moderator).map((g) => g.id);
     assert.deepEqual(ids, ['overview', 'moderation', 'content', 'people', 'operations', 'site']);
-    assert.deepEqual(groupedItems(moderator).find((g) => g.id === 'operations')!.items.map((i) => i.href), ['/jobs', '/indices', '/live-streaming']);
+    assert.deepEqual(groupedItems(moderator).find((g) => g.id === 'operations')!.items.map((i) => i.href), ['/jobs', '/indices', '/delivery', '/live-streaming']);
     assert.equal(groupedItems(admin).find((g) => g.id === 'operations')!.items[0].href, '/operations');
   });
 

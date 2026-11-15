@@ -16,25 +16,39 @@
       "image": "./container/Dockerfile",
       "image_build_context": "./container",
       "instance_type": "standard-4",
-      // Bounds spend: at most this many transcodes at once (the queue backs off when full)
+      // Kept small: Cloudflare's account-wide Containers limit (15,000 vCPU = 3,750 standard-4) is shared
+      // with production (apps/media/wrangler.jsonc). The admin's range is enforced by TranscodeSlots.
       "max_instances": 2,
       // A deploy lets running transcodes finish (up to 1 h) before their instance is replaced;
       // one cut off after that retries at once without using up an attempt (jobs.ts isInfraFailure)
       "rollout_active_grace_period": 3600
     }
   ],
-  "durable_objects": { "bindings": [{ "name": "TRANSCODER", "class_name": "Transcoder" }] },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Transcoder"] }],
+  "durable_objects": {
+    "bindings": [
+      { "name": "TRANSCODER", "class_name": "Transcoder" },
+      // One object: the slots that enforce the admin's max concurrent transcodes (src/slot-state.ts)
+      { "name": "TRANSCODE_SLOTS", "class_name": "TranscodeSlots" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["Transcoder"] },
+    { "tag": "v2", "new_sqlite_classes": ["TranscodeSlots"] }
+  ],
   // MEDIA: public renditions (pub/…), served by the R2 custom domain. MEDIA_PRIVATE: private and
   // unlisted ones (priv/…), with no public access at all: only /priv/ (token checked) reads it.
   "r2_buckets": [
     { "binding": "MEDIA", "bucket_name": "al-ummah-now-media-qa" },
     { "binding": "MEDIA_PRIVATE", "bucket_name": "al-ummah-now-media-private-qa" },
     // Uploads as received (read only): the transcode source (docs/media-delivery/ORIGINALS.md)
-    { "binding": "MEDIA_ORIGINALS", "bucket_name": "al-ummah-now-media-originals-qa" }
+    { "binding": "MEDIA_ORIGINALS", "bucket_name": "al-ummah-now-media-originals-qa" },
+    // Read only here: the admin's max concurrent transcodes (ops/media-transcode-limit.json, written by api-videos)
+    { "binding": "GLOBAL_SETTINGS", "bucket_name": "global-settings-qa" }
   ],
   "services": [{ "binding": "VIDEOS", "service": "videos-qa" }],
   "queues": {
+    // A job with no free slot is sent again later (src/dispatch.ts)
+    "producers": [{ "binding": "TRANSCODE_QUEUE", "queue": "al-ummah-now-transcode-qa" }],
     "consumers": [
       {
         "queue": "al-ummah-now-transcode-qa",
@@ -52,5 +66,6 @@
   ],
   // The deployed version: the release self-test runs a few real starts per version, not per call
   "version_metadata": { "binding": "CF_VERSION_METADATA" },
-  "vars": { "TRANSCODER_INSTANCE": "standard-4", "LOG_LEVEL": "warn" }
+  // MEDIA_TRANSCODE_CEILING: max_instances above (the admin's setting can't go higher)
+  "vars": { "TRANSCODER_INSTANCE": "standard-4", "LOG_LEVEL": "warn", "MEDIA_TRANSCODE_CEILING": "2" }
 }
