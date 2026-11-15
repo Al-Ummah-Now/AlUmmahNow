@@ -13,6 +13,20 @@ import { test, expect, type Page } from '@playwright/test';
 import { appendFileSync } from 'fs';
 import { randomBytes } from 'crypto';
 
+/**
+ * Starts sign-in from the videos header's solid Sign in button (the signed-out header has no
+ * account menu since the unified header, v2026.11.15.2). A click before React hydrates the form
+ * is dropped, so it is retried until the browser reaches Auth.
+ */
+async function headerSignIn(page: Page): Promise<void> {
+  const signIn = page.locator('[data-testid="header-sign-in"]:visible').first();
+  await expect(signIn).toBeVisible({ timeout: 30000 });
+  await expect(async () => {
+    if (!page.url().startsWith(H.auth)) await signIn.click({ timeout: 5000 });
+    await expect(page).toHaveURL(new RegExp(`^${H.auth}`), { timeout: 10000 });
+  }).toPass({ timeout: 45000 });
+}
+
 const H = {
   web: 'https://videos.alummahnow.net',
   auth: 'https://auth.alummahnow.net',
@@ -82,9 +96,7 @@ test('production: sign-up, sign-in on web, profile sign-in, admin refuses', asyn
 
   // Web: register through the real sign-in menu
   await page.goto(`${H.web}/en`);
-  await page.locator('[data-testid="nav-menu-trigger"]:visible').first().click(); // the header's account menu, not a card's "more" menu
-  await page.locator('[role="menu"] form button[type="submit"]').first().click();
-  await expect(page).toHaveURL(new RegExp(`^${H.auth}`), { timeout: 30000 });
+  await headerSignIn(page);
   await page.click('a:has-text("Register")');
   await page.fill('input[name="email"]', EMAIL);
   await page.fill('input[name="password"]', PASSWORD);
@@ -101,9 +113,7 @@ test('production: sign-up, sign-in on web, profile sign-in, admin refuses', asyn
   // Web: sign in again from a fresh session (password)
   await context.clearCookies();
   await page.goto(`${H.web}/en`);
-  await page.locator('[data-testid="nav-menu-trigger"]:visible').first().click(); // the header's account menu, not a card's "more" menu
-  await page.locator('[role="menu"] form button[type="submit"]').first().click();
-  await expect(page).toHaveURL(new RegExp(`^${H.auth}`), { timeout: 30000 });
+  await headerSignIn(page);
   await password(page);
   await expect(page).toHaveURL(new RegExp(`^${H.web}/en(/|\\?|$)`), { timeout: 30000 });
 
