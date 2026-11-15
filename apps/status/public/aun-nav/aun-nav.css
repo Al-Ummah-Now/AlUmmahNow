@@ -812,7 +812,8 @@
   padding: 0 var(--fanous-spacing-xs, 4px);
   border-radius: var(--fanous-radius-sm, 4px);
   background: color-mix(in srgb, var(--aun-menu-text) 8%, transparent);
-  color: var(--aun-menu-muted);
+  /* the menu's text colour, not muted: muted text on the tint is under 4.5:1 in some themes */
+  color: var(--aun-menu-text);
   font-size: 0.6875rem;
   font-weight: 600;
   line-height: 1.4;

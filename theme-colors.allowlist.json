@@ -33,8 +33,6 @@
   "apps/web/src/components/Channel/ChannelTabs.tsx": 4,
   "apps/web/src/components/Channel/rtl/ChannelHeader.tsx": 27,
   "apps/web/src/components/Channel/rtl/ChannelTabs.tsx": 4,
-  "apps/web/src/components/ChannelSelector/index.tsx": 87,
-  "apps/web/src/components/ChannelSelector/rtl/index.tsx": 87,
   "apps/web/src/components/ChannelSwitcher/index.tsx": 35,
   "apps/web/src/components/ChannelSwitcher/rtl/index.tsx": 35,
   "apps/web/src/components/ChannelTabs/AboutTabContent.tsx": 38,
