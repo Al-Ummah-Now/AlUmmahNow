@@ -28,6 +28,9 @@ that product/legal should confirm.
 | `community_posts/posts/...`, `comments/...`, `likes/{postId}/{userId}.json`, `votes/{postId}/{userId}.json`, `comment-likes/...` | Posts, comments, likes, poll votes | Contract (b) | Until erasure / content deletion |
 | `playlists/{playlistId}` | Owner `userId` | Contract (b) | Until erasure |
 | `upload-defaults/{userId}/...` | Upload templates | Contract (b) | Until erasure |
+| `media-private/studio/{userId}/...` | Studio brand kit and shared assets (institution mode) | Contract (b) | Until erasure |
+| `media-private/staging/{videoId}/...` | Renditions pre-encoded in desktop Studio, until the transcode verifies them | Contract (b) | Deleted when the transcode ends; unused after 48 h |
+| `subtitles/{videoId}/on-device/{lang}.json` | A transcript made on the creator's computer, until it becomes a caption draft | Contract (b) | Deleted once drafted; with the video |
 | `reports/report:{entityId}:{reportId}:{reporterId}` | Who reported what | Legitimate interest (f): platform safety and moderation history | Kept; reporter identity removed on erasure |
 | D1 notifications DB `notification_settings`, `notification_email_prefs`, `notification_seen` | Category switches, email preferences, when the user last opened the notification menu (the bell's badge) | Contract (b) | Until erasure; exported (`notificationState`) and erased with the account |
 | KV `RATE_LIMIT_KV` `rate_limit:{op}:{userId}` | Counters | Legitimate interest (f): abuse prevention | ~25 h TTL |

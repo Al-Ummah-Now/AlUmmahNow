@@ -28,12 +28,14 @@
  *   community_posts/posts/{channelId}/{postId}.json    post (+ likes/, votes/, comments/ (incl. reply-parents/ pointers), comment-likes/ trees)
  *   playlists/{playlistId}                             playlist (owner: userId)
  *   upload-defaults/{userId}/...                       upload templates
+ *   MEDIA_PRIVATE studio/{userId}/...                  Studio brand kit and shared assets (institution mode)
  *   reports/report:{entityId}:{reportId}:{reporterId}  reports filed by the user
  */
 
 import { eraseUserSubscriptions, exportUserSubscriptions, subscriberChannelOf } from '../subscription-store';
 import { getEmailSettings, getSeenAt, getSettings } from '../notifications';
 import { defaultPointerPrefix } from '../uploadDefaultPointer';
+import { readAssets, readBrandKit, studioPrefix } from '../studio/brandKit';
 import { deleteVideoSideRecords } from '../videoSideRecords';
 import { sectionOrderKey } from '../channelSectionOrder';
 import { BucketLike, BudgetExhausted, OperationBudget, asBucket, deleteKeys, readJson, updateJson, writeJson } from './scan';
@@ -70,6 +72,8 @@ export interface PrivacyBuckets {
 	playlists: unknown;
 	'upload-defaults': unknown;
 	reports: unknown;
+	/** Studio brand kit and shared assets under studio/<userId>/ (lib/studio/brandKit.ts) */
+	MEDIA_PRIVATE?: unknown;
 	subtitles?: unknown;
 	/** Upload markers (ops/upload-reaper/created/<videoId>) and the scheduler's entries: lib/videoSideRecords.ts */
 	global_settings?: unknown;
@@ -254,6 +258,8 @@ export interface UserDataExport {
 	pollVotes: Json[];
 	playlists: Json[];
 	uploadDefaults: Json[];
+	/** Studio brand kit and the shared assets' names and sizes (the files themselves are downloadable in Studio) */
+	studioBrandKit: Json[];
 	reportsFiled: Json[];
 	/** Notification preferences and when the notification menu was last opened (NOTIFICATIONS_DB). */
 	notificationState: Json[];
@@ -278,6 +284,7 @@ export const EXPORT_LIST_FIELDS = [
 	'pollVotes',
 	'playlists',
 	'uploadDefaults',
+	'studioBrandKit',
 	'reportsFiled',
 	'notificationState',
 ] as const;
@@ -369,6 +376,14 @@ export async function collectUserData(
 				if (entry.userId === userId) out.watchHistory.push(entry);
 			})(ctx, `${userId}:`),
 		(ctx) => readEach(asBucket(env['upload-defaults']), () => true, (t) => void out.uploadDefaults.push(t))(ctx, `${userId}/`),
+		async (ctx) => {
+			if (!env.MEDIA_PRIVATE) return;
+			ctx.budget.spend();
+			const kit = await readBrandKit(env.MEDIA_PRIVATE, userId);
+			ctx.budget.spend();
+			const { assets } = await readAssets(env.MEDIA_PRIVATE, userId);
+			if (kit || assets.length) out.studioBrandKit.push({ brandKit: kit, assets });
+		},
 		(ctx) =>
 			readEach(asBucket(env.channels), () => true, (channel, key, c) => {
 				const channelId = channel.id ?? key;
@@ -890,6 +905,10 @@ export async function eraseUserData(
 
 	const phases: Phase[] = [
 		deletePrefixPages(asBucket(env.watch_history), `${userId}:`, 'watchHistory'),
+		// Studio brand kit and shared assets (institution mode)
+		async (ctx) => {
+			if (env.MEDIA_PRIVATE) await deletePrefixPages(asBucket(env.MEDIA_PRIVATE), studioPrefix(userId), 'studioBrandKit')(ctx);
+		},
 		async (ctx) => {
 			const uploadDefaults = asBucket(env['upload-defaults']);
 			await deletePrefixPages(uploadDefaults, `${userId}/`, 'uploadDefaults')(ctx);

@@ -43,7 +43,8 @@ import { SubtitlesGet } from '../endpoints/video/subtitlesGet';
 import { SubtitlesDelete } from '../endpoints/video/subtitlesDelete';
 import { SubtitlesSetDefault } from '../endpoints/video/subtitlesSetDefault';
 import { CaptionJobCancel, CaptionJobCreate, CaptionJobsList, CaptionMinutesGet } from '../endpoints/captions/captionJobs';
-import { CaptionDraftDelete, CaptionDraftGet, CaptionDraftPublish, CaptionDraftSave, CaptionDraftsList, ReviewTranscriptClaim } from '../endpoints/captions/captionDrafts';
+import { RenditionFilePut, RenditionsCancel, RenditionsComplete, RenditionsCreate } from '../endpoints/video/renditions';
+import { CaptionDraftDelete, CaptionDraftGet, CaptionDraftPublish, CaptionDraftSave, CaptionDraftsList, OnDeviceTranscriptSubmit, ReviewTranscriptClaim } from '../endpoints/captions/captionDrafts';
 
 // Video scheduling endpoints
 import { VideoScheduleCreate } from '../endpoints/video/scheduleCreate';
@@ -185,6 +186,11 @@ videoRouter.get('/:videoId/captions/drafts/:language', CaptionDraftGet);
 videoRouter.put('/:videoId/captions/drafts/:language', CaptionDraftSave);
 videoRouter.delete('/:videoId/captions/drafts/:language', CaptionDraftDelete);
 videoRouter.post('/:videoId/captions/drafts/:language/publish', CaptionDraftPublish);
+videoRouter.post('/:videoId/captions/drafts/:language/transcript', OnDeviceTranscriptSubmit);
+videoRouter.post('/:videoId/renditions', RenditionsCreate);
+videoRouter.put('/:videoId/renditions/:stagingId/files/:rung/:file', RenditionFilePut);
+videoRouter.post('/:videoId/renditions/:stagingId/complete', RenditionsComplete);
+videoRouter.delete('/:videoId/renditions/:stagingId', RenditionsCancel);
 videoRouter.post('/:videoId/review/transcript/claim', ReviewTranscriptClaim);
 // On-demand transcription jobs (AUN-CAPTIONS §5.1)
 videoRouter.post('/:videoId/captions/jobs', CaptionJobCreate);
