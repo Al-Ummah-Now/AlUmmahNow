@@ -9,6 +9,6 @@
     "target": "es2022",
     "noEmit": true
   },
-  "include": ["src/**/*", "test/**/*", "container/ladder.mjs", "container/rungs.mjs", "container/review.mjs"],
+  "include": ["src/**/*", "test/**/*", "container/ladder.mjs", "container/rungs.mjs", "container/review.mjs", "container/prebuilt.mjs"],
   "exclude": ["node_modules", "dist"]
 }

@@ -11,7 +11,11 @@
  * Bunny is never touched here: every Bunny path works exactly as before.
  */
 import { r2ThumbnailPrefix } from '../thumbnail/store';
+import { isStale as isPrebuiltStale } from './prebuilt';
 import {
+	PREBUILT_REJECTIONS,
+	type PrebuiltRejection,
+	type PrebuiltUploadState,
 	isVideoMediaPublic,
 	mediaFrameUrl,
 	mediaPlayUrl,
@@ -35,6 +39,7 @@ import {
 	sanitizeMp4,
 	type TranscodeFailure,
 	type TranscodeJobEvent,
+	type TranscodeResult,
 	type TranscodeJobMessage,
 	type VideoR2State,
 	type VideoVisibilityFields,
@@ -248,6 +253,12 @@ export async function enqueueTranscode(
 				reason,
 				...(review ? { review } : {}),
 			};
+			// D11: renditions the creator pre-encoded in desktop Studio go with the first transcode, to verify
+			const pre = (video as MediaVideo & { prebuilt?: PrebuiltUploadState }).prebuilt;
+			if (reason === 'upload' && pre?.status === 'ready' && !isPrebuiltStale(pre, now.getTime())) {
+				job.prebuilt = { stagingId: pre.stagingId, rungs: pre.rungs };
+				(video as MediaVideo & { prebuilt?: PrebuiltUploadState }).prebuilt = { ...pre, status: 'queued' };
+			}
 			video.r2 = {
 				status: 'queued',
 				jobId: job.jobId,
@@ -438,6 +449,16 @@ export async function promoteR2Copy(env: MediaEnv, videoId: string): Promise<boo
 	}
 }
 
+/** The container's word on pre-encoded renditions, kept only in the shape Studio reads (D11). */
+export function withPrebuiltOutcome(result: TranscodeResult): TranscodeResult {
+	const p = (result as { prebuilt?: { used?: unknown; reason?: unknown; rung?: unknown } }).prebuilt;
+	const { prebuilt: _drop, ...rest } = result as TranscodeResult & { prebuilt?: unknown };
+	if (!p || typeof p !== 'object') return rest as TranscodeResult;
+	const reason = typeof p.reason === 'string' && (PREBUILT_REJECTIONS as readonly string[]).includes(p.reason) ? (p.reason as PrebuiltRejection) : undefined;
+	const rung = typeof p.rung === 'string' && /^[A-Za-z0-9_-]{1,16}$/.test(p.rung) ? p.rung : undefined;
+	return { ...rest, prebuilt: { used: p.used === true, ...(p.used === true ? {} : { reason: reason ?? 'error' }), ...(rung && p.used !== true ? { rung } : {}) } } as TranscodeResult;
+}
+
 export async function applyJobEvent(
 	env: MediaEnv & ErrorReporterEnv,
 	ctx: ExecutionContextLike | undefined,
@@ -478,7 +499,7 @@ export async function applyJobEvent(
 			}
 			r2.status = 'ready';
 			r2.readyAt = ev.at;
-			r2.result = ev.result;
+			r2.result = withPrebuiltOutcome(ev.result);
 			r2.rungs = ev.result.rungs.map((r) => ({ name: r.name, state: 'done' as const }));
 			delete r2.error;
 			delete r2.progress;
@@ -503,6 +524,8 @@ export async function applyJobEvent(
 				}
 			}
 		}
+		// D11: the job took the pre-encoded renditions (used or not); their staging is gone with it
+		if (ev.type === 'ready' || (ev.type === 'failed' && ev.final)) delete (video as { prebuilt?: unknown }).prebuilt;
 		// The video's provider record mirrors the job (docs/media-delivery/PROVIDERS.md)
 		const ref = (video as SoleCopyVideo).media?.providers.r2;
 		if (ref) {
