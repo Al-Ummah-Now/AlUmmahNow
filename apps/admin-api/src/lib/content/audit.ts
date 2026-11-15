@@ -114,10 +114,10 @@ export function toAuditEntry(row: LogRow): AdminAuditEntry & { previous: Record<
  */
 export async function readAudit(db: AuditDb, opts: { kind?: ContentKind; id?: string; live?: boolean; limit: number }) {
   const statement = opts.live
-    ? db.prepare('SELECT id, key, old_value, new_value, actor_id, created_at FROM site_settings_log WHERE key >= ? AND key < ? ORDER BY created_at DESC, id DESC LIMIT ?').bind(LIVE_AUDIT_PREFIX, LIVE_AUDIT_END, opts.limit)
+    ? db.prepare('SELECT id, key, old_value, new_value, actor_id, created_at FROM site_settings_log WHERE key >= ? AND key < ? ORDER BY created_at DESC, rowid DESC LIMIT ?').bind(LIVE_AUDIT_PREFIX, LIVE_AUDIT_END, opts.limit)
     : opts.kind && opts.id
-    ? db.prepare('SELECT id, key, old_value, new_value, actor_id, created_at FROM site_settings_log WHERE key = ? ORDER BY created_at DESC, id DESC LIMIT ?').bind(auditKey(opts.kind, opts.id), opts.limit)
-    : db.prepare('SELECT id, key, old_value, new_value, actor_id, created_at FROM site_settings_log WHERE key >= ? AND key < ? ORDER BY created_at DESC, id DESC LIMIT ?').bind(CONTENT_AUDIT_PREFIX, CONTENT_AUDIT_END, opts.limit);
+    ? db.prepare('SELECT id, key, old_value, new_value, actor_id, created_at FROM site_settings_log WHERE key = ? ORDER BY created_at DESC, rowid DESC LIMIT ?').bind(auditKey(opts.kind, opts.id), opts.limit)
+    : db.prepare('SELECT id, key, old_value, new_value, actor_id, created_at FROM site_settings_log WHERE key >= ? AND key < ? ORDER BY created_at DESC, rowid DESC LIMIT ?').bind(CONTENT_AUDIT_PREFIX, CONTENT_AUDIT_END, opts.limit);
   const { results = [] } = await statement.all<LogRow>();
   return results.map(toAuditEntry);
 }
