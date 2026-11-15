@@ -51,7 +51,9 @@ the same elements as JSX and their tests compare the result with the builders.
   in videos web and the admins, so every header lines up.
 - **One typeface** in every header, set by the contract whatever the page uses: system-ui
   (`--aun-header-font`), Arabic 'Noto Naskh Arabic' then Geeza Pro / Tahoma (`--aun-header-font-ar`).
-- **One line on every screen.** The bar never wraps to a second row. Sites whose own links sit in
+- **One line on every screen.** The bar never wraps to a second row (`flex-wrap: nowrap`); when
+  room runs out the brand is the one group that shrinks, and its wordmark (a long scholar site
+  name too) ends in an ellipsis; below 400px it is hidden and the logo stays. Sites whose own links sit in
   the bar (www, scholar sites, the dev site) mark that group `.aun-header-primary.aun-collapse`:
   below 1024px it leaves the bar and the menu button (`menuButtonHtml`, slot 1) opens an
   `.aun-header-panel` popover right under the bar with those links and the search. It opens
