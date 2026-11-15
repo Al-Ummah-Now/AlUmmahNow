@@ -15,6 +15,9 @@ import { socialClient } from '@/lib/studio/social-client';
 import { CopyButton, Notice, Pill, Section, fill } from './shared';
 import { RelativeDate } from '@/components/RelativeDate';
 
+/** Event labels are keyed with `_` for `.` (translation paths are dot-joined). */
+const eventName = (names: Record<string, string>, event: string) => names[event.replace('.', '_')] ?? event;
+
 interface Props {
   channelId: string;
   locale: 'en' | 'ar';
@@ -132,7 +135,7 @@ export function SocialWebhooks({ channelId, locale, webhooks, limit, onWebhooks 
                     checked={events.includes(ev)}
                     onChange={(e) => setEvents((list) => (e.target.checked ? [...list, ev] : list.filter((x) => x !== ev)))}
                   />
-                  {w.eventNames[ev]}
+                  {eventName(w.eventNames, ev)}
                 </label>
               ))}
             </div>
@@ -165,7 +168,7 @@ export function SocialWebhooks({ channelId, locale, webhooks, limit, onWebhooks 
             <div className="flex flex-wrap items-start gap-3">
               <div className="min-w-0 flex-1">
                 <p className="truncate font-mono text-sm" dir="ltr" title={hook.url}>{hook.url}</p>
-                <p className="mt-1 text-xs text-[var(--fanous-color-text-secondary)]">{hook.events.map((e) => (w.eventNames as Record<string, string>)[e] ?? e).join(' · ')}</p>
+                <p className="mt-1 text-xs text-[var(--fanous-color-text-secondary)]">{hook.events.map((e) => eventName(w.eventNames, e)).join(' · ')}</p>
                 {hook.lastDeliveryAt ? (
                   <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--fanous-color-text-secondary)]">
                     <span>{w.lastStatus}:</span>
