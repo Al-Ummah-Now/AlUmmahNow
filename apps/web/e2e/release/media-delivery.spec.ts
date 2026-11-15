@@ -23,7 +23,7 @@
  * with it).
  */
 import * as path from 'path';
-import { encoding, untilEncoded } from './encode';
+import { untilEncoded } from './encode';
 import { test, expect, type Page } from '@playwright/test';
 import { trackRunUploads } from './run-videos';
 import { releaseEnv, target } from './targets';
@@ -168,7 +168,9 @@ test.describe('Release: R2 delivery', () => {
       expect(first!.access, 'a private upload is transcoded to the private prefix').toBe('priv');
       test.info().annotations.push({ type: 'r2-first-status', description: first!.status });
 
-      // Queue → container → events → record. Still queued/transcoding at the deadline = slow (#929)
+      // Queue → container → events → record. Still transcoding at the deadline = slow (#929). Still
+      // queued is not slow: our own transcoder never started it (2026-11-15: jobs left 'queued' after
+      // a media deploy restarted the Durable Object mid-launch), so that fails
       let r2: R2View | undefined;
       await untilEncoded('the R2 transcode of the media clip',
         () => expect
@@ -178,7 +180,7 @@ test.describe('Release: R2 delivery', () => {
             intervals: [10_000],
           })
           .toMatch(/^(ready|failed)$/),
-        async () => encoding((await uploadStatus(user, videoId, channelId)).r2?.status),
+        async () => (await uploadStatus(user, videoId, channelId)).r2?.status === 'transcoding',
         'the R2 transcode (Containers)');
       expect(r2!.status, `the R2 transcode failed: ${r2!.error ?? 'no error recorded'}`).toBe('ready');
 

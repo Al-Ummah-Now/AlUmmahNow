@@ -926,15 +926,42 @@ export function sweepVerdict(video: MediaVideo, now: number): 'requeue' | 'move'
 	return null;
 }
 
+/**
+ * The Errors page item for a job the sweep found stuck and queued again: a stuck job means the
+ * transcoder lost it (it should retry on its own), so a person should know. Same key as a failed
+ * transcode, so the item resolves when the re-queued job is ready.
+ */
+export function stuckJobNotice(video: Pick<MediaVideo, 'id' | 'r2'>, now: number) {
+	const r2 = video.r2!;
+	const since = r2.status === 'transcoding' ? (r2.startedAt ?? r2.queuedAt) : r2.queuedAt;
+	const minutes = Math.max(0, Math.round((now - Date.parse(since)) / 60_000));
+	return {
+		key: needsActionKey(video.id),
+		source: 'processing' as const,
+		title: `R2 transcode was stuck ${r2.status} (re-queued automatically)`,
+		message: `Job ${r2.jobId} sat ${r2.status} for ${minutes} min without word from the transcoder; the sweep queued it again. Check the media Worker logs if this repeats.`,
+		itemType: 'video' as const,
+		itemId: video.id,
+		itemUrl: `/videos/${video.id}`,
+		retry: { kind: 'service' as const, service: 'api-videos', path: '/internal/media/retry', body: { ids: [video.id] } },
+		retryLabel: 'Transcode again',
+		extra: { status: r2.status, jobId: r2.jobId, minutes },
+	};
+}
+
 /** Bounded: looks at the given candidates only (the caller lists them from the ownership index). */
-export async function sweepMedia(env: MediaEnv, ids: string[], now = Date.now()): Promise<{ requeued: number; moved: number }> {
+export async function sweepMedia(env: MediaEnv, ids: string[], now = Date.now(), ctx?: ExecutionContextLike): Promise<{ requeued: number; moved: number }> {
 	let requeued = 0;
 	let moved = 0;
 	for (const id of ids.slice(0, 200)) {
 		const video = await repo(env).getObject(id);
 		if (!video) continue;
 		const verdict = sweepVerdict(video, now);
-		if (verdict === 'requeue' && (await enqueueTranscode(env, id, 'sweep', { force: true })).queued) requeued++;
+		if (verdict === 'requeue' && (await enqueueTranscode(env, id, 'sweep', { force: true })).queued) {
+			requeued++;
+			logger.warn('[MediaSweep] Stuck transcode queued again', { videoId: id, status: video.r2?.status, jobId: video.r2?.jobId });
+			reportNeedsAction('api-videos', env as never, ctx, stuckJobNotice(video, now));
+		}
 		if (verdict === 'move') {
 			const to = accessDrift(video);
 			if (to && (await queueMediaMove(env, id, to))) moved++;
@@ -954,14 +981,14 @@ export async function onVideoWritten(env: MediaEnv, decoded: unknown): Promise<v
 }
 
 /** Cron: jobs stuck in queued/transcoding (from media_jobs), re-queued; bounded per run. */
-export async function sweepMediaJobs(env: MediaEnv, now = Date.now()): Promise<{ requeued: number; moved: number }> {
+export async function sweepMediaJobs(env: MediaEnv, now = Date.now(), ctx?: ExecutionContextLike): Promise<{ requeued: number; moved: number }> {
 	if (!env.SEARCH_DB || !env.TRANSCODE_QUEUE) return { requeued: 0, moved: 0 };
 	const { results } = await env.SEARCH_DB.prepare(
 		`SELECT video_id FROM media_jobs WHERE (status = 'queued' AND queued_at < ?1) OR (status = 'transcoding' AND updated_at < ?2) ORDER BY updated_at LIMIT 50`,
 	)
 		.bind(new Date(now - STUCK_QUEUED_MS).toISOString(), new Date(now - STUCK_TRANSCODING_MS).toISOString())
 		.all<{ video_id: string }>();
-	return sweepMedia(env, (results ?? []).map((r) => r.video_id), now);
+	return sweepMedia(env, (results ?? []).map((r) => r.video_id), now, ctx);
 }
 
 /**

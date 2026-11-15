@@ -15,6 +15,7 @@ import {
 	purgeVideoMedia,
 	r2Urls,
 	sourceUrl,
+	stuckJobNotice,
 	sweepVerdict,
 	writeDeliverySettings,
 	type MediaMoveMessage,
@@ -241,6 +242,16 @@ describe('access follows visibility', () => {
 		assert.deepEqual([...raw.MEDIA.store.keys()], ['pub/other-video-1234/r1/master.m3u8']);
 	});
 
+	it('a stuck job the sweep re-queues flags the admin, keyed like a failure so ready resolves it', () => {
+		const now = Date.parse('2026-11-15T03:00:00Z');
+		const n = stuckJobNotice({ id: ID, r2: { status: 'queued', jobId: 'job-9', rev: 'r', access: 'pub', attempts: 0, queuedAt: '2026-11-15T01:45:00Z' } as never }, now);
+		assert.equal(n.key, `media-transcode:${ID}`);
+		assert.match(n.title, /stuck queued/);
+		assert.equal(n.extra.minutes, 75);
+		assert.deepEqual(n.retry, { kind: 'service', service: 'api-videos', path: '/internal/media/retry', body: { ids: [ID] } });
+		const t = stuckJobNotice({ id: ID, r2: { status: 'transcoding', jobId: 'job-9', rev: 'r', access: 'pub', attempts: 1, queuedAt: '2026-11-14T18:00:00Z', startedAt: '2026-11-14T20:00:00Z' } as never }, now);
+		assert.equal(t.extra.minutes, 420);
+	});
 	it('the sweep re-queues stuck jobs and moves drifted ones', () => {
 		const now = Date.parse('2026-11-11T12:00:00Z');
 		const base = { jobId: 'j', rev: 'r', access: 'pub' as const, attempts: 0 };

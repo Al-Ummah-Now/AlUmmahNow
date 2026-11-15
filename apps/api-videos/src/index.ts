@@ -570,7 +570,7 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 		);
 		// R2 transcodes stuck in queued/transcoding (lib/media/r2-delivery.ts)
 		ctx.waitUntil(
-			sweepMediaJobs(rawEnv as never).then(
+			sweepMediaJobs(rawEnv as never, Date.now(), ctx).then(
 				() => undefined,
 				(error) => logger.error('[MediaSweep] Run failed', { error: error instanceof Error ? error.message : String(error) }),
 			),
