@@ -121,6 +121,7 @@ export function createVideoPlayer(
     player = videojs(element, {
       ...VIDEO_JS_OPTIONS,
       ...options,
+      html5: { ...VIDEO_JS_OPTIONS.html5, ...vhsTrackOptions(element), ...((options.html5 as Record<string, unknown> | undefined) ?? {}) },
       controlBar: {
         ...base,
         fanousNextButton: { copy },
@@ -169,6 +170,23 @@ export function createVideoPlayer(
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     throw new Error(`Video player initialization failed: ${errorMessage}`);
   }
+}
+
+/**
+ * Where HLS plays through VHS (no native HLS), the player's audio and video track lists are VHS's
+ * own: WebKit without native HLS (Linux WebKitGTK/WPE) has `audioTracks` on the element, and
+ * Video.js then proxied that list, which held Media Source's own unnamed track next to VHS's
+ * renditions ("3" in the Audio menu) and ignored a switch (wiki AUN-MULTI-AUDIO). VHS documents
+ * native tracks off whenever it plays. Browsers with native HLS (Safari, iOS) keep theirs.
+ */
+export function vhsTrackOptions(element: { canPlayType(type: string): string }): { nativeAudioTracks?: false; nativeVideoTracks?: false } {
+  let native = '';
+  try {
+    native = element.canPlayType('application/vnd.apple.mpegurl') || element.canPlayType('application/x-mpegURL');
+  } catch {
+    native = '';
+  }
+  return native ? {} : { nativeAudioTracks: false, nativeVideoTracks: false };
 }
 
 /** Control labels for the player's own components, in the player's language. */
