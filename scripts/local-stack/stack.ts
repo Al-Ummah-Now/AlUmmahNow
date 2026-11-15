@@ -259,6 +259,10 @@ export const WORKERS: StackWorker[] = [
       SHORT_LINK_URL: url('short-links'),
       // The CSP lets the player fetch the fake R2 media host's HLS (fake-external.ts FAKE_MEDIA_HOST)
       MEDIA_PUBLIC_HOST: 'media.local-stack.test',
+      // The About page reads the CMS page and links to www (src/lib/about); without the CMS in the
+      // stack the read fails fast and the page shows its built-in copy
+      CMS_URL: url('cms'),
+      WWW_URL: url('www'),
     },
   },
   {
@@ -306,7 +310,8 @@ export const WORKERS: StackWorker[] = [
       SIGN_IN_FALLBACK_URL: `${url('profile')}/`,
       // Exact origins (the issuer matches them exactly; wildcards are https only): every app that
       // calls the session API with credentials (/session/accounts: the silent sign-in probe)
-      ALLOWED_ORIGINS: [url('web'), url('admin-web'), url('profile'), url('auth-admin')].join(','),
+      // (the CMS's account chooser too, when it is booted)
+      ALLOWED_ORIGINS: [url('web'), url('admin-web'), url('profile'), url('auth-admin'), url('cms')].join(','),
       // Same apps and paths as QA/stage/production (the Auth repo's wrangler configs); www and the CMS only when booted
       FRONTCHANNEL_LOGOUT_URLS: [`${url('profile')}/logout`, `${url('auth-admin')}/logout`, `${url('web')}/api/auth/logout`, `${url('admin-web')}/api/auth/logout`].join(','),
       CLIENT_REGISTRY_MODE: 'enforce',
@@ -342,8 +347,10 @@ export const WORKERS: StackWorker[] = [
     repo: 'cms',
     dir: '.',
     config: 'wrangler.jsonc',
-    // Only the public and internal APIs are used (www's reads, the scholar reference outbox): its
-    // staff screens' sign-in config (AUTH_CLIENT_ID, session keys) is not needed
+    // The public and internal APIs (www's reads, the scholar reference outbox) and the staff screens:
+    // staff sign in through the local issuer with the production AUTH_CLIENT_ID from wrangler.jsonc
+    // (boot points that client's redirect URI at this port); ENVIRONMENT=local gives the session its
+    // local secret
     vars: {
       ENVIRONMENT: 'local',
       PUBLIC_URL: url('cms'),

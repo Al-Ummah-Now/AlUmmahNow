@@ -168,7 +168,25 @@ node --experimental-strip-types --no-warnings scripts/local-stack/smoke.ts      
 ```
 
 `LOCAL_STACK_AUTH_DIR` points at another Auth checkout, and `LOCAL_STACK_DIR` moves the state dir
-(`.local-stack/`). Every boot starts from empty databases. To stop a stack, use Ctrl-C or kill its
+(`.local-stack/`).
+
+**The CMS or www from a branch or a local checkout.** To try a cross-app change before the sibling
+repo releases it, build that repo's bundle yourself instead of fetching the released one, then boot:
+
+```bash
+node --experimental-strip-types --no-warnings scripts/local-stack/sibling-build.ts --repo cms --checkout ../AlUmmahNowCMS   # a checkout as it is
+node --experimental-strip-types --no-warnings scripts/local-stack/sibling-build.ts --repo www --ref feat/page-builder       # a branch, tag or commit
+```
+
+It runs that repo's own `scripts/release/local-stack-bundle.sh` (the one its release workflow runs;
+www is built first) and puts the result where boot looks (`.local-stack/repos/cms|www`, or
+`LOCAL_STACK_CMS_DIR` / `LOCAL_STACK_WWW_DIR`). `--ref` fetches into `.local-stack/src/<repo>` and runs
+`npm ci` there. Local only: CI on `main` and in releases uses released bundles alone. In the stack,
+CMS staff sign in through the local issuer (the production `AUTH_CLIENT_ID`, its redirect URI pointed
+at `localhost:3402`); a run account promoted with `/test/promote` has the Admin role the CMS accepts.
+The videos site's About page reads the stack's CMS (`CMS_URL`) and links to its www (`WWW_URL`).
+`79-page-builder-cross-app` (CMS page builder → www and the videos About page) runs on such a build
+and skips on CMS or www bundles that predate the page builder. Every boot starts from empty databases. To stop a stack, use Ctrl-C or kill its
 PID. Never kill processes by name.
 
 ## Run the specs
