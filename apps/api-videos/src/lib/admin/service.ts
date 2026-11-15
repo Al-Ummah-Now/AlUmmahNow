@@ -7,6 +7,7 @@
  * goes through the env's wrapped buckets, so the search, ownership and
  * comment indexes follow (lib/search/sync.ts).
  */
+import { runCancelJob, runReconcileJob, runRefundJob, runSyncPricesJob, runWebhookJob } from '../billing/service';
 import { bunnyRef } from '../media/providers';
 import { adminVideoMedia } from '../media/video-override';
 import { eraseUploadTraces } from '../privacy/upload-traces';
@@ -1662,5 +1663,11 @@ export const ADMIN_JOB_HANDLERS: Record<AdminJobKind, JobHandler> = {
 	// CSAM takedown (lib/csam/contain.ts) and the image owner index it maps images with
 	'csam.contain': (env, job) => runContainStep(env as ContainEnv, job),
 	'images.index-owners': (env, job) => backfillImageOwnersStep(env as never, job.params as never),
+	// Payments (lib/billing/service.ts): webhooks, price sync, cancels, refunds, reconciles
+	'billing.webhook': (env, job) => runWebhookJob(env as never, job),
+	'billing.sync-prices': (env, job) => runSyncPricesJob(env as never, job),
+	'billing.cancel': (env, job) => runCancelJob(env as never, job),
+	'billing.refund': (env, job) => runRefundJob(env as never, job),
+	'billing.reconcile': (env, job) => runReconcileJob(env as never, job),
 };
 

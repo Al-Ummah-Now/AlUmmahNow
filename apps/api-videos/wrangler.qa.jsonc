@@ -283,6 +283,9 @@
     // White-label scholar sites (wiki AUN-SCHOLAR-SITES): host suffix <slug>.{alummahnow.org | stage. | qa.}; revoked sites redirect to the channel here
     "SITES_ENV": "qa",
     "VIDEOS_WEB_URL": "https://videos.qa.alummahnow.net",
+    "PUBLIC_API_URL": "https://videos.api.qa.alummahnow.net",
+    // The test payment provider (lib/billing/fake.ts): moves no money; never set in production or stage
+    "PAYMENTS_FAKE_PROVIDER": "1",
     // Error reports to the admin Errors page (docs/features/error-reporting.md)
     "ERRORS_INGEST_URL": "https://admin.api.qa.alummahnow.net/internal/errors",
     // Mobile apps settings (videos admin): attestation switches for the native proof (lib/attestation)

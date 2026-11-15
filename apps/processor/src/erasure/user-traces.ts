@@ -15,6 +15,10 @@
  * - SEARCH_DB tier_requests (wiki AUN-TIER-REQUESTS): the user's requests for a tier, with the name
  *   and "about you" they wrote. Deleted. Requests the user decided as staff keep the decision, with
  *   the decider scrubbed to the placeholder.
+ * - SEARCH_DB billing_* (wiki AUN-SUBS): payment records are bookkeeping, so subscriptions and
+ *   payments are kept with the user id replaced by the erased marker (comp reasons dropped, a comp
+ *   the user granted as staff keeps the grant with the granter scrubbed). Webhook payloads (they can
+ *   hold the email) are emptied; customer links and checkouts are deleted.
  * - SEARCH_DB admin_deletions / admin_jobs: kept as action records, the user scrubbed to
  *   placeholders (#1253, admin-history.ts).
  *
@@ -35,6 +39,7 @@ export interface UserTracesResult {
   rateLimits: number;
   creatorTier: number;
   tierRequests: number;
+  billing: number;
   adminDeletions: number;
   adminJobs: number;
 }
@@ -70,6 +75,16 @@ export async function eraseUserTraces(
         search.prepare('UPDATE tier_requests SET decided_by = ? WHERE decided_by = ? RETURNING id').bind(erasedMarker, userId),
       ])
     : [];
+  const billing = search
+    ? await search.batch([
+        search.prepare('UPDATE billing_subscriptions SET user_id = ?, comp_reason = NULL WHERE user_id = ? RETURNING id').bind(erasedMarker, userId),
+        search.prepare('UPDATE billing_subscriptions SET comp_by = ? WHERE comp_by = ? RETURNING id').bind(erasedMarker, userId),
+        search.prepare('UPDATE billing_payments SET user_id = ? WHERE user_id = ? RETURNING id').bind(erasedMarker, userId),
+        search.prepare(`UPDATE billing_events SET user_id = ?, payload = '{}' WHERE user_id = ? RETURNING id`).bind(erasedMarker, userId),
+        search.prepare('DELETE FROM billing_customers WHERE user_id = ? RETURNING provider_ref').bind(userId),
+        search.prepare('DELETE FROM billing_checkouts WHERE user_id = ? RETURNING id').bind(userId),
+      ])
+    : [];
   const history = search ? await eraseUserAdminHistory(search, userId, erasedMarker) : { deletions: 0, jobs: 0 };
   return {
     invites: count(invites),
@@ -79,6 +94,7 @@ export async function eraseUserTraces(
     rateLimits: count(windows) + count(leases),
     creatorTier: count(tier),
     tierRequests: count(requests) + count(decided),
+    billing: billing.reduce((n, r) => n + count(r), 0),
     adminDeletions: history.deletions,
     adminJobs: history.jobs,
   };

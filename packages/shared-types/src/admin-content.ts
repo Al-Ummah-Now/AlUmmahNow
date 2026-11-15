@@ -573,12 +573,21 @@ export const ADMIN_JOB_KINDS = [
    * idempotent (INSERT OR IGNORE). Target 'user' / 'image-owners'.
    */
   'images.index-owners',
+  /**
+   * Payments (wiki AUN-SUBS; api-videos lib/billing/service.ts). Target kind 'billing':
+   * a webhook event id, a provider id, a subscription id or a payment id.
+   */
+  'billing.webhook',
+  'billing.sync-prices',
+  'billing.cancel',
+  'billing.refund',
+  'billing.reconcile',
 ] as const;
 
 export type AdminJobKind = (typeof ADMIN_JOB_KINDS)[number];
 export const ADMIN_JOB_STATUSES = ['queued', 'running', 'retrying', 'succeeded', 'failed'] as const;
 export type AdminJobStatus = (typeof ADMIN_JOB_STATUSES)[number];
-export type AdminJobTarget = 'channel' | 'video' | 'user';
+export type AdminJobTarget = 'channel' | 'video' | 'user' | 'billing';
 
 export interface AdminJob {
   id: string;
@@ -613,6 +622,12 @@ export const ADMIN_JOB_PERMISSIONS: Readonly<Record<AdminJobKind, readonly Admin
   // admin-api also requires a super admin for this kind (CSAM cases are super-admin only)
   'csam.contain': ['users:manage', 'content:delete'],
   'images.index-owners': ['users:manage'],
+  // admin-api also requires its billing permissions (billing:manage; refunds billing:refund)
+  'billing.webhook': ['creators:manage'],
+  'billing.sync-prices': ['creators:manage'],
+  'billing.cancel': ['creators:manage'],
+  'billing.refund': ['creators:manage'],
+  'billing.reconcile': ['creators:manage'],
 };
 
 // ---------------------------------------------------------------------------
