@@ -415,9 +415,16 @@ export async function refreshItemStates(env: YtEnv, items: ItemRow[], now = new 
 }
 
 /** Every picked item is done (ready, failed, or never uploaded and left). */
-export function allPickedSettled(items: Pick<ItemRow, 'selected' | 'state' | 'video_id'>[]): boolean {
+/**
+ * Every picked item has landed: its video is ready (and yt-finalize has had its go at YouTube's
+ * thumbnail, which a finished import no longer gets) or it failed.
+ */
+export function allPickedSettled(items: Pick<ItemRow, 'selected' | 'state' | 'video_id' | 'thumbnail_state'>[]): boolean {
 	const picked = items.filter((i) => Number(i.selected) === 1);
-	return picked.length > 0 && picked.every((i) => i.state === 'ready' || i.state === 'failed' || i.state === 'imported');
+	return (
+		picked.length > 0 &&
+		picked.every((i) => (i.state === 'ready' && !(i.video_id && i.thumbnail_state === 'pending')) || i.state === 'failed' || i.state === 'imported')
+	);
 }
 
 export async function readImport(env: YtEnv, who: YtCaller, importId: string): Promise<{ import: YtImport; items: YtImportItem[]; playlists: YtImportPlaylist[] }> {

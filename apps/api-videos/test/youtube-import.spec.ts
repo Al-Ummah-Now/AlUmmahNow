@@ -34,6 +34,7 @@ import {
 	startOAuth,
 	cancelImport,
 	linkBack,
+	allPickedSettled,
 } from '../src/lib/youtube-import/service';
 import { handleYtImportBatch, itemFieldsOf, runYtJob, captionStagingKey, retryYtJob, finalizeWaitS, FINALIZE_WAIT_S, FINALIZE_WAIT_SOON_S } from '../src/lib/youtube-import/jobs';
 import { sweepYoutubeImports } from '../src/lib/youtube-import/sweep';
@@ -266,6 +267,15 @@ describe('YouTube import: finishing a video still on its way', () => {
 		assert.equal(finalizeWaitS(10 * 60_000), FINALIZE_WAIT_S);
 		assert.equal(finalizeWaitS(5 * 3600_000), FINALIZE_WAIT_S);
 		assert.ok(FINALIZE_WAIT_SOON_S < FINALIZE_WAIT_S);
+	});
+
+	it('keeps the import open until each ready video has had its thumbnail step', () => {
+		const item = (state: string, thumbnail_state: string, video_id: string | null = 'v1') => ({ selected: 1, state, video_id, thumbnail_state });
+		assert.equal(allPickedSettled([item('ready', 'pending')]), false, 'yt-finalize still to come: closing would skip it');
+		assert.equal(allPickedSettled([item('ready', 'done'), item('ready', 'failed')]), true);
+		assert.equal(allPickedSettled([item('ready', 'done'), item('failed', 'pending')]), true, 'a failed item never blocks');
+		assert.equal(allPickedSettled([item('ready', 'done'), item('imported', 'pending', null)]), true);
+		assert.equal(allPickedSettled([item('processing', 'done')]), false);
 	});
 });
 
