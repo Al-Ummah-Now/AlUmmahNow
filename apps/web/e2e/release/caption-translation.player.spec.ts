@@ -37,7 +37,7 @@ test.describe('caption and title translation', () => {
   for (const locale of LOCALES) {
     test(`Studio translates a transcript and a title; Quran stays in its edition (${locale})`, async ({ browser, ownData }) => {
       test.setTimeout(300000);
-      const creator = await ownData.createCreator(browser, `ctr-${locale}`, { locale });
+      const creator = await ownData.createCreator(browser, `ctr-${locale}`);
       const channelId = creator.channelIds[0]!;
       const userId = creator.user.userId.replace(/[^A-Za-z0-9_:-]/g, '');
       // Caption minutes: the shipped tiers start at 0, the admin grants them (erased with the user)
