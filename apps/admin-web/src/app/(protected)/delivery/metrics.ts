@@ -155,9 +155,27 @@ export interface UnitCosts {
 }
 
 /**
- * Unit costs from the measured period where there is enough to divide by,
- * else the plan's assumptions. Cost metrics (delivery_cost_daily, written by
- * the collector): r2 class_a_ops / class_b_ops, bunny egress_gb.
+ * Below these the measured units are noise, not a rate (a few short clips with a container start each,
+ * a handful of test plays), so the plan's assumptions are used and the line says "assumed".
+ */
+export const MIN_SAMPLE = {
+  /** Video-minutes transcoded in the period (transcode, storage, Class A per video-minute) */
+  videoMinutes: 60,
+  /** Viewer-hours of the provider in the period (R2 Class B, Bunny GB per viewer-hour) */
+  viewerHours: 200,
+} as const;
+
+/**
+ * Physically possible at most: every 2 s segment of every rung missing the CDN (1,800 per viewer-hour)
+ * with playlist refreshes on top. A measured rate above it counts reads that are not playback.
+ */
+export const MAX_CLASS_B_PER_VIEWER_HOUR = 3_600;
+
+/**
+ * Unit costs from the measured period where there is enough to divide by (MIN_SAMPLE) and the rate is
+ * plausible, else the plan's assumptions. Cost metrics (delivery_cost_daily, written by the collector):
+ * r2 class_a_ops / class_b_ops (playback buckets only since #1463; the originals' reads are
+ * class_b_ops_originals), bunny egress_gb.
  */
 export function unitCosts(jobs: MediaJobsSummary | null, costs: readonly MediaCostRow[], playback: Record<Provider, PlaybackStats>): UnitCosts {
   const videoMinutes = num(jobs?.video_seconds) / 60;
@@ -167,12 +185,15 @@ export function unitCosts(jobs: MediaJobsSummary | null, costs: readonly MediaCo
   const classA = metric('r2', 'class_a_ops');
   const classB = metric('r2', 'class_b_ops');
   const bunnyGb = metric('bunny', 'egress_gb');
+  const enoughVideo = videoMinutes >= MIN_SAMPLE.videoMinutes;
+  const r2Hours = playback.r2.viewerHours;
+  const bunnyHours = playback.bunny.viewerHours;
   const measured = {
-    transcode: videoMinutes > 0 && containerSeconds > 0,
-    storage: videoMinutes > 0 && bytes > 0,
-    classA: videoMinutes > 0 && classA > 0,
-    classB: playback.r2.viewerHours > 0 && classB > 0,
-    delivery: playback.bunny.viewerHours > 0 && bunnyGb > 0,
+    transcode: enoughVideo && containerSeconds > 0,
+    storage: enoughVideo && bytes > 0,
+    classA: enoughVideo && classA > 0,
+    classB: r2Hours >= MIN_SAMPLE.viewerHours && classB > 0 && classB / r2Hours <= MAX_CLASS_B_PER_VIEWER_HOUR,
+    delivery: bunnyHours >= MIN_SAMPLE.viewerHours && bunnyGb > 0,
   };
   return {
     containerSecondsPerVideoMinute: measured.transcode ? containerSeconds / videoMinutes : ASSUMED.containerSecondsPerVideoMinute,

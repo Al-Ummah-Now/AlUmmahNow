@@ -398,6 +398,25 @@ describe('daily cost inputs', () => {
 		assert.ok(Math.abs(get('r2', 'cost_usd')! - r2Cost) < 1e-5);
 		assert.equal(get('r2', 'class_b_ops'), undefined, 'no analytics token: left out');
 	});
+
+	it('Class B reads of the originals bucket are real spend but never per-viewer playback reads', async () => {
+		const { classBByKind, isPlaybackBucket, metricsFromRecords, PRICES } = await import('../src/lib/media/costs');
+		assert.equal(isPlaybackBucket('al-ummah-now-media'), true);
+		assert.equal(isPlaybackBucket('al-ummah-now-media-private-stage'), true);
+		assert.equal(isPlaybackBucket('al-ummah-now-media-originals'), false);
+		assert.equal(isPlaybackBucket('al-ummah-now-media-originals-qa'), false);
+		const groups = [
+			{ sum: { requests: 100 }, dimensions: { actionType: 'GetObject', bucketName: 'al-ummah-now-media' } },
+			{ sum: { requests: 20 }, dimensions: { actionType: 'HeadObject', bucketName: 'al-ummah-now-media-private' } },
+			{ sum: { requests: 3000 }, dimensions: { actionType: 'GetObject', bucketName: 'al-ummah-now-media-originals' } },
+			{ sum: { requests: 50 }, dimensions: { actionType: 'PutObject', bucketName: 'al-ummah-now-media' } },
+		];
+		assert.deepEqual(classBByKind(groups), { playback: 120, originals: 3000 });
+		const m = metricsFromRecords({ jobs: { containerSeconds: 0, bytes: 0, objects: 0, videoSeconds: 0, storedBytes: 0 }, qoe: [], r2ClassB: 120, r2ClassBOriginals: 3000 });
+		const get = (k: string) => m.find((x) => x.provider === 'r2' && x.metric === k)?.value;
+		assert.equal(get('class_b_ops'), 120);
+		assert.ok(Math.abs(get('cost_usd')! - (3120 / 1e6) * PRICES.r2ClassBPerMillion) < 1e-6, 'the daily cost still counts both');
+	});
 });
 
 describe('Bunny ready re-queues a failed R2 job', () => {

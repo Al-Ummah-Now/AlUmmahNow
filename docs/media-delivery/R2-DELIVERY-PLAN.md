@@ -179,10 +179,21 @@ the cost projection below, recomputed from measured unit costs. It follows the l
 layout (#871).
 
 The page (`apps/admin-web/src/app/(protected)/delivery/`, admin-api `/api/media/*`) replaces an
-assumption with a measured unit cost as soon as the period has one: container seconds, duration and
-bytes from `media_jobs`; R2 `class_a_ops` / `class_b_ops` and Bunny `egress_gb` from
-`delivery_cost_daily`, divided by the period's video-minutes or viewer-hours. The collector writes
-those metric names.
+assumption with a measured unit cost once the period has enough to be a rate (`MIN_SAMPLE` in
+`metrics.ts`): at least 60 video-minutes transcoded for transcode, storage and Class A per video-minute,
+and at least 200 viewer-hours of that provider for R2 Class B and Bunny GB per viewer-hour. The inputs
+are container seconds, duration and bytes from `media_jobs`, and R2 `class_a_ops` / `class_b_ops` and
+Bunny `egress_gb` from `delivery_cost_daily`. Each line says "measured" or "assumed". A measured Class B
+rate above 3,600 per viewer-hour (more than every 2 s segment missing the cache) counts reads that
+aren't playback, so the plan's figure is used instead.
+
+`class_b_ops` counts the playback buckets only (media, media-private). The originals bucket's reads
+(the transcoder fetching its source, the backfill verifying copies) are real spend: they are in the
+daily `cost_usd`, but they are kept apart as `class_b_ops_originals` and never divided by viewer-hours.
+2026-11-15: production's projection showed Bunny cheaper because 3,140 Class B reads across all three
+buckets were divided by 0.25 R2 viewer-hours (about 12,700 per viewer-hour against the plan's 72).
+Production's 30 days then held 6 transcodes (12.5 video-minutes) and under one viewer-hour per
+provider, so every line now uses the plan's units until real traffic builds up.
 
 ### Cost model (until the measured numbers replace it)
 
