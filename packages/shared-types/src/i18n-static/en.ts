@@ -727,7 +727,6 @@ export const EN_TRANSLATIONS: AppTranslations = {
     saidInVideos: 'Said in videos',
     saidInVideosHint: 'Found in the captions. Each one opens where it is said.',
     saidAt: 'At {time}',
-    watchFrom: 'Watch {title} from {time}',
     fromCaptions: 'From the {language} captions',
     searchError: 'Search is unavailable right now. Please try again.',
     retry: 'Try again',

@@ -51,7 +51,7 @@ describe('SearchTranscriptMatches', () => {
     render(<SearchTranscriptMatches matches={[match()]} query="patience prayer" />);
     const section = screen.getByTestId('search-transcripts');
     expect(within(section).getByRole('heading', { name: en.search.saidInVideos })).toBeInTheDocument();
-    const link = within(section).getByRole('link', { name: 'Watch Friday reminder from 12:34' });
+    const link = within(section).getByRole('link', { name: /Friday reminder.*At 12:34.*patience/ });
     expect(link).toHaveAttribute('href', '/en/video/v1?t=754');
     expect(within(section).getByText('At 12:34', { exact: false })).toBeInTheDocument();
     expect(Array.from(section.querySelectorAll('mark')).map((m) => m.textContent)).toEqual(['patience', 'prayer']);
@@ -63,7 +63,7 @@ describe('SearchTranscriptMatches', () => {
     render(<SearchTranscriptMatches matches={[match()]} query="patience" />);
     const section = screen.getByTestId('search-transcripts');
     expect(within(section).getByRole('heading', { name: 'قيل في المرئيات' })).toBeInTheDocument();
-    expect(within(section).getByRole('link', { name: 'شاهد تذكير الجمعة من 12:34' })).toHaveAttribute('href', '/ar/video/v1?t=754');
+    expect(within(section).getByRole('link', { name: /تذكير الجمعة.*عند 12:34/ })).toHaveAttribute('href', '/ar/video/v1?t=754');
     expect(within(section).getByText('من الترجمة الإنجليزية')).toBeInTheDocument();
     expect(screen.getByTestId('search-transcript-text')).toHaveAttribute('lang', 'en');
   });

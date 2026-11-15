@@ -927,7 +927,6 @@ export interface AppTranslations {
     saidInVideos: string;
     saidInVideosHint: string;
     saidAt: string;
-    watchFrom: string;
     fromCaptions: string;
     searchError: string;
     retry: string;
