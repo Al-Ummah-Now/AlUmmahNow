@@ -172,3 +172,17 @@ export const isDark = ([r, g, b]: [number, number, number]) => (r * 299 + g * 58
 export async function horizontalOverflow(page: Page): Promise<number> {
   return page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 }
+
+/**
+ * Waits until React has hydrated `locator` (it carries React's props). Text typed into a
+ * server-rendered controlled field before that is reset by hydration (NEWSLETTER-02 on WebKit,
+ * #1459: the first field filled came back empty).
+ */
+export async function waitForHydration(locator: import('@playwright/test').Locator) {
+  await expect
+    .poll(() => locator.evaluate((el) => Object.keys(el).some((k) => k.startsWith('__reactProps$'))).catch(() => false), {
+      message: 'the field never hydrated',
+      timeout: 30_000,
+    })
+    .toBe(true);
+}
