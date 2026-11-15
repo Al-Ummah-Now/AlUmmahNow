@@ -28,8 +28,12 @@ export interface ThumbnailUploadResult {
   thumbnailUrl?: string;
   thumbnailSizes?: Record<string, string>;
   error?: string;
-  /** API refusal code, e.g. thumbnail_shape (not the video's shape) */
+  /** API refusal code, e.g. thumbnail_shape (not the video's shape), upload_limit (429) */
   code?: string;
+  /** HTTP status of a refusal */
+  status?: number;
+  /** Seconds until the upload limit allows another (upload_limit) */
+  retryAfter?: number;
 }
 
 export async function uploadVideoThumbnail(
@@ -60,7 +64,14 @@ export async function uploadVideoThumbnail(
 
     if (!response.ok || !data?.success || !data?.result?.thumbnailUrl) {
       logger.error('[uploadVideoThumbnail] Upload failed', { videoId, status: response.status, error: data?.error });
-      return { success: false, error: data?.error, code: data?.code };
+      const retryAfter = Number(data?.retryAfter ?? response.headers.get('Retry-After'));
+      return {
+        success: false,
+        error: data?.error,
+        code: data?.code,
+        status: response.status,
+        ...(Number.isFinite(retryAfter) && retryAfter > 0 ? { retryAfter } : {}),
+      };
     }
 
     return {

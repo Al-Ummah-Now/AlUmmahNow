@@ -16,6 +16,7 @@ import {
   waitForReady,
 } from './test-utils/e2e-videos';
 import { ownStudioVideos } from './test-utils/own-studio-videos';
+import { resetUploadLimit } from './test-utils/upload-rate-limit';
 
 /**
  * Thumbnail management on the video edit page.
@@ -45,6 +46,12 @@ test.beforeAll(async () => {
   // The local stack's fake Bunny has the frames once the video is ready (ownStudioVideos waits for
   // that), and its CDN host only resolves in the browser; QA: wait once, capped (#929)
   if (process.env.E2E_ENV !== 'local') await waitForThumbnails('single', seed[SEED_TITLES.singleVideo].id);
+});
+
+// Each test starts with the account's image upload limit unused: this file uploads more than the
+// free tier's 2 a minute, and the run account is shared with the shard's other specs (#1466)
+test.beforeEach(async () => {
+  await resetUploadLimit('single', 'image_upload');
 });
 
 async function openEditor(page: Page, video: E2EVideo, locale: 'en' | 'ar' = 'en') {
