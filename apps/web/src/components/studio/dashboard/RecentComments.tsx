@@ -57,7 +57,7 @@ export function RecentComments({ locale, channelId }: { locale: string; channelI
                 <bdi className="font-medium text-foreground">{comment.author.displayName}</bdi>
                 <time dateTime={comment.createdAt}>{formatRelativeTime(comment.createdAt, lang)}</time>
               </p>
-              <p dir="auto" className="max-h-[2lh] overflow-hidden break-words text-foreground">{comment.text}</p>
+              <p dir="auto" className="clamp-2 text-foreground">{comment.text}</p>
               <p className="truncate text-xs text-muted-foreground">
                 {t.studio.commentsPage.on.split('{title}').flatMap((part, i) => (i === 0 ? [part] : [<bdi key="t">{comment.targetTitle}</bdi>, part]))}
               </p>

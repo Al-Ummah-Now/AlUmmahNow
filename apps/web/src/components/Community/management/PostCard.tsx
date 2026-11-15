@@ -117,7 +117,7 @@ export function PostCard({ post, locale, onView, onEdit, onDelete }: PostCardPro
                 )}
               </div>
 
-              <p className="text-sm md:text-base max-h-[2lh] overflow-hidden break-words mb-2">
+              <p className="text-sm md:text-base clamp-2 mb-2">
                 {post.content || post.poll?.question || post.quiz?.question || (isRTL ? 'بدون محتوى' : 'No content')}
               </p>
 
