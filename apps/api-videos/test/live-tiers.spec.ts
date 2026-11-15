@@ -10,7 +10,7 @@ import { DEFAULT_CREATOR_TIER, LIVE_TIER_ERROR_CODES } from '@al-ummah/shared-ty
 import { assignTier, readTier, saveTier, validateTier } from '../src/lib/creatorTiers';
 import { checkLiveTier, liveAccess, liveUsage, streamTierContext } from '../src/lib/live/tier-gate';
 import { endOverTierLimit } from '../src/lib/live/service';
-import { insertSession, readSession, updateSession } from '../src/lib/live/store';
+import { eraseLiveSessionOwner, insertSession, readSession, updateSession } from '../src/lib/live/store';
 import { SqliteD1 } from './search-sqlite-d1';
 
 const NOW = Date.parse('2026-11-14T12:00:00.000Z');
@@ -173,5 +173,14 @@ describe('live in creator tiers', () => {
 		assert.deepEqual(await streamTierContext({ channels: bucket(channel) }, stream, 'bob'), { ownerId: 'alice', callerMayGoLive: true });
 		assert.deepEqual(await streamTierContext({ channels: bucket({ userId: 'alice', members: [] }) }, stream, 'bob'), { ownerId: 'alice', callerMayGoLive: false });
 		assert.equal((await streamTierContext({ channels: bucket(channel) }, stream, 'alice')).callerMayGoLive, true);
+	});
+
+	it('account erasure clears the owner from their sessions and keeps the sessions', async () => {
+		const d1 = await setup();
+		const mine = await session(d1, 'alice');
+		const theirs = await session(d1, 'carol');
+		await eraseLiveSessionOwner(d1, 'alice');
+		assert.equal((await readSession(d1, mine))!.owner_id, null);
+		assert.equal((await readSession(d1, theirs))!.owner_id, 'carol');
 	});
 });
