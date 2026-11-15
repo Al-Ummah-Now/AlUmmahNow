@@ -9,6 +9,7 @@ import { emptyTakeoutSet, type TakeoutSet } from '../takeout';
 import { ImportUploader, initiateErrorCode } from '../uploader';
 import type { LiveState } from '../wizard';
 import { item } from './fixtures';
+import { reportError } from '@/lib/errors/reporter';
 
 jest.mock('@/lib/auth/client-token', () => ({
   fetchClientAuthInfo: jest.fn(async () => ({ accessToken: 'tok' })),
@@ -19,6 +20,8 @@ jest.mock('@/lib/runtime-config', () => ({ getApiUrl: () => 'https://api.test' }
 jest.mock('@/lib/logger-client', () => ({ logger: { error: jest.fn(), warn: jest.fn(), debug: jest.fn(), info: jest.fn() } }));
 jest.mock('@/lib/errors/reporter', () => ({ reportError: jest.fn(() => 'ERR-TEST-0001') }));
 jest.mock('@/lib/upload/fingerprint', () => ({ tryFileFingerprint: jest.fn(async () => ({ name: 'n', size: 1, lastModified: 1, hash: 'h' })) }));
+
+beforeEach(() => (reportError as jest.Mock).mockClear());
 
 const json = (body: unknown, status = 200) => ({ ok: status < 400, status, json: async () => body, headers: { get: () => null } }) as unknown as Response;
 
@@ -76,8 +79,9 @@ describe('ImportUploader', () => {
         abort: async () => undefined,
       };
     });
-    const u = new ImportUploader({ importId: 'imp1', channelId: 'c1', takeout: takeout(), onState: (id, s) => states.push([id, s]), deps: { initiate, complete, createUpload } as never });
-    return { u, states, initiate, complete, created };
+    const onServerChanged = jest.fn();
+    const u = new ImportUploader({ importId: 'imp1', channelId: 'c1', takeout: takeout(), onState: (id, s) => states.push([id, s]), onServerChanged, deps: { initiate, complete, createUpload } as never });
+    return { u, states, initiate, complete, created, onServerChanged };
   }
 
   const settle = () => new Promise((r) => setTimeout(r, 20));
@@ -101,14 +105,34 @@ describe('ImportUploader', () => {
     expect(initiateErrorCode({ code: 'youtube_item_taken' })).toBe('youtube_item_taken');
     expect(initiateErrorCode({ code: 'upload_limit' })).toBe('upload_limit');
     expect(initiateErrorCode({ code: 'weird' })).toBe('generic');
-    const taken = run({ success: false, status: 409, code: 'youtube_item_taken', error: 'raw' });
-    taken.u.enqueue([item('i1', { selected: true, state: 'selected', match })]);
+    const limit = run({ success: false, status: 403, code: 'upload_limit', error: 'raw' });
+    limit.u.enqueue([item('i1', { selected: true, state: 'selected', match })]);
     await settle();
-    expect(taken.states.at(-1)).toEqual(['i1', { phase: 'failed', errorCode: 'youtube_item_taken' }]);
+    expect(limit.states.at(-1)).toEqual(['i1', { phase: 'failed', errorCode: 'upload_limit' }]);
+    expect(reportError).not.toHaveBeenCalled();
     const broken = run({ success: true, result: { videoId: 'v1', tusSessionId: 's1' } }, { fail: new Error('boom') });
     broken.u.enqueue([item('i2', { selected: true, state: 'selected', match })]);
     await settle();
     expect(broken.states.at(-1)).toEqual(['i2', { phase: 'failed', errorCode: 'generic', reference: 'ERR-TEST-0001' }]);
+  });
+
+  it('409 youtube_item_taken: already processing or imported, so no failure; the import is read again', async () => {
+    const taken = run({ success: false, status: 409, code: 'youtube_item_taken', error: 'raw' });
+    taken.u.enqueue([item('i1', { selected: true, state: 'selected', match })]);
+    await settle();
+    expect(taken.states.at(-1)).toEqual(['i1', { phase: 'processing' }]);
+    expect(taken.onServerChanged).toHaveBeenCalledTimes(1);
+    expect(taken.created).toHaveLength(0);
+    expect(reportError).not.toHaveBeenCalled();
+  });
+
+  it('404 youtube_import_not_found: the import changed elsewhere; its own message, not reported, read again', async () => {
+    const gone = run({ success: false, status: 404, code: 'youtube_import_not_found', error: 'raw' });
+    gone.u.enqueue([item('i1', { selected: true, state: 'selected', match })]);
+    await settle();
+    expect(gone.states.at(-1)).toEqual(['i1', { phase: 'failed', errorCode: 'youtube_import_not_found' }]);
+    expect(gone.onServerChanged).toHaveBeenCalledTimes(1);
+    expect(reportError).not.toHaveBeenCalled();
   });
 
   it('asks for the file when it is not among the picked ones, and runs two at a time', async () => {

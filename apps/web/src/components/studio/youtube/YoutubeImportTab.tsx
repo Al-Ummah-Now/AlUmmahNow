@@ -10,7 +10,6 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import type { YtFileMatch, YtImport, YtImportItem, YtImportPlaylist, YtVisibilityMode } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -24,6 +23,7 @@ import { uploadErrorMessage } from '@/lib/upload/report-upload-error';
 import {
   cancelImport,
   downloadLinkBackCsv,
+  finishOAuth,
   getImport,
   getImportStatus,
   retryItem,
@@ -39,6 +39,7 @@ import { ImportUploader } from '@/lib/youtube-import/uploader';
 import {
   computeMatches,
   connectErrorKey,
+  finishErrorKey,
   importItems,
   initialStep,
   isSettled,
@@ -75,7 +76,6 @@ export function YoutubeImportTab({ locale, channelId, channelHandle }: Props) {
   const { t } = useLanguage();
   const text = t.studio.youtube;
   const lang = locale === 'ar' ? 'ar' : 'en';
-  const router = useRouter();
 
   const [load, setLoad] = useState<'loading' | 'failed' | 'ready'>('loading');
   const [loadError, setLoadError] = useState('');
@@ -127,17 +127,39 @@ export function YoutubeImportTab({ locale, channelId, channelHandle }: Props) {
   // First load: the status, then the import (?import= after Google's redirect, else the latest one)
   useEffect(() => {
     const controller = new AbortController();
-    // Google's redirect lands here with ?import=<id> or ?error=<code>
+    // Google's redirect lands here with ?connect=<state> or ?error=<code>; a notification links ?import=<id>
     const params = new URLSearchParams(window.location.search);
     const queryImport = params.get('import');
     const queryError = params.get('error');
+    const queryConnect = params.get('connect');
+    // Off the URL at once: a reload or a shared link must never send the one-time state again
+    if (queryImport || queryError || queryConnect) {
+      window.history.replaceState(window.history.state, '', `/${locale}/studio/${encodeURIComponent(channelId)}/content/youtube`);
+    }
     void (async () => {
       try {
         const status = await getImportStatus(channelId, controller.signal);
         setView(status);
-        const errorKey = connectErrorKey(queryError);
-        if (errorKey) setConnectError(text.errors[errorKey]);
-        const id = queryImport || status.import?.id || null;
+        let errorKey: string | null = connectErrorKey(queryError);
+        if (errorKey) setConnectError(text.errors[errorKey as keyof typeof text.errors]);
+        let connected: string | null = null;
+        if (queryConnect && !errorKey && status.ready) {
+          try {
+            connected = (await finishOAuth(queryConnect)).id;
+          } catch (error) {
+            if (controller.signal.aborted) return;
+            const refused = finishErrorKey(error instanceof YtImportApiError ? error.status : undefined);
+            errorKey = refused ?? 'failed';
+            if (refused) {
+              logger.debug('[YtImport] Connection refused at finish', { channelId, refused });
+              setConnectError(text.errors[refused]);
+            } else {
+              logger.error('[YtImport] Could not finish the connection', { channelId, error });
+              setConnectError(shown(text.errors.failed, error, 'oauth-finish'));
+            }
+          }
+        }
+        const id = connected || queryImport || status.import?.id || null;
         let imp: YtImport | null = status.import;
         if (id && status.ready) {
           const detail = await getImport(id, controller.signal);
@@ -160,7 +182,6 @@ export function YoutubeImportTab({ locale, channelId, channelHandle }: Props) {
         }
         setLoad('failed');
       }
-      if (queryImport || queryError) router.replace(`/${locale}/studio/${encodeURIComponent(channelId)}/content/youtube`, { scroll: false });
     })();
     return () => controller.abort();
     // The query is read once on arrival
@@ -183,6 +204,12 @@ export function YoutubeImportTab({ locale, channelId, channelHandle }: Props) {
     applyDetail(detail.import, detail.items, detail.playlists);
     return detail;
   }, [applyDetail, current]);
+
+  // The uploader lives across renders; it reads the import through this ref, never a stale closure
+  const refreshRef = useRef(refresh);
+  useEffect(() => {
+    refreshRef.current = refresh;
+  }, [refresh]);
 
   // While the channel is being read: follow it, then open Choose videos
   useEffect(() => {
@@ -221,7 +248,13 @@ export function YoutubeImportTab({ locale, channelId, channelHandle }: Props) {
   const uploader = useCallback(() => {
     if (!current) return null;
     if (!uploaderRef.current) {
-      uploaderRef.current = new ImportUploader({ importId: current.id, channelId, takeout, onState: setItemLive });
+      uploaderRef.current = new ImportUploader({
+        importId: current.id,
+        channelId,
+        takeout,
+        onState: setItemLive,
+        onServerChanged: () => void refreshRef.current().catch((error: unknown) => logger.warn('[YtImport] Refresh after a refusal failed', { error })),
+      });
     }
     return uploaderRef.current;
   }, [channelId, current, setItemLive, takeout]);

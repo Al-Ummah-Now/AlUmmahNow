@@ -67,6 +67,15 @@ export async function startOAuth(channelId: string, captions: boolean, locale: '
   return r.url;
 }
 
+/**
+ * Google's redirect brings back only a one-time `state`; this signed-in call turns it into the
+ * import. 403 when another account started the connection, 4xx when the state expired or was used.
+ */
+export async function finishOAuth(state: string): Promise<YtImport> {
+  const r = await call<{ import: YtImport }>(`${base}/oauth/finish`, { method: 'POST', body: JSON.stringify({ state }) });
+  return r.import;
+}
+
 export async function getImport(importId: string, signal?: AbortSignal): Promise<YtImportDetail> {
   const r = await call<YtImportDetail>(importPath(importId), { signal });
   return { import: r.import, items: r.items ?? [], playlists: r.playlists ?? [] };

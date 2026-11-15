@@ -190,3 +190,14 @@ export function connectErrorKey(code: string | null): 'youtube_denied' | 'youtub
   if (!code) return null;
   return code === 'youtube_denied' || code === 'youtube_no_channel' || code === 'youtube_import_off' ? code : 'failed';
 }
+
+/**
+ * Why `oauth/finish` refused the connection, for the message beside "Connect again": another
+ * account on this site started it (403), or the state expired or was already used (other 4xx).
+ * null: not a refusal (network, server), shown as a reported failure.
+ */
+export function finishErrorKey(status: number | undefined): 'connect_other_account' | 'connect_expired' | null {
+  if (status === 403) return 'connect_other_account';
+  if (status !== undefined && status >= 400 && status < 500 && status !== 401) return 'connect_expired';
+  return null;
+}
