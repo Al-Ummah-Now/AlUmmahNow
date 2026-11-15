@@ -115,6 +115,18 @@ describe('YoutubeImportTab', () => {
     expect(error).toHaveTextContent('ERR-TEST-0001');
   });
 
+  it.each([
+    ['listing_failed', text.errors.import_failed],
+    ['youtube_not_connected', text.errors.import_disconnected],
+  ])('a latest import the server gave up on (%s) says why on Connect', async (code, message) => {
+    const failed = { ...imp('failed'), error: code };
+    getImportStatus.mockResolvedValue({ ready: true, captionsAvailable: true, import: failed });
+    getImport.mockResolvedValue({ import: failed, items: [], playlists: [] });
+    render(<YoutubeImportTab locale="en" channelId="c1" channelHandle={null} />);
+    expect(await screen.findByTestId('yt-connect-error')).toHaveTextContent(message);
+    expect(screen.getByTestId('yt-connect-button')).toHaveTextContent(text.connect.again);
+  });
+
   it('chooses videos and a playlist, then saves the full selection', async () => {
     const items = [item('a', { title: 'محاضرة الفجر' }), item('b', { state: 'imported' }), item('c')];
     const playlists = [{ ytPlaylistId: 'PL1', title: 'Series', description: '', ytVisibility: 'public' as const, ytVideoIds: [items[2]!.ytVideoId], selected: false, playlistId: null, state: 'none' as const }];
@@ -161,6 +173,19 @@ describe('ImportStep', () => {
     onCancel: jest.fn(), resume: null, channelHref: '/en/@fajr', contentHref: '/en/studio/c1/content/videos', shortUrl: (id: string) => `https://alummahnow.link/v/${id}`,
     onDownloadCsv: jest.fn(), onNewImport: jest.fn(), notice: '',
   };
+
+  it("shows the server's reason on a failed row it did not upload here, and when captions lost the connection", () => {
+    const rows = [
+      item('gone', { title: 'Removed one', selected: true, match, state: 'failed', videoId: 'v9', error: 'video_removed' }),
+      item('odd', { title: 'Odd one', selected: true, match, state: 'failed', error: 'something_new' }),
+      item('cap', { title: 'Captions one', selected: true, match, state: 'ready', videoId: 'v8', captions: 'failed', error: 'youtube_not_connected' }),
+    ];
+    render(<ImportStep {...props} items={rows} live={new Map()} done={false} onRetry={jest.fn()} />);
+    const errors = screen.getAllByTestId('yt-row-error');
+    expect(errors[0]).toHaveTextContent(text.progress.errors.video_removed);
+    expect(errors[1]).toHaveTextContent(text.progress.errors.generic);
+    expect(screen.getByTestId('yt-captions-gone')).toHaveTextContent(text.progress.captionsDisconnected);
+  });
 
   it('shows each state: uploading %, failed with Try again, ready with caption quota, waiting', () => {
     const onRetry = jest.fn();

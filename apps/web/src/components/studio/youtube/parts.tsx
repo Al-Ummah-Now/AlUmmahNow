@@ -61,7 +61,7 @@ export function Thumb({ item, className = '' }: { item: Pick<YtImportItem, 'thum
         <img src={item.thumbnailUrl} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
       ) : null}
       {duration && (
-        <span className="absolute bottom-1 end-1 rounded bg-black/80 px-1 py-px text-[11px] font-medium tabular-nums text-white" dir="ltr">
+        <span className="absolute bottom-1 end-1 rounded bg-[var(--fanous-color-surface)] px-1 py-px text-[11px] font-medium tabular-nums text-[var(--fanous-color-text-primary)]" dir="ltr">
           {duration}
         </span>
       )}

@@ -9,6 +9,8 @@ import {
   computeMatches,
   connectErrorKey,
   finishErrorKey,
+  importErrorKey,
+  itemErrorKey,
   filterItems,
   formatDuration,
   freeFiles,
@@ -58,6 +60,16 @@ describe('where the wizard opens', () => {
     expect(connectErrorKey('youtube_no_channel')).toBe('youtube_no_channel');
     expect(connectErrorKey('youtube_import_off')).toBe('youtube_import_off');
     expect(connectErrorKey('<script>')).toBe('failed');
+  });
+
+  it("maps the server's reasons to their copy, unknown ones to the generic message", () => {
+    expect(itemErrorKey('video_removed')).toBe('video_removed');
+    expect(itemErrorKey('upload_failed')).toBe('upload_failed');
+    expect(itemErrorKey('weird')).toBe('generic');
+    expect(itemErrorKey(null)).toBe('generic');
+    expect(importErrorKey('youtube_not_connected')).toBe('import_disconnected');
+    expect(importErrorKey('listing_failed')).toBe('import_failed');
+    expect(importErrorKey(null)).toBe('import_failed');
   });
 
   it('reads oauth/finish refusals: 403 another account, other 4xx expired, the rest a failure', () => {

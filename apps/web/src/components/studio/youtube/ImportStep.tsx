@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useLanguage } from '@/hooks/useLanguage';
 import { uploadErrorMessage } from '@/lib/upload/report-upload-error';
-import { rowPhase, type LiveState, type ProgressCounts } from '@/lib/youtube-import/wizard';
+import { itemErrorKey, rowPhase, type LiveState, type ProgressCounts } from '@/lib/youtube-import/wizard';
 import { fill, StepHeading, Thumb } from './parts';
 
 interface Props {
@@ -127,7 +127,10 @@ function ProgressRow({ item, live, lang, retrying, onRetry }: { item: YtImportIt
   // Bytes sent are not bytes stored: 100% only once the server has the whole file (then Processing)
   const percent = Math.min(live?.percent ?? 0, 99);
   const errors = text.errors as Record<string, string>;
-  const errorText = phase === 'failed' ? uploadErrorMessage(errors[live?.errorCode ?? ''] ?? errors.generic, live?.reference ?? '', lang) : '';
+  // This page's own failure (with its reference) first, else the server's reason
+  const errorKey = live?.errorCode ?? itemErrorKey(item.error);
+  const errorText = phase === 'failed' ? uploadErrorMessage(errors[errorKey] ?? errors.generic, live?.reference ?? '', lang) : '';
+  const captionsGone = item.captions === 'failed' && item.error === 'youtube_not_connected';
   const label =
     phase === 'uploading'
       ? live?.reconnecting
@@ -154,6 +157,7 @@ function ProgressRow({ item, live, lang, retrying, onRetry }: { item: YtImportIt
         </p>
         {phase === 'uploading' && <Progress value={percent} className="mt-2 h-1.5" aria-label={label} />}
         {errorText && <p className="yt-error mt-1 text-xs" data-testid="yt-row-error">{errorText}</p>}
+        {captionsGone && <p className="mt-1 text-xs text-muted-foreground" data-testid="yt-captions-gone">{text.captionsDisconnected}</p>}
       </div>
       {phase === 'failed' && (
         <Button variant="outline" size="sm" className="min-h-11 shrink-0 gap-1.5" onClick={onRetry} disabled={retrying} data-testid="yt-retry">
