@@ -2,51 +2,31 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 /**
- * WebKit's web process aborts (libstdc++ assertion on an empty std::optional<size_t> during
- * rendering) when a line cut with text-overflow: ellipsis holds an inline bidi isolate: <bdi>, or
- * an inline element with dir (#1382: Studio Comments' "On {title}" line, 2–6 of 6 WebKit runs).
- * With either the ellipsis or the isolate removed the release job passed 8 of 8. The isolate must
- * be the box that truncates (OnTitle, or <bdi className="block truncate">), never an inline child
- * of a `truncate` element.
+ * WebKit's web process aborts (libstdc++ assertion on an empty std::optional<size_t> while
+ * rendering) when text-overflow: ellipsis meets bidi isolation: <bdi>, or an element with dir
+ * (#1382: Studio Comments, Dashboard and Posts crashed 2–6 of 6 WebKit release runs; with either
+ * the ellipsis or the isolation turned off they passed 8 of 8). globals.css swaps the ellipsis for
+ * an end-edge fade wherever `truncate` meets an isolate; this keeps that rule in place.
  */
-const SRC = path.join(__dirname, '../..');
+const css = fs.readFileSync(path.join(__dirname, '../../app/globals.css'), 'utf8');
 
-function files(dir: string): string[] {
-  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
-    const full = path.join(dir, e.name);
-    if (e.isDirectory()) return e.name === '__tests__' ? [] : files(full);
-    return /\.tsx$/.test(e.name) ? [full] : [];
-  });
-}
-
-/** `truncate` elements whose content (up to their closing tag) holds an inline <bdi> or dir span */
-function offenders(source: string): string[] {
-  const found: string[] = [];
-  const open = /<(p|h[1-6]|span|div|li|a|Link|label|dd|dt|td)\b[^>]*className=(?:"[^"]*\btruncate\b[^"]*"|\{`[^`]*\btruncate\b[^`]*`\})[^>]*>/g;
-  for (const m of source.matchAll(open)) {
-    const tag = m[1];
-    const rest = source.slice(m.index! + m[0].length);
-    const end = rest.indexOf(`</${tag}>`);
-    const body = end === -1 ? '' : rest.slice(0, end);
-    for (const child of body.matchAll(/<(bdi|span)\b([^>]*)>/g)) {
-      const attrs = child[2];
-      const isolate = child[1] === 'bdi' || /\bdir=/.test(attrs);
-      const isBox = /\b(block|truncate|flex|inline-block)\b/.test(attrs);
-      if (isolate && !isBox) found.push(`${m[0].slice(0, 80)} … <${child[1]}${attrs.slice(0, 40)}>`);
-    }
-  }
-  return found;
-}
-
-describe('no ellipsis line around an inline bidi isolate (WebKit crash)', () => {
-  it('flags the pattern that crashed', () => {
-    expect(offenders('<p className="truncate text-xs">On <bdi>{t}</bdi></p>')).toHaveLength(1);
-    expect(offenders('<p className="truncate"><span dir="auto">{t}</span></p>')).toHaveLength(1);
-    expect(offenders('<p className="text-xs"><bdi className="block truncate">{t}</bdi></p>')).toHaveLength(0);
+describe('truncate never ellipsises bidi-isolated text (WebKit crash)', () => {
+  it('isolates that truncate, and truncate boxes holding one, clip and fade instead', () => {
+    const start = css.indexOf(':is(bdi, [dir]).truncate,');
+    expect(start).toBeGreaterThan(-1);
+    const rule = css.slice(start, css.indexOf('}', start));
+    expect(rule).toContain('.truncate:has(bdi, [dir])');
+    expect(rule).toMatch(/text-overflow: clip/);
+    expect(rule).toMatch(/mask-image: linear-gradient\(to right/);
   });
 
-  it('no component has it', () => {
-    const bad = files(SRC).flatMap((f) => offenders(fs.readFileSync(f, 'utf8')).map((o) => `${path.relative(SRC, f)}: ${o}`));
-    expect(bad).toEqual([]);
+  it('fades toward the end edge in right-to-left text', () => {
+    const rtl = css.slice(css.indexOf(':is(bdi, [dir]).truncate:dir(rtl)'));
+    expect(rtl).toMatch(/^:is\(bdi, \[dir\]\)\.truncate:dir\(rtl\),\s*\.truncate:has\(bdi, \[dir\]\):dir\(rtl\) \{[^}]*to left/);
+  });
+
+  it('the line clamp utility stays free of -webkit-line-clamp', () => {
+    const rule = css.slice(css.indexOf('.clamp-2 {'), css.indexOf('.clamp-2:dir(rtl)'));
+    expect(rule).not.toMatch(/line-clamp:|-webkit-box/);
   });
 });

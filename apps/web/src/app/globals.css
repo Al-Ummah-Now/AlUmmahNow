@@ -73,6 +73,24 @@
   .clamp-2:dir(rtl) {
     --clamp-fade: linear-gradient(to left, currentColor calc(100% - 3em), transparent);
   }
+
+  /*
+   * WebKit's web process aborts (#1382) when text-overflow: ellipsis meets bidi isolation (<bdi>
+   * or an element with dir): with either removed the WebKit release runs stopped crashing. Isolated
+   * text that truncates therefore fades out at its end edge instead of showing "…". Covers every
+   * `truncate` on a <bdi>/[dir] element and every `truncate` box holding one.
+   */
+  :is(bdi, [dir]).truncate,
+  .truncate:has(bdi, [dir]) {
+    text-overflow: clip;
+    -webkit-mask-image: linear-gradient(to right, currentColor calc(100% - 2em), transparent);
+    mask-image: linear-gradient(to right, currentColor calc(100% - 2em), transparent);
+  }
+  :is(bdi, [dir]).truncate:dir(rtl),
+  .truncate:has(bdi, [dir]):dir(rtl) {
+    -webkit-mask-image: linear-gradient(to left, currentColor calc(100% - 2em), transparent);
+    mask-image: linear-gradient(to left, currentColor calc(100% - 2em), transparent);
+  }
 }
 
 @layer utilities {

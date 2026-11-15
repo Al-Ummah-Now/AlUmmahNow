@@ -1,10 +1,9 @@
 import type { ReactNode } from 'react';
 
 /**
- * "On {title}" on one line, the title cut with an ellipsis. The title is its own <bdi> flex item
- * that truncates; the line around it never does. WebKit's web process aborts when an ellipsis
- * line (text-overflow) holds an inline bidi isolate (<bdi>, or an inline element with dir)
- * (#1382), so never put `truncate` on the parent of an inline <bdi>.
+ * "On {title}" on one line: the words around the title stay whole and the title (isolated, so a
+ * title in the other script keeps its order) is cut to fit. Isolated text that truncates fades at
+ * its end edge instead of an ellipsis (globals.css, WebKit crash #1382).
  */
 export function OnTitle({ template, title }: { template: string; title: ReactNode }) {
   const [before, after = ''] = template.split('{title}');
