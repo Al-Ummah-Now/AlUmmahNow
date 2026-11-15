@@ -16,12 +16,15 @@ import { join } from 'node:path';
 import { Hono } from 'hono';
 import { YT_SCOPE_CAPTIONS, YT_SCOPE_READONLY, type YtImportJob } from '@al-ummah/shared-types';
 import { SqliteD1 } from './search-sqlite-d1';
-import { MemoryBucket, MemoryQueue } from './helpers';
+import { MemoryBucket, MemoryQueue, buildApp } from './helpers';
+import { UploadInitiateEndpoint } from '../src/endpoints/video/uploadInitiate';
 import { decryptToken, encryptToken, pkcePair } from '../src/lib/youtube-import/crypto';
 import { readYtSettings, saveYtSettings, ytReadyConfig, ytSettingsView, YT_SETTINGS_KEY, YtSettingsError } from '../src/lib/youtube-import/settings';
 import {
 	YtHttpError,
 	oauthCallback,
+	finishOAuth,
+	youtubeItemClaimKey,
 	prepareImportUpload,
 	readImport,
 	recordImportUpload,
@@ -39,7 +42,7 @@ import { readImportRow, readItemRows, readPlaylistRows } from '../src/lib/youtub
 import { clearMediaSettingsCache } from '../src/lib/media/settings';
 import { isAnnounceable } from '../src/lib/notification-events';
 import { assignTier, readTier, saveTier, validateTier } from '../src/lib/creatorTiers';
-import { uploadSessionLimitMiddleware } from '../src/middleware/upload-limits';
+import { confirmYoutubeImportItem, uploadSessionLimitMiddleware } from '../src/middleware/upload-limits';
 
 const CLIENT_ID = '123456789012-unittestclient.apps.googleusercontent.com';
 const SECRET = 'unit-test-client-secret';
@@ -213,16 +216,16 @@ function makeEnv(extra: Record<string, unknown> = {}) {
 
 type Env = ReturnType<typeof makeEnv>['env'];
 
-/** Consent → callback, as the browser goes through it. Returns the import id. */
+/** Consent → callback → finish, as the browser and the wizard go through it. Returns the import id. */
 async function connect(env: Env): Promise<string> {
 	const { url } = await startOAuth(env as never, caller, { channelId: CHANNEL, captions: true, locale: 'ar' }, NOW);
 	const consent = new URL(url);
 	const code = `code-${Math.random()}`;
 	google.codes.set(code, consent.searchParams.get('code_challenge')!);
 	const back = new URL(await oauthCallback(env as never, { code, state: consent.searchParams.get('state')! }, NOW));
-	const importId = back.searchParams.get('import');
-	assert.ok(importId, `callback answered ${back}`);
-	return importId!;
+	const connectState = back.searchParams.get('connect');
+	assert.ok(connectState, `callback answered ${back}`);
+	return (await finishOAuth(env as never, caller, connectState!, NOW)).import.id;
 }
 
 /** Runs the queued listing jobs until the import is listed. */
@@ -312,7 +315,7 @@ describe('YouTube import: connecting', () => {
 		await assert.rejects(startOAuth(env as never, caller, { channelId: 'missing', captions: false, locale: 'en' }), (e: YtHttpError) => e.status === 404);
 	});
 
-	it('stores the import with a sealed token, uses the state once and lists it in the background', async () => {
+	it('the callback only keeps the code; the starter finishes: sealed token, state used up, listing queued', async () => {
 		const { env, q, db } = makeEnv();
 		const { url } = await startOAuth(env as never, caller, { channelId: CHANNEL, captions: true, locale: 'ar' }, NOW);
 		const consent = new URL(url);
@@ -320,19 +323,54 @@ describe('YouTube import: connecting', () => {
 		google.codes.set('code-1', consent.searchParams.get('code_challenge')!);
 		const back = new URL(await oauthCallback(env as never, { code: 'code-1', state }, NOW));
 		assert.equal(`${back.origin}${back.pathname}`, `${WEB}/ar/studio/${CHANNEL}/content/youtube`);
-		const importId = back.searchParams.get('import')!;
-		const row = (await readImportRow(env.SEARCH_DB, importId))!;
+		assert.equal(back.searchParams.get('connect'), state);
+		assert.equal(google.codes.size, 1, 'nothing is exchanged by the unauthenticated callback');
+		assert.equal(q.sent.length, 0);
+
+		const { import: imp } = await finishOAuth(env as never, caller, state, NOW);
+		const row = (await readImportRow(env.SEARCH_DB, imp.id))!;
 		assert.equal(row.status, 'listing');
 		assert.equal(row.captions, 1);
 		assert.ok(row.refresh_token_enc && !row.refresh_token_enc.includes('rt-1'), 'the token is sealed');
-		assert.equal(await decryptToken(SECRET, importId, { ciphertext: row.refresh_token_enc!, iv: row.token_iv! }), 'rt-1');
-		assert.deepEqual(q.sent.map((m) => m.body), [{ kind: 'yt-list', importId, phase: 'videos' }]);
+		assert.equal(await decryptToken(SECRET, imp.id, { ciphertext: row.refresh_token_enc!, iv: row.token_iv! }), 'rt-1');
+		assert.deepEqual(q.sent.map((m) => m.body), [{ kind: 'yt-list', importId: imp.id, phase: 'videos' }]);
 		assert.equal(db.db.prepare('SELECT COUNT(*) AS n FROM yt_oauth_states').get()!.n, 0, 'the state is used up');
 
-		// The same state again: the creator goes back to the studio with an error
+		// Replays: the callback again, and the finish again
 		const again = new URL(await oauthCallback(env as never, { code: 'code-1', state }, NOW));
 		assert.equal(again.pathname, '/en/studio');
 		assert.equal(again.searchParams.get('error'), 'failed');
+		await assert.rejects(finishOAuth(env as never, caller, state, NOW), (e: YtHttpError) => e.status === 404 && e.code === 'youtube_connect_expired');
+	});
+
+	it('a consent link opened by another account never links its YouTube (login CSRF)', async () => {
+		const { env, q, db } = makeEnv({ channels: new MemoryBucket({ [CHANNEL]: { id: CHANNEL, userId: OWNER, isDeleted: false }, 'victim-channel': { id: 'victim-channel', userId: 'victim', isDeleted: false } }) });
+		// The attacker starts a consent for their own channel and sends the link to the victim
+		const { url } = await startOAuth(env as never, caller, { channelId: CHANNEL, captions: false, locale: 'en' }, NOW);
+		const consent = new URL(url);
+		const state = consent.searchParams.get('state')!;
+		google.codes.set('victim-code', consent.searchParams.get('code_challenge')!);
+		// The victim consents with their Google account; the callback lands them on the wizard
+		const back = new URL(await oauthCallback(env as never, { code: 'victim-code', state }, NOW));
+		assert.equal(back.searchParams.get('connect'), state);
+		// The victim's signed-in wizard tries to finish: refused, nothing exchanged, state gone
+		await assert.rejects(finishOAuth(env as never, { userId: 'victim', roles: ['Super Admin'] }, state, NOW), (e: YtHttpError) => e.status === 403);
+		assert.equal(google.codes.size, 1, 'the victim’s code was never exchanged');
+		assert.equal(db.db.prepare('SELECT COUNT(*) AS n FROM yt_oauth_states').get()!.n, 0);
+		// And the attacker cannot finish it afterwards either
+		await assert.rejects(finishOAuth(env as never, caller, state, NOW), (e: YtHttpError) => e.status === 404);
+		assert.equal(db.db.prepare('SELECT COUNT(*) AS n FROM yt_imports').get()!.n, 0);
+		assert.equal(q.sent.length, 0);
+	});
+
+	it('the starter who lost the channel cannot finish', async () => {
+		const { env } = makeEnv();
+		const { url } = await startOAuth(env as never, caller, { channelId: CHANNEL, captions: false, locale: 'en' }, NOW);
+		const consent = new URL(url);
+		google.codes.set('c', consent.searchParams.get('code_challenge')!);
+		const state = new URL(await oauthCallback(env as never, { code: 'c', state: consent.searchParams.get('state')! }, NOW)).searchParams.get('connect')!;
+		await env.channels.put(CHANNEL, JSON.stringify({ id: CHANNEL, userId: 'someone-else', isDeleted: false }));
+		await assert.rejects(finishOAuth(env as never, caller, state, NOW), (e: YtHttpError) => e.status === 403);
 	});
 
 	it('answers denied, no channel and expired consents with an error for the wizard', async () => {
@@ -345,13 +383,19 @@ describe('YouTube import: connecting', () => {
 		google.noChannel = true;
 		consent = await start();
 		google.codes.set('c2', consent.searchParams.get('code_challenge')!);
-		const none = new URL(await oauthCallback(env as never, { code: 'c2', state: consent.searchParams.get('state')! }, NOW));
-		assert.equal(none.searchParams.get('error'), 'youtube_no_channel');
+		const state = new URL(await oauthCallback(env as never, { code: 'c2', state: consent.searchParams.get('state')! }, NOW)).searchParams.get('connect')!;
+		await assert.rejects(finishOAuth(env as never, caller, state, NOW), (e: YtHttpError) => e.status === 409 && e.code === 'youtube_no_channel');
 		assert.deepEqual(google.revoked, ['rt-1'], 'the unused grant is revoked');
 
 		consent = await start();
 		const late = new URL(await oauthCallback(env as never, { code: 'x', state: consent.searchParams.get('state')! }, new Date(NOW.getTime() + 16 * 60_000)));
 		assert.equal(late.searchParams.get('error'), 'failed');
+
+		// A kept code waits 5 minutes for the finish
+		consent = await start();
+		google.codes.set('c3', consent.searchParams.get('code_challenge')!);
+		const slow = new URL(await oauthCallback(env as never, { code: 'c3', state: consent.searchParams.get('state')! }, NOW)).searchParams.get('connect')!;
+		await assert.rejects(finishOAuth(env as never, caller, slow, new Date(NOW.getTime() + 6 * 60_000)), (e: YtHttpError) => e.code === 'youtube_connect_expired');
 	});
 });
 
@@ -391,6 +435,18 @@ describe('YouTube import: listing and picking', () => {
 
 		// Another user's import is not found
 		await assert.rejects(readImport(env as never, { userId: 'other' }, importId), (e: YtHttpError) => e.status === 404);
+	});
+
+	it('a creator whose channel role was taken away can no longer act on the import', async () => {
+		const { env, q } = makeEnv();
+		const { importId, byYt } = await listedImport(env, q);
+		await env.channels.put(CHANNEL, JSON.stringify({ id: CHANNEL, userId: 'new-owner', isDeleted: false }));
+		const forbidden = (e: YtHttpError) => e.status === 403;
+		await assert.rejects(saveSelection(env as never, caller, importId, { itemIds: [byYt.ytPUB.id], playlistIds: [], visibilityMode: 'keep' }, NOW), forbidden);
+		await assert.rejects(saveMatches(env as never, caller, importId, [{ itemId: byYt.ytPUB.id, match: MATCH('x') }]), forbidden);
+		await assert.rejects(startImport(env as never, caller, importId, NOW), forbidden);
+		await assert.rejects(cancelImport(env as never, caller, importId), forbidden);
+		await assert.rejects(readImport(env as never, caller, importId), forbidden);
 	});
 
 	it('refuses to start with nothing picked', async () => {
@@ -435,6 +491,65 @@ describe('YouTube import: uploads, captions, thumbnails, playlists and the close
 		// Another channel, another user: not found
 		await assert.rejects(prepareImportUpload(env as never, caller, 'other-channel', { importId, itemId: byYt.ytPUB.id }, NOW), (e: YtHttpError) => e.status === 404);
 		await assert.rejects(prepareImportUpload(env as never, { userId: 'other' }, CHANNEL, { importId, itemId: byYt.ytPUB.id }, NOW), (e: YtHttpError) => e.status === 404);
+	});
+
+	it('refuses the upload once the creator lost the channel', async () => {
+		const { env, q } = makeEnv();
+		const { importId, byYt } = await importing(env, q);
+		await env.channels.put(CHANNEL, JSON.stringify({ id: CHANNEL, userId: 'new-owner', isDeleted: false }));
+		await assert.rejects(prepareImportUpload(env as never, caller, CHANNEL, { importId, itemId: byYt.ytPUB.id }, NOW), (e: YtHttpError) => e.status === 403);
+	});
+
+	it('two parallel initiates of one item make one video (the claim), and the item records it', async () => {
+		const { env, q } = makeEnv({
+			TUS_SESSIONS: { data: new Map(), get: async () => null, put: async () => undefined, delete: async () => undefined },
+			'bunny-stream-key': 'key',
+			bunny_stream_library_id: '123',
+			bunny_hostname: 'vz-test.b-cdn.net',
+		});
+		const { importId, byYt } = await importing(env, q);
+		const google = globalThis.fetch;
+		let bunnyCreates = 0;
+		globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+			const url = String(input);
+			if (url.includes('video.bunnycdn.com')) {
+				const method = init?.method ?? 'GET';
+				if (/\/library\/\d+\/videos\/?(\?.*)?$/.test(url) && method === 'POST') {
+					bunnyCreates++;
+					await new Promise((r) => setTimeout(r, 30));
+					return new Response(JSON.stringify({ guid: crypto.randomUUID(), status: 0 }), { status: 200 });
+				}
+				if (method === 'GET') return new Response(JSON.stringify({ status: 0 }), { status: 200 });
+				return new Response(JSON.stringify({}), { status: 200 });
+			}
+			return google(input, init);
+		}) as typeof fetch;
+		const app = buildApp((router) => router.post('/api/videos/upload/initiate', UploadInitiateEndpoint), { userId: OWNER, roles: ['Super Admin'] });
+		const initiate = async () => {
+			const res = await app.request(
+				'/api/videos/upload/initiate',
+				{ method: 'POST', headers: { 'Content-Type': 'application/json', channelId: CHANNEL }, body: JSON.stringify({ title: 'ignored', fileSize: 4096, mimeType: 'video/mp4', youtubeImport: { importId, itemId: byYt.ytPUB.id } }) },
+				env,
+			);
+			return { status: res.status, body: (await res.json()) as any };
+		};
+		const [a, b] = await Promise.all([initiate(), initiate()]);
+		assert.equal(a.status, 200, JSON.stringify(a.body));
+		assert.equal(b.status, 200, JSON.stringify(b.body));
+		assert.equal(a.body.result.videoId, b.body.result.videoId);
+		assert.equal(bunnyCreates, 1);
+		const item = (await readItemRows(env.SEARCH_DB, importId)).find((i) => i.id === byYt.ytPUB.id)!;
+		assert.equal(item.video_id, a.body.result.videoId);
+		assert.equal(env.videos.read(a.body.result.videoId).title, 'Public talk', 'the snapshot decides the title');
+
+		// Another user's initiate of the same item is not found
+		const stranger = buildApp((router) => router.post('/api/videos/upload/initiate', UploadInitiateEndpoint), { userId: 'stranger' });
+		const res = await stranger.request(
+			'/api/videos/upload/initiate',
+			{ method: 'POST', headers: { 'Content-Type': 'application/json', channelId: CHANNEL }, body: JSON.stringify({ title: 't', fileSize: 4096, mimeType: 'video/mp4', youtubeImport: { importId, itemId: byYt.ytPUB.id } }) },
+			env,
+		);
+		assert.equal(res.status, 404);
 	});
 
 	it('keeps everything private when the creator asked for it', async () => {
@@ -632,11 +747,12 @@ describe('YouTube import: tiers and announcements', () => {
 		assert.equal((await readTier(db, 'counted'))!.importCountsAgainstLimits, true, 'imports count by default');
 	});
 
-	it('lets import uploads past the counters only on a tier that says so', async () => {
+	it('gives an import its session back only once the initiate confirmed a valid item, on a tier that says so', async () => {
 		const db = new SqliteD1() as unknown as D1Database;
 		await saveTier(db, 'free-imports', { name: 'Free imports', perHour: 1, perDay: 1, maxConcurrent: 5, maxChannels: 1, importCountsAgainstLimits: false }, 'admin', { create: true });
 		await saveTier(db, 'counted', { name: 'Counted', perHour: 1, perDay: 1, maxConcurrent: 5, maxChannels: 1 }, 'admin', { create: true });
 		await assignTier(db, 'alice', 'free-imports', 'admin');
+		await assignTier(db, 'carol', 'free-imports', 'admin');
 		await assignTier(db, 'bob', 'counted', 'admin');
 		const app = new Hono();
 		app.use('*', async (c, next) => {
@@ -646,18 +762,35 @@ describe('YouTube import: tiers and announcements', () => {
 			await next();
 		});
 		app.use('/api/videos/upload/initiate', uploadSessionLimitMiddleware());
-		app.post('/api/videos/upload/initiate', (c) => c.json({ success: true, result: { videoId: 'v' } }));
-		const initiate = (user: string, youtube: boolean) =>
+		// Stand-in for the initiate: `item` says what the import item check found
+		app.post('/api/videos/upload/initiate', async (c) => {
+			const item = c.req.header('x-item');
+			if (item === 'missing') return c.json({ success: false, code: 'youtube_import_not_found' }, 404);
+			if (item === 'valid') confirmYoutubeImportItem(c);
+			return c.json({ success: true, result: { videoId: 'v' } });
+		});
+		const initiate = (user: string, item: 'valid' | 'missing' | 'none', youtubeBody = item !== 'none') =>
 			app.request(
 				'/api/videos/upload/initiate',
-				{ method: 'POST', headers: { 'x-user': user, 'content-type': 'application/json' }, body: JSON.stringify({ title: 't', ...(youtube ? { youtubeImport: { importId: 'i', itemId: 'x' } } : {}) }) },
+				{ method: 'POST', headers: { 'x-user': user, 'x-item': item, 'content-type': 'application/json' }, body: JSON.stringify({ title: 't', ...(youtubeBody ? { youtubeImport: { importId: 'i', itemId: 'x' } } : {}) }) },
 				{ SEARCH_DB: db, UPLOAD_RATE_LIMIT: 'on' },
 			);
-		for (let n = 0; n < 3; n++) assert.equal((await initiate('alice', true)).status, 200, `alice import ${n}`);
-		assert.equal((await initiate('alice', false)).status, 200);
-		assert.equal((await initiate('alice', false)).status, 429, 'normal uploads still count');
-		assert.equal((await initiate('bob', true)).status, 200);
-		assert.equal((await initiate('bob', true)).status, 429, 'imports count on this tier');
+		for (let n = 0; n < 3; n++) assert.equal((await initiate('alice', 'valid')).status, 200, `alice import ${n}`);
+		assert.equal((await initiate('alice', 'missing')).status, 404, 'an invalid item is refused (and refunded)');
+		assert.equal((await initiate('alice', 'none')).status, 200);
+		assert.equal((await initiate('alice', 'none')).status, 429, 'normal uploads still count');
+		// The body alone proves nothing: an import the initiate did not confirm counts
+		assert.equal((await initiate('carol', 'none', true)).status, 200);
+		assert.equal((await initiate('carol', 'valid')).status, 429, 'the unconfirmed one used the hour');
+		assert.equal((await initiate('bob', 'valid')).status, 200);
+		assert.equal((await initiate('bob', 'valid')).status, 429, 'imports count on this tier');
+	});
+
+	it('the item is the upload claim: one key per item, the same for every retry', async () => {
+		assert.equal(await youtubeItemClaimKey('imp', 'item-1'), await youtubeItemClaimKey('imp', 'item-1'));
+		assert.notEqual(await youtubeItemClaimKey('imp', 'item-1'), await youtubeItemClaimKey('imp', 'item-2'));
+		assert.notEqual(await youtubeItemClaimKey('imp', 'item-1'), await youtubeItemClaimKey('imp2', 'item-1'));
+		assert.match(await youtubeItemClaimKey('imp', 'item-1'), /^[0-9a-f]{64}$/);
 	});
 
 	it('never announces an imported video to subscribers', () => {

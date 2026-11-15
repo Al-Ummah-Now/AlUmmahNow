@@ -24,8 +24,10 @@
  * page (upload_limit_hits), with a friendly `upload_limit` answer and
  * `retryAfter`; the client says when uploading works again.
  *
- * A tier with `importCountsAgainstLimits: false` lets Move from YouTube
- * initiates (wiki AUN-YT-IMPORT) skip the counters; the tier gate still applies.
+ * A tier with `importCountsAgainstLimits: false` gives a Move from YouTube
+ * initiate (wiki AUN-YT-IMPORT) its session back once the initiate confirmed
+ * a valid import item (confirmYoutubeImportItem); until then it counts like
+ * any upload. The tier gate always applies.
  *
  * UPLOAD_RATE_LIMIT="off" (and development/preview by default) stops counting
  * the limits; the tier gate itself applies everywhere.
@@ -107,15 +109,12 @@ export async function uploadSessionWeight(c: Context): Promise<number> {
   }
 }
 
-/** A single initiate that uploads a Move from YouTube item (`youtubeImport` in the body). */
-export async function isYoutubeImportInitiate(c: Context): Promise<boolean> {
-  if (!c.req.path.endsWith('/upload/initiate') || c.req.path.endsWith('/batch/initiate')) return false;
-  try {
-    const body = (await c.req.raw.clone().json()) as { youtubeImport?: { importId?: unknown; itemId?: unknown } };
-    return typeof body?.youtubeImport?.importId === 'string' && typeof body.youtubeImport.itemId === 'string';
-  } catch {
-    return false;
-  }
+/** Context key the initiate sets once a Move from YouTube item is confirmed valid and recorded. */
+export const YOUTUBE_IMPORT_CONFIRMED = 'youtubeImportConfirmed';
+
+/** Called by the initiate after it checked and recorded the import item (never before). */
+export function confirmYoutubeImportItem(c: Context): void {
+  c.set(YOUTUBE_IMPORT_CONFIRMED as never, true as never);
 }
 
 /** How many `reused: true` entries a JSON answer carries (single or batch initiate). */
@@ -233,8 +232,6 @@ function creatorUploadMiddleware(options: GateOptions) {
     }
     c.set('creatorTier', creator);
     if (creator.tier.unlimited || !uploadLimitsEnforced(c.env ?? {})) return next();
-    // Move from YouTube: a tier may let imports skip the counters (the initiate still checks the item)
-    if (options.sessions && creator.tier.importCountsAgainstLimits === false && (await isYoutubeImportInitiate(c))) return next();
 
     const limits = options.limitsOf(creator.tier);
     const subject = creator.subjectId;
@@ -277,7 +274,11 @@ function creatorUploadMiddleware(options: GateOptions) {
       if (options.sessions) {
         const status = c.res?.status ?? 500;
         if (status >= 400) refund = counted;
-        else {
+        else if (creator.tier.importCountsAgainstLimits === false && c.get(YOUTUBE_IMPORT_CONFIRMED as never)) {
+          // Move from YouTube on a tier where imports are free: counted like any upload, given
+          // back only once the initiate confirmed a valid import item
+          refund = counted;
+        } else {
           const payload = await c.res.clone().json().catch(() => null);
           refund = Math.min(counted, countReused(payload));
         }

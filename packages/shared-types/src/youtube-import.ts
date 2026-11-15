@@ -184,6 +184,8 @@ export const YT_IMPORT_ERRORS = {
   denied: 'youtube_denied',
   itemTaken: 'youtube_item_taken',
   notFound: 'youtube_import_not_found',
+  /** POST oauth/finish: the consent is unknown, used or older than 5 minutes (connect again) */
+  connectExpired: 'youtube_connect_expired',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -347,7 +349,8 @@ export function parseTakeoutVideosCsv(text: string): TakeoutVideoRow[] {
 export function normalizeTitle(value: string): string {
   let s = value.normalize('NFKC').toLowerCase();
   s = s.replace(/\.[a-z0-9]{2,5}$/i, '');
-  s = s.replace(/\s*\(\d+\)\s*$/, '');
+  // Trim first, then an anchored marker: no backtracking over runs of spaces
+  s = s.trim().replace(/\(\d+\)$/, '');
   return s.replace(/[^\p{L}\p{N}]+/gu, '');
 }
 
@@ -392,7 +395,8 @@ export function matchTakeoutFiles(
 
   // 1. The id written in the file name ("Title [dQw4w9WgXcQ].mp4", "dQw4w9WgXcQ.mp4")
   for (const item of items) {
-    const file = files.find((f) => !claimed.has(f.key) && new RegExp(`(^|[^A-Za-z0-9_-])${item.ytVideoId.replace(/-/g, '\\-')}([^A-Za-z0-9_-]|$)`).test(f.fileName.replace(/\.[a-z0-9]{2,5}$/i, '')));
+    // The id as a whole token of the name (ids are [A-Za-z0-9_-]); no pattern built from input
+    const file = files.find((f) => !claimed.has(f.key) && f.fileName.replace(/\.[a-z0-9]{2,5}$/i, '').split(/[^A-Za-z0-9_-]+/).includes(item.ytVideoId));
     if (file) take(item.id, file, 'id');
   }
   // 2. videos.csv: id → title → the one file with that title

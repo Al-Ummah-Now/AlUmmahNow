@@ -4,7 +4,8 @@
  *
  * GET  /api/youtube-import/status?channelId=           feature ready? the latest import
  * POST /api/youtube-import/oauth/start                 { channelId, captions, locale } → { url } (Google consent)
- * GET  /api/youtube-import/oauth/callback              Google's redirect (plain route, index.ts) → 302 to the wizard
+ * GET  /api/youtube-import/oauth/callback              Google's redirect (plain route, index.ts): keeps the code → 302 to the wizard ?connect=<state>
+ * POST /api/youtube-import/oauth/finish                { state } → { import } (only the user who started the consent)
  * GET  /api/youtube-import/:importId                   { import, items, playlists }
  * PUT  /api/youtube-import/:importId/selection         { itemIds, playlistIds, visibilityMode }
  * PUT  /api/youtube-import/:importId/matches           { matches: [{ itemId, match | null }] } (≤ 500)
@@ -26,6 +27,7 @@ import {
 	MAX_SELECTION,
 	YtHttpError,
 	cancelImport,
+	finishOAuth,
 	importStatus,
 	linkBack,
 	readImport,
@@ -111,6 +113,22 @@ export class YoutubeImportOAuthStart extends YtRoute {
 	async handle(c: AppContext) {
 		const { body } = await this.getValidatedData<typeof this.schema>();
 		return this.answer(c, () => startOAuth(this.env(c), this.caller(c), body as { channelId: string; captions: boolean; locale: 'en' | 'ar' }));
+	}
+}
+
+export class YoutubeImportOAuthFinish extends YtRoute {
+	schema = {
+		tags: ['YouTube import'],
+		summary: 'Move from YouTube: finish the Google connection',
+		description:
+			'The wizard sends the `connect` value the callback put in its URL. Only the user who started the consent may finish it (403 otherwise, and the consent is used up); the code is exchanged here, and the import is created or connected. 404 youtube_connect_expired: unknown, used or older than 5 minutes.',
+		request: { body: { content: { 'application/json': { schema: z.object({ state: z.string().min(1).max(128) }) } } } },
+		responses: { '200': { description: '{ import }' }, ...errors, '502': { description: 'Google gave no lasting access (code failed)', content: { 'application/json': { schema: ResponseError } } } },
+	};
+
+	async handle(c: AppContext) {
+		const { body } = await this.getValidatedData<typeof this.schema>();
+		return this.answer(c, () => finishOAuth(this.env(c), this.caller(c), (body as { state: string }).state));
 	}
 }
 

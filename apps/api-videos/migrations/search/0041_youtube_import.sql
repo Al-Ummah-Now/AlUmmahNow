@@ -40,6 +40,8 @@ CREATE TABLE IF NOT EXISTS yt_oauth_states (
   locale TEXT NOT NULL,
   captions INTEGER NOT NULL DEFAULT 0,
   verifier TEXT NOT NULL,
+  -- Google's code, kept by the callback until the signed-in creator finishes (POST oauth/finish)
+  code TEXT,
   expires_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_yt_oauth_states_expires ON yt_oauth_states (expires_at);

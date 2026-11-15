@@ -17,7 +17,7 @@ from the YouTube Data API v3, read with the creator's read-only consent.
 
 | Step | Who | What |
 |---|---|---|
-| Connect | Studio → `POST /api/youtube-import/oauth/start` | Google consent (PKCE S256, offline, `youtube.readonly`, plus `youtube.force-ssl` only when the creator asks for captions). Google sends the browser to `GET /api/youtube-import/oauth/callback`, which stores the import and 302s to the wizard (`?import=` or `?error=`). |
+| Connect | Studio → `POST /api/youtube-import/oauth/start` | Google consent (PKCE S256, offline, `youtube.readonly`, plus `youtube.force-ssl` only when the creator asks for captions). Google sends the browser to `GET /api/youtube-import/oauth/callback`. That request carries no sign-in, so it exchanges nothing: it keeps Google's code on the consent row (single use, 5 minutes) and 302s to the wizard with `?connect=<state>` (or `?error=`). The signed-in wizard then calls `POST /api/youtube-import/oauth/finish { state }`. Only the user who started the consent may finish it, while they can still import into the channel; anyone else gets 403 and the consent is used up. This stops a consent link someone else started from binding the visitor's YouTube channel to their import (login CSRF). |
 | List | queue `yt-list` | One API page per message: the uploads playlist, then the creator's playlists, then each playlist's items. Live and upcoming broadcasts and rejected uploads are left out. Ends in status `ready`. |
 | Pick | Studio → `PUT selection`, `PUT matches` | The picked videos and playlists, `visibilityMode` (`keep` YouTube's visibility, or `private`), and which Takeout file is which video. |
 | Import | Studio → `POST start`, then `POST /api/videos/upload/initiate` with `youtubeImport: { importId, itemId }` per file | The server builds the record from the item snapshot, so body values for title, description, tags, language, visibility, schedule and publish date are ignored. It also records the item's video and queues `yt-finalize`. A retried item reuses its video. |
@@ -53,7 +53,8 @@ The user who connected manages the import. They need `video.upload` on the chann
 (the owner, or a channel role that uploads), and the channel owner needs a creator tier,
 the same as uploads. Uploads count against the tier's limits unless the tier has
 **Imports count against limits** off (`importCountsAgainstLimits`, admin Creator tiers).
-The tier gate itself always applies.
+Even then, an import's upload session is counted like any other. It is given back only
+after the initiate has confirmed a valid import item. The tier gate itself always applies.
 
 ## Reliability
 
@@ -89,7 +90,12 @@ The tier gate itself always applies.
   Google client secret and the import id as associated data. It is revoked at Google
   when the import finishes, is cancelled, expires or the account is erased.
 - The OAuth `state` is random, single use and expires in 15 minutes. The PKCE verifier
-  never leaves the server.
+  never leaves the server. Google's code is exchanged only by `oauth/finish`, for the
+  signed-in user who started the consent.
+- Every action on an import (and each item's upload) checks again that the creator may
+  still upload to the channel, so a channel role that was taken away stops the import.
+- Each item's upload is claimed by the item (the upload claim of `lib/uploads/initiateOnce.ts`,
+  keyed on import and item). Two parallel initiates make one video.
 - Thumbnails are fetched only from `i.ytimg.com` / `i9.ytimg.com`, at most 6 MB, and only
   as JPEG, PNG or WebP.
 - Account erasure (`eraseYoutubeImports`, in both erasure paths) deletes the imports,
