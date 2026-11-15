@@ -5309,6 +5309,1402 @@
         }
       }
     },
+    "/api/v1/channels/{id}/blocks": {
+      "get": {
+        "tags": [
+          "Channels"
+        ],
+        "summary": "List the people a channel blocked from commenting",
+        "operationId": "get_ChannelBlocksList",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Channel id"
+            },
+            "required": true,
+            "description": "Channel id",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Blocked people, most recent first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "userId": {
+                            "type": "string"
+                          },
+                          "displayName": {
+                            "type": "string"
+                          },
+                          "avatarUrl": {
+                            "type": "string"
+                          },
+                          "blockedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "userId",
+                          "displayName",
+                          "blockedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No comment moderation role on this channel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Channel not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The comments index cannot be read right now; try again shortly",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Channels"
+        ],
+        "summary": "Block a person from commenting on the channel",
+        "description": "Silent: the person isn't told. Their new comments and replies on the channel's videos and posts stay visible only to them. 400 `cannot_block_member` for the owner or a channel member, 404 `user_not_found` for an unknown account.",
+        "operationId": "post_ChannelBlockAdd",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Channel id"
+            },
+            "required": true,
+            "description": "Channel id",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "userId": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]{1,128}$"
+                  }
+                },
+                "required": [
+                  "userId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Blocked (blocking again changes nothing)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The owner or a member of the channel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No comment moderation role on this channel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Channel not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The comments index cannot be read right now; try again shortly",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/channels/{id}/blocks/{userId}": {
+      "delete": {
+        "tags": [
+          "Channels"
+        ],
+        "summary": "Unblock a person on the channel",
+        "operationId": "delete_ChannelBlockRemove",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Channel id"
+            },
+            "required": true,
+            "description": "Channel id",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "The blocked person"
+            },
+            "required": true,
+            "description": "The blocked person",
+            "name": "userId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unblocked (or was not blocked)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "removed": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "removed"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No comment moderation role on this channel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Channel not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The comments index cannot be read right now; try again shortly",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/channels/{id}/comments": {
+      "get": {
+        "tags": [
+          "Channels"
+        ],
+        "summary": "List a channel's comments for Studio",
+        "description": "One tab of the channel's comments on its videos and posts, newest first: `inbox` (published), `held` (held for review; platform moderation holds are included and flagged `heldBy: 'moderation'`, channel blocks are never listed), `removed` (removed by the channel in the last 90 days, most recently removed first). Filters: a text search (`q`), one video or post (`target=video:<id>` or `post:<id>`), top-level comments without a channel reply (`noReply=1`), comments with a link (`hasLink=1`). With `q` the index is read in pages of up to 300 comments per request, so a page can hold fewer than `limit` items while `nextCursor` is set, and `total` counts the comments matching the other filters. `indexing: true` while the channel's index is still being built. Needs `comment.moderate` on the channel.",
+        "operationId": "get_ChannelCommentsList",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Channel id"
+            },
+            "required": true,
+            "description": "Channel id",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "inbox",
+                "held",
+                "removed"
+              ],
+              "default": "inbox"
+            },
+            "required": false,
+            "name": "tab",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "required": false,
+            "name": "q",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^(video|post):([A-Za-z0-9_-]{1,128})$",
+              "description": "video:<id> or post:<id>"
+            },
+            "required": false,
+            "description": "video:<id> or post:<id>",
+            "name": "target",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1",
+                "true",
+                "0",
+                "false"
+              ]
+            },
+            "required": false,
+            "name": "noReply",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1",
+                "true",
+                "0",
+                "false"
+              ]
+            },
+            "required": false,
+            "name": "hasLink",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 400
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "number"
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of comments",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "video",
+                              "post"
+                            ]
+                          },
+                          "targetId": {
+                            "type": "string"
+                          },
+                          "targetTitle": {
+                            "type": "string"
+                          },
+                          "targetUrlPath": {
+                            "type": "string"
+                          },
+                          "parentId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "text": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "author": {
+                            "type": "object",
+                            "properties": {
+                              "userId": {
+                                "type": "string"
+                              },
+                              "channelId": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "displayName": {
+                                "type": "string"
+                              },
+                              "avatarUrl": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "userId",
+                              "channelId",
+                              "displayName"
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "published",
+                              "held",
+                              "removed"
+                            ]
+                          },
+                          "heldBy": {
+                            "type": "string",
+                            "enum": [
+                              "moderation",
+                              "channel_block"
+                            ]
+                          },
+                          "isPinned": {
+                            "type": "boolean"
+                          },
+                          "isHearted": {
+                            "type": "boolean"
+                          },
+                          "repliesCount": {
+                            "type": "number"
+                          },
+                          "hasChannelReply": {
+                            "type": "boolean"
+                          },
+                          "removedAt": {
+                            "type": "string"
+                          },
+                          "removedBy": {
+                            "type": "object",
+                            "properties": {
+                              "userId": {
+                                "type": "string"
+                              },
+                              "displayName": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "userId",
+                              "displayName"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "kind",
+                          "targetId",
+                          "targetTitle",
+                          "targetUrlPath",
+                          "parentId",
+                          "text",
+                          "createdAt",
+                          "author",
+                          "status",
+                          "isPinned",
+                          "isHearted",
+                          "repliesCount",
+                          "hasChannelReply"
+                        ]
+                      }
+                    },
+                    "nextCursor": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "total": {
+                      "type": "number"
+                    },
+                    "indexing": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "items",
+                    "nextCursor",
+                    "total"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No comment moderation role on this channel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Channel not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The comments index cannot be read right now; try again shortly",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/channels/{id}/comments/bulk": {
+      "post": {
+        "tags": [
+          "Channels"
+        ],
+        "summary": "Act on up to 50 of a channel's comments",
+        "description": "Approve, remove, restore, hold, pin, unpin, heart or unheart comments on the channel's videos and posts. Each item must be on this channel (`not_in_channel` otherwise) and gets its own result: approving a comment held by platform moderation answers `held_by_moderation`; pinning replaces the video's or post's pinned comment; removing another person's comment is a soft removal (restorable for 90 days), removing your own deletes it. Needs `comment.moderate` on the channel.",
+        "operationId": "post_ChannelCommentsBulk",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Channel id"
+            },
+            "required": true,
+            "description": "Channel id",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "approve",
+                      "remove",
+                      "restore",
+                      "hold",
+                      "pin",
+                      "unpin",
+                      "heart",
+                      "unheart"
+                    ]
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "video",
+                            "post"
+                          ]
+                        },
+                        "targetId": {
+                          "type": "string",
+                          "pattern": "^[A-Za-z0-9_-]{1,128}$"
+                        },
+                        "commentId": {
+                          "type": "string",
+                          "pattern": "^[A-Za-z0-9_-]{1,128}$"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "targetId",
+                        "commentId"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 50
+                  }
+                },
+                "required": [
+                  "action",
+                  "items"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "One result per item, in order",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "commentId": {
+                            "type": "string"
+                          },
+                          "ok": {
+                            "type": "boolean"
+                          },
+                          "error": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "commentId",
+                          "ok"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "results"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid action or items (1 to 50)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No comment moderation role on this channel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Channel not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The comments index cannot be read right now; try again shortly",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/channels/{id}/comments/summary": {
+      "get": {
+        "tags": [
+          "Channels"
+        ],
+        "summary": "Count a channel's comments per Studio tab",
+        "description": "Inbox, Held and Removed totals and the five latest published comments (Dashboard and the Comments page). Needs `comment.moderate` on the channel.",
+        "operationId": "get_ChannelCommentsSummary",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Channel id"
+            },
+            "required": true,
+            "description": "Channel id",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Counts per tab and the latest comments",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "inbox": {
+                      "type": "number"
+                    },
+                    "held": {
+                      "type": "number"
+                    },
+                    "removed": {
+                      "type": "number"
+                    },
+                    "recent": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "video",
+                              "post"
+                            ]
+                          },
+                          "targetId": {
+                            "type": "string"
+                          },
+                          "targetTitle": {
+                            "type": "string"
+                          },
+                          "targetUrlPath": {
+                            "type": "string"
+                          },
+                          "parentId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "text": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "author": {
+                            "type": "object",
+                            "properties": {
+                              "userId": {
+                                "type": "string"
+                              },
+                              "channelId": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "displayName": {
+                                "type": "string"
+                              },
+                              "avatarUrl": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "userId",
+                              "channelId",
+                              "displayName"
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "published",
+                              "held",
+                              "removed"
+                            ]
+                          },
+                          "heldBy": {
+                            "type": "string",
+                            "enum": [
+                              "moderation",
+                              "channel_block"
+                            ]
+                          },
+                          "isPinned": {
+                            "type": "boolean"
+                          },
+                          "isHearted": {
+                            "type": "boolean"
+                          },
+                          "repliesCount": {
+                            "type": "number"
+                          },
+                          "hasChannelReply": {
+                            "type": "boolean"
+                          },
+                          "removedAt": {
+                            "type": "string"
+                          },
+                          "removedBy": {
+                            "type": "object",
+                            "properties": {
+                              "userId": {
+                                "type": "string"
+                              },
+                              "displayName": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "userId",
+                              "displayName"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "kind",
+                          "targetId",
+                          "targetTitle",
+                          "targetUrlPath",
+                          "parentId",
+                          "text",
+                          "createdAt",
+                          "author",
+                          "status",
+                          "isPinned",
+                          "isHearted",
+                          "repliesCount",
+                          "hasChannelReply"
+                        ]
+                      }
+                    },
+                    "indexing": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "inbox",
+                    "held",
+                    "removed",
+                    "recent"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No comment moderation role on this channel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Channel not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The comments index cannot be read right now; try again shortly",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/channels/{id}/content": {
       "get": {
         "tags": [
@@ -10899,10 +12295,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Actor channel ID (must own the post)"
+              "description": "Actor channel ID (the channel, as its owner or a member with post.manage)"
             },
             "required": true,
-            "description": "Actor channel ID (must own the post)",
+            "description": "Actor channel ID (the channel, as its owner or a member with post.manage)",
             "name": "channelId",
             "in": "header"
           }
@@ -11280,10 +12676,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Actor channel ID (must own the post)"
+              "description": "Actor channel ID (the channel, as its owner or a member with post.manage)"
             },
             "required": true,
-            "description": "Actor channel ID (must own the post)",
+            "description": "Actor channel ID (the channel, as its owner or a member with post.manage)",
             "name": "channelId",
             "in": "header"
           }
@@ -11817,7 +13213,7 @@
           "Community Posts - Comments"
         ],
         "summary": "Delete a comment",
-        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nSoft delete a comment. Comment author or post owner can delete. Comments with replies show [deleted] instead of being removed.",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nThe author deletes their own comment (one with replies shows [deleted]). A comment moderator of the post's channel removes it instead: hidden with its replies and restorable from Studio for 90 days (`removed: true`).",
         "operationId": "delete_DeletePostComment",
         "parameters": [
           {
@@ -11877,6 +13273,9 @@
                     },
                     "message": {
                       "type": "string"
+                    },
+                    "removed": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -11959,7 +13358,7 @@
         "tags": [
           "Community Posts - Comments"
         ],
-        "summary": "Heart a comment (channel owner, channel admin or channel moderator)",
+        "summary": "Heart a comment (comment moderators)",
         "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nMarks a comment as hearted by the post creator.",
         "operationId": "post_HeartPostComment",
         "parameters": [
@@ -12064,7 +13463,7 @@
             }
           },
           "403": {
-            "description": "No comment.moderate role on the channel",
+            "description": "No comment moderation role on this channel",
             "content": {
               "application/json": {
                 "schema": {
@@ -12113,7 +13512,7 @@
         "tags": [
           "Community Posts - Comments"
         ],
-        "summary": "Remove heart from a comment (channel owner, channel admin or channel moderator)",
+        "summary": "Remove heart from a comment (comment moderators)",
         "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nRemoves the creator heart from a comment.",
         "operationId": "delete_UnheartPostComment",
         "parameters": [
@@ -12218,7 +13617,7 @@
             }
           },
           "403": {
-            "description": "No comment.moderate role on the channel",
+            "description": "No comment moderation role on this channel",
             "content": {
               "application/json": {
                 "schema": {
@@ -12517,7 +13916,7 @@
         "tags": [
           "Community Posts - Comments"
         ],
-        "summary": "Pin a comment (channel owner, channel admin or channel moderator)",
+        "summary": "Pin a comment (comment moderators)",
         "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nPins a top-level comment to the top of the comment list. Replaces any previously pinned comment.",
         "operationId": "post_PinPostComment",
         "parameters": [
@@ -12622,7 +14021,7 @@
             }
           },
           "403": {
-            "description": "No comment.moderate role on the channel",
+            "description": "No comment moderation role on this channel",
             "content": {
               "application/json": {
                 "schema": {
@@ -12671,7 +14070,7 @@
         "tags": [
           "Community Posts - Comments"
         ],
-        "summary": "Unpin a comment (channel owner, channel admin or channel moderator)",
+        "summary": "Unpin a comment (comment moderators)",
         "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nRemoves the pinned state from a comment.",
         "operationId": "delete_UnpinPostComment",
         "parameters": [
@@ -12776,7 +14175,7 @@
             }
           },
           "403": {
-            "description": "No comment.moderate role on the channel",
+            "description": "No comment moderation role on this channel",
             "content": {
               "application/json": {
                 "schema": {
@@ -37085,6 +38484,7 @@
           "Comments"
         ],
         "summary": "Delete a comment for a video",
+        "description": "The author deletes their own comment for good (a top-level comment takes its replies with it). The video's owner or a channel member with `comment.moderate` removing someone else's comment makes a soft removal: hidden from everyone, kept with its replies for 90 days and restorable (POST .../restore), then purged. Answers `removed: true` for a removal.",
         "operationId": "delete_CommentDelete",
         "parameters": [
           {
@@ -37501,6 +38901,334 @@
         }
       }
     },
+    "/api/v1/videos/{id}/comments/{cid}/heart": {
+      "post": {
+        "tags": [
+          "Comments"
+        ],
+        "summary": "Heart or unheart a comment as the video's channel",
+        "operationId": "post_CommentHeart",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video id"
+            },
+            "required": true,
+            "description": "Video id",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Comment or reply id"
+            },
+            "required": true,
+            "description": "Comment or reply id",
+            "name": "cid",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "hearted": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "hearted"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done (changed: false when it already was so)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "changed": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "changed"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not possible on this comment (a reply cannot be pinned; a held comment cannot be pinned)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No comment moderation role on the video's channel, or held by platform moderation (`held_by_moderation`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Video or comment not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Not removed by the channel (`not_removed`), past the 90 days (`restore_expired`) or removed (`removed`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/videos/{id}/comments/{cid}/hold": {
+      "post": {
+        "tags": [
+          "Comments"
+        ],
+        "summary": "Hold a published comment for review",
+        "description": "Hides a published comment from viewers (its author still sees it) until it is approved with POST .../approve.",
+        "operationId": "post_CommentHold",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video id"
+            },
+            "required": true,
+            "description": "Video id",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Comment or reply id"
+            },
+            "required": true,
+            "description": "Comment or reply id",
+            "name": "cid",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Done (changed: false when it already was so)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "changed": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "changed"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not possible on this comment (a reply cannot be pinned; a held comment cannot be pinned)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No comment moderation role on the video's channel, or held by platform moderation (`held_by_moderation`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Video or comment not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Not removed by the channel (`not_removed`), past the 90 days (`restore_expired`) or removed (`removed`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/videos/{id}/comments/{cid}/likes": {
       "post": {
         "tags": [
@@ -37738,6 +39466,179 @@
         }
       }
     },
+    "/api/v1/videos/{id}/comments/{cid}/pin": {
+      "post": {
+        "tags": [
+          "Comments"
+        ],
+        "summary": "Pin or unpin a top-level comment",
+        "description": "A video has at most one pinned comment: pinning one unpins the previous.",
+        "operationId": "post_CommentPin",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video id"
+            },
+            "required": true,
+            "description": "Video id",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Comment or reply id"
+            },
+            "required": true,
+            "description": "Comment or reply id",
+            "name": "cid",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "pinned": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "pinned"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done (changed: false when it already was so)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "changed": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "changed"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not possible on this comment (a reply cannot be pinned; a held comment cannot be pinned)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No comment moderation role on the video's channel, or held by platform moderation (`held_by_moderation`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Video or comment not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Not removed by the channel (`not_removed`), past the 90 days (`restore_expired`) or removed (`removed`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/videos/{id}/comments/{cid}/replies": {
       "get": {
         "tags": [
@@ -37943,6 +39844,162 @@
           },
           "404": {
             "description": "Video or comment not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/videos/{id}/comments/{cid}/restore": {
+      "post": {
+        "tags": [
+          "Comments"
+        ],
+        "summary": "Restore a comment the video's channel removed",
+        "description": "Puts back a comment (with its replies) removed by the channel in the last 90 days. Never a platform moderation removal.",
+        "operationId": "post_CommentRestore",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video id"
+            },
+            "required": true,
+            "description": "Video id",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Comment or reply id"
+            },
+            "required": true,
+            "description": "Comment or reply id",
+            "name": "cid",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Done (changed: false when it already was so)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "changed": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "changed"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not possible on this comment (a reply cannot be pinned; a held comment cannot be pinned)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No comment moderation role on the video's channel, or held by platform moderation (`held_by_moderation`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Video or comment not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Not removed by the channel (`not_removed`), past the 90 days (`restore_expired`) or removed (`removed`)",
             "content": {
               "application/json": {
                 "schema": {

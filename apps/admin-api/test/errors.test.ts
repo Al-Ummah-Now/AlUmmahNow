@@ -374,6 +374,10 @@ describe('retry runner', () => {
     const job = await runRetry(env({ VIDEOS }), { kind: 'service', service: 'api-videos', path: '/internal/captions/jobs/retry', body: { jobId: 'j1' } }, '1');
     assert.equal(job.status, 'resolved');
     assert.equal(calls[1].url, 'https://api-videos.internal/internal/captions/jobs/retry');
+    // Studio comments: a channel's index rebuild that gave up (#771)
+    const rebuild = await runRetry(env({ VIDEOS }), { kind: 'service', service: 'api-videos', path: '/internal/channel-comments/retry', body: { job: 'rebuild', channelId: 'ch1' } }, '1');
+    assert.equal(rebuild.status, 'resolved');
+    assert.deepEqual(calls[2], { url: 'https://api-videos.internal/internal/channel-comments/retry', body: '{"job":"rebuild","channelId":"ch1"}' });
   });
 
   it('keeps the item open with the reason when the retry fails, dismisses a vanished item', async () => {

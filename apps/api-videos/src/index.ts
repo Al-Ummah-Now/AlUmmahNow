@@ -15,6 +15,8 @@ import { createReviewInternalRouter } from './endpoints/review/reviewInternal';
 import { createNotificationsInternalRouter } from './endpoints/notifications/notificationsInternal';
 import { sweepRunUsers } from './lib/e2e/runUserSweep';
 import { handlePlaylistAddBatch, isPlaylistAddMessage } from './lib/playlistUploadAdds';
+import { handleChannelCommentsBatch, isChannelCommentsMessage, startCommentPurge } from './lib/channelComments/jobs';
+import { createChannelCommentsInternalRouter } from './endpoints/channel/channelCommentsInternal';
 import { createPlaylistAddsInternalRouter } from './endpoints/playlist/playlistAddsInternal';
 import { createCaptionJobsInternalRouter } from './endpoints/captions/captionJobsInternal';
 
@@ -289,6 +291,8 @@ app.route('/internal/video-format', createVideoFormatInternalRouter() as never);
 app.route('/internal/privacy/footprints', createFootprintsInternalRouter() as never);
 // New uploads → playlists: the admin Errors page's Retry on a failed add
 app.route('/internal/playlist-adds', createPlaylistAddsInternalRouter() as never);
+// Studio comments: Retry of an index rebuild or the removed-comment purge (lib/channelComments/jobs.ts)
+app.route('/internal/channel-comments', createChannelCommentsInternalRouter() as never);
 // Caption jobs: media audio reports, processor progress/finish, admin retry (AUN-CAPTIONS §5.1)
 app.route('/internal/captions', createCaptionJobsInternalRouter() as never);
 // Scholars (the CMS): their channels and their articles on the Community tab
@@ -517,7 +521,8 @@ app.get("/", async (c) => {
 /**
  * Crons (wrangler `triggers.crons`): hourly, the subscription import, the
  * stalled-upload sweep and the privacy footprint pass upkeep;
- * daily, enforce data retention (Story 1.3, AC 5).
+ * daily, enforce data retention (Story 1.3, AC 5) and purge comments channels
+ * removed more than 90 days ago (lib/channelComments/jobs.ts).
  * See src/lib/privacy/retention.ts and docs/compliance/GDPR.md.
  */
 async function scheduled(controller: ScheduledController, rawEnv: AppBindings, ctx: ExecutionContext): Promise<void> {
@@ -664,6 +669,8 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 				logger.error('[ThumbnailRepair] Daily run failed to start', { error: error instanceof Error ? error.message : String(error) });
 				reportJobFailure(rawEnv, ctx, 'thumbnail-check', error);
 			}
+			// Comments a channel removed more than 90 days ago (lib/channelComments/jobs.ts; queued pages, never throws)
+			await startCommentPurge(rawEnv as never, ctx);
 			try {
 				// Live QoE, events and segment indexes past 90 days (lib/live/qoe.ts)
 				if (rawEnv.SEARCH_DB) await pruneLiveData(rawEnv.SEARCH_DB);
@@ -733,7 +740,8 @@ async function handleFetch(request: Request, env: AppBindings, ctx: ExecutionCon
  *   owner delete (kind "bunny-delete"), the QA/stage test-library purge
  *   (kind "test-library-purge") and the channel collection backfill (kind
  *   "bunny-collection-backfill") and the privacy footprint backfill (kind
- *   "privacy-footprint-backfill") and the public MP4 backfill (kind "mp4-backfill").
+ *   "privacy-footprint-backfill") and the public MP4 backfill (kind "mp4-backfill")
+ *   and Studio comments' index rebuilds and removed-comment purge (kind "channel-comments").
  * R2 writes go through the search-sync wrapper so changes reach the search
  * index and ownership rows like any API write.
  */
@@ -759,7 +767,10 @@ async function queue(batch: MessageBatch<unknown>, env: AppBindings, ctx: Execut
 		for (const msg of batch.messages.filter((m) => isMp4BackfillMessage(m.body))) await handleMp4BackfillMessage(env as never, msg);
 		// Privacy footprint backfill (lib/privacy/footprints.ts), one bucket page per message
 		for (const msg of batch.messages.filter((m) => isFootprintBackfillMessage(m.body))) await handleFootprintBackfillMessage(env as never, msg.body as never);
-		const rest = batch.messages.filter((m) => !isFormat(m) && !isCollectionBackfill(m) && !isFootprintBackfillMessage(m.body) && !isPublishedAtBackfillMessage(m.body) && !isArchivePrivacyMessage(m.body) && !isMp4BackfillMessage(m.body));
+		// Studio comments: per-channel index rebuilds and the daily removed-comment purge (lib/channelComments/jobs.ts)
+		const channelComments = batch.messages.filter((m) => isChannelCommentsMessage(m.body));
+		if (channelComments.length) await handleChannelCommentsBatch({ messages: channelComments as never }, synced, ctx);
+		const rest = batch.messages.filter((m) => !isFormat(m) && !isCollectionBackfill(m) && !isFootprintBackfillMessage(m.body) && !isPublishedAtBackfillMessage(m.body) && !isArchivePrivacyMessage(m.body) && !isMp4BackfillMessage(m.body) && !isChannelCommentsMessage(m.body));
 		// New uploads → playlists (lib/playlistUploadAdds.ts)
 		const playlistAdds = rest.filter((m) => isPlaylistAddMessage(m.body));
 		const reaper = rest.filter((m) => isReaperMessage(m.body));

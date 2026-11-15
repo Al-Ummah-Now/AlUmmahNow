@@ -97,3 +97,47 @@ export function patchComment<E>(
 ): Promise<{ data: PostComment | null; rejected?: E }> {
 	return new R2Repository<PostComment>(bucket).updateObjectOrReject<E>(commentKey, mutate);
 }
+
+/**
+ * The pinned pointer (`comments/<post>/pinned.json`) is the single source of
+ * truth for which comment is pinned (SCALABILITY-AUDIT AV-12): it changes only
+ * with a conditional write, and the comment list derives `isPinned` from it.
+ * The comments' own `isPinned` flags are kept in step best-effort.
+ * An empty `commentId` means nothing is pinned.
+ */
+export async function swapPinnedPointer(
+  bucket: R2Bucket,
+  postId: string,
+  next: (current: string) => string | false,
+): Promise<{ previous: string; changed: boolean }> {
+  let previous = '';
+  let changed = false;
+  await new R2Repository<{ commentId: string; pinnedAt: string }>(bucket).updateObject(
+    `comments/${postId}/pinned.json`,
+    (pointer) => {
+      previous = pointer.commentId || '';
+      const commentId = next(previous);
+      changed = commentId !== false && commentId !== previous;
+      if (!changed) return false;
+      pointer.commentId = commentId as string;
+      pointer.pinnedAt = new Date().toISOString();
+      return true;
+    },
+    { initial: () => ({ commentId: '', pinnedAt: new Date().toISOString() }) },
+  );
+  return { previous, changed };
+}
+
+export async function setCommentPinned(
+  bucket: R2Bucket,
+  postId: string,
+  commentId: string,
+  pinned: boolean
+): Promise<PostComment | null> {
+  const { data } = await patchComment<never>(bucket, `comments/${postId}/top-level/${commentId}.json`, (comment) => {
+    if (Boolean(comment.isPinned) === pinned) return false;
+    comment.isPinned = pinned;
+    return true;
+  });
+  return data;
+}

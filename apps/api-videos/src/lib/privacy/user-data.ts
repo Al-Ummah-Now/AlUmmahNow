@@ -46,6 +46,8 @@ import { eraseChannelHandleHistory } from './handle-history';
 import { footprintTargets, footprintsComplete, forgetFootprints } from './footprints';
 import { eraseCaptionMinutes } from '../captions/minutes';
 import { eraseImageOwners } from '../csam/imageOwners';
+import { eraseChannelComments } from '../channelComments';
+import { purgePostComment } from '../channelComments/jobs';
 
 /** Tombstone written in place of a user id on content kept after erasure. */
 export const DELETED_USER_ID = 'deleted-user';
@@ -501,8 +503,29 @@ function stripUserReactions(list: unknown, userId: string): { list: Reaction[]; 
 	return { list: kept, removed: list.length - kept.length };
 }
 
-function anonymizeVideoComments(comments: unknown, userId: string, summary: ErasureSummary): boolean {
+/**
+ * The user's comments a channel removed (#771) are deleted, not anonymised:
+ * hidden from everyone already, their replies went with them.
+ */
+function dropChannelRemoved(comments: unknown, userId: string, summary: ErasureSummary): boolean {
+	if (!Array.isArray(comments)) return false;
 	let changed = false;
+	for (let i = comments.length - 1; i >= 0; i--) {
+		const comment = comments[i] as Json | null;
+		if (!comment || typeof comment !== 'object') continue;
+		if (comment.userId === userId && comment.removedBy === 'channel') {
+			comments.splice(i, 1);
+			bump(summary.deleted, 'videoComments');
+			changed = true;
+		} else if (dropChannelRemoved(comment.replies, userId, summary)) {
+			changed = true;
+		}
+	}
+	return changed;
+}
+
+function anonymizeVideoComments(comments: unknown, userId: string, summary: ErasureSummary): boolean {
+	let changed = dropChannelRemoved(comments, userId, summary);
 	forEachComment(comments, (comment) => {
 		for (const kind of ['likes', 'dislikes'] as const) {
 			const { list, removed } = stripUserReactions(comment[kind], userId);
@@ -795,9 +818,16 @@ export async function eraseUserData(
 		// Conditional rewrite (SCALABILITY-AUDIT AV-23): a concurrent like or
 		// edit cannot bring the author back
 		let anonymized = false;
+		let removedByChannel = false;
 		await updateJson<Json>(community, key, (comment) => {
 			anonymized = false;
+			removedByChannel = false;
 			if (comment.userId !== userId) return false;
+			// Removed by the channel (#771): deleted with its replies below, not anonymised
+			if (comment.removedBy === 'channel') {
+				removedByChannel = true;
+				return false;
+			}
 			comment.userId = DELETED_USER_ID;
 			comment.channelId = DELETED_CHANNEL_ID;
 			comment.content = '';
@@ -808,6 +838,14 @@ export async function eraseUserData(
 			return true;
 		}, ctx.budget);
 		if (anonymized) bump(summary.anonymized, 'communityComments');
+		if (removedByChannel) {
+			const match = /^comments\/([^/]+)\/(?:top-level|replies\/([^/]+))\/([^/]+)\.json$/.exec(key);
+			if (match) {
+				ctx.budget.spend(8);
+				await purgePostComment({ community_posts: env.community_posts } as never, match[1], match[3], match[2] ?? null, () => true);
+				bump(summary.deleted, 'communityComments');
+			}
+		}
 	};
 
 	/** Reports filed: kept for moderation history, reporter identity removed; the user's claims deleted. */
@@ -1043,6 +1081,10 @@ export async function eraseUserData(
 			if (db) {
 				ctx.budget.spend(3);
 				await forgetFootprints(db, userId);
+				// Studio's comment index and channel blocks (#771): the user's comments and blocks of them, and
+				// everything of their channels; a block they placed keeps the row without naming them
+				ctx.budget.spend(4);
+				await eraseChannelComments(db, userId, ctx.checkpoint.o);
 				// The search binding is the D1 database; the minutes need its batch and all()
 				await eraseCaptionMinutes(db as unknown as D1Database, userId);
 			}

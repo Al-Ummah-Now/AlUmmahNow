@@ -73,9 +73,14 @@ export class ListPostCommentReplies extends OptionalAuthRoute {
       return c.json({ success: false, error: 'Post not found' }, 404);
     }
 
-    const parentObj = await bucket.head(topLevelCommentKey(postId, commentId));
+    const parentObj = await bucket.get(topLevelCommentKey(postId, commentId));
     if (!parentObj) {
       return c.json({ success: false, error: 'Comment not found' }, 404);
+    }
+    const viewerUserId = this.getUserId(c);
+    // Replies go with their thread: none while the channel removed it, or it is held from this viewer
+    if (!presentComment(await parentObj.json<PostComment>(), viewerUserId)) {
+      return c.json({ success: true, comments: [], pagination: { limit, hasNext: false } } as PostCommentListResponse);
     }
 
     const indexObj = await bucket.get(repliesIndexKey(postId, commentId));
@@ -95,14 +100,14 @@ export class ListPostCommentReplies extends OptionalAuthRoute {
     const fetched = await Promise.all(
       pageIds.map(async (replyId) => {
         const replyObj = await bucket.get(replyCommentKey(postId, commentId, replyId));
-        return replyObj ? presentComment(await replyObj.json<PostComment>()) : null;
+        return replyObj ? presentComment(await replyObj.json<PostComment>(), viewerUserId) : null;
       })
     );
     const replies = fetched.filter((reply): reply is PostComment => reply !== null);
 
     const response: PostCommentListResponse = {
       success: true,
-      comments: await withViewerLikes(bucket, postId, replies, this.getUserId(c)),
+      comments: await withViewerLikes(bucket, postId, replies, viewerUserId),
       pagination: {
         limit,
         cursor: pageIds.length > 0 ? pageIds[pageIds.length - 1] : undefined,

@@ -126,7 +126,12 @@ describe('post comment moderation (comment.moderate)', () => {
 		const remove = (userId: string, role: string) => actingAs(userId, role).request(`/api/community/channels/${CH}/posts/p1/comments/c1`, { method: 'DELETE', headers: jsonHeaders }, env as never);
 		assert.equal((await remove('ed', 'editor')).status, 403);
 		assert.equal((await remove('mod', 'moderator')).status, 200);
-		assert.ok(env.community_posts.read('comments/p1/top-level/c1.json').deletedAt);
+		// The channel's removal is soft (Studio Comments, #771): restorable for 90 days
+		const removed = env.community_posts.read('comments/p1/top-level/c1.json');
+		assert.equal(removed.isDeleted, true);
+		assert.equal(removed.removedBy, 'channel');
+		assert.equal(removed.removedByUserId, 'mod');
+		assert.ok(removed.removedAt);
 	});
 });
 

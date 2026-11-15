@@ -69,6 +69,7 @@ export class CommentApprove extends AuthenticatedRoute {
 			if (target.comment.heldBy === 'moderation') return { reject: { status: 403, error: "held_by_moderation" } };
 			if (target.comment.status !== 'held') return false;
 			target.comment.status = 'published';
+			delete target.comment.heldBy;
 			released = target.comment;
 			return true;
 		});

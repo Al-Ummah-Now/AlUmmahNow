@@ -149,8 +149,19 @@ const MEMBER_WRITE_ROUTES: ReadonlyArray<{ methods: ReadonlyArray<string>; path:
 	{ methods: ['POST'], path: /^\/api\/moderation\/reports\/?$/, capability: 'channel.speak' },
 	// Members API: the endpoints decide who may change what
 	{ methods: ['POST', 'PUT', 'DELETE'], path: /^\/api\/channels\/[^/]+\/members(?:\/[^/]+)?\/?$/, capability: 'channel.speak' },
-	// Comment moderation
-	{ methods: ['POST'], path: /^\/api\/videos\/[^/]+\/comments\/[^/]+\/approve\/?$/, capability: 'comment.moderate' },
+	// Comment moderation (Studio Comments, #771): video and post comments, the channel's comment list and blocks
+	{ methods: ['POST'], path: /^\/api\/videos\/[^/]+\/comments\/[^/]+\/(?:approve|restore|hold|pin|heart)\/?$/, capability: 'comment.moderate' },
+	{ methods: ['POST', 'DELETE'], path: /^\/api\/community\/channels\/[^/]+\/posts\/[^/]+\/comments\/[^/]+\/(?:pin|heart)\/?$/, capability: 'comment.moderate' },
+	{ methods: ['POST'], path: /^\/api\/community\/channels\/[^/]+\/posts\/[^/]+\/comments\/[^/]+\/(?:approve|hold|restore)\/?$/, capability: 'comment.moderate' },
+	{ methods: ['POST'], path: /^\/api\/channels\/[^/]+\/comments\/bulk\/?$/, capability: 'comment.moderate' },
+	{ methods: ['POST', 'DELETE'], path: /^\/api\/channels\/[^/]+\/blocks(?:\/[^/]+)?\/?$/, capability: 'comment.moderate' },
+	// Post comments as the channel: replies (channel.speak), edits and deletes (the endpoints decide)
+	{ methods: ['POST'], path: /^\/api\/community\/channels\/[^/]+\/posts\/[^/]+\/comments\/?$/, capability: 'channel.speak' },
+	{ methods: ['PUT', 'DELETE'], path: /^\/api\/community\/channels\/[^/]+\/posts\/[^/]+\/comments\/[^/]+\/?$/, capability: 'channel.speak' },
+	// The channel's community posts: create, edit, delete, and their media (post.manage)
+	{ methods: ['POST'], path: /^\/api\/community\/channels\/[^/]+\/posts\/?$/, capability: 'post.manage' },
+	{ methods: ['PUT', 'DELETE'], path: /^\/api\/community\/channels\/[^/]+\/posts\/[^/]+\/?$/, capability: 'post.manage' },
+	{ methods: ['POST'], path: /^\/api\/community\/media\/(?:upload\/images|upload\/gif|link-preview)\/?$/, capability: 'post.manage' },
 	// Uploads
 	{ methods: ['POST'], path: /^\/api\/videos\/?$/, capability: 'video.upload' },
 	{ methods: ['POST', 'PATCH', 'HEAD', 'DELETE'], path: /^\/api\/videos\/(?:upload|tus)(?:\/|$)/, capability: 'video.upload' },

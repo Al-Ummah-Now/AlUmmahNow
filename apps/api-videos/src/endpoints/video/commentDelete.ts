@@ -1,6 +1,6 @@
 import { canOnVideo } from "../../lib/channelAccess";
 import { Str } from "chanfana";
-import { date, z } from "zod";
+import { z } from "zod";
 import { Video, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
@@ -8,11 +8,14 @@ import { AuthenticatedRoute, AppContext } from '../../base';
 import { StoredComment, findStoredComment, removeStoredComment } from "../../lib/comments";
 import { broadcastInBackground } from "../../lib/websocket-notify";
 import { isRestrictedVideo } from '../../lib/visibility';
+import { logger } from "../../lib/logger";
+import { moderateVideoComment, moderationStatus } from "../../lib/channelComments/moderation";
 
 export class CommentDelete extends AuthenticatedRoute {
 	schema = {
 		tags: ["Comments"],
 		summary: "Delete a comment for a video",
+		description: "The author deletes their own comment for good (a top-level comment takes its replies with it). The video's owner or a channel member with `comment.moderate` removing someone else's comment makes a soft removal: hidden from everyone, kept with its replies for 90 days and restorable (POST .../restore), then purged. Answers `removed: true` for a removal.",
 		request: {
 			params: z.object({
 				id: Str({ description: "Video id" }),
@@ -99,12 +102,22 @@ export class CommentDelete extends AuthenticatedRoute {
 			}, 403);
 		}
 
-		// Remove the comment (a top-level comment takes its replies with it) on
-		// the fresh video (SCALABILITY-AUDIT AV-2), so concurrent changes survive.
+		// A moderator removing someone else's comment: a soft removal the channel
+		// can restore for 90 days (lib/channelComments/moderation.ts, #771)
+		if (comment.userId !== userId) {
+			const outcome = await moderateVideoComment(c as never, id, cid, 'remove', userId);
+			if (outcome.ok === false) return c.json({ success: false, error: outcome.error }, moderationStatus(outcome.error));
+			logger.info('[CommentDelete] Removed by the channel', { videoId: id, commentId: cid, actorUserId: userId, changed: outcome.changed });
+			return { success: true, removed: true };
+		}
+
+		// The author's own comment is deleted for good (a top-level comment takes
+		// its replies with it), on the fresh video (SCALABILITY-AUDIT AV-2), so
+		// concurrent changes survive.
 		const { data: saved, rejected } = await repository.updateObjectOrReject<{ status: 403 | 404; error: string }>(id, (fresh) => {
 			const target = findStoredComment(fresh.comments as unknown as StoredComment[], cid);
 			if (!target) return { reject: { status: 404, error: "Comment not found" } };
-			if (target.comment.userId !== userId && !(moderates && fresh.userId === video.userId)) return { reject: { status: 403, error: "Forbidden" } };
+			if (target.comment.userId !== userId) return { reject: { status: 403, error: "Forbidden" } };
 			fresh.comments = removeStoredComment(fresh.comments as unknown as StoredComment[], cid).comments as unknown as typeof fresh.comments;
 			return true;
 		});

@@ -33,6 +33,7 @@ import {
 } from '@al-ummah/shared-types';
 import { logger } from '../logger';
 import { syncCommentIndex } from '../admin/commentIndex';
+import { reportIndexFailure, syncVideoCommentRows, type IndexEnv } from '../channelComments';
 import { FOOTPRINT_BUCKETS, withFootprints } from '../privacy/footprints';
 
 /** R2 binding name → indexed entity type. */
@@ -153,6 +154,7 @@ function wrapBucket(
   producer: QueueBinding | undefined,
   waitUntil: (p: Promise<unknown>) => void,
   onVideo?: (decoded: unknown) => Promise<void>,
+  onVideoComments?: (id: string, decoded: unknown) => Promise<void>,
 ): R2Bucket {
   const tracksOwnership = ownershipKindFor(type) !== null;
   // Admin comment list (lib/admin/commentIndex.ts): video comments mirrored in D1, after the response
@@ -184,6 +186,8 @@ function wrapBucket(
             }
             if (tracksOwnership && decoded !== undefined) await syncOwnershipInline(db, producer, type, id, decoded, version);
             if (tracksComments && decoded !== undefined) waitUntil(syncCommentIndex(db, id, decoded));
+            // Studio's channel comment rows (lib/channelComments): inline, so the next list sees the change
+            if (onVideoComments && decoded && typeof decoded === 'object') await onVideoComments(id, decoded);
             // R2 renditions follow the video's visibility (lib/media/r2-delivery.ts)
             if (type === 'video' && decoded && onVideo) waitUntil(onVideo(decoded));
             queue.enqueue(type, id, decoded !== undefined
@@ -205,6 +209,7 @@ function wrapBucket(
             if (!id) continue;
             if (tracksOwnership) await syncOwnershipInline(db, producer, type, id, null, version);
             if (tracksComments) waitUntil(syncCommentIndex(db, id, null));
+            if (onVideoComments) await onVideoComments(id, null);
             queue.enqueue(type, id, async () => null, version);
           }
         };
@@ -213,6 +218,21 @@ function wrapBucket(
       return typeof value === 'function' ? value.bind(target) : value;
     },
   });
+}
+
+/**
+ * The channel comments index (lib/channelComments) for a written video. Never
+ * throws: a failure is reported and marks the channel for a rebuild.
+ */
+function channelCommentsSync(env: object, db: SearchDb, ctx: Pick<ExecutionContext, 'waitUntil'>) {
+  return async (id: string, decoded: unknown): Promise<void> => {
+    try {
+      await syncVideoCommentRows(db, id, decoded);
+    } catch (error) {
+      const channelId = (decoded as { channelId?: unknown } | null)?.channelId;
+      await reportIndexFailure(env as IndexEnv, ctx, error, { channelId: typeof channelId === 'string' ? channelId : null, targetKind: 'video', targetId: id });
+    }
+  };
 }
 
 /**
@@ -284,7 +304,8 @@ export function withSearchSync<E extends object>(env: E, ctx: Pick<ExecutionCont
     if (bucket && typeof bucket.put === 'function') {
       // The hook gets the unwrapped env: its own writes need no search sync of their own
       const onVideo = type === 'video' && (env as { MEDIA?: unknown }).MEDIA ? (decoded: unknown) => onVideoWritten(env as never, decoded) : undefined;
-      wrapped[binding] = wrapBucket(bucket, type, queue, db, (env as { queue?: QueueBinding }).queue, promise => ctx.waitUntil(promise), onVideo);
+      const onVideoComments = type === 'video' ? channelCommentsSync(env, db, ctx) : undefined;
+      wrapped[binding] = wrapBucket(bucket, type, queue, db, (env as { queue?: QueueBinding }).queue, promise => ctx.waitUntil(promise), onVideo, onVideoComments);
     }
   }
   const profiles = wrapped.profiles as R2Bucket | undefined;

@@ -6,14 +6,17 @@ import { z } from 'zod';
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import Queue, { MessageType } from '../../lib/queue';
-import type { PostComment, CommunityPost, PostCommentIndex, ChannelRole } from '@al-ummah/shared-types';
-import { can } from '@al-ummah/shared-types';
+import { can, type PostComment, type CommunityPost } from '@al-ummah/shared-types';
+import { roleOnChannel } from '../../lib/channelAccess';
+import { executionCtxOf, indexPostComment } from '../../lib/channelComments';
+import { moderatePostComment, moderationStatus } from '../../lib/channelComments/moderation';
+import { logger } from '../../lib/logger';
 
 const deleteCommentSchema = {
   tags: ['Community Posts - Comments'],
   summary: 'Delete a comment',
   description:
-    'Soft delete a comment. Comment author or post owner can delete. Comments with replies show [deleted] instead of being removed.',
+    "The author deletes their own comment (one with replies shows [deleted]). A comment moderator of the post's channel removes it instead: hidden with its replies and restorable from Studio for 90 days (`removed: true`).",
   request: {
     params: z.object({
       channelId: Str({ description: 'Channel ID that owns the post' }),
@@ -32,6 +35,7 @@ const deleteCommentSchema = {
           schema: z.object({
             success: z.boolean(),
             message: z.string(),
+            removed: z.boolean().optional(),
           }),
         },
       },
@@ -102,19 +106,29 @@ export class DeletePostComment extends AuthenticatedRoute {
       );
     }
 
-    // 3. Check authorization (comment author OR post owner)
+    // 3. Authorization: the author deletes their own comment (a hard delete,
+    // shown as [deleted] while it has replies). Anyone else needs
+    // `comment.moderate` on the post's channel (channel roles, never site
+    // roles), and their delete is the channel's soft removal (#771): restorable
+    // from Studio for 90 days, its replies hidden with it.
     const isCommentAuthor = comment.userId === userId;
-    // Acting as the post's channel (the middleware checked the role) with comment.moderate
-    const isPostOwner = post.channelId === userChannelId && can(c.get('channelRole') as ChannelRole | null | undefined, 'comment.moderate');
-
-    if (!isCommentAuthor && !isPostOwner) {
-      return c.json(
-        {
-          success: false,
-          error: 'You can only delete your own comments or comments on your posts',
-        },
-        403
-      );
+    if (!isCommentAuthor) {
+      const role = await roleOnChannel(c.env as never, post.channelId || postChannelId, userId).catch(() => null);
+      if (!can(role, 'comment.moderate')) {
+        return c.json(
+          {
+            success: false,
+            error: 'You can only delete your own comments or comments on your channel\'s posts',
+          },
+          403
+        );
+      }
+      const outcome = await moderatePostComment(c as never, postChannelId, postId, commentId, 'remove', userId, new Date(), comment.parentCommentId ?? null);
+      if (outcome.ok === false) {
+        return c.json({ success: false, error: outcome.error }, moderationStatus(outcome.error));
+      }
+      logger.info('[DeletePostComment] Removed by the channel', { postId, commentId, actorUserId: userId, changed: outcome.changed });
+      return c.json({ success: true, message: 'Comment removed', removed: true });
     }
 
     // 4. Already deleted?
@@ -131,8 +145,11 @@ export class DeletePostComment extends AuthenticatedRoute {
     // (SCALABILITY-AUDIT AV-11). Only the request that sets deletedAt goes on
     // to adjust indexes and counters, so two deletes at once count once.
     const deletedAt = new Date().toISOString();
+    // Only a public comment is in the post's count: a held or channel-removed one was already out of it
+    let wasCounted = true;
     const { data: deleted, rejected } = await patchComment<'already'>(bucket, commentKey, (fresh) => {
       if (fresh.deletedAt) return { reject: 'already' };
+      wasCounted = fresh.status !== 'held' && fresh.removedBy !== 'channel';
       fresh.deletedAt = deletedAt;
       return true;
     });
@@ -162,9 +179,12 @@ export class DeletePostComment extends AuthenticatedRoute {
       }
     }
 
+    // Studio's comment list drops it (lib/channelComments)
+    await indexPostComment(c.env as never, executionCtxOf(c as never), postId, postChannelId, deleted);
+
     // 6. Decrement post's comments count
     // Conditional write of the counter only (SCALABILITY-AUDIT AV-9)
-    await bumpPostComments(bucket, postKey, -1);
+    if (wasCounted) await bumpPostComments(bucket, postKey, -1);
 
     // 7. Send queue event
     const queue = new Queue(c.env.queue);

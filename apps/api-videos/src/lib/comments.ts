@@ -34,8 +34,19 @@ export interface StoredComment {
 	parentCommentId?: string;
 	/** 'held' while awaiting the video owner's review (comment settings = held) */
 	status?: CommentStatus;
-	/** 'moderation' when a moderator held it (Epic 28); the video owner cannot approve those */
-	heldBy?: 'moderation';
+	/**
+	 * 'moderation' when a moderator held it (Epic 28); the video owner cannot approve those.
+	 * 'channel_block' when its author is blocked from the channel: seen only by them, never in Studio's Held tab.
+	 */
+	heldBy?: 'moderation' | 'channel_block';
+	/** Hearted by the video's channel (Studio Comments, #771) */
+	isHearted?: boolean;
+	/** Set when the video's channel removed it (soft: restorable for 90 days, then purged); its replies stay with it */
+	removedBy?: 'channel';
+	removedAt?: string;
+	removedByUserId?: string;
+	/** The last channel moderation action on it (audit: who, what, when) */
+	moderation?: { action: string; userId: string; at: string };
 }
 
 export type CommentStatus = 'published' | 'held';
@@ -98,12 +109,25 @@ export interface CommentPage<T> {
 export const DEFAULT_COMMENT_PAGE_SIZE = 20;
 export const MAX_COMMENT_PAGE_SIZE = 100;
 
+/**
+ * The public comment count of a video: top-level comments anyone may see.
+ * Removed, hidden and held comments are not counted, so a channel's removal
+ * lowers it and a restore brings it back.
+ */
+export function publicCommentsCount(comments: unknown): number {
+	if (!Array.isArray(comments)) return 0;
+	return (comments as StoredComment[]).filter((c) => !!c && c.isDeleted !== true && c.isHidden !== true && c.status !== 'held').length;
+}
+
 /** Comments that are soft-deleted or hidden by moderation are never listed. */
 export function isCommentVisible(comment: StoredComment | null | undefined, viewer?: CommentViewer): boolean {
 	if (!comment) return false;
 	if (comment.isDeleted === true || comment.isHidden === true) return false;
 	if (comment.status === 'held') {
-		return !!viewer && (viewer.isVideoOwner === true || (!!viewer.userId && viewer.userId === comment.userId));
+		const isAuthor = !!viewer?.userId && viewer.userId === comment.userId;
+		// A channel block is silent: only its author sees the comment, never the channel
+		if (comment.heldBy === 'channel_block') return isAuthor;
+		return !!viewer && (viewer.isVideoOwner === true || isAuthor);
 	}
 	return true;
 }
@@ -265,7 +289,8 @@ export function toCommentListItem(
 		isPinned: comment.isPinned === true,
 		isLiked: !!viewerChannelId && likes.some((l) => l.channelId === viewerChannelId),
 		isDisliked: false,
-		isHeld: comment.status === 'held',
+		// The blocked author is not told: their comment reads as published to them
+		isHeld: comment.status === 'held' && comment.heldBy !== 'channel_block',
 		parentCommentId: comment.parentCommentId || null,
 		author,
 	};
