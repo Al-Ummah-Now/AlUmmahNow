@@ -71,10 +71,23 @@ describe('video thumbnail client', () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: false,
       status: 403,
+      headers: new Headers(),
       json: async () => ({ success: false, error: 'Forbidden' }),
     }) as unknown as typeof fetch;
 
     const result = await uploadVideoThumbnail('vid', new File(['x'], 'a.jpg', { type: 'image/jpeg' }));
-    expect(result).toEqual({ success: false, error: 'Forbidden' });
+    expect(result).toEqual({ success: false, error: 'Forbidden', status: 403 });
+  });
+
+  it('passes the refusal code, status and wait of an upload limit (#1466)', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 429,
+      headers: new Headers({ 'Retry-After': '1380' }),
+      json: async () => ({ success: false, code: 'upload_limit', error: "You've reached the upload limit; try again later", retryAfter: 1380 }),
+    }) as unknown as typeof fetch;
+
+    const result = await uploadVideoThumbnail('vid', new File(['x'], 'a.jpg', { type: 'image/jpeg' }));
+    expect(result).toMatchObject({ success: false, code: 'upload_limit', status: 429, retryAfter: 1380 });
   });
 });

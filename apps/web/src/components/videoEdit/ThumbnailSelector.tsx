@@ -5,6 +5,7 @@ import { FitImage } from '@/components/VideoThumbnail/FitImage';
 import React, { useState, useRef } from 'react';
 import { Upload, Check } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
+import { thumbnailRefusalMessage } from '@/lib/upload/thumbnail-error';
 import { useFileDropZone } from '@/hooks/useFileDropZone';
 import { uploadVideoThumbnail, validateThumbnailFile } from '@/lib/api/video-thumbnail-client';
 import { ThumbnailCropper, loadImageFile } from '@/components/VideoThumbnail/ThumbnailCropper';
@@ -163,7 +164,7 @@ export default function ThumbnailSelector({
         onThumbnailChange(uploadedUrl);
       } else {
         setCustomThumbnail(null);
-        setUploadError(result.code === 'thumbnail_shape' ? t.video.thumbnailWrongShape ?? null : result.error || t.video.thumbnailUploadFailed || null);
+        setUploadError(thumbnailRefusalMessage(t, result));
       }
     } catch (error) {
       logger.error('[ThumbnailSelector] Error uploading thumbnail', { videoId, error });
