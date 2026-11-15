@@ -1,8 +1,14 @@
 /**
  * Admin settings of Move from YouTube (wiki AUN-YT-IMPORT): on/off and the
  * Google OAuth Web client id, in global_settings `youtube-import/settings.json`.
- * The client secret is the Secrets Store binding GOOGLE_OAUTH_CLIENT_SECRET
- * (google-oauth-client-secret[-qa|-stage]) and is never stored or shown here.
+ *
+ * The client secret is set on the admin page (write only) and sealed the way
+ * the cost dashboard seals its keys (COST-1): AES-256-GCM under a key derived
+ * (HKDF-SHA256) from INTERNAL_API_KEY, in global_settings
+ * `youtube-import/client-secret.json`. Only api-videos can open it, and it is
+ * never returned: the view says only whether one is present and who set it.
+ * Without one, the Secrets Store binding GOOGLE_OAUTH_CLIENT_SECRET
+ * (google-oauth-client-secret[-qa|-stage]) is read instead.
  *
  * Creators can connect only when the feature is on, a client id is set and
  * the secret is present ("ready").
@@ -10,6 +16,7 @@
 import {
 	DEFAULT_YOUTUBE_IMPORT_SETTINGS,
 	isGoogleClientId,
+	isGoogleClientSecret,
 	youtubeImportScopes,
 	type YoutubeImportSettings,
 	type YoutubeImportSettingsView,
@@ -18,6 +25,7 @@ import { getSecret } from '../env-helpers';
 import { logger } from '../logger';
 
 export const YT_SETTINGS_KEY = 'youtube-import/settings.json';
+export const YT_SECRET_KEY = 'youtube-import/client-secret.json';
 
 /**
  * Value of a Secrets Store entry created before its real value is known (the
@@ -28,6 +36,8 @@ export const UNSET_SECRET = 'unset';
 export interface YtSettingsEnv {
 	global_settings?: R2Bucket;
 	GOOGLE_OAUTH_CLIENT_SECRET?: unknown;
+	/** The master the admin-set client secret is sealed with */
+	INTERNAL_API_KEY?: unknown;
 	Audience?: string;
 	/** Local stack only: the defaults while no settings file exists ("true" / a client id) */
 	YOUTUBE_IMPORT_DEFAULT_ENABLED?: string;
@@ -68,10 +78,127 @@ export async function readYtSettings(env: YtSettingsEnv): Promise<YoutubeImportS
 	}
 }
 
-/** The Google client secret, or '' when it is missing or still the placeholder. */
+// ---------------------------------------------------------------------------
+// The admin-set client secret, sealed
+// ---------------------------------------------------------------------------
+
+/** global_settings youtube-import/client-secret.json */
+export interface SealedYtSecret {
+	ciphertext: string;
+	iv: string;
+	/** Which master sealed it ('ik1' = INTERNAL_API_KEY) */
+	keyId: 'ik1';
+	updatedAt: string;
+	updatedBy: string;
+}
+
+const SEAL_SALT = new TextEncoder().encode('al-ummah-youtube-import-client-secret');
+const SEAL_INFO = new TextEncoder().encode('youtube-import:client-secret:aes-gcm:v1');
+/** Bound in as associated data, so the ciphertext opens only as this secret */
+const SEAL_AD = new TextEncoder().encode('google-oauth-client-secret');
+
+const toB64 = (bytes: Uint8Array) => {
+	let s = '';
+	for (const b of bytes) s += String.fromCharCode(b);
+	return btoa(s);
+};
+const fromB64 = (text: string) => Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
+
+async function sealMaster(env: YtSettingsEnv): Promise<string | null> {
+	const master = (await getSecret(env.INTERNAL_API_KEY, 'INTERNAL_API_KEY')).trim();
+	return master.length >= 16 ? master : null;
+}
+
+async function sealKey(master: string): Promise<CryptoKey> {
+	const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(master), 'HKDF', false, ['deriveKey']);
+	return crypto.subtle.deriveKey({ name: 'HKDF', hash: 'SHA-256', salt: SEAL_SALT, info: SEAL_INFO }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+
+export async function sealYtSecret(master: string, value: string, actorId: string, now: string): Promise<SealedYtSecret> {
+	const iv = crypto.getRandomValues(new Uint8Array(12));
+	const sealed = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: SEAL_AD }, await sealKey(master), new TextEncoder().encode(value));
+	return { ciphertext: toB64(new Uint8Array(sealed)), iv: toB64(iv), keyId: 'ik1', updatedAt: now, updatedBy: actorId };
+}
+
+/** The sealed value, or null when it cannot be opened (master rotated, damaged). */
+export async function openYtSecret(master: string, sealed: Pick<SealedYtSecret, 'ciphertext' | 'iv'>): Promise<string | null> {
+	try {
+		const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromB64(sealed.iv), additionalData: SEAL_AD }, await sealKey(master), fromB64(sealed.ciphertext));
+		return new TextDecoder().decode(plain);
+	} catch {
+		return null;
+	}
+}
+
+async function readSealedYtSecret(env: YtSettingsEnv): Promise<SealedYtSecret | null> {
+	try {
+		const stored = await env.global_settings?.get(YT_SECRET_KEY);
+		if (!stored) return null;
+		const raw = JSON.parse(await stored.text()) as Partial<SealedYtSecret>;
+		if (typeof raw.ciphertext !== 'string' || typeof raw.iv !== 'string') return null;
+		return {
+			ciphertext: raw.ciphertext,
+			iv: raw.iv,
+			keyId: 'ik1',
+			updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : '',
+			updatedBy: typeof raw.updatedBy === 'string' ? raw.updatedBy : '',
+		};
+	} catch (error) {
+		logger.warn('[YouTubeImport] Stored client secret unreadable', { error: error instanceof Error ? error.message : String(error) });
+		return null;
+	}
+}
+
+export interface YtSecretState {
+	/** The secret in use, '' when none */
+	value: string;
+	source: 'admin' | 'binding' | null;
+	updatedAt: string | null;
+	updatedBy: string | null;
+	/** An admin-set secret is stored but does not open */
+	unreadable: boolean;
+}
+
+/** The secret in use: the admin-set one first, then the Secrets Store binding (unless it still holds the placeholder). */
+export async function ytSecretState(env: YtSettingsEnv): Promise<YtSecretState> {
+	const sealed = await readSealedYtSecret(env);
+	let unreadable = false;
+	if (sealed) {
+		const master = await sealMaster(env);
+		const value = master ? ((await openYtSecret(master, sealed)) ?? '').trim() : '';
+		if (value) return { value, source: 'admin', updatedAt: sealed.updatedAt || null, updatedBy: sealed.updatedBy || null, unreadable: false };
+		unreadable = true;
+		logger.warn('[YouTubeImport] The admin-set client secret no longer opens; set it again', { updatedAt: sealed.updatedAt });
+	}
+	const bound = (await getSecret(env.GOOGLE_OAUTH_CLIENT_SECRET, 'GOOGLE_OAUTH_CLIENT_SECRET')).trim();
+	const value = bound && bound !== UNSET_SECRET ? bound : '';
+	return { value, source: value ? 'binding' : null, updatedAt: sealed?.updatedAt || null, updatedBy: sealed?.updatedBy || null, unreadable };
+}
+
+/** The Google client secret, or '' when there is none. */
 export async function googleClientSecret(env: YtSettingsEnv): Promise<string> {
-	const value = (await getSecret(env.GOOGLE_OAUTH_CLIENT_SECRET, 'GOOGLE_OAUTH_CLIENT_SECRET')).trim();
-	return value && value !== UNSET_SECRET ? value : '';
+	return (await ytSecretState(env)).value;
+}
+
+/**
+ * Seals and stores the client secret set on the admin page (it replaces any earlier one). Returns
+ * whether one was set before. The value is never logged or returned.
+ */
+export async function saveYtClientSecret(
+	env: YtSettingsEnv,
+	value: unknown,
+	actorId: string,
+	now = new Date().toISOString(),
+): Promise<{ hadAdminSecret: boolean }> {
+	if (!env.global_settings) throw new YtSettingsError('unavailable', 'Settings storage is not configured');
+	if (!isGoogleClientSecret(value)) throw new YtSettingsError('invalid_secret', 'The client secret must be 16 to 256 characters with no spaces');
+	const master = await sealMaster(env);
+	if (!master) throw new YtSettingsError('unavailable', 'No key to seal the secret with (INTERNAL_API_KEY is not bound)');
+	const hadAdminSecret = !!(await readSealedYtSecret(env));
+	const sealed = await sealYtSecret(master, value.trim(), actorId, now);
+	await env.global_settings.put(YT_SECRET_KEY, JSON.stringify(sealed), { httpMetadata: { contentType: 'application/json' } });
+	logger.info('[YouTubeImport] Client secret replaced', { actorId, hadAdminSecret });
+	return { hadAdminSecret };
 }
 
 /** Where Google sends the creator back (register it in Google Cloud for each environment). */
@@ -81,10 +208,15 @@ export function ytRedirectUri(env: YtSettingsEnv): string {
 
 export async function ytSettingsView(env: YtSettingsEnv): Promise<YoutubeImportSettingsView> {
 	const settings = await readYtSettings(env);
-	const secretPresent = !!(await googleClientSecret(env));
+	const secret = await ytSecretState(env);
+	const secretPresent = !!secret.value;
 	return {
 		...settings,
 		secretPresent,
+		secretSource: secret.source,
+		secretUpdatedAt: secret.updatedAt,
+		secretUpdatedBy: secret.updatedBy,
+		secretUnreadable: secret.unreadable,
 		redirectUri: ytRedirectUri(env),
 		scopes: youtubeImportScopes(true),
 		ready: settings.enabled && !!settings.clientId && secretPresent,

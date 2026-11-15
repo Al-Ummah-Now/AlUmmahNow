@@ -1,4 +1,4 @@
-import { getNotificationPlatformSettings, getNotificationSettingsHistory, getYoutubeImportSettings, saveYoutubeImportSettings } from '@/lib/api/admin';
+import { getNotificationPlatformSettings, getNotificationSettingsHistory, getYoutubeImportSettings, saveYoutubeImportClientSecret, saveYoutubeImportSettings } from '@/lib/api/admin';
 import { getAdminSession } from '@/lib/auth';
 import { canManageMedia, canManagePlatformSettings } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
@@ -46,7 +46,7 @@ export default async function PlatformSettingsPage() {
       )}
       {showYoutube &&
         (youtube ? (
-          <YoutubeImportSetting view={youtube} canEdit={canManageMedia(session?.user.role)} save={saveYoutubeImportSettings} />
+          <YoutubeImportSetting view={youtube} canEdit={canManageMedia(session?.user.role)} save={saveYoutubeImportSettings} saveSecret={saveYoutubeImportClientSecret} />
         ) : (
           <ErrorAlert testId="youtube-import-load-error">{t('youtubeImport.loadFailed')}</ErrorAlert>
         ))}

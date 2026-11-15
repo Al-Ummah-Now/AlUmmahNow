@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { renderToStaticMarkup } from 'react-dom/server';
 import * as React from 'react';
 import { YT_SCOPE_CAPTIONS, YT_SCOPE_READONLY, type YoutubeImportSettingsView } from '@al-ummah/shared-types';
-import { clientIdError, formOf, readiness, saveErrorMessage, scopePurpose, secretNameFor, settingsPatch } from '../src/lib/youtube-import';
+import { clientIdError, clientSecretError, formOf, readiness, saveErrorMessage, scopePurpose, secretNameFor, secretSaveErrorMessage, settingsPatch } from '../src/lib/youtube-import';
 import { I18nProvider } from '../src/i18n/I18nProvider';
 import { YoutubeImportSetting } from '../src/app/(protected)/platform-settings/YoutubeImportSetting';
 import en from '../src/i18n/messages/en';
@@ -19,6 +19,7 @@ import ar from '../src/i18n/messages/ar';
 
 /** The save server action, stubbed: render tests never save. */
 const save = async () => ({ ok: true as const, data: view() });
+const saveSecret = async () => ({ ok: true as const, data: view() });
 const CLIENT = '123456789012-abcdefgh12345678.apps.googleusercontent.com';
 const view = (over: Partial<YoutubeImportSettingsView> = {}): YoutubeImportSettingsView => ({
   enabled: false,
@@ -79,6 +80,25 @@ describe('YouTube import settings: form rules', () => {
     assert.equal(saveErrorMessage({ status: 503 }), 'youtubeImport.saveFailed');
   });
 
+  it('checks the client secret before sending it, and maps its failures', () => {
+    assert.equal(clientSecretError(''), 'youtubeImport.errorSecretEmpty');
+    assert.equal(clientSecretError('   '), 'youtubeImport.errorSecretEmpty');
+    assert.equal(clientSecretError('short'), 'youtubeImport.errorSecret');
+    assert.equal(clientSecretError('has spaces in the middle'), 'youtubeImport.errorSecret');
+    assert.equal(clientSecretError('unset'), 'youtubeImport.errorSecret');
+    assert.equal(clientSecretError(' test-only-abcdefghijklmnopqrstuvwx '), null);
+    assert.equal(secretSaveErrorMessage({ status: 400 }), 'youtubeImport.errorSecret');
+    assert.equal(secretSaveErrorMessage({ status: 403 }), 'youtubeImport.errorForbidden');
+    assert.equal(secretSaveErrorMessage({ status: 502 }), 'youtubeImport.secretSaveFailed');
+  });
+
+  it('never tells the admin to paste the secret in Cloudflare', () => {
+    for (const messages of [en, ar]) {
+      const steps = Object.entries(messages.youtubeImport).filter(([k]) => k.startsWith('step')).map(([, v]) => v).join(' ');
+      assert.doesNotMatch(steps, /Cloudflare|Secrets Store/);
+    }
+  });
+
   it('has every string in English and Arabic', () => {
     const enKeys = Object.keys(en.youtubeImport).sort();
     assert.deepEqual(Object.keys(ar.youtubeImport).sort(), enKeys);
@@ -88,29 +108,53 @@ describe('YouTube import settings: form rules', () => {
 });
 
 describe('YouTube import settings: the section', () => {
-  it('shows a missing secret with its name, the redirect URI and the scopes', () => {
-    const html = render(el(YoutubeImportSetting, { view: view({ clientId: CLIENT }), canEdit: true, save }));
+  it('shows a missing secret with Add, the redirect URI and the scopes', () => {
+    const html = render(el(YoutubeImportSetting, { view: view({ clientId: CLIENT }), canEdit: true, save, saveSecret }));
     assert.match(html, /data-state="needsSecret"/);
     assert.match(html, /data-present="false"/);
-    assert.match(html, /google-oauth-client-secret-qa/);
+    assert.doesNotMatch(html, /google-oauth-client-secret/, 'a missing secret is set here, not in Cloudflare');
     assert.match(html, /https:\/\/videos\.api\.qa\.alummahnow\.net\/api\/youtube-import\/oauth\/callback/);
     assert.match(html, /youtube\.readonly/);
     assert.match(html, /youtube\.force-ssl/);
-    // api-videos counts the Secrets Store placeholder "unset" as no secret: say so while it is missing
-    assert.match(html, /data-testid="youtube-import-secret-placeholder"[^>]*>[^<]*&quot;unset&quot;/);
+    // Missing: an "Add client secret" button, no field (and so no value) until it is pressed
+    assert.match(html, /data-testid="youtube-import-secret-replace"[^>]*>Add client secret</);
+    assert.doesNotMatch(html, /youtube-import-secret-input/);
     assert.match(html, /data-testid="youtube-import-save"[^>]*disabled|disabled[^>]*data-testid="youtube-import-save"/, 'nothing to save yet');
   });
 
   it('shows ready, read-only for a role that cannot edit, and in Arabic', () => {
     const ready = view({ clientId: CLIENT, secretPresent: true, enabled: true, ready: true, updatedAt: '2026-11-14T10:00:00.000Z', updatedBy: 'usr_admin' });
-    const html = render(el(YoutubeImportSetting, { view: ready, canEdit: false, save }));
+    const html = render(el(YoutubeImportSetting, { view: ready, canEdit: false, save, saveSecret }));
     assert.match(html, /data-state="ready"/);
     assert.match(html, /Creators can connect/);
     assert.match(html, /data-testid="youtube-import-read-only"/);
     assert.match(html, /usr_admin/);
-    assert.doesNotMatch(html, /youtube-import-secret-placeholder/);
-    const arabic = render(el(YoutubeImportSetting, { view: ready, canEdit: true, save }), 'ar');
+    assert.doesNotMatch(html, /youtube-import-secret-replace/, 'no Replace without the media permission');
+    const arabic = render(el(YoutubeImportSetting, { view: ready, canEdit: true, save, saveSecret }), 'ar');
     assert.match(arabic, /النقل من يوتيوب/);
     assert.match(arabic, /يمكن لصنّاع المحتوى الربط/);
+  });
+
+  it('says where a present secret comes from, offers Replace, and never holds a value', () => {
+    const setHere = view({ clientId: CLIENT, secretPresent: true, secretSource: 'admin', secretUpdatedAt: '2026-11-15T09:00:00.000Z', secretUpdatedBy: 'usr_admin' });
+    const html = render(el(YoutubeImportSetting, { view: setHere, canEdit: true, save, saveSecret }));
+    assert.match(html, /data-source="admin"/);
+    assert.match(html, /data-testid="youtube-import-secret-state"[^>]*>Present</);
+    assert.match(html, /Set here on .* by usr_admin/);
+    assert.match(html, /data-testid="youtube-import-secret-replace"[^>]*>Replace</);
+    assert.doesNotMatch(html, /type="password"/);
+    assert.doesNotMatch(html, /google-oauth-client-secret/, 'no Secrets Store name while the admin-set one is used');
+    const fromStore = render(el(YoutubeImportSetting, { view: view({ clientId: CLIENT, secretPresent: true, secretSource: 'binding' }), canEdit: true, save, saveSecret }));
+    assert.match(fromStore, /data-source="binding"/);
+    assert.match(fromStore, /google-oauth-client-secret-qa/);
+    const arabic = render(el(YoutubeImportSetting, { view: setHere, canEdit: true, save, saveSecret }), 'ar');
+    assert.match(arabic, />موجود</);
+    assert.match(arabic, />استبدال</);
+  });
+
+  it('asks to set the secret again when the stored one no longer opens', () => {
+    const html = render(el(YoutubeImportSetting, { view: view({ clientId: CLIENT, secretPresent: false, secretSource: null, secretUnreadable: true }), canEdit: true, save, saveSecret }));
+    assert.match(html, /data-testid="youtube-import-secret-unreadable"/);
+    assert.match(html, /data-state="needsSecret"/);
   });
 });
