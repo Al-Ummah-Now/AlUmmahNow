@@ -25,7 +25,8 @@ const BRAND = new Uint8Array([0xff, 0xd8, 0x01]);
 const call = (kind: string, file: string) => GET(new Request(`${HOST}/og/${kind}/${file}`), { params: Promise.resolve({ kind, file }) });
 
 function fakeImages(size = { width: 720, height: 1280 }) {
-  const t = { transform: () => t, draw: () => t, output: async () => ({ image: () => new Response(CARD).body }) };
+  // `rgba` (the channel logo's pixels, 420x420) gives raw pixels; anything else the finished card
+  const t = { transform: () => t, draw: () => t, output: async (o: { format: string }) => ({ image: () => new Response(o.format === 'rgba' ? new Uint8Array(420 * 420 * 4) : CARD).body }) };
   return { info: jest.fn(async () => size), input: jest.fn(() => t) };
 }
 
@@ -80,11 +81,11 @@ describe('GET /og/<kind>/<id>.jpg', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('a channel: its banner (the avatar is not needed then), card made; no pictures → the brand card', async () => {
+  it('a channel: logo and banner both fetched, card made; no pictures → the brand card', async () => {
     channel.mockResolvedValue({ id: 'c1', avatarUrl: 'https://images.alummahnow.net/a.jpg', coverUrl: 'https://images.alummahnow.net/c.jpg' });
     const res = await call('c', 'c1.jpg');
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(CARD);
-    expect(fetchMock.mock.calls.map((c) => c[0])).toEqual(['https://images.alummahnow.net/c.jpg']);
+    expect(fetchMock.mock.calls.map((c) => c[0]).sort()).toEqual(['https://images.alummahnow.net/a.jpg', 'https://images.alummahnow.net/c.jpg']);
 
     channel.mockResolvedValue({ id: 'c2' });
     const plain = await call('c', 'c2.jpg');

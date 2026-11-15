@@ -7,6 +7,27 @@
 import { avatarLayout, cardLayout, fromBase64Url, imageCardUrl, parseCardPath, videoCardUrl, channelCardUrl } from '../layout';
 import { stableSourceKey } from '../source-key';
 import { composeChannelCard, composeImageCard, type ImagesLike, type TransformerLike } from '../compose';
+import { circleMask, encodePng, solid } from '../png';
+
+describe('png', () => {
+  it('encodes RGBA with a valid signature, IHDR size and chunk CRCs', async () => {
+    const png = await encodePng(3, 2, solid(3, 2, '#093041'));
+    expect(Array.from(png.slice(0, 8))).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const view = new DataView(png.buffer);
+    expect(String.fromCharCode(...png.slice(12, 16))).toBe('IHDR');
+    expect([view.getUint32(16), view.getUint32(20), png[24], png[25]]).toEqual([3, 2, 8, 6]);
+    expect(String.fromCharCode(...png.slice(-8, -4))).toBe('IEND');
+    expect(view.getUint32(png.length - 4)).toBe(0xae426082); // the fixed CRC of IEND
+    await expect(encodePng(3, 3, new Uint8Array(4))).rejects.toThrow();
+  });
+
+  it('cuts a circle: corners transparent, centre untouched', () => {
+    const px = circleMask(10, new Uint8Array(10 * 10 * 4).fill(255));
+    expect(px[3]).toBe(0);
+    expect(px[(5 * 10 + 5) * 4 + 3]).toBe(255);
+    expect(solid(1, 1, '#093041')).toEqual(new Uint8Array([9, 48, 65, 255]));
+  });
+});
 
 describe('cardLayout', () => {
   it('fills the card with a landscape frame (16:9 and wider crop a little)', () => {
@@ -63,19 +84,28 @@ describe('stableSourceKey', () => {
 });
 
 /** A recording fake of the Images binding */
-function fakeImages(size: { width: number; height: number }) {
+function fakeImages(size: { width: number; height: number }, rgbaSize = 0) {
   const calls: unknown[] = [];
+  const drawn: number[][] = [];
   const transformer = (name: string): TransformerLike => {
     const t: TransformerLike = {
       transform: (o) => { calls.push([name, 'transform', o]); return t; },
-      draw: (_img, o) => { calls.push([name, 'draw', o]); return t; },
-      output: async (o) => { calls.push([name, 'output', o]); return { image: () => new Response(new Uint8Array([0xff, 0xd8])).body as ReadableStream<Uint8Array> }; },
+      draw: (img, o) => {
+        calls.push([name, 'draw', o]);
+        if (img instanceof ReadableStream) void new Response(img).arrayBuffer().then((b) => drawn.push(Array.from(new Uint8Array(b))));
+        return t;
+      },
+      output: async (o) => {
+        calls.push([name, 'output', o]);
+        const body = o.format === 'rgba' ? new Uint8Array(rgbaSize * rgbaSize * 4).fill(200) : new Uint8Array([0xff, 0xd8]);
+        return { image: () => new Response(body).body as ReadableStream<Uint8Array> };
+      },
     };
     return t;
   };
   let n = 0;
   const images: ImagesLike = { info: async () => size, input: () => transformer(`in${n++}`) };
-  return { images, calls };
+  return { images, calls, drawn };
 }
 
 describe('compose', () => {
@@ -102,23 +132,36 @@ describe('compose', () => {
     ]);
   });
 
-  it('a channel: its 4:1 banner whole on a blurred copy (nothing drawn over it), else the avatar on a blurred avatar', async () => {
-    const a = fakeImages({ width: 2560, height: 640 });
+  it('a channel: the banner fills the card, the logo cut to a 420px circle drawn in the centre', async () => {
+    const a = fakeImages({ width: 2560, height: 640 }, 420);
     await composeChannelCard(a.images, bytes, bytes);
     expect(a.calls).toEqual([
-      ['in0', 'transform', { width: 1200, height: 300, fit: 'scale-down' }],
-      ['in1', 'transform', { width: 1200, height: 630, fit: 'cover', blur: 40, brightness: 0.55 }],
-      ['in1', 'draw', { top: 165, left: 0 }],
-      ['in1', 'output', { format: 'image/jpeg', quality: 82 }],
+      ['in0', 'transform', { width: 1200, height: 630, fit: 'cover', gravity: 'center' }],
+      ['in1', 'transform', { width: 420, height: 420, fit: 'cover', gravity: 'center' }],
+      ['in1', 'output', { format: 'rgba' }],
+      ['in0', 'draw', { top: 105, left: 390 }],
+      ['in0', 'output', { format: 'image/jpeg', quality: 82 }],
     ]);
-    const b = fakeImages({ width: 800, height: 800 });
+    // the logo drawn is a PNG with an alpha channel
+    expect(a.drawn[0]?.slice(0, 4)).toEqual([0x89, 0x50, 0x4e, 0x47]);
+  });
+
+  it('a channel without a banner: the logo on the page colour; without a logo: the banner filling the card', async () => {
+    const b = fakeImages({ width: 800, height: 800 }, 420);
     await composeChannelCard(b.images, bytes, null);
+    // in0 is the solid page-colour canvas (nothing to transform), in1 the logo
     expect(b.calls).toEqual([
-      ['in0', 'transform', { width: 420, height: 420, fit: 'cover', gravity: 'center' }],
-      ['in1', 'transform', expect.objectContaining({ blur: 40 })],
-      ['in1', 'draw', { top: 105, left: 390 }],
-      ['in1', 'output', { format: 'image/jpeg', quality: 82 }],
+      ['in1', 'transform', { width: 420, height: 420, fit: 'cover', gravity: 'center' }],
+      ['in1', 'output', { format: 'rgba' }],
+      ['in0', 'draw', { top: 105, left: 390 }],
+      ['in0', 'output', { format: 'image/jpeg', quality: 82 }],
     ]);
-    await expect(composeChannelCard(b.images, null, null)).rejects.toThrow();
+    const c = fakeImages({ width: 2560, height: 640 });
+    await composeChannelCard(c.images, null, bytes);
+    expect(c.calls).toEqual([
+      ['in0', 'transform', { width: 1200, height: 630, fit: 'cover', gravity: 'center' }],
+      ['in0', 'output', { format: 'image/jpeg', quality: 82 }],
+    ]);
+    await expect(composeChannelCard(c.images, null, null)).rejects.toThrow();
   });
 });
