@@ -22,6 +22,8 @@
 		// Direct alert mail when the admin itself is down (src/run.ts)
 		{ "binding": "RESEND_API_KEY", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "RESEND_API_KEY" }
 	],
+	// Email subscriptions (src/subscribe.ts): confirmation jobs; admin-api consumes the queue and sends
+	"queues": { "producers": [{ "binding": "STATUS_NOTIFY_QUEUE", "queue": "al-ummah-now-status-notify" }] },
 	"vars": {
 		"ENVIRONMENT": "production",
 		"LOG_LEVEL": "warn",
@@ -47,6 +49,7 @@
 				{ "binding": "INTERNAL_API_KEY", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "internal-api-key-stage" },
 				{ "binding": "RESEND_API_KEY", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "RESEND_API_KEY" }
 			],
+			"queues": { "producers": [{ "binding": "STATUS_NOTIFY_QUEUE", "queue": "al-ummah-now-status-notify-stage" }] },
 			"vars": {
 				"ENVIRONMENT": "stage",
 				"LOG_LEVEL": "warn",

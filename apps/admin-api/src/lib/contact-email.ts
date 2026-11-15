@@ -34,7 +34,7 @@ export interface RenderedEmail {
   text: string;
   html: string;
   replyTo?: string;
-  /** Extra headers (the newsletter's List-Unsubscribe and List-Unsubscribe-Post) */
+  /** Extra mail headers (newsletter and status page mail: List-Unsubscribe and List-Unsubscribe-Post) */
   headers?: Record<string, string>;
 }
 

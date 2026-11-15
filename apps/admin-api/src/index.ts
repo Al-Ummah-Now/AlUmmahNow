@@ -50,6 +50,7 @@ import { contactSubmit } from './endpoints/contact/ContactSubmit';
 import { contactMailConsumer, type ContactMailJob, type QueueMessageLike } from './lib/contact-mail-queue';
 import { handleAuthRequestBatch, scheduleSyncs, type AuthRequestMessage } from './lib/authModerationQueue';
 import { consumeErrorQueue, errorsIngest, reportAdminApiError } from './endpoints/errors/ErrorsIngest';
+import { statusNotifyConsumer } from './lib/status-notify';
 import { runErrorRetention } from './lib/errors-retention';
 import { purgeE2eReports } from './lib/report-stats';
 
@@ -355,11 +356,13 @@ async function scheduled(controller: ScheduledController, env: AdminBindings, ct
 /**
  * Queue consumers:
  *   - contact mail jobs (lib/contact-mail-queue.ts)
+ *   - status page subscriptions: confirmations, incident fan-out, deliveries (lib/status-notify.ts)
  *   - requests to auth: auth-moderation-requests[-env] and its DLQ (lib/authModerationQueue.ts)
  *   - error ingest and its DLQ: al-ummah-now-errors[-dlq][-env] (endpoints/errors/ErrorsIngest.ts)
  */
 async function queue(batch: { queue: string; messages: readonly QueueMessageLike<ContactMailJob>[] }, env: AdminBindings): Promise<void> {
   if (/(^|-)contact-mail(-|$)/.test(batch.queue)) return contactMailConsumer(batch, env);
+  if (/(^|-)status-notify(-|$)/.test(batch.queue)) return statusNotifyConsumer(batch, env);
   if (/^auth-moderation-requests(-|$)/.test(batch.queue)) return handleAuthRequestBatch(batch as unknown as MessageBatch<AuthRequestMessage>, env);
   if (/(^|-)errors(-dlq)?(-|$)/.test(batch.queue)) return consumeErrorQueue(batch, env);
   logger.error('[Queue] Batch for an unknown queue; retrying', { queue: batch.queue });

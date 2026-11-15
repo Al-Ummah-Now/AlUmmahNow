@@ -72,8 +72,9 @@ export function resourcesFor(env: ResourceEnv): Resources {
 	return {
 		// Errors page: async ingest and its dead letters (apps/admin-api ErrorsIngest.ts)
 		// R2 video delivery (apps/media): transcode jobs and their dead letters (DLQ name ends in the env, see queue-consumers)
+		// Status page subscriptions (apps/admin-api lib/status-notify.ts; producers admin-api and apps/status)
 		// Move from YouTube jobs (apps/api-videos lib/youtube-import/jobs.ts; dead letters go to the shared al-ummah-now-dlq)
-		queues: [`al-ummah-now-errors${s}`, `al-ummah-now-errors-dlq${s}`, `al-ummah-now-transcode${s}`, `al-ummah-now-transcode-dlq${s}`, `al-ummah-now-yt-import${s}`],
+		queues: [`al-ummah-now-errors${s}`, `al-ummah-now-errors-dlq${s}`, `al-ummah-now-transcode${s}`, `al-ummah-now-transcode-dlq${s}`, `al-ummah-now-yt-import${s}`, `al-ummah-now-status-notify${s}`],
 		// Private source maps of the web apps (apps/admin-api lib/sourcemaps.ts; upload-sourcemaps.ts)
 		// Renditions served from media.<env>.alummahnow.net (docs/media-delivery/R2-DELIVERY-PLAN.md)
 		// (public, behind the R2 custom domain) and private/unlisted ones (no public access; the media Worker serves them)

@@ -1,6 +1,6 @@
 import { STATUS_COMPONENTS } from '@al-ummah/shared-types';
-import { getStatusOverview } from '@/lib/api/status';
-import type { StatusOverview } from '@/lib/api/status-types';
+import { getStatusOverview, getStatusSubscriptions } from '@/lib/api/status';
+import type { StatusOverview, StatusSubscriptions as Subs } from '@/lib/api/status-types';
 import { AdminApiError } from '@/lib/api/errors';
 import { getAdminSession } from '@/lib/auth';
 import { canReadOps } from '@/lib/roles';
@@ -10,6 +10,7 @@ import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { DeletedIncidents, IncidentCard, NewIncidentForm } from './StatusAdmin';
 import { publicStatusUrl } from './model';
+import { StatusSubscriptions } from './StatusSubscriptions';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,9 +32,17 @@ export default async function StatusAdminPage() {
   if (!canReadOps(session?.user.role)) return <ErrorAlert testId="status-no-access">{t('statusPage.noAccess')}</ErrorAlert>;
 
   let overview: StatusOverview | null = null;
+  let subs: Subs | null = null;
   let loadError = '';
   try {
-    overview = await getStatusOverview();
+    [overview, subs] = await Promise.all([
+      getStatusOverview(),
+      // Its own failure (say, before the subscriptions migration) leaves the rest of the page working
+      getStatusSubscriptions().catch((error) => {
+        logger.error('[status] Failed to load subscriptions', { error: error instanceof Error ? error.message : String(error) });
+        return null;
+      }),
+    ]);
   } catch (error) {
     logger.error('[status] Failed to load the overview', { error: error instanceof Error ? error.message : String(error) });
     loadError = error instanceof AdminApiError && error.status === 503 ? t('statusPage.notConfigured') : t('statusPage.loadFailed');
@@ -98,6 +107,8 @@ export default async function StatusAdminPage() {
               </div>
             ))}
           </section>
+
+          {subs ? <StatusSubscriptions data={subs} /> : <ErrorAlert testId="status-subs-error">{t('statusPage.loadFailed')}</ErrorAlert>}
 
           <section className="mb-6" aria-labelledby="status-recent-title" data-testid="status-recent">
             <h2 id="status-recent-title" className="text-xl font-semibold text-fg mb-3">{t('statusPage.recent')}</h2>

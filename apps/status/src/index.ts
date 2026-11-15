@@ -9,6 +9,8 @@
  *   GET /api/status.json
  *   GET /feed.atom, /feed.rss (and /ar/…)
  *   GET /healthz    this Worker and its D1
+ *   GET|POST /subscribe, /subscribe/confirm, /unsubscribe (and /ar/…): email subscriptions
+ *                   (subscribe.ts); never cached; POST /unsubscribe is also RFC 8058 one-click
  * Static files (status.css, mode.js, the shared header's aun-nav.css, Fawanees tokens and icons)
  * come from public/ (Workers Static Assets).
  */
@@ -18,7 +20,18 @@ import { atomFeed, rssFeed } from './feed';
 import type { Locale } from './i18n';
 import { logger } from './logger';
 import { buildSummary, toJson } from './model';
-import { renderIncidentPage, renderStatusPage } from './render';
+import {
+  renderConfirmPage,
+  renderIncidentPage,
+  renderSentPage,
+  renderStatusPage,
+  renderSubscribePage,
+  renderSubscribedPage,
+  renderUnsubscribePage,
+  renderUnsubscribedPage,
+  type PageOptions,
+} from './render';
+import { confirm, subscribe, tokenState, unsubscribe, type SubscribeEnv } from './subscribe';
 import { runOnce, statusEnvName, type StatusEnv } from './run';
 import { loadFeedIncidents, loadIncident, prune, publicIncident, publicIncidents } from './store';
 
@@ -26,7 +39,7 @@ const PRUNE_CRON = '40 3 * * *';
 /** Edge cache for pages and JSON: short, so a posted incident shows within a minute. */
 const CACHE_SECONDS = 30;
 
-interface Env extends StatusEnv {
+interface Env extends StatusEnv, SubscribeEnv {
   ASSETS?: Fetcher;
 }
 
@@ -35,6 +48,68 @@ const SECURITY_HEADERS: Record<string, string> = {
   'x-content-type-options': 'nosniff',
   'referrer-policy': 'strict-origin-when-cross-origin',
 };
+
+/** The subscription pages post their forms to this origin; nothing of them is cached. */
+const FORM_HEADERS: Record<string, string> = {
+  ...SECURITY_HEADERS,
+  'content-security-policy': SECURITY_HEADERS['content-security-policy'].replace("form-action 'none'", "form-action 'self'"),
+  'cache-control': 'no-store',
+  'content-type': 'text/html; charset=utf-8',
+};
+
+const html = (body: string, status = 200) => new Response(body, { status, headers: FORM_HEADERS });
+
+/** A form post from another site (a missing Origin is allowed: some browsers leave it out). */
+function crossSite(request: Request, url: URL): boolean {
+  const origin = request.headers.get('origin');
+  return !!origin && origin !== 'null' && origin !== url.origin;
+}
+
+async function formOf(request: Request): Promise<Record<string, string>> {
+  const type = request.headers.get('content-type') ?? '';
+  if (!/application\/x-www-form-urlencoded|multipart\/form-data/i.test(type)) return {};
+  try {
+    const out: Record<string, string> = {};
+    for (const [k, v] of (await request.formData()).entries()) if (typeof v === 'string') out[k] = v.slice(0, 1000);
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * /subscribe, /subscribe/confirm and /unsubscribe. GET never changes anything (mail scanners open
+ * links); the buttons post. Returns null for other paths.
+ */
+async function subscriptions(request: Request, env: Env, url: URL, path: string, opts: PageOptions): Promise<Response | null> {
+  const post = request.method === 'POST';
+  const token = url.searchParams.get('t') ?? '';
+  if (path === '/subscribe') {
+    if (!post) return html(renderSubscribePage(opts));
+    if (crossSite(request, url)) return new Response('Forbidden', { status: 403, headers: FORM_HEADERS });
+    const form = await formOf(request);
+    const outcome = await subscribe(env, { email: form.email, locale: form.locale, honeypot: form.website, ip: request.headers.get('cf-connecting-ip') ?? '' });
+    if (outcome === 'sent') return new Response(null, { status: 303, headers: { ...FORM_HEADERS, location: `${opts.locale === 'ar' ? '/ar' : ''}/subscribe/sent` } });
+    const status = outcome === 'invalid' ? 400 : outcome === 'limited' ? 429 : 503;
+    return html(renderSubscribePage(opts, { error: outcome, email: typeof form.email === 'string' ? form.email.slice(0, 254) : '' }), status);
+  }
+  if (path === '/subscribe/sent' && !post) return html(renderSentPage(opts));
+  if (path === '/subscribe/confirm') {
+    if (!post) return html(renderConfirmPage({ ...opts, search: token ? `?t=${encodeURIComponent(token)}` : '' }, (await tokenState(env.STATUS_DB, token)).state, token));
+    if (crossSite(request, url)) return new Response('Forbidden', { status: 403, headers: FORM_HEADERS });
+    const form = await formOf(request);
+    const state = await confirm(env.STATUS_DB, form.t ?? token);
+    return state === 'active' ? html(renderSubscribedPage(opts)) : html(renderConfirmPage(opts, 'unknown', ''), 404);
+  }
+  if (path === '/unsubscribe') {
+    if (!post) return html(renderUnsubscribePage({ ...opts, search: token ? `?t=${encodeURIComponent(token)}` : '' }, (await tokenState(env.STATUS_DB, token)).state !== 'unknown', token));
+    // RFC 8058 one-click: the mail provider posts List-Unsubscribe=One-Click to the link (token in the query)
+    const form = await formOf(request);
+    await unsubscribe(env.STATUS_DB, form.t || token);
+    return html(renderUnsubscribedPage(opts));
+  }
+  return null;
+}
 
 function respond(body: string, type: string, status = 200, extra: Record<string, string> = {}): Response {
   return new Response(body, {
@@ -62,7 +137,7 @@ async function scheduled(controller: ScheduledController, env: Env, ctx: Executi
 
 async function handle(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const url = new URL(request.url);
-  if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method not allowed', { status: 405, headers: { allow: 'GET, HEAD' } });
+  if (request.method !== 'GET' && request.method !== 'HEAD' && request.method !== 'POST') return new Response('Method not allowed', { status: 405, headers: { allow: 'GET, HEAD, POST' } });
 
   let path = url.pathname.replace(/\/+$/, '') || '/';
   let locale: Locale = 'en';
@@ -82,6 +157,11 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
     }
   }
 
+  const pageOpts = { locale, path: path === '/' ? '' : path, assetVersion: (env.CF_VERSION_METADATA?.id ?? 'dev').slice(0, 8), environment: env.ENVIRONMENT };
+  const sub = await subscriptions(request, env, url, path, pageOpts);
+  if (sub) return sub;
+  if (request.method === 'POST') return new Response('Method not allowed', { status: 405, headers: { allow: 'GET, HEAD' } });
+
   const cache = (caches as unknown as { default: Cache }).default;
   const cacheKey = new Request(url.toString(), { method: 'GET' });
   const hit = await cache.match(cacheKey);
@@ -89,7 +169,7 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
 
   const now = new Date();
   const base = STATUS_PAGE_URLS[statusEnvName(env)];
-  const opts = { locale, path: path === '/' ? '' : path, search: url.search, assetVersion: (env.CF_VERSION_METADATA?.id ?? 'dev').slice(0, 8), environment: env.ENVIRONMENT };
+  const opts = { ...pageOpts, search: url.search };
   let res: Response;
   if (path === '/') {
     res = respond(renderStatusPage(await buildSummary(env.STATUS_DB, now, env.ENVIRONMENT), opts), 'text/html; charset=utf-8');

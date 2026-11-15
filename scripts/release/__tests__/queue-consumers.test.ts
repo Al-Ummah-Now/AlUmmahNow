@@ -15,6 +15,7 @@ describe('queue consumers', () => {
 	it('reads admin-api\'s consumers for production (top level) and stage', () => {
 		assert.deepEqual(consumersOf(config).map((c) => `${c.queue}->${c.worker}`), [
 			'al-ummah-now-contact-mail->al-ummah-admin-api',
+			'al-ummah-now-status-notify->al-ummah-admin-api',
 			'auth-moderation-requests->al-ummah-admin-api',
 			'auth-moderation-requests-dlq->al-ummah-admin-api',
 			'al-ummah-now-errors->al-ummah-admin-api',
@@ -22,6 +23,7 @@ describe('queue consumers', () => {
 		]);
 		assert.deepEqual(consumersOf(config, 'stage').map((c) => `${c.queue}->${c.worker}`), [
 			'al-ummah-now-contact-mail-stage->al-ummah-admin-api-stage',
+			'al-ummah-now-status-notify-stage->al-ummah-admin-api-stage',
 			'auth-moderation-requests-stage->al-ummah-admin-api-stage',
 			'auth-moderation-requests-dlq-stage->al-ummah-admin-api-stage',
 			'al-ummah-now-errors-stage->al-ummah-admin-api-stage',

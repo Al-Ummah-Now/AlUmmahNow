@@ -114,6 +114,8 @@
 			},
 			// Contact us mail jobs (lib/contact-mail-queue.ts), consumed below
 			{ "binding": "CONTACT_MAIL_QUEUE", "queue": "al-ummah-now-contact-mail" },
+			// Status page subscriptions: confirmation mail, incident fan-out and deliveries (lib/status-notify.ts), consumed below
+			{ "binding": "STATUS_NOTIFY_QUEUE", "queue": "al-ummah-now-status-notify" },
 			// Final mail failures → platform DLQ (processor stores them in dead_letters)
 			{ "binding": "ERRORS_DLQ", "queue": "al-ummah-now-dlq" },
 			// Requests to auth: sends, answers and status reads, with retries (src/lib/authModerationQueue.ts)
@@ -130,6 +132,14 @@
 			{
 				// Retries back off in code (msg.retry delaySeconds); keep max_retries = MAX_ATTEMPTS - 1
 				"queue": "al-ummah-now-contact-mail",
+				"max_batch_size": 10,
+				"max_batch_timeout": 5,
+				"max_retries": 5,
+				"dead_letter_queue": "al-ummah-now-dlq"
+			},
+			{
+				// Retries back off in code (lib/status-notify.ts backoffSeconds); keep max_retries = STATUS_MAX_ATTEMPTS - 1
+				"queue": "al-ummah-now-status-notify",
 				"max_batch_size": 10,
 				"max_batch_timeout": 5,
 				"max_retries": 5,
@@ -299,6 +309,8 @@
 					},
 					// Contact us mail jobs (lib/contact-mail-queue.ts), consumed below
 					{ "binding": "CONTACT_MAIL_QUEUE", "queue": "al-ummah-now-contact-mail-stage" },
+					// Status page subscriptions: confirmation mail, incident fan-out and deliveries (lib/status-notify.ts), consumed below
+					{ "binding": "STATUS_NOTIFY_QUEUE", "queue": "al-ummah-now-status-notify-stage" },
 					// Final mail failures → platform DLQ (processor stores them in dead_letters)
 					{ "binding": "ERRORS_DLQ", "queue": "al-ummah-now-dlq-stage" },
 					// Requests to auth: sends, answers and status reads, with retries (src/lib/authModerationQueue.ts)
@@ -315,6 +327,14 @@
 					{
 						// Retries back off in code (msg.retry delaySeconds); keep max_retries = MAX_ATTEMPTS - 1
 						"queue": "al-ummah-now-contact-mail-stage",
+						"max_batch_size": 10,
+						"max_batch_timeout": 5,
+						"max_retries": 5,
+						"dead_letter_queue": "al-ummah-now-dlq-stage"
+					},
+					{
+						// Retries back off in code (lib/status-notify.ts backoffSeconds); keep max_retries = STATUS_MAX_ATTEMPTS - 1
+						"queue": "al-ummah-now-status-notify-stage",
 						"max_batch_size": 10,
 						"max_batch_timeout": 5,
 						"max_retries": 5,

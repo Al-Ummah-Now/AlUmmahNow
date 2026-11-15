@@ -45,7 +45,7 @@ export interface PageOptions {
   locale: Locale;
   /** Path without the locale prefix ('' or /incidents/<id>) */
   path: string;
-  /** The request's query ("?…" or ''), kept by the language button */
+  /** The request's query ("?…" or ''), kept by the language button (confirm and unsubscribe pages pass only their token) */
   search?: string;
   assetVersion: string;
   environment: string;
@@ -148,7 +148,7 @@ ${main}
 <footer class="wrap foot">
   ${footApps(locale, apps)}
   <p>${esc(t(locale, 'footerNote'))}</p>
-  <p class="feeds"><span>${esc(t(locale, 'feeds'))}:</span> <a href="${prefix(locale)}/feed.atom">${esc(t(locale, 'atom'))}</a> <a href="${prefix(locale)}/feed.rss">${esc(t(locale, 'rss'))}</a> <a href="/api/status.json">${esc(t(locale, 'json'))}</a></p>
+  <p class="feeds"><span>${esc(t(locale, 'feeds'))}:</span> <a href="${prefix(locale)}/subscribe" data-testid="footer-subscribe">${esc(t(locale, 'emailUpdates'))}</a> <a href="${prefix(locale)}/feed.atom">${esc(t(locale, 'atom'))}</a> <a href="${prefix(locale)}/feed.rss">${esc(t(locale, 'rss'))}</a> <a href="/api/status.json">${esc(t(locale, 'json'))}</a></p>
 </footer>
 </body>
 </html>`;
@@ -230,6 +230,7 @@ export function renderStatusPage(s: StatusSummary, o: PageOptions): string {
     section('upcoming-title', t(locale, 'upcoming'), s.upcoming),
     components,
     history,
+    subscribeCta(locale),
   ].join('\n');
   return shell(o, t(locale, 'pageTitle'), main);
 }
@@ -240,4 +241,83 @@ export function renderIncidentPage(i: Incident | null, o: PageOptions): string {
   if (!i) return shell(o, t(locale, 'notFound'), `${back}<section class="card"><h1>${esc(t(locale, 'notFound'))}</h1><p>${esc(t(locale, 'notFoundBody'))}</p></section>`);
   const title = locale === 'ar' ? i.title_ar : i.title_en;
   return shell(o, `${title} · ${t(locale, 'pageTitle')}`, `${back}${incidentCard(locale, i, { full: true })}`);
+}
+
+const MAIL_ICON = '<svg class="icon big" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 4.2-8 5-8-5V6l8 5 8-5z"/></svg>';
+
+function subscribeCta(locale: Locale): string {
+  return `<section class="card cta" aria-labelledby="cta-title" data-testid="subscribe-cta">
+  ${MAIL_ICON}
+  <div class="cta-text"><h2 id="cta-title">${esc(t(locale, 'ctaTitle'))}</h2><p>${esc(t(locale, 'ctaBody'))}</p></div>
+  <a class="button" href="${prefix(locale)}/subscribe">${esc(t(locale, 'ctaButton'))}</a>
+</section>`;
+}
+
+export type SubscribeError = 'invalid' | 'limited' | 'unavailable';
+const ERROR_KEY = { invalid: 'subscribeInvalid', limited: 'subscribeLimited', unavailable: 'subscribeUnavailable' } as const;
+
+/** A centred panel for the subscription pages: icon, heading, text, then the action. */
+function panel(locale: Locale, opts: { title: string; body: string[]; action?: string; tone?: 'ok' | 'info'; testId: string }): string {
+  const back = `<p class="back"><a href="${prefix(locale) || '/'}">${esc(t(locale, 'back'))}</a></p>`;
+  const toneIcon = opts.tone === 'ok' ? icon('operational', 'icon big') : MAIL_ICON;
+  return `${back}<section class="card panel${opts.tone === 'ok' ? ' panel-ok' : ''}" data-testid="${opts.testId}">
+  <div class="panel-head">${toneIcon}<h1>${esc(opts.title)}</h1></div>
+  ${opts.body.map((b) => `<p>${esc(b)}</p>`).join('')}
+  ${opts.action ?? ''}
+</section>`;
+}
+
+export function renderSubscribePage(o: PageOptions, state: { error?: SubscribeError; email?: string } = {}): string {
+  const { locale } = o;
+  const err = state.error ? t(locale, ERROR_KEY[state.error]) : '';
+  const lang = (value: Locale, label: string) =>
+    `<label class="choice"><input type="radio" name="locale" value="${value}"${value === locale ? ' checked' : ''}><span lang="${value}">${label}</span></label>`;
+  const form = `<form class="sub-form" method="post" action="${prefix(locale)}/subscribe" novalidate data-testid="subscribe-form">
+  ${err ? `<div class="form-error" role="alert" id="sub-error"><strong>${esc(t(locale, 'subscribeErrorTitle'))}</strong><p>${esc(err)}</p></div>` : ''}
+  <div class="field">
+    <label for="sub-email">${esc(t(locale, 'subscribeEmail'))}</label>
+    <input id="sub-email" name="email" type="email" inputmode="email" autocomplete="email" dir="ltr" required maxlength="254" value="${esc(state.email ?? '')}"${err ? ' aria-invalid="true" aria-describedby="sub-error"' : ''}>
+  </div>
+  <fieldset class="field">
+    <legend>${esc(t(locale, 'subscribeLanguage'))}</legend>
+    <div class="choices">${lang('en', 'English')}${lang('ar', 'العربية')}</div>
+  </fieldset>
+  <div class="hp" aria-hidden="true"><label for="sub-website">${esc(t(locale, 'honeypot'))}</label><input id="sub-website" name="website" type="text" tabindex="-1" autocomplete="off"></div>
+  <button class="button" type="submit">${esc(t(locale, 'subscribeButton'))}</button>
+  <p class="note">${esc(t(locale, 'subscribeNote'))}</p>
+</form>`;
+  return shell(o, `${t(locale, 'subscribeTitle')} · ${t(locale, 'pageTitle')}`, panel(locale, { title: t(locale, 'subscribeTitle'), body: [t(locale, 'subscribeIntro')], action: form, testId: 'subscribe-page' }));
+}
+
+export function renderSentPage(o: PageOptions): string {
+  const { locale } = o;
+  return shell(o, `${t(locale, 'sentTitle')} · ${t(locale, 'pageTitle')}`, panel(locale, { title: t(locale, 'sentTitle'), body: [t(locale, 'sentBody'), t(locale, 'sentSpam')], testId: 'subscribe-sent' }));
+}
+
+const tokenForm = (locale: Locale, path: string, token: string, label: string, testId: string) =>
+  `<form method="post" action="${prefix(locale)}${path}" data-testid="${testId}"><input type="hidden" name="t" value="${esc(token)}"><button class="button" type="submit">${esc(label)}</button></form>`;
+
+const againLink = (locale: Locale) => `<p><a class="button button-quiet" href="${prefix(locale)}/subscribe">${esc(t(locale, 'subscribeAgain'))}</a></p>`;
+
+export function renderConfirmPage(o: PageOptions, state: 'pending' | 'active' | 'unknown', token: string): string {
+  const { locale } = o;
+  if (state === 'unknown') return shell(o, t(locale, 'expiredTitle'), panel(locale, { title: t(locale, 'expiredTitle'), body: [t(locale, 'expiredBody')], action: againLink(locale), testId: 'subscribe-expired' }));
+  if (state === 'active') return renderSubscribedPage(o);
+  return shell(o, t(locale, 'confirmTitle'), panel(locale, { title: t(locale, 'confirmTitle'), body: [t(locale, 'confirmBody')], action: tokenForm(locale, '/subscribe/confirm', token, t(locale, 'confirmButton'), 'confirm-form'), testId: 'subscribe-confirm' }));
+}
+
+export function renderSubscribedPage(o: PageOptions): string {
+  const { locale } = o;
+  return shell(o, t(locale, 'subscribedTitle'), panel(locale, { title: t(locale, 'subscribedTitle'), body: [t(locale, 'subscribedBody')], tone: 'ok', testId: 'subscribe-done' }));
+}
+
+export function renderUnsubscribePage(o: PageOptions, known: boolean, token: string): string {
+  const { locale } = o;
+  if (!known) return renderUnsubscribedPage(o);
+  return shell(o, t(locale, 'unsubscribeTitle'), panel(locale, { title: t(locale, 'unsubscribeTitle'), body: [t(locale, 'unsubscribeBody')], action: tokenForm(locale, '/unsubscribe', token, t(locale, 'unsubscribeButton'), 'unsubscribe-form'), testId: 'unsubscribe-page' }));
+}
+
+export function renderUnsubscribedPage(o: PageOptions): string {
+  const { locale } = o;
+  return shell(o, t(locale, 'unsubscribedTitle'), panel(locale, { title: t(locale, 'unsubscribedTitle'), body: [t(locale, 'unsubscribedBody')], action: againLink(locale), tone: 'ok', testId: 'unsubscribe-done' }));
 }

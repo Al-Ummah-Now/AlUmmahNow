@@ -93,3 +93,70 @@ export const STATUS_PAGE_URLS = {
   stage: 'https://status.stage.alummahnow.net',
   qa: 'https://status.qa.alummahnow.net',
 } as const;
+
+/*
+ * Subscriptions (docs/status-page/README.md "Subscriptions"): email subscribers sign up on the
+ * public page (double opt-in, one language each); webhooks are registered by admins on the videos
+ * admin's Status page. Both get incident and maintenance posts and their updates. The status
+ * Worker and admin-api enqueue jobs on STATUS_NOTIFY_QUEUE (al-ummah-now-status-notify[-env]);
+ * admin-api consumes it (lib/status-notify.ts).
+ */
+
+/** Jobs on the status notify queue. */
+export const STATUS_NOTIFY_VERSION = 1;
+export type StatusNotifyJob =
+  /** Send the double opt-in email to a pending subscriber */
+  | { v: typeof STATUS_NOTIFY_VERSION; kind: 'status-confirm'; subscriberId: string }
+  /** Fan one incident post or update out to every active subscriber */
+  | { v: typeof STATUS_NOTIFY_VERSION; kind: 'status-fanout'; notificationId: string }
+  /** Deliver one notification to one subscriber */
+  | { v: typeof STATUS_NOTIFY_VERSION; kind: 'status-deliver'; notificationId: string; subscriberId: string };
+
+export function isStatusNotifyJob(body: unknown): body is StatusNotifyJob {
+  const k = (body as { kind?: unknown } | null)?.kind;
+  return k === 'status-confirm' || k === 'status-fanout' || k === 'status-deliver';
+}
+
+/** What a notification announces: a new post, an update, or the update that closed it. */
+export const STATUS_NOTIFY_EVENTS = ['created', 'updated', 'resolved'] as const;
+export type StatusNotifyEvent = (typeof STATUS_NOTIFY_EVENTS)[number];
+
+/** Webhook `type`: `incident.created`, `maintenance.resolved`, … */
+export type StatusWebhookType = `${IncidentKind}.${StatusNotifyEvent}`;
+
+/**
+ * Webhook request headers. The signature is HMAC-SHA256 with the webhook's secret over
+ * `${timestamp}.${raw body}`, hex, prefixed `sha256=`; receivers should refuse timestamps more
+ * than 5 minutes old.
+ */
+export const STATUS_WEBHOOK_HEADERS = {
+  event: 'x-aun-event',
+  delivery: 'x-aun-delivery',
+  timestamp: 'x-aun-timestamp',
+  signature: 'x-aun-signature',
+} as const;
+
+/** The JSON body of a webhook delivery (both languages, public components only). */
+export interface StatusWebhookPayload {
+  type: StatusWebhookType;
+  /** The notification id; the same for every retry of this delivery */
+  id: string;
+  environment: string;
+  sentAt: string;
+  incident: {
+    id: string;
+    kind: IncidentKind;
+    title: { en: string; ar: string };
+    status: IncidentStatus;
+    impact: IncidentImpact;
+    components: StatusComponentId[];
+    startsAt: string;
+    endsAt: string | null;
+    resolvedAt: string | null;
+    url: string;
+  };
+  update: { status: IncidentStatus; body: { en: string; ar: string }; at: string };
+}
+
+/** Pending email subscriptions expire (and are deleted) after this many days. */
+export const STATUS_CONFIRM_DAYS = 7;

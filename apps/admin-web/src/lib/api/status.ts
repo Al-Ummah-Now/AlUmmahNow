@@ -6,7 +6,7 @@
  */
 import type { ActionResult } from './errors';
 import { fetchAdmin, toResult } from './request';
-import type { IncidentUpdateInput, NewIncidentInput, StatusIncident, StatusOverview } from './status-types';
+import type { IncidentUpdateInput, NewIncidentInput, NewStatusWebhook, StatusIncident, StatusOverview, StatusSubscriptions } from './status-types';
 
 const incidentPath = (id: string, action?: 'updates' | 'restore' | 'purge') => `/api/status/incidents/${encodeURIComponent(id)}${action ? `/${action}` : ''}`;
 const json = (method: string, body: unknown): RequestInit => ({ method, body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } });
@@ -33,4 +33,25 @@ export async function restoreIncident(id: string): Promise<ActionResult<StatusIn
 
 export async function purgeIncident(id: string): Promise<ActionResult<{ id: string }>> {
   return toResult(() => fetchAdmin<{ id: string }>(incidentPath(id, 'purge'), { method: 'POST' }));
+}
+
+/** Subscriptions (admin-api /api/status/subscriptions, webhooks, subscribers, notifications). */
+export async function getStatusSubscriptions(): Promise<StatusSubscriptions> {
+  return fetchAdmin<StatusSubscriptions>('/api/status/subscriptions');
+}
+
+export async function addStatusWebhook(input: { name: string; url: string }): Promise<ActionResult<NewStatusWebhook>> {
+  return toResult(() => fetchAdmin<NewStatusWebhook>('/api/status/webhooks', json('POST', input)));
+}
+
+export async function deleteStatusWebhook(id: string): Promise<ActionResult<{ id: string }>> {
+  return toResult(() => fetchAdmin<{ id: string }>(`/api/status/webhooks/${encodeURIComponent(id)}`, { method: 'DELETE' }));
+}
+
+export async function removeStatusSubscriber(email: string): Promise<ActionResult<{ removed: boolean }>> {
+  return toResult(() => fetchAdmin<{ removed: boolean }>('/api/status/subscribers/remove', json('POST', { email })));
+}
+
+export async function retryStatusNotification(id: string): Promise<ActionResult<{ queued: number }>> {
+  return toResult(() => fetchAdmin<{ queued: number }>(`/api/status/notifications/${encodeURIComponent(id)}/retry`, { method: 'POST' }));
 }

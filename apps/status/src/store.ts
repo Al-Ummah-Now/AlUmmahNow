@@ -5,6 +5,7 @@
 import { isClosedStatus, isPublicStatusComponent, type IncidentImpact, type IncidentKind, type IncidentStatus, type StatusComponentId } from '@al-ummah/shared-types';
 import type { ComponentResult, RawState } from './checks';
 import type { CheckedState, DayCounts, StoredState } from './state';
+import { pruneSubscriptionStatements } from './subscribe';
 
 export interface StateRow extends StoredState {
   component: StatusComponentId;
@@ -166,7 +167,10 @@ export function isUpcoming(i: Incident, now: Date): boolean {
   return i.kind === 'maintenance' && i.status === 'scheduled' && i.starts_at > now.toISOString();
 }
 
-/** Keep 100 days of daily rows; purge incidents soft-deleted 30+ days ago. */
+/**
+ * Keep 100 days of daily rows; purge incidents soft-deleted 30+ days ago; drop unconfirmed email
+ * subscriptions, old rate-limit rows and 30-day-old notification records (subscribe.ts).
+ */
 export async function prune(db: D1Database, now: Date): Promise<void> {
   const keepFrom = new Date(now.getTime() - 100 * 86_400_000).toISOString().slice(0, 10);
   const purgeBefore = new Date(now.getTime() - 30 * 86_400_000).toISOString();
@@ -174,6 +178,7 @@ export async function prune(db: D1Database, now: Date): Promise<void> {
     db.prepare('DELETE FROM daily WHERE day < ?').bind(keepFrom),
     db.prepare('DELETE FROM incident_updates WHERE incident_id IN (SELECT id FROM incidents WHERE deleted_at IS NOT NULL AND deleted_at < ?)').bind(purgeBefore),
     db.prepare('DELETE FROM incidents WHERE deleted_at IS NOT NULL AND deleted_at < ?').bind(purgeBefore),
+    ...pruneSubscriptionStatements(db, now),
   ]);
 }
 

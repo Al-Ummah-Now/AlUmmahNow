@@ -18,6 +18,8 @@
  *   (admin-api lib/media-troubleshoot/cloudflare.ts), and only with a FAKE_CF_TOKEN_PREFIX token; any
  *   other token or call is refused. PUT /__fake/cloudflare { logVideo } names the video its log lines
  *   mention, DELETE /__fake/cloudflare forgets it.
+ * - Webhook receiver (FAKE_WEBHOOK_HOST): status page webhook deliveries are kept and answered 200
+ *   (a path containing /fail-<status>/ answers that status): GET /__fake/webhooks.
  *
  * State is in memory and dies with the stack, like every other piece of local state.
  */
@@ -71,6 +73,15 @@ export const bunny = {
 };
 export const storage = new Map<string, { body: Buffer; type: string }>();
 export const emails: unknown[] = [];
+/** Status page webhooks (apps/admin-api lib/status-notify.ts) registered at https://<this host>/… */
+export const FAKE_WEBHOOK_HOST = 'webhooks.local-stack.test';
+export const webhookRequests: { url: string; method: string; headers: Record<string, string>; body: string }[] = [];
+
+async function webhookReceiver(request: Request, url: URL): Promise<Response> {
+  webhookRequests.push({ url: url.toString(), method: request.method, headers: Object.fromEntries(request.headers), body: await request.text() });
+  const fail = /\/fail-(\d{3})(\/|$)/.exec(url.pathname);
+  return new Response(fail ? 'failing on purpose' : 'ok', { status: fail ? Number(fail[1]) : 200 });
+}
 
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...headers } });
@@ -457,6 +468,7 @@ export function registerFakes(): void {
   FAKES.set(IMAGE_HOST, images);
   FAKES.set('api.resend.com', resend);
   FAKES.set('api.cloudflare.com', cloudflareApi);
+  FAKES.set(FAKE_WEBHOOK_HOST, webhookReceiver);
   FAKES.set(FAKE_MEDIA_HOST, (request, url) => mediaHost(request.method, url.pathname));
   // Move from YouTube: Google's consent, tokens, the YouTube Data API and thumbnails (fake-google.ts)
   FAKES.set('accounts.google.com', googleAccounts);
@@ -521,6 +533,7 @@ async function readBody(req: IncomingMessage): Promise<string> {
  * - PUT | GET /__fake/images/<path>: seed or check one stored image (Bunny Storage)
  * - GET /__fake/google, POST /__fake/google/consent?mode=…|quota?on=1|reset (fake-google.ts)
  * - GET /__fake/social/posts[?network=] | /webhooks, POST /__fake/social/telegram/post | /fail?network=&status= (fake-social.ts)
+ * - GET /__fake/webhooks (status page webhook deliveries received)
  * - POST /__stack/d1/<database name> with SQL as the body: { results } (seed, fast-path fixtures)
  * - GET | PUT | DELETE /__stack/r2/<bucket name>/<key>: one object (fixtures a spec seeds in R2)
  * - GET /__stack/r2/<bucket name>?prefix=<p>[&cursor=<c>]: { keys, cursor } (teardowns find what a run wrote)
@@ -623,6 +636,7 @@ async function control(req: IncomingMessage, url: URL): Promise<Response> {
     }
     return json({ logVideo: fakeCloudflare.logVideo });
   }
+  if (kind === 'webhooks') return json(webhookRequests);
   if (kind === 'media') {
     const [, , , step, videoId] = url.pathname.split('/');
     if (req.method !== 'POST') return json({ error: 'POST /__fake/media/transcode/<videoId> | /down | /up' }, 405);

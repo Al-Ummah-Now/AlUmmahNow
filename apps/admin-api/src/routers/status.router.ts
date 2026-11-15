@@ -14,6 +14,14 @@
  *   DELETE /incidents/:id                 soft delete (hidden from the public page, restorable for 30 days)
  *   POST   /incidents/:id/restore
  *   POST   /incidents/:id/purge           delete permanently now
+ *
+ * Subscriptions (lib/status-notify.ts): posting an incident or an update with a public component
+ * queues its announcement to every active subscriber.
+ *   GET    /subscriptions                 email counts (no addresses), webhooks, the last 20 notifications with delivery counts
+ *   POST   /webhooks                      { name, url } → 201 with the signing secret (shown once)
+ *   DELETE /webhooks/:id
+ *   POST   /subscribers/remove            { email } removes that email subscriber (a support erasure request)
+ *   POST   /notifications/:id/retry       queues its failed deliveries again
  */
 import { Hono, type Context } from 'hono';
 import {
@@ -31,6 +39,7 @@ import { logger } from '../lib/logger';
 import { audit } from '../lib/authModeration';
 import type { AdminBindings, AuthContext } from '../base/types';
 import type { D1Database } from '../lib/types';
+import { announce, newWebhookSecret, retryNotification, validateWebhookUrl } from '../lib/status-notify';
 
 type Env = { Bindings: AdminBindings; Variables: { auth?: AuthContext } };
 type C = Context<Env>;
@@ -223,15 +232,17 @@ app.post('/incidents', async (c) => {
   const now = new Date().toISOString();
   const actor = actorOf(c);
   const closed = isClosedStatus(parsed.status) ? now : null;
+  const firstUpdateId = crypto.randomUUID();
   await db.batch([
     db
       .prepare(`INSERT INTO incidents (id, kind, title_en, title_ar, status, impact, components, starts_at, ends_at, resolved_at, created_at, created_by, updated_at, updated_by)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .bind(id, parsed.kind, parsed.titleEn, parsed.titleAr, parsed.status, parsed.impact, JSON.stringify(parsed.components), parsed.startsAt, parsed.endsAt, closed, now, actor, now, actor),
     db.prepare('INSERT INTO incident_updates (id, incident_id, status, body_en, body_ar, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .bind(crypto.randomUUID(), id, parsed.status, parsed.bodyEn, parsed.bodyAr, now, actor),
+      .bind(firstUpdateId, id, parsed.status, parsed.bodyEn, parsed.bodyAr, now, actor),
   ]);
   await audit(c.env.REPORTS_DB, { actorId: actor, action: `status.${parsed.kind}.create`, targetType: 'status_incident', targetId: id, metadata: { status: parsed.status, impact: parsed.impact, components: parsed.components } });
+  await announce(c.env, { incidentId: id, updateId: firstUpdateId, event: closed ? 'resolved' : 'created', components: parsed.components });
   const row = await load(db, id);
   return c.json({ success: true, result: (await withUpdates(db, [row!]))[0] }, 201);
 });
@@ -288,11 +299,13 @@ app.post('/incidents/:id/updates', async (c) => {
   const now = new Date().toISOString();
   const actor = actorOf(c);
   const resolvedAt = isClosedStatus(status) ? (row.resolved_at ?? now) : null;
+  const updateId = crypto.randomUUID();
   await db.batch([
-    db.prepare('INSERT INTO incident_updates (id, incident_id, status, body_en, body_ar, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(crypto.randomUUID(), id, status, bodyEn, bodyAr, now, actor),
+    db.prepare('INSERT INTO incident_updates (id, incident_id, status, body_en, body_ar, created_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(updateId, id, status, bodyEn, bodyAr, now, actor),
     db.prepare('UPDATE incidents SET status = ?, impact = ?, resolved_at = ?, updated_at = ?, updated_by = ? WHERE id = ?').bind(status, impact, resolvedAt, now, actor, id),
   ]);
   await audit(c.env.REPORTS_DB, { actorId: actor, action: `status.${row.kind}.update`, targetType: 'status_incident', targetId: id, metadata: { status, impact } });
+  await announce(c.env, { incidentId: id, updateId, event: isClosedStatus(status) ? 'resolved' : 'updated', components: JSON.parse(row.components) as string[] });
   return c.json({ success: true, result: (await withUpdates(db, [(await load(db, id))!]))[0] }, 201);
 });
 
@@ -329,6 +342,110 @@ app.post('/incidents/:id/purge', async (c) => {
   await db.batch([db.prepare('DELETE FROM incident_updates WHERE incident_id = ?').bind(id), db.prepare('DELETE FROM incidents WHERE id = ?').bind(id)]);
   await audit(c.env.REPORTS_DB, { actorId: actorOf(c), action: `status.${row.kind}.purge`, targetType: 'status_incident', targetId: id });
   return c.json({ success: true, result: { id } });
+});
+
+// ------------------------------------------------------------ subscriptions
+
+const WEBHOOK_NAME_MAX = 80;
+const MAX_WEBHOOKS = 20;
+
+app.get('/subscriptions', async (c) => {
+  const db = c.env.STATUS_DB!;
+  const [counts, webhooks, notes] = await Promise.all([
+    db.prepare("SELECT status, COUNT(*) AS n FROM subscribers WHERE kind = 'email' GROUP BY status").all<{ status: string; n: number }>(),
+    db.prepare("SELECT id, name, address, created_at, created_by FROM subscribers WHERE kind = 'webhook' ORDER BY created_at").all<{ id: string; name: string | null; address: string; created_at: string; created_by: string | null }>(),
+    db
+      .prepare(
+        `SELECT n.id, n.incident_id, n.event, n.created_at, n.fanned_out_at, n.recipients, i.title_en, i.title_ar, i.kind,
+           (SELECT COUNT(*) FROM deliveries d WHERE d.notification_id = n.id AND d.status IN ('sent', 'sunk')) AS sent,
+           (SELECT COUNT(*) FROM deliveries d WHERE d.notification_id = n.id AND d.status = 'failed') AS failed,
+           (SELECT COUNT(*) FROM deliveries d WHERE d.notification_id = n.id AND d.status = 'queued') AS queued
+         FROM notifications n LEFT JOIN incidents i ON i.id = n.incident_id ORDER BY n.created_at DESC LIMIT 20`,
+      )
+      .all<Record<string, unknown>>(),
+  ]);
+  const count = (s: string) => Number((counts.results ?? []).find((r) => r.status === s)?.n ?? 0);
+  // Last outcome per webhook: shown next to it so a broken endpoint is visible
+  const lastByHook = new Map<string, { status: string; error: string | null; at: string }>();
+  for (const w of webhooks.results ?? []) {
+    const d = await db.prepare('SELECT status, error, updated_at FROM deliveries WHERE subscriber_id = ? ORDER BY updated_at DESC LIMIT 1').bind(w.id).first<{ status: string; error: string | null; updated_at: string }>();
+    if (d) lastByHook.set(w.id, { status: d.status, error: d.error, at: d.updated_at });
+  }
+  return c.json({
+    success: true,
+    result: {
+      email: { active: count('active'), pending: count('pending') },
+      webhooks: (webhooks.results ?? []).map((w) => ({ id: w.id, name: w.name ?? '', url: w.address, createdAt: w.created_at, createdBy: w.created_by, last: lastByHook.get(w.id) ?? null })),
+      notifications: (notes.results ?? []).map((n) => ({
+        id: n.id as string,
+        incidentId: n.incident_id as string,
+        kind: (n.kind as string | null) ?? null,
+        titleEn: (n.title_en as string | null) ?? null,
+        titleAr: (n.title_ar as string | null) ?? null,
+        event: n.event as string,
+        createdAt: n.created_at as string,
+        fannedOutAt: (n.fanned_out_at as string | null) ?? null,
+        recipients: n.recipients === null ? null : Number(n.recipients),
+        sent: Number(n.sent ?? 0),
+        failed: Number(n.failed ?? 0),
+        queued: Number(n.queued ?? 0),
+      })),
+    },
+  });
+});
+
+app.post('/webhooks', async (c) => {
+  const b = ((await c.req.json().catch(() => null)) ?? {}) as Record<string, unknown>;
+  const name = cleanText(b.name, WEBHOOK_NAME_MAX);
+  if (!name) return bad(c, `name is required (at most ${WEBHOOK_NAME_MAX} characters)`);
+  const checked = validateWebhookUrl(b.url, c.env.ENVIRONMENT);
+  if ('error' in checked) return bad(c, checked.error);
+  const db = c.env.STATUS_DB!;
+  const total = await db.prepare("SELECT COUNT(*) AS n FROM subscribers WHERE kind = 'webhook'").first<{ n: number }>();
+  if (Number(total?.n ?? 0) >= MAX_WEBHOOKS) return bad(c, `at most ${MAX_WEBHOOKS} webhooks`);
+  if (await db.prepare("SELECT id FROM subscribers WHERE kind = 'webhook' AND address = ?").bind(checked.url).first()) return c.json({ success: false, code: 'conflict', error: 'This URL is already registered' }, 409);
+  const id = crypto.randomUUID();
+  const secret = newWebhookSecret();
+  const now = new Date().toISOString();
+  await db
+    .prepare("INSERT INTO subscribers (id, kind, address, locale, name, status, secret, created_at, created_by, confirmed_at) VALUES (?, 'webhook', ?, 'en', ?, 'active', ?, ?, ?, ?)")
+    .bind(id, checked.url, name, secret, now, actorOf(c), now)
+    .run();
+  await audit(c.env.REPORTS_DB, { actorId: actorOf(c), action: 'status.webhook.create', targetType: 'status_webhook', targetId: id, metadata: { name, host: new URL(checked.url).host } });
+  return c.json({ success: true, result: { id, name, url: checked.url, createdAt: now, secret } }, 201);
+});
+
+app.delete('/webhooks/:id', async (c) => {
+  const id = c.req.param('id');
+  if (!ID.test(id)) return c.json({ success: false, code: 'not_found', error: 'No such webhook' }, 404);
+  const db = c.env.STATUS_DB!;
+  const row = await db.prepare("SELECT id, name, address FROM subscribers WHERE id = ? AND kind = 'webhook'").bind(id).first<{ id: string; name: string | null; address: string }>();
+  if (!row) return c.json({ success: false, code: 'not_found', error: 'No such webhook' }, 404);
+  await db.batch([db.prepare('DELETE FROM deliveries WHERE subscriber_id = ?').bind(id), db.prepare('DELETE FROM subscribers WHERE id = ?').bind(id)]);
+  await audit(c.env.REPORTS_DB, { actorId: actorOf(c), action: 'status.webhook.delete', targetType: 'status_webhook', targetId: id, metadata: { name: row.name, host: new URL(row.address).host } });
+  return c.json({ success: true, result: { id } });
+});
+
+app.post('/subscribers/remove', async (c) => {
+  const b = ((await c.req.json().catch(() => null)) ?? {}) as Record<string, unknown>;
+  const email = typeof b.email === 'string' ? b.email.trim().toLowerCase() : '';
+  if (!email || email.length > 254 || !email.includes('@')) return bad(c, 'email must be an email address');
+  const db = c.env.STATUS_DB!;
+  const row = await db.prepare("SELECT id FROM subscribers WHERE kind = 'email' AND address = ?").bind(email).first<{ id: string }>();
+  // The audit row never holds the address: only whether one was removed
+  if (row) await db.batch([db.prepare('DELETE FROM deliveries WHERE subscriber_id = ?').bind(row.id), db.prepare('DELETE FROM subscribers WHERE id = ?').bind(row.id)]);
+  await audit(c.env.REPORTS_DB, { actorId: actorOf(c), action: 'status.subscriber.remove', targetType: 'status_subscriber', targetId: row?.id ?? 'none', metadata: { removed: !!row } });
+  return c.json({ success: true, result: { removed: !!row } });
+});
+
+app.post('/notifications/:id/retry', async (c) => {
+  const id = c.req.param('id');
+  if (!ID.test(id)) return c.json({ success: false, code: 'not_found', error: 'No such notification' }, 404);
+  const out = await retryNotification(c.env, id);
+  if (out === 'gone') return c.json({ success: false, code: 'not_found', error: 'No such notification' }, 404);
+  if (!out) return c.json({ success: false, code: 'unavailable', error: 'Could not queue the deliveries' }, 503);
+  await audit(c.env.REPORTS_DB, { actorId: actorOf(c), action: 'status.notification.retry', targetType: 'status_notification', targetId: id, metadata: { queued: out.queued } });
+  return c.json({ success: true, result: out });
 });
 
 export default app;

@@ -18,6 +18,7 @@ import { CONTACT_MAIL_VERSION, enqueueContactMail, type ContactMailJob } from '.
 import { getWarning, recordWarningEmail } from './content/warnings';
 import { enqueueWarningMail } from './warning-mail';
 import { enqueueRejectionMail, rejectionMailJob } from './review/rejection-mail';
+import { retryConfirm, retryNotification } from './status-notify';
 import { logger } from './logger';
 import { enqueueDeviceRevocation } from './deviceTokenRevocation';
 import { getIssue, getSubscriber, renewConfirmToken, requeueFailed, setDelivery } from './newsletter-store';
@@ -134,6 +135,22 @@ export const BUILTIN_RETRIES: Record<string, (env: AdminBindings, args: Record<s
       return { ok: false, status: 'open', result: 'Could not queue the emails' };
     }
     return { ok: true, status: 'resolved', result: `Queued again (${failed.length} email${failed.length === 1 ? '' : 's'})` };
+  },
+  /** Status page subscriptions: queues a notification's failed deliveries (or its unfinished fan-out) again. */
+  'status-notify': async (env, args) => {
+    if (!args.id) return { ok: false, status: 'open', result: 'Not a status notification' };
+    const out = await retryNotification(env, args.id);
+    if (out === 'gone') return { ok: false, status: 'dismissed', result: 'Notification no longer exists' };
+    if (!out) return { ok: false, status: 'open', result: 'Could not queue the deliveries' };
+    return { ok: true, status: 'resolved', result: out.queued ? `Queued ${out.queued} again` : 'Nothing to send again' };
+  },
+  /** Status page subscriptions: queues a pending subscriber's confirmation email again. */
+  'status-confirm': async (env, args) => {
+    if (!args.id) return { ok: false, status: 'open', result: 'Not a status subscription' };
+    const out = await retryConfirm(env, args.id);
+    if (out === 'gone') return { ok: true, status: 'resolved', result: 'Nothing to send: confirmed or removed since' };
+    if (!out) return { ok: false, status: 'open', result: 'Could not queue the email' };
+    return { ok: true, status: 'resolved', result: 'Queued again' };
   },
   'warning-email': async (env, args) => {
     const id = args.id;
