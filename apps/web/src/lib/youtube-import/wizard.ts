@@ -3,7 +3,7 @@
  * to open, what the selection and matches calls send, how review groups and
  * progress are counted. No React and no I/O, so it is unit-tested directly.
  */
-import { matchTakeoutFiles, normalizeTitle, type TakeoutFile, type TakeoutVideoRow, type YtFileMatch, type YtImport, type YtImportItem, type YtImportPlaylist, type YtVisibilityMode } from '@al-ummah/shared-types';
+import { matchTakeoutFiles, normalizeTitle, YT_IMPORT_ERRORS, type TakeoutFile, type TakeoutVideoRow, type YtFileMatch, type YtImport, type YtImportItem, type YtImportPlaylist, type YtVisibilityMode } from '@al-ummah/shared-types';
 import { keyOfMatch, toFileMatch } from './takeout';
 
 export const WIZARD_STEPS = ['connect', 'pick', 'files', 'review', 'import'] as const;
@@ -191,11 +191,6 @@ export function connectErrorKey(code: string | null): 'youtube_denied' | 'youtub
   return code === 'youtube_denied' || code === 'youtube_no_channel' || code === 'youtube_import_off' ? code : 'failed';
 }
 
-/**
- * Why `oauth/finish` refused the connection, for the message beside "Connect again": another
- * account on this site started it (403), or the state expired or was already used (other 4xx).
- * null: not a refusal (network, server), shown as a reported failure.
- */
 /** The server's reason for a failed item (YtImportItem.error) as a key of t.studio.youtube.progress.errors. */
 export function itemErrorKey(code: string | null | undefined): 'video_removed' | 'upload_failed' | 'generic' {
   return code === 'video_removed' || code === 'upload_failed' ? code : 'generic';
@@ -206,8 +201,17 @@ export function importErrorKey(code: string | null | undefined): 'import_disconn
   return code === 'youtube_not_connected' ? 'import_disconnected' : 'import_failed';
 }
 
-export function finishErrorKey(status: number | undefined): 'connect_other_account' | 'connect_expired' | null {
+export type FinishErrorKey = 'connect_other_account' | 'connect_expired' | 'youtube_denied' | 'youtube_no_channel' | 'youtube_import_off';
+
+/**
+ * Why `POST oauth/finish` refused the connection, for the message beside "Connect again":
+ * 403 another account on this site started it (the consent is used up); 404
+ * `youtube_connect_expired` the connect token is unknown, used or older than 5 minutes; 400/409
+ * Google's own refusals. null: not a refusal (502, network), shown as a reported failure.
+ */
+export function finishErrorKey(status: number | undefined, code?: string | null): FinishErrorKey | null {
+  if (code === YT_IMPORT_ERRORS.denied || code === YT_IMPORT_ERRORS.noChannel || code === YT_IMPORT_ERRORS.notEnabled) return code;
   if (status === 403) return 'connect_other_account';
-  if (status !== undefined && status >= 400 && status < 500 && status !== 401) return 'connect_expired';
+  if (code === YT_IMPORT_ERRORS.connectExpired || status === 404 || status === 410) return 'connect_expired';
   return null;
 }

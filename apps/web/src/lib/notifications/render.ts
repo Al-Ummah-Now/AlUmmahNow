@@ -32,6 +32,7 @@ export const NOTIFICATION_CENTER_KEYS: readonly RealtimeNotificationKey[] = [
   'tierRequestDeclined',
   'tierRequestReceived',
   'tierChanged',
+  'youtubeImportFinished',
 ];
 
 export function isCenterKey(key: unknown): key is RealtimeNotificationKey {

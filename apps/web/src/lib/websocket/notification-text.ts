@@ -25,6 +25,7 @@ const KEY_TO_TEXT: Record<Exclude<RealtimeNotificationKey, 'accountWarning'>, { 
   tierRequestDeclined: { title: 'tierRequestDeclinedTitle', message: 'tierRequestDeclinedMessage' },
   tierRequestReceived: { title: 'tierRequestReceivedTitle', message: 'tierRequestReceivedMessage' },
   tierChanged: { title: 'tierChangedTitle', message: 'tierChangedMessage' },
+  youtubeImportFinished: { title: 'youtubeImportFinishedTitle', message: 'youtubeImportFinishedMessage' },
 };
 
 const CHANNEL_TEAM_KEYS = new Set<string>(['channelInviteReceived', 'channelInviteAccepted', 'channelRoleChanged', 'channelMemberRemoved', 'channelMemberLeft']);
