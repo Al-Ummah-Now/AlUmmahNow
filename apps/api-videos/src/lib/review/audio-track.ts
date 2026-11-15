@@ -24,6 +24,7 @@ import {
 import R2Repository from '../r2Repo';
 import { logger } from '../logger';
 import { decisionTransition, outcomeTransition } from './apply';
+import { reviewGateFor } from './gate';
 import type { ReviewScanEnv } from './scan';
 import type { AudioTracksEnv } from '../audio-tracks/service';
 
@@ -141,8 +142,34 @@ export async function applyAudioTrackOutcome(env: AudioTrackReviewEnv, videoId: 
 	if (res.applied) {
 		logger.info('[Review] Audio track outcome applied', { videoId, trackId, reviewId: req.reviewId, route: req.routing.route, status: res.review.status });
 		await repackageIfChanged(env, videoId, trackId, res);
+		await recheckPendingLabel(env, videoId, trackId);
 	}
 	return strip(res);
+}
+
+/**
+ * A name changed while the track was still checked: once the check has ended, a cleared track's
+ * name gets its text check (metadata_edit), which can only pull it back. Never throws.
+ */
+export async function recheckPendingLabel(env: AudioTrackReviewEnv, videoId: string, trackId: string): Promise<void> {
+	try {
+		let due: AudioTrack | null = null;
+		const saved = await repo(env).updateObject(videoId, (fresh) => {
+			due = null;
+			const t = (fresh.audioTracks ?? []).find((x) => x.id === trackId) as (AudioTrack & { labelCheckPending?: boolean }) | undefined;
+			if (!t?.labelCheckPending || !t.review || t.review.status === 'checking') return false;
+			delete t.labelCheckPending;
+			if (t.review.status === 'approved' || t.review.status === 'post_review') due = t;
+			return true;
+		});
+		const track = due as AudioTrack | null;
+		if (!saved || !track) return;
+		const gate = await reviewGateFor(env as never, saved);
+		if (gate.mode !== 'enforce' && gate.mode !== 'enforce_nsfw') return;
+		await queueAudioTrackScan(env, saved, track, { reviewId: track.review!.reviewId, mode: gate.mode, trigger: 'metadata_edit' });
+	} catch (error) {
+		logger.error('[Review] Could not re-check a track name', { videoId, trackId, error: error instanceof Error ? error.message : String(error) });
+	}
 }
 
 /** A person's decision through admin-api (approve | reject | undo). */
