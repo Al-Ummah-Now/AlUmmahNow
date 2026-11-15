@@ -229,6 +229,14 @@ export function StudioDashboard({ locale, channelId, role, liveOn = false, uploa
           <p className="mb-4 text-sm text-muted-foreground">{text.welcome.body}</p>
           <Button asChild className="min-h-11"><Link href={studioUploadHref(locale, channelId)}>{text.welcome.upload}</Link></Button>
         </div>
+        {/* No videos yet, but posts can already have comments */}
+        {can(role, 'comment.moderate') && (
+          <div className="mt-4">
+            <Card title={text.recentComments.title} testId="studio-dash-comments">
+              <RecentComments locale={locale} channelId={channelId} />
+            </Card>
+          </div>
+        )}
       </div>
     );
   }

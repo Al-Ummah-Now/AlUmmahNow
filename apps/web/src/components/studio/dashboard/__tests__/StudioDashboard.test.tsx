@@ -126,6 +126,14 @@ describe('StudioDashboard', () => {
     expect(held).toHaveBeenCalledWith('c1', 3);
   });
 
+  it('keeps Recent comments on the welcome view (a channel with only posts has comments)', async () => {
+    counts.mockResolvedValue(ZERO);
+    list.mockResolvedValue({ items: [], cursor: null });
+    show();
+    expect(await screen.findByTestId('studio-dash-welcome')).toBeInTheDocument();
+    expect(await screen.findByTestId('studio-dash-comments-body')).toBeInTheDocument();
+  });
+
   it('a section with no data says so plainly', async () => {
     counts.mockResolvedValue({ ...ZERO, published: 1 });
     list.mockImplementation(async (_c: string, q: { status: string }) => ({ items: q.status === 'published' ? byStatus.published : [], cursor: null }));
