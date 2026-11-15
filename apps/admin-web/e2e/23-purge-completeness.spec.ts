@@ -12,7 +12,7 @@ import crypto from 'node:crypto';
 import { test, expect } from './support/fixtures';
 import { adminApi } from './support/api';
 import { E2E_ENTITY_PREFIX, LOCAL_STACK, STACK_CONTROL_URL } from './support/env';
-import { runCron, stackR2, stackSql } from './support/local-stack';
+import { eraseRowsMentioning, runCron, stackR2, stackSql } from './support/local-stack';
 
 const NOTIFICATIONS = 'al-ummah-now-notifications';
 const SEARCH = 'al-ummah-now-search';
@@ -56,6 +56,9 @@ test.describe('purge completeness', () => {
     await stackR2('DELETE', 'videos', videoId);
     await stackR2('DELETE', 'community-posts', `posts/${channelId}/${postId}.json`);
     await stackSql(NOTIFICATIONS, `DELETE FROM notifications WHERE id = '${hex}'`);
+    // Search-side rows the record writes left (the privacy footprint of the seeded owner, the
+    // IndexNow ping a removed URL keeps by design): ours carry the hex, nothing else does
+    for (const table of ['privacy_footprints', 'privacy_footprint_sigs', 'indexnow_pending']) await eraseRowsMentioning(SEARCH, table, [hex]);
   });
 
   test('PURGE-01 a deleted video\'s notifications are hidden at once and come back on restore', async () => {
