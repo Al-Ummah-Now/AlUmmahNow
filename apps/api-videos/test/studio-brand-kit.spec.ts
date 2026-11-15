@@ -117,6 +117,31 @@ describe('shared assets', () => {
 		for (let i = 0; i < STUDIO_ASSET_LIMITS.maxAssets; i++) assert.equal((await upload(env, PNG, `L${i}`)).status, 201);
 		const res = await upload(env, PNG, 'one more');
 		assert.deepEqual([res.status, ((await res.json()) as any).error], [409, 'library_full']);
+		// A full library never stores the bytes
+		assert.equal([...env.MEDIA_PRIVATE.store.keys()].filter((k) => k.includes('/assets/')).length, STUDIO_ASSET_LIMITS.maxAssets);
+	});
+
+	it('an upload that loses the race to the last free slot leaves no bytes behind', async () => {
+		const env = { MEDIA_PRIVATE: new Bucket() };
+		for (let i = 0; i < STUDIO_ASSET_LIMITS.maxAssets - 1; i++) assert.equal((await upload(env, PNG, `L${i}`)).status, 201);
+		// Another upload takes the last slot after this one passed the quota check and stored its bytes
+		const bucket = env.MEDIA_PRIVATE;
+		const put = bucket.put.bind(bucket);
+		let raced = false;
+		bucket.put = async (key: string, body: any, opts?: any) => {
+			const r = await put(key, body, opts);
+			if (!raced && key.includes('/assets/')) {
+				raced = true;
+				const index = JSON.parse(bucket.store.get('studio/owner/assets.json')!.body);
+				index.assets.push({ id: 'ffffffffffffffff', kind: 'image', name: 'other', contentType: 'image/png', bytes: 10, createdAt: new Date().toISOString() });
+				await put('studio/owner/assets.json', JSON.stringify(index));
+			}
+			return r;
+		};
+		const res = await upload(env, PNG, 'loser');
+		assert.deepEqual([res.status, ((await res.json()) as any).error], [409, 'library_full']);
+		const stored = [...bucket.store.keys()].filter((k) => k.includes('/assets/'));
+		assert.equal(stored.length, STUDIO_ASSET_LIMITS.maxAssets - 1, 'the losing upload deleted its bytes');
 	});
 
 	it('everything lives under the account prefix', () => {

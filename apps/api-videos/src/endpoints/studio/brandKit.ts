@@ -172,19 +172,27 @@ export class StudioAssetCreate extends AuthenticatedRoute {
 		const type = sniff(data);
 		if (!type) return c.json({ success: false, error: 'unsupported_type' }, 400);
 		const asset: StudioAsset = { id: newAssetId(), kind: type.kind, name, contentType: type.contentType, bytes: data.byteLength, createdAt: new Date().toISOString() };
-		for (let attempt = 0; attempt < 5; attempt++) {
-			const { assets, etag } = await readAssets(bucket, ownerId);
-			if (assets.length >= STUDIO_ASSET_LIMITS.maxAssets || assets.reduce((n, a) => n + a.bytes, 0) + asset.bytes > STUDIO_ASSET_LIMITS.maxTotalBytes) {
-				return c.json({ success: false, error: 'library_full' }, 409);
+		const full = (assets: StudioAsset[]) =>
+			assets.length >= STUDIO_ASSET_LIMITS.maxAssets || assets.reduce((n, a) => n + a.bytes, 0) + asset.bytes > STUDIO_ASSET_LIMITS.maxTotalBytes;
+		// Quota first, so a full library never stores the bytes at all
+		if (full((await readAssets(bucket, ownerId)).assets)) return c.json({ success: false, error: 'library_full' }, 409);
+		await bucket.put(assetKey(ownerId, asset.id), data, { httpMetadata: { contentType: type.contentType } });
+		// The bytes are stored: every exit but success deletes them, so nothing is kept outside the index
+		let outcome: 'added' | 'library_full' | 'busy' = 'busy';
+		try {
+			for (let attempt = 0; attempt < 5 && outcome === 'busy'; attempt++) {
+				const { assets, etag } = await readAssets(bucket, ownerId);
+				if (full(assets)) outcome = 'library_full';
+				else if (await writeAssets(bucket, ownerId, [...assets, asset], etag)) outcome = 'added';
 			}
-			if (attempt === 0) await bucket.put(assetKey(ownerId, asset.id), data, { httpMetadata: { contentType: type.contentType } });
-			if (await writeAssets(bucket, ownerId, [...assets, asset], etag)) {
-				logger.info('[Studio] Asset added', { ownerId, assetId: asset.id, kind: asset.kind, bytes: asset.bytes });
-				return c.json({ success: true, data: asset }, 201);
-			}
+		} finally {
+			if (outcome !== 'added') await bucket.delete(assetKey(ownerId, asset.id));
 		}
-		await bucket.delete(assetKey(ownerId, asset.id));
-		return c.json({ success: false, error: 'busy' }, 503);
+		if (outcome === 'added') {
+			logger.info('[Studio] Asset added', { ownerId, assetId: asset.id, kind: asset.kind, bytes: asset.bytes });
+			return c.json({ success: true, data: asset }, 201);
+		}
+		return outcome === 'library_full' ? c.json({ success: false, error: 'library_full' }, 409) : c.json({ success: false, error: 'busy' }, 503);
 	}
 }
 
