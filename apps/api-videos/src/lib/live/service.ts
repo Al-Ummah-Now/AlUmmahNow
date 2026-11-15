@@ -352,10 +352,18 @@ export async function endOverTierLimit(env: LiveEnv, now = Date.now()): Promise<
 		.all<LiveSessionRow>();
 	for (const s of overLength ?? []) await end(s, 'longest stream');
 
-	const { results: owners } = await d1
-		.prepare("SELECT DISTINCT owner_id FROM live_sessions WHERE status = 'live' AND limit_minutes IS NOT NULL AND owner_id IS NOT NULL LIMIT 50")
-		.all<{ owner_id: string }>();
-	for (const { owner_id: ownerId } of owners ?? []) {
+	// Every owner with a limited stream live, a page at a time (keyset on owner_id), so none is skipped
+	const owners: string[] = [];
+	for (let after = ''; ; ) {
+		const { results: page } = await d1
+			.prepare("SELECT DISTINCT owner_id FROM live_sessions WHERE status = 'live' AND limit_minutes IS NOT NULL AND owner_id IS NOT NULL AND owner_id > ? ORDER BY owner_id LIMIT 100")
+			.bind(after)
+			.all<{ owner_id: string }>();
+		for (const r of page ?? []) owners.push(r.owner_id);
+		if (!page || page.length < 100) break;
+		after = page[page.length - 1].owner_id;
+	}
+	for (const ownerId of owners) {
 		// The stored tier only (never resolveCreator: without the owner's roles it would drop a super admin's row)
 		const assignment = await readAssignment(d1, ownerId);
 		const tier = assignment ? await readTier(d1, assignment.tierId) : null;
