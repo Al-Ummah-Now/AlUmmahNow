@@ -96,6 +96,7 @@ alert directly through Resend to `ALERT_EMAIL_TO`. Internal components alert lik
 | `/api/status.json` | overall state, public components (state, 90-day uptime, daily bars), active / upcoming / recent incidents with their public components (both languages); CORS open |
 | `/feed.atom`, `/feed.rss` (`/ar/…`) | incidents and maintenance, newest update first |
 | `/healthz` | the Worker and its D1 (not cached) |
+| `/subscribe`, `/subscribe/confirm`, `/unsubscribe` (`/ar/…`) | email subscriptions (see [Subscriptions](#subscriptions)); never cached |
 
 Light and dark follow the device on the first visit; the "Dark mode" button's choice is remembered
 on the device (`localStorage aun_status_mode`, no "System" option). Colours are the Fawanees tokens.
@@ -119,12 +120,95 @@ on the device (`localStorage aun_status_mode`, no "System" option). Colours are 
 ## Local
 
 ```bash
-pnpm --filter @al-ummah/status test        # state machine, uptime math, probes, run + alerts on SQLite, HTML, feeds
+pnpm --filter @al-ummah/status test        # state machine, uptime math, probes, run + alerts on SQLite, HTML, feeds, subscriptions
 cd apps/status && pnpm dev                  # wrangler dev on :3095 with a local D1 (no cron: trigger it with /__scheduled)
 ```
 
 The local E2E stack runs the status Worker on port 3095, sharing its D1 with admin-api's
 `STATUS_DB`; `apps/admin-web/e2e/status-page.spec.ts` posts an incident in the admin and reads it on
-the public page in English and Arabic.
+the public page in English and Arabic; `23-status-subscriptions.spec.ts` subscribes, confirms, gets
+an incident by email (the stack's Resend fake) and by a signed webhook (the stack's receiver,
+`https://webhooks.local-stack.test/…`, `GET /__fake/webhooks`) and unsubscribes.
 
-Subscriptions (email / webhook) are not built yet: [#1193](https://github.com/Al-Ummah-Now/AlUmmahNow/issues/1193).
+## Subscriptions
+
+[#1193](https://github.com/Al-Ummah-Now/AlUmmahNow/issues/1193). Every incident or scheduled
+maintenance with at least one **public** component is sent to subscribers when it is posted, at
+each update and when it is resolved or completed (events `created`, `updated`, `resolved`). Edits
+(title, components, window) are not sent. Incidents on internal components only are never sent,
+and what is sent lists only the public components.
+
+**Email (public, double opt-in).** `/subscribe` (`/ar/subscribe`), linked from a card at the
+bottom of the page and the footer. The visitor gives an address and the one language of the emails
+(English or Arabic). Answering never tells whether the address was already subscribed.
+
+| Path | What |
+|---|---|
+| `GET /subscribe`, `POST /subscribe` | the form; a post stores a **pending** subscriber and queues the confirmation email, then 303 → `/subscribe/sent` |
+| `GET /subscribe/confirm?t=` | a page with a **Confirm subscription** button (GET changes nothing: mail scanners open links) |
+| `POST /subscribe/confirm` | pending → **active** |
+| `GET /unsubscribe?t=` | a page with an **Unsubscribe** button |
+| `POST /unsubscribe?t=` | deletes the subscriber and its delivery records; also the RFC 8058 one-click target of `List-Unsubscribe-Post` |
+
+- Abuse limits: 5 subscribe posts per IP per hour (a keyed hash of the IP, kept for a day; no IPs
+  stored), one confirmation email per address per 10 minutes, nothing at all for an active address,
+  a honeypot field, and posts from another origin are refused (403). Pending subscriptions nobody
+  confirmed are deleted after 7 days (`STATUS_CONFIRM_DAYS`) by the daily prune.
+- Each email address has one random token in its confirm and unsubscribe links (`subscribers.token`).
+  It is stored as is because every email carries the unsubscribe link; it controls only that one
+  subscription. Unsubscribing deletes the row, so the address is kept only while subscribed.
+- Every incident email is in the subscriber's language on the shared branded layout
+  (`admin-api lib/email/layout.ts`): status, affected public components, the maintenance window,
+  the message, a link to the incident page and an unsubscribe link, with `List-Unsubscribe` and
+  `List-Unsubscribe-Post: List-Unsubscribe=One-Click` headers. Sent through Resend from
+  `support@alummahnow.net` like the other platform mail. Outside production, subjects start with
+  `[qa]`/`[stage]` and `@e2e.alummahnow.net` addresses are not sent (status `sunk`).
+
+**Webhooks (admins).** Admins add and delete them on the videos admin's Status page
+(**Subscriptions** card): a name and an `https` URL with a public host name (no IP literals,
+localhost, internal names or credentials; at most 20). A signing secret (`whsec_…`) is shown once
+when it is added. Each delivery is a `POST` of JSON (`StatusWebhookPayload` in
+`packages/shared-types/src/status-page.ts`):
+
+```json
+{ "type": "incident.created", "id": "<notification id, same on every retry>", "environment": "production", "sentAt": "…",
+  "incident": { "id": "…", "kind": "incident", "title": { "en": "…", "ar": "…" }, "status": "investigating", "impact": "partial",
+                "components": ["playback"], "startsAt": "…", "endsAt": null, "resolvedAt": null, "url": "https://status.alummahnow.net/incidents/…" },
+  "update": { "status": "investigating", "body": { "en": "…", "ar": "…" }, "at": "…" } }
+```
+
+Headers: `x-aun-event` (the type), `x-aun-delivery` (the id), `x-aun-timestamp` (Unix seconds) and
+`x-aun-signature: sha256=<hex HMAC-SHA256 of "<timestamp>.<raw body>" with the secret>`. Receivers
+should check the signature, refuse timestamps more than 5 minutes old and treat `id` as the dedupe
+key (a retry can repeat a delivery). Redirects are not followed; 10 s timeout; any 2xx is success.
+
+**Delivery (queued).** Nothing is sent on a request path. The status Worker (confirmations) and
+admin-api (incident posts and updates, `announce()`) queue jobs on `al-ummah-now-status-notify[-env]`
+(`STATUS_NOTIFY_QUEUE`), consumed by admin-api (`lib/status-notify.ts`):
+
+1. `status-fanout`: one `deliveries` row (`queued`) and one `status-deliver` job per active subscriber.
+2. `status-deliver`: one email or webhook POST. Network errors, 408/429 and 5xx retry with backoff
+   (30 s doubling, at most 15 min, 6 attempts); a webhook 4xx or a refused address fails at once.
+   A subscriber who left or an incident deleted since is `skipped`. A delivery that is no longer
+   `queued` is never sent again, and Resend gets an Idempotency-Key per email.
+3. `status-confirm`: the confirmation email of a pending subscriber.
+
+A final failure marks the delivery `failed`, goes to the platform DLQ (`al-ummah-now-dlq[-env]`,
+also the queue's own dead-letter queue) and raises one needs-action item per notification on the
+admin **Errors** page (`status-notify:<id>`, Retry "Send again" queues every failed delivery of it;
+`status-confirm:<id>` for a confirmation email). The Subscriptions card shows the email counts
+(confirmed, waiting; never addresses), each webhook's last delivery, and the last 20 notifications
+with recipients, delivered and failed counts and **Send failed again**. An admin can remove one
+email address on request (a deletion request); the audit log records that one was removed, never
+the address. Every admin change is in `admin_audit_log` (`status.webhook.create|delete`,
+`status.subscriber.remove`, `status.notification.retry`).
+
+Tables (`migrations/0002_subscriptions.sql`): `subscribers`, `notifications`, `deliveries`,
+`subscribe_limits`. The daily prune also deletes notification and delivery records older than 30 days.
+
+Admin endpoints (admin-api `/api/status`, `status:manage`): `GET /subscriptions`,
+`POST /webhooks`, `DELETE /webhooks/:id`, `POST /subscribers/remove`, `POST /notifications/:id/retry`.
+
+**Cost.** Resend volume is the only real cost: one email per subscriber per incident post or
+update. Queue operations (about 3 per delivery) and D1 writes stay inside the included usage at any
+realistic subscriber count; nothing runs while there are no incidents.

@@ -196,6 +196,8 @@ export const WORKERS: StackWorker[] = [
       WEBSOCKET_URL: url('websocket'),
       ADMIN_WEB_URL: url('admin-web'),
       VIDEOS_API_URL: url('api-videos'),
+      // Links in status page mail (lib/status-notify.ts): the stack's status Worker
+      STATUS_PAGE_URL: url('status'),
       // Step-up window (middleware/passkeys.ts): the admin E2E run signs in once in its global setup and
       // purges in its teardown, well past 15 minutes; the 900 s rule is unit tested (test/passkeys.test.ts)
       STEP_UP_MAX_AGE_S: '86400',

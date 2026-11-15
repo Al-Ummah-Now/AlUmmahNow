@@ -89,6 +89,10 @@ export interface AdminBindings {
   CONTACT_MAIL_QUEUE?: Queue<unknown>;
   /** Platform DLQ (al-ummah-now-dlq[-env]): final mail failures, stored by the processor in dead_letters */
   ERRORS_DLQ?: Queue<unknown>;
+  /** Status page subscriptions (lib/status-notify.ts): confirmation mail, incident fan-out, deliveries; consumed here */
+  STATUS_NOTIFY_QUEUE?: Queue<unknown>;
+  /** Public status page origin for links in status mail; defaults by ENVIRONMENT (the local stack sets it) */
+  STATUS_PAGE_URL?: string;
 
   // Errors page (lib/errors-*.ts)
   /** Admin notification address for new-error and spike alerts (production only); falls back to CONTACT_INBOX */

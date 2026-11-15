@@ -66,3 +66,44 @@ export interface IncidentUpdateInput {
   bodyAr: string;
   impact?: string;
 }
+
+/** GET /api/status/subscriptions: email counts (never addresses), webhooks (no secrets), recent notifications. */
+export interface StatusSubscriptions {
+  email: { active: number; pending: number };
+  webhooks: StatusWebhook[];
+  notifications: StatusNotification[];
+}
+
+export interface StatusWebhook {
+  id: string;
+  name: string;
+  url: string;
+  createdAt: string;
+  createdBy?: string | null;
+  /** The newest delivery to it */
+  last: { status: string; error: string | null; at: string } | null;
+}
+
+/** POST /api/status/webhooks: the signing secret is returned once, here only. */
+export interface NewStatusWebhook {
+  id: string;
+  name: string;
+  url: string;
+  createdAt: string;
+  secret: string;
+}
+
+export interface StatusNotification {
+  id: string;
+  incidentId: string;
+  kind: 'incident' | 'maintenance' | null;
+  titleEn: string | null;
+  titleAr: string | null;
+  event: 'created' | 'updated' | 'resolved';
+  createdAt: string;
+  fannedOutAt: string | null;
+  recipients: number | null;
+  sent: number;
+  failed: number;
+  queued: number;
+}

@@ -17,6 +17,8 @@
   "secrets_store_secrets": [
     { "binding": "INTERNAL_API_KEY", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "internal-api-key-qa" }
   ],
+  // Email subscriptions (src/subscribe.ts): confirmation jobs; admin-api consumes the queue and sends
+  "queues": { "producers": [{ "binding": "STATUS_NOTIFY_QUEUE", "queue": "al-ummah-now-status-notify-qa" }] },
   "vars": {
     "ENVIRONMENT": "qa",
     "LOG_LEVEL": "warn",
