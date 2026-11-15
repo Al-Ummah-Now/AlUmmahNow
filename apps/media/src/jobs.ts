@@ -6,6 +6,43 @@ import { reviewMediaPrefix, type ReviewExtractionOptions } from '@al-ummah/share
 import { mediaPrefix, sanitizeRungs, type MediaAccess, type R2RungProgress, type TranscodeFailure, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
 
 export const MAX_ATTEMPTS = 3;
+
+/**
+ * A job that could not start (container start failed, capacity full): the queue redelivers it after
+ * these delays (seconds, per failed delivery). Short, because a start failure is either passing (a
+ * rollout, capacity) and should resume as soon as it clears, or a broken image that only a release
+ * fixes; the old 60 s doubling to 15 min left jobs waiting minutes after the cause was gone
+ * (2026-11-15: 2.7 min of pure backoff after the fixed image rolled out).
+ */
+export const START_RETRY_DELAYS = [15, 30, 60, 120, 300, 300, 300, 300];
+/** Deliveries before a job that never started is given up and reported (queue max_retries 8 + the first). */
+export const START_MAX_DELIVERIES = START_RETRY_DELAYS.length + 1;
+
+/** What the consumer does after a delivery could not start its job. */
+export function startRetry(attempts: number): { giveUp: false; delaySeconds: number } | { giveUp: true } {
+	if (attempts >= START_MAX_DELIVERIES) return { giveUp: true };
+	return { giveUp: false, delaySeconds: START_RETRY_DELAYS[Math.min(Math.max(1, attempts), START_RETRY_DELAYS.length) - 1]! };
+}
+
+/** Plain words for a start failure (what the admin and the Errors page show). */
+export function startFailureReason(error: string): string {
+	if (/no container instance|max_instances|capacity|not available at this time|too many/i.test(error)) return 'capacity full';
+	if (/just exited|crashed while checking for ports|not running, consider calling start|exited \(code/i.test(error)) return 'container start failed';
+	if (/refused the job/i.test(error)) return 'container refused the job';
+	return 'start failed';
+}
+
+/**
+ * Failures that are the platform's, not the job's: a launch lost to a restart, a container restarted
+ * under the job, or stopped by SIGTERM (a deploy's rollout). They retry soon and do not use up the
+ * job's attempts, up to INFRA_RETRY_LIMIT in a row (so a real loop still ends).
+ */
+export const INFRA_RETRY_LIMIT = 6;
+export const INFRA_RETRY_SECONDS = 15;
+export function isInfraFailure(error: string, exitCode?: number): boolean {
+	if (error === 'launch_lost' || error === 'container_restarted') return true;
+	return error === 'container_stopped' && exitCode === 143;
+}
 /** No word from the container for this long while it runs → treat as dead. */
 export const SILENCE_LIMIT_MS = 20 * 60 * 1000;
 /** Hard ceiling for one attempt (a 3 h lecture at 1x is well inside). */
@@ -41,6 +78,12 @@ export interface JobState {
 	rungs?: R2RungProgress[];
 	/** Container seconds of finished attempts */
 	priorSeconds: number;
+	/** Platform failures in a row (isInfraFailure); they do not count as attempts */
+	infraRetries?: number;
+	/** The pending retry was for a platform failure: it keeps the attempt number */
+	retryKeepsAttempt?: boolean;
+	/** When the scheduled retry runs (ms), while waiting_retry */
+	nextRetryAt?: number;
 	error?: string;
 	result?: TranscodeResult;
 	/** The latest failed attempt, as reported */
@@ -102,8 +145,9 @@ export function containerSeconds(job: JobState, now: number): number {
  */
 export const SOURCE_WAIT_ATTEMPTS = 24;
 
-export function onFailure(job: JobState, error: string, fatal: boolean): { retry: false } | { retry: true; delaySeconds: number } {
+export function onFailure(job: JobState, error: string, fatal: boolean, infra = false): { retry: false } | { retry: true; delaySeconds: number; keepsAttempt?: boolean } {
 	if (fatal) return { retry: false };
+	if (infra && (job.infraRetries ?? 0) < INFRA_RETRY_LIMIT) return { retry: true, delaySeconds: INFRA_RETRY_SECONDS, keepsAttempt: true };
 	if (error === 'source_unavailable') return job.attempt >= SOURCE_WAIT_ATTEMPTS ? { retry: false } : { retry: true, delaySeconds: 300 };
 	if (job.attempt >= MAX_ATTEMPTS) return { retry: false };
 	return { retry: true, delaySeconds: 60 * job.attempt * job.attempt };
@@ -144,6 +188,39 @@ export function hasWatchdogDue(sql: Pick<SqlStorage, 'exec'>, nowMs: number): bo
 	} catch {
 		return false;
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Container self-test (GET /priv/_selftest, the release smoke): one real container start
+// ---------------------------------------------------------------------------
+
+export interface SelfTestResult {
+	ok: boolean;
+	/** start() → the container answered /status */
+	startMs: number;
+	at: string;
+	error?: string;
+	/** The answer is a stored earlier run */
+	cached?: boolean;
+	/** Not tested: every instance is busy (capacity full), which is not a broken image */
+	skipped?: string;
+}
+
+/** A passing run is reused this long; the release smoke asks for a run after its deploy (`after`). */
+export const SELFTEST_FRESH_MS = 10 * 60 * 1000;
+/** Never more than one real start per this interval, whatever callers ask (the route is public). */
+export const SELFTEST_MIN_GAP_MS = 60 * 1000;
+/** The release smoke fails a cold start slower than this. */
+export const SELFTEST_START_LIMIT_MS = 60 * 1000;
+
+/** Start a container now, or answer with the stored run? */
+export function selfTestDue(last: SelfTestResult | undefined, now: number, after?: number): boolean {
+	if (!last) return true;
+	const age = now - Date.parse(last.at);
+	if (!(age >= SELFTEST_MIN_GAP_MS)) return false;
+	if (!last.ok) return true;
+	if (after !== undefined && Date.parse(last.at) < after) return true;
+	return age >= SELFTEST_FRESH_MS;
 }
 
 /** Keys an outbound PUT may write for this job (and nothing else). */

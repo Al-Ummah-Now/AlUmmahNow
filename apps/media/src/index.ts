@@ -9,8 +9,8 @@
  */
 import type { CaptionAudioJobMessage, LiveReviewJobMessage, Mp4JobMessage, TranscodeJobMessage } from '@al-ummah/shared-types';
 import { isCaptionAudioJobMessage, isLiveReviewJobMessage, isMediaRev, isMediaVideoId, isMp4JobMessage } from '@al-ummah/shared-types';
-import { liveReviewQueueAction, mp4QueueAction } from './jobs';
-import { reportCaptionAudio, reportLiveReviewMedia, reportMp4Event } from './videos-api';
+import { liveReviewQueueAction, mp4QueueAction, startFailureReason, startRetry } from './jobs';
+import { reportCaptionAudio, reportEvent, reportLiveReviewMedia, reportMp4Event } from './videos-api';
 import { handlePrivate } from './edge';
 import { errorText, hasInternalKey, log, type Env } from './env';
 import { withNoIndex } from './crawlers';
@@ -33,8 +33,26 @@ function isJob(body: unknown): body is TranscodeJobMessage {
 	);
 }
 
+/** Under /priv/ because that is the only path routed to this Worker; it is not a rendition. */
+export const SELFTEST_PATH = '/priv/_selftest';
+
+async function handleSelfTest(url: URL, env: Env): Promise<Response> {
+	const raw = Number(url.searchParams.get('after'));
+	// `after` may only ask for a run since a recent time (the smoke's deploy), never force a stream of starts
+	const after = Number.isFinite(raw) && raw > Date.now() - 24 * 3600_000 && raw <= Date.now() ? raw : undefined;
+	try {
+		const result = await env.TRANSCODER.get(env.TRANSCODER.idFromName('selftest')).selfTest(after);
+		return Response.json(result, { status: result.ok ? 200 : 503, headers: { 'cache-control': 'no-store' } });
+	} catch (error) {
+		log.error('[MediaSelfTest] Self-test failed', { error: errorText(error) });
+		return Response.json({ ok: false, startMs: 0, at: new Date().toISOString(), error: 'self-test unavailable' }, { status: 503, headers: { 'cache-control': 'no-store' } });
+	}
+}
+
 async function handleFetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 	const url = new URL(request.url);
+	// Release smoke: one real container start (rate limited in the DO; the only answer is ok/timing)
+	if (url.pathname === SELFTEST_PATH && request.method === 'GET') return handleSelfTest(url, env);
 	if (url.pathname.startsWith('/priv/')) return handlePrivate(request, env, ctx);
 	if (url.pathname === '/health') return Response.json({ ok: true });
 	const m = /^\/internal\/jobs\/([^/]+)$/.exec(url.pathname);
@@ -136,6 +154,51 @@ async function handleLiveReviewJob(msg: Message<LiveReviewJobMessage>, env: Env)
 	msg.ack();
 }
 
+/**
+ * A transcode job: start it on its video's Transcoder. A start that fails (container start failed,
+ * capacity full) comes back after a short delay (startRetry); the last delivery reports the job
+ * failed to api-videos, which marks it and raises the Errors page item (Transcode again), instead
+ * of the message falling silently into the DLQ.
+ */
+export async function handleTranscodeStart(msg: Message<TranscodeJobMessage>, env: Env): Promise<void> {
+	const job = msg.body;
+	try {
+		await env.TRANSCODER.get(env.TRANSCODER.idFromName(job.videoId)).startJob(job);
+		msg.ack();
+		return;
+	} catch (error) {
+		const text = errorText(error).slice(0, 300);
+		const reason = startFailureReason(text);
+		const next = startRetry(msg.attempts);
+		if (!next.giveUp) {
+			log.warn('[MediaQueue] Could not start job; retrying', { videoId: job.videoId, jobId: job.jobId, attempts: msg.attempts, delaySeconds: next.delaySeconds, reason, error: text });
+			msg.retry({ delaySeconds: next.delaySeconds });
+			return;
+		}
+		log.error('[MediaQueue] Job never started; giving up', { videoId: job.videoId, jobId: job.jobId, attempts: msg.attempts, reason, error: text });
+		const at = new Date().toISOString();
+		try {
+			await reportEvent(env, {
+				videoId: job.videoId,
+				jobId: job.jobId,
+				type: 'failed',
+				at,
+				attempt: 0,
+				final: true,
+				error: `${reason}: ${text}`,
+				instanceType: env.TRANSCODER_INSTANCE ?? 'standard-4',
+				failure: { stage: 'start', error: `${reason}: ${text}`, attempt: 0, elapsedMs: 0, at, stopReason: `never started after ${msg.attempts} deliveries` },
+			});
+		} catch (reportError) {
+			// api-videos unreachable: let the queue keep it (DLQ after max_retries); the sweep re-queues it
+			log.warn('[MediaQueue] Could not report the job that never started', { videoId: job.videoId, error: errorText(reportError) });
+			msg.retry({ delaySeconds: 300 });
+			return;
+		}
+		msg.ack();
+	}
+}
+
 export default {
 	// Private media and internal routes are never for search engines (crawlers.ts)
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -161,16 +224,7 @@ export default {
 				msg.ack();
 				continue;
 			}
-			const job = msg.body;
-			try {
-				await env.TRANSCODER.get(env.TRANSCODER.idFromName(job.videoId)).startJob(job);
-				msg.ack();
-			} catch (error) {
-				// Container capacity (max_instances) or a start failure: try again later
-				const delaySeconds = Math.min(900, 60 * 2 ** Math.max(0, msg.attempts - 1));
-				log.warn('[MediaQueue] Could not start job; retrying', { videoId: job.videoId, attempts: msg.attempts, delaySeconds, error: errorText(error) });
-				msg.retry({ delaySeconds });
-			}
+			await handleTranscodeStart(msg as Message<TranscodeJobMessage>, env);
 		}
 	},
 } satisfies ExportedHandler<Env>;

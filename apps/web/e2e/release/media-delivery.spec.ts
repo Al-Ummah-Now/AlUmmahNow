@@ -43,6 +43,8 @@ test.beforeEach(({ page }) => trackRunUploads(page));
 const CLIP = path.join(__dirname, '..', 'test-fixtures', 'e2e-sample.mp4');
 /** Bunny encodes first (the transcode reads Bunny's file), then the container starts and runs */
 const R2_READY_TIMEOUT_MS = 10 * 60_000;
+/** Queued → first container start (a cold start takes ~2 s; one 15 s start retry fits easily) */
+const R2_START_LIMIT_MS = 2 * 60_000;
 /** r2 is written when the upload completes; a little slack for the record to be read back */
 const R2_PRESENT_TIMEOUT_MS = 60_000;
 
@@ -186,6 +188,12 @@ test.describe('Release: R2 delivery', () => {
 
       // The queue path ran: the container reported started and ready, with what it wrote
       expect(r2!.startedAt, 'started event (the consumer picked the job up)').toBeTruthy();
+      // Queued → the first container start: one cold start plus the consumer's pick-up, a short
+      // start retry at most. 2026-11-15: starts crashed (an image without review.mjs) and jobs waited
+      // 4 to 7 min in "queued"; a stage run must catch that before production
+      const startedAfterMs = Date.parse(r2!.startedAt!) - Date.parse(r2!.queuedAt);
+      test.info().annotations.push({ type: 'r2-started-after-queue', description: `${Math.round(startedAfterMs / 1000)}s` });
+      expect(startedAfterMs, `the transcode started ${Math.round(startedAfterMs / 1000)} s after it was queued (limit ${R2_START_LIMIT_MS / 1000} s)`).toBeLessThanOrEqual(R2_START_LIMIT_MS);
       expect(r2!.readyAt, 'ready event').toBeTruthy();
       expect(Date.parse(r2!.readyAt!)).toBeGreaterThanOrEqual(Date.parse(r2!.startedAt!));
       expect(r2!.renditions.length, 'renditions written').toBeGreaterThan(0);

@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { TranscodeJobMessage } from '@al-ummah/shared-types';
-import { ATTEMPT_LIMIT_MS, containerSeconds, hasWatchdogDue, keyAllowed, LAUNCH_LIMIT_MS, launchLost, MAX_ATTEMPTS, newJob, onFailure, onMessage, onProgressEvent, PROGRESS_REPORT_MS, SILENCE_LIMIT_MS, watchdogVerdict } from '../src/jobs';
+import { ATTEMPT_LIMIT_MS, containerSeconds, hasWatchdogDue, INFRA_RETRY_LIMIT, isInfraFailure, keyAllowed, SELFTEST_FRESH_MS, SELFTEST_MIN_GAP_MS, selfTestDue, START_MAX_DELIVERIES, startFailureReason, startRetry, LAUNCH_LIMIT_MS, launchLost, MAX_ATTEMPTS, newJob, onFailure, onMessage, onProgressEvent, PROGRESS_REPORT_MS, SILENCE_LIMIT_MS, watchdogVerdict } from '../src/jobs';
 
 const msg = (over: Partial<TranscodeJobMessage> = {}): TranscodeJobMessage => ({
 	kind: 'transcode',
@@ -160,5 +160,63 @@ describe('hasWatchdogDue', () => {
 	});
 	it('counts an unreadable schedule table as none (one spare run beats an unwatched job)', () => {
 		assert.equal(hasWatchdogDue(sqlWith(new Error('no such table')) as never, 1_000_000), false);
+	});
+});
+
+describe('start retries (a job that could not start)', () => {
+	it('comes back within seconds, not minutes: the 2026-11-15 jobs waited 240 s after the fixed image rolled out', () => {
+		assert.deepEqual(startRetry(1), { giveUp: false, delaySeconds: 15 });
+		assert.deepEqual(startRetry(2), { giveUp: false, delaySeconds: 30 });
+		assert.deepEqual(startRetry(3), { giveUp: false, delaySeconds: 60 });
+		for (let a = 1; a < START_MAX_DELIVERIES; a++) {
+			const r = startRetry(a);
+			assert.ok(!r.giveUp && r.delaySeconds <= 300, `delivery ${a} waits at most 5 min`);
+		}
+	});
+	it('gives up (and is reported) on the last delivery the queue makes, instead of falling into the DLQ', () => {
+		assert.equal(START_MAX_DELIVERIES, 9, 'wrangler max_retries 8 + the first delivery');
+		assert.deepEqual(startRetry(START_MAX_DELIVERIES), { giveUp: true });
+		let total = 0;
+		for (let a = 1; a < START_MAX_DELIVERIES; a++) total += (startRetry(a) as { delaySeconds: number }).delaySeconds;
+		assert.ok(total <= 30 * 60, `a job that cannot start is reported within 30 min (was ~78), got ${total} s`);
+	});
+	it('names the cause in plain words', () => {
+		assert.equal(startFailureReason('The container just exited'), 'container start failed');
+		assert.equal(startFailureReason('Container crashed while checking for ports, did you start the container and setup the entrypoint correctly?'), 'container start failed');
+		assert.equal(startFailureReason('The container is not running, consider calling start()'), 'container start failed');
+		assert.equal(startFailureReason('There is no Container instance available at this time'), 'capacity full');
+		assert.equal(startFailureReason('container refused the job: HTTP 409'), 'container refused the job');
+	});
+});
+
+describe('platform failures do not use up attempts', () => {
+	const job = newJob(msg(), 0);
+	it('a deploy SIGTERM, a lost launch or a restarted container retries in 15 s and keeps the attempt', () => {
+		assert.equal(isInfraFailure('container_stopped', 143), true);
+		assert.equal(isInfraFailure('launch_lost'), true);
+		assert.equal(isInfraFailure('container_restarted'), true);
+		assert.deepEqual(onFailure({ ...job, attempt: MAX_ATTEMPTS }, 'container_stopped', false, true), { retry: true, delaySeconds: 15, keepsAttempt: true });
+	});
+	it('a real crash (OOM 137, ffmpeg) counts, and so do platform failures past the limit', () => {
+		assert.equal(isInfraFailure('container_stopped', 137), false);
+		assert.equal(isInfraFailure('ffmpeg exited 1'), false);
+		assert.deepEqual(onFailure({ ...job, attempt: MAX_ATTEMPTS, infraRetries: INFRA_RETRY_LIMIT }, 'launch_lost', false, true), { retry: false });
+		assert.deepEqual(onFailure({ ...job, infraRetries: INFRA_RETRY_LIMIT }, 'launch_lost', false, true), { retry: true, delaySeconds: 60 });
+	});
+});
+
+describe('container self-test (release smoke)', () => {
+	const at = (ms: number) => new Date(ms).toISOString();
+	const T = 10 * SELFTEST_FRESH_MS;
+	it('starts one when there is none, or the last passed run is stale or older than the deploy', () => {
+		assert.equal(selfTestDue(undefined, T), true);
+		assert.equal(selfTestDue({ ok: true, startMs: 1, at: at(T - SELFTEST_FRESH_MS) }, T), true);
+		assert.equal(selfTestDue({ ok: true, startMs: 1, at: at(T - 5 * 60_000) }, T), false);
+		assert.equal(selfTestDue({ ok: true, startMs: 1, at: at(T - 5 * 60_000) }, T, T - 60_000), true);
+	});
+	it('never starts more than one container a minute, whatever the caller asks (the route is public)', () => {
+		assert.equal(selfTestDue({ ok: false, startMs: 1, at: at(T - 10_000) }, T), false);
+		assert.equal(selfTestDue({ ok: true, startMs: 1, at: at(T - 10_000) }, T, T), false);
+		assert.equal(selfTestDue({ ok: false, startMs: 1, at: at(T - SELFTEST_MIN_GAP_MS) }, T), true);
 	});
 });
