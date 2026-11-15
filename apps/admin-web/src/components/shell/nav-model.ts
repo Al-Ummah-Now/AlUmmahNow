@@ -101,6 +101,8 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/legacy-profiles', label: 'nav.legacyProfiles', icon: 'archive', group: 'people', requires: (a) => a.manageUsers },
 
   { href: '/operations', label: 'nav.operations', icon: 'activity', group: 'operations', requires: (a) => a.ops },
+  // Costs (COST-1): budget, forecast, alert emails; super admins also set the collector's keys and alert settings; ops:read
+  { href: '/costs', label: 'nav.costs', icon: 'tag', group: 'operations', requires: (a) => a.ops },
   { href: '/processing', label: 'nav.processing', icon: 'cpu', group: 'operations', requires: (a) => a.processing },
   { href: '/stale-uploads', label: 'nav.staleUploads', icon: 'clock', group: 'operations', requires: (a) => a.staleUploads },
   { href: '/jobs', label: 'nav.jobs', icon: 'layers', group: 'operations' },

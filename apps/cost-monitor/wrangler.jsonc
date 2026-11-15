@@ -14,6 +14,15 @@
 	// dropped; LOG_LEVEL warn and no invocation logs keep it to failures only (24 runs a day)
 	"observability": { "enabled": true, "head_sampling_rate": 1, "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": false } },
 	"triggers": { "crons": ["10 * * * *", "30 3 * * *"] },
+	"queues": {
+		"producers": [{ "binding": "COST_JOBS_QUEUE", "queue": "al-ummah-cost-jobs" }],
+		"consumers": [
+			// Cost jobs (src/jobs.ts): MAX_ATTEMPTS = max_retries + 1; the job retries with its own backoff
+			{ "queue": "al-ummah-cost-jobs", "max_batch_size": 5, "max_batch_timeout": 5, "max_retries": 5, "retry_delay": 60, "dead_letter_queue": "al-ummah-cost-jobs-dlq" },
+			// Backstop: a job the consumer itself could not handle is flagged on the Errors page
+			{ "queue": "al-ummah-cost-jobs-dlq", "max_batch_size": 10, "max_batch_timeout": 5, "max_retries": 2 }
+		]
+	},
 	"d1_databases": [
 		{ "binding": "COSTS_DB", "database_name": "al-ummah-now-costs", "database_id": "af54e39e-6faa-4923-bba3-8dd7b3e58cf7", "migrations_dir": "migrations" }
 	],
@@ -38,6 +47,15 @@
 			"version_metadata": { "binding": "CF_VERSION_METADATA" },
 			"observability": { "enabled": true, "head_sampling_rate": 1, "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": false } },
 			"triggers": { "crons": ["10 * * * *", "30 3 * * *"] },
+			"queues": {
+				"producers": [{ "binding": "COST_JOBS_QUEUE", "queue": "al-ummah-cost-jobs-stage" }],
+				"consumers": [
+					// Cost jobs (src/jobs.ts): MAX_ATTEMPTS = max_retries + 1; the job retries with its own backoff
+					{ "queue": "al-ummah-cost-jobs-stage", "max_batch_size": 5, "max_batch_timeout": 5, "max_retries": 5, "retry_delay": 60, "dead_letter_queue": "al-ummah-cost-jobs-dlq-stage" },
+					// Backstop: a job the consumer itself could not handle is flagged on the Errors page
+					{ "queue": "al-ummah-cost-jobs-dlq-stage", "max_batch_size": 10, "max_batch_timeout": 5, "max_retries": 2 }
+				]
+			},
 			"d1_databases": [
 				{ "binding": "COSTS_DB", "database_name": "al-ummah-now-costs-stage", "database_id": "d4c4d007-c691-4f92-a728-b2ecd706a3ae", "migrations_dir": "migrations" }
 			],

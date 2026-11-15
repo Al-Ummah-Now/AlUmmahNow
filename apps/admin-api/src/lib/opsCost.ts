@@ -12,7 +12,7 @@
  *   Plan        the Workers Paid subscription, PLAN_BASE_USD a month whatever the usage
  * The pure functions below are what the tests cover; loaders and the alert job follow them.
  */
-import { newErrorRef, scrubEvent, type ErrorEventInput } from '@al-ummah/shared-types';
+import { COST_ALERT_DEFAULTS, newErrorRef, parseCostAlertSettings, scrubEvent, type CostAlertSettings, type ErrorEventInput } from '@al-ummah/shared-types';
 import { logger } from './logger';
 import type { D1Database } from './types';
 
@@ -67,7 +67,7 @@ export function projectMonth(daily: DayCost[], now: Date): Projection {
   };
 }
 
-export type BudgetPart = 'cloudflare' | 'bunny' | 'containers' | 'ai' | 'plan';
+export type BudgetPart = 'cloudflare' | 'bunny' | 'containers' | 'ai' | 'resend' | 'plan';
 export type BudgetLevel = 'ok' | 'warn50' | 'warn80' | 'over';
 
 export interface BudgetStatus {
@@ -93,10 +93,16 @@ export function levelOf(share: number): BudgetLevel {
 }
 
 /** The month's spend against the budget, per source and in total. */
-export function budgetStatus(sources: Omit<Record<BudgetPart, DayCost[]>, 'plan'>, now: Date, capUsd = BUDGET_USD): BudgetStatus {
+export function budgetStatus(
+  sources: Omit<Record<BudgetPart, DayCost[]>, 'plan' | 'resend'> & { resend?: DayCost[] },
+  now: Date,
+  capUsd = BUDGET_USD,
+  /** The alert levels set in Costs → Alert settings; the meter draws its marks at these shares. */
+  levels: readonly number[] = BUDGET_LEVELS,
+): BudgetStatus {
   const parts = {} as BudgetStatus['parts'];
-  for (const key of ['cloudflare', 'bunny', 'containers', 'ai'] as const) {
-    const p = projectMonth(sources[key], now);
+  for (const key of ['cloudflare', 'bunny', 'containers', 'ai', 'resend'] as const) {
+    const p = projectMonth(sources[key] ?? [], now);
     parts[key] = { mtd: p.mtd, projected: p.trailing };
   }
   const p = projectMonth([], now);
@@ -115,7 +121,7 @@ export function budgetStatus(sources: Omit<Record<BudgetPart, DayCost[]>, 'plan'
     level: levelOf(share),
     projectedLevel: levelOf(projectedShare),
     parts,
-    levels: BUDGET_LEVELS,
+    levels: [...levels].sort((a, b) => a - b),
   };
 }
 
@@ -211,7 +217,17 @@ export interface Spike {
  * (SPIKE_TOTAL_MIN_USD for a total) more. Yesterday and today so far are both checked, so a
  * runaway loop is flagged the same day; a partial day only counts once it already crossed.
  */
-export function findSpikes(rows: ResourceDay[], now: Date): Spike[] {
+export interface SpikeRule {
+  factor: number;
+  minUsd: number;
+  totalMinUsd: number;
+}
+
+export const DEFAULT_SPIKE_RULE: SpikeRule = { factor: SPIKE_FACTOR, minUsd: SPIKE_MIN_USD, totalMinUsd: SPIKE_TOTAL_MIN_USD };
+
+export const spikeRuleOf = (s: CostAlertSettings): SpikeRule => ({ factor: s.spikeFactor, minUsd: s.spikeMinUsd, totalMinUsd: s.spikeTotalMinUsd });
+
+export function findSpikes(rows: ResourceDay[], now: Date, rule: SpikeRule = DEFAULT_SPIKE_RULE): Spike[] {
   const today = now.toISOString().slice(0, 10);
   const yesterday = new Date(Date.parse(`${today}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
   const series = new Map<string, { env: string; resourceId: string | null; name: string; costs: Map<string, number> }>();
@@ -226,12 +242,12 @@ export function findSpikes(rows: ResourceDay[], now: Date): Spike[] {
   }
   const out: Spike[] = [];
   for (const [key, s] of series) {
-    const minUsd = s.resourceId ? SPIKE_MIN_USD : SPIKE_TOTAL_MIN_USD;
+    const minUsd = s.resourceId ? rule.minUsd : rule.totalMinUsd;
     let worst: Spike | null = null;
     for (const day of [yesterday, today]) {
       const cost = s.costs.get(day) ?? 0;
       const base = fullDays(new Date(`${day}T12:00:00Z`)).reduce((sum, d) => sum + (s.costs.get(d) ?? 0), 0) / BASELINE_DAYS;
-      if (cost >= SPIKE_FACTOR * base && cost - base >= minUsd && (!worst || cost - base > worst.cost - worst.baseline)) {
+      if (cost >= rule.factor * base && cost - base >= minUsd && (!worst || cost - base > worst.cost - worst.baseline)) {
         worst = { key, env: s.env, resourceId: s.resourceId, name: s.name, day, cost: round2(cost), baseline: round2(base) };
       }
     }
@@ -269,7 +285,31 @@ export async function loadResourceDays(env: CostDbs, since: string): Promise<Res
   );
 }
 
-export async function loadExtraDays(env: CostDbs, since: string): Promise<{ bunny: DayCost[]; containers: DayCost[]; ai: DayCost[] }> {
+export interface ExtraDays {
+  bunny: DayCost[];
+  containers: DayCost[];
+  ai: DayCost[];
+  resend: DayCost[];
+  /** Where each came from: the collector's billing pulls (COST-1) or the older per-app estimates. */
+  sources: { bunny: 'billing' | 'estimate' | 'none'; containers: 'billing' | 'estimate' | 'none'; resend: 'emails' | 'none' };
+}
+
+/** cost_product_daily rows (COST-1 collector), per product and env. */
+export interface ProductDay {
+  day: string;
+  env: string;
+  product: string;
+  quantity: number | null;
+  unit: string | null;
+  cost: number;
+}
+
+export async function loadProductDays(env: CostDbs, since: string): Promise<ProductDay[]> {
+  return rows<ProductDay>(env.COSTS_DB, 'SELECT day, env, product, quantity, unit, cost_usd AS cost FROM cost_product_daily WHERE day >= ?', since);
+}
+
+export async function loadExtraDays(env: CostDbs, since: string, productDays?: ProductDay[]): Promise<ExtraDays> {
+  const products = productDays ?? (await loadProductDays(env, since));
   const [delivery, ai] = await Promise.all([
     rows<{ day: string; provider: string; metric: string; value: number }>(
       env.SEARCH_DB,
@@ -278,10 +318,22 @@ export async function loadExtraDays(env: CostDbs, since: string): Promise<{ bunn
     ),
     rows<DayCost>(env.REPORTS_DB, 'SELECT day, SUM(usd) AS cost FROM ai_usage_daily WHERE day >= ? GROUP BY day', since),
   ]);
+  const of = (product: string) => sumByDay(products.filter((p) => p.product === product));
+  const bunnyBilling = of('bunny');
+  const containersBilling = of('containers');
+  const bunnyEstimate = delivery.filter((d) => d.provider === 'bunny').map((d) => ({ day: d.day, cost: num(d.value) }));
+  const containersEstimate = delivery.filter((d) => d.provider === 'r2').map((d) => ({ day: d.day, cost: num(d.value) * CONTAINER_USD_PER_SECOND }));
+  const resend = of('resend');
   return {
-    bunny: delivery.filter((d) => d.provider === 'bunny').map((d) => ({ day: d.day, cost: num(d.value) })),
-    containers: delivery.filter((d) => d.provider === 'r2').map((d) => ({ day: d.day, cost: num(d.value) * CONTAINER_USD_PER_SECOND })),
+    bunny: bunnyBilling.length ? bunnyBilling : bunnyEstimate,
+    containers: containersBilling.length ? containersBilling : containersEstimate,
     ai: ai.map((d) => ({ day: d.day, cost: num(d.cost) })),
+    resend,
+    sources: {
+      bunny: bunnyBilling.length ? 'billing' : bunnyEstimate.length ? 'estimate' : 'none',
+      containers: containersBilling.length ? 'billing' : containersEstimate.length ? 'estimate' : 'none',
+      resend: resend.length ? 'emails' : 'none',
+    },
   };
 }
 
@@ -302,11 +354,19 @@ export function costWindowStart(now: Date): string {
 // Alerts (admin-api hourly tick): Errors page items through the shared reporter, one per key
 // ---------------------------------------------------------------------------------------------
 
+/** What an alert email says, in data (rendered per subscriber language by lib/cost-alert-mail.ts). */
+export type CostAlertData =
+  | { type: 'budget'; month: string; level: number; mtd: number; cap: number; projected: number }
+  | { type: 'projected'; month: string; mtd: number; cap: number; projected: number }
+  | { type: 'spike'; env: string; name: string; resource: boolean; day: string; cost: number; baseline: number };
+
 export interface CostAlert {
   key: string;
   title: string;
   message: string;
   value: number;
+  kind: 'budget' | 'spike';
+  data: CostAlertData;
 }
 
 const usd = (v: number) => `$${v.toFixed(2)}`;
@@ -315,24 +375,33 @@ const usd = (v: number) => `$${v.toFixed(2)}`;
  * The alerts that should be open now. Budget alerts are for the account as a whole, so only the
  * production admin raises them (its collector covers every env); spikes are raised everywhere.
  */
-export function wantedAlerts(budget: BudgetStatus | null, spikes: Spike[]): CostAlert[] {
+export function wantedAlerts(
+  budget: BudgetStatus | null,
+  spikes: Spike[],
+  settings: Pick<CostAlertSettings, 'budgetLevels' | 'projectedAlert'> = COST_ALERT_DEFAULTS,
+): CostAlert[] {
   const out: CostAlert[] = [];
   if (budget) {
-    for (const level of BUDGET_LEVELS) {
+    for (const level of settings.budgetLevels) {
       if (budget.share < level) continue;
+      const pct = Math.round(level * 100);
       out.push({
-        key: `ops-cost:budget:${budget.month}:${Math.round(level * 100)}`,
-        title: level >= 1 ? 'Monthly budget used up' : `${Math.round(level * 100)}% of the monthly budget used`,
+        key: `ops-cost:budget:${budget.month}:${pct}`,
+        title: level >= 1 ? (level > 1 ? `${pct}% of the monthly budget used` : 'Monthly budget used up') : `${pct}% of the monthly budget used`,
         message: `${usd(budget.mtd)} of ${usd(budget.capUsd)} spent in ${budget.month}; projected ${usd(budget.projected)} by the end of the month`,
         value: budget.mtd,
+        kind: 'budget',
+        data: { type: 'budget', month: budget.month, level, mtd: budget.mtd, cap: budget.capUsd, projected: budget.projected },
       });
     }
-    if (budget.projectedShare >= 1) {
+    if (settings.projectedAlert && budget.projectedShare >= 1) {
       out.push({
         key: `ops-cost:projected:${budget.month}`,
         title: 'Projected to go over the monthly budget',
         message: `Projected ${usd(budget.projected)} for ${budget.month} against ${usd(budget.capUsd)} (${usd(budget.mtd)} so far)`,
         value: budget.projected,
+        kind: 'budget',
+        data: { type: 'projected', month: budget.month, mtd: budget.mtd, cap: budget.capUsd, projected: budget.projected },
       });
     }
   }
@@ -342,9 +411,22 @@ export function wantedAlerts(budget: BudgetStatus | null, spikes: Spike[]): Cost
       title: s.resourceId ? 'Spend jump on a resource' : 'Daily spend jumped',
       message: `${s.name} (${s.env}) cost ${usd(s.cost)} on ${s.day}, against ${usd(s.baseline)} a day over the previous ${BASELINE_DAYS} days`,
       value: s.cost,
+      kind: 'spike',
+      data: { type: 'spike', env: s.env, name: s.name, resource: !!s.resourceId, day: s.day, cost: s.cost, baseline: s.baseline },
     });
   }
   return out;
+}
+
+/** The alert settings (COSTS_DB cost_settings 'alerts'), defaults when unset or not migrated. */
+export async function loadCostSettings(db: D1Database | undefined): Promise<CostAlertSettings> {
+  if (!db) return parseCostAlertSettings(null);
+  try {
+    const row = await db.prepare("SELECT value FROM cost_settings WHERE key = 'alerts'").first<{ value: string }>();
+    return parseCostAlertSettings(row?.value);
+  } catch {
+    return parseCostAlertSettings(null);
+  }
 }
 
 export interface AlertSink {
@@ -387,13 +469,16 @@ export async function syncCostAlerts(
   env: CostDbs & { ENVIRONMENT?: string },
   sink: AlertSink,
   now = new Date(),
+  /** Emails the newly opened alerts to the admins who subscribed (lib/cost-alert-mail.ts). */
+  notify?: (fresh: CostAlert[]) => Promise<void>,
 ): Promise<{ opened: number; resolved: number }> {
   const db = env.COSTS_DB;
   if (!db) return { opened: 0, resolved: 0 };
+  const settings = await loadCostSettings(db);
   const since = costWindowStart(now);
   const resourceDays = await loadResourceDays(env, since);
-  const budget = env.ENVIRONMENT === 'production' ? budgetStatus({ cloudflare: sumByDay(resourceDays), ...(await loadExtraDays(env, since)) }, now) : null;
-  const wanted = wantedAlerts(budget, findSpikes(resourceDays, now));
+  const budget = env.ENVIRONMENT === 'production' ? budgetStatus({ cloudflare: sumByDay(resourceDays), ...(await loadExtraDays(env, since)) }, now, settings.budgetUsd, settings.budgetLevels) : null;
+  const wanted = wantedAlerts(budget, findSpikes(resourceDays, now, spikeRuleOf(settings)), settings);
   const openKeys = new Set(((await db.prepare('SELECT key FROM ops_cost_alerts').all<{ key: string }>()).results ?? []).map((o) => o.key));
   const fresh = wanted.filter((a) => !openKeys.has(a.key));
   const events = fresh.map((a) => alertEvent(a, env.ENVIRONMENT, now)).filter((e): e is ErrorEventInput => e !== null);
@@ -408,6 +493,13 @@ export async function syncCostAlerts(
     ...stale.map((key) => db.prepare('DELETE FROM ops_cost_alerts WHERE key = ?').bind(key)),
   ];
   if (statements.length) await db.batch(statements);
+  if (fresh.length && notify) {
+    try {
+      await notify(fresh);
+    } catch (error) {
+      logger.error('[OpsCost] Could not queue the alert emails', { error: error instanceof Error ? error.message : String(error) });
+    }
+  }
   if (fresh.length || stale.length) logger.info('[OpsCost] Spend alerts updated', { opened: fresh.length, resolved: stale.length, open: wanted.length });
   return { opened: fresh.length, resolved: stale.length };
 }

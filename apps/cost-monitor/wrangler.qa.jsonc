@@ -9,6 +9,15 @@
   "version_metadata": { "binding": "CF_VERSION_METADATA" },
   "observability": { "enabled": true, "head_sampling_rate": 1, "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": false } },
   "triggers": { "crons": ["10 * * * *", "30 3 * * *"] },
+  "queues": {
+    "producers": [{ "binding": "COST_JOBS_QUEUE", "queue": "al-ummah-cost-jobs-qa" }],
+    "consumers": [
+      // Cost jobs (src/jobs.ts): MAX_ATTEMPTS = max_retries + 1; the job retries with its own backoff
+      { "queue": "al-ummah-cost-jobs-qa", "max_batch_size": 5, "max_batch_timeout": 5, "max_retries": 5, "retry_delay": 60, "dead_letter_queue": "al-ummah-cost-jobs-dlq-qa" },
+      // Backstop: a job the consumer itself could not handle is flagged on the Errors page
+      { "queue": "al-ummah-cost-jobs-dlq-qa", "max_batch_size": 10, "max_batch_timeout": 5, "max_retries": 2 }
+    ]
+  },
   "d1_databases": [
     { "binding": "COSTS_DB", "database_name": "al-ummah-now-costs-qa", "database_id": "a83d0ca5-6186-43df-8bc0-90b36561f42d", "migrations_dir": "migrations" }
   ],

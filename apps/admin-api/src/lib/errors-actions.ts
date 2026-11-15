@@ -23,6 +23,7 @@ import { logger } from './logger';
 import { enqueueDeviceRevocation } from './deviceTokenRevocation';
 import { getIssue, getSubscriber, renewConfirmToken, requeueFailed, setDelivery } from './newsletter-store';
 import { confirmJob, enqueueNewsletterMail, fanoutJob, sendJob } from './newsletter-mail';
+import { COST_MAIL_VERSION } from './cost-alert-mail';
 
 export interface RetryOutcome {
   ok: boolean;
@@ -164,6 +165,37 @@ export const BUILTIN_RETRIES: Record<string, (env: AdminBindings, args: Record<s
       return { ok: false, status: 'open', result: 'Could not queue the email' };
     }
     return { ok: true, status: 'resolved', result: 'Queued again' };
+  },
+  /** Runs a cost-monitor job that gave up again (COST-1, apps/cost-monitor src/jobs.ts): queued on its own queue. */
+  'cost-job': async (env, args) => {
+    const kinds = ['hourly', 'daily', 'containers', 'bunny', 'resend'];
+    if (!kinds.includes(args.job ?? '') || !args.at || Number.isNaN(Date.parse(args.at)) || (args.day !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(args.day))) {
+      return { ok: false, status: 'dismissed', result: 'Not a cost job' };
+    }
+    if (!env.COST_JOBS_QUEUE) return { ok: false, status: 'open', result: 'The cost jobs queue is not bound here' };
+    try {
+      await env.COST_JOBS_QUEUE.send({ v: 1, job: args.job, at: args.at, ...(args.day ? { day: args.day } : {}) } as never, { contentType: 'json' });
+      // The job resolves the item itself when it succeeds; a new failure flags it again
+      return { ok: true, status: 'resolved', result: 'Queued again' };
+    } catch {
+      return { ok: false, status: 'open', result: 'Could not queue the job' };
+    }
+  },
+  /** Queues a cost alert email that failed for good again (lib/cost-alert-mail.ts). */
+  'cost-alert-email': async (env, args) => {
+    const { fingerprint, userId } = args;
+    if (!fingerprint || !userId || !env.COSTS_DB) return { ok: false, status: 'dismissed', result: 'Not a cost email' };
+    const row = await env.COSTS_DB.prepare('SELECT status FROM cost_alert_deliveries WHERE fingerprint = ? AND user_id = ?').bind(fingerprint, userId).first<{ status: string }>();
+    if (!row) return { ok: false, status: 'dismissed', result: 'The email no longer exists' };
+    if (row.status !== 'failed') return { ok: true, status: 'resolved', result: `Nothing to resend (${row.status})` };
+    await env.COSTS_DB.prepare("UPDATE cost_alert_deliveries SET status = 'queued', error = NULL, updated_at = ? WHERE fingerprint = ? AND user_id = ?").bind(new Date().toISOString(), fingerprint, userId).run();
+    try {
+      await env.CONTACT_MAIL_QUEUE!.send({ v: COST_MAIL_VERSION, kind: 'cost-alert', fingerprint, userId } as never, { contentType: 'json' });
+      return { ok: true, status: 'resolved', result: 'Queued again' };
+    } catch {
+      await env.COSTS_DB.prepare("UPDATE cost_alert_deliveries SET status = 'failed', error = 'could not queue the email' WHERE fingerprint = ? AND user_id = ?").bind(fingerprint, userId).run();
+      return { ok: false, status: 'open', result: 'Could not queue the email' };
+    }
   },
 };
 

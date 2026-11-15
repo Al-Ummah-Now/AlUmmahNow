@@ -23,6 +23,7 @@ import { renderAcknowledgement, renderInboxNotification, renderReply, replyLocal
 import { isWarningMailJob, processWarningMailJob, type WarningMailJob } from './warning-mail';
 import { isRejectionMailJob, processRejectionMailJob, type RejectionMailJob } from './review/rejection-mail';
 import { isNewsletterMailJob, processNewsletterMailJob, type NewsletterMailJob } from './newsletter-mail';
+import { isCostAlertMailJob, processCostAlertMailJob, type CostAlertMailJob } from './cost-alert-mail';
 
 export const CONTACT_MAIL_VERSION = 1;
 /** Keep equal to max_retries + 1 of the contact-mail consumer in wrangler*.jsonc. */
@@ -226,6 +227,8 @@ export async function contactMailConsumer(
         ? await processRejectionMailJob(env, msg as QueueMessageLike<RejectionMailJob>)
         : isNewsletterMailJob(msg.body)
           ? await processNewsletterMailJob(env, msg as QueueMessageLike<NewsletterMailJob>)
+        : isCostAlertMailJob(msg.body)
+          ? await processCostAlertMailJob(env, msg as unknown as QueueMessageLike<CostAlertMailJob>)
           : await processContactMailJob(env, msg as QueueMessageLike<ContactMailJob>);
     const kind = (msg.body as { kind?: string } | undefined)?.kind ?? 'unknown';
     outcomes[`${kind}:${outcome}`] = (outcomes[`${kind}:${outcome}`] ?? 0) + 1;

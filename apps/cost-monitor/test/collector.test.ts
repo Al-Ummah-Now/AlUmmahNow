@@ -234,14 +234,16 @@ describe('hourly run', () => {
     assert.ok(daily!.n > 0);
   });
 
-  it('marks a run partial when a dataset fails, and failed without the token', async () => {
+  it('marks a run partial when a dataset fails, and skips (never fails) without any token', async () => {
     const env = collectorEnv();
     const partial = await runHourly(env, undefined, new Date('2026-11-12T16:10:00Z'), fakeFetch(env, { ...FIXTURE, errors: [{ message: 'r2Storage: quota' }] }));
     assert.equal(partial.status, 'partial');
     const noToken = { ...collectorEnv(), CF_ANALYTICS_TOKEN: undefined };
-    const failed = await runHourly(noToken, undefined, new Date(), fakeFetch(noToken as never, FIXTURE));
-    assert.equal(failed.status, 'failed');
-    assert.equal(failed.queries, 0);
+    const skipped = await runHourly(noToken, undefined, new Date(), fakeFetch(noToken as never, FIXTURE));
+    assert.equal(skipped.status, 'skipped');
+    assert.equal(skipped.queries, 0);
+    assert.equal((await noToken.COSTS_DB.prepare('SELECT COUNT(*) AS n FROM collector_runs').first<{ n: number }>())!.n, 0);
+    assert.equal(noToken.graphql, 0);
   });
 
   it('keeps collecting the static manifest when discovery fails (recorded), and discovers again next hour', async () => {
