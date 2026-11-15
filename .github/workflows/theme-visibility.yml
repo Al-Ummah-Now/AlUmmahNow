@@ -39,6 +39,8 @@ jobs:
     env:
       CI: true
       NEXT_TELEMETRY_DISABLED: 1
+      # Full stacks for dev-server render errors (#1457): Next hides frames inside next/ otherwise
+      __NEXT_SHOW_IGNORE_LISTED: true
 
     steps:
       - name: Checkout code
