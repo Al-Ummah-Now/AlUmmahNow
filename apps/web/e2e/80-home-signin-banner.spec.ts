@@ -62,6 +62,10 @@ test.describe('Home sign-in banner - signed out', () => {
     const box = await art.boundingBox();
     expect(box!.width).toBeGreaterThan(100);
     expect(box!.height).toBeGreaterThan(30);
+    // Nothing moves while the page loads (measured before the theme switch below: a script switching
+    // the theme is a shift without input, and a "band" theme frames its art differently from an inset one)
+    await page.waitForTimeout(1000);
+    expect(await cls(page), 'cumulative layout shift while loading').toBeLessThan(0.01);
     // Switching theme switches the art
     const other = theme === 'nahas' ? 'zujaj' : 'nahas';
     await page.evaluate((t) => { document.documentElement.dataset.theme = t; }, other);
@@ -69,8 +73,6 @@ test.describe('Home sign-in banner - signed out', () => {
     await page.evaluate((t) => { document.documentElement.dataset.theme = t; }, theme);
     // No sideways scroll
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
-    await page.waitForTimeout(1000);
-    expect(await cls(page), 'cumulative layout shift').toBeLessThan(0.01);
   });
 
   test('BANNER-002 is right to left in Arabic, and keyboard reachable', async ({ page }) => {
