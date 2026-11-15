@@ -8,7 +8,7 @@ interface UseLazyVideoOptions {
 }
 
 interface UseLazyVideoReturn {
-  ref: React.RefObject<HTMLDivElement>;
+  ref: React.RefObject<HTMLDivElement | null>;
   isVisible: boolean;
   hasLoaded: boolean;
   load: () => void;

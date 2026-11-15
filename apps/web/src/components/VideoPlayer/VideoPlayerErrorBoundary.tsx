@@ -161,7 +161,7 @@ export function withVideoPlayerErrorBoundary<P extends object>(
   Component: React.ComponentType<P>,
   lang: 'en' | 'ar' = 'en'
 ): React.FC<P> {
-  return function WrappedComponent(props: P): JSX.Element {
+  return function WrappedComponent(props: P): React.JSX.Element {
     return (
       <VideoPlayerErrorBoundary lang={lang}>
         <Component {...props} />

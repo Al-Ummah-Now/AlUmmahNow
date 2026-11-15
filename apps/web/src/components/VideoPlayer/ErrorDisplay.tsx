@@ -38,7 +38,7 @@ export function ErrorDisplay({
   className = '',
   locale,
   onReport,
-}: ErrorDisplayProps): JSX.Element {
+}: ErrorDisplayProps): React.JSX.Element {
   const [isDetailsExpanded, setIsDetailsExpanded] = useState(false);
   const { t, isRTL, dir } = useVideoPlayerI18n(lang);
   const errorTypeKey = mapErrorTypeToI18n(error.type);
@@ -229,7 +229,7 @@ export function CompactErrorDisplay({
   lang,
   onRetry,
   className = '',
-}: Omit<ErrorDisplayProps, 'onFallback' | 'showDetails'>): JSX.Element {
+}: Omit<ErrorDisplayProps, 'onFallback' | 'showDetails'>): React.JSX.Element {
   const { t, isRTL, dir } = useVideoPlayerI18n(lang);
   const errorTypeKey = mapErrorTypeToI18n(error.type);
 

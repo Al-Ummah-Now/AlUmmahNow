@@ -51,6 +51,11 @@ beforeEach(() => {
 const renderEditor = () =>
   render(<CaptionDraftEditor videoId="v1" language="ar" languageLabel="Arabic" open onClose={jest.fn()} onChanged={jest.fn()} />);
 
+/** The header buttons render (disabled) before the draft loads: wait for the loaded draft. */
+const loaded = async () => {
+  await waitFor(() => expect(screen.getByTestId('caption-publish')).toBeEnabled());
+};
+
 describe('CaptionDraftEditor', () => {
   it('shows Quran spans as references, never the heard text; a confirmed span shows the official text', async () => {
     renderEditor();
@@ -66,7 +71,8 @@ describe('CaptionDraftEditor', () => {
 
   it('"Confirm all suggested" leaves possible Quran for a look; publish saves over the loaded version first', async () => {
     renderEditor();
-    const confirmAll = await screen.findByTestId('caption-confirm-all');
+    await loaded();
+    const confirmAll = screen.getByTestId('caption-confirm-all');
     expect(confirmAll.textContent).toContain('(1)');
     fireEvent.click(confirmAll);
     const spans = screen.getAllByTestId('caption-quran-span');
@@ -90,7 +96,8 @@ describe('CaptionDraftEditor', () => {
   it('a save over a changed draft stops and offers Reload', async () => {
     saveCaptionDraft.mockResolvedValue({ ok: false, status: 409, error: 'draft_conflict', version: 9 });
     renderEditor();
-    fireEvent.click(await screen.findByTestId('caption-confirm-all'));
+    await loaded();
+    fireEvent.click(screen.getByTestId('caption-confirm-all'));
     fireEvent.click(screen.getByTestId('caption-publish'));
     await waitFor(() => expect(screen.getByTestId('caption-save-state').getAttribute('data-state')).toBe('conflict'));
     expect(publishCaptionDraft).not.toHaveBeenCalled();
@@ -100,7 +107,8 @@ describe('CaptionDraftEditor', () => {
   it('asks before replacing an uploaded track', async () => {
     publishCaptionDraft.mockResolvedValueOnce({ ok: false, status: 409, error: 'replaces_upload' });
     renderEditor();
-    fireEvent.click(await screen.findByTestId('caption-publish'));
+    await loaded();
+    fireEvent.click(screen.getByTestId('caption-publish'));
     expect(await screen.findByText('Replace your uploaded subtitles?')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Replace' }));
     await waitFor(() => expect(publishCaptionDraft).toHaveBeenLastCalledWith('v1', 'ar', 3, true));

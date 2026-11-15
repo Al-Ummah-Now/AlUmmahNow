@@ -80,7 +80,8 @@ describe('GoLive', () => {
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith('SECRETKEY');
     fireEvent.click(screen.getByTestId('studio-golive-copy-ffmpeg'));
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(rtmp.ffmpegExample);
-    expect(await screen.findByTestId('studio-golive-copied')).toHaveTextContent(`${text.ffmpeg}: ${text.copied}`);
+    // The live region is always there (empty); the text arrives once the clipboard write resolves
+    await waitFor(() => expect(screen.getByTestId('studio-golive-copied')).toHaveTextContent(`${text.ffmpeg}: ${text.copied}`));
   });
 
   it('has the same layout for the self-hosted HTTPS push, with its own help line', async () => {
