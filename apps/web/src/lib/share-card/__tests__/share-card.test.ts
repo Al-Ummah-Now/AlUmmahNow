@@ -4,7 +4,41 @@
  * Large link previews (2026-11-15): the pure card rules, the source key and the composition calls
  * made on the Images binding (mocked; the real binding is exercised by the local preview renders).
  */
-import { avatarLayout, cardLayout, fromBase64Url, imageCardUrl, parseCardPath, videoCardUrl, channelCardUrl } from '../layout';
+import { avatarLayout, cardLayout, CHANNEL_LOGO_OVERLAP, CHANNEL_PADDING, channelLayout, fromBase64Url, imageCardUrl, parseCardPath, videoCardUrl, channelCardUrl } from '../layout';
+
+describe('channelLayout (owner: banner whole, logo at its corner, even padding, nothing clipped)', () => {
+  const shapes: [string, number, number][] = [['6:1', 3000, 500], ['4:1', 2560, 640], ['16:9', 1920, 1080], ['square', 800, 800], ['portrait 9:16', 720, 1280], ['unknown size', 0, 0]];
+  it.each(shapes)('%s: banner and logo inside the padding, logo on the banner edge, mirrored for Arabic', (_name, w, h) => {
+    for (const rtl of [false, true]) {
+      const { banner, logo } = channelLayout(w, h, rtl);
+      for (const box of [banner, logo]) {
+        expect(box.left).toBeGreaterThanOrEqual(CHANNEL_PADDING);
+        expect(box.top).toBeGreaterThanOrEqual(CHANNEL_PADDING);
+        expect(box.left + box.width).toBeLessThanOrEqual(1200 - CHANNEL_PADDING);
+        expect(box.top + box.height).toBeLessThanOrEqual(630 - CHANNEL_PADDING);
+      }
+      // the banner keeps its shape (never cropped or stretched)
+      if (w && h) expect(Math.abs(banner.width / banner.height - w / h)).toBeLessThan(0.02);
+      // the logo overlaps only the banner's lower edge, by a quarter of the logo
+      expect(banner.top + banner.height - logo.top).toBe(CHANNEL_LOGO_OVERLAP);
+      // top and bottom margins are even
+      expect(Math.abs(banner.top - (630 - (logo.top + logo.height)))).toBeLessThanOrEqual(1);
+      // start side: left in English, right in Arabic, mirrored exactly
+      const mirror = channelLayout(w, h, !rtl).logo;
+      expect(mirror.left).toBe(1200 - logo.left - logo.width);
+      const logoMid = logo.left + logo.width / 2;
+      const bannerMid = banner.left + banner.width / 2;
+      // a banner too narrow for the logo at its corner gets the logo centred under it
+      if (banner.width >= logo.width + 64) expect(rtl ? logoMid > bannerMid : logoMid < bannerMid).toBe(true);
+      else expect(Math.abs(logoMid - bannerMid)).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('the card URL carries the language only for Arabic', () => {
+    expect(channelCardUrl('https://videos.alummahnow.net', 'c1', 'ar')).toBe('https://videos.alummahnow.net/og/c/c1.jpg?lang=ar');
+    expect(channelCardUrl('https://videos.alummahnow.net', 'c1', 'en')).toBe('https://videos.alummahnow.net/og/c/c1.jpg');
+  });
+});
 import { stableSourceKey } from '../source-key';
 import { composeChannelCard, composeImageCard, type ImagesLike, type TransformerLike } from '../compose';
 import { circleMask, encodePng, solid } from '../png';
@@ -132,24 +166,27 @@ describe('compose', () => {
     ]);
   });
 
-  it('a channel: the banner fills the card, the logo cut to a 420px circle drawn in the centre', async () => {
-    const a = fakeImages({ width: 2560, height: 640 }, 420);
+  it('a channel: the banner whole on the page colour, the round logo at its bottom-start corner (mirrored for Arabic)', async () => {
+    const a = fakeImages({ width: 2560, height: 640 }, 232);
     await composeChannelCard(a.images, bytes, bytes);
+    // in0: the banner, in1: the page canvas, in2: the logo
     expect(a.calls).toEqual([
-      ['in0', 'transform', { width: 1200, height: 630, fit: 'cover', gravity: 'center' }],
-      ['in1', 'transform', { width: 420, height: 420, fit: 'cover', gravity: 'center' }],
-      ['in1', 'output', { format: 'rgba' }],
-      ['in0', 'draw', { top: 105, left: 390 }],
-      ['in0', 'output', { format: 'image/jpeg', quality: 82 }],
+      ['in0', 'transform', { width: 1120, height: 280, fit: 'contain' }],
+      ['in1', 'draw', { top: 88, left: 40 }],
+      ['in2', 'transform', { width: 232, height: 232, fit: 'cover', gravity: 'center' }],
+      ['in2', 'output', { format: 'rgba' }],
+      ['in1', 'draw', { top: 310, left: 72 }],
+      ['in1', 'output', { format: 'image/jpeg', quality: 82 }],
     ]);
-    // the logo drawn is a PNG with an alpha channel
-    expect(a.drawn[0]?.slice(0, 4)).toEqual([0x89, 0x50, 0x4e, 0x47]);
+    expect(a.drawn.at(-1)?.slice(0, 4)).toEqual([0x89, 0x50, 0x4e, 0x47]);
+    const ar = fakeImages({ width: 2560, height: 640 }, 232);
+    await composeChannelCard(ar.images, bytes, bytes, true);
+    expect(ar.calls).toContainEqual(['in1', 'draw', { top: 310, left: 1200 - 72 - 232 }]);
   });
 
-  it('a channel without a banner: the logo on the page colour; without a logo: the banner filling the card', async () => {
+  it('a channel without a banner: the logo centred on the page colour; without a logo: the banner alone', async () => {
     const b = fakeImages({ width: 800, height: 800 }, 420);
     await composeChannelCard(b.images, bytes, null);
-    // in0 is the solid page-colour canvas (nothing to transform), in1 the logo
     expect(b.calls).toEqual([
       ['in1', 'transform', { width: 420, height: 420, fit: 'cover', gravity: 'center' }],
       ['in1', 'output', { format: 'rgba' }],
@@ -159,8 +196,9 @@ describe('compose', () => {
     const c = fakeImages({ width: 2560, height: 640 });
     await composeChannelCard(c.images, null, bytes);
     expect(c.calls).toEqual([
-      ['in0', 'transform', { width: 1200, height: 630, fit: 'cover', gravity: 'center' }],
-      ['in0', 'output', { format: 'image/jpeg', quality: 82 }],
+      ['in0', 'transform', { width: 1120, height: 280, fit: 'contain' }],
+      ['in1', 'draw', { top: 88, left: 40 }],
+      ['in1', 'output', { format: 'image/jpeg', quality: 82 }],
     ]);
     await expect(composeChannelCard(c.images, null, null)).rejects.toThrow();
   });

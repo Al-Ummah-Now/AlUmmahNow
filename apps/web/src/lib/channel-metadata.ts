@@ -36,7 +36,7 @@ export async function buildChannelMetadata(channel: Channel | null, locale: stri
   const path = channelPath(locale, channel);
   const otherLocale = locale === 'ar' ? 'en' : 'ar';
   // The channel's 1200x630 card (avatar on its cover banner); the site's card without either picture
-  const image = origin && (channel.avatarUrl || channel.coverUrl) ? channelCardUrl(origin, channel.id) : undefined;
+  const image = origin && (channel.avatarUrl || channel.coverUrl) ? channelCardUrl(origin, channel.id, locale) : undefined;
   return {
     title,
     description,

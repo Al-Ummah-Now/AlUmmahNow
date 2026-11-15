@@ -19,6 +19,7 @@ import { asServiceUnavailable } from './src/lib/seo/unavailable';
 import { asGoneIfPurged } from './src/lib/seo/gone';
 import { rootLocaleRedirect } from './src/lib/seo/root-locale';
 import { appAssociationResponse } from './src/lib/well-known/app-association';
+import { withWholeBody } from './src/lib/http/whole-body';
 
 interface Handler {
   fetch(request: Request, env: unknown, ctx: unknown): Promise<Response>;
@@ -43,7 +44,8 @@ const worker: Handler = {
     try {
       const response = await (openNext as Handler).fetch(withPublicHost(request), env, ctx);
       if (summarise) logger.request({ ...base, status: response.status, durationMs: Date.now() - startedAt });
-      return asGoneIfPurged(request, asServiceUnavailable(request, response), env);
+      // Share images with a Content-Length (lib/http/whole-body.ts)
+      return withWholeBody(request, await asGoneIfPurged(request, asServiceUnavailable(request, response), env));
     } catch (error) {
       logger.request({ ...base, status: 500, durationMs: Date.now() - startedAt, error });
       throw error;

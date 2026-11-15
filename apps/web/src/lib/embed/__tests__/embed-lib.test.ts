@@ -329,10 +329,9 @@ describe('buildWatchMetadata', () => {
     expect(meta.alternates?.types).toEqual({
       'application/json+oembed': [{ url: oembedEndpointUrl(HOST, `${HOST}/ar/video/v1`), title: 'العنوان' }],
     });
-    expect(meta.openGraph).toMatchObject({
-      type: 'video.other',
-      videos: [{ url: `${HOST}/embed/v/v1?lang=ar`, type: 'text/html', width: 1280, height: 720 }],
-    });
+    expect(meta.openGraph).toMatchObject({ type: 'video.other', images: [{ url: `${HOST}/og/v/v1.jpg`, width: 1200, height: 630 }] });
+    // no og:video: chat apps can't play our HTML player and show a small video-link preview when it is there (2026-11-15)
+    expect(meta.openGraph).not.toHaveProperty('videos');
     expect(meta.twitter).toMatchObject({ card: 'player', players: [{ playerUrl: `${HOST}/embed/v/v1?lang=ar`, width: 1280, height: 720 }] });
   });
 
@@ -345,7 +344,8 @@ describe('buildWatchMetadata', () => {
     const meta = buildWatchMetadata(video, 'ar', HOST, onSite);
     expect(meta.alternates?.canonical).toBe('https://scholar.example/ar/watch/v1/');
     expect(meta.alternates?.languages).toEqual({ ar: 'https://scholar.example/ar/watch/v1/' });
-    expect(meta.openGraph).toMatchObject({ url: 'https://scholar.example/ar/watch/v1/', videos: [{ url: `${HOST}/embed/v/v1?lang=ar` }] });
+    expect(meta.openGraph).toMatchObject({ url: 'https://scholar.example/ar/watch/v1/' });
+    expect(meta.twitter).toMatchObject({ players: [{ playerUrl: `${HOST}/embed/v/v1?lang=ar` }] });
     expect(meta.alternates?.types).toEqual({ 'application/json+oembed': [{ url: oembedEndpointUrl(HOST, `${HOST}/ar/video/v1`), title: 'العنوان' }] });
   });
 
@@ -353,7 +353,6 @@ describe('buildWatchMetadata', () => {
     const short = toEmbedVideo({ id: 's1', title: 'Short', playUrl: 'https://vz/t/s1/playlist.m3u8', isPublic: true, width: 720, height: 1280, isShort: true });
     const meta = buildWatchMetadata(short, 'en', HOST);
     expect(meta.twitter).toMatchObject({ card: 'player', players: [{ playerUrl: expect.stringContaining('/embed/v/s1'), width: 405, height: 720 }] });
-    expect(meta.openGraph).toMatchObject({ videos: [{ type: 'text/html', width: 405, height: 720 }] });
     // a Short flag with no size is still 9:16; a square is square; unknown stays 1280x720
     expect(declaredPlayerSize({ isShort: true })).toEqual({ width: 405, height: 720 });
     expect(declaredPlayerSize({ width: 1080, height: 1080 })).toEqual({ width: 720, height: 720 });
@@ -366,7 +365,7 @@ describe('buildWatchMetadata', () => {
     const meta = buildWatchMetadata(short, 'ar', HOST);
     expect(meta.twitter).toMatchObject({ players: [{ width: 413, height: 720 }] });
     // the player keeps the Short's ratio; the share image is the 1200x630 card (its frame centred) for the large preview
-    expect(meta.openGraph).toMatchObject({ videos: [{ width: 413, height: 720 }], images: [{ url: `${HOST}/og/v/s2.jpg`, width: 1200, height: 630, type: 'image/jpeg' }] });
+    expect(meta.openGraph).toMatchObject({ images: [{ url: `${HOST}/og/v/s2.jpg`, width: 1200, height: 630, type: 'image/jpeg' }] });
     expect(fitSize(null, null, 720 / 1256)).toEqual({ width: 367, height: 640 });
     // a landscape video keeps a 16:9 card
     const wide = toEmbedVideo({ id: 'w1', title: 'Wide', playUrl: 'https://vz/t/w1/playlist.m3u8', isPublic: true, width: 1920, height: 1080 });

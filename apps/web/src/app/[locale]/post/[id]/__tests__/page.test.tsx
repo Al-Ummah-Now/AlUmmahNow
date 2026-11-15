@@ -45,7 +45,7 @@ describe('post permalink page', () => {
 
     load.mockResolvedValue(post());
     const text = await generateMetadata(params('ar'));
-    expect(text.twitter).toMatchObject({ card: 'summary_large_image', images: [`${O}/og/c/c1.jpg`] });
+    expect(text.twitter).toMatchObject({ card: 'summary_large_image', images: [`${O}/og/c/c1.jpg?lang=ar`] });
     expect(text.openGraph).toMatchObject({ siteName: 'الأمة الآن', images: [{ width: 1200, height: 630 }] });
   });
 

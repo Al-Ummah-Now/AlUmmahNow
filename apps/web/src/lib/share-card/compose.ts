@@ -3,7 +3,7 @@
  * blur and overlay only. Text is never drawn: the title and description are the preview's text
  * under the image, in the page's language.
  */
-import { avatarLayout, CARD_HEIGHT, CARD_QUALITY, CARD_TYPE, CARD_WIDTH, cardLayout, CHANNEL_PAGE_COLOUR } from './layout';
+import { avatarLayout, CARD_HEIGHT, CARD_QUALITY, CARD_TYPE, CARD_WIDTH, cardLayout, channelLayout, CHANNEL_PAGE_COLOUR } from './layout';
 import { circleMask, encodePng, solid } from './png';
 
 /** The part of the Images binding the cards use (workers-types ImagesBinding) */
@@ -39,24 +39,33 @@ export async function composeImageCard(images: ImagesLike, bytes: ArrayBuffer): 
   return toJpeg(backdrop(images, bytes).draw(front, { top: layout.top, left: layout.left }));
 }
 
-/**
- * A channel (owner, 2026-11-15): its logo (avatar) in front, cut into a circle like the site's
- * avatars and otherwise as supplied, on its banner scaled and cropped to fill the whole card (centred,
- * no bars, no distortion). Without a banner the logo sits on the theme's page colour. Nothing else is
- * drawn: the channel's name is the preview's title under the image.
- */
-export async function composeChannelCard(images: ImagesLike, avatar: ArrayBuffer | null, cover: ArrayBuffer | null): Promise<ArrayBuffer> {
-  if (!avatar) {
-    if (!cover) throw new Error('A channel card needs an avatar or a banner');
-    return toJpeg(images.input(streamOf(cover)).transform({ width: CARD_WIDTH, height: CARD_HEIGHT, fit: 'cover', gravity: 'center' }));
-  }
-  const layout = avatarLayout();
-  const base = cover
-    ? images.input(streamOf(cover)).transform({ width: CARD_WIDTH, height: CARD_HEIGHT, fit: 'cover', gravity: 'center' })
-    : images.input(streamOf(await encodePng(CARD_WIDTH, CARD_HEIGHT, solid(CARD_WIDTH, CARD_HEIGHT, CHANNEL_PAGE_COLOUR))));
+async function roundLogo(images: ImagesLike, avatar: ArrayBuffer, size: number): Promise<ReadableStream<Uint8Array>> {
   // Square crop around the centre, then the circle (the binding gives raw RGBA; png.ts adds the alpha)
-  const square = await images.input(streamOf(avatar)).transform({ width: layout.size, height: layout.size, fit: 'cover', gravity: 'center' }).output({ format: 'rgba' });
+  const square = await images.input(streamOf(avatar)).transform({ width: size, height: size, fit: 'cover', gravity: 'center' }).output({ format: 'rgba' });
   const pixels = new Uint8Array(await new Response(square.image()).arrayBuffer());
-  const logo = await encodePng(layout.size, layout.size, circleMask(layout.size, pixels));
-  return toJpeg(base.draw(streamOf(logo), { top: layout.top, left: layout.left }));
+  return streamOf(await encodePng(size, size, circleMask(size, pixels)));
+}
+
+const pageCanvas = async (images: ImagesLike) =>
+  images.input(streamOf(await encodePng(CARD_WIDTH, CARD_HEIGHT, solid(CARD_WIDTH, CARD_HEIGHT, CHANNEL_PAGE_COLOUR))));
+
+/**
+ * A channel (owner, 2026-11-15): its banner whole on the theme's page colour, with its logo (avatar,
+ * cut into a circle like the site's avatars, otherwise as supplied) at the banner's bottom-start
+ * corner, mirrored for Arabic (layout.ts channelLayout). Without a banner the logo sits centred on
+ * the page colour; without a logo the banner alone. Nothing else is drawn: the channel's name is the
+ * preview's title under the image.
+ */
+export async function composeChannelCard(images: ImagesLike, avatar: ArrayBuffer | null, cover: ArrayBuffer | null, rtl = false): Promise<ArrayBuffer> {
+  if (!avatar && !cover) throw new Error('A channel card needs an avatar or a banner');
+  if (!cover) {
+    const layout = avatarLayout();
+    return toJpeg((await pageCanvas(images)).draw(await roundLogo(images, avatar as ArrayBuffer, layout.size), { top: layout.top, left: layout.left }));
+  }
+  const info = await images.info(streamOf(cover));
+  const { banner, logo } = channelLayout(info.width ?? 0, info.height ?? 0, rtl);
+  const bannerImage = images.input(streamOf(cover)).transform({ width: banner.width, height: banner.height, fit: 'contain' });
+  let card = (await pageCanvas(images)).draw(bannerImage, { top: banner.top, left: banner.left });
+  if (avatar) card = card.draw(await roundLogo(images, avatar, logo.width), { top: logo.top, left: logo.left });
+  return toJpeg(card);
 }
