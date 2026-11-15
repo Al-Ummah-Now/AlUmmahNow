@@ -64,10 +64,11 @@ test.describe('public profile settings (signed in)', () => {
     test.skip(testInfo.project.name.startsWith('Mobile'), 'Depends on the desktop settings test');
     const u = userApi('single');
     const res = await request.post(`${API_URL}/api/videos/${own.videos()[0].id}/comments`, {
-      headers: { Authorization: `Bearer ${u.token}` },
+      // Cloudflare's documented Turnstile test token: the local stack uses the always-pass test secret
+      headers: { Authorization: `Bearer ${u.token}`, 'X-Turnstile-Token': 'XXXX.DUMMY.TOKEN.XXXX' },
       data: { text: COMMENT },
     });
-    expect(res.ok()).toBe(true);
+    expect(res.ok(), await res.text()).toBe(true);
     commentId = (await res.json()).result.comment.id;
   });
 });
