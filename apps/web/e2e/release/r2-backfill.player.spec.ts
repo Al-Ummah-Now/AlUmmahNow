@@ -97,8 +97,8 @@ test.describe('R2 backfill: copy, transcode, verify, play R2 first', () => {
       if (!done.hasOriginal) expect(done.copiedBytes, 'our original was copied from Bunny').toBe(done.sourceBytes);
       await expect.poll(async () => (run = (await call<{ run: Run }>(`/runs/${run.id}`)).run).status, { message: 'the run is done', timeout: 60000 }).toBe('done');
 
-      // Both copies, Bunny still first until the flip
-      await expect.poll(async () => (await view()).sources?.map((s) => s.provider).join(',') ?? '', { timeout: 30000 }).toBe('bunny,r2');
+      // Bunny still plays first until the flip (R2 is listed after it only where the playback order names R2)
+      await expect.poll(async () => (await view()).sources?.[0]?.provider ?? '', { timeout: 30000 }).toBe('bunny');
 
       // Play R2 first for this video
       const flip = await call<{ flipped: string[]; refused: unknown[] }>('/flip', { method: 'POST', body: JSON.stringify({ target: 'videos', videoIds: [videoId], actorId: 'e2e-backfill' }) });
@@ -121,7 +121,7 @@ test.describe('R2 backfill: copy, transcode, verify, play R2 first', () => {
       // Undo: Bunny first again
       expect((await call<{ flipped: string[] }>('/flip', { method: 'POST', body: JSON.stringify({ target: 'videos', videoIds: [videoId], undo: true, actorId: 'e2e-backfill' }) })).flipped).toEqual([videoId]);
       flipped = false;
-      await expect.poll(async () => (await view()).sources?.map((s) => s.provider).join(',') ?? '', { timeout: 30000 }).toBe('bunny,r2');
+      await expect.poll(async () => (await view()).sources?.[0]?.provider ?? '', { message: 'Bunny first again', timeout: 30000 }).toBe('bunny');
     } finally {
       if (videoId && flipped) await internal('/backfill/flip', { method: 'POST', body: JSON.stringify({ target: 'videos', videoIds: [videoId], undo: true, actorId: 'e2e-backfill' }) }).catch(() => undefined);
       if (videoId) await apiFetch(user, `/api/videos/${videoId}/permanent`, { method: 'DELETE', headers: { channelId } });
