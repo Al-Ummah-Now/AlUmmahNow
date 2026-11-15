@@ -238,6 +238,12 @@
       "store_id": "f8eddc9944d041919ed8dc7d08d32308",
       "secret_name": "csam-evidence-key-qa"
     },
+    {
+      // AES-256-GCM key(s) sealing social auto-post tokens and webhook secrets (lib/social/crypto.ts)
+      "binding": "SOCIAL_TOKEN_KEK",
+      "store_id": "f8eddc9944d041919ed8dc7d08d32308",
+      "secret_name": "social-token-kek-qa"
+    },
     { "binding": "TURNSTILE_SECRET", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "turnstile-secret-test" },
     {
       // HMAC key of self-hosted live stream keys (lib/live/providers.ts)
