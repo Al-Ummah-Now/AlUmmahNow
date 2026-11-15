@@ -161,6 +161,8 @@ export const WORKERS: StackWorker[] = [
       // White-label scholar sites: <slug>.sites.localhost hosts, revoked sites redirect to the local web app
       SITES_ENV: 'local',
       VIDEOS_WEB_URL: url('web'),
+      // Mobile apps settings (attestation switches, NAT-REL) come from the stack's admin-api
+      ADMIN_API_URL: url('admin-api'),
       // The fake Bunny CDN (fake-external.ts FAKE_CDN_HOST): workers reach it through the outbound
       // fakes, the browser through Playwright routes to PORTS['fake-cdn']
       bunny_hostname: 'vz-local-stack.b-cdn.net',
