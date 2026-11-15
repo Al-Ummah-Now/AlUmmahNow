@@ -11,6 +11,7 @@ import { FILTER_LABEL, STALE_FILTERS, parseStaleFilter, statusQuery, TYPE_LABEL 
 import { ReaperPanel } from './ReaperPanel';
 import { StaleUploadsTable } from './StaleUploadsTable';
 import { LiveRefresh } from '@/components/LiveRefresh';
+import { UserName } from '@/components/audit/UserName';
 
 export const dynamic = 'force-dynamic';
 
@@ -110,7 +111,7 @@ export default async function StaleUploadsPage({ searchParams }: PageProps) {
                       <td className={tdClass}>{formatDate(row.at, locale, true)}</td>
                       <td className={tdClass} dir="ltr">{row.videoId}</td>
                       <td className={tdClass}>{t(TYPE_LABEL[row.target])}</td>
-                      <td className={tdClass} dir="auto">{row.actor}</td>
+                      <td className={tdClass}>{row.actor ? <UserName id={row.actor} showEmail={false} /> : '—'}</td>
                       <td className={tdClass}>{row.force ? t('staleUploads.deleteNow') : row.mode === 'live' ? t('staleUploads.modeLive') : t('staleUploads.modeDryRun')}</td>
                       <td className={tdClass}>
                         {row.state !== 'done' ? t('staleUploads.resultStarted') : row.bunnyDeleted ? t('staleUploads.resultDone') : t('staleUploads.resultMarked')}

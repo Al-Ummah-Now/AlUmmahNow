@@ -247,6 +247,8 @@ export interface AdminLookupUser {
   found: boolean;
   displayName: string | null;
   userName: string | null;
+  /** The profile's email (admin pages show it next to the name). */
+  email?: string | null;
   isBanned: boolean;
 }
 

@@ -1,5 +1,6 @@
 // Export all shared types
 export * from './video';
+export * from './admin-audit';
 export * from './token-audience';
 export * from './token-key-refetch';
 export * from './video-visibility';

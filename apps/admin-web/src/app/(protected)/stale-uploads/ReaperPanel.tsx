@@ -10,6 +10,8 @@ import { useConfirm } from '@/components/content/actions';
 import { formatDate } from '@/i18n/translate';
 import { ErrorAlert, cardClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
+import { UserName } from '@/components/audit/UserName';
+import { fillNodes } from '@/components/audit/fill';
 
 /**
  * The reaper's mode (dry run until an admin turns deletion on), its last
@@ -92,7 +94,7 @@ export function ReaperPanel({
         </div>
         <p className="text-fg-muted max-w-2xl">{live ? t('staleUploads.modeLiveHelp') : t('staleUploads.modeDryRunHelp')}</p>
         {config.updatedAt && config.updatedBy && (
-          <p className="text-fg-subtle text-sm">{t('staleUploads.modeBy', { actor: config.updatedBy, date: formatDate(config.updatedAt, locale, true) })}</p>
+          <p className="text-fg-subtle text-sm">{fillNodes(t('staleUploads.modeBy', { date: formatDate(config.updatedAt, locale, true) }), { actor: <UserName id={config.updatedBy} showEmail={false} /> })}</p>
         )}
         <div className="border-t border-border pt-3 text-sm">
           <div className="font-medium text-fg">{t('staleUploads.lastSweep')}</div>

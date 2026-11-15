@@ -15,6 +15,7 @@ import { appleAppSiteAssociation, assetLinks } from '@al-ummah/shared-types';
 import themesRouter, { publicThemes } from './routers/themes.router';
 import contentRouter from './routers/content.router';
 import suggestRouter from './routers/suggest.router';
+import { auditRouter, namesRouter } from './routers/audit.router';
 import reportQueueRouter from './routers/reportQueue.router';
 import reviewRouter from './routers/review.router';
 import { purgeReviewMedia, reviewStats } from './lib/review/queue';
@@ -231,6 +232,9 @@ app.route('/api/review', reviewRouter as never);
 
 // Admin autocomplete: suggestions for every search and lookup box in admin-web
 app.route('/api/suggest', suggestRouter);
+// Audit log page (merged audit tables, audit:read) and names for the ids every admin page shows
+app.route('/api/audit', auditRouter);
+app.route('/api/names', namesRouter);
 // Invite creators: pre-provisioned accounts, plan and channels before first sign-in (docs/admin/INVITES.md)
 app.route('/api/invites', invitesRouter);
 // White-label scholar sites: grant, change, revoke, restore (wiki AUN-SCHOLAR-SITES §8)

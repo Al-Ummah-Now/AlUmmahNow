@@ -34,6 +34,8 @@ import {
   type OverrideDraft,
 } from '@/lib/media/providers-form';
 import { logger } from '@/lib/logger-client';
+import { UserName } from '@/components/audit/UserName';
+import { fillNodes } from '@/components/audit/fill';
 
 type HealthKey = Exclude<keyof ProviderHealthSettings, 'enabled'>;
 const HEALTH_FIELDS: { key: HealthKey; label: MessageKey; hint?: MessageKey; min: number; max: number }[] = [
@@ -521,7 +523,7 @@ export function ProviderSettings({ view, labelledBy }: { view: MediaProvidersVie
           <p role="status" className="text-sm text-fg" data-testid="providers-saved">{notice ?? (dirty ? t('mediaProviders.unsaved') : '')}</p>
         </div>
         <p className="text-sm text-fg-muted" data-testid="providers-updated">
-          {saved.updatedAt ? t('mediaProviders.updated', { date: formatDate(saved.updatedAt, locale, true), user: saved.updatedBy ?? '—' }) : t('mediaProviders.neverChanged')}
+          {saved.updatedAt ? fillNodes(t('mediaProviders.updated', { date: formatDate(saved.updatedAt, locale, true) }), { user: saved.updatedBy ? <UserName id={saved.updatedBy} showEmail={false} /> : '—' }) : t('mediaProviders.neverChanged')}
         </p>
       </form>
     </section>

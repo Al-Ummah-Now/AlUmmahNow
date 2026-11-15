@@ -54,6 +54,7 @@ import {
   type MetricFormat,
   type OverrideUndo,
 } from '@/lib/live-streaming';
+import { UserName } from '@/components/audit/UserName';
 
 interface Initial {
   view: LiveSettingsView | null;
@@ -988,7 +989,7 @@ function HistorySection({ audit, locale }: { audit: LiveAuditEntry[]; locale: st
                   <span className="font-medium">{actionLabel(entry.action)}</span>
                   {target.id && target.id !== 'routing' && <span className="text-fg-muted" dir="ltr">{target.id}</span>}
                   <span className="text-fg-muted">{formatDate(entry.createdAt, locale as never, true)}</span>
-                  <span className="text-fg-muted" dir="ltr">{entry.actorId}</span>
+                  <span className="text-fg-muted"><UserName id={entry.actorId} showEmail={false} /></span>
                 </div>
                 <ul className="mt-1 space-y-0.5 text-xs text-fg-muted">
                   {changeLines(entry.details, entry.previous ?? null).map((line) => (

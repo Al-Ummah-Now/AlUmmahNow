@@ -9,7 +9,7 @@ import ar from '../src/i18n/messages/ar';
 import { createTranslator } from '../src/i18n/translate';
 
 const moderator: NavAccess = { contact: false, processing: false, errors: false, manageUsers: false, staleUploads: false, media: false, ops: false };
-const admin: NavAccess = { contact: true, processing: true, errors: true, manageUsers: true, staleUploads: true, media: true, ops: true };
+const admin: NavAccess = { contact: true, processing: true, errors: true, manageUsers: true, staleUploads: true, media: true, ops: true, audit: true };
 const hrefs = (access: NavAccess) => visibleItems(access).map((i) => i.href);
 
 describe('nav model', () => {
@@ -21,7 +21,7 @@ describe('nav model', () => {
 
   it('hides from moderators exactly what the old nav hid', () => {
     const hidden = hrefs(admin).filter((h) => !hrefs(moderator).includes(h)).sort();
-    assert.deepEqual(hidden, ['/contact', '/delivery', '/media-providers', '/errors', '/legacy-profiles', '/operations', '/processing', '/stale-uploads', '/status', '/abuse', '/web-vitals', '/video-formats', '/newsletter'].sort());
+    assert.deepEqual(hidden, ['/audit', '/contact', '/delivery', '/media-providers', '/errors', '/legacy-profiles', '/operations', '/processing', '/stale-uploads', '/status', '/abuse', '/web-vitals', '/video-formats', '/newsletter'].sort());
   });
 
   it('shows Errors to whoever has errors:read or videos:processing', () => {

@@ -5,6 +5,8 @@ import { formatDate, formatNumber, type MessageKey, type Translator } from '@/i1
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { TierEditor, type TierActions } from './TierEditor';
 import { LimitHitsNotice } from './LimitHitsNotice';
+import { UserName } from '@/components/audit/UserName';
+import { fillNodes } from '@/components/audit/fill';
 
 const FIELD_LABEL: Record<string, MessageKey> = {
   name: 'creators.tierName',
@@ -63,7 +65,7 @@ export function CreatorTiersView({ list, audit, canManage, t, locale, actions }:
               <li key={entry.id}>
                 <span className="font-medium text-fg">{list?.items.find((tier) => `content:creator-tier:${tier.id}` === entry.key)?.name ?? entry.key.replace('content:creator-tier:', '')}</span>{' '}
                 <span className="text-fg">{auditSummary(entry, t)}</span>{' '}
-                <span className="text-fg-muted">{t('creators.historyBy', { actor: entry.actorId, date: formatDate(entry.createdAt, locale, true) })}</span>
+                <span className="text-fg-muted">{fillNodes(t('creators.historyBy', { date: formatDate(entry.createdAt, locale, true) }), { actor: <UserName id={entry.actorId} showEmail={false} /> })}</span>
               </li>
             ))}
           </ul>

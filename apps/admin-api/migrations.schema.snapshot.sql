@@ -27,6 +27,7 @@
 --   apps/admin-api/migrations/0026_erase_tombstones.sql
 --   apps/admin-api/migrations/0027_csam_cases.sql
 --   apps/admin-api/migrations/0028_newsletter.sql
+--   apps/admin-api/migrations/0029_audit_feed_indexes.sql
 
 CREATE TABLE admin_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, actor_email TEXT, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, metadata TEXT, created_at TEXT NOT NULL);
 CREATE TABLE ai_budget_daily (day TEXT NOT NULL, feature TEXT NOT NULL, reserved REAL NOT NULL DEFAULT 0, PRIMARY KEY (day, feature));
@@ -73,6 +74,7 @@ CREATE TABLE theme_package_versions (theme_id TEXT NOT NULL, version TEXT NOT NU
 CREATE TABLE theme_packages (id TEXT PRIMARY KEY, name_en TEXT NOT NULL, name_ar TEXT NOT NULL, based_on TEXT, latest_version TEXT, draft_updated_by TEXT NOT NULL, draft_updated_at TEXT NOT NULL, created_by TEXT NOT NULL, created_at TEXT NOT NULL, deleted_at TEXT, deleted_by TEXT, delete_reason TEXT, purge_requested_at TEXT, purge_requested_by TEXT, purge_started_at TEXT);
 CREATE TABLE usage_counters (subject_type TEXT NOT NULL, subject_id TEXT NOT NULL, key TEXT NOT NULL, period TEXT NOT NULL, value INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY (subject_type, subject_id, key, period));
 CREATE TABLE user_warnings (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, reason_code TEXT NOT NULL, note TEXT, report_id TEXT, entity_kind TEXT, entity_id TEXT, issued_by TEXT NOT NULL, issued_by_name TEXT NOT NULL, created_at TEXT NOT NULL, locale TEXT NOT NULL DEFAULT 'en' CHECK (locale IN ('en', 'ar')), in_app_sent INTEGER NOT NULL DEFAULT 0, email_status TEXT, email_error TEXT, email_updated_at TEXT);
+CREATE INDEX idx_admin_audit_actor ON admin_audit_log (actor_id, created_at);
 CREATE INDEX idx_admin_audit_created ON admin_audit_log(created_at);
 CREATE INDEX idx_admin_audit_target ON admin_audit_log(target_type, target_id, created_at);
 CREATE INDEX idx_auth_modreq_delivery ON auth_moderation_requests(delivery_status, created_at);
@@ -154,6 +156,8 @@ CREATE INDEX idx_reports_owner ON reports(owner_id);
 CREATE INDEX idx_reports_reporter_id ON reports(reporter_id);
 CREATE INDEX idx_reports_status ON reports(status);
 CREATE INDEX idx_site_domain_checks_due ON site_domain_checks (next_check_at);
+CREATE INDEX idx_site_settings_log_actor ON site_settings_log (actor_id, created_at);
+CREATE INDEX idx_site_settings_log_created ON site_settings_log (created_at, id);
 CREATE INDEX idx_site_settings_log_key ON site_settings_log (key, created_at);
 CREATE UNIQUE INDEX idx_subscriptions_live ON subscriptions(subject_type, subject_id) WHERE status IN ('trialing', 'active', 'past_due');
 CREATE INDEX idx_subscriptions_plan ON subscriptions(plan_id, plan_version);

@@ -17,9 +17,10 @@ function seed() {
 	own.run('video', 'v_1', 'usr_owner', 'ch_1', 'A video', null, 1, 0);
 	own.run('profile', 'usr_owner', null, null, 'Owner Name', 'owner', 0, 0);
 	own.run('profile', 'usr_rep', null, null, 'Reporter Name', 'rep', 0, 0);
+	db.db.prepare("UPDATE content_ownership SET email = 'rep@example.com' WHERE kind = 'profile' AND id = 'usr_rep'").run();
 	db.db.prepare('INSERT INTO admin_comments (video_id, comment_id, user_id, channel_id, text) VALUES (?, ?, ?, ?, ?)').run('v_1', 'c_1', 'usr_commenter', null, '  a   rude comment ');
 	db.db.prepare('INSERT INTO videos_bans (user_id, reason, banned_by, banned_at) VALUES (?, ?, ?, ?)').run('usr_owner', 'x', 'admin', '2026-01-01T00:00:00Z');
-	const profiles = new MemoryBucket({ usr_commenter: { displayName: 'Commenter' } });
+	const profiles = new MemoryBucket({ usr_commenter: { displayName: 'Commenter', email: 'commenter@example.com' } });
 	const playlists = new MemoryBucket({ p_1: { id: 'p_1', title: 'List', userId: 'usr_rep', channelId: 'ch_1' } });
 	const app = new Hono();
 	app.route('/internal/admin', adminRouter as never);
@@ -64,7 +65,10 @@ describe('admin lookup', () => {
 		assert.equal(users.usr_rep.displayName, 'Reporter Name');
 		assert.equal(users.usr_rep.isBanned, false);
 		assert.equal(users.usr_commenter.displayName, 'Commenter', 'read from R2 when the index lacks the profile');
+		assert.equal(users.usr_rep.email, 'rep@example.com', 'the email for admin pages (#745)');
+		assert.equal(users.usr_commenter.email, 'commenter@example.com');
 		assert.equal(users.usr_unknown.found, false);
+		assert.equal(users.usr_unknown.email, null);
 	});
 
 	it('drops malformed and duplicate entries', () => {

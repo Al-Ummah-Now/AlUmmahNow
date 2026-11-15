@@ -1,0 +1,157 @@
+/**
+ * How the admin shows an audit row (issues #711, #745): the action as words in the admin's
+ * language, the actor and items by name, and every id-valued detail as the thing it names. No
+ * React here, so it is tested without a browser (test/audit-log.test.ts).
+ */
+import { auditRefKind, isSystemActor, type AdminNames } from '@al-ummah/shared-types';
+import type { MessageKey, Translator } from '@/i18n/translate';
+import en from '@/i18n/messages/en';
+
+export type NamedKind = 'user' | 'channel' | 'video' | 'playlist' | 'post' | 'comment';
+
+const ACTIONS = en.auditLog.actions as Record<string, string>;
+
+/** `status.incident.create` → `status_incident_create`: the key form of an action. */
+export const actionKey = (action: string) => action.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+
+/**
+ * The words for an action: its own label, else the label of its last part (`status.incident.edit`
+ * reads "Edited"), else the action itself with its separators as spaces (a new action keeps
+ * showing up until it gets words).
+ */
+export function actionLabel(action: string, t: Translator): string {
+  const full = actionKey(action);
+  if (full in ACTIONS) return t(`auditLog.actions.${full}` as MessageKey);
+  const last = actionKey(action.split(/[.:]/).pop() ?? '');
+  if (last in ACTIONS) return t(`auditLog.actions.${last}` as MessageKey);
+  return action.replace(/[._:-]+/g, ' ').trim();
+}
+
+/** Where an item's admin page is; null for kinds without one. */
+export function itemHref(kind: string, id: string): string | null {
+  const e = encodeURIComponent(id);
+  switch (kind) {
+    case 'user':
+      return `/users/${e}`;
+    case 'channel':
+      return `/channels/${e}`;
+    case 'video':
+      return `/videos/${e}`;
+    case 'playlist':
+      return `/playlists/${e}`;
+    default:
+      return null;
+  }
+}
+
+export interface PersonView {
+  id: string;
+  /** What to show: the name, else the email, else "System" / the id */
+  label: string;
+  email: string | null;
+  href: string | null;
+  system: boolean;
+  found: boolean;
+}
+
+/** A person by name: display name, then @handle, then email; the system actors read "System". */
+export function personView(id: string, names: AdminNames | null | undefined, t: Translator, fallbackEmail: string | null = null): PersonView {
+  if (isSystemActor(id)) return { id, label: t('auditLog.system'), email: null, href: null, system: true, found: true };
+  const named = names?.users[id];
+  const email = named?.email ?? fallbackEmail ?? null;
+  const label = named?.name?.trim() || (named?.userName ? `@${named.userName}` : '') || email || id;
+  return { id, label, email: label === email ? null : email, href: itemHref('user', id), system: false, found: !!named?.found };
+}
+
+export interface ItemView {
+  kind: string;
+  id: string;
+  label: string;
+  href: string | null;
+  found: boolean;
+}
+
+/** An item by title; the id when it has no name (deleted, or not a kind the lookup knows). */
+export function itemView(kind: string, id: string, names: AdminNames | null | undefined, t: Translator): ItemView {
+  if (kind === 'user') {
+    const p = personView(id, names, t);
+    return { kind, id, label: p.label, href: p.href, found: p.found };
+  }
+  const named = names?.items[`${kind}:${id}`];
+  return { kind, id, label: named?.title?.trim() || id, href: itemHref(kind, id), found: !!named?.found };
+}
+
+export type DetailView =
+  | { key: string; type: 'ref'; item: ItemView }
+  | { key: string; type: 'text'; value: string };
+
+/** A detail's value as text: strings as they are, everything else as compact JSON. */
+export const detailText = (value: unknown): string => (typeof value === 'string' ? value : JSON.stringify(value));
+
+/** The details of a row, with ids replaced by what they name. */
+export function detailViews(details: Record<string, unknown> | null | undefined, names: AdminNames | null | undefined, t: Translator): DetailView[] {
+  if (!details) return [];
+  return Object.entries(details)
+    .filter(([, v]) => v !== null && v !== undefined && v !== '')
+    .map(([key, value]) => {
+      const kind = auditRefKind(key, value);
+      return kind ? { key, type: 'ref' as const, item: itemView(kind, value as string, names, t) } : { key, type: 'text' as const, value: detailText(value) };
+    });
+}
+
+/** Every id an entry list mentions, for one names request. */
+export function namesRequestOf(entries: { actorId: string; target?: { kind: string; id: string } | null; details?: Record<string, unknown> | null }[]): { users: string[]; items: { kind: string; id: string }[] } {
+  const users = new Set<string>();
+  const items = new Map<string, { kind: string; id: string }>();
+  const add = (kind: string, id: string) => {
+    if (kind === 'user') users.add(id);
+    else items.set(`${kind}:${id}`, { kind, id });
+  };
+  for (const e of entries) {
+    if (e.actorId && !isSystemActor(e.actorId)) users.add(e.actorId);
+    if (e.target) add(e.target.kind, e.target.id);
+    for (const [key, value] of Object.entries(e.details ?? {})) {
+      const kind = auditRefKind(key, value);
+      if (kind) add(kind, value as string);
+    }
+  }
+  return { users: [...users], items: [...items.values()] };
+}
+
+/** The audit page's URL for a set of filters (empty values dropped, the cursor last). */
+export function auditHref(filters: Record<string, string | undefined>): string {
+  const params = new URLSearchParams();
+  for (const key of ['actorId', 'itemKind', 'itemId', 'area', 'action', 'from', 'to', 'cursor']) {
+    const value = filters[key];
+    if (value) params.set(key, value);
+  }
+  const query = params.toString();
+  return query ? `/audit?${query}` : '/audit';
+}
+
+/** A template cut at the named placeholders: text, then `{ slot }` where a node goes. Other placeholders stay text. */
+export function splitTemplate(template: string, slots: string[]): (string | { slot: string })[] {
+  return template
+    .split(/(\{\w+\})/)
+    .filter((part) => part !== '')
+    .map((part) => {
+      const name = /^\{(\w+)\}$/.exec(part)?.[1];
+      return name && slots.includes(name) ? { slot: name } : part;
+    });
+}
+
+const DETAIL_KEYS = en.auditLog.detailKeys as Record<string, string>;
+const SETTINGS = en.auditLog.settings as Record<string, string>;
+
+/** A detail's name in words ("New owner"); one without words yet keeps its key. */
+export function detailKeyLabel(key: string, t: Translator): string {
+  return key in DETAIL_KEYS ? t(`auditLog.detailKeys.${key}` as MessageKey) : key;
+}
+
+/** A setting's name in words: `notifications:menu-open` reads "Notification menu"; per-item settings (ops thresholds) keep their id after the name. */
+export function settingLabel(setting: string, t: Translator): string {
+  const full = actionKey(setting);
+  if (full in SETTINGS) return t(`auditLog.settings.${full}` as MessageKey);
+  const prefix = Object.keys(SETTINGS).find((k) => full.startsWith(`${k}_`));
+  return prefix ? `${t(`auditLog.settings.${prefix}` as MessageKey)} (${setting.slice(setting.lastIndexOf(':') + 1)})` : setting;
+}
