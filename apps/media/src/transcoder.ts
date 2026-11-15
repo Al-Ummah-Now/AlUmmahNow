@@ -476,9 +476,9 @@ export class Transcoder extends Container<Env> {
 	async selfTest(version?: string): Promise<SelfTestResult> {
 		const last = await this.ctx.storage.get<SelfTestResult>('selftest');
 		if (!selfTestDue(last, Date.now(), version)) return { ...last!, cached: true };
-		const runs = selfTestRuns(last, version);
 		const started = Date.now();
-		const base = () => ({ startMs: Date.now() - started, at: new Date().toISOString(), version, runs });
+		const counts = selfTestRuns(last, version, started);
+		const base = () => ({ startMs: Date.now() - started, at: new Date().toISOString(), version, ...counts });
 		let result: SelfTestResult;
 		let detail = '';
 		try {
