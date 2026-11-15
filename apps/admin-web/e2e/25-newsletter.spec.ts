@@ -9,7 +9,7 @@
 import { test, expect } from './support/fixtures';
 import { adminApi, readTokens } from './support/api';
 import { ADMIN_API_URL, LOCAL_STACK, RUN_TAG } from './support/env';
-import { expectDirection, expectNoAxeViolations, setPreferences } from './support/ui';
+import { expectDirection, expectNoAxeViolations, setPreferences, waitForHydration } from './support/ui';
 
 const SUFFIX = `${RUN_TAG}-${Date.now().toString(36)}`;
 const SUBJECT_EN = `E2E newsletter ${SUFFIX}`;
@@ -44,6 +44,8 @@ test.describe('newsletter', () => {
     await page.goto('/newsletter');
     await expect(page.getByRole('heading', { level: 1, name: 'Newsletter' })).toBeVisible();
     const editor = page.getByTestId('newsletter-editor');
+    // Typing before hydration is lost when React takes over the controlled fields (#1459)
+    await waitForHydration(editor.getByLabel('Subject (English)'));
     await editor.getByLabel('Subject (English)').fill(SUBJECT_EN);
     await expect(page.getByTestId('newsletter-incomplete')).toBeVisible();
     await expect(page.getByTestId('newsletter-send')).toBeDisabled();
