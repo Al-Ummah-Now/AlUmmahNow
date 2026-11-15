@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import { sqliteD1 } from './d1-sqlite';
 import { AUTH_GRACE_MS, dueRevokedInvites, inviteEraseItemKey, settleRevokedInvites, type InviteEraseDeps } from '../src/lib/invite-erase';
 import { BUILTIN_RETRIES } from '../src/lib/errors-actions';
+import { writeAudit } from '../src/lib/content/audit';
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = Date.parse('2026-12-20T12:00:00.000Z');
@@ -42,6 +43,9 @@ function harness(held: string[] = []) {
   const asked: string[][] = [];
   let authDown = false;
   let eraseFails = false;
+  let transferFails = false;
+  const owners = new Map<string, string | null>();
+  const transfers: [string, string][] = [];
   const deps: InviteEraseDeps = {
     now: NOW,
     auth: {
@@ -58,13 +62,30 @@ function harness(held: string[] = []) {
     },
     flag: async (row, reason) => void flagged.push({ id: row.id, reason }),
     resolve: async (row) => void resolved.push(row.id),
+    channelOwner: async (id) => (owners.has(id) ? { ownerId: owners.get(id) ?? null, isDeleted: false } : null),
+    transferChannel: async (id, to) => {
+      if (transferFails) throw new Error('videos 500');
+      transfers.push([id, to]);
+    },
   };
   const env = { REPORTS_DB: db } as never;
   const remaining = async () => ((await db.prepare('SELECT id FROM creator_invites ORDER BY id').all<{ id: string }>()).results ?? []).map((r) => r.id);
-  return { db, env, deps, erased, flagged, resolved, asked, remaining, downAuth: () => void (authDown = true), failErase: () => void (eraseFails = true) };
+  return { db, env, deps, erased, flagged, resolved, asked, remaining, owners, transfers, downAuth: () => void (authDown = true), failErase: () => void (eraseFails = true), failTransfer: () => void (transferFails = true) };
 }
 
 const settle = async (h: ReturnType<typeof harness>) => settleRevokedInvites(h.env, await dueRevokedInvites(h.db as never, daysAgo(30), 50), h.deps);
+
+/** The invite moved ch_moved from usr_prev (as invites.router.ts audits it); ch_new was made for it. */
+async function seedMovedChannel(h: ReturnType<typeof harness>, id: string, previousOwner: string | null = 'usr_prev') {
+  const channels = [
+    { id: 'ch_new', name: 'New', action: 'created' },
+    { id: 'ch_moved', name: 'Moved', action: 'transferred', jobId: 'job_1' },
+  ];
+  await seed(h.db, id, { channels: JSON.stringify(channels) });
+  await writeAudit(h.db as never, { kind: 'channel', id: 'ch_moved', action: 'transfer', actorId: 'usr_admin', details: { newOwnerId: `usr_${id}`, inviteId: id }, previous: { ownerId: previousOwner } }, daysAgo(40));
+  h.owners.set('ch_new', `usr_${id}`);
+  h.owners.set('ch_moved', `usr_${id}`);
+}
 
 describe('revoked invite erase (#716)', () => {
   it('erases the videos side of an invite auth purged, then drops its mirror', async () => {
@@ -132,6 +153,68 @@ describe('revoked invite erase (#716)', () => {
     assert.deepEqual(await h2.remaining(), ['b']);
   });
 
+  it('gives a channel the invite moved back to its previous owner before erasing anything', async () => {
+    const h = harness();
+    await seedMovedChannel(h, 'mv');
+    let out = await settle(h);
+    assert.deepEqual(out, { purged: [], erased: [], waiting: ['mv'], failed: [] });
+    assert.deepEqual(h.transfers, [['ch_moved', 'usr_prev']]);
+    assert.deepEqual(h.erased, []);
+    const audit = await h.db.prepare("SELECT actor_id, new_value, old_value FROM site_settings_log WHERE key = 'content:channel:ch_moved' ORDER BY created_at DESC").first<{ actor_id: string; new_value: string; old_value: string }>();
+    assert.equal(audit?.actor_id, 'system:trash-cleanup');
+    assert.deepEqual(JSON.parse(audit!.new_value).details, { newOwnerId: 'usr_prev', inviteId: 'mv', reason: 'revoked-invite' });
+    assert.deepEqual(JSON.parse(audit!.old_value), { ownerId: 'usr_mv' });
+
+    // The job has not landed yet: wait, without queueing it again
+    out = await settle(h);
+    assert.deepEqual(out.waiting, ['mv']);
+    assert.equal(h.transfers.length, 1);
+
+    // Landed: the channel is the previous owner's again, so the erase goes on
+    h.owners.set('ch_moved', 'usr_prev');
+    out = await settle(h);
+    assert.deepEqual(out, { purged: ['mv'], erased: ['mv'], waiting: [], failed: [] });
+    assert.deepEqual(h.erased, ['usr_mv']);
+  });
+
+  it('never erases when a moved channel has no known previous owner, or cannot be given back', async () => {
+    const h = harness();
+    await seedMovedChannel(h, 'orphan', null);
+    const out = await settle(h);
+    assert.equal(out.failed[0]?.id, 'orphan');
+    assert.match(out.failed[0]!.error, /previous owner is unknown/);
+    assert.deepEqual(h.erased, []);
+    assert.deepEqual(h.transfers, []);
+    assert.deepEqual(h.flagged.map((f) => f.id), ['orphan']);
+    assert.deepEqual(await h.remaining(), ['orphan']);
+
+    const h2 = harness();
+    await seedMovedChannel(h2, 'stuck');
+    h2.failTransfer();
+    const out2 = await settle(h2);
+    assert.match(out2.failed[0]!.error, /could not be given back/);
+    assert.deepEqual(h2.erased, []);
+    assert.deepEqual(h2.flagged.map((f) => f.id), ['stuck']);
+  });
+
+  it('flags a give-back that has not landed two days after it was queued', async () => {
+    const h = harness();
+    await seedMovedChannel(h, 'slow');
+    await writeAudit(h.db as never, { kind: 'channel', id: 'ch_moved', action: 'transfer', actorId: 'system:trash-cleanup', details: { newOwnerId: 'usr_prev', inviteId: 'slow', reason: 'revoked-invite' }, previous: { ownerId: 'usr_slow' } }, new Date(NOW - AUTH_GRACE_MS - 60_000).toISOString());
+    const out = await settle(h);
+    assert.match(out.failed[0]!.error, /has not finished/);
+    assert.deepEqual(h.transfers, []);
+    assert.deepEqual(h.erased, []);
+  });
+
+  it('erases at once when a moved channel already left the invited user', async () => {
+    const h = harness();
+    await seedMovedChannel(h, 'left');
+    h.owners.set('ch_moved', 'usr_someone');
+    assert.deepEqual((await settle(h)).erased, ['left']);
+    assert.deepEqual(h.transfers, []);
+  });
+
   it('leaves invites not yet due alone', async () => {
     const h = harness();
     await seed(h.db, 'recent', { deleted_at: daysAgo(3) });
@@ -147,5 +230,8 @@ describe('revoked invite erase (#716)', () => {
     assert.deepEqual(await retry({ REPORTS_DB: db } as never, { id: 'inv_missing' }, 'a1'), { ok: true, status: 'resolved', result: 'The invite is already purged' });
     await seed(db, 'restored', { deleted_at: null, status: 'invited' });
     assert.equal((await retry({ REPORTS_DB: db } as never, { id: 'restored' }, 'a1')).status, 'dismissed');
+    // A Retry never erases ahead of the purge window
+    await seed(db, 'early', { deleted_at: new Date(Date.now() - 3 * DAY).toISOString() });
+    assert.deepEqual(await retry({ REPORTS_DB: db } as never, { id: 'early' }, 'a1'), { ok: false, status: 'dismissed', result: 'The invite is not due for its purge yet' });
   });
 });

@@ -48,10 +48,12 @@ export const BUILTIN_RETRIES: Record<string, (env: AdminBindings, args: Record<s
   /** Runs a revoked invite's erase again (#716, lib/invite-erase.ts); a new failure reopens the item. */
   'invite-videos-erase': async (env, args) => {
     const { getInvite } = await import('./invites');
-    const { settleRevokedInvites } = await import('./invite-erase');
+    const { isDueRevokedInvite, settleRevokedInvites } = await import('./invite-erase');
     const row = args.id ? await getInvite(env.REPORTS_DB, args.id) : null;
     if (!row) return { ok: true, status: 'resolved', result: 'The invite is already purged' };
     if (!row.deleted_at) return { ok: false, status: 'dismissed', result: 'The invite was restored' };
+    // Only what the hourly cleanup would purge: a Retry never erases ahead of the 30-day window
+    if (!isDueRevokedInvite(row, new Date())) return { ok: false, status: 'dismissed', result: 'The invite is not due for its purge yet' };
     const out = await settleRevokedInvites(env as never, [row], { resolve: async () => undefined });
     if (out.failed.length) return { ok: false, status: 'open', result: `Not erased: ${out.failed[0].error}` };
     if (out.waiting.length) return { ok: false, status: 'open', result: 'Auth still holds the invite; erased once auth purges it' };
