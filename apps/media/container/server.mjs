@@ -25,7 +25,7 @@ import { Readable } from 'node:stream';
 import { bandwidthOf, displaySize, ffmpegArgs, ladderFor, MP4_FILE, mp4Args, mp4Rung, playlistFiles, progressSeconds, stillsArgs } from './ladder.mjs';
 import { RungTracker, uploadByPlan, uploadPlan } from './rungs.mjs';
 import { ENVELOPE_RATE, MATCH_FRAME_SIZE, avcCodec, contentMatches, envelope, frameDistance, masterPlaylist, matchTimes, mediaPlaylist, parseMediaPlaylist, stagedPathAllowed, verifyRenditions } from './prebuilt.mjs';
-import { audioStreams, folderUploadOrder, masterVariants, normaliseArgs, packageMaster, splitRungArgs, TRACK_FILE, trackHlsArgs } from './audio.mjs';
+import { audioFailure, audioStreams, folderUploadOrder, masterVariants, normaliseArgs, packageMaster, splitRungArgs, TRACK_FILE, trackHlsArgs } from './audio.mjs';
 import { audioArgs, captionAudioManifestFor, frameInterval, frameTimes, framesArgs, manifestFor, reviewVariant, thinFrames } from './review.mjs';
 
 const PORT = 8080;
@@ -881,8 +881,8 @@ const server = createServer(async (req, res) => {
 		try {
 			return send(200, await runAudioTrack(job));
 		} catch (error) {
-			log('audio track failed', { jobId: job.jobId, error: String(error?.message || error) });
-			return send(500, { error: String(error?.message || error).slice(0, 300), fatal: !!error?.fatal });
+			log('audio track failed', { jobId: job.jobId, error: String(error?.message || error), stack: error?.stack });
+			return send(500, audioFailure(error));
 		} finally {
 			reviewing = false;
 			await rm(join(WORK, 'audio-track'), { recursive: true, force: true }).catch(() => undefined);
@@ -895,8 +895,8 @@ const server = createServer(async (req, res) => {
 			const meta = JSON.parse(await run('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_streams', 'http://source.internal/src']));
 			return send(200, { streams: audioStreams(meta) });
 		} catch (error) {
-			log('audio probe failed', { jobId: job.jobId, error: String(error?.message || error) });
-			return send(500, { error: String(error?.message || error).slice(0, 300) });
+			log('audio probe failed', { jobId: job.jobId, error: String(error?.message || error), stack: error?.stack });
+			return send(500, audioFailure(error));
 		}
 	}
 	if (req.url === '/audio-package' && req.method === 'POST') {
@@ -912,8 +912,8 @@ const server = createServer(async (req, res) => {
 			log('audio package', { jobId: job.jobId, tracks: out.trackIds.length, ms: Date.now() - t0 });
 			return send(200, out);
 		} catch (error) {
-			log('audio package failed', { jobId: job.jobId, error: String(error?.message || error) });
-			return send(500, { error: String(error?.message || error).slice(0, 300), fatal: !!error?.fatal });
+			log('audio package failed', { jobId: job.jobId, error: String(error?.message || error), stack: error?.stack });
+			return send(500, audioFailure(error));
 		} finally {
 			reviewing = false;
 			await rm(join(WORK, 'audio-package'), { recursive: true, force: true }).catch(() => undefined);

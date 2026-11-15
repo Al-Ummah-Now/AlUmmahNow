@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { audioStreams, folderUploadOrder, masterVariants, normaliseArgs, packageMaster, parseAttributes, splitRungArgs, trackHlsArgs, uniqueNames, videoCodecs } from '../container/audio.mjs';
+import { audioFailure, audioStreams, folderUploadOrder, masterVariants, normaliseArgs, packageMaster, parseAttributes, splitRungArgs, trackHlsArgs, uniqueNames, videoCodecs } from '../container/audio.mjs';
 import { audioPartsFromKeys, audioQueueAction, AUDIO_MAX_ATTEMPTS, packageKeyAllowed, serveAudioUpload } from '../src/audio';
 
 // Workers' FixedLengthStream, for Node (length checks are the runtime's job)
@@ -211,5 +211,25 @@ describe('uploaded track file', () => {
 		const env = { MEDIA_ORIGINALS: bucket({ [`${prefix}000000000000`]: 'hello' }) };
 		const res = await serveAudioUpload(env, { videoId: 'vid1', trackId: 'tabc123def456', uploadId: 'up-12345678', bytes: 10 }, null);
 		assert.equal(res.status, 404);
+	});
+});
+
+describe('audioFailure (what a failed audio job tells the Worker)', () => {
+	it('passes a known failure code with its fatal flag', () => {
+		assert.deepEqual(audioFailure(Object.assign(new Error('track_missing tdub00000001'), { fatal: true })), { error: 'track_missing', fatal: true });
+		assert.deepEqual(audioFailure(Object.assign(new Error('no_audio'), { fatal: true })), { error: 'no_audio', fatal: true });
+		assert.deepEqual(audioFailure(new Error('source_unavailable')), { error: 'source_unavailable', fatal: false });
+	});
+
+	it('never sends an exception text, path or stack', () => {
+		const thrown = new TypeError("Cannot read properties of undefined (reading 'id') at /app/container/server.mjs:713:20");
+		const body = audioFailure(thrown);
+		assert.deepEqual(body, { error: 'audio_failed', fatal: false });
+		const text = JSON.stringify(body);
+		assert.ok(!text.includes('server.mjs') && !text.includes('Cannot read') && !text.includes(String(thrown.stack).split('\n')[1]!.trim()));
+		assert.deepEqual(audioFailure(Object.assign(new Error('ffmpeg exited 1'), { exitCode: 1, stderrTail: ['/work/audio-track/in.m4a: Invalid data'] })), { error: 'tool_failed', fatal: false });
+		assert.deepEqual(audioFailure(new Error('put pub/v1/x/a/orig/index.m3u8 HTTP 500')), { error: 'audio_failed', fatal: false });
+		assert.deepEqual(audioFailure('a string'), { error: 'audio_failed', fatal: false });
+		assert.deepEqual(audioFailure(undefined), { error: 'audio_failed', fatal: false });
 	});
 });
