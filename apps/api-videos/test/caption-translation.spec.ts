@@ -324,3 +324,15 @@ describe('viewer-side titles (O6: on, channel opt-out, admin pause)', () => {
 		assert.equal(env.queue.sent.length, sent + 1);
 	});
 });
+
+describe('Quran Foundation translation text', () => {
+	it('drops footnotes and markup, decodes entities once, leaves no tag behind', async () => {
+		const { cleanQfTranslation } = await import('@al-ummah/shared-types');
+		assert.equal(cleanQfTranslation('Say, <i>"He is Allah</i>,<sup foot_note=1>1</sup> [who is] One"'), 'Say, "He is Allah, [who is] One"');
+		assert.equal(cleanQfTranslation('a &amp;lt;script&amp;gt; b'), 'a &lt;script&gt; b');
+		assert.equal(cleanQfTranslation('x <scr<script>ipt>alert(1)</script> y'), 'x iptalert(1) y');
+		assert.equal(cleanQfTranslation('one <superb>two</superb> three'), 'one two three');
+		assert.equal(cleanQfTranslation('unterminated <sup'), 'unterminated');
+		assert.equal(cleanQfTranslation('<sup>'.repeat(5000) + 'end').length < 10, true);
+	});
+});

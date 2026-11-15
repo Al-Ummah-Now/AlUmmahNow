@@ -276,15 +276,37 @@ export const DEFAULT_QURAN_TRANSLATIONS: Readonly<Record<string, QuranTranslatio
   en: { id: 20, name: 'Saheeh International', author: 'Saheeh International', language: 'en' },
 };
 
-/** Removes a QF translation's footnote markers and markup: `text<sup foot_note=1>1</sup>` → `text`. */
+const QF_ENTITIES: Readonly<Record<string, string>> = { nbsp: ' ', amp: '&', quot: '"', '#39': "'", lt: '', gt: '' };
+
+/**
+ * Removes a QF translation's footnote markers and markup: `text<sup foot_note=1>1</sup>` → `text`.
+ * One linear pass (no backtracking regex): a `<sup …>…</sup>` footnote goes with its number, any
+ * other tag goes, a stray `<` or `>` goes (the text ends up in a WebVTT cue), and entities are
+ * decoded once at the end, so `&amp;lt;` stays text and never becomes markup.
+ */
 export function cleanQfTranslation(html: string): string {
-  return html
-    .replace(/<sup[^>]*>.*?<\/sup>/gi, '')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
+  const lower = html.toLowerCase();
+  let out = '';
+  let i = 0;
+  while (i < html.length) {
+    const ch = html[i]!;
+    if (ch === '<') {
+      const end = html.indexOf('>', i);
+      if (end < 0) break;
+      const isSup = lower.startsWith('<sup', i) && /[\s>]/.test(html[i + 4] ?? '');
+      if (isSup) {
+        const close = lower.indexOf('</sup>', end);
+        i = close < 0 ? end + 1 : close + '</sup>'.length;
+      } else {
+        i = end + 1;
+      }
+      continue;
+    }
+    if (ch !== '>') out += ch;
+    i += 1;
+  }
+  return out
+    .replace(/&(nbsp|amp|quot|#39|lt|gt);/g, (_, name: string) => QF_ENTITIES[name] ?? '')
     .replace(/\s+/g, ' ')
     .trim();
 }
