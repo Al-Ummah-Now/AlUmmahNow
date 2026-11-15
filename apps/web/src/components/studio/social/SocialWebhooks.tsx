@@ -11,9 +11,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { useLanguage } from '@/hooks/useLanguage';
-import { formatRelativeTime } from '@/lib/format/videoMeta';
 import { socialClient } from '@/lib/studio/social-client';
 import { CopyButton, Notice, Pill, Section, fill } from './shared';
+import { RelativeDate } from '@/components/RelativeDate';
 
 interface Props {
   channelId: string;
@@ -170,7 +170,7 @@ export function SocialWebhooks({ channelId, locale, webhooks, limit, onWebhooks 
                   <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--fanous-color-text-secondary)]">
                     <span>{w.lastStatus}:</span>
                     <Pill tone={lastTone(hook)}>{hook.lastStatus}</Pill>
-                    <time dateTime={hook.lastDeliveryAt}>{formatRelativeTime(hook.lastDeliveryAt, locale)}</time>
+                    <RelativeDate value={hook.lastDeliveryAt} lang={locale} />
                   </p>
                 ) : null}
               </div>

@@ -22,7 +22,7 @@ export function SocialFeeds({ locale, feeds }: { locale: SocialLanguage; feeds: 
       action={
         <div className="flex items-center gap-2 text-sm">
           <span id="social-feed-lang">{f.language}</span>
-          <ThemedSelectField aria-labelledby="social-feed-lang" value={lang} onChange={(e) => setLang(e.target.value as SocialLanguage)} data-testid="social-feed-language">
+          <ThemedSelectField id="social-feed-lang-v" aria-labelledby="social-feed-lang social-feed-lang-v" value={lang} onChange={(e) => setLang(e.target.value as SocialLanguage)} data-testid="social-feed-language">
             <option value="en">{t.studio.social.languages.en}</option>
             <option value="ar">{t.studio.social.languages.ar}</option>
           </ThemedSelectField>
