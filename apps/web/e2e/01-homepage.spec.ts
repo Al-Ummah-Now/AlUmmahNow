@@ -1,6 +1,7 @@
 import { test, expect } from './fixtures';
 import type { Page } from '@playwright/test';
 import { ANONYMOUS_STATE } from './test-utils/auth-state';
+import { drawerOpener } from './test-utils/navigation';
 import { ownPublicVideos } from './test-utils/own-public-video';
 
 /**
@@ -38,8 +39,9 @@ test.describe('Homepage - English', () => {
 
     const header = page.getByRole('banner');
     await expect(header).toBeVisible();
-    await expect(header.getByRole('button', { name: 'Navigation menu', exact: true })).toBeVisible();
-    await expect(page.getByTestId('nav-drawer-toggle')).toBeVisible();
+    // Signed out: the solid Sign in; the drawer opens from the menu button (the tab bar's More on phones)
+    await expect(header.getByTestId('header-sign-in')).toBeVisible();
+    await expect(drawerOpener(page)).toBeVisible();
   });
 
   test('should display the video feed', async ({ page }) => {

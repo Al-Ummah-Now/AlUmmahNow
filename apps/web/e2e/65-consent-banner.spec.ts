@@ -2,6 +2,7 @@
 // first-visit state, so they use Playwright's base test.
 import { test as base, expect, type BrowserContext, type Page } from '@playwright/test';
 import { ANONYMOUS_STATE, AUTH_STATE } from './test-utils/auth-state';
+import { drawerOpener } from './test-utils/navigation';
 import { ensureFreshSessions } from './test-utils/fresh-session';
 import { ownPublicVideos } from './test-utils/own-public-video';
 
@@ -116,7 +117,7 @@ test.describe('Consent banner - first visit', () => {
     await expect(banner(page)).toBeVisible();
     await expect(page.locator('[aria-modal="true"]')).toHaveCount(0);
     // The header stays usable while the banner is open
-    await expect(page.getByTestId('nav-drawer-toggle')).toBeEnabled();
+    await expect(drawerOpener(page)).toBeEnabled();
     const box = await banner(page).boundingBox();
     const viewport = page.viewportSize()!;
     expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height + 1);

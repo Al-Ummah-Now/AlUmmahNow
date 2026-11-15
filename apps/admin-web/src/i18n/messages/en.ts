@@ -101,11 +101,6 @@ const en = {
       report: 'Reported items',
     },
   },
-  preferences: {
-    language: 'Language',
-    english: 'English',
-    arabic: 'العربية',
-  },
   accounts: {
     more: 'More accounts',
     current: 'Current account',

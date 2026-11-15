@@ -46,10 +46,11 @@ export default async function AccessDeniedPage() {
           </div>
         )}
 
-        {/* Another account of this browser may have the role: switch to it here */}
-        {process.env.Issuer && (
+        {/* Another account of this browser may have the role: switch to it here (signed in, the header's
+            account menu does it) */}
+        {process.env.Issuer && !session && (
           <div className="flex justify-center" data-testid="access-denied-accounts">
-            <AccountMenu issuer={process.env.Issuer} currentEmail={session?.user.email} />
+            <AccountMenu issuer={process.env.Issuer} />
           </div>
         )}
 

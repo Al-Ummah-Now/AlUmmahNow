@@ -20,7 +20,11 @@ describe('theme builder preview', () => {
     for (const page of ['home', 'watch', 'settings', 'components'] as const) {
       const html = previewDocument({ themeId: 'fawanees', css, page, mode: 'dark', lang: 'ar' });
       assert.match(html, /<html lang="ar" dir="rtl" data-theme="fawanees" data-rail="closed" class="dark"/);
-      assert.ok(html.includes('<header class="ah">'), page);
+      assert.ok(html.includes('<header class="ah aun-header">'), page);
+      // the shared header's pieces (packages/fanous-tokens/nav/header.js), in the page language and mode
+      assert.ok(html.includes('<a class="aun-brand" href="#">') && html.includes('<span class="aun-brand-name">الأمة الآن</span><span class="aun-brand-app">المرئيات</span>'), page);
+      assert.ok(html.includes('<a class="aun-lang" href="#" hreflang="en">'), page);
+      assert.ok(html.includes('aria-label="التبديل إلى الوضع الفاتح"'), page);
       assert.ok(html.includes('class="nv-panel"'), page);
       assert.ok(html.includes('/theme-kit/site.css'), page);
     }

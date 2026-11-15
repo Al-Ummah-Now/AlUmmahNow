@@ -77,18 +77,19 @@ export function NotificationBell({ dir = 'ltr' }: NotificationBellProps) {
         ref={buttonRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="relative rounded-full p-2 text-[var(--fanous-color-accent)] hover:bg-[var(--fanous-c-nav-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fanous-color-accent)]"
+        // A header control like every other (aun-nav.css .aun-icon-btn: 40px, the nav border, 18px icon)
+        className="aun-icon-btn relative"
         aria-label={label}
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
         aria-haspopup="dialog"
         data-testid="notification-bell"
       >
-        <Bell className="h-5 w-5" aria-hidden="true" />
+        <Bell aria-hidden="true" />
         {unseenCount > 0 && (
           <span
             data-testid="notification-badge"
-            className="absolute top-0.5 end-0 min-w-[1.1rem] h-[1.1rem] rounded-full bg-[var(--fanous-c-button-destructive-bg)] px-1 text-[0.65rem] font-bold leading-[1.1rem] !text-[var(--fanous-c-button-destructive-text)] text-center"
+            className="absolute -top-1 -end-1 min-w-[1.1rem] h-[1.1rem] rounded-full bg-[var(--fanous-c-button-destructive-bg)] px-1 text-[0.65rem] font-bold leading-[1.1rem] !text-[var(--fanous-c-button-destructive-text)] text-center"
             aria-hidden="true"
           >
             {badge}

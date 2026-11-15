@@ -5,6 +5,7 @@ import { test as fixturesTest, expect } from './fixtures';
 import { useOwnData, type Creator } from './release/builders';
 import { apiFetch } from './release/web-session';
 import { consentCookie } from './test-utils/consent';
+import { drawerOpener } from './test-utils/navigation';
 
 /**
  * Help and the identity tour (docs/features/HELP-AND-TOUR.md; owner-approved 2026-11-13):
@@ -351,7 +352,7 @@ test.describe('Help pages', () => {
       await page.goto('/en/explore');
       if (await card(page).isVisible({ timeout: 3000 }).catch(() => false)) await card(page).getByTestId('tour-later').click();
       const drawer = page.getByTestId('side-nav');
-      if (!(await drawer.locator('a[href$="/help"]').isVisible())) await page.getByTestId('nav-drawer-toggle').click();
+      if (!(await drawer.locator('a[href$="/help"]').isVisible())) await drawerOpener(page).click();
       await drawer.locator('a[href$="/help"]').click();
       await expect(page).toHaveURL(/\/en\/help$/);
       await expect(page.getByRole('heading', { level: 1, name: HELP_EN.title })).toBeVisible();

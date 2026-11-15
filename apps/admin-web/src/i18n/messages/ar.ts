@@ -100,11 +100,6 @@ const ar: Messages = {
       report: 'العناصر المُبلَّغ عنها',
     },
   },
-  preferences: {
-    language: 'اللغة',
-    english: 'English',
-    arabic: 'العربية',
-  },
   accounts: {
     more: 'حسابات أخرى',
     current: 'الحساب الحالي',

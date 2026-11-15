@@ -1,0 +1,817 @@
+/*
+ * Al Ummah Now navigation contract (docs/design/NAV.md): the header account button, the account
+ * menu and every menu that opens from the header, in every app (videos web, videos admin, www,
+ * CMS, profile, auth admin). Framework-free: plain class names, any markup that follows NAV.md.
+ *
+ * Fanous tokens only. Every app vendors this file at a pinned commit (each repo's sync script);
+ * fallbacks equal the token values so an app that vendors only the colour tokens still renders the
+ * same sizes. Logical properties only, so it mirrors in RTL with no extra rules.
+ *
+ * The header is dark in every theme and mode: header controls use the nav tokens. A menu is not
+ * part of the header: in light mode it is the page background with the page's text, in dark mode
+ * the theme's menu tokens; it resets text colours, so it never inherits the header's light text.
+ */
+
+/* ---------- header controls (on the dark header) ---------- */
+.aun-acct-btn,
+.aun-icon-btn,
+.aun-lang,
+.aun-app {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--fanous-spacing-sm, 8px);
+  min-height: 2.5rem;
+  min-width: 2.5rem;
+  margin: 0;
+  padding-block: 0;
+  padding-inline: var(--fanous-spacing-sm, 8px);
+  border: 1px solid var(--fanous-c-nav-search-border);
+  border-radius: var(--fanous-radius-full, 999px);
+  background: transparent;
+  color: var(--fanous-c-nav-text);
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.2;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.aun-icon-btn {
+  padding-inline: 0;
+}
+.aun-acct-btn {
+  max-width: 15rem;
+  padding-inline: var(--fanous-spacing-xs, 4px) var(--fanous-spacing-sm, 8px);
+  /* no ring around the avatar (owner, 2026-11-13): the border stays for size, never drawn */
+  border-color: transparent;
+}
+.aun-acct-btn:hover,
+.aun-icon-btn:hover,
+.aun-lang:hover,
+.aun-app:hover,
+.aun-acct-btn[aria-expanded='true'],
+.aun-icon-btn[aria-expanded='true'] {
+  background: var(--fanous-c-nav-hover);
+}
+.aun-acct-btn:focus-visible,
+.aun-icon-btn:focus-visible,
+.aun-lang:focus-visible,
+.aun-app:focus-visible,
+.aun-brand:focus-visible,
+.aun-signin:focus-visible {
+  outline: 2px solid var(--fanous-c-nav-active-text);
+  outline-offset: 2px;
+}
+.aun-acct-btn svg,
+.aun-icon-btn svg {
+  width: 1.125rem;
+  height: 1.125rem;
+  flex: none;
+}
+.aun-acct-btn .aun-caret {
+  width: 0.875rem;
+  height: 0.875rem;
+  color: var(--fanous-c-nav-icon);
+}
+.aun-acct-name {
+  min-width: 0;
+  /* a long name (or the email, when there is no name) never pushes the header apart */
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* below 768px the button is the avatar and the caret; the name is still its accessible name */
+@media (max-width: 47.99rem) {
+  .aun-acct-btn .aun-acct-name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* ---------- the header bar (docs/design/NAV.md "Header") ----------
+   One frame in every app. Markup: nav/header.js. Reading order, mirrored in Arabic:
+   [drawer toggle] brand [env] [.aun-header-primary: the app's links / search] .aun-header-tools:
+   [app actions] [.aun-apps] .aun-lang .aun-mode [.aun-acct-btn | .aun-signin]
+   Breakpoints: 1280px (app links lose their names), 1024px, 768px (account name hidden),
+   640px (phone: 56px bar, app links leave the bar), 400px (the wordmark is hidden, the logo stays). */
+.aun-header {
+  --aun-header-height: 4rem;
+  --aun-header-gap: var(--fanous-spacing-lg, 16px);
+  --aun-header-pad: var(--fanous-spacing-lg, 16px);
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--aun-header-gap);
+  row-gap: 0;
+  min-height: var(--aun-header-height);
+  padding-inline: var(--aun-header-pad);
+  background: var(--aun-header-bg, var(--fanous-c-nav-bg));
+  border-block-end: 1px solid var(--fanous-c-nav-border);
+  color: var(--fanous-c-nav-text);
+}
+/* the row inside, for headers centred in a max width (www, sites, status, profile) */
+.aun-header-row {
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--aun-header-gap);
+  row-gap: 0;
+  width: 100%;
+  /* the bar's 1px bottom border is inside its height: the bar is 64px (56px) with or without a row */
+  min-height: calc(var(--aun-header-height) - 1px);
+  max-width: var(--aun-header-max, none);
+  margin-inline: auto;
+}
+.aun-header-primary {
+  display: flex;
+  align-items: center;
+  gap: var(--fanous-spacing-sm, 8px);
+  /* only the room the other groups leave: a long primary area never pushes the tools to a new line */
+  flex: 1 1 0%;
+  min-width: 0;
+}
+.aun-header-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--fanous-spacing-sm, 8px);
+  flex: none;
+  margin-inline-start: auto;
+}
+@media (max-width: 63.99rem) {
+  .aun-header {
+    --aun-header-gap: var(--fanous-spacing-md, 12px);
+  }
+}
+@media (max-width: 39.99rem) {
+  .aun-header {
+    --aun-header-height: 3.5rem;
+    --aun-header-gap: var(--fanous-spacing-sm, 8px);
+    --aun-header-pad: var(--fanous-spacing-md, 12px);
+  }
+  .aun-header-tools {
+    gap: var(--fanous-spacing-xs, 4px);
+  }
+}
+
+/* brand: the owner's logo (round) and the wordmark; tool apps add a second line with their name */
+.aun-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  min-width: 0;
+  min-height: 2.5rem;
+  padding-block: var(--fanous-spacing-xs, 4px);
+  padding-inline: var(--fanous-spacing-xs, 4px) var(--fanous-spacing-sm, 8px);
+  margin-inline-start: calc(-1 * var(--fanous-spacing-xs, 4px));
+  border-radius: 10px;
+  color: var(--fanous-c-nav-text);
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.aun-brand:hover {
+  background: var(--fanous-c-nav-hover);
+}
+.aun-brand-mark {
+  display: block;
+  flex: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--fanous-radius-full, 999px);
+  object-fit: cover;
+}
+.aun-brand-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.15;
+}
+.aun-brand-name {
+  font-size: 1rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.aun-brand-name:lang(ar) {
+  font-size: 1.125rem;
+}
+.aun-brand-app {
+  color: var(--fanous-c-nav-icon);
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+@media (max-width: 39.99rem) {
+  .aun-brand-mark {
+    width: 2rem;
+    height: 2rem;
+  }
+}
+@media (max-width: 24.99rem) {
+  .aun-brand-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+/* below 400px the bar is at its tightest: 4px between groups, the account button is the avatar alone
+   (the caret goes; the name stays its accessible name) and the environment badge sits on the logo's
+   corner instead of beside it, so language, light/dark and the account still fit on a 320px phone */
+@media (max-width: 24.99rem) {
+  .aun-header {
+    --aun-header-gap: var(--fanous-spacing-xs, 4px);
+  }
+  .aun-acct-btn .aun-caret {
+    display: none;
+  }
+  .aun-acct-btn {
+    padding-inline: var(--fanous-spacing-xs, 4px);
+  }
+  .aun-env {
+    align-self: flex-end;
+    margin-block-end: 0.625rem;
+    margin-inline-start: -1.375rem;
+    box-shadow: 0 0 0 2px var(--fanous-c-nav-bg);
+    position: relative;
+  }
+}
+
+/* QA / STAGE badge, right after the brand; never in production */
+.aun-env {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  height: 1.25rem;
+  padding-inline: 6px;
+  border-radius: var(--fanous-radius-full, 999px);
+  background: var(--fanous-c-nav-active-text);
+  color: var(--fanous-c-nav-bg);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1;
+}
+
+/* app links: the public sites other than this one (Website, Videos) */
+.aun-apps {
+  display: flex;
+  align-items: center;
+  gap: var(--fanous-spacing-sm, 8px);
+  flex: none;
+}
+.aun-app {
+  padding-inline: var(--fanous-spacing-xs, 4px) var(--fanous-spacing-md, 12px);
+}
+.aun-app-mark {
+  display: block;
+  flex: none;
+  width: 1.375rem;
+  height: 1.375rem;
+  border-radius: var(--fanous-radius-full, 999px);
+}
+@media (max-width: 79.99rem) {
+  .aun-app {
+    padding-inline: 0;
+  }
+  .aun-app-name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+@media (max-width: 39.99rem) {
+  .aun-apps {
+    display: none;
+  }
+}
+
+/* Sign in when signed out: solid, the same height as every header control */
+.aun-signin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  min-height: 2.5rem;
+  padding-inline: var(--fanous-spacing-lg, 16px);
+  border: 1px solid transparent;
+  border-radius: var(--fanous-radius-full, 999px);
+  background: var(--fanous-c-nav-active-text);
+  color: var(--fanous-c-nav-bg);
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.aun-signin:hover {
+  background: color-mix(in srgb, var(--fanous-c-nav-active-text) 85%, var(--fanous-c-nav-text));
+}
+
+/* text for screen readers only (the language button's action) */
+.aun-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---------- avatar (image, else the name's first letter) ---------- */
+.aun-avatar {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--fanous-radius-full, 999px);
+  overflow: hidden;
+  background: var(--fanous-color-primary);
+  color: var(--fanous-color-on-primary);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1;
+  object-fit: cover;
+  text-transform: uppercase;
+}
+.aun-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.aun-avatar--sm {
+  width: 1.5rem;
+  height: 1.5rem;
+  font-size: 0.75rem;
+}
+.aun-avatar--lg {
+  width: 2.5rem;
+  height: 2.5rem;
+  font-size: 1rem;
+}
+
+/* ---------- menu surface ---------- */
+.aun-menu {
+  /* Never the dark header's colours (owner review, 2026-11-12, revision 3):
+     - light mode: the page background (--fanous-color-background) with the page's text, a clear
+       outline border and a soft shadow, so it lifts off the page and the cards; hover and the
+       current row are a light tint (the theme's menu hover half-mixed into the background);
+     - dark mode: the theme's own menu tokens, as before.
+     light-dark() follows the page's color-scheme, which every app sets per mode. */
+  --aun-menu-bg: light-dark(var(--fanous-color-background), var(--fanous-c-menu-bg));
+  --aun-menu-text: light-dark(var(--fanous-color-text-primary), var(--fanous-c-menu-text));
+  --aun-menu-muted: light-dark(var(--fanous-color-text-secondary), var(--fanous-c-menu-muted));
+  --aun-menu-hover-light: color-mix(in srgb, var(--fanous-c-menu-hover) 50%, var(--fanous-color-background));
+  --aun-menu-hover: light-dark(var(--aun-menu-hover-light), var(--fanous-c-menu-hover));
+  /* Separators, one rule in both modes and every app: the menu's text mixed 45% into the menu's
+     surface (light 2.47–2.73:1, dark 2.60–3.81:1 across the four themes). The theme's divider token
+     is 1.0–1.8:1 there, too faint (owner reviews: "in dark you can't see the lines between rows",
+     then the CMS menu, then www and profile: "the dividers are too faint") */
+  /* Each mode's line is mixed on its own and light-dark() only picks between two plain values: a
+     color-mix() nested inside light-dark() came out invalid in the owner's browser on production
+     and the lines vanished (2026-11-13, profile and videos admin) */
+  --aun-menu-line-light: color-mix(in srgb, var(--fanous-color-text-primary) 45%, var(--fanous-color-background));
+  --aun-menu-line-dark: color-mix(in srgb, var(--fanous-c-menu-text) 45%, var(--fanous-c-menu-bg));
+  --aun-menu-line: light-dark(var(--aun-menu-line-light), var(--aun-menu-line-dark));
+  /* Every row starts with one leading column (icon, app tile or avatar), so the labels line up */
+  --aun-menu-lead: 2rem;
+  --aun-menu-edge: light-dark(var(--fanous-color-outline), var(--fanous-c-menu-border));
+  position: absolute;
+  inset-inline-end: 0;
+  inset-block-start: calc(100% + var(--fanous-spacing-sm, 8px));
+  z-index: 60;
+  box-sizing: border-box;
+  /* one width for every view and app (the channel switcher no longer narrows it) */
+  width: min(21rem, calc(100vw - 2 * var(--fanous-spacing-sm, 8px)));
+  max-height: calc(100dvh - 5rem);
+  overflow-y: auto;
+  margin: 0;
+  /* rows run edge to edge (their highlight spans the menu's full width); only the ends are padded */
+  padding: 0 0 var(--fanous-spacing-xs, 4px);
+  list-style: none;
+  /* Opaque whatever happens to the tokens: the menu colour is a layer over the browser's own
+     opaque Canvas. If --aun-menu-bg ever fails to resolve, only the layer drops and Canvas stays;
+     the menu is never see-through (production report 2026-11-13, videos admin). Longhands only, so
+     one bad value never resets the others. */
+  background-color: Canvas;
+  background-image: linear-gradient(var(--aun-menu-bg), var(--aun-menu-bg));
+  color: var(--aun-menu-text);
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--aun-menu-edge);
+  border-radius: var(--fanous-radius-md, 8px);
+  box-shadow: var(--fanous-elevation-medium);
+  font-size: 0.9375rem;
+  font-weight: 400;
+  line-height: 1.35;
+  text-align: start;
+}
+.aun-menu[hidden] {
+  display: none;
+}
+.aun-menu ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.aun-menu li {
+  margin: 0;
+}
+/* phone: a sheet under the header, the full width less a small gutter */
+@media (max-width: 30rem) {
+  .aun-menu {
+    position: fixed;
+    inset-inline: var(--fanous-spacing-sm, 8px);
+    inset-block-start: calc(var(--aun-header-height, 3.5rem) + var(--fanous-spacing-xs, 4px));
+    width: auto;
+    max-height: calc(100dvh - var(--aun-header-height, 3.5rem) - var(--fanous-spacing-lg, 16px));
+  }
+}
+
+/* who is signed in: the current account at the top, on the menu's own background like every row
+   (owner review: no tinted panel); the divider under it separates it
+   (.aun-menu scope: it outranks .aun-menu-item when the panel is also a link to the profile) */
+.aun-menu .aun-menu-who {
+  display: flex;
+  align-items: center;
+  gap: var(--fanous-spacing-md, 12px);
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 4.25rem;
+  margin: 0;
+  padding: var(--fanous-spacing-md, 12px) var(--fanous-spacing-lg, 16px);
+  border-radius: 0;
+  background: transparent;
+  color: var(--aun-menu-text);
+}
+.aun-menu .aun-menu-who .aun-avatar {
+  width: 2.5rem;
+  height: 2.5rem;
+  font-size: 1rem;
+}
+.aun-menu-who-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.aun-menu-who-name {
+  font-size: 1rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* An email that does not fit keeps its domain: the local part shrinks with an ellipsis, the
+   "@domain" stays whole (markup: .aun-email > .aun-email-local + .aun-email-domain, full address
+   in title) */
+.aun-email {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  unicode-bidi: isolate;
+  direction: ltr;
+}
+[dir='rtl'] .aun-email {
+  justify-content: flex-end;
+}
+.aun-email-local {
+  min-width: 1.5em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aun-email-domain {
+  flex: none;
+  max-width: 75%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aun-menu-who-sub,
+.aun-acct-email,
+.aun-acct-current {
+  color: var(--aun-menu-muted);
+  font-size: 0.8125rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* section header: names the group under it (never upper-cased or letter-spaced: Arabic) */
+.aun-menu-label {
+  display: block;
+  margin: 0;
+  padding: var(--fanous-spacing-sm, 8px) var(--fanous-spacing-lg, 16px) var(--fanous-spacing-xs, 4px);
+  color: var(--aun-menu-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* separator: full width, the same space above and below */
+.aun-menu-sep {
+  height: 0;
+  margin: var(--fanous-spacing-xs, 4px) 0;
+  padding: 0;
+  border: 0;
+  /* Longhands: a shorthand with a var() that fails resets to no border at all, and the line
+     vanished on production; a failing colour longhand falls back to the text colour instead */
+  border-block-start-width: 1px;
+  border-block-start-style: solid;
+  border-block-start-color: var(--aun-menu-line);
+}
+
+
+/* item: a link or a button */
+.aun-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--fanous-spacing-md, 12px);
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 2.75rem;
+  margin: 0;
+  padding: var(--fanous-spacing-xs, 4px) var(--fanous-spacing-lg, 16px);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--aun-menu-text);
+  font: inherit;
+  text-align: start;
+  text-decoration: none;
+  cursor: pointer;
+}
+.aun-menu-item:hover,
+.aun-menu-item:focus-visible {
+  background: var(--aun-menu-hover);
+  color: var(--aun-menu-text);
+  text-decoration: none;
+}
+.aun-menu-item:focus-visible,
+.aun-acct-signout:focus-visible {
+  outline: 2px solid var(--fanous-color-focus-ring);
+  outline-offset: -2px;
+}
+.aun-menu-item:active {
+  background: var(--aun-menu-hover);
+}
+.aun-menu-item[disabled],
+.aun-menu-item[aria-disabled='true'] {
+  cursor: progress;
+  opacity: 0.6;
+}
+/* the current account and a context line are not actions: no busy look */
+.aun-menu-item[disabled][aria-current='true'],
+.aun-menu-item[aria-disabled='true'].aun-menu-who-sub {
+  cursor: default;
+  opacity: 1;
+}
+/* leading icons sit centred in the leading column; trailing ones (a chevron) at the end */
+.aun-menu-item > svg,
+.aun-menu-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: none;
+  margin-inline: calc((var(--aun-menu-lead) - 1.25rem) / 2);
+  color: var(--aun-menu-muted);
+}
+.aun-menu-item > .aun-menu-text ~ svg {
+  margin-inline: auto 0;
+}
+.aun-menu-item > .aun-avatar {
+  width: var(--aun-menu-lead);
+  height: var(--aun-menu-lead);
+}
+.aun-menu-item > .aun-menu-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* the current page / app / choice */
+.aun-menu-item[aria-current]:not([aria-current='false']):not(.aun-menu-who),
+.aun-menu-item[aria-checked='true'],
+.aun-menu-item[aria-pressed='true'] {
+  background: var(--aun-menu-hover);
+  font-weight: 600;
+}
+.aun-menu-check {
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+  margin-inline-start: auto;
+  color: var(--fanous-color-link);
+}
+/* sign out of every account */
+.aun-menu-item--danger,
+.aun-menu-item--danger > svg {
+  color: var(--fanous-color-error-text);
+}
+
+/* ---------- more accounts: the other accounts in this browser ---------- */
+/* One row per account, edge to edge: the switch button and its sign-out icon button highlight as
+   one row */
+.aun-acct-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding-inline-end: var(--fanous-spacing-xs, 4px);
+}
+.aun-acct-row:hover,
+.aun-acct-row:focus-within {
+  background: var(--aun-menu-hover);
+}
+.aun-menu .aun-acct-row > .aun-menu-item {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 3.25rem;
+  padding-inline-end: var(--fanous-spacing-xs, 4px);
+  background: transparent;
+}
+.aun-menu .aun-acct-row > .aun-menu-item:focus-visible {
+  outline: 0;
+}
+.aun-acct-row:has(> .aun-menu-item:focus-visible) {
+  outline: 2px solid var(--fanous-color-focus-ring);
+  outline-offset: -2px;
+}
+.aun-acct-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+.aun-acct-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A name in the other script (a Latin name in Arabic) keeps its own direction (dir="auto") but
+   lines up with the menu's start, like its email. Physical sides from the page's dir: Chrome's
+   text-align: match-parent acts as inherit and would align it by its own direction */
+[dir='rtl'] .aun-acct-label,
+[dir='rtl'] .aun-menu-who-name,
+[dir='rtl'] .aun-menu-text {
+  text-align: right;
+}
+[dir='ltr'] .aun-acct-label,
+[dir='ltr'] .aun-menu-who-name,
+[dir='ltr'] .aun-menu-text {
+  text-align: left;
+}
+.aun-acct-row [aria-current='true'] .aun-acct-label {
+  font-weight: 600;
+}
+/* "Sign out of {name}": an icon button at the row's end (the name is its aria-label) */
+.aun-acct-signout {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--fanous-radius-full, 999px);
+  background: transparent;
+  color: var(--aun-menu-muted);
+  font: inherit;
+  cursor: pointer;
+}
+.aun-acct-signout:hover {
+  background: color-mix(in srgb, var(--aun-menu-text) 10%, transparent);
+}
+.aun-acct-signout svg {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+.aun-acct-signout:hover {
+  color: var(--fanous-color-error-text);
+}
+
+/* ---------- Al Ummah Now apps: each app's own favicon ---------- */
+/* The owner's art as is and whole: each app's highest-resolution favicon (the icon-512.png crop),
+   downscaled only to a 96 px lossless WebP by packages/app-icons src/nav-icons.ts. The images are
+   separate files every app serves at /aun-nav/icons/<id>.webp, never inlined here: menus use
+   <img class="aun-app-icon" src="/aun-nav/icons/<id>.webp" width="32" height="32" alt=""
+   loading="lazy" decoding="async">. The whole square is shown inside a circle the size of the
+   account avatars (2rem); the profile app's "Your apps" cards use 3rem. */
+.aun-app-icon {
+  display: inline-block;
+  flex: none;
+  box-sizing: border-box;
+  width: var(--aun-menu-lead);
+  height: var(--aun-menu-lead);
+  border-radius: var(--fanous-radius-full, 999px);
+  object-fit: cover;
+}
+.aun-app-icon--card {
+  width: 3rem;
+  height: 3rem;
+}
+
+/* ---------- the context slot (NAV.md "Slots"): one app's own layer, e.g. the videos channel layer ---------- */
+.aun-menu-context {
+  display: flex;
+  flex-direction: column;
+}
+/* the current context (the active channel): avatar + name, like an account row */
+.aun-menu-context-current .aun-avatar {
+  width: 2rem;
+  height: 2rem;
+}
+/* a small role chip ("Channel admin") */
+.aun-badge {
+  flex: none;
+  margin-inline-start: auto;
+  padding: var(--fanous-spacing-xxs, 2px) var(--fanous-spacing-sm, 8px);
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--aun-menu-line);
+  border-radius: var(--fanous-radius-full, 999px);
+  color: var(--aun-menu-muted);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+/* a line that explains why an action is missing (a limit reached) */
+.aun-menu-note {
+  margin: 0;
+  padding: var(--fanous-spacing-sm, 8px) var(--fanous-spacing-lg, 16px);
+  color: var(--aun-menu-muted);
+  font-size: 0.8125rem;
+}
+/* an inline form (create a channel) */
+.aun-menu-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fanous-spacing-sm, 8px);
+  padding: var(--fanous-spacing-sm, 8px) var(--fanous-spacing-lg, 16px);
+}
+.aun-menu-form .aun-menu-label {
+  padding: 0;
+}
+.aun-menu-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 2.5rem;
+  padding: 0 var(--fanous-spacing-md, 12px);
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--aun-menu-line);
+  border-radius: var(--fanous-radius-sm, 4px);
+  background: transparent;
+  color: var(--aun-menu-text);
+  font: inherit;
+}
+.aun-menu-input:focus-visible {
+  outline: 2px solid var(--fanous-color-focus-ring);
+  outline-offset: -1px;
+}
+.aun-menu-form-actions {
+  display: flex;
+  gap: var(--fanous-spacing-sm, 8px);
+}
+.aun-menu-form-actions > * {
+  flex: 1 1 0;
+}
+
+/* directional icons (back, chevron, sign out) point the reading direction */
+[dir='rtl'] .aun-flip {
+  transform: scaleX(-1);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .aun-acct-btn,
+  .aun-icon-btn,
+  .aun-lang,
+  .aun-menu-item,
+  .aun-acct-signout {
+    transition: background-color var(--fanous-duration-fast, 120ms) ease;
+  }
+}

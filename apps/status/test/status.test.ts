@@ -11,7 +11,8 @@ import { classify, componentChecks, host, httpProbe, playbackProbes, statuspageP
 import { advance, dayLevel, effectiveState, formatUptime, lastDays, overallState, uptime, type StoredState } from '../src/state';
 import { runOnce, type StatusEnv } from '../src/run';
 import { buildSummary, toJson } from '../src/model';
-import { renderIncidentPage, renderStatusPage, siteLinks } from '../src/render';
+import { modeToggle, renderIncidentPage, renderStatusPage, siteLinks } from '../src/render';
+import { appLinksHtml, brandHtml, envBadgeHtml, langButtonHtml, modeButtonHtml } from '../../../packages/fanous-tokens/nav/header.js';
 import { readFileSync } from 'node:fs';
 import { MOON_ICON_BODY, SUN_ICON_BODY } from '../../../packages/fanous-tokens/nav/mode-toggle.js';
 import { atomFeed, rssFeed } from '../src/feed';
@@ -383,7 +384,7 @@ describe('public model, page and feeds', () => {
     const ar = renderStatusPage(s, { locale: 'ar', path: '', assetVersion: 'v', environment: 'qa' });
     assert.match(ar, /<html lang="ar" dir="rtl">/);
     assert.match(ar, /مرئيات بطيئة/);
-    assert.match(ar, /class="env">QA</);
+    assert.match(ar, /class="aun-env"[^>]*>QA</);
     const page = renderIncidentPage(await loadIncident(db, 'i1'), { locale: 'en', path: '/incidents/i1', assetVersion: 'v', environment: 'production' });
     assert.match(page, /A slow CDN region/);
     assert.equal(await loadIncident(db, 'gone'), null);
@@ -409,46 +410,92 @@ describe('public model, page and feeds', () => {
   });
 });
 
-describe('header: the way back and the Light / Dark control', () => {
+describe('header: the shared builders, the way back and the Light / Dark control', () => {
   const empty = { overall: 'operational', lastCheckedAt: null, components: [], active: [], upcoming: [], history: [] } as unknown as Parameters<typeof renderStatusPage>[0];
-  const page = (locale: 'en' | 'ar', environment: string) => renderStatusPage(empty, { locale, path: '', assetVersion: 'v', environment });
+  const page = (locale: 'en' | 'ar', environment: string, path = '', search = '') => renderStatusPage(empty, { locale, path, search, assetVersion: 'v', environment });
+  const header = (html: string) => html.slice(html.indexOf('<header'), html.indexOf('</header>') + 9);
+  const read = (rel: string) => readFileSync(new URL(rel, import.meta.url));
 
-  it("links the logo and the apps to this environment's own www and videos hosts, in the page language", () => {
+  it('is the shared header: brand, env badge, app links, language, light/dark from header.js', () => {
+    for (const locale of ['en', 'ar'] as const) {
+      const prefix = locale === 'ar' ? '/ar' : '';
+      const h = header(page(locale, 'qa'));
+      assert.match(h, /^<header class="aun-header">\s*<div class="aun-header-row">/);
+      assert.ok(h.includes(brandHtml({ lang: locale, href: prefix || '/', app: locale === 'ar' ? 'الحالة' : 'Status' })), 'brand: the status home, "Status" on the second line');
+      assert.ok(h.includes(envBadgeHtml('qa', locale)));
+      assert.ok(h.includes(appLinksHtml({ lang: locale, links: [{ id: 'www', href: siteLinks(locale, 'qa').www }, { id: 'videos', href: siteLinks(locale, 'qa').videos }] })));
+      assert.ok(h.includes(langButtonHtml({ lang: locale, href: locale === 'ar' ? '/' : '/ar' })));
+      // reading order: brand, env, primary, tools (apps, language, light/dark)
+      const at = (re: RegExp) => h.search(re);
+      assert.ok(at(/class="aun-brand"/) < at(/class="aun-env"/) && at(/class="aun-env"/) < at(/aun-header-primary/) && at(/aun-header-primary/) < at(/class="aun-apps"/) && at(/class="aun-apps"/) < at(/class="aun-lang"/) && at(/class="aun-lang"/) < at(/id="mode-toggle"/));
+      assert.doesNotMatch(h, /aun-acct-btn|aun-signin/, 'no account here: the status page has no sign-in');
+    }
+    assert.doesNotMatch(header(page('en', 'production')), /aun-env/, 'no badge in production');
+    // the stylesheets: Fawanees tokens, then the shared header, then the page's own
+    const html = page('en', 'qa');
+    assert.ok(html.indexOf('/fanous/tokens.css') < html.indexOf('/aun-nav/aun-nav.css') && html.indexOf('/aun-nav/aun-nav.css') < html.indexOf('/status.css'));
+  });
+
+  it("links the apps to this environment's own www and videos hosts, in the page language", () => {
     assert.deepEqual(siteLinks('en', 'production'), { www: 'https://www.alummahnow.net/en/', videos: 'https://videos.alummahnow.net/en' });
     assert.deepEqual(siteLinks('ar', 'stage'), { www: 'https://www.stage.alummahnow.net/ar/', videos: 'https://videos.stage.alummahnow.net/ar' });
     assert.deepEqual(siteLinks('en', 'qa'), { www: 'https://www.qa.alummahnow.net/en/', videos: 'https://videos.qa.alummahnow.net/en' });
     assert.deepEqual(siteLinks('en', 'development'), siteLinks('en', 'qa'), 'local dev links to QA, like its checks');
     for (const [env, sub] of [['production', ''], ['stage', '.stage'], ['qa', '.qa']] as const) {
-      const html = page('en', env);
-      assert.match(html, new RegExp(`<a class="brand" href="https://www${sub.replace('.', '\\.')}\\.alummahnow\\.net/en/" aria-label="Al Ummah Now website"`));
-      assert.match(html, new RegExp(`href="https://www${sub.replace('.', '\\.')}\\.alummahnow\\.net/en/" data-testid="status-app-www"><img class="app-icon" src="/aun-nav/icons/www\\.webp"[^>]*alt=""[^>]*><span>Website</span>`));
-      assert.match(html, new RegExp(`href="https://videos${sub.replace('.', '\\.')}\\.alummahnow\\.net/en" data-testid="status-app-videos"><img class="app-icon" src="/aun-nav/icons/videos\\.webp"[^>]*><span>Videos</span>`));
+      const h = header(page('en', env));
+      const d = sub.replace('.', '\\.');
+      assert.match(h, new RegExp(`<a class="aun-app" href="https://www${d}\\.alummahnow\\.net/en/"><img class="aun-app-mark" src="/aun-nav/icons/www\\.webp"[^>]*><span class="aun-app-name">Website</span>`));
+      assert.match(h, new RegExp(`<a class="aun-app" href="https://videos${d}\\.alummahnow\\.net/en"><img class="aun-app-mark" src="/aun-nav/icons/videos\\.webp"[^>]*><span class="aun-app-name">Videos</span>`));
     }
     const ar = page('ar', 'production');
-    assert.match(ar, /<nav class="apps" aria-label="تطبيقات الأمة الآن">/);
-    assert.match(ar, /aria-label="موقع الأمة الآن"/);
-    assert.match(ar, /href="https:\/\/www\.alummahnow\.net\/ar\/" data-testid="status-app-www"[^]*?<span>الموقع<\/span>/);
-    assert.match(ar, /href="https:\/\/videos\.alummahnow\.net\/ar" data-testid="status-app-videos"[^]*?<span>المرئيات<\/span>/);
-    assert.match(ar, /<a class="brand-sub" href="\/ar">الحالة<\/a>/, 'the "Status" label still leads to the status page');
+    assert.match(header(ar), /<nav class="aun-apps" aria-label="تطبيقات الأمة الآن">/);
+    // phones: the bar drops the app links, the footer carries them
+    assert.match(ar, /<footer[^]*<nav class="foot-apps" aria-label="تطبيقات الأمة الآن"><a href="https:\/\/www\.alummahnow\.net\/ar\/">[^]*الموقع<\/a> <a href="https:\/\/videos\.alummahnow\.net\/ar">[^]*المرئيات<\/a><\/nav>/);
   });
 
-  it('serves the apps\' own favicons, byte-equal to the shared nav icons', () => {
-    for (const id of ['www', 'videos']) {
-      assert.deepEqual(readFileSync(new URL(`../public/aun-nav/icons/${id}.webp`, import.meta.url)), readFileSync(new URL(`../../../packages/fanous-tokens/nav/icons/${id}.webp`, import.meta.url)), id);
+  it('the language button keeps the page and the query, and never leaves this host', () => {
+    assert.match(header(page('en', 'qa', '/incidents/i1', '?a=1&b=2')), /<a class="aun-lang" href="\/ar\/incidents\/i1\?a=1&amp;b=2" hreflang="ar">/);
+    assert.match(header(page('ar', 'qa', '/incidents/i1', '?a=1')), /<a class="aun-lang" href="\/incidents\/i1\?a=1" hreflang="en">/);
+    assert.match(header(page('ar', 'qa', '', '')), /<a class="aun-lang" href="\/" hreflang="en">/);
+    assert.match(header(page('ar', 'qa', '', '?')), /<a class="aun-lang" href="\/" hreflang="en">/);
+    // a path that would otherwise start with two slashes is collapsed (samePath): never protocol-relative
+    for (const bad of ['//evil.example', '/\\evil.example']) {
+      const href = /<a class="aun-lang" href="([^"]*)"/.exec(header(page('ar', 'qa', bad)))![1];
+      assert.equal(new URL(href.replace(/&amp;/g, '&'), 'https://status.qa.alummahnow.net').host, 'status.qa.alummahnow.net', bad);
     }
   });
 
-  it('is the shared icon toggle: Moon and Sun, named for the mode it switches to, no aria-pressed, no text', () => {
+  it('serves the shared header files byte-equal to packages/fanous-tokens and the videos logo', () => {
+    for (const id of ['www', 'videos']) {
+      assert.deepEqual(read(`../public/aun-nav/icons/${id}.webp`), read(`../../../packages/fanous-tokens/nav/icons/${id}.webp`), id);
+    }
+    assert.deepEqual(read('../public/aun-nav/aun-nav.css'), read('../../../packages/fanous-tokens/nav/aun-nav.css'), 'aun-nav.css');
+    assert.deepEqual(read('../public/fanous/tokens.css'), read('../../../packages/fanous-tokens/generated/fawanees/web/tokens.css'), 'Fawanees tokens');
+    assert.deepEqual(read('../public/brand/logo-64.webp'), read('../../web/public/brand/logo-64.webp'), 'logo');
+  });
+
+  it('the no-JS header colours are the Fawanees light nav tokens', () => {
+    const css = read('../public/status.css').toString();
+    const tokens = read('../../../packages/fanous-tokens/generated/fawanees/web/tokens.css').toString();
+    const light = tokens.slice(tokens.indexOf("[data-fanous-theme='light']"));
+    const block = css.slice(css.indexOf(':root:not([data-fanous-theme])'), css.indexOf('}', css.indexOf(':root:not([data-fanous-theme])')));
+    const vars = [...block.matchAll(/(--fanous-[a-z-]+): (#[0-9a-f]+);/g)];
+    assert.ok(vars.length >= 8);
+    for (const [, name, value] of vars) assert.ok(light.includes(`${name}: ${value};`), `${name} ${value}`);
+    assert.match(css, /\[hidden\] \{ display: none !important; \}/, 'hidden beats the shared button display');
+  });
+
+  it('is the shared icon toggle: Moon and Sun, named for the mode it switches to, hidden until mode.js runs', () => {
     const en = page('en', 'production');
     const btn = en.match(/<button[^>]*id="mode-toggle"[^>]*>([^]*?)<\/button>/);
     assert.ok(btn, 'toggle rendered');
-    assert.match(btn[0], /data-testid="theme-toggle"/);
-    assert.match(btn[0], /aria-label="Switch to dark mode" title="Switch to dark mode"/);
-    assert.match(btn[0], /data-label-dark="Switch to dark mode" data-label-light="Switch to light mode"/);
+    assert.match(btn[0], /^<button type="button" class="aun-icon-btn aun-mode" id="mode-toggle" data-testid="theme-toggle" data-label-dark="Switch to dark mode" data-label-light="Switch to light mode" hidden aria-label="Switch to dark mode" title="Switch to dark mode">/);
+    assert.equal(btn[0], modeToggle('en'));
+    assert.ok(modeButtonHtml({ lang: 'en', dark: false }).includes(MOON_ICON_BODY));
     assert.doesNotMatch(btn[0], /aria-pressed|Dark mode</);
     assert.ok(btn[1].includes(MOON_ICON_BODY) && btn[1].includes(SUN_ICON_BODY), 'both Lucide icons, CSS shows one');
     assert.equal(btn[1].replace(/<svg[^>]*>[^]*?<\/svg>/g, ''), '', 'icons only, the name is the label');
     const ar = page('ar', 'production');
-    assert.match(ar, /data-label-dark="التبديل إلى الوضع الداكن" data-label-light="التبديل إلى الوضع الفاتح" aria-label="التبديل إلى الوضع الداكن"/);
+    assert.match(ar, /data-label-dark="التبديل إلى الوضع الداكن" data-label-light="التبديل إلى الوضع الفاتح" hidden aria-label="التبديل إلى الوضع الداكن"/);
   });
 });

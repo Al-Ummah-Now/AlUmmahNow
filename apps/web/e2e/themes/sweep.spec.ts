@@ -2,6 +2,7 @@ import { test } from '@playwright/test';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { AxeBuilder } from '@axe-core/playwright';
 import { applyTheme, LANGS, measureText, MODES, mockApi, signIn, THEMES } from './harness';
+import { drawerOpener } from '../test-utils/navigation';
 
 /**
  * Audit sweep (report only, SWEEP=1): pages and overlays x themes x modes x languages. Writes every
@@ -24,7 +25,7 @@ const STEPS: Step[] = [
   { name: 'contact', path: '/contact' },
   { name: 'account-menu', path: '', open: async (p) => { await p.getByTestId('nav-menu-trigger').first().click(); }, root: '.ah' },
   { name: 'notifications-menu', path: '', open: async (p) => { await p.getByTestId('notification-bell').click(); }, root: '[data-testid=notification-dropdown]' },
-  { name: 'side-nav', path: '', open: async (p) => { await p.getByTestId('nav-drawer-toggle').click(); }, root: '[data-testid=side-nav]' },
+  { name: 'side-nav', path: '', open: async (p) => { await drawerOpener(p).click(); }, root: '[data-testid=side-nav]' },
   { name: 'search-suggest', path: '', open: async (p) => {
     // Phone: open the search sheet once (it stays open across theme changes)
     const open = p.getByTestId('header-search-open');

@@ -100,17 +100,31 @@ test.describe('Accessibility - Keyboard Navigation', () => {
     }).toPass({ timeout: 60000 });
   });
 
-  test('header menu button is keyboard operable', async ({ page, isMobile }) => {
-    test.skip(isMobile, 'Mobile uses the navigation drawer (covered in 08-unified-navigation)');
+  // The account menu exists signed in (signed out the header shows the solid Sign in)
+  test('header Sign in is keyboard reachable', async ({ page }) => {
     await page.goto('/en/');
-    const trigger = menuTrigger(page);
+    const signIn = page.getByTestId('header-sign-in');
+    await signIn.focus();
+    await expect(signIn).toBeFocused();
+    await expect(signIn).toHaveAttribute('type', 'submit');
+    await expect(signIn).toHaveAccessibleName('Sign in');
+  });
 
-    await trigger.focus();
-    await expect(trigger).toBeFocused();
-    await page.keyboard.press('Enter');
-    await expect(page.getByRole('menu')).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(page.getByRole('menu')).toBeHidden();
+  test.describe('signed in', () => {
+    test.use({ storageState: AUTH_STATE.single });
+
+    test('header menu button is keyboard operable', async ({ page, isMobile }) => {
+      test.skip(isMobile, 'Mobile uses the navigation drawer (covered in 08-unified-navigation)');
+      await page.goto('/en/');
+      const trigger = menuTrigger(page);
+
+      await trigger.focus();
+      await expect(trigger).toBeFocused();
+      await page.keyboard.press('Enter');
+      await expect(page.getByRole('menu')).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(page.getByRole('menu')).toBeHidden();
+    });
   });
 });
 
@@ -177,15 +191,20 @@ test.describe('Accessibility - RTL Support', () => {
     await expect(page.getByRole('main')).toHaveCSS('direction', 'rtl');
   });
 
-  test('RTL header menu is keyboard operable', async ({ page, isMobile }) => {
-    test.skip(isMobile, 'Mobile uses the navigation drawer (covered in 08-unified-navigation)');
-    await page.goto('/ar/');
-    const trigger = menuTrigger(page);
+  // The account menu exists signed in (signed out the header shows the solid Sign in)
+  test.describe('signed in', () => {
+    test.use({ storageState: AUTH_STATE.single });
 
-    await trigger.focus();
-    await page.keyboard.press('Enter');
-    await expect(page.getByRole('menu')).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(page.getByRole('menu')).toBeHidden();
+    test('RTL header menu is keyboard operable', async ({ page, isMobile }) => {
+      test.skip(isMobile, 'Mobile uses the navigation drawer (covered in 08-unified-navigation)');
+      await page.goto('/ar/');
+      const trigger = menuTrigger(page);
+
+      await trigger.focus();
+      await page.keyboard.press('Enter');
+      await expect(page.getByRole('menu')).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(page.getByRole('menu')).toBeHidden();
+    });
   });
 });

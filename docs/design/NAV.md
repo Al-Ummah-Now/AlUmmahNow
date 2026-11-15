@@ -30,7 +30,8 @@ every app shares is a **framework-free CSS + markup contract**, not a component:
 
 ## Header
 
-One header in every app: videos web, videos admin, www, scholar sites, status, CMS admin, auth
+One header in every app: videos web, videos admin, www, the developer site (alummahnow.dev),
+scholar sites, status, CMS admin, auth
 admin, profile and the sign-in pages (owner, 2026-11-14: "UNIFY"; every difference between apps is
 a bug). Based on www and the videos web, which the owner reviewed. The wiki's design-system page
 (E10, "Header") carries the same spec.
@@ -41,11 +42,12 @@ the builders, or a byte-identical copy checked by the repo's Fanous sync check. 
 the same elements as JSX and their tests compare the result with the builders.
 
 **Bar** (`.aun-header`, `.aun-header-row` inside it when centred in a max width):
-- 4rem (64px) tall; 3.5rem (56px) below 640px. Sticky at the top.
+- 4rem (64px) tall; 3.5rem (56px) below 640px, the 1px bottom border included, with or without a
+  `.aun-header-row` inside (the row is the height less the border). Sticky at the top.
 - Background `--aun-header-bg` (an app's header material) else `--fanous-c-nav-bg`; 1px bottom
   border `--fanous-c-nav-border`; text `--fanous-c-nav-text`.
 - Padding-inline 16px (12px below 640px). Gap between groups 16px, 12px below 1024px, 8px below
-  640px. Inside the tools group 8px (4px below 640px).
+  640px, 4px below 400px. Inside the tools group 8px (4px below 640px).
 
 **Order** (reading order; it mirrors in Arabic):
 
@@ -54,14 +56,15 @@ the same elements as JSX and their tests compare the result with the builders.
 | 1 | Drawer toggle | `.aun-icon-btn` | Only apps with a side rail or drawer. 40×40. |
 | 2 | Brand | `.aun-brand` | Logo, wordmark, app name (below). Links to the app's own home. |
 | 3 | Environment badge | `.aun-env` | "QA" / "STAGE" right after the brand; never in production. |
-| 4 | The app's own links or search | `.aun-header-primary` | www links, the videos/CMS search, the admin ⌘K search. Takes the free space. |
+| 4 | The app's own links or search | `.aun-header-primary` | www links, the videos/CMS search, the admin ⌘K search. Takes only the room the other groups leave (`flex: 1 1 0%`), so a long primary area never pushes the tools to a second line. Present (empty) when an app has none. |
 | 5 | App actions | in `.aun-header-tools` | Upload, notifications, Create/New. 2.5rem tall pills. |
 | 6 | App links | `.aun-apps` › `.aun-app` | Website and Videos: the public sites other than this one. |
 | 7 | Language | `.aun-lang` | The other language's own name. |
 | 8 | Light/dark | `.aun-icon-btn.aun-mode` | Sun in dark mode, moon in light. |
 | 9 | Account | `.aun-acct-btn`, or `.aun-signin` | Signed out: a solid "Sign in", never hidden in a menu. |
 
-Language and light/dark sit in the header in every app, next to each other in this order. They are
+**Language first, then sun/moon** in every app (settled 2026-11-14; www and the dev site change to
+match). Language and light/dark sit in the header in every app, next to each other in this order. They are
 no longer at the foot of a side rail. There is no language dropdown or select anywhere: two
 languages, one button.
 
@@ -69,12 +72,16 @@ languages, one button.
 transparent, text 15px/500 `--fanous-c-nav-text`, hover `--fanous-c-nav-hover`. Icons are 18px.
 Focus everywhere is a 2px outline in `--fanous-c-nav-active-text`, offset 2px.
 - **Brand.** The owner's logo (`/brand/logo-64.webp`), round, 36px (32px below 640px); 10px to the
-  text. Wordmark "Al Ummah Now" / "الأمة الآن", 16px/700 (Arabic 18px). Every app but www adds a
-  second line with its name, 12px/500 `--fanous-c-nav-icon`: Videos, Admin, Status, Content, Accounts
-  admin, Account. Hover `--fanous-c-nav-hover`, radius 10px. Below 400px the text is hidden and the
-  logo stays (the text stays the link's name).
+  text. Wordmark "Al Ummah Now" / "الأمة الآن", 16px/700 (Arabic 18px); a white-label scholar site
+  passes its own site name instead (`brandHtml({ name })`, escaped; never by patching the output).
+  Every app but www adds a second line with its name, 12px/500 `--fanous-c-nav-icon`: Videos /
+  المرئيات, Admin / الإدارة, Status / الحالة, Developers / «المطوّرون» (alummahnow.dev), Content,
+  Accounts admin, Account. Hover `--fanous-c-nav-hover`, radius 10px. Below 400px the text is hidden
+  and the logo stays (the text stays the link's name).
 - **Environment badge.** 20px tall pill, 11px/700, letter-spacing 0.06em, `--fanous-c-nav-active-text`
   background with `--fanous-c-nav-bg` text. Its name is "QA environment" / "بيئة الاختبار QA".
+  Below 400px it sits on the logo's lower inline-end corner (ringed in `--fanous-c-nav-bg`), so it
+  takes no room of its own.
 - **App links.** The app icon (`/aun-nav/icons/<id>.webp`, 22px round) and the name ("Website" /
   "الموقع", "Videos" / "المرئيات"). Below 1280px the icon alone, at 40×40; the name stays the
   accessible name. Below 640px they leave the bar; on phones they are in the account menu's "Al Ummah
@@ -84,11 +91,16 @@ Focus everywhere is a 2px outline in `--fanous-c-nav-active-text`, offset 2px.
   page's language and contains the visible label: "Switch to Arabic: العربية" /
   "التبديل إلى الإنجليزية: English". It keeps the current page and query, each app's way of storing
   the choice (URL prefix, `?lang=`, cookie) and the RTL flip; hreflang alternates are not touched.
+  A link built from the request path goes through `samePath()` (`nav/header.js`): leading slashes
+  and backslashes collapse to one "/", so `//evil.example` can never become a protocol-relative link
+  to another host. A link that starts with a locale prefix (`/ar` + path) is already safe.
 - **Light/dark** (`.aun-icon-btn.aun-mode`). One button, no menu and no "System" option (owner
   decision 2026-11-13): Lucide 0.487's sun and moon from `nav/mode-toggle.js`, the moon in light mode
   and the sun in dark. The name is the action ("Switch to light mode" / "التبديل إلى الوضع الفاتح"),
   repeated in `title`, no aria-pressed.
-- **Account** (`.aun-acct-btn`). See "Account button". The name is hidden below 768px.
+- **Account** (`.aun-acct-btn`). See "Account button". The name is hidden below 768px; below 400px
+  the caret is hidden too and the button is the avatar alone. Apps with no sign-in (status) have no
+  account control.
 - **Sign in** (`.aun-signin`). Solid pill, `--fanous-c-nav-active-text` background, `--fanous-c-nav-bg`
   text, 15px/600, padding-inline 16px.
 
@@ -96,6 +108,17 @@ Focus everywhere is a 2px outline in `--fanous-c-nav-active-text`, offset 2px.
 768px), the brand logo shrinks to 32px; below 400px only the logo shows. Apps with a long primary
 area (www links, search) move it to its own row or an icon that opens a sheet; the tools group never
 wraps or hides the language, light/dark or account controls.
+
+**Per-app fit.** Where an app's bar holds more than the base, these keep it on one line at every
+width from 320px (the language, light/dark and account controls never move):
+- *Videos web.* Below 1024px the brand is the logo alone, the search is an icon that opens a sheet,
+  and Upload is a 40px icon (its label stays its name). Below 640px the drawer toggle and Upload
+  leave the bar for the bottom tab bar (Home, Explore, Upload, Subscriptions, You, More; More opens
+  the drawer), and the drawer carries the Website link.
+- *Videos admin.* Beside the 264px sidebar: the ⌘K search is an icon below 1280px and the
+  breadcrumbs show from 1024px; below 1024px the brand is the logo alone and the account button the
+  avatar and caret (the name stays its accessible name). Public pages (sign-in, access denied) have the same bar, with Sign in when signed out.
+- *Status.* No drawer and no account: below 640px the app links are in the page footer.
 
 There is one sign-out entry, inside the account menu. The header has no separate "Log out" button.
 
@@ -115,11 +138,10 @@ There is one sign-out entry, inside the account menu. The header has no separate
 - `.aun-caret`.
 - Pill shape (`--fanous-radius-full`), 2.5rem tall, 1px `--fanous-c-nav-search-border`. Hover
   and open use `--fanous-c-nav-hover`. Focus is a 2px `--fanous-c-nav-active-text` ring.
-- Phone (≤ 30rem): the name is visually hidden but stays the accessible name. The button shows
-  the avatar and the caret.
+- Below 768px the name is visually hidden but stays the accessible name. The button shows the
+  avatar and the caret (below 400px the avatar alone).
 - The name is at most 12rem, with an ellipsis, so a long name (or the email, when there is no name)
-  never pushes the header apart. The videos header also shows only the avatar and caret below
-  1024px, where Upload, the bell and the account would otherwise squeeze the search under the logo.
+  never pushes the header apart.
 
 ## Account menu
 

@@ -27,8 +27,14 @@ test.describe('navigation', () => {
 
   test('NAV-02 brand link returns to the dashboard', async ({ page }) => {
     await page.goto('/translations');
-    await openMainNav(page);
-    await page.getByRole('link', { name: /Al Ummah Now\s*Admin/ }).click();
+    // Since the unified header the logo lockup is in the top bar at every width; a deployed build
+    // before it has it at the top of the sidebar (behind the phone drawer)
+    const headerBrand = page.locator('header .aun-brand');
+    if (await headerBrand.isVisible().catch(() => false)) await headerBrand.click();
+    else {
+      await openMainNav(page);
+      await page.getByRole('link', { name: /Al Ummah Now\s*Admin/ }).click();
+    }
     await expect(page).toHaveURL(/\/dashboard$/);
   });
 

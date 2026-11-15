@@ -1,5 +1,5 @@
 import { test, expect } from './support/fixtures';
-import { accountControl, expectDirection, horizontalOverflow, openMainNav, setPreferences } from './support/ui';
+import { accountControl, chooseLanguage, expectDirection, horizontalOverflow, openMainNav, setPreferences } from './support/ui';
 import { storageStatePath } from './support/env';
 
 const AR_PAGES = [
@@ -15,20 +15,32 @@ test.describe('language and direction', () => {
   test('I18N-01 the language switcher flips to Arabic RTL and persists', async ({ page }) => {
     await page.goto('/dashboard');
     await expectDirection(page, 'en');
-    await openMainNav(page);
-    await page.getByTestId('language-select').selectOption('ar');
+    await chooseLanguage(page, 'ar');
     await expectDirection(page, 'ar');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('لوحة تحكم الإدارة');
+    await openMainNav(page);
     await expect(page.getByRole('navigation', { name: 'التنقل الرئيسي' }).getByRole('link', { name: 'الإشراف', exact: true })).toBeVisible();
 
     await page.reload();
     await expectDirection(page, 'ar');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('لوحة تحكم الإدارة');
 
-    await openMainNav(page);
-    await page.getByTestId('language-select').selectOption('en');
+    await chooseLanguage(page, 'en');
     await expectDirection(page, 'en');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Admin Dashboard');
+  });
+
+  test('I18N-07 the language button keeps the page and its query', async ({ page }) => {
+    await page.goto('/dashboard?e2e=lang');
+    const toggle = page.getByTestId('language-toggle');
+    await toggle.or(page.getByTestId('language-select')).first().waitFor({ state: 'attached' });
+    test.skip((await toggle.count()) === 0, 'deployed build before the unified header');
+    await expect(toggle).toHaveAttribute('href', '/dashboard?e2e=lang');
+    await chooseLanguage(page, 'ar');
+    await expect(page).toHaveURL(/\/dashboard\?e2e=lang$/);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('لوحة تحكم الإدارة');
+    await chooseLanguage(page, 'en');
+    await expect(page).toHaveURL(/\/dashboard\?e2e=lang$/);
   });
 
   test.describe('Accept-Language', () => {
@@ -37,7 +49,14 @@ test.describe('language and direction', () => {
     test('I18N-02 Arabic browsers get Arabic by default', async ({ page }) => {
       await page.goto('/dashboard');
       await expectDirection(page, 'ar');
-      await expect(page.getByTestId('language-select')).toHaveValue('ar');
+      const toggle = page.getByTestId('language-toggle');
+      if (await toggle.isVisible().catch(() => false)) {
+        // the header's language button offers the other language, by its own name
+        await expect(toggle).toHaveAccessibleName('التبديل إلى الإنجليزية: English');
+        await expect(toggle).toHaveAttribute('hreflang', 'en');
+      } else {
+        await expect(page.getByTestId('language-select')).toHaveValue('ar');
+      }
     });
   });
 
