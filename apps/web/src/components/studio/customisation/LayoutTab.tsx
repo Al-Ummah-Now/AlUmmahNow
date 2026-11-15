@@ -5,14 +5,9 @@ import { ExternalLink } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { channelPath } from '@/lib/channel-url';
 import { cn } from '@/lib/utils';
+import type { LayoutView } from '@/lib/studio/params';
 import { SectionsView } from './SectionsView';
 import { TabsView } from './TabsView';
-
-export type LayoutView = 'sections' | 'tabs';
-
-export function parseLayoutView(value: string | string[] | undefined): LayoutView {
-  return value === 'tabs' ? 'tabs' : 'sections';
-}
 
 /**
  * Customisation → Layout (spec §4.9): what visitors see on the channel page,

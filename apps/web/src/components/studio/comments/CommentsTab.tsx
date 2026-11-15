@@ -33,22 +33,11 @@ import {
 import { formatRelativeTime } from '@/lib/format/videoMeta';
 import { logger } from '@/lib/logger-client';
 import { can, type StudioRole } from '@/lib/studio/permissions';
+import { COMMENT_TABS, MAX_COMMENT_SELECTION } from '@/lib/studio/params';
 import { cn } from '@/lib/utils';
 
-export const COMMENT_TABS: readonly StudioCommentTab[] = ['inbox', 'held', 'removed'];
-/** The bulk route takes up to 50 comments (spec §4.7) */
-export const MAX_COMMENT_SELECTION = 50;
 const PAGE_SIZE = 20;
 const DEFAULT_AVATAR = '/avatar.png';
-
-export function parseCommentTab(value: string | string[] | undefined): StudioCommentTab {
-  return value === 'held' || value === 'removed' ? value : 'inbox';
-}
-
-/** `video:<id>` or `post:<id>`, anything else is ignored */
-export function parseCommentTarget(value: string | string[] | undefined): string | undefined {
-  return typeof value === 'string' && /^(video|post):[\w-]{1,128}$/.test(value) ? value : undefined;
-}
 
 const itemOf = (comment: StudioComment): BulkItem => ({ kind: comment.kind, targetId: comment.targetId, commentId: comment.id });
 

@@ -1,7 +1,8 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { STUDIO_EN } from '@al-ummah/shared-types';
-import { CommentsTab, MAX_COMMENT_SELECTION, parseCommentTab, parseCommentTarget } from '../CommentsTab';
+import { CommentsTab } from '../CommentsTab';
+import { MAX_COMMENT_SELECTION, parseCommentTab, parseCommentTarget } from '@/lib/studio/params';
 import type { StudioComment } from '@/lib/api/studio-comments';
 
 const list = jest.fn();

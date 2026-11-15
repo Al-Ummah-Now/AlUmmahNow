@@ -1,5 +1,6 @@
 import { StudioNoAccess } from '@/components/studio/StudioNoAccess';
-import { LayoutTab, parseLayoutView } from '@/components/studio/customisation/LayoutTab';
+import { LayoutTab } from '@/components/studio/customisation/LayoutTab';
+import { parseLayoutView } from '@/lib/studio/params';
 import { getTranslations } from '@/lib/i18n';
 import { requireStudioPage } from '@/lib/studio/server';
 

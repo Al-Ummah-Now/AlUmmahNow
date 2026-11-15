@@ -14,17 +14,7 @@ import { matchesSearch } from '@/lib/search/match';
 import { useLanguage } from '@/hooks/useLanguage';
 import { logger } from '@/lib/logger-client';
 import { cn } from '@/lib/utils';
-
-/**
- * The statuses a creator can filter by. Posts are published or scheduled
- * (the API has no post drafts), so Drafts is not offered.
- */
-export const POST_STATUSES = [PostStatus.PUBLISHED, PostStatus.SCHEDULED] as const;
-export type PostListStatus = (typeof POST_STATUSES)[number];
-
-export function parsePostStatus(value: string | string[] | undefined): PostListStatus {
-  return value === PostStatus.SCHEDULED ? PostStatus.SCHEDULED : PostStatus.PUBLISHED;
-}
+import { POST_STATUSES, type PostListStatus } from '@/lib/studio/params';
 
 const TYPE_OPTIONS: PostType[] = [PostType.TEXT, PostType.IMAGE, PostType.POLL, PostType.QUIZ, PostType.VIDEO, PostType.GIF];
 

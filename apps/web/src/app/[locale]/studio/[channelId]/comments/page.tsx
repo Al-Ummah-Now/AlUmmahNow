@@ -1,5 +1,6 @@
 import { StudioNoAccess } from '@/components/studio/StudioNoAccess';
-import { CommentsTab, parseCommentTab, parseCommentTarget } from '@/components/studio/comments/CommentsTab';
+import { CommentsTab } from '@/components/studio/comments/CommentsTab';
+import { parseCommentTab, parseCommentTarget } from '@/lib/studio/params';
 import { getTranslations } from '@/lib/i18n';
 import { requireStudioPage } from '@/lib/studio/server';
 

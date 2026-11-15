@@ -1,5 +1,6 @@
 import { StudioNoAccess } from '@/components/studio/StudioNoAccess';
-import { PostsTab, parsePostStatus } from '@/components/studio/posts/PostsTab';
+import { PostsTab } from '@/components/studio/posts/PostsTab';
+import { parsePostStatus } from '@/lib/studio/params';
 import { getTranslations } from '@/lib/i18n';
 import { requireStudioPage } from '@/lib/studio/server';
 
