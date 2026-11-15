@@ -21,6 +21,10 @@ on:
         description: Only log lines containing this text (empty = all warn/error lines)
         type: string
         default: ''
+  pull_request:
+    paths:
+      - scripts/ops/media-diagnostics.ts
+      - .github/workflows/media-diagnostics.yml
 
 permissions:
   contents: read
@@ -31,6 +35,8 @@ concurrency:
 
 jobs:
   report:
+    # Fork PRs get no secrets
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -42,8 +48,8 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          ENV_NAME: ${{ inputs.env }}
-          HOURS: ${{ inputs.hours }}
+          ENV_NAME: ${{ inputs.env || 'production' }}
+          HOURS: ${{ inputs.hours || '8' }}
           SEARCH: ${{ inputs.search }}
         run: |
           set -o pipefail
