@@ -85,6 +85,17 @@ test('language button: the other language, marked with its lang; the name holds 
     '<a class="aun-lang" href="/en/" hreflang="en"><span class="aun-visually-hidden">التبديل إلى الإنجليزية: </span>' +
       '<span lang="en">English</span></a>'
   );
+  // WCAG 2.5.3 (axe label-content-name-mismatch): no aria-label, so the name is the text content
+  // (hidden action + visible label) and the visible label is inside it
+  for (const lang of ['en', 'ar'] as const) {
+    const html = langButtonHtml({ lang, href: '/x' });
+    assert.doesNotMatch(html, /aria-label/i, lang);
+    const visible = /<span lang="[a-z]+">([^<]+)<\/span>/.exec(html)![1];
+    const text = html.replace(/<[^>]+>/g, '');
+    assert.equal(visible, HEADER_LABELS[lang].otherLang, lang);
+    assert.ok(text.includes(visible), `${lang}: "${text}" contains "${visible}"`);
+    assert.ok(text.startsWith(HEADER_LABELS[lang].switchLang), lang);
+  }
 });
 
 test('light/dark button: the shared icons and action names', () => {
