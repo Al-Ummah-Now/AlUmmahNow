@@ -1,5 +1,5 @@
 import { createClient } from "@al-ummah-now/openauth/client"
-import { audienceMode, withAudienceCheck } from "@al-ummah/shared-types"
+import { audienceMode, withAudienceCheck, withKeyRefetch } from "@al-ummah/shared-types"
 import { logger } from "@/lib/logger-server"
 
 type OpenAuthClient = ReturnType<typeof createClient>
@@ -8,8 +8,9 @@ type OpenAuthClient = ReturnType<typeof createClient>
  * One OpenAuth client per isolate. The client caches the issuer's discovery
  * document and JWKS inside itself, so creating one per call (as getClient,
  * SessionManager and the multi-account actions did) fetched both from the
- * auth worker on every session check. Rebuilt every CLIENT_TTL_MS so a
- * rotated signing key is picked up.
+ * auth worker on every session check. Rebuilt every CLIENT_TTL_MS, and at
+ * once when a live token fails to verify (withKeyRefetch), so a rotated
+ * signing key is picked up (AlUmmahNowAuth#13).
  */
 export const CLIENT_TTL_MS = 10 * 60 * 1000
 
@@ -27,7 +28,7 @@ export function getOpenAuthClient(now: () => number = Date.now): OpenAuthClient 
   const t = now()
   if (!cached || cached.key !== key || t - cached.createdAt >= CLIENT_TTL_MS || t < cached.createdAt) {
     // verify() also checks aud: only this site's own client's tokens (AUD_MODE log|enforce|off)
-    const client = withAudienceCheck(createClient({ clientID, issuer }), { service: "web", issuer, mode: () => audienceMode(process.env.AUD_MODE), route: "web session" }, (message, fields) => logger.warn(message, fields))
+    const client = withAudienceCheck(withKeyRefetch(() => createClient({ clientID, issuer })), { service: "web", issuer, mode: () => audienceMode(process.env.AUD_MODE), route: "web session" }, (message, fields) => logger.warn(message, fields))
     cached = { key, client, createdAt: t }
   }
   return cached.client

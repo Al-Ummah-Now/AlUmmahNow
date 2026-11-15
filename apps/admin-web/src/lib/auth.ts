@@ -8,7 +8,7 @@
 import { cache } from 'react';
 import { cookies as getCookies, headers as getHeaders } from 'next/headers';
 import { createClient } from '@al-ummah-now/openauth/client';
-import { audienceMode, withAudienceCheck } from '@al-ummah/shared-types';
+import { audienceMode, withAudienceCheck, withKeyRefetch } from '@al-ummah/shared-types';
 import { redirect } from 'next/navigation';
 import { subjects } from '@/interfaces/subjects';
 import { hasPanelAccess, isReviewOnly, reviewOnlyRedirect, type PanelRole } from './roles';
@@ -50,12 +50,14 @@ let authClient: AuthClient | null = null;
 /**
  * The client is cached per isolate so its JWKS cache survives across
  * requests instead of re-fetching the auth server keys on every page view.
+ * withKeyRefetch rebuilds it when a live token fails to verify, so a new
+ * signing key is picked up (AlUmmahNowAuth#13).
  */
 export async function getAuthClient(): Promise<AuthClient> {
   if (!authClient) {
     // verify() also checks aud: only admin-web's own client's tokens (AUD_MODE log|enforce|off)
     authClient = withAudienceCheck(
-      createClient({ clientID: process.env.ClientId!, issuer: process.env.Issuer! }),
+      withKeyRefetch(() => createClient({ clientID: process.env.ClientId!, issuer: process.env.Issuer! })),
       { service: 'admin-web', issuer: process.env.Issuer, mode: () => audienceMode(process.env.AUD_MODE), route: 'admin-web session' },
       (message, fields) => logger.warn(message, fields),
     );
