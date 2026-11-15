@@ -77,6 +77,7 @@ import { createProcessingInternalRouter } from "./endpoints/video/processingInte
 import scholarsInternalRouter from "./routers/scholars-internal.router";
 import postsInternalRouter from "./routers/posts-internal.router";
 import { sitesInternalRouter, sitesRouter } from "./routers/sites.router";
+import { socialInternalRouter, socialRouter } from "./routers/social.router";
 import { publishDuePosts } from "./lib/scheduled-posts";
 import { sweepStaging } from "./lib/media/prebuilt";
 import { runHealthCheck } from "./lib/media/health";
@@ -313,6 +314,9 @@ app.route('/internal/posts', postsInternalRouter as never);
 // White-label scholar sites (wiki AUN-SCHOLAR-SITES): admin-api grants; the sites Worker and Studio read and edit
 app.route('/internal/sites', sitesInternalRouter as never);
 app.route('/api/sites', sitesRouter as never);
+// Social auto-post and scheduler-tool support (wiki AUN-SOCIAL, SOC-1)
+app.route('/internal/social', socialInternalRouter as never);
+app.route('/api/social', socialRouter as never);
 // R2 delivery beside Bunny (epic #687): apps/media's callbacks, admin retry / jobs / settings
 app.route('/internal/media', createMediaInternalRouter() as never);
 // Platform notification settings (admin-api proxies with the admin role + audit)

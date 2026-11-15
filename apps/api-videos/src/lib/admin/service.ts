@@ -7,6 +7,7 @@
  * goes through the env's wrapped buckets, so the search, ownership and
  * comment indexes follow (lib/search/sync.ts).
  */
+import { disconnectChannel, eraseChannelSocial } from '../social/connect';
 import { bunnyRef } from '../media/providers';
 import { adminVideoMedia } from '../media/video-override';
 import { eraseUploadTraces } from '../privacy/upload-traces';
@@ -714,6 +715,8 @@ async function purgeChannel(env: AdminServiceEnv, job: AdminJob): Promise<JobOut
 	// The channel's Bunny collections (a soft-deleted channel kept them; lib/channelCollection.ts)
 	const purgedChannel = await repo(env.channels).getObject(id);
 	if (purgedChannel) await removeCollectionsFor(env as never, id, purgedChannel);
+	// Its social auto-post connections and webhooks (wiki AUN-SOCIAL); a failure retries this step
+	await disconnectChannel(env as never, id, 'system');
 	// Last: the record itself (the deletion row and the admin audit log keep the history)
 	await env.channels.delete(id);
 	await send(env, MessageType.ChannelDelete, { channelId: id, userId, reason: 'admin' });
@@ -1504,6 +1507,7 @@ async function runRunUserErase(env: AdminServiceEnv, job: AdminJob): Promise<Job
 			// Each owned channel's collections go with its record (never throws)
 			onChannelDeleted: async (id: string, channel: unknown) => {
 				await removeCollectionsFor(env as never, id, channel as never);
+				await eraseChannelSocial(env, id);
 			},
 		},
 		Number(job.params.step) || 0,
@@ -1544,6 +1548,7 @@ async function eraseUserStep(env: AdminServiceEnv & Record<string, unknown>, use
 			// Each owned channel's collections go with its record (never throws)
 			onChannelDeleted: async (id: string, channel: unknown) => {
 				await removeCollectionsFor(env as never, id, channel as never);
+				await eraseChannelSocial(env, id);
 			},
 		},
 		{ resumeToken },

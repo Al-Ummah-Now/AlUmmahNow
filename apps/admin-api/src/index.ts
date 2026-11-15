@@ -30,6 +30,7 @@ import processingRouter from './routers/processing.router';
 import mediaRouter from './routers/media.router';
 import youtubeImportRouter from './routers/youtubeImport.router';
 import notificationSettingsRouter from './routers/notificationSettings.router';
+import socialRouter from './routers/social.router';
 import opsRouter from './routers/ops.router';
 import abuseRouter from './routers/abuse.router';
 import vitalsRouter from './routers/vitals.router';
@@ -242,6 +243,8 @@ app.route('/api/youtube-import', youtubeImportRouter);
 
 // Platform notification settings (what opening the notification menu does): settings:manage to change, audited proxy to api-videos
 app.route('/api/notification-settings', notificationSettingsRouter);
+// Social auto-post (wiki AUN-SOCIAL): kill switches, the X spend cap, network credentials; settings:manage, audited proxy to api-videos
+app.route('/api/social', socialRouter);
 
 // Platform analytics (Operations page, docs/admin/LIVE_OPS.md): reads apps/cost-monitor's rollups; ops:read / ops:manage
 app.route('/api/ops', opsRouter);

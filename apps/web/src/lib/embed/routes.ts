@@ -18,3 +18,13 @@ export function isOEmbedPath(pathname: string): boolean {
 export function isShareImagePath(pathname: string): boolean {
   return /^\/thumb\/[^/]+\.jpg$/.test(pathname);
 }
+
+/** Channel RSS feeds for scheduler tools (app/feeds, wiki AUN-SOCIAL): no locale redirect */
+export function isFeedPath(pathname: string): boolean {
+  return /^\/feeds\/[A-Za-z0-9_-]+\/[a-z]+\.xml$/.test(pathname);
+}
+
+/** Studio share kit clip downloads: /studio-download/clip/<channelId>/<shortId>.mp4 (app/studio-download): no locale redirect */
+export function isStudioDownloadPath(pathname: string): boolean {
+  return /^\/studio-download\/clip\/[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+\.mp4$/.test(pathname);
+}

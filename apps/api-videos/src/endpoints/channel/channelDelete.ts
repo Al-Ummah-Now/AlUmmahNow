@@ -11,6 +11,7 @@ import { loadOwnedChannels } from "../../lib/analytics";
 import { inBackground } from "../../lib/websocket-notify";
 import { logger } from "../../lib/logger";
 import { removeCollectionsFor } from "../../lib/channelCollection";
+import { disconnectChannel } from "../../lib/social/connect";
 
 export class ChannelDelete extends AuthenticatedRoute {
 	schema = {
@@ -139,6 +140,13 @@ export class ChannelDelete extends AuthenticatedRoute {
 		// Its Bunny collections: the record is gone, so nothing could find them later
 		// (the videos stay in the library). Awaited so the response means they are gone; never throws.
 		await removeCollectionsFor(c.env as never, id, channel);
+
+		// Its social auto-post connections and webhooks: tokens revoked and erased (wiki AUN-SOCIAL)
+		try {
+			await disconnectChannel(c.env as never, id, userId);
+		} catch (error) {
+			logger.warn('[ChannelDelete] Could not disconnect social accounts', { channelId: id, error: error instanceof Error ? error.message : String(error) });
+		}
 
 		// Drop the channel from the owner's profile
 		try {

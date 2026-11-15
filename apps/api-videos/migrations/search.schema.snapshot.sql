@@ -34,6 +34,7 @@
 --   apps/api-videos/migrations/search/0039_channel_comments.sql
 --   apps/api-videos/migrations/search/0041_youtube_import.sql
 --   apps/api-videos/migrations/search/0042_media_backfill.sql
+--   apps/api-videos/migrations/search/0046_social.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -107,6 +108,17 @@ CREATE TABLE 'search_videos_fts_content'(id INTEGER PRIMARY KEY, c0, c1);
 CREATE TABLE 'search_videos_fts_data'(id INTEGER PRIMARY KEY, block BLOB);
 CREATE TABLE 'search_videos_fts_docsize'(id INTEGER PRIMARY KEY, sz BLOB);
 CREATE TABLE 'search_videos_fts_idx'(segid, term, pgno, PRIMARY KEY(segid, term)) WITHOUT ROWID;
+CREATE TABLE social_accounts (id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, network TEXT NOT NULL, remote_id TEXT NOT NULL, handle TEXT NOT NULL DEFAULT '', display_name TEXT NOT NULL DEFAULT '', instance TEXT, language TEXT NOT NULL DEFAULT 'en', status TEXT NOT NULL DEFAULT 'active', status_reason TEXT, token_ciphertext TEXT, token_expires_at INTEGER, refresh_lease_until INTEGER, connected_by TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, UNIQUE (channel_id, network, remote_id));
+CREATE TABLE social_audit (id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, actor_id TEXT NOT NULL, action TEXT NOT NULL, target TEXT, detail TEXT, created_at INTEGER NOT NULL);
+CREATE TABLE social_deliveries (id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, account_id TEXT NOT NULL, network TEXT NOT NULL, event TEXT NOT NULL, entity_id TEXT NOT NULL, entity_title TEXT, format TEXT NOT NULL, include_link INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, remote_id TEXT, remote_url TEXT, cost_micros INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, sent_at INTEGER, UNIQUE (account_id, event, entity_id));
+CREATE TABLE social_instance_apps (instance TEXT PRIMARY KEY, client_id TEXT NOT NULL, client_secret_ciphertext TEXT NOT NULL, created_at INTEGER NOT NULL);
+CREATE TABLE social_pending (id TEXT PRIMARY KEY, kind TEXT NOT NULL, channel_id TEXT NOT NULL, user_id TEXT NOT NULL, network TEXT NOT NULL, language TEXT NOT NULL DEFAULT 'en', data_ciphertext TEXT, expires_at INTEGER NOT NULL);
+CREATE TABLE social_rules (account_id TEXT NOT NULL, event TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 0, format TEXT NOT NULL DEFAULT 'video', include_link INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL, PRIMARY KEY (account_id, event));
+CREATE TABLE social_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_by TEXT, updated_at INTEGER NOT NULL);
+CREATE TABLE social_spend (month TEXT NOT NULL, network TEXT NOT NULL, cost_micros INTEGER NOT NULL DEFAULT 0, posts INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (month, network));
+CREATE TABLE social_templates (channel_id TEXT NOT NULL, event TEXT NOT NULL, lang TEXT NOT NULL, body TEXT NOT NULL, updated_by TEXT, updated_at INTEGER NOT NULL, PRIMARY KEY (channel_id, event, lang));
+CREATE TABLE social_webhook_deliveries (id TEXT PRIMARY KEY, webhook_id TEXT NOT NULL, channel_id TEXT NOT NULL, event TEXT NOT NULL, entity_id TEXT NOT NULL, status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, response_status INTEGER, last_error TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, UNIQUE (webhook_id, event, entity_id));
+CREATE TABLE social_webhooks (id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, url TEXT NOT NULL, secret_ciphertext TEXT NOT NULL, events TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, failure_count INTEGER NOT NULL DEFAULT 0, last_status TEXT, last_delivery_at INTEGER, created_by TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
 CREATE TABLE upload_limit_hits (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, period TEXT NOT NULL, tier_id TEXT, hit_at INTEGER NOT NULL) WITHOUT ROWID;
 CREATE TABLE upload_rate_leases (user_id TEXT NOT NULL, operation TEXT NOT NULL, lease_id TEXT NOT NULL, expires_at INTEGER NOT NULL, PRIMARY KEY (user_id, operation, lease_id)) WITHOUT ROWID;
 CREATE TABLE upload_rate_windows (user_id TEXT NOT NULL, operation TEXT NOT NULL, period TEXT NOT NULL, window_start INTEGER NOT NULL, count INTEGER NOT NULL, PRIMARY KEY (user_id, operation, period)) WITHOUT ROWID;
@@ -192,6 +204,13 @@ CREATE INDEX idx_search_videos_created ON search_videos (created_at);
 CREATE INDEX idx_search_videos_indexed ON search_videos (indexed_at);
 CREATE INDEX idx_search_videos_language ON search_videos (language, created_at);
 CREATE INDEX idx_search_videos_short ON search_videos (is_short, created_at);
+CREATE INDEX idx_social_accounts_channel ON social_accounts (channel_id);
+CREATE INDEX idx_social_audit_channel ON social_audit (channel_id, created_at DESC);
+CREATE INDEX idx_social_deliveries_channel ON social_deliveries (channel_id, created_at DESC);
+CREATE INDEX idx_social_deliveries_status ON social_deliveries (status, updated_at);
+CREATE INDEX idx_social_pending_expires ON social_pending (expires_at);
+CREATE INDEX idx_social_webhook_deliveries_hook ON social_webhook_deliveries (webhook_id, created_at DESC);
+CREATE INDEX idx_social_webhooks_channel ON social_webhooks (channel_id);
 CREATE INDEX idx_upload_limit_hits_at ON upload_limit_hits (hit_at);
 CREATE INDEX idx_upload_limit_hits_user ON upload_limit_hits (user_id, hit_at);
 CREATE INDEX idx_upload_rate_leases_expires ON upload_rate_leases (expires_at);

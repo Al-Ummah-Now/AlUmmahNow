@@ -47,6 +47,9 @@ export function parseContentUrl(raw: string, host: string): ContentRef | null {
 
   let match = path.match(/^\/(?:en|ar)\/video\/([^/]+)$/);
   if (match) return isValidContentId(match[1]) ? withList(withStart({ kind: 'video', id: match[1] })) : null;
+  // A Short's page embeds like a video (its 9:16 ratio comes from the video)
+  match = path.match(/^\/(?:en|ar)\/shorts\/([^/]+)$/);
+  if (match) return isValidContentId(match[1]) ? withStart({ kind: 'video', id: match[1] }) : null;
   match = path.match(/^\/embed\/v\/([^/]+)$/);
   if (match) return isValidContentId(match[1]) ? withStart({ kind: 'video', id: match[1] }) : null;
 
@@ -59,6 +62,65 @@ export function parseContentUrl(raw: string, host: string): ContentRef | null {
   if (match) return isValidContentId(match[1]) ? { kind: 'playlist', id: match[1] } : null;
 
   return null;
+}
+
+/** A channel page on `host`: /{locale}/@{handle}, /{locale}/c/{handle} or /{locale}/channels/{id}. */
+export type ChannelRef = { handle: string } | { id: string };
+
+export function parseChannelUrl(raw: string, host: string): ChannelRef | null {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+  if (url.host.toLowerCase() !== host.toLowerCase()) return null;
+  // The channel's tabs (/videos, /shorts, /community …) are the same channel
+  const path = url.pathname.replace(/\/+$/, '');
+  let match = path.match(/^\/(?:en|ar)\/(?:@|%40|c\/)([A-Za-z0-9._-]{1,40})(?:\/[a-z-]+)?$/);
+  if (match) return { handle: match[1] };
+  match = path.match(/^\/(?:en|ar)\/channels\/([A-Za-z0-9_-]{1,80})(?:\/[a-z-]+)?$/);
+  if (match) return { id: match[1] };
+  return null;
+}
+
+export interface OEmbedChannel {
+  title: string;
+  url: string;
+  thumbnailUrl?: string;
+}
+
+/** oEmbed "link" response for a channel: a card (title, author, avatar), no player. */
+export interface OEmbedLinkResponse {
+  version: '1.0';
+  type: 'link';
+  provider_name: string;
+  provider_url: string;
+  title: string;
+  author_name: string;
+  author_url: string;
+  thumbnail_url?: string;
+  thumbnail_width?: number;
+  thumbnail_height?: number;
+  aun_channel_id: string;
+}
+
+/** Channel avatars are square; providers want the size with the URL */
+export const CHANNEL_THUMBNAIL_SIZE = 400;
+
+export function buildChannelOEmbed(origin: string, channelId: string, channel: OEmbedChannel): OEmbedLinkResponse {
+  return {
+    version: '1.0',
+    type: 'link',
+    provider_name: PROVIDER_NAME,
+    provider_url: origin,
+    title: channel.title,
+    author_name: channel.title,
+    author_url: channel.url,
+    ...(channel.thumbnailUrl ? { thumbnail_url: channel.thumbnailUrl, thumbnail_width: CHANNEL_THUMBNAIL_SIZE, thumbnail_height: CHANNEL_THUMBNAIL_SIZE } : {}),
+    aun_channel_id: channelId,
+  };
 }
 
 function positiveInt(value: string | null): number | null {

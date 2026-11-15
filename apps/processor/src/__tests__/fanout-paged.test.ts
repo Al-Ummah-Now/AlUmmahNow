@@ -22,11 +22,12 @@ function setup(subscribers: number) {
   insert.run('big', 'owner', 'all');
 
   const queued: AlUmmahMessage[] = [];
+  const social: AlUmmahMessage[] = []; // SocialEvent announcements go to the social consumer, not MessageProcessor
   const pushDispatched: string[] = [];
   let sendBatchCalls = 0;
   let failNextSendBatch = 0;
   const queue = {
-    send: jest.fn(async (m: AlUmmahMessage) => { await pause(); queued.push(m); }),
+    send: jest.fn(async (m: AlUmmahMessage) => { await pause(); (m.type === MessageType.SocialEvent ? social : queued).push(m); }),
     sendBatch: jest.fn(async (batch: Array<{ body: AlUmmahMessage }>) => {
       await pause();
       sendBatchCalls++;
@@ -68,7 +69,7 @@ function setup(subscribers: number) {
     throw new Error(`message ${m.id} dead-lettered`);
   };
   return {
-    db, env, queued, deliver, realtime, pushDispatched,
+    db, env, queued, social, deliver, realtime, pushDispatched,
     stats: () => ({ sendBatchCalls, realtimeCalls }),
     failSendBatch: (n: number) => { failNextSendBatch = n; },
   };
@@ -119,6 +120,8 @@ describe('paged fan-out', () => {
     expect(t.stats().realtimeCalls).toBe(2);
     expect(t.stats().sendBatchCalls).toBe(1);
     expect(t.queued).toHaveLength(1);
+    // The first page (only) announces the upload to social auto-post
+    expect(t.social.map((m) => m.payload)).toEqual([{ channelId: 'big', event: 'video', entityId: 'v1' }]);
     // The next page starts after the FANOUT_PAGE-th subscriber in key order
     const boundary = t.db.raw.prepare("SELECT user_id FROM channel_subscribers WHERE channel_id = 'big' ORDER BY user_id LIMIT 1 OFFSET ?").get(FANOUT_PAGE - 1)?.user_id;
     expect((t.queued[0].payload as { afterUserId?: string }).afterUserId).toBe(boundary);

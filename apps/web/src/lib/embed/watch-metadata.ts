@@ -44,7 +44,8 @@ export function buildWatchMetadata(video: EmbedVideo | null, locale: string, ori
   const size = declaredPlayerSize(video);
   // Stable image on our domain: crawlers cache it, so never a signed CDN URL
   const image = video.poster ? shareImageUrl(origin, video.id) : undefined;
-  const images = image ? [{ url: image, width: size.width, height: size.height, alt: title }] : undefined;
+  // type and secure_url: Meta's apps (WhatsApp, Facebook, Messenger) and LinkedIn read them for the large card
+  const images = image ? [{ url: image, secureUrl: image, type: 'image/jpeg', width: size.width, height: size.height, alt: title }] : undefined;
 
   return {
     title,

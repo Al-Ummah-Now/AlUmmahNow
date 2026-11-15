@@ -23,6 +23,7 @@ import { isCategorizeMessage, processCategorizeMessages, sweepCategorySuggestion
 import type { CategorizeEnv } from './categorize/job';
 import { isQuranSyncMessage, processQuranSyncMessages, quranSyncMessage, runQuranDaily, type QuranQueueMessage, type QuranSyncEnv } from './quran/sync';
 import { isCaptionJobMessage, processCaptionJobMessages, type CaptionJobEnv, type CaptionJobQueueMessage } from './captions/job';
+import { isSocialMessage, processSocialMessages, type SocialQueueEnv, type SocialQueueMessage } from './social/consumer';
 import { captionClaimMessage, claimFromRetryBody, isCaptionClaimMessage, processCaptionClaimMessages, type CaptionClaimEnv, type CaptionClaimQueueMessage } from './captions/claim';
 import { captionClaimKey, type CaptionClaimState } from '@al-ummah/shared-types';
 import type { SearchDb } from '@al-ummah/shared-types';
@@ -403,6 +404,13 @@ async function handleQueue(batch: MessageBatch<AlUmmahMessage>, env: QueueEnviro
   if (captionJobs.length) {
     await processCaptionJobMessages(captionJobs as unknown as CaptionJobQueueMessage[], env as unknown as CaptionJobEnv, ctx, logger);
     batch = { ...batch, messages: batch.messages.filter((m) => !isCaptionJobMessage(m)) };
+    if (batch.messages.length === 0) return;
+  }
+  // Social auto-post (AUN-SOCIAL): planning and one delivery attempt per message, its own backoff, then the admin
+  const social = batch.messages.filter(isSocialMessage);
+  if (social.length) {
+    await processSocialMessages(social as unknown as SocialQueueMessage[], env as unknown as SocialQueueEnv, ctx, logger);
+    batch = { ...batch, messages: batch.messages.filter((m) => !isSocialMessage(m)) };
     if (batch.messages.length === 0) return;
   }
   if (batch.queue?.includes('moderation')) {

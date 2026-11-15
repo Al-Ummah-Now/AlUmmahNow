@@ -26,8 +26,9 @@ import { eraseArchiveSubject } from './erasure/archive-subjects';
 import { recordEraseTombstone } from './erasure/tombstones';
 import { archiveTitlesEraseMessage, eraseArchiveTitlesPage, writeArchiveEntry } from './erasure/archive-titles';
 import { ARCHIVE_PRIVACY_VERSION, ARCHIVE_TITLES_VERSION, archiveSubjectKey } from '@al-ummah/shared-types';
-import type { NotificationCreatePayload, NotificationFanoutPayload, PushDispatchPayload, PushRetryDevice } from '@al-ummah/shared-types';
+import type { NotificationCreatePayload, NotificationFanoutPayload, PushDispatchPayload, PushRetryDevice, SocialEventPayload } from '@al-ummah/shared-types';
 import { PUSH_RETRY_DELAYS_SECONDS } from '@al-ummah/shared-types';
+import { socialEventMessage } from './social/consumer';
 import { publishAdminLive } from '@al-ummah/shared-types';
 import { dispatchPush, enqueuePush } from './push/dispatch';
 import { resolvePushProviders, type PushProviders } from './push/provider';
@@ -560,6 +561,18 @@ export class MessageProcessor {
     }
   }
 
+  /**
+   * Queues a SocialEvent (AUN-SOCIAL). Its own message, so planning retries on its own and never repeats the
+   * subscriber fan-out; a queue failure here fails this message, which retries (planning is idempotent).
+   */
+  private async announceToSocial(env: QueueEnvironment, payload: SocialEventPayload): Promise<void> {
+    if (!env.MESSAGE_QUEUE) {
+      this.logger.warn('MESSAGE_QUEUE not bound; social event not queued', payload as unknown as Record<string, unknown>);
+      return;
+    }
+    await env.MESSAGE_QUEUE.send(socialEventMessage(payload));
+  }
+
   /** Fan a new-video / live-started notification out to the channel's subscribers. */
   private async processNotificationFanout(message: AlUmmahMessage, env: QueueEnvironment): Promise<void> {
     const payload = message.payload as unknown as NotificationFanoutPayload;
@@ -575,6 +588,8 @@ export class MessageProcessor {
       params: payload.params,
       actionUrl: payload.actionUrl,
     };
+    // The first page also tells social (auto-posts, webhooks): once per event, whatever the subscriber count
+    if (!payload.afterUserId) await this.announceToSocial(env, { channelId: payload.channelId, event: payload.kind === 'live_started' ? 'live' : payload.isHighlight ? 'video' : 'short', entityId: payload.entityId });
     // One page of subscribers per message (SCALABILITY-AUDIT PR-5): the next
     // page is queued first, so a failure below retries only this page
     const page = await fanoutNotificationPage(env.NOTIFICATIONS_DB, payload);
@@ -847,6 +862,8 @@ export class MessageProcessor {
     switch (message.type) {
       case MessageType.CommunityPostCreated:
         this.logger.debug(`Community post ${postId} created on channel ${channelId} by actor`, { actor });
+        // A new post (or a scheduled one reaching its time) is announced to social; api-videos checks it is public
+        if (env) await this.announceToSocial(env, { channelId, event: 'post', entityId: postId });
         break;
       case MessageType.CommunityPostUpdated:
         this.logger.debug(`Community post ${postId} updated on channel ${channelId} by actor`, { actor });

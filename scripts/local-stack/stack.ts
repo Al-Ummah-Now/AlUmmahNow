@@ -76,6 +76,8 @@ export const LOCAL_SECRETS: Record<string, string> = {
   image_storage_key: 'local-stack-fake-images',
   // Cloudflare's public always-pass Turnstile test secret: answered by our code, never sent to Cloudflare
   TURNSTILE_SECRET: '1x0000000000000000000000000000000AA',
+  // Social auto-post sealing key (<version>:<base64 32 bytes>): a fixed test key, never a real one
+  SOCIAL_TOKEN_KEK: '1:bG9jYWwtc3RhY2stc29jaWFsLXRva2VuLWtlay0zMmI=',
 };
 
 /**
@@ -163,6 +165,10 @@ export const WORKERS: StackWorker[] = [
       VIDEOS_WEB_URL: url('web'),
       // Mobile apps settings (attestation switches, NAT-REL) come from the stack's admin-api
       ADMIN_API_URL: url('admin-api'),
+      // Social OAuth callbacks and the Telegram webhook point here
+      VIDEOS_API_URL: url('api-videos'),
+      // Fake webhook receivers of the social E2E (fake-external.ts) are plain-http local hosts
+      SOCIAL_WEBHOOK_ALLOW_HOSTS: 'hooks.local-stack.test',
       // The fake Bunny CDN (fake-external.ts FAKE_CDN_HOST): workers reach it through the outbound
       // fakes, the browser through Playwright routes to PORTS['fake-cdn']
       bunny_hostname: 'vz-local-stack.b-cdn.net',
