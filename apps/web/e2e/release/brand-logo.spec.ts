@@ -2,7 +2,8 @@
  * Release regression: the header logo is there on first paint. It used to be the
  * 1000px /logo.png (1.1 MB), lazy-loaded into a 32px slot, so the header showed an
  * empty ring while a page loaded. Now it is a small WebP per pixel density, in the
- * first HTML, loaded eagerly at high priority, with its size reserved.
+ * first HTML, loaded eagerly at high priority, with its size reserved: the shared header's 36px
+ * slot (32px on phones; packages/fanous-tokens/nav/aun-nav.css .aun-brand-mark).
  */
 import { test, expect, type Page } from '@playwright/test';
 import { target } from './targets';
@@ -63,18 +64,18 @@ async function expectLogo(page: Page, url: string, slot: number): Promise<void> 
 test.describe('Release: header logo on first paint', () => {
   for (const locale of ['en', 'ar'] as const) {
     test(`home shows the logo at once (${locale})`, async ({ page }) => {
-      await expectLogo(page, `${target().web}/${locale}`, 32);
+      await expectLogo(page, `${target().web}/${locale}`, 36);
     });
 
     test(`watch page shows the logo at once (${locale})`, async ({ page }) => {
       const video = await own('landscape');
       test.skip(!video, NO_PLAYABLE_VIDEO);
-      await expectLogo(page, watchUrl(video!.id, locale), 32);
+      await expectLogo(page, watchUrl(video!.id, locale), 36);
     });
 
     test(`phone header shows the logo at its smaller slot (${locale})`, async ({ page }) => {
       await page.setViewportSize(PHONE);
-      await expectLogo(page, `${target().web}/${locale}`, 28);
+      await expectLogo(page, `${target().web}/${locale}`, 32);
     });
   }
 });

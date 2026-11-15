@@ -1,40 +1,11 @@
 'use client';
 
-import { useEffect, useId, useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState, useTransition, type MouseEvent } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { applyColorMode, currentColorMode } from '@/lib/color-mode';
-import {
-  LOCALE_COOKIE,
-  PREFERENCE_COOKIE_MAX_AGE,
-  THEME_COOKIE,
-  getDirection,
-  isLocale,
-  type Theme,
-} from '@/i18n/config';
-// The Light / Dark control every app shares (docs/design/NAV.md): Lucide sun/moon, action names
-import { MOON_ICON_BODY, SUN_ICON_BODY, modeToggleLabel } from '../../../../packages/fanous-tokens/nav/mode-toggle.js';
-
-/** A Lucide icon from the shared markup; CSS (globals.css) shows the one for the mode on screen. */
-function ModeIcon({ icon }: { icon: 'sun' | 'moon' }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={`lucide lucide-${icon} mode-icon mode-${icon} size-[18px]`}
-      aria-hidden="true"
-      focusable="false"
-      dangerouslySetInnerHTML={{ __html: icon === 'sun' ? SUN_ICON_BODY : MOON_ICON_BODY }}
-    />
-  );
-}
+import { LOCALE_COOKIE, PREFERENCE_COOKIE_MAX_AGE, THEME_COOKIE, getDirection, type Theme } from '@/i18n/config';
+import { HeaderLangButton, HeaderModeButton, selfHref } from '@/components/shell/HeaderParts';
 
 function writeCookie(name: string, value: string) {
   const secure = window.location.protocol === 'https:' ? '; Secure' : '';
@@ -46,17 +17,21 @@ export function applyTheme(theme: Theme) {
 }
 
 /**
- * Language and light/dark switchers. Preferences are persisted in cookies so the
- * server renders the right `lang`/`dir`/`data-color-mode` on the next request.
- * Light / Dark is the videos site's toggle (no "System", owner decision 2026-11-13): one icon
- * button, the Moon in light mode and the Sun in dark, named for the mode it switches to. Until the
- * first click the device decides; the icon follows html.dark through CSS, so it is right at first paint.
+ * The header's language and light/dark buttons (docs/design/NAV.md "Header"), language first. The
+ * choices are cookies (admin_locale, admin_theme), so the server renders the right lang/dir and
+ * data-color-mode on the next request; a switch refreshes the current page, query and all.
+ * Language: one button with the other language's name, never a select. Light / Dark: the videos
+ * site's toggle (no "System", owner decision 2026-11-13); until the first click the device decides,
+ * and the icon follows html.dark through CSS, so it is right at first paint.
  */
-export function PreferencesControls({ className = '' }: { className?: string }) {
-  const { t, locale, theme } = useLanguage();
+export function PreferencesControls() {
+  const { locale, theme } = useLanguage();
   const router = useRouter();
+  const pathname = usePathname() ?? '/';
+  // The query is read in the browser (useSearchParams would need a Suspense boundary on static pages)
+  const [search, setSearch] = useState('');
+  useEffect(() => setSearch(window.location.search), [pathname]);
   const [isPending, startTransition] = useTransition();
-  const languageId = useId();
   // The mode on screen: the saved choice, else the device's (only known in the browser)
   const [shown, setShown] = useState<Theme | null>(theme);
   useEffect(() => {
@@ -72,57 +47,30 @@ export function PreferencesControls({ className = '' }: { className?: string }) 
     };
   }, []);
 
-  const onLocaleChange = (value: string) => {
-    if (!isLocale(value) || value === locale) return;
-    writeCookie(LOCALE_COOKIE, value);
-    document.documentElement.lang = value;
-    document.documentElement.dir = getDirection(value);
+  // The language lives in a cookie, not the URL: the link is this page with its query
+  const here = selfHref(pathname, search);
+  const other = locale === 'ar' ? 'en' : 'ar';
+
+  const onLanguage = (e: MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault();
+    writeCookie(LOCALE_COOKIE, other);
+    document.documentElement.lang = other;
+    document.documentElement.dir = getDirection(other);
     startTransition(() => router.refresh());
   };
 
-  const onThemeChange = (value: Theme) => {
-    if (value === theme && value === shown) return;
+  const onTheme = () => {
+    const value: Theme = currentColorMode() === 'dark' ? 'light' : 'dark';
     writeCookie(THEME_COOKIE, value);
     applyTheme(value);
     startTransition(() => router.refresh());
   };
 
-  const selectClass =
-    'bg-surface-2 text-fg border border-border rounded px-2 py-1 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-focus';
-
+  // display: contents keeps both buttons in the header's tools row; aria-busy while the refresh runs
   return (
-    <div className={`flex flex-wrap items-center gap-3 ${className}`} aria-busy={isPending}>
-      <div className="flex items-center gap-2">
-        <label htmlFor={languageId} className="text-fg-muted text-sm">
-          {t('preferences.language')}
-        </label>
-        <select
-          id={languageId}
-          data-testid="language-select"
-          value={locale}
-          onChange={(e) => onLocaleChange(e.target.value)}
-          className={selectClass}
-        >
-          <option value="en" lang="en">
-            {t('preferences.english')}
-          </option>
-          <option value="ar" lang="ar">
-            {t('preferences.arabic')}
-          </option>
-        </select>
-      </div>
-      <button
-        type="button"
-        data-testid="theme-toggle"
-        aria-label={modeToggleLabel(locale, shown === 'dark')}
-        title={modeToggleLabel(locale, shown === 'dark')}
-        onClick={() => onThemeChange(currentColorMode() === 'dark' ? 'light' : 'dark')}
-        suppressHydrationWarning
-        className="inline-grid size-11 shrink-0 place-items-center rounded-full text-drawer-icon hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
-      >
-        <ModeIcon icon="moon" />
-        <ModeIcon icon="sun" />
-      </button>
+    <div className="contents" aria-busy={isPending} data-testid="header-preferences">
+      <HeaderLangButton lang={locale} href={here} onClick={onLanguage} />
+      <HeaderModeButton lang={locale} dark={shown === 'dark'} onClick={onTheme} />
     </div>
   );
 }

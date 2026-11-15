@@ -9,7 +9,8 @@
  *   GET /api/status.json
  *   GET /feed.atom, /feed.rss (and /ar/…)
  *   GET /healthz    this Worker and its D1
- * Static files (status.css, mode.js, icons) come from public/ (Workers Static Assets).
+ * Static files (status.css, mode.js, the shared header's aun-nav.css, Fawanees tokens and icons)
+ * come from public/ (Workers Static Assets).
  */
 import { withLogging } from '@al-ummah/logger';
 import { STATUS_PAGE_URLS } from '@al-ummah/shared-types';
@@ -88,7 +89,7 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
 
   const now = new Date();
   const base = STATUS_PAGE_URLS[statusEnvName(env)];
-  const opts = { locale, path: path === '/' ? '' : path, assetVersion: (env.CF_VERSION_METADATA?.id ?? 'dev').slice(0, 8), environment: env.ENVIRONMENT };
+  const opts = { locale, path: path === '/' ? '' : path, search: url.search, assetVersion: (env.CF_VERSION_METADATA?.id ?? 'dev').slice(0, 8), environment: env.ENVIRONMENT };
   let res: Response;
   if (path === '/') {
     res = respond(renderStatusPage(await buildSummary(env.STATUS_DB, now, env.ENVIRONMENT), opts), 'text/html; charset=utf-8');

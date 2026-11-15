@@ -72,6 +72,28 @@
   --scrollbar-thumb: var(--fanous-color-outline);
 }
 
+/* The shared header (docs/design/NAV.md "Header"). The drawer's menu button is for phones (the sidebar is always
+   there from 768px). Below 1024px the bar shows the logo alone (the wordmark stays the link's name), as on
+   videos: beside the 264px sidebar the admin's bar also holds the search, and Website / Videos, language,
+   light/dark and the account must stay on one line, so the account button is the avatar alone there too
+   (the name stays its accessible name). */
+@media (min-width: 768px) {
+  .aun-header .admin-menu-btn {
+    display: none;
+  }
+}
+@media (max-width: 1023px) {
+  .aun-header .aun-brand-text,
+  .aun-header .aun-acct-btn .aun-acct-name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
 /* The Light / Dark toggle (PreferencesControls): the Moon in light mode, the Sun in dark */
 html.dark .mode-moon,
 html:not(.dark) .mode-sun {

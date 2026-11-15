@@ -1,5 +1,5 @@
 import { test, expect } from './support/fixtures';
-import { bodyBackground, chooseTheme, expectColorMode, isDark, openMainNav, setPreferences } from './support/ui';
+import { bodyBackground, chooseTheme, expectColorMode, headerControl, isDark, setPreferences } from './support/ui';
 
 // Owner decision 2026-11-13: Light / Dark only, no "System" option. The first visit follows the
 // device; from the first click on, the admin's choice (admin_theme cookie) applies.
@@ -20,9 +20,8 @@ test.describe('theme', () => {
       await expectColorMode(page, null);
       expect(await page.evaluate(() => (window as unknown as { __darkAtBody: boolean }).__darkAtBody)).toBe(true);
       expect(isDark(await bodyBackground(page))).toBe(true);
-      await openMainNav(page);
-      // The videos site's toggle: one icon button, the Sun in dark mode, named for the mode it switches to
-      const toggle = page.getByTestId('theme-toggle');
+      // The shared header's toggle: one icon button, the Sun in dark mode, named for the mode it switches to
+      const toggle = await headerControl(page, 'theme-toggle');
       await expect(toggle).toHaveAccessibleName('Switch to light mode');
       await expect(toggle).toHaveAttribute('title', 'Switch to light mode');
       await expect(toggle).not.toHaveAttribute('aria-pressed', /./);
@@ -79,8 +78,7 @@ test.describe('theme', () => {
     test('THEME-05 back to light from a saved dark, by keyboard', async ({ page }) => {
       await setPreferences(page, { theme: 'dark' });
       await page.goto('/dashboard');
-      await openMainNav(page);
-      const toggle = page.getByTestId('theme-toggle');
+      const toggle = await headerControl(page, 'theme-toggle');
       await expect(toggle).toHaveAccessibleName('Switch to light mode');
       await toggle.focus();
       await page.keyboard.press('Enter');

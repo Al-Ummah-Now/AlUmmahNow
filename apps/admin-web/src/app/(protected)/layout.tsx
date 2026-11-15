@@ -77,6 +77,7 @@ export default async function ProtectedLayout({
         userName={userName}
         userRoles={session.user.role ? [session.user.role] : []}
         authIssuer={process.env.Issuer}
+        environment={process.env.NEXTJS_ENV}
         initialRail={navCookie === 'rail'}
         access={{
           contact: contactNew !== null,

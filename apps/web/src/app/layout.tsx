@@ -165,6 +165,8 @@ function serverRuntimeConfig() {
     CMS_URL: deriveCmsUrl(process.env.OPENAUTH_ISSUER || process.env.Issuer, process.env.CMS_URL),
     WWW_URL: deriveWwwUrl(process.env.OPENAUTH_ISSUER || process.env.Issuer, process.env.WWW_URL),
     SHORT_LINK_URL: deriveShortLinkUrl(process.env.API_URL || process.env.NEXT_PUBLIC_API_URL, process.env.SHORT_LINK_URL),
+    // The header's QA / STAGE badge (read per request: stage and production share one build)
+    ENVIRONMENT: process.env.NEXTJS_ENV || '',
   };
 }
 

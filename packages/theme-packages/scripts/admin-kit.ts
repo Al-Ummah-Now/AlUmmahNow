@@ -4,7 +4,7 @@
 //
 //   theme-kit/builtins/index.json                    [{ id, name, files: [...] }]
 //   theme-kit/builtins/<id>/theme.json, assets/...
-//   theme-kit/site.css                                font faces + system.css + pages.css from apps/web
+//   theme-kit/site.css                                font faces + the shared header (aun-nav.css) + system.css + pages.css from apps/web
 //   theme-kit/fonts/*.woff2
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -33,6 +33,8 @@ for (const font of new Set(faces.match(/\/fonts\/[a-z0-9-]+\.woff2/g) ?? [])) {
 }
 const css = [
   faces.replaceAll("url('/fonts/", "url('/theme-kit/fonts/"),
+  // the shared header's stylesheet, as apps/web/src/app/globals.css imports it before the theme's
+  readFileSync(join(ROOT, 'packages/fanous-tokens/nav/aun-nav.css'), 'utf8'),
   readFileSync(join(WEB, 'src/theme/system.css'), 'utf8'),
   readFileSync(join(WEB, 'src/theme/pages.css'), 'utf8'),
 ].join('\n');

@@ -9,6 +9,7 @@ import {
   envBadgeHtml,
   langButtonHtml,
   modeButtonHtml,
+  samePath,
   signInHtml,
 } from '../nav/header.js';
 import { modeIconSvg } from '../nav/mode-toggle.js';
@@ -32,6 +33,24 @@ test('brand: the logo, the wordmark and the app name, in both languages', () => 
   );
   assert.match(brandHtml({ lang: 'ar', href: '/ar/' }), /<span class="aun-brand-name">الأمة الآن<\/span><\/span><\/a>$/);
   assert.match(brandHtml({ lang: 'en', href: '/?a=1&b=2', logoSrc: '/x.png' }), /href="\/\?a=1&amp;b=2"><img class="aun-brand-mark" src="\/x.png"/);
+  // a white-label site passes its own name (escaped); the app line is unchanged
+  assert.match(
+    brandHtml({ lang: 'en', href: '/', name: 'Shaykh <A> & Co', app: 'Videos' }),
+    /<span class="aun-brand-name">Shaykh &lt;A&gt; &amp; Co<\/span><span class="aun-brand-app">Videos<\/span>/
+  );
+  assert.equal(brandHtml({ lang: 'ar', href: '/', name: '' }), brandHtml({ lang: 'ar', href: '/' }));
+});
+
+test('samePath: a self-link from the request path is never protocol-relative', () => {
+  assert.equal(samePath('/ar/search?q=a'), '/ar/search?q=a');
+  assert.equal(samePath('//evil.example/x?y=1'), '/evil.example/x?y=1');
+  assert.equal(samePath('/\\evil.example'), '/evil.example');
+  assert.equal(samePath('\\\\evil.example'), '/evil.example');
+  assert.equal(samePath('///\\/a'), '/a');
+  assert.equal(samePath('https://evil.example/'), '/');
+  assert.equal(samePath('evil.example'), '/');
+  assert.equal(samePath(''), '/');
+  assert.equal(samePath(undefined), '/');
 });
 
 test('environment badge: QA and STAGE only', () => {
@@ -98,5 +117,12 @@ test('the stylesheet defines every class the builders use, one control height an
   }
   assert.match(css, /--aun-header-height: 4rem;/);
   assert.match(css, /--aun-header-height: 3\.5rem;/);
+  // the bar is exactly 64px / 56px including its 1px bottom border, alone or with a centred row inside
+  const bar = css.slice(css.indexOf('.aun-header {'), css.indexOf('}', css.indexOf('.aun-header {')));
+  assert.match(bar, /box-sizing: border-box;/);
+  assert.match(bar, /min-height: var\(--aun-header-height\);/);
+  assert.match(bar, /border-block-end: 1px solid/);
+  const row = css.slice(css.indexOf('.aun-header-row {'), css.indexOf('}', css.indexOf('.aun-header-row {')));
+  assert.match(row, /min-height: calc\(var\(--aun-header-height\) - 1px\);/);
   for (const bp of ['79.99rem', '63.99rem', '47.99rem', '39.99rem', '24.99rem']) assert.ok(css.includes(`(max-width: ${bp})`), bp);
 });

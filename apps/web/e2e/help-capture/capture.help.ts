@@ -310,7 +310,7 @@ const SCENES: Scene[] = [
     signedIn: false,
     run: async (page, lang) => {
       await settle(page, '', lang);
-      return [[page.getByTestId('nav-menu-trigger')], [header(page)]];
+      return [[page.getByTestId('header-sign-in')], [header(page)]];
     },
   },
   {
@@ -427,11 +427,10 @@ const SCENES: Scene[] = [
     markers: 'above',
     run: async (page, lang) => {
       await settle(page, `/channels/${channelId}`, lang);
-      const panel = page.locator('nav.nv-panel');
-      if ((await panel.getAttribute('data-open')) !== 'true') await page.getByTestId('nav-drawer-toggle').click();
-      const theme = panel.getByTestId('theme-toggle');
-      const language = panel.getByTestId('language-toggle');
-      return [[theme, language], [panel]];
+      // Language and light/dark are in the top bar at every width (docs/design/NAV.md "Header")
+      const theme = header(page).getByTestId('theme-toggle');
+      const language = header(page).getByTestId('language-toggle');
+      return [[theme, language], [header(page)]];
     },
   },
 ];
