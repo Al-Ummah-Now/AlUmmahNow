@@ -2,7 +2,7 @@
 
 import { useLanguage } from '@/hooks/useLanguage';
 import { RelativeDate } from '@/components/RelativeDate';
-import { formatAbsoluteDateTime, formatViews, formatViewsExact, publishedDateOf, type MetaLang } from '@/lib/format/videoMeta';
+import { formatAbsoluteDate, formatAbsoluteDateTime, formatViews, formatViewsExact, publishedDateOf, type MetaLang } from '@/lib/format/videoMeta';
 
 export interface DatedVideo {
   isLive?: boolean | null;
@@ -13,6 +13,14 @@ export interface DatedVideo {
   dateCreated?: string | Date | null;
   scheduledPublishDate?: string | null;
   scheduledPublishStatus?: string | null;
+  /** Brought from YouTube by its creator (wiki AUN-YT-IMPORT) */
+  importedFrom?: { platform?: string; publishedAt?: string | null } | null;
+}
+
+/** The YouTube publish date of an imported video, or null. */
+export function youtubeOriginDate(video: DatedVideo): string | null {
+  const at = video.importedFrom?.platform === 'youtube' ? video.importedFrom.publishedAt : null;
+  return at && Number.isFinite(Date.parse(at)) ? at : null;
 }
 
 /** Scheduled and not out yet. */
@@ -66,23 +74,45 @@ const SEP = ' • ';
  */
 export function WatchMetaSummary({ video, views, lang, describedById }: { video: DatedVideo; views: number | string | null | undefined; lang: MetaLang; describedById: string }) {
   const { t } = useLanguage();
-  const tip = `${formatViewsExact(views, lang)}${SEP}${labelledDate(video, lang, t.video?.dateLabel as Record<string, string> | undefined)}`;
+  const labels = t.video?.dateLabel as Record<string, string> | undefined;
+  const origin = youtubeOriginDate(video);
+  const tip = `${formatViewsExact(views, lang)}${SEP}${labelledDate(video, lang, labels)}${origin ? `${SEP}${fromYoutubeText(origin, lang, labels)}` : ''}`;
   return (
     <summary title={tip} data-tip={tip} aria-describedby={describedById}>
       <span>{formatViews(views, lang)}</span>
       <span aria-hidden="true">•</span>
       <VideoDate video={video} lang={lang} />
+      {origin && (
+        <>
+          <span aria-hidden="true">•</span>
+          <span className="watch-origin" data-testid="watch-origin-short">{labels?.fromYoutubeShort ?? 'Originally on YouTube'}</span>
+        </>
+      )}
       <span id={describedById} hidden>{tip}</span>
     </summary>
   );
 }
 
-/** The expanded description's first line: the full count and what the date is, exact. */
+/** "Originally published on YouTube on 3 March 2021" (the date only: YouTube's time is not ours to show). */
+function fromYoutubeText(at: string, lang: MetaLang, labels: Record<string, string> | undefined): string {
+  return (labels?.fromYoutube ?? 'Originally published on YouTube on {date}').replace('{date}', formatAbsoluteDate(at, lang));
+}
+
+/** The expanded description's first line: the full count and what the date is, exact; an imported video says where it first came out. */
 export function WatchMetaDetail({ video, views, lang }: { video: DatedVideo; views: number | string | null | undefined; lang: MetaLang }) {
   const { t } = useLanguage();
+  const labels = t.video?.dateLabel as Record<string, string> | undefined;
+  const origin = youtubeOriginDate(video);
   return (
-    <p className="watch-desc-date" data-testid="watch-published">
-      {formatViewsExact(views, lang)}{SEP}{labelledDate(video, lang, t.video?.dateLabel as Record<string, string> | undefined)}
-    </p>
+    <>
+      <p className="watch-desc-date" data-testid="watch-published">
+        {formatViewsExact(views, lang)}{SEP}{labelledDate(video, lang, labels)}
+      </p>
+      {origin && (
+        <p className="watch-desc-origin" data-testid="watch-origin">
+          {fromYoutubeText(origin, lang, labels)}
+        </p>
+      )}
+    </>
   );
 }

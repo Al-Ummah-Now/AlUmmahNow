@@ -734,6 +734,10 @@ export interface AppTranslations {
       ended: string;
       scheduled: string;
       liveNow: string;
+      /** An imported video (wiki AUN-YT-IMPORT): "Originally published on YouTube on {date}" */
+      fromYoutube: string;
+      /** Its short label beside the date */
+      fromYoutubeShort: string;
     };
     videoSingular: string;
     uploadVideo: string;

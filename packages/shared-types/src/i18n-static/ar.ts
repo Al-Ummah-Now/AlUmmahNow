@@ -518,6 +518,8 @@ export const AR_TRANSLATIONS: AppTranslations = {
       ended: 'انتهى في {date}',
       scheduled: 'مجدول في {date}',
       liveNow: 'يُبث مباشرة الآن',
+      fromYoutube: 'نُشر أول مرة على يوتيوب في {date}',
+      fromYoutubeShort: 'نُشر أولًا على يوتيوب',
     },
     videos: 'المرئيات',
     videoSingular: "مرئي",

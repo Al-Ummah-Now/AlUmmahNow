@@ -22,7 +22,7 @@ import { buildEvent, embedderOrigin, parseCommand, resolvePartnerOrigin } from '
 import { buildOEmbed, fitSize, parseContentUrl } from '../oembed';
 import { viewContextFromBatch } from '../view-context';
 import { buildWatchMetadata, declaredPlayerSize } from '../watch-metadata';
-import { posterFor, toEmbedVideo, videoAspect } from '../content';
+import { firstPublished, posterFor, toEmbedVideo, videoAspect } from '../content';
 import { isEmbedPath, isOEmbedPath } from '../routes';
 import { embedStrings, fill } from '../strings';
 
@@ -300,6 +300,13 @@ describe('toEmbedVideo (visibility)', () => {
     ['without a stream', { playUrl: undefined }],
   ])('refuses a %s video', (_label, overrides) => {
     expect(toEmbedVideo({ ...base, ...overrides })).toBeNull();
+  });
+  it('dates a video imported from YouTube by its original publish date (JSON-LD uploadDate)', () => {
+    const own = { ...base, publishedAt: '2026-11-14T10:00:00Z', dateCreated: '2026-11-14T09:00:00Z' };
+    expect(toEmbedVideo(own)?.uploadDate).toBe('2026-11-14T10:00:00Z');
+    expect(toEmbedVideo({ ...own, importedFrom: { publishedAt: '2019-03-02T08:00:00Z' } })?.uploadDate).toBe('2019-03-02T08:00:00Z');
+    expect(toEmbedVideo({ ...own, importedFrom: { publishedAt: null } })?.uploadDate).toBe('2026-11-14T10:00:00Z');
+    expect(firstPublished({ dateCreated: '2026-01-01T00:00:00Z' })).toBe('2026-01-01T00:00:00Z');
   });
   it('keeps legacy videos without an upload status', () => {
     expect(toEmbedVideo({ ...base, uploadStatus: undefined })).not.toBeNull();

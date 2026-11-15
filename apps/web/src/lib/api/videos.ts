@@ -987,6 +987,7 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
             channelName: video.channelName,
             channelNameLocalized: video.channelNameLocalized,
             publishedAt: video.publishedAt,
+            importedFrom: (video as { importedFrom?: PlayerOptions['importedFrom'] }).importedFrom ?? null,
             isLive: video.isLive === true,
             channelAvatar: video.channelAvatarUrl,
             channelVerified: video.channelIsVerified === true,
