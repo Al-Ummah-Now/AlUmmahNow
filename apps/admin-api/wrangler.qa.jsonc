@@ -153,7 +153,9 @@
     // Moderation requests to auth: this app's auth client (secret: worker secret
     // AUTH_MODERATION_CLIENT_SECRET) and the admin web for evidence links
     "AUTH_MODERATION_CLIENT_ID": "d7464de8-363d-4fc1-b1af-7c71653f0afc",
-    "ADMIN_WEB_URL": "https://admin.qa.alummahnow.net"
+    "ADMIN_WEB_URL": "https://admin.qa.alummahnow.net",
+    // Newsletter (lib/newsletter.ts): www origin of the confirm and unsubscribe links
+    "NEWSLETTER_SITE_URL": "https://www.qa.alummahnow.net"
   },
 
   // Abuse counters (Turnstile outcomes on Contact us, rate-limit hits; no personal data)

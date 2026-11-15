@@ -26,6 +26,7 @@
 --   apps/admin-api/migrations/0025_review_alert_subscribers.sql
 --   apps/admin-api/migrations/0026_erase_tombstones.sql
 --   apps/admin-api/migrations/0027_csam_cases.sql
+--   apps/admin-api/migrations/0028_newsletter.sql
 
 CREATE TABLE admin_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, actor_email TEXT, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, metadata TEXT, created_at TEXT NOT NULL);
 CREATE TABLE ai_budget_daily (day TEXT NOT NULL, feature TEXT NOT NULL, reserved REAL NOT NULL DEFAULT 0, PRIMARY KEY (day, feature));
@@ -56,6 +57,9 @@ CREATE TABLE moderation_actions (id TEXT PRIMARY KEY, signal_id TEXT, subject_ty
 CREATE TABLE moderation_appeals (id TEXT PRIMARY KEY, action_id TEXT, signal_id TEXT, subject_type TEXT NOT NULL, subject_id TEXT NOT NULL, user_id TEXT NOT NULL, message TEXT, status TEXT NOT NULL DEFAULT 'open', reviewer_id TEXT, resolved_at TEXT, created_at TEXT NOT NULL);
 CREATE TABLE moderation_config (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_by TEXT, updated_at TEXT NOT NULL);
 CREATE TABLE moderation_signals (id TEXT PRIMARY KEY, subject_type TEXT NOT NULL, subject_id TEXT NOT NULL, parent_id TEXT, surface TEXT NOT NULL, author_id TEXT, channel_id TEXT, language TEXT, categories_json TEXT NOT NULL DEFAULT '{}', top_category TEXT, top_score REAL, models TEXT, prompt_version TEXT, decision TEXT NOT NULL, skip_reason TEXT, priority INTEGER NOT NULL DEFAULT 0, review_status TEXT NOT NULL DEFAULT 'n/a', reviewer_id TEXT, reviewer_decision TEXT, reviewed_at TEXT, translation TEXT, translation_expires_at TEXT, created_at TEXT NOT NULL, handled_action TEXT, handled_by_id TEXT, handled_by_email TEXT, handled_at TEXT);
+CREATE TABLE newsletter_deliveries (issue_id TEXT NOT NULL, subscriber_id TEXT NOT NULL, status TEXT NOT NULL, provider_id TEXT, error TEXT, updated_at TEXT NOT NULL, PRIMARY KEY (issue_id, subscriber_id));
+CREATE TABLE newsletter_issues (id TEXT PRIMARY KEY, subject_en TEXT NOT NULL DEFAULT '', subject_ar TEXT NOT NULL DEFAULT '', body_en TEXT NOT NULL DEFAULT '', body_ar TEXT NOT NULL DEFAULT '', status TEXT NOT NULL CHECK (status IN ('draft', 'sending', 'sent')), created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, sent_by TEXT, send_started_at TEXT, fanned_out_at TEXT, finished_at TEXT);
+CREATE TABLE newsletter_subscribers (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, locale TEXT NOT NULL CHECK (locale IN ('en', 'ar')), status TEXT NOT NULL CHECK (status IN ('pending', 'confirmed', 'unsubscribed')), confirm_token_hash TEXT, confirm_expires_at TEXT, confirm_sent_at TEXT, confirm_status TEXT, confirm_error TEXT, unsubscribe_token TEXT NOT NULL UNIQUE, ip_hash TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, confirmed_at TEXT, unsubscribed_at TEXT);
 CREATE TABLE plan_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, action TEXT NOT NULL, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, before_json TEXT, after_json TEXT, reason TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')));
 CREATE TABLE plan_entitlements (plan_id TEXT NOT NULL REFERENCES plans(id), plan_version INTEGER NOT NULL, key TEXT NOT NULL, value_json TEXT NOT NULL, PRIMARY KEY (plan_id, plan_version, key));
 CREATE TABLE plans (id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, name_en TEXT NOT NULL, name_ar TEXT NOT NULL, description_en TEXT, description_ar TEXT, audience TEXT NOT NULL CHECK (audience IN ('creator', 'organisation', 'viewer', 'everyone')), status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'archived')), is_public INTEGER NOT NULL DEFAULT 0, is_default INTEGER NOT NULL DEFAULT 0, sort_order INTEGER NOT NULL DEFAULT 0, version INTEGER NOT NULL DEFAULT 1, created_by TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')));
@@ -130,6 +134,12 @@ CREATE INDEX idx_modsig_handled_by ON moderation_signals (handled_by_id, handled
 CREATE INDEX idx_modsig_queue_action ON moderation_signals (created_at) WHERE review_status = 'pending' AND handled_at IS NULL;
 CREATE INDEX idx_modsig_review ON moderation_signals(review_status, priority DESC, created_at DESC);
 CREATE INDEX idx_modsig_subject ON moderation_signals(subject_type, subject_id);
+CREATE INDEX idx_newsletter_deliveries_status ON newsletter_deliveries (issue_id, status);
+CREATE INDEX idx_newsletter_deliveries_subscriber ON newsletter_deliveries (subscriber_id);
+CREATE INDEX idx_newsletter_issues_created ON newsletter_issues (created_at);
+CREATE INDEX idx_newsletter_subscribers_confirm ON newsletter_subscribers (confirm_token_hash);
+CREATE INDEX idx_newsletter_subscribers_ip ON newsletter_subscribers (ip_hash, updated_at);
+CREATE INDEX idx_newsletter_subscribers_status ON newsletter_subscribers (status, id);
 CREATE INDEX idx_plan_audit_entity ON plan_audit_log(entity_type, entity_id, created_at);
 CREATE UNIQUE INDEX idx_plans_one_default ON plans(is_default) WHERE is_default = 1;
 CREATE INDEX idx_reports_closed ON reports(status, resolved_at);

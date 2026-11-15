@@ -36,6 +36,8 @@ import opsRouter from './routers/ops.router';
 import abuseRouter from './routers/abuse.router';
 import vitalsRouter from './routers/vitals.router';
 import statusRouter from './routers/status.router';
+import newsletterRouter from './routers/newsletter.router';
+import newsletterInternal from './endpoints/newsletter/NewsletterInternal';
 import reviewAlertsRouter from './routers/reviewAlerts.router';
 import staleUploadsRouter from './routers/staleUploads.router';
 import trashRouter from './routers/trash.router';
@@ -164,6 +166,8 @@ app.get('/public/mobile-apps/:file{apple-app-site-association|assetlinks\\.json}
 
 // Contact us messages from the videos site's server (X-API-Key; endpoints/contact/ContactSubmit.ts)
 app.post('/internal/contact', (c) => contactSubmit(c as never));
+// Newsletter sign-up, confirm and unsubscribe from www's server (X-API-Key; endpoints/newsletter/NewsletterInternal.ts)
+app.route('/internal/newsletter', newsletterInternal as never);
 
 // Published theme packages: compiled CSS, theme.json and assets, immutable per version
 app.route('/public/themes', publicThemes as never);
@@ -257,6 +261,8 @@ app.route('/api/vitals', vitalsRouter);
 
 // Public status page incidents and maintenance (docs/status-page/README.md): writes apps/status's D1; status:manage
 app.route('/api/status', statusRouter);
+// Newsletter subscribers and issues (AlUmmahNowUI#6): newsletter:manage, audited
+app.route('/api/newsletter', newsletterRouter as never);
 // Review alerts for the native Admin app: rota, escalation, staff devices, timings
 app.route('/api/review-alerts', reviewAlertsRouter);
 

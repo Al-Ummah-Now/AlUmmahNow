@@ -58,6 +58,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/admin-web/e2e/22-media-providers.spec.ts': { placement: 'local', reason: 'Video provider settings (problems, confirm, channel override) and a per-video playback pin through admin-api; global settings, so shared-state and restored afterwards' },
   'apps/admin-web/e2e/23-purge-completeness.spec.ts': { placement: 'local', reason: 'Purge completeness: notifications hidden on delete, thumbnails, notifications and post images erased by the purge (seeds R2 and fake image storage)' },
   'apps/admin-web/e2e/24-categories.spec.ts': { placement: 'local', reason: 'Categories page: add, rename, reorder, retire with undo, restore one run-namespaced category; live in /api/categories and the web search filter; global list, so shared-state, deleted from the stack D1 afterwards' },
+  'apps/admin-web/e2e/23-newsletter.spec.ts': { placement: 'local', reason: 'Newsletter page: draft in en + ar saved and deleted, a sign-up through the internal endpoint (stack key) listed and erased; own rows only' },
   'apps/web/e2e/01-homepage.spec.ts': { placement: 'local', reason: 'anonymous home page layout and content' },
   'apps/web/e2e/02-video-player.spec.ts': { placement: 'local', reason: 'player loads a seed video; any playable HLS will do' },
   'apps/web/e2e/03-profile.spec.ts': { placement: 'local', reason: 'profile page and profile guard with stored sessions' },

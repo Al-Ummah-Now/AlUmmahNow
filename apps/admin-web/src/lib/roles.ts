@@ -110,6 +110,15 @@ export function canUseContactInbox(role?: string): boolean {
 }
 
 /**
+ * Newsletter (subscribers and issues): mirrors admin-api PERMISSIONS (newsletter:manage is granted
+ * to admins and super admins). admin-api enforces it; this only hides what the user cannot open.
+ */
+export function canManageNewsletter(role?: string): boolean {
+  const r = normalizeRole(role);
+  return r === 'admin' || r === 'super_admin';
+}
+
+/**
  * Upload processing health and the "Uploads & processing" section of the
  * Errors page: mirrors admin-api PERMISSIONS
  * (videos:processing is granted to admins and super admins, not moderators).

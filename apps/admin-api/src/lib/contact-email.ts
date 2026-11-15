@@ -34,6 +34,8 @@ export interface RenderedEmail {
   text: string;
   html: string;
   replyTo?: string;
+  /** Extra headers (the newsletter's List-Unsubscribe and List-Unsubscribe-Post) */
+  headers?: Record<string, string>;
 }
 
 export interface MessageForEmail {
@@ -248,6 +250,7 @@ export async function sendContactEmail(
         text: email.text,
         html: email.html,
         ...(email.replyTo ? { reply_to: email.replyTo } : {}),
+        ...(email.headers ? { headers: email.headers } : {}),
       }),
     });
     if (!res.ok) {
