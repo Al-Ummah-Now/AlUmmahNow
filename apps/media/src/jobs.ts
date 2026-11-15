@@ -11,6 +11,12 @@ export const SILENCE_LIMIT_MS = 20 * 60 * 1000;
 /** Hard ceiling for one attempt (a 3 h lecture at 1x is well inside). */
 export const ATTEMPT_LIMIT_MS = 4 * 60 * 60 * 1000;
 export const WATCHDOG_SECONDS = 60;
+/**
+ * A launch that never got the container's answer within this long is lost: the Durable Object or
+ * its container was restarted mid-start (a `wrangler deploy` restarts both). Cold starts take
+ * well under a minute; image pulls after a deploy a few.
+ */
+export const LAUNCH_LIMIT_MS = 5 * 60 * 1000;
 
 /** stopping: a failed attempt is being torn down (its container's stop is ours, not a crash) */
 export type JobStatus = 'running' | 'stopping' | 'waiting_retry' | 'ready' | 'failed';
@@ -27,6 +33,8 @@ export interface JobState {
 	attempt: number;
 	/** Current attempt's container start (ms) */
 	attemptStartedAt: number;
+	/** When the container accepted this attempt (POST /jobs answered, or it reported in); unset while starting */
+	launchedAt?: number;
 	lastSeenAt: number;
 	progress: number;
 	/** Per-rung state from the container's latest progress event */
@@ -62,10 +70,22 @@ export function newJob(msg: TranscodeJobMessage, now: number): JobState {
 	};
 }
 
-/** What a delivered queue message means for the job this video already has. */
-export function onMessage(current: JobState | undefined, msg: TranscodeJobMessage): 'start' | 'duplicate' | 'supersede' {
+/**
+ * A running attempt whose launch was lost: no container ever took it and nothing was heard for
+ * LAUNCH_LIMIT_MS. Jobs saved before `launchedAt` existed count as launched while they report in
+ * (lastSeenAt), so a real running transcode is never mistaken for a lost one.
+ */
+export function launchLost(job: JobState, now: number): boolean {
+	return job.status === 'running' && !job.launchedAt && now - job.attemptStartedAt > LAUNCH_LIMIT_MS && now - job.lastSeenAt > LAUNCH_LIMIT_MS;
+}
+
+/**
+ * What a delivered queue message means for the job this video already has. The same job again is
+ * a duplicate, unless its launch was lost (the queue redelivers when the consumer died mid-start).
+ */
+export function onMessage(current: JobState | undefined, msg: TranscodeJobMessage, now: number = Date.now()): 'start' | 'duplicate' | 'supersede' | 'relaunch' {
 	if (!current) return 'start';
-	if (current.jobId === msg.jobId) return 'duplicate';
+	if (current.jobId === msg.jobId) return launchLost(current, now) ? 'relaunch' : 'duplicate';
 	return current.status === 'running' || current.status === 'stopping' || current.status === 'waiting_retry' ? 'supersede' : 'start';
 }
 
@@ -102,12 +122,28 @@ export function watchdogVerdict(
 		if (status.status === 'failed') return { kind: 'failed', error: status.error || 'container_failed', fatal: false };
 		return { kind: 'ok' };
 	}
+	// Started but never taken by a container (restarted mid-launch): retry now, not after the silence limit
+	if (launchLost(job, now)) return { kind: 'failed', error: 'launch_lost', fatal: false };
 	if (status && status.status === 'idle' && now - job.attemptStartedAt > 2 * 60 * 1000) {
 		// A restarted container (it lost the job)
 		return { kind: 'failed', error: 'container_restarted', fatal: false };
 	}
 	if (now - job.lastSeenAt > SILENCE_LIMIT_MS) return { kind: 'failed', error: 'container_silent', fatal: false };
 	return { kind: 'ok' };
+}
+
+/**
+ * A later watchdog run already scheduled? Reads @cloudflare/containers' own schedule table
+ * (`container_schedules`, time in seconds); any read problem counts as "none", so the caller
+ * schedules one (a spare run is harmless, a missing one leaves a job unwatched).
+ */
+export function hasWatchdogDue(sql: Pick<SqlStorage, 'exec'>, nowMs: number): boolean {
+	try {
+		const row = sql.exec(`SELECT COUNT(*) AS n FROM container_schedules WHERE callback = 'watchdog' AND time > ?`, Math.floor(nowMs / 1000)).toArray()[0] as { n?: number } | undefined;
+		return Number(row?.n) > 0;
+	} catch {
+		return false;
+	}
 }
 
 /** Keys an outbound PUT may write for this job (and nothing else). */
