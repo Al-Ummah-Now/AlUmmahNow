@@ -42,7 +42,7 @@ export function RecentComments({ locale, channelId }: { locale: string; channelI
     <div data-testid="studio-dash-comments-body">
       {summary.held > 0 && (
         <p className="mb-2 text-sm">
-          <Link href={`${base}?tab=held`} className="font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" data-testid="studio-dash-comments-held">
+          <Link href={`${base}?tab=held`} className="font-medium text-[var(--fanous-color-link)] underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" data-testid="studio-dash-comments-held">
             {text.recentComments.held.replace('{count}', new Intl.NumberFormat(locale).format(summary.held))}
           </Link>
         </p>

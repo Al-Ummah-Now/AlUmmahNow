@@ -17,7 +17,7 @@ function Card({ title, children, tone, testId }: { title: string; children: Reac
       data-testid={testId}
       className={tone === 'danger' ? 'rounded-xl border border-destructive/50 bg-card p-4 text-card-foreground md:p-6' : 'rounded-xl border border-border bg-card p-4 text-card-foreground md:p-6'}
     >
-      <h3 className={tone === 'danger' ? 'text-base font-semibold text-destructive' : 'text-base font-semibold text-foreground'}>{title}</h3>
+      <h3 className={tone === 'danger' ? 'text-base font-semibold text-[var(--fanous-color-error-text)]' : 'text-base font-semibold text-foreground'}>{title}</h3>
       <div className="mt-2 space-y-3 text-sm text-muted-foreground">{children}</div>
     </section>
   );

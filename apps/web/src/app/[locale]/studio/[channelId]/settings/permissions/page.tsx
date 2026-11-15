@@ -16,7 +16,7 @@ export default async function StudioPermissionsPage({ params }: { params: Promis
   return (
     <div className="max-w-3xl">
       <h1 className="sr-only">{t.studio.nav.settings}</h1>
-      <h2 className="text-lg font-semibold text-foreground">{t.channelRoles.team}</h2>
+      <h2 className="text-lg font-semibold text-foreground">{t.studio.nav.permissions}</h2>
       <p className="mb-6 mt-1 text-sm text-muted-foreground">{t.channelRoles.teamDescription}</p>
       <ChannelTeam channelId={channelId} role={access.role} locale={locale} />
     </div>

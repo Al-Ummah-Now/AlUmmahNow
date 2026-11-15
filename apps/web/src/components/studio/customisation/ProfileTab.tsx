@@ -300,7 +300,7 @@ export function ProfileTab({ channelId, role }: { channelId: string; role: Chann
         <div className="grid gap-4 md:grid-cols-2">
           <div>
             <label htmlFor="channel-name-en" className="mb-1.5 block text-sm font-medium text-foreground">
-              {text.nameEn} <span aria-hidden="true" className="text-destructive">*</span>
+              {text.nameEn} <span aria-hidden="true" className="text-[var(--fanous-color-error-text)]">*</span>
             </label>
             <input id="channel-name-en" dir="ltr" required maxLength={NAME_MAX} value={fields.nameEn} onChange={setField('nameEn')} className={FIELD} disabled={saving} />
           </div>
@@ -344,7 +344,7 @@ export function ProfileTab({ channelId, role }: { channelId: string; role: Chann
             {saving && <Loader2 aria-hidden="true" className="me-2 h-4 w-4 animate-spin motion-reduce:animate-none" />}
             {saving ? text.saving : text.save}
           </Button>
-          <p role="status" aria-live="polite" data-testid="channel-edit-status" className={notice?.kind === 'error' ? 'text-sm text-destructive' : 'text-sm text-muted-foreground'}>
+          <p role="status" aria-live="polite" data-testid="channel-edit-status" className={notice?.kind === 'error' ? 'text-sm text-[var(--fanous-color-error-text)]' : 'text-sm text-muted-foreground'}>
             {notice?.text}
           </p>
         </div>

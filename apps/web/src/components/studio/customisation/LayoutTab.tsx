@@ -46,7 +46,7 @@ export function LayoutTab({ locale, channel, view }: { locale: string; channel: 
           href={channelPath(locale, channel)}
           target="_blank"
           rel="noopener"
-          className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-[var(--fanous-color-link)] underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           data-testid="studio-layout-preview"
         >
           <ExternalLink aria-hidden="true" className="h-4 w-4" />

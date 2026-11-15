@@ -344,7 +344,7 @@ export default function PostForm({ locale, channelId, post }: PostFormProps) {
         </Button>
       </div>
       {editing && error && (
-        <p role="alert" className="mb-4 text-sm text-destructive" data-testid="post-save-error">{error}</p>
+        <p role="alert" className="mb-4 text-sm text-[var(--fanous-color-error-text)]" data-testid="post-save-error">{error}</p>
       )}
 
       <div>
@@ -454,7 +454,7 @@ export default function PostForm({ locale, channelId, post }: PostFormProps) {
                 )}
 
                 {error && [PostType.ARTICLE, PostType.CARDS, PostType.LINK].includes(selectedType) && (
-                  <p role="alert" className="mt-4 text-sm text-destructive" data-testid="new-post-error">{error}</p>
+                  <p role="alert" className="mt-4 text-sm text-[var(--fanous-color-error-text)]" data-testid="new-post-error">{error}</p>
                 )}
               </Card>
             )}

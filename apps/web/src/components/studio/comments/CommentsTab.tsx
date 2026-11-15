@@ -254,7 +254,7 @@ export function CommentsTab({ locale, channel, role, tab, target }: Props) {
       {target && (
         <p className="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground" data-testid="studio-comments-target">
           {targetTitle ? text.filters.target.split('{title}').flatMap((part, i) => (i === 0 ? [part] : [<bdi key="t" className="font-medium text-foreground">{targetTitle}</bdi>, part])) : null}
-          <Link href={`${base}?tab=${tab}`} className="inline-flex min-h-11 items-center gap-1 font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <Link href={`${base}?tab=${tab}`} className="inline-flex min-h-11 items-center gap-1 font-medium text-[var(--fanous-color-link)] underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             <X aria-hidden="true" className="h-4 w-4" />
             {text.filters.clearTarget}
           </Link>
@@ -503,7 +503,7 @@ function CommentRow({ locale, lang, comment, tab, base, channel, canSpeak, selec
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onSelect={onReport} data-testid="studio-comment-report">{text.actions.report}</DropdownMenuItem>
                 {comment.author.userId && (
-                  <DropdownMenuItem onSelect={onBlock} className="text-destructive focus:text-destructive" data-testid="studio-comment-block">{text.actions.block}</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={onBlock} className="text-[var(--fanous-color-error-text)] focus:text-[var(--fanous-color-error-text)]" data-testid="studio-comment-block">{text.actions.block}</DropdownMenuItem>
                 )}
               </DropdownMenuContent>
             </DropdownMenu>

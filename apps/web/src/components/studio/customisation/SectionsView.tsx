@@ -314,7 +314,7 @@ export function SectionsView({ channelId, ownerId }: { channelId: string; ownerI
       )}
 
       {error && (
-        <div role="alert" className="p-3 border border-destructive rounded-lg text-sm text-destructive">
+        <div role="alert" className="p-3 border border-destructive rounded-lg text-sm text-[var(--fanous-color-error-text)]">
           {error}
         </div>
       )}
