@@ -117,7 +117,7 @@ test.describe('Playlist manager', () => {
       await page.getByRole('link', { name: 'All playlists' }).click();
       const renamedRow = managedRow(page, renamed);
       await expect(renamedRow).toBeVisible({ timeout: PLAYLIST_LIST_TIMEOUT });
-      await expect(renamedRow).toContainText('0 videos');
+      await expect(renamedRow).toContainText('No videos');
       await expect(renamedRow).toContainText('Private');
       await expect(renamedRow.getByRole('link', { name: 'View playlist' })).toHaveAttribute('href', /^\/en\/playlist\/[\w-]+$/);
 
@@ -262,7 +262,7 @@ test.describe('Playlist page - owner', () => {
       await list.getByRole('listitem').first().getByRole('button', { name: 'Remove from playlist' }).click();
       await page.getByTestId('playlist-remove-video-dialog-confirm').click();
       await expect.poll(titles).toEqual([videos[0].title]);
-      await expect(page.getByText('1 videos')).toBeVisible();
+      await expect(page.getByText('1 video', { exact: true })).toBeVisible();
       await expect.poll(async () => (await apiGet<{ videos: string[] }>(`/api/playlists/${id}`)).videos).toEqual([videos[0].id]);
     } finally {
       await deletePlaylistQuietly(owner, channelId(), id);
