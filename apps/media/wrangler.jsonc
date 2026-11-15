@@ -20,7 +20,10 @@
 			"image_build_context": "./container",
 			"instance_type": "standard-4",
 			// Bounds spend: at most this many transcodes at once (the queue backs off when full)
-			"max_instances": 4
+			"max_instances": 4,
+			// A deploy lets running transcodes finish (up to 1 h) before their instance is replaced;
+			// one cut off after that retries at once without using up an attempt (jobs.ts isInfraFailure)
+			"rollout_active_grace_period": 3600
 		}
 	],
 	"durable_objects": { "bindings": [{ "name": "TRANSCODER", "class_name": "Transcoder" }] },
@@ -64,7 +67,10 @@
 					"image": "./container/Dockerfile",
 					"image_build_context": "./container",
 					"instance_type": "standard-4",
-					"max_instances": 2
+					"max_instances": 2,
+					// A deploy lets running transcodes finish (up to 1 h) before their instance is replaced;
+					// one cut off after that retries at once without using up an attempt (jobs.ts isInfraFailure)
+					"rollout_active_grace_period": 3600
 				}
 			],
 			"durable_objects": { "bindings": [{ "name": "TRANSCODER", "class_name": "Transcoder" }] },

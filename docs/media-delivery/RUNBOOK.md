@@ -122,15 +122,31 @@ from R2 on every request, at Class B cost and with no edge cache.
   playing Bunny, which is untouched.
 - **`source_missing`:** Bunny didn't keep the original. "Keep original files" must be on in the
   library's Encoding settings.
-- **Queue backs off ("Could not start job"):** all `max_instances` containers are busy. That's
-  expected under bursts. Raising `max_instances` raises the peak spend. The Delivery page's
+- **"Could not start job" (`reason` in the log line):** `capacity full` means all `max_instances`
+  containers are busy, expected under bursts; `container start failed` means the container exited
+  while starting, which is a broken image or the platform, never load. The consumer tries again
+  after 15 s, 30 s, 60 s, 2 min, then every 5 min (`START_RETRY_DELAYS` in `apps/media/src/jobs.ts`),
+  so a job resumes within seconds once the cause clears. After the queue's last delivery (9) the
+  job is reported failed: the record gets `r2.status = failed` and the Errors page an item with
+  "Transcode again", about 24 min after it was queued. 2026-11-15: an image without
+  `container/review.mjs` crashed at every start (`ERR_MODULE_NOT_FOUND`, exit 1) from v2026.11.13.x
+  to v2026.11.14.6; the release smoke now starts a real container (`GET /priv/_selftest`) and the
+  stage E2E fails a transcode that does not start within 2 min.
+- **Container logs:** the container's stdout and exits are Workers Observability events of type
+  `cf-container` with `$container.applicationId` = the transcoder application's id (not the
+  Worker's script name). `.github/workflows/media-diagnostics.yml` prints them, read-only.
+- **Deploys:** `rollout_active_grace_period` (1 h) lets running transcodes finish before a rollout
+  replaces their instance. One cut off after that (SIGTERM, exit 143), a lost launch or a
+  restarted container retries after 15 s without using up one of its 3 attempts (up to 6 in a row).
+- **Capacity:** raising `max_instances` raises the peak spend. Raising `max_instances` raises the peak spend. The Delivery page's
   "Transcoder now" card shows transcoding now out of the maximum, the jobs waiting and the oldest
   wait (from `media_jobs`, refreshed every 30 s). The maximum is api-videos' `MEDIA_MAX_TRANSCODES`
   var: change it with `max_instances` in `apps/media/wrangler*.jsonc` (production 4, stage and QA 2).
 - **One video:** its admin page has an R2 card with the status, the failure details when a
   transcode failed, and "Transcode again" (`media:manage`).
-- **Dead letters** (`al-ummah-now-transcode-dlq-*`): the queue gave up starting a job. The
-  api-videos sweep re-queues videos stuck in `queued`.
+- **Dead letters** (`al-ummah-now-transcode-dlq-*`): only when api-videos could not be told that a
+  job never started. The api-videos sweep re-queues videos stuck in `queued` for over an hour and
+  raises an Errors page item ("R2 transcode was stuck … re-queued automatically").
 - **Container image:** `apps/media/container/Dockerfile` (node:22-alpine + ffmpeg). Wrangler builds
   and pushes it on deploy. Old images count toward the 50 GB image storage. Prune with
   `wrangler containers images list` / `delete`.

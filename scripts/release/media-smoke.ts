@@ -8,6 +8,9 @@
  *     R2 here would mean the route is gone and private renditions are not protected)
  *   - the public host answers (R2 custom domain): a missing /pub/ key is a plain 404
  *   - the transcoder Containers application exists and is not failed
+ *   - a real container starts on the image just deployed, within START_LIMIT_MS (GET /priv/_selftest,
+ *     asked for a run after this smoke began; polled while the rollout replaces instances). 2026-11-15:
+ *     an image missing /app/review.mjs crashed at every start for a day and nothing failed
  * Exits 1 with every failure listed; the workflow then rolls the media Worker back.
  */
 import { fileURLToPath } from 'node:url';
@@ -22,13 +25,48 @@ export const MEDIA_WORKERS: Record<MediaEnv, string> = { production: 'al-ummah-n
 const VID = '00000000-0000-4000-8000-000000000000';
 const REV = 'aaaaaaaaaaaaaaaa';
 
+/** A cold start slower than this fails the smoke (apps/media jobs.ts SELFTEST_START_LIMIT_MS). */
+export const START_LIMIT_MS = 60_000;
+/** How long the smoke waits for the rollout to give it a container that starts. */
+export const SELFTEST_WAIT_MS = 5 * 60_000;
+const SELFTEST_POLL_MS = 20_000;
+
+interface SelfTest {
+	ok: boolean;
+	startMs: number;
+	at: string;
+	error?: string;
+	cached?: boolean;
+	skipped?: string;
+}
+
+/**
+ * The verdict on one self-test answer: pass, fail now, or ask again (a cached run from before the
+ * deploy, or a start that failed while the rollout is still replacing instances).
+ */
+export function selfTestVerdict(r: SelfTest | null, since: number, waitedMs: number): { done: true; ok: boolean; detail: string } | { done: false } {
+	const late = waitedMs >= SELFTEST_WAIT_MS;
+	if (!r) return late ? { done: true, ok: false, detail: 'no answer from /priv/_selftest' } : { done: false };
+	if (Date.parse(r.at) < since) return late ? { done: true, ok: false, detail: `only an older run (${r.at})` } : { done: false };
+	if (r.skipped) return { done: true, ok: true, detail: `not tested: ${r.skipped}` };
+	if (!r.ok) return late ? { done: true, ok: false, detail: `the container did not start: ${r.error ?? 'unknown'}` } : { done: false };
+	if (r.startMs > START_LIMIT_MS) return { done: true, ok: false, detail: `cold start took ${r.startMs} ms (limit ${START_LIMIT_MS})` };
+	return { done: true, ok: true, detail: `started in ${r.startMs} ms` };
+}
+
 export interface SmokeResult {
 	name: string;
 	ok: boolean;
 	detail: string;
 }
 
-export async function mediaSmoke(env: MediaEnv, deps: { fetch: typeof fetch; cf: Pick<CfClient, 'request'> }): Promise<SmokeResult[]> {
+export async function mediaSmoke(
+	env: MediaEnv,
+	deps: { fetch: typeof fetch; cf: Pick<CfClient, 'request'>; sleep?: (ms: number) => Promise<void>; now?: () => number },
+): Promise<SmokeResult[]> {
+	const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+	const now = deps.now ?? Date.now;
+	const since = now();
 	const host = MEDIA_HOSTS[env];
 	const out: SmokeResult[] = [];
 	const check = async (name: string, fn: () => Promise<string>) => {
@@ -56,6 +94,23 @@ export async function mediaSmoke(env: MediaEnv, deps: { fetch: typeof fetch; cf:
 		if (!app) throw new Error(`${name} not found`);
 		if (app.state && /fail|error/i.test(app.state)) throw new Error(`${name} is ${app.state}`);
 		return `${name}${app.state ? ` (${app.state})` : ''}`;
+	});
+	await check('a transcoder container starts (self-test)', async () => {
+		for (;;) {
+			let body: SelfTest | null = null;
+			try {
+				const res = await deps.fetch(`https://${host}/priv/_selftest?after=${since}`, { redirect: 'manual' });
+				body = (await res.json().catch(() => null)) as SelfTest | null;
+			} catch {
+				body = null;
+			}
+			const v = selfTestVerdict(body, since, now() - since);
+			if (v.done) {
+				if (!v.ok) throw new Error(v.detail);
+				return v.detail;
+			}
+			await sleep(SELFTEST_POLL_MS);
+		}
 	});
 	return out;
 }

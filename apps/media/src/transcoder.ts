@@ -8,7 +8,7 @@
 import { Container, type OutboundHandlerContext } from '@cloudflare/containers';
 import { failRungs, MEDIA_MP4, mediaPrefix, sanitizeFailure, sanitizeMp4, type CaptionAudioJobMessage, type LiveReviewJobMessage, type Mp4JobMessage, sanitizeRungs, type R2RungProgress, type TranscodeFailure, type TranscodeJobEvent, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
 import { bucketFor, errorText, log, type Env } from './env';
-import { containerSeconds, hasWatchdogDue, keyAllowed, liveReviewPrefix, liveVodSource, liveVodTarget, newJob, onFailure, onMessage, onProgressEvent, watchdogVerdict, WATCHDOG_SECONDS, type JobState } from './jobs';
+import { containerSeconds, hasWatchdogDue, isInfraFailure, keyAllowed, selfTestDue, startFailureReason, type SelfTestResult, liveReviewPrefix, liveVodSource, liveVodTarget, newJob, onFailure, onMessage, onProgressEvent, watchdogVerdict, WATCHDOG_SECONDS, type JobState } from './jobs';
 import { reportCaptionAudio, reportEvent, reportLiveReviewMedia, reportMp4Event, sourceCandidates } from './videos-api';
 import { serveOriginal } from './originals';
 import { storeUpload } from './uploads';
@@ -271,9 +271,13 @@ export class Transcoder extends Container<Env> {
 		await deletePrefix(bucketFor(this.env, job.prefix), `${job.prefix}/`).catch((e) => log.warn('[Transcoder] Cleanup failed', { videoId: job.videoId, error: errorText(e) }));
 		if (job.reviewPrefix) await deletePrefix(this.env.MEDIA_PRIVATE, job.reviewPrefix).catch(() => undefined);
 		await this.destroy().catch(() => undefined);
-		const next = onFailure(job, error, fatal);
+		const infra = isInfraFailure(error, parts.exitCode);
+		const next = onFailure(job, error, fatal, infra);
 		if (next.retry) {
 			job.status = 'waiting_retry';
+			job.retryKeepsAttempt = !!next.keepsAttempt;
+			job.infraRetries = next.keepsAttempt ? (job.infraRetries ?? 0) + 1 : 0;
+			job.nextRetryAt = now + next.delaySeconds * 1000;
 			await this.save(job);
 			await this.report(job, { type: 'failed', error, final: false, failure, ...(job.rungs ? { rungs: job.rungs } : {}) });
 			await this.schedule(next.delaySeconds, 'retry', job.jobId);
@@ -290,7 +294,10 @@ export class Transcoder extends Container<Env> {
 	async retry(jobId: string): Promise<void> {
 		const job = await this.job();
 		if (!job || job.jobId !== jobId || job.status !== 'waiting_retry') return;
-		job.attempt += 1;
+		// A platform failure (deploy, restart) does not use up an attempt
+		if (!job.retryKeepsAttempt) job.attempt += 1;
+		delete job.retryKeepsAttempt;
+		delete job.nextRetryAt;
 		job.status = 'running';
 		job.attemptStartedAt = Date.now();
 		job.lastSeenAt = job.attemptStartedAt;
@@ -459,6 +466,34 @@ export class Transcoder extends Container<Env> {
 		} finally {
 			await this.stop().catch(() => undefined);
 		}
+		return result;
+	}
+
+	/**
+	 * Release smoke (GET /priv/_selftest on the DO `selftest`): one real container start, timed, then
+	 * stopped. Rate limited by selfTestDue (the route is public); never touches a job's state.
+	 */
+	async selfTest(after?: number): Promise<SelfTestResult> {
+		const last = await this.ctx.storage.get<SelfTestResult>('selftest');
+		if (!selfTestDue(last, Date.now(), after)) return { ...last!, cached: true };
+		const started = Date.now();
+		let result: SelfTestResult;
+		try {
+			await this.startAndWaitForPorts();
+			const res = await this.containerFetch('http://container/status');
+			const body = (await res.json().catch(() => null)) as { status?: string } | null;
+			const ok = res.ok && body?.status === 'idle';
+			result = { ok, startMs: Date.now() - started, at: new Date().toISOString(), ...(ok ? {} : { error: `status HTTP ${res.status} ${body?.status ?? ''}`.trim() }) };
+		} catch (error) {
+			const text = errorText(error).slice(0, 200);
+			result = startFailureReason(text) === 'capacity full'
+				? { ok: true, startMs: Date.now() - started, at: new Date().toISOString(), skipped: 'capacity full: every instance is transcoding' }
+				: { ok: false, startMs: Date.now() - started, at: new Date().toISOString(), error: text };
+		} finally {
+			await this.stop().catch(() => undefined);
+		}
+		if (!result.ok) log.error('[Transcoder] Self-test: the container did not start', { ...result });
+		await this.ctx.storage.put('selftest', result);
 		return result;
 	}
 
