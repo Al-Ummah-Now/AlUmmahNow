@@ -261,8 +261,11 @@ can own several channels and hold roles on other people's. The **active channel*
 and Studio. Switching channels never switches the account, and switching accounts brings that
 account's own channels and active channel.
 
-`<div class="aun-menu-context" role="group" aria-labelledby="…">`, label **Channel** / **القناة**, then
-in this order:
+`<div class="aun-menu-context" role="group" aria-labelledby="…">`, label **Acting as** / **تتصرّف باسم**, then
+in this order. Identities follow the YouTube/Facebook pattern: you are shown by your own avatar and
+name (display name → first + last → email, never an @handle) with a small `.aun-identity-tag`
+**Personal** / **حساب شخصي**; a channel by its logo and name with the tag **Channel** / **قناة**.
+Never "no channel", "without a channel" or "none".
 This menu is the **only** place to choose an identity (owner decision 2026-11-15). Comments, replies,
 posts, likes, subscriptions and playlists always use the current acting identity; their composers show
 only that identity's avatar (photo or channel logo, accessible name = the identity's name), with no
@@ -270,17 +273,17 @@ only that identity's avatar (photo or channel logo, accessible name = the identi
 
 | Row | What | When |
 |---|---|---|
-| Current channel (`.aun-menu-context-current`) | avatar + name, crown on the main channel, a `.aun-badge` role chip when the account is not the owner ("Channel admin"); links to the channel | a channel is active |
-| "No active channel" (muted, not a link) | | no channel is active |
-| **Switch channel ›** | opens the switcher in place (below) | always (an account without channels can still choose "Use without a channel") |
+| Current channel (`.aun-menu-context-current`) | logo + name + tag **Channel**, crown on the main channel, a `.aun-badge` role chip when the account is not the owner ("Channel admin"); links to the channel | a channel is active |
+| You (`.aun-menu-context-current`, not a link) | your avatar + name + tag **Personal** | no channel is active |
+| **Switch channel ›** | opens the switcher in place (below) | always (an account without channels can still pick itself) |
 | **Studio** | the creator home, on the active channel | the account has at least one channel |
 | **Create channel** | opens the switcher with the create form | the account has no channel yet and may create one |
 
-**Switcher view** (in place, a back row "‹ Switch channel" at the top):
+**Switcher view** (in place, a back row "‹ Acting as" at the top):
+0. You: your avatar + name + tag **Personal**, checked when no channel is active.
 1. "Your channels" (`.aun-menu-label`): the account's own channels; the active one checked (`aria-checked`, `.aun-menu-check`).
 2. "Channels you manage": channels where the account holds a role, each with its `.aun-badge`.
-3. "Use without a channel".
-4. **Create channel** (`.aun-menu-form` with `.aun-menu-input`), only while the tier allows another channel.
+3. **Create channel** (`.aun-menu-form` with `.aun-menu-input`), only while the tier allows another channel.
    At the tier's limit (`channel_limit`: `channelsOwned >= maxChannels`), the row is replaced by
    a `.aun-menu-note` "You can own up to {max} channels". A create the server refuses for the
    limit (another tab used it up) reads the tier again, closes the form and shows the same note,

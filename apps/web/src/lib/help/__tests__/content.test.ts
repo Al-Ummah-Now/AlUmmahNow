@@ -100,7 +100,7 @@ describe('helpSearchEntries', () => {
     const sw = entries.find((e) => e.id === 'identity#switch')!;
     expect(sw).toMatchObject({ topic: 'identity', section: 'switch', label: 'Switch', subtitle: HELP_EN.topics.identity.title });
     expect(sw.keywords).toContain('التبديل');
-    expect(sw.keywords.join(' ')).toMatch(/Use without a channel/);
+    expect(sw.keywords.join(' ')).toMatch(/Personal/);
     expect(entries.filter((e) => !e.section)).toHaveLength(HELP_TOPIC_IDS.length);
   });
 });

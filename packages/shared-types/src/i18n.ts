@@ -383,7 +383,6 @@ export interface AppTranslations {
    * Header/Navigation
    */
   header: {
-    noChannelSelected: string;
     switchAccount: string;
     addAccount: string;
     logout: string;
@@ -421,11 +420,12 @@ export interface AppTranslations {
     accounts: string;
     profile: string;
     analytics: string;
-    noChannel: string;
-    noActiveChannel: string;
+    /** The tag on your own identity in the Acting as picker (the YouTube/Facebook pattern) */
+    identityPersonal: string;
+    /** The tag on a channel identity in the Acting as picker */
+    identityChannel: string;
     switchChannel: string;
     signOut: string;
-    useWithoutChannel: string;
     createChannel: string;
     channelName: string;
     enterChannelName: string;
@@ -479,7 +479,6 @@ export interface AppTranslations {
     unsubscribe: string;
     manageChannels: string;
     yourChannels: string;
-    browseWithoutChannel: string;
     enterChannelNamePlaceholder: string;
     refreshChannelList: string;
     singleChannel: string;
