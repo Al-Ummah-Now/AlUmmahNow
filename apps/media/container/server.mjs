@@ -10,6 +10,7 @@
 //
 // API (from the Worker): POST /jobs { jobId, prefix, attempt }, GET /status, GET /health.
 import { createServer } from 'node:http';
+import { errorReason } from './errors.mjs';
 import { spawn } from 'node:child_process';
 import { randomInt } from 'node:crypto';
 import { clearTimeout, setTimeout } from 'node:timers';
@@ -653,7 +654,7 @@ const server = createServer(async (req, res) => {
 		} catch (error) {
 			log('remux failed', { jobId: job.jobId, error: String(error?.message || error) });
 			await rm(WORK, { recursive: true, force: true }).catch(() => undefined);
-			return send(500, { error: String(error?.message || error).slice(0, 300), fatal: !!error?.fatal, ...(Array.isArray(error?.stderrTail) ? { stderrTail: error.stderrTail } : {}) });
+			return send(500, { error: errorReason(error), fatal: !!error?.fatal, ...(Array.isArray(error?.stderrTail) ? { stderrTail: error.stderrTail } : {}) });
 		}
 	}
 	// Live recording review (VR9): frames and audio from an HLS VOD read through vod.internal
@@ -680,7 +681,7 @@ const server = createServer(async (req, res) => {
 			return send(200, { manifestKey: out.manifestKey });
 		} catch (error) {
 			log('live review failed', { videoId: job.videoId, error: String(error?.message || error) });
-			return send(500, { error: String(error?.message || error).slice(0, 300), fatal: !!error?.fatal });
+			return send(500, { error: errorReason(error), fatal: !!error?.fatal });
 		} finally {
 			reviewing = false;
 		}
@@ -713,7 +714,7 @@ const server = createServer(async (req, res) => {
 			return send(200, { manifestKey: `${job.prefix}manifest.json` });
 		} catch (error) {
 			log('caption audio failed', { jobId: job.jobId, error: String(error?.message || error) });
-			return send(500, { error: String(error?.message || error).slice(0, 300), fatal: !!error?.fatal });
+			return send(500, { error: errorReason(error), fatal: !!error?.fatal });
 		} finally {
 			reviewing = false;
 			await rm(dir, { recursive: true, force: true }).catch(() => undefined);
