@@ -47,7 +47,7 @@ export interface EmbedVideo {
   isShort?: boolean;
   /** Unlisted (D-SEO-5): playable by link, shared with a card, but never indexed */
   isUnlisted?: boolean;
-  /** When it was first public (publishedAt, else dateCreated): search engines' uploadDate */
+  /** When it was first public (an imported video's YouTube date, else publishedAt, else dateCreated): search engines' uploadDate */
   uploadDate?: string;
   views?: number;
   isLive?: boolean;
@@ -70,6 +70,8 @@ export interface EmbedPlaylist {
 }
 
 interface ApiVideo {
+  /** Imported from YouTube (wiki AUN-YT-IMPORT): its true first publish date is the YouTube one */
+  importedFrom?: { publishedAt?: string | null } | null;
   id?: string;
   title?: string;
   titleLocalized?: Record<string, string>;
@@ -128,6 +130,11 @@ const positiveSize = (v: unknown) => typeof v === 'number' && Number.isFinite(v)
 
 export { videoAspect } from './aspect';
 
+/** When the video was first public: an imported video's YouTube publish date, else ours. */
+export function firstPublished(video: Pick<ApiVideo, 'importedFrom' | 'publishedAt' | 'dateCreated'>): string | undefined {
+  return video.importedFrom?.publishedAt || video.publishedAt || video.dateCreated || undefined;
+}
+
 export function toEmbedVideo(video: ApiVideo | null | undefined): EmbedVideo | null {
   if (!video || !video.id || !video.playUrl) return null;
   // The shared rule (shared-types video-visibility.ts, #1241): public or unlisted (D-SEO-5),
@@ -154,7 +161,7 @@ export function toEmbedVideo(video: ApiVideo | null | undefined): EmbedVideo | n
     ...(positiveSize(video.width) && positiveSize(video.height) ? { width: Number(video.width), height: Number(video.height) } : {}),
     ...(video.isShort === true ? { isShort: true } : {}),
     ...(video.isPublic === false && video.isUnlisted === true ? { isUnlisted: true } : {}),
-    ...(video.publishedAt || video.dateCreated ? { uploadDate: video.publishedAt || video.dateCreated } : {}),
+    ...(firstPublished(video) ? { uploadDate: firstPublished(video) } : {}),
     ...(typeof video.views === 'number' && video.views >= 0 ? { views: video.views } : {}),
     ...(video.isLive === true ? { isLive: true } : {}),
     ...(video.delivery?.source === 'r2' || video.delivery?.source === 'bunny' ? { delivery: { source: video.delivery.source } } : {}),

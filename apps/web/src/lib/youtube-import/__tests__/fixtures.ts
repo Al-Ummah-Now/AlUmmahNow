@@ -1,0 +1,30 @@
+/** A YouTube import item for tests (not a test file itself). */
+import type { YtImportItem } from '@al-ummah/shared-types';
+
+export const item = (id: string, over: Partial<YtImportItem> = {}): YtImportItem => ({
+  id,
+  importId: 'imp1',
+  ytVideoId: `${id.toUpperCase().padEnd(11, 'x')}`.slice(0, 11),
+  title: `Video ${id}`,
+  description: '',
+  titleLocalized: {},
+  descriptionLocalized: {},
+  tags: [],
+  language: null,
+  publishedAt: '2024-01-01T00:00:00Z',
+  publishAt: null,
+  durationSeconds: 61,
+  ytVisibility: 'public',
+  madeForKids: false,
+  thumbnailUrl: null,
+  selected: false,
+  match: null,
+  videoId: null,
+  state: 'available',
+  thumbnail: 'none',
+  captions: 'none',
+  captionLanguages: [],
+  error: null,
+  updatedAt: '2026-11-14T00:00:00Z',
+  ...over,
+});

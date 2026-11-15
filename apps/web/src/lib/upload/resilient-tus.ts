@@ -265,8 +265,17 @@ export function apiUrlFromTusEndpoint(endpoint: string): string {
   return endpoint.replace(/\/api\/videos\/tus\/?$/, '');
 }
 
+/** What a custom `fileReader` uploads (a Takeout zip entry): the name, size and date the upload is fingerprinted with. */
+export interface UploadInput {
+  name: string;
+  size: number;
+  type: string;
+  lastModified: number;
+}
+
 export interface ResilientUploadOptions {
-  file: File;
+  /** A File, or with `fileReader` any input that reader opens (a Takeout zip entry). */
+  file: File | UploadInput;
   /** The API TUS proxy endpoint (…/api/videos/tus). */
   endpoint: string;
   videoId: string;
@@ -286,6 +295,8 @@ export interface ResilientUploadOptions {
   onSuccess?: () => void;
   onError?: (error: Error) => void;
   retryDelays?: number[];
+  /** Reads the bytes instead of tus's own File reader (lib/youtube-import/zip-entry-reader.ts streams a zip entry). */
+  fileReader?: tus.FileReader;
   /** Test seams. */
   httpStack?: tus.HttpStack;
   urlStorage?: tus.UrlStorage;
@@ -365,14 +376,15 @@ export class ResilientUpload {
 
   private build(): tus.Upload {
     const { file, endpoint, videoId } = this.opts;
-    return new tus.Upload(file, {
+    return new tus.Upload(file as File, {
       endpoint,
       uploadUrl: this.uploadUrl ?? null,
       chunkSize: chunkSizeOverride() ?? this.opts.chunkSize ?? DEFAULT_TUS_CHUNK_SIZE,
       retryDelays: this.opts.retryDelays ?? jitteredRetryDelays(),
       storeFingerprintForResuming: true,
       removeFingerprintOnSuccess: true,
-      fingerprint: async (f: File) => uploadFingerprint(f, videoId),
+      fingerprint: async () => uploadFingerprint(file, videoId),
+      ...(this.opts.fileReader ? { fileReader: this.opts.fileReader } : {}),
       ...(this.opts.urlStorage ? { urlStorage: this.opts.urlStorage } : {}),
       httpStack: new ResilientHttpStack(
         this.opts.httpStack,

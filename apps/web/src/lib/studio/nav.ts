@@ -73,6 +73,8 @@ export const STUDIO_NAV: readonly StudioNavItem[] = [
       { id: 'videos', requires: ['video.view_private'] },
       // Live streams (either provider, D3); a stream's Go live page needs live.manage
       { id: 'live', requires: ['live.manage', 'live.moderate'], feature: 'live' },
+      // Move from YouTube (wiki AUN-YT-IMPORT): whoever can upload to the channel
+      { id: 'youtube', requires: ['video.upload'] },
       { id: 'posts', requires: ['post.manage'] },
     ],
   },

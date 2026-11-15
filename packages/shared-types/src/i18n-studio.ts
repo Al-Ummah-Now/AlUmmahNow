@@ -1,5 +1,6 @@
 /** Creator Studio strings (docs/specs/CREATOR-STUDIO.md). */
 import { SOCIAL_STUDIO_AR, SOCIAL_STUDIO_EN } from './i18n-social';
+import { YT_IMPORT_AR, YT_IMPORT_EN } from './i18n-youtube-import';
 
 /** The Studio duration filter's bounds in minutes (api-videos search: under 4, 4–20, over 20). */
 export const DURATION_FILTER_MINUTES = { medium: 4, long: 20 } as const;
@@ -28,6 +29,7 @@ export const STUDIO_EN = {
   tabs: {
     videos: 'Videos',
     live: 'Live',
+    youtube: 'Move from YouTube',
     posts: 'Posts',
     profile: 'Profile',
     layout: 'Layout',
@@ -534,6 +536,7 @@ export const STUDIO_EN = {
       loadFailed: 'Could not load this stream.',
     },
   },
+  youtube: YT_IMPORT_EN,
   signIn: {
     title: 'Sign in to use Studio',
     body: 'You\'ll come back to this page after signing in.',
@@ -566,6 +569,7 @@ export const STUDIO_AR: StudioTranslations = {
   tabs: {
     videos: 'المرئيات',
     live: 'البث المباشر',
+    youtube: 'الانتقال من يوتيوب',
     posts: 'المنشورات',
     profile: 'الملف الشخصي',
     layout: 'التخطيط',
@@ -1072,6 +1076,7 @@ export const STUDIO_AR: StudioTranslations = {
       loadFailed: 'تعذّر تحميل هذا البث.',
     },
   },
+  youtube: YT_IMPORT_AR,
   signIn: {
     title: 'سجّل الدخول لاستخدام الاستوديو',
     body: 'ستعود إلى هذه الصفحة بعد تسجيل الدخول.',

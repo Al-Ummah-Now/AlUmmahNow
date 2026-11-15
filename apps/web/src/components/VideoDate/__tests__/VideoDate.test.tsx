@@ -76,4 +76,24 @@ describe('views and the watch page line', () => {
     expect(document.getElementById('tip')?.textContent).toBe(summary.getAttribute('data-tip'));
     expect(screen.getByTestId('watch-published')).toHaveTextContent(/^١٬٢٣٤ مشاهدة • نُشر في /);
   });
+
+  it('a video moved from YouTube says when it was first published there (en and ar)', () => {
+    mockLang = 'en';
+    const imported = { dateCreated: dayAgo, importedFrom: { platform: 'youtube', publishedAt: '2019-03-02T08:00:00Z' } };
+    const { unmount } = render(<details><WatchMetaSummary video={imported} views={5} lang="en" describedById="tip" /><WatchMetaDetail video={imported} views={5} lang="en" /></details>);
+    expect(screen.getByTestId('watch-origin-short')).toHaveTextContent('Originally on YouTube');
+    expect(screen.getByTestId('watch-origin')).toHaveTextContent('Originally published on YouTube on March 2, 2019');
+    expect(document.querySelector('summary')!.getAttribute('data-tip')).toContain('Originally published on YouTube on');
+    unmount();
+    mockLang = 'ar';
+    render(<details><WatchMetaSummary video={imported} views={5} lang="ar" describedById="tip" /><WatchMetaDetail video={imported} views={5} lang="ar" /></details>);
+    expect(screen.getByTestId('watch-origin')).toHaveTextContent(/^نُشر أول مرة على يوتيوب في /);
+  });
+
+  it('says nothing for videos uploaded here', () => {
+    mockLang = 'en';
+    render(<details><WatchMetaSummary video={{ dateCreated: dayAgo }} views={5} lang="en" describedById="tip" /><WatchMetaDetail video={{ dateCreated: dayAgo, importedFrom: { platform: 'youtube', publishedAt: 'not a date' } }} views={5} lang="en" /></details>);
+    expect(screen.queryByTestId('watch-origin')).toBeNull();
+    expect(screen.queryByTestId('watch-origin-short')).toBeNull();
+  });
 });

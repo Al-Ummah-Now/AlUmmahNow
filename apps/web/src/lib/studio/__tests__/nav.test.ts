@@ -17,9 +17,9 @@ describe('navigation per role', () => {
   });
 
   it.each<[StudioRole, string[]]>([
-    ['owner', ['videos', 'live', 'posts']],
-    ['admin', ['videos', 'live', 'posts']],
-    ['editor', ['videos', 'posts']],
+    ['owner', ['videos', 'live', 'youtube', 'posts']],
+    ['admin', ['videos', 'live', 'youtube', 'posts']],
+    ['editor', ['videos', 'youtube', 'posts']],
     ['moderator', ['live']],
   ])('%s sees exactly its Content tabs', (role, expected) => {
     expect(tabs(role, 'content')).toEqual(expected);
@@ -56,6 +56,8 @@ describe('checkPath', () => {
     ['owner', ['content', 'videos'], 'ok'],
     ['editor', ['content', 'live'], 'forbidden'],
     ['owner', ['content', 'live'], 'ok'],
+    ['editor', ['content', 'youtube'], 'ok'],
+    ['moderator', ['content', 'youtube'], 'forbidden'],
     ['moderator', ['content', 'live'], 'ok'],
     ['admin', ['content', 'live', 's1'], 'ok'],
     ['moderator', ['content', 'live', 's1'], 'forbidden'],

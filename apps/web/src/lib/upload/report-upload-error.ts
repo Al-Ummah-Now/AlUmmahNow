@@ -25,8 +25,8 @@ export interface UploadErrorContext {
   attempt?: number;
   /** False when the UI does not show this failure (background); default true */
   shown?: boolean;
-  /** single upload page or batch */
-  flow?: 'single' | 'batch';
+  /** single upload page, batch, or Studio → Move from YouTube */
+  flow?: 'single' | 'batch' | 'youtube-import';
 }
 
 /** HTTP status of a failed request inside a tus-js-client error (DetailedError.originalResponse). */

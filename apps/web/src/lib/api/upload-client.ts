@@ -12,7 +12,7 @@
  * bytes already went straight to the API's TUS endpoint; now the steps around
  * them do too. Same request bodies and response shapes as the old actions.
  */
-import type { BatchUploadInitiateResponse, VideoScheduleResponse } from '@al-ummah/shared-types';
+import type { BatchUploadInitiateResponse, VideoScheduleResponse, YoutubeImportInitiate } from '@al-ummah/shared-types';
 import { fetchClientAuthInfo } from '@/lib/auth/client-token';
 import { getApiUrl } from '@/lib/runtime-config';
 import { logger } from '@/lib/logger-client';
@@ -109,6 +109,8 @@ export interface InitiateMetadata {
   thumbnail?: { type: 'auto' | 'custom'; data?: string; position?: number; filename?: string; video?: { width: number; height: number } };
   /** Same file again → same unfinished video (lib/upload/fingerprint.ts) */
   fingerprint?: UploadFingerprint;
+  /** Move from YouTube: the import item this upload is for (the server takes its metadata from the item) */
+  youtubeImport?: YoutubeImportInitiate;
 }
 
 export interface InitiateResult {

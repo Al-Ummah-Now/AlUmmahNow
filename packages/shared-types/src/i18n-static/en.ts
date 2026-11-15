@@ -521,6 +521,8 @@ export const EN_TRANSLATIONS: AppTranslations = {
       ended: 'Ended {date}',
       scheduled: 'Scheduled for {date}',
       liveNow: 'Live now',
+      fromYoutube: 'Originally published on YouTube on {date}',
+      fromYoutubeShort: 'Originally on YouTube',
     },
     videoSingular: "Video",
     uploadVideo: 'Upload Video',
