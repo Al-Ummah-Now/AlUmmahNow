@@ -36,6 +36,7 @@ const item: NotificationItem = {
   id: 'n1',
   notificationKey: 'youtubeImportFinished',
   notificationType: 'upload',
+  category: 'uploads',
   params,
   actionUrl: '/studio/c1/content/youtube?import=imp1',
   isRead: false,

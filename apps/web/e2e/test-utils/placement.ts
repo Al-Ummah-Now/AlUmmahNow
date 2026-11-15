@@ -236,6 +236,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/release/theatre.player.spec.ts': { placement: 'local', reason: 'theatre layout on landscape video' },
   'apps/web/e2e/release/up-next-series.player.spec.ts': { placement: 'local', reason: 'series order from the recommendations index over its own uploads; fake Bunny HLS plays locally' },
   'apps/web/e2e/release/upload-channel.spec.ts': { placement: 'local', reason: 'upload page channel picker/switch decides channelId' },
+  'apps/web/e2e/release/youtube-import.spec.ts': { placement: 'local', reason: 'Move from YouTube through the stack\'s fake Google: refused consent, connect, Takeout zip match, import; titles, dates, visibility, schedule, thumbnail, captions, playlist via the API' },
   'apps/web/e2e/release/r2-only-upload.player.spec.ts': { placement: 'local', reason: 'R2-only ingest: own TUS target, R2 transcode events (stack fake pipeline), ready + published, plays from the media host' },
   'apps/web/e2e/release/r2-backfill.player.spec.ts': { placement: 'local', reason: 'R2 backfill of its own Bunny-only upload: estimate, cap, start, ranged copy from the fake Bunny CDN, fake transcode writes renditions, verify, R2 first plays from the media host, undo' },
   'apps/web/e2e/release/provider-fallback.player.spec.ts': { placement: 'local', reason: 'Bunny + R2 copies, R2 first; the fake media host goes down and the player moves to Bunny by itself (sources list), QoE names the fallback; R2 again when it is up' },
