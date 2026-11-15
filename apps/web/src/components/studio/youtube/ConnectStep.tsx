@@ -91,7 +91,7 @@ export const ConnectStep = forwardRef<HTMLHeadingElement, Props>(function Connec
 
           <Button onClick={onConnect} disabled={connecting} className="yt-cta min-h-11 gap-2 px-5" data-testid="yt-connect-button">
             {connecting ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <YoutubeMark className="h-4 w-4" />}
-            {connecting ? text.connecting : text.button}
+            {connecting ? text.connecting : error ? text.again : text.button}
           </Button>
         </div>
 

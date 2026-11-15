@@ -21,7 +21,7 @@ import { zipEntryFileReader } from './zip-entry-reader';
 export const IMPORT_CONCURRENCY = 2;
 
 /** Refusal codes with their own message (t.studio.youtube.progress.errors). */
-const KNOWN_CODES = new Set(['upload_limit', 'uploads_by_invitation', 'youtube_item_taken']);
+const KNOWN_CODES = new Set(['upload_limit', 'uploads_by_invitation', 'youtube_item_taken', 'youtube_import_not_found']);
 
 export function initiateErrorCode(result: Pick<ApiResult<unknown>, 'code'>): string {
   return result.code && KNOWN_CODES.has(result.code) ? result.code : 'generic';
@@ -32,6 +32,8 @@ export interface ImportUploaderOptions {
   channelId: string;
   takeout: TakeoutSet;
   onState: (itemId: string, state: LiveState | null) => void;
+  /** The server's import moved on without this page (another tab, a cancel): read it again */
+  onServerChanged?: () => void;
   /** Test seams */
   deps?: Partial<UploaderDeps>;
 }
@@ -132,6 +134,13 @@ export class ImportUploader {
     );
     if (!initiated.success || !initiated.result) {
       const code = initiateErrorCode(initiated);
+      if (code === 'youtube_item_taken') {
+        // Already processing or imported (another tab, an earlier try): the server's state takes over
+        onState(item.id, { phase: 'processing' });
+        this.opts.onServerChanged?.();
+        return;
+      }
+      if (code === 'youtube_import_not_found') this.opts.onServerChanged?.();
       if (code === 'generic') logger.error('[YtImport] Initiate failed', { importId, itemId: item.id, status: initiated.status });
       this.fail(item, code, Object.assign(new Error(initiated.error || 'initiate failed'), { status: initiated.status, serverRef: initiated.serverRef }), 'initiate');
       return;

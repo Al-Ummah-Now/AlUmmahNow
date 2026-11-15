@@ -8,6 +8,7 @@ import { item } from './fixtures';
 import {
   computeMatches,
   connectErrorKey,
+  finishErrorKey,
   filterItems,
   formatDuration,
   freeFiles,
@@ -57,6 +58,16 @@ describe('where the wizard opens', () => {
     expect(connectErrorKey('youtube_no_channel')).toBe('youtube_no_channel');
     expect(connectErrorKey('youtube_import_off')).toBe('youtube_import_off');
     expect(connectErrorKey('<script>')).toBe('failed');
+  });
+
+  it('reads oauth/finish refusals: 403 another account, other 4xx expired, the rest a failure', () => {
+    expect(finishErrorKey(403)).toBe('connect_other_account');
+    expect(finishErrorKey(400)).toBe('connect_expired');
+    expect(finishErrorKey(404)).toBe('connect_expired');
+    expect(finishErrorKey(410)).toBe('connect_expired');
+    expect(finishErrorKey(401)).toBeNull();
+    expect(finishErrorKey(500)).toBeNull();
+    expect(finishErrorKey(undefined)).toBeNull();
   });
 });
 

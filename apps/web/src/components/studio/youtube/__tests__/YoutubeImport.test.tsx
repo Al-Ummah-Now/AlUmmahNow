@@ -1,6 +1,6 @@
 /**
  * Studio → Move from YouTube (wiki AUN-YT-IMPORT): the feature-off state,
- * Google's ?error= codes, choosing videos (the selection payload), and how the
+ * Google's ?error= codes, finishing ?connect=<state>, choosing videos (the selection payload), and how the
  * Import step shows each item's state.
  */
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -14,6 +14,7 @@ const getImportStatus = jest.fn();
 const getImport = jest.fn();
 const saveSelection = jest.fn();
 const startOAuth = jest.fn();
+const finishOAuth = jest.fn();
 
 jest.mock('@/hooks/useLanguage', () => ({
   useLanguage: () => ({ t: { studio: mockStudio, confirmDialog: { typeToConfirm: 'Type {value}' }, common: { cancel: 'Cancel' } }, lang: 'en', locale: 'en', isRTL: false }),
@@ -26,9 +27,9 @@ jest.mock('@/lib/youtube-import/api', () => {
     getImport: (...a: unknown[]) => getImport(...a),
     saveSelection: (...a: unknown[]) => saveSelection(...a),
     startOAuth: (...a: unknown[]) => startOAuth(...a),
+    finishOAuth: (...a: unknown[]) => finishOAuth(...a),
   };
 });
-jest.mock('next/navigation', () => ({ useRouter: () => ({ replace: jest.fn(), push: jest.fn() }) }));
 jest.mock('@/components/common/AppLink', () => ({ __esModule: true, default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => <a href={href} {...rest}>{children}</a> }));
 jest.mock('@/lib/logger-client', () => ({ logger: { error: jest.fn(), warn: jest.fn(), debug: jest.fn(), info: jest.fn() } }));
 jest.mock('@/lib/errors/reporter', () => ({ reportError: jest.fn(() => 'ERR-TEST-0001') }));
@@ -67,6 +68,51 @@ describe('YoutubeImportTab', () => {
     fireEvent.click(screen.getByTestId('yt-connect-button'));
     expect(startOAuth).toHaveBeenCalledWith('c1', true, 'en');
     expect(screen.getByTestId('yt-connect-button')).toHaveTextContent(text.connect.connecting);
+  });
+
+  it('finishes ?connect=<state> with the signed-in call, takes the state off the URL, and opens that import', async () => {
+    window.history.replaceState(null, '', '/en/studio/c1/content/youtube?connect=st-123');
+    getImportStatus.mockResolvedValue({ ready: true, captionsAvailable: true, import: null });
+    finishOAuth.mockResolvedValue(imp('listing'));
+    getImport.mockResolvedValue({ import: imp('listing'), items: [], playlists: [] });
+    render(<YoutubeImportTab locale="en" channelId="c1" channelHandle={null} />);
+    // Gone from the address bar before any call, so a reload never sends the state again
+    expect(window.location.search).toBe('');
+    expect(await screen.findByTestId('yt-connect-listing')).toBeInTheDocument();
+    expect(finishOAuth).toHaveBeenCalledTimes(1);
+    expect(finishOAuth).toHaveBeenCalledWith('st-123');
+    expect(getImport).toHaveBeenCalledWith('imp1', expect.anything());
+  });
+
+  it.each([
+    [403, 'youtube_connect_other_account', text.errors.connect_other_account],
+    [410, 'youtube_state_expired', text.errors.connect_expired],
+  ])('a %i from finish shows a friendly message and Connect again', async (status, code, message) => {
+    const { YtImportApiError } = jest.requireActual('@/lib/youtube-import/api');
+    window.history.replaceState(null, '', '/en/studio/c1/content/youtube?connect=st-old');
+    getImportStatus.mockResolvedValue({ ready: true, captionsAvailable: true, import: null });
+    finishOAuth.mockRejectedValue(new YtImportApiError(status, code));
+    startOAuth.mockReturnValue(new Promise(() => undefined));
+    render(<YoutubeImportTab locale="en" channelId="c1" channelHandle={null} />);
+    expect(await screen.findByTestId('yt-connect-error')).toHaveTextContent(message);
+    expect(screen.getByTestId('yt-connect-error')).not.toHaveTextContent('ERR-');
+    expect(window.location.search).toBe('');
+    expect(getImport).not.toHaveBeenCalled();
+    const again = screen.getByTestId('yt-connect-button');
+    expect(again).toHaveTextContent(text.connect.again);
+    fireEvent.click(again);
+    expect(startOAuth).toHaveBeenCalledWith('c1', false, 'en');
+  });
+
+  it('a server failure at finish is reported and shown with its reference', async () => {
+    const { YtImportApiError } = jest.requireActual('@/lib/youtube-import/api');
+    window.history.replaceState(null, '', '/en/studio/c1/content/youtube?connect=st-1');
+    getImportStatus.mockResolvedValue({ ready: true, captionsAvailable: true, import: null });
+    finishOAuth.mockRejectedValue(new YtImportApiError(500, 'internal', 'srv-1'));
+    render(<YoutubeImportTab locale="en" channelId="c1" channelHandle={null} />);
+    const error = await screen.findByTestId('yt-connect-error');
+    expect(error).toHaveTextContent(text.errors.failed.replace(/\.$/, ''));
+    expect(error).toHaveTextContent('ERR-TEST-0001');
   });
 
   it('chooses videos and a playlist, then saves the full selection', async () => {
