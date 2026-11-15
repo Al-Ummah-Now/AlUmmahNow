@@ -157,7 +157,7 @@ async function logs(script: string, since: Date, until: Date, search: string, ke
 		timeframe: { from: since.getTime(), to: until.getTime() },
 		view: 'events',
 		limit: 300,
-		parameters: { datasets: ['cloudflare-workers'], filters, filterCombination: 'and' },
+		parameters: { datasets: key === '$workers.scriptName' ? ['cloudflare-workers'] : [], filters, filterCombination: 'and' },
 	});
 	if (!r.ok) return p(`unavailable: ${errs(r)}`), p();
 	// warn/error only (these Workers log nothing else; invocation events and console.log are left out)
@@ -177,6 +177,24 @@ async function logs(script: string, since: Date, until: Date, search: string, ke
 	p();
 }
 
+async function discover(names: Names, since: Date, until: Date): Promise<void> {
+	p(`## Observability: where the container logs are`);
+	const timeframe = { from: since.getTime(), to: until.getTime() };
+	for (const key of ['$metadata.service', '$workers.scriptName', '$metadata.type', 'dataset']) {
+		const r = await post(`/accounts/${account}/workers/observability/telemetry/values`, { key, type: 'string', timeframe, limit: 200, datasets: [] });
+		const vals = (r.body?.result ?? []).map((v: any) => String(v.value)).filter((v: string) => key !== '$metadata.service' && key !== '$workers.scriptName' ? true : v.includes(names.media.replace(/-(stage|qa)$/, '')));
+		p(`- ${key}: ${r.ok ? JSON.stringify(vals).slice(0, 1500) : errs(r)}`);
+	}
+	const k = await post(`/accounts/${account}/workers/observability/telemetry/keys`, { timeframe, limit: 1000, datasets: [] });
+	const keys = (k.body?.result ?? []).map((x: any) => String(x.key)).filter((x: string) => /contain|instance|exit|stream|service|dataset|app/i.test(x));
+	p(`- keys: ${k.ok ? JSON.stringify(keys).slice(0, 2000) : errs(k)}`);
+	// Container output, wherever it is: every event whose service names the transcoder application
+	for (const value of [`${names.media}-transcoder`, `${names.media}-transcoder-stage`]) {
+		await logs(value, since, until, '', '$metadata.service', true);
+	}
+	p();
+}
+
 async function main(): Promise<void> {
 	if (!token || !account) throw new Error('CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are required');
 	const env = arg('env', 'production') as EnvName;
@@ -192,10 +210,8 @@ async function main(): Promise<void> {
 	await queues(names, since, until);
 	await containers(names);
 	for (const s of [names.media, names.videos, names.admin]) await logs(s, since, until, search);
-	// The transcoder container's own output (stdout/stderr, exits), every level
-	const app = `${names.media}-transcoder`;
-	await logs(app, since, until, search, '$metadata.service', true);
-	await logs(app, since, until, search, '$containers.application', true);
+	// Where the transcoder container's own output (stdout/stderr, exits) is: services and keys that mention it
+	await discover(names, since, until);
 	process.stdout.write(out.join('\n') + '\n');
 }
 
