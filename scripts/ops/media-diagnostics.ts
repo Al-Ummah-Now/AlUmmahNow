@@ -59,7 +59,10 @@ async function post(path: string, payload: unknown): Promise<{ ok: boolean; stat
 }
 
 function errs(r: { status: number; body: any }): string {
-	return `HTTP ${r.status} ${JSON.stringify(r.body?.errors ?? r.body ?? null).slice(0, 300)}`;
+	const b = r.body ?? {};
+	const detail = b.errors?.length ? b.errors : b.messages?.length ? b.messages : b.error ?? b.message ?? b;
+	const text = JSON.stringify(detail);
+	return `HTTP ${r.status} ${text.length > 900 ? text.slice(-900) : text}`;
 }
 
 /**
@@ -147,10 +150,7 @@ async function containers(names: Names): Promise<void> {
 
 async function logs(script: string, since: Date, until: Date, search: string): Promise<void> {
 	p(`## Logs: ${script}`);
-	const filters: unknown[] = [
-		{ key: '$workers.scriptName', operation: 'eq', type: 'string', value: script },
-		{ key: '$metadata.level', operation: 'in', type: 'string', value: ['warn', 'error'] },
-	];
+	const filters: unknown[] = [{ key: '$workers.scriptName', operation: 'eq', type: 'string', value: script }];
 	if (search) filters.push({ key: '$metadata.message', operation: 'includes', type: 'string', value: search });
 	const r = await post(`/accounts/${account}/workers/observability/telemetry/query`, {
 		queryId: `media-diagnostics-${script}`,
@@ -160,7 +160,8 @@ async function logs(script: string, since: Date, until: Date, search: string): P
 		parameters: { datasets: ['cloudflare-workers'], filters, filterCombination: 'and' },
 	});
 	if (!r.ok) return p(`unavailable: ${errs(r)}`), p();
-	const events = r.body.result?.events?.events ?? [];
+	// warn/error only (these Workers log nothing else; invocation events and console.log are left out)
+	const events = (r.body.result?.events?.events ?? []).filter((e: any) => /warn|error/i.test(String(e.$metadata?.level ?? e.source?.level ?? '')));
 	p(`${events.length} events`);
 	const rows = events
 		.map((e: any) => {
