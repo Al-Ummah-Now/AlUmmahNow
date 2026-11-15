@@ -50,7 +50,7 @@ Implement a comprehensive video categorization system with:
 1. **Category Definition**
    - Define 15 Islamic-specific categories
    - Support bilingual category names (English/Arabic)
-   - Categories must be immutable once defined (no dynamic creation)
+   - Superseded 2026-11-15 (owner: "can you add categories in admin?"): categories are admin-managed in Videos admin › Categories (add, rename en + ar, reorder, retire, restore). A category's value (slug) is immutable once created, so videos keep working; a retired category is hidden from pickers, Explore, search filters and AI suggestions, and videos that have it keep it and its label. See [Admin-managed categories](#admin-managed-categories-2026-11-15).
 
 2. **Upload Integration**
    - Category dropdown selector in upload form
@@ -868,3 +868,13 @@ The Video Category Selection feature will significantly improve content discover
 2. Assign developers
 3. Begin Phase 1 implementation
 4. Schedule deployment for next sprint
+
+## Admin-managed categories (2026-11-15)
+
+- **Store:** search D1 table `video_categories` (api-videos migration `0050_video_categories.sql`), seeded from `VIDEO_CATEGORIES` in `packages/shared-types/src/upload-defaults.ts`, with the AI hint per category.
+- **Reads:** `packages/shared-types/src/video-categories.ts`. Each worker loads the list into an isolate cache for 60 s (`loadVideoCategories`) and uses the sync helpers (`getActiveVideoCategories`, `findVideoCategory`, `videoCategoryLabel`, `categoryAssignability`). On a D1 error or an empty table the built-in list is used. api-videos refreshes it in a middleware on `/api/*` and `/internal/*`.
+- **Public list:** `GET /api/categories` (api-videos), every category with `retired`, edge-cached for 60 s. The web app reads it through `useVideoCategories()` (built-in list until it answers).
+- **Admin:** admin-api `/api/video-categories` (GET list with video counts, POST add, PATCH rename/hint/retire/restore, PUT `/order`, GET `/history`). Changes need `videos:categories` (admins and super admins) and are audited in `site_settings_log` (`content:category:<value>`). After a change admin-api reloads its list and calls api-videos `POST /internal/categories/invalidate`; other isolates and colos follow within a minute.
+- **Writes:** upload, batch upload, video edit, bulk edit, upload templates and admin "set category" accept only active categories, or the retired category the item already has (`400 unknown_category` / `retired_category`).
+- **AI:** the categorize prompt lists the active categories with their hints; answers map onto active ones only; the result cache key includes the active set once it differs from the built-in one.
+- **Rename and search:** a rename queues `MessageType.CategoryRelabel` (processor `handlers/category-relabel.ts`): it swaps the old labels for the new ones at the end of each matching search row's index text, 200 rows per delivery (retry, DLQ).
