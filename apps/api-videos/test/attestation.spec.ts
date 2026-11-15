@@ -205,7 +205,7 @@ describe('App Attest assertion', () => {
 async function serviceAccount() {
 	const pair = (await crypto.subtle.generateKey({ name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' }, true, ['sign', 'verify'])) as CryptoKeyPair;
 	const pkcs8 = new Uint8Array(await crypto.subtle.exportKey('pkcs8', pair.privateKey));
-	return JSON.stringify({ client_email: 'integrity@project.iam.gserviceaccount.com', private_key: `-----BEGIN PRIVATE KEY-----\n${b64(pkcs8)}\n-----END PRIVATE KEY-----\n` });
+	return JSON.stringify({ client_email: 'integrity@project.iam.gserviceaccount.com', private_key: `-----BEGIN PRIVATE KEY-----\n${b64(pkcs8)}\n-----END PRIVATE KEY-----\n` }); // secret-scan:allow (a key generated at test time)
 }
 
 function google(payload: (hash: string) => unknown) {
@@ -333,7 +333,7 @@ describe('attestation endpoints', () => {
 		settings.android.playIntegrity = { enabled: true, cloudProjectNumber: '123456789012' };
 		const decode = google((h) => verdict(h, { requestDetails: { requestPackageName: 'net.alummahnow.studio', requestHash: h, timestampMillis: String(Date.now()) } }));
 		const admin = adminApi(settings);
-		globalThis.fetch = (async (url: string, init?: RequestInit) => (url.startsWith('https://admin.api.test') ? admin(url) : decode.fetcher(url, init))) as typeof fetch;
+		globalThis.fetch = (async (url: string, init?: RequestInit) => (new URL(url).host === 'admin.api.test' ? admin(url) : decode.fetcher(url, init))) as typeof fetch;
 		const { call, HUMAN_VERIFIED } = server(settings, { PLAY_INTEGRITY_SERVICE_ACCOUNT: await serviceAccount() });
 		const config = (await (await call('/api/apps/attestation/config')).json()) as { result: { android: unknown } };
 		assert.deepEqual(config.result.android, { enabled: true, cloudProjectNumber: '123456789012' });
