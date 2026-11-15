@@ -17,6 +17,8 @@ import { HeaderBrand, HeaderEnvBadge, HeaderLangButton, HeaderMenuButton, Header
 /** React's spelling → the builders': void tags, apostrophes; app-only attributes dropped. */
 const norm = (html: string) =>
   html
+    // React 19 emits a preload hint for a high-priority image; in a page it goes to <head>
+    .replace(/^<link rel="preload" as="image"[^>]*>/, '')
     .replace(/\s(data-testid|srcset|srcSet|loading|fetchpriority|fetchPriority|decoding)="[^"]*"/g, '')
     .replace(/\s*\/>/g, '>')
     .replace(/&#x27;/g, '&#39;')
