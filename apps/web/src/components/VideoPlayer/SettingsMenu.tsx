@@ -39,6 +39,8 @@ import {
   type QualityLevelLike,
   type TextTrackLike,
 } from '@/lib/video/settings-model';
+import type { AudioTrackView } from '@al-ummah/shared-types';
+import { audioTrackLabel, matchTracks, writeAudioPreference, type PlayerAudioTrack } from '@/lib/video/audio-tracks';
 
 interface Levels extends ArrayLike<QualityLevelLike> {
   selectedIndex: number;
@@ -97,9 +99,11 @@ export interface SettingsMenuProps {
   player: Player;
   lang: SupportedLanguage;
   onShowShortcuts: () => void;
+  /** The API's audio tracks (wiki AUN-MULTI-AUDIO), in the package master's order: labels and the saved choice */
+  audioTracks?: AudioTrackView[];
 }
 
-export function SettingsMenu({ player, lang, onShowShortcuts }: SettingsMenuProps) {
+export function SettingsMenu({ player, lang, onShowShortcuts, audioTracks }: SettingsMenuProps) {
   const p = player as unknown as PlayerApi;
   const { t, dir } = useVideoPlayerI18n(lang);
   const [open, setOpen] = useState(false);
@@ -259,8 +263,19 @@ export function SettingsMenu({ player, lang, onShowShortcuts }: SettingsMenuProp
   const text = p.textTracks?.();
   const captions = captionOptions(text, t.chrome.off);
   const captionId = currentCaptionId(text);
-  const audio = audioOptions(p.audioTracks?.());
-  const audioId = currentAudioId(p.audioTracks?.());
+  const playerAudio = p.audioTracks?.();
+  const audioMeta = playerAudio ? matchTracks(playerAudio, audioTracks) : [];
+  const audio = audioOptions(playerAudio).map((o, i) => {
+    const meta = audioMeta[i] ?? null;
+    return { ...o, label: audioTrackLabel(meta, playerAudio![i] as PlayerAudioTrack, (kind) => t.chrome.audioKinds[kind], i), ...(meta ? { lang: meta.language } : {}) };
+  });
+  const audioId = currentAudioId(playerAudio);
+  const chooseAudio = (id: string) => {
+    selectAudio(playerAudio, id);
+    // Remembered for the next video with a track of this language and kind
+    const meta = audioMeta[Number(id)];
+    if (meta) writeAudioPreference({ language: meta.language, kind: meta.kind });
+  };
   const captionStyle = p.getChild('textTrackSettings') ?? p.getChild('TextTrackSettings');
 
   const rows = rootRows({
@@ -301,7 +316,7 @@ export function SettingsMenu({ player, lang, onShowShortcuts }: SettingsMenuProp
             onClick={() => choose(() => apply(o.id), panel)}
           >
             <span className="vjs-fanous-mi-icon vjs-fanous-mi-check" aria-hidden="true">{o.id === current && <Check />}</span>
-            <span className="vjs-fanous-mi-label">{o.label}</span>
+            <span className="vjs-fanous-mi-label" {...(o.lang ? { lang: o.lang, dir: 'auto' } : {})}>{o.label}</span>
           </button>
         ))}
       </div>
@@ -385,7 +400,7 @@ export function SettingsMenu({ player, lang, onShowShortcuts }: SettingsMenuProp
         {panel === 'quality' && sub(t.controls.quality, qualities, qualityId, (id) => selectQuality(levels, id))}
         {panel === 'speed' && sub(t.controls.speed, speedOptions(rates, t.speed.normal), String(p.playbackRate()), (id) => p.playbackRate(Number(id)))}
         {panel === 'captions' && sub(t.controls.captions, captions, captionId, (id) => selectCaption(text, id), captionStyle?.open ? { label: t.chrome.captionStyle, run: () => captionStyle.open?.() } : undefined)}
-        {panel === 'audio' && sub(t.chrome.audioTrack, audio, audioId, (id) => selectAudio(p.audioTracks?.(), id))}
+        {panel === 'audio' && sub(t.chrome.audioTrack, audio, audioId, chooseAudio)}
       </div>
     </div>,
     host,

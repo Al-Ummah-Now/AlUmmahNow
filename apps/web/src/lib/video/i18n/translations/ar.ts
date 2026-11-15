@@ -129,6 +129,7 @@ export const AR_TRANSLATIONS: VideoPlayerTranslations = {
     off: 'إيقاف',
     back: 'رجوع',
     audioTrack: 'المسار الصوتي',
+    audioKinds: { original: 'الأصلي', dub: 'مدبلج', commentary: 'تعليق', description: 'وصف صوتي' },
     shortcuts: 'اختصارات لوحة المفاتيح',
     captionStyle: 'نمط الترجمة',
     live: 'مباشر',

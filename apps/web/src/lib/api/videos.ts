@@ -1,5 +1,6 @@
 'use server';
 
+import { audioTracksOf } from '@/lib/video/audio-tracks';
 import { VideoObject, VideoInfo } from "@/interfaces";
 import { parseLimitRefusal, type LimitRefusal } from '@/lib/studio/limits';
 import { loadRelated, readLastGoodShelf, RELATED_LIMIT, saveLastGoodShelf, toVideoInfo } from "@/lib/video/related";
@@ -1014,6 +1015,7 @@ export async function fetchVideoById(vid: string): Promise<PlayerOptions | undef
             delivery: (video as { delivery?: PlayerOptions['delivery'] }).delivery,
             sources: playbackSourcesOf((video as { sources?: unknown }).sources),
             hasChapters: (video as { hasChapters?: boolean }).hasChapters === true,
+            ...(audioTracksOf((video as { audioTracks?: unknown }).audioTracks).length ? { audioTracks: audioTracksOf((video as { audioTracks?: unknown }).audioTracks) } : {}),
         };
 
         logger.debug('[fetchVideoById] Mapped to PlayerOptions:', playerOptions);

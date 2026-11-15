@@ -46,6 +46,8 @@
 import { logger } from '@/lib/logger-client';
 
 import { useEffect, useLayoutEffect, useRef, useState, useCallback, useSyncExternalStore } from 'react';
+import type { AudioTrackView } from '@al-ummah/shared-types';
+import { useAudioTrackChoice } from '@/hooks/useAudioTrackChoice';
 import { createVideoPlayer, disposeVideoPlayer } from '@/lib/video/videojs-setup';
 import { isSameMediaUrl } from '@/lib/video/media-url';
 import { isLivePlayback } from '@/lib/video/live-state';
@@ -152,6 +154,8 @@ export interface CustomVideoPlayerProps {
   autoplayedView?: boolean;
   /** Inside a playlist: start at 0 and offer the saved position ("Resume at") instead of seeking */
   offerResume?: boolean;
+  /** The video's audio tracks (VideoView.audioTracks; wiki AUN-MULTI-AUDIO): menu labels and the first track */
+  audioTracks?: AudioTrackView[];
 }
 
 /**
@@ -184,6 +188,7 @@ export default function CustomVideoPlayer({
   autoplayIntent = false,
   autoplayedView = false,
   offerResume = false,
+  audioTracks,
 }: CustomVideoPlayerProps) {
   const { t, dir } = useVideoPlayerI18n(lang);
   const playerRef = useRef<Player | null>(null);
@@ -204,6 +209,7 @@ export default function CustomVideoPlayer({
   onPlaybackErrorRef.current = onPlaybackError;
   const addedTextTracksRef = useRef<Array<{ track: unknown }>>([]);
   const [playerReady, setPlayerReady] = useState(false);
+  useAudioTrackChoice(playerReady ? (playerRef.current as unknown as Parameters<typeof useAudioTrackChoice>[0]) : null, audioTracks, lang);
   const [currentError, setCurrentError] = useState<VideoError | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
   const [ended, setEnded] = useState(false);
@@ -1367,7 +1373,7 @@ export default function CustomVideoPlayer({
       </div>
 
       {playerReady && playerRef.current && (
-        <SettingsMenu player={playerRef.current} lang={lang} onShowShortcuts={() => setIsKeyboardHelpOpen(true)} />
+        <SettingsMenu player={playerRef.current} lang={lang} audioTracks={audioTracks} onShowShortcuts={() => setIsKeyboardHelpOpen(true)} />
       )}
       {playerReady && playerRef.current && <ProgressTooltip player={playerRef.current} dir={dir === 'rtl' ? 'rtl' : 'ltr'} />}
 

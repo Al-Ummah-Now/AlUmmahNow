@@ -47,6 +47,8 @@ export interface PlayerOptions {
   processingIssueKind?: 'encode_failed' | 'needs_reupload' | 'stalled';
   /** The video has chapters (the API's flag): the page holds the chapter bar's place while they load */
   hasChapters?: boolean;
+  /** Audio tracks of the package (VideoView.audioTracks; wiki AUN-MULTI-AUDIO) */
+  audioTracks?: import('@al-ummah/shared-types').AudioTrackView[];
 }
 
 /** True while the video cannot play yet (still uploading or processing at Bunny). */

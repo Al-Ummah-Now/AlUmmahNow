@@ -7,7 +7,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { REVIEW_REASON_CODES } from '@al-ummah/shared-types';
+import { AUDIO_TRACK_LANGUAGES, REVIEW_REASON_CODES } from '@al-ummah/shared-types';
 import { VideoPlayer } from '../../../videos/[id]/VideoPlayer';
 import { claimReview, decideReview, revealReviewItem, type ReviewDetailView, type ReviewFindingView } from '@/lib/api/review';
 import { useLanguage } from '@/i18n/I18nProvider';
@@ -50,9 +50,9 @@ export function ReviewWorkspace({ detail, media }: Props) {
   const transcript = findings.filter((f) => f.source === 'transcript');
   const metadata = findings.filter((f) => f.source === 'metadata');
 
-  const video = () => playerBox.current?.querySelector('video') ?? null;
+  const video = () => playerBox.current?.querySelector<HTMLMediaElement>('video, audio') ?? null;
   const seek = useCallback((ms: number | null) => {
-    const el = playerBox.current?.querySelector('video');
+    const el = playerBox.current?.querySelector<HTMLMediaElement>('video, audio');
     if (!el || ms === null) return;
     el.currentTime = ms / 1000;
     void el.play().catch(() => undefined);
@@ -69,7 +69,7 @@ export function ReviewWorkspace({ detail, media }: Props) {
       if (e.key !== 'n' && e.key !== 'N') return;
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) return;
-      const now = (playerBox.current?.querySelector('video')?.currentTime ?? 0) * 1000;
+      const now = (playerBox.current?.querySelector<HTMLMediaElement>('video, audio')?.currentTime ?? 0) * 1000;
       const next = timed.find((f) => (f.at_ms ?? 0) > now + 500) ?? timed[0];
       if (next) seek(next.at_ms);
     };
@@ -113,6 +113,16 @@ export function ReviewWorkspace({ detail, media }: Props) {
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h1 className="text-xl font-bold text-fg" dir="auto">{subject?.title || review.subject_id}</h1>
+              {review.subject_type === 'audio_track' && subject?.track && (
+                <p className="mt-1 text-sm text-fg-muted" data-testid="review-audio-track">
+                  <span className="me-2 rounded border border-border px-1.5 py-0.5 text-xs font-medium text-fg">{t('review.audioTrack')}</span>
+                  <bdi dir="auto">{subject.track.label}</bdi>
+                  {' · '}
+                  <span lang={subject.track.language}>{AUDIO_TRACK_LANGUAGES.find((l) => l.code === subject.track!.language)?.name ?? subject.track.language}</span>
+                  {' · '}
+                  {translateDynamic(t, 'review.audioKind', subject.track.kind)}
+                </p>
+              )}
               {review.subject_type === 'livestream' && (
                 <p className="mt-1 text-sm text-fg-muted" data-testid="review-live-recording">
                   <span className="me-2 rounded border border-border px-1.5 py-0.5 text-xs font-medium text-fg">{t('review.liveRecording')}</span>
@@ -128,7 +138,12 @@ export function ReviewWorkspace({ detail, media }: Props) {
               ))}
             </div>
           </div>
-          {playerShown ? (
+          {review.subject_type === 'audio_track' ? (
+            <div ref={playerBox} className="space-y-2">
+              <audio controls preload="metadata" src={`/api/review-audio/${encodeURIComponent(review.id)}`} className="w-full" aria-label={t('review.audioPlayer', { label: subject?.track?.label ?? '' })} data-testid="review-audio-player" />
+              <p className="text-sm text-fg-muted">{t('review.audioTrackHint')}</p>
+            </div>
+          ) : playerShown ? (
             <div ref={playerBox}>
               <VideoPlayer playUrl={media.playUrl} videoUrl={media.videoUrl} poster={null} title={subject?.title ?? review.subject_id} />
             </div>

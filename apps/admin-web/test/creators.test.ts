@@ -62,6 +62,7 @@ describe('tier effect (stated in every confirmation)', () => {
     assert.equal(tierEffect({ ...CREATOR, maxChannels: null }, tEn, 'en').endsWith('own any number of channels.'), true);
     // Caption minutes join the sentence only when the tier gives some
     assert.equal(tierEffect({ ...CREATOR, captionMinutesMonth: 600 }, tEn, 'en').endsWith('Caption minutes: 600 a month.'), true);
+    assert.equal(tierEffect({ ...CREATOR, audioTracksPerVideo: 3 }, tEn, 'en').endsWith('Audio tracks per video: 3.'), true);
     assert.equal(tierEffect(UNLIMITED, tEn, 'en'), 'They can upload and create channels with no limits.');
     assert.equal(tierEffect(null, tEn, 'en'), 'They will not be able to upload or create channels.');
     const arabic = tierEffect(CREATOR, tAr, 'ar');
@@ -76,13 +77,16 @@ describe('tier effect (stated in every confirmation)', () => {
 });
 
 describe('tier form validation (same bounds and rules as api-videos)', () => {
-  const base: TierFormValues = { id: 'gold', name: 'Gold', unlimited: false, perHour: 10, perDay: 100, maxConcurrent: 5, maxChannels: 2, captionMinutesMonth: 0 };
+  const base: TierFormValues = { id: 'gold', name: 'Gold', unlimited: false, perHour: 10, perDay: 100, maxConcurrent: 5, maxChannels: 2, captionMinutesMonth: 0, audioTracksPerVideo: 0 };
 
   it('accepts a valid tier and an unlimited one without limits', () => {
     assert.deepEqual(validateTierForm(base, { create: true }), {});
     assert.deepEqual(validateTierForm({ ...base, unlimited: true, perHour: NaN }), {});
     assert.deepEqual(validateTierForm({ ...base, maxChannels: null }), {}, 'empty channels = no limit');
     assert.deepEqual(validateTierForm({ ...base, captionMinutesMonth: -1 }).captionMinutesMonth?.key, 'creators.errorRange');
+    // Audio tracks per video (wiki AUN-MULTI-AUDIO MA9): 0 to 16
+    assert.deepEqual(validateTierForm({ ...base, audioTracksPerVideo: 17 }).audioTracksPerVideo?.key, 'creators.errorRange');
+    assert.equal(validateTierForm({ ...base, audioTracksPerVideo: 16 }).audioTracksPerVideo, undefined);
   });
 
   it('flags each field outside CREATOR_TIER_BOUNDS, a daily limit under the hourly one, and bad ids or names', () => {

@@ -4,6 +4,7 @@
  * signed CDN URL; the Organization @id is shared with www. The site's default description comes
  * from the root layout (D-SEO-6, the copy PR); nothing here sets one.
  */
+import { videoLanguages } from '@/lib/video/audio-tracks';
 import type { Metadata } from 'next';
 import type { EmbedVideo, PublicChapter } from '@/lib/embed/content';
 import { canonicalWatchUrl, embedUrl } from '@/lib/embed/snippets';
@@ -112,7 +113,8 @@ export function videoObjectLd(video: EmbedVideo, locale: string, origin: string,
     ...(video.contentUrl && !video.isUnlisted ? { contentUrl: video.contentUrl } : {}),
     embedUrl: embedUrl(origin, 'video', video.id),
     url: page,
-    inLanguage: lang,
+    // Every audio language of a multi-audio video (wiki AUN-MULTI-AUDIO), else the page's language
+    inLanguage: videoLanguages(video.audioTracks, lang),
     ...(typeof video.views === 'number'
       ? { interactionStatistic: { '@type': 'InteractionCounter', interactionType: { '@type': 'WatchAction' }, userInteractionCount: video.views } }
       : {}),

@@ -161,6 +161,8 @@ export interface VideoPlayerTranslations {
     off: string;
     back: string;
     audioTrack: string;
+    /** Audio track kinds in the audio menu (wiki AUN-MULTI-AUDIO) */
+    audioKinds: { original: string; dub: string; commentary: string; description: string };
     shortcuts: string;
     captionStyle: string;
     live: string;

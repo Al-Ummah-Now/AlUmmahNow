@@ -16,7 +16,7 @@ import {
 import type { Locale } from '@/i18n/config';
 import { formatNumber, type MessageKey, type Translator } from '@/i18n/translate';
 
-export type TierLimits = Pick<CreatorTier, 'unlimited' | 'perHour' | 'perDay' | 'maxConcurrent' | 'maxChannels'> & Partial<Pick<CreatorTier, 'captionMinutesMonth'>>;
+export type TierLimits = Pick<CreatorTier, 'unlimited' | 'perHour' | 'perDay' | 'maxConcurrent' | 'maxChannels'> & Partial<Pick<CreatorTier, 'captionMinutesMonth' | 'audioTracksPerVideo'>>;
 
 /** What holding `tier` lets a user do; null = no tier. */
 export function tierEffect(tier: TierLimits | null, t: Translator, locale: Locale): string {
@@ -29,7 +29,9 @@ export function tierEffect(tier: TierLimits | null, t: Translator, locale: Local
     concurrent: n(tier.maxConcurrent),
     channels: tier.maxChannels === null ? t('creators.effectChannelsAny') : t('creators.effectChannels', { count: n(tier.maxChannels) }),
   });
-  return tier.captionMinutesMonth ? `${uploads} ${t('creators.effectCaptions', { minutes: n(tier.captionMinutesMonth) })}` : uploads;
+  const captions = tier.captionMinutesMonth ? ` ${t('creators.effectCaptions', { minutes: n(tier.captionMinutesMonth) })}` : '';
+  const audio = tier.audioTracksPerVideo ? ` ${t('creators.effectAudioTracks', { count: n(tier.audioTracksPerVideo) })}` : '';
+  return `${uploads}${captions}${audio}`;
 }
 
 /** The confirmation of a change from one tier to another (or none). */
@@ -56,6 +58,8 @@ export interface TierFormValues {
   maxConcurrent: number;
   maxChannels: number | null;
   captionMinutesMonth: number;
+  /** Extra audio tracks a creator may add to one video (wiki AUN-MULTI-AUDIO MA9) */
+  audioTracksPerVideo: number;
 }
 
 export type TierField = 'id' | 'name' | 'perHour' | 'perDay' | 'maxConcurrent' | 'maxChannels' | 'captionMinutesMonth' | 'audioTracksPerVideo';
@@ -80,6 +84,7 @@ export function validateTierForm(form: TierFormValues, opts: { create?: boolean 
   inRange('maxConcurrent', form.maxConcurrent);
   if (form.maxChannels !== null) inRange('maxChannels', form.maxChannels);
   inRange('captionMinutesMonth', form.captionMinutesMonth);
+  inRange('audioTracksPerVideo', form.audioTracksPerVideo);
   if (!errors.perHour && !errors.perDay && form.perDay < form.perHour) errors.perDay = { key: 'creators.errorPerDay' };
   return errors;
 }

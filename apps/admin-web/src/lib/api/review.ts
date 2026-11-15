@@ -61,7 +61,7 @@ export interface ReviewDetailView {
   findings: ReviewFindingView[];
   history: Array<{ id: string; status: string; decision: string | null; reason_code: string | null; decided_at: string | null; created_at: string; appeal_of: string | null }>;
   /** `playUrl`/`posterUrl`: a live stream's recording (VR9), signed by api-videos */
-  subject: { id: string; title: string; description: string; tags: string[]; channelId?: string; ownerId?: string; duration?: number; currentStatus: string | null; playUrl?: string | null; posterUrl?: string | null } | null;
+  subject: { id: string; title: string; description: string; tags: string[]; channelId?: string; ownerId?: string; duration?: number; currentStatus: string | null; playUrl?: string | null; posterUrl?: string | null; trackId?: string; track?: { language: string; label: string; kind: string } } | null;
   manifestKey: string | null;
 }
 

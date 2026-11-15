@@ -302,6 +302,7 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
               analyticsContext={analyticsContext}
               showChapterOverlay={false}
               lang={lang}
+              audioTracks={video.audioTracks}
               className="w-full"
               ariaLabel={fill(s.playVideo, { title })}
               onPlayerReady={delivery.handlePlayerReady}

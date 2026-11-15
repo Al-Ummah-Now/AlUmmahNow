@@ -13,6 +13,7 @@ import { logger } from '@/lib/logger-server';
 import { playbackSourcesOf } from '@/lib/video/delivery';
 import { getLocalizedValue, isVideoOpenToAnyone } from '@al-ummah/shared-types';
 import { shareImagePath } from './share-image';
+import { audioTracksOf } from '@/lib/video/audio-tracks';
 
 export interface EmbedVideo {
   id: string;
@@ -57,6 +58,8 @@ export interface EmbedVideo {
    * public R2 videos; never set for unlisted or private ones.
    */
   contentUrl?: string;
+  /** Audio tracks of the package (wiki AUN-MULTI-AUDIO): the audio menu's names, the first track, SEO inLanguage */
+  audioTracks?: import('@al-ummah/shared-types').AudioTrackView[];
 }
 
 export interface EmbedPlaylist {
@@ -85,6 +88,7 @@ interface ApiVideo {
   dateCreated?: string;
   views?: number;
   isLive?: boolean;
+  audioTracks?: unknown;
   isDeleted?: boolean;
   isHidden?: boolean;
   uploadStatus?: string;
@@ -156,6 +160,7 @@ export function toEmbedVideo(video: ApiVideo | null | undefined): EmbedVideo | n
     ...(video.delivery?.source === 'r2' || video.delivery?.source === 'bunny' ? { delivery: { source: video.delivery.source } } : {}),
     ...(sources.length ? { sources } : {}),
     ...(video.isPublic !== false && isPublicMp4(video.contentUrl) ? { contentUrl: video.contentUrl } : {}),
+    ...(audioTracksOf(video.audioTracks).length ? { audioTracks: audioTracksOf(video.audioTracks) } : {}),
   };
 }
 
