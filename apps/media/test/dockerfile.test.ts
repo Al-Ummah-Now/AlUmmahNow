@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-const dir = join(import.meta.dirname, '..', 'container');
+// The test script runs from apps/media (this package is CommonJS, so no import.meta)
+const dir = join(process.cwd(), 'container');
 
 describe('container image', () => {
 	it('copies every module the job server imports (review.mjs was left out of the image once)', () => {
