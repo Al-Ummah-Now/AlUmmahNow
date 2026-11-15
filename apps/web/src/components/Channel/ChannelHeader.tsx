@@ -13,6 +13,7 @@ import { ChannelOwnerActions } from '@/components/Channel/ChannelOwnerActions';
 import { ShareLinkButton } from '@/components/share/ShareLinkButton';
 import { formatHandle } from '@/lib/channel-url';
 import { loginRoutePath } from '@/lib/auth/silent-sign-in';
+import { formatVideoCount } from '@/lib/format/videoMeta';
 
 interface ChannelHeaderProps {
   channel: Channel;
@@ -151,7 +152,7 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
                 <>
                   <span>•</span>
                   <span>
-                    {formatNumber(channel.videosCount)} {(channel.videosCount === 1 ? t.video.videoSingular : t.video.videos).toLowerCase()}
+                    {formatVideoCount(channel.videosCount, locale)}
                   </span>
                 </>
               )}
@@ -204,8 +205,4 @@ function formatSubscriberCount(count: number): string {
     return `${(count / 1000).toFixed(1)}K`;
   }
   return count.toString();
-}
-
-function formatNumber(num: number): string {
-  return num.toLocaleString();
 }

@@ -32,6 +32,7 @@ import CreatePlaylistForm, { type CreatedPlaylist } from './CreatePlaylistForm';
 import type { PickedVideo } from './VideoPicker';
 import { counted, fill } from './text';
 import { FAINT, MUTED, NOTICE, TEXT } from './styles';
+import { formatVideoCount } from '@/lib/format/videoMeta';
 
 interface Props {
   open: boolean;
@@ -155,7 +156,7 @@ export default function AddToPlaylistDialog({ open, onOpenChange, channelId, vid
   const options: AutocompleteOption[] = (playlists ?? []).map((playlist) => ({
     id: playlist.id,
     label: titleOf(playlist),
-    subtitle: `${playlist.isPublic === false ? t.playlist.privateLabel : t.playlist.publicLabel} · ${counted(countOf(playlist), p.countOne, p.countOther)}`,
+    subtitle: `${playlist.isPublic === false ? t.playlist.privateLabel : t.playlist.publicLabel} · ${formatVideoCount(countOf(playlist), lang)}`,
     icon: playlist.isPublic === false ? <Lock className="h-4 w-4" /> : <ListPlus className="h-4 w-4" />,
     // Both names match a search, whichever language is typed
     keywords: [playlist.name, playlist.title, ...Object.values(playlist.titleLocalized ?? {})].filter((k): k is string => typeof k === 'string'),

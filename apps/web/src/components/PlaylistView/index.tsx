@@ -14,6 +14,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowDown, ArrowUp, ListVideo, Lock, Play, Trash2 } from 'lucide-react';
 import { getLocalizedValue } from '@al-ummah/shared-types';
 import { ShareLinkButton } from '@/components/share/ShareLinkButton';
+import { formatVideoCount } from '@/lib/format/videoMeta';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useHydrated } from '@/hooks/useHydrated';
 import { useConfirm } from '@/components/ui/confirm-dialog';
@@ -212,7 +213,7 @@ export default function PlaylistView({ playlistId, initialPlaylist, initialParti
                 </Link>
               )}
               <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                <span>{t.playlist.videoCount.replace('{count}', String(videos.length))}</span>
+                <span>{formatVideoCount(videos.length, lang)}</span>
                 <span aria-hidden="true">•</span>
                 <span className="inline-flex items-center gap-1">
                   {playlist.isPublic === false && <Lock className="w-3.5 h-3.5" />}

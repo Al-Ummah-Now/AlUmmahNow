@@ -34,6 +34,7 @@ import VideoCard from '@/components/videoCard/index';
 import { ChannelTile } from '@/components/ChannelTile';
 import { useLanguage } from '@/hooks/useLanguage';
 import { searchVideoToVideoObject } from '@/lib/search/mappers';
+import { formatVideoCount } from '@/lib/format/videoMeta';
 
 const CATEGORY_ICONS: Record<string, LucideIcon> = {
   quran_recitation: BookOpenText,
@@ -158,7 +159,7 @@ export function CategoryGrid({ categories: all }: { categories: ExploreCategory[
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-medium text-gray-900 dark:text-white">{label}</span>
                   <span className="block text-xs text-gray-500 dark:text-gray-400">
-                    {t.explore.categoryVideos.replace('{count}', new Intl.NumberFormat(lang === 'ar' ? 'ar' : 'en').format(category.count))}
+                    {formatVideoCount(category.count, lang)}
                   </span>
                 </span>
               </Link>

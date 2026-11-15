@@ -9,11 +9,12 @@ import { Shelf } from './Shelf';
 import type { SectionPlaylist } from '../sectionData';
 import { PlayAllOverlay } from '@/components/PlaylistCover/PlayAllOverlay';
 import { getPlayAllEntryHref } from '@/lib/playlists/playlist-utils';
+import { formatVideoCount } from '@/lib/format/videoMeta';
 
 /** Playlists as cover cards linking to the playlist page */
 export function PlaylistShelf({ playlists }: { playlists: SectionPlaylist[] }) {
   const { t, locale } = useLanguage();
-  const countLabel = (count: number) => t.channelSections.render.videosCount.replace('{count}', String(count));
+  const countLabel = (count: number) => formatVideoCount(count, locale);
 
   return (
     <Shelf

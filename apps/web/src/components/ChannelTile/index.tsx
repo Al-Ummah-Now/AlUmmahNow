@@ -10,6 +10,7 @@ import { resolveUrl } from '@/lib/utility';
 import { formatViewerCount } from '@/lib/utils/number-format';
 import type { ChannelSummary } from '@/components/ChannelSections/sectionData';
 import { channelPath } from '@/lib/channel-url';
+import { formatVideoCount } from '@/lib/format/videoMeta';
 
 interface ChannelTileProps {
   channel: ChannelSummary;
@@ -32,10 +33,7 @@ export function ChannelTile({ channel, variant = 'card', className = '' }: Chann
     '{count}',
     formatViewerCount(channel.subscribersCount || 0, 'compact', numberLocale)
   );
-  const videos = t.discovery.videosCount.replace(
-    '{count}',
-    formatViewerCount(channel.videosCount || 0, 'compact', numberLocale)
-  );
+  const videos = formatVideoCount(channel.videosCount, lang, { compact: true });
   const avatarSize = variant === 'compact' ? 'w-20 h-20' : 'w-24 h-24';
 
   return (

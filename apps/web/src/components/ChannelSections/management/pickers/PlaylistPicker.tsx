@@ -10,6 +10,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { Autocomplete, type AutocompleteOption, type AutocompletePage } from '@/components/ui/Autocomplete';
 import { fetchSuggestions } from '@/lib/search/suggest-client';
 import { SelectedList, type PickedItem } from './SelectedList';
+import { formatVideoCount } from '@/lib/format/videoMeta';
 
 /** Playlists per page; the list pages on as it is scrolled */
 const PICKER_PAGE = 30;
@@ -52,10 +53,10 @@ export function PlaylistPicker({ channelId, value, onChange, max, testId, label 
     const item = toPickedPlaylist(playlist, locale);
     return {
       id: playlist.id, label: item.label, keywords: [playlist.name, playlist.title],
-      subtitle: t.channelSections.render.videosCount.replace('{count}', String(playlist.videosCount ?? 0)),
+      subtitle: formatVideoCount(playlist.videosCount ?? 0, locale),
       thumbnailUrl: item.thumbnailUrl ?? undefined, thumbnailShape: 'wide' as const, value: item,
     };
-  }, [locale, t]);
+  }, [locale]);
 
   // The channel's public playlists as soon as it opens, a page at a time
   const loadInitial = useCallback(async (cursor: string | null): Promise<AutocompletePage> => {
@@ -70,10 +71,10 @@ export function PlaylistPicker({ channelId, value, onChange, max, testId, label 
     const found = await fetchSuggestions(q, { types: ['playlist'], channelId, limit: 10, signal });
     return found.filter((s) => s.id).map((s) => ({
       id: s.id!, label: s.text, thumbnailUrl: s.thumbnailUrl, thumbnailShape: 'wide' as const,
-      subtitle: s.count !== undefined ? t.channelSections.render.videosCount.replace('{count}', String(s.count)) : undefined,
+      subtitle: s.count !== undefined ? formatVideoCount(s.count, locale) : undefined,
       value: { id: s.id!, label: s.text, thumbnailUrl: s.thumbnailUrl } satisfies PickedItem,
     }));
-  }, [channelId, t]);
+  }, [channelId, locale]);
 
   const toggle = (item: PickedItem) => {
     if (selectedIds.has(item.id)) onChange(value.filter((v) => v.id !== item.id));

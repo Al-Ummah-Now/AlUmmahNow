@@ -1,4 +1,4 @@
-import { formatAbsoluteDate, formatAbsoluteDateTime, formatRelativeTime, formatViews, formatViewsExact, formatSubscribers } from '../videoMeta';
+import { formatAbsoluteDate, formatAbsoluteDateTime, formatRelativeTime, formatViews, formatViewsExact, formatSubscribers, formatVideoCount } from '../videoMeta';
 
 describe('formatViews', () => {
   it('uses English singular, plural and zero', () => {
@@ -106,5 +106,41 @@ describe('formatSubscribers', () => {
     expect(formatSubscribers(5, 'ar')).toMatch(/مشتركين$/);
     expect(formatSubscribers(11, 'ar')).toMatch(/مشتركًا$/);
     expect(formatSubscribers(100, 'ar')).toMatch(/مشترك$/);
+  });
+});
+
+describe('formatVideoCount', () => {
+  it('uses English singular, plural and zero', () => {
+    expect(formatVideoCount(0, 'en')).toBe('No videos');
+    expect(formatVideoCount(1, 'en')).toBe('1 video');
+    expect(formatVideoCount(2, 'en')).toBe('2 videos');
+    expect(formatVideoCount(1234, 'en')).toBe('1,234 videos');
+  });
+
+  it('uses every Arabic plural form with Arabic-Indic digits (glossary)', () => {
+    expect(formatVideoCount(0, 'ar')).toBe('لا توجد مرئيات');
+    expect(formatVideoCount(1, 'ar')).toBe('مرئي واحد');
+    expect(formatVideoCount(2, 'ar')).toBe('مرئيان');
+    expect(formatVideoCount(3, 'ar')).toBe('٣ مرئيات');
+    expect(formatVideoCount(10, 'ar')).toBe('١٠ مرئيات');
+    expect(formatVideoCount(11, 'ar')).toBe('١١ مرئيًا');
+    expect(formatVideoCount(99, 'ar')).toBe('٩٩ مرئيًا');
+    expect(formatVideoCount(100, 'ar')).toBe('١٠٠ مرئي');
+    expect(formatVideoCount(102, 'ar')).toBe('١٠٢ مرئي');
+    expect(formatVideoCount(103, 'ar')).toBe('١٠٣ مرئيات');
+    expect(formatVideoCount(111, 'ar')).toBe('١١١ مرئيًا');
+  });
+
+  it('treats missing, invalid and negative counts as zero, and accepts numeric strings', () => {
+    expect(formatVideoCount(undefined, 'en')).toBe('No videos');
+    expect(formatVideoCount(null, 'ar')).toBe('لا توجد مرئيات');
+    expect(formatVideoCount(-3, 'en')).toBe('No videos');
+    expect(formatVideoCount('2', 'ar')).toBe('مرئيان');
+  });
+
+  it('compacts large counts but keeps the plural of the real count', () => {
+    expect(formatVideoCount(1500, 'en', { compact: true })).toBe('1.5K videos');
+    expect(formatVideoCount(1, 'en', { compact: true })).toBe('1 video');
+    expect(formatVideoCount(5, 'ar', { compact: true })).toBe('٥ مرئيات');
   });
 });

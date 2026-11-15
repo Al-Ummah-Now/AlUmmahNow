@@ -69,6 +69,19 @@ function managedRow(page: Page, title: string): Locator {
 /** The playlist name: English and Arabic fields (2026-11-11), or the single Name field the target may still have */
 const nameField = (page: Page) => page.getByRole('textbox', { name: 'Name (English)' }).or(page.getByRole('textbox', { name: 'Name', exact: true })).first();
 
+/** The Arabic video count the app shows (glossary): «مرئي واحد»، «مرئيان»، «٣ مرئيات»، «١١ مرئيًا»، «١٠٠ مرئي» */
+function arabicVideoCount(n: number): string {
+  const num = new Intl.NumberFormat('ar-u-nu-arab').format(n);
+  switch (new Intl.PluralRules('ar').select(n)) {
+    case 'zero': return 'لا توجد مرئيات';
+    case 'one': return 'مرئي واحد';
+    case 'two': return 'مرئيان';
+    case 'few': return `${num} مرئيات`;
+    case 'many': return `${num} مرئيًا`;
+    default: return `${num} مرئي`;
+  }
+}
+
 test.describe('Playlist manager', () => {
   test.use({ storageState: AUTH_STATE.single });
   test.beforeAll(async () => {
@@ -213,7 +226,7 @@ test.describe('Playlist page - visitor', () => {
     await expectRtl(page);
     await expect(page.getByRole('heading', { level: 1, name: playlist.name })).toBeVisible();
     await expect(page.getByRole('link', { name: 'تشغيل الكل' })).toHaveAttribute('href', new RegExp(`^/ar/video/[\\w-]+\\?list=${playlist.id}&index=0$`));
-    await expect(page.getByText(`${shown} من المرئيات`)).toBeVisible();
+    await expect(page.getByText(arabicVideoCount(shown), { exact: true })).toBeVisible();
     await expect(page.getByText('عامة', { exact: true })).toBeVisible();
   });
 
