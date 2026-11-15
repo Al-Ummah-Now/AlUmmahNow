@@ -158,9 +158,15 @@ test.describe('Release: Studio Comments', () => {
     const moderator = await newAccount(browser, 'rel-comments-mod');
     const editor = await newAccount(browser, 'rel-comments-editor');
     try {
+      // Roles are given by invitation only (docs/specs/CHANNEL-ROLES.md §4): the owner invites, the member accepts
       for (const [member, role] of [[moderator, 'moderator'], [editor, 'editor']] as const) {
-        const res = await apiFetch(owner, `/api/channels/${channelId}/members`, json({ userId: member.user.userId, role }));
-        expect(res.status, `grant ${role}: ${await res.clone().text()}`).toBeLessThan(300);
+        const sent = await apiFetch(owner, `/api/channels/${channelId}/invites`, json({ email: member.user.email, role }));
+        expect(sent.status, `invite ${role}: ${await sent.clone().text()}`).toBe(200);
+        const mine = (await (await apiFetch(member.user, '/api/channel-invites')).json()) as { data?: { invites?: Array<{ id: string; channel: { id: string } }> } };
+        const invitation = mine.data?.invites?.find((i) => i.channel.id === channelId);
+        expect(invitation, `the ${role} does not see the invitation`).toBeTruthy();
+        const accepted = await apiFetch(member.user, `/api/channel-invites/${invitation!.id}/accept`, { method: 'POST' });
+        expect(accepted.status, `accept ${role}: ${await accepted.clone().text()}`).toBe(200);
       }
       await moderator.page.goto(`${target().web}/en/studio/${channelId}/comments`);
       await expect(moderator.page.getByTestId('studio-comments')).toBeVisible({ timeout: 30000 });
