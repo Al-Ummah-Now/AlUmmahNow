@@ -48,7 +48,7 @@
   "apps/web/src/components/Community/CommentsSection.tsx": 34,
   "apps/web/src/components/Community/CommunityPosts.tsx": 34,
   "apps/web/src/components/Community/LikeButton.tsx": 14,
-  "apps/web/src/components/Community/PostCard.tsx": 20,
+  "apps/web/src/components/Community/PostCard.tsx": 16,
   "apps/web/src/components/Community/PostEngagement.tsx": 26,
   "apps/web/src/components/Community/ReplyForm.tsx": 30,
   "apps/web/src/components/Community/management/PostAnalytics.tsx": 4,
