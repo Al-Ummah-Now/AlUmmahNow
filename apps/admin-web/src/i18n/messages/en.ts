@@ -3169,6 +3169,7 @@ const en = {
     tokenRemoved: 'Token removed.',
     tokenRemoveFailed: 'Could not remove the token. Try again.',
     tokenSuperOnly: 'Only a super admin can set or change the token.',
+  },
   costs: {
     title: 'Costs',
     subtitle: 'What the platform costs this month across Cloudflare, Bunny and Resend, against the monthly budget: the forecast, where it goes, what moved, alert emails and the keys that collect it.',
