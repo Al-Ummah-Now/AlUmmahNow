@@ -9,7 +9,7 @@ import { Container, type OutboundHandlerContext } from '@cloudflare/containers';
 import { audioTrackFileKey, failRungs, MEDIA_MP4, mediaPrefix, sanitizeDetectedStreams, sanitizeFailure, sanitizeMp4, type AudioPackageJobMessage, type AudioProbeJobMessage, type AudioTrackJobMessage, type CaptionAudioJobMessage, type LiveReviewJobMessage, type Mp4JobMessage, sanitizeRungs, type R2RungProgress, type TranscodeFailure, type TranscodeJobEvent, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
 import type { TranscodeStartFailure, TranscoderJobView } from '@al-ummah/shared-types';
 import { bucketFor, errorText, log, type Env } from './env';
-import { cancelledJob, containerSeconds, hasWatchdogDue, jobView, startFailureNote, isInfraFailure, keyAllowed, selfTestDue, selfTestRuns, startFailureReason, type SelfTestResult, liveReviewPrefix, liveVodSource, liveVodTarget, newJob, onFailure, onMessage, onProgressEvent, stagedKey, watchdogVerdict, WATCHDOG_SECONDS, type JobState } from './jobs';
+import { startupTimes, cancelledJob, containerSeconds, hasWatchdogDue, jobView, startFailureNote, isInfraFailure, keyAllowed, selfTestDue, selfTestRuns, startFailureReason, type SelfTestResult, liveReviewPrefix, liveVodSource, liveVodTarget, newJob, onFailure, onMessage, onProgressEvent, stagedKey, watchdogVerdict, WATCHDOG_SECONDS, type JobState } from './jobs';
 import { reportAudioPackage, reportAudioProbe, reportAudioTrack, reportCaptionAudio, reportEvent, reportLiveReviewMedia, reportMp4Event, sourceCandidates } from './videos-api';
 import { serveOriginal } from './originals';
 import { storeUpload } from './uploads';
@@ -225,7 +225,7 @@ export class Transcoder extends Container<Env> {
 		// the watchdog still finds the job and retries it (launch_lost) instead of it hanging
 		await this.armWatchdog();
 		try {
-			await this.launch(job);
+			await this.launch(job, true);
 			// Started: the earlier failed starts no longer explain anything (the admin panel)
 			await this.ctx.storage.delete('startFailure');
 		} catch (error) {
@@ -237,7 +237,10 @@ export class Transcoder extends Container<Env> {
 		return action === 'supersede' ? 'superseded' : action === 'relaunch' ? 'relaunched' : 'started';
 	}
 
-	private async launch(job: JobState): Promise<void> {
+	private async launch(job: JobState, firstAttempt = false): Promise<void> {
+		// Startup timing (TranscodeStartup): was the container already up (warm reuse) or booted for this attempt
+		const t0 = Date.now();
+		const cold = !this.ctx.container?.running;
 		await this.setOutboundByHosts({
 			'source.internal': { method: 'source', params: { videoId: job.videoId } },
 			'media.internal': { method: 'media', params: { prefix: job.prefix } },
@@ -246,6 +249,7 @@ export class Transcoder extends Container<Env> {
 			...(job.prebuilt ? { 'staging.internal': { method: 'staging', params: { prefix: job.prebuilt.prefix, rungs: job.prebuilt.rungs.join(',') } } } : {}),
 		});
 		await this.startAndWaitForPorts();
+		const ready = Date.now();
 		const res = await this.containerFetch('http://container/jobs', {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
@@ -253,9 +257,10 @@ export class Transcoder extends Container<Env> {
 		});
 		if (res.status !== 202 && res.status !== 200) throw new Error(`container refused the job: HTTP ${res.status} ${await res.text()}`);
 		job.launchedAt = Date.now();
+		job.startup = startupTimes(job, cold, t0, ready, job.launchedAt, firstAttempt);
 		await this.save(job);
 		await this.armWatchdog();
-		await this.report(job, { type: 'started' });
+		await this.report(job, { type: 'started', startup: job.startup });
 	}
 
 	/** The creator's staged renditions are done with once the job ends (used or not). */
@@ -281,7 +286,16 @@ export class Transcoder extends Container<Env> {
 			}
 			return;
 		}
-		if (ev.type === 'started') return this.save(job);
+		if (ev.type === 'started') {
+			// FFmpeg is running (after the source probe): the last startup time, sent once
+			if (job.startup && job.startup.ffmpegMs === undefined) {
+				job.startup = { ...job.startup, ffmpegMs: Math.max(0, now - job.attemptStartedAt) };
+				await this.save(job);
+				await this.report(job, { type: 'started', startup: job.startup }).catch(() => undefined);
+				return;
+			}
+			return this.save(job);
+		}
 		if (ev.type === 'ready') return this.finishReady(job, ev.result);
 		const rungs = sanitizeRungs(ev.rungs);
 		if (rungs) job.rungs = rungs;
@@ -361,6 +375,7 @@ export class Transcoder extends Container<Env> {
 		job.progress = 0;
 		delete job.rungs;
 		delete job.launchedAt;
+		delete job.startup;
 		await this.ctx.storage.delete('progressReported');
 		await this.save(job);
 		await this.armWatchdog();
@@ -732,7 +747,7 @@ export class Transcoder extends Container<Env> {
 	// Reports to api-videos: kept until delivered (the watchdog resends)
 	// -----------------------------------------------------------------------
 
-	private async report(job: JobState, ev: Pick<TranscodeJobEvent, 'type' | 'progress' | 'result' | 'error' | 'final' | 'failure' | 'rungs'>): Promise<void> {
+	private async report(job: JobState, ev: Pick<TranscodeJobEvent, 'type' | 'progress' | 'result' | 'error' | 'final' | 'failure' | 'rungs' | 'startup'>): Promise<void> {
 		const event: TranscodeJobEvent = {
 			videoId: job.videoId,
 			jobId: job.jobId,

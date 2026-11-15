@@ -310,7 +310,9 @@ describe('/internal/media/summary live figures', () => {
 	it('counts transcoding and queued jobs, the max, and the oldest wait', async () => {
 		const now = Date.parse('2026-11-11T12:00:00.000Z');
 		const live = await readMediaLive({ SEARCH_DB: jobsDb(rows), MEDIA_MAX_TRANSCODES: '2' } as never, now);
-		assert.deepEqual(live, {
+		assert.equal(live.startTimes?.samples, 0, 'no start times recorded in this fake');
+		assert.deepEqual({ ...live, startTimes: undefined }, {
+			startTimes: undefined,
 			transcoding: 1,
 			queued: 3,
 			maxTranscodes: 2,

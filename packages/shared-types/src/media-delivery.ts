@@ -190,6 +190,37 @@ export function sanitizeFailure(f: TranscodeFailure): TranscodeFailure {
 	};
 }
 
+/**
+ * How long a transcode attempt took to start (apps/media Transcoder.launch), all in ms:
+ * - dispatchMs: queued (api-videos) → the Transcoder starts the attempt (queue delivery, any wait
+ *   for a free slot); absent for a retry
+ * - readyMs: → the container is up and listening (a cold start boots it; a warm one reuses it)
+ * - acceptMs: → the container accepted the job (its pipeline starts: fetch and probe the source)
+ * - ffmpegMs: → the container reports FFmpeg running (after the probe); arrives with a second event
+ * - cold: the container was not running before this attempt
+ */
+export interface TranscodeStartup {
+	cold: boolean;
+	readyMs: number;
+	acceptMs: number;
+	dispatchMs?: number;
+	ffmpegMs?: number;
+}
+
+const startupMs = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v < 86_400_000 ? Math.round(v) : undefined);
+
+/** A startup report as sent, or null when it is malformed (never trusted as is). */
+export function sanitizeStartup(raw: unknown): TranscodeStartup | null {
+	const r = raw as Partial<TranscodeStartup> | null;
+	if (!r || typeof r !== 'object' || typeof r.cold !== 'boolean') return null;
+	const readyMs = startupMs(r.readyMs);
+	const acceptMs = startupMs(r.acceptMs);
+	if (readyMs === undefined || acceptMs === undefined) return null;
+	const dispatchMs = startupMs(r.dispatchMs);
+	const ffmpegMs = startupMs(r.ffmpegMs);
+	return { cold: r.cold, readyMs, acceptMs, ...(dispatchMs !== undefined ? { dispatchMs } : {}), ...(ffmpegMs !== undefined ? { ffmpegMs } : {}) };
+}
+
 /** The R2 side of a video record (api-videos). `r2PlayUrl` is derived from it. */
 export interface VideoR2State {
 	status: R2RenditionStatus;
@@ -216,6 +247,8 @@ export interface VideoR2State {
 	rungs?: R2RungProgress[];
 	/** The latest failed attempt (kept after a later attempt succeeds, for the history) */
 	failure?: TranscodeFailure;
+	/** How long the latest attempt took to start (TranscodeStartup) */
+	startup?: TranscodeStartup;
 	/** A re-transcode: the rendition set that keeps playing until this one is ready (then deleted) */
 	previous?: { rev: string; access: MediaAccess };
 }
@@ -255,6 +288,8 @@ export interface TranscodeJobEvent {
 	final?: boolean;
 	/** failed only: where and why */
 	failure?: TranscodeFailure;
+	/** started only: how long the attempt took to start */
+	startup?: TranscodeStartup;
 }
 
 /**

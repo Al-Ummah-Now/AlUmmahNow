@@ -10,6 +10,9 @@
  *  - the Transcoder container application and its instances (state, as Cloudflare reports it)
  *  - warn/error log lines of the media Worker, api-videos and admin-api over the window (Workers
  *    Observability query; these Workers log warn/error only)
+ *  - transcode start times over the last 30 days: queued → the container running FFmpeg, p50/p95
+ *    (one aggregate read-only SELECT of api-videos' own media_jobs timestamps in the search D1; no
+ *    video ids or user data printed)
  *
  * Only al-ummah resources are named and read. Calls are GET lists/reads, the GraphQL Analytics
  * read and the Observability telemetry query (a POST that only reads). The token is never printed;
@@ -30,6 +33,13 @@ export interface Names {
 	queue: string;
 	dlq: string;
 }
+
+/** api-videos' search D1 (media_jobs) per environment, from apps/api-videos/wrangler*.jsonc. */
+export const SEARCH_D1: Record<EnvName, string> = {
+	production: '41064871-cf1f-46e9-b102-7b913240ad89',
+	stage: '956a3550-bd20-4cfc-9bf2-b1c2265b33dd',
+	qa: '0282bac3-5b70-4343-a991-937c732d981a',
+};
 
 export function namesFor(env: EnvName): Names {
 	if (env === 'production') return { media: 'al-ummah-now-media', videos: 'videos', admin: 'al-ummah-admin-api', queue: 'al-ummah-now-transcode', dlq: 'al-ummah-now-transcode-dlq' };
@@ -197,6 +207,42 @@ async function discover(names: Names, since: Date, until: Date): Promise<void> {
 	p();
 }
 
+/** The p-th percentile (0..100) of sorted numbers, nearest rank; null when empty. */
+export function percentile(sorted: number[], p: number): number | null {
+	if (!sorted.length) return null;
+	const rank = Math.ceil((p / 100) * sorted.length);
+	return sorted[Math.min(sorted.length, Math.max(1, rank)) - 1]!;
+}
+
+/**
+ * Start time of a transcode: media_jobs.queued_at (api-videos queued it) → started_at (the container
+ * accepted the job and FFmpeg started: the Transcoder's 'started' event). Includes the queue's
+ * delivery, any wait for a free slot and the container's cold start. First attempts only (a retry
+ * waits on purpose). Read-only aggregate; prints no ids.
+ */
+export const START_TIMES_SQL = `SELECT CAST((julianday(started_at) - julianday(queued_at)) * 86400000 AS INTEGER) AS ms
+ FROM media_jobs WHERE started_at IS NOT NULL AND queued_at >= datetime('now', '-30 days') AND attempts <= 1 ORDER BY ms LIMIT 5000`;
+
+export function startTimeSummary(values: number[]): string {
+	const ms = values.filter((v) => Number.isFinite(v) && v >= 0).sort((a, b) => a - b);
+	if (!ms.length) return 'no transcodes started in the last 30 days';
+	const s = (v: number | null) => (v === null ? '–' : `${(v / 1000).toFixed(1)} s`);
+	return `${ms.length} transcodes: p50 ${s(percentile(ms, 50))}, p95 ${s(percentile(ms, 95))}, fastest ${s(ms[0]!)}, slowest ${s(ms[ms.length - 1]!)}`;
+}
+
+async function startTimes(env: EnvName): Promise<void> {
+	p('## Transcode start times (30 days: queued → FFmpeg running, first attempts)');
+	const r = await post(`/accounts/${account}/d1/database/${SEARCH_D1[env]}/query`, { sql: START_TIMES_SQL });
+	if (!r.ok) {
+		p(`- not readable: ${errs(r)}`);
+		p();
+		return;
+	}
+	const rows: { ms: number }[] = r.body?.result?.[0]?.results ?? [];
+	p(`- ${startTimeSummary(rows.map((x) => Number(x.ms)))}`);
+	p();
+}
+
 async function main(): Promise<void> {
 	if (!token || !account) throw new Error('CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are required');
 	const env = arg('env', 'production') as EnvName;
@@ -211,6 +257,7 @@ async function main(): Promise<void> {
 	await deployments(names);
 	await queues(names, since, until);
 	await containers(names);
+	await startTimes(env);
 	for (const s of [names.media, names.videos, names.admin]) await logs(s, since, until, search);
 	// Where the transcoder container's own output (stdout/stderr, exits) is: services and keys that mention it
 	await discover(names, since, until);

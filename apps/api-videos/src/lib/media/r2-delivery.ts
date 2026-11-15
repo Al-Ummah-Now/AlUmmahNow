@@ -14,6 +14,7 @@ import { r2ThumbnailPrefix } from '../thumbnail/store';
 import { isStale as isPrebuiltStale } from './prebuilt';
 import {
 	PREBUILT_REJECTIONS,
+	sanitizeStartup,
 	type PrebuiltRejection,
 	type PrebuiltUploadState,
 	isVideoMediaPublic,
@@ -116,14 +117,17 @@ export async function recordJob(env: Pick<MediaEnv, 'SEARCH_DB'>, video: MediaVi
 	try {
 		await env.SEARCH_DB.prepare(
 			`INSERT INTO media_jobs (video_id, job_id, status, access, reason, attempts, queued_at, started_at, ready_at, failed_at, error,
-			   duration_seconds, bytes, objects, rungs, container_seconds, instance_type, bunny_ready_at, updated_at)
-			 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
+			   duration_seconds, bytes, objects, rungs, container_seconds, instance_type, bunny_ready_at, updated_at,
+			   start_cold, start_dispatch_ms, start_ready_ms, start_accept_ms, start_ffmpeg_ms)
+			 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)
 			 ON CONFLICT (video_id) DO UPDATE SET job_id = excluded.job_id, status = excluded.status, access = excluded.access,
 			   reason = COALESCE(excluded.reason, media_jobs.reason), attempts = excluded.attempts, queued_at = excluded.queued_at,
 			   started_at = excluded.started_at, ready_at = excluded.ready_at, failed_at = excluded.failed_at, error = excluded.error,
 			   duration_seconds = excluded.duration_seconds, bytes = excluded.bytes, objects = excluded.objects, rungs = excluded.rungs,
 			   container_seconds = excluded.container_seconds, instance_type = excluded.instance_type,
-			   bunny_ready_at = COALESCE(excluded.bunny_ready_at, media_jobs.bunny_ready_at), updated_at = excluded.updated_at`,
+			   bunny_ready_at = COALESCE(excluded.bunny_ready_at, media_jobs.bunny_ready_at), updated_at = excluded.updated_at,
+			   start_cold = excluded.start_cold, start_dispatch_ms = excluded.start_dispatch_ms, start_ready_ms = excluded.start_ready_ms,
+			   start_accept_ms = excluded.start_accept_ms, start_ffmpeg_ms = excluded.start_ffmpeg_ms`,
 		)
 			.bind(
 				video.id,
@@ -145,6 +149,11 @@ export async function recordJob(env: Pick<MediaEnv, 'SEARCH_DB'>, video: MediaVi
 				r2.instanceType ?? null,
 				video.playableAt ?? null,
 				new Date().toISOString(),
+				r2.startup ? (r2.startup.cold ? 1 : 0) : null,
+				r2.startup?.dispatchMs ?? null,
+				r2.startup?.readyMs ?? null,
+				r2.startup?.acceptMs ?? null,
+				r2.startup?.ffmpegMs ?? null,
 			)
 			.run();
 	} catch (error) {
@@ -488,6 +497,9 @@ export async function applyJobEvent(
 		if (ev.type === 'started') {
 			r2.status = 'transcoding';
 			r2.startedAt ??= ev.at;
+			// How the attempt started (the container sends it again with FFmpeg's time)
+			const startup = sanitizeStartup(ev.startup);
+			if (startup) r2.startup = startup;
 			// A new attempt (sent at launch, before the container's first progress): the last one's rung states no longer apply
 			delete r2.rungs;
 		} else if (ev.type === 'progress') {
