@@ -33,6 +33,7 @@ import { watchLaterId } from '../library';
 import { footprintTargets, forgetFootprints } from './footprints';
 import { eraseCaptionMinutes } from '../captions/minutes';
 import { eraseYoutubeImports } from '../youtube-import/erase';
+import { eraseLiveSessionOwner } from '../live/store';
 import { sectionOrderKey } from '../channelSectionOrder';
 import { eraseUserSubscriptions } from '../subscription-store';
 import { isOwnershipComplete } from '../search/ownership';
@@ -225,6 +226,9 @@ export async function eraseRunUserData(
 			budget.spend(2);
 			await cancelInvitesOfUser(db, userId);
 			await anonymizeTeamActivity(db, userId, DELETED_USER_ID);
+			// Their live sessions' tier owner (search migration 0040), as the full erasure does
+			budget.spend();
+			await eraseLiveSessionOwner(db, userId);
 			budget.spend();
 			const profiles = asBucket(env.profiles);
 			const stored = await profiles.get(userId);
