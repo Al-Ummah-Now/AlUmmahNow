@@ -9,6 +9,8 @@
  * (app/og/[kind]/[file]/route.ts). This file is the pure part: which kind of card a source makes.
  */
 
+import fanousTokens from '../../../../../packages/fanous-tokens/tokens/fanous.tokens.json';
+
 export const CARD_WIDTH = 1200;
 export const CARD_HEIGHT = 630;
 export const CARD_TYPE = 'image/jpeg';
@@ -33,8 +35,8 @@ export type CardLayout =
 
 export const AVATAR_SIZE = 420;
 
-/** The page colour behind a channel logo without a banner: production's theme (Lantern), dark page */
-export const CHANNEL_PAGE_COLOUR = '#093041';
+/** The page colour behind a channel logo without a banner: the Fanous `night` token (the dark page of production's theme) */
+export const CHANNEL_PAGE_COLOUR: string = fanousTokens.color.brand.night.$value;
 
 export function cardLayout(width: number, height: number): CardLayout {
   if (!(width > 0) || !(height > 0)) return { kind: 'fill' };
