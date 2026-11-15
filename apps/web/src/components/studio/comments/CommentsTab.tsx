@@ -35,6 +35,7 @@ import { logger } from '@/lib/logger-client';
 import { can, type StudioRole } from '@/lib/studio/permissions';
 import { COMMENT_TABS, MAX_COMMENT_SELECTION } from '@/lib/studio/params';
 import { cn } from '@/lib/utils';
+import { OnTitle } from './OnTitle';
 
 const PAGE_SIZE = 20;
 const DEFAULT_AVATAR = '/avatar.png';
@@ -431,10 +432,10 @@ function CommentRow({ locale, lang, comment, tab, base, channel, canSpeak, selec
               <span className="inline-flex items-center gap-1 text-xs text-muted-foreground" data-testid="studio-comment-hearted"><Heart aria-hidden="true" className="h-3 w-3 fill-current" />{text.hearted}</span>
             )}
           </div>
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">
-            <span className="me-1 rounded bg-muted px-1.5 py-0.5 font-medium text-foreground">{comment.kind === 'video' ? text.video : text.post}</span>
-            <Link href={`/${locale}${comment.targetUrlPath}`} className="underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-              {text.on.split('{title}').flatMap((part, i) => (i === 0 ? [part] : [<bdi key="t">{comment.targetTitle}</bdi>, part]))}
+          <p className="mt-0.5 flex min-w-0 items-baseline text-xs text-muted-foreground">
+            <span className="me-1 shrink-0 rounded bg-muted px-1.5 py-0.5 font-medium text-foreground">{comment.kind === 'video' ? text.video : text.post}</span>
+            <Link href={`/${locale}${comment.targetUrlPath}`} className="min-w-0 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <OnTitle template={text.on} title={comment.targetTitle} />
             </Link>
           </p>
           <p dir="auto" className="mt-2 whitespace-pre-wrap break-words text-sm text-foreground" data-testid="studio-comment-text">{comment.text}</p>

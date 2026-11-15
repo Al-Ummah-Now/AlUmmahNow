@@ -8,6 +8,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { getChannelCommentSummary, type StudioCommentSummary } from '@/lib/api/studio-comments';
 import { formatRelativeTime } from '@/lib/format/videoMeta';
 import { logger } from '@/lib/logger-client';
+import { OnTitle } from '@/components/studio/comments/OnTitle';
 
 /** Dashboard: the latest comments and how many wait for review, linking to Comments (spec §4.3). */
 export function RecentComments({ locale, channelId }: { locale: string; channelId: string }) {
@@ -58,8 +59,8 @@ export function RecentComments({ locale, channelId }: { locale: string; channelI
                 <time dateTime={comment.createdAt}>{formatRelativeTime(comment.createdAt, lang)}</time>
               </p>
               <p dir="auto" className="clamp-2 text-foreground">{comment.text}</p>
-              <p className="truncate text-xs text-muted-foreground">
-                {t.studio.commentsPage.on.split('{title}').flatMap((part, i) => (i === 0 ? [part] : [<bdi key="t">{comment.targetTitle}</bdi>, part]))}
+              <p className="text-xs text-muted-foreground">
+                <OnTitle template={t.studio.commentsPage.on} title={comment.targetTitle} />
               </p>
             </li>
           ))}

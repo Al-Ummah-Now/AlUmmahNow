@@ -53,9 +53,8 @@
 
   /*
    * Two lines at most, the second fading out toward its end edge (RTL-aware) instead of an
-   * ellipsis. No -webkit-line-clamp: WebKit's web process aborts on it in Studio's Recent
-   * comments, Posts list and notification rows (#1382). The mask's first layer keeps line 1
-   * whole; the second covers line 2 only, so text that fits on one line is never faded.
+   * ellipsis. The mask's first layer keeps line 1 whole; the second covers line 2 only, so text
+   * that fits on one line is never faded. Used for comment, post and notification previews.
    */
   .clamp-2 {
     max-height: 2lh;
