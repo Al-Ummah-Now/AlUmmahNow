@@ -4,6 +4,7 @@
  * Studio (signed in; the channel's owner and admins, `channel.edit`; the share kit also for editors, `video.edit`):
  *   GET    /api/social/channel/:channelId                         → SocialOverview
  *   POST   /api/social/channel/:channelId/connect                 { network, language, handle?, instance?, returnLang } → ConnectStartResult
+ *   POST   /api/social/channel/:channelId/connect/confirm         { id } (the callback's confirm id; same person, same channel) → { account }
  *   GET    /api/social/channel/:channelId/telegram/:code          → { pending }   (Studio polls while the person posts the code)
  *   PATCH  /api/social/channel/:channelId/accounts/:accountId     { language?, rules? } → { account }
  *   DELETE /api/social/channel/:channelId/accounts/:accountId     → { ok }
@@ -21,7 +22,7 @@
  * Public:
  *   GET  /api/social/feeds/:channelId/:kind.xml[?lang=ar]       RSS 2.0 for scheduler tools (lib/social/feed.ts)
  *   GET  /api/social/bluesky/client-metadata.json, /api/social/bluesky/jwks.json   (our AT Protocol OAuth client)
- *   GET  /api/social/oauth/:network/callback                    → 302 to Studio
+ *   GET  /api/social/oauth/:network/callback                    → 302 to Studio with ?confirm=<id> (nothing linked yet)
  *   POST /api/social/webhooks/telegram                          (X-Telegram-Bot-Api-Secret-Token)
  *
  * Internal (/internal/social, INTERNAL_API_KEY; the processor and admin-api):
@@ -89,7 +90,7 @@ import {
 } from '../lib/social/store';
 import { randomToken, sealText, socialCryptoReady } from '../lib/social/crypto';
 import { apiOrigin, blueskyClient, blueskyJwks, clearCredentials, networkReadiness, readCredentials, writeCredentials, type SocialEnv } from '../lib/social/platform';
-import { disconnect, disconnectChannel, ensureTelegramWebhook, finishOAuth, handleTelegramUpdate, startConnect, studioReturnUrl, telegramCodePending } from '../lib/social/connect';
+import { confirmConnect, disconnect, disconnectChannel, ensureTelegramWebhook, finishOAuth, handleTelegramUpdate, startConnect, studioReturnUrl, telegramCodePending } from '../lib/social/connect';
 import { clientMetadata } from '../lib/social/adapters/bluesky';
 import { attemptPost, attemptWebhook, enqueueDelivery, giveUpPost, giveUpWebhook, planEvent, requeueWebhookDelivery, webhookSecretBound } from '../lib/social/deliver';
 import { loadSocialContent, webOrigin } from '../lib/social/content';
@@ -192,6 +193,19 @@ socialRouter.post('/channel/:channelId/connect', async (c) => {
 		if (!settings.enabled || !settings.networks[b.network].enabled) throw new SocialError(503, 'network_paused');
 		const result = await startConnect(c.env, { network: b.network, channelId, userId, language: lang(b.language), returnLang: lang(b.returnLang), handle: b.handle, instance: b.instance });
 		return c.json(result);
+	} catch (error) {
+		return fail(c, error);
+	}
+});
+
+// The network sent the person back; only the signed-in person who started the flow can link the account
+socialRouter.post('/channel/:channelId/connect/confirm', async (c) => {
+	const channelId = c.req.param('channelId');
+	try {
+		const userId = await requireRole(c, channelId, 'channel.edit');
+		const b = await body<{ id: string }>(c);
+		const account = await confirmConnect(c.env, typeof b.id === 'string' ? b.id : '', { userId, channelId });
+		return c.json({ account: accountView(account, await listRules(c.env, [account.id])) });
 	} catch (error) {
 		return fail(c, error);
 	}
@@ -498,7 +512,7 @@ socialRouter.get('/oauth/:network/callback', async (c) => {
 		const result = await finishOAuth(c.env, network, new URL(c.req.url).searchParams, async (userId, channelId) => can(await roleOnChannel(c.env as never, channelId, userId), 'channel.edit'));
 		c.header('Cache-Control', 'no-store');
 		c.header('Referrer-Policy', 'no-referrer');
-		return c.redirect(studioReturnUrl(c.env, result.lang, result.channelId, result.account ? { connected: network } : { error: result.error }), 302);
+		return c.redirect(studioReturnUrl(c.env, result.lang, result.channelId, result.confirm ? { confirm: result.confirm } : { error: result.error }), 302);
 	} catch (error) {
 		logger.error('[Social] OAuth callback failed', { network, error: error instanceof Error ? error.message : String(error) });
 		return c.redirect(studioReturnUrl(c.env, 'en', null, { error: 'internal_error' }), 302);
