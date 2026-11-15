@@ -395,7 +395,9 @@ describe('BulkEditPanel (Studio "Edit selected")', () => {
       await act(async () => {
         fireEvent.click(screen.getByTestId('rename-pair-translate-ar'));
       });
-      expect(screen.getByTestId('rename-pattern-ar')).toHaveValue('الدرس {n}');
+      // The Arabic pattern already has text, so it asks before replacing it
+      fireEvent.click(await screen.findByTestId('confirm-dialog-confirm'));
+      await waitFor(() => expect(screen.getByTestId('rename-pattern-ar')).toHaveValue('الدرس {n}'));
       act(() => registerTranslator(null));
     });
   });

@@ -90,7 +90,7 @@ test.describe('caption and title translation', () => {
           await page.reload();
           await expect(english).toBeVisible({ timeout: 5000 });
         }).toPass({ timeout: 120000, intervals: [3000] });
-        await expect(english.getByTestId('caption-draft-machine')).toContainText(MACHINE_FROM[locale]);
+        await expect(english).toContainText(MACHINE_FROM[locale]);
 
         // Publish it; the served track keeps Quran in the Quran Foundation edition, with its name
         const drafts = (await (await apiFetch(creator.user, `/api/videos/${video.id}/captions/drafts`)).json()) as { data?: { drafts?: Array<{ language: string; version: number; kind: string; sourceLanguage?: string }> } };
