@@ -1,11 +1,12 @@
 /**
- * Social connections (wiki AUN-SOCIAL, SOC-1): the Telegram code flow, and that a deleted channel takes every
+ * Social connections (wiki AUN-SOCIAL, SOC-1): OAuth links only after the person who started it confirms, the
+ * Telegram code flow (only a chat admin's code counts), and that a deleted channel takes every
  * social row with it (accounts, rules, templates, deliveries, webhooks, codes, audit). Mocked network only.
  */
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { SqliteD1 } from './search-sqlite-d1';
-import { disconnectChannel, eraseChannelSocial, handleTelegramUpdate, startConnect } from '../src/lib/social/connect';
+import { confirmConnect, disconnectChannel, eraseChannelSocial, finishOAuth, handleTelegramUpdate, startConnect } from '../src/lib/social/connect';
 import { audit, saveRule, saveTemplate, upsertAccount } from '../src/lib/social/store';
 import { writeCredentials, type SocialEnv } from '../src/lib/social/platform';
 
@@ -18,14 +19,17 @@ function makeEnv() {
 	return { env, db };
 }
 
-/** Telegram's Bot API, recording each method called. */
-function telegramFetch(member = { status: 'administrator', can_post_messages: true }) {
+/** Telegram's Bot API, recording each method called. `sender` is the status of the person who posted (groups). */
+function telegramFetch(member = { status: 'administrator', can_post_messages: true }, sender = 'administrator') {
 	const methods: string[] = [];
-	const f = (async (input: RequestInfo | URL) => {
+	const f = (async (input: RequestInfo | URL, init?: RequestInit) => {
 		const method = String(input).split('/').pop()!;
 		methods.push(method);
 		if (method === 'getMe') return json({ ok: true, result: { id: 42, username: 'aun_bot' } });
-		if (method === 'getChatMember') return json({ ok: true, result: member });
+		if (method === 'getChatMember') {
+			const asked = JSON.parse(String(init?.body ?? '{}')) as { user_id?: number };
+			return json({ ok: true, result: asked.user_id === 42 ? member : { status: sender } });
+		}
 		return json({ ok: true, result: true });
 	}) as typeof fetch;
 	return { f, methods };
@@ -71,6 +75,61 @@ describe('Telegram code flow', () => {
 		await upsertAccount(t.env, { channelId: 'ch1', network: 'telegram', remoteId: '-100888', handle: '', displayName: 'C', instance: null, language: 'en', tokenCiphertext: null, tokenExpiresAt: null, connectedBy: 'owner' });
 		const out = await handleTelegramUpdate(t.env, { update_id: 3, my_chat_member: { chat: { id: -100888, type: 'channel' }, new_chat_member: { status: 'left' } } }, telegramFetch().f);
 		assert.equal(out.revoked, 1);
+	});
+
+	it('in a group, only a code posted by one of its admins connects', async () => {
+		const started = await startConnect(t.env, { network: 'telegram', channelId: 'ch1', userId: 'owner', language: 'en', returnLang: 'en' }, telegramFetch().f);
+		const code = started.kind === 'telegram' ? started.code : '';
+		const update = { update_id: 4, message: { message_id: 5, chat: { id: -200, type: 'supergroup', title: 'G' }, from: { id: 7 }, text: code } };
+		assert.deepEqual(await handleTelegramUpdate(t.env, update, telegramFetch(undefined, 'member').f), {}, 'a member posting the code');
+		assert.deepEqual(await handleTelegramUpdate(t.env, { ...update, message: { ...update.message, from: undefined } }, telegramFetch().f), {}, 'no sender');
+		assert.ok((await handleTelegramUpdate(t.env, update, telegramFetch(undefined, 'creator').f)).connected, 'the group owner');
+	});
+});
+
+describe('OAuth connect', () => {
+	const INSTANCE = 'social.example.org';
+	function mastodonFetch() {
+		return (async (input: RequestInfo | URL) => {
+			const url = String(input);
+			if (url.endsWith('/api/v1/apps')) return json({ client_id: 'cid', client_secret: 'csec' });
+			if (url.endsWith('/oauth/token')) return json({ access_token: 'tok', scope: 'write:statuses' });
+			if (url.endsWith('/verify_credentials')) return json({ id: '77', username: 'noor', acct: 'noor', display_name: 'Noor' });
+			return json({}, 404);
+		}) as typeof fetch;
+	}
+	async function backFromNetwork(t: ReturnType<typeof makeEnv>) {
+		const started = await startConnect(t.env, { network: 'mastodon', channelId: 'ch1', userId: 'owner', language: 'en', returnLang: 'ar', instance: INSTANCE }, mastodonFetch());
+		assert.equal(started.kind, 'redirect');
+		const state = new URL(started.kind === 'redirect' ? started.authorizeUrl : '').searchParams.get('state')!;
+		return finishOAuth(t.env, 'mastodon', new URLSearchParams({ state, code: 'c1' }), async () => true, mastodonFetch());
+	}
+	const accounts = (t: ReturnType<typeof makeEnv>) => (t.db.db.prepare('SELECT COUNT(*) AS n FROM social_accounts').get() as { n: number }).n;
+
+	it('the callback links nothing; only the person who started it, on that channel, can confirm, once', async () => {
+		const t = makeEnv();
+		const result = await backFromNetwork(t);
+		assert.equal(result.channelId, 'ch1');
+		assert.equal(result.lang, 'ar');
+		assert.ok(result.confirm);
+		assert.equal(accounts(t), 0, 'nothing linked by the callback');
+
+		await assert.rejects(confirmConnect(t.env, result.confirm!, { userId: 'someone-else', channelId: 'ch1' }), { code: 'connect_expired' });
+		await assert.rejects(confirmConnect(t.env, result.confirm!, { userId: 'owner', channelId: 'ch2' }), { code: 'connect_expired' });
+		assert.equal(accounts(t), 0);
+
+		const account = await confirmConnect(t.env, result.confirm!, { userId: 'owner', channelId: 'ch1' });
+		assert.deepEqual({ channel: account.channel_id, remote: account.remote_id, handle: account.handle, by: account.connected_by }, { channel: 'ch1', remote: '77', handle: `noor@${INSTANCE}`, by: 'owner' });
+		await assert.rejects(confirmConnect(t.env, result.confirm!, { userId: 'owner', channelId: 'ch1' }), { code: 'connect_expired' }, 'single use');
+		assert.equal(accounts(t), 1);
+	});
+
+	it('an expired confirmation links nothing', async () => {
+		const t = makeEnv();
+		const result = await backFromNetwork(t);
+		t.db.db.prepare('UPDATE social_pending SET expires_at = ? WHERE id = ?').run(Date.now() - 1, result.confirm!);
+		await assert.rejects(confirmConnect(t.env, result.confirm!, { userId: 'owner', channelId: 'ch1' }), { code: 'connect_expired' });
+		assert.equal(accounts(t), 0);
 	});
 });
 

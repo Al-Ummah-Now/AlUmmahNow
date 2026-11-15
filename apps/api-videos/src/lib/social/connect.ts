@@ -2,7 +2,8 @@
  * Connecting and disconnecting accounts (spec §5): OAuth for X, Bluesky and Mastodon, a one-time code for
  * Telegram. The OAuth state is single use, bound to the person and the channel, and lives 10 minutes; its PKCE
  * verifier (and Bluesky's DPoP key) is stored encrypted. Nothing is stored as a connection until the network
- * has confirmed who signed in.
+ * has confirmed who signed in, and the signed-in person who started the flow has confirmed it in Studio (the
+ * callback alone links nothing, so a link someone else sends you can't attach their account to your channel).
  */
 import type { SocialLanguage, SocialNetwork } from '@al-ummah/shared-types';
 import { openJson, pkceChallenge, randomToken, sealJson } from './crypto';
@@ -18,10 +19,12 @@ import { logger } from '../logger';
 
 const OAUTH_TTL_MS = 10 * 60_000;
 const TELEGRAM_CODE_TTL_MS = 30 * 60_000;
+const CONFIRM_TTL_MS = 10 * 60_000;
 
 interface PendingRow {
 	id: string;
-	kind: 'oauth' | 'telegram';
+	/** oauth: waiting for the network; confirm: tokens back, waiting for the person in Studio; telegram: a code */
+	kind: 'oauth' | 'confirm' | 'telegram';
 	channel_id: string;
 	user_id: string;
 	network: SocialNetwork;
@@ -38,6 +41,11 @@ interface OAuthPendingData {
 	returnLang: SocialLanguage;
 }
 
+interface ConfirmPendingData {
+	tokens: TokenSet;
+	identity: { remoteId: string; handle: string; displayName: string; instance?: string };
+}
+
 const pendingBound = (id: string) => `pending:${id}`;
 
 async function putPending(env: SocialEnv, row: Omit<PendingRow, 'data_ciphertext'>, data: unknown): Promise<void> {
@@ -49,10 +57,12 @@ async function putPending(env: SocialEnv, row: Omit<PendingRow, 'data_ciphertext
 		.run();
 }
 
-/** Reads and deletes a pending row (single use). */
-async function takePending(env: SocialEnv, id: string, kind: PendingRow['kind']): Promise<PendingRow | null> {
+/** Reads and deletes a pending row (single use). With `owner`, only that person's row for that channel matches. */
+async function takePending(env: SocialEnv, id: string, kind: PendingRow['kind'], owner?: { userId: string; channelId: string }): Promise<PendingRow | null> {
 	const db = socialDb(env);
-	const row = await db.prepare('SELECT * FROM social_pending WHERE id = ? AND kind = ?').bind(id, kind).first<PendingRow>();
+	const row = owner
+		? await db.prepare('SELECT * FROM social_pending WHERE id = ? AND kind = ? AND user_id = ? AND channel_id = ?').bind(id, kind, owner.userId, owner.channelId).first<PendingRow>()
+		: await db.prepare('SELECT * FROM social_pending WHERE id = ? AND kind = ?').bind(id, kind).first<PendingRow>();
 	if (!row) return null;
 	const r = await db.prepare('DELETE FROM social_pending WHERE id = ?').bind(id).run();
 	if (!changes(r)) return null;
@@ -146,9 +156,10 @@ async function mastodonApp(env: SocialEnv, instance: string, redirectUri: string
 export const tokenBound = (accountId: string) => `account:${accountId}:tokens`;
 
 /** Where the browser goes after a callback: the channel's Social page in Studio, with the outcome. */
-export function studioReturnUrl(env: SocialEnv, lang: SocialLanguage, channelId: string | null, outcome: { connected?: SocialNetwork; error?: string }): string {
+export function studioReturnUrl(env: SocialEnv, lang: SocialLanguage, channelId: string | null, outcome: { connected?: SocialNetwork; confirm?: string; error?: string }): string {
 	const u = new URL(channelId ? `${webOrigin(env)}/${lang}/studio/${encodeURIComponent(channelId)}/social` : `${webOrigin(env)}/${lang}/studio`);
 	if (outcome.connected) u.searchParams.set('connected', outcome.connected);
+	if (outcome.confirm) u.searchParams.set('confirm', outcome.confirm);
 	if (outcome.error) u.searchParams.set('error', outcome.error);
 	return u.toString();
 }
@@ -156,7 +167,8 @@ export function studioReturnUrl(env: SocialEnv, lang: SocialLanguage, channelId:
 export interface CallbackResult {
 	channelId: string | null;
 	lang: SocialLanguage;
-	account?: AccountRow;
+	/** The id Studio sends back to confirm the connection (POST /channel/:id/connect/confirm) */
+	confirm?: string;
 	error?: string;
 }
 
@@ -205,30 +217,51 @@ export async function finishOAuth(
 		} else {
 			return fail('network_refused');
 		}
-		const id = `pending-${pending.id}`;
-		// Sealed against a placeholder first, then re-sealed against the row id once we know it
-		const account = await upsertAccount(env, {
-			channelId: pending.channel_id,
-			network,
-			remoteId: identity.remoteId,
-			handle: identity.handle,
-			displayName: identity.displayName,
-			instance: identity.instance ?? null,
-			language: pending.language,
-			tokenCiphertext: await sealJson(env, tokens, id),
-			tokenExpiresAt: tokens.expiresAt ?? null,
-			connectedBy: pending.user_id,
-		});
-		await socialDb(env)
-			.prepare('UPDATE social_accounts SET token_ciphertext = ? WHERE id = ?')
-			.bind(await sealJson(env, tokens, tokenBound(account.id)), account.id)
-			.run();
-		await audit(env, pending.channel_id, pending.user_id, 'account.connect', account.id, { network, handle: identity.handle });
-		return { channelId: pending.channel_id, lang, account };
+		// Nothing is linked yet: the tokens wait, sealed, for the person who started this to confirm in Studio
+		const confirm = randomToken(24);
+		await putPending(
+			env,
+			{ id: confirm, kind: 'confirm', channel_id: pending.channel_id, user_id: pending.user_id, network, language: pending.language, expires_at: Date.now() + CONFIRM_TTL_MS },
+			{ tokens, identity } satisfies ConfirmPendingData,
+		);
+		return { channelId: pending.channel_id, lang, confirm };
 	} catch (error) {
 		logger.warn('[Social] Connect failed', { network, channelId: pending.channel_id, error: error instanceof Error ? error.message : String(error) });
 		return fail(error instanceof NetworkError && error.kind === 'retry' ? 'network_unavailable' : 'network_refused');
 	}
+}
+
+/**
+ * Studio confirms a connection the network sent back. Only the signed-in person who started the flow, on the same
+ * channel, can; anyone else's confirm id simply isn't found. Single use.
+ */
+export async function confirmConnect(
+	env: SocialEnv,
+	confirmId: string,
+	who: { userId: string; channelId: string },
+): Promise<AccountRow> {
+	const pending = confirmId ? await takePending(env, confirmId, 'confirm', who) : null;
+	if (!pending) throw new SocialError(404, 'connect_expired');
+	const { tokens, identity } = await openJson<ConfirmPendingData>(env, pending.data_ciphertext!, pendingBound(pending.id));
+	// Sealed against a placeholder first, then re-sealed against the row id once we know it
+	const account = await upsertAccount(env, {
+		channelId: pending.channel_id,
+		network: pending.network,
+		remoteId: identity.remoteId,
+		handle: identity.handle,
+		displayName: identity.displayName,
+		instance: identity.instance ?? null,
+		language: pending.language,
+		tokenCiphertext: await sealJson(env, tokens, `pending-${pending.id}`),
+		tokenExpiresAt: tokens.expiresAt ?? null,
+		connectedBy: pending.user_id,
+	});
+	await socialDb(env)
+		.prepare('UPDATE social_accounts SET token_ciphertext = ? WHERE id = ?')
+		.bind(await sealJson(env, tokens, tokenBound(account.id)), account.id)
+		.run();
+	await audit(env, pending.channel_id, pending.user_id, 'account.connect', account.id, { network: pending.network, handle: identity.handle });
+	return account;
 }
 
 // --- Telegram ------------------------------------------------------------------------------------
@@ -270,7 +303,7 @@ interface TgChat {
 interface TgUpdate {
 	update_id: number;
 	channel_post?: { message_id: number; chat: TgChat; text?: string };
-	message?: { message_id: number; chat: TgChat; text?: string };
+	message?: { message_id: number; chat: TgChat; text?: string; from?: { id: number; is_bot?: boolean } };
 	my_chat_member?: { chat: TgChat; new_chat_member: { status: string; can_post_messages?: boolean } };
 }
 
@@ -305,7 +338,14 @@ export async function handleTelegramUpdate(env: SocialEnv, update: TgUpdate, f: 
 	try {
 		const me = await tgGetMe(f, creds.botToken);
 		const member = await tgCall<{ status: string; can_post_messages?: boolean }>(f, creds.botToken, 'getChatMember', { chat_id: chat.id, user_id: me.id });
-		const canPost = member.status === 'administrator' && (chat.type !== 'channel' || member.can_post_messages !== false);
+		let canPost = member.status === 'administrator' && (chat.type !== 'channel' || member.can_post_messages !== false);
+		// In a group, anyone can post a message: the code only counts from one of the group's admins. (In a
+		// channel only its admins can post at all.)
+		if (canPost && !update.channel_post) {
+			const sender = update.message?.from;
+			const role = sender ? await tgCall<{ status: string }>(f, creds.botToken, 'getChatMember', { chat_id: chat.id, user_id: sender.id }) : null;
+			canPost = !!role && ['creator', 'administrator'].includes(role.status);
+		}
 		// Without the right to post, the code stays usable: Studio's steps say to make the bot an admin and post it again
 		if (!canPost) {
 			await putPending(env, { id: pending.id, kind: 'telegram', channel_id: pending.channel_id, user_id: pending.user_id, network: 'telegram', language: pending.language, expires_at: pending.expires_at }, undefined);
