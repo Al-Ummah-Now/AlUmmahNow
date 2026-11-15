@@ -75,6 +75,10 @@ on its own port:
     videos), thumbnails and MP4s. Encoded videos only; before the encode it answers 404, like Bunny.
   - **Bunny Storage and the image host** (`images.alummahnow.net`).
   - **Resend**: emails are kept, never sent.
+  - **Cloudflare API** (`api.cloudflare.com`): only the read calls of the transcode troubleshooting panel
+    (containers, queues, queue backlog, Observability logs; admin-api `lib/media-troubleshoot/cloudflare.ts`),
+    and only with an `e2e-fake-cloudflare-token-…` token. `PUT /__fake/cloudflare { logVideo }` names the
+    video its log lines mention; `DELETE /__fake/cloudflare` forgets it.
   - **The R2 media pipeline** (the transcoder Container and the media Worker are not in the stack):
     `POST /__fake/media/transcode/<videoId>` checks the record's queued job and its kept original, then
     sends the job events a real transcode sends (`started`, then `ready` with the result, or with
@@ -109,6 +113,7 @@ on its own port:
     `POST /__fake/google/consent?mode=allow|deny|no-channel|no-captions` (`no-channel`: the account has no
     YouTube channel; `no-captions`: the consent grants only the read-only scope),
     `POST /__fake/google/quota?on=1|0` (captions calls answer `quotaExceeded`), `POST /__fake/google/reset`;
+  - `PUT|DELETE /__fake/cloudflare`: the video the fake Cloudflare log lines name;
   - `POST /__stack/d1/<database name>`, which runs the request body as SQL. The seed uses it for roles
     and creator tiers, and specs that are not about auth can use it as a fast path;
   - `GET|PUT|DELETE /__stack/r2/<bucket name>/<key>`: one object of a stack R2 bucket (fixtures a spec
