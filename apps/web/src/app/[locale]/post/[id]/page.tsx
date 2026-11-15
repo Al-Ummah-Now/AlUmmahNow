@@ -37,7 +37,7 @@ export async function generateMetadata({ params }: PostPageProps): Promise<Metad
   const title = postHeadline(post, lang);
   const description = postDescription(post, lang);
   const host = (await headers()).get('host');
-  const image = host ? postCardUrl(post, originFromHost(host)) : undefined;
+  const image = host ? postCardUrl(post, originFromHost(host), lang) : undefined;
   const url = (l: string) => (host ? postPermalink(originFromHost(host), l, id) : `/${l}/post/${encodeURIComponent(id)}`);
   // A channel with a live scholar site: the post is canonical there (AUN-SCHOLAR-SITES §4.4)
   const onSite = sitePostCanonical(await loadSiteLink(post.channelId), lang, id);

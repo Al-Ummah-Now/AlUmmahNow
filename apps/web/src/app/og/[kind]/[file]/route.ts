@@ -22,7 +22,8 @@ import { stableSourceKey } from '@/lib/share-card/source-key';
 const EDGE_SECONDS = 3600;
 const MAX_SOURCE_BYTES = 8 * 1024 * 1024;
 const IMAGE_TYPE = /^image\/(jpeg|png|webp|gif|avif)$/;
-const R2_PREFIX = 'share-cards/v1';
+// v2 (2026-11-15): the channel card changed (banner whole, logo at its corner); every stored card is rebuilt
+const R2_PREFIX = 'share-cards/v2';
 
 type EdgeCache = { match(req: Request): Promise<Response | undefined>; put(req: Request, res: Response): Promise<void> };
 type R2Like = {
@@ -115,7 +116,7 @@ async function plan(kind: 'v' | 'c' | 'i', id: string): Promise<Plan | null> {
     const avatar = ok(channel.avatarUrl);
     const cover = ok(channel.coverUrl);
     if (!avatar && !cover) return { kind: 'site' };
-    return avatar ? { kind: 'channel', avatar, cover } : { kind: 'image', source: cover as string };
+    return { kind: 'channel', avatar, cover };
   }
   const source = fromBase64Url(id);
   // Our own public image hosts only, never a signed (expiring) URL: this is not an open proxy
@@ -129,7 +130,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ kind
   if (!parsed) return notFound();
 
   const cache = edgeCache();
-  const cacheKey = new Request(new URL(`/og/${parsed.kind}/${parsed.id}.jpg`, request.url).toString());
+  // A channel card is mirrored for Arabic (?lang=ar): its own cache and storage entry
+  const rtl = parsed.kind === 'c' && new URL(request.url).searchParams.get('lang') === 'ar';
+  const cacheKey = new Request(new URL(`/og/${parsed.kind}/${parsed.id}.jpg${rtl ? '?lang=ar' : ''}`, request.url).toString());
   const cached = await cache?.match(cacheKey).catch(() => undefined);
   if (cached) return cached;
 
@@ -139,7 +142,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ kind
   if (what.kind === 'site' || !env.IMAGES) return siteCard(request, env);
 
   const sources = what.kind === 'image' ? [what.source] : [what.avatar as string, what.cover ?? ''];
-  const key = `${R2_PREFIX}/${parsed.kind}/${await sha(`${parsed.kind}:${parsed.id}`)}/${await sha(sources.map(stableSourceKey).join('|'))}.jpg`;
+  const key = `${R2_PREFIX}/${parsed.kind}/${await sha(`${parsed.kind}:${parsed.id}`)}/${await sha(sources.map(stableSourceKey).join('|'))}${rtl ? '-ar' : ''}.jpg`;
   // A card made from an /og/i URL never changes (the URL is the source): browsers keep it a week
   const maxAge = parsed.kind === 'i' ? 604800 : EDGE_SECONDS;
 
@@ -160,7 +163,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ kind
       // The logo in front of the banner; either alone when the other does not load
       const [avatar, cover] = await Promise.all([fetchImage(what.avatar as string), what.cover ? fetchImage(what.cover) : Promise.resolve(null)]);
       if (!avatar && !cover) return siteCard(request, env);
-      card = await composeChannelCard(env.IMAGES, avatar, cover);
+      card = await composeChannelCard(env.IMAGES, avatar, cover, rtl);
     }
   } catch (error) {
     logger.warn('[og] Share card failed', { kind: parsed.kind, id: parsed.id.slice(0, 64), error: error instanceof Error ? error.message : String(error) });

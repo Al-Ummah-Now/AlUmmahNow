@@ -56,13 +56,13 @@ export function postImage(post: PermalinkPost): string | undefined {
 
 /**
  * The post's 1200x630 share card (large previews): its picture or article cover, else the video it
- * shares, else its channel's card (avatar on the cover banner).
+ * shares, else its channel's card (mirrored on Arabic pages).
  */
-export function postCardUrl(post: PermalinkPost, origin: string): string {
+export function postCardUrl(post: PermalinkPost, origin: string, locale?: string): string {
   const image = postImage(post);
   if (image) return imageCardUrl(origin, image);
   if (post.videoId) return videoCardUrl(origin, post.videoId);
-  return channelCardUrl(origin, post.channelId);
+  return channelCardUrl(origin, post.channelId, locale);
 }
 
 /** Only a published, public post is indexed: members-only, scheduled, held or deleted ones never are. */

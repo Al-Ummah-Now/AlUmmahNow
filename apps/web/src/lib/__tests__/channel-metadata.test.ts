@@ -25,7 +25,8 @@ describe('buildChannelMetadata', () => {
 
   it('an avatar: the channel\'s 1200x630 card (never the square avatar, which gets the small side preview)', async () => {
     const meta = await buildChannelMetadata(channel({ avatarUrl: 'https://cdn.example/a.jpg' } as Partial<Channel>), 'ar');
-    const card = 'http://localhost:3001/og/c/ch_1.jpg';
+    // the Arabic page's card is mirrored (logo at the right)
+    const card = 'http://localhost:3001/og/c/ch_1.jpg?lang=ar';
     expect(meta.openGraph?.images).toEqual([{ url: card, secureUrl: card, width: 1200, height: 630, type: 'image/jpeg', alt: 'Test Channel' }]);
     expect(meta.twitter).toMatchObject({ card: 'summary_large_image', images: [card] });
   });

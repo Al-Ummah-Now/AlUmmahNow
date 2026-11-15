@@ -41,7 +41,7 @@ export async function generateMetadata({ params }: Pick<PlaylistLayoutProps, 'pa
   // The first video's 1200x630 card (large previews) when it is public, else the channel's
   const first = Array.isArray(data.videos) && typeof data.videos[0] === 'string' ? await loadPublicVideo(data.videos[0]) : null;
   const origin = originFromHost(host);
-  const image = first?.poster ? videoCardUrl(origin, first.id) : data.channelId ? channelCardUrl(origin, data.channelId) : null;
+  const image = first?.poster ? videoCardUrl(origin, first.id) : data.channelId ? channelCardUrl(origin, data.channelId, lang) : null;
   return {
     ...(title ? { title } : {}),
     ...(description ? { description } : {}),

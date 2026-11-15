@@ -25,8 +25,8 @@ const FILL_MAX_ASPECT = 2.3;
  * - `fill`: a wide image (a landscape video frame), cropped to 1200x630 around its centre.
  * - `framed`: the whole image, as large as fits, centred on a blurred, dimmed copy of itself
  *   (a Short's vertical frame, a square image). Nothing is added: no logo, badge or text.
- * - `avatar`: a channel: its logo, a 420px circle, centred on its banner cropped to fill the card
- *   (compose.ts composeChannelCard), or on CHANNEL_PAGE_COLOUR without a banner.
+ * - `avatar`: a channel without a banner: its logo, a 420px circle, centred on CHANNEL_PAGE_COLOUR.
+ *   A channel with a banner uses channelLayout (the banner whole, the logo at its bottom-start corner).
  */
 export type CardLayout =
   | { kind: 'fill' }
@@ -47,6 +47,46 @@ export function cardLayout(width: number, height: number): CardLayout {
   const w = Math.min(CARD_WIDTH, Math.round(width * scale));
   const h = Math.min(CARD_HEIGHT, Math.round(height * scale));
   return { kind: 'framed', width: w, height: h, left: Math.round((CARD_WIDTH - w) / 2), top: Math.round((CARD_HEIGHT - h) / 2) };
+}
+
+/**
+ * A channel with a banner (owner, 2026-11-15, "something like this" + "watch for padding and make sure
+ * nothing overlaps"): the banner WHOLE (never cropped) on the page colour, as wide as fits inside an
+ * even CHANNEL_PADDING on every side; the round logo at the banner's bottom-start corner (left in
+ * English, right in Arabic), overlapping its lower edge by a quarter of the logo so it reads as the
+ * channel's picture without hiding much of the banner. The banner + logo group is centred vertically
+ * and every part stays inside the padding, whatever the banner's shape (6:1 to portrait), so the logo
+ * is never clipped by the card edge.
+ */
+export const CHANNEL_PADDING = 40;
+export const CHANNEL_LOGO_SIZE = 232;
+/** How much of the logo sits over the banner's lower edge */
+export const CHANNEL_LOGO_OVERLAP = Math.round(CHANNEL_LOGO_SIZE / 4);
+/** How far in from the banner's start edge the logo sits */
+const CHANNEL_LOGO_INSET = 32;
+
+export interface Box { left: number; top: number; width: number; height: number }
+
+export function channelLayout(bannerWidth: number, bannerHeight: number, rtl: boolean): { banner: Box; logo: Box } {
+  const aspect = bannerWidth > 0 && bannerHeight > 0 ? bannerWidth / bannerHeight : 4;
+  const below = CHANNEL_LOGO_SIZE - CHANNEL_LOGO_OVERLAP;
+  const maxWidth = CARD_WIDTH - 2 * CHANNEL_PADDING;
+  const maxHeight = CARD_HEIGHT - 2 * CHANNEL_PADDING - below;
+  let width = maxWidth;
+  let height = Math.round(width / aspect);
+  if (height > maxHeight) {
+    height = maxHeight;
+    width = Math.round(height * aspect);
+  }
+  const left = Math.round((CARD_WIDTH - width) / 2);
+  const top = Math.round((CARD_HEIGHT - (height + below)) / 2);
+  // The logo starts CHANNEL_LOGO_INSET in from the banner's start edge (never closer than the padding to
+  // the card edge); a banner too narrow for that (portrait, square-ish) gets the logo centred under it
+  const fitsAtStart = width >= CHANNEL_LOGO_SIZE + 2 * CHANNEL_LOGO_INSET;
+  const startX = fitsAtStart ? Math.max(CHANNEL_PADDING, left + CHANNEL_LOGO_INSET) : Math.round(left + (width - CHANNEL_LOGO_SIZE) / 2);
+  const logoLeft = rtl ? CARD_WIDTH - startX - CHANNEL_LOGO_SIZE : startX;
+  const logoTop = top + height - CHANNEL_LOGO_OVERLAP;
+  return { banner: { left, top, width, height }, logo: { left: logoLeft, top: logoTop, width: CHANNEL_LOGO_SIZE, height: CHANNEL_LOGO_SIZE } };
 }
 
 export function avatarLayout(): Extract<CardLayout, { kind: 'avatar' }> {
@@ -70,7 +110,9 @@ export function parseCardPath(pathname: string): { kind: CardKind; id: string } 
 const trimOrigin = (origin: string) => origin.replace(/\/+$/, '');
 
 export const videoCardUrl = (origin: string, videoId: string) => `${trimOrigin(origin)}/og/v/${encodeURIComponent(videoId)}.jpg`;
-export const channelCardUrl = (origin: string, channelId: string) => `${trimOrigin(origin)}/og/c/${encodeURIComponent(channelId)}.jpg`;
+/** A channel's card; Arabic pages mirror it (the logo at the right), so the language is part of the URL */
+export const channelCardUrl = (origin: string, channelId: string, lang?: string | null) =>
+  `${trimOrigin(origin)}/og/c/${encodeURIComponent(channelId)}.jpg${lang === 'ar' ? '?lang=ar' : ''}`;
 
 function base64Url(text: string): string {
   const bytes = new TextEncoder().encode(text);

@@ -58,6 +58,10 @@ export function buildWatchMetadata(video: EmbedVideo | null, locale: string, ori
       // oEmbed answers for this site's own watch URL
       types: { 'application/json+oembed': [{ url: oembedEndpointUrl(origin, ownUrl), title }] },
     },
+    // No og:video (2026-11-15): it named our HTML player, which no chat app plays (WhatsApp, Telegram,
+    // iMessage, Facebook/Messenger, Slack and Discord only play allow-listed players). Apps that see
+    // og:video switch to a video-link layout with the small side thumbnail instead of the large card.
+    // X still plays it through twitter:player.
     openGraph: {
       type: 'video.other',
       siteName: 'Al Ummah Now',
@@ -66,7 +70,6 @@ export function buildWatchMetadata(video: EmbedVideo | null, locale: string, ori
       url: pageUrl,
       locale: lang === 'ar' ? 'ar_AR' : 'en_US',
       images,
-      videos: [{ url: player, secureUrl: player, type: 'text/html', width: size.width, height: size.height }],
     },
     twitter: {
       card: 'player',
