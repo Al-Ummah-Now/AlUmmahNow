@@ -8,6 +8,7 @@
  * comment indexes follow (lib/search/sync.ts).
  */
 import { disconnectChannel, eraseChannelSocial } from '../social/connect';
+import { runTranscodeAction } from '../media/troubleshoot';
 import { bunnyRef } from '../media/providers';
 import { adminVideoMedia } from '../media/video-override';
 import { eraseUploadTraces } from '../privacy/upload-traces';
@@ -1704,5 +1705,8 @@ export const ADMIN_JOB_HANDLERS: Record<AdminJobKind, JobHandler> = {
 	// CSAM takedown (lib/csam/contain.ts) and the image owner index it maps images with
 	'csam.contain': (env, job) => runContainStep(env as ContainEnv, job),
 	'images.index-owners': (env, job) => backfillImageOwnersStep(env as never, job.params as never),
+	// R2 transcode troubleshooting (lib/media/troubleshoot.ts), videos admin → Delivery
+	'media.transcode-retry': (env, job) => runTranscodeAction(env as never, job),
+	'media.transcode-cancel': (env, job) => runTranscodeAction(env as never, job),
 };
 

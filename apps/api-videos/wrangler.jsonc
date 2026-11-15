@@ -424,7 +424,9 @@
 	 * Service Bindings (communicate between multiple Workers)
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
 	 */
-	// "services": [{ "binding": "MY_SERVICE", "service": "my-service" }]
+	// The media Worker (apps/media): the Transcoder's job view and the admin's Cancel / Retry now
+	// (lib/media/troubleshoot.ts, videos admin → Delivery → Transcode troubleshooting)
+	"services": [{ "binding": "MEDIA_WORKER", "service": "al-ummah-now-media" }],
 	"dev": {
 		"ip": "127.0.0.1",
 		"port": 3086,
@@ -438,6 +440,7 @@
 			// Workers Logs bills per line: every invocation kept (sampling would drop errors), no invocation log, LOG_LEVEL warn
 			"observability": { "enabled": true, "head_sampling_rate": 1, "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": false } },
 			"version_metadata": { "binding": "CF_VERSION_METADATA" },
+			"services": [{ "binding": "MEDIA_WORKER", "service": "al-ummah-now-media-stage" }],
 			"name": "videos-stage",
 			"routes": [
 				{
