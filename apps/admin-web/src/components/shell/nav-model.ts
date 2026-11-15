@@ -120,6 +120,8 @@ export const NAV_ITEMS: NavItem[] = [
 
   { href: '/site-theme', label: 'nav.siteTheme', icon: 'palette', group: 'site' },
   { href: '/platform-settings', label: 'nav.platformSettings', icon: 'sliders', group: 'site' },
+  // Universal links / App Links files and app attestation (NAT-REL): every admin reads, admins change
+  { href: '/mobile-apps', label: 'nav.mobileApps', icon: 'phone', group: 'site' },
   // White-label scholar sites (wiki AUN-SCHOLAR-SITES §8): every admin reads, creators:manage changes
   { href: '/sites', label: 'nav.scholarSites', icon: 'globe', group: 'site' },
   // Newsletter (AlUmmahNowUI#6): www sign-ups, issues in en + ar; newsletter:manage = admins and super admins, as contact:read
