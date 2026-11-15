@@ -1,9 +1,9 @@
 // Renditions encoded on the creator's computer (D11: desktop Studio's optional pre-encode).
 //
 // The server never trusts them: the container checks every rung against the ladder it would have
-// encoded itself for this source (ladder.mjs), checks each playlist and file, decodes samples, and
-// only then uploads them. Anything off → the normal server encode runs instead, in the same attempt.
-// The master playlist is always written here, never taken from the upload.
+// encoded itself for this source (ladder.mjs), checks each playlist and file, decodes every segment,
+// checks the frames and audio match the source, and only then uploads them. Anything off → the normal server encode runs instead, in the same attempt.
+// Master and media playlists are always written here, never taken from the upload.
 //
 // Pure (unit-tested in apps/media/test/prebuilt.test.ts); server.mjs does the I/O and ffprobe.
 
@@ -16,10 +16,13 @@ export const PEAK_FACTOR = 1.5;
 /** Rendition and source durations may differ by this much (or 1%, whichever is larger). */
 export const DURATION_SLACK_SECONDS = 1;
 /** Segments decoded end to end per rung: first, middle and last. */
-export const DECODE_SAMPLES = 3;
+
+/** The only tags an uploaded media playlist may carry; anything else is rejected, never passed on. */
+const ALLOWED_TAGS = new Set(['#EXTM3U', '#EXT-X-VERSION', '#EXT-X-TARGETDURATION', '#EXT-X-MEDIA-SEQUENCE', '#EXT-X-PLAYLIST-TYPE', '#EXT-X-INDEPENDENT-SEGMENTS', '#EXT-X-MAP', '#EXTINF', '#EXT-X-ENDLIST']);
 
 /**
- * Parse a media playlist we can accept: VOD, fMP4 with one EXT-X-MAP, EXTINF per segment.
+ * Parse a media playlist we can accept: VOD, fMP4 with one EXT-X-MAP, EXTINF per segment, and no
+ * tag outside ALLOWED_TAGS. The upload is only read: what gets published is mediaPlaylist(), written here.
  * @param {string} text
  * @returns {{ ok: true, init: string, segments: { file: string, seconds: number }[], targetDuration: number } | { ok: false, reason: string }}
  */
@@ -28,17 +31,20 @@ export function parseMediaPlaylist(text) {
 	if (!files) return { ok: false, reason: 'playlist_names' };
 	const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
 	if (lines[0] !== '#EXTM3U') return { ok: false, reason: 'playlist_header' };
-	if (!lines.includes('#EXT-X-ENDLIST')) return { ok: false, reason: 'playlist_not_vod' };
-	if (lines.some((l) => l.startsWith('#EXT-X-KEY') || l.startsWith('#EXT-X-BYTERANGE') || l.startsWith('#EXT-X-DISCONTINUITY'))) return { ok: false, reason: 'playlist_features' };
+	if (lines.some((l) => l.startsWith('#') && !ALLOWED_TAGS.has(l.split(':')[0]))) return { ok: false, reason: 'playlist_features' };
+	if (lines.filter((l) => l === '#EXT-X-ENDLIST').length !== 1 || lines.at(-1) !== '#EXT-X-ENDLIST') return { ok: false, reason: 'playlist_not_vod' };
+	const type = lines.find((l) => l.startsWith('#EXT-X-PLAYLIST-TYPE:'));
+	if (type && type !== '#EXT-X-PLAYLIST-TYPE:VOD') return { ok: false, reason: 'playlist_not_vod' };
 	const maps = lines.filter((l) => l.startsWith('#EXT-X-MAP:'));
 	if (maps.length !== 1) return { ok: false, reason: 'playlist_init' };
-	const init = /URI="([^"]+)"/.exec(maps[0])?.[1];
-	const target = Number(/^#EXT-X-TARGETDURATION:(\d+)/.exec(lines.find((l) => l.startsWith('#EXT-X-TARGETDURATION:')) || '')?.[1]);
+	const init = /^#EXT-X-MAP:URI="([^"]+)"$/.exec(maps[0])?.[1];
+	const target = Number(/^#EXT-X-TARGETDURATION:(\d+)$/.exec(lines.find((l) => l.startsWith('#EXT-X-TARGETDURATION:')) || '')?.[1]);
 	const segments = [];
 	let pending = null;
 	for (const l of lines) {
-		const inf = /^#EXTINF:([0-9.]+)/.exec(l);
-		if (inf) {
+		if (l.startsWith('#EXTINF:')) {
+			const inf = /^#EXTINF:([0-9]+(?:\.[0-9]+)?),?$/.exec(l);
+			if (!inf || pending !== null) return { ok: false, reason: 'playlist_extinf' };
 			pending = Number(inf[1]);
 			continue;
 		}
@@ -47,9 +53,119 @@ export function parseMediaPlaylist(text) {
 		segments.push({ file: l, seconds: pending });
 		pending = null;
 	}
+	if (pending !== null) return { ok: false, reason: 'playlist_extinf' };
 	if (!init || segments.length === 0) return { ok: false, reason: 'playlist_empty' };
 	if (new Set(segments.map((s) => s.file)).size !== segments.length || segments.some((s) => s.file === init)) return { ok: false, reason: 'playlist_duplicates' };
 	return { ok: true, init, segments, targetDuration: Number.isFinite(target) ? target : 0 };
+}
+
+/**
+ * The media playlist we publish for a verified rung, written from the parsed upload (the uploaded
+ * text itself is never published).
+ * @param {{ init: string, segments: { file: string, seconds: number }[] }} pl
+ */
+export function mediaPlaylist(pl) {
+	const target = Math.ceil(Math.max(...pl.segments.map((s) => s.seconds)));
+	const lines = ['#EXTM3U', '#EXT-X-VERSION:7', `#EXT-X-TARGETDURATION:${target}`, '#EXT-X-MEDIA-SEQUENCE:0', '#EXT-X-PLAYLIST-TYPE:VOD', '#EXT-X-INDEPENDENT-SEGMENTS', `#EXT-X-MAP:URI="${pl.init}"`];
+	for (const s of pl.segments) lines.push(`#EXTINF:${s.seconds.toFixed(6)},`, s.file);
+	lines.push('#EXT-X-ENDLIST');
+	return `${lines.join('\n')}\n`;
+}
+
+// ---- Same content as the source -------------------------------------------------------------
+//
+// Well-formed renditions are not enough: they must show and sound like the source the server
+// probed (review and stills also run on the published rung, server.mjs). Frames are compared as
+// tiny grey thumbnails at evenly spaced times, audio as a loudness envelope.
+
+/** Frames compared per video, evenly spaced (never the first or last instant). */
+export const MATCH_FRAMES = 12;
+/** Thumbnail size the frames are scaled to before comparing (grey, 1 byte per pixel). */
+export const MATCH_FRAME_SIZE = { width: 32, height: 18 };
+/** Mean absolute pixel difference (0–255) a re-encode stays under; a different picture does not. */
+export const FRAME_DIFF_MEDIAN_MAX = 12;
+export const FRAME_DIFF_MAX = 48;
+/** Audio envelope: windows of this many ms, and the correlation a re-encode keeps. */
+export const ENVELOPE_WINDOW_MS = 100;
+export const ENVELOPE_RATE = 2000;
+export const ENVELOPE_CORRELATION_MIN = 0.8;
+
+/** Times (s) frames are compared at. */
+export function matchTimes(durationSeconds, n = MATCH_FRAMES) {
+	if (!(durationSeconds > 0)) return [];
+	return Array.from({ length: n }, (_, i) => Number((((i + 0.5) / n) * durationSeconds).toFixed(3)));
+}
+
+/** Mean absolute difference of two equal-size grey frames (Uint8Array / Buffer). */
+export function frameDistance(a, b) {
+	if (!a || !b || a.length !== b.length || a.length === 0) return 255;
+	let sum = 0;
+	for (let i = 0; i < a.length; i++) sum += Math.abs(a[i] - b[i]);
+	return sum / a.length;
+}
+
+/** RMS per window from signed 16-bit little-endian mono PCM. */
+export function envelope(pcm, rate = ENVELOPE_RATE, windowMs = ENVELOPE_WINDOW_MS) {
+	const per = Math.max(1, Math.round((rate * windowMs) / 1000));
+	const samples = Math.floor(pcm.length / 2);
+	const out = [];
+	for (let start = 0; start + per <= samples; start += per) {
+		let sq = 0;
+		for (let i = start; i < start + per; i++) {
+			const v = pcm.readInt16LE(i * 2) / 32768;
+			sq += v * v;
+		}
+		out.push(Math.sqrt(sq / per));
+	}
+	return out;
+}
+
+/** Pearson correlation over the common length; null when either side is (near) constant. */
+export function correlation(a, b) {
+	const n = Math.min(a.length, b.length);
+	if (n < 2) return null;
+	let ma = 0;
+	let mb = 0;
+	for (let i = 0; i < n; i++) {
+		ma += a[i];
+		mb += b[i];
+	}
+	ma /= n;
+	mb /= n;
+	let cov = 0;
+	let va = 0;
+	let vb = 0;
+	for (let i = 0; i < n; i++) {
+		cov += (a[i] - ma) * (b[i] - mb);
+		va += (a[i] - ma) ** 2;
+		vb += (b[i] - mb) ** 2;
+	}
+	if (va < 1e-9 || vb < 1e-9) return null;
+	return cov / Math.sqrt(va * vb);
+}
+
+/**
+ * Do the renditions carry the source's content?
+ * @param {{ frameDistances: number[], sourceEnvelope?: number[] | null, renditionEnvelope?: number[] | null }} o
+ * @returns {{ ok: true } | { ok: false, reason: 'content_mismatch' | 'audio_mismatch' }}
+ */
+export function contentMatches(o) {
+	const d = [...o.frameDistances].sort((x, y) => x - y);
+	if (d.length === 0) return { ok: false, reason: 'content_mismatch' };
+	const median = d[Math.floor((d.length - 1) / 2)];
+	if (median > FRAME_DIFF_MEDIAN_MAX || d[d.length - 1] > FRAME_DIFF_MAX) return { ok: false, reason: 'content_mismatch' };
+	if (o.sourceEnvelope) {
+		const src = o.sourceEnvelope;
+		const ren = o.renditionEnvelope ?? [];
+		if (Math.abs(src.length - ren.length) > Math.max(10, src.length * 0.02)) return { ok: false, reason: 'audio_mismatch' };
+		const r = correlation(src, ren);
+		// Both silent or flat: compare levels instead
+		if (r === null) {
+			const mean = (x) => x.reduce((n, v) => n + v, 0) / Math.max(1, x.length);
+			if (Math.abs(mean(src) - mean(ren)) > 0.02) return { ok: false, reason: 'audio_mismatch' };
+		} else if (r < ENVELOPE_CORRELATION_MIN) return { ok: false, reason: 'audio_mismatch' };
+	}
+	return { ok: true };
 }
 
 /**
@@ -100,12 +216,6 @@ export function verifyRenditions(o) {
 		if (peak > (want.maxrate + want.audio) * PEAK_FACTOR) return fail('bitrate');
 	}
 	return { ok: true };
-}
-
-/** Segments decoded end to end: first, middle and last (fewer for short rungs). */
-export function decodeSamples(segments) {
-	if (segments.length <= DECODE_SAMPLES) return segments.map((s) => s.file);
-	return [...new Set([0, Math.floor(segments.length / 2), segments.length - 1])].map((i) => segments[i].file);
 }
 
 /** RFC 6381 codec string of an H.264 stream from ffprobe's profile name and level. */

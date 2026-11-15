@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { ladderFor } from '../container/ladder.mjs';
-import { avcCodec, decodeSamples, masterPlaylist, parseMediaPlaylist, stagedPathAllowed, verifyRenditions } from '../container/prebuilt.mjs';
+import { avcCodec, contentMatches, correlation, envelope, frameDistance, masterPlaylist, matchTimes, mediaPlaylist, parseMediaPlaylist, stagedPathAllowed, verifyRenditions } from '../container/prebuilt.mjs';
 
 function playlist(segs: number[], extra = '') {
 	return ['#EXTM3U', '#EXT-X-VERSION:7', '#EXT-X-TARGETDURATION:6', '#EXT-X-PLAYLIST-TYPE:VOD', '#EXT-X-MAP:URI="init.mp4"', ...segs.flatMap((s, i) => [`#EXTINF:${s},`, `seg_${String(i + 1).padStart(5, '0')}.m4s`]), extra, '#EXT-X-ENDLIST'].filter(Boolean).join('\n');
@@ -36,6 +36,71 @@ describe('parseMediaPlaylist', () => {
 		assert.equal((parseMediaPlaylist(playlist([6], '#EXT-X-KEY:METHOD=AES-128,URI="k"')) as any).reason, 'playlist_features');
 		assert.equal((parseMediaPlaylist(playlist([6]).replace('seg_00001.m4s', '../x.m4s')) as any).reason, 'playlist_names');
 		assert.equal((parseMediaPlaylist(playlist([6]).replace('#EXT-X-MAP:URI="init.mp4"\n', '')) as any).reason, 'playlist_names');
+	});
+	it('refuses any tag outside the allowlist (nothing unknown is ever passed on)', () => {
+		for (const tag of ['#EXT-X-DISCONTINUITY', '#EXT-X-BYTERANGE:100@0', '#EXT-X-PROGRAM-DATE-TIME:2026-01-01T00:00:00Z', '#EXT-X-DATERANGE:ID="a"', '#EXT-X-SESSION-DATA:DATA-ID="x"', '#EXT-X-START:TIME-OFFSET=5', '#EXT-X-CUSTOM']) {
+			assert.equal((parseMediaPlaylist(playlist([6], tag)) as any).reason, 'playlist_features', tag);
+		}
+	});
+	it('refuses a playlist that is not VOD, has trailing content or a dangling EXTINF', () => {
+		assert.equal((parseMediaPlaylist(playlist([6]).replace('#EXT-X-PLAYLIST-TYPE:VOD', '#EXT-X-PLAYLIST-TYPE:EVENT')) as any).reason, 'playlist_not_vod');
+		assert.equal((parseMediaPlaylist(`${playlist([6])}\nseg_00009.m4s`) as any).reason, 'playlist_not_vod');
+		assert.equal((parseMediaPlaylist(playlist([6]).replace('#EXTINF:6,', '#EXTINF:6,\n#EXTINF:6,')) as any).reason, 'playlist_extinf');
+		assert.equal((parseMediaPlaylist(playlist([6]).replace('#EXTINF:6,', '#EXTINF:6,title')) as any).reason, 'playlist_extinf');
+	});
+});
+
+describe('mediaPlaylist', () => {
+	it('publishes our own playlist built from the parsed upload, which parses back the same', () => {
+		const parsed = parseMediaPlaylist(playlist([6, 6, 3.25])) as any;
+		const text = mediaPlaylist(parsed);
+		assert.equal(text, ['#EXTM3U', '#EXT-X-VERSION:7', '#EXT-X-TARGETDURATION:6', '#EXT-X-MEDIA-SEQUENCE:0', '#EXT-X-PLAYLIST-TYPE:VOD', '#EXT-X-INDEPENDENT-SEGMENTS', '#EXT-X-MAP:URI="init.mp4"', '#EXTINF:6.000000,', 'seg_00001.m4s', '#EXTINF:6.000000,', 'seg_00002.m4s', '#EXTINF:3.250000,', 'seg_00003.m4s', '#EXT-X-ENDLIST', ''].join('\n'));
+		const again = parseMediaPlaylist(text) as any;
+		assert.deepEqual(again.segments, parsed.segments);
+		assert.equal(again.init, 'init.mp4');
+	});
+});
+
+describe('content match (renditions must be the source, not just well formed)', () => {
+	const frame = (fill: (i: number) => number) => Uint8Array.from({ length: 576 }, (_, i) => fill(i));
+	const pcm = (f: (i: number) => number, n: number) => {
+		const b = Buffer.alloc(n * 2);
+		for (let i = 0; i < n; i++) b.writeInt16LE(Math.max(-32768, Math.min(32767, Math.round(f(i) * 32767))), i * 2);
+		return b;
+	};
+	it('spreads the compared frames over the video, never at 0 or the end', () => {
+		const t = matchTimes(120, 12);
+		assert.equal(t.length, 12);
+		assert.equal(t[0], 5);
+		assert.equal(t[11], 115);
+		assert.deepEqual(matchTimes(0), []);
+	});
+	it('a re-encode is close, a different picture is far', () => {
+		const a = frame((i) => (i * 7) % 256);
+		assert.ok(frameDistance(a, frame((i) => Math.min(255, ((i * 7) % 256) + 3))) <= 3);
+		assert.ok(frameDistance(a, frame((i) => 255 - ((i * 7) % 256))) > 60);
+		assert.equal(frameDistance(a, new Uint8Array(10)), 255);
+	});
+	it('loudness envelopes follow the speech, and correlation tells a re-encode from other audio', () => {
+		const speech = (i: number) => Math.sin(i / 3) * (Math.floor(i / 400) % 3 === 0 ? 0.6 : 0.05);
+		const other = (i: number) => Math.sin(i / 3) * (Math.floor(i / 400) % 3 === 1 ? 0.6 : 0.05);
+		const src = envelope(pcm(speech, 40_000));
+		assert.equal(src.length, 200);
+		assert.ok((correlation(src, envelope(pcm((i) => speech(i) * 0.9, 40_000))) ?? 0) > 0.99);
+		assert.ok((correlation(src, envelope(pcm(other, 40_000))) ?? 1) < 0.8);
+		assert.equal(correlation([1, 1, 1], [2, 2, 2]), null);
+	});
+	it('passes matching content and refuses swapped pictures or audio', () => {
+		const env = Array.from({ length: 100 }, (_, i) => (i % 10) / 10);
+		assert.deepEqual(contentMatches({ frameDistances: Array(12).fill(4), sourceEnvelope: env, renditionEnvelope: env.map((v) => v * 0.95) }), { ok: true });
+		assert.deepEqual(contentMatches({ frameDistances: Array(12).fill(40) }), { ok: false, reason: 'content_mismatch' });
+		// One scene swapped between two samples still shows as one far frame
+		assert.deepEqual(contentMatches({ frameDistances: [...Array(11).fill(3), 90] }), { ok: false, reason: 'content_mismatch' });
+		assert.deepEqual(contentMatches({ frameDistances: [] }), { ok: false, reason: 'content_mismatch' });
+		assert.deepEqual(contentMatches({ frameDistances: Array(12).fill(3), sourceEnvelope: env, renditionEnvelope: [...env].reverse() }), { ok: false, reason: 'audio_mismatch' });
+		assert.deepEqual(contentMatches({ frameDistances: Array(12).fill(3), sourceEnvelope: env, renditionEnvelope: env.slice(0, 40) }), { ok: false, reason: 'audio_mismatch' });
+		assert.deepEqual(contentMatches({ frameDistances: Array(12).fill(3), sourceEnvelope: Array(50).fill(0), renditionEnvelope: Array(50).fill(0.3) }), { ok: false, reason: 'audio_mismatch' });
+		assert.deepEqual(contentMatches({ frameDistances: Array(12).fill(3), sourceEnvelope: Array(50).fill(0), renditionEnvelope: Array(50).fill(0) }), { ok: true });
 	});
 });
 
@@ -74,11 +139,6 @@ describe('verifyRenditions', () => {
 });
 
 describe('helpers', () => {
-	it('decodes first, middle and last segments', () => {
-		const segs = Array.from({ length: 9 }, (_, i) => ({ file: `s${i}`, seconds: 6 }));
-		assert.deepEqual(decodeSamples(segs), ['s0', 's4', 's8']);
-		assert.deepEqual(decodeSamples(segs.slice(0, 2)), ['s0', 's1']);
-	});
 	it('writes codec strings and our own master playlist, lowest rung first', () => {
 		assert.equal(avcCodec('High', 40), 'avc1.640028');
 		assert.equal(avcCodec('Main', 31), 'avc1.4d001f');

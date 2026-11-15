@@ -3,7 +3,8 @@
  *
  * Studio declares the files, PUTs each one into a staging prefix of MEDIA_PRIVATE, then completes.
  * The transcode job queued when the original upload completes carries the staging reference; the
- * media container verifies every rung against the ladder it would have encoded and either uses them
+ * media container verifies every rung against the ladder it would have encoded, decodes every
+ * segment and checks the frames and audio match the source, then either uses them
  * or encodes as usual (apps/media/container/prebuilt.mjs). The server never trusts the files: it
  * writes its own master playlist and the staging prefix is deleted when the job ends.
  */
