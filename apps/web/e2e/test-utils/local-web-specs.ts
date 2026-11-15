@@ -76,6 +76,7 @@ export const LOCAL_WEB_SPECS: readonly string[] = [
   '75-save-to-playlist-menu.spec.ts',
   '77-menus-in-viewport.spec.ts',
   '78-scholar-refs.spec.ts',
+  '79-page-builder-cross-app.spec.ts',
   // Sub-batch 7: player, watch loading, embeds and the player's axe checks on the file's own videos
   '20-accessibility-axe.spec.ts',
   '31-video-player.spec.ts',
