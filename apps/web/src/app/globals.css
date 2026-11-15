@@ -61,9 +61,9 @@
     max-height: 2lh;
     overflow: hidden;
     overflow-wrap: break-word;
-    --clamp-fade: linear-gradient(to right, #000 calc(100% - 3em), transparent);
-    -webkit-mask-image: linear-gradient(#000, #000), var(--clamp-fade);
-    mask-image: linear-gradient(#000, #000), var(--clamp-fade);
+    --clamp-fade: linear-gradient(to right, currentColor calc(100% - 3em), transparent);
+    -webkit-mask-image: linear-gradient(currentColor, currentColor), var(--clamp-fade);
+    mask-image: linear-gradient(currentColor, currentColor), var(--clamp-fade);
     -webkit-mask-size: 100% 1lh, 100% 1lh;
     mask-size: 100% 1lh, 100% 1lh;
     -webkit-mask-position: 0 0, 0 1lh;
@@ -72,7 +72,7 @@
     mask-repeat: no-repeat;
   }
   .clamp-2:dir(rtl) {
-    --clamp-fade: linear-gradient(to left, #000 calc(100% - 3em), transparent);
+    --clamp-fade: linear-gradient(to left, currentColor calc(100% - 3em), transparent);
   }
 }
 
