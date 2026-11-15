@@ -82,7 +82,10 @@ test.describe('public profile page (signed out)', () => {
     const comment = page.getByTestId('comments-section').getByTestId('comment').filter({ hasText: COMMENT });
     const author = comment.getByTestId('comment-author-link');
     await expect(author).toHaveAttribute('href', `/en/u/@${HANDLE}`);
-    const [response] = await Promise.all([page.waitForResponse((r) => r.url().endsWith(`/en/u/@${HANDLE}`) && r.request().isNavigationRequest()), author.click()]);
+    // The link may navigate on the client, so the page's own response headers are read directly
+    await author.click();
+    await expect(page).toHaveURL(new RegExp(`/en/u/@${HANDLE}$`));
+    const response = await request.get(`/en/u/@${HANDLE}`);
     expect(response.status()).toBe(200);
     expect(response.headers()['x-robots-tag']).toBe('noindex, nofollow');
 
