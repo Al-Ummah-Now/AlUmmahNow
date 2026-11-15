@@ -2,7 +2,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { LiveStreamViewers } from '../src/endpoints/live/liveSession';
-import { beatLiveViewer, countLiveViewers, liveViewersObject } from '../src/lib/live/viewers';
+import { beatLiveViewer, countLiveViewers, liveViewersObject, networkOf, viewerNet } from '../src/lib/live/viewers';
 import { MemoryBucket, buildApp } from './helpers';
 
 /** The realtime worker's liveviewers object, reduced to a set per stream. */
@@ -80,5 +80,18 @@ describe('live viewers', () => {
 		assert.equal(await beatLiveViewer({ VIEW_COUNTER: ns }, 's1', 'tab-aaaaaaaa'), null);
 		assert.equal(await countLiveViewers({ VIEW_COUNTER: ns }, 's1'), null);
 		assert.equal(await countLiveViewers({}, 's1'), null);
+	});
+
+	it('groups an IPv6 address by its /64 and keeps IPv4 addresses apart, never sending the address', async () => {
+		assert.equal(networkOf('2001:db8:1:2:aaaa::1'), '2001:db8:1:2::/64');
+		assert.equal(networkOf('2001:0db8:0001:0002:ffff:ffff:ffff:ffff'), '2001:db8:1:2::/64');
+		assert.equal(networkOf('2001:db8::5'), '2001:db8:0:0::/64');
+		assert.equal(networkOf('203.0.113.7'), '203.0.113.7');
+		const a = await viewerNet('2001:db8:1:2::1', 's1');
+		assert.equal(a, await viewerNet('2001:db8:1:2:dead:beef::9', 's1'));
+		assert.notEqual(a, await viewerNet('2001:db8:1:3::1', 's1'));
+		assert.notEqual(a, await viewerNet('2001:db8:1:2::1', 's2'), 'not linkable across streams');
+		assert.match(a, /^[a-f0-9]{16}$/);
+		assert.equal(await viewerNet(undefined, 's1'), 'none');
 	});
 });
