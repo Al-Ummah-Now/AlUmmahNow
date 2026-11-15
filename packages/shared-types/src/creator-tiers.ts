@@ -59,9 +59,10 @@ export interface CreatorTier {
   /**
    * YouTube imports (wiki AUN-YT-IMPORT) count against perHour/perDay like
    * uploads (true, the default) or skip those counters (false). A tier is
-   * still needed to import; ignored when `unlimited`.
+   * still needed to import; ignored when `unlimited`. Missing (a tier stored
+   * before the field existed) means true: only an explicit false skips them.
    */
-  importCountsAgainstLimits: boolean;
+  importCountsAgainstLimits?: boolean;
   updatedAt: string | null;
   updatedBy: string | null;
 }

@@ -158,7 +158,11 @@ export async function openEntryStream(
   const start = await entryDataOffset(read, entry);
   const raw = slice(start, start + entry.compressedSize);
   if (entry.method === 0) return raw;
-  return raw.pipeThrough(new DecompressionStream('deflate-raw') as unknown as ReadableWritablePair<Uint8Array, Uint8Array>);
+  // Read from globalThis when called: a direct reference makes Next's Edge bundles (admin-web's
+  // instrumentation imports this package) refuse to build, though nothing there unzips
+  const Decompression = (globalThis as { DecompressionStream?: typeof DecompressionStream }).DecompressionStream;
+  if (!Decompression) throw new Error('DecompressionStream is not available in this runtime');
+  return raw.pipeThrough(new Decompression('deflate-raw') as unknown as ReadableWritablePair<Uint8Array, Uint8Array>);
 }
 
 /** Video files Takeout exports (YouTube keeps the uploaded container). */
