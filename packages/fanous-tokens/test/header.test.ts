@@ -111,12 +111,14 @@ test('light/dark button: the shared icons and action names', () => {
 test('menu button: the videos drawer icon, named, opening the panel popover', () => {
   assert.equal(
     menuButtonHtml({ lang: 'en', panel: 'site-menu' }),
-    '<button type="button" class="aun-icon-btn aun-menu aun-menu-collapse" popovertarget="site-menu" aria-label="Menu" title="Menu">' +
+    '<button type="button" class="aun-icon-btn aun-menu-btn aun-menu-collapse" popovertarget="site-menu" aria-label="Menu" title="Menu">' +
       '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
       'stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-menu" aria-hidden="true" focusable="false">' +
       '<line x1="4" x2="20" y1="12" y2="12"></line><line x1="4" x2="20" y1="6" y2="6"></line><line x1="4" x2="20" y1="18" y2="18"></line></svg></button>'
   );
   assert.match(menuButtonHtml({ lang: 'ar', panel: 'a"b' }), /popovertarget="a&quot;b" aria-label="القائمة"/);
+  // .aun-menu is the account menu's surface (absolute, 21rem wide): the button never wears it
+  assert.ok(!/class="([^"]*)"/.exec(menuButtonHtml({ lang: 'en', panel: 'p' }))![1].split(' ').includes('aun-menu'));
 });
 
 test('sign in: a solid pill', () => {
@@ -157,4 +159,8 @@ test('the stylesheet defines every class the builders use, one control height an
   assert.match(css, /@media \(max-width: 63\.99rem\) \{[^@]*\.aun-header-primary\.aun-collapse \{\n    display: none;/);
   assert.match(css, /@media \(min-width: 64rem\) \{\n  \.aun-menu-collapse \{\n    display: none;/);
   for (const bp of ['79.99rem', '63.99rem', '47.99rem', '39.99rem', '24.99rem']) assert.ok(css.includes(`(max-width: ${bp})`), bp);
+  // below 400px language and Sign in narrow after their own rules, so the Arabic Sign in fits a 320px bar
+  const tight = css.indexOf('@media (max-width: 24.99rem) {\n  .aun-lang {');
+  assert.ok(tight > css.indexOf('.aun-signin {') && tight > css.indexOf('.aun-lang,\n.aun-app {'), 'the 400px Sign in / language rule comes after theirs');
+  assert.match(css.slice(tight, css.indexOf('\n}\n', tight)), /\.aun-signin \{\n    padding-inline: var\(--fanous-spacing-md, 12px\);/);
 });
