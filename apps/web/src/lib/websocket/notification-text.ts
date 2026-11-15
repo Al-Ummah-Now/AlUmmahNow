@@ -15,6 +15,8 @@ const KEY_TO_TEXT: Record<Exclude<RealtimeNotificationKey, 'accountWarning'>, { 
   reviewApproved: { title: 'reviewApprovedTitle', message: 'reviewApprovedMessage' },
   reviewRejected: { title: 'reviewRejectedTitle', message: 'reviewRejectedMessage' },
   reviewNeeded: { title: 'reviewNeededTitle', message: 'reviewNeededMessage' },
+  tierRequestApproved: { title: 'tierRequestApprovedTitle', message: 'tierRequestApprovedMessage' },
+  tierRequestDeclined: { title: 'tierRequestDeclinedTitle', message: 'tierRequestDeclinedMessage' },
 };
 
 function interpolate(template: string, params: Record<string, string | number> = {}): string {

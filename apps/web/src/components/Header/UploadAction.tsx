@@ -15,6 +15,13 @@ const Icon = () => (
   </svg>
 );
 
+/** A lantern-like arrow up into a frame: the Request access pill (same stroke set as Upload) */
+const UpgradeIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M12 3l7 7h-4v6H9v-6H5z" /><path d="M5 21h14" />
+  </svg>
+);
+
 export function UploadAction() {
   const { t, lang } = useLanguage();
   const { user } = useAuth();
@@ -23,8 +30,17 @@ export function UploadAction() {
   // The accessible name says what it does; the visible label is the short "Upload"
   const label = t.upload.uploadVideo;
   const short = t.navigation.upload;
-  // Uploading is by invitation: no Upload for a signed-in user without a creator tier
-  if (user && !mayUpload(creator)) return null;
+  // Uploading is by invitation: a signed-in user whose tier allows no uploads (Member) gets
+  // "Request access" in its place, to /upgrade (wiki AUN-TIER-REQUESTS)
+  if (user && !mayUpload(creator)) {
+    if (creator.status !== 'ready' || creator.access.pendingDeletion) return null;
+    const request = t.creator.requestAccess;
+    return (
+      <Link href={`/${lang}/upgrade`} className="upload-action" aria-label={request} title={request} data-testid="header-request-access">
+        <UpgradeIcon /><span className="upload-action-label">{request}</span>
+      </Link>
+    );
+  }
   // Signed in without a channel: nowhere to upload to yet
   if (user && !account?.channel) {
     const why = t.upload.createChannelToUpload;

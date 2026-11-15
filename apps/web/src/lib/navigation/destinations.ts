@@ -21,6 +21,8 @@ export const ACCOUNT_MENU_PATHS = {
   /** The creator home: videos, scheduling, analytics, channel settings (/studio opens the active channel) */
   studio: '/studio',
   settings: '/settings',
+  /** The tiers and the user's tier request (wiki AUN-TIER-REQUESTS) */
+  upgrade: '/upgrade',
 } as const;
 
 export const HEADER_PATHS = {

@@ -57,11 +57,14 @@ export function uploadEligibleChannels<T extends UploadChannelCandidate>(channel
 
 /** What GET /api/me/creator said about tiers: only the fields the picker needs. */
 export interface UploadTierAccess {
-  /** The user's own tier: owned channels upload under it */
-  tier: unknown | null;
+  /** The user's own tier: owned channels upload under it (Member allows no uploads) */
+  tier: { unlimited: boolean; uploads?: boolean } | null;
   /** Channels they help run whose owner's tier allows uploads (#759) */
   uploadChannelIds?: readonly string[];
 }
+
+/** Whether the user's own tier allows uploads; an older API without the flag leaves it to the server. */
+const ownTierUploads = (tier: UploadTierAccess['tier']): boolean => !!tier && (tier.unlimited || tier.uploads !== false);
 
 /**
  * Keep the channels whose tier allows an upload: an owned channel needs the
@@ -73,7 +76,7 @@ export function tierAllowedChannels<T extends UploadChannelCandidate>(channels: 
   if (!access) return [...channels];
   const memberIds = access.uploadChannelIds ? new Set(access.uploadChannelIds) : null;
   return channels.filter((channel) => {
-    if (roleOn(channel, userId) === 'owner') return access.tier != null;
+    if (roleOn(channel, userId) === 'owner') return ownTierUploads(access.tier);
     return !memberIds || memberIds.has(channel.id);
   });
 }

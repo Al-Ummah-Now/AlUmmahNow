@@ -82,7 +82,9 @@ export type RealtimeNotificationKey =
   | 'accountWarning'
   | 'reviewApproved'
   | 'reviewRejected'
-  | 'reviewNeeded';
+  | 'reviewNeeded'
+  | 'tierRequestApproved'
+  | 'tierRequestDeclined';
 
 export interface NotificationEvent {
   type: 'notification';

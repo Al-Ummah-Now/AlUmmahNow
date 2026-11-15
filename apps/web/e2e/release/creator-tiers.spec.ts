@@ -1,7 +1,7 @@
 /**
  * Release regression: uploading and creating channels are by invitation
  * (creator tiers, assigned by admins in the videos admin).
- * - A new account (no tier) is refused by the server (403
+ * - A new account (Member, the default tier: no uploads or channels) is refused by the server (403
  *   uploads_by_invitation, a friendly message, never a raw error) and gets no
  *   upload or create-channel UI, in English and Arabic.
  * - Once an admin gives it the Creator tier on its user page, it creates a
@@ -80,7 +80,7 @@ test.describe('Release: creator tiers', () => {
 
     // 1. No tier
     const none = await creatorAccess(user);
-    expect(none.tier, 'a new account has no tier').toBeNull();
+    expect(none.tier?.id, 'a new account holds Member').toBe('member');
     expect(none.canUpload).toBe(false);
     expect(none.canCreateChannel).toBe(false);
     await expectInvitationOnly(await createChannel(user), 'POST /api/channels without a tier');

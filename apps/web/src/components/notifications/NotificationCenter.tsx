@@ -14,7 +14,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Link from '@/components/common/AppLink';
 import { usePathname } from 'next/navigation';
-import { AlertCircle, Bell, Heart, MessageCircle, Radio, ShieldAlert, UserPlus, Video, X } from 'lucide-react';
+import { AlertCircle, BadgeCheck, Bell, Heart, MessageCircle, Radio, ShieldAlert, UserPlus, Video, X } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useWebSocketSubscription } from '@/lib/websocket/WebSocketProvider';
@@ -69,6 +69,9 @@ function KindIcon({ kind }: { kind: string }) {
       return <ShieldAlert {...props} />;
     case 'reviewApproved':
       return <Video {...props} />;
+    case 'tierRequestApproved':
+    case 'tierRequestDeclined':
+      return <BadgeCheck {...props} />;
     default:
       return <Bell {...props} />;
   }

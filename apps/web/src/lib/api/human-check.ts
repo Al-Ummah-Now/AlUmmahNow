@@ -10,7 +10,7 @@ import { buildApiUrl } from './api-client';
 import { getServerAuthContext } from './server-auth';
 import { logger } from '@/lib/logger-server';
 
-export type HumanCheckKind = 'comment' | 'post' | 'report';
+export type HumanCheckKind = 'comment' | 'post' | 'report' | 'tier_request';
 
 export interface HumanCheckStatus {
   required: boolean;

@@ -72,6 +72,8 @@ export function catalog(d: CatalogData): CatalogPage[] {
     { id: 'feed-anon', path: '/subscriptions', role: 'anon' },
     { id: 'subscriptions-anon', path: '/subscriptions/manage', role: 'anon' },
     { id: 'history-anon', path: '/history', role: 'anon' },
+    // Request a tier (wiki AUN-TIER-REQUESTS): signed out, every card asks to sign in
+    { id: 'upgrade-anon', path: '/upgrade', role: 'anon' },
     // No signed-out /studio/go/analytics: it signs the visitor in at once (StudioSignIn), so the page
     // a visitor sees is the issuer's sign-in page, whose accessibility the Auth repo checks (#1042)
     // Signed-in creator (profile + one channel)
@@ -101,6 +103,7 @@ export function catalog(d: CatalogData): CatalogPage[] {
     // Profile without a channel
     { id: 'upload-no-channel', path: '/upload', role: 'none' },
     { id: 'analytics-no-channel', path: '/studio/go/analytics', role: 'none' },
+    { id: 'upgrade', path: '/upgrade', role: 'none' },
   ];
   if (d.playlistId) pages.push({ id: 'playlist', path: `/playlist/${d.playlistId}`, role: 'anon' });
   return pages;

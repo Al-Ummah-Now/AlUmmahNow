@@ -22,6 +22,8 @@ export const NOTIFICATION_CENTER_KEYS: readonly RealtimeNotificationKey[] = [
   'reviewApproved',
   'reviewRejected',
   'reviewNeeded',
+  'tierRequestApproved',
+  'tierRequestDeclined',
 ];
 
 export function isCenterKey(key: unknown): key is RealtimeNotificationKey {

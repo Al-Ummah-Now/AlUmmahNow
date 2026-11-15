@@ -90,3 +90,30 @@ for (const role of ROLES) {
     }
   });
 }
+
+/**
+ * The /upgrade request dialog (wiki AUN-TIER-REQUESTS), open over the page: name and "about you"
+ * fields, help and counter, in both languages and colour schemes. Opening it sends nothing.
+ */
+test.describe('axe - upgrade request dialog', () => {
+  test.use({ storageState: storageFor('none') });
+  for (const colorScheme of ['light', 'dark'] as const) {
+    for (const locale of ['en', 'ar'] as const) {
+      test(`A11Y-ALL upgrade-dialog (${locale}, ${colorScheme}) has no WCAG 2.1 AA violations`, async ({ page }) => {
+        const entry = catalog(PLACEHOLDER).find((p) => p.id === 'upgrade')!;
+        await openCatalogPageInReferenceTheme(page, locale, entry, colorScheme);
+        const request = page.locator('[data-testid^="tier-card-"][data-state="request"] button[data-testid$="-request"]').first();
+        await expect(request, 'a tier this user can request').toBeVisible({ timeout: 15000 });
+        await request.click();
+        const dialog = page.getByTestId('tier-request-dialog');
+        await expect(dialog).toBeVisible();
+        await expect(dialog).toHaveAttribute('role', 'dialog');
+        const results = await new AxeBuilder({ page }).include('[data-testid="tier-request-dialog"]').withTags(WCAG_TAGS).analyze();
+        const summary = results.violations.map((v) => `${v.id} (${v.impact}): ${v.nodes.map((n) => n.target.join(' ')).slice(0, 5).join(' | ')}`).join('\n');
+        expect(results.violations, summary).toEqual([]);
+        await page.keyboard.press('Escape');
+        await expect(dialog).toBeHidden();
+      });
+    }
+  }
+});

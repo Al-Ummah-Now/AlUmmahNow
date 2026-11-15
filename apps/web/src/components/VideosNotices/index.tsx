@@ -70,7 +70,8 @@ export function SuspendedChannelNotice({ channels }: { channels: Channel[] }) {
 /**
  * Uploading and creating channels are by invitation (creator tiers): shown
  * on the upload page and where "Create channel" would be, to a signed-in user
- * without a tier. `page` is the full upload-page version with a way home.
+ * whose tier allows no uploads (Member), with a "Request access" link to
+ * /upgrade. `page` is the full upload-page version with a way home.
  */
 export function UploadsByInvitationNotice({ page = false }: { page?: boolean }) {
   const { t, lang } = useLanguage();
@@ -79,6 +80,9 @@ export function UploadsByInvitationNotice({ page = false }: { page?: boolean }) 
       <div role="status" data-testid="uploads-by-invitation" className="rounded-lg border border-border border-s-4 border-s-primary bg-card px-4 py-3 text-card-foreground shadow-sm">
         <p className="font-semibold">{t.creator.invitationTitle}</p>
         <p className="mt-1 text-sm text-muted-foreground">{t.creator.invitationMessage}</p>
+        <a href={`/${lang}/upgrade`} className="mt-2 inline-flex text-sm font-semibold text-primary underline-offset-4 hover:underline" data-testid="request-access-link">
+          {t.creator.requestAccess}
+        </a>
       </div>
     );
   }
@@ -86,9 +90,14 @@ export function UploadsByInvitationNotice({ page = false }: { page?: boolean }) 
     <div className="mx-auto w-full max-w-2xl rounded-lg border border-border border-s-4 border-s-primary bg-card p-8 text-center text-card-foreground shadow-sm md:p-12" data-testid="upload-by-invitation" role="status">
       <h1 className="mb-4 text-2xl font-bold md:text-3xl">{t.creator.invitationTitle}</h1>
       <p className="mb-8 text-base text-muted-foreground md:text-lg">{t.creator.invitationMessage}</p>
-      <a href={`/${lang}`} className="inline-flex items-center justify-center rounded-lg bg-primary px-6 py-3 font-medium text-primary-foreground hover:opacity-90">
-        {t.upload.goHome}
-      </a>
+      <div className="flex flex-wrap items-center justify-center gap-3">
+        <a href={`/${lang}/upgrade`} className="inline-flex items-center justify-center rounded-lg bg-primary px-6 py-3 font-medium text-primary-foreground hover:opacity-90" data-testid="request-access-link">
+          {t.creator.requestAccess}
+        </a>
+        <a href={`/${lang}`} className="inline-flex items-center justify-center rounded-lg border border-border px-6 py-3 font-medium text-foreground hover:bg-muted">
+          {t.upload.goHome}
+        </a>
+      </div>
     </div>
   );
 }
