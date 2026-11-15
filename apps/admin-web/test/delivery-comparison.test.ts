@@ -98,7 +98,7 @@ describe('playback measurements', () => {
 
 describe('cost', () => {
   it('reproduces the plan table with the assumed unit costs', () => {
-    const [small, medium, large] = SCALES.map((s) => projectMonthlyCost(s, assumed));
+    const [small, medium, large] = SCALES.map((s) => projectMonthlyCost(s, assumed, 500));
     // Small: transcode ~$6, storage ~$9, both fit; Bunny $21-30
     near(small.r2.transcode, 6.02);
     near(small.r2.storage, 8.64);
@@ -135,7 +135,7 @@ describe('cost', () => {
     assert.equal(unit.classAPerVideoMinute, ASSUMED.classAPerVideoMinute);
     assert.deepEqual(unit.measured, { transcode: true, storage: true, classA: false, classB: true, delivery: true });
     // Cheaper transcode than assumed: 30 s x $0.0001114 per video-minute
-    near(projectMonthlyCost(SCALES[0], unit).r2.transcode, 1200 * 30 * 0.0001114);
+    near(projectMonthlyCost(SCALES[0], unit, 500).r2.transcode, 1200 * 30 * 0.0001114);
   });
 
   it('measured transcode cost per video-minute', () => {

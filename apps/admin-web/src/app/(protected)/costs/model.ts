@@ -4,7 +4,7 @@
  * alert settings form with the same limits as admin-api (shared-types mergeCostAlertSettings).
  * Pure: server and client safe.
  */
-import { chartLocale, COST_ALERT_KINDS, RESEND_PLANS, type CostAlertKind, type CostAlertSettings, type CostCredentialView, type CostProvider, type ResendPlan } from '@al-ummah/shared-types';
+import { chartLocale, COST_ALERT_KINDS, COST_ALERT_RANGES, RESEND_PLANS, type CostAlertKind, type CostAlertSettings, type CostCredentialView, type CostProvider, type ResendPlan } from '@al-ummah/shared-types';
 import type { MessageKey, TranslateParams } from '@/i18n/translate';
 import type { CostCollectorState } from '@/lib/api/costs-types';
 
@@ -156,12 +156,12 @@ export type SettingsField = 'budgetUsd' | 'budgetLevels' | 'spikeFactor' | 'spik
 
 /** The limits mergeCostAlertSettings applies (budget levels in percent here). */
 export const SETTINGS_LIMITS = {
-  budgetUsd: { min: 1, max: 100_000 },
-  spikeFactor: { min: 1.1, max: 100 },
-  spikeMinUsd: { min: 0, max: 10_000 },
-  spikeTotalMinUsd: { min: 0, max: 10_000 },
-  levelPercent: { min: 1, max: 200 },
-  levelCount: { min: 1, max: 5 },
+  budgetUsd: COST_ALERT_RANGES.budgetUsd,
+  spikeFactor: COST_ALERT_RANGES.spikeFactor,
+  spikeMinUsd: COST_ALERT_RANGES.spikeMinUsd,
+  spikeTotalMinUsd: COST_ALERT_RANGES.spikeTotalMinUsd,
+  levelPercent: { min: COST_ALERT_RANGES.budgetLevel.min * 100, max: COST_ALERT_RANGES.budgetLevel.max * 100 },
+  levelCount: COST_ALERT_RANGES.levelCount,
 } as const;
 
 const trimNumber = (v: number) => String(Math.round(v * 100) / 100);

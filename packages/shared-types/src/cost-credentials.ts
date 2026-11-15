@@ -151,8 +151,25 @@ export interface CostAlertSettings {
   resendPlan: ResendPlan;
 }
 
+/**
+ * The platform's monthly budget is ONE admin-managed value (#1427): Costs → Alert settings saves
+ * it to COSTS_DB cost_settings, and the Costs page, Operations, Delivery's projection and the alert
+ * tick all read it from there. This default only applies until a super admin saves one.
+ */
+export const DEFAULT_MONTHLY_BUDGET_USD = 500;
+
+/** Allowed ranges for the alert settings (#1427); budget levels are shares (0.1 = 10%). */
+export const COST_ALERT_RANGES = {
+  budgetUsd: { min: 50, max: 5000 },
+  budgetLevel: { min: 0.1, max: 1.5 },
+  levelCount: { min: 1, max: 5 },
+  spikeFactor: { min: 1.2, max: 10 },
+  spikeMinUsd: { min: 0, max: 100 },
+  spikeTotalMinUsd: { min: 0, max: 100 },
+} as const;
+
 export const COST_ALERT_DEFAULTS: CostAlertSettings = {
-  budgetUsd: 500,
+  budgetUsd: DEFAULT_MONTHLY_BUDGET_USD,
   budgetLevels: [0.5, 0.8, 1],
   projectedAlert: true,
   spikeFactor: 2,
@@ -192,11 +209,12 @@ export function mergeCostAlertSettings(current: CostAlertSettings, input: unknow
   };
   const known = new Set(Object.keys(COST_ALERT_DEFAULTS));
   for (const k of Object.keys(b)) if (!known.has(k)) return `Unknown setting ${k}`;
+  const R = COST_ALERT_RANGES;
   const err =
-    numIn('budgetUsd', 1, 100_000) ??
-    numIn('spikeFactor', 1.1, 100) ??
-    numIn('spikeMinUsd', 0, 10_000) ??
-    numIn('spikeTotalMinUsd', 0, 10_000) ??
+    numIn('budgetUsd', R.budgetUsd.min, R.budgetUsd.max) ??
+    numIn('spikeFactor', R.spikeFactor.min, R.spikeFactor.max) ??
+    numIn('spikeMinUsd', R.spikeMinUsd.min, R.spikeMinUsd.max) ??
+    numIn('spikeTotalMinUsd', R.spikeTotalMinUsd.min, R.spikeTotalMinUsd.max) ??
     intIn('digestWeekday', 0, 6) ??
     intIn('digestHour', 0, 23) ??
     boolIn('projectedAlert') ??
@@ -208,8 +226,8 @@ export function mergeCostAlertSettings(current: CostAlertSettings, input: unknow
   }
   if (b.budgetLevels !== undefined) {
     const lv = b.budgetLevels;
-    if (!Array.isArray(lv) || lv.length < 1 || lv.length > 5) return 'budgetLevels must list 1 to 5 levels';
-    for (const x of lv) if (typeof x !== 'number' || !Number.isFinite(x) || x <= 0 || x > 2) return 'each budget level is a share above 0 and at most 2 (200%)';
+    if (!Array.isArray(lv) || lv.length < R.levelCount.min || lv.length > R.levelCount.max) return `budgetLevels must list ${R.levelCount.min} to ${R.levelCount.max} levels`;
+    for (const x of lv) if (typeof x !== 'number' || !Number.isFinite(x) || x < R.budgetLevel.min || x > R.budgetLevel.max) return `each budget level is a share from ${R.budgetLevel.min} to ${R.budgetLevel.max} (${R.budgetLevel.min * 100}% to ${R.budgetLevel.max * 100}%)`;
     out.budgetLevels = [...new Set(lv.map((x) => Math.round((x as number) * 100) / 100))].sort((x, y) => x - y);
   }
   return out;

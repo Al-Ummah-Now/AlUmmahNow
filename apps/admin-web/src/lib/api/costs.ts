@@ -13,6 +13,11 @@ import type { CostAlertKind, CostAlertSettings, CostCredentialResult, CostProvid
 const json = (method: string, body: unknown): RequestInit => ({ method, body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } });
 const credentialPath = (provider: CostProvider, test = false) => `/api/costs/credentials/${encodeURIComponent(provider)}${test ? '/test' : ''}`;
 
+/** The one admin-set monthly budget (Costs → Alert settings, #1427). */
+export async function getMonthlyBudget(): Promise<number> {
+  return (await fetchAdmin<{ budgetUsd: number }>('/api/costs/budget')).budgetUsd;
+}
+
 export async function getCostsDashboard(): Promise<CostsDashboard> {
   return fetchAdmin<CostsDashboard>('/api/costs');
 }

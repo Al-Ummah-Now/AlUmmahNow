@@ -16,9 +16,6 @@ import { COST_ALERT_DEFAULTS, newErrorRef, parseCostAlertSettings, scrubEvent, t
 import { logger } from './logger';
 import type { D1Database } from './types';
 
-export const BUDGET_USD = 500;
-/** Shares of the month's budget that open a warning. */
-export const BUDGET_LEVELS = [0.5, 0.8, 1] as const;
 /** The idle target the projected idle cost is shown against. */
 export const IDLE_TARGET_USD = 50;
 export const PLAN_BASE_USD = 5;
@@ -26,11 +23,6 @@ export const PLAN_BASE_USD = 5;
 export const CONTAINER_USD_PER_SECOND = 4 * 0.00002 + 12 * 0.0000025 + 20 * 0.00000007;
 /** Days of history the idle projection and the spike baseline look at. */
 export const BASELINE_DAYS = 7;
-/** A jump is at least this many times the baseline day... */
-export const SPIKE_FACTOR = 2;
-/** ...and at least this many dollars above it (per driver; the daily total needs SPIKE_TOTAL_MIN_USD). */
-export const SPIKE_MIN_USD = 0.5;
-export const SPIKE_TOTAL_MIN_USD = 2;
 
 export interface DayCost {
   day: string;
@@ -96,9 +88,10 @@ export function levelOf(share: number): BudgetLevel {
 export function budgetStatus(
   sources: Omit<Record<BudgetPart, DayCost[]>, 'plan' | 'resend'> & { resend?: DayCost[] },
   now: Date,
-  capUsd = BUDGET_USD,
+  /** The admin-set budget (loadCostSettings); never a constant here (#1427). */
+  capUsd = COST_ALERT_DEFAULTS.budgetUsd,
   /** The alert levels set in Costs → Alert settings; the meter draws its marks at these shares. */
-  levels: readonly number[] = BUDGET_LEVELS,
+  levels: readonly number[] = COST_ALERT_DEFAULTS.budgetLevels,
 ): BudgetStatus {
   const parts = {} as BudgetStatus['parts'];
   for (const key of ['cloudflare', 'bunny', 'containers', 'ai', 'resend'] as const) {
@@ -213,8 +206,8 @@ export interface Spike {
 
 /**
  * Daily spend jumps, per env total and per driver. A day is a jump when it costs at least
- * SPIKE_FACTOR times the average of the BASELINE_DAYS before it and at least SPIKE_MIN_USD
- * (SPIKE_TOTAL_MIN_USD for a total) more. Yesterday and today so far are both checked, so a
+ * spikeFactor times the average of the BASELINE_DAYS before it and at least spikeMinUsd
+ * (spikeTotalMinUsd for a total) more, all from the saved alert settings. Yesterday and today so far are both checked, so a
  * runaway loop is flagged the same day; a partial day only counts once it already crossed.
  */
 export interface SpikeRule {
@@ -223,7 +216,7 @@ export interface SpikeRule {
   totalMinUsd: number;
 }
 
-export const DEFAULT_SPIKE_RULE: SpikeRule = { factor: SPIKE_FACTOR, minUsd: SPIKE_MIN_USD, totalMinUsd: SPIKE_TOTAL_MIN_USD };
+export const DEFAULT_SPIKE_RULE: SpikeRule = { factor: COST_ALERT_DEFAULTS.spikeFactor, minUsd: COST_ALERT_DEFAULTS.spikeMinUsd, totalMinUsd: COST_ALERT_DEFAULTS.spikeTotalMinUsd };
 
 export const spikeRuleOf = (s: CostAlertSettings): SpikeRule => ({ factor: s.spikeFactor, minUsd: s.spikeMinUsd, totalMinUsd: s.spikeTotalMinUsd });
 

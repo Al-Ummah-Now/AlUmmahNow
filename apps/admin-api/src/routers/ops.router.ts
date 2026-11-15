@@ -17,7 +17,6 @@ import { hasPermission, normalizeRoles } from '../lib/roles';
 import { logger } from '../lib/logger';
 import type { AdminBindings, AuthContext } from '../base/types';
 import {
-  BUDGET_USD,
   budgetStatus,
   costWindowStart,
   findSpikes,
@@ -45,8 +44,6 @@ type Metric = (typeof OPS_METRICS)[number];
 /** Summed across resources for a total; the rest take the worst (max). */
 const SUMMED = new Set<Metric>(['requests', 'errors', 'reads', 'writes', 'bytes', 'stored_bytes', 'objects', 'backlog_avg', 'gb_seconds', 'cost_usd']);
 export const RANGES = { '24h': { hours: 24 }, '7d': { hours: 168 }, '30d': { days: 30 }, '13m': { days: 396 } } as const;
-/** The owner's budget for everything: Cloudflare, Bunny, Workers AI (docs/admin/LIVE_OPS.md §A.4). */
-export const MONTHLY_CAP_USD = BUDGET_USD;
 /** Data older than this is shown as stale (the collector runs hourly). */
 export const STALE_AFTER_MS = 2 * 3_600_000;
 export const THRESHOLD_AUDIT_PREFIX = 'ops:threshold:';
@@ -152,7 +149,8 @@ app.get('/overview', async (c) => {
       cost: {
         env: projectMonth(byDay((e) => e === env), now),
         all: projectMonth(byDay(() => true), now),
-        capUsd: MONTHLY_CAP_USD,
+        // The one admin-set budget (Costs → Alert settings, #1427)
+        capUsd: (await loadCostSettings(c.env.COSTS_DB)).budgetUsd,
         estimated: true,
       },
       dataAsOf: lastRun?.finished_at ?? null,
