@@ -8,6 +8,7 @@ import { ErrorAlert, cardClass } from '@/components/ui';
 import { JobRetry, LegacyRestoreRun, RefreshWhileActive } from '@/components/AdminJobActions';
 import { JOB_STATUS_LABEL, isJobActive } from '@/lib/admin-jobs';
 import { logger } from '@/lib/logger';
+import { UserName } from '@/components/audit/UserName';
 
 export const dynamic = 'force-dynamic';
 
@@ -147,7 +148,7 @@ export default async function LegacyProfilesPage() {
                         ))}
                         {written.length > 0 && <div className="text-fg-muted text-xs">{t('legacyProfiles.backups', { count: written.length })}</div>}
                       </td>
-                      <td className={tdClass} dir="ltr">{job.actorId}</td>
+                      <td className={tdClass}><UserName id={job.actorId} showEmail={false} /></td>
                     </tr>
                   );
                 })}

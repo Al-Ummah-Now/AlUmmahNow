@@ -10,6 +10,7 @@ import { Chip, CursorPager, EmptyState, MonoId, PageHeader, tableWrapClass, tdCl
 import { hrefWith, PAGE_SIZE, pickParams, type SearchParams } from '@/components/content/query';
 import { logger } from '@/lib/logger';
 import { DeletionActions } from './DeletionActions';
+import { UserName } from '@/components/audit/UserName';
 
 export const dynamic = 'force-dynamic';
 
@@ -119,7 +120,7 @@ export default async function DeletedPage({ searchParams }: { searchParams: Prom
                       </span>
                     </td>
                     <td className={`${tdClass} ${wideOnly} text-sm`}>
-                      <Link href={`/users/${encodeURIComponent(d.deletedBy)}`} className={linkClass}><MonoId value={d.deletedBy} max={24} /></Link>
+                      <UserName id={d.deletedBy} showEmail={false} />
                     </td>
                     <td className={`${tdClass} ${wideOnly} text-sm text-fg-muted whitespace-nowrap`}>
                       <time dateTime={d.deletedAt}>{formatDate(d.deletedAt, locale, true)}</time>

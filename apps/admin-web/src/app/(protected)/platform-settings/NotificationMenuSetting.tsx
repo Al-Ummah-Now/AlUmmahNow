@@ -9,6 +9,8 @@ import { useLanguage } from '@/i18n/I18nProvider';
 import { formatDate, type MessageKey } from '@/i18n/translate';
 import { ErrorAlert, cardClass, primaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
+import { UserName } from '@/components/audit/UserName';
+import { fillNodes } from '@/components/audit/fill';
 
 const MODES: { value: NotificationMenuOpenMode; label: MessageKey; hint: MessageKey }[] = [
   { value: 'seen', label: 'platformSettings.menuOpenSeen', hint: 'platformSettings.menuOpenSeenHint' },
@@ -95,7 +97,7 @@ export function NotificationMenuSetting({ settings, history, canEdit }: { settin
 
         <p className="text-sm text-fg-muted" data-testid="notification-menu-last-changed">
           {settings.updatedAt
-            ? t('platformSettings.lastChanged', { date: formatDate(settings.updatedAt, locale, true), actor: settings.updatedBy ?? '—' })
+            ? fillNodes(t('platformSettings.lastChanged', { date: formatDate(settings.updatedAt, locale, true) }), { actor: settings.updatedBy ? <UserName id={settings.updatedBy} showEmail={false} /> : '—' })
             : t('platformSettings.neverChanged')}
         </p>
 
@@ -117,7 +119,7 @@ export function NotificationMenuSetting({ settings, history, canEdit }: { settin
         <ul className="space-y-1 text-sm text-fg-muted" data-testid="notification-menu-history">
           {history.map((h) => (
             <li key={h.id}>
-              {t('platformSettings.historyEntry', { date: formatDate(h.createdAt, locale, true), from: label(h.oldValue), to: label(h.newValue), actor: h.actorId })}
+              {fillNodes(t('platformSettings.historyEntry', { date: formatDate(h.createdAt, locale, true), from: label(h.oldValue), to: label(h.newValue) }), { actor: <UserName id={h.actorId} showEmail={false} /> })}
             </li>
           ))}
         </ul>

@@ -5,7 +5,7 @@
 import Link from '@/components/AppLink';
 import type { Locale } from '@/i18n/config';
 import { formatDate, type Translator } from '@/i18n/translate';
-import type { ContentAuditEntry, ContentReport } from '@/lib/api/content-types';
+import type { ContentReport } from '@/lib/api/content-types';
 import { cardClass, linkClass } from '@/components/ui';
 
 export type ChipTone = 'neutral' | 'good' | 'info' | 'warn' | 'bad';
@@ -216,37 +216,6 @@ function TranslatedValue({ t, prefix, value }: { t: Translator; prefix: string; 
   const key = `${prefix}.${value}` as Parameters<Translator>[0];
   const text = t(key);
   return <>{text === key ? value : text}</>;
-}
-
-export function AuditCard({ entries, t, locale }: { entries: ContentAuditEntry[]; t: Translator; locale: Locale }) {
-  return (
-    <SectionCard title={t('content.audit')} testId="content-audit" id="content-audit-title">
-      {entries.length === 0 ? (
-        <p className="text-fg-muted text-sm">{t('content.auditEmpty')}</p>
-      ) : (
-        <ol className="space-y-3">
-          {entries.map((e) => (
-            <li key={e.id} className="text-sm" data-testid="audit-entry" data-action={e.action}>
-              <p className="text-fg">
-                <span className="font-mono" dir="ltr">{e.action}</span>{' '}
-                <span className="text-fg-muted">{t('content.auditBy', { actor: e.actorId })}</span>
-              </p>
-              {e.details && Object.keys(e.details).length > 0 && (
-                <p className="text-fg-muted text-xs break-words font-mono" dir="ltr">
-                  {Object.entries(e.details)
-                    .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
-                    .join(' · ')}
-                </p>
-              )}
-              <p className="text-fg-subtle text-xs">
-                <time dateTime={e.createdAt}>{formatDate(e.createdAt, locale, true)}</time>
-              </p>
-            </li>
-          ))}
-        </ol>
-      )}
-    </SectionCard>
-  );
 }
 
 export function BackLink({ href, label }: { href: string; label: string }) {

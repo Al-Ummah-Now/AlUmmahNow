@@ -23,6 +23,8 @@ export interface NavAccess {
   manageUsers: boolean;
   /** videos:uploads */
   staleUploads: boolean;
+  /** audit:read (Audit log: admins and super admins) */
+  audit?: boolean;
   /** media:manage (Delivery: Bunny vs R2 comparison, and the Video providers settings) */
   media: boolean;
   /** ops:read (Operations: platform analytics per environment) */
@@ -100,6 +102,8 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/processing', label: 'nav.processing', icon: 'cpu', group: 'operations', requires: (a) => a.processing },
   { href: '/stale-uploads', label: 'nav.staleUploads', icon: 'clock', group: 'operations', requires: (a) => a.staleUploads },
   { href: '/jobs', label: 'nav.jobs', icon: 'layers', group: 'operations' },
+  // Audit log (issue #711): every admin action, filtered by person, item, area, action and date; audit:read
+  { href: '/audit', label: 'nav.audit', icon: 'list', group: 'operations', requires: (a) => a.audit === true },
   {
     href: '/errors', label: 'nav.errors', icon: 'alert', group: 'operations',
     requires: (a) => a.errors || a.processing, badge: 'errors', badgeTestId: 'errors-nav-badge', badgeLabel: 'errorsPage.navBadge',

@@ -169,6 +169,12 @@ export function canManageVideosUsers(role?: string): boolean {
  * admins and super admins, not moderators). admin-api enforces it; this only
  * hides what the user cannot open.
  */
+/** Audit log page (/audit; admin-api audit:read): admins and super admins. */
+export function canReadAudit(role?: string): boolean {
+  const r = normalizeRole(role);
+  return r === 'admin' || r === 'super_admin';
+}
+
 export function canUseStaleUploads(role?: string): boolean {
   const r = normalizeRole(role);
   return r === 'admin' || r === 'super_admin';

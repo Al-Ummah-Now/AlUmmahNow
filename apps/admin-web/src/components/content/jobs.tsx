@@ -18,6 +18,8 @@ import { ActionFeedback, useContentAction } from './actions';
 import { Chip, SectionCard, smallButtonClass } from './parts';
 import { canRetryJob, isActiveJob, jobTargetHref, jobTone } from './job-helpers';
 import { JOB_KIND_LABEL } from '@/lib/admin-jobs';
+import { UserName } from '@/components/audit/UserName';
+import { fillNodes } from '@/components/audit/fill';
 
 /** How often a page with a running job re-reads it while the live socket is down. */
 const REFRESH_MS = 3000;
@@ -144,7 +146,7 @@ export function JobsTable({ jobs, permissions, testId = 'jobs-table' }: { jobs: 
                   <Link href={jobTargetHref(job)} className={`${linkClass} text-xs`}>
                     {t(`jobs.targets.${job.targetKind}` as MessageKey)} <span className="font-mono" dir="ltr">{job.targetId.length > 24 ? `${job.targetId.slice(0, 24)}…` : job.targetId}</span>
                   </Link>
-                  <span className="block text-xs text-fg-subtle">{t('jobs.by', { actor: job.actorId })}</span>
+                  <span className="block text-xs text-fg-subtle">{fillNodes(t('jobs.by'), { actor: <UserName id={job.actorId} showEmail={false} /> })}</span>
                   {job.lastError && job.status !== 'succeeded' && <span className="block md:hidden text-xs text-danger-fg break-words mt-1" dir="ltr">{job.lastError}</span>}
                 </td>
                 <td className={td}>

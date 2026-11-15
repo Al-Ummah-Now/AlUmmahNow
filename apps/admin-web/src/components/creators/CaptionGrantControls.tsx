@@ -10,6 +10,8 @@ import { fieldClass } from '@/components/ui';
 import { Chip, dangerButtonClass, smallButtonClass } from '@/components/content/parts';
 import { reportError } from '@/lib/errors/reporter';
 import { confirmButtonClass } from './TierChangeDialog';
+import { UserName } from '@/components/audit/UserName';
+import { fillNodes } from '@/components/audit/fill';
 
 export interface CaptionGrantControlsProps {
   userId: string;
@@ -212,10 +214,10 @@ export function CaptionGrantControls({ userId, usage, grants, ledger = [], canMa
                     : t('captionMinutes.grantUntilUsed', { minutes: n(g.minutes), used: n(g.used) })}
                 </span>
                 <span className="text-fg-muted">
-                  {t('captionMinutes.grantBy', { reason: g.reason, actor: g.createdBy, date: formatDate(g.createdAt, locale, true) })}
+                  {fillNodes(t('captionMinutes.grantBy', { reason: g.reason, date: formatDate(g.createdAt, locale, true) }), { actor: <UserName id={g.createdBy} showEmail={false} /> })}
                 </span>
                 {g.revokedAt && (
-                  <span className="text-fg-muted">{t('captionMinutes.revokedLine', { actor: g.revokedBy ?? '', date: formatDate(g.revokedAt, locale, true), reason: g.revokeReason ?? '' })}</span>
+                  <span className="text-fg-muted">{fillNodes(t('captionMinutes.revokedLine', { date: formatDate(g.revokedAt, locale, true), reason: g.revokeReason ?? '' }), { actor: g.revokedBy ? <UserName id={g.revokedBy} showEmail={false} /> : '' })}</span>
                 )}
                 {canManage && !g.revokedAt && revoking !== g.id && (
                   <div>

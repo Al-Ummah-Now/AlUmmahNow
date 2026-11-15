@@ -49,7 +49,7 @@ async function ownershipRows(db: SearchDb, kind: 'video' | 'channel' | 'profile'
 	if (ids.length === 0) return out;
 	const { results } = await db
 		.prepare(
-			`SELECT o.id, o.owner_id, o.channel_id, o.admin_title, o.handle, o.is_hidden, o.is_deleted
+			`SELECT o.id, o.owner_id, o.channel_id, o.admin_title, o.handle, o.email, o.is_hidden, o.is_deleted
 			 FROM json_each(?) j JOIN ${OWNERSHIP_TABLE} o ON o.kind = ? AND o.id = j.value`,
 		)
 		.bind(JSON.stringify(ids), kind)
@@ -159,6 +159,7 @@ async function lookupUsers(env: AdminEnv, db: SearchDb, ids: string[]): Promise<
 			found: !!indexed || !!profile,
 			displayName: name,
 			userName: indexed?.handle ?? (profile?.userName as string | undefined) ?? null,
+			email: indexed?.email ?? (profile?.email as string | undefined) ?? null,
 			isBanned: bans.has(id),
 		};
 	});

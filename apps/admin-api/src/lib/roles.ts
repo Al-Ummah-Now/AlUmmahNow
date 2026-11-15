@@ -68,6 +68,8 @@ export const PERMISSIONS = {
   'review_alerts:manage': ADMIN_ROLE_IDS,
   /** Staff push devices: list a staff member's devices and sign one out (lost device). */
   'staff_devices:manage': ADMIN_ROLE_IDS,
+  /** Audit log page (/audit): every admin action across the videos admin, filtered by person, item, area, action and date. */
+  'audit:read': ADMIN_ROLE_IDS,
 } as const satisfies Record<string, readonly string[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

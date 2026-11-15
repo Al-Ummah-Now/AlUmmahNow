@@ -27,6 +27,8 @@ import { SiteDomainsPanel } from './SiteDomainsPanel';
 import { Chip, EmptyState, Notice, PageHeader, SectionCard, smallButtonClass, tableWrapClass, tdClass, thClass } from '@/components/content/parts';
 import { fieldClass, primaryButtonClass } from '@/components/ui';
 import { checkSiteSlug, getSite, grantSite, restoreSite, revokeSite, updateSite, type SiteDetail, type SiteListItem } from '@/lib/api/sites';
+import { UserName } from '@/components/audit/UserName';
+import { actionLabel } from '@/components/audit/audit-model';
 
 const STATUS_KEY: Record<SiteStatus, MessageKey> = {
   setup: 'scholarSites.statusSetup',
@@ -312,7 +314,7 @@ function SitePanel({ channelId, canManage, onChanged }: { channelId: string; can
         <ul className="text-sm space-y-1" data-testid="site-history">
           {detail?.history.map((h) => (
             <li key={h.id} className="text-fg-muted">
-              <span dir="ltr">{h.action}</span> · {new Date(h.createdAt).toLocaleString(locale)} · <span dir="ltr">{h.actorId}</span>
+              <span title={h.action}>{actionLabel(h.action, t)}</span> · {new Date(h.createdAt).toLocaleString(locale)} · <UserName id={h.actorId} showEmail={false} />
             </li>
           ))}
         </ul>
@@ -380,7 +382,7 @@ export function SitesView({ sites, q, canManage, title }: { sites: SiteListItem[
                       <td className={tdClass}><span dir="ltr" className="font-mono">{s.site?.hosts.find((h) => h.primary)?.host ?? '—'}</span></td>
                       <td className={tdClass}><Chip tone={STATUS_TONE[status(s.site)]}>{t(STATUS_KEY[status(s.site)])}</Chip></td>
                       <td className={tdClass}>{s.site ? t(TIER_KEY[s.site.tier]) : '—'}</td>
-                      <td className={tdClass}><span dir="ltr">{s.grantedBy}</span></td>
+                      <td className={tdClass}>{s.grantedBy ? <UserName id={s.grantedBy} /> : '—'}</td>
                     </tr>,
                     open === s.channelId ? (
                       <tr key={`${s.channelId}-panel`}>
