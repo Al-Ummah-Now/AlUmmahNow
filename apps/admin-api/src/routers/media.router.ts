@@ -23,6 +23,9 @@
  *   PUT  /videos/:id/override { override | null }  pin one video's playback providers (audited, key
  *                           media:video:<id>); 400 { problems } when it would leave the video unplayable
  *
+ *   /troubleshoot/*         transcode troubleshooting: per-job view, containers, queues, logs, Retry now,
+ *                           Cancel, the read-only Cloudflare token (mediaTroubleshoot.router.ts)
+ *
  * Every change writes its audit row (site_settings_log) before calling
  * api-videos and removes it again if the call fails, so no change goes unaudited.
  */
@@ -31,6 +34,7 @@ import { normaliseMediaSettings, settingsProblems } from '@al-ummah/shared-types
 import { hasPermission, normalizeRoles } from '../lib/roles';
 import { callVideosInternal, ProcessingApiError, type ProcessingClientEnv } from '../lib/processing/videosProcessing';
 import { logger } from '../lib/logger';
+import troubleshootRouter from './mediaTroubleshoot.router';
 import type { AdminBindings, AuthContext } from '../base/types';
 
 type Env = { Bindings: AdminBindings & ProcessingClientEnv; Variables: { auth?: AuthContext } };
@@ -39,7 +43,7 @@ type C = Context<Env>;
 export const MEDIA_VIDEO_AUDIT_PREFIX = 'media:video:';
 export const MEDIA_SETTINGS_AUDIT_KEY = 'media:delivery';
 const MAX_IDS = 50;
-const JOB_STATUSES = ['queued', 'transcoding', 'ready', 'failed'];
+const JOB_STATUSES = ['queued', 'transcoding', 'ready', 'failed', 'cancelled'];
 const MODES = ['bunny', 'r2', 'split'];
 const ASSIGNS = ['video', 'view'];
 
@@ -93,6 +97,8 @@ async function audited<T>(c: C, rows: { key: string; oldValue: unknown; newValue
     throw error;
   }
 }
+
+app.route('/troubleshoot', troubleshootRouter as never);
 
 app.get('/summary', async (c) => {
   const days = Math.min(Math.max(parseInt(c.req.query('days') || '30', 10) || 30, 1), 120);
