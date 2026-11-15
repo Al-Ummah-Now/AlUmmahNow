@@ -68,8 +68,8 @@ export function TranslationJobs({ videoId, jobs, t, label, confirm, reload }: Pi
       <ul className="space-y-2">
         {shown.map((job) =>
           job.status === 'failed' ? (
-            <li key={job.id} role="alert" data-testid="caption-translation-failed" data-language={job.language} className="space-y-1 text-sm">
-              <p className="text-[var(--fanous-color-error-text)]">
+            <li key={job.id} data-testid="caption-translation-failed" data-language={job.language} className="space-y-1 text-sm">
+              <p role="alert" className="text-[var(--fanous-color-error-text)]">
                 {label(job.language)}: {t.jobs.failed[job.error ?? 'failed']}
               </p>
               {job.minutesReserved > 0 && !job.waived && <p className="text-xs text-muted-foreground">{fill(t.jobs.refunded, { minutes: job.minutesReserved })}</p>}

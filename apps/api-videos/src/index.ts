@@ -270,6 +270,8 @@ for (const path of ['/api/videos/upload/initiate', '/api/videos/upload/batch/ini
 for (const path of ['/api/search', '/api/videos/search']) {
 	app.use(path, edgeRateLimit('SEARCH_LIMITER', 'videos.search', ['GET']));
 }
+// Viewer-side translated titles (public): direct callers share the search budget per IP or user
+app.use('/api/videos/:id/translated-metadata', edgeRateLimit('SEARCH_LIMITER', 'videos.translated_metadata', ['GET']));
 
 // Channel creation is by invitation too: a creator tier, within its channel limit
 app.use('/api/channels', channelCreateGate);
