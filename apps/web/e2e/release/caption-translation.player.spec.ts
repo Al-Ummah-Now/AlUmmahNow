@@ -122,11 +122,18 @@ test.describe('caption and title translation', () => {
         // The player's own Settings → Captions menu lists the track with the label
         const label = locale === 'ar' ? `الإنجليزية (${MACHINE_LABEL.ar})` : `English (${MACHINE_LABEL.en})`;
         const menu = page.getByTestId('player-settings-menu');
+        // The control bar (and its Settings button) shows once playback has started: play, pause,
+        // keep the bar up, then Settings → Captions
+        await page.locator('.video-js .vjs-big-play-button').click();
+        await page.waitForFunction(() => (document.querySelector<HTMLVideoElement>('.video-js video')?.currentTime ?? 0) > 0.3, undefined, { timeout: 30000 });
+        await page.evaluate(() => document.querySelector<HTMLVideoElement>('.video-js video')!.pause());
         await expect(async () => {
-          if (!(await menu.isVisible())) {
-            await page.locator('.video-js').hover();
-            await page.locator('.video-js .vjs-fanous-settings').click({ timeout: 5000 });
-          }
+          await page.evaluate(() => {
+            const el = document.querySelector('.video-js');
+            el?.classList.remove('vjs-user-inactive');
+            el?.classList.add('vjs-user-active');
+          });
+          if (!(await menu.isVisible())) await page.locator('.video-js .vjs-fanous-settings').click({ timeout: 5000 });
           const captions = menu.locator('[data-row="captions"]');
           if (await captions.isVisible()) await captions.click({ timeout: 5000 });
           await expect(menu.locator('[role="menuitemradio"]').filter({ hasText: label })).toBeVisible({ timeout: 3000 });
