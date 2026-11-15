@@ -20,8 +20,12 @@ export function checkImage(file: unknown): File {
 	return file;
 }
 
-export async function storeImage(env: Record<string, unknown>, file: File, suffix: string): Promise<string> {
-	const path = `/${crypto.randomUUID()}_${suffix}.${file.type.split('/')[1]}`;
+/**
+ * `folder` (a video thumbnail: `/thumbnails/<videoId>`) keeps the file in its item's own folder,
+ * which is what the purge erases (lib/admin/purgeCopies.ts); avatars and covers stay at the root.
+ */
+export async function storeImage(env: Record<string, unknown>, file: File, suffix: string, folder = ''): Promise<string> {
+	const path = `${folder}/${crypto.randomUUID()}_${suffix}.${file.type.split('/')[1]}`;
 	const key = await requireSecret(env.image_storage_key as never, 'image_storage_key');
 	const zone = requireEnvVar(env as never, 'ZONE');
 	const uploaded = await new BunnyStorageClient(zone, key).putFile(path, file.stream());

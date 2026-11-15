@@ -99,14 +99,15 @@ describe('image files (lib/media/imageFiles.ts)', () => {
 });
 
 describe('which images belong to an item', () => {
-	it('a video owns its thumbnail folder and an admin upload, never a shared or foreign file', () => {
+	it('a video owns only the files in its own thumbnail folder, never a shared, foreign or root file', () => {
 		const paths = ownedVideoImagePaths('v1', {
 			thumbnailUrl: `${IMG}/thumbnails/v1/new.jpg?width=1280`,
 			thumbnailSizes: { hd: `${IMG}/thumbnails/v1/new.jpg?width=1280`, sd: `${IMG}/thumbnails/v1/new.jpg?width=640` },
 			previousThumbnailUrl: `${IMG}/${UUID}_thumbnail.png`,
 			customThumbnailUrl: `${IMG}/thumbnails/v2/theirs.jpg`,
 		});
-		assert.deepEqual(paths.sort(), [`/${UUID}_thumbnail.png`, '/thumbnails/v1/new.jpg']);
+		// A root admin upload from before uploads went to the folder may be named by any record: kept
+		assert.deepEqual(paths, ['/thumbnails/v1/new.jpg']);
 		// A legacy imported thumbnail (named after a title, may be shared) is not the purge's to delete
 		assert.deepEqual(ownedVideoImagePaths('v1', { thumbnailUrl: 'images.alummahnow.net/Old lesson title.jpg' }), []);
 	});
@@ -129,7 +130,9 @@ describe('video purge erases every copy (#700, #814)', () => {
 			userId: 'owner',
 			channelId: 'ch1',
 			isDeleted: true,
-			thumbnailUrl: `${IMG}/${UUID}_thumbnail.jpeg`,
+			thumbnailUrl: `${IMG}/thumbnails/v1/${UUID}_thumbnail.jpeg`,
+			// Another video's file: a record can name any URL, and it is not this purge's to delete
+			previousThumbnailUrl: `${IMG}/${UUID}_thumbnail.jpeg`,
 		});
 		const env = baseEnv({
 			videos: { v1: video, v2: videoFixture({ id: 'v2', userId: 'owner', channelId: 'ch1' }) },
@@ -141,7 +144,7 @@ describe('video purge erases every copy (#700, #814)', () => {
 				'ch1/s3.json': { id: 's3', type: 'videos', videoIds: ['v2'] },
 			},
 		});
-		for (const f of ['/thumbnails/v1/one.jpg', '/thumbnails/v1/two.jpg', `/${UUID}_thumbnail.jpeg`, '/thumbnails/v2/keep.jpg']) storage.files.add(f);
+		for (const f of ['/thumbnails/v1/one.jpg', '/thumbnails/v1/two.jpg', `/thumbnails/v1/${UUID}_thumbnail.jpeg`, `/${UUID}_thumbnail.jpeg`, '/thumbnails/v2/keep.jpg']) storage.files.add(f);
 		await env.subtitles.put('v1/en.vtt', 'WEBVTT');
 		await env.subtitles.put('v1/original/a.srt', '1');
 		await env.subtitles.put('v2/en.vtt', 'WEBVTT');
@@ -166,8 +169,8 @@ describe('video purge erases every copy (#700, #814)', () => {
 		const outcome = await ADMIN_JOB_HANDLERS['video.purge'](env, { targetId: 'v1', params: { userId: 'owner', channelId: 'ch1' } } as never);
 		assert.equal((outcome as { done: boolean }).done, true);
 		assert.equal(env.videos.store.has('v1'), false);
-		// Bunny Storage: both uploads in its folder and the admin upload; another video's file stays
-		assert.deepEqual([...storage.files], ['/thumbnails/v2/keep.jpg']);
+		// Bunny Storage: every file in its folder (uploads and the admin upload); files it only names stay
+		assert.deepEqual([...storage.files].sort(), [`/${UUID}_thumbnail.jpeg`, '/thumbnails/v2/keep.jpg']);
 		assert.equal(env.SEARCH_DB.count('image_owners'), 0, 'the index row goes with the file');
 		// Subtitles (#814)
 		assert.deepEqual([...env.subtitles.store.keys()], ['v2/en.vtt']);
@@ -190,9 +193,9 @@ describe('video purge erases every copy (#700, #814)', () => {
 		storage.failDeletes = false;
 		// The retry finds the record gone and still erases what was left
 		await ADMIN_JOB_HANDLERS['video.purge'](env, { targetId: 'v1', params: { userId: 'owner', channelId: 'ch1' } } as never);
-		assert.deepEqual([...storage.files], ['/thumbnails/v2/keep.jpg']);
+		assert.deepEqual([...storage.files].sort(), [`/${UUID}_thumbnail.jpeg`, '/thumbnails/v2/keep.jpg']);
 		await ADMIN_JOB_HANDLERS['video.purge'](env, { targetId: 'v1', params: { userId: 'owner', channelId: 'ch1' } } as never);
-		assert.deepEqual([...storage.files], ['/thumbnails/v2/keep.jpg']);
+		assert.deepEqual([...storage.files].sort(), [`/${UUID}_thumbnail.jpeg`, '/thumbnails/v2/keep.jpg']);
 	});
 
 	it('reference and caption steps are no-ops with nothing to do', async () => {
