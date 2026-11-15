@@ -156,7 +156,7 @@ async function logs(script: string, since: Date, until: Date, search: string, ke
 		queryId: `media-diagnostics-${script}`,
 		timeframe: { from: since.getTime(), to: until.getTime() },
 		view: 'events',
-		limit: 300,
+		limit: 1000,
 		parameters: { datasets: key === '$workers.scriptName' ? ['cloudflare-workers'] : [], filters, filterCombination: 'and' },
 	});
 	if (!r.ok) return p(`unavailable: ${errs(r)}`), p();
@@ -169,7 +169,8 @@ async function logs(script: string, since: Date, until: Date, search: string, ke
 			const level = e.$metadata?.level ?? e.source?.level ?? '';
 			const msg = e.$metadata?.message ?? e.source?.message ?? '';
 			const trigger = e.$workers?.event?.queue ? 'queue' : e.$workers?.eventType ?? '';
-			const src = typeof e.source === 'object' ? JSON.stringify(e.source).slice(0, 700) : '';
+			const c = e.$container ? ` {placement:${e.$container.placementId ?? ''},host:${e.$container.hostname ?? ''},v:${e.$container.version ?? ''}}` : '';
+			const src = (typeof e.source === 'object' ? JSON.stringify(e.source).slice(0, 700) : String(e.source ?? '').slice(0, 700)) + c;
 			return `- ${t} [${level}] ${trigger} ${msg} ${src}`;
 		})
 		.sort();
@@ -190,7 +191,7 @@ async function discover(names: Names, since: Date, until: Date): Promise<void> {
 	p(`- keys: ${k.ok ? JSON.stringify(keys).slice(0, 2000) : errs(k)}`);
 	// Container output, wherever it is: every event whose service names the transcoder application
 	for (const value of [`${names.media}-transcoder`, `${names.media}-transcoder-stage`]) {
-		await logs(value, since, until, '', '$metadata.service', true);
+		await logs(value, since, until, '', '$container.appName', true);
 	}
 	p();
 }
