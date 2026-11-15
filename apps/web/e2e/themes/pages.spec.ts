@@ -30,21 +30,38 @@ for (const entry of THEME_PAGES) {
       await page.waitForLoadState('networkidle').catch(() => {});
       await expect(page.locator('#page-content')).toBeVisible();
       // Colours are checked at rest: a theme switch must not be measured mid-transition
-      await page.addStyleTag({ content: '*,*::before,*::after{transition:none!important;animation-duration:0s!important;animation-delay:0s!important}' });
+      const still = () => page.addStyleTag({ content: '*,*::before,*::after{transition:none!important;animation-duration:0s!important;animation-delay:0s!important}' });
+      await still();
       const findings: string[] = [];
+      const measure = async (theme: string, mode: (typeof MODES)[number]) => {
+        const found: string[] = [];
+        await applyTheme(page, theme, mode);
+        await page.mouse.move(0, 0);
+        await page.waitForTimeout(250);
+        await page.screenshot({ path: info.outputPath(`${entry.id}-${theme}-${mode}-${lang}.png`) });
+        for (const t of await measureText(page, 'body')) {
+          if (t.ratio < 4.5) found.push(`${theme} ${mode}: pixels ${t.ratio}:1 ${t.fg} on ${t.bg} "${t.text}" (${t.selector})`);
+        }
+        // The player is covered by its own specs; the dev overlay is not part of the site
+        const axe = await new AxeBuilder({ page }).exclude('video').exclude('nextjs-portal').withRules(['color-contrast']).analyze();
+        for (const v of axe.violations) {
+          for (const n of v.nodes) found.push(`${theme} ${mode}: axe ${n.target.join(' ')} ${n.failureSummary?.split('\n').slice(1).join(' ').slice(0, 160)}`);
+        }
+        return found;
+      };
       for (const theme of THEMES) {
         for (const mode of MODES) {
-          await applyTheme(page, theme, mode);
-          await page.mouse.move(0, 0);
-          await page.waitForTimeout(250);
-          await page.screenshot({ path: info.outputPath(`${entry.id}-${theme}-${mode}-${lang}.png`) });
-          for (const t of await measureText(page, 'body')) {
-            if (t.ratio < 4.5) findings.push(`${theme} ${mode}: pixels ${t.ratio}:1 ${t.fg} on ${t.bg} "${t.text}" (${t.selector})`);
-          }
-          // The player is covered by its own specs; the dev overlay is not part of the site
-          const axe = await new AxeBuilder({ page }).exclude('video').exclude('nextjs-portal').withRules(['color-contrast']).analyze();
-          for (const v of axe.violations) {
-            for (const n of v.nodes) findings.push(`${theme} ${mode}: axe ${n.target.join(' ')} ${n.failureSummary?.split('\n').slice(1).join(' ').slice(0, 160)}`);
+          try {
+            findings.push(...(await measure(theme, mode)));
+          } catch (error) {
+            // The dev server can reload the page while it compiles a route for the first time ("Fast
+            // Refresh had to perform a full reload"): that is not a finding. Measure this theme again,
+            // once, on the reloaded page; any other error, or a second one, fails the test.
+            if (!/Execution context was destroyed/.test(String(error))) throw error;
+            await page.waitForLoadState('load');
+            await expect(page.locator('#page-content')).toBeVisible();
+            await still();
+            findings.push(...(await measure(theme, mode)));
           }
         }
       }

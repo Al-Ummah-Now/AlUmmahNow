@@ -183,10 +183,13 @@ test.describe('header accessibility', () => {
 test.describe('header accessibility, signed out', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
   for (const locale of ['en', 'ar'] as const) {
-    test(`I18N-10 axe finds no violations in the sign-in page header (${locale})`, async ({ page }) => {
+    test(`I18N-10 axe finds no violations in the signed-out header (${locale})`, async ({ page }) => {
       await setPreferences(page, { locale });
-      await page.goto('/login');
+      // The admin's own signed-out page (PublicShell): plain /login goes straight on to the Auth
+      // server's sign-in page, another app with its own header and language
+      await page.goto('/login?error=auth_failed');
       await expectDirection(page, locale);
+      await expect(page.locator('header.aun-header').getByTestId('header-sign-in')).toBeVisible();
       await expectHeaderAxeClean(page);
     });
   }

@@ -204,7 +204,8 @@ async function open(browser: Browser, lang: Lang, device: Device, mode: Mode, op
 async function settle(page: Page, path: string, lang: Lang): Promise<void> {
   await page.goto(`/${lang}${path}`, { waitUntil: 'domcontentloaded' });
   await page.waitForLoadState('networkidle').catch(() => undefined);
-  await expect(page.getByTestId('nav-menu-trigger')).toBeVisible({ timeout: 30_000 });
+  // The header has settled: the account button, or signed out the solid Sign in
+  await expect(page.locator('[data-testid="nav-menu-trigger"]:visible, [data-testid="header-sign-in"]:visible').first()).toBeVisible({ timeout: 30_000 });
   await page.evaluate(() => document.fonts.ready);
 }
 
