@@ -86,7 +86,7 @@ async function expectWatchLayout(page: Page, locale: Locale, width: number): Pro
 const overlaps = (a: Box, b: Box) =>
   a.x < b.x + b.width - 0.5 && b.x < a.x + a.width - 0.5 && a.y < b.y + b.height - 0.5 && b.y < a.y + a.height - 0.5;
 
-async function expectHeader(page: Page, locale: Locale, width: number): Promise<void> {
+async function expectHeader(page: Page, locale: Locale, width: number, signedIn: boolean): Promise<void> {
   const where = `${locale} @ ${width}px header`;
   const items = await page.evaluate(() => {
     const box = (el: Element | null) => {
@@ -104,7 +104,8 @@ async function expectHeader(page: Page, locale: Locale, width: number): Promise<
       ['menu', document.querySelector('[data-testid="nav-drawer-toggle"]')],
       ['logo', header?.querySelector('.aun-brand') ?? null],
       ...(uploadInCluster ? [] : [['upload', upload] as [string, Element | null]]),
-      ['search', header?.querySelector('.ah-search-wrap .ah-search, [data-testid="header-search-open"]') ?? null],
+      // The search box, or below 1024px the icon that opens it: whichever is on screen
+      ['search', [...(header?.querySelectorAll('.ah-search-wrap .ah-search, [data-testid="header-search-open"]') ?? [])].find((e) => e.getBoundingClientRect().width > 0) ?? null],
       ...(uploadInCluster ? [['upload', upload] as [string, Element | null]] : []),
       // The end cluster's other children (Upload sits in it since the shared nav; it is listed by name above)
       ...[...(end?.children ?? [])].filter((c) => !c.querySelector('[data-testid="header-upload"]') && c.getAttribute('data-testid') !== 'header-upload').map((c, i) => [`end-${i}`, c] as [string, Element]),
@@ -129,6 +130,7 @@ async function expectHeader(page: Page, locale: Locale, width: number): Promise<
   const ordered = locale === 'en' ? xs.every((x, i) => i === 0 || x > xs[i - 1]) : xs.every((x, i) => i === 0 || x < xs[i - 1]);
   expect(ordered, `${where}: items in reading order (${names.join(', ')})`).toBe(true);
 
+  if (!signedIn) return;
   // The account chevron follows the button's last visible part (the name, or the avatar when the
   // name is hidden): adjacent and on the same line
   const parts = await page.evaluate(() => {
@@ -160,15 +162,16 @@ async function expectHeader(page: Page, locale: Locale, width: number): Promise<
   ).toBeLessThanOrEqual(2);
 }
 
-async function checkAllWidths(page: Page, videoId: string, locale: Locale): Promise<void> {
+async function checkAllWidths(page: Page, videoId: string, locale: Locale, signedIn: boolean): Promise<void> {
   for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(watchUrl(videoId, locale));
     await expect(page.locator('[data-testid="related-videos-list"]:visible a').first(), 'related videos load').toBeVisible({ timeout: 30000 });
     await expect(page.locator('#video-player')).toBeVisible();
-    await expect(page.getByTestId('nav-menu-trigger')).toBeVisible();
+    // Signed in: the account button; signed out: the header's solid Sign in (docs/design/NAV.md)
+    await expect(page.getByTestId(signedIn ? 'nav-menu-trigger' : 'header-sign-in')).toBeVisible();
     await expectWatchLayout(page, locale, width);
-    await expectHeader(page, locale, width);
+    await expectHeader(page, locale, width, signedIn);
   }
 }
 
@@ -182,7 +185,7 @@ test.describe('Release: watch page and header layout, tablet to desktop', () => 
     test(`player dominates, related stays compact, header aligned, anonymous (${locale})`, async ({ page }) => {
       const id = await videoWithRelated();
       test.skip(!id, NO_PLAYABLE_VIDEO);
-      await checkAllWidths(page, id!, locale);
+      await checkAllWidths(page, id!, locale, false);
     });
 
     test(`player dominates, related stays compact, header aligned, signed in (${locale})`, async ({ page }) => {
@@ -195,7 +198,7 @@ test.describe('Release: watch page and header layout, tablet to desktop', () => 
       await createProfile(user);
       // The header's Upload button shows only with a creator tier (uploads are by invitation)
       await grantCreatorTier(user);
-      await checkAllWidths(page, id!, locale);
+      await checkAllWidths(page, id!, locale, true);
     });
   }
 });

@@ -36,17 +36,17 @@ test.describe('Menus stay inside the viewport - signed out', () => {
 
   for (const vp of VIEWPORTS) {
     for (const locale of LOCALES) {
-      test(`MENU-VP-001 ${vp.width}×${vp.height} ${locale}: account menu and search suggestions`, async ({ page }) => {
+      test(`MENU-VP-001 ${vp.width}×${vp.height} ${locale}: Sign in and search suggestions`, async ({ page }) => {
         await page.setViewportSize(vp);
         await page.goto(`/${locale}`);
-        const menu = await openAccountMenu(page);
-        await expectInViewport(page, menu, 'account menu (signed out)');
-        await page.keyboard.press('Escape');
-        await expect(menu).toBeHidden();
+        // Signed out there is no account menu: the header's solid Sign in, on screen (docs/design/NAV.md)
+        await expectInViewport(page, page.getByTestId('header-sign-in'), 'Sign in (signed out)');
 
-        // The search page's own box shows below 640px (sm:hidden); wider, the header's box is the one
+        // The search page's own box shows below 640px (sm:hidden); from 1024px the header's box; in
+        // between the header's search icon opens the box over the bar
         await page.goto(`/${locale}/search`);
         const box = page.locator('[data-testid="search-input"]:visible, [data-testid="header-search-input"]:visible').first();
+        if (!(await box.isVisible({ timeout: 5000 }).catch(() => false))) await page.getByTestId('header-search-open').click();
         await expect(box).toBeVisible();
         await box.click();
         await box.fill(locale === 'ar' ? 'ص' : 'a');
