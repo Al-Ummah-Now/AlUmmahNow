@@ -167,3 +167,32 @@ export const BUILD_SECRETS: BuildSecret[] = [
 	{ name: 'NEXT_SERVER_ACTIONS_ENCRYPTION_KEY', workflow: 'release.yml', purpose: 'Server Action key of the stage + production build (web, admin-web)' },
 	{ name: 'NEXT_SERVER_ACTIONS_ENCRYPTION_KEY_QA', workflow: 'deploy.yml', purpose: 'Server Action key of the QA build (web, admin-web); PR builds get none' },
 ];
+
+/** The account's Secrets Store (al-ummah secrets of every env). */
+export const SECRETS_STORE_ID = 'f8eddc9944d041919ed8dc7d08d32308';
+
+/** Name suffix of a Secrets Store secret per env (production has none). */
+export const STORE_SUFFIX: Record<EnvName, string> = { production: '', stage: '-stage', qa: '-qa' };
+
+export interface GeneratedSecret {
+	/** How the value is made; one generator may make several secrets at once (a key pair). */
+	generated: 'vapid';
+	/** Base Secrets Store names; the env suffix is added (vapid-public-key-qa). */
+	names: Record<string, string>;
+	purpose: string;
+}
+
+/**
+ * Secrets whose values we generate ourselves, not owner credentials. The
+ * "Provision generated secrets" workflow (provision-generated-secrets.ts) creates
+ * them in SECRETS_STORE_ID for each env, only when absent: it never overwrites,
+ * because live state depends on the value (browser push subscriptions are bound
+ * to the VAPID public key).
+ */
+export const GENERATED_SECRETS: GeneratedSecret[] = [
+	{
+		generated: 'vapid',
+		names: { publicKey: 'vapid-public-key', privateKey: 'vapid-private-key' },
+		purpose: 'Web Push VAPID key pair (RFC 8292): processor signs and encrypts pushes, api-videos serves the public key',
+	},
+];
