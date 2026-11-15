@@ -91,6 +91,7 @@ interface MiniflareInstance {
   getKVNamespace(binding: string, worker?: string): Promise<{
     list(o?: { cursor?: string }): Promise<{ keys: { name: string }[]; list_complete: boolean; cursor?: string }>;
     get(key: string): Promise<string | null>;
+    delete(key: string): Promise<void>;
   }>;
   getWorker(name?: string): Promise<{ scheduled(o: { cron: string; scheduledTime?: Date }): Promise<{ outcome: string; noRetry: boolean }> }>;
   getQueueProducer(binding: string, worker?: string): Promise<{ send(body: unknown): Promise<void> }>;
@@ -533,6 +534,11 @@ async function main(): Promise<void> {
       const p = prepared.find((x) => x.worker.app === app || x.name === app);
       if (!p) throw new Error(`no worker ${app} (${prepared.map((x) => x.worker.app).join(', ')})`);
       await (await mf.getQueueProducer(binding, p.name)).send(body);
+    },
+    kvDelete: async (binding, key) => {
+      const p = prepared.find((x) => ((x.local.config.kv_namespaces as Json[] | undefined) ?? []).some((k) => String(k.binding) === binding));
+      if (!p) throw new Error(`no KV namespace bound as ${binding}`);
+      await (await mf.getKVNamespace(binding, p.name)).delete(key);
     },
     scheduled: async (app, cron, time) => {
       const p = prepared.find((x) => x.worker.app === app || x.name === app);

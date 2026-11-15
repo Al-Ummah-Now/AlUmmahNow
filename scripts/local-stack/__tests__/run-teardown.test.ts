@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { historyDeletes, isHistory, keptOnPurpose } from '../run-teardown.ts';
+import { historyDeletes, isHistory, keptOnPurpose, residueDeletes, signUpResidue } from '../run-teardown.ts';
 
 test('only revocations and tombstones are kept on purpose', () => {
   assert.ok(keptOnPurpose({ store: 'kv:TOKEN_REVOCATIONS', location: 'u:usr_1' }));
@@ -39,4 +39,23 @@ test('history rows are deleted by primary key, quoted, per table', () => {
     { database: 'al-ummah-now-search', sql: "DELETE FROM admin_jobs WHERE (id = 'j''1') OR (id = 'j2')" },
     { database: 'al-ummah-now-search', sql: "DELETE FROM admin_deletions WHERE (kind = 'video' AND target_id = 'v1')" },
   ]);
+});
+
+test('an abandoned sign-up (account never created) is found by the run marker: Auth code row and code-sink key', () => {
+  const marker = '43699547929';
+  const email = `e2e+${marker}-1-rel-mwhn63crupjs-rel-studio-links@e2e.alummahnow.net`;
+  const other = 'e2e+999-1-rel-x@e2e.alummahnow.net';
+  const residue = signUpResidue([
+    { store: 'd1:al-ummah-now-d1', location: 'password_codes', sample: JSON.stringify({ email, code_hash: 'h', attempts: 0 }) },
+    { store: 'kv:AUTH_STORAGE', location: `test:email:${email}`, sample: `test:email:${email}` },
+    // another run's address, a non-run address and other stores are never touched
+    { store: 'd1:al-ummah-now-d1', location: 'password_codes', sample: JSON.stringify({ email: other }) },
+    { store: 'd1:al-ummah-now-d1', location: 'password_codes', sample: JSON.stringify({ email: `owner+${marker}@example.com` }) },
+    { store: 'kv:AUTH_STORAGE', location: `session:${email}`, sample: email },
+    { store: 'd1:al-ummah-now-d1', location: 'users', sample: JSON.stringify({ email }) },
+    { store: 'd1:al-ummah-now-d1', location: 'password_codes', sample: 'not json' },
+  ], marker);
+  assert.deepEqual(residue, { emails: [email], sinkKeys: [`test:email:${email}`] });
+  assert.deepEqual(residueDeletes([email, "e2e+o'q@e2e.alummahnow.net"]), [`DELETE FROM password_codes WHERE email IN ('${email}', 'e2e+o''q@e2e.alummahnow.net')`]);
+  assert.equal(residueDeletes(Array.from({ length: 51 }, (_, i) => `e2e+${i}@e2e.alummahnow.net`)).length, 2);
 });

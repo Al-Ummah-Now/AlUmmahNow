@@ -20,7 +20,11 @@
  *    Then sends that last step (UserDataErased) once more for every run user id
  *    (E2E_RUN_USER_IDS_FILE): what reached the processor after a user's erasure (an error report
  *    from the page still open, a late queue message) is erased too, and waits again.
- * 3. Removes this run's rows from the stores the product keeps as history (HISTORY below), found by
+ * 3. Removes what an abandoned sign-up left (signUpResidue below): a spec that timed out after the
+ *    verification code was sent never created the account, so the issuer's run-user delete finds
+ *    nothing ("absent") and leaves that email's Auth sign-up code and code-sink entry. Found by the
+ *    run marker in the scan, not by the accounts the run created (#1425).
+ * 4. Removes this run's rows from the stores the product keeps as history (HISTORY below), found by
  *    the scan: the run's own test data, never allowed through.
  *
  * Never fails the job: the Leftovers step after it does, with the list of what is left.
@@ -106,6 +110,40 @@ export function historyDeletes(hits: Hit[]): { database: string; sql: string }[]
   return out;
 }
 
+const AUTH_DB = 'd1:al-ummah-now-d1';
+const CODE_SINK_PREFIX = 'test:email:';
+
+/**
+ * An abandoned sign-up's state: the Auth sign-up code (password_codes, keyed by email) and the E2E
+ * code-sink entry (AUTH_STORAGE test:email:<email>). Only run accounts' addresses that hold the
+ * run marker: the scan only returns marker hits, and this checks again.
+ */
+export function signUpResidue(hits: Hit[], marker: string): { emails: string[]; sinkKeys: string[] } {
+  const isRun = (email: string) => email.includes(marker) && /^e2e\+[^@\s]+@e2e\.alummahnow\.net$/.test(email);
+  const emails = new Set<string>();
+  const sinkKeys = new Set<string>();
+  for (const hit of hits) {
+    if (hit.store === AUTH_DB && hit.location === 'password_codes') {
+      try {
+        const email = (JSON.parse(hit.sample) as { email?: unknown }).email;
+        if (typeof email === 'string' && isRun(email)) emails.add(email);
+      } catch {
+        // not a row sample
+      }
+    } else if (hit.store === 'kv:AUTH_STORAGE' && hit.location.startsWith(CODE_SINK_PREFIX) && isRun(hit.location.slice(CODE_SINK_PREFIX.length))) {
+      sinkKeys.add(hit.location);
+    }
+  }
+  return { emails: [...emails], sinkKeys: [...sinkKeys] };
+}
+
+/** DELETE statements for those emails' sign-up codes, in chunks of 50. */
+export function residueDeletes(emails: string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < emails.length; i += 50) out.push(`DELETE FROM password_codes WHERE email IN (${emails.slice(i, i + 50).map(quote).join(', ')})`);
+  return out;
+}
+
 function runUserIds(): string[] {
   const file = process.env.E2E_RUN_USER_IDS_FILE;
   if (!file || !existsSync(file)) return [];
@@ -156,6 +194,21 @@ async function settle(deadline: number, crons: boolean): Promise<Hit[]> {
   }
 }
 
+/** Deletes the abandoned sign-ups among `hits` (3. above); returns how many entries it removed. */
+async function clearSignUpResidue(hits: Hit[]): Promise<number> {
+  const { emails, sinkKeys } = signUpResidue(hits, marker);
+  for (const sql of residueDeletes(emails)) {
+    const res = await fetch(`${control}/__stack/d1/${encodeURIComponent(AUTH_DB.slice('d1:'.length))}`, { method: 'POST', headers: { 'content-type': 'text/plain' }, body: sql });
+    if (!res.ok) log(`abandoned sign-up codes: ${res.status} ${await res.text()}`);
+  }
+  for (const key of sinkKeys) {
+    const res = await fetch(`${control}/__stack/kv/AUTH_STORAGE/${encodeURIComponent(key)}`, { method: 'DELETE' });
+    if (!res.ok) log(`code-sink entry ${key}: ${res.status} ${await res.text()}`);
+  }
+  if (emails.length || sinkKeys.length) log(`abandoned sign-ups: removed ${emails.length} sign-up code(s) and ${sinkKeys.length} code-sink entr${sinkKeys.length === 1 ? 'y' : 'ies'}`);
+  return emails.length + sinkKeys.length;
+}
+
 /** The processor's erasure step once more for each run user (idempotent; see 2. above). */
 async function eraseAgain(ids: string[]): Promise<void> {
   const { MessageType } = await import('../../packages/shared-types/src/queue.ts');
@@ -172,12 +225,16 @@ async function eraseAgain(ids: string[]): Promise<void> {
 async function main(): Promise<void> {
   if (marker.length < 6) throw new Error('--marker <run id> (or E2E_RUN_ID) is required');
   const deadline = Date.now() + waitSeconds * 1000;
+  // Before waiting: nothing queued will ever remove it, so the wait would only run out
+  await clearSignUpResidue(await scan());
   let left = await settle(deadline, true);
   const ids = runUserIds();
   if (ids.length) {
     await eraseAgain(ids);
     left = await settle(Math.max(deadline, Date.now() + 30_000), false);
   }
+
+  if (await clearSignUpResidue(left)) left = pending(await scan());
   if (left.length) log(`gave up waiting after ${waitSeconds} s with ${left.length} pending; the leftover check lists them`);
 
   const history = (await scan()).filter(isHistory);
