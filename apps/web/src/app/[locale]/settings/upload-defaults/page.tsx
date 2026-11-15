@@ -19,7 +19,8 @@ import {
   AlertCircle,
   Loader2,
 } from 'lucide-react';
-import { UploadTemplate, VIDEO_CATEGORIES } from '@al-ummah/shared-types';
+import { UploadTemplate } from '@al-ummah/shared-types';
+import { useVideoCategories } from '@/hooks/useVideoCategories';
 import { listTemplates, deleteTemplate, setDefaultTemplate } from '@/lib/api/upload-defaults';
 import { TemplateEditorModal } from '@/components/settings/TemplateEditorModal';
 import { parseTemplateListResponse } from '@/lib/upload/template-list';
@@ -28,6 +29,7 @@ import { logger } from '@/lib/logger-client';
 
 export default function UploadDefaultsPage() {
   const { t, isRTL } = useLanguage();
+  const categories = useVideoCategories();
 
   // State
   const [templates, setTemplates] = useState<UploadTemplate[]>([]);
@@ -302,7 +304,7 @@ export default function UploadDefaultsPage() {
                       {template.template.category && (
                         <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                           <span className="font-medium">{isRTL ? 'التصنيف:' : 'Category:'}</span>
-                          <span data-testid="template-category">{VIDEO_CATEGORIES.find((c) => c.value === template.template.category)?.label[isRTL ? 'ar' : 'en'] ?? template.template.category}</span>
+                          <span data-testid="template-category">{categories.label(template.template.category, isRTL ? 'ar' : 'en') ?? template.template.category}</span>
                         </div>
                       )}
                       {template.template.tags && template.template.tags.length > 0 && (

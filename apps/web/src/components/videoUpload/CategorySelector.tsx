@@ -12,7 +12,9 @@
 import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import { useLanguage } from '@/hooks/useLanguage';
 import { Folder, ChevronDown, Sparkles, Loader2 } from 'lucide-react';
-import { VideoCategory, VIDEO_CATEGORIES } from '@al-ummah/shared-types';
+import type { VideoCategory } from '@al-ummah/shared-types';
+import { useVideoCategories } from '@/hooks/useVideoCategories';
+import { pickerCategories } from '@/lib/api/categories';
 import { isKnownCategory, suggestionOptions, type CategorySuggestionView } from '@/lib/category-suggestion/form';
 
 interface CategorySelectorProps {
@@ -55,10 +57,10 @@ export function CategorySelector({
   compact = false,
 }: CategorySelectorProps) {
   const { isRTL } = useLanguage();
-  const labelOf = (v: string) => {
-    const found = VIDEO_CATEGORIES.find((c) => c.value === v);
-    return found ? (isRTL ? found.label.ar : found.label.en) : v;
-  };
+  const categories = useVideoCategories();
+  const labelOf = (v: string) => categories.label(v, isRTL ? 'ar' : 'en') ?? v;
+  // Active categories, plus the current one when it was retired (saving other fields keeps it)
+  const choices = pickerCategories(categories.all, value);
   const options = suggestionOptions(suggestion);
   // Not sure enough to preselect: offer the top options (when nothing is chosen yet, or the AI's choice is shown)
   const offerOptions = !aiSelected && !value && !!suggestion?.lowConfidence && options.length > 0;
@@ -114,7 +116,7 @@ export function CategorySelector({
           <option value="">
             {isRTL ? 'اختر تصنيف...' : 'Select a category...'}
           </option>
-          {VIDEO_CATEGORIES.map((category) => (
+          {choices.map((category) => (
             <option key={category.value} value={category.value}>
               {isRTL ? category.label.ar : category.label.en}
             </option>

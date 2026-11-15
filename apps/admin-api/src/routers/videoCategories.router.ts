@@ -31,6 +31,7 @@ import {
 import { hasPermission } from '../lib/roles';
 import { logger } from '../lib/logger';
 import { auditKey, dropAudit, writeAudit } from '../lib/content/audit';
+import { resolveNames } from '../lib/queue/names';
 import type { ProcessingClientEnv } from '../lib/processing/videosProcessing';
 import type { AdminBindings, AuthContext } from '../base/types';
 
@@ -151,12 +152,16 @@ app.get('/history', async (c) => {
     .prepare('SELECT id, key, old_value, new_value, actor_id, created_at FROM site_settings_log WHERE key >= ? AND key < ? ORDER BY created_at DESC, id DESC LIMIT ?')
     .bind(prefix, `${prefix.slice(0, -1)};`, limit)
     .all<{ id: string; key: string; old_value: string | null; new_value: string; actor_id: string; created_at: string }>();
-  const entries = (results ?? []).map((r) => ({
+  const rows = results ?? [];
+  // Names, not ids (one batch over the search index; falls back to the id)
+  const names = await resolveNames(c.env.SEARCH_DB as never, { profiles: rows.map((r) => r.actor_id) });
+  const entries = rows.map((r) => ({
     id: r.id,
     value: r.key.slice(prefix.length),
     previous: r.old_value ? JSON.parse(r.old_value) : null,
     change: JSON.parse(r.new_value),
     actorId: r.actor_id,
+    actorName: names.profiles.get(r.actor_id) ?? null,
     createdAt: r.created_at,
   }));
   return c.json({ success: true, result: { entries } });

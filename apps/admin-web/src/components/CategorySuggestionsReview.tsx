@@ -8,13 +8,12 @@
  */
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { VIDEO_CATEGORIES } from '@al-ummah/shared-types';
 import { acceptCategorySuggestions, retryCategorySuggestions, setVideoCategories } from '@/lib/api/admin';
 import type { ActionResult } from '@/lib/api/errors';
 import type { CategoryBulkResult, CategorySuggestionItem, CategorySuggestionQueue } from '@/lib/api/types';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { translateDynamic, type Translator } from '@/i18n/translate';
-import { categoryLabel } from '@/lib/category-label';
+import { categoryLabel, type CategoryOption } from '@/lib/category-label';
 import { ErrorAlert, fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
 
@@ -34,10 +33,13 @@ export function CategorySuggestionsReview({
   items,
   view,
   canEdit,
+  categories,
 }: {
   items: CategorySuggestionItem[];
   view: CategorySuggestionQueue;
   canEdit: boolean;
+  /** The admin-managed list: labels for every value, active ones to choose from */
+  categories: readonly CategoryOption[];
 }) {
   const router = useRouter();
   const { t, locale } = useLanguage();
@@ -112,7 +114,7 @@ export function CategorySuggestionsReview({
             {t('categorySuggestions.changeTo')}
             <select value={target} onChange={(e) => setTarget(e.target.value)} className={fieldClass} data-testid="category-change-select">
               <option value="">—</option>
-              {VIDEO_CATEGORIES.map((c) => (
+              {categories.filter((c) => !c.retired).map((c) => (
                 <option key={c.value} value={c.value}>
                   {c.label[locale] ?? c.label.en}
                 </option>
@@ -159,7 +161,7 @@ export function CategorySuggestionsReview({
               {items.map((item) => {
                 const title = item.video?.title ?? t('categorySuggestions.untitled');
                 const confidence = pct(item.confidence);
-                const current = categoryLabel(item.video?.category, locale);
+                const current = categoryLabel(item.video?.category, locale, categories);
                 return (
                   <tr key={item.videoId} className="border-t border-border align-top" data-testid="category-row" data-video-id={item.videoId}>
                     {canEdit && (
@@ -192,7 +194,7 @@ export function CategorySuggestionsReview({
                       {item.category ? (
                         <>
                           <p className="font-medium text-fg" data-testid="category-suggested" data-category={item.category}>
-                            {categoryLabel(item.category, locale)}
+                            {categoryLabel(item.category, locale, categories)}
                           </p>
                           {confidence !== null && (
                             <div className="mt-1">
@@ -206,7 +208,7 @@ export function CategorySuggestionsReview({
                             <div className="mt-2 flex flex-wrap gap-1" aria-label={t('categorySuggestions.options')}>
                               {item.options.slice(1).map((o) => (
                                 <span key={o.category} className="px-2 py-0.5 rounded bg-surface-2 text-fg-muted text-xs">
-                                  {categoryLabel(o.category, locale)} · {pct(o.confidence)}%
+                                  {categoryLabel(o.category, locale, categories)} · {pct(o.confidence)}%
                                 </span>
                               ))}
                             </div>
