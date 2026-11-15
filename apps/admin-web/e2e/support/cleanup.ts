@@ -20,7 +20,7 @@ import { getAccessToken } from './oauth';
 import { eraseRowsMentioning, runCron, stackLeftovers, stackR2, stackR2Keys, stackSql, topOfHour } from './local-stack';
 import { adminApi } from './api';
 import { ARCHIVE_BUCKETS, archiveHits, processorBatchTimeoutMs, quietPeriodState, type QuietPeriod } from './archive-hits';
-import { parseJsonc } from '../../../../scripts/release/jsonc';
+import { parseJsonc } from './jsonc';
 
 const LEDGER = path.join(AUTH_DIR, 'run-ledger.jsonl');
 

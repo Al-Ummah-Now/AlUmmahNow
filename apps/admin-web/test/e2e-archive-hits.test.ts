@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { archiveHits, processorBatchTimeoutMs, quietPeriodState } from '../e2e/support/archive-hits';
-import { parseJsonc } from '../../../scripts/release/jsonc';
+import { parseJsonc } from '../e2e/support/jsonc';
 
 test('the run\'s message-archive and backup copies archived after the sweep are found by their scan keys', () => {
   // The two objects that escaped on #1403's Local admin run (ReportResolve, dismissed as A11Y-02 ended)
@@ -51,4 +51,11 @@ test('quiet period: sweeps until no new archive copy for 10 s past the batch win
   assert.equal(quietPeriodState(p, t0 + 90_000, t0 + 88_000, 0), 'timeout');
   assert.equal(quietPeriodState(p, t0 + 90_000, null, 1), 'timeout');
   assert.equal(quietPeriodState({ ...p, maxMs: 50_000 }, t0 + 50_000, null, 1), 'timeout');
+});
+
+test('the JSONC reader drops comments and trailing commas, never inside strings', () => {
+  assert.deepEqual(
+    parseJsonc('{\n  // note\n  "a": "x // not a comment, ]", /* block */ "b": [1, 2,], "c": "q\\"/*", // tail\n}'),
+    { a: 'x // not a comment, ]', b: [1, 2], c: 'q"/*' },
+  );
 });
