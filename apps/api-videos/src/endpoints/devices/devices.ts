@@ -4,12 +4,14 @@
  * GET    /api/devices               my registered devices (tokens redacted)
  * PUT    /api/devices/:installId    register / refresh this install's push token
  * DELETE /api/devices/:installId    unregister (call on sign-out)
+ * GET    /api/devices/webpush-key   public: the VAPID public key browsers subscribe with (#1287)
  *
  * Which categories reach a device: the user's /api/notifications/settings,
  * narrowed by the device's optional `categories`.
  */
 import { z } from "zod";
-import { AuthenticatedRoute, AppContext } from "../../base";
+import { AuthenticatedRoute, AppContext, PublicRoute } from "../../base";
+import { getSecret } from "../../lib/env-helpers";
 import { logger } from "../../lib/logger";
 import { ResponseError } from "../../lib/types";
 import { isStaff } from "@al-ummah/shared-types";
@@ -90,5 +92,35 @@ export class DeviceUnregister extends AuthenticatedRoute {
 			return c.json({ success: false, error: "not_found" }, 404);
 		}
 		return { success: true, result: { installId: params.installId } };
+	}
+}
+
+/** A VAPID public key: base64url of an uncompressed P-256 point (65 bytes, 0x04 first). */
+export function isVapidPublicKey(value: string): boolean {
+	if (!/^[A-Za-z0-9_-]{86,88}={0,2}$/.test(value)) return false;
+	try {
+		const bin = atob(value.replace(/-/g, "+").replace(/_/g, "/").replace(/=+$/, "") + "=".repeat((4 - (value.replace(/=+$/, "").length % 4)) % 4));
+		return bin.length === 65 && bin.charCodeAt(0) === 4;
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * The applicationServerKey for PushManager.subscribe (#1287). Public by design (RFC 8292): the
+ * processor signs every push with the matching private key. `publicKey: null` while the
+ * environment has no VAPID key pair (Secrets Store placeholder): browsers offer no opt-in then.
+ */
+export class WebPushKey extends PublicRoute {
+	schema = {
+		tags: ["Devices"],
+		summary: "VAPID public key for Web Push subscriptions",
+		responses: { "200": { description: "{ publicKey: string | null }" } },
+	};
+
+	async handle(c: AppContext) {
+		const raw = (await getSecret(c.env.VAPID_PUBLIC_KEY, "VAPID_PUBLIC_KEY")).trim();
+		const publicKey = isVapidPublicKey(raw) ? raw : null;
+		return c.json({ success: true, result: { publicKey } }, 200, { "Cache-Control": "public, max-age=300" });
 	}
 }

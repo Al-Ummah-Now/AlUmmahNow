@@ -38,6 +38,8 @@ export interface AppBindings {
   /** R2 transcode jobs for apps/media */
   TRANSCODE_QUEUE?: Queue;
   MEDIA_SIGN_KEY?: { get(): Promise<string> } | string;
+  /** Web Push VAPID public key (Secrets Store vapid-public-key[-qa|-stage], shared with the processor; #1287) */
+  VAPID_PUBLIC_KEY?: { get(): Promise<string> } | string;
   MEDIA_PUBLIC_HOST?: string;
   /** Processor-written view/watch-time rollups (al-ummah-now-messages bucket) */
   analytics_rollups?: R2Bucket;

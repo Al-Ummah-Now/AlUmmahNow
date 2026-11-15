@@ -77,7 +77,7 @@ export interface R2Bucket {
 export interface QueueEnvironment extends PushSenderEnv {
   /** Producer to the processor's own queue (PushDispatch, Epic 9.4). Optional: push is skipped when unbound. */
   MESSAGE_QUEUE?: {
-    send: (message: AlUmmahMessage) => Promise<void>;
+    send: (message: AlUmmahMessage, options?: { delaySeconds?: number }) => Promise<void>;
     /** Up to 100 messages (256 KB) in one subrequest (SCALABILITY-AUDIT PR-7). */
     sendBatch?: (messages: Array<{ body: AlUmmahMessage }>) => Promise<void>;
   };

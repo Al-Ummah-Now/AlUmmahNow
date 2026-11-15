@@ -148,7 +148,23 @@ export interface PushDispatchPayload {
   notificationKey: NotificationKey;
   params?: NotificationParams;
   actionUrl?: string;
+  /**
+   * A retry (processor push/dispatch): only these installs, each with the notification it
+   * still has to get. No user ids, so a dead-lettered retry stays replayable (#1255 hashes them).
+   */
+  devices?: PushRetryDevice[];
+  /** Retries already made for `devices` (0 or unset on the first send). */
+  attempt?: number;
 }
+
+/** One device a push retry goes to. */
+export interface PushRetryDevice {
+  installId: string;
+  notificationId: string;
+}
+
+/** Delay before each push retry (s); after the last one the message goes to the DLQ (Errors page, Replay). */
+export const PUSH_RETRY_DELAYS_SECONDS = [60, 300, 1800] as const;
 
 /** Recipients per PushDispatch message. */
 export const PUSH_DISPATCH_BATCH = 100;

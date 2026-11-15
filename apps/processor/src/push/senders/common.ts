@@ -54,6 +54,11 @@ export async function signJwt(header: Record<string, unknown>, claims: Record<st
   return `${input}.${base64url(signature)}`;
 }
 
+/** A push service answer worth trying again later: rate limited or the service is down. */
+export function retryableStatus(status: number): boolean {
+  return status === 429 || status >= 500;
+}
+
 export const nowSeconds = (now: number) => Math.floor(now / 1000);
 
 export async function bodyText(res: Response): Promise<string> {

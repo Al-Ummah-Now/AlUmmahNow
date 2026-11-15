@@ -278,7 +278,7 @@ export function reviewAlertText(
   reason: ReviewAlertReason,
   minutes: number | null,
   locale: string | null | undefined,
-): { title: string; body: string; openLabel: string; claimLabel: string } {
+): { title: string; body: string; openLabel: string; claimLabel: string; groupTitle: string } {
   const ar = (locale ?? '').toLowerCase().startsWith('ar');
   const parts = ar ? ['مرئي محجوز للمراجعة', REASON_TEXT.ar[reason]] : ['Video held for review', REASON_TEXT.en[reason]];
   if (minutes !== null) parts.push(ar ? `بقي ${minutes} د` : `${minutes} min left`);
@@ -287,5 +287,7 @@ export function reviewAlertText(
     body: parts.join(' · '),
     openLabel: ar ? 'فتح' : 'Open',
     claimLabel: ar ? 'استلام' : 'Claim',
+    // The Windows Action Center group (wiki AUN-ADMIN-NATIVE Alerts, #1307)
+    groupTitle: ar ? 'الإدارة · طابور المراجعة' : 'Admin · Review queue',
   };
 }

@@ -183,7 +183,7 @@ describe('APNs', () => {
     expect(new Set(auth()).size).toBe(2);
     server.responders.set('api.push.apple.com', () => ({ status: 403, body: { reason: 'ExpiredProviderToken' } }));
     now += 1000;
-    expect(await apns.sendAlert(target(), alert)).toEqual({ ok: false, invalidToken: false, error: '403 ExpiredProviderToken' });
+    expect(await apns.sendAlert(target(), alert)).toEqual({ ok: false, invalidToken: false, retryable: false, error: '403 ExpiredProviderToken' });
     server.responders.clear();
     await apns.sendAlert(target(), alert);
     expect(new Set(auth()).size).toBe(3);
@@ -193,7 +193,7 @@ describe('APNs', () => {
     const apns = new ApnsPushProvider(env, new Counting(), server.fetch);
     for (const [status, reason, invalid] of [[410, 'Unregistered', true], [400, 'BadDeviceToken', true], [400, 'DeviceTokenNotForTopic', false], [429, 'TooManyRequests', false]] as const) {
       server.responders.set('api.push.apple.com', () => ({ status, body: { reason } }));
-      expect(await apns.sendAlert(target(), alert)).toEqual({ ok: false, invalidToken: invalid, error: `${status} ${reason}` });
+      expect(await apns.sendAlert(target(), alert)).toEqual({ ok: false, invalidToken: invalid, retryable: status === 429, error: `${status} ${reason}` });
     }
   });
 
@@ -290,6 +290,16 @@ describe('WNS', () => {
       server.responders.set('db5p.notify.windows.com', () => ({ status, headers: { 'x-wns-error-description': 'x' } }));
       expect(await wns.sendAlert(target({ provider: 'wns', token: channel }), alert)).toMatchObject({ ok: false, invalidToken: invalid });
     }
+  });
+
+  it('review toasts sit under the localised "Admin · Review queue" header (#1307)', async () => {
+    const { reviewAlertText } = await import('@al-ummah/shared-types');
+    const en = reviewToastXml({ ...alert, ...reviewAlertText('nsfw', 9, 'en') });
+    const ar = reviewToastXml({ ...alert, ...reviewAlertText('nsfw', 9, 'ar') });
+    expect(en).toMatch(/^<toast [^>]*><header id="admin-review-queue" title="Admin · Review queue" arguments="review-queue" activationType="foreground"\/><visual>/);
+    expect(ar).toContain('<header id="admin-review-queue" title="الإدارة · طابور المراجعة"');
+    // The header id is fixed: every review alert joins the one group
+    expect(reviewToastXml({ ...alert, reviewId: 'rev-2' })).toContain('<header id="admin-review-queue" title="Admin · Review queue"');
   });
 
   it('toast XML escapes everything', () => {
