@@ -9,6 +9,7 @@
  * - web and admin-web render a page.
  * Exits 1 on the first failure, with the reason.
  */
+import { createHash, randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { STATE_DIR, url, type StackApp } from './stack.ts';
@@ -37,8 +38,10 @@ async function main(): Promise<void> {
     const discovery = (await (await get(`${url('auth')}/.well-known/oauth-authorization-server`)).json()) as { issuer?: string };
     if (discovery.issuer === url('auth')) ok(`issuer ${discovery.issuer}`);
     else fail(`issuer discovery says ${discovery.issuer}, expected ${url('auth')}`);
+    // Public clients must send PKCE (S256) on /authorize, as the apps do; the verifier is never redeemed
+    const challenge = createHash('sha256').update(randomBytes(32).toString('base64url')).digest('base64url');
     for (const client of CLIENTS) {
-      const res = await get(`${url('auth')}/authorize?client_id=${client.clientId}&redirect_uri=${encodeURIComponent(client.callback)}&response_type=code&state=smoke`);
+      const res = await get(`${url('auth')}/authorize?client_id=${client.clientId}&redirect_uri=${encodeURIComponent(client.callback)}&response_type=code&state=smoke&code_challenge=${challenge}&code_challenge_method=S256`);
       const location = res.headers.get('location') ?? '';
       if (res.status >= 300 && res.status < 400 && !/error=/.test(location) && !location.startsWith(client.callback)) ok(`${client.app} client accepted (${res.status} → ${new URL(location, url('auth')).pathname})`);
       else fail(`${client.app} client: /authorize answered ${res.status} ${location.slice(0, 160)}`);
