@@ -48,7 +48,7 @@
     "@axe-core/playwright": "^4.11.0",
     "@eslint/eslintrc": "^3.3.1",
     "@opennextjs/aws": "^3.8.5",
-    "@opennextjs/cloudflare": "^1.20.1",
+    "@opennextjs/cloudflare": "^1.20.2",
     "@playwright/test": "^1.56.1",
     "@tailwindcss/postcss": "^4.1.17",
     "@testing-library/jest-dom": "^6.1.5",
