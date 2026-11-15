@@ -58,11 +58,27 @@ function timestampMs(stamp: string): number {
   return Math.round(((hours * 60 + minutes) * 60 + seconds) * 1000);
 }
 
+/** Drops every <...> tag and any stray angle bracket in one linear pass, so no tag can survive. */
+function withoutTags(text: string): string {
+  let out = '';
+  let i = 0;
+  while (i < text.length) {
+    const ch = text[i]!;
+    if (ch === '<') {
+      const end = text.indexOf('>', i);
+      if (end < 0) break;
+      i = end + 1;
+      continue;
+    }
+    if (ch !== '>') out += ch;
+    i += 1;
+  }
+  return out;
+}
+
 function cueText(lines: string[]): string {
-  return lines
-    .join(' ')
-    .replace(QURAN_MARKER, ' ')
-    .replace(/<[^>]*>/g, '')
+  // Tags go before entities are decoded, and decoding runs once, so a decoded &lt; stays plain text.
+  return withoutTags(lines.join(' ').replace(QURAN_MARKER, ' '))
     .replace(/&[a-z#0-9]+;/gi, (e) => ENTITIES[e.toLowerCase()] ?? e)
     .replace(/\s+/g, ' ')
     .trim();
