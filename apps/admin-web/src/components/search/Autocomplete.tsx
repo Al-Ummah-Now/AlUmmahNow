@@ -590,14 +590,14 @@ function OptionContent({ option, kind, current, showIds = true }: { option: Auto
             </span>
           )}
         </span>
-        <span className="flex min-w-0 gap-2 text-xs text-fg-muted">
+        <span className="flex min-w-0 flex-wrap gap-x-2 text-xs text-fg-muted">
           {s.secondary && (
-            <span className={showIds ? 'truncate' : '[overflow-wrap:anywhere]'} dir="auto">
+            <span className={showIds ? 'min-w-0 max-w-full truncate' : '[overflow-wrap:anywhere]'} dir="auto">
               {s.secondary}
             </span>
           )}
           {showIds && (
-            <bdi dir="ltr" className="shrink-0 font-mono">
+            <bdi dir="ltr" className="min-w-0 max-w-full font-mono [overflow-wrap:anywhere]">
               {s.id}
             </bdi>
           )}
@@ -706,14 +706,14 @@ function PickedChip({
           </span>
           {item && <InvitedBadge suggestion={item} />}
         </span>
-        <span className="flex min-w-0 gap-2 text-xs text-fg-muted">
+        <span className="flex min-w-0 flex-wrap gap-x-2 text-xs text-fg-muted">
           {item?.secondary && (
-            <span className={showIds ? 'truncate' : '[overflow-wrap:anywhere]'} dir="auto">
+            <span className={showIds ? 'min-w-0 max-w-full truncate' : '[overflow-wrap:anywhere]'} dir="auto">
               {item.secondary}
             </span>
           )}
           {showIds && (
-            <bdi dir="ltr" className="shrink-0 font-mono">
+            <bdi dir="ltr" className="min-w-0 max-w-full font-mono [overflow-wrap:anywhere]">
               {id}
             </bdi>
           )}
