@@ -84,6 +84,23 @@ describe('revocation rules', () => {
 		assert.equal(isLegacyLongLivedToken({}), false);
 	});
 
+	it('a signed-out device (s:<sid>) revokes only that sign-in (#442)', async () => {
+		const { kv, reads } = fakeKv({ 's:sid_gone': { v: 1, before: 2000 } });
+		const t = 2_000_000;
+		assert.equal(await isTokenRevoked(kv, { userId: 'usr_a', sid: 'sid_gone', authTime: 1500 }, t), true);
+		// The same user's other device, and a later sign-in on that device, keep working
+		assert.equal(await isTokenRevoked(kv, { userId: 'usr_a', sid: 'sid_other', authTime: 1500 }, t), false);
+		assert.equal(await isTokenRevoked(kv, { userId: 'usr_a', sid: 'sid_gone', authTime: 2500 }, t), false);
+		// u: and s: are each read once per window
+		assert.deepEqual(reads.map((r) => r.key).sort(), ['s:sid_gone', 's:sid_other', 'u:usr_a']);
+		assert.ok(reads.every((r) => r.cacheTtl === KV_CACHE_TTL_S));
+	});
+
+	it('decodes the sid of a verified token', () => {
+		const payload = Buffer.from(JSON.stringify({ iat: 10, exp: 20, auth_time: 5, sid: 'sid_1' })).toString('base64url');
+		assert.deepEqual(decodeVerifiedClaims(`h.${payload}.s`), { iat: 10, exp: 20, auth_time: 5, sid: 'sid_1' });
+	});
+
 	it('decodes the times of a verified token', () => {
 		const payload = Buffer.from(JSON.stringify({ iat: 10, exp: 20, auth_time: 5 })).toString('base64url');
 		assert.deepEqual(decodeVerifiedClaims(`h.${payload}.s`), { iat: 10, exp: 20, auth_time: 5 });
@@ -159,6 +176,12 @@ describe('authMiddleware with the revocation list', () => {
 		// A 15-minute token, and a long one from a local issuer after the cutover, still work
 		assert.equal((await call(await sign({}), {})).status, 200);
 		assert.equal((await call(await sign({ iat: LEGACY_TOKEN_ISSUED_BEFORE_S, exp: nowS() + 30 * 86400 }), {})).status, 200);
+	});
+
+	it('rejects a token of a signed-out device (s:<sid>); the user\'s other sign-ins work (#442)', async () => {
+		const { kv } = fakeKv({ 's:sid_gone': { v: 1, before: nowS() - 10 } });
+		assert.equal((await call(await sign({ sid: 'sid_gone', auth_time: nowS() - 3600 }), { TOKEN_REVOCATIONS: kv })).status, 401);
+		assert.equal((await call(await sign({ sid: 'sid_other', auth_time: nowS() - 3600 }), { TOKEN_REVOCATIONS: kv })).status, 200);
 	});
 
 	it('without the binding nothing changes (rollout safety)', async () => {

@@ -218,6 +218,11 @@ export class AuthModerationClient {
   async provideInfo(id: string, body: { note: string; evidence?: Evidence[]; requested_by: { id: string; display_name: string } }): Promise<AuthRequest> {
     return (await this.call<{ request: AuthRequest }>('POST', `/moderation/requests/${encodeURIComponent(id)}/info`, body)).data.request;
   }
+
+  /** Ends one native install's sign-in at auth (POST /internal/token-revocations, tokens:revoke; 204). */
+  async revokeInstallTokens(userId: string, installId: string): Promise<void> {
+    await this.call('POST', '/internal/token-revocations', { user_id: userId, install_id: installId });
+  }
 }
 
 // ---------------------------------------------------------------------------

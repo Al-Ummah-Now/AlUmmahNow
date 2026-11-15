@@ -19,6 +19,7 @@ import { getWarning, recordWarningEmail } from './content/warnings';
 import { enqueueWarningMail } from './warning-mail';
 import { enqueueRejectionMail, rejectionMailJob } from './review/rejection-mail';
 import { logger } from './logger';
+import { enqueueDeviceRevocation } from './deviceTokenRevocation';
 
 export interface RetryOutcome {
   ok: boolean;
@@ -57,6 +58,15 @@ export const BUILTIN_RETRIES: Record<string, (env: AdminBindings, args: Record<s
     if (!(await enqueueContactMail(env, [job]))) {
       await recordDelivery(env.REPORTS_DB, { messageId: id, kind, noteId: args.noteId, status: 'failed', error: 'could not queue the email', now });
       return { ok: false, status: 'open', result: 'Could not queue the email' };
+    }
+    return { ok: true, status: 'resolved', result: 'Queued again' };
+  },
+  /** Queues a "Sign out this device" revocation at auth again (#442); a new failure reopens the item. */
+  'device-tokens': async (env, args) => {
+    const { userId, installId } = args;
+    if (!userId || !installId) return { ok: false, status: 'open', result: 'Not a device sign-out' };
+    if (!(await enqueueDeviceRevocation(env, { userId, installId, actorId: args.actorId || 'errors-retry' }))) {
+      return { ok: false, status: 'open', result: 'Could not queue the sign-out' };
     }
     return { ok: true, status: 'resolved', result: 'Queued again' };
   },

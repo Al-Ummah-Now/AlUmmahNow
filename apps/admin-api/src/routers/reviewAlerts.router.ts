@@ -7,7 +7,8 @@
  *   GET  /api/review-alerts/history?limit=    the latest changes (audit, newest first)
  *   GET  /api/review-alerts/stats?days=14     daily median and p90 from held to alert / open / claim / decision
  *   GET  /api/review-alerts/devices?userId=   a staff member's push devices (staff_devices:manage)
- *   DELETE /api/review-alerts/devices/:installId?userId=   "Sign out this device": the push registration goes
+ *   DELETE /api/review-alerts/devices/:installId?userId=   "Sign out this device": the push registration goes,
+ *                                             and the install's sign-in ends at auth (queued, lib/deviceTokenRevocation.ts)
  *
  * The settings live in REPORTS_DB site_settings (key REVIEW_ALERT_SETTINGS_KEY), which the processor's
  * review-alerts consumer reads on every alert. Devices and timings live in the processor's
@@ -22,6 +23,7 @@ import {
 } from '@al-ummah/shared-types';
 import { hasPermission } from '../lib/roles';
 import { logger } from '../lib/logger';
+import { enqueueDeviceRevocation } from '../lib/deviceTokenRevocation';
 import type { AdminBindings, AuthContext } from '../base/types';
 
 type Env = { Bindings: AdminBindings; Variables: { auth?: AuthContext } };
@@ -124,8 +126,10 @@ app.delete('/devices/:installId', async (c) => {
   await c.env.REPORTS_DB.prepare('INSERT INTO admin_audit_log (id, actor_id, actor_email, action, target_type, target_id, metadata, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
     .bind(crypto.randomUUID(), actorOf(c), null, 'staff_device_signed_out', 'user', userId, JSON.stringify({ installId }), new Date().toISOString())
     .run();
-  logger.info('[ReviewAlerts] Staff device signed out', { actorId: actorOf(c), userId, installId });
-  return c.json({ success: true, result: { installId } });
+  // Its tokens too (#442): a lost device must not stay signed in. Retried on the queue; a final failure is flagged
+  const queued = await enqueueDeviceRevocation(c.env, { userId, installId, actorId: actorOf(c) });
+  logger.info('[ReviewAlerts] Staff device signed out', { actorId: actorOf(c), userId, installId, tokensQueued: queued });
+  return c.json({ success: true, result: { installId, tokensRevocationQueued: queued } });
 });
 
 export default app;

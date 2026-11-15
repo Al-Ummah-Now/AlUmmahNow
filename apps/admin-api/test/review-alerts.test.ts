@@ -14,9 +14,11 @@ const SETTINGS = { enabled: true, escalateAllAfterSeconds: 120, escalateSeniorsA
 
 function setup(roles: string[], processor: (path: string, method: string) => Response = () => new Response('{}')) {
   const calls: Array<{ path: string; method: string; key: string | null }> = [];
+  const queued: unknown[] = [];
   const env = {
     REPORTS_DB: sqliteD1(),
     INTERNAL_API_KEY: 'k',
+    AUTH_REQUESTS_QUEUE: { async send(body: unknown) { queued.push(body); } },
     PROCESSOR: {
       async fetch(input: string, init?: RequestInit) {
         const u = new URL(input);
@@ -32,7 +34,7 @@ function setup(roles: string[], processor: (path: string, method: string) => Res
   });
   app.route('/api/review-alerts', router);
   const req = (path: string, init?: RequestInit) => app.request(path, init, env as never);
-  return { req, env, calls };
+  return { req, env, calls, queued };
 }
 const put = (json: unknown): RequestInit => ({ method: 'PUT', body: JSON.stringify(json), headers: { 'Content-Type': 'application/json' } });
 
@@ -82,18 +84,21 @@ describe('/api/review-alerts/devices', () => {
     assert.equal((await req('/api/review-alerts/devices')).status, 400);
   });
 
-  it('signs out one device: the processor deletes the push row and the action is audited', async () => {
-    const { req, calls, env } = setup(['admin'], (_p, method) => new Response(JSON.stringify({ deleted: method === 'DELETE' }), { status: 200 }));
+  it('signs out one device: the processor deletes the push row, the install\'s sign-in ends at auth (queued) and the action is audited', async () => {
+    const { req, calls, env, queued } = setup(['admin'], (_p, method) => new Response(JSON.stringify({ deleted: method === 'DELETE' }), { status: 200 }));
     const res = await req('/api/review-alerts/devices/install-1234?userId=rev-1', { method: 'DELETE' });
     assert.equal(res.status, 200);
+    assert.equal(((await res.json()) as any).result.tokensRevocationQueued, true);
+    assert.deepEqual(queued, [{ type: 'revoke-install', userId: 'rev-1', installId: 'install-1234', actorId: 'admin-1' }]);
     assert.deepEqual(calls.at(-1), { path: '/internal/push-devices/install-1234?userId=rev-1', method: 'DELETE', key: 'k' });
     const audit = await env.REPORTS_DB.prepare("SELECT action, target_id, metadata FROM admin_audit_log").first<any>();
     assert.deepEqual({ ...audit }, { action: 'staff_device_signed_out', target_id: 'rev-1', metadata: '{"installId":"install-1234"}' });
   });
 
-  it('a device that is not that user’s is a 404 and is not audited', async () => {
-    const { req, env } = setup(['admin'], () => new Response('{"deleted":false}', { status: 404 }));
+  it('a device that is not that user’s is a 404, is not audited and revokes nothing', async () => {
+    const { req, env, queued } = setup(['admin'], () => new Response('{"deleted":false}', { status: 404 }));
     assert.equal((await req('/api/review-alerts/devices/install-1234?userId=rev-1', { method: 'DELETE' })).status, 404);
+    assert.deepEqual(queued, []);
     assert.equal((await env.REPORTS_DB.prepare('SELECT COUNT(*) AS n FROM admin_audit_log').first<any>()).n, 0);
   });
 });

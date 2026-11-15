@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { authenticateToken, canPublish, canSubscribe } from '../src/auth.ts';
-import { LEGACY_TOKEN_ISSUED_BEFORE_S, isLegacyLongLivedToken } from '../src/token-revocation.ts';
+import { LEGACY_TOKEN_ISSUED_BEFORE_S, clearRevocationCache, isLegacyLongLivedToken } from '../src/token-revocation.ts';
 import { ISSUER, WEB_CLIENT, makeSigner, unsignedToken } from './helpers.ts';
 
 const prodEnv = { Issuer: ISSUER, ALLOWED_CLIENT_IDS: `${WEB_CLIENT}, admin-client`, ENVIRONMENT: 'production' };
@@ -48,6 +48,17 @@ test('legacy 30-day token is rejected so the client fetches a fresh one (#663)',
   // A long-lived token from a local issuer after the cutover still connects
   const local = await sign({}, { iat: LEGACY_TOKEN_ISSUED_BEFORE_S, exp: now + 30 * 86400 });
   assert.equal((await authenticateToken(local, prodEnv, { getKey }))?.sub, 'user-123');
+});
+
+test('a token of a signed-out device (s:<sid>) cannot connect; the user\'s other sign-ins can (#442)', async () => {
+  clearRevocationCache();
+  const { getKey, sign } = await makeSigner();
+  const now = Math.floor(Date.now() / 1000);
+  const entries: Record<string, unknown> = { 's:sid_gone': { v: 1, before: now - 10 } };
+  const TOKEN_REVOCATIONS = { get: async (key: string) => entries[key] ?? null } as unknown as KVNamespace;
+  const env = { ...prodEnv, TOKEN_REVOCATIONS };
+  assert.equal(await authenticateToken(await sign({ sid: 'sid_gone', auth_time: now - 3600 }), env, { getKey }), null);
+  assert.equal((await authenticateToken(await sign({ sid: 'sid_other', auth_time: now - 3600 }), env, { getKey }))?.sub, 'user-123');
 });
 
 test('legacy token rule: over 15 minutes + 60 s slack, issued before the cutover', () => {

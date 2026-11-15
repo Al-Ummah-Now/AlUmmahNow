@@ -6,11 +6,14 @@
  * the user signs out of all devices, deletes the account, resets the
  * password or is suspended/signed out by an admin:
  *   key `u:<usr_id>` → { v: 1, before: unix_s, reason, updatedAt }
+ * and one entry per browser sign-in when that one device is signed out (by
+ * the user or an admin, #442):
+ *   key `s:<sid>` → same layout; `sid` is the access token's claim
  * A token is revoked when its sign-in (`auth_time`, else `iat`) is before
- * `before`. (Single sign-out deletes the refresh token at the auth server;
- * the short-lived access token then just expires.)
+ * the `before` of either entry. (Single sign-out deletes the refresh token
+ * at the auth server; the short-lived access token then just expires.)
  *
- * Cost: one KV read per user per isolate per CACHE_MS at most (entries and
+ * Cost: one KV read per user (and per sid) per isolate per CACHE_MS at most (entries and
  * "no entry" are both cached in the isolate; KV's edge cache absorbs the
  * rest). Revocation takes effect within ~CACHE_MS + KV_CACHE_TTL_S + KV
  * propagation (about 2 minutes). KV errors fail open: the token is still
@@ -24,6 +27,8 @@ export interface RevocationEntry {
 
 export interface TokenTimes {
 	userId: string;
+	/** The token's sign-in (`sid` claim), when it has one. */
+	sid?: string;
 	authTime?: number;
 	iat?: number;
 }
@@ -34,7 +39,7 @@ const MAX_CACHED = 5_000;
 
 const cache = new Map<string, { entry: RevocationEntry | null; until: number }>();
 
-export function isRevoked(entry: RevocationEntry | null | undefined, token: Omit<TokenTimes, 'userId'>): boolean {
+export function isRevoked(entry: RevocationEntry | null | undefined, token: Omit<TokenTimes, 'userId' | 'sid'>): boolean {
 	if (!entry) return false;
 	if (entry.before === undefined) return false;
 	const signedInAt = token.authTime ?? token.iat;
@@ -42,12 +47,12 @@ export function isRevoked(entry: RevocationEntry | null | undefined, token: Omit
 	return signedInAt < entry.before;
 }
 
-async function lookup(kv: KVNamespace, userId: string, now: number): Promise<RevocationEntry | null> {
-	const hit = cache.get(userId);
+async function lookup(kv: KVNamespace, key: string, now: number): Promise<RevocationEntry | null> {
+	const hit = cache.get(key);
 	if (hit && hit.until > now) return hit.entry;
-	const entry = await kv.get<RevocationEntry>(`u:${userId}`, { type: 'json', cacheTtl: KV_CACHE_TTL_S });
+	const entry = await kv.get<RevocationEntry>(key, { type: 'json', cacheTtl: KV_CACHE_TTL_S });
 	if (cache.size >= MAX_CACHED) cache.clear();
-	cache.set(userId, { entry: entry ?? null, until: now + CACHE_MS });
+	cache.set(key, { entry: entry ?? null, until: now + CACHE_MS });
 	return entry ?? null;
 }
 
@@ -55,7 +60,12 @@ async function lookup(kv: KVNamespace, userId: string, now: number): Promise<Rev
 export async function isTokenRevoked(kv: KVNamespace | undefined, token: TokenTimes, now = Date.now()): Promise<boolean> {
 	if (!kv || !token.userId) return false;
 	try {
-		return isRevoked(await lookup(kv, token.userId, now), token);
+		// The user's entry (everywhere) and this sign-in's entry (one device), read together
+		const [user, session] = await Promise.all([
+			lookup(kv, `u:${token.userId}`, now),
+			token.sid ? lookup(kv, `s:${token.sid}`, now) : null,
+		]);
+		return isRevoked(user, token) || isRevoked(session, token);
 	} catch (error) {
 		console.warn('[revocation] Revocation list unavailable; allowing the token', String(error));
 		return false;
@@ -88,7 +98,7 @@ export function isLegacyLongLivedToken(claims: { iat?: number; exp?: number }): 
 }
 
 /** Claims of a JWT that was already verified (no signature check here). */
-export function decodeVerifiedClaims(token: string): { iat?: number; exp?: number; auth_time?: number } {
+export function decodeVerifiedClaims(token: string): { iat?: number; exp?: number; auth_time?: number; sid?: string } {
 	try {
 		const segment = token.split('.')[1] ?? '';
 		const b64 = segment.replace(/-/g, '+').replace(/_/g, '/');
@@ -98,6 +108,7 @@ export function decodeVerifiedClaims(token: string): { iat?: number; exp?: numbe
 			iat: num(claims.iat),
 			exp: num(claims.exp),
 			auth_time: num(claims.auth_time),
+			...(typeof claims.sid === 'string' && claims.sid ? { sid: claims.sid } : {}),
 		};
 	} catch {
 		return {};
