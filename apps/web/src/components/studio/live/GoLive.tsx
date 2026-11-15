@@ -8,7 +8,7 @@
  */
 import { useCallback, useEffect, useId, useState } from 'react';
 import Link from '@/components/common/AppLink';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Eye } from 'lucide-react';
 import type { LiveIngest, LiveStreamState } from '@al-ummah/shared-types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -181,6 +181,12 @@ export function GoLive({ locale, channelId, streamId }: { locale: string; channe
             {state?.startedAt ? text.startedAt.replace('{time}', timeFormat.format(new Date(state.startedAt))) : ''}
             {state?.startedAt && state?.bitrateKbps ? ' · ' : ''}
             {state?.bitrateKbps ? text.bitrate.replace('{kbps}', String(Math.round(state.bitrateKbps))) : ''}
+          </p>
+        )}
+        {phase === 'live' && typeof state?.viewers === 'number' && (
+          <p className="mt-1 flex items-center gap-1 text-sm font-medium text-foreground" data-testid="studio-golive-viewers" data-count={state.viewers}>
+            <Eye aria-hidden="true" className="h-4 w-4" />
+            {text.watching.replace('{count}', new Intl.NumberFormat(locale === 'ar' ? 'ar' : 'en').format(state.viewers))}
           </p>
         )}
         {error && <p role="alert" className="mt-2 text-sm text-destructive" data-testid="studio-golive-error">{error}</p>}

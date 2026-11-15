@@ -256,6 +256,8 @@ for (const path of [
 	app.use(path, edgeRateLimit('REACTION_LIMITER', 'videos.reaction', ['POST', 'DELETE']));
 }
 app.use('/api/moderation/reports', edgeRateLimit('REPORT_LIMITER', 'videos.report'));
+// Live watching heartbeats (AlUmmahNow#30), per IP: bounds made-up viewers with the per-network cap in the object
+app.use('/api/live-streams/:id/viewers', edgeRateLimit('LIVE_VIEWER_LIMITER', 'videos.live_viewers'));
 app.use('/api/moderation/reports', requireHuman('videos.report', 'always'));
 for (const path of ['/api/videos/upload/initiate', '/api/videos/upload/batch/initiate']) {
 	app.use(path, edgeRateLimit('UPLOAD_INITIATE_LIMITER', 'videos.upload_initiate'));

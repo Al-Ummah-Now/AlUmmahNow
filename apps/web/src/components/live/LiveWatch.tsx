@@ -4,10 +4,12 @@
  * The live watch page (/[locale]/live/[id]). Plays state.playbackUrl while the
  * stream is live and the recording (vodUrl) after it ends, with the same
  * player whichever provider serves the stream. Polls the state every 15 s
- * until the stream is live, then every minute to notice the end.
+ * until the stream is live, then every minute to notice the end. While live it
+ * shows how many people are watching (useLiveViewers, AlUmmahNow#30).
  */
 import { useCallback, useEffect, useState } from 'react';
 import Link from '@/components/common/AppLink';
+import { Eye } from 'lucide-react';
 import type { Player } from 'video.js';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -18,6 +20,7 @@ import { LiveApiError, getPublicChannel, getState, getStream, type LiveChannelVi
 import { logger } from '@/lib/logger-client';
 import { LivePlayer } from './LivePlayer';
 import { useLiveQoe } from './useLiveQoe';
+import { useLiveViewers } from './useLiveViewers';
 
 export const WATCH_POLL_MS = 15_000;
 export const WATCH_LIVE_POLL_MS = 60_000;
@@ -89,6 +92,8 @@ export function LiveWatch({ streamId }: { streamId: string }) {
     timing: timed,
   });
 
+  const viewers = useLiveViewers(streamId, view === 'ready' && mode === 'live', state?.viewers);
+
   const timeFormat = new Intl.DateTimeFormat(lang === 'ar' ? 'ar' : 'en', { dateStyle: 'medium', timeStyle: 'short' });
   const fmt = (iso?: string | null) => (iso && Number.isFinite(Date.parse(iso)) ? timeFormat.format(new Date(iso)) : '');
 
@@ -142,6 +147,12 @@ export function LiveWatch({ streamId }: { streamId: string }) {
         {mode === 'recording' && <Badge variant="secondary">{text.recording}</Badge>}
         <h1 className="text-xl font-semibold text-foreground" dir="auto" data-testid="live-watch-title">{stream?.title}</h1>
       </div>
+      {mode === 'live' && viewers !== null && (
+        <p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground" data-testid="live-watch-viewers" data-count={viewers}>
+          <Eye aria-hidden="true" className="h-4 w-4" />
+          {text.watching.replace('{count}', new Intl.NumberFormat(lang === 'ar' ? 'ar' : 'en').format(viewers))}
+        </p>
+      )}
       {channel && channelName && (
         <p className="mt-1 text-sm text-muted-foreground">
           <Link href={channelPath(lang, channel)} className="hover:underline" dir="auto" data-testid="live-watch-channel">{channelName}</Link>

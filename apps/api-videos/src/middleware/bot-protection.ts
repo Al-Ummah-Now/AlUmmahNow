@@ -50,7 +50,8 @@ export type LimiterName =
 	| 'REPORT_LIMITER'
 	| 'UPLOAD_INITIATE_LIMITER'
 	| 'SEARCH_LIMITER'
-	| 'ATTEST_LIMITER';
+	| 'ATTEST_LIMITER'
+	| 'LIVE_VIEWER_LIMITER';
 
 export type BotEnv = TurnstileEnv & AttestationEnv & { [K in LimiterName]?: RateLimit } & {
 	HUMAN_VERIFIED?: KVNamespace;
