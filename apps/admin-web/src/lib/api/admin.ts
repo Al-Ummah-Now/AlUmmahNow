@@ -1,8 +1,9 @@
 'use server';
 
-import type { AdminJob, AdminJobStatus, AdminVideoMedia, ErrorStatus, LegacyRestorePlan, MediaHealthSnapshot, MediaOverride, MediaSettings, Report, ReportStats } from '@al-ummah/shared-types';
+import type { AdminJob, AdminJobStatus, AdminVideoMedia, ErrorStatus, LegacyRestorePlan, MediaHealthSnapshot, MediaOverride, MediaSettings, Report, ReportStats, TroubleshootLogs, TroubleshootTokenView } from '@al-ummah/shared-types';
 import { AdminApiError, type ActionResult } from './errors';
 import { fetchAdmin, requestAdmin, navigateForPasskey } from './request';
+import type { TranscodeTroubleshoot, TroubleshootTokenTest } from './types';
 import type {
   ListReportsParams,
   ListReportsResponse,
@@ -352,6 +353,47 @@ export async function listMediaJobs(params: { status?: string; limit?: number } 
 /** Transcode again (audited per video in admin-api). */
 export async function retryMediaJobs(ids: string[]): Promise<ActionResult<unknown>> {
   return mutate('/api/media/retry', 'POST', { ids });
+}
+
+// Transcode troubleshooting (admin-api /api/media/troubleshoot; media:manage, token changes super admin)
+
+async function readResult<T>(endpoint: string): Promise<ActionResult<T>> {
+  try {
+    return { ok: true, data: await fetchAdmin<T>(endpoint) };
+  } catch (error) {
+    await navigateForPasskey(error);
+    if (error instanceof AdminApiError) return { ok: false, status: error.status, error: error.message };
+    return { ok: false, status: 500, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+/** Per-job view, container and queue status, and the token's state. A result, not a throw (the panel polls it). */
+export async function getTranscodeTroubleshoot(): Promise<ActionResult<TranscodeTroubleshoot>> {
+  return readResult<TranscodeTroubleshoot>('/api/media/troubleshoot');
+}
+
+/** Recent media Worker and transcoder container log lines; `q` is a video or job id (checked again server-side). */
+export async function getTranscodeLogs(params: { q?: string; hours: number; source: 'all' | 'worker' | 'container' }): Promise<ActionResult<TroubleshootLogs>> {
+  const query = new URLSearchParams({ hours: String(params.hours), source: params.source });
+  if (params.q) query.set('q', params.q);
+  return readResult<TroubleshootLogs>(`/api/media/troubleshoot/logs?${query}`);
+}
+
+/** Retry now / Cancel: queued admin jobs, audited per video. */
+export async function transcodeAction(videoId: string, action: 'retry-now' | 'cancel'): Promise<ActionResult<unknown>> {
+  return mutate(`/api/media/troubleshoot/jobs/${encodeURIComponent(videoId)}/${action}`, 'POST', {});
+}
+
+export async function setTroubleshootToken(token: string): Promise<ActionResult<{ token: TroubleshootTokenView; test: TroubleshootTokenTest }>> {
+  return mutate('/api/media/troubleshoot/token', 'PUT', { token });
+}
+
+export async function testTroubleshootToken(): Promise<ActionResult<{ token: TroubleshootTokenView; test: TroubleshootTokenTest }>> {
+  return mutate('/api/media/troubleshoot/token/test', 'POST', {});
+}
+
+export async function removeTroubleshootToken(): Promise<ActionResult<{ removed: boolean }>> {
+  return mutate('/api/media/troubleshoot/token', 'DELETE', {});
 }
 
 /** Provider settings with each provider's health and what makes them unsafe (docs/media-delivery/PROVIDERS.md). */

@@ -6,7 +6,7 @@
  * files can only export async functions.
  */
 
-import type { AdminJob, AiModerationConfig, AiUsageDay, ModerationCategoryPolicy, ModerationSignal, OwnershipDrift } from '@al-ummah/shared-types';
+import type { AdminJob, AiModerationConfig, AiUsageDay, ModerationCategoryPolicy, ModerationSignal, OwnershipDrift, TroubleshootJobs, TroubleshootStatus, TroubleshootTokenCheck, TroubleshootTokenView } from '@al-ummah/shared-types';
 
 import type {
   Report,
@@ -558,7 +558,7 @@ export interface MediaSummary {
   settings?: import('@al-ummah/shared-types').DeliverySettings;
 }
 
-export type MediaJobStatus = 'queued' | 'transcoding' | 'ready' | 'failed';
+export type MediaJobStatus = 'queued' | 'transcoding' | 'ready' | 'failed' | 'cancelled';
 
 /** A video's latest R2 transcode (media_jobs). */
 export interface MediaJob {
@@ -581,4 +581,18 @@ export interface MediaJob {
   instance_type: string | null;
   bunny_ready_at: string | null;
   updated_at: string;
+}
+
+/** GET /api/media/troubleshoot: the transcode troubleshooting panel (videos admin → Delivery). */
+export interface TranscodeTroubleshoot {
+  /** Null when api-videos could not be read */
+  jobs: TroubleshootJobs | null;
+  status: TroubleshootStatus;
+  token: TroubleshootTokenView;
+}
+
+/** A token test: which of the panel's read permissions the token has. */
+export interface TroubleshootTokenTest {
+  ok: boolean;
+  checks: { name: TroubleshootTokenCheck; ok: boolean }[];
 }

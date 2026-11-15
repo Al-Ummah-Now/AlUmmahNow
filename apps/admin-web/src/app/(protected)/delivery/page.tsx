@@ -1,8 +1,8 @@
 import Link from '@/components/AppLink';
-import { getMediaQoeLive, getMediaSummary, listMediaJobs } from '@/lib/api/admin';
+import { getMediaQoeLive, getMediaSummary, getTranscodeTroubleshoot, listMediaJobs } from '@/lib/api/admin';
 import type { MediaJob, MediaSummary } from '@/lib/api/types';
 import { getAdminSession } from '@/lib/auth';
-import { canManageMedia } from '@/lib/roles';
+import { canManageMedia, isSuperAdmin } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
 import type { MessageKey } from '@/i18n/translate';
 import { ErrorAlert, cardClass, fieldClass, linkClass, secondaryButtonClass } from '@/components/ui';
@@ -10,6 +10,7 @@ import { logger } from '@/lib/logger';
 import { JobsTable } from './JobsTable';
 import { LiveTranscodes } from './LiveTranscodes';
 import { LiveQoe } from './LiveQoe';
+import { TranscodeTroubleshooting } from './TranscodeTroubleshooting';
 import { CostSection, PlaybackSection, SpeedSection } from './sections';
 import { JOB_FILTERS, JOB_STATUS_LABEL, PERIODS, parseJobFilter, parsePeriod } from './metrics';
 
@@ -31,7 +32,8 @@ function settled<T>(result: PromiseSettledResult<T>, what: string): T | null {
  * Delivery comparison (epic #687, docs/media-delivery/R2-DELIVERY-PLAN.md
  * Phase 3), measurements only: live transcodes and playback quality, then (under the period
  * buttons that filter them) time to playable, playback quality per source and cost with the
- * projection against the monthly cap, and recent R2 transcodes with "Transcode again". The provider
+ * projection against the monthly cap, and recent R2 transcodes with "Transcode again". Transcode
+ * troubleshooting (TranscodeTroubleshooting.tsx) sits under the live figures; ?video=<id> focuses one video. The provider
  * settings have their own page (media-providers/page.tsx), linked from the header.
  */
 export default async function DeliveryComparisonPage({ searchParams }: PageProps) {
@@ -44,11 +46,16 @@ export default async function DeliveryComparisonPage({ searchParams }: PageProps
     return <ErrorAlert testId="delivery-no-access">{t('mediaDelivery.noAccess')}</ErrorAlert>;
   }
 
-  const [summaryResult, jobsResult, qoeLiveResult] = await Promise.allSettled([
+  const [summaryResult, jobsResult, qoeLiveResult, troubleshootResult] = await Promise.allSettled([
     getMediaSummary(days),
     listMediaJobs({ status: filter === 'all' ? undefined : filter, limit: 50 }),
     getMediaQoeLive(),
+    getTranscodeTroubleshoot(),
   ]);
+  const troubleshoot = troubleshootResult.status === 'fulfilled' && troubleshootResult.value.ok ? troubleshootResult.value.data : null;
+  if (troubleshootResult.status === 'fulfilled' && !troubleshootResult.value.ok) logger.warn('[delivery] Troubleshoot view unavailable', { status: troubleshootResult.value.status });
+  const videoParam = Array.isArray(params.video) ? params.video[0] : params.video;
+  const focusVideo = typeof videoParam === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(videoParam) ? videoParam : null;
   const qoeLive = qoeLiveResult.status === 'fulfilled' && qoeLiveResult.value.ok ? qoeLiveResult.value.data : null;
   const summary: MediaSummary | null = settled(summaryResult, 'summary');
   const jobs: MediaJob[] | null = settled(jobsResult, 'jobs');
@@ -72,6 +79,8 @@ export default async function DeliveryComparisonPage({ searchParams }: PageProps
           <LiveQoe initial={qoeLive} />
         </>
       )}
+
+      <TranscodeTroubleshooting initial={troubleshoot} canSetToken={isSuperAdmin(session?.user.role)} focusVideo={focusVideo} />
 
       {/* The period filters only the sections under it, so its buttons sit right above them */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-6">
