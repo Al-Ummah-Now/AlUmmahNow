@@ -7,7 +7,7 @@ import path from 'path';
 import { expect, type Locator, type Page } from '@playwright/test';
 
 const FIXTURES = path.join(__dirname, 'fixtures');
-const TYPES: Record<string, string> = { '.m3u8': 'application/vnd.apple.mpegurl', '.ts': 'video/mp2t', '.vtt': 'text/vtt' };
+const TYPES: Record<string, string> = { '.m3u8': 'application/vnd.apple.mpegurl', '.ts': 'video/mp2t', '.vtt': 'text/vtt', '.mp4': 'video/mp4', '.m4s': 'video/iso.segment' };
 const CORS = { 'access-control-allow-origin': '*' };
 
 /** A live media playlist that slides over the bright fixture's 360p segments, 2s each */
@@ -77,7 +77,7 @@ export async function routeFixtures(page: Page, chapterTitles: [string, string, 
 
 export interface HarnessOptions {
   lang?: 'en' | 'ar';
-  src?: 'bright' | 'dark' | 'short' | 'live';
+  src?: 'bright' | 'dark' | 'short' | 'live' | 'audio';
   watch?: boolean;
   width?: number;
   /** Seed a saved position (seconds) so the player resumes and offers Start over */

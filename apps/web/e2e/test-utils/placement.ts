@@ -132,6 +132,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/76-help-tour.spec.ts': { placement: 'local', reason: 'Help pages and the identity tour: own accounts, onboarding flag on the account, keyboard, RTL, axe' },
   'apps/web/e2e/a11y/axe-all-pages.spec.ts': { placement: 'local', reason: 'axe scan of route catalog; catalog fetched from API_URL' },
   'apps/web/e2e/player/alignment.spec.ts': { placement: 'local', reason: 'already local: /en/dev/player harness with fixture video' },
+  'apps/web/e2e/player/audio-tracks.spec.ts': { placement: 'local', reason: 'already local player harness; demuxed multi-audio fixture' },
   'apps/web/e2e/player/autoplay.spec.ts': { placement: 'local', reason: 'already local player harness; account endpoints served by the spec' },
   'apps/web/e2e/player/controls.spec.ts': { placement: 'local', reason: 'already local player harness' },
   'apps/web/e2e/player/mini-player.spec.ts': { placement: 'local', reason: 'already local player harness' },

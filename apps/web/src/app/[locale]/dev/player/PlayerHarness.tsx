@@ -1,7 +1,8 @@
 'use client';
 /**
  * The player in a watch-page layout, driven by the query string so each E2E case is one URL:
- *   ?src=bright|dark|short|live   which fixture plays (served by the E2E route handler)
+ *   ?src=bright|dark|short|live|audio   which fixture plays (served by the E2E route handler);
+ *                                 audio: a demuxed package with the original and an English dub
  *   &watch=0                      an embed-like surface: no theatre, mini player or up next
  *   &width=320                    a fixed player width, for small-player checks
  *   &start=12                     a start position, for the start-over pill
@@ -21,8 +22,14 @@ import { usePlaylistPlayback } from '@/hooks/usePlaylistPlayback';
 import { clearAutoplayIntent, hasAutoplayIntent, requestAutoplay } from '@/lib/video/autoplay-intent';
 import { navigateOrLoad } from '@/lib/navigation/navigate-or-load';
 import { useAutoplaySetting } from '@/hooks/useAutoplaySetting';
+import type { AudioTrackView } from '@al-ummah/shared-types';
 
-const SOURCES = ['bright', 'dark', 'short', 'live'] as const;
+const SOURCES = ['bright', 'dark', 'short', 'live', 'audio'] as const;
+/** The audio fixture's tracks, as the API lists them (VideoView.audioTracks, the master's order) */
+const AUDIO_TRACKS: AudioTrackView[] = [
+  { id: 'orig', language: 'ar', label: 'العربية', kind: 'original', isDefault: true },
+  { id: 'tdub00000001', language: 'en', label: 'English', kind: 'dub', isDefault: false },
+];
 type Source = (typeof SOURCES)[number];
 
 export function PlayerHarness({ lang }: { lang: 'en' | 'ar' }) {
@@ -99,6 +106,7 @@ export function PlayerHarness({ lang }: { lang: 'en' | 'ar' }) {
             offerResume={playback.active}
             enableChapters={src !== 'live' && src !== 'short'}
             enableSubtitles={src !== 'live'}
+            audioTracks={src === 'audio' ? AUDIO_TRACKS : undefined}
           />
           </section>
           <h1 className="mt-4 text-lg font-semibold">Harness: {src}</h1>
