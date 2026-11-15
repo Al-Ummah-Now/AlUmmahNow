@@ -10,7 +10,7 @@
  * would not match the half already bound.
  * Exit 0 = done, 1 = a group is half provisioned or a create failed, 2 = could not run.
  */
-import { generateKeyPairSync } from 'node:crypto';
+import { generateKeyPairSync, randomBytes } from 'node:crypto';
 import { appendFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,7 +27,12 @@ export function generateVapid(): Record<string, string> {
 	return { publicKey: point.toString('base64url'), privateKey: jwk.d };
 }
 
-export const GENERATORS: Record<GeneratedSecret['generated'], () => Record<string, string>> = { vapid: generateVapid };
+/** A versioned AES-256 key, `1:<base64 32 bytes>`, as lib/social/crypto.ts reads it (later versions are appended). */
+export function generateKek(): Record<string, string> {
+	return { key: `1:${randomBytes(32).toString('base64')}` };
+}
+
+export const GENERATORS: Record<GeneratedSecret['generated'], () => Record<string, string>> = { vapid: generateVapid, kek: generateKek };
 
 export interface Deps {
 	existing(storeId: string): Promise<Set<string>>;

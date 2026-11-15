@@ -190,7 +190,7 @@ export const STORE_SUFFIX: Record<EnvName, string> = { production: '', stage: '-
 
 export interface GeneratedSecret {
 	/** How the value is made; one generator may make several secrets at once (a key pair). */
-	generated: 'vapid';
+	generated: 'vapid' | 'kek';
 	/** Base Secrets Store names; the env suffix is added (vapid-public-key-qa). */
 	names: Record<string, string>;
 	purpose: string;
@@ -208,5 +208,11 @@ export const GENERATED_SECRETS: GeneratedSecret[] = [
 		generated: 'vapid',
 		names: { publicKey: 'vapid-public-key', privateKey: 'vapid-private-key' },
 		purpose: 'Web Push VAPID key pair (RFC 8292): processor signs and encrypts pushes, api-videos serves the public key',
+	},
+	{
+		generated: 'kek',
+		names: { key: 'social-token-kek' },
+		purpose:
+			'AES-256-GCM key(s) sealing social auto-post tokens and webhook secrets in api-videos (lib/social/crypto.ts), <version>:<base64 32 bytes>[,...]. Never rotate by replacing: append a new version',
 	},
 ];
