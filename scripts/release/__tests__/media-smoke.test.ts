@@ -38,10 +38,10 @@ describe('media smoke', () => {
 	});
 	it('fails a container that never starts (2026-11-15: the image without review.mjs), after waiting out the rollout', async () => {
 		const c = clock();
-		const crash = (now: number) => ({ ok: false, startMs: 900, at: new Date(now).toISOString(), error: 'The container just exited' });
+		const crash = (now: number) => ({ ok: false, startMs: 900, at: new Date(now).toISOString(), error: 'container start failed' });
 		const r = await mediaSmoke('production', { ...c, fetch: fetchWith(403, 404, crash, c.now), cf: cfWith([{ name: 'al-ummah-now-media-transcoder' }]) });
 		assert.equal(r[3].ok, false);
-		assert.match(r[3].detail, /did not start: The container just exited/);
+		assert.match(r[3].detail, /did not start: container start failed/);
 		assert.ok(c.now() - T0 >= SELFTEST_WAIT_MS, 'it waited for the rollout before failing');
 	});
 	it('waits through crashes while the rollout replaces instances, then passes', async () => {

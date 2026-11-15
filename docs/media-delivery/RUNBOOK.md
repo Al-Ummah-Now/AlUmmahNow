@@ -130,7 +130,9 @@ from R2 on every request, at Class B cost and with no edge cache.
   job is reported failed: the record gets `r2.status = failed` and the Errors page an item with
   "Transcode again", about 24 min after it was queued. 2026-11-15: an image without
   `container/review.mjs` crashed at every start (`ERR_MODULE_NOT_FOUND`, exit 1) from v2026.11.13.x
-  to v2026.11.14.6; the release smoke now starts a real container (`GET /priv/_selftest`) and the
+  to v2026.11.14.6; the release smoke now starts a real container (`GET /priv/_selftest`: the first call after a
+  deploy runs it, a pass is reused for that Worker version, a failure reruns at most once a minute
+  and 10 times per version; the answer carries only the plain reason, the raw error is in the log) and the
   stage E2E fails a transcode that does not start within 2 min.
 - **Container logs:** the container's stdout and exits are Workers Observability events of type
   `cf-container` with `$container.applicationId` = the transcoder application's id (not the

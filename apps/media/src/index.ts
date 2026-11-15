@@ -36,12 +36,11 @@ function isJob(body: unknown): body is TranscodeJobMessage {
 /** Under /priv/ because that is the only path routed to this Worker; it is not a rendition. */
 export const SELFTEST_PATH = '/priv/_selftest';
 
-async function handleSelfTest(url: URL, env: Env): Promise<Response> {
-	const raw = Number(url.searchParams.get('after'));
-	// `after` may only ask for a run since a recent time (the smoke's deploy), never force a stream of starts
-	const after = Number.isFinite(raw) && raw > Date.now() - 24 * 3600_000 && raw <= Date.now() ? raw : undefined;
+async function handleSelfTest(env: Env): Promise<Response> {
+	// Real starts are limited per deployed Worker version (selfTestDue), so callers cannot force a stream of them
+	const version = env.CF_VERSION_METADATA?.id;
 	try {
-		const result = await env.TRANSCODER.get(env.TRANSCODER.idFromName('selftest')).selfTest(after);
+		const result = await env.TRANSCODER.get(env.TRANSCODER.idFromName('selftest')).selfTest(version);
 		return Response.json(result, { status: result.ok ? 200 : 503, headers: { 'cache-control': 'no-store' } });
 	} catch (error) {
 		log.error('[MediaSelfTest] Self-test failed', { error: errorText(error) });
@@ -51,8 +50,8 @@ async function handleSelfTest(url: URL, env: Env): Promise<Response> {
 
 async function handleFetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 	const url = new URL(request.url);
-	// Release smoke: one real container start (rate limited in the DO; the only answer is ok/timing)
-	if (url.pathname === SELFTEST_PATH && request.method === 'GET') return handleSelfTest(url, env);
+	// Release smoke: one real container start (limited per version in the DO; the answer is ok, timing and a plain reason)
+	if (url.pathname === SELFTEST_PATH && request.method === 'GET') return handleSelfTest(env);
 	if (url.pathname.startsWith('/priv/')) return handlePrivate(request, env, ctx);
 	if (url.pathname === '/health') return Response.json({ ok: true });
 	const m = /^\/internal\/jobs\/([^/]+)$/.exec(url.pathname);

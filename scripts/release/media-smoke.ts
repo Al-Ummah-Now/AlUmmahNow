@@ -41,7 +41,7 @@ interface SelfTest {
 }
 
 /**
- * The verdict on one self-test answer: pass, fail now, or ask again (a cached run from before the
+ * The verdict on one self-test answer: pass, fail now, or ask again (a stored run from before the
  * deploy, or a start that failed while the rollout is still replacing instances).
  */
 export function selfTestVerdict(r: SelfTest | null, since: number, waitedMs: number): { done: true; ok: boolean; detail: string } | { done: false } {
@@ -99,7 +99,7 @@ export async function mediaSmoke(
 		for (;;) {
 			let body: SelfTest | null = null;
 			try {
-				const res = await deps.fetch(`https://${host}/priv/_selftest?after=${since}`, { redirect: 'manual' });
+				const res = await deps.fetch(`https://${host}/priv/_selftest`, { redirect: 'manual' });
 				body = (await res.json().catch(() => null)) as SelfTest | null;
 			} catch {
 				body = null;

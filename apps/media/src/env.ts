@@ -22,6 +22,8 @@ export interface Env {
 	/** Instance type in wrangler config, recorded with each job for cost */
 	TRANSCODER_INSTANCE?: string;
 	LOG_LEVEL?: string;
+	/** Deployed Worker version: limits the release self-test to a few real starts per deploy */
+	CF_VERSION_METADATA?: { id: string; tag?: string; timestamp?: string };
 }
 
 const cache = new Map<string, { at: number; value: string }>();

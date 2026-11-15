@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { TranscodeJobMessage } from '@al-ummah/shared-types';
-import { ATTEMPT_LIMIT_MS, containerSeconds, hasWatchdogDue, INFRA_RETRY_LIMIT, isInfraFailure, keyAllowed, SELFTEST_FRESH_MS, SELFTEST_MIN_GAP_MS, selfTestDue, START_MAX_DELIVERIES, startFailureReason, startRetry, LAUNCH_LIMIT_MS, launchLost, MAX_ATTEMPTS, newJob, onFailure, onMessage, onProgressEvent, PROGRESS_REPORT_MS, SILENCE_LIMIT_MS, watchdogVerdict } from '../src/jobs';
+import { ATTEMPT_LIMIT_MS, containerSeconds, hasWatchdogDue, INFRA_RETRY_LIMIT, isInfraFailure, keyAllowed, SELFTEST_MAX_RUNS, SELFTEST_MIN_GAP_MS, selfTestDue, selfTestRuns, START_MAX_DELIVERIES, startFailureReason, startRetry, LAUNCH_LIMIT_MS, launchLost, MAX_ATTEMPTS, newJob, onFailure, onMessage, onProgressEvent, PROGRESS_REPORT_MS, SILENCE_LIMIT_MS, watchdogVerdict } from '../src/jobs';
 
 const msg = (over: Partial<TranscodeJobMessage> = {}): TranscodeJobMessage => ({
 	kind: 'transcode',
@@ -207,16 +207,21 @@ describe('platform failures do not use up attempts', () => {
 
 describe('container self-test (release smoke)', () => {
 	const at = (ms: number) => new Date(ms).toISOString();
-	const T = 10 * SELFTEST_FRESH_MS;
-	it('starts one when there is none, or the last passed run is stale or older than the deploy', () => {
-		assert.equal(selfTestDue(undefined, T), true);
-		assert.equal(selfTestDue({ ok: true, startMs: 1, at: at(T - SELFTEST_FRESH_MS) }, T), true);
-		assert.equal(selfTestDue({ ok: true, startMs: 1, at: at(T - 5 * 60_000) }, T), false);
-		assert.equal(selfTestDue({ ok: true, startMs: 1, at: at(T - 5 * 60_000) }, T, T - 60_000), true);
+	const T = Date.parse('2026-11-15T03:00:00Z');
+	const run = (ok: boolean, ago: number, version: string | undefined, runs = 1) => ({ ok, startMs: 1, at: at(T - ago), version, runs });
+	it('starts one for a new deploy (no run yet, or the last run is from another version)', () => {
+		assert.equal(selfTestDue(undefined, T, 'v2'), true);
+		assert.equal(selfTestDue(run(true, 10_000, 'v1'), T, 'v2'), true);
+		assert.equal(selfTestRuns(run(false, 10_000, 'v1', 7), 'v2'), 1);
 	});
-	it('never starts more than one container a minute, whatever the caller asks (the route is public)', () => {
-		assert.equal(selfTestDue({ ok: false, startMs: 1, at: at(T - 10_000) }, T), false);
-		assert.equal(selfTestDue({ ok: true, startMs: 1, at: at(T - 10_000) }, T, T), false);
-		assert.equal(selfTestDue({ ok: false, startMs: 1, at: at(T - SELFTEST_MIN_GAP_MS) }, T), true);
+	it('reuses a pass for the same version, however often it is asked (the route is public)', () => {
+		assert.equal(selfTestDue(run(true, 10_000, 'v2'), T, 'v2'), false);
+		assert.equal(selfTestDue(run(true, 24 * 3600_000, 'v2'), T, 'v2'), false);
+	});
+	it('reruns a failure at most once a minute and at most SELFTEST_MAX_RUNS times per version', () => {
+		assert.equal(selfTestDue(run(false, 10_000, 'v2'), T, 'v2'), false);
+		assert.equal(selfTestDue(run(false, SELFTEST_MIN_GAP_MS, 'v2'), T, 'v2'), true);
+		assert.equal(selfTestRuns(run(false, SELFTEST_MIN_GAP_MS, 'v2', 3), 'v2'), 4);
+		assert.equal(selfTestDue(run(false, 3600_000, 'v2', SELFTEST_MAX_RUNS), T, 'v2'), false);
 	});
 });

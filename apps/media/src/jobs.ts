@@ -199,28 +199,42 @@ export interface SelfTestResult {
 	/** start() → the container answered /status */
 	startMs: number;
 	at: string;
+	/** Plain category only (startFailureReason); the raw error goes to the log, never the answer */
 	error?: string;
 	/** The answer is a stored earlier run */
 	cached?: boolean;
 	/** Not tested: every instance is busy (capacity full), which is not a broken image */
 	skipped?: string;
+	/** Worker version (CF_VERSION_METADATA) the run belongs to */
+	version?: string;
+	/** Real starts made for this version so far */
+	runs?: number;
 }
 
-/** A passing run is reused this long; the release smoke asks for a run after its deploy (`after`). */
-export const SELFTEST_FRESH_MS = 10 * 60 * 1000;
-/** Never more than one real start per this interval, whatever callers ask (the route is public). */
+/** A failed run may be retried at most once per this interval (the route is public). */
 export const SELFTEST_MIN_GAP_MS = 60 * 1000;
+/** At most this many real starts per deployed Worker version, whatever callers ask. */
+export const SELFTEST_MAX_RUNS = 10;
 /** The release smoke fails a cold start slower than this. */
 export const SELFTEST_START_LIMIT_MS = 60 * 1000;
 
-/** Start a container now, or answer with the stored run? */
-export function selfTestDue(last: SelfTestResult | undefined, now: number, after?: number): boolean {
+/**
+ * Start a container now, or answer with the stored run? The first call after a deploy (a new
+ * version) runs; a pass is then reused for that version; a failure may rerun once a minute, up to
+ * SELFTEST_MAX_RUNS per version. That bounds what anyone calling the public route can cost to
+ * about ten starts per release.
+ */
+export function selfTestDue(last: SelfTestResult | undefined, now: number, version: string | undefined): boolean {
 	if (!last) return true;
-	const age = now - Date.parse(last.at);
-	if (!(age >= SELFTEST_MIN_GAP_MS)) return false;
-	if (!last.ok) return true;
-	if (after !== undefined && Date.parse(last.at) < after) return true;
-	return age >= SELFTEST_FRESH_MS;
+	if (last.version !== version) return true;
+	if (last.ok) return false;
+	if ((last.runs ?? 1) >= SELFTEST_MAX_RUNS) return false;
+	return now - Date.parse(last.at) >= SELFTEST_MIN_GAP_MS;
+}
+
+/** Runs counted for the next start of `version`. */
+export function selfTestRuns(last: SelfTestResult | undefined, version: string | undefined): number {
+	return last && last.version === version ? (last.runs ?? 1) + 1 : 1;
 }
 
 /** Keys an outbound PUT may write for this job (and nothing else). */
