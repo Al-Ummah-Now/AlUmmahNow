@@ -107,7 +107,7 @@ function EditionRow({ channelId, row, onChange }: { channelId: string; row: Chan
               {cs.save}
             </button>
             {row.source === 'channel' && (
-              <button type="button" className="b b-ghost b-sm min-h-11" disabled={busy} onClick={() => void run(() => resetChannelQuranEdition(channelId, row.language))} data-testid={`channel-quran-${row.language}-reset`}>
+              <button type="button" className="b b-ghost b-sm min-h-11 whitespace-nowrap" disabled={busy} onClick={() => void run(() => resetChannelQuranEdition(channelId, row.language))} data-testid={`channel-quran-${row.language}-reset`}>
                 {cs.reset}
               </button>
             )}

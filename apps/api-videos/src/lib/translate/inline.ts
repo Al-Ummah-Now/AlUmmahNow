@@ -37,6 +37,8 @@ export class TranslateHttpError extends Error {
 }
 
 const LANGUAGE = /^[a-z]{2,3}(?:-[A-Za-z]{2,4})?$/;
+/** The languages the site is shown in: viewer-side titles are made only for these (§5.9) */
+export const VIEWER_TITLE_LANGUAGES = new Set(['en', 'ar']);
 /** Bumped when the prompt or the Quran handling changes, so old cached answers are not served. */
 const CACHE_VERSION = 'v1';
 const CACHE_SECONDS = 30 * 24 * 3600;
@@ -75,7 +77,12 @@ const edgeCache = (): EdgeCache | null => {
 	const c = (globalThis as { caches?: { default?: EdgeCache } }).caches;
 	return c?.default ?? null;
 };
-const cacheKey = async (from: string, to: string, provider: string, text: string) => `https://translate.cache.internal/${CACHE_VERSION}/${from}/${to}/${provider}/${await sha256Hex(text)}`;
+/**
+ * Everything that shapes the prompt is in the key (field and context, e.g. the video's title), so an
+ * answer made with one creator's context is never served to another request.
+ */
+const cacheKey = async (from: string, to: string, provider: string, field: string, context: string, text: string) =>
+	`https://translate.cache.internal/${CACHE_VERSION}/${from}/${to}/${provider}/${field}/${await sha256Hex(context)}/${await sha256Hex(text)}`;
 
 async function cached(keys: string[]): Promise<Array<{ text: string; quran?: Array<{ range: string; label: string }> } | null>> {
 	const cache = edgeCache();
@@ -225,7 +232,8 @@ export async function translateInline(env: InlineTranslateEnv, input: InlineTran
 
 	// Empty texts come back empty; the rest from the cache, then the model
 	const texts = input.items.filter((i) => i.text.trim());
-	const keys = await Promise.all(texts.map((i) => cacheKey(input.from, input.to, provider, i.text)));
+	const contextKey = JSON.stringify([input.context?.title ?? '', input.context?.channel ?? '']);
+	const keys = await Promise.all(texts.map((i) => cacheKey(input.from, input.to, provider, input.field, contextKey, i.text)));
 	const hits = await cached(keys);
 	const misses = texts.filter((_, n) => !hits[n]);
 	const results = new Map<string, InlineTranslateResultItem>();
@@ -338,9 +346,11 @@ const hasCreatorText = (video: VideoObject, lang: string) => {
  * wrote a title in that language, or when the title is already in it. A missing or stale
  * translation is queued (the viewer sees the original meanwhile): `pending`.
  */
-export async function viewerTranslation(env: ViewerTranslationEnv, video: VideoObject, lang: string, now = new Date()): Promise<{ translation: ViewerTranslation | null; pending: boolean }> {
+export async function viewerTranslation(env: ViewerTranslationEnv, video: VideoObject, wanted: string, now = new Date()): Promise<{ translation: ViewerTranslation | null; pending: boolean }> {
 	const none = { translation: null, pending: false };
-	if (!LANGUAGE.test(lang) || !video.title?.trim()) return none;
+	// Only the site's own languages: a public, anonymous route must not queue one job per language code
+	const lang = wanted.split('-')[0]!.toLowerCase();
+	if (!VIEWER_TITLE_LANGUAGES.has(lang) || !video.title?.trim()) return none;
 	const settings = await readCaptionSettings(env);
 	if (!settings.viewerTitles.enabled || !settings.inline.enabled) return none;
 	if (hasCreatorText(video, lang)) return none;

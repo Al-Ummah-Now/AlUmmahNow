@@ -26,7 +26,7 @@ import {
   type CaptionJobView,
 } from '@/lib/api/caption-drafts';
 import CaptionDraftEditor from './CaptionDraftEditor';
-import CaptionTranscribe, { type CaptionMinutes } from './CaptionTranscribe';
+import CaptionTranscribe, { visibleJobs, type CaptionMinutes } from './CaptionTranscribe';
 import CaptionTranslate, { TranslationJobs } from './CaptionTranslate';
 
 export interface CaptionDraftsPanelProps {
@@ -203,7 +203,8 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
           reload={load}
         />
       )}
-      {minutes && <TranslationJobs videoId={videoId} jobs={jobs} t={tc} label={label} confirm={confirm} reload={load} />}
+      {/* Translations whose source draft is gone; the others show in their source draft's row */}
+      {minutes && <TranslationJobs videoId={videoId} jobs={jobs.filter((j) => !(drafts ?? []).some((d) => d.language === j.sourceLanguage))} t={tc} label={label} confirm={confirm} reload={load} />}
 
       {(!!drafts?.length || transcript || claims.length > 0) && (
         <div>
@@ -378,6 +379,11 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
                   </button>
                 </div>
               </div>
+              {d.kind === 'source' && visibleJobs(jobs.filter((j) => j.kind === 'translate' && j.sourceLanguage === d.language)).length > 0 && (
+                <div className="mt-3 border-t border-border pt-3">
+                  <TranslationJobs videoId={videoId} jobs={jobs.filter((j) => j.sourceLanguage === d.language)} t={tc} label={label} confirm={confirm} reload={load} />
+                </div>
+              )}
               {translating === d.language && minutes && (
                 <CaptionTranslate
                   videoId={videoId}
