@@ -221,7 +221,7 @@ export async function enqueueTranscode(
 		const current = (await repo(env).getObject(videoId)) as (MediaVideo & { channelId?: string; media?: VideoMediaProviders }) | null;
 		if (!current) return { queued: false, why: 'video not found' };
 		const wantsR2 = current.media ? !!current.media.providers.r2 : ingestTargets(await readMediaSettings(env), current.channelId).includes('r2');
-		if (!wantsR2 && reason !== 'retry') return { queued: false, why: 'R2 does not take this video' };
+		if (!wantsR2 && reason !== 'retry' && reason !== 'backfill') return { queued: false, why: 'R2 does not take this video' };
 		// E2E run accounts skip R2 to spare the transcoder, unless R2 is the video's only copy
 		const onlyCopy = !!current.media && !current.media.providers.bunny;
 		if (reason === 'upload' && !onlyCopy && opts.uploaderId && (await isE2eUploader(env, opts.uploaderId))) return { queued: false, why: 'E2E run account' };
@@ -787,6 +787,11 @@ export async function purgeVideoMedia(env: MediaEnv, videoId: string): Promise<n
 	}
 	// The kept original (docs/media-delivery/ORIGINALS.md)
 	n += await deleteOriginal(env as never, videoId);
+	// Its R2 backfill rows: verification, scheduled Bunny removal, run items (docs/media-delivery/BACKFILL.md)
+	const db = (env as { SEARCH_DB?: D1Database }).SEARCH_DB;
+	if (db) {
+		await db.batch(['media_r2_verified', 'media_bunny_removals', 'media_backfill_items'].map((table) => db.prepare(`DELETE FROM ${table} WHERE video_id = ?1`).bind(videoId)));
+	}
 	return n;
 }
 

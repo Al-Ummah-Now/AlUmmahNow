@@ -237,6 +237,12 @@ Clients never see provider internals: video views drop `r2`, `media`, `bunnyLibr
 `thumbnailCheck` (`publicVideoFields`), beside the processing and review internals they already
 dropped. What leaves the API is our ids and server-signed playback and thumbnail URLs.
 
+## Backfill
+
+Existing Bunny-only videos get an R2 copy from the admin's R2 backfill page (copy, transcode, verify), which then
+flips playback to R2 first through these same settings: a video override, a channel override or the global order.
+See [BACKFILL.md](./BACKFILL.md).
+
 ## Code map
 
 | What | Where |

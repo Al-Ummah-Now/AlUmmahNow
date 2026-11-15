@@ -117,7 +117,7 @@ async function libraryOf(env: ProcessingEnv, videoId: string, hints?: LibraryHin
 	return bunnyLibraryForVideo(env as BunnyLibrariesEnv, await recordHints(env, videoId, hints));
 }
 
-async function getBunnyVideo(library: BunnyLibrary, videoId: string): Promise<BunnyVideoState | null> {
+export async function getBunnyVideo(library: BunnyLibrary, videoId: string): Promise<BunnyVideoState | null> {
 	const { libraryId, apiKey } = bunnyApi(library);
 	const response = await fetch(`${BUNNY_API}/library/${encodeURIComponent(String(libraryId))}/videos/${encodeURIComponent(videoId)}`, {
 		headers: { AccessKey: apiKey, accept: 'application/json' },

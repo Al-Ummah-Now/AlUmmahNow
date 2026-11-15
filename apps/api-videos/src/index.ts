@@ -86,6 +86,9 @@ import { handleFootprintBackfillMessage, isFootprintBackfillMessage, maintainFoo
 import { handleVideoFormatMessage, startDailyVideoFormatRun } from "./lib/video-format/job";
 import { handlePublishedAtBackfillMessage, isPublishedAtBackfillMessage } from "./lib/publishedAtBackfill";
 import { handleMp4BackfillMessage, isMp4BackfillMessage } from "./lib/media/mp4-backfill";
+import { handleBackfillMessage, restartQuietRuns } from "./lib/media/backfill/run";
+import { isBackfillMessage } from "./lib/media/backfill/types";
+import { queueDueRemovals, removeFromBunny } from "./lib/media/backfill/removal";
 import { handleArchivePrivacyMessage, isArchivePrivacyMessage } from "./lib/archivePrivacyRewrite";
 import { startDailyThumbnailCheck } from "./lib/thumbnail/repair";
 import { VIDEO_FORMAT_JOB_KIND } from "@al-ummah/shared-types";
@@ -568,6 +571,13 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 				logger.error('[ProcessingSweep] Run failed', { error: error instanceof Error ? error.message : String(error) }),
 			),
 		);
+		// R2 backfill: restart run loops that went quiet, and queue Bunny removals whose grace period is over (lib/media/backfill/)
+		ctx.waitUntil(
+			Promise.all([restartQuietRuns(rawEnv as never), queueDueRemovals(rawEnv as never)]).then(
+				() => undefined,
+				(error) => logger.error('[Backfill] Sweep failed', { error: error instanceof Error ? error.message : String(error) }),
+			),
+		);
 		// R2 transcodes stuck in queued/transcoding (lib/media/r2-delivery.ts)
 		ctx.waitUntil(
 			sweepMediaJobs(rawEnv as never, Date.now(), ctx).then(
@@ -799,12 +809,16 @@ async function queue(batch: MessageBatch<unknown>, env: AppBindings, ctx: Execut
 		for (const msg of batch.messages.filter((m) => isArchivePrivacyMessage(m.body))) await handleArchivePrivacyMessage(env as never, msg);
 		// Public MP4 backfill (lib/media/mp4-backfill.ts, #1182), one media_jobs page per message, dry run by default
 		for (const msg of batch.messages.filter((m) => isMp4BackfillMessage(m.body))) await handleMp4BackfillMessage(env as never, msg);
+		// R2 backfill of existing videos and Bunny removals (lib/media/backfill/, docs/media-delivery/BACKFILL.md)
+		for (const msg of batch.messages.filter((m) => isBackfillMessage(m.body))) {
+			await handleBackfillMessage(synced, ctx, msg, { removal: (e, c, videoId, last) => removeFromBunny(e, c, videoId, last) });
+		}
 		// Privacy footprint backfill (lib/privacy/footprints.ts), one bucket page per message
 		for (const msg of batch.messages.filter((m) => isFootprintBackfillMessage(m.body))) await handleFootprintBackfillMessage(env as never, msg.body as never);
 		// Studio comments: per-channel index rebuilds and the daily removed-comment purge (lib/channelComments/jobs.ts)
 		const channelComments = batch.messages.filter((m) => isChannelCommentsMessage(m.body));
 		if (channelComments.length) await handleChannelCommentsBatch({ messages: channelComments as never }, synced, ctx);
-		const rest = batch.messages.filter((m) => !isFormat(m) && !isCollectionBackfill(m) && !isFootprintBackfillMessage(m.body) && !isPublishedAtBackfillMessage(m.body) && !isArchivePrivacyMessage(m.body) && !isMp4BackfillMessage(m.body) && !isChannelCommentsMessage(m.body));
+		const rest = batch.messages.filter((m) => !isFormat(m) && !isCollectionBackfill(m) && !isFootprintBackfillMessage(m.body) && !isPublishedAtBackfillMessage(m.body) && !isArchivePrivacyMessage(m.body) && !isMp4BackfillMessage(m.body) && !isChannelCommentsMessage(m.body) && !isBackfillMessage(m.body));
 		// New uploads → playlists (lib/playlistUploadAdds.ts)
 		const playlistAdds = rest.filter((m) => isPlaylistAddMessage(m.body));
 		const reaper = rest.filter((m) => isReaperMessage(m.body));

@@ -13,6 +13,8 @@ const PROBE_TIMEOUT_MS = 5_000;
 
 /** The Bunny GUID of a video, or null when Bunny holds no copy. */
 export function bunnyRef(video: ProviderVideo): string | null {
+	// Removed from its Bunny library after a verified R2 backfill (lib/media/backfill/removal.ts)
+	if (video.bunnyRemoved) return null;
 	const stored = storedRef(video, 'bunny');
 	if (stored) return stored.ref;
 	return isLegacyRow(video) ? video.id : null;

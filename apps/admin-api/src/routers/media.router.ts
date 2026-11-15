@@ -17,6 +17,9 @@
  *   GET  /providers         provider settings, health and problems (docs/media-delivery/PROVIDERS.md)
  *   PUT  /providers { settings }  replace them (audited, key media:delivery); 400 { problems } when unsafe
  *   POST /health/check      one provider health pass now
+ *   /backfill/*             R2 backfill runs (estimate, settings, start/pause/cancel, items, Retry), "play R2
+ *                           first" (video / channel / global) and Bunny library retirement; audited as
+ *                           media:backfill:<run>, media:video:<id>, media:delivery and media:bunny-retire:<library>
  *   PUT  /videos/:id/override { override | null }  pin one video's playback providers (audited, key
  *                           media:video:<id>); 400 { problems } when it would leave the video unplayable
  *
@@ -217,6 +220,140 @@ app.put('/videos/:id/override', async (c) => {
 
 app.post('/health/check', async (c) => {
   const result = await callVideosInternal(c.env, '/internal/media/health/check', { method: 'POST', json: {} });
+  return c.json({ success: true, result });
+});
+
+// ---------------------------------------------------------------------------
+// R2 backfill of existing videos and Bunny retirement (api-videos /internal/media/backfill/*,
+// docs/media-delivery/BACKFILL.md). Reads pass through; every change is audited first.
+// ---------------------------------------------------------------------------
+
+export const MEDIA_BACKFILL_AUDIT_PREFIX = 'media:backfill:';
+export const MEDIA_BUNNY_RETIRE_AUDIT_PREFIX = 'media:bunny-retire:';
+const RUN_ID = /^[A-Za-z0-9-]{8,64}$/;
+const BF = '/internal/media/backfill';
+
+const passQuery = (c: C, names: string[]) => Object.fromEntries(names.map((n) => [n, c.req.query(n)]).filter(([, v]) => v)) as Record<string, string>;
+
+app.get('/backfill/runs', async (c) => c.json({ success: true, result: await callVideosInternal(c.env, `${BF}/runs`, { query: passQuery(c, ['limit']) }) }));
+
+app.post('/backfill/runs', async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { scope?: unknown };
+  if (!body.scope || typeof body.scope !== 'object' || JSON.stringify(body.scope).length > 40_000) return bad(c, 'scope must be an object');
+  const result = await audited(c, [{ key: `${MEDIA_BACKFILL_AUDIT_PREFIX}new`, oldValue: undefined, newValue: { action: 'estimate', scope: body.scope } }], () =>
+    callVideosInternal<{ run: { id: string } }>(c.env, `${BF}/runs`, { method: 'POST', json: { scope: body.scope, actorId: actorOf(c) } }),
+  );
+  logger.info('[Media] Backfill estimate requested', { actorId: actorOf(c), runId: result.run?.id });
+  return c.json({ success: true, result }, 201);
+});
+
+app.get('/backfill/runs/:id', async (c) => {
+  const id = c.req.param('id');
+  if (!RUN_ID.test(id)) return bad(c, 'bad run id');
+  return c.json({ success: true, result: await callVideosInternal(c.env, `${BF}/runs/${id}`) });
+});
+
+app.get('/backfill/runs/:id/items', async (c) => {
+  const id = c.req.param('id');
+  if (!RUN_ID.test(id)) return bad(c, 'bad run id');
+  return c.json({ success: true, result: await callVideosInternal(c.env, `${BF}/runs/${id}/items`, { query: passQuery(c, ['state', 'cursor', 'limit']) }) });
+});
+
+app.put('/backfill/runs/:id/settings', async (c) => {
+  const id = c.req.param('id');
+  if (!RUN_ID.test(id)) return bad(c, 'bad run id');
+  const body = (await c.req.json().catch(() => ({}))) as { settings?: unknown };
+  if (!body.settings || typeof body.settings !== 'object') return bad(c, 'settings must be an object');
+  const result = await audited(c, [{ key: `${MEDIA_BACKFILL_AUDIT_PREFIX}${id}`, oldValue: undefined, newValue: { action: 'settings', settings: body.settings } }], () =>
+    callVideosInternal(c.env, `${BF}/runs/${id}/settings`, { method: 'PUT', json: { settings: body.settings } }),
+  );
+  return c.json({ success: true, result });
+});
+
+app.post('/backfill/runs/:id/:action{start|pause|cancel|retry-failed}', async (c) => {
+  const id = c.req.param('id');
+  const action = c.req.param('action');
+  if (!RUN_ID.test(id)) return bad(c, 'bad run id');
+  const result = await audited(c, [{ key: `${MEDIA_BACKFILL_AUDIT_PREFIX}${id}`, oldValue: undefined, newValue: { action } }], () =>
+    callVideosInternal(c.env, `${BF}/runs/${id}/${action}`, { method: 'POST', json: {} }),
+  );
+  logger.info('[Media] Backfill run action', { runId: id, action, actorId: actorOf(c) });
+  return c.json({ success: true, result });
+});
+
+app.post('/backfill/items/retry', async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { runId?: unknown; videoId?: unknown };
+  if (typeof body.runId !== 'string' || !RUN_ID.test(body.runId) || typeof body.videoId !== 'string' || !VIDEO_ID.test(body.videoId)) return bad(c, 'runId and videoId are required');
+  const result = await audited(c, [{ key: `${MEDIA_BACKFILL_AUDIT_PREFIX}${body.runId}`, oldValue: undefined, newValue: { action: 'retry_item', videoId: body.videoId } }], () =>
+    callVideosInternal(c.env, `${BF}/items/retry`, { method: 'POST', json: { runId: body.runId, videoId: body.videoId } }),
+  );
+  return c.json({ success: true, result });
+});
+
+/** Play R2 first: per video (verified only), per channel or everywhere, through the provider settings. */
+app.post('/backfill/flip', async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { target?: unknown; videoIds?: unknown; channelId?: unknown; undo?: unknown };
+  const undo = body.undo === true;
+  let rows: { key: string; oldValue: unknown; newValue: unknown }[];
+  if (body.target === 'videos') {
+    const ids = Array.isArray(body.videoIds) ? body.videoIds : [];
+    if (!ids.length || ids.length > 200 || !ids.every((v) => typeof v === 'string' && VIDEO_ID.test(v))) return bad(c, 'videoIds must list 1-200 video ids');
+    rows = (ids as string[]).map((v) => ({ key: `${MEDIA_VIDEO_AUDIT_PREFIX}${v}`, oldValue: undefined, newValue: { action: undo ? 'r2_first_undo' : 'r2_first' } }));
+  } else if (body.target === 'channel' || body.target === 'global') {
+    if (body.target === 'channel' && (typeof body.channelId !== 'string' || !VIDEO_ID.test(body.channelId))) return bad(c, 'channelId is required');
+    const current = await callVideosInternal<{ settings: Record<string, unknown> }>(c.env, '/internal/media/providers');
+    rows = [{ key: MEDIA_SETTINGS_AUDIT_KEY, oldValue: current.settings, newValue: { action: undo ? 'r2_first_undo' : 'r2_first', target: body.target, channelId: body.channelId } }];
+  } else return bad(c, 'target must be videos, channel or global');
+  const result = await audited(c, rows, () =>
+    callVideosInternal(c.env, `${BF}/flip`, { method: 'POST', json: { target: body.target, videoIds: body.videoIds, channelId: body.channelId, undo, actorId: actorOf(c) } }),
+  );
+  logger.info('[Media] Backfill flip', { target: body.target, undo, actorId: actorOf(c) });
+  return c.json({ success: true, result });
+});
+
+app.get('/backfill/channels/:id/verification', async (c) => {
+  const id = c.req.param('id');
+  if (!VIDEO_ID.test(id)) return bad(c, 'bad channel id');
+  return c.json({ success: true, result: await callVideosInternal(c.env, `${BF}/channels/${id}/verification`) });
+});
+
+app.get('/backfill/libraries', async (c) => c.json({ success: true, result: await callVideosInternal(c.env, `${BF}/libraries`) }));
+
+app.get('/backfill/libraries/:id/removals', async (c) => {
+  const id = c.req.param('id');
+  if (!/^\d{1,12}$/.test(id)) return bad(c, 'bad library id');
+  return c.json({ success: true, result: await callVideosInternal(c.env, `${BF}/libraries/${id}/removals`, { query: passQuery(c, ['status', 'cursor', 'limit']) }) });
+});
+
+/** Retire a library: schedule the removal of its verified videos after the grace period. Needs the typed confirmation. */
+app.post('/backfill/libraries/:id/removals', async (c) => {
+  const id = c.req.param('id');
+  if (!/^\d{1,12}$/.test(id)) return bad(c, 'bad library id');
+  const body = (await c.req.json().catch(() => ({}))) as { graceDays?: unknown; confirm?: unknown };
+  if (body.confirm !== id) return bad(c, 'Type the library id to confirm');
+  if (typeof body.graceDays !== 'number') return bad(c, 'graceDays is required');
+  const result = await audited(c, [{ key: `${MEDIA_BUNNY_RETIRE_AUDIT_PREFIX}${id}`, oldValue: undefined, newValue: { action: 'schedule_removals', graceDays: body.graceDays } }], () =>
+    callVideosInternal(c.env, `${BF}/libraries/${id}/removals`, { method: 'POST', json: { graceDays: body.graceDays, actorId: actorOf(c) } }),
+  );
+  logger.warn('[Media] Bunny library removals scheduled', { libraryId: id, graceDays: body.graceDays, actorId: actorOf(c) });
+  return c.json({ success: true, result });
+});
+
+app.post('/backfill/libraries/:id/removals/cancel', async (c) => {
+  const id = c.req.param('id');
+  if (!/^\d{1,12}$/.test(id)) return bad(c, 'bad library id');
+  const result = await audited(c, [{ key: `${MEDIA_BUNNY_RETIRE_AUDIT_PREFIX}${id}`, oldValue: undefined, newValue: { action: 'cancel_removals' } }], () =>
+    callVideosInternal(c.env, `${BF}/libraries/${id}/removals/cancel`, { method: 'POST', json: {} }),
+  );
+  return c.json({ success: true, result });
+});
+
+app.post('/backfill/removals/retry', async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { videoId?: unknown };
+  if (typeof body.videoId !== 'string' || !VIDEO_ID.test(body.videoId)) return bad(c, 'videoId is required');
+  const result = await audited(c, [{ key: `${MEDIA_VIDEO_AUDIT_PREFIX}${body.videoId}`, oldValue: undefined, newValue: { action: 'bunny_removal_retry' } }], () =>
+    callVideosInternal(c.env, `${BF}/removals/retry`, { method: 'POST', json: { videoId: body.videoId } }),
+  );
   return c.json({ success: true, result });
 });
 
