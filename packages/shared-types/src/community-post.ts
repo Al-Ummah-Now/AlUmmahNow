@@ -230,7 +230,10 @@ export interface UpdateCommunityPostRequest {
   link?: CreateCommunityPostRequest['link'];
   visibility?: PostVisibility;
   commentsEnabled?: boolean;
+  /** A scheduled post only: its new time (ISO, 5 minutes to a year ahead). */
   scheduledAt?: string;
+  /** A scheduled post only: publish it at once (Story 29.4). */
+  publishNow?: boolean;
   pinned?: boolean;
 }
 

@@ -1,4 +1,5 @@
 import { syncScholarRef } from './handlers/scholar-refs';
+import { notifySubscribersOfPost } from './handlers/post-notify';
 import { AlUmmahMessage, ProcessingResult, MessageType, QueueEnvironment } from './types';
 import { Logger } from '@al-ummah/logger';
 import { handleChannelSectionEvent } from './handlers/channel-section';
@@ -12,6 +13,7 @@ import { CounterBatch } from './lib/analytics-counters';
 import { notifyLiveStream, notifyVideoProcessing, ProcessingStatus, uploadResultActionUrl, uploadResultDedupeKey } from './lib/websocket-notify';
 import {
   eraseUserNotifications,
+  fanoutKey,
   fanoutNotificationPage,
   markPushed,
   unpushedNotification,
@@ -30,7 +32,7 @@ import { ARCHIVE_PRIVACY_VERSION, ARCHIVE_TITLES_VERSION, archiveSubjectKey } fr
 import type { NotificationCreatePayload, NotificationFanoutPayload, PushDispatchPayload, PushRetryDevice, SocialEventPayload } from '@al-ummah/shared-types';
 import { PUSH_RETRY_DELAYS_SECONDS } from '@al-ummah/shared-types';
 import { socialEventMessage } from './social/consumer';
-import { publishAdminLive } from '@al-ummah/shared-types';
+import { publishAdminLive, isNotificationFanoutKind } from '@al-ummah/shared-types';
 import { dispatchPush, enqueuePush } from './push/dispatch';
 import { resolvePushProviders, type PushProviders } from './push/provider';
 import { shortLinkIncrements, visitIncrements } from './lib/site-visits';
@@ -582,10 +584,10 @@ export class MessageProcessor {
     await env.MESSAGE_QUEUE.send(socialEventMessage(payload));
   }
 
-  /** Fan a new-video / live-started notification out to the channel's subscribers. */
+  /** Fan a new-video / live-started / new-post notification out to the channel's subscribers. */
   private async processNotificationFanout(message: AlUmmahMessage, env: QueueEnvironment): Promise<void> {
     const payload = message.payload as unknown as NotificationFanoutPayload;
-    if (!payload.channelId || !payload.entityId || (payload.kind !== 'new_video' && payload.kind !== 'live_started')) {
+    if (!payload.channelId || !payload.entityId || !isNotificationFanoutKind(payload.kind)) {
       throw new Error('Notification fan-out message missing required fields: kind, channelId, entityId');
     }
     if (!env.NOTIFICATIONS_DB) {
@@ -593,7 +595,7 @@ export class MessageProcessor {
       return;
     }
     const data = {
-      notificationKey: payload.kind === 'live_started' ? ('liveStarted' as const) : ('newVideo' as const),
+      notificationKey: fanoutKey(payload.kind),
       params: payload.params,
       actionUrl: payload.actionUrl,
     };
@@ -882,6 +884,12 @@ export class MessageProcessor {
         break;
       // CommunityPostLiked/Unliked are now handled by dedicated handlePostLikeEvent handler
       // PollVoted is now handled by dedicated handlePollVoteEvent handler
+    }
+
+    // Subscribers hear about a post that went live (handlers/post-notify.ts, Story 29.4): queues the
+    // paged fan-out; a failed read or send throws, so the queue retries (then DLQ + admin Errors)
+    if (message.type === MessageType.CommunityPostCreated && env) {
+      await notifySubscribersOfPost(env as never, channelId, postId, this.logger);
     }
 
     // The scholar post reference outbox (handlers/scholar-refs.ts): a retryable failure throws, so the

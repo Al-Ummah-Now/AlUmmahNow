@@ -12,8 +12,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { PostCard } from '@/components/Community/management/PostCard';
 import {
   listCommunityPosts,
-  deleteCommunityPost
+  deleteCommunityPost,
+  updateCommunityPost
 } from '@/lib/api/community-posts';
+import { editPostHref } from '@/components/Community/PostManageMenu';
+import { reportError } from '@/lib/errors/reporter';
 import { Plus, Search, Filter } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
@@ -33,7 +36,10 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
   const { t } = useLanguage();
 
   const [activeTab, setActiveTab] = useState<PostStatus>(PostStatus.PUBLISHED);
-  const [posts, setPosts] = useState<CommunityPost[]>([]);
+  // Every post of the channel (the owner's list includes scheduled ones); the tabs split it by status
+  const [allPosts, setAllPosts] = useState<CommunityPost[]>([]);
+  const posts = useMemo(() => allPosts.filter((p) => p.status === activeTab), [allPosts, activeTab]);
+  const [actionError, setActionError] = useState('');
   const [channelName, setChannelName] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -65,40 +71,56 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
     try {
       const response = await listCommunityPosts({
         channelId: id,
-        status: activeTab,
         page: 1,
         limit: 50
-      });
+      }, { channelId: id });
 
       if (response?.posts) {
-        setPosts(response.posts);
+        setAllPosts(response.posts);
       }
     } catch (error) {
-      logger.error('Failed to load posts', { error, channelId: id, status: activeTab });
+      logger.error('Failed to load posts', { error, channelId: id });
     } finally {
       setLoading(false);
     }
-  }, [activeTab, id]);
+  }, [id]);
 
   useEffect(() => {
     loadPosts();
   }, [loadPosts]);
 
-  // Posts are shown on the channel page's Community tab (there is no per-post page)
+  // A post's own page (/post/{id})
   const handleView = (post: CommunityPost) => {
-    logger.debug('Opening community post on channel page', { channelId: id, postId: post.id });
-    router.push(`/${locale}/channels/${id}?tab=community`);
+    router.push(`/${locale}/post/${encodeURIComponent(post.id)}`);
+  };
+
+  const handleEdit = (post: CommunityPost) => {
+    router.push(editPostHref(locale, post));
   };
 
   const handleDelete = async (postId: string) => {
+    setActionError('');
     const result = await deleteCommunityPost(id, postId, {
       channelId: id
     });
 
     if (result?.success) {
-      setPosts((prev) => prev.filter(p => p.id !== postId));
+      setAllPosts((prev) => prev.filter(p => p.id !== postId));
     } else {
-      logger.error('Failed to delete community post', { channelId: id, postId });
+      reportError(new Error('Delete post refused'), { shown: true, extra: { channelId: id, postId, action: 'delete_post' } });
+      setActionError(t.community.deleteFailed);
+    }
+  };
+
+  // A scheduled post goes live now (subscribers are notified by the processor)
+  const handlePublishNow = async (post: CommunityPost) => {
+    setActionError('');
+    const result = await updateCommunityPost(id, post.id, { publishNow: true }, { channelId: id });
+    if (result?.success && result.post) {
+      setAllPosts((prev) => prev.map((p) => (p.id === post.id ? { ...p, ...result.post } : p)));
+    } else {
+      reportError(new Error('Publish post now refused'), { shown: true, extra: { channelId: id, postId: post.id, action: 'publish_post_now' } });
+      setActionError(t.community.publishFailed);
     }
   };
 
@@ -112,9 +134,8 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
   });
 
   const tabCounts = {
-    [PostStatus.PUBLISHED]: posts.filter(p => p.status === PostStatus.PUBLISHED).length,
-    [PostStatus.SCHEDULED]: posts.filter(p => p.status === PostStatus.SCHEDULED).length,
-    [PostStatus.DRAFT]: posts.filter(p => p.status === PostStatus.DRAFT).length
+    [PostStatus.PUBLISHED]: allPosts.filter(p => p.status === PostStatus.PUBLISHED).length,
+    [PostStatus.SCHEDULED]: allPosts.filter(p => p.status === PostStatus.SCHEDULED).length
   };
 
   return (
@@ -207,7 +228,7 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
         md:px-6 md:py-8
       ">
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as PostStatus)}>
-          <TabsList className="grid w-full sm:w-auto grid-cols-3 mb-6">
+          <TabsList className="grid w-full sm:w-auto grid-cols-2 mb-6">
             <TabsTrigger value={PostStatus.PUBLISHED}>
               {t.community.published}
               {tabCounts[PostStatus.PUBLISHED] > 0 && (
@@ -224,16 +245,11 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
                 </span>
               )}
             </TabsTrigger>
-            <TabsTrigger value={PostStatus.DRAFT}>
-              {t.community.drafts}
-              {tabCounts[PostStatus.DRAFT] > 0 && (
-                <span className="ml-2 rtl:mr-2 rtl:ml-0 text-xs bg-primary/20 px-2 py-0.5 rounded-full">
-                  {tabCounts[PostStatus.DRAFT]}
-                </span>
-              )}
-            </TabsTrigger>
           </TabsList>
 
+          {actionError && (
+            <p role="alert" className="mb-4 text-sm text-destructive" data-testid="community-action-error">{actionError}</p>
+          )}
           <TabsContent value={activeTab} className="mt-0">
             {loading ? (
               <div className="space-y-4">
@@ -271,7 +287,9 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
                     post={post}
                     locale={locale}
                     onView={handleView}
+                    onEdit={handleEdit}
                     onDelete={handleDelete}
+                    onPublishNow={handlePublishNow}
                   />
                 ))}
               </div>

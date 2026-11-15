@@ -32,6 +32,8 @@ export default function CommunityPosts({ channelId, isRTL = false, locale = 'en'
   const channelName = account?.channel?.nameLocalized?.[lang]?.trim() || activeChannel?.name?.trim();
   const viewerUserId = user?.id;
   const viewerChannelId = activeChannel?.channelId;
+  // The owner acting as the post's channel may edit and delete it (channel members cannot, api-videos)
+  const canManage = (post: CommunityPost) => Boolean(viewerUserId && activeChannel && activeChannel.channelId === post.channelId && activeChannel.userId === viewerUserId);
 
   const [posts, setPosts] = useState<CommunityPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -184,6 +186,8 @@ export default function CommunityPosts({ channelId, isRTL = false, locale = 'en'
           channelId={viewerChannelId}
           userId={viewerUserId}
           openPostLabel={t.community.openPost}
+          canManage={canManage(post)}
+          onDeleted={(id) => setPosts((prev) => prev.filter((p) => p.id !== id))}
           // With a channel active, comments are that channel's; without one, the member's own (#1151)
           userAvatar={activeChannel ? activeChannel.avatarUrl : profile?.avatarUrl}
           userDisplayName={activeChannel ? channelName || undefined : userDisplayName(profile, lang, user?.email) || undefined}

@@ -78,6 +78,7 @@ export type RealtimeNotificationKey =
   | 'uploadFailed'
   | 'newVideo'
   | 'liveStarted'
+  | 'newPost'
   | 'commentReply'
   | 'accountWarning'
   | 'reviewApproved'

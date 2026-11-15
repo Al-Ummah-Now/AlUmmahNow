@@ -32,14 +32,17 @@ import {
   ThumbsUp,
   MessageSquare
 } from 'lucide-react';
+import { formatScheduledAt } from './PostSchedulePicker';
 
 interface PostCardProps {
   post: CommunityPost;
   locale: string;
   onView: (post: CommunityPost) => void;
-  /** Omit to hide the Edit action (there is no post edit page yet) */
+  /** Omit to hide the Edit action */
   onEdit?: (post: CommunityPost) => void;
   onDelete: (postId: string) => Promise<void>;
+  /** A scheduled post: publish it now (Story 29.4) */
+  onPublishNow?: (post: CommunityPost) => Promise<void>;
 }
 
 const POST_TYPE_LABELS = {
@@ -61,11 +64,22 @@ const STATUS_LABELS = {
   [PostStatus.DELETED]: { en: 'Deleted', ar: 'محذوف' }
 };
 
-export function PostCard({ post, locale, onView, onEdit, onDelete }: PostCardProps) {
+export function PostCard({ post, locale, onView, onEdit, onDelete, onPublishNow }: PostCardProps) {
   const isRTL = locale === 'ar';
   const { t } = useLanguage();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const isScheduled = post.status === PostStatus.SCHEDULED && !!post.scheduledAt;
+  const publishNow = async () => {
+    if (!onPublishNow) return;
+    setPublishing(true);
+    try {
+      await onPublishNow(post);
+    } finally {
+      setPublishing(false);
+    }
+  };
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -122,9 +136,9 @@ export function PostCard({ post, locale, onView, onEdit, onDelete }: PostCardPro
               </p>
 
               <div className="flex items-center gap-3 md:gap-4 text-xs md:text-sm text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <Calendar className="w-3 h-3 md:w-4 md:h-4" />
-                  {timeAgo}
+                <span className="flex items-center gap-1" data-testid={isScheduled ? 'managed-post-scheduled-at' : undefined}>
+                  <Calendar className="w-3 h-3 md:w-4 md:h-4" aria-hidden="true" />
+                  {isScheduled ? t.community.scheduledFor.replace('{date}', formatScheduledAt(post.scheduledAt!, locale)) : timeAgo}
                 </span>
                 <span className="flex items-center gap-1">
                   <Eye className="w-3 h-3 md:w-4 md:h-4" />
@@ -141,6 +155,12 @@ export function PostCard({ post, locale, onView, onEdit, onDelete }: PostCardPro
               </div>
             </div>
 
+            <div className="flex shrink-0 items-center gap-2">
+            {isScheduled && onPublishNow && (
+              <Button variant="outline" size="sm" onClick={publishNow} disabled={publishing} data-testid="managed-post-publish-now">
+                {t.community.publishNow}
+              </Button>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -155,13 +175,13 @@ export function PostCard({ post, locale, onView, onEdit, onDelete }: PostCardPro
               </DropdownMenuTrigger>
               <DropdownMenuContent align={isRTL ? 'start' : 'end'}>
                 <DropdownMenuItem onClick={() => onView(post)}>
-                  <Eye className="w-4 h-4 mr-2 rtl:ml-2 rtl:mr-0" />
-                  {isRTL ? 'عرض' : 'View'}
+                  <Eye className="w-4 h-4 me-2" aria-hidden="true" />
+                  {t.community.viewPost}
                 </DropdownMenuItem>
                 {onEdit && (
                   <DropdownMenuItem onClick={() => onEdit(post)}>
-                    <Edit className="w-4 h-4 mr-2 rtl:ml-2 rtl:mr-0" />
-                    {isRTL ? 'تعديل' : 'Edit'}
+                    <Edit className="w-4 h-4 me-2" aria-hidden="true" />
+                    {t.community.editPost}
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem
@@ -173,6 +193,7 @@ export function PostCard({ post, locale, onView, onEdit, onDelete }: PostCardPro
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            </div>
           </div>
         </div>
       </Card>

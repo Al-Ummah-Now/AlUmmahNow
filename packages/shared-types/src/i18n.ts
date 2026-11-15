@@ -1605,6 +1605,47 @@ export interface AppTranslations {
     previousCard: string;
     nextCard: string;
     opensOutside: string;
+    // Story 29.4: post edit / delete and scheduling
+    /** The post card menu (the channel owner): its button label */
+    postActions: string;
+    viewPost: string;
+    editPost: string;
+    /** The edit page heading */
+    editPostTitle: string;
+    deletePost: string;
+    deletePostTitle: string;
+    deletePostBody: string;
+    deleting: string;
+    deleteFailed: string;
+    cancel: string;
+    saveChanges: string;
+    saving: string;
+    saved: string;
+    saveFailed: string;
+    backToPosts: string;
+    postNotFound: string;
+    pollLocked: string;
+    mediaLocked: string;
+    /** The composer: publish now or at a set time */
+    publishTiming: string;
+    publishNowOption: string;
+    publishNowHelp: string;
+    scheduleOption: string;
+    scheduleHelp: string;
+    scheduleDateTime: string;
+    scheduleTimezone: string;
+    scheduleRequired: string;
+    scheduleTooSoon: string;
+    scheduleTooFar: string;
+    scheduleNotAllowed: string;
+    /** The composer button when a time is set */
+    schedule: string;
+    /** A scheduled post (its owner sees it before it goes live), with the date in the viewer's language */
+    scheduledFor: string;
+    /** A scheduled post: publish it at once */
+    publishNow: string;
+    publishFailed: string;
+    changeTime: string;
   };
 
   /**
@@ -1662,6 +1703,8 @@ export interface AppTranslations {
       newVideoMessage: string;
       liveStartedTitle: string;
       liveStartedMessage: string;
+      newPostTitle: string;
+      newPostMessage: string;
       commentReplyTitle: string;
       commentReplyMessage: string;
     };

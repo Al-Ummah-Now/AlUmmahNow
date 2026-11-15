@@ -14,7 +14,11 @@ import { withPostCounts } from '../../lib/post-counters';
 import { logger } from '../../lib/logger';
 import Queue, { MessageType } from '../../lib/queue';
 import { scanInBackground, communityPostScanText } from '../../lib/moderation-scan';
-import { markScheduled } from '../../lib/scheduled-posts';
+import { goLive, markScheduled } from '../../lib/scheduled-posts';
+import { postScheduleProblem } from '../../lib/post-schedule';
+import { checkPostScheduleAllowed } from '../../lib/studioLimits';
+import sanitizeHtml from 'sanitize-html';
+import { sanitizeOptions } from './create-post';
 import { can, parsePostFields, type PostV2Fields } from '@al-ummah/shared-types';
 import { roleOnChannel } from '../../lib/channelAccess';
 import { platformMediaHost, postFieldsMessage } from '../../lib/post-v2';
@@ -33,7 +37,10 @@ const updatePostSchema = z.object({
   content: z.string().max(5000).optional(),
   visibility: z.nativeEnum(PostVisibility).optional(),
   commentsEnabled: z.boolean().optional(),
+  /** A scheduled post only: its new time, 5 minutes to a year ahead */
   scheduledAt: z.string().datetime().optional(),
+  /** A scheduled post only: publish it now (Story 29.4) */
+  publishNow: z.literal(true).optional(),
   pinned: z.boolean().optional(),
   locale: z.enum(['en', 'ar']).optional(),
   translationKey: z.string().max(64).optional(),
@@ -94,12 +101,21 @@ export class UpdateCommunityPost extends AuthenticatedRoute {
         },
       },
       400: {
-        description: 'Invalid request',
+        description: 'Invalid request (code not_scheduled: scheduledAt or publishNow on a post that is not scheduled; schedule_too_soon / schedule_too_far)',
         content: {
           'application/json': {
             schema: z.object({
               error: z.string(),
+              code: z.string().optional(),
             }),
+          },
+        },
+      },
+      402: {
+        description: 'The plan does not include scheduled posts (posts.scheduled)',
+        content: {
+          'application/json': {
+            schema: z.object({ success: z.literal(false), error: z.literal('upgrade_required'), entitlement: z.string(), message: z.string() }),
           },
         },
       },
@@ -167,6 +183,18 @@ export class UpdateCommunityPost extends AuthenticatedRoute {
         return c.json({ error: validation.error }, 400);
       }
 
+      // Scheduling (Story 29.4): a scheduled post can move to another time or go live now; a
+      // published post cannot be scheduled again
+      if (body.publishNow && body.scheduledAt !== undefined) {
+        return c.json({ error: 'Send either scheduledAt or publishNow', code: 'invalid_schedule' }, 400);
+      }
+      if (body.scheduledAt !== undefined) {
+        const problem = postScheduleProblem(body.scheduledAt);
+        if (problem) return c.json({ error: problem.message, code: problem.code, field: 'scheduledAt' }, 400);
+        const refusal = await checkPostScheduleAllowed(c.env, { userId, channelId: postChannelId });
+        if (refusal) return c.json(refusal, 402);
+      }
+
       // Apply the allowed fields to the fresh post with a conditional write
       // (SCALABILITY-AUDIT AV-9): a concurrent comment, like or poll count is
       // kept, and a post deleted meanwhile is not brought back
@@ -189,10 +217,12 @@ export class UpdateCommunityPost extends AuthenticatedRoute {
         v2 = parsed.value;
       }
 
-      const { data: saved, rejected } = await new R2Repository<CommunityPost>(c.env.community_posts).updateObjectOrReject<'deleted'>(postKey, (fresh) => {
+      const { data: saved, rejected } = await new R2Repository<CommunityPost>(c.env.community_posts).updateObjectOrReject<'deleted' | 'not_scheduled'>(postKey, (fresh) => {
         if (fresh.status === PostStatus.DELETED) return { reject: 'deleted' };
+        if ((body.scheduledAt !== undefined || body.publishNow) && fresh.status !== PostStatus.SCHEDULED) return { reject: 'not_scheduled' };
         if (body.content !== undefined) {
-          fresh.content = body.content;
+          // The same few tags as a new post (create-post.ts); everything else is dropped
+          fresh.content = body.content ? sanitizeHtml(body.content, sanitizeOptions) : '';
         }
         if (body.visibility !== undefined) {
           fresh.visibility = body.visibility;
@@ -215,10 +245,20 @@ export class UpdateCommunityPost extends AuthenticatedRoute {
         fresh.updatedAt = new Date().toISOString();
         return true;
       });
+      if (rejected === 'not_scheduled') {
+        return c.json({ error: 'Only a scheduled post can be rescheduled or published now', code: 'not_scheduled' }, 400);
+      }
       if (!saved || rejected) {
         return c.json({ error: 'Post not found' }, 404);
       }
       Object.assign(post, saved);
+      // Publish now: the same step as the scheduled-posts cron (index, CommunityPostCreated → subscribers
+      // notified); its marker is dropped when it comes due
+      if (body.publishNow) {
+        const nowIso = new Date().toISOString();
+        const live = await goLive(c.env as never, postChannelId, postId, null, nowIso, nowIso, { userId, channelId: userChannelId });
+        if (live) Object.assign(post, live);
+      }
       // Rescheduled: a marker for the new time (the old one is dropped when it comes due; #1218)
       if (body.scheduledAt !== undefined && saved.status === PostStatus.SCHEDULED && saved.scheduledAt) {
         await markScheduled(c.env.community_posts, postChannelId, postId, saved.scheduledAt);

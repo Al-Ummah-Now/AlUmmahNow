@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from '@/components/common/AppLink';
-import { Bell, MessageCircle, Radio, Trash2, UserPlus, Video, AlertCircle, Check, Mail, ShieldAlert, Users } from 'lucide-react';
+import { Bell, MessageCircle, MessageSquareText, Radio, Trash2, UserPlus, Video, AlertCircle, Check, Mail, ShieldAlert, Users } from 'lucide-react';
 import type { NotificationItem } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { localizeActionUrl, relativeTime, renderNotification } from '@/lib/notifications/render';
@@ -30,6 +30,8 @@ function Icon({ item }: { item: NotificationItem }) {
       return <MessageCircle className={cls} aria-hidden="true" />;
     case 'newSubscriber':
       return <UserPlus className={cls} aria-hidden="true" />;
+    case 'newPost':
+      return <MessageSquareText className={cls} aria-hidden="true" />;
     case 'uploadFailed':
       return <AlertCircle className={cls} aria-hidden="true" />;
     case 'accountWarning':

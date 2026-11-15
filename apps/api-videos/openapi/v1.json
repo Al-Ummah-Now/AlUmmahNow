@@ -13999,13 +13999,16 @@
             }
           },
           "400": {
-            "description": "Invalid request",
+            "description": "Invalid request (a scheduledAt sooner than 5 minutes or more than a year ahead: code schedule_too_soon / schedule_too_far)",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
                     "error": {
+                      "type": "string"
+                    },
+                    "code": {
                       "type": "string"
                     }
                   },
@@ -14032,6 +14035,42 @@
                       "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
                     }
                   }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "The plan does not include scheduled posts (posts.scheduled)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "upgrade_required"
+                      ]
+                    },
+                    "entitlement": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error",
+                    "entitlement",
+                    "message"
+                  ]
                 }
               }
             }
@@ -14160,6 +14199,12 @@
                   "scheduledAt": {
                     "type": "string",
                     "format": "date-time"
+                  },
+                  "publishNow": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
                   },
                   "pinned": {
                     "type": "boolean"
@@ -14403,13 +14448,16 @@
             }
           },
           "400": {
-            "description": "Invalid request",
+            "description": "Invalid request (code not_scheduled: scheduledAt or publishNow on a post that is not scheduled; schedule_too_soon / schedule_too_far)",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
                     "error": {
+                      "type": "string"
+                    },
+                    "code": {
                       "type": "string"
                     }
                   },
@@ -14436,6 +14484,42 @@
                       "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
                     }
                   }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "The plan does not include scheduled posts (posts.scheduled)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "upgrade_required"
+                      ]
+                    },
+                    "entitlement": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error",
+                    "entitlement",
+                    "message"
+                  ]
                 }
               }
             }
@@ -17552,6 +17636,7 @@
                       "enum": [
                         "new_videos",
                         "live",
+                        "posts",
                         "replies",
                         "comments",
                         "subscribers",
@@ -17559,7 +17644,7 @@
                         "account"
                       ]
                     },
-                    "maxItems": 7
+                    "maxItems": 8
                   }
                 },
                 "required": [
@@ -21885,6 +21970,9 @@
                         "type": "boolean"
                       },
                       "live": {
+                        "type": "boolean"
+                      },
+                      "posts": {
                         "type": "boolean"
                       },
                       "replies": {
