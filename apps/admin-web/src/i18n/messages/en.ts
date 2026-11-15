@@ -74,7 +74,6 @@ const en = {
     groupSite: 'Site',
     breadcrumbs: 'Breadcrumb',
     quick: 'Quick navigation',
-    open: 'Open menu',
     close: 'Close menu',
     collapse: 'Collapse sidebar',
     expand: 'Expand sidebar',

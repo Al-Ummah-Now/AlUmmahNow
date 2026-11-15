@@ -5,9 +5,9 @@
  * admin's header can never drift from the one every other app renders (the videos site has the
  * same pieces in apps/web Header/HeaderParts.tsx). App hooks (test ids, handlers) are the only additions.
  */
-import type { MouseEventHandler } from 'react';
-import { HEADER_LABELS, samePath } from '../../../../../packages/fanous-tokens/nav/header.js';
-import { modeIconSvg, modeToggleLabel } from '../../../../../packages/fanous-tokens/nav/mode-toggle.js';
+import type { MouseEventHandler, Ref } from 'react';
+import { HEADER_LABELS, MENU_ICON_BODY, samePath } from '../../../../../packages/fanous-tokens/nav/header.js';
+import { MODE_ICON_ATTRS, modeIconSvg, modeToggleLabel } from '../../../../../packages/fanous-tokens/nav/mode-toggle.js';
 
 export type HeaderLang = 'en' | 'ar';
 const labels = (lang: string) => HEADER_LABELS[lang === 'ar' ? 'ar' : 'en'];
@@ -92,6 +92,49 @@ export function HeaderLangButton({ lang, href, onClick }: { lang: string; href: 
       <span className="aun-visually-hidden">{l.switchLang}: </span>
       <span lang={to}>{l.otherLang}</span>
     </a>
+  );
+}
+
+/** lucide `menu`, exactly as menuButtonHtml draws it. */
+const MENU_ICON_SVG = `<svg ${MODE_ICON_ATTRS} class="lucide lucide-menu" aria-hidden="true" focusable="false">${MENU_ICON_BODY}</svg>`;
+
+/**
+ * The drawer's menu button, first in the bar: menuButtonHtml's 40px `.aun-icon-btn.aun-menu-btn` with
+ * lucide `menu`, named "Menu" / "القائمة", the same button as the videos site's. A drawer is not a
+ * popover, so it has no popovertarget and no aun-menu-collapse; globals.css hides it from 768px,
+ * where the sidebar is always there.
+ */
+export function HeaderMenuButton({
+  lang,
+  className,
+  ref,
+  onClick,
+  expanded,
+  controls,
+  testId,
+}: {
+  lang: string;
+  className?: string;
+  ref?: Ref<HTMLButtonElement>;
+  onClick?: MouseEventHandler<HTMLButtonElement>;
+  expanded?: boolean;
+  controls?: string;
+  testId?: string;
+}) {
+  const name = labels(lang).menu;
+  return (
+    <button
+      ref={ref}
+      type="button"
+      className={className ? `aun-icon-btn aun-menu-btn ${className}` : 'aun-icon-btn aun-menu-btn'}
+      aria-label={name}
+      title={name}
+      aria-expanded={expanded}
+      aria-controls={controls}
+      data-testid={testId}
+      onClick={onClick}
+      dangerouslySetInnerHTML={{ __html: MENU_ICON_SVG }}
+    />
   );
 }
 

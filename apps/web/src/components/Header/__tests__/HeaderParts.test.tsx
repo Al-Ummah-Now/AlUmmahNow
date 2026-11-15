@@ -9,10 +9,11 @@ import {
   brandHtml,
   envBadgeHtml,
   langButtonHtml,
+  menuButtonHtml,
   modeButtonHtml,
   signInHtml,
 } from '../../../../../../packages/fanous-tokens/nav/header.js';
-import { HeaderAppLinks, HeaderBrand, HeaderEnvBadge, HeaderLangButton, HeaderModeButton, HeaderSignIn, langSwitchHref } from '../HeaderParts';
+import { HeaderAppLinks, HeaderBrand, HeaderEnvBadge, HeaderLangButton, HeaderMenuButton, HeaderModeButton, HeaderSignIn, langSwitchHref } from '../HeaderParts';
 
 /** React's spelling → the builders': void tags, apostrophes; app-only attributes dropped. */
 const norm = (html: string) =>
@@ -46,6 +47,14 @@ describe.each(['en', 'ar'] as const)('header pieces equal the shared builders (%
   it('language button', () => {
     const href = lang === 'ar' ? '/en/search?q=a&type=video' : '/ar/search?q=a&type=video';
     expect(r(<HeaderLangButton lang={lang} href={href} />)).toBe(norm(langButtonHtml({ lang, href })));
+  });
+
+  it('drawer toggle: menuButtonHtml\'s button, icon and name (a drawer, not a popover: no popovertarget, no aun-menu-collapse)', () => {
+    const want = norm(menuButtonHtml({ lang, panel: 'p' })).replace(' aun-menu-collapse', '').replace(' popovertarget="p"', '');
+    expect(r(<HeaderMenuButton lang={lang} />)).toBe(want);
+    // the videos drawer adds its own class and names the button for closing while the drawer is open
+    expect(r(<HeaderMenuButton lang={lang} className="ah-menu" label="Close menu" aria-expanded />))
+      .toBe(want.replace('aun-menu-btn"', 'aun-menu-btn ah-menu"').replace(/aria-label="[^"]*" title="[^"]*"/, 'aria-label="Close menu" title="Close menu" aria-expanded="true"'));
   });
 
   it('light / dark button', () => {

@@ -21,7 +21,7 @@ import {
 } from './nav-model';
 import { REVIEW_ONLY_HOME } from '@/lib/roles';
 import { appLinks, appUrlsFromIssuer } from '@al-ummah/shared-types';
-import { HeaderAppLinks, HeaderBrand, HeaderEnvBadge } from './HeaderParts';
+import { HeaderAppLinks, HeaderBrand, HeaderEnvBadge, HeaderMenuButton } from './HeaderParts';
 
 interface AdminShellProps {
   userEmail?: string;
@@ -144,13 +144,77 @@ export function AdminShell({ userEmail, userName, userRoles, authIssuer, environ
   };
 
   return (
-    <div className={`min-h-screen md:grid ${rail ? 'md:grid-cols-[76px_minmax(0,1fr)]' : 'md:grid-cols-[264px_minmax(0,1fr)]'}`} data-rail={rail}>
+    <div className="min-h-screen" data-rail={rail}>
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:start-2 focus:z-[70] rounded bg-accent px-4 py-2 text-on-accent"
       >
         {t('common.skipToContent')}
       </a>
+
+      {/* The shared header (docs/design/NAV.md "Header"; pieces in shell/HeaderParts.tsx, checked against
+          packages/fanous-tokens/nav/header.js), full width over the sidebar and the page as on videos: drawer
+          toggle, brand, env badge, breadcrumbs and the ⌘K search, then Website / Videos, language, light/dark
+          and the account; mirrored in RTL */}
+      <header className="shell-header aun-header text-nav-text">
+        <HeaderMenuButton
+          ref={menuButtonRef}
+          lang={locale}
+          onClick={() => setDrawerOpen(true)}
+          expanded={drawerOpen}
+          controls="admin-nav"
+          testId="nav-open"
+          className="admin-menu-btn"
+        />
+        <HeaderBrand lang={locale} href={home} app={t('common.admin')} link={Link} />
+        <HeaderEnvBadge environment={environment} lang={locale} />
+        <div className="aun-header-primary">
+          {crumbs.length > 0 && (
+            <nav aria-label={t('nav.breadcrumbs')} className="min-w-0 flex-[0_1_auto] max-lg:hidden">
+              <ol className="flex min-w-0 items-center gap-1.5 text-sm">
+                {crumbs.map((crumb, i) => {
+                  const last = i === crumbs.length - 1;
+                  return (
+                    <li key={crumb.label} className={`flex min-w-0 items-center gap-1.5 ${last ? '' : 'max-md:hidden'}`}>
+                      {crumb.href ? (
+                        <Link href={crumb.href} className={`truncate rounded text-nav-search-placeholder hover:text-nav-text hover:underline ${focusRing}`}>
+                          {t(crumb.label)}
+                        </Link>
+                      ) : (
+                        <span aria-current={last ? 'page' : undefined} className={`truncate ${last ? 'font-semibold text-nav-text' : 'text-nav-search-placeholder'}`}>
+                          {t(crumb.label)}
+                        </span>
+                      )}
+                      {!last && <Icon name="chevron" className="size-3.5 text-nav-search-placeholder rtl:-scale-x-100" />}
+                    </li>
+                  );
+                })}
+              </ol>
+            </nav>
+          )}
+          <button
+            type="button"
+            onClick={() => setPaletteOpen(true)}
+            data-testid="command-open"
+            aria-keyshortcuts="Meta+K Control+K"
+            className={`ms-auto flex h-10 shrink-0 items-center gap-2.5 rounded-full border border-nav-search-border px-3 text-sm text-nav-search-placeholder hover:bg-nav-hover hover:text-nav-search-text max-xl:w-10 max-xl:justify-center max-xl:px-0 xl:min-w-48 xl:max-w-[26rem] xl:flex-[1_1_0%] xl:bg-nav-search-bg ${focusRing}`}
+          >
+            <Icon name="search" className="size-[18px]" />
+            <span className="flex-1 truncate text-start max-xl:sr-only">{t('palette.placeholder')}</span>
+            <kbd aria-hidden="true" className="rounded border [font-family:inherit] border-nav-search-border px-1.5 text-[11px] max-xl:hidden" dir="ltr">⌘K</kbd>
+          </button>
+        </div>
+        <div className="aun-header-tools">
+          <HeaderAppLinks lang={locale} links={sites} />
+          <PreferencesControls />
+          {/* The account button and menu (docs/design/NAV.md): avatar + name; sign-out lives in the menu */}
+          {userEmail && authIssuer && (
+            <AccountMenu issuer={authIssuer} currentEmail={userEmail} currentName={userName} roles={userRoles} />
+          )}
+        </div>
+      </header>
+
+      <div className={`md:grid ${rail ? 'md:grid-cols-[76px_minmax(0,1fr)]' : 'md:grid-cols-[264px_minmax(0,1fr)]'}`}>
 
       {/* Phone drawer scrim */}
       {drawerOpen && (
@@ -168,7 +232,7 @@ export function AdminShell({ userEmail, userName, userRoles, authIssuer, environ
         id="admin-nav"
         aria-label={t('nav.label')}
         data-testid="admin-sidebar"
-        className={`shell-rail fixed inset-y-0 start-0 z-50 flex w-[300px] max-w-[86vw] flex-col border-e border-drawer-divider transition-transform duration-200 md:sticky md:top-0 md:z-auto md:h-screen md:w-auto md:max-w-none md:translate-x-0 ${
+        className={`shell-rail fixed inset-y-0 start-0 z-50 flex w-[300px] max-w-[86vw] flex-col border-e border-drawer-divider transition-transform duration-200 md:sticky md:top-16 md:z-auto md:h-[calc(100dvh-4rem)] md:w-auto md:max-w-none md:translate-x-0 ${
           drawerOpen ? 'translate-x-0' : 'max-md:invisible max-md:-translate-x-full max-md:rtl:translate-x-full'
         }`}
       >
@@ -212,73 +276,11 @@ export function AdminShell({ userEmail, userName, userRoles, authIssuer, environ
       </nav>
 
       <div className="flex min-w-0 flex-col">
-        {/* The shared header (docs/design/NAV.md "Header"; pieces in shell/HeaderParts.tsx, checked against
-            packages/fanous-tokens/nav/header.js): drawer toggle, brand, env badge, breadcrumbs and the ⌘K search,
-            then Website / Videos, language, light/dark and the account; mirrored in RTL */}
-        <header className="shell-header aun-header text-nav-text">
-          <button
-            ref={menuButtonRef}
-            type="button"
-            onClick={() => setDrawerOpen(true)}
-            aria-expanded={drawerOpen}
-            aria-controls="admin-nav"
-            aria-label={t('nav.open')}
-            data-testid="nav-open"
-            className="aun-icon-btn admin-menu-btn"
-          >
-            <Icon name="menu" />
-          </button>
-          <HeaderBrand lang={locale} href={home} app={t('common.admin')} link={Link} />
-          <HeaderEnvBadge environment={environment} lang={locale} />
-          <div className="aun-header-primary">
-            {crumbs.length > 0 && (
-              <nav aria-label={t('nav.breadcrumbs')} className="min-w-0 flex-[0_1_auto] max-lg:hidden">
-                <ol className="flex min-w-0 items-center gap-1.5 text-sm">
-                  {crumbs.map((crumb, i) => {
-                    const last = i === crumbs.length - 1;
-                    return (
-                      <li key={crumb.label} className={`flex min-w-0 items-center gap-1.5 ${last ? '' : 'max-md:hidden'}`}>
-                        {crumb.href ? (
-                          <Link href={crumb.href} className={`truncate rounded text-nav-search-placeholder hover:text-nav-text hover:underline ${focusRing}`}>
-                            {t(crumb.label)}
-                          </Link>
-                        ) : (
-                          <span aria-current={last ? 'page' : undefined} className={`truncate ${last ? 'font-semibold text-nav-text' : 'text-nav-search-placeholder'}`}>
-                            {t(crumb.label)}
-                          </span>
-                        )}
-                        {!last && <Icon name="chevron" className="size-3.5 text-nav-search-placeholder rtl:-scale-x-100" />}
-                      </li>
-                    );
-                  })}
-                </ol>
-              </nav>
-            )}
-            <button
-              type="button"
-              onClick={() => setPaletteOpen(true)}
-              data-testid="command-open"
-              aria-keyshortcuts="Meta+K Control+K"
-              className={`ms-auto flex h-10 shrink-0 items-center gap-2.5 rounded-full border border-nav-search-border px-3 text-sm text-nav-search-placeholder hover:bg-nav-hover hover:text-nav-search-text max-xl:w-10 max-xl:justify-center max-xl:px-0 xl:min-w-48 xl:max-w-[26rem] xl:flex-[1_1_0%] xl:bg-nav-search-bg ${focusRing}`}
-            >
-              <Icon name="search" className="size-[18px]" />
-              <span className="flex-1 truncate text-start max-xl:sr-only">{t('palette.placeholder')}</span>
-              <kbd aria-hidden="true" className="rounded border border-nav-search-border px-1.5 text-[11px] max-xl:hidden" dir="ltr">⌘K</kbd>
-            </button>
-          </div>
-          <div className="aun-header-tools">
-            <HeaderAppLinks lang={locale} links={sites} />
-            <PreferencesControls />
-            {/* The account button and menu (docs/design/NAV.md): avatar + name; sign-out lives in the menu */}
-            {userEmail && authIssuer && (
-              <AccountMenu issuer={authIssuer} currentEmail={userEmail} currentName={userName} roles={userRoles} />
-            )}
-          </div>
-        </header>
 
         <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-7xl px-4 pb-24 pt-6 focus:outline-none sm:px-6 md:pb-10 lg:px-8">
           {children}
         </main>
+      </div>
       </div>
 
       <nav
