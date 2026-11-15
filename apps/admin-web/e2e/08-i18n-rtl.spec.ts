@@ -1,6 +1,8 @@
 import { test, expect } from './support/fixtures';
 import { accountControl, chooseLanguage, expectDirection, horizontalOverflow, openMainNav, setPreferences } from './support/ui';
 import { storageStatePath } from './support/env';
+import AxeBuilder from '@axe-core/playwright';
+import type { Page } from '@playwright/test';
 
 const AR_PAGES = [
   { path: '/dashboard', heading: 'لوحة تحكم الإدارة' },
@@ -30,7 +32,7 @@ test.describe('language and direction', () => {
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Admin Dashboard');
   });
 
-  test('I18N-07 the language button keeps the page and its query', async ({ page }) => {
+  test('I18N-08 the language button keeps the page and its query', async ({ page }) => {
     await page.goto('/dashboard?e2e=lang');
     const toggle = page.getByTestId('language-toggle');
     await toggle.or(page.getByTestId('language-select')).first().waitFor({ state: 'attached' });
@@ -149,4 +151,43 @@ test.describe('access denied in Arabic', () => {
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('تم رفض الوصول');
     await expect(page.getByRole('button', { name: 'تسجيل الخروج' })).toBeVisible();
   });
+});
+
+/**
+ * The header passes axe (WCAG 2.2 AA) in both languages, in the admin shell and the signed-out
+ * shell, with the experimental label-content-name-mismatch rule switched on (WCAG 2.5.3: the
+ * language button's visible label is inside its name; docs/design/NAV.md "Header"). .options()
+ * replaces the whole options object, so it comes before .withTags() or the tag filter is dropped.
+ */
+async function expectHeaderAxeClean(page: Page) {
+  await expect(page.locator('header.aun-header .aun-brand')).toBeVisible();
+  const { violations } = await new AxeBuilder({ page })
+    .options({ rules: { 'label-content-name-mismatch': { enabled: true } } })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .include('header.aun-header')
+    .analyze();
+  expect(violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.html).join(' | ')}`)).toEqual([]);
+}
+
+test.describe('header accessibility', () => {
+  for (const locale of ['en', 'ar'] as const) {
+    test(`I18N-09 axe finds no violations in the admin header (${locale})`, async ({ page }) => {
+      await setPreferences(page, { locale });
+      await page.goto('/dashboard');
+      await expectDirection(page, locale);
+      await expectHeaderAxeClean(page);
+    });
+  }
+});
+
+test.describe('header accessibility, signed out', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+  for (const locale of ['en', 'ar'] as const) {
+    test(`I18N-10 axe finds no violations in the sign-in page header (${locale})`, async ({ page }) => {
+      await setPreferences(page, { locale });
+      await page.goto('/login');
+      await expectDirection(page, locale);
+      await expectHeaderAxeClean(page);
+    });
+  }
 });
