@@ -136,7 +136,8 @@ describe('a channel with more playlists than one page', () => {
     fireEvent.click(option('Series 150'));
     await act(async () => { fireEvent.click(screen.getByTestId('add-to-playlist-submit')); });
     expect(addVideosToPlaylist).toHaveBeenCalledWith('Series-150', ['a', 'b'], { channelId: 'ch' });
-  });
+    // 160 options over three pages: 0.4 s alone, past Jest's 5 s default on a loaded CI runner
+  }, 30_000);
 
   it('searching asks the server, so playlist #150 is found before its page is loaded', async () => {
     (listPlaylists as jest.Mock).mockImplementation(pagedList(manyPlaylists('Series', 'ch')));
