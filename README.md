@@ -162,6 +162,8 @@ The source of truth is [`scripts/release/secrets-manifest.ts`](scripts/release/s
 
 Stage shares the QA Bunny library and its keys; only `INTERNAL_API_KEY` has its own stage secret.
 
+**Generated secrets** (`GENERATED_SECRETS` in the manifest) are values we make ourselves, not owner credentials: the Web Push VAPID pair `vapid-public-key` / `vapid-private-key` (`-qa`, `-stage`). Run Actions → **Provision generated secrets** on `main` (env `all`, optional dry run): it generates each absent pair in the runner and creates it in the Secrets Store (scope workers), skips existing ones (never overwrites: browser subscriptions are bound to the key) and fails on half a pair. Its summary lists names and created/skipped only.
+
 **Build secrets** (GitHub Actions, read by the OpenNext build of web and admin-web; `BUILD_SECRETS` in the manifest):
 
 | Secret | Builds | Purpose |
