@@ -471,7 +471,7 @@ export async function collectUserData(
 				if (!sdb) return;
 				ctx.budget.spend();
 				const { results } = await sdb
-					.prepare('SELECT id, channel_id, role, invitee_user_id, invitee_email, invited_by, status, created_at, expires_at, responded_at FROM channel_invites WHERE invitee_user_id = ? OR invited_by = ? ORDER BY created_at')
+					.prepare('SELECT id, channel_id, role, invitee_user_id, invitee_email, by_email, invited_by, status, created_at, expires_at, responded_at FROM channel_invites WHERE invitee_user_id = ? OR invited_by = ? ORDER BY created_at')
 					.bind(userId, userId)
 					.all<Json>();
 				for (const row of results ?? []) {
@@ -482,7 +482,8 @@ export async function collectUserData(
 						channelId: row.channel_id,
 						role: row.role,
 						status: row.status,
-						...(received ? { invitedBy: row.invited_by } : { inviteeUserId: row.invitee_user_id ?? null }),
+						// A sent email invitation never names the account it reached
+						...(received ? { invitedBy: row.invited_by } : { inviteeUserId: row.by_email ? null : (row.invitee_user_id ?? null) }),
 						createdAt: row.created_at,
 						expiresAt: row.expires_at,
 						respondedAt: row.responded_at ?? null,

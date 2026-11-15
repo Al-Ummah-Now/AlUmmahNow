@@ -32,6 +32,8 @@ export interface InviteRow {
 	role: ChannelMemberRole;
 	invitee_user_id: string | null;
 	invitee_email: string | null;
+	/** 1 for an email invitation: its account is never shown to the inviter (audit, Team page, export). */
+	by_email: number;
 	invited_by: string;
 	status: ChannelInviteStatus;
 	created_at: string;
@@ -135,6 +137,7 @@ export async function insertInvite(
 		role: invite.role,
 		invitee_user_id: invite.inviteeUserId,
 		invitee_email: invite.inviteeEmail,
+		by_email: invite.inviteeEmail ? 1 : 0,
 		invited_by: invite.invitedBy,
 		status: 'pending',
 		created_at: nowIso,
@@ -144,10 +147,10 @@ export async function insertInvite(
 	try {
 		await db
 			.prepare(
-				`INSERT INTO channel_invites (id, channel_id, role, invitee_user_id, invitee_email, invited_by, status, created_at, expires_at)
-				 VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
+				`INSERT INTO channel_invites (id, channel_id, role, invitee_user_id, invitee_email, by_email, invited_by, status, created_at, expires_at)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
 			)
-			.bind(row.id, row.channel_id, row.role, row.invitee_user_id, row.invitee_email, row.invited_by, row.created_at, row.expires_at)
+			.bind(row.id, row.channel_id, row.role, row.invitee_user_id, row.invitee_email, row.by_email, row.invited_by, row.created_at, row.expires_at)
 			.run();
 	} catch (error) {
 		if (/UNIQUE/i.test(error instanceof Error ? error.message : String(error))) throw new AlreadyInvited();
@@ -247,6 +250,30 @@ export async function resolveStaleClaims(
 	return rows.length;
 }
 
+/**
+ * The account an activity row may name for this invitation: none for an email
+ * invitation, even once tied to an account, so the log never tells the inviter
+ * who owns the address (§4.1).
+ */
+export function inviteAuditTarget(row: Pick<InviteRow, 'by_email' | 'invitee_user_id'>): string | null {
+	return row.by_email ? null : row.invitee_user_id;
+}
+
+/** Actor of an email invitee's decline in the log: shown as "someone", never the account. */
+export const EMAIL_INVITEE_ACTOR = 'email-invitee';
+
+/**
+ * Whether `userId` was removed from the channel after `since`: an invitation
+ * from before a removal can't bring them back (the removal outranks it).
+ */
+export async function removedSince(db: D1Database, channelId: string, userId: string, since: string): Promise<boolean> {
+	const row = await db
+		.prepare(`SELECT 1 FROM channel_audit WHERE channel_id = ? AND target_user_id = ? AND action = 'member_removed' AND created_at > ? LIMIT 1`)
+		.bind(channelId, userId, since)
+		.first();
+	return Boolean(row);
+}
+
 /** Cancel the open invitations (pending, or claimed by an accept in flight) matching `where`. Returns the closed rows. */
 
 async function cancelWhere(db: D1Database, where: string, binds: unknown[], now = new Date()): Promise<InviteRow[]> {
@@ -273,8 +300,9 @@ export const cancelInvitesOfUser = (db: D1Database, userId: string, now?: Date) 
  * The caller's open invitations: by account, and by the email in their own
  * token (§4.1). An email invitation seen for the first time is tied to the
  * account (invitee_user_id), so it keeps reaching them if the email changes.
- * If they already have an invitation by account on that channel, the email
- * one is closed instead (one pending invitation per person per channel).
+ * One per channel is listed (an @handle invitation first). Nothing visible to
+ * the inviter changes when an email invitation is tied or set aside: that
+ * would tell them who owns the address.
  */
 export async function invitesFor(db: D1Database, userId: string, email: string | null, now = new Date()): Promise<InviteRow[]> {
 	const nowIso = now.toISOString();
@@ -293,10 +321,13 @@ export async function invitesFor(db: D1Database, userId: string, email: string |
 		}
 	}
 	const { results } = await db
-		.prepare(`SELECT * FROM channel_invites WHERE invitee_user_id = ? AND status = 'pending' AND expires_at > ? ORDER BY created_at DESC, id`)
+		.prepare(`SELECT * FROM channel_invites WHERE invitee_user_id = ? AND status = 'pending' AND expires_at > ? ORDER BY by_email, created_at DESC, id`)
 		.bind(userId, nowIso)
 		.all<InviteRow>();
-	return results ?? [];
+	const seen = new Set<string>();
+	return (results ?? [])
+		.filter((row) => !seen.has(row.channel_id) && Boolean(seen.add(row.channel_id)))
+		.sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : a.id.localeCompare(b.id)));
 }
 
 /**
@@ -314,7 +345,7 @@ export async function expireInvites(db: D1Database, now = new Date(), limit = 50
 	await db.batch(
 		rows.flatMap((row) => [
 			db.prepare(`UPDATE channel_invites SET status = 'expired', invitee_email = NULL, responded_at = ? WHERE id = ? AND status = 'pending'`).bind(nowIso, row.id),
-			auditStatement(db, { channelId: row.channel_id, actorId: row.invited_by, action: 'invite_expired', targetUserId: row.invitee_user_id, newRole: row.role }, now),
+			auditStatement(db, { channelId: row.channel_id, actorId: row.invited_by, action: 'invite_expired', targetUserId: inviteAuditTarget(row), newRole: row.role }, now),
 		]),
 	);
 	return rows.length;

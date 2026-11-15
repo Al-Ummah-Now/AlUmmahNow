@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS channel_invites (
   role TEXT NOT NULL CHECK (role IN ('admin', 'editor', 'moderator')),
   invitee_user_id TEXT,
   invitee_email TEXT,                 -- normalized; cleared when the invitation closes
+  by_email INTEGER NOT NULL DEFAULT 0, -- 1: sent to an email; the account it reaches is never shown to the inviter
   invited_by TEXT NOT NULL,
   -- claimed: an accept in flight (between claiming the row and writing the role)
   status TEXT NOT NULL CHECK (status IN ('pending', 'claimed', 'accepted', 'declined', 'cancelled', 'expired')),
@@ -23,8 +24,10 @@ CREATE TABLE IF NOT EXISTS channel_invites (
   responded_at TEXT
 );
 
--- One pending invitation per person per channel
-CREATE UNIQUE INDEX IF NOT EXISTS idx_channel_invites_user ON channel_invites (channel_id, invitee_user_id) WHERE status = 'pending' AND invitee_user_id IS NOT NULL;
+-- One pending invitation per person per channel, per kind: an @handle
+-- invitation never collides with an email one tied to the same account, so
+-- inviting cannot confirm which account owns an email
+CREATE UNIQUE INDEX IF NOT EXISTS idx_channel_invites_user ON channel_invites (channel_id, invitee_user_id) WHERE status = 'pending' AND invitee_user_id IS NOT NULL AND by_email = 0;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_channel_invites_email ON channel_invites (channel_id, invitee_email) WHERE status = 'pending' AND invitee_email IS NOT NULL;
 -- My invitations, by account or by email
 CREATE INDEX IF NOT EXISTS idx_channel_invites_invitee_user ON channel_invites (invitee_user_id, status);
