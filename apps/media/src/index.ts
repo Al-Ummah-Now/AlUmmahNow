@@ -5,15 +5,17 @@
  * - queue  al-ummah-now-transcode[-env]: one FFmpeg container per video (Transcoder); also
  *          remux-only jobs (kind 'mp4', the public MP4 backfill #1182)
  * - fetch  media.<env>.alummahnow.net/priv/*: token-checked private renditions (edge.ts)
- * - fetch  /internal/jobs/:videoId (X-API-Key): the job as the container sees it (admin)
+ * - fetch  /internal/jobs/:videoId[/cancel|/retry-now] (X-API-Key): the job as the container sees it,
+ *          and the admin's Cancel / Retry now (handleInternalJob)
  */
 import type { CaptionAudioJobMessage, LiveReviewJobMessage, Mp4JobMessage, TranscodeJobMessage } from '@al-ummah/shared-types';
 import { isCaptionAudioJobMessage, isLiveReviewJobMessage, isMediaRev, isMediaVideoId, isMp4JobMessage, isPrebuiltRef } from '@al-ummah/shared-types';
 import { liveReviewQueueAction, mp4QueueAction, startFailureReason, startRetry } from './jobs';
 import { reportCaptionAudio, reportEvent, reportLiveReviewMedia, reportMp4Event } from './videos-api';
 import { handlePrivate } from './edge';
-import { errorText, hasInternalKey, log, type Env } from './env';
+import { errorText, log, type Env } from './env';
 import { withNoIndex } from './crawlers';
+import { handleInternalJob } from './internal-jobs';
 import type { Mp4Outcome } from './transcoder';
 
 export { ContainerProxy } from '@cloudflare/containers';
@@ -55,14 +57,8 @@ async function handleFetch(request: Request, env: Env, ctx: ExecutionContext): P
 	if (url.pathname === SELFTEST_PATH && request.method === 'GET') return handleSelfTest(env);
 	if (url.pathname.startsWith('/priv/')) return handlePrivate(request, env, ctx);
 	if (url.pathname === '/health') return Response.json({ ok: true });
-	const m = /^\/internal\/jobs\/([^/]+)$/.exec(url.pathname);
-	if (m && request.method === 'GET') {
-		if (!(await hasInternalKey(request, env.INTERNAL_API_KEY))) return new Response('Unauthorized', { status: 401 });
-		const videoId = decodeURIComponent(m[1]!);
-		if (!isMediaVideoId(videoId)) return new Response('Bad id', { status: 400 });
-		const state = await env.TRANSCODER.get(env.TRANSCODER.idFromName(videoId)).jobState();
-		return Response.json({ job: state });
-	}
+	const m = /^\/internal\/jobs\/([^/]+)(?:\/(cancel|retry-now))?$/.exec(url.pathname);
+	if (m) return handleInternalJob(request, env, decodeURIComponent(m[1]!), m[2] as 'cancel' | 'retry-now' | undefined);
 	return new Response('Not found', { status: 404 });
 }
 
@@ -170,6 +166,12 @@ export async function handleTranscodeStart(msg: Message<TranscodeJobMessage>, en
 		const text = errorText(error).slice(0, 300);
 		const reason = startFailureReason(text);
 		const next = startRetry(msg.attempts);
+		// The admin's troubleshooting panel: delivery n of max, the next try and why (never fails the consumer)
+		try {
+			await env.TRANSCODER.get(env.TRANSCODER.idFromName(job.videoId)).noteStartFailure(job.jobId, text, msg.attempts);
+		} catch (noteError) {
+			log.warn('[MediaQueue] Could not note the failed start', { videoId: job.videoId, error: errorText(noteError) });
+		}
 		if (!next.giveUp) {
 			log.warn('[MediaQueue] Could not start job; retrying', { videoId: job.videoId, jobId: job.jobId, attempts: msg.attempts, delaySeconds: next.delaySeconds, reason, error: text });
 			msg.retry({ delaySeconds: next.delaySeconds });

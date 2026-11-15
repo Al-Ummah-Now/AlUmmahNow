@@ -573,6 +573,13 @@ export const ADMIN_JOB_KINDS = [
    * idempotent (INSERT OR IGNORE). Target 'user' / 'image-owners'.
    */
   'images.index-owners',
+  /**
+   * R2 transcode troubleshooting (videos admin → Delivery): "Retry now" on one video's transcode
+   * (api-videos lib/media/troubleshoot.ts retryTranscodeNow). Target the video.
+   */
+  'media.transcode-retry',
+  /** "Cancel" one video's R2 transcode: container stopped, partial output deleted, record marked cancelled. Target the video. */
+  'media.transcode-cancel',
 ] as const;
 
 export type AdminJobKind = (typeof ADMIN_JOB_KINDS)[number];
@@ -613,6 +620,9 @@ export const ADMIN_JOB_PERMISSIONS: Readonly<Record<AdminJobKind, readonly Admin
   // admin-api also requires a super admin for this kind (CSAM cases are super-admin only)
   'csam.contain': ['users:manage', 'content:delete'],
   'images.index-owners': ['users:manage'],
+  // Started with media:manage (admins and super admins), who also hold videos:manage
+  'media.transcode-retry': ['videos:manage'],
+  'media.transcode-cancel': ['videos:manage'],
 };
 
 // ---------------------------------------------------------------------------

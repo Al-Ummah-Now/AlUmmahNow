@@ -3,7 +3,10 @@
  * Transcoder Durable Object (transcoder.ts) keeps one JobState per video.
  */
 import { reviewMediaPrefix, type ReviewExtractionOptions } from '@al-ummah/shared-types';
-import { mediaPrefix, prebuiltStagingPrefix, sanitizeRungs, type MediaAccess, type R2RungProgress, type TranscodeFailure, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
+import { mediaPrefix, prebuiltStagingPrefix, sanitizeRungs, scrubOpsText, startFailureReason, type MediaAccess, type R2RungProgress, type TranscodeFailure, type TranscodeJobMessage, type TranscodeResult, type TranscodeStartFailure, type TranscoderJobView } from '@al-ummah/shared-types';
+
+/** Plain words for a start failure (shared with the admin's troubleshooting panel, media-troubleshoot.ts). */
+export { startFailureReason };
 
 export const MAX_ATTEMPTS = 3;
 
@@ -22,14 +25,6 @@ export const START_MAX_DELIVERIES = START_RETRY_DELAYS.length + 1;
 export function startRetry(attempts: number): { giveUp: false; delaySeconds: number } | { giveUp: true } {
 	if (attempts >= START_MAX_DELIVERIES) return { giveUp: true };
 	return { giveUp: false, delaySeconds: START_RETRY_DELAYS[Math.min(Math.max(1, attempts), START_RETRY_DELAYS.length) - 1]! };
-}
-
-/** Plain words for a start failure (what the admin and the Errors page show). */
-export function startFailureReason(error: string): string {
-	if (/no container instance|max_instances|capacity|not available at this time|too many/i.test(error)) return 'capacity full';
-	if (/just exited|crashed while checking for ports|not running, consider calling start|exited \(code/i.test(error)) return 'container start failed';
-	if (/refused the job/i.test(error)) return 'container refused the job';
-	return 'start failed';
 }
 
 /**
@@ -55,8 +50,11 @@ export const WATCHDOG_SECONDS = 60;
  */
 export const LAUNCH_LIMIT_MS = 5 * 60 * 1000;
 
-/** stopping: a failed attempt is being torn down (its container's stop is ours, not a crash) */
-export type JobStatus = 'running' | 'stopping' | 'waiting_retry' | 'ready' | 'failed';
+/**
+ * stopping: a failed attempt is being torn down (its container's stop is ours, not a crash);
+ * cancelled: an admin cancelled it (videos admin → Delivery), never retried
+ */
+export type JobStatus = 'running' | 'stopping' | 'waiting_retry' | 'ready' | 'failed' | 'cancelled';
 
 export interface JobState {
 	videoId: string;
@@ -94,6 +92,46 @@ export interface JobState {
 	reviewPrefix?: string;
 	/** D11: the creator's pre-encoded renditions to verify (and their MEDIA_PRIVATE staging prefix) */
 	prebuilt?: { stagingId: string; rungs: string[]; prefix: string };
+}
+
+const iso = (ms: number | undefined) => (ms && Number.isFinite(ms) ? new Date(ms).toISOString() : null);
+
+/** The job as the admin's troubleshooting panel sees it (GET /internal/jobs/:videoId). */
+export function jobView(job: JobState): TranscoderJobView {
+	return {
+		jobId: job.jobId,
+		status: job.status,
+		attempt: job.attempt,
+		maxAttempts: job.error === 'source_unavailable' ? SOURCE_WAIT_ATTEMPTS : MAX_ATTEMPTS,
+		attemptStartedAt: iso(job.attemptStartedAt),
+		launchedAt: iso(job.launchedAt),
+		lastSeenAt: iso(job.lastSeenAt),
+		nextRetryAt: job.status === 'waiting_retry' ? iso(job.nextRetryAt) : null,
+		progress: Number.isFinite(job.progress) ? job.progress : null,
+		error: job.error ? scrubOpsText(job.error).slice(0, 300) : null,
+	};
+}
+
+/**
+ * A delivery of `jobId` could not start (container start failed, capacity full): what the
+ * Transcoder keeps so the admin sees attempt n of max, the next try and why. Pure.
+ */
+export function startFailureNote(jobId: string, error: string, deliveries: number, now: number): TranscodeStartFailure {
+	const next = startRetry(deliveries);
+	return {
+		jobId,
+		deliveries,
+		maxDeliveries: START_MAX_DELIVERIES,
+		reason: startFailureReason(error),
+		error: scrubOpsText(error).slice(0, 300),
+		at: new Date(now).toISOString(),
+		nextRetryAt: next.giveUp ? null : new Date(now + next.delaySeconds * 1000).toISOString(),
+	};
+}
+
+/** A cancelled job's stand-in when it never started, so a later delivery of it is a duplicate. */
+export function cancelledJob(msg: Pick<TranscodeJobMessage, 'videoId' | 'jobId' | 'rev' | 'access' | 'queuedAt'>, now: number): JobState {
+	return { ...newJob({ kind: 'transcode', reason: 'retry', ...msg }, now), status: 'cancelled', error: 'cancelled', finishedAt: now };
 }
 
 export function newJob(msg: TranscodeJobMessage, now: number): JobState {

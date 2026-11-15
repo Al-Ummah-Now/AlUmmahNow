@@ -14,7 +14,8 @@
 
 export type MediaAccess = 'pub' | 'priv';
 
-export type R2RenditionStatus = 'queued' | 'transcoding' | 'ready' | 'failed';
+/** cancelled: an admin cancelled the job (videos admin → Delivery); the sweep never queues it again */
+export type R2RenditionStatus = 'queued' | 'transcoding' | 'ready' | 'failed' | 'cancelled';
 
 /** One rung of the HLS ladder as written to R2. */
 export interface MediaRung {
@@ -201,6 +202,8 @@ export interface VideoR2State {
 	readyAt?: string;
 	failedAt?: string;
 	error?: string;
+	/** Who cancelled it (status cancelled) */
+	cancelledBy?: string;
 	/** Seconds the container ran (all attempts), for cost per video-minute */
 	containerSeconds?: number;
 	instanceType?: string;
