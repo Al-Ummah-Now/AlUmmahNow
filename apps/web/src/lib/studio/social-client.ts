@@ -38,6 +38,8 @@ export const socialClient = {
   overview: (channelId: string) => call<SocialOverview>(channelId, ''),
   connect: (channelId: string, input: { network: SocialNetwork; language: SocialLanguage; returnLang: SocialLanguage; handle?: string; instance?: string }) =>
     call<ConnectResult>(channelId, '/connect', json('POST', input)),
+  /** The network sent the person back: link the account (only the person who started connecting can) */
+  confirmConnect: (channelId: string, id: string) => call<{ account: SocialAccountView }>(channelId, '/connect/confirm', json('POST', { id })),
   telegramPending: (channelId: string, code: string) => call<{ pending: boolean }>(channelId, `/telegram/${encodeURIComponent(code)}`),
   updateAccount: (channelId: string, accountId: string, patch: { language?: SocialLanguage; rules?: Array<{ event: SocialEvent; enabled: boolean; format: SocialFormat; includeLink: boolean }> }) =>
     call<{ account: SocialAccountView }>(channelId, `/accounts/${encodeURIComponent(accountId)}`, json('PATCH', patch)),
