@@ -165,6 +165,8 @@ export interface AppTranslations {
     invitationTitle: string;
     invitationMessage: string;
     invitationShort: string;
+    /** Link to /upgrade wherever uploading is by invitation */
+    requestAccess: string;
     /** A write refused with `videos_account_pending_deletion` */
     accountPendingDeletion: string;
     limitReached: string;
@@ -177,6 +179,84 @@ export interface AppTranslations {
     minute: string;
     hours: string;
     hour: string;
+  };
+  /** /upgrade: request a tier (wiki AUN-TIER-REQUESTS). Never prices. */
+  upgrade: {
+    metaTitle: string;
+    title: string;
+    lead: string;
+    betaTitle: string;
+    betaBody: string;
+    tiersHeading: string;
+    current: string;
+    request: string;
+    requested: string;
+    signInToRequest: string;
+    includes: string;
+    watch: string;
+    uploads: string;
+    uploadsPerDay: string;
+    uploadsUnlimited: string;
+    noUploads: string;
+    channelsOne: string;
+    channelsUpTo: string;
+    channelsUnlimited: string;
+    noChannels: string;
+    captionMinutes: string;
+    captionsUnlimited: string;
+    noCaptionMinutes: string;
+    pages: string;
+    noPages: string;
+    howTitle: string;
+    step1Title: string;
+    step1Body: string;
+    step2Title: string;
+    step2Body: string;
+    step3Title: string;
+    step3Body: string;
+    status: {
+      pendingTitle: string;
+      pendingBody: string;
+      withdraw: string;
+      withdrawTitle: string;
+      withdrawBody: string;
+      withdrawConfirm: string;
+      keep: string;
+      withdrawn: string;
+      approvedTitle: string;
+      approvedBody: string;
+      approvedUpload: string;
+      declinedTitle: string;
+      declinedReason: string;
+      declinedBody: string;
+    };
+    form: {
+      title: string;
+      description: string;
+      name: string;
+      nameHelp: string;
+      about: string;
+      aboutHelp: string;
+      count: string;
+      nameInvalid: string;
+      aboutTooShort: string;
+      aboutTooLong: string;
+      submit: string;
+      sending: string;
+      cancel: string;
+      sent: string;
+      checking: string;
+    };
+    errors: {
+      pending: string;
+      held: string;
+      notRequestable: string;
+      tooMany: string;
+      humanCheck: string;
+      failed: string;
+      loadFailed: string;
+      retry: string;
+    };
   };
   imageCrop: {
     avatarTitle: string;
@@ -279,6 +359,8 @@ export interface AppTranslations {
   navigation: {
     /** Scholars (AlUmmahNowCMS docs/SCHOLARS.md): articles are written in the CMS. */
     writeArticle: string;
+    /** Account menu: the /upgrade page (request a tier; wiki AUN-TIER-REQUESTS) */
+    upgrade: string;
     myArticles: string;
     scholarPage: string;
     navigationMenu: string;
@@ -1630,6 +1712,10 @@ export interface AppTranslations {
       reviewRejectedMessage: string;
       reviewNeededTitle: string;
       reviewNeededMessage: string;
+      tierRequestApprovedTitle: string;
+      tierRequestApprovedMessage: string;
+      tierRequestDeclinedTitle: string;
+      tierRequestDeclinedMessage: string;
       uploadReadyMessage: string;
       uploadFailedTitle: string;
       uploadFailedMessage: string;

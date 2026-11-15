@@ -42,7 +42,14 @@ function seed() {
     search.raw.prepare(`INSERT INTO upload_rate_windows (user_id, operation, period, window_start, count) VALUES (?, 'upload', 'day', 1, 3)`).run(userId);
     search.raw.prepare(`INSERT INTO upload_rate_leases (user_id, operation, lease_id, expires_at) VALUES (?, 'upload', 'lease_1', 9999999999999)`).run(userId);
     search.raw.prepare(`INSERT INTO creator_tier_assignments (user_id, tier_id, source, assigned_by, assigned_at) VALUES (?, 'creator', 'admin', 'usr_admin', '2026-11-13')`).run(userId);
+    search.raw
+      .prepare(`INSERT INTO tier_requests (id, user_id, tier_id, tier_name, from_tier_id, name, about, status, created_at) VALUES (?, ?, 'creator', 'Creator', 'member', 'Name', 'About me and my channel', 'pending', '2026-11-14')`)
+      .run(`tr_${userId}`, userId);
   }
+  // A request the erased user decided as staff: the decision stays, the decider becomes the placeholder
+  search.raw
+    .prepare(`INSERT INTO tier_requests (id, user_id, tier_id, tier_name, from_tier_id, name, about, status, created_at, decided_at, decided_by) VALUES ('tr_decided', 'usr_third', 'creator', 'Creator', 'member', 'N', 'About me and my channel', 'approved', '2026-11-14', '2026-11-14', ?)`)
+    .run(USER);
   return { reports, search };
 }
 
@@ -50,7 +57,7 @@ describe('eraseUserTraces (#1059)', () => {
   it('deletes invites, error-group membership and category suggestions; anonymises error events, keeping the errors', async () => {
     const { reports, search } = seed();
     const result = await eraseUserTraces(reports, search, USER, ERASED);
-    expect(result).toEqual({ invites: 1, errorUsers: 1, errorEvents: 2, categorySuggestions: 1, rateLimits: 2, creatorTier: 1, adminDeletions: 0, adminJobs: 0 });
+    expect(result).toEqual({ invites: 1, errorUsers: 1, errorEvents: 2, categorySuggestions: 1, rateLimits: 2, creatorTier: 1, tierRequests: 2, adminDeletions: 0, adminJobs: 0 });
 
     expect(reports.raw.prepare('SELECT id FROM creator_invites ORDER BY id').all()).toEqual([{ id: 'inv_2' }]);
     expect(reports.raw.prepare('SELECT user_key FROM error_group_users').all()).toEqual([{ user_key: OTHER }]);
@@ -66,12 +73,14 @@ describe('eraseUserTraces (#1059)', () => {
     expect(search.raw.prepare('SELECT user_id FROM upload_rate_windows').all()).toEqual([{ user_id: OTHER }]);
     expect(search.raw.prepare('SELECT user_id FROM upload_rate_leases').all()).toEqual([{ user_id: OTHER }]);
     expect(search.raw.prepare('SELECT user_id FROM creator_tier_assignments').all()).toEqual([{ user_id: OTHER }]);
+    expect(search.raw.prepare("SELECT user_id FROM tier_requests WHERE id != 'tr_decided'").all()).toEqual([{ user_id: OTHER }]);
+    expect(search.raw.prepare("SELECT status, decided_by FROM tier_requests WHERE id = 'tr_decided'").get()).toEqual({ status: 'approved', decided_by: ERASED });
   });
 
   it('is idempotent and works without the search database', async () => {
     const { reports, search } = seed();
     await eraseUserTraces(reports, search, USER, ERASED);
-    expect(await eraseUserTraces(reports, search, USER, ERASED)).toEqual({ invites: 0, errorUsers: 0, errorEvents: 0, categorySuggestions: 0, rateLimits: 0, creatorTier: 0, adminDeletions: 0, adminJobs: 0 });
+    expect(await eraseUserTraces(reports, search, USER, ERASED)).toEqual({ invites: 0, errorUsers: 0, errorEvents: 0, categorySuggestions: 0, rateLimits: 0, creatorTier: 0, tierRequests: 0, adminDeletions: 0, adminJobs: 0 });
     expect((await eraseUserTraces(reports, undefined, OTHER, ERASED)).categorySuggestions).toBe(0);
   });
 });

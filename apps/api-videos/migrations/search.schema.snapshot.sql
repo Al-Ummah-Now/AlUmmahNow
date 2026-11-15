@@ -32,6 +32,7 @@
 --   apps/api-videos/migrations/search/0037_image_owners.sql
 --   apps/api-videos/migrations/search/0038_media_originals_keep.sql
 --   apps/api-videos/migrations/search/0039_channel_comments.sql
+--   apps/api-videos/migrations/search/0040_member_tier_and_tier_requests.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -52,7 +53,7 @@ CREATE TABLE channel_comments (comment_id TEXT PRIMARY KEY, channel_id TEXT NOT 
 CREATE TABLE channel_comments_index_state (channel_id TEXT PRIMARY KEY, indexed_at TEXT, status TEXT NOT NULL CHECK (status IN ('building', 'ready', 'stale', 'failed')), updated_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE content_ownership (kind TEXT NOT NULL, id TEXT NOT NULL, owner_id TEXT, channel_id TEXT, is_public INTEGER NOT NULL DEFAULT 1, is_hidden INTEGER NOT NULL DEFAULT 0, is_deleted INTEGER NOT NULL DEFAULT 0, is_live INTEGER NOT NULL DEFAULT 0, duration REAL, schedule_status TEXT, upload_status TEXT, views INTEGER NOT NULL DEFAULT 0, created_at INTEGER, updated_at INTEGER, indexed_at INTEGER NOT NULL DEFAULT 0, studio_status TEXT, title TEXT, category TEXT, language TEXT, source_version INTEGER NOT NULL DEFAULT 0, admin_title TEXT, handle TEXT, email TEXT, is_verified INTEGER NOT NULL DEFAULT 0, is_suspended INTEGER NOT NULL DEFAULT 0, subscribers INTEGER NOT NULL DEFAULT 0, admin_cols INTEGER NOT NULL DEFAULT 0, is_short INTEGER NOT NULL DEFAULT 0, needs_format INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (kind, id));
 CREATE TABLE creator_tier_assignments (user_id TEXT PRIMARY KEY, tier_id TEXT NOT NULL, source TEXT NOT NULL DEFAULT 'admin' CHECK (source IN ('admin', 'subscription')), assigned_by TEXT NOT NULL, assigned_at TEXT NOT NULL) WITHOUT ROWID;
-CREATE TABLE creator_tiers (id TEXT PRIMARY KEY, name TEXT NOT NULL, unlimited INTEGER NOT NULL DEFAULT 0, per_hour INTEGER NOT NULL, per_day INTEGER NOT NULL, max_concurrent INTEGER NOT NULL, max_channels INTEGER, updated_at TEXT, updated_by TEXT, deleted_at TEXT, deleted_by TEXT, delete_reason TEXT, purge_requested_at TEXT, purge_requested_by TEXT, caption_minutes_month INTEGER NOT NULL DEFAULT 0) WITHOUT ROWID;
+CREATE TABLE creator_tiers (id TEXT PRIMARY KEY, name TEXT NOT NULL, unlimited INTEGER NOT NULL DEFAULT 0, per_hour INTEGER NOT NULL, per_day INTEGER NOT NULL, max_concurrent INTEGER NOT NULL, max_channels INTEGER, updated_at TEXT, updated_by TEXT, deleted_at TEXT, deleted_by TEXT, delete_reason TEXT, purge_requested_at TEXT, purge_requested_by TEXT, caption_minutes_month INTEGER NOT NULL DEFAULT 0, uploads INTEGER NOT NULL DEFAULT 1, channels INTEGER NOT NULL DEFAULT 1, pages INTEGER NOT NULL DEFAULT 0, requestable INTEGER NOT NULL DEFAULT 0, sort_order INTEGER NOT NULL DEFAULT 50, name_ar TEXT, description TEXT, description_ar TEXT) WITHOUT ROWID;
 CREATE TABLE delivery_cost_daily (day TEXT NOT NULL, provider TEXT NOT NULL, metric TEXT NOT NULL, value REAL NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (day, provider, metric));
 CREATE TABLE image_owners (path TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK (kind IN ('profile_avatar', 'profile_cover', 'channel_avatar', 'channel_cover', 'post_image', 'video_thumbnail')), owner_id TEXT, channel_id TEXT, created_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE indexnow_pending (video_id TEXT PRIMARY KEY, is_short INTEGER NOT NULL DEFAULT 0, queued_at REAL NOT NULL) WITHOUT ROWID;
@@ -101,6 +102,7 @@ CREATE TABLE 'search_videos_fts_content'(id INTEGER PRIMARY KEY, c0, c1);
 CREATE TABLE 'search_videos_fts_data'(id INTEGER PRIMARY KEY, block BLOB);
 CREATE TABLE 'search_videos_fts_docsize'(id INTEGER PRIMARY KEY, sz BLOB);
 CREATE TABLE 'search_videos_fts_idx'(segid, term, pgno, PRIMARY KEY(segid, term)) WITHOUT ROWID;
+CREATE TABLE tier_requests (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, tier_id TEXT NOT NULL, tier_name TEXT NOT NULL, from_tier_id TEXT NOT NULL, name TEXT NOT NULL, about TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'declined', 'withdrawn')), decline_reason TEXT, created_at TEXT NOT NULL, decided_at TEXT, decided_by TEXT, notified_at TEXT, email_status TEXT, email_error TEXT) WITHOUT ROWID;
 CREATE TABLE upload_limit_hits (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, period TEXT NOT NULL, tier_id TEXT, hit_at INTEGER NOT NULL) WITHOUT ROWID;
 CREATE TABLE upload_rate_leases (user_id TEXT NOT NULL, operation TEXT NOT NULL, lease_id TEXT NOT NULL, expires_at INTEGER NOT NULL, PRIMARY KEY (user_id, operation, lease_id)) WITHOUT ROWID;
 CREATE TABLE upload_rate_windows (user_id TEXT NOT NULL, operation TEXT NOT NULL, period TEXT NOT NULL, window_start INTEGER NOT NULL, count INTEGER NOT NULL, PRIMARY KEY (user_id, operation, period)) WITHOUT ROWID;
@@ -177,6 +179,9 @@ CREATE INDEX idx_search_videos_created ON search_videos (created_at);
 CREATE INDEX idx_search_videos_indexed ON search_videos (indexed_at);
 CREATE INDEX idx_search_videos_language ON search_videos (language, created_at);
 CREATE INDEX idx_search_videos_short ON search_videos (is_short, created_at);
+CREATE UNIQUE INDEX idx_tier_requests_one_pending ON tier_requests (user_id) WHERE status = 'pending';
+CREATE INDEX idx_tier_requests_status ON tier_requests (status, created_at, id);
+CREATE INDEX idx_tier_requests_user ON tier_requests (user_id, created_at);
 CREATE INDEX idx_upload_limit_hits_at ON upload_limit_hits (hit_at);
 CREATE INDEX idx_upload_limit_hits_user ON upload_limit_hits (user_id, hit_at);
 CREATE INDEX idx_upload_rate_leases_expires ON upload_rate_leases (expires_at);

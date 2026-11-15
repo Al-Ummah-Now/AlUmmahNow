@@ -2,8 +2,10 @@
  * Creator tiers: who may upload and create channels, and within which limits
  * (packages/shared-types/src/creator-tiers.ts, migrations/search/0009).
  *
- * - No tier ("None", the default): no uploads, no channel creation.
- * - A tier: its upload limits and channel limit; `unlimited` has none.
+ * - No assignment row: the shipped Member tier (DEFAULT_TIER_ID), whose flags
+ *   allow no uploads and no channel creation (wiki AUN-TIER-REQUESTS).
+ * - A tier: its capability flags (uploads, channels, pages), its upload limits
+ *   and channel limit; `unlimited` has none and allows everything.
  * - The videos "Super Admin" role: always Unlimited, no row needed.
  * - An upload to a channel runs under the channel OWNER's tier and counts
  *   against the owner's limits, so a channel's managers and editors work
@@ -18,7 +20,10 @@
 import {
 	CREATOR_TIER_BOUNDS,
 	CREATOR_TIER_SOURCES,
+	CREATOR_TIER_TEXT,
 	DEFAULT_CREATOR_TIER,
+	DEFAULT_MEMBER_TIER,
+	DEFAULT_TIER_ID,
 	DEFAULT_UNLIMITED_TIER,
 	type CreatorTier,
 	type CreatorTierAssignment,
@@ -30,6 +35,7 @@ import {
 import { logger } from './logger';
 
 const SHIPPED_TIERS: CreatorTier[] = [
+	{ ...DEFAULT_MEMBER_TIER, updatedAt: null, updatedBy: null },
 	{ ...DEFAULT_CREATOR_TIER, updatedAt: null, updatedBy: null },
 	{ ...DEFAULT_UNLIMITED_TIER, updatedAt: null, updatedBy: null },
 ];
@@ -52,15 +58,35 @@ interface TierRow {
 	max_concurrent: number;
 	max_channels: number | null;
 	caption_minutes_month?: number | null;
+	uploads?: number | null;
+	channels?: number | null;
+	pages?: number | null;
+	requestable?: number | null;
+	sort_order?: number | null;
+	name_ar?: string | null;
+	description?: string | null;
+	description_ar?: string | null;
 	updated_at: string | null;
 	updated_by: string | null;
 }
 
+/** A flag column; before migration 0039 the columns are missing, so the shipped default applies. */
+const flag = (value: number | null | undefined, fallback: boolean) => (value === null || value === undefined ? fallback : Number(value) === 1);
+
 function toTier(row: TierRow): CreatorTier {
+	const shipped = SHIPPED_TIERS.find((t) => t.id === row.id);
 	return {
 		id: row.id,
 		name: row.name,
+		nameAr: row.name_ar ?? shipped?.nameAr ?? null,
+		description: row.description ?? null,
+		descriptionAr: row.description_ar ?? null,
 		unlimited: Number(row.unlimited) === 1,
+		uploads: flag(row.uploads, shipped?.uploads ?? true),
+		channels: flag(row.channels, shipped?.channels ?? true),
+		pages: flag(row.pages, shipped?.pages ?? false),
+		requestable: flag(row.requestable, shipped?.requestable ?? false),
+		sortOrder: row.sort_order === null || row.sort_order === undefined ? shipped?.sortOrder ?? 50 : Number(row.sort_order),
 		perHour: Number(row.per_hour),
 		perDay: Number(row.per_day),
 		maxConcurrent: Number(row.max_concurrent),
@@ -79,13 +105,13 @@ export async function readTiers(db: D1Database): Promise<CreatorTier[]> {
 	let rows: TierRow[] = [];
 	try {
 		// A soft-deleted tier (migration 0016) is neither listed nor assignable; it is in the admin's Recently deleted
-		rows = (await db.prepare('SELECT * FROM creator_tiers WHERE deleted_at IS NULL ORDER BY unlimited, name').all<TierRow>()).results ?? [];
+		rows = (await db.prepare('SELECT * FROM creator_tiers WHERE deleted_at IS NULL').all<TierRow>()).results ?? [];
 	} catch {
 		rows = [];
 	}
 	const tiers = rows.map(toTier);
 	for (const shipped of SHIPPED_TIERS) if (!tiers.some((t) => t.id === shipped.id)) tiers.push(shipped);
-	return tiers;
+	return tiers.sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
 }
 
 export async function readTier(db: D1Database, id: string): Promise<CreatorTier | null> {
@@ -127,8 +153,19 @@ export async function readAssignments(db: D1Database, userIds: string[]): Promis
 export interface ResolvedCreator {
 	/** The user whose tier applies and whose counters move (the channel owner for a channel upload) */
 	subjectId: string;
+	/**
+	 * The tier that applies: the assigned one, Unlimited for a super admin, or
+	 * the default Member tier ('none': no assignment). Null only when the
+	 * Member tier itself was deleted, which deleteTier refuses; callers check
+	 * its flags (tierAllowsUploads / tierAllowsChannels), never just presence.
+	 */
 	tier: CreatorTier | null;
 	via: 'tier' | 'super_admin' | 'none';
+}
+
+/** The default tier every user without an assignment holds (Member). */
+export async function readDefaultTier(db: D1Database): Promise<CreatorTier | null> {
+	return readTier(db, DEFAULT_TIER_ID);
 }
 
 /** Who stored a super admin's automatic Unlimited assignment */
@@ -191,11 +228,13 @@ export async function resolveCreator(
 	if (!assignment) {
 		// A super admin working on someone else's channel still has their own Unlimited
 		if (isSuperAdmin(who.roles)) return { subjectId: who.userId, tier: unlimited, via: 'super_admin' };
-		return { subjectId, tier: null, via: 'none' };
+		return { subjectId, tier: await readDefaultTier(db), via: 'none' };
 	}
 	const tier = await readTier(db, assignment.tierId);
 	if (!tier && isSuperAdmin(who.roles)) return { subjectId: who.userId, tier: unlimited, via: 'super_admin' };
-	return { subjectId, tier, via: tier ? 'tier' : 'none' };
+	// An assignment to a tier that no longer exists falls back to Member, never to more
+	if (!tier) return { subjectId, tier: await readDefaultTier(db), via: 'none' };
+	return { subjectId, tier, via: 'tier' };
 }
 
 /** Assign (tierId) or remove (null) a user's tier. Returns the previous assignment. */
@@ -211,7 +250,8 @@ export async function assignTier(
 		throw new CreatorTierError(400, 'invalid_user');
 	}
 	const previous = await readAssignment(db, userId);
-	if (tierId === null) {
+	// Member is what no row means: assigning it removes the row, so Member has one representation
+	if (tierId === null || tierId === DEFAULT_TIER_ID) {
 		await db.prepare('DELETE FROM creator_tier_assignments WHERE user_id = ?').bind(userId).run();
 		return { previous, assignment: null };
 	}
@@ -236,6 +276,14 @@ export interface TierInput {
 	maxConcurrent?: unknown;
 	maxChannels?: unknown;
 	captionMinutesMonth?: unknown;
+	uploads?: unknown;
+	channels?: unknown;
+	pages?: unknown;
+	requestable?: unknown;
+	sortOrder?: unknown;
+	nameAr?: unknown;
+	description?: unknown;
+	descriptionAr?: unknown;
 }
 
 function intIn(value: unknown, field: keyof typeof CREATOR_TIER_BOUNDS): number {
@@ -247,12 +295,40 @@ function intIn(value: unknown, field: keyof typeof CREATOR_TIER_BOUNDS): number 
 	return n;
 }
 
-/** Validates a full tier definition (the shipped `unlimited` tier stays unlimited). */
+/** An optional text field: undefined keeps `current`, '' or null clears it. */
+function optionalText(value: unknown, current: string | null | undefined, field: string, max: number): string | null {
+	if (value === undefined) return current ?? null;
+	if (value === null) return null;
+	if (typeof value !== 'string') throw new CreatorTierError(400, 'invalid_tier', `${field} must be text`);
+	const text = value.trim();
+	if (text.length > max) throw new CreatorTierError(400, 'invalid_tier', `${field} must be at most ${max} characters`);
+	return text || null;
+}
+
+function bool(value: unknown, current: boolean | undefined, fallback: boolean): boolean {
+	if (value === undefined) return current ?? fallback;
+	return value === true;
+}
+
+/** Validates a full tier definition (the shipped `unlimited` tier stays unlimited; Member never is). */
 export function validateTier(id: string, input: TierInput, current?: CreatorTier | null): Omit<CreatorTier, 'updatedAt' | 'updatedBy'> {
 	const name = typeof input.name === 'string' ? input.name.trim() : current?.name ?? '';
-	if (!name || name.length > 60) throw new CreatorTierError(400, 'invalid_tier', 'name must be 1 to 60 characters');
-	const unlimited = id === DEFAULT_UNLIMITED_TIER.id ? true : input.unlimited === undefined ? current?.unlimited ?? false : input.unlimited === true;
-	if (unlimited) return { id, name, unlimited, perHour: 0, perDay: 0, maxConcurrent: 0, maxChannels: null, captionMinutesMonth: 0 };
+	if (!name || name.length > CREATOR_TIER_TEXT.name) throw new CreatorTierError(400, 'invalid_tier', `name must be 1 to ${CREATOR_TIER_TEXT.name} characters`);
+	const unlimited = id === DEFAULT_UNLIMITED_TIER.id ? true : id === DEFAULT_TIER_ID ? false : input.unlimited === undefined ? current?.unlimited ?? false : input.unlimited === true;
+	const text = {
+		nameAr: optionalText(input.nameAr, current?.nameAr, 'nameAr', CREATOR_TIER_TEXT.name),
+		description: optionalText(input.description, current?.description, 'description', CREATOR_TIER_TEXT.description),
+		descriptionAr: optionalText(input.descriptionAr, current?.descriptionAr, 'descriptionAr', CREATOR_TIER_TEXT.description),
+	};
+	const requestable = bool(input.requestable, current?.requestable, false);
+	const sortOrder = intIn(input.sortOrder ?? current?.sortOrder ?? 50, 'sortOrder');
+	if (unlimited) {
+		return { id, name, ...text, unlimited, uploads: true, channels: true, pages: true, requestable, sortOrder, perHour: 0, perDay: 0, maxConcurrent: 0, maxChannels: null, captionMinutesMonth: 0 };
+	}
+	// A new tier allows uploads and channels unless the admin says otherwise (what a tier meant before the flags)
+	const uploads = bool(input.uploads, current?.uploads, true);
+	const channels = bool(input.channels, current?.channels, true);
+	const pages = bool(input.pages, current?.pages, false);
 	const pick = (field: 'perHour' | 'perDay' | 'maxConcurrent') => intIn(input[field] ?? current?.[field], field);
 	const perHour = pick('perHour');
 	const perDay = pick('perDay');
@@ -260,7 +336,7 @@ export function validateTier(id: string, input: TierInput, current?: CreatorTier
 	const rawChannels = input.maxChannels === undefined ? current?.maxChannels ?? null : input.maxChannels;
 	const maxChannels = rawChannels === null || rawChannels === '' ? null : intIn(rawChannels, 'maxChannels');
 	const captionMinutesMonth = intIn(input.captionMinutesMonth ?? current?.captionMinutesMonth ?? 0, 'captionMinutesMonth');
-	return { id, name, unlimited, perHour, perDay, maxConcurrent: pick('maxConcurrent'), maxChannels, captionMinutesMonth };
+	return { id, name, ...text, unlimited, uploads, channels, pages, requestable, sortOrder, perHour, perDay, maxConcurrent: pick('maxConcurrent'), maxChannels, captionMinutesMonth };
 }
 
 /** Creates (new id) or replaces a tier definition. */
@@ -283,13 +359,35 @@ export async function saveTier(
 	const tier = { ...validateTier(id, input, previous), updatedAt: now, updatedBy: actorId };
 	await db
 		.prepare(
-			`INSERT INTO creator_tiers (id, name, unlimited, per_hour, per_day, max_concurrent, max_channels, caption_minutes_month, updated_at, updated_by)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-			 ON CONFLICT (id) DO UPDATE SET name = excluded.name, unlimited = excluded.unlimited, per_hour = excluded.per_hour,
+			`INSERT INTO creator_tiers (id, name, name_ar, description, description_ar, unlimited, uploads, channels, pages, requestable, sort_order,
+			   per_hour, per_day, max_concurrent, max_channels, caption_minutes_month, updated_at, updated_by)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			 ON CONFLICT (id) DO UPDATE SET name = excluded.name, name_ar = excluded.name_ar, description = excluded.description,
+			   description_ar = excluded.description_ar, unlimited = excluded.unlimited, uploads = excluded.uploads, channels = excluded.channels,
+			   pages = excluded.pages, requestable = excluded.requestable, sort_order = excluded.sort_order, per_hour = excluded.per_hour,
 			   per_day = excluded.per_day, max_concurrent = excluded.max_concurrent, max_channels = excluded.max_channels,
 			   caption_minutes_month = excluded.caption_minutes_month, updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
 		)
-		.bind(id, tier.name, tier.unlimited ? 1 : 0, tier.perHour, tier.perDay, tier.maxConcurrent, tier.maxChannels, tier.captionMinutesMonth, now, actorId)
+		.bind(
+			id,
+			tier.name,
+			tier.nameAr,
+			tier.description,
+			tier.descriptionAr,
+			tier.unlimited ? 1 : 0,
+			tier.uploads ? 1 : 0,
+			tier.channels ? 1 : 0,
+			tier.pages ? 1 : 0,
+			tier.requestable ? 1 : 0,
+			tier.sortOrder,
+			tier.perHour,
+			tier.perDay,
+			tier.maxConcurrent,
+			tier.maxChannels,
+			tier.captionMinutesMonth,
+			now,
+			actorId,
+		)
 		.run();
 	return { previous, tier };
 }
@@ -305,7 +403,7 @@ export async function deleteTier(
 	by: { actorId: string; reason?: string | null } = { actorId: 'unknown' },
 	now = new Date().toISOString(),
 ): Promise<{ previous: CreatorTier }> {
-	if (id === DEFAULT_CREATOR_TIER.id || id === DEFAULT_UNLIMITED_TIER.id) throw new CreatorTierError(409, 'tier_shipped', 'The Creator and Unlimited tiers cannot be deleted');
+	if (SHIPPED_TIERS.some((t) => t.id === id)) throw new CreatorTierError(409, 'tier_shipped', 'The Member, Creator and Unlimited tiers cannot be deleted');
 	const previous = await readTier(db, id);
 	if (!previous) throw new CreatorTierError(404, 'tier_not_found');
 	const held = await db.prepare('SELECT COUNT(*) AS n FROM creator_tier_assignments WHERE tier_id = ?').bind(id).first<{ n: number }>();
@@ -407,7 +505,7 @@ export async function purgeTiers(db: D1Database, cutoff: string, limit = 100): P
 	const purged: string[] = [];
 	const failed: { id: string; error: string }[] = [];
 	for (const { id } of results ?? []) {
-		if (id === DEFAULT_CREATOR_TIER.id || id === DEFAULT_UNLIMITED_TIER.id) {
+		if (SHIPPED_TIERS.some((t) => t.id === id)) {
 			failed.push({ id, error: 'shipped tier' });
 			continue;
 		}

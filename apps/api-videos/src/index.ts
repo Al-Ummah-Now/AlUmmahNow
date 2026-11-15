@@ -52,6 +52,7 @@ import { pruneRateLimits, rateLimitMiddleware } from "./middleware/rate-limit";
 import { UPLOAD_CONTINUE_PATHS, UPLOAD_SESSION_PATHS, uploadContinueLimitMiddleware, uploadSessionLimitMiddleware } from "./middleware/upload-limits";
 import { pruneLimitHits } from "./lib/creatorTiers";
 import { channelCreateGate, handleCreatorAccess } from "./endpoints/creator/creatorAccess";
+import { handleCreateTierRequest, handleUpgradeOverview, handleWithdrawTierRequest } from "./endpoints/creator/tierRequests";
 import { logger } from './lib/logger';
 import { registerAllRouters } from './routers';
 import type { AppBindings } from './base';
@@ -244,6 +245,8 @@ for (const path of [
 }
 app.use('/api/moderation/reports', edgeRateLimit('REPORT_LIMITER', 'videos.report'));
 app.use('/api/moderation/reports', requireHuman('videos.report', 'always'));
+// Tier requests on /upgrade: Turnstile on every request (wiki AUN-TIER-REQUESTS)
+app.use('/api/me/tier-requests', requireHuman('videos.tier_request', 'always'));
 for (const path of ['/api/videos/upload/initiate', '/api/videos/upload/batch/initiate']) {
 	app.use(path, edgeRateLimit('UPLOAD_INITIATE_LIMITER', 'videos.upload_initiate'));
 }
@@ -258,6 +261,10 @@ app.use('/api/channels/', channelCreateGate);
 app.get('/api/me/creator', authMiddleware, handleCreatorAccess);
 // Native app attestation: App Attest / Play Integrity → X-AUN-Native-Proof (lib/attestation, #1274)
 app.route('/api/apps/attestation', attestationRouter as never);
+// Tier requests (/upgrade): the tiers, the user's request, filing and withdrawing one
+app.get('/api/tiers/upgrade', handleUpgradeOverview);
+app.post('/api/me/tier-requests', authMiddleware, handleCreateTierRequest);
+app.post('/api/me/tier-requests/:id/withdraw', authMiddleware, handleWithdrawTierRequest);
 // Whether the next comment/post/report needs a Turnstile token (middleware/bot-protection.ts)
 app.get('/api/me/human-check', authMiddleware, humanCheckStatus);
 

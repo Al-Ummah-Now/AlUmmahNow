@@ -55,6 +55,10 @@ export const NOTIFICATION_KEYS = [
   'reviewRejected',
   /** To reviewers: a video waits in the review queue (params: videoTitle, escalated = 0 | 1) */
   'reviewNeeded',
+  /** Tier requests (wiki AUN-TIER-REQUESTS): an admin approved the user's request (params: tier_en, tier_ar); always on */
+  'tierRequestApproved',
+  /** An admin declined it (params: tier_en, tier_ar; the reason is on /upgrade); always on */
+  'tierRequestDeclined',
 ] as const;
 export type NotificationKey = (typeof NOTIFICATION_KEYS)[number];
 
@@ -71,6 +75,8 @@ export const NOTIFICATION_KEY_CATEGORY: Record<NotificationKey, NotificationCate
   reviewApproved: 'account',
   reviewRejected: 'account',
   reviewNeeded: 'account',
+  tierRequestApproved: 'account',
+  tierRequestDeclined: 'account',
 };
 
 /** Legacy realtime notification type (drives the toast icon). */
@@ -88,6 +94,8 @@ export const NOTIFICATION_KEY_TYPE: Record<NotificationKey, RealtimeNotification
   reviewApproved: 'system',
   reviewRejected: 'system',
   reviewNeeded: 'system',
+  tierRequestApproved: 'system',
+  tierRequestDeclined: 'system',
 };
 
 /** Per-channel bell: every upload & live, highlights (long-form uploads & live), or nothing. */

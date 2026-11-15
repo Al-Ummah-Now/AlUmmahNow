@@ -1,19 +1,24 @@
 /**
  * Creator tiers (videos-side; never Auth RBAC).
  *
- * Uploading and creating channels are by invitation: a user with no tier
- * ("None", the default) can do neither. Admins assign a tier in the videos
- * admin (Creators page, user page). A tier sets the upload limits and how many
- * channels its holder may own. The videos "Super Admin" role is always
- * Unlimited. Managers and editors of a channel upload under the channel
- * owner's tier.
+ * Every user holds a tier. A user with no assignment row holds the shipped
+ * **Member** tier, the default, whose capability flags allow no uploads and no
+ * channel creation, so uploading and creating channels stay by invitation
+ * (wiki AUN-TIER-REQUESTS). Admins assign a tier in the videos admin (Users,
+ * user page) or approve a user's tier request (/upgrade). A tier sets what its
+ * holder may do (uploads, channels, pages), the upload limits and how many
+ * channels they may own. The videos "Super Admin" role is always Unlimited.
+ * Managers and editors of a channel upload under the channel owner's tier.
  *
  * An assignment carries its `source` so paid subscriptions can grant tiers
  * later next to the admin's own assignments.
  */
 
 /** Tier ids shipped by migration; admins can add more. `unlimited` ignores every limit. */
-export const CREATOR_TIER_IDS = { creator: 'creator', unlimited: 'unlimited' } as const;
+export const CREATOR_TIER_IDS = { member: 'member', creator: 'creator', unlimited: 'unlimited' } as const;
+
+/** The tier of every user without an assignment row (wiki AUN-TIER-REQUESTS). */
+export const DEFAULT_TIER_ID = CREATOR_TIER_IDS.member;
 
 export const CREATOR_TIER_SOURCES = ['admin', 'subscription'] as const;
 export type CreatorTierSource = (typeof CREATOR_TIER_SOURCES)[number];
@@ -40,8 +45,24 @@ export function creatorTierOrigin(assignment: Pick<CreatorTierAssignment, 'sourc
 export interface CreatorTier {
   id: string;
   name: string;
-  /** No session, hourly, daily, concurrency or channel limit */
+  /** Arabic name shown on the Arabic /upgrade page; null = `name` */
+  nameAr: string | null;
+  /** One line under the name on /upgrade (English); null = none */
+  description: string | null;
+  /** Arabic line under the name; null = `description` */
+  descriptionAr: string | null;
+  /** No session, hourly, daily, concurrency or channel limit (implies uploads and channels) */
   unlimited: boolean;
+  /** May upload videos (the Member tier ships with false: uploads are by invitation) */
+  uploads: boolean;
+  /** May create channels, up to `maxChannels` */
+  channels: boolean;
+  /** May create pages (reserved: no page feature reads it yet; shown on /upgrade) */
+  pages: boolean;
+  /** Listed on /upgrade, where users may request it */
+  requestable: boolean;
+  /** Order on /upgrade and in the admin (low first) */
+  sortOrder: number;
   /** Upload sessions (one per video) per hour */
   perHour: number;
   /** Upload sessions per day */
@@ -60,11 +81,44 @@ export interface CreatorTier {
   updatedBy: string | null;
 }
 
+/**
+ * The shipped Member tier: every user's tier until an admin assigns another.
+ * Watching, saving and commenting are never gated; it allows no uploads and no
+ * channels (both are by invitation during the beta), which an admin can change
+ * later without code (wiki AUN-TIER-REQUESTS).
+ */
+export const DEFAULT_MEMBER_TIER: Omit<CreatorTier, 'updatedAt' | 'updatedBy'> = {
+  id: CREATOR_TIER_IDS.member,
+  name: 'Member',
+  nameAr: 'عضو',
+  description: null,
+  descriptionAr: null,
+  unlimited: false,
+  uploads: false,
+  channels: false,
+  pages: false,
+  requestable: true,
+  sortOrder: 0,
+  perHour: 10,
+  perDay: 50,
+  maxConcurrent: 3,
+  maxChannels: 1,
+  captionMinutesMonth: 0,
+};
+
 /** The defaults of the shipped Creator tier (also the fallback when D1 has no row). */
 export const DEFAULT_CREATOR_TIER: Omit<CreatorTier, 'updatedAt' | 'updatedBy'> = {
   id: CREATOR_TIER_IDS.creator,
   name: 'Creator',
+  nameAr: 'صانع محتوى',
+  description: null,
+  descriptionAr: null,
   unlimited: false,
+  uploads: true,
+  channels: true,
+  pages: false,
+  requestable: true,
+  sortOrder: 10,
   perHour: 300,
   perDay: 2000,
   maxConcurrent: 20,
@@ -75,7 +129,15 @@ export const DEFAULT_CREATOR_TIER: Omit<CreatorTier, 'updatedAt' | 'updatedBy'> 
 export const DEFAULT_UNLIMITED_TIER: Omit<CreatorTier, 'updatedAt' | 'updatedBy'> = {
   id: CREATOR_TIER_IDS.unlimited,
   name: 'Unlimited',
+  nameAr: 'غير محدود',
+  description: null,
+  descriptionAr: null,
   unlimited: true,
+  uploads: true,
+  channels: true,
+  pages: true,
+  requestable: false,
+  sortOrder: 100,
   perHour: 0,
   perDay: 0,
   maxConcurrent: 0,
@@ -90,7 +152,18 @@ export const CREATOR_TIER_BOUNDS = {
   maxConcurrent: { min: 1, max: 1000 },
   maxChannels: { min: 1, max: 1000 },
   captionMinutesMonth: { min: 0, max: 1_000_000 },
+  sortOrder: { min: 0, max: 10_000 },
 } as const;
+
+/** Text lengths of a tier's names and descriptions. */
+export const CREATOR_TIER_TEXT = { name: 60, description: 200 } as const;
+
+/** Whether a tier lets its holder upload (unlimited implies it). */
+export const tierAllowsUploads = (tier: Pick<CreatorTier, 'unlimited' | 'uploads'> | null | undefined): boolean => !!tier && (tier.unlimited || tier.uploads);
+/** Whether a tier lets its holder create channels (unlimited implies it). */
+export const tierAllowsChannels = (tier: Pick<CreatorTier, 'unlimited' | 'channels'> | null | undefined): boolean => !!tier && (tier.unlimited || tier.channels);
+/** Whether a tier lets its holder create pages (unlimited implies it). */
+export const tierAllowsPages = (tier: Pick<CreatorTier, 'unlimited' | 'pages'> | null | undefined): boolean => !!tier && (tier.unlimited || tier.pages);
 
 /** A user's tier assignment. */
 export interface CreatorTierAssignment {
@@ -103,11 +176,13 @@ export interface CreatorTierAssignment {
 
 /**
  * What the signed-in user may do (GET /api/me/creator), for the web UI to show
- * or hide upload and channel-create controls. `via` says why: their own tier,
- * the super admin role, or none.
+ * or hide upload and channel-create controls. `via` says why: an assigned
+ * tier, the super admin role, or none ('none': no assignment, so the user holds
+ * the default Member tier, which `tier` then describes).
  */
 export interface CreatorAccess {
-  tier: { id: string; name: string; unlimited: boolean } | null;
+  /** The user's own tier (Member when none is assigned) with its uploads and channels flags */
+  tier: { id: string; name: string; unlimited: boolean; uploads?: boolean; channels?: boolean } | null;
   via: 'tier' | 'super_admin' | 'none';
   /**
    * True when the user can upload somewhere: with their own tier (to the
@@ -122,6 +197,8 @@ export interface CreatorAccess {
    */
   uploadChannelIds?: string[];
   canCreateChannel: boolean;
+  /** The tier's "create pages" flag (no page feature reads it yet) */
+  canCreatePages?: boolean;
   channelsOwned: number;
   maxChannels: number | null;
   limits: { perHour: number; perDay: number; maxConcurrent: number } | null;
@@ -132,7 +209,7 @@ export interface CreatorAccess {
 
 /** Error codes the upload and channel-create paths answer with (the web maps them to en/ar messages). */
 export const CREATOR_ERROR_CODES = {
-  /** 403: the user has no creator tier */
+  /** 403: the user's tier does not allow uploads (or channel creation) */
   uploadsByInvitation: 'uploads_by_invitation',
   /** 403: the tier's channel limit is reached */
   channelLimit: 'channel_limit',

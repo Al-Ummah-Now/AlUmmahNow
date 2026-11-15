@@ -2,7 +2,8 @@
  * Who may upload, and how much: creator tiers (lib/creatorTiers.ts) on every
  * route that opens or continues an upload.
  *
- * - No tier: 403 `uploads_by_invitation` on every upload-session path, TUS
+ * - A tier without the uploads flag (Member, the default): 403
+ *   `uploads_by_invitation` on every upload-session path, TUS
  *   create and upload complete. Nothing is created or counted.
  * - Unlimited tier or the videos "Super Admin" role: no limits, nothing counted.
  * - Any other tier: its limits, counted against the tier holder (the channel
@@ -28,7 +29,7 @@
  * the limits; the tier gate itself applies everywhere.
  */
 import type { Context } from 'hono';
-import { channelRoleOf, CREATOR_ERROR_CODES, type CreatorTier } from '@al-ummah/shared-types';
+import { channelRoleOf, CREATOR_ERROR_CODES, tierAllowsUploads, type CreatorTier } from '@al-ummah/shared-types';
 import { logger } from '../lib/logger';
 import { recordLimitHit, resolveCreator, type ResolvedCreator } from '../lib/creatorTiers';
 import { getTusSessionKey, parseTusMetadata, type TusProxySession } from '../lib/bunny/tus';
@@ -213,8 +214,8 @@ function creatorUploadMiddleware(options: GateOptions) {
       logger.error('[Uploads] Creator tier lookup failed; refusing the upload', { userId, error: error instanceof Error ? error.message : String(error) });
       return unavailable(c);
     }
-    if (!creator.tier) {
-      logger.info('[Uploads] Upload refused: no creator tier', { userId, subjectId: creator.subjectId, path: c.req.path });
+    if (!creator.tier || !tierAllowsUploads(creator.tier)) {
+      logger.info('[Uploads] Upload refused: the tier allows no uploads', { userId, subjectId: creator.subjectId, tierId: creator.tier?.id ?? null, path: c.req.path });
       return invitationOnly(c);
     }
     c.set('creatorTier', creator);

@@ -112,6 +112,7 @@ export * from './studio-comments';
 export * from './playlist-bulk';
 // Creator tiers: who may upload and create channels (videos admin)
 export * from './creator-tiers';
+export * from './tier-requests';
 export * from './thumbnail-crop';
 export * from './roles';
 // Staff passkey rule and step-up (wiki AUTH-PASSKEYS): admin-api and admin-web read Auth tokens the same way

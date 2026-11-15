@@ -12,6 +12,9 @@
  *   counters and in-flight slots (api-videos middleware/rate-limit.ts, lib/creatorTiers.ts), keyed by
  *   the user id. Deleted: the account is gone, so nothing is left to limit.
  * - SEARCH_DB creator_tier_assignments: the user's creator tier (who assigned it, when). Deleted.
+ * - SEARCH_DB tier_requests (wiki AUN-TIER-REQUESTS): the user's requests for a tier, with the name
+ *   and "about you" they wrote. Deleted. Requests the user decided as staff keep the decision, with
+ *   the decider scrubbed to the placeholder.
  * - SEARCH_DB admin_deletions / admin_jobs: kept as action records, the user scrubbed to
  *   placeholders (#1253, admin-history.ts).
  *
@@ -31,6 +34,7 @@ export interface UserTracesResult {
   categorySuggestions: number;
   rateLimits: number;
   creatorTier: number;
+  tierRequests: number;
   adminDeletions: number;
   adminJobs: number;
 }
@@ -56,12 +60,14 @@ export async function eraseUserTraces(
       )
       .bind(erasedMarker, userId),
   ]);
-  const [suggestions, windows, leases, tier] = search
+  const [suggestions, windows, leases, tier, requests, decided] = search
     ? await search.batch([
         search.prepare('DELETE FROM category_suggestions WHERE user_id = ? RETURNING subject_id').bind(userId),
         search.prepare('DELETE FROM upload_rate_windows WHERE user_id = ? RETURNING operation').bind(userId),
         search.prepare('DELETE FROM upload_rate_leases WHERE user_id = ? RETURNING operation').bind(userId),
         search.prepare('DELETE FROM creator_tier_assignments WHERE user_id = ? RETURNING tier_id').bind(userId),
+        search.prepare('DELETE FROM tier_requests WHERE user_id = ? RETURNING id').bind(userId),
+        search.prepare('UPDATE tier_requests SET decided_by = ? WHERE decided_by = ? RETURNING id').bind(erasedMarker, userId),
       ])
     : [];
   const history = search ? await eraseUserAdminHistory(search, userId, erasedMarker) : { deletions: 0, jobs: 0 };
@@ -72,6 +78,7 @@ export async function eraseUserTraces(
     categorySuggestions: count(suggestions),
     rateLimits: count(windows) + count(leases),
     creatorTier: count(tier),
+    tierRequests: count(requests) + count(decided),
     adminDeletions: history.deletions,
     adminJobs: history.jobs,
   };
