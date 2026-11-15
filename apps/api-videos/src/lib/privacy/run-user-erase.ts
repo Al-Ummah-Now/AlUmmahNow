@@ -13,7 +13,8 @@
  *   keyed prefixes: watch_history/{userId}:, upload-defaults/{userId}/,
  *     channel_sections/{channelId}/, community posts/{channelId}/
  *   privacy_footprints: its playlists without a channel (Watch later, personal playlists)
- *   NOTIFICATIONS_DB subscriptions, its footprints, then the profile
+ *   NOTIFICATIONS_DB subscriptions, its footprints, channel-team invitations
+ *   and activity rows (cancelled / anonymized), then the profile
  *   (hooks remove Bunny media and the channels' and profile's collections)
  *
  * Not covered, by design (run accounts only): reactions and comments on
@@ -36,7 +37,8 @@ import { sectionOrderKey } from '../channelSectionOrder';
 import { eraseUserSubscriptions } from '../subscription-store';
 import { isOwnershipComplete } from '../search/ownership';
 import { BudgetExhausted, OperationBudget, asBucket, deleteKeys, readJson, type BucketLike } from './scan';
-import type { ErasureHooks, PrivacyBuckets } from './user-data';
+import { DELETED_USER_ID, type ErasureHooks, type PrivacyBuckets } from './user-data';
+import { anonymizeTeamActivity, cancelInvitesOfUser } from '../channelTeam';
 import { eraseImageOwners } from '../csam/imageOwners';
 
 type Json = Record<string, any>;
@@ -218,6 +220,11 @@ export async function eraseRunUserData(
 			// Move from YouTube: imports, snapshots, consents, staged captions (Google token revoked)
 			budget.spend(2);
 			await eraseYoutubeImports(db, env as never, userId);
+			// Channel teams: invitations to or from the account are cancelled, its id
+			// leaves the activity log and closed invitations (as in eraseUserData)
+			budget.spend(2);
+			await cancelInvitesOfUser(db, userId);
+			await anonymizeTeamActivity(db, userId, DELETED_USER_ID);
 			budget.spend();
 			const profiles = asBucket(env.profiles);
 			const stored = await profiles.get(userId);

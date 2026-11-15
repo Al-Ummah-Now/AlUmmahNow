@@ -153,11 +153,14 @@ describe('inviting (§4.1, §4.2)', () => {
 	});
 
 	it('a removed member\'s older invitations cannot bring them back', async () => {
+		// Stamps compare by millisecond: step past one between the changes
+		const tick = () => new Promise((resolve) => setTimeout(resolve, 3));
 		const withSara = () => teamEnv({ team: channel('team', { members: [member('admin1', 'admin'), member('ed', 'editor'), member('sara', 'moderator')] }) });
 		// An email invitation sent while she was on the team, already seen (tied): it stays
 		// visibly pending (closing it would name the account to the inviter), but can't be used
 		const { env, db } = withSara();
 		await invite(env, 'owner', { email: 'sara@test.local', role: 'admin' });
+		await tick();
 		await myInvites(env, 'sara');
 		assert.equal((await as('owner').request('/api/channels/team/members/sara', { method: 'DELETE' }, env as never)).status, 200);
 		assert.equal(inviteRows(db)[0].status, 'pending');
@@ -172,6 +175,7 @@ describe('inviting (§4.1, §4.2)', () => {
 		// The stamp holds even when the activity log can't be written
 		const { env: env4 } = withSara();
 		await invite(env4, 'owner', { email: 'sara@test.local', role: 'admin' });
+		await tick();
 		(env4 as any).SEARCH_DB.db.exec('DROP TABLE channel_audit');
 		assert.equal((await as('owner').request('/api/channels/team/members/sara', { method: 'DELETE' }, env4 as never)).status, 200);
 		const [stale] = await myInvites(env4, 'sara');
@@ -181,6 +185,7 @@ describe('inviting (§4.1, §4.2)', () => {
 		// Leaving outranks an older invitation too
 		const { env: env3 } = withSara();
 		await invite(env3, 'owner', { email: 'sara@test.local', role: 'admin' });
+		await tick();
 		assert.equal((await as('sara').request('/api/channels/team/members/sara', { method: 'DELETE' }, env3 as never)).status, 200);
 		const [old] = await myInvites(env3, 'sara');
 		assert.equal(await codeOf(await respond(env3, 'sara', old.id, 'accept')), 'invite_not_found');
@@ -189,6 +194,7 @@ describe('inviting (§4.1, §4.2)', () => {
 		// One not yet seen (not tied) still lists, but accepting is refused
 		const { env: env2, db: db2 } = withSara();
 		await invite(env2, 'owner', { email: 'sara@test.local', role: 'admin' });
+		await tick();
 		assert.equal((await as('owner').request('/api/channels/team/members/sara', { method: 'DELETE' }, env2 as never)).status, 200);
 		const [left] = await myInvites(env2, 'sara');
 		assert.equal(await codeOf(await respond(env2, 'sara', left.id, 'accept')), 'invite_not_found');
@@ -196,6 +202,7 @@ describe('inviting (§4.1, §4.2)', () => {
 		assert.equal(inviteRows(db2)[0].status, 'cancelled');
 
 		// A new invitation after the removal works
+		await tick();
 		await invite(env2, 'owner', { handle: 'SaraTalks', role: 'moderator' });
 		const [fresh] = await myInvites(env2, 'sara');
 		assert.equal((await respond(env2, 'sara', fresh.id, 'accept')).status, 200);
