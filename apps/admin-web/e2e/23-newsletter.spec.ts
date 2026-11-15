@@ -59,7 +59,7 @@ test.describe('newsletter', () => {
     await expectNoAxeViolations(page, 'newsletter draft (en)');
 
     // Send asks first and names the count; with no confirmed subscribers it stays off
-    const confirmed = await adminApi<{ subscribers: { confirmed: number } }>('/api/newsletter/issues?limit=1');
+    const confirmed = await adminApi<{ subscribers: { confirmed: number } }>('/api/newsletter/issues');
     if ((confirmed.body.result?.subscribers.confirmed ?? 0) === 0) await expect(page.getByTestId('newsletter-no-subscribers')).toBeVisible();
 
     await page.getByTestId('newsletter-back').click();

@@ -199,6 +199,8 @@ export const WORKERS: StackWorker[] = [
       // Step-up window (middleware/passkeys.ts): the admin E2E run signs in once in its global setup and
       // purges in its teardown, well past 15 minutes; the 900 s rule is unit tested (test/passkeys.test.ts)
       STEP_UP_MAX_AGE_S: '86400',
+      // Confirm and unsubscribe links in newsletter emails (lib/newsletter.ts) open www's pages
+      NEWSLETTER_SITE_URL: url('www'),
       ...TURNSTILE_TEST_VARS,
     },
   },
