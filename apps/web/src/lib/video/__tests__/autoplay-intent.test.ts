@@ -42,6 +42,30 @@ describe('autoplay intent', () => {
     expect(load().hasAutoplayIntent('next')).toBe(false);
   });
 
+  it('a client move that commits just after the fallback fired does not consume the loaded page\'s request (#1137)', () => {
+    jest.useFakeTimers();
+    let intent!: IntentModule;
+    let nav!: typeof import('../../navigation/navigate-or-load');
+    jest.isolateModules(() => {
+      jest.doMock('@/lib/logger-client', () => ({ logger: { warn: jest.fn(), debug: jest.fn(), info: jest.fn(), error: jest.fn() } }));
+      intent = jest.requireActual('../autoplay-intent');
+      nav = jest.requireActual('../../navigation/navigate-or-load');
+    });
+    const assign = jest.fn();
+    window.history.replaceState(null, '', '/en/video/a');
+    intent.requestAutoplay('next', { auto: true });
+    // The countdown's push has not committed after 2 s: the fallback starts loading the page...
+    nav.navigateOrLoad(() => undefined, '/en/video/next', 2000, assign);
+    jest.advanceTimersByTime(2000);
+    expect(assign).toHaveBeenCalled();
+    // ...then the client move commits after all and the next video mounts on this page
+    intent.clearAutoplayIntent('next');
+    // The loaded page still starts the video on its own
+    const afterLoad = load();
+    expect(afterLoad.hasAutoplayIntent('next')).toBe(true);
+    expect(afterLoad.isAutoAdvance('next')).toBe(true);
+  });
+
   it('expires: an old request never starts a later visit', () => {
     jest.useFakeTimers();
     jest.setSystemTime(new Date('2026-11-13T10:00:00Z'));

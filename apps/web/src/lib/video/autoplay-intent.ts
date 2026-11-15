@@ -11,9 +11,14 @@
  * and consumed when the requested video mounts, so a later reload or a shared link still does not
  * autoplay.
  *
+ * The stored copy is kept while that fallback load is on its way: the client-side move can commit
+ * just after the fallback fired, and its mount must not consume what the loaded page needs (#1137).
+ *
  * `auto` marks an advance the viewer did not ask for (the countdown ran out): that view is
  * counted as autoplayed in creator analytics.
  */
+
+import { isPageLoadPending } from '@/lib/navigation/navigate-or-load';
 
 interface Intent {
   videoId: string;
@@ -75,6 +80,8 @@ export function isAutoAdvance(videoId: string): boolean {
 /** Called once the requested video is mounted, so a later plain visit does not autoplay. */
 export function clearAutoplayIntent(videoId: string): void {
   if (pending?.videoId === videoId) pending = null;
+  // A fallback load is replacing this page: the loaded page consumes the stored request
+  if (isPageLoadPending()) return;
   if (stored()?.videoId === videoId) {
     try {
       session()?.removeItem(STORAGE_KEY);
