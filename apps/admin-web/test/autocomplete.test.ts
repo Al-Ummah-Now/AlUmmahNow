@@ -27,6 +27,7 @@ import {
   optionsFor,
   phaseOf,
   received,
+  reopened,
   step,
   showInitial,
   typed,
@@ -361,5 +362,24 @@ describe('moderation filters by reported item and reporter', () => {
     assert.equal(entitySuggestKind('post'), 'post');
     assert.equal(entitySuggestKind('livestream'), null);
     assert.equal(entitySuggestKind(undefined), null);
+  });
+});
+
+describe('reopened (focus or click on a picker)', () => {
+  const list: InitialList = { items: [], next: null, status: 'ready' };
+  it('stays open when focus lands after a real query, before its answer, and the answer shows', () => {
+    const asking = typed(initialState(), 'someone@example.com', list);
+    const focused = reopened(asking, list);
+    assert.equal(focused.open, true);
+    const answered = received(focused, 'pick', 'someone@example.com', [{ id: 'usr_1', label: 'Someone' } as AutocompleteItem]);
+    assert.equal(answered.open, true);
+    assert.equal(answered.options.length, 1);
+  });
+  it('stays closed for an answered query with nothing to show', () => {
+    const none = received(typed(initialState(), 'nobody', list), 'pick', 'nobody', []);
+    assert.equal(reopened({ ...none, open: false }, list).open, none.options.length > 0);
+  });
+  it('shows the initial list when nothing real is typed', () => {
+    assert.equal(reopened(initialState(), list).open, true);
   });
 });

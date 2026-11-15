@@ -187,6 +187,17 @@ export function failed(state: AutocompleteState, mode: AutocompleteMode, query: 
   return { ...state, options: optionsFor(mode, query, [], rules), status: 'error', active: -1 };
 }
 
+/**
+ * The box got focus or a click (pickers with initial results). Nothing real typed: the initial list.
+ * A real query typed: open while its answer is on the way, too. Focus can land after the typing (a
+ * test's fill, a hydration replay); closing then left the answer's options hidden, since an
+ * answer never reopens the list (TRANSFER-02 flake, #1399).
+ */
+export function reopened(state: AutocompleteState, initial: InitialList | null): AutocompleteState {
+  if (state.query.trim().length < MIN_QUERY) return showInitial({ ...state, open: true }, initial);
+  return { ...state, open: state.options.length > 0 || state.status === 'loading' };
+}
+
 export const closed = (state: AutocompleteState): AutocompleteState => ({ ...state, open: false, active: -1 });
 
 const fold = (text: string | null | undefined) => (text ?? '').toLocaleLowerCase();

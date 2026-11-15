@@ -52,6 +52,7 @@ import {
   isArabicInitial,
   ARABIC_INITIAL_STYLE,
   received,
+  reopened,
   resolveUrl,
   suggestUrl,
   typed,
@@ -215,7 +216,7 @@ export function Autocomplete({
 
   const openInitial = useCallback(() => {
     if (!initialOn) return;
-    setState((s) => (s.query.trim().length >= MIN_QUERY ? { ...s, open: s.options.length > 0 } : showInitial({ ...s, open: true }, initialRef.current)));
+    setState((s) => reopened(s, initialRef.current));
     if (!initialRef.current || (initialRef.current.status === 'error' && initialRef.current.items.length === 0)) loadInitial(null);
   }, [initialOn, loadInitial]);
 
