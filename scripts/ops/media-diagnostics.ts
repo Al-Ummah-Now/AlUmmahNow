@@ -193,7 +193,7 @@ async function main(): Promise<void> {
 	await containers(names);
 	for (const s of [names.media, names.videos, names.admin]) await logs(s, since, until, search);
 	// The transcoder container's own output (stdout/stderr, exits), every level
-	const app = `${names.media.replace(/-(stage|qa)$/, '')}-transcoder${env === 'production' ? '' : `-${env}`}`;
+	const app = `${names.media}-transcoder`;
 	await logs(app, since, until, search, '$metadata.service', true);
 	await logs(app, since, until, search, '$containers.application', true);
 	process.stdout.write(out.join('\n') + '\n');
