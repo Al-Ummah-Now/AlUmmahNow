@@ -11,7 +11,7 @@ import { test, expect } from './support/fixtures';
 import { adminApi, readTokens } from './support/api';
 import { LOCAL_STACK, RUN_TAG, VIDEOS_API_URL, WEB_APP_URL } from './support/env';
 import { stackSql } from './support/local-stack';
-import { expectDirection, openMainNav } from './support/ui';
+import { chooseLanguage } from './support/ui';
 
 const SUFFIX = `${RUN_TAG}-${Date.now().toString(36)}`.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(-24);
 const VALUE = `e2e_${SUFFIX}`.replace(/_+$/, '');
@@ -146,13 +146,9 @@ test.describe('video categories', () => {
 
   test('CAT-03 the Arabic page is right to left with Arabic labels', async ({ page }) => {
     await page.goto('/categories');
-    await openMainNav(page);
-    await page.getByTestId('language-select').selectOption('ar');
-    await expectDirection(page, 'ar');
+    await chooseLanguage(page, 'ar');
     await expect(page.getByRole('heading', { level: 1, name: 'التصنيفات' })).toBeVisible();
     await expect(page.locator('[data-testid="category-row"][data-value="fiqh"]')).toContainText('الفقه');
-    await openMainNav(page);
-    await page.getByTestId('language-select').selectOption('en');
-    await expectDirection(page, 'en');
+    await chooseLanguage(page, 'en');
   });
 });
