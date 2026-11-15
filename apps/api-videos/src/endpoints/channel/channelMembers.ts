@@ -416,8 +416,8 @@ export class ChannelMemberRemove extends AuthenticatedRoute {
 		if (rejected) return fail(c, rejected.status, rejected.code, rejected.message);
 		if (removedRole && channel) {
 			await recordTeamActivity(c.env as never, executionCtx(c), [{ channelId: params.id, actorId, action: leaving ? 'member_left' : 'member_removed', targetUserId: params.userId, oldRole: removedRole }]);
-			// Their own open invitations to this channel can't bring them back (an
-			// email one not yet tied is refused at accept: removedSince)
+			// Their @handle invitations to this channel are cancelled; email ones stay
+			// visibly pending and are refused at accept (membershipChangedSince)
 			if (!leaving && c.env.SEARCH_DB) {
 				try {
 					await cancelInvitesTo(c.env.SEARCH_DB as D1Database, params.id, params.userId);

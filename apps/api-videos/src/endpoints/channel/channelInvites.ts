@@ -49,7 +49,7 @@ import {
 	pendingChannelInvites,
 	readInvite,
 	recordTeamActivity,
-	removedSince,
+	membershipChangedSince,
 	settleClaim,
 	teamSeatLimit,
 	type InviteRow,
@@ -348,8 +348,8 @@ export class ChannelInviteAccept extends AuthenticatedRoute {
 			return fail(c, 409, 'shared_limit', 'You already help run the most channels allowed');
 		}
 
-		// Removed from the channel after this was sent: the removal outranks it
-		if (await removedSince(db, invite.channel_id, userId, invite.created_at)) {
+		// Removed, left or re-roled after this was sent: the later change outranks it
+		if (await membershipChangedSince(db, invite.channel_id, userId, invite.created_at)) {
 			await closeInvite(db, invite.id, 'cancelled');
 			return fail(c, 404, 'invite_not_found', 'This invitation is no longer open');
 		}

@@ -263,12 +263,13 @@ export function inviteAuditTarget(row: Pick<InviteRow, 'by_email' | 'invitee_use
 export const EMAIL_INVITEE_ACTOR = 'email-invitee';
 
 /**
- * Whether `userId` was removed from the channel after `since`: an invitation
- * from before a removal can't bring them back (the removal outranks it).
+ * Whether `userId`'s membership changed after `since` (removed, left, or their
+ * role changed): an invitation from before that can't bring them back or give
+ * back a role they lost; the later change outranks it.
  */
-export async function removedSince(db: D1Database, channelId: string, userId: string, since: string): Promise<boolean> {
+export async function membershipChangedSince(db: D1Database, channelId: string, userId: string, since: string): Promise<boolean> {
 	const row = await db
-		.prepare(`SELECT 1 FROM channel_audit WHERE channel_id = ? AND target_user_id = ? AND action = 'member_removed' AND created_at > ? LIMIT 1`)
+		.prepare(`SELECT 1 FROM channel_audit WHERE channel_id = ? AND target_user_id = ? AND action IN ('member_removed', 'member_left', 'role_changed') AND created_at > ? LIMIT 1`)
 		.bind(channelId, userId, since)
 		.first();
 	return Boolean(row);
@@ -290,8 +291,13 @@ async function cancelWhere(db: D1Database, where: string, binds: unknown[], now 
 export const cancelChannelInvites = (db: D1Database, channelId: string, now?: Date) => cancelWhere(db, 'channel_id = ?', [channelId], now);
 export const cancelInvitesSentBy = (db: D1Database, channelId: string, inviterId: string, now?: Date) =>
 	cancelWhere(db, 'channel_id = ? AND invited_by = ?', [channelId, inviterId], now);
+/**
+ * A removed member's @handle invitations to the channel. Email ones stay
+ * visibly pending (closing them would tell the inviter who owns the address);
+ * accept refuses them via membershipChangedSince.
+ */
 export const cancelInvitesTo = (db: D1Database, channelId: string, userId: string, now?: Date) =>
-	cancelWhere(db, 'channel_id = ? AND invitee_user_id = ?', [channelId, userId], now);
+	cancelWhere(db, 'channel_id = ? AND invitee_user_id = ? AND by_email = 0', [channelId, userId], now);
 /** Account erasure: every invitation to or from the user, on any channel. */
 export const cancelInvitesOfUser = (db: D1Database, userId: string, now?: Date) =>
 	cancelWhere(db, '(invitee_user_id = ? OR invited_by = ?)', [userId, userId], now);

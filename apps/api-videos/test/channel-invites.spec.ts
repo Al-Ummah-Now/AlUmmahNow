@@ -153,13 +153,24 @@ describe('inviting (§4.1, §4.2)', () => {
 
 	it('a removed member\'s older invitations cannot bring them back', async () => {
 		const withSara = () => teamEnv({ team: channel('team', { members: [member('admin1', 'admin'), member('ed', 'editor'), member('sara', 'moderator')] }) });
-		// An email invitation sent while she was on the team, already seen (tied): cancelled on removal
+		// An email invitation sent while she was on the team, already seen (tied): it stays
+		// visibly pending (closing it would name the account to the inviter), but can't be used
 		const { env, db } = withSara();
 		await invite(env, 'owner', { email: 'sara@test.local', role: 'admin' });
 		await myInvites(env, 'sara');
 		assert.equal((await as('owner').request('/api/channels/team/members/sara', { method: 'DELETE' }, env as never)).status, 200);
-		assert.equal(inviteRows(db)[0].status, 'cancelled');
-		assert.deepEqual(await myInvites(env, 'sara'), []);
+		assert.equal(inviteRows(db)[0].status, 'pending');
+		const [tied] = await myInvites(env, 'sara');
+		assert.equal(await codeOf(await respond(env, 'sara', tied.id, 'accept')), 'invite_not_found');
+		assert.equal(channelRoleOf(env.channels.read('team'), 'sara'), null);
+
+		// Leaving outranks an older invitation too
+		const { env: env3 } = withSara();
+		await invite(env3, 'owner', { email: 'sara@test.local', role: 'admin' });
+		assert.equal((await as('sara').request('/api/channels/team/members/sara', { method: 'DELETE' }, env3 as never)).status, 200);
+		const [old] = await myInvites(env3, 'sara');
+		assert.equal(await codeOf(await respond(env3, 'sara', old.id, 'accept')), 'invite_not_found');
+		assert.equal(channelRoleOf(env3.channels.read('team'), 'sara'), null);
 
 		// One not yet seen (not tied) still lists, but accepting is refused
 		const { env: env2, db: db2 } = withSara();
