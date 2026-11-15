@@ -193,6 +193,11 @@ export function RunPanel({ initial }: { initial: BackfillRun }) {
               <Stat label={t('mediaBackfill.estOps')} value={`${f.integer(est.classAOps)} · ${f.usd(est.opsUsd)}`} />
               <Stat label={t('mediaBackfill.estTotal')} value={f.usd(est.totalUsd)} strong testId="backfill-estimate-total" />
             </dl>
+            {est.ceiling && (
+              <p className="mt-3 text-sm text-fg" data-testid="backfill-estimate-ceiling">
+                {t('mediaBackfill.estCeiling', { ceiling: f.usd(est.ceiling.totalUsd), transcode: f.integer(est.ceiling.transcodeSeconds / 60) })}
+              </p>
+            )}
             <p className="mt-3 text-sm text-fg-muted">
               {est.basis.assumed ? t('mediaBackfill.basisAssumed') : t('mediaBackfill.basisMeasured', { jobs: f.integer(est.basis.jobs) })}
               {' '}{t('mediaBackfill.estVideoTime', { time: f.duration(est.videoSeconds) })}

@@ -9,6 +9,7 @@ import { useLanguage } from '@/i18n/I18nProvider';
 import type { MessageKey } from '@/i18n/translate';
 import { ErrorAlert, cardClass, fieldClass, primaryButtonClass } from '@/components/ui';
 import { useFormats } from './useFormats';
+import { Autocomplete } from '@/components/search/Autocomplete';
 import { logger } from '@/lib/logger-client';
 
 
@@ -31,7 +32,7 @@ export function NewRun() {
   const [onlyMissing, setOnlyMissing] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const ids = { channel: useId(), from: useId(), to: useId(), videos: useId(), missing: useId(), legend: useId() };
+  const ids = { from: useId(), to: useId(), videos: useId(), missing: useId(), legend: useId() };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,9 +84,8 @@ export function NewRun() {
 
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         {kind === 'channel' && (
-          <div className="flex flex-col gap-1">
-            <label htmlFor={ids.channel} className="text-sm font-medium text-fg">{t('mediaBackfill.channelId')}</label>
-            <input id={ids.channel} value={channelId} onChange={(e) => setChannelId(e.target.value)} className={fieldClass} dir="ltr" autoComplete="off" required data-testid="backfill-channel" />
+          <div className="sm:col-span-2">
+            <Autocomplete kind="channel" mode="pick" label={t('mediaBackfill.channelId')} defaultValue={channelId} onChange={(id) => setChannelId(id)} testId="backfill-channel" />
           </div>
         )}
         {kind === 'dates' && (

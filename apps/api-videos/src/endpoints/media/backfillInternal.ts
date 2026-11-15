@@ -2,6 +2,7 @@
  * R2 backfill, internal side (X-API-Key; admin-api proxies it behind media:manage and audit).
  * docs/media-delivery/BACKFILL.md.
  *
+ *   GET  /internal/media/backfill/overview                    this environment: videos without R2, likely and ceiling cost
  *   GET  /internal/media/backfill/runs                        recent runs
  *   POST /internal/media/backfill/runs { scope, actorId }     new run → estimating (queued)
  *   GET  /internal/media/backfill/runs/:id                    one run: status, estimate, settings, spend, counts
@@ -25,6 +26,7 @@ import { BackfillStateError, cancelRun, changeSettings, createRun, pauseRun, ret
 import { getRunRow, listItems, listRuns, readRun, runView, countsOf, spentOf } from '../../lib/media/backfill/store';
 import { channelVerification, flipChannel, flipGlobal, flipVideos, MAX_FLIP_VIDEOS } from '../../lib/media/backfill/flip';
 import { cancelRemovals, librarySummaries, listRemovals, RemovalError, retryRemoval, scheduleRemovals } from '../../lib/media/backfill/removal';
+import { backfillOverview } from '../../lib/media/backfill/overview';
 import type { BackfillEnv } from '../../lib/media/backfill/types';
 
 type E = { Bindings: BackfillEnv };
@@ -52,6 +54,8 @@ export function createBackfillInternalRouter() {
 		if (error instanceof MediaSettingsError) return c.json({ success: false, code: 'settings_refused', error: error.message, problems: error.problems }, 400);
 		throw error;
 	});
+
+	app.get('/overview', async (c) => c.json({ success: true, result: { overview: await backfillOverview(c.env) } }));
 
 	app.get('/runs', async (c) => c.json({ success: true, result: { runs: await listRuns(c.env.SEARCH_DB!, Number(c.req.query('limit')) || 20) } }));
 

@@ -19,6 +19,13 @@ admin: scope ─► estimate (queued) ─► sets the cap ─► Start
 admin: Play R2 first (video / channel / global)      │   admin: Retire library ─► grace period ─► Bunny delete
 ```
 
+0. **This environment** (top of the page, `GET /internal/media/backfill/overview`, read-only): live counts of the
+   videos with no ready R2 rendition (not live, not deleted) and their length, what Bunny stores for this environment
+   (cached 10 min per isolate), and what moving all of them would cost, **likely** (this environment's measured ratios,
+   copies = the missing videos' share of Bunny's bytes) and at the **ceiling** (`BACKFILL_CEILING`: 4 container-s per
+   video-s, 1.25 MB of renditions per video-s, 2 writes per video-s, never below the measured ratios; copies = all of
+   Bunny's bytes). Admins run the backfill in batches (a channel or a date range), each with its own estimate and cap.
+   Backfills run only from this page: never from CI, scripts or by an agent; CI and E2E use mocks and tiny seed data.
 1. **Scope** — all videos, one channel, an upload-date range, or a list of up to 500 ids; optionally only videos without
    a ready R2 rendition. Read from the `content_ownership` index (SEARCH_DB) in pages of 20, never an R2 list.
 2. **Estimate** (`op: estimate`, one page per message). For each video, the item is planned from real sizes: a
@@ -29,7 +36,8 @@ admin: Play R2 first (video / channel / global)      │   admin: Retire library
    check runs again when the video would start. Costs use `PRICES`
    (`lib/media/costs.ts`) with ratios measured from this environment's finished transcodes (`media_jobs`): container
    seconds, rendition bytes and objects per second of video. With no finished transcode yet the ratios are assumed and
-   the page says so. The cap starts at the estimate (rounded up to the cent).
+   the page says so. The estimate also carries a `ceiling` (the same videos at the ceiling ratios). The cap starts at
+   the likely estimate (rounded up to the cent); the admin may raise it toward the ceiling.
 3. **Start** needs a cap above 0. A tick (`op: tick`, every 20 s while running) starts videos up to the concurrency
    (capped by `MEDIA_MAX_TRANSCODES`) and the spacing between starts, and only when spent + what the videos in
    progress may still cost + the next video's estimate stays within the cap. Otherwise the run stops as **Stopped at

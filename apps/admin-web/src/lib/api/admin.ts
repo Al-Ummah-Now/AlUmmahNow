@@ -1,6 +1,6 @@
 'use server';
 
-import type { AdminJob, AdminJobStatus, AdminVideoMedia, BackfillItem, BackfillItemState, BackfillRun, BackfillScope, BackfillSettings, BunnyLibrarySummary, BunnyRemoval, ErrorStatus, LegacyRestorePlan, MediaHealthSnapshot, MediaOverride, MediaSettings, Report, ReportStats, TroubleshootLogs, TroubleshootTokenView } from '@al-ummah/shared-types';
+import type { AdminJob, AdminJobStatus, AdminVideoMedia, BackfillItem, BackfillItemState, BackfillOverview, BackfillRun, BackfillScope, BackfillSettings, BunnyLibrarySummary, BunnyRemoval, ErrorStatus, LegacyRestorePlan, MediaHealthSnapshot, MediaOverride, MediaSettings, Report, ReportStats, TroubleshootLogs, TroubleshootTokenView } from '@al-ummah/shared-types';
 import { AdminApiError, type ActionResult } from './errors';
 import { fetchAdmin, requestAdmin, navigateForPasskey } from './request';
 import type { TranscodeTroubleshoot, TroubleshootTokenTest } from './types';
@@ -423,6 +423,11 @@ export interface BackfillFlipResult {
   flipped?: string[];
   refused?: { videoId: string; problem: string }[];
   verification?: { videos: number; verified: number };
+}
+
+/** This environment: videos without an R2 rendition, likely and ceiling cost (live counts). */
+export async function getBackfillOverview(): Promise<BackfillOverview> {
+  return (await fetchAdmin<{ overview: BackfillOverview }>('/api/media/backfill/overview')).overview;
 }
 
 export async function listBackfillRuns(): Promise<BackfillRun[]> {

@@ -1,4 +1,5 @@
 /** R2 backfill of existing videos (AUN-R2-MIGRATION): estimate, copy + checksums, transcode, verify, budget, flip, Bunny removal. */
+import { backfillOverview, resetOverviewCache } from '../src/lib/media/backfill/overview';
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import { purgeVideoMedia } from '../src/lib/media/r2-delivery';
 import assert from 'node:assert/strict';
@@ -308,9 +309,41 @@ describe('backfill estimate', () => {
 		assert.equal(done.estimate!.egressBytes, SOURCE.length, "Bunny's Content-Range size");
 		assert.equal(done.estimate!.transcodeSeconds, 45, '90 s × 0.5 measured');
 		assert.equal(done.estimate!.basis.assumed, false);
+		const ceiling = done.estimate!.ceiling!;
+		assert.equal(ceiling.transcodeSeconds, 360, '90 s × 4 (the ceiling rate, above the measured 0.5)');
+		assert.equal(ceiling.egressBytes, done.estimate!.egressBytes, 'the copy is the real size in both');
+		assert.ok(ceiling.totalUsd > done.estimate!.totalUsd, 'the ceiling is above the likely cost');
 		assert.equal(done.settings.budgetUsd, Math.ceil(done.estimate!.totalUsd * 100) / 100, 'the cap starts at the estimate');
 		const item = (await listItems(env.SEARCH_DB, run.id, { state: 'pending' })).items[0]!;
 		assert.deepEqual([item.sourceFile, item.libraryId, item.hasOriginal], ['play_720p.mp4', LEGACY_LIB, false]);
+	});
+});
+
+describe('backfill overview', () => {
+	it('counts videos without a ready rendition and prices likely and ceiling from live counts', async () => {
+		resetOverviewCache();
+		const env = await makeEnv({ [id(1)]: legacyVideo(1), [id(2)]: legacyVideo(2) });
+		// id(2) already has a ready R2 rendition: not counted
+		await env.SEARCH_DB.prepare("INSERT INTO media_jobs (video_id, job_id, status, access, attempts, queued_at, updated_at, duration_seconds, container_seconds, bytes, objects) VALUES (?, 'j', 'ready', 'pub', 1, 't', 't', 0, 0, 0, 0)").bind(id(2)).run();
+		const GB = 1024 ** 3;
+		const o = await backfillOverview(env as never, Date.parse('2026-11-15T00:00:00Z'), async () => 10 * GB);
+		assert.equal(o.videos, 1);
+		assert.equal(o.videoSeconds, 90);
+		assert.equal(o.bunnyStoredBytes, 10 * GB);
+		assert.equal(o.likely.egressBytes, 5 * GB, 'half the video time is missing → half of what Bunny stores');
+		assert.equal(o.ceiling.egressBytes, 10 * GB, 'the ceiling copies all of it');
+		assert.equal(o.likely.transcodeSeconds, 45, 'measured 0.5');
+		assert.equal(o.ceiling.transcodeSeconds, 360, 'ceiling 4');
+		assert.ok(o.ceiling.totalUsd > o.likely.totalUsd);
+	});
+
+	it('still answers when Bunny cannot be read (copies not counted)', async () => {
+		resetOverviewCache();
+		const env = await makeEnv({ [id(1)]: legacyVideo(1) });
+		const o = await backfillOverview(env as never, Date.now(), async () => undefined);
+		assert.equal(o.bunnyStoredBytes, null);
+		assert.equal(o.likely.egressBytes, 0);
+		assert.equal(o.videos, 1);
 	});
 });
 

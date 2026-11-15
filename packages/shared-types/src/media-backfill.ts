@@ -73,7 +73,77 @@ export interface BackfillEstimate extends BackfillCost {
 	/** Seconds of video to transcode */
 	videoSeconds: number;
 	/** Ratios measured from this environment's finished transcodes (media_jobs) */
-	basis: { jobs: number; containerPerVideoSecond: number; renditionBytesPerVideoSecond: number; objectsPerVideoSecond: number; assumed: boolean };
+	basis: BackfillBasis;
+	/** The same videos at the ceiling ratios (BACKFILL_CEILING): what the run could cost at worst. Absent on estimates made before it existed. */
+	ceiling?: BackfillCost;
+	at: string;
+}
+
+/** Ratios a cost is computed with. */
+export interface BackfillBasis {
+	jobs: number;
+	containerPerVideoSecond: number;
+	renditionBytesPerVideoSecond: number;
+	objectsPerVideoSecond: number;
+	/** No finished transcodes to measure from: the ratios are assumed (shown as such) */
+	assumed: boolean;
+}
+
+/**
+ * The ceiling ratios: never below what was measured. 4 container-seconds per video-second (the worst
+ * measured, QA 2026-11-15: 3.75 on short clips, where container start-up dominates), renditions of
+ * 1.25 MB per video-second (a 10 Mbps ladder; QA and stage measure 0.09-0.11 MB), and 2 R2 writes per
+ * video-second (QA measures 1.85).
+ */
+export const BACKFILL_CEILING = { containerPerVideoSecond: 4, renditionBytesPerVideoSecond: 1_250_000, objectsPerVideoSecond: 2 } as const;
+
+export function ceilingBasis(basis: BackfillBasis): BackfillBasis {
+	return {
+		jobs: basis.jobs,
+		containerPerVideoSecond: Math.max(basis.containerPerVideoSecond, BACKFILL_CEILING.containerPerVideoSecond),
+		renditionBytesPerVideoSecond: Math.max(basis.renditionBytesPerVideoSecond, BACKFILL_CEILING.renditionBytesPerVideoSecond),
+		objectsPerVideoSecond: Math.max(basis.objectsPerVideoSecond, BACKFILL_CEILING.objectsPerVideoSecond),
+		assumed: false,
+	};
+}
+
+/** Copy part size: one R2 object (and one Bunny range request) per 64 MiB. */
+export const BACKFILL_PART_BYTES = 64 * 1024 * 1024;
+
+/**
+ * Cost of a set of videos: `copyBytes` copied out of Bunny in `copies` objects (each 64 MiB parts + 2 writes),
+ * `transcodeVideoSeconds` of video transcoded at `basis`. With an assumed basis the renditions are taken as
+ * large as `assumedRenditionBytes` (the sources), else from the measured ratio.
+ */
+export function backfillCostAt(
+	prices: BackfillPrices,
+	basis: BackfillBasis,
+	input: { copyBytes: number; copyOps: number; transcodeVideoSeconds: number; assumedRenditionBytes?: number },
+): BackfillCost {
+	const secs = input.transcodeVideoSeconds;
+	const renditionBytes = basis.assumed ? input.assumedRenditionBytes ?? 0 : secs * basis.renditionBytesPerVideoSecond;
+	return backfillCost(prices, {
+		egressBytes: input.copyBytes,
+		transcodeSeconds: secs * basis.containerPerVideoSecond,
+		storageBytes: input.copyBytes + renditionBytes,
+		classAOps: input.copyOps + secs * basis.objectsPerVideoSecond,
+	});
+}
+
+/**
+ * This environment at a glance (the Backfill page, before any run): live counts of the videos that have no
+ * R2 rendition yet, the bytes Bunny stores for them, and what moving all of them would cost, likely
+ * (measured ratios) and at the ceiling. A run's own estimate, from each video's real size, replaces it.
+ */
+export interface BackfillOverview {
+	/** Videos (not live, not deleted) with no ready R2 rendition */
+	videos: number;
+	videoSeconds: number;
+	/** Bytes Bunny stores for this environment's libraries (all files; null when Bunny could not be read) */
+	bunnyStoredBytes: number | null;
+	basis: BackfillBasis;
+	likely: BackfillCost;
+	ceiling: BackfillCost;
 	at: string;
 }
 

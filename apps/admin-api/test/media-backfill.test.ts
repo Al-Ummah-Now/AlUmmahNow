@@ -51,9 +51,17 @@ describe('/api/media/backfill runs', () => {
   it('moderators are refused before api-videos is called', async () => {
     const { req, calls } = setup(['Moderator']);
     assert.equal((await req('/api/media/backfill/runs')).status, 403);
+    assert.equal((await req('/api/media/backfill/overview')).status, 403);
     assert.equal((await req('/api/media/backfill/runs', send('POST', { scope: { kind: 'all' } }))).status, 403);
     assert.equal((await req(`/api/media/backfill/runs/${RUN}/start`, send('POST', {}))).status, 403);
     assert.equal(calls.length, 0);
+  });
+
+  it('the overview is a read that passes through and audits nothing', async () => {
+    const { req, calls, audit } = setup(['Admin']);
+    assert.equal((await req('/api/media/backfill/overview')).status, 200);
+    assert.deepEqual(calls.map((c) => c.path), [`${BF}/overview`]);
+    assert.equal(audit.length, 0);
   });
 
   it('a new estimate is audited and carries the admin, not a spoofed actor', async () => {

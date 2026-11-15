@@ -26,6 +26,9 @@ test.describe('R2 backfill page', () => {
       await setPreferences(page, variant);
       await page.goto('/backfill');
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+      await expect(page.getByTestId('backfill-overview')).toBeVisible();
+      await expect(page.getByTestId('backfill-overview-likely-total')).toHaveText(/\d/);
+      await expect(page.getByTestId('backfill-overview-ceiling-total')).toHaveText(/\d/);
       await expect(page.getByTestId('backfill-new')).toBeVisible();
       await expect(page.getByTestId('backfill-flip')).toBeVisible();
       await expect(page.getByTestId('backfill-retire')).toBeVisible();
@@ -46,6 +49,15 @@ test.describe('R2 backfill page', () => {
     await page.getByTestId('backfill-estimate-button').click();
     await expect(page.getByTestId('backfill-new-error')).toBeVisible();
     expect(posts, 'no server action ran').toEqual([]);
+  });
+
+  test('batches: the channel scope is a channel picker, and nothing starts without Start', async ({ page }) => {
+    await setPreferences(page, { locale: 'en', theme: 'dark' });
+    await page.goto('/backfill');
+    await expect(page.getByTestId('backfill-overview')).toContainText('This environment');
+    await page.getByTestId('backfill-scope-channel').check();
+    await expect(page.getByRole('combobox', { name: 'Channel' })).toBeVisible();
+    await expect(page.getByTestId('backfill-start')).toHaveCount(0);
   });
 
   test('lists the Bunny libraries; the one new uploads go to cannot be retired', async ({ page }) => {

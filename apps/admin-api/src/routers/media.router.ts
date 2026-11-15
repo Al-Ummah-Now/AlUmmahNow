@@ -241,6 +241,8 @@ const BF = '/internal/media/backfill';
 
 const passQuery = (c: C, names: string[]) => Object.fromEntries(names.map((n) => [n, c.req.query(n)]).filter(([, v]) => v)) as Record<string, string>;
 
+app.get('/backfill/overview', async (c) => c.json({ success: true, result: await callVideosInternal(c.env, `${BF}/overview`) }));
+
 app.get('/backfill/runs', async (c) => c.json({ success: true, result: await callVideosInternal(c.env, `${BF}/runs`, { query: passQuery(c, ['limit']) }) }));
 
 app.post('/backfill/runs', async (c) => {
