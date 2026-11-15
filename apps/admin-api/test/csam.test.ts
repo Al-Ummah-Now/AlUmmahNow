@@ -86,7 +86,7 @@ function setup() {
     const res = await call(path, init);
     return { status: res.status, body: (await res.json()) as any };
   };
-  const log = async (caseId: string) => (await db.prepare('SELECT action FROM csam_access_log WHERE case_id = ? ORDER BY created_at').bind(caseId).all<{ action: string }>()).results.map((r) => r.action);
+  const log = async (caseId: string) => (await db.prepare('SELECT action FROM csam_access_log WHERE case_id = ? ORDER BY created_at, rowid').bind(caseId).all<{ action: string }>()).results.map((r) => r.action);
   const flags = () => errors.flatMap((m: any) => (m.events ?? []).map((e: any) => e.action?.key)).filter(Boolean);
   const resolved = () => errors.flatMap((m: any) => m.resolved ?? []);
   return { db, env, videos, queued, call, json, log, flags, resolved };

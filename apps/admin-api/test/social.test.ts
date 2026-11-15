@@ -41,7 +41,7 @@ function setup(roles: string[], status = 200) {
   });
   app.route('/api/social', router);
   const req = (path: string, init?: RequestInit) => app.request(path, init, env as never);
-  const audit = async () => ((await env.REPORTS_DB.prepare('SELECT key, old_value, new_value, actor_id FROM site_settings_log ORDER BY created_at').all<any>()).results ?? []).map((r: any) => ({ ...r }));
+  const audit = async () => ((await env.REPORTS_DB.prepare('SELECT key, old_value, new_value, actor_id FROM site_settings_log ORDER BY created_at, rowid').all<any>()).results ?? []).map((r: any) => ({ ...r }));
   return { req, calls, audit };
 }
 

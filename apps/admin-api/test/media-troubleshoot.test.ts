@@ -95,7 +95,7 @@ function setup(roles: string[], opts: { cf?: CfAnswer; environment?: string; vid
   });
   app.route('/api/media', mediaRouter);
   const req = (path: string, init?: RequestInit) => app.request(path, init, env as never);
-  const audit = async () => (await env.REPORTS_DB.prepare('SELECT key, old_value, new_value, actor_id FROM site_settings_log ORDER BY created_at').all<any>()).results ?? [];
+  const audit = async () => (await env.REPORTS_DB.prepare('SELECT key, old_value, new_value, actor_id FROM site_settings_log ORDER BY created_at, rowid').all<any>()).results ?? [];
   return { req, env, videoCalls, cfCalls, audit };
 }
 

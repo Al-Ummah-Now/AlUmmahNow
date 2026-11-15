@@ -143,7 +143,7 @@ describe('credentials', () => {
     assert.equal(t.result.view.test.ok, false);
     assert.equal((await req('/api/costs/credentials/bunny', send('DELETE'))).status, 200);
     assert.equal(await env.COSTS_DB.prepare('SELECT * FROM cost_credentials').first(), null);
-    const actions = (await env.REPORTS_DB.prepare("SELECT new_value FROM site_settings_log WHERE key = 'costs:credential:bunny' ORDER BY created_at").all<{ new_value: string }>()).results.map((r) => JSON.parse(r.new_value).action);
+    const actions = (await env.REPORTS_DB.prepare("SELECT new_value FROM site_settings_log WHERE key = 'costs:credential:bunny' ORDER BY created_at, rowid").all<{ new_value: string }>()).results.map((r) => JSON.parse(r.new_value).action);
     assert.deepEqual(actions, ['set', 'tested', 'removed']);
   });
 

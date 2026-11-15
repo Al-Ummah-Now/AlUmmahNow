@@ -25,7 +25,7 @@ function envWith(queue?: { send(body: unknown): Promise<void> }) {
 }
 
 async function audits(env: any) {
-  const { results } = await env.REPORTS_DB.prepare('SELECT action, target_id, metadata FROM admin_audit_log ORDER BY created_at').all();
+  const { results } = await env.REPORTS_DB.prepare('SELECT action, target_id, metadata FROM admin_audit_log ORDER BY created_at, rowid').all();
   return (results as any[]).map((r) => ({ action: r.action, target: r.target_id, meta: JSON.parse(r.metadata) }));
 }
 

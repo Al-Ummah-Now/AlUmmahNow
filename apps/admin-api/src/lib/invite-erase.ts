@@ -133,7 +133,7 @@ async function giveBackTransferredChannels(env: InviteEraseEnv, row: InviteRow, 
     if (!current || current.ownerId !== row.user_id) continue;
     // Deleted while the invited user held it: the erase would purge it, and a give-back cannot move it
     if (current.isDeleted) return { state: 'blocked', reason: `${label} was moved to the invite and is in Recently deleted; restore it or purge it first` };
-    const { results } = await env.REPORTS_DB.prepare('SELECT old_value, new_value, created_at FROM site_settings_log WHERE key = ? ORDER BY created_at')
+    const { results } = await env.REPORTS_DB.prepare('SELECT old_value, new_value, created_at FROM site_settings_log WHERE key = ? ORDER BY created_at, rowid')
       .bind(auditKey('channel', channel.id))
       .all<AuditRow>();
     const moves = (results ?? []).map((r) => ({ at: r.created_at, value: parse(r.new_value), previous: parse(r.old_value) })).filter((m) => m.value?.action === 'transfer' && m.value?.details?.inviteId === row.id);
