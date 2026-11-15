@@ -11,7 +11,6 @@ import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import React, { useEffect, useId, useRef } from 'react';
 import { SlidersHorizontal, X } from 'lucide-react';
 import type { SearchEntityType } from '@al-ummah/shared-types';
-import { VIDEO_CATEGORIES } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import {
   SEARCH_DATES,
@@ -23,6 +22,8 @@ import {
   SearchUrlState,
   activeFilterKeys,
 } from '@/lib/search/url-state';
+import { useVideoCategories } from '@/hooks/useVideoCategories';
+import { pickerCategories } from '@/lib/api/categories';
 import { categoryLabel, dateLabel, durationLabel, filterChipLabel, languageLabel, sortLabel, typeLabel } from './labels';
 
 const chipBase = 'inline-flex items-center gap-1 shrink-0 rounded-full px-3 h-9 text-sm font-medium border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500';
@@ -99,6 +100,7 @@ export function SearchFilterButton({ state, open, onOpenChange }: Pick<FilterPan
 
 export function SearchFilterPanel({ state, open, onOpenChange, onChange, onClear }: FilterPanelProps) {
   const { t, lang } = useLanguage();
+  const categories = useVideoCategories();
   const panelRef = useRef<HTMLDivElement>(null);
   const categoryId = useId();
   const videoOnly = !state.type || state.type === 'video';
@@ -181,8 +183,8 @@ export function SearchFilterPanel({ state, open, onOpenChange, onChange, onClear
               className="w-full h-10 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 text-sm text-gray-900 dark:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             >
               <option value="">{t.search.allCategories}</option>
-              {VIDEO_CATEGORIES.map(category => (
-                <option key={category.value} value={category.value}>{categoryLabel(category.value, lang, category.value)}</option>
+              {pickerCategories(categories.all, state.category).map(category => (
+                <option key={category.value} value={category.value}>{categoryLabel(category.value, lang, category.value, categories.all)}</option>
               ))}
             </ThemedSelectField>
           </div>
@@ -237,12 +239,13 @@ export function ActiveFilterChips({
   onRemove: (key: SearchFilterKey) => void;
 }) {
   const { t, lang } = useLanguage();
+  const { all: categories } = useVideoCategories();
   const keys = activeFilterKeys(state);
   if (keys.length === 0) return null;
   return (
     <ul className="flex flex-wrap gap-2" aria-label={t.search.activeFilters}>
       {keys.map(key => {
-        const label = filterChipLabel(t.search, key, state, lang, channelName);
+        const label = filterChipLabel(t.search, key, state, lang, channelName, categories);
         return (
           <li key={key}>
             <button

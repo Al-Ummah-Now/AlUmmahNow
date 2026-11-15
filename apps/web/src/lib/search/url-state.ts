@@ -11,7 +11,7 @@ import type {
   SearchQuery,
   SearchSort,
 } from '@al-ummah/shared-types';
-import { VIDEO_CATEGORIES } from '@al-ummah/shared-types';
+import { CATEGORY_SLUG_PATTERN } from '@al-ummah/shared-types';
 
 export const SEARCH_TYPES: ReadonlyArray<SearchEntityType> = ['video', 'channel', 'playlist', 'post'];
 export const SEARCH_DURATIONS: ReadonlyArray<SearchDurationFilter> = ['short', 'medium', 'long'];
@@ -51,7 +51,8 @@ export function parseSearchParams(params: ParamsLike | null | undefined): Search
     duration: pick(params.get('duration'), SEARCH_DURATIONS),
     date: pick(params.get('date'), SEARCH_DATES),
     language: pick(params.get('language'), SEARCH_LANGUAGES),
-    category: category && VIDEO_CATEGORIES.some(c => c.value === category) ? category : undefined,
+    // Any category value (admins add categories); an unknown one simply finds nothing
+    category: category && CATEGORY_SLUG_PATTERN.test(category) ? category : undefined,
     verified: params.get('verified') === 'true',
     channelId: channelId && /^[A-Za-z0-9_-]{1,100}$/.test(channelId) ? channelId : undefined,
     sort: pick(params.get('sort'), SEARCH_SORTS) ?? 'relevance',

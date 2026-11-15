@@ -1,5 +1,7 @@
 'use client';
 
+import { useVideoCategories } from '@/hooks/useVideoCategories';
+import { pickerCategories } from '@/lib/api/categories';
 import { copyText } from '@/lib/share/copy';
 import { shareLink } from '@/lib/share/short-link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -9,7 +11,7 @@ import Link from '@/components/common/AppLink';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { MoreVertical, UploadCloud } from 'lucide-react';
 import type { View } from 'react-big-calendar';
-import { VIDEO_CATEGORIES, type CreatorReviewView, type StudioVideoStatus } from '@al-ummah/shared-types';
+import { type CreatorReviewView, type StudioVideoStatus } from '@al-ummah/shared-types';
 import { BulkEditPanel, type BulkPanelVideo } from '@/components/bulkEdit/BulkEditPanel';
 import { useChannelPlaylists } from '@/hooks/useChannelPlaylists';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
@@ -63,6 +65,7 @@ type Pending = { ids: string[] } | null;
 
 export function VideosTab({ locale, channelId, role }: Props) {
   const { t } = useLanguage();
+  const { all: allCategories } = useVideoCategories();
   const text = t.studio.videos;
   const router = useRouter();
   const pathname = usePathname();
@@ -366,7 +369,7 @@ export function VideosTab({ locale, channelId, role }: Props) {
         </select>
         <select aria-label={text.filters.category} className={selectClass} value={query.category} onChange={(e) => update({ category: e.target.value })}>
           <option value="">{text.filters.category}: {text.filters.any}</option>
-          {VIDEO_CATEGORIES.map((category) => (
+          {pickerCategories(allCategories, query.category).map((category) => (
             <option key={category.value} value={category.value}>{category.label[locale === 'ar' ? 'ar' : 'en']}</option>
           ))}
         </select>

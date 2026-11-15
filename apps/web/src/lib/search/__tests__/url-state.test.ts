@@ -9,6 +9,10 @@ import {
 } from '../url-state';
 
 describe('search URL state', () => {
+  it('keeps any category value (admins add categories); an unknown one just finds nothing', () => {
+    expect(parseSearchParams(new URLSearchParams('category=seerah_for_kids')).category).toBe('seerah_for_kids');
+  });
+
   it('parses valid params and drops invalid ones', () => {
     const state = parseSearchParams(new URLSearchParams(
       'q=%D8%A7%D9%84%D8%B5%D9%84%D8%A7%D8%A9&type=video&duration=long&date=week&language=ar&category=fiqh&verified=true&channelId=ch_1&sort=date',
@@ -17,7 +21,7 @@ describe('search URL state', () => {
       q: 'الصلاة', type: 'video', duration: 'long', date: 'week', language: 'ar',
       category: 'fiqh', verified: true, channelId: 'ch_1', sort: 'date',
     });
-    const bad = parseSearchParams(new URLSearchParams('type=evil&duration=x&date=y&language=zz&category=nope&verified=1&channelId=../x&sort=z'));
+    const bad = parseSearchParams(new URLSearchParams('type=evil&duration=x&date=y&language=zz&category=No%20Way!&verified=1&channelId=../x&sort=z'));
     expect(bad).toEqual({ q: '', type: undefined, duration: undefined, date: undefined, language: undefined, category: undefined, verified: false, channelId: undefined, sort: 'relevance' });
   });
 

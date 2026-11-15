@@ -8,7 +8,7 @@
 import { TagAutocomplete } from '@/components/ui/TagAutocomplete';
 import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import React, { useEffect, useState } from 'react';
-import { VIDEO_CATEGORIES } from '@al-ummah/shared-types';
+import { useVideoCategories } from '@/hooks/useVideoCategories';
 import {
   Dialog,
   DialogContent,
@@ -44,6 +44,7 @@ const fieldClass =
 
 export function BulkEditDialog({ open, count, onOpenChange, onApply, selectedTags = [], knownTags = [] }: BulkEditDialogProps) {
   const { t, lang, isRTL } = useLanguage();
+  const { active: activeCategories } = useVideoCategories();
   const b = t.bulkEdit;
   const [form, setForm] = useState<BulkEditForm>(EMPTY_BULK_EDIT);
   const [busy, setBusy] = useState(false);
@@ -100,7 +101,7 @@ export function BulkEditDialog({ open, count, onOpenChange, onApply, selectedTag
               <ThemedSelectField className={fieldClass} value={form.category} onChange={(e) => set('category', e.target.value)} data-testid="bulk-edit-category">
                 <option value="">{b.noChange}</option>
                 <option value={CLEAR_CATEGORY}>{b.clearCategory}</option>
-                {VIDEO_CATEGORIES.map((c) => (
+                {activeCategories.map((c) => (
                   <option key={c.value} value={c.value}>{c.label[lang === 'ar' ? 'ar' : 'en']}</option>
                 ))}
               </ThemedSelectField>

@@ -27,8 +27,10 @@ describe('edit-metadata', () => {
       expect(parseVideoCategory('quran_recitation')).toBe('quran_recitation');
     });
 
-    it('rejects unknown or missing categories', () => {
-      expect(parseVideoCategory('not_a_category')).toBe('');
+    it('keeps any category value (admin-made or retired) and rejects malformed or missing ones', () => {
+      expect(parseVideoCategory('seerah_for_kids')).toBe('seerah_for_kids');
+      expect(parseVideoCategory('Not a category!')).toBe('');
+      expect(parseVideoCategory(42)).toBe('');
       expect(parseVideoCategory(undefined)).toBe('');
     });
   });

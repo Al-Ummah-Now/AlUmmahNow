@@ -7,7 +7,8 @@
 import React, { useMemo, useState } from 'react';
 import { Autocomplete, type AutocompleteOption } from '@/components/ui/Autocomplete';
 import { useLanguage } from '@/hooks/useLanguage';
-import { VIDEO_CATEGORIES } from '@al-ummah/shared-types';
+import { useVideoCategories } from '@/hooks/useVideoCategories';
+import { pickerCategories } from '@/lib/api/categories';
 import { inputClass } from './RenameFields';
 
 interface CategoryAutocompleteProps {
@@ -22,12 +23,13 @@ interface CategoryAutocompleteProps {
 export function CategoryAutocomplete({ value, onChange, label, inputId, placeholder, testId = 'category-autocomplete' }: CategoryAutocompleteProps) {
   const { lang } = useLanguage();
   const ui = lang === 'ar' ? 'ar' : 'en';
-  const options = useMemo<AutocompleteOption[]>(() => VIDEO_CATEGORIES.map((c) => ({
+  const { all } = useVideoCategories();
+  const options = useMemo<AutocompleteOption[]>(() => pickerCategories(all, value).map((c) => ({
     id: c.value,
     label: c.label[ui],
     keywords: [c.label.en, c.label.ar, c.value],
     selected: c.value === value,
-  })), [ui, value]);
+  })), [all, ui, value]);
   const labelOf = (id: string) => options.find((o) => o.id === id)?.label ?? '';
   const [text, setText] = useState(labelOf(value));
   // A new pick (or page language) shows its label: adjusted while rendering
@@ -47,7 +49,7 @@ export function CategoryAutocomplete({ value, onChange, label, inputId, placehol
       options={options}
       emptyOptions={options}
       minChars={0}
-      maxOptions={VIDEO_CATEGORIES.length}
+      maxOptions={options.length}
       onSelect={(option) => {
         setText(option.label);
         onChange(option.id);

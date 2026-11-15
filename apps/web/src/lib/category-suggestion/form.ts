@@ -2,7 +2,8 @@
  * Form-side rules for AI category suggestions ("AI suggests, uploader confirms").
  * Pure, so the upload and edit forms share them and they are unit-tested.
  */
-import { VIDEO_CATEGORIES, type VideoCategory } from '@al-ummah/shared-types';
+import type { VideoCategory } from '@al-ummah/shared-types';
+import { getCachedCategories } from '@/lib/api/categories';
 
 export interface CategoryScoreView {
   category: string;
@@ -39,8 +40,12 @@ export interface CategoryFormState {
   touched: boolean;
 }
 
+/**
+ * An available category of the live list (admin-managed; lib/api/categories.ts,
+ * loaded by the category pickers on the same form). Retired ones are not offered.
+ */
 export function isKnownCategory(value: unknown): value is VideoCategory {
-  return typeof value === 'string' && VIDEO_CATEGORIES.some((c) => c.value === value);
+  return typeof value === 'string' && getCachedCategories().some((c) => c.value === value && !c.retired);
 }
 
 /**

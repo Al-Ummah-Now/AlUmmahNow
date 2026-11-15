@@ -1,11 +1,12 @@
 import Link from '@/components/AppLink';
 import { VIDEO_CATEGORIES } from '@al-ummah/shared-types';
+import { listVideoCategoriesAdmin } from '@/lib/api/categories';
 import { getCategorySuggestionStats, listCategorySuggestions } from '@/lib/api/admin';
 import type { CategorySuggestionList, CategorySuggestionQueue, CategorySuggestionStats } from '@/lib/api/types';
 import { getI18n } from '@/i18n/server';
 import { formatNumber } from '@/i18n/translate';
 import { CategorySuggestionsReview } from '@/components/CategorySuggestionsReview';
-import { categoryLabel } from '@/lib/category-label';
+import { categoryLabel, type CategoryOption } from '@/lib/category-label';
 import { ErrorAlert, cardClass, fieldClass, linkClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { CategorizeSettings, CategoryBackfill } from './CategorizeControls';
@@ -22,8 +23,15 @@ interface PageProps {
 export default async function CategorySuggestionsPage({ searchParams }: PageProps) {
   const raw = await searchParams;
   const { t, locale } = await getI18n();
+  // The admin-managed list (Categories page); the built-in list if it cannot be read
+  const categories: CategoryOption[] = await listVideoCategoriesAdmin()
+    .then((r) => r.categories)
+    .catch((e) => {
+      logger.warn('[category-suggestions] Category list unavailable; using the built-in list', { error: e instanceof Error ? e.message : String(e) });
+      return VIDEO_CATEGORIES;
+    });
   const view: CategorySuggestionQueue = VIEWS.includes(raw.view as CategorySuggestionQueue) ? (raw.view as CategorySuggestionQueue) : 'review';
-  const category = typeof raw.category === 'string' && VIDEO_CATEGORIES.some((c) => c.value === raw.category) ? raw.category : undefined;
+  const category = typeof raw.category === 'string' && categories.some((c) => c.value === raw.category) ? raw.category : undefined;
   const page = Math.max(1, Number(raw.page) || 1);
   // Deep link to one video (e.g. from a video page)
   const videoId = typeof raw.video === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(raw.video) ? raw.video : undefined;
@@ -67,7 +75,7 @@ export default async function CategorySuggestionsPage({ searchParams }: PageProp
             <ul className="mt-4 grid gap-2 sm:grid-cols-2">
               {stats.byCategory.map((c) => (
                 <li key={c.category} className="flex justify-between gap-3 border border-border rounded px-3 py-2" data-testid="category-explore-row" data-category={c.category} data-videos={c.videos}>
-                  <span className="text-fg">{categoryLabel(c.category, locale)}</span>
+                  <span className="text-fg">{categoryLabel(c.category, locale, categories)}</span>
                   <span className="text-end text-sm">
                     <span className="block text-fg">{t('categorySuggestions.exploreVideos', { count: n(c.videos) })}</span>
                     {c.aiUnreviewed > 0 && <span className="block text-fg-muted">{t('categorySuggestions.exploreUnreviewed', { count: n(c.aiUnreviewed) })}</span>}
@@ -131,15 +139,15 @@ export default async function CategorySuggestionsPage({ searchParams }: PageProp
           {t('categorySuggestions.filterCategory')}
           <select name="category" defaultValue={category ?? ''} className={fieldClass} data-testid="category-filter">
             <option value="">{t('categorySuggestions.anyCategory')}</option>
-            {VIDEO_CATEGORIES.map((c) => (
-              <option key={c.value} value={c.value}>{c.label[locale] ?? c.label.en}</option>
+            {categories.map((c) => (
+              <option key={c.value} value={c.value}>{c.label[locale] ?? c.label.en}{c.retired ? ` (${t('videoCategories.retiredTag')})` : ''}</option>
             ))}
           </select>
         </label>
         <button type="submit" className={secondaryButtonClass}>{t('categorySuggestions.filter')}</button>
       </form>
 
-      {list && <CategorySuggestionsReview key={`${view}-${category ?? ''}-${videoId ?? ''}-${page}`} items={list.items} view={view} canEdit={list.canEdit} />}
+      {list && <CategorySuggestionsReview key={`${view}-${category ?? ''}-${videoId ?? ''}-${page}`} items={list.items} view={view} canEdit={list.canEdit} categories={categories} />}
 
       {list && totalPages > 1 && (
         <div className="flex items-center gap-4 text-sm">

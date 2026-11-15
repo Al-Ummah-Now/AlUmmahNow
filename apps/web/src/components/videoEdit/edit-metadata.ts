@@ -2,11 +2,9 @@
  * Helpers for initialising and diffing editable video metadata (tags/category).
  */
 
-import { VIDEO_CATEGORIES, type VideoCategory } from '@al-ummah/shared-types';
+import { CATEGORY_SLUG_PATTERN, type VideoCategory } from '@al-ummah/shared-types';
 
 const MAX_TAG_LENGTH = 50;
-
-const KNOWN_CATEGORIES = new Set<string>(VIDEO_CATEGORIES.map((c) => c.value));
 
 /**
  * Normalize a single user-entered tag (trim, collapse whitespace, cap length).
@@ -41,10 +39,12 @@ export function parseVideoTags(raw: unknown): string[] {
 }
 
 /**
- * Parse a stored category, ignoring values that are not known categories.
+ * Parse a stored category. Categories are admin-managed, so any category value
+ * is kept (an admin-made one, or a retired one the video still has); values
+ * that are not category-shaped are ignored.
  */
 export function parseVideoCategory(raw: unknown): VideoCategory | '' {
-  return typeof raw === 'string' && KNOWN_CATEGORIES.has(raw) ? (raw as VideoCategory) : '';
+  return typeof raw === 'string' && CATEGORY_SLUG_PATTERN.test(raw) ? raw : '';
 }
 
 export function getInitialEditMetadata(video: { tags?: unknown; category?: unknown }): {

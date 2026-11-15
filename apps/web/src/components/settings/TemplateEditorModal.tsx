@@ -7,6 +7,8 @@
  * Supports bilingual fields (EN/AR) and template variables.
  */
 
+import { useVideoCategories } from '@/hooks/useVideoCategories';
+import { pickerCategories } from '@/lib/api/categories';
 import { TagAutocomplete } from '@/components/ui/TagAutocomplete';
 import { useChannelTags } from '@/hooks/useChannelTags';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
@@ -21,7 +23,6 @@ import {
   CreateTemplateRequest,
   UpdateTemplateRequest,
   VideoCategory,
-  VIDEO_CATEGORIES,
 } from '@al-ummah/shared-types';
 import { VariableGuide } from './VariableGuide';
 import { createTemplate, updateTemplate } from '@/lib/api/upload-defaults';
@@ -42,6 +43,7 @@ export function TemplateEditorModal({
   mode,
 }: TemplateEditorModalProps) {
   const { t, isRTL, lang } = useLanguage();
+  const { all: allCategories } = useVideoCategories();
 
   // Form state
   const [nameEn, setNameEn] = useState('');
@@ -565,7 +567,7 @@ export function TemplateEditorModal({
                     "
                   >
                     <option value="">{isRTL ? 'اختر التصنيف' : 'Select category'}</option>
-                    {VIDEO_CATEGORIES.map((cat) => (
+                    {pickerCategories(allCategories, category).map((cat) => (
                       <option key={cat.value} value={cat.value}>
                         {cat.label[lang]}
                       </option>

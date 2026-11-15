@@ -85,6 +85,8 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/videos', label: 'nav.videos', icon: 'film', group: 'content' },
   { href: '/channels', label: 'nav.channels', icon: 'tv', group: 'content' },
   { href: '/playlists', label: 'nav.playlists', icon: 'list', group: 'content' },
+  // Video categories (admin-managed): every admin reads, videos:categories changes
+  { href: '/categories', label: 'nav.categories', icon: 'tag', group: 'content' },
   { href: '/category-suggestions', label: 'nav.categorySuggestions', icon: 'tag', group: 'content' },
   { href: '/translations', label: 'nav.translations', icon: 'globe', group: 'content' },
 

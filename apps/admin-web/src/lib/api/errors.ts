@@ -10,6 +10,8 @@ export class AdminApiError extends Error {
     public readonly code?: string,
     /** Why admin-api refused a settings change (shared-types settingsProblems shape), when given. */
     public readonly problems?: { problem: string; detail?: string }[],
+    /** Per-field error codes (e.g. { labelEn: 'required' }), when given. */
+    public readonly fields?: Record<string, string>,
   ) {
     super(message);
     this.name = 'AdminApiError';
