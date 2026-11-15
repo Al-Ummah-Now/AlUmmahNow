@@ -132,12 +132,30 @@ export function resetVapidJwtCache(): void {
   jwtCache.clear();
 }
 
+/**
+ * The private scalar as the 32 bytes a JWK `d` must be (RFC 7518 §6.2.2.1: full length, big-endian).
+ * A valid key can arrive shorter or longer: tools that print the scalar as an integer drop its
+ * leading zero bytes (Node's ECDH getPrivateKey(), about 1 key in 256 is 31 bytes), and ASN.1
+ * INTEGER encodings add a 0x00 sign byte. Those are left-padded or trimmed; anything else (empty,
+ * zero, longer than 32 significant bytes) is null. #1444: such a key used to be refused, which
+ * left Web Push silently log-only.
+ */
+export function normalizePrivateScalar(raw: Uint8Array): Uint8Array | null {
+  let start = 0;
+  while (start < raw.length && raw[start] === 0) start++;
+  const significant = raw.subarray(start);
+  if (significant.length === 0 || significant.length > 32) return null;
+  const d = new Uint8Array(32);
+  d.set(significant, 32 - significant.length);
+  return d;
+}
+
 /** The JWK of the VAPID key pair: x and y come from the public point, d is the private scalar. */
 export async function importVapidKeys(publicKey: string, privateKey: string): Promise<VapidKeys> {
   const pub = fromBase64url(publicKey);
-  const d = fromBase64url(privateKey);
   if (pub.length !== 65 || pub[0] !== 4) throw new Error('VAPID_PUBLIC_KEY is not an uncompressed P-256 point (65 bytes, base64url)');
-  if (d.length !== 32) throw new Error('VAPID_PRIVATE_KEY is not a 32-byte P-256 private key (base64url)');
+  const d = normalizePrivateScalar(fromBase64url(privateKey));
+  if (!d) throw new Error('VAPID_PRIVATE_KEY is not a P-256 private key (base64url, up to 32 bytes)');
   const jwk: JsonWebKey = { kty: 'EC', crv: 'P-256', x: base64url(pub.slice(1, 33)), y: base64url(pub.slice(33, 65)), d: base64url(d), ext: false };
   const key = await crypto.subtle.importKey('jwk', jwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
   return { privateKey: key, publicKey: base64url(pub) };
