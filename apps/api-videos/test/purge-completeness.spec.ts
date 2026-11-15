@@ -233,7 +233,8 @@ describe('post images (#699)', () => {
 	});
 
 	it('a creator\'s own post delete goes to the 30-day cleanup and an admin can restore it', async () => {
-		const env = baseEnv({ posts: { 'posts/ch1/p1.json': post('p1', { status: 'published' }), 'posts/ch1/index.json': { postIds: ['p1'] } } });
+		// The owner's channel record: deleting a post checks the caller's role on its channel
+		const env = baseEnv({ channels: { ch1: { id: 'ch1', userId: 'owner', handle: 'ch1', playlists: [] } }, posts: { 'posts/ch1/p1.json': post('p1', { status: 'published' }), 'posts/ch1/index.json': { postIds: ['p1'] } } });
 		const app = buildApp((r) => r.delete('/api/channels/:channelId/posts/:postId', DeleteCommunityPost), { userId: 'owner' });
 		const res = await app.request('/api/channels/ch1/posts/p1', { method: 'DELETE', headers: { channelId: 'ch1' } }, env);
 		assert.equal(res.status, 200);
