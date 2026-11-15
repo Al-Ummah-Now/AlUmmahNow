@@ -100,8 +100,9 @@ export const ENVELOPE_CORRELATION_MIN = 0.8;
 export function matchTimes(durationSeconds, n = MATCH_FRAMES, random = Math.random) {
 	if (!(durationSeconds > 0)) return [];
 	const stretch = durationSeconds / n;
-	// Stay clear of the very end, where a decoder may have no frame left
-	return Array.from({ length: n }, (_, i) => Number(Math.min(durationSeconds - 0.05, (i + 0.05 + random() * 0.9) * stretch).toFixed(3))).filter((t) => t >= 0);
+	// Stay clear of the last half second: a rendition may end a few frames before the source
+	const last = durationSeconds > 1 ? durationSeconds - 0.5 : durationSeconds / 2;
+	return Array.from({ length: n }, (_, i) => Number(Math.min(last, (i + 0.05 + random() * 0.9) * stretch).toFixed(3))).filter((t) => t >= 0);
 }
 
 /** Mean absolute difference of two equal-size grey frames (Uint8Array / Buffer). */
@@ -152,6 +153,27 @@ export function correlation(a, b) {
 	return cov / Math.sqrt(va * vb);
 }
 
+/** Envelope with less relative variation than this is steady sound: levels are compared, not shape. */
+export const FLAT_CV = 0.05;
+/** Encoder delay tolerated when lining up envelopes, in windows each way. */
+export const ENVELOPE_MAX_LAG = 3;
+
+function stats(x) {
+	const mean = x.reduce((n, v) => n + v, 0) / Math.max(1, x.length);
+	const std = Math.sqrt(x.reduce((n, v) => n + (v - mean) ** 2, 0) / Math.max(1, x.length));
+	return { mean, std };
+}
+
+/** The best correlation with the rendition shifted up to `maxLag` windows either way. */
+export function bestCorrelation(a, b, maxLag = ENVELOPE_MAX_LAG) {
+	let best = null;
+	for (let lag = -maxLag; lag <= maxLag; lag++) {
+		const r = lag >= 0 ? correlation(a.slice(lag), b) : correlation(a, b.slice(-lag));
+		if (r !== null && (best === null || r > best)) best = r;
+	}
+	return best;
+}
+
 /**
  * Do the renditions carry the source's content?
  * @param {{ frameDistances: number[], sourceEnvelope?: number[] | null, renditionEnvelope?: number[] | null }} o
@@ -166,12 +188,15 @@ export function contentMatches(o) {
 		const src = o.sourceEnvelope;
 		const ren = o.renditionEnvelope ?? [];
 		if (Math.abs(src.length - ren.length) > Math.max(10, src.length * 0.02)) return { ok: false, reason: 'audio_mismatch' };
-		const r = correlation(src, ren);
-		// Both silent or flat: compare levels instead
-		if (r === null) {
-			const mean = (x) => x.reduce((n, v) => n + v, 0) / Math.max(1, x.length);
-			if (Math.abs(mean(src) - mean(ren)) > 0.02) return { ok: false, reason: 'audio_mismatch' };
-		} else if (r < ENVELOPE_CORRELATION_MIN) return { ok: false, reason: 'audio_mismatch' };
+		const a = stats(src);
+		const b = stats(ren);
+		if (a.std <= FLAT_CV * a.mean + 1e-4) {
+			// Steady sound (a tone, hum, music bed) or silence: the shape says nothing, the level must match
+			if (b.std > Math.max(FLAT_CV * 4 * b.mean, 0.01) || Math.abs(a.mean - b.mean) > Math.max(0.02, a.mean * 0.15)) return { ok: false, reason: 'audio_mismatch' };
+		} else {
+			const r = bestCorrelation(src, ren);
+			if (r === null || r < ENVELOPE_CORRELATION_MIN) return { ok: false, reason: 'audio_mismatch' };
+		}
 	}
 	return { ok: true };
 }
