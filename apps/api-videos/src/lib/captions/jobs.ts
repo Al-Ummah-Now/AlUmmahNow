@@ -100,7 +100,7 @@ export interface CaptionSettings {
 		/** The month's budget for inline and viewer-side translation; a day may spend 1/30 of it */
 		monthlyBudgetUsd: number;
 	};
-	/** Viewer-side translated titles (§5.9, O6 / P4): off until an admin turns it on */
+	/** Viewer-side translated titles (§5.9, O6 / P4): an admin setting, on by default; the owner's answer is a toggle */
 	viewerTitles: { enabled: boolean };
 }
 
@@ -113,7 +113,7 @@ export function defaultCaptionSettings(env: Pick<CaptionJobsEnv, 'ENVIRONMENT'>)
 		model: CAPTION_MODEL,
 		translation: { enabled: true, model: CAPTION_TRANSLATE_MODELS.primary, fallbackModel: CAPTION_TRANSLATE_MODELS.fallback, deepl: false, deeplLanguages: [] },
 		inline: { enabled: true, dailyItems: INLINE_TRANSLATE_DEFAULT_DAILY_ITEMS, monthlyBudgetUsd: env.ENVIRONMENT === 'production' ? 20 : 2 },
-		// O6 (decided 2026-11-11): on, labelled, each channel can opt out; the admin can pause it
+		// P4/O6 pending the owner: on by default, labelled, each channel can opt out; the admin setting turns it off site-wide
 		viewerTitles: { enabled: true },
 	};
 }

@@ -4433,7 +4433,7 @@ const en = {
     dailyItems: 'Texts per user per day',
     inlineBudget: 'Monthly budget (USD)',
     viewerTitles: 'Show viewers machine-translated titles',
-    viewerTitlesHint: 'When a video has no title in the viewer’s language, the watch page shows a machine translation labelled “Auto-translated” with “Show original”. On by default (owner decision O6); channels can opt out. Turn it off to pause it for the whole site.',
+    viewerTitlesHint: 'When a video has no title in the viewer’s language, the watch page shows a machine translation labelled “Auto-translated” with “Show original”. On by default; channels can opt out. Turn it off to switch it off for the whole site.',
     save: 'Save',
     saving: 'Saving…',
     saved: 'Saved.',

@@ -302,7 +302,7 @@ export async function translateInline(env: InlineTranslateEnv, input: InlineTran
 }
 
 // ---------------------------------------------------------------------------
-// Viewer-side titles (§5.9, O6): admin switch off by default, per-channel opt-out
+// Viewer-side titles (§5.9, O6): admin switch (on by default until the owner decides), per-channel opt-out
 // ---------------------------------------------------------------------------
 
 export interface ViewerTranslationEnv extends InlineTranslateEnv {
