@@ -10,6 +10,8 @@ import { robotsTxtResponse, withNoIndex } from "./lib/crawlers";
 import { logger } from './lib/logger';
 import { registerAllRouters } from './routers';
 import { publicSiteTheme } from './lib/siteSettings';
+import { mobileAppsEnvironment, readMobileApps } from './lib/mobileApps';
+import { appleAppSiteAssociation, assetLinks } from '@al-ummah/shared-types';
 import themesRouter, { publicThemes } from './routers/themes.router';
 import contentRouter from './routers/content.router';
 import suggestRouter from './routers/suggest.router';
@@ -138,6 +140,23 @@ app.use('/api/*', loggingMiddleware);
 app.get('/public/site-theme', async (c) => {
   const answer = await publicSiteTheme((c.env as AdminBindings).REPORTS_DB, new URL(c.req.url).origin);
   return c.json(answer, 200, { 'Cache-Control': 'public, max-age=30' });
+});
+
+// Mobile apps settings, all public by nature (they are published in the domain association files):
+// the videos site serves AASA / assetlinks.json from them and api-videos reads the attestation switches
+app.get('/public/mobile-apps', async (c) => {
+  const env = c.env as AdminBindings;
+  const { settings } = await readMobileApps(env.REPORTS_DB, mobileAppsEnvironment(env.ENVIRONMENT));
+  return c.json({ settings }, 200, { 'Cache-Control': 'public, max-age=60' });
+});
+// The two domain association files, built here so the sites that serve them (videos web on its host)
+// only pass them through. 404 while they would list no app: empty means not served.
+app.get('/public/mobile-apps/:file{apple-app-site-association|assetlinks\\.json}', async (c) => {
+  const env = c.env as AdminBindings;
+  const { settings } = await readMobileApps(env.REPORTS_DB, mobileAppsEnvironment(env.ENVIRONMENT));
+  const doc = c.req.param('file') === 'assetlinks.json' ? assetLinks(settings) : appleAppSiteAssociation(settings);
+  if (!doc) return c.json({ error: 'not_configured' }, 404, { 'Cache-Control': 'public, max-age=60' });
+  return c.json(doc, 200, { 'Cache-Control': 'public, max-age=60' });
 });
 
 // Contact us messages from the videos site's server (X-API-Key; endpoints/contact/ContactSubmit.ts)

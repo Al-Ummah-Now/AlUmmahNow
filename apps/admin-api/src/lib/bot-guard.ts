@@ -179,6 +179,7 @@ export type AbuseKind =
 	| 'turnstile_error'
 	| 'rate_limited'
 	| 'bad_user_agent'
+	| 'native_proof_missing'
 	| 'bypass';
 
 /** One counter point: blobs = [app, endpoint, kind, environment]. Never personal data. */

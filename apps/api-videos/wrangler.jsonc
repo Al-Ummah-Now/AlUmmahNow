@@ -192,7 +192,9 @@
 		// Upload initiations per user (on top of the D1 tier limits)
 		{ "name": "UPLOAD_INITIATE_LIMITER", "namespace_id": "2271", "simple": { "limit": 10, "period": 60 } },
 		// Searches per user or IP (not Worker subrequests)
-		{ "name": "SEARCH_LIMITER", "namespace_id": "2281", "simple": { "limit": 120, "period": 60 } }
+		{ "name": "SEARCH_LIMITER", "namespace_id": "2281", "simple": { "limit": 120, "period": 60 } },
+		// Native app attestation challenges and proofs (routers/attestation.router.ts)
+		{ "name": "ATTEST_LIMITER", "namespace_id": "2291", "simple": { "limit": 20, "period": 60 } }
 	],
 	// Abuse counters for the admin Abuse panel (Turnstile outcomes, rate-limit hits; no personal data)
 	"analytics_engine_datasets": [{ "binding": "ABUSE_EVENTS", "dataset": "al_ummah_now_abuse" }],
@@ -338,6 +340,8 @@
 		"VIDEOS_WEB_URL": "https://videos.alummahnow.net",
 		// Error reports to the admin Errors page (docs/features/error-reporting.md)
 		"ERRORS_INGEST_URL": "https://admin.api.alummahnow.net/internal/errors",
+		// Mobile apps settings (videos admin): attestation switches for the native proof (lib/attestation)
+		"ADMIN_API_URL": "https://admin.api.alummahnow.net",
 		// R2 delivery host (public renditions direct from R2, private ones via apps/media). The
 		// viewer switch (admin Delivery page) defaults to Bunny; uploads are dual-written to R2.
 		"MEDIA_PUBLIC_HOST": "media.alummahnow.net",
@@ -532,7 +536,9 @@
 				// Upload initiations per user (on top of the D1 tier limits)
 				{ "name": "UPLOAD_INITIATE_LIMITER", "namespace_id": "2272", "simple": { "limit": 10, "period": 60 } },
 				// Searches per user or IP (not Worker subrequests)
-				{ "name": "SEARCH_LIMITER", "namespace_id": "2282", "simple": { "limit": 120, "period": 60 } }
+				{ "name": "SEARCH_LIMITER", "namespace_id": "2282", "simple": { "limit": 120, "period": 60 } },
+				// Native app attestation challenges and proofs (routers/attestation.router.ts)
+				{ "name": "ATTEST_LIMITER", "namespace_id": "2292", "simple": { "limit": 20, "period": 60 } }
 			],
 			"analytics_engine_datasets": [{ "binding": "ABUSE_EVENTS", "dataset": "al_ummah_now_abuse_stage" }],
 			"kv_namespaces": [
@@ -659,6 +665,8 @@
 				"VIDEOS_WEB_URL": "https://videos.stage.alummahnow.net",
 				// Error reports to the admin Errors page (docs/features/error-reporting.md)
 				"ERRORS_INGEST_URL": "https://admin.api.stage.alummahnow.net/internal/errors",
+				// Mobile apps settings (videos admin): attestation switches for the native proof (lib/attestation)
+				"ADMIN_API_URL": "https://admin.api.stage.alummahnow.net",
 				"MEDIA_PUBLIC_HOST": "media.stage.alummahnow.net",
 				"MEDIA_BUCKET_NAMES": "al-ummah-now-media-stage,al-ummah-now-media-private-stage,al-ummah-now-media-originals-stage",
 				"ORIGINALS_RETENTION_DAYS": "30",

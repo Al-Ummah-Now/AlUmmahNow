@@ -12,9 +12,13 @@
  *   first comment or post: once verified, the account is remembered for 180 days in
  *   KV HUMAN_VERIFIED). Tokens issued to our native apps (NATIVE_CLIENT_IDS) are not
  *   asked: the apps cannot show the widget; the rate limits still apply to them.
+ *   A valid attestation proof (X-AUN-Native-Proof, lib/attestation) passes in place of a
+ *   Turnstile token. Native clients listed in videos admin → Mobile apps → "Require a proof
+ *   from" lose the exemption: without a proof they get 403 native_proof_required.
  *
  * Refusals answer JSON with a `code` the clients translate:
- * 429 rate_limited, 403 forbidden_client, 403 human_check_required (+ siteKey).
+ * 429 rate_limited, 403 forbidden_client, 403 human_check_required (+ siteKey),
+ * 403 native_proof_required.
  */
 import type { Context, Next } from 'hono';
 import { logger } from '../lib/logger';
@@ -26,6 +30,8 @@ import {
 	turnstileMode,
 	type TurnstileEnv,
 } from '../lib/bot-guard';
+import { NATIVE_PROOF_HEADER } from '@al-ummah/shared-types';
+import { loadMobileAppsSettings, validProof, type AttestationEnv } from '../lib/attestation/service';
 
 export const RATE_LIMIT_RETRY_SECONDS = 60;
 export const HUMAN_VERIFIED_TTL_SECONDS = 180 * 24 * 60 * 60;
@@ -41,9 +47,10 @@ export type LimiterName =
 	| 'REACTION_LIMITER'
 	| 'REPORT_LIMITER'
 	| 'UPLOAD_INITIATE_LIMITER'
-	| 'SEARCH_LIMITER';
+	| 'SEARCH_LIMITER'
+	| 'ATTEST_LIMITER';
 
-export type BotEnv = TurnstileEnv & { [K in LimiterName]?: RateLimit } & {
+export type BotEnv = TurnstileEnv & AttestationEnv & { [K in LimiterName]?: RateLimit } & {
 	HUMAN_VERIFIED?: KVNamespace;
 	/** Comma-separated OAuth client ids of our native apps */
 	NATIVE_CLIENT_IDS?: string;
@@ -86,6 +93,18 @@ export function tokenClientId(c: Context): string | null {
 		return typeof aud === 'string' ? aud : null;
 	} catch {
 		return null;
+	}
+}
+
+/** Whether this native client must attest (its id is listed in the Mobile apps settings). */
+async function nativeProofRequired(c: Context, env: BotEnv): Promise<boolean> {
+	const id = tokenClientId(c);
+	if (!id) return false;
+	try {
+		const settings = await loadMobileAppsSettings(env);
+		return settings.attestation.enforceClientIds.includes(id);
+	} catch {
+		return false;
 	}
 }
 
@@ -145,7 +164,16 @@ export function requireHuman(endpoint: string, policy: 'always' | 'first') {
 	return async (c: Context, next: Next) => {
 		if (c.req.method !== 'POST') return next();
 		const env = c.env as BotEnv;
-		if (turnstileMode(env) === 'off' || isNativeClient(c, env)) return next();
+		const proof = c.req.header(NATIVE_PROOF_HEADER);
+		if (proof && (await validProof(env.HUMAN_VERIFIED, proof))) return next();
+		if (isNativeClient(c, env)) {
+			if (await nativeProofRequired(c, env)) {
+				recordAbuse(env, endpoint, 'native_proof_missing');
+				return c.json({ success: false, code: 'native_proof_required', error: 'Please update the app and try again.' }, 403);
+			}
+			return next();
+		}
+		if (turnstileMode(env) === 'off') return next();
 		const user = signedInUser(c);
 		if (policy === 'first') {
 			if (!user) return next(); // the endpoint answers 401
