@@ -11,7 +11,11 @@
  * State lives in KV HUMAN_VERIFIED under its own prefixes (no new namespace):
  *   att:c:<challenge>   one-time challenge, 5 min
  *   att:k:<keyId>       an attested Apple key (public key, app id, counter), refreshed on use, 1 year
- *   att:p:<sha256>      a proof (only its hash is stored), 1 hour
+ *   att:p:<sha256>      a proof (only its hash is stored), 1 hour; pinned to the first account that uses it
+ *
+ * A proof is not a bearer pass on its own: requireHuman accepts it only from a signed-in token of a
+ * registered native client, only while that platform's check is on, and only for the account that
+ * first used it (acceptProof).
  */
 import { parseMobileAppsSettings, publicAttestationConfig, type MobileAppsEnvironment, type MobileAppsSettings, type PublicAttestationConfig } from '@al-ummah/shared-types';
 import { logger } from '../logger';
@@ -103,15 +107,50 @@ export async function issueProof(kv: KVNamespace, subject: { platform: 'apple' |
   return { proof, expiresAt: new Date(now + PROOF_TTL_SECONDS * 1000).toISOString() };
 }
 
-/** Whether the header carries a proof we issued in the last hour. */
-export async function validProof(kv: KVNamespace | undefined, proof: string | undefined | null): Promise<boolean> {
-  if (!kv || !proof || !/^[A-Za-z0-9_-]{43}$/.test(proof)) return false;
+interface StoredProof {
+  platform: 'apple' | 'android';
+  app: string;
+  at: number;
+  /** The account that first used it; any other account is refused. */
+  user?: string;
+}
+
+async function readProof(kv: KVNamespace, proof: string): Promise<StoredProof | null> {
+  if (!/^[A-Za-z0-9_-]{43}$/.test(proof)) return null;
   try {
-    return (await kv.get(await proofKey(proof))) !== null;
+    return await kv.get<StoredProof>(await proofKey(proof), 'json');
   } catch (error) {
     logger.warn('[attestation] Proof lookup failed', { error: error instanceof Error ? error.message : String(error) });
+    return null;
+  }
+}
+
+/** Whether the header carries a proof we issued in the last hour (no binding checks; see acceptProof). */
+export async function validProof(kv: KVNamespace | undefined, proof: string | undefined | null): Promise<boolean> {
+  if (!kv || !proof) return false;
+  return (await readProof(kv, proof)) !== null;
+}
+
+/**
+ * Whether `userId` may use this proof now: it was issued in the last hour, its platform's check is
+ * still on, and it is unused or was first used by the same account. The first use pins the account.
+ */
+export async function acceptProof(kv: KVNamespace | undefined, settings: MobileAppsSettings, proof: string | undefined | null, userId: string, now = Date.now()): Promise<boolean> {
+  if (!kv || !proof) return false;
+  const stored = await readProof(kv, proof);
+  if (!stored) return false;
+  const enabled = stored.platform === 'apple' ? settings.apple.appAttest.enabled : settings.android.playIntegrity.enabled;
+  if (!enabled) return false;
+  if (stored.user) return stored.user === userId;
+  const remaining = Math.floor(PROOF_TTL_SECONDS - (now - stored.at) / 1000);
+  if (remaining < 60) return false;
+  try {
+    await kv.put(await proofKey(proof), JSON.stringify({ ...stored, user: userId }), { expirationTtl: remaining });
+  } catch (error) {
+    logger.warn('[attestation] Proof pin failed', { error: error instanceof Error ? error.message : String(error) });
     return false;
   }
+  return true;
 }
 
 interface StoredKey {

@@ -86,10 +86,13 @@ secret **`PLAY_INTEGRITY_SERVICE_ACCOUNT`** (the Google Cloud service account JS
 Integrity API) on `al-ummah-now-api` (and its QA / stage Workers); without it the Android endpoint
 answers `503 not_configured`.
 
-The apps send the proof in **`X-AUN-Native-Proof`** on writes. `requireHuman` accepts a valid proof in
-place of a Turnstile token. Native client ids listed under "Require a proof" in the admin lose the
-signed-client exemption: without a proof they get `403 native_proof_required` (counted as
-`native_proof_missing` on the Abuse page). Desktop and TV have no platform attestation and keep the
+The apps send the proof in **`X-AUN-Native-Proof`** on writes. Native client ids listed under
+"Require a proof" in the admin lose the signed-client exemption: without a valid proof they get
+`403 native_proof_required` (counted as `native_proof_missing` on the Abuse page). A proof is not a
+bearer pass: it counts only on a signed-in request from a registered native client
+(`NATIVE_CLIENT_IDS`), only while its platform's check is on, and only for the account that first
+used it (the first use pins the account in KV). On any other request the header is ignored and
+Turnstile applies as usual. Desktop and TV have no platform attestation and keep the
 exemption. Running cost: one KV write per challenge and per proof (about one per app per hour),
 nothing while it is off.
 

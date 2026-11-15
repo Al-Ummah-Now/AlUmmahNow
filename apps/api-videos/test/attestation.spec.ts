@@ -13,7 +13,7 @@ import { defaultMobileAppsSettings, type MobileAppsSettings } from '@al-ummah/sh
 import { verifyAppleAssertion, verifyAppleAttestation } from '../src/lib/attestation/apple';
 import { resetPlayIntegrityToken, verifyPlayIntegrity } from '../src/lib/attestation/android';
 import { decodeCbor, hex, parseCertificate, sha256 } from '../src/lib/attestation/encoding';
-import { consumeChallenge, issueChallenge, issueProof, resetAttestationSettings, validProof } from '../src/lib/attestation/service';
+import { acceptProof, consumeChallenge, issueChallenge, issueProof, resetAttestationSettings, validProof } from '../src/lib/attestation/service';
 import attestationRouter from '../src/routers/attestation.router';
 import { requireHuman } from '../src/middleware/bot-protection';
 
@@ -405,25 +405,45 @@ describe('requireHuman with native proofs', () => {
 		return { call: (headers: Record<string, string>) => a.request('/api/moderation/reports', { method: 'POST', headers }, env), HUMAN_VERIFIED };
 	}
 
-	it('a valid proof passes in place of Turnstile; a made-up one does not', async () => {
-		const { call, HUMAN_VERIFIED } = app(defaultMobileAppsSettings('stage'));
-		const { proof } = await issueProof(HUMAN_VERIFIED, { platform: 'apple', app: APP_ID });
-		assert.equal((await call({ 'X-AUN-Native-Proof': proof })).status, 201);
-		const res = await call({ 'X-AUN-Native-Proof': 'A'.repeat(43) });
+	function enforcedSettings(): MobileAppsSettings {
+		const settings = defaultMobileAppsSettings('stage');
+		settings.android.playIntegrity = { enabled: true, cloudProjectNumber: '123456789012' };
+		settings.attestation.enforceClientIds = [NATIVE];
+		return settings;
+	}
+
+	it('a proof is no pass for a web (non-native) request: Turnstile still applies', async () => {
+		const { call, HUMAN_VERIFIED } = app(enforcedSettings());
+		const { proof } = await issueProof(HUMAN_VERIFIED, { platform: 'android', app: 'net.alummahnow.studio' });
+		const res = await call({ 'X-AUN-Native-Proof': proof });
 		assert.equal(res.status, 403);
 		assert.equal(((await res.json()) as { code: string }).code, 'human_check_required');
 	});
 
 	it('native clients keep the exemption until the admin requires a proof from them', async () => {
-		const settings = defaultMobileAppsSettings('stage');
-		assert.equal((await app(settings).call({ Authorization: `Bearer ${jwt(NATIVE)}` })).status, 201);
+		assert.equal((await app(defaultMobileAppsSettings('stage')).call({ Authorization: `Bearer ${jwt(NATIVE)}` })).status, 201);
 		resetAttestationSettings();
-		settings.attestation.enforceClientIds = [NATIVE];
-		const enforced = app(settings);
+		const enforced = app(enforcedSettings());
 		const res = await enforced.call({ Authorization: `Bearer ${jwt(NATIVE)}` });
 		assert.equal(res.status, 403);
 		assert.equal(((await res.json()) as { code: string }).code, 'native_proof_required');
+		assert.equal((await enforced.call({ Authorization: `Bearer ${jwt(NATIVE)}`, 'X-AUN-Native-Proof': 'A'.repeat(43) })).status, 403);
 		const { proof } = await issueProof(enforced.HUMAN_VERIFIED, { platform: 'android', app: 'net.alummahnow.studio' });
 		assert.equal((await enforced.call({ Authorization: `Bearer ${jwt(NATIVE)}`, 'X-AUN-Native-Proof': proof })).status, 201);
+		assert.equal((await enforced.call({ Authorization: `Bearer ${jwt(NATIVE)}`, 'X-AUN-Native-Proof': proof })).status, 201);
+	});
+
+	it('a proof is pinned to the first account that uses it and dies when its platform is turned off', async () => {
+		const settings = enforcedSettings();
+		const store = kv();
+		const { proof } = await issueProof(store, { platform: 'android', app: 'net.alummahnow.studio' });
+		assert.equal(await acceptProof(store, settings, proof, 'usr_1'), true);
+		assert.equal(await acceptProof(store, settings, proof, 'usr_1'), true);
+		assert.equal(await acceptProof(store, settings, proof, 'usr_2'), false);
+		settings.android.playIntegrity.enabled = false;
+		assert.equal(await acceptProof(store, settings, proof, 'usr_1'), false);
+		const late = await issueProof(store, { platform: 'android', app: 'net.alummahnow.studio' }, Date.now() - 3590_000);
+		settings.android.playIntegrity.enabled = true;
+		assert.equal(await acceptProof(store, settings, late.proof, 'usr_3'), false);
 	});
 });

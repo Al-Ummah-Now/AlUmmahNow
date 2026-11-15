@@ -12,9 +12,11 @@
  *   first comment or post: once verified, the account is remembered for 180 days in
  *   KV HUMAN_VERIFIED). Tokens issued to our native apps (NATIVE_CLIENT_IDS) are not
  *   asked: the apps cannot show the widget; the rate limits still apply to them.
- *   A valid attestation proof (X-AUN-Native-Proof, lib/attestation) passes in place of a
- *   Turnstile token. Native clients listed in videos admin → Mobile apps → "Require a proof
- *   from" lose the exemption: without a proof they get 403 native_proof_required.
+ *   Native clients listed in videos admin → Mobile apps → "Require a proof from" lose that
+ *   exemption: they need a valid attestation proof (X-AUN-Native-Proof, lib/attestation), else
+ *   403 native_proof_required. A proof counts only on a native client's signed-in request, while
+ *   its platform's check is on, and for the account that first used it; anyone else's request
+ *   ignores the header and goes through Turnstile as usual.
  *
  * Refusals answer JSON with a `code` the clients translate:
  * 429 rate_limited, 403 forbidden_client, 403 human_check_required (+ siteKey),
@@ -31,7 +33,7 @@ import {
 	type TurnstileEnv,
 } from '../lib/bot-guard';
 import { NATIVE_PROOF_HEADER } from '@al-ummah/shared-types';
-import { loadMobileAppsSettings, validProof, type AttestationEnv } from '../lib/attestation/service';
+import { acceptProof, loadMobileAppsSettings, type AttestationEnv } from '../lib/attestation/service';
 
 export const RATE_LIMIT_RETRY_SECONDS = 60;
 export const HUMAN_VERIFIED_TTL_SECONDS = 180 * 24 * 60 * 60;
@@ -96,16 +98,22 @@ export function tokenClientId(c: Context): string | null {
 	}
 }
 
-/** Whether this native client must attest (its id is listed in the Mobile apps settings). */
-async function nativeProofRequired(c: Context, env: BotEnv): Promise<boolean> {
+/**
+ * A signed-in native client's request: a valid proof passes; without one, 403 native_proof_required
+ * when the admin requires a proof from this client, else the native exemption.
+ */
+async function nativeProofDecision(c: Context, env: BotEnv): Promise<'pass' | 'refuse'> {
 	const id = tokenClientId(c);
-	if (!id) return false;
+	const user = signedInUser(c);
+	let settings;
 	try {
-		const settings = await loadMobileAppsSettings(env);
-		return settings.attestation.enforceClientIds.includes(id);
+		settings = await loadMobileAppsSettings(env);
 	} catch {
-		return false;
+		return 'pass';
 	}
+	const proof = c.req.header(NATIVE_PROOF_HEADER);
+	if (proof && user && (await acceptProof(env.HUMAN_VERIFIED, settings, proof, user))) return 'pass';
+	return id && settings.attestation.enforceClientIds.includes(id) ? 'refuse' : 'pass';
 }
 
 function isNativeClient(c: Context, env: BotEnv): boolean {
@@ -164,10 +172,8 @@ export function requireHuman(endpoint: string, policy: 'always' | 'first') {
 	return async (c: Context, next: Next) => {
 		if (c.req.method !== 'POST') return next();
 		const env = c.env as BotEnv;
-		const proof = c.req.header(NATIVE_PROOF_HEADER);
-		if (proof && (await validProof(env.HUMAN_VERIFIED, proof))) return next();
 		if (isNativeClient(c, env)) {
-			if (await nativeProofRequired(c, env)) {
+			if ((await nativeProofDecision(c, env)) === 'refuse') {
 				recordAbuse(env, endpoint, 'native_proof_missing');
 				return c.json({ success: false, code: 'native_proof_required', error: 'Please update the app and try again.' }, 403);
 			}
