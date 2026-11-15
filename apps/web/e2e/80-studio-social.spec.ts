@@ -75,9 +75,12 @@ test('SOC-01 connect Mastodon, turn on community posts, a new post goes out and 
   const form = page.getByTestId('social-connect-form-mastodon');
   await form.getByRole('textbox').fill(instance);
   await form.getByRole('button', { name: 'Continue' }).click();
-  // The instance's OAuth page approves at once and api-videos sends us back to Studio
-  await expect(page).toHaveURL(new RegExp(`/en/studio/${channelId}/social\\?connected=mastodon`), { timeout: 30_000 });
+  // The instance's OAuth page approves at once; api-videos sends us back to Studio, which confirms the link
+  const confirmed = page.waitForResponse((r) => r.url().endsWith(`/api/social/channel/${channelId}/connect/confirm`) && r.request().method() === 'POST', { timeout: 30_000 });
+  await expect(page).toHaveURL(new RegExp(`/en/studio/${channelId}/social`), { timeout: 30_000 });
+  expect((await confirmed).status()).toBe(200);
   await expect(page.getByRole('status').filter({ hasText: 'Mastodon connected.' })).toBeVisible();
+  expect(new URL(page.url()).searchParams.has('confirm'), 'the one-time id leaves the address bar').toBe(false);
   const account = page.getByTestId('social-account-mastodon');
   await expect(account).toBeVisible();
 
