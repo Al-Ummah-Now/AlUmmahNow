@@ -15,6 +15,7 @@ import { VideoUpload } from '../src/endpoints/video/videoUpload';
 import { LiveStreamCreate } from '../src/endpoints/live/liveStreamCreate';
 import { MemoryBucket, MemoryQueue, buildApp } from './helpers';
 import { SqliteD1 } from './search-sqlite-d1';
+import { assignTier } from '../src/lib/creatorTiers';
 import { forgetBunnyAvailability } from '../src/lib/live/providers';
 
 const realFetch = globalThis.fetch;
@@ -124,6 +125,8 @@ describe('every Bunny create gets the right collection', () => {
 
 	it('live stream: the channel collection (it used the channel id as the collection id)', async () => {
 		const h = harness(CHANNEL);
+		// Live needs a tier that includes it (lib/live/tier-gate.ts)
+		await assignTier(h.env.SEARCH_DB, 'alice', 'creator', 'admin-1');
 		const res = await h.post('/api/live', { title: 'Live' }, 'ch1');
 		assert.ok(res.status < 300, `status ${res.status}: ${await res.clone().text()}`);
 		// Bunny Stream Live creates the stream (its recording becomes the library video) in the channel's collection
