@@ -151,6 +151,8 @@
 			{ "binding": "TOKEN_REVOCATIONS", "id": "e6e662fc9cd9420797ddfa8060eb6956" },
 			// Accounts that passed Turnstile once (middleware/bot-protection.ts, 180-day TTL)
 			{ "binding": "HUMAN_VERIFIED", "id": "924324ece3634d2f92924fa0be2b51c9" },
+			// Remote config for the native apps: flags, config, versions (Epic 9.5; edited in the videos admin, #413)
+			{ "binding": "APP_CONFIG", "id": "e6d4ea29c0414fc4aecaf67d6da215d5" },
     {
       "binding": "TUS_SESSIONS",
       "id": "89659e4b76fe4f41823ad956990e6731"

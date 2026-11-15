@@ -203,6 +203,8 @@
 			{ "binding": "TOKEN_REVOCATIONS", "id": "2afbb5f5d5414c9ea1a7d54013cfe724", "preview_id": "e6e662fc9cd9420797ddfa8060eb6956" },
 			// Accounts that passed Turnstile once (middleware/bot-protection.ts, 180-day TTL)
 			{ "binding": "HUMAN_VERIFIED", "id": "71f0659777884bba8adaa50d9334a2b3", "preview_id": "52611e9cb9cd4482a06305cad2dd73b2" },
+			// Remote config for the native apps: flags, config, versions (Epic 9.5; edited in the videos admin, #413)
+			{ "binding": "APP_CONFIG", "id": "47795bc1c41f4ab18807ed4630e10607", "preview_id": "7b8fabee71fa4effa16661861114913e" },
 		{
 			"binding": "TUS_SESSIONS",
 			"id": "a7f78b8bf0984994a2cd2f4c92169ae1",
@@ -576,6 +578,8 @@
 			{ "binding": "TOKEN_REVOCATIONS", "id": "0831520b71144a6e848ed62918602c13" },
 			// Accounts that passed Turnstile once (middleware/bot-protection.ts, 180-day TTL)
 			{ "binding": "HUMAN_VERIFIED", "id": "ffbc2d62e6264070ae5c8d3f2e34eb69" },
+			// Remote config for the native apps: flags, config, versions (Epic 9.5; edited in the videos admin, #413)
+			{ "binding": "APP_CONFIG", "id": "d8ffc8e11e3f418c8745a899745a8245" },
 				{
 					"binding": "TUS_SESSIONS",
 					"id": "a200f6a898594502971558727243e538"

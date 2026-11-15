@@ -5,18 +5,24 @@
  * - GET /internal/app-config/:key   the stored document (null when unset)
  * - PUT /internal/app-config/:key   replace it; validated first, so a bad
  *   document is never written (400 with the zod issues)
+ * - POST /internal/app-config/evaluate   dry run: what an app build would get
+ *   from draft documents (any left out are read from KV), validated the same way
  *
  * Keys: `flags` and `config` (rule lists, lib/feature-flags.ts) and
- * `versions` (update policies, lib/app-config.ts). The admin-web UI is a
- * later story; until then these are called with the service key.
+ * `versions` (update policies, lib/app-config.ts). The videos admin edits them
+ * through admin-api (/api/app-config, settings:manage, audited); the service
+ * key never reaches a browser. Answers carry `result` (and `problems` on a 400)
+ * like the other internal routes; `value` and `issues` stay for older callers.
  */
 import { z } from 'zod';
 import { PublicRoute } from '../../base';
 import type { AppContext } from '../../base';
-import { VersionsDocumentSchema } from '../../lib/app-config';
+import { APPS, PLATFORMS, SEMVER, VersionsDocumentSchema, buildAppConfig } from '../../lib/app-config';
+import type { VersionsDocument } from '../../lib/app-config';
 import { APP_CONFIG_KEYS, forgetAppConfigDocument } from '../../lib/app-config-store';
 import type { AppConfigKey } from '../../lib/app-config-store';
-import { ConfigRulesDocumentSchema, RulesDocumentSchema } from '../../lib/feature-flags';
+import { ConfigRulesDocumentSchema, RulesDocumentSchema, evaluateConfig, evaluateFlags } from '../../lib/feature-flags';
+import type { FlagContext, FlagRule } from '../../lib/feature-flags';
 import { logger } from '../../lib/logger';
 
 export const APP_CONFIG_SCHEMAS: Record<AppConfigKey, z.ZodTypeAny> = {
@@ -44,7 +50,7 @@ export class AppConfigDocumentGet extends PublicRoute {
 		const kv = namespace(c);
 		if (kv instanceof Response) return kv;
 		const value = await kv.get(params.key, { type: 'json' });
-		return c.json({ success: true, key: params.key, value });
+		return c.json({ success: true, key: params.key, value, result: value });
 	}
 }
 
@@ -70,11 +76,59 @@ export class AppConfigDocumentPut extends PublicRoute {
 		if (kv instanceof Response) return kv;
 		const parsed = APP_CONFIG_SCHEMAS[params.key].safeParse(body);
 		if (!parsed.success) {
-			return c.json({ success: false, error: 'invalid_document', issues: parsed.error.issues }, 400);
+			return c.json({ success: false, error: 'invalid_document', issues: parsed.error.issues, problems: parsed.error.issues }, 400);
 		}
 		await kv.put(params.key, JSON.stringify(parsed.data));
 		forgetAppConfigDocument(kv, params.key);
 		logger.debug('[AppConfig] Document replaced', { key: params.key });
-		return c.json({ success: true, key: params.key, value: parsed.data });
+		return c.json({ success: true, key: params.key, value: parsed.data, result: parsed.data });
+	}
+}
+
+const EvaluateBody = z.object({
+	context: z.object({
+		platform: z.enum(PLATFORMS),
+		app: z.enum(APPS),
+		version: z.string().regex(SEMVER),
+		locale: z.string().max(16).optional(),
+		installId: z.string().max(64).optional(),
+	}),
+	/** Drafts to try; a key left out is read from KV */
+	documents: z.object({ flags: z.unknown().optional(), config: z.unknown().optional(), versions: z.unknown().optional() }).partial().default({}),
+});
+
+export class AppConfigEvaluate extends PublicRoute {
+	schema = {
+		tags: ['Internal'],
+		summary: 'Dry-run remote config for an app build (internal)',
+		request: { body: { content: { 'application/json': { schema: EvaluateBody } } } },
+		responses: {
+			'200': { description: 'What the build would get from GET /api/v1/app-config' },
+			'400': { description: 'Invalid context or draft document' },
+			'401': { description: 'Missing or wrong X-API-Key' },
+		},
+	};
+
+	async handle(c: AppContext) {
+		const { body } = await this.getValidatedData<typeof this.schema>();
+		const kv = namespace(c);
+		if (kv instanceof Response) return kv;
+		const docs: { flags?: FlagRule[]; config?: FlagRule[]; versions?: VersionsDocument } = {};
+		for (const key of APP_CONFIG_KEYS) {
+			// A draft is checked exactly as a save would check it; otherwise the stored document (straight from KV)
+			const raw = body.documents[key] !== undefined ? body.documents[key] : await kv.get(key, { type: 'json' });
+			if (raw == null) continue;
+			const parsed = APP_CONFIG_SCHEMAS[key].safeParse(raw);
+			if (!parsed.success) {
+				return c.json({ success: false, error: 'invalid_document', key, problems: parsed.error.issues }, 400);
+			}
+			(docs as Record<string, unknown>)[key] = parsed.data;
+		}
+		// Validated by EvaluateBody (chanfana's inferred type marks every field optional)
+		const ctx = body.context as FlagContext;
+		return c.json({
+			success: true,
+			result: buildAppConfig(ctx, docs.versions, { flags: evaluateFlags(docs.flags ?? [], ctx), config: evaluateConfig(docs.config ?? [], ctx) }),
+		});
 	}
 }

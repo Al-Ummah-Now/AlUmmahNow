@@ -31,6 +31,8 @@ export interface NavAccess {
   ops: boolean;
   /** A content or senior reviewer with no admin role (VR7): only the review queue is shown */
   reviewOnly?: boolean;
+  /** settings:manage (Remote config for the apps): admins and super admins */
+  settings?: boolean;
   /** Super admin: CSAM cases (docs/specs/CSAM-RESPONSE.md), which no other role may open */
   superAdmin?: boolean;
 }
@@ -126,6 +128,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/platform-settings', label: 'nav.platformSettings', icon: 'sliders', group: 'site' },
   // Universal links / App Links files and app attestation (NAT-REL): every admin reads, admins change
   { href: '/mobile-apps', label: 'nav.mobileApps', icon: 'phone', group: 'site' },
+  { href: '/app-config', label: 'nav.appConfig', icon: 'sliders', group: 'site', requires: (a) => a.settings === true },
   // White-label scholar sites (wiki AUN-SCHOLAR-SITES §8): every admin reads, creators:manage changes
   { href: '/sites', label: 'nav.scholarSites', icon: 'globe', group: 'site' },
   // Newsletter (AlUmmahNowUI#6): www sign-ups, issues in en + ar; newsletter:manage = admins and super admins, as contact:read

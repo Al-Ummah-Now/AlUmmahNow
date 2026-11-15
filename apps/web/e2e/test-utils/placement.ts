@@ -61,6 +61,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/admin-web/e2e/24-categories.spec.ts': { placement: 'local', reason: 'Categories page: add, rename, reorder, retire with undo, restore one run-namespaced category; live in /api/categories and the web search filter; global list, so shared-state, deleted from the stack D1 afterwards' },
   'apps/admin-web/e2e/25-newsletter.spec.ts': { placement: 'local', reason: 'Newsletter page: draft in en + ar saved and deleted, a sign-up through the internal endpoint (stack key) listed and erased; own rows only' },
   'apps/admin-web/e2e/24-audit-log.spec.ts': { placement: 'local', reason: 'Audit log page (#711) and names instead of ids (#745): own profile, video and audit rows via the stack control API, removed afterwards' },
+  'apps/admin-web/e2e/25-app-config.spec.ts': { placement: 'local', reason: 'Remote config editor (#413): problems on their field, save + audit history, dry run of the drafts, conflict and load latest through admin-api and api-videos APP_CONFIG; global documents, so shared-state and restored afterwards' },
   'apps/web/e2e/01-homepage.spec.ts': { placement: 'local', reason: 'anonymous home page layout and content' },
   'apps/web/e2e/02-video-player.spec.ts': { placement: 'local', reason: 'player loads a seed video; any playable HLS will do' },
   'apps/web/e2e/03-profile.spec.ts': { placement: 'local', reason: 'profile page and profile guard with stored sessions' },

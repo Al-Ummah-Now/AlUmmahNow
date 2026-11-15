@@ -4,7 +4,7 @@
 import { Hono } from 'hono';
 import { fromHono } from 'chanfana';
 import { AppConfigGet } from '../endpoints/app-config/appConfigGet';
-import { AppConfigDocumentGet, AppConfigDocumentPut } from '../endpoints/app-config/appConfigAdmin';
+import { AppConfigDocumentGet, AppConfigDocumentPut, AppConfigEvaluate } from '../endpoints/app-config/appConfigAdmin';
 
 const app = new Hono();
 
@@ -14,6 +14,7 @@ appConfigRouter.get('/', AppConfigGet);
 
 // Internal admin (Epic 9.5): /internal/* is behind the INTERNAL_API_KEY middleware
 export const appConfigAdminRouter = fromHono(new Hono(), { base: '/internal/app-config' });
+appConfigAdminRouter.post('/evaluate', AppConfigEvaluate);
 appConfigAdminRouter.get('/:key', AppConfigDocumentGet);
 appConfigAdminRouter.put('/:key', AppConfigDocumentPut);
 
