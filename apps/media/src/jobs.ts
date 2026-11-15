@@ -209,32 +209,46 @@ export interface SelfTestResult {
 	version?: string;
 	/** Real starts made for this version so far */
 	runs?: number;
+	/** UTC day (YYYY-MM-DD) and real starts made that day, across every version */
+	day?: string;
+	dayRuns?: number;
 }
 
-/** A failed run may be retried at most once per this interval (the route is public). */
+/** Never more than one real start per this interval, for any version (the route is public). */
 export const SELFTEST_MIN_GAP_MS = 60 * 1000;
 /** At most this many real starts per deployed Worker version, whatever callers ask. */
 export const SELFTEST_MAX_RUNS = 10;
+/** At most this many real starts per UTC day across all versions, so alternating versions cannot reset the cap. */
+export const SELFTEST_MAX_DAY_RUNS = 30;
 /** The release smoke fails a cold start slower than this. */
 export const SELFTEST_START_LIMIT_MS = 60 * 1000;
 
 /**
  * Start a container now, or answer with the stored run? The first call after a deploy (a new
- * version) runs; a pass is then reused for that version; a failure may rerun once a minute, up to
- * SELFTEST_MAX_RUNS per version. That bounds what anyone calling the public route can cost to
- * about ten starts per release.
+ * version) runs; a pass is then reused for that version; a failure may rerun up to
+ * SELFTEST_MAX_RUNS per version. Every real start, whatever the version, is at least
+ * SELFTEST_MIN_GAP_MS after the last one and within SELFTEST_MAX_DAY_RUNS a day, which bounds what
+ * anyone calling the public route can cost.
  */
 export function selfTestDue(last: SelfTestResult | undefined, now: number, version: string | undefined): boolean {
 	if (!last) return true;
+	if (!(now - Date.parse(last.at) >= SELFTEST_MIN_GAP_MS)) return false;
+	if (last.day === utcDay(now) && (last.dayRuns ?? 1) >= SELFTEST_MAX_DAY_RUNS) return false;
 	if (last.version !== version) return true;
 	if (last.ok) return false;
-	if ((last.runs ?? 1) >= SELFTEST_MAX_RUNS) return false;
-	return now - Date.parse(last.at) >= SELFTEST_MIN_GAP_MS;
+	return (last.runs ?? 1) < SELFTEST_MAX_RUNS;
 }
 
-/** Runs counted for the next start of `version`. */
-export function selfTestRuns(last: SelfTestResult | undefined, version: string | undefined): number {
-	return last && last.version === version ? (last.runs ?? 1) + 1 : 1;
+const utcDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+
+/** Counters for the next real start of `version` at `now`. */
+export function selfTestRuns(last: SelfTestResult | undefined, version: string | undefined, now: number): Pick<SelfTestResult, 'runs' | 'day' | 'dayRuns'> {
+	const day = utcDay(now);
+	return {
+		runs: last && last.version === version ? (last.runs ?? 1) + 1 : 1,
+		day,
+		dayRuns: last && last.day === day ? (last.dayRuns ?? 1) + 1 : 1,
+	};
 }
 
 /** Keys an outbound PUT may write for this job (and nothing else). */
