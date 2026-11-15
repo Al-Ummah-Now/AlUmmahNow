@@ -54,3 +54,7 @@ jobs:
         run: |
           set -o pipefail
           node --experimental-strip-types --no-warnings scripts/ops/media-diagnostics.ts --env "$ENV_NAME" --hours "$HOURS" --search "$SEARCH" | tee -a "$GITHUB_STEP_SUMMARY"
+          # On a PR that changes the report: stage too, for comparison
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            node --experimental-strip-types --no-warnings scripts/ops/media-diagnostics.ts --env stage --hours "$HOURS" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi

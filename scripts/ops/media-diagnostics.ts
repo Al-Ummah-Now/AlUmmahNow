@@ -148,9 +148,9 @@ async function containers(names: Names): Promise<void> {
 	p();
 }
 
-async function logs(script: string, since: Date, until: Date, search: string): Promise<void> {
-	p(`## Logs: ${script}`);
-	const filters: unknown[] = [{ key: '$workers.scriptName', operation: 'eq', type: 'string', value: script }];
+async function logs(script: string, since: Date, until: Date, search: string, key = '$workers.scriptName', allLevels = false): Promise<void> {
+	p(`## Logs: ${script}${key === '$workers.scriptName' ? '' : ` (${key})`}`);
+	const filters: unknown[] = [{ key, operation: 'eq', type: 'string', value: script }];
 	if (search) filters.push({ key: '$metadata.message', operation: 'includes', type: 'string', value: search });
 	const r = await post(`/accounts/${account}/workers/observability/telemetry/query`, {
 		queryId: `media-diagnostics-${script}`,
@@ -161,7 +161,7 @@ async function logs(script: string, since: Date, until: Date, search: string): P
 	});
 	if (!r.ok) return p(`unavailable: ${errs(r)}`), p();
 	// warn/error only (these Workers log nothing else; invocation events and console.log are left out)
-	const events = (r.body.result?.events?.events ?? []).filter((e: any) => /warn|error/i.test(String(e.$metadata?.level ?? e.source?.level ?? '')));
+	const events = (r.body.result?.events?.events ?? []).filter((e: any) => allLevels || /warn|error/i.test(String(e.$metadata?.level ?? e.source?.level ?? '')));
 	p(`${events.length} events`);
 	const rows = events
 		.map((e: any) => {
@@ -192,6 +192,10 @@ async function main(): Promise<void> {
 	await queues(names, since, until);
 	await containers(names);
 	for (const s of [names.media, names.videos, names.admin]) await logs(s, since, until, search);
+	// The transcoder container's own output (stdout/stderr, exits), every level
+	const app = `${names.media.replace(/-(stage|qa)$/, '')}-transcoder${env === 'production' ? '' : `-${env}`}`;
+	await logs(app, since, until, search, '$metadata.service', true);
+	await logs(app, since, until, search, '$containers.application', true);
 	process.stdout.write(out.join('\n') + '\n');
 }
 
