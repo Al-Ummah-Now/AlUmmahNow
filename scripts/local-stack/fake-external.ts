@@ -14,6 +14,10 @@
  * - Bunny Storage (storage.bunnycdn.com) + the image host (images.alummahnow.net): PUT stores, GET serves.
  * - Resend (api.resend.com): emails are kept, never sent: GET /__fake/resend/emails.
  * - Google and YouTube (Move from YouTube): fake-google.ts.
+ * - Cloudflare API (api.cloudflare.com): only the read calls of the transcode troubleshooting panel
+ *   (admin-api lib/media-troubleshoot/cloudflare.ts), and only with a FAKE_CF_TOKEN_PREFIX token; any
+ *   other token or call is refused. PUT /__fake/cloudflare { logVideo } names the video its log lines
+ *   mention, DELETE /__fake/cloudflare forgets it.
  *
  * State is in memory and dies with the stack, like every other piece of local state.
  */
@@ -396,6 +400,54 @@ function mediaHost(method: string, pathname: string): Response {
   return send(readFileSync(path), TYPES[extname(path)] ?? 'application/octet-stream');
 }
 
+/** Tokens the fake Cloudflare API accepts (the transcode troubleshooting E2E sets one in the admin). */
+export const FAKE_CF_TOKEN_PREFIX = 'e2e-fake-cloudflare-token-';
+const CF_APPLICATION_ID = 'fake-transcoder-app';
+export const fakeCloudflare = { logVideo: null as string | null };
+
+/**
+ * The QA names the stack's admin-api reads (ENVIRONMENT qa): one transcoder application with
+ * 2 instances at most and one running, the transcode queue with 2 waiting and an empty DLQ, a media
+ * Worker warning and the container's start crash (the 2026-11-15 incident) naming logVideo.
+ */
+async function cloudflareApi(request: Request, url: URL): Promise<Response> {
+  const ok = (result: unknown) => json({ success: true, errors: [], messages: [], result });
+  if (!(request.headers.get('authorization') ?? '').startsWith(`Bearer ${FAKE_CF_TOKEN_PREFIX}`)) {
+    return json({ success: false, errors: [{ code: 10000, message: 'Authentication error' }] }, 403);
+  }
+  const path = url.pathname.replace(/^\/client\/v4/, '');
+  type CfBody = { query?: string; variables?: { q?: string }; parameters?: { filters?: { key?: string; value?: string }[] } };
+  const body: CfBody = request.method === 'POST' ? ((await request.json().catch(() => ({}))) as CfBody) : {};
+  if (/^\/accounts\/[^/]+\/containers\/applications$/.test(path)) {
+    return ok([{ id: CF_APPLICATION_ID, name: 'al-ummah-now-media-qa-transcoder', max_instances: 2, health: { instances: { active: 1, healthy: 1, failed: 0 } } }]);
+  }
+  if (path.endsWith(`/containers/applications/${CF_APPLICATION_ID}/instances`)) {
+    return ok([{ id: 'fake-instance-1', state: 'running', location: 'local' }]);
+  }
+  if (/^\/accounts\/[^/]+\/queues$/.test(path)) {
+    return ok([{ queue_name: 'al-ummah-now-transcode-qa', queue_id: 'fake-queue' }, { queue_name: 'al-ummah-now-transcode-dlq-qa', queue_id: 'fake-dlq' }]);
+  }
+  if (path === '/graphql') {
+    const query = String(body.query ?? '');
+    if (query.includes('workersInvocationsAdaptive')) return json({ data: { viewer: { accounts: [{ workersInvocationsAdaptive: [{ sum: { requests: 1 } }] }] } }, errors: null });
+    const messages = body.variables?.q === 'fake-queue' ? 2 : 0;
+    return json({ data: { viewer: { accounts: [{ queueBacklogAdaptiveGroups: [{ dimensions: { datetimeMinute: new Date().toISOString() }, avg: { messages } }] }] } }, errors: null });
+  }
+  if (/^\/accounts\/[^/]+\/workers\/observability\/telemetry\/query$/.test(path)) {
+    const filter = body.parameters?.filters?.[0] ?? {};
+    const video = fakeCloudflare.logVideo ?? 'no-video-set';
+    const now = Date.now();
+    const events =
+      filter.key === '$workers.scriptName' && filter.value === 'al-ummah-now-media-qa'
+        ? [{ timestamp: now - 60_000, $metadata: { level: 'warn', message: 'transcode start failed, retrying' }, source: { videoId: video, attempt: 3, delaySeconds: 120, error: 'container start failed' } }]
+        : filter.key === '$container.applicationId' && filter.value === CF_APPLICATION_ID
+          ? [{ timestamp: now - 30_000, source: `Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/app/review.mjs' imported from /app/transcode.mjs (video ${video})`, $container: { instanceId: 'fake-instance-1', exitCode: 1 } }]
+          : [];
+    return ok({ events: { events } });
+  }
+  return json({ success: false, errors: [{ code: 7003, message: 'No route for that URI (fake)' }] }, 404);
+}
+
 /** Registers the fakes with the outbound router. */
 export function registerFakes(): void {
   FAKES.set('video.bunnycdn.com', bunnyStream);
@@ -404,6 +456,7 @@ export function registerFakes(): void {
   FAKES.set('.storage.bunnycdn.com', images);
   FAKES.set(IMAGE_HOST, images);
   FAKES.set('api.resend.com', resend);
+  FAKES.set('api.cloudflare.com', cloudflareApi);
   FAKES.set(FAKE_MEDIA_HOST, (request, url) => mediaHost(request.method, url.pathname));
   // Move from YouTube: Google's consent, tokens, the YouTube Data API and thumbnails (fake-google.ts)
   FAKES.set('accounts.google.com', googleAccounts);
@@ -464,6 +517,7 @@ async function readBody(req: IncomingMessage): Promise<string> {
  * - GET /__fake/bunny/videos[/<guid>], POST /__fake/bunny/videos/<guid>/encode|fail|hold|tus-head-404[?count=n]
  * - POST /__fake/media/transcode/<videoId>[?outcome=fail], POST /__fake/media/down | /up[?video=<id>] (the R2 media pipeline)
  * - GET /__fake/resend/emails
+ * - PUT /__fake/cloudflare { logVideo } | DELETE /__fake/cloudflare: the video the fake Cloudflare log lines name
  * - PUT | GET /__fake/images/<path>: seed or check one stored image (Bunny Storage)
  * - GET /__fake/google, POST /__fake/google/consent?mode=…|quota?on=1|reset (fake-google.ts)
  * - GET /__fake/social/posts[?network=] | /webhooks, POST /__fake/social/telegram/post | /fail?network=&status= (fake-social.ts)
@@ -560,6 +614,15 @@ async function control(req: IncomingMessage, url: URL): Promise<Response> {
   const [, , kind, , guid, action] = url.pathname.split('/');
   if (kind === 'resend') return json(emails);
   if (kind === 'google') return googleControl(req.method, url);
+  if (kind === 'cloudflare') {
+    if (req.method === 'DELETE') fakeCloudflare.logVideo = null;
+    else if (req.method === 'PUT') {
+      const { logVideo } = JSON.parse((await readBody(req)) || '{}') as { logVideo?: unknown };
+      if (typeof logVideo !== 'string' || !/^[A-Za-z0-9-]{8,64}$/.test(logVideo)) return json({ error: 'logVideo must be a video id' }, 400);
+      fakeCloudflare.logVideo = logVideo;
+    }
+    return json({ logVideo: fakeCloudflare.logVideo });
+  }
   if (kind === 'media') {
     const [, , , step, videoId] = url.pathname.split('/');
     if (req.method !== 'POST') return json({ error: 'POST /__fake/media/transcode/<videoId> | /down | /up' }, 405);

@@ -146,7 +146,7 @@ from R2 on every request, at Class B cost and with no edge cache.
 - **Deploys:** `rollout_active_grace_period` (1 h) lets running transcodes finish before a rollout
   replaces their instance. One cut off after that (SIGTERM, exit 143), a lost launch or a
   restarted container retries after 15 s without using up one of its 3 attempts (up to 6 in a row).
-- **Capacity:** raising `max_instances` raises the peak spend. Raising `max_instances` raises the peak spend. The Delivery page's
+- **Capacity:** raising `max_instances` raises the peak spend. The Delivery page's
   "Transcoder now" card shows transcoding now out of the maximum, the jobs waiting and the oldest
   wait (from `media_jobs`, refreshed every 30 s). The maximum is api-videos' `MEDIA_MAX_TRANSCODES`
   var: change it with `max_instances` in `apps/media/wrangler*.jsonc` (production 4, stage and QA 2).
@@ -158,6 +158,58 @@ from R2 on every request, at Class B cost and with no edge cache.
 - **Container image:** `apps/media/container/Dockerfile` (node:22-alpine + ffmpeg). Wrangler builds
   and pushes it on deploy. Old images count toward the 50 GB image storage. Prune with
   `wrangler containers images list` / `delete`.
+
+## Troubleshooting panel (videos admin → Delivery)
+
+Why a transcode waits or fails, without Cloudflare access (owner 2026-11-15: "why the logs are not on
+admin to troubleshoot?"). Needs `media:manage`; the token needs a super admin.
+
+- **Jobs:** every R2 job queued, starting, running or waiting to retry, and those failed or cancelled
+  in the last 3 days (api-videos `GET /internal/media/troubleshoot`, from `media_jobs` and each video's
+  transcoder Durable Object through the `MEDIA_WORKER` binding). Per job: video, state, attempt n of
+  max, queued/started/next try, the last error in words (`transcodeErrorReason` in
+  `packages/shared-types/src/media-troubleshoot.ts`; the raw, scrubbed error is one click away) and
+  the container instance (named by the video id) with its state from the Containers API.
+- **Start failures are kept.** When a start fails the queue consumer notes it on the video's
+  transcoder (`noteStartFailure`), so a job that never started shows "Start failed, retrying", the
+  reason and the next try instead of a bare "queued".
+- **Right now:** containers in use out of `max_instances` and their health (Containers API), the
+  transcode queue's and the DLQ's backlog (GraphQL `queueBacklogAdaptiveGroups`, latest minute of the
+  last 15), and the jobs waiting with the oldest wait (`media_jobs`).
+- **Log lines:** warn/error lines of the media Worker (`$workers.scriptName`) and every line of the
+  transcoder container (`$container.applicationId`) from Workers Observability, last 1, 6 or 24 h,
+  filtered by a video or job id. admin-api builds every query from our own names
+  (`mediaNames()` in `apps/admin-api/src/lib/media-troubleshoot/cloudflare.ts`); the browser only
+  sends an id (checked against `^[A-Za-z0-9-]{8,64}$` on both sides), never a filter. URL query
+  strings and credentials are scrubbed before a line leaves admin-api (`scrubOpsText`, from #1407).
+- **Retry now / Cancel** (per job, confirm dialog): audited per video (`media:video:<id>`), then a
+  queued admin job (`media.transcode-retry` / `media.transcode-cancel`, retry with backoff, DLQ). Retry
+  now runs a waiting retry at once, re-sends a job that never started (same job id), or queues a failed
+  or cancelled one again. Cancel stops the container, marks the job cancelled, deletes what it wrote
+  and records `r2.status = cancelled` (the owner sees "failed"; Bunny keeps playing), so the sweep
+  never re-queues it. A job that gives up flags the Errors page with Retry.
+- **Stalls** (api-videos 10-minute sweep, `flagStalledTranscodes`): a running job with no word from its
+  container for 10 min, a retry 5 min past its time, or a job queued over 30 min raises one Errors page
+  item `media-transcode:<videoId>` with "Retry now" and a link to the panel (`/delivery?video=<id>`).
+  Reported once per stall, so a dismissed item stays dismissed; resolved when the job finishes or is
+  cancelled.
+
+**The Cloudflare token.** A super admin sets it in the panel. Create it in the Cloudflare dashboard
+(My Profile → API Tokens), scoped to the account, with read permissions only: **Workers
+Observability: Read**, **Containers: Read**, **Queues: Read**, **Account Analytics: Read**. Save runs a
+test and lists any permission it lacks; "Test again" repeats it. It is stored sealed in admin-api's
+`site_settings` (`ops:cloudflare-troubleshoot-token`, AES-GCM with a key derived from
+`INTERNAL_API_KEY`), never returned, shown by its last 4 characters, and every set/replace/test/remove
+is audited (`media:troubleshoot-token`). After `INTERNAL_API_KEY` is rotated the panel says the token
+can no longer be read and it has to be set again. Without a token the panel says so in plain words
+and shows the jobs from our own records; nothing fails.
+
+**Running cost.** While the page is open and visible it refreshes every 30 s: one admin-api request,
+small D1 reads and up to one transcoder Durable Object call per listed job (30 at most), and with a
+token 5 Cloudflare API calls (applications, instances, queues list, 2 GraphQL), cached 20 s in
+admin-api. Log lines are 2 Observability queries, only when asked for. The stall sweep adds the same
+Durable Object calls every 10 min, only while jobs are queued or running. Cloudflare API calls are not
+billed and the rest is well inside the Workers plan: about $0 a month.
 
 ## Public MP4 (search engines' contentUrl)
 
