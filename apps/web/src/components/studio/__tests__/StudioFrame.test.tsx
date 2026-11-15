@@ -26,7 +26,8 @@ describe('StudioFrame', () => {
 
   it('shows the owner every item, linking to the first tab', () => {
     frame('owner');
-    expect(rail().getAllByRole('link').map((a) => a.textContent)).toEqual(['Dashboard', 'Content', 'Analytics', 'Playlists', 'Customisation', 'Settings']);
+    expect(rail().getAllByRole('link').map((a) => a.textContent)).toEqual(['Dashboard', 'Content', 'Analytics', 'Playlists', 'Customisation', 'Social', 'Settings']);
+    expect(screen.getByTestId('studio-nav-social')).toHaveAttribute('href', '/en/studio/c1/social');
     expect(screen.getByTestId('studio-nav-content')).toHaveAttribute('href', '/en/studio/c1/content/videos');
     // Sections Studio hasn't rebuilt open the channel settings page, never a dead end
     expect(screen.getByTestId('studio-nav-playlists')).toHaveAttribute('href', '/en/settings/channel/c1/playlists');
