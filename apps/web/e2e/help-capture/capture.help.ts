@@ -410,6 +410,7 @@ const SCENES: Scene[] = [
     },
   },
   {
+    // Markers: you first (tagged Personal), then the Your Channels heading (owner decision 2026-11-15)
     id: 'identity-switch',
     run: async (page, lang) => {
       await settle(page, `/channels/${channelId}`, lang);
