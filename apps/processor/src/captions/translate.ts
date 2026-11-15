@@ -112,10 +112,7 @@ export function isCaptionTranslatePayload(p: unknown): p is CaptionTranslatePayl
 export const captionTranslateMessage = (payload: CaptionTranslatePayload, now = Date.now()) => ({ id: crypto.randomUUID(), type: MessageType.CaptionTranslate, payload, timestamp: now });
 
 class Stopped extends Error {}
-const withoutDeepl = (env: CaptionTranslateEnv): TranslatorEnv => {
-  const { AI_KEY_DEEPL: _key, ...rest } = env;
-  return rest;
-};
+const withoutDeepl = (env: CaptionTranslateEnv): TranslatorEnv => ({ ...env, AI_KEY_DEEPL: undefined });
 class Retryable extends Error {}
 
 async function secret(value: ErrorReporterEnv['INTERNAL_API_KEY']): Promise<string> {
