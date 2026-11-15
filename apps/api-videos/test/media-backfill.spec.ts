@@ -13,9 +13,10 @@ import {
 	withinBudget,
 	DEFAULT_BACKFILL_SETTINGS,
 } from '@al-ummah/shared-types';
-import { cancelRun, changeSettings, createRun, handleBackfillMessage, pauseRun, retryItem, startRun, restartQuietRuns } from '../src/lib/media/backfill/run';
+import { cancelRun, changeSettings, copyMessage, createRun, handleBackfillMessage, pauseRun, retryItem, startRun, restartQuietRuns } from '../src/lib/media/backfill/run';
 import { readRun, listItems, getItem } from '../src/lib/media/backfill/store';
 import { PART_BYTES, scopePage } from '../src/lib/media/backfill/estimate';
+import { uploadIdFor } from '../src/lib/media/backfill/copy';
 import { flipChannel, flipGlobal, flipVideos } from '../src/lib/media/backfill/flip';
 import { cancelRemovals, librarySummaries, queueDueRemovals, removeFromBunny, scheduleRemovals } from '../src/lib/media/backfill/removal';
 import { bunnyRef } from '../src/lib/media/providers';
@@ -411,6 +412,46 @@ describe('backfill run', () => {
 		assert.equal(env.MEDIA_ORIGINALS.store.size, 0, 'nothing copied');
 	});
 
+	it('a hold that lands mid-copy stops the copy and drops the parts this run wrote', async () => {
+		const env = await makeEnv({ [id(1)]: legacyVideo(1) });
+		const run = await createRun(env, { kind: 'all', onlyMissing: false }, 'admin-1');
+		await drain(env);
+		await changeSettings(env, run.id, { concurrency: 1, spacingSeconds: 0, budgetUsd: 5 });
+		await startRun(env, undefined, run.id);
+		// Run the tick only: the item is copying and its first copy message is queued
+		const q = env.PROCESSING_CHECK_QUEUE;
+		const tick = q.sent.shift()!;
+		await handleBackfillMessage(env, undefined, { body: tick.body, attempts: 1, ack: () => {}, retry: () => {} }, { fetch: fakeFetch, md5: nodeMd5 });
+		assert.equal((await getItem(env.SEARCH_DB, run.id, id(1)))!.state, 'copying');
+		// A part from an earlier delivery, and an upload's own kept original that must stay
+		await env.MEDIA_ORIGINALS.put(`src/${id(1)}/${uploadIdFor(run.id)}/000000000000000`, 'part');
+		await env.MEDIA_ORIGINALS.put(`src/${id(1)}/upload-own/000000000000000`, 'theirs');
+		await env.videos.put(id(1), JSON.stringify({ ...env.videos.read(id(1)), suspensionHolds: ['csam'], isHidden: true }));
+		await copyMessage(env, undefined, run.id, id(1), 0, fakeFetch, new Date(), nodeMd5);
+		const item = (await getItem(env.SEARCH_DB, run.id, id(1)))!;
+		assert.deepEqual([item.state, item.skip_reason], ['skipped', 'held']);
+		assert.deepEqual([...env.MEDIA_ORIGINALS.store.keys()], [`src/${id(1)}/upload-own/000000000000000`]);
+	});
+
+	it('a hold that lands during the transcode leaves the video out before it is verified', async () => {
+		const env = await makeEnv({ [id(1)]: legacyVideo(1) });
+		const run = await createRun(env, { kind: 'all', onlyMissing: false }, 'admin-1');
+		await drain(env);
+		await changeSettings(env, run.id, { concurrency: 1, spacingSeconds: 0, budgetUsd: 5 });
+		await startRun(env, undefined, run.id);
+		const finish = fakeTranscoder(env);
+		await drain(env, {
+			ticks: 6,
+			onTranscode: async (videoId) => {
+				await finish(videoId);
+				await env.videos.put(videoId, JSON.stringify({ ...env.videos.read(videoId), suspensionHolds: ['user:u1'] }));
+			},
+		});
+		const item = (await getItem(env.SEARCH_DB, run.id, id(1)))!;
+		assert.deepEqual([item.state, item.skip_reason], ['skipped', 'held']);
+		assert.equal(await env.SEARCH_DB.prepare('SELECT COUNT(*) AS n FROM media_r2_verified').first().then((r: any) => r.n), 0, 'never marked R2-ready');
+	});
+
 	it('pause starts nothing; cancel cancels what has not started', async () => {
 		const env = await makeEnv({ [id(1)]: legacyVideo(1), [id(2)]: legacyVideo(2) });
 		const run = await createRun(env, { kind: 'all', onlyMissing: false }, 'admin-1');
@@ -523,6 +564,24 @@ describe('retiring a Bunny library', () => {
 		const row = await env.SEARCH_DB.prepare('SELECT status, error FROM media_bunny_removals WHERE video_id = ?').bind(id(1)).first();
 		assert.equal(row.status, 'cancelled');
 		assert.match(row.error, /under a hold/);
+	});
+
+	it('a hold that lands while the removal runs is caught before Bunny is asked to delete', async () => {
+		const env = await verified();
+		const now = new Date();
+		await scheduleRemovals(env, LEGACY_LIB, 7, 'admin-1', now);
+		await queueDueRemovals(env, new Date(now.getTime() + 8 * 86_400_000));
+		// The hold arrives between the first read and the compare-and-swap (here: while the thumbnail is kept)
+		const holdingFetch: typeof fetch = async (input, init) => {
+			await env.videos.put(id(1), JSON.stringify({ ...env.videos.read(id(1)), suspensionHolds: ['csam'], isHidden: true }));
+			return fakeFetch(input, init);
+		};
+		const body = env.PROCESSING_CHECK_QUEUE.sent.find((m: any) => m.body.op === 'removal')!.body;
+		await removeFromBunny(env, undefined, body.videoId, false, holdingFetch);
+		assert.deepEqual(bunnyDeletes, []);
+		assert.equal(env.videos.read(id(1)).bunnyRemoved, undefined, 'the record keeps its Bunny copy');
+		const row = await env.SEARCH_DB.prepare('SELECT status, error FROM media_bunny_removals WHERE video_id = ?').bind(id(1)).first();
+		assert.deepEqual([row.status, /under a hold/.test(row.error)], ['cancelled', true]);
 	});
 
 	it('cancel stops scheduled removals; a re-transcoded (unverified) rendition is never removed', async () => {

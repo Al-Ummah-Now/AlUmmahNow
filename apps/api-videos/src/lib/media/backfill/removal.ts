@@ -235,9 +235,19 @@ export async function removeFromBunny(env: BackfillEnv, ctx: Ctx, videoId: strin
 			return;
 		}
 		await setStatus(env, videoId, 'removing', { guid }, now);
+		const keepHeld = async () => {
+			await setStatus(env, videoId, 'cancelled', { error: 'The video is under a hold (containment or suspension); its Bunny copy is kept' }, now);
+			logger.warn('[BunnyRemoval] Video under a hold, Bunny copy kept', { videoId });
+		};
 		if (!video.bunnyRemoved) {
 			const thumb = await keepThumbnail(env, library, video, guid, fetchImpl);
+			let heldNow = false;
 			await repo.updateObject(videoId, (v) => {
+				// Checked again in the same compare-and-swap that marks the copy removed
+				if (underHold(v)) {
+					heldNow = true;
+					return false;
+				}
 				if (v.bunnyRemoved) return false;
 				if (thumb && v.thumbnailUrl && bunnyHostOf(v.thumbnailUrl) === library.host?.toLowerCase()) {
 					v.thumbnailUrl = thumb;
@@ -248,7 +258,10 @@ export async function removeFromBunny(env: BackfillEnv, ctx: Ctx, videoId: strin
 				v.dateModified = now.toISOString();
 				return true;
 			});
+			if (heldNow) return keepHeld();
 		}
+		// And once more right before the delete, which Bunny cannot make conditional
+		if (underHold(await repo.getObject(videoId))) return keepHeld();
 		await deleteBunnyVideo(env as never, guid, { bunnyLibraryId: library.libraryId });
 		await setStatus(env, videoId, 'removed', { removed_at: now.toISOString(), error: null, attempts: row.attempts + 1 }, now);
 		resolveNeedsAction(env, ctx, needsKey(videoId));
