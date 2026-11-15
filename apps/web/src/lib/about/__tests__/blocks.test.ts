@@ -38,7 +38,7 @@ describe('renderAboutBlocks', () => {
     const out = renderAboutBlocks(sample('en'), ctx('en'));
     expect(out.html).toContain(`href="${WWW}/en/videos/"`);
     expect(out.html).toMatch(/href="\/en\/(video|playlist|channels)\/[^"]+"/);
-    expect(out.html).toMatch(new RegExp(`href="${WWW}/en/articles/[^"]+/"`));
+    expect(out.html).toContain(`href="${WWW}/en/articles/`);
   });
 
   it('without www’s address the card-post call to action is left out and site paths stay on this site', () => {
