@@ -8,7 +8,7 @@
 import { Container, type OutboundHandlerContext } from '@cloudflare/containers';
 import { failRungs, MEDIA_MP4, mediaPrefix, sanitizeFailure, sanitizeMp4, type CaptionAudioJobMessage, type LiveReviewJobMessage, type Mp4JobMessage, sanitizeRungs, type R2RungProgress, type TranscodeFailure, type TranscodeJobEvent, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
 import { bucketFor, errorText, log, type Env } from './env';
-import { containerSeconds, hasWatchdogDue, isInfraFailure, keyAllowed, selfTestDue, startFailureReason, type SelfTestResult, liveReviewPrefix, liveVodSource, liveVodTarget, newJob, onFailure, onMessage, onProgressEvent, watchdogVerdict, WATCHDOG_SECONDS, type JobState } from './jobs';
+import { containerSeconds, hasWatchdogDue, isInfraFailure, keyAllowed, selfTestDue, selfTestRuns, startFailureReason, type SelfTestResult, liveReviewPrefix, liveVodSource, liveVodTarget, newJob, onFailure, onMessage, onProgressEvent, watchdogVerdict, WATCHDOG_SECONDS, type JobState } from './jobs';
 import { reportCaptionAudio, reportEvent, reportLiveReviewMedia, reportMp4Event, sourceCandidates } from './videos-api';
 import { serveOriginal } from './originals';
 import { storeUpload } from './uploads';
@@ -471,28 +471,33 @@ export class Transcoder extends Container<Env> {
 
 	/**
 	 * Release smoke (GET /priv/_selftest on the DO `selftest`): one real container start, timed, then
-	 * stopped. Rate limited by selfTestDue (the route is public); never touches a job's state.
+	 * stopped. Limited per deployed version by selfTestDue (the route is public); never touches a job's state.
 	 */
-	async selfTest(after?: number): Promise<SelfTestResult> {
+	async selfTest(version?: string): Promise<SelfTestResult> {
 		const last = await this.ctx.storage.get<SelfTestResult>('selftest');
-		if (!selfTestDue(last, Date.now(), after)) return { ...last!, cached: true };
+		if (!selfTestDue(last, Date.now(), version)) return { ...last!, cached: true };
+		const runs = selfTestRuns(last, version);
 		const started = Date.now();
+		const base = () => ({ startMs: Date.now() - started, at: new Date().toISOString(), version, runs });
 		let result: SelfTestResult;
+		let detail = '';
 		try {
 			await this.startAndWaitForPorts();
 			const res = await this.containerFetch('http://container/status');
 			const body = (await res.json().catch(() => null)) as { status?: string } | null;
 			const ok = res.ok && body?.status === 'idle';
-			result = { ok, startMs: Date.now() - started, at: new Date().toISOString(), ...(ok ? {} : { error: `status HTTP ${res.status} ${body?.status ?? ''}`.trim() }) };
+			if (!ok) detail = `status HTTP ${res.status} ${body?.status ?? ''}`.trim();
+			result = { ok, ...base(), ...(ok ? {} : { error: 'container refused the job' }) };
 		} catch (error) {
-			const text = errorText(error).slice(0, 200);
-			result = startFailureReason(text) === 'capacity full'
-				? { ok: true, startMs: Date.now() - started, at: new Date().toISOString(), skipped: 'capacity full: every instance is transcoding' }
-				: { ok: false, startMs: Date.now() - started, at: new Date().toISOString(), error: text };
+			detail = errorText(error).slice(0, 200);
+			const reason = startFailureReason(detail);
+			result = reason === 'capacity full'
+				? { ok: true, ...base(), skipped: 'capacity full: every instance is transcoding' }
+				: { ok: false, ...base(), error: reason };
 		} finally {
 			await this.stop().catch(() => undefined);
 		}
-		if (!result.ok) log.error('[Transcoder] Self-test: the container did not start', { ...result });
+		if (!result.ok) log.error('[Transcoder] Self-test: the container did not start', { ...result, detail });
 		await this.ctx.storage.put('selftest', result);
 		return result;
 	}

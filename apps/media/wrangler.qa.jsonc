@@ -50,5 +50,7 @@
     { "binding": "MEDIA_SIGN_KEY", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "media-sign-key-qa" },
     { "binding": "INTERNAL_API_KEY", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "internal-api-key-qa" }
   ],
+  // The deployed version: the release self-test runs a few real starts per version, not per call
+  "version_metadata": { "binding": "CF_VERSION_METADATA" },
   "vars": { "TRANSCODER_INSTANCE": "standard-4", "LOG_LEVEL": "warn" }
 }
