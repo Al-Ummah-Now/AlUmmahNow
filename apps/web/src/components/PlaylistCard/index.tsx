@@ -5,6 +5,7 @@ import React from 'react';
 import Link from '@/components/common/AppLink';
 import { PlaylistCover } from '@/components/PlaylistCover';
 import { Playlist } from '@al-ummah/shared-types';
+import { formatVideoCount } from '@/lib/format/videoMeta';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getPlayAllEntryHref, getPlaylistDisplayName, getPlaylistVideoCount } from '@/lib/playlists/playlist-utils';
 import { PlayAllOverlay } from '@/components/PlaylistCover/PlayAllOverlay';
@@ -29,7 +30,7 @@ export function PlaylistCard(playlist: Playlist) {
         <PlaylistCover playlist={playlist} alt={name}>
           {/* Video count badge */}
           <div className={`absolute bottom-2 ${isRTL ? 'left-2' : 'right-2'} bg-black/80 text-white text-xs px-2 py-1 rounded`}>
-            {t.playlist.videoCount.replace('{count}', String(count))}
+            {formatVideoCount(count, lang)}
           </div>
         </PlaylistCover>
 

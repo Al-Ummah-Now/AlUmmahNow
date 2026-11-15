@@ -58,6 +58,7 @@ import VideoPicker, { type PickedVideo } from './VideoPicker';
 import { counted, fill, formatDuration, localTitle } from './text';
 import { LABEL, MUTED, NOTICE, TEXT } from './styles';
 import { managePlaylistsHref } from '@/components/PlaylistManager';
+import { formatVideoCount } from '@/lib/format/videoMeta';
 
 interface Props {
   channelId: string;
@@ -496,7 +497,7 @@ export default function PlaylistEditor({ channelId, playlistId, initialJobId }: 
         <div className="min-w-0">
           <Link href={allHref} className="b b-ghost b-sm -ms-3 mb-1"><Back className="h-4 w-4" aria-hidden="true" />{p.allPlaylists}</Link>
           <h1 className={`truncate text-2xl font-bold ${TEXT}`}>{playlistTitle}</h1>
-          <p className={`text-sm ${MUTED}`}>{counted(items.length, p.countOne, p.countOther)}</p>
+          <p className={`text-sm ${MUTED}`}>{formatVideoCount(items.length, lang)}</p>
         </div>
         <Link href={getPlaylistHref(lang, playlistId)} className="b b-secondary b-sm">
           <ExternalLink className="h-4 w-4" aria-hidden="true" />
@@ -546,7 +547,7 @@ export default function PlaylistEditor({ channelId, playlistId, initialJobId }: 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 id="playlist-videos-heading" className={`text-lg font-semibold ${TEXT}`}>
               {p.videosHeading}
-              <span className={`ms-2 text-sm font-normal ${MUTED}`} data-testid="playlist-item-count">{counted(items.length, p.countOne, p.countOther)}</span>
+              <span className={`ms-2 text-sm font-normal ${MUTED}`} data-testid="playlist-item-count">{formatVideoCount(items.length, lang)}</span>
             </h2>
             {!picking && !personal && (
               <button type="button" className="b b-primary b-sm" onClick={() => setPicking(true)} data-testid="playlist-add-videos">

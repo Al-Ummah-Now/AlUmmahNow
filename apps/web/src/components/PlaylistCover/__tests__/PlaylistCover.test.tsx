@@ -13,8 +13,9 @@ jest.mock('next/link', () => ({
   __esModule: true,
   default: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
 }));
+let mockLang: 'en' | 'ar' = 'en';
 jest.mock('@/hooks/useLanguage', () => ({
-  useLanguage: () => ({ lang: 'en', isRTL: false, t: { playlist: { videoCount: '{count} videos' } } }),
+  useLanguage: () => ({ lang: mockLang, isRTL: mockLang === 'ar', t: { playlist: {} } }),
 }));
 
 const COVER = 'https://images.test/cover.jpg';
@@ -42,5 +43,30 @@ describe('PlaylistCard', () => {
     const playlist = { id: 'p', name: 'Great Mosques', dateCreated: '2026-11-09T00:00:00Z', cover: { videoId: 'v', thumbnailUrl: COVER } } as Playlist;
     render(<PlaylistCard {...playlist} />);
     expect(screen.getByAltText('Great Mosques')).toHaveAttribute('src', COVER);
+  });
+
+  describe('video count badge', () => {
+    afterEach(() => { mockLang = 'en'; });
+    const card = (videosCount: number) => render(<PlaylistCard {...({ id: 'p', name: 'List', dateCreated: '2026-11-09T00:00:00Z', videosCount } as Playlist)} />);
+
+    it('says "1 video", never "1 videos"', () => {
+      card(1);
+      expect(screen.getByText('1 video')).toBeInTheDocument();
+      expect(screen.queryByText('1 videos')).toBeNull();
+    });
+
+    it('uses the plural from 2 on', () => {
+      card(3);
+      expect(screen.getByText('3 videos')).toBeInTheDocument();
+    });
+
+    it('uses the Arabic forms', () => {
+      mockLang = 'ar';
+      const { unmount } = card(1);
+      expect(screen.getByText('مرئي واحد')).toBeInTheDocument();
+      unmount();
+      card(11);
+      expect(screen.getByText('١١ مرئيًا')).toBeInTheDocument();
+    });
   });
 });

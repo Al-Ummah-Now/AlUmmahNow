@@ -18,8 +18,9 @@ import { PlaylistCover } from '@/components/PlaylistCover';
 import { deletePlaylist, listPlaylists, type PlaylistWithVideos } from '@/lib/api/playlists';
 import { getPlaylistHref } from '@/lib/playlists/playlist-utils';
 import { directionLabels, fieldLabel } from '@/components/playlists/PlaylistDetailsFields';
-import { counted, fill } from '@/components/playlists/text';
+import { fill } from '@/components/playlists/text';
 import { DIVIDE, MUTED, NOTICE, TEXT } from '@/components/playlists/styles';
+import { formatVideoCount } from '@/lib/format/videoMeta';
 
 interface PlaylistManagerProps {
   channelId: string;
@@ -141,7 +142,7 @@ export default function PlaylistManager({ channelId }: PlaylistManagerProps) {
                     <Link href={editHref} className="hover:underline">{title}</Link>
                   </h3>
                   <p className={`mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm ${MUTED}`}>
-                    <span>{counted(count, p.countOne, p.countOther)}</span>
+                    <span>{formatVideoCount(count, lang)}</span>
                     <span aria-hidden="true">•</span>
                     <span className="inline-flex items-center gap-1">
                       {playlist.isPublic === false && <Lock className="h-3.5 w-3.5" aria-hidden="true" />}

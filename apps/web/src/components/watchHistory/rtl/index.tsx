@@ -12,7 +12,7 @@ import { useWatchHistory } from '@/hooks/useWatchHistory';
 import { resolveUrl } from '@/lib/utility';
 import { entryTitle } from '@/services/api/watch-history';
 import { PauseHistoryButton, PausedNotice, watchHistoryErrorMessage, type WatchHistoryEntryProps } from '../index';
-import { formatAbsoluteDate, formatRelativeTime } from '@/lib/format/videoMeta';
+import { formatAbsoluteDate, formatRelativeTime, formatVideoCount } from '@/lib/format/videoMeta';
 import { channelLabel } from '@/lib/channel-name';
 
 function WatchHistoryEntryRTL({ entry, lang, t, onRemove }: WatchHistoryEntryProps) {
@@ -103,7 +103,7 @@ export default function WatchHistoryPageRTL() {
           <h1 className="text-3xl font-bold">{t.watchHistory.title}</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
             {history.total > 0
-              ? (history.total === 1 ? t.watchHistory.totalCountOne : t.watchHistory.totalCount.replace('{count}', String(history.total)))
+              ? formatVideoCount(history.total, lang)
               : t.watchHistory.subtitle}
           </p>
         </div>

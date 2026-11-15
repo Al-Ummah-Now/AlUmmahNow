@@ -61,6 +61,32 @@ export function formatSubscribers(count: number | string | null | undefined, lan
   return n === 1 ? '1 subscriber' : `${compact(n, lang)} subscribers`;
 }
 
+/**
+ * "No videos", "1 video", "12 videos", or in Arabic «لا توجد مرئيات»، «مرئي واحد»، «مرئيان»،
+ * «٣ مرئيات»، «١١ مرئيًا»، «١٠٠ مرئي» (glossary: «مرئي», never «فيديو»). Exact numbers, grouped
+ * in the locale's digits by default; `compact` gives "1.2K videos" for tiles with little room.
+ * The plural form always follows the real count.
+ */
+export function formatVideoCount(count: number | string | null | undefined, lang: MetaLang | string, options: { compact?: boolean } = {}): string {
+  const n = Math.max(0, Math.floor(Number(count) || 0));
+  const ar = lang === 'ar';
+  // Arabic-Indic digits pinned (glossary «٣ مرئيات»): plain 'ar' prints Latin digits on newer ICU,
+  // so the server render and each browser could disagree
+  const num = new Intl.NumberFormat(ar ? 'ar-u-nu-arab' : 'en', options.compact ? { notation: 'compact', maximumFractionDigits: 1 } : {}).format(n);
+  if (ar) {
+    if (n === 0) return 'لا توجد مرئيات';
+    switch (new Intl.PluralRules('ar').select(n)) {
+      case 'one': return 'مرئي واحد';
+      case 'two': return 'مرئيان';
+      case 'few': return `${num} مرئيات`;
+      case 'many': return `${num} مرئيًا`;
+      default: return `${num} مرئي`;
+    }
+  }
+  if (n === 0) return 'No videos';
+  return n === 1 ? '1 video' : `${num} videos`;
+}
+
 const UNITS:[Intl.RelativeTimeFormatUnit, number][] = [
   ['year', 31536000],
   ['month', 2592000],
