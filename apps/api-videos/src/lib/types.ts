@@ -292,6 +292,8 @@ export const Channel = z.object({
         addedAt: Str(),
         updatedAt: Str().optional(),
     })).optional(),
+    // When each person last lost or changed a role here (lib/channelTeam.ts stampMemberChanges); never in views
+    memberChangedAt: z.record(Str()).optional(),
     // Soft delete and moderation fields
     ...SoftDeleteFields,
     ...ModerationFields,
