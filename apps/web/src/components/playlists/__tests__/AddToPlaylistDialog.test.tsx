@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import AddToPlaylistDialog from '../AddToPlaylistDialog';
 import { addVideosToPlaylist, createManagedPlaylist, getPlaylistAddJob, listPlaylists } from '@/lib/api/playlists';
 import { listVideos } from '@/lib/api/videos';
@@ -53,10 +53,12 @@ it('adds the videos to every chosen playlist and shows each result', async () =>
 });
 
 it('typing narrows the playlists, in either language', async () => {
-  (listPlaylists as jest.Mock).mockResolvedValue({ data: [
+  const both = [
     { id: 'p1', title: 'Tafsir', name: 'Tafsir', titleLocalized: { en: 'Tafsir', ar: 'تفسير' }, videos: [], isPublic: true },
     { id: 'p2', title: 'Fiqh', name: 'Fiqh', videos: [], isPublic: true },
-  ] });
+  ];
+  // The server search (q) answers the matches only, like the API
+  (listPlaylists as jest.Mock).mockImplementation(async (params?: { q?: string }) => ({ data: params?.q ? both.filter((pl) => pl.id === 'p1') : both }));
   render(<AddToPlaylistDialog open onOpenChange={jest.fn()} channelId="ch" videos={videos} />);
   const search = await screen.findByRole('combobox', { name: 'Search your playlists' });
   fireEvent.change(search, { target: { value: 'تفس' } });
@@ -114,4 +116,39 @@ it('a queued add in the dialog shows background progress', async () => {
   fireEvent.click(option('Tafsir'));
   await act(async () => { fireEvent.click(screen.getByTestId('add-to-playlist-submit')); });
   expect(await screen.findByText('40 of 100 done')).toBeInTheDocument();
+});
+
+describe('a channel with more playlists than one page', () => {
+  const { manyPlaylists, pagedList } = jest.requireActual('./manyPlaylists') as typeof import('./manyPlaylists');
+
+  it('"Show more playlists" reaches playlist #150 and adds the videos to it', async () => {
+    (listPlaylists as jest.Mock).mockImplementation(pagedList(manyPlaylists('Series', 'ch')));
+    (addVideosToPlaylist as jest.Mock).mockResolvedValue({ ok: true, data: done(2) });
+    render(<AddToPlaylistDialog open onOpenChange={jest.fn()} channelId="ch" videos={videos} />);
+    await screen.findAllByTestId('add-to-playlist-option');
+    const ids = () => screen.getAllByTestId('add-to-playlist-option').map((o) => o.getAttribute('data-option-id'));
+    expect(ids()).not.toContain('Series-150');
+    while (screen.queryByRole('button', { name: 'Show more playlists' })) {
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Show more playlists' })); });
+    }
+    expect(listPlaylists).toHaveBeenCalledWith(expect.objectContaining({ channelId: 'ch', cursor: '50' }));
+    expect(ids()).toHaveLength(160);
+    fireEvent.click(option('Series 150'));
+    await act(async () => { fireEvent.click(screen.getByTestId('add-to-playlist-submit')); });
+    expect(addVideosToPlaylist).toHaveBeenCalledWith('Series-150', ['a', 'b'], { channelId: 'ch' });
+  });
+
+  it('searching asks the server, so playlist #150 is found before its page is loaded', async () => {
+    (listPlaylists as jest.Mock).mockImplementation(pagedList(manyPlaylists('Series', 'ch')));
+    (addVideosToPlaylist as jest.Mock).mockResolvedValue({ ok: true, data: done(2) });
+    render(<AddToPlaylistDialog open onOpenChange={jest.fn()} channelId="ch" videos={videos} />);
+    const search = await screen.findByRole('combobox', { name: 'Search your playlists' });
+    fireEvent.change(search, { target: { value: 'Series 150' } });
+    await waitFor(() => expect(screen.getAllByTestId('add-to-playlist-option').map((o) => o.getAttribute('data-option-id'))).toContain('Series-150'));
+    expect(listPlaylists).toHaveBeenCalledWith(expect.objectContaining({ channelId: 'ch', q: 'Series 150' }));
+    fireEvent.click(option('Series 150'));
+    expect(screen.getByTestId('add-to-playlist-chosen')).toHaveTextContent('Series 150');
+    await act(async () => { fireEvent.click(screen.getByTestId('add-to-playlist-submit')); });
+    expect(addVideosToPlaylist).toHaveBeenCalledWith('Series-150', ['a', 'b'], { channelId: 'ch' });
+  });
 });

@@ -20140,10 +20140,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Only return playlists that belong to this channel (cursor is ignored; up to `limit` newest playlists)"
+              "description": "Only return playlists that belong to this channel, newest first, `limit` at a time: follow `cursor` for the next page (empty after the last)"
             },
             "required": false,
-            "description": "Only return playlists that belong to this channel (cursor is ignored; up to `limit` newest playlists)",
+            "description": "Only return playlists that belong to this channel, newest first, `limit` at a time: follow `cursor` for the next page (empty after the last)",
             "name": "channelId",
             "in": "query"
           },
@@ -20154,11 +20154,22 @@
                 "true",
                 "false"
               ],
-              "description": "true (signed in): the caller's personal playlists, made without a channel, private and unlisted ones included, newest first (cursor is ignored; up to `limit`). Channel playlists are listed with channelId"
+              "description": "true (signed in): the caller's personal playlists, made without a channel, private and unlisted ones included, newest first, `limit` at a time: follow `cursor` for the next page (empty after the last). Channel playlists are listed with channelId"
             },
             "required": false,
-            "description": "true (signed in): the caller's personal playlists, made without a channel, private and unlisted ones included, newest first (cursor is ignored; up to `limit`). Channel playlists are listed with channelId",
+            "description": "true (signed in): the caller's personal playlists, made without a channel, private and unlisted ones included, newest first, `limit` at a time: follow `cursor` for the next page (empty after the last). Channel playlists are listed with channelId",
             "name": "mine",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "description": "With channelId or mine: only playlists whose name (any language, case-insensitive) contains this text"
+            },
+            "required": false,
+            "description": "With channelId or mine: only playlists whose name (any language, case-insensitive) contains this text",
+            "name": "q",
             "in": "query"
           },
           {

@@ -5,8 +5,9 @@
  * row's menu, or the selection's bulk bar).
  *
  * With videos chosen: search the channel's playlists (the standard live
- * autocomplete, several can be ticked) and add the videos to every ticked
- * one; a manual playlist gets them at its end. Or "New playlist with N
+ * autocomplete, several can be ticked; it opens with the first page, "Show
+ * more playlists" pages on and typing also searches every playlist on the
+ * server) and add the videos to every ticked one; a manual playlist gets them at its end. Or "New playlist with N
  * videos": the create form with that selection, which can be put in order
  * before saving (no video picker: they are already chosen).
  * Opened with no videos: the create form with the video picker.
@@ -18,10 +19,11 @@
  * Exported for the upload flows too.
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ListPlus, Lock, Plus, Search, X } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { addVideosToPlaylist, listPlaylists, type PlaylistWithVideos } from '@/lib/api/playlists';
+import { PLAYLIST_PAGE_SIZE, usePlaylistPages } from '@/hooks/usePlaylistPages';
 import { reportError } from '@/lib/errors/reporter';
 import { playlistName } from '@/lib/playlists/playlist-names';
 import { Autocomplete, type AutocompleteOption } from '@/components/ui/Autocomplete';
@@ -52,15 +54,15 @@ interface Sent {
   justCreated?: boolean;
 }
 
-const MAX_PLAYLISTS = 100;
 
 export default function AddToPlaylistDialog({ open, onOpenChange, channelId, videos, onAdded }: Props) {
   const { t, lang, isRTL } = useLanguage();
   const p = t.playlistTools;
-  const [playlists, setPlaylists] = useState<PlaylistWithVideos[] | null>(null);
+  // Playlists made here, and ones a search found on the server past the loaded pages
+  const [createdHere, setCreatedHere] = useState<PlaylistWithVideos[]>([]);
+  const [found, setFound] = useState<Map<string, PlaylistWithVideos>>(() => new Map());
   // Counts after an add here (the listed playlists predate it)
   const [counts, setCounts] = useState<Map<string, number>>(() => new Map());
-  const [loadFailed, setLoadFailed] = useState(false);
   const [chosen, setChosen] = useState<string[]>([]);
   const [creating, setCreating] = useState(videos.length === 0);
   const [query, setQuery] = useState('');
@@ -70,18 +72,31 @@ export default function AddToPlaylistDialog({ open, onOpenChange, channelId, vid
   const [hint, setHint] = useState<string | null>(null);
   const [sent, setSent] = useState<Sent[]>([]);
 
-  const load = useCallback(async () => {
-    setLoadFailed(false);
-    try {
-      const result = await listPlaylists({ channelId, limit: MAX_PLAYLISTS });
-      if (!result) throw new Error('listPlaylists returned no answer');
-      setPlaylists(result.data || []);
-    } catch (error) {
-      reportError(error, { shown: true, extra: { step: 'add-to-playlist-load', channelId } });
-      setLoadFailed(true);
-      setPlaylists([]);
-    }
-  }, [channelId]);
+  // Each opening reads the playlists again (set while rendering, so it is read once)
+  const [openings, setOpenings] = useState(open ? 1 : 0);
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) setOpenings((n) => n + 1);
+  }
+  // The channel's playlists, a page at a time
+  const pages = usePlaylistPages(channelId, { enabled: open, reloadKey: openings });
+  const loadFailed = pages.failed;
+
+  useEffect(() => {
+    if (pages.failed) reportError(new Error('Listing playlists failed'), { shown: true, extra: { step: 'add-to-playlist-load', channelId } });
+  }, [pages.failed, channelId]);
+
+  const playlists = useMemo(() => {
+    const loadedIds = new Set(pages.items.map((pl) => pl.id));
+    return [...createdHere.filter((pl) => !loadedIds.has(pl.id)), ...pages.items];
+  }, [createdHere, pages.items]);
+  // Every playlist the dialog has seen: chosen ones can come from a search
+  const known = useMemo(() => {
+    const all = new Map(found);
+    for (const pl of playlists) all.set(pl.id, pl);
+    return all;
+  }, [found, playlists]);
 
   // A fresh start each time it opens
   useEffect(() => {
@@ -92,10 +107,10 @@ export default function AddToPlaylistDialog({ open, onOpenChange, channelId, vid
     setQuery('');
     setHint(null);
     setSent([]);
-    setPlaylists(null);
-    void load();
+    setCreatedHere([]);
+    setFound(new Map());
     // eslint-disable-next-line react-hooks/exhaustive-deps -- a fresh start per opening, not per selection change
-  }, [open, load]);
+  }, [open]);
 
   const videoIds = videos.map((v) => v.id);
   const titleOf = (playlist: PlaylistWithVideos) => playlistName(playlist, lang);
@@ -108,7 +123,7 @@ export default function AddToPlaylistDialog({ open, onOpenChange, channelId, vid
     }
     setAdding(true);
     setHint(null);
-    const targets = (playlists ?? []).filter((pl) => chosen.includes(pl.id));
+    const targets = chosen.map((id) => known.get(id)).filter((pl): pl is PlaylistWithVideos => !!pl);
     const results = await Promise.all(targets.map(async (playlist): Promise<Sent> => {
       const title = titleOf(playlist);
       try {
@@ -135,7 +150,7 @@ export default function AddToPlaylistDialog({ open, onOpenChange, channelId, vid
   const created = ({ playlist, videoIds: ids, add }: CreatedPlaylist) => {
     setCreating(false);
     const title = playlistName(playlist, lang);
-    setPlaylists((prev) => [playlist, ...(prev ?? [])]);
+    setCreatedHere((prev) => [playlist, ...prev.filter((pl) => pl.id !== playlist.id)]);
     const outcome: BulkAddOutcome = add
       ? { kind: 'result', result: add }
       : { kind: 'result', result: { status: 'done', added: 0, alreadyInPlaylist: 0, notInChannel: 0, pending: 0, videosCount: 0 } };
@@ -153,16 +168,31 @@ export default function AddToPlaylistDialog({ open, onOpenChange, channelId, vid
   const dialogText = !creating ? p.dialogDescriptionSelected : fromSelection ? p.newPlaylistHelpSelected : p.newPlaylistHelp;
 
   const countOf = (playlist: PlaylistWithVideos) => counts.get(playlist.id) ?? playlist.videos?.length ?? playlist.videosCount ?? 0;
-  const options: AutocompleteOption[] = (playlists ?? []).map((playlist) => ({
+  const subtitleOf = (playlist: PlaylistWithVideos) =>
+    `${playlist.isPublic === false ? t.playlist.privateLabel : t.playlist.publicLabel} · ${formatVideoCount(countOf(playlist), lang)}`;
+  const toOption = useCallback((playlist: PlaylistWithVideos): AutocompleteOption => ({
     id: playlist.id,
-    label: titleOf(playlist),
-    subtitle: `${playlist.isPublic === false ? t.playlist.privateLabel : t.playlist.publicLabel} · ${formatVideoCount(countOf(playlist), lang)}`,
+    label: playlistName(playlist, lang),
     icon: playlist.isPublic === false ? <Lock className="h-4 w-4" /> : <ListPlus className="h-4 w-4" />,
     // Both names match a search, whichever language is typed
     keywords: [playlist.name, playlist.title, ...Object.values(playlist.titleLocalized ?? {})].filter((k): k is string => typeof k === 'string'),
     value: playlist,
-  }));
-  const chosenPlaylists = (playlists ?? []).filter((pl) => chosen.includes(pl.id));
+  }), [lang]);
+  const options: AutocompleteOption[] = playlists.map(toOption);
+  const chosenPlaylists = chosen.map((id) => known.get(id)).filter((pl): pl is PlaylistWithVideos => !!pl);
+
+  // Typing also asks the server: playlists past the loaded pages are found too
+  const searchServer = useCallback(async (q: string): Promise<AutocompleteOption[]> => {
+    const page = await listPlaylists({ channelId, q, limit: PLAYLIST_PAGE_SIZE });
+    if (!page) throw new Error('Playlist search failed');
+    const matches = page.data || [];
+    setFound((prev) => {
+      const next = new Map(prev);
+      for (const pl of matches) next.set(pl.id, pl);
+      return next;
+    });
+    return matches.map(toOption);
+  }, [channelId, toOption]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -211,14 +241,14 @@ export default function AddToPlaylistDialog({ open, onOpenChange, channelId, vid
           ) : (
             <div className="space-y-3">
               <label htmlFor="add-to-playlist-search" className={`block text-sm font-semibold ${TEXT}`}>{p.yourPlaylists}</label>
-              {playlists === null ? (
+              {pages.loading && playlists.length === 0 ? (
                 <ul className="space-y-2" aria-busy="true">
                   {Array.from({ length: 3 }, (_, i) => <li key={i} className="sk h-12" />)}
                 </ul>
               ) : loadFailed ? (
                 <div role="alert" className={`flex flex-wrap items-center justify-between gap-3 rounded-[var(--r-md)] px-4 py-3 text-sm ${NOTICE.error}`}>
                   <span>{t.playlist.loadFailed}</span>
-                  <button type="button" className="b b-secondary b-sm" onClick={() => void load()}>{p.tryAgain}</button>
+                  <button type="button" className="b b-secondary b-sm" onClick={pages.retry}>{p.tryAgain}</button>
                 </div>
               ) : playlists.length === 0 ? (
                 <p className={`text-sm ${MUTED}`}>{p.noPlaylistsYet}</p>
@@ -230,14 +260,22 @@ export default function AddToPlaylistDialog({ open, onOpenChange, channelId, vid
                   onValueChange={setQuery}
                   options={options}
                   emptyOptions={options}
-                  maxOptions={MAX_PLAYLISTS}
+                  load={searchServer}
+                  loadKey={`${channelId}:${lang}`}
+                  minChars={1}
+                  // Every loaded page is listed; a search lists a page of matches
+                  maxOptions={Math.max(options.length, PLAYLIST_PAGE_SIZE)}
                   keepOpenOnSelect
                   onSelect={(option) => {
                     if (sentIds.has(option.id) || adding) return;
                     setHint(null);
                     toggle(option.id);
                   }}
-                  decorate={(option) => ({ selected: chosen.includes(option.id) || sentIds.has(option.id), disabled: sentIds.has(option.id) || adding })}
+                  decorate={(option) => ({
+                    selected: chosen.includes(option.id) || sentIds.has(option.id),
+                    disabled: sentIds.has(option.id) || adding,
+                    subtitle: subtitleOf(option.value as PlaylistWithVideos),
+                  })}
                   label={p.searchPlaylists}
                   listLabel={p.yourPlaylists}
                   inputId="add-to-playlist-search"
@@ -249,6 +287,15 @@ export default function AddToPlaylistDialog({ open, onOpenChange, channelId, vid
                 >
                   <Search className={`pointer-events-none absolute start-3 top-[22px] h-4 w-4 -translate-y-1/2 ${FAINT}`} aria-hidden="true" />
                 </Autocomplete>
+              )}
+
+              {!loadFailed && !query.trim() && playlists.length > 0 && (pages.hasMore || pages.moreFailed) && (
+                <div className="flex flex-col items-start gap-1">
+                  {pages.moreFailed && <p role="alert" className="text-sm text-[var(--fanous-color-error-text)]">{t.playlist.morePlaylistsFailed}</p>}
+                  <button type="button" className="b b-ghost b-sm" onClick={pages.loadMore} disabled={pages.loadingMore || adding} data-testid="add-to-playlist-more">
+                    {pages.loadingMore ? t.common.loading : t.playlist.showMorePlaylists}
+                  </button>
+                </div>
               )}
 
               {chosenPlaylists.length > 0 && (

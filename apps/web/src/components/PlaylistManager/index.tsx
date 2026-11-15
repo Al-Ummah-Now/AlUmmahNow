@@ -3,19 +3,21 @@
 /**
  * Manage Playlists (channel settings): the channel's playlists. Each one
  * opens its editor (details, order, videos); "New playlist" opens the create
- * form with the video picker. Delete stays here.
+ * form with the video picker. Delete stays here. A page at a time ("Show more
+ * playlists"), with a search over every playlist (hooks/usePlaylistPages.ts).
  */
 
 import { playlistName } from '@/lib/playlists/playlist-names';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from '@/components/common/AppLink';
-import { AlertTriangle, ArrowDownUp, ExternalLink, ListVideo, Lock, Pencil, Plus, Trash2 } from 'lucide-react';
+import { AlertTriangle, ArrowDownUp, ExternalLink, ListVideo, Lock, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { playlistSortOf } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { reportError } from '@/lib/errors/reporter';
 import { PlaylistCover } from '@/components/PlaylistCover';
-import { deletePlaylist, listPlaylists, type PlaylistWithVideos } from '@/lib/api/playlists';
+import { deletePlaylist, type PlaylistWithVideos } from '@/lib/api/playlists';
+import { usePlaylistPages } from '@/hooks/usePlaylistPages';
 import { getPlaylistHref } from '@/lib/playlists/playlist-utils';
 import { directionLabels, fieldLabel } from '@/components/playlists/PlaylistDetailsFields';
 import { fill } from '@/components/playlists/text';
@@ -26,7 +28,6 @@ interface PlaylistManagerProps {
   channelId: string;
 }
 
-const MAX_PLAYLISTS = 100;
 
 /** Manage Playlists of a channel, or (channelId '') the user's personal playlists under You. */
 export function managePlaylistsHref(lang: string, channelId: string, playlistId?: string): string {
@@ -38,31 +39,29 @@ export default function PlaylistManager({ channelId }: PlaylistManagerProps) {
   const { t, lang, isRTL } = useLanguage();
   const { confirm, dialog: confirmDialog } = useConfirm();
   const p = t.playlistTools;
-  const [playlists, setPlaylists] = useState<PlaylistWithVideos[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<{ message: string; ref?: string } | null>(null);
+  const [error, setError] = useState<{ message: string; ref?: string; retry?: () => void } | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Deleted here (the loaded pages still hold them)
+  const [deleted, setDeleted] = useState<Set<string>>(() => new Set());
+  const [search, setSearch] = useState('');
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      // A channel's playlists, or (no channel) the user's personal ones
-      const result = await listPlaylists(channelId ? { channelId, limit: MAX_PLAYLISTS } : { mine: true, limit: MAX_PLAYLISTS });
-      if (!result) {
-        setError({ message: t.playlist.loadFailed, ref: reportError(new Error('Listing channel playlists failed'), { shown: true, extra: { step: 'playlist-manager-load', channelId } }) });
-      }
-      setPlaylists(result?.data || []);
-    } catch (caught) {
-      setError({ message: t.playlist.loadFailed, ref: reportError(caught, { shown: true, extra: { step: 'playlist-manager-load', channelId } }) });
-    } finally {
-      setLoading(false);
-    }
-  }, [channelId, t]);
+  // A channel's playlists, or (no channel) the user's personal ones, a page at a time
+  const pages = usePlaylistPages(channelId, { query: search });
+  const playlists = pages.items.filter((playlist) => !deleted.has(playlist.id));
+  const loading = pages.loading;
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    // A list error clears once the list loads (a retry, another search); a delete error stays
+    if (!pages.failed) {
+      setError((shown) => (shown?.retry ? null : shown));
+      return;
+    }
+    setError({
+      message: t.playlist.loadFailed,
+      ref: reportError(new Error('Listing playlists failed'), { shown: true, extra: { step: 'playlist-manager-load', channelId } }),
+      retry: pages.retry,
+    });
+  }, [pages.failed, pages.retry, channelId, t]);
 
   const handleDelete = async (playlist: PlaylistWithVideos) => {
     const title = playlistName(playlist, lang);
@@ -81,7 +80,7 @@ export default function PlaylistManager({ channelId }: PlaylistManagerProps) {
         setError({ message: t.playlist.deleteFailed, ref: reportError(new Error('Deleting a playlist failed'), { shown: true, extra: { step: 'playlist-delete', playlistId: playlist.id } }) });
         return;
       }
-      setPlaylists((prev) => prev.filter((item) => item.id !== playlist.id));
+      setDeleted((prev) => new Set(prev).add(playlist.id));
     } catch (caught) {
       setError({ message: t.playlist.deleteFailed, ref: reportError(caught, { shown: true, extra: { step: 'playlist-delete', playlistId: playlist.id } }) });
     } finally {
@@ -110,9 +109,26 @@ export default function PlaylistManager({ channelId }: PlaylistManagerProps) {
             <p className="font-medium">{error.message}</p>
             {error.ref && <p className="text-xs">{fill(p.errorRef, { ref: error.ref })}</p>}
           </div>
-          <button type="button" className="b b-secondary b-sm flex-none" onClick={() => void load()}>{p.tryAgain}</button>
+          {error.retry && (
+            <button type="button" className="b b-secondary b-sm flex-none" onClick={() => { setError(null); error.retry?.(); }}>{p.tryAgain}</button>
+          )}
         </div>
       )}
+
+      <div role="search" className="relative max-w-md">
+        <label htmlFor="playlist-manager-search" className="sr-only">{t.playlist.searchYourPlaylists}</label>
+        <Search className={`pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 ${MUTED}`} aria-hidden="true" />
+        <input
+          id="playlist-manager-search"
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder={t.playlist.searchYourPlaylists}
+          autoComplete="off"
+          className="f-input f-icon-start w-full py-2 text-sm"
+          data-testid="playlist-manager-search"
+        />
+      </div>
 
       {loading ? (
         <ul className="c !p-0" aria-busy="true" aria-label={t.common.loading}>
@@ -123,7 +139,7 @@ export default function PlaylistManager({ channelId }: PlaylistManagerProps) {
       ) : playlists.length === 0 && !error ? (
         <div className="empty c">
           <ListVideo className="h-10 w-10" aria-hidden="true" />
-          <p>{t.playlist.noPlaylists}</p>
+          <p>{pages.searched ? t.playlist.noMatchingPlaylists : t.playlist.noPlaylists}</p>
         </div>
       ) : (
         <ul className={`c !p-0 ${DIVIDE}`} data-testid="playlist-manager-list">
@@ -181,6 +197,15 @@ export default function PlaylistManager({ channelId }: PlaylistManagerProps) {
             );
           })}
         </ul>
+      )}
+
+      {!loading && (pages.hasMore || pages.moreFailed) && (
+        <div className="flex flex-col items-center gap-2">
+          {pages.moreFailed && <p role="alert" className="text-sm text-[var(--fanous-color-error-text)]">{t.playlist.morePlaylistsFailed}</p>}
+          <button type="button" className="b b-secondary" onClick={pages.loadMore} disabled={pages.loadingMore} data-testid="playlist-manager-more">
+            {pages.loadingMore ? t.common.loading : t.playlist.showMorePlaylists}
+          </button>
+        </div>
       )}
     </div>
   );

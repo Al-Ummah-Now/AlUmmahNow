@@ -64,12 +64,15 @@ async function requiredAuth(channelId: string) {
 /**
  * List playlists
  * GET /api/playlists (?channelId= filters to one channel; ?mine=true: the
- * signed-in user's personal playlists, made without a channel)
+ * signed-in user's personal playlists, made without a channel). Both page:
+ * pass the answer's `cursor` back for the next page (empty after the last).
  */
 export async function listPlaylists(
   params?: ListQueryParams & {
     isPublic?: boolean;
     mine?: boolean;
+    /** With channelId or mine: only playlists whose name contains this text (any language) */
+    q?: string;
   },
   _headers?: ApiHeaders
 ): Promise<PaginationResponse<PlaylistWithVideos> | null> {
@@ -78,6 +81,7 @@ export async function listPlaylists(
   if (params?.cursor) queryParams.append('cursor', params.cursor);
   if (params?.channelId) queryParams.append('channelId', params.channelId);
   else if (params?.mine) queryParams.append('mine', 'true');
+  if (params?.q?.trim()) queryParams.append('q', params.q.trim());
 
   return apiRequestServer<PaginationResponse<PlaylistWithVideos>>({
     method: 'GET',
