@@ -17,3 +17,11 @@ test('stage names carry the -stage suffix', () => {
 	assert.equal(n.queue, 'al-ummah-now-transcode-stage');
 	assert.equal(n.dlq, 'al-ummah-now-transcode-dlq-stage');
 });
+
+test('scrub drops signed URL queries and credentials', async () => {
+	const { scrub } = await import('../media-diagnostics.ts');
+	assert.equal(scrub('src https://vz-1.b-cdn.net/a/play_720p.mp4?token=abc&expires=1 ok'), 'src https://vz-1.b-cdn.net/a/play_720p.mp4?… ok');
+	assert.doesNotMatch(scrub('Authorization: Bearer abc.def'), /abc/);
+	assert.match(scrub('{"apiKey":"s3cr3t","videoId":"v1"}'), /"apiKey":"…","videoId":"v1"/);
+	assert.equal(scrub('jwt eyJhbGciOiJIUzI1.eyJzdWIiOiIxMjM0.sig'), 'jwt …jwt…');
+});

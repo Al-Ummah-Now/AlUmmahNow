@@ -62,8 +62,20 @@ function errs(r: { status: number; body: any }): string {
 	return `HTTP ${r.status} ${JSON.stringify(r.body?.errors ?? r.body ?? null).slice(0, 300)}`;
 }
 
+/**
+ * Printed text loses URL query strings (signed Bunny/R2 URLs carry tokens there) and anything that
+ * looks like a credential: bearer tokens, JWTs, key/token/secret/signature/password fields.
+ */
+export function scrub(text: string): string {
+	return text
+		.replace(/(https?:\/\/[^\s"'?]+)\?[^\s"']*/g, '$1?…')
+		.replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer …')
+		.replace(/eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+/g, '…jwt…')
+		.replace(/("?(?:[a-z_-]*(?:token|secret|password|signature|api[_-]?key|authorization|x-amz-[a-z-]+))"?\s*[:=]\s*)("[^"]*"|[^\s,}&]+)/gi, '$1"…"');
+}
+
 const out: string[] = [];
-const p = (s = '') => out.push(s);
+const p = (s = '') => out.push(scrub(s));
 
 async function deployments(names: Names): Promise<void> {
 	p(`## ${names.media}: deployments`);
@@ -135,7 +147,10 @@ async function containers(names: Names): Promise<void> {
 
 async function logs(script: string, since: Date, until: Date, search: string): Promise<void> {
 	p(`## Logs: ${script}`);
-	const filters: unknown[] = [{ key: '$workers.scriptName', operation: 'eq', type: 'string', value: script }];
+	const filters: unknown[] = [
+		{ key: '$workers.scriptName', operation: 'eq', type: 'string', value: script },
+		{ key: '$metadata.level', operation: 'in', type: 'string', value: ['warn', 'error'] },
+	];
 	if (search) filters.push({ key: '$metadata.message', operation: 'includes', type: 'string', value: search });
 	const r = await post(`/accounts/${account}/workers/observability/telemetry/query`, {
 		queryId: `media-diagnostics-${script}`,
