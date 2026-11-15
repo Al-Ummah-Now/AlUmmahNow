@@ -17,7 +17,7 @@ import type { Locale } from '@/i18n/config';
 import { formatNumber, type MessageKey, type Translator } from '@/i18n/translate';
 
 export type TierLimits = Pick<CreatorTier, 'unlimited' | 'perHour' | 'perDay' | 'maxConcurrent' | 'maxChannels'> &
-  Partial<Pick<CreatorTier, 'captionMinutesMonth' | 'audioTracksPerVideo' | 'live' | 'liveHoursMonth' | 'liveMaxConcurrent' | 'liveMaxStreamMinutes'>>;
+  Partial<Pick<CreatorTier, 'captionMinutesMonth' | 'audioTracksPerVideo' | 'live' | 'liveHoursMonth' | 'liveMaxConcurrent' | 'liveMaxStreamMinutes' | 'importCountsAgainstLimits'>>;
 
 /** The live streaming sentence of a tier's effect (none when the tier predates live). */
 function liveEffect(tier: TierLimits, t: Translator, n: (value: number) => string): string {
@@ -40,7 +40,8 @@ export function tierEffect(tier: TierLimits | null, t: Translator, locale: Local
   });
   const captions = tier.captionMinutesMonth ? t('creators.effectCaptions', { minutes: n(tier.captionMinutesMonth) }) : '';
   const audio = tier.audioTracksPerVideo ? t('creators.effectAudioTracks', { count: n(tier.audioTracksPerVideo) }) : '';
-  return [uploads, liveEffect(tier, t, n), captions, audio].filter(Boolean).join(' ');
+  const imports = tier.importCountsAgainstLimits === false ? t('creators.effectImportsFree') : '';
+  return [uploads, liveEffect(tier, t, n), captions, audio, imports].filter(Boolean).join(' ');
 }
 
 /** The confirmation of a change from one tier to another (or none). */
@@ -73,6 +74,8 @@ export interface TierFormValues {
   liveHoursMonth: number;
   liveMaxConcurrent: number;
   liveMaxStreamMinutes: number;
+  /** YouTube imports count against perHour/perDay (wiki AUN-YT-IMPORT); ignored when unlimited */
+  importCountsAgainstLimits: boolean;
 }
 
 export type TierField = 'id' | 'name' | 'perHour' | 'perDay' | 'maxConcurrent' | 'maxChannels' | 'captionMinutesMonth' | 'liveHoursMonth' | 'liveMaxConcurrent' | 'liveMaxStreamMinutes' | 'audioTracksPerVideo';
