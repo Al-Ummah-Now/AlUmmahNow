@@ -196,6 +196,16 @@ export function connectErrorKey(code: string | null): 'youtube_denied' | 'youtub
  * account on this site started it (403), or the state expired or was already used (other 4xx).
  * null: not a refusal (network, server), shown as a reported failure.
  */
+/** The server's reason for a failed item (YtImportItem.error) as a key of t.studio.youtube.progress.errors. */
+export function itemErrorKey(code: string | null | undefined): 'video_removed' | 'upload_failed' | 'generic' {
+  return code === 'video_removed' || code === 'upload_failed' ? code : 'generic';
+}
+
+/** Why the server gave up on the whole import (YtImport.error), shown on Connect. */
+export function importErrorKey(code: string | null | undefined): 'import_disconnected' | 'import_failed' {
+  return code === 'youtube_not_connected' ? 'import_disconnected' : 'import_failed';
+}
+
 export function finishErrorKey(status: number | undefined): 'connect_other_account' | 'connect_expired' | null {
   if (status === 403) return 'connect_other_account';
   if (status !== undefined && status >= 400 && status < 500 && status !== 401) return 'connect_expired';

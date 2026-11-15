@@ -40,6 +40,7 @@ import {
   computeMatches,
   connectErrorKey,
   finishErrorKey,
+  importErrorKey,
   importItems,
   initialStep,
   isSettled,
@@ -169,6 +170,8 @@ export function YoutubeImportTab({ locale, channelId, channelHandle }: Props) {
           setSelectedPlaylists(new Set(detail.playlists.filter((p) => p.selected).map((p) => p.ytPlaylistId)));
           setVisibilityMode(detail.import.visibilityMode);
         }
+        // The server gave up on the latest import (reading the channel failed, access removed): say why
+        if (!errorKey && imp?.status === 'failed') setConnectError(text.errors[importErrorKey(imp.error)]);
         setStep(errorKey ? 'connect' : initialStep(imp && imp.status !== 'cancelled' ? imp : null));
         setLoad('ready');
       } catch (error) {
@@ -221,11 +224,12 @@ export function YoutubeImportTab({ locale, channelId, channelHandle }: Props) {
             setSelected(new Set());
             setStep('pick');
           }
+          if (detail && detail.import.status === 'failed') setConnectError(text.errors[importErrorKey(detail.import.error)]);
         })
         .catch((error: unknown) => logger.warn('[YtImport] Listing poll failed', { error }));
     }, LISTING_POLL_MS);
     return () => clearInterval(timer);
-  }, [current, refresh]);
+  }, [current, refresh, text]);
 
   // While importing: poll every 5 s (processing, thumbnails, captions and playlists finish on the server)
   useEffect(() => {
