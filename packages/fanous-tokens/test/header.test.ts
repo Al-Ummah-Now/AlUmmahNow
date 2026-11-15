@@ -8,6 +8,7 @@ import {
   brandHtml,
   envBadgeHtml,
   langButtonHtml,
+  menuButtonHtml,
   modeButtonHtml,
   samePath,
   signInHtml,
@@ -107,6 +108,17 @@ test('light/dark button: the shared icons and action names', () => {
   assert.ok(modeButtonHtml({ lang: 'ar', dark: false }).includes('التبديل إلى الوضع الداكن'));
 });
 
+test('menu button: the videos drawer icon, named, opening the panel popover', () => {
+  assert.equal(
+    menuButtonHtml({ lang: 'en', panel: 'site-menu' }),
+    '<button type="button" class="aun-icon-btn aun-menu aun-menu-collapse" popovertarget="site-menu" aria-label="Menu" title="Menu">' +
+      '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+      'stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-menu" aria-hidden="true" focusable="false">' +
+      '<line x1="4" x2="20" y1="12" y2="12"></line><line x1="4" x2="20" y1="6" y2="6"></line><line x1="4" x2="20" y1="18" y2="18"></line></svg></button>'
+  );
+  assert.match(menuButtonHtml({ lang: 'ar', panel: 'a"b' }), /popovertarget="a&quot;b" aria-label="القائمة"/);
+});
+
 test('sign in: a solid pill', () => {
   assert.equal(signInHtml({ lang: 'en', href: '/login' }), '<a class="aun-signin" href="/login">Sign in</a>');
   assert.equal(signInHtml({ lang: 'ar', href: '/login' }), '<a class="aun-signin" href="/login">تسجيل الدخول</a>');
@@ -119,7 +131,7 @@ test('labels exist in both languages', () => {
 test('the stylesheet defines every class the builders use, one control height and the breakpoints', () => {
   for (const cls of ['aun-header', 'aun-header-row', 'aun-header-primary', 'aun-header-tools', 'aun-brand', 'aun-brand-mark', 'aun-brand-text',
     'aun-brand-name', 'aun-brand-app', 'aun-env', 'aun-apps', 'aun-app', 'aun-app-mark', 'aun-app-name', 'aun-lang', 'aun-icon-btn',
-    'aun-signin', 'aun-acct-btn', 'aun-visually-hidden']) {
+    'aun-signin', 'aun-acct-btn', 'aun-visually-hidden', 'aun-menu-collapse', 'aun-header-panel', 'aun-collapse']) {
     assert.match(css, new RegExp(`\\.${cls}[\\s,{:]`), `.${cls} is styled`);
   }
   // every control is 2.5rem (40px) tall; the bar 4rem, 3.5rem on phones
@@ -136,5 +148,13 @@ test('the stylesheet defines every class the builders use, one control height an
   assert.match(bar, /border-block-end: 1px solid/);
   const row = css.slice(css.indexOf('.aun-header-row {'), css.indexOf('}', css.indexOf('.aun-header-row {')));
   assert.match(row, /min-height: calc\(var\(--aun-header-height\) - 1px\);/);
+  // one typeface, and the bar is full width in every app (never centred in a max width)
+  assert.match(bar, /font-family: var\(--aun-header-font, system-ui/);
+  assert.match(css, /\.aun-header:lang\(ar\) \{\n  font-family: var\(--aun-header-font-ar, 'Noto Naskh Arabic'/);
+  assert.doesNotMatch(row, /max-width/);
+  assert.doesNotMatch(css, /--aun-header-max/);
+  // below 1024px a site's own links leave the bar for the panel; the menu button shows only there
+  assert.match(css, /@media \(max-width: 63\.99rem\) \{[^@]*\.aun-header-primary\.aun-collapse \{\n    display: none;/);
+  assert.match(css, /@media \(min-width: 64rem\) \{\n  \.aun-menu-collapse \{\n    display: none;/);
   for (const bp of ['79.99rem', '63.99rem', '47.99rem', '39.99rem', '24.99rem']) assert.ok(css.includes(`(max-width: ${bp})`), bp);
 });
