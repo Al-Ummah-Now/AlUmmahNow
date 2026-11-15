@@ -69,6 +69,10 @@ export interface TierForm {
   maxChannels: number | null;
   captionMinutesMonth: number;
   audioTracksPerVideo: number;
+  live: boolean;
+  liveHoursMonth: number;
+  liveMaxConcurrent: number;
+  liveMaxStreamMinutes: number;
 }
 
 export async function saveCreatorTier(tier: TierForm, create: boolean): Promise<ActionResult<unknown>> {

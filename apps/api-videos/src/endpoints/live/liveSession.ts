@@ -26,6 +26,8 @@ import { signLiveVodUrl } from '../../lib/live/vod-sign';
 import { canManageLiveStream } from '../../lib/channelAccess';
 import { beatLiveViewer, countLiveViewers, isViewerId, viewerNet } from '../../lib/live/viewers';
 import { isLiveVodWithheld } from '@al-ummah/shared-types';
+import { checkLiveTier, streamTierOwner, type LiveTierOp } from '../../lib/live/tier-gate';
+import type { SessionTier } from '../../lib/live/service';
 
 const Params = z.object({ id: Str({ description: 'Live stream id' }) });
 const Ok = (schema: z.ZodTypeAny, description: string) => ({ description, content: { 'application/json': { schema: z.object({ success: z.boolean(), result: schema }) } } });
@@ -83,6 +85,29 @@ async function ownedStream(c: AppContext, id: string, userId: string): Promise<L
 	if (!stream) return fail(c, 404, 'not_found', 'Live stream not found');
 	if (!(await canManageLiveStream(c.env as never, stream, userId))) return fail(c, 403, 'forbidden', 'Insufficient permissions for this stream');
 	return stream;
+}
+
+const rolesOf = (c: AppContext) => (c.get('auth') as { payload?: { roles?: string[] } } | undefined)?.payload?.roles;
+
+/**
+ * The channel owner's creator tier must include live (lib/live/tier-gate.ts): a refusal is
+ * 403/402 with its code and the limit it hit; D1 not answering fails closed (503).
+ */
+export async function liveTierGate(c: AppContext, stream: Pick<LiveStreamRecord, 'id' | 'channelId' | 'userId' | 'sessionId'>, op: LiveTierOp, userId: string): Promise<SessionTier | Response> {
+	const db = env(c).SEARCH_DB;
+	if (!db) return {};
+	try {
+		const owner = await streamTierOwner(env(c), stream);
+		const result = await checkLiveTier(db, { userId, roles: rolesOf(c), channelOwnerId: owner }, op, { sessionId: stream.sessionId ?? null });
+		if ('code' in result) {
+			logger.info('[Live] Refused by the creator tier', { streamId: stream.id, op, code: result.code, subjectId: result.subjectId });
+			return c.json({ success: false, code: result.code, error: result.error, ...result.details }, result.status);
+		}
+		return { ownerId: result.subjectId, limitMinutes: result.limitMinutes };
+	} catch (error) {
+		logger.error('[Live] Creator tier check failed; refusing', { streamId: stream.id, op, error: error instanceof Error ? error.message : String(error) });
+		return c.json({ success: false, code: 'creator_access_unavailable', error: 'This is briefly unavailable; try again shortly', retryAfter: 30 }, 503, { 'Retry-After': '30' });
+	}
 }
 
 function providerFailure(c: AppContext, error: unknown, where: string) {
@@ -154,14 +179,21 @@ export class LiveStreamIngestGet extends AuthenticatedRoute {
 		summary: 'Encoder settings (owner)',
 		description: '🔒 The ingest URL, stream key and a ready ffmpeg command for the stream\'s current session. Provisions a session when the stream has none.',
 		request: { params: Params },
-		responses: { '200': Ok(z.record(z.any()), 'Ingest settings'), '403': Err('Not the owner'), '404': Err('Not found'), '503': Err('No provider available') },
+		responses: { '200': Ok(z.record(z.any()), 'Ingest settings'), '402': Err('This month\'s live hours are used (live_hours_used)'), '403': Err('Not the owner, or live is not in the creator tier (live_not_in_tier)'), '404': Err('Not found'), '503': Err('No provider available') },
 	});
 	async handle(c: AppContext) {
 		const { params } = await this.getValidatedData<typeof this.schema>();
 		const stream = await ownedStream(c, params.id, this.getUserId(c));
 		if (stream instanceof Response) return stream;
+		// An ended stream only shows its last settings; anything that may provision a session is gated
+		let tier: SessionTier = {};
+		if (stream.status !== 'ended' && stream.status !== 'cancelled') {
+			const gate = await liveTierGate(c, stream, 'ingest', this.getUserId(c));
+			if (gate instanceof Response) return gate;
+			tier = gate;
+		}
 		try {
-			const out = await streamIngest(env(c), stream);
+			const out = await streamIngest(env(c), stream, tier);
 			c.header('cache-control', 'no-store');
 			return { success: true, result: { ingest: out.ingest, state: await streamState(env(c), out.stream) } };
 		} catch (error) {
@@ -176,15 +208,17 @@ export class LiveStreamStart extends AuthenticatedRoute {
 		summary: 'Go live (owner)',
 		description: '🔒 Opens ingest for the stream. The stream shows as live when the encoder\'s first video arrives.',
 		request: { params: Params },
-		responses: { '200': Ok(z.record(z.any()), 'Started'), '403': Err('Not the owner or suspended'), '404': Err('Not found'), '503': Err('No provider available') },
+		responses: { '200': Ok(z.record(z.any()), 'Started'), '402': Err('This month\'s live hours are used (live_hours_used)'), '403': Err('Not the owner, suspended, live not in the creator tier (live_not_in_tier) or at the tier\'s streams-at-once limit (live_concurrent_limit)'), '404': Err('Not found'), '503': Err('No provider available') },
 	});
 	async handle(c: AppContext) {
 		const { params } = await this.getValidatedData<typeof this.schema>();
 		const stream = await ownedStream(c, params.id, this.getUserId(c));
 		if (stream instanceof Response) return stream;
 		if (await liveStreamIsFrozen(c.env, stream as Record<string, unknown>)) return fail(c, 403, CHANNEL_SUSPENDED_CODE, 'This channel is suspended on Al Ummah Now videos');
+		const tier = await liveTierGate(c, stream, 'start', this.getUserId(c));
+		if (tier instanceof Response) return tier;
 		try {
-			const out = await streamStart(env(c), stream);
+			const out = await streamStart(env(c), stream, Date.now(), tier);
 			return { success: true, result: { ingest: out.ingest, state: await streamState(env(c), out.stream) } };
 		} catch (error) {
 			return providerFailure(c, error, 'Start');

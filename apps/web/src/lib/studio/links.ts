@@ -12,3 +12,8 @@ export function studioReuploadHref(locale: string, channelId: string, video: { i
   params.set('channel', channelId);
   return `/${locale}/upload?${params.toString()}`;
 }
+
+/** Studio's Live tab for this channel: create a stream, then its Go live page. */
+export function studioLiveHref(locale: string, channelId: string): string {
+  return `/${locale}/studio/${encodeURIComponent(channelId)}/content/live`;
+}

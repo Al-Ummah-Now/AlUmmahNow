@@ -68,6 +68,17 @@ export interface CreatorTier {
    * 0 = none; ignored when `unlimited` (still bounded by AUDIO_TRACKS_HARD_MAX).
    */
   audioTracksPerVideo: number;
+  /**
+   * May go live (Studio Live, D3). The limits below apply unless `unlimited`.
+   * The tier that applies is the channel OWNER's, like uploads.
+   */
+  live: boolean;
+  /** Hours of live streaming per calendar month (UTC), summed over the holder's channels */
+  liveHoursMonth: number;
+  /** Streams live at once across the holder's channels */
+  liveMaxConcurrent: number;
+  /** Longest single stream, in minutes; a longer one is ended (the recording is kept) */
+  liveMaxStreamMinutes: number;
   updatedAt: string | null;
   updatedBy: string | null;
 }
@@ -84,6 +95,13 @@ export const DEFAULT_CREATOR_TIER: Omit<CreatorTier, 'updatedAt' | 'updatedBy'> 
   captionMinutesMonth: 0,
   importCountsAgainstLimits: true,
   audioTracksPerVideo: 0,
+  // Live (owner 2026-11-14): on, 20 h a month, one stream at a time, 4 h per stream.
+  // Self-hosted live costs Workers requests + R2 (no egress): about $0.01 per stream-hour
+  // at 100 viewers, so a full month of every Creator's hours stays far inside the budget.
+  live: true,
+  liveHoursMonth: 20,
+  liveMaxConcurrent: 1,
+  liveMaxStreamMinutes: 240,
 };
 
 export const DEFAULT_UNLIMITED_TIER: Omit<CreatorTier, 'updatedAt' | 'updatedBy'> = {
@@ -97,6 +115,10 @@ export const DEFAULT_UNLIMITED_TIER: Omit<CreatorTier, 'updatedAt' | 'updatedBy'
   captionMinutesMonth: 0,
   importCountsAgainstLimits: true,
   audioTracksPerVideo: 0,
+  live: true,
+  liveHoursMonth: 0,
+  liveMaxConcurrent: 0,
+  liveMaxStreamMinutes: 0,
 };
 
 /** Bounds an admin may set on a tier (validation, not a policy). */
@@ -107,7 +129,38 @@ export const CREATOR_TIER_BOUNDS = {
   maxChannels: { min: 1, max: 1000 },
   captionMinutesMonth: { min: 0, max: 1_000_000 },
   audioTracksPerVideo: { min: 0, max: 16 },
+  liveHoursMonth: { min: 1, max: 10_000 },
+  liveMaxConcurrent: { min: 1, max: 100 },
+  liveMaxStreamMinutes: { min: 10, max: 1440 },
 } as const;
+
+/** Whether a tier lets its holder go live (unlimited implies it). */
+export const tierAllowsLive = (tier: Pick<CreatorTier, 'unlimited' | 'live'> | null | undefined): boolean => !!tier && (tier.unlimited || tier.live);
+
+/** Why live streaming is refused before any provider is asked (403 / 402, `code` in the answer). */
+export const LIVE_TIER_ERROR_CODES = {
+  /** 403: the channel owner's tier does not include live streaming (or they hold no tier) */
+  notInTier: 'live_not_in_tier',
+  /** 402: this month's live hours are used up */
+  hoursUsed: 'live_hours_used',
+  /** 403: the tier's streams-at-once limit is reached */
+  concurrentLimit: 'live_concurrent_limit',
+} as const;
+export type LiveTierErrorCode = (typeof LIVE_TIER_ERROR_CODES)[keyof typeof LIVE_TIER_ERROR_CODES];
+
+/** Live streaming the signed-in user may do on their own channels (part of GET /api/me/creator). */
+export interface LiveAccess {
+  allowed: boolean;
+  /** Why not: no tier, the tier leaves live out, the month's hours are used, or a pending account deletion */
+  reason: 'no_tier' | 'not_in_tier' | 'hours_used' | 'pending_deletion' | null;
+  unlimited: boolean;
+  /** null when unlimited */
+  hoursMonth: number | null;
+  /** Minutes streamed this calendar month (UTC) on the user's channels */
+  usedMinutes: number;
+  maxConcurrent: number | null;
+  maxStreamMinutes: number | null;
+}
 
 /** A user's tier assignment. */
 export interface CreatorTierAssignment {
@@ -143,6 +196,8 @@ export interface CreatorAccess {
   maxChannels: number | null;
   limits: { perHour: number; perDay: number; maxConcurrent: number } | null;
   usage: { hour: number; day: number };
+  /** Live streaming on the user's own channels */
+  live: LiveAccess;
   /** Set while an admin deletion of the user's videos data is pending: nothing can be uploaded or created */
   pendingDeletion?: boolean;
 }

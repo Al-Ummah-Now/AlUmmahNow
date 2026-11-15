@@ -10,6 +10,7 @@ import { addAuthToSchema } from "../../lib/openapi-auth";
 import { attachSession, type LiveStreamRecord, type StreamsEnv } from "../../lib/live/streams";
 import { uploadIdentity } from "../../lib/channelAccess";
 import { LiveRefusedError } from "../../lib/live/service";
+import { liveTierGate } from "./liveSession";
 import { logger } from '../../lib/logger';
 import { PUBLIC_DISLIKES_COUNT } from "../../lib/reactions";
 
@@ -52,6 +53,14 @@ export class LiveStreamCreate extends AuthenticatedRoute {
 					},
 				},
 			},
+			"402": {
+				description: "This month's live streaming hours are used (code live_hours_used)",
+				content: { "application/json": { schema: ResponseError } },
+			},
+			"403": {
+				description: "Live streaming is not in the channel owner's creator tier (code live_not_in_tier)",
+				content: { "application/json": { schema: ResponseError } },
+			},
 			"401": {
 				description: "Unauthorized - missing or invalid authentication token",
 				content: {
@@ -78,6 +87,10 @@ export class LiveStreamCreate extends AuthenticatedRoute {
 		const { channelId } = request.headers;
         const userId = this.getUserId(c);
 		const inputStream = request.body;
+
+		// The channel owner's creator tier must include live (lib/live/tier-gate.ts), before anything is stored
+		const tier = await liveTierGate(c, { id: 'new', channelId, userId, sessionId: null }, 'create', userId);
+		if (tier instanceof Response) return tier;
 
 		// Create the business live stream object
 		// A channel member creates the stream for the channel: it belongs to the
@@ -114,7 +127,7 @@ export class LiveStreamCreate extends AuthenticatedRoute {
 		await repository.putObject(`livestream:${liveStream.id}`, { ...liveStream, ...(isTest ? { isTest: true } : {}) } as LiveStreamType);
 		let attached: Awaited<ReturnType<typeof attachSession>>;
 		try {
-			attached = await attachSession(c.env as unknown as StreamsEnv, { ...(liveStream as unknown as LiveStreamRecord), isTest });
+			attached = await attachSession(c.env as unknown as StreamsEnv, { ...(liveStream as unknown as LiveStreamRecord), isTest }, Date.now(), tier);
 		} catch (error) {
 			await repository.deleteObject(`livestream:${liveStream.id}`).catch(() => undefined);
 			if (error instanceof LiveRefusedError) {

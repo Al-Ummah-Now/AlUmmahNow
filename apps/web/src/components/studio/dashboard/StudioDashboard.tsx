@@ -13,7 +13,7 @@ import { logger } from '@/lib/logger-client';
 import { changePercent, rangeDates, sumMetrics } from '@/lib/studio/analytics';
 import { can, type StudioRole } from '@/lib/studio/permissions';
 import { legacyHref } from '@/lib/studio/nav';
-import { studioUploadHref } from '@/lib/studio/links';
+import { studioLiveHref, studioUploadHref } from '@/lib/studio/links';
 
 interface Props {
   locale: string;
@@ -87,6 +87,7 @@ export function StudioDashboard({ locale, channelId, role }: Props) {
   const number = new Intl.NumberFormat(locale);
   const quickLinks = [
     can(role, 'video.upload') && { label: text.quick.upload, href: studioUploadHref(locale, channelId) },
+    can(role, 'live.manage') && { label: text.quick.goLive, href: studioLiveHref(locale, channelId) },
     can(role, 'post.manage') && { label: text.quick.newPost, href: legacyHref(locale, channelId, 'content/posts/new')! },
     can(role, 'channel.edit') && { label: text.quick.customise, href: legacyHref(locale, channelId, 'customisation/profile')! },
   ].filter((link): link is { label: string; href: string } => Boolean(link));

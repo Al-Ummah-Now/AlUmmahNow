@@ -180,14 +180,21 @@ export interface LiveSessionRow {
 	peak_viewers: number;
 	viewer_seconds: number;
 	error: string | null;
+	/** The tier holder this session counts against (migration 0040); null on older sessions */
+	owner_id?: string | null;
+	/** Longest it may stay live, in minutes (tier-gate.ts); null = no limit */
+	limit_minutes?: number | null;
 }
 
-export async function insertSession(db: D1Database, s: Pick<LiveSessionRow, 'id' | 'stream_id' | 'channel_id' | 'provider' | 'provider_ref' | 'reason' | 'preferred' | 'seq' | 'failover_from' | 'failover_error' | 'low_latency' | 'is_test' | 'created_at' | 'playback_url'>): Promise<void> {
+export async function insertSession(
+	db: D1Database,
+	s: Pick<LiveSessionRow, 'id' | 'stream_id' | 'channel_id' | 'provider' | 'provider_ref' | 'reason' | 'preferred' | 'seq' | 'failover_from' | 'failover_error' | 'low_latency' | 'is_test' | 'created_at' | 'playback_url' | 'owner_id' | 'limit_minutes'>,
+): Promise<void> {
 	await db
 		.prepare(
-			'INSERT INTO live_sessions (id, stream_id, channel_id, provider, provider_ref, reason, preferred, seq, failover_from, failover_error, low_latency, is_test, created_at, playback_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+			'INSERT INTO live_sessions (id, stream_id, channel_id, provider, provider_ref, reason, preferred, seq, failover_from, failover_error, low_latency, is_test, created_at, playback_url, owner_id, limit_minutes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
 		)
-		.bind(s.id, s.stream_id, s.channel_id, s.provider, s.provider_ref, s.reason, s.preferred, s.seq, s.failover_from, s.failover_error, s.low_latency, s.is_test, s.created_at, s.playback_url)
+		.bind(s.id, s.stream_id, s.channel_id, s.provider, s.provider_ref, s.reason, s.preferred, s.seq, s.failover_from, s.failover_error, s.low_latency, s.is_test, s.created_at, s.playback_url, s.owner_id ?? null, s.limit_minutes ?? null)
 		.run();
 }
 
@@ -198,7 +205,7 @@ export async function readSession(db: D1Database, id: string): Promise<LiveSessi
 /** Columns a caller may set (never the id, stream or provider). */
 const SESSION_UPDATABLE = new Set([
 	'provider_ref', 'status', 'start_requested_at', 'ingest_connected_at', 'first_segment_at', 'last_segment_at', 'ended_at', 'end_reason',
-	'vod_ready_at', 'vod_url', 'playback_url', 'stored_bytes', 'peak_viewers', 'viewer_seconds', 'error', 'key_version',
+	'vod_ready_at', 'vod_url', 'playback_url', 'stored_bytes', 'peak_viewers', 'viewer_seconds', 'error', 'key_version', 'limit_minutes',
 ]);
 
 export async function updateSession(db: D1Database, id: string, set: Partial<LiveSessionRow>, onlyIfStatus?: LiveSessionStatus[]): Promise<boolean> {

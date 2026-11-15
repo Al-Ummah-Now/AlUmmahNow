@@ -137,7 +137,9 @@ export async function deleteStream(id: string): Promise<void> {
 }
 
 /** The refusal codes Studio explains in its own words; anything else is the generic message. */
-export const LIVE_ERROR_CODES = ['live_capacity', 'live_budget', 'live_unavailable', 'live_provider_error'] as const;
+export const LIVE_ERROR_CODES = ['live_capacity', 'live_budget', 'live_unavailable', 'live_provider_error', 'live_not_in_tier', 'live_hours_used', 'live_concurrent_limit'] as const;
+/** Refusals by the channel owner's creator tier (402/403), not failures: never reported as errors. */
+export const LIVE_TIER_CODES: readonly string[] = ['live_not_in_tier', 'live_hours_used', 'live_concurrent_limit'];
 export type LiveErrorCode = (typeof LIVE_ERROR_CODES)[number] | 'generic';
 
 export function liveErrorCode(error: unknown): LiveErrorCode {

@@ -14,6 +14,7 @@ import {
 	type LiveRoutingSettings,
 	type LiveStreamState,
 } from '@al-ummah/shared-types';
+import { reportNeedsAction } from '@al-ummah/shared-types';
 import { logger } from '../logger';
 import { LIVE_ADAPTERS, LiveProviderError, type LiveEnv } from './providers';
 import { vodReady } from './vod-ready';
@@ -50,6 +51,12 @@ export async function providerUsage(env: LiveEnv, settings: LiveRoutingSettings,
 	return { bunny: { ...usage.bunny, available: bunny }, selfhosted: { ...usage.selfhosted, available: selfhosted } };
 }
 
+/** The tier holder a new session counts against and how long it may stay live (lib/live/tier-gate.ts). */
+export interface SessionTier {
+	ownerId?: string | null;
+	limitMinutes?: number | null;
+}
+
 export interface NewSession {
 	session: LiveSessionRow;
 	assignment: LiveAssignment;
@@ -64,6 +71,7 @@ export async function provisionSession(
 	env: LiveEnv,
 	stream: { id: string; title: string; userId?: string | null; channelId?: string | null; providerMove?: LiveProviderId | null; isTest?: boolean },
 	now = Date.now(),
+	tier: SessionTier = {},
 ): Promise<NewSession> {
 	const d1 = db(env);
 	const settings = await readLiveRouting(d1, now);
@@ -123,6 +131,8 @@ export async function provisionSession(
 		is_test: stream.isTest ? 1 : 0,
 		created_at: now,
 		playback_url: made.provisioned.playbackUrl,
+		owner_id: tier.ownerId ?? null,
+		limit_minutes: tier.limitMinutes ?? null,
 	};
 	await insertSession(d1, session);
 	await recordEvent(d1, { sessionId: session.id, provider, kind: 'assigned', at: now, detail: assignment });
@@ -140,11 +150,18 @@ export async function sessionIngest(env: LiveEnv, session: LiveSessionRow): Prom
  * failure with fallback on re-provisions the stream on self-hosted (the
  * encoder settings change; Studio shows the new ones).
  */
-export async function startSession(env: LiveEnv, session: LiveSessionRow, stream: { id: string; title: string; userId?: string | null; channelId?: string | null }, now = Date.now()): Promise<LiveSessionRow> {
+export async function startSession(
+	env: LiveEnv,
+	session: LiveSessionRow,
+	stream: { id: string; title: string; userId?: string | null; channelId?: string | null },
+	now = Date.now(),
+	tier: SessionTier = {},
+): Promise<LiveSessionRow> {
 	const d1 = db(env);
 	try {
 		await LIVE_ADAPTERS[session.provider].start(env, session);
-		await updateSession(d1, session.id, { start_requested_at: now }, ['provisioned', 'live']);
+		// The limit is worked out again at Go live: hours used since the session was provisioned count
+		await updateSession(d1, session.id, { start_requested_at: now, ...('limitMinutes' in tier ? { limit_minutes: tier.limitMinutes ?? null } : {}) }, ['provisioned', 'live']);
 		return (await readSession(d1, session.id))!;
 	} catch (error) {
 		const code = error instanceof LiveProviderError ? error.code : 'error';
@@ -152,7 +169,7 @@ export async function startSession(env: LiveEnv, session: LiveSessionRow, stream
 		const settings = await readLiveRouting(d1, now);
 		if (!settings.fallback) throw error;
 		await updateSession(d1, session.id, { status: 'failed', error: code, ended_at: now, end_reason: 'start_failed' });
-		const next = await provisionSession(env, { ...stream, providerMove: otherLiveProvider(session.provider) }, now);
+		const next = await provisionSession(env, { ...stream, providerMove: otherLiveProvider(session.provider) }, now, { ownerId: tier.ownerId ?? session.owner_id ?? null, limitMinutes: 'limitMinutes' in tier ? tier.limitMinutes : session.limit_minutes ?? null });
 		await d1
 			.prepare("UPDATE live_sessions SET reason = 'failover', failover_from = ?, failover_error = ? WHERE id = ?")
 			.bind(session.provider, code, next.session.id)
@@ -264,8 +281,8 @@ export async function currentBitrateKbps(db: D1Database, session: LiveSessionRow
  * Minute cron: end self-hosted sessions whose encoder went quiet (idle
  * timeout) and poll live Bunny sessions. Bounded per run.
  */
-export async function sweepLiveSessions(env: LiveEnv, now = Date.now()): Promise<{ idleEnded: number; bunnyPolled: number }> {
-	if (!env.SEARCH_DB) return { idleEnded: 0, bunnyPolled: 0 };
+export async function sweepLiveSessions(env: LiveEnv, now = Date.now()): Promise<{ idleEnded: number; bunnyPolled: number; limitEnded: number }> {
+	if (!env.SEARCH_DB) return { idleEnded: 0, bunnyPolled: 0, limitEnded: 0 };
 	const d1 = env.SEARCH_DB;
 	const settings = await readLiveRouting(d1, now);
 	const idleBefore = now - settings.selfhosted.idleTimeoutSec * 1000;
@@ -287,7 +304,44 @@ export async function sweepLiveSessions(env: LiveEnv, now = Date.now()): Promise
 		.bind(now - 6 * 3_600_000)
 		.all<LiveSessionRow>();
 	for (const s of bunny ?? []) await refreshBunnySession(env, s, now);
-	return { idleEnded, bunnyPolled: (bunny ?? []).length };
+	const limitEnded = await endOverTierLimit(env, now);
+	return { idleEnded, bunnyPolled: (bunny ?? []).length, limitEnded };
+}
+
+/**
+ * Sessions live past their tier limit (limit_minutes, lib/live/tier-gate.ts: the tier's longest
+ * stream, or what was left of the month's hours) are ended; the recording is kept. The sweep is
+ * the retry loop (every 5 minutes, so a stream may run up to one sweep past its limit). A provider
+ * that would not stop is an Errors page item (resolved once a later end works).
+ */
+export async function endOverTierLimit(env: LiveEnv, now = Date.now()): Promise<number> {
+	const d1 = db(env);
+	const { results } = await d1
+		.prepare(
+			"SELECT * FROM live_sessions WHERE status = 'live' AND limit_minutes IS NOT NULL AND first_segment_at IS NOT NULL AND first_segment_at + limit_minutes * 60000 <= ? LIMIT 20",
+		)
+		.bind(now)
+		.all<LiveSessionRow>();
+	let ended = 0;
+	for (const s of results ?? []) {
+		const after = await endSession(env, s, 'tier_limit', now);
+		await onSessionEnded?.(env, s);
+		ended++;
+		logger.info('[Live] Ended at the creator tier limit', { sessionId: s.id, streamId: s.stream_id, ownerId: s.owner_id ?? null, limitMinutes: s.limit_minutes });
+		if (after.error) {
+			reportNeedsAction('api-videos', env as never, undefined, {
+				key: `live-tier-stop:${s.id}`,
+				source: 'processing',
+				title: 'A live stream past its tier limit did not stop at the provider',
+				message: `Session ${s.id} (${s.provider}) was ended at its creator tier limit of ${s.limit_minutes} minutes, but stopping it at the provider failed (${after.error}). Stop it on the Live streaming page.`,
+				itemType: 'live_session',
+				itemId: s.id,
+				itemUrl: '/live-streaming',
+				extra: { sessionId: s.id, streamId: s.stream_id, provider: s.provider, error: after.error },
+			});
+		}
+	}
+	return ended;
 }
 
 /** Hook set by the API layer so an idle end also ends the stream record (lib/live/streams.ts). */

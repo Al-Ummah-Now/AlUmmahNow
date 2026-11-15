@@ -16,7 +16,16 @@ import {
 import type { Locale } from '@/i18n/config';
 import { formatNumber, type MessageKey, type Translator } from '@/i18n/translate';
 
-export type TierLimits = Pick<CreatorTier, 'unlimited' | 'perHour' | 'perDay' | 'maxConcurrent' | 'maxChannels'> & Partial<Pick<CreatorTier, 'captionMinutesMonth' | 'audioTracksPerVideo'>>;
+export type TierLimits = Pick<CreatorTier, 'unlimited' | 'perHour' | 'perDay' | 'maxConcurrent' | 'maxChannels'> &
+  Partial<Pick<CreatorTier, 'captionMinutesMonth' | 'audioTracksPerVideo' | 'live' | 'liveHoursMonth' | 'liveMaxConcurrent' | 'liveMaxStreamMinutes'>>;
+
+/** The live streaming sentence of a tier's effect (none when the tier predates live). */
+function liveEffect(tier: TierLimits, t: Translator, n: (value: number) => string): string {
+  if (tier.live === undefined) return '';
+  if (!tier.live) return t('creators.effectLiveOff');
+  const params = { hours: n(tier.liveHoursMonth ?? 0), concurrent: n(tier.liveMaxConcurrent ?? 1), minutes: n(tier.liveMaxStreamMinutes ?? 0) };
+  return tier.liveMaxConcurrent === 1 ? t('creators.effectLiveOne', params) : t('creators.effectLive', params);
+}
 
 /** What holding `tier` lets a user do; null = no tier. */
 export function tierEffect(tier: TierLimits | null, t: Translator, locale: Locale): string {
@@ -29,9 +38,9 @@ export function tierEffect(tier: TierLimits | null, t: Translator, locale: Local
     concurrent: n(tier.maxConcurrent),
     channels: tier.maxChannels === null ? t('creators.effectChannelsAny') : t('creators.effectChannels', { count: n(tier.maxChannels) }),
   });
-  const captions = tier.captionMinutesMonth ? ` ${t('creators.effectCaptions', { minutes: n(tier.captionMinutesMonth) })}` : '';
-  const audio = tier.audioTracksPerVideo ? ` ${t('creators.effectAudioTracks', { count: n(tier.audioTracksPerVideo) })}` : '';
-  return `${uploads}${captions}${audio}`;
+  const captions = tier.captionMinutesMonth ? t('creators.effectCaptions', { minutes: n(tier.captionMinutesMonth) }) : '';
+  const audio = tier.audioTracksPerVideo ? t('creators.effectAudioTracks', { count: n(tier.audioTracksPerVideo) }) : '';
+  return [uploads, liveEffect(tier, t, n), captions, audio].filter(Boolean).join(' ');
 }
 
 /** The confirmation of a change from one tier to another (or none). */
@@ -60,9 +69,13 @@ export interface TierFormValues {
   captionMinutesMonth: number;
   /** Extra audio tracks a creator may add to one video (wiki AUN-MULTI-AUDIO MA9) */
   audioTracksPerVideo: number;
+  live: boolean;
+  liveHoursMonth: number;
+  liveMaxConcurrent: number;
+  liveMaxStreamMinutes: number;
 }
 
-export type TierField = 'id' | 'name' | 'perHour' | 'perDay' | 'maxConcurrent' | 'maxChannels' | 'captionMinutesMonth' | 'audioTracksPerVideo';
+export type TierField = 'id' | 'name' | 'perHour' | 'perDay' | 'maxConcurrent' | 'maxChannels' | 'captionMinutesMonth' | 'liveHoursMonth' | 'liveMaxConcurrent' | 'liveMaxStreamMinutes' | 'audioTracksPerVideo';
 export type TierFormErrors = Partial<Record<TierField, { key: MessageKey; params?: Record<string, string | number> }>>;
 
 export const TIER_ID_PATTERN = /^[a-z0-9][a-z0-9-]{1,39}$/;
@@ -85,6 +98,11 @@ export function validateTierForm(form: TierFormValues, opts: { create?: boolean 
   if (form.maxChannels !== null) inRange('maxChannels', form.maxChannels);
   inRange('captionMinutesMonth', form.captionMinutesMonth);
   inRange('audioTracksPerVideo', form.audioTracksPerVideo);
+  if (form.live) {
+    inRange('liveHoursMonth', form.liveHoursMonth);
+    inRange('liveMaxConcurrent', form.liveMaxConcurrent);
+    inRange('liveMaxStreamMinutes', form.liveMaxStreamMinutes);
+  }
   if (!errors.perHour && !errors.perDay && form.perDay < form.perHour) errors.perDay = { key: 'creators.errorPerDay' };
   return errors;
 }

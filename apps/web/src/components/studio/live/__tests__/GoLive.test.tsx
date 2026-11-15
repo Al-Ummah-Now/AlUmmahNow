@@ -8,6 +8,7 @@ const getState = jest.fn();
 const startStream = jest.fn();
 const endStream = jest.fn();
 
+jest.mock('@/hooks/useCreatorAccess', () => ({ useCreatorAccess: () => ({ status: 'loading' }) }));
 jest.mock('@/hooks/useLanguage', () => ({
   useLanguage: () => ({ t: { studio: mockStudio, confirmDialog: { typeToConfirm: 'Type {value}' }, common: { cancel: 'Cancel' } }, lang: 'en', isRTL: false }),
 }));
@@ -153,5 +154,23 @@ describe('GoLive', () => {
     getIngest.mockRejectedValue(new LiveApiError(403, 'forbidden'));
     render(<GoLive locale="en" channelId="c1" streamId="s1" />);
     expect(await screen.findByTestId('studio-golive-forbidden')).toHaveTextContent(text.notOwner);
+  });
+
+  it('shows a tier refusal of the ingest settings with Request access, not "not yours"', async () => {
+    const { LiveApiError } = jest.requireActual('@/lib/live/api');
+    getStream.mockResolvedValue({ id: 's1', title: 'x', status: 'scheduled' });
+    getIngest.mockRejectedValue(new LiveApiError(403, 'live_not_in_tier'));
+    render(<GoLive locale="ar" channelId="c1" streamId="s1" />);
+    expect(await screen.findByTestId('studio-golive-failed')).toHaveTextContent(STUDIO_EN.live.errors.live_not_in_tier);
+    expect(screen.getByTestId('studio-live-request-access')).toHaveAttribute('href', '/ar/upgrade');
+  });
+
+  it('explains the month\'s hours being used when going live (402)', async () => {
+    setup();
+    const { LiveApiError } = jest.requireActual('@/lib/live/api');
+    startStream.mockRejectedValue(new LiveApiError(402, 'live_hours_used'));
+    fireEvent.click(await screen.findByTestId('studio-golive-start'));
+    expect(await screen.findByTestId('studio-golive-error')).toHaveTextContent(STUDIO_EN.live.errors.live_hours_used);
+    expect(screen.queryByTestId('studio-live-request-access')).not.toBeInTheDocument();
   });
 });
