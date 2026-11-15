@@ -49,7 +49,7 @@ export interface AdminEnv extends OwnershipEnv {
 
 type Row = Record<string, any>;
 
-const R2_STATUSES = ['queued', 'transcoding', 'ready', 'failed'];
+const R2_STATUSES = ['queued', 'transcoding', 'ready', 'failed', 'cancelled'];
 
 /** A record's `r2` when it looks like one (epic #687), else null. */
 function r2Of(video: Row | null | undefined): Row | null {

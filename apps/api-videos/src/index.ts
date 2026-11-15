@@ -8,6 +8,7 @@ import { handleBunnyDeleteBatch, isBunnyDeleteMessage } from './lib/uploads/bunn
 import { handleCollectionBackfillMessage, isCollectionBackfillMessage } from './lib/bunny/collectionBackfill';
 import { handlePurgeBatch, isPurgeMessage, startScheduledPurge } from './lib/uploads/testLibraryPurge';
 import { handleMediaMoveBatch, isMediaMoveMessage, sweepMediaJobs } from './lib/media/r2-delivery';
+import { flagStalledTranscodes } from './lib/media/troubleshoot';
 import { flushIndexNow } from './lib/indexnow';
 import { collectDeliveryCosts } from './lib/media/costs';
 import { sweepOriginals } from './lib/media/originals';
@@ -597,6 +598,8 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 				(error) => logger.error('[MediaSweep] Run failed', { error: error instanceof Error ? error.message : String(error) }),
 			),
 		);
+		// R2 transcodes that stalled (no progress, a late retry, waiting too long to start) flag the admin once (lib/media/troubleshoot.ts)
+		ctx.waitUntil(flagStalledTranscodes(rawEnv as never, ctx).then(() => undefined));
 		// Watch pages whose public content changed go to IndexNow (lib/indexnow.ts; production only)
 		ctx.waitUntil(
 			flushIndexNow(rawEnv as never).then(

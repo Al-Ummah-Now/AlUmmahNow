@@ -19,6 +19,12 @@
  *   PUT  /internal/media/providers         { settings, actorId } → 400 { problems } when unsafe
  *   POST /internal/media/health/check      one provider health pass now (the Errors page "Check now")
  *   /internal/media/backfill/*            the R2 backfill and Bunny retirement (backfillInternal.ts)
+ *   GET  /internal/media/troubleshoot      the troubleshooting panel's jobs (lib/media/troubleshoot.ts): queued,
+ *                                          running, waiting and recent failed/cancelled, with the Transcoder's view
+ *   POST /internal/media/troubleshoot/actions  { action: retry-now | cancel, videoId, actorId } → 202 { job }
+ *                                          (admin-jobs queue: retry with backoff, DLQ, Errors page item when it gives up)
+ *   POST /internal/media/troubleshoot/retry-now  { videoId } (the Errors page "Retry now" of a stall) → { job }
+ *   POST /internal/media/troubleshoot/jobs/retry { jobId } (the Errors page Retry of an action that gave up)
  *   PUT  /internal/media/videos/:id/override  { override | null, actorId } a video's playback override
  *                                          (lib/media/video-override.ts) → { override, media };
  *                                          400 { problem } when it would leave the video unplayable
@@ -33,6 +39,8 @@ import { MediaSettingsError, readMediaSettings, saveMediaSettings } from '../../
 import { setVideoOverride } from '../../lib/media/video-override';
 import { createBackfillInternalRouter } from './backfillInternal';
 import type { LibraryHints } from '../../lib/bunny/libraries';
+import { readTroubleshootJobs, type TroubleshootEnv } from '../../lib/media/troubleshoot';
+import { createJob, getJob, retryJob, type JobEnv } from '../../lib/admin/jobs';
 import { applyJobEvent, applyMp4Event, enqueueTranscode, readDeliverySettings, sourceCandidates, writeDeliverySettings, type MediaEnv } from '../../lib/media/r2-delivery';
 
 const MAX_IDS = 50;
@@ -156,6 +164,38 @@ export function createMediaInternalRouter() {
 			: db.prepare('SELECT * FROM media_jobs ORDER BY updated_at DESC LIMIT ?').bind(limit);
 		const { results } = await stmt.all();
 		return c.json({ success: true, result: { items: results ?? [] } });
+	});
+
+	app.get('/troubleshoot', async (c) => c.json({ success: true, result: await readTroubleshootJobs(c.env as TroubleshootEnv) }));
+
+	/** Retry now / Cancel run as admin jobs (owner rule: queued, retried, failures flag the admin). */
+	const queueAction = async (env: Env, action: 'retry-now' | 'cancel', videoId: string, actorId: string) =>
+		createJob(env as unknown as JobEnv, { kind: action === 'cancel' ? 'media.transcode-cancel' : 'media.transcode-retry', targetKind: 'video', targetId: videoId, actorId });
+
+	app.post('/troubleshoot/actions', async (c) => {
+		const body = (await c.req.json().catch(() => null)) as { action?: unknown; videoId?: unknown; actorId?: unknown } | null;
+		if (body?.action !== 'retry-now' && body?.action !== 'cancel') return c.json({ success: false, error: 'action must be retry-now or cancel' }, 400);
+		if (typeof body.videoId !== 'string' || !isMediaVideoId(body.videoId)) return c.json({ success: false, error: 'bad video id' }, 400);
+		if (typeof body.actorId !== 'string' || !body.actorId) return c.json({ success: false, error: 'actorId is required' }, 400);
+		const job = await queueAction(c.env, body.action, body.videoId, body.actorId);
+		return c.json({ success: true, result: { job } }, 202);
+	});
+
+	app.post('/troubleshoot/retry-now', async (c) => {
+		const body = (await c.req.json().catch(() => null)) as { videoId?: unknown } | null;
+		if (typeof body?.videoId !== 'string' || !isMediaVideoId(body.videoId)) return c.json({ success: false, error: 'bad video id' }, 400);
+		const job = await queueAction(c.env, 'retry-now', body.videoId, 'errors-retry');
+		if (job.status === 'failed') return c.json({ success: false, error: job.lastError ?? 'could not queue' }, 503);
+		return c.json({ success: true, result: { job } });
+	});
+
+	app.post('/troubleshoot/jobs/retry', async (c) => {
+		const body = (await c.req.json().catch(() => null)) as { jobId?: unknown } | null;
+		if (typeof body?.jobId !== 'string' || !/^[A-Za-z0-9-]{8,64}$/.test(body.jobId)) return c.json({ success: false, error: 'bad job id' }, 400);
+		const existing = await getJob(c.env as unknown as JobEnv, body.jobId);
+		if (!existing || !existing.kind.startsWith('media.transcode-')) return c.json({ success: false, error: 'job not found' }, 404);
+		const job = await retryJob(c.env as unknown as JobEnv, body.jobId);
+		return c.json({ success: true, result: { job } });
 	});
 
 	app.get('/qoe-live', async (c) => {

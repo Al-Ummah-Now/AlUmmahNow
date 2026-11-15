@@ -475,7 +475,7 @@ export async function applyJobEvent(
 			why = 'stale job';
 			return false;
 		}
-		if (r2.status === 'ready' || (r2.status === 'failed' && ev.type !== 'ready')) {
+		if (r2.status === 'ready' || r2.status === 'cancelled' || (r2.status === 'failed' && ev.type !== 'ready')) {
 			why = `already ${r2.status}`;
 			return false;
 		}
@@ -710,7 +710,8 @@ export async function applyMp4Event(env: Pick<MediaEnv, 'videos'>, ev: Mp4JobEve
  * waits on `status` and fetches `playUrl`, which is there whatever the delivery switch says.
  */
 export interface OwnerR2View {
-	status: VideoR2State['status'];
+	/** A cancelled job reads as failed here (the public contract has no "cancelled") */
+	status: Exclude<VideoR2State['status'], 'cancelled'>;
 	access: MediaAccess;
 	rev: string;
 	attempts: number;
@@ -735,7 +736,7 @@ export async function ownerR2View(env: MediaEnv, video: Pick<MediaVideo, 'id' | 
 		logger.warn('[Media] Could not build the R2 play URL', { videoId: video.id, error: error instanceof Error ? error.message : String(error) });
 	}
 	return {
-		status: r2.status,
+		status: r2.status === 'cancelled' ? 'failed' : r2.status,
 		access: r2.access,
 		rev: r2.rev,
 		attempts: r2.attempts ?? 0,

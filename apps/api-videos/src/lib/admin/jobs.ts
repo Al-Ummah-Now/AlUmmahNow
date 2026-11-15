@@ -276,6 +276,11 @@ export async function handleAdminJobBatch(batch: { messages: readonly JobMessage
 			if (last) {
 				// Flags the admin: the job shows "failed — Retry", and this alert reaches the logs
 				logger.error('[AdminJobs] Job failed after retries', { alert: 'admin_job_failed', jobId: job.id, kind: job.kind, target: job.targetId, attempts: msg.attempts, error: reason });
+				// R2 transcode actions also raise an Errors page item with Retry (videos admin → Delivery)
+				if (job.kind.startsWith('media.transcode-')) {
+					const { reportActionFailed } = await import('../media/troubleshoot');
+					await reportActionFailed(env as never, job, reason).catch(() => undefined);
+				}
 			} else {
 				logger.warn('[AdminJobs] Job attempt failed; retrying', { jobId: job.id, kind: job.kind, attempts: msg.attempts, error: reason });
 			}
