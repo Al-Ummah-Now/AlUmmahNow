@@ -363,6 +363,24 @@ function TierCard({ tier, users, invites = 0, canManage, actions, create = false
           </>
         )}
       </fieldset>
+      <div className="flex flex-col gap-1 text-sm">
+        <label className="flex items-center gap-2 text-fg">
+          <input
+            type="checkbox"
+            role="switch"
+            checked={form.unlimited ? false : form.importCountsAgainstLimits}
+            disabled={!canManage || form.unlimited}
+            aria-describedby={`${ids}-imports-help`}
+            onChange={(e) => set('importCountsAgainstLimits', e.target.checked)}
+            className="h-4 w-4 accent-accent"
+            data-testid={`tier-${key}-importCountsAgainstLimits`}
+          />
+          {t('creators.tierImportsCount')}
+        </label>
+        <span id={`${ids}-imports-help`} className="text-xs text-fg-muted" data-testid={`tier-${key}-imports-help`}>
+          {form.unlimited ? t('creators.helpImportsUnlimited') : t('creators.helpImportsCount')}
+        </span>
+      </div>
       {canManage && (
         // Footer: Save / Create tier at the end edge; Delete and why it is blocked before it
         <div className="flex flex-wrap items-center justify-end gap-2">

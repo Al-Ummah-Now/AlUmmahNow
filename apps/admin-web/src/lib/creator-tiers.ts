@@ -20,7 +20,7 @@ import type { Locale } from '@/i18n/config';
 import { formatNumber, type MessageKey, type Translator } from '@/i18n/translate';
 
 export type TierLimits = Pick<CreatorTier, 'unlimited' | 'perHour' | 'perDay' | 'maxConcurrent' | 'maxChannels'> &
-  Partial<Pick<CreatorTier, 'captionMinutesMonth' | 'audioTracksPerVideo' | 'live' | 'liveHoursMonth' | 'liveMaxConcurrent' | 'liveMaxStreamMinutes' | 'uploads' | 'channels'>>;
+  Partial<Pick<CreatorTier, 'captionMinutesMonth' | 'audioTracksPerVideo' | 'live' | 'liveHoursMonth' | 'liveMaxConcurrent' | 'liveMaxStreamMinutes' | 'uploads' | 'channels' | 'importCountsAgainstLimits'>>;
 
 /** The live streaming sentence of a tier's effect (none when the tier predates live). */
 function liveEffect(tier: TierLimits, t: Translator, n: (value: number) => string): string {
@@ -53,6 +53,8 @@ export function tierEffect(tier: TierLimits | null, t: Translator, locale: Local
   if (uploads || channels) parts.push(liveEffect(tier, t, n));
   if (tier.captionMinutesMonth) parts.push(t('creators.effectCaptions', { minutes: n(tier.captionMinutesMonth) }));
   if (tier.audioTracksPerVideo) parts.push(t('creators.effectAudioTracks', { count: n(tier.audioTracksPerVideo) }));
+  // Imports from YouTube skip the upload limits on this tier (only said where it can upload)
+  if (uploads && tier.importCountsAgainstLimits === false) parts.push(t('creators.effectImportsFree'));
   return parts.filter(Boolean).join(' ');
 }
 
@@ -114,6 +116,8 @@ export interface TierFormValues {
   liveHoursMonth: number;
   liveMaxConcurrent: number;
   liveMaxStreamMinutes: number;
+  /** YouTube imports count against perHour/perDay (wiki AUN-YT-IMPORT); ignored when unlimited */
+  importCountsAgainstLimits: boolean;
 }
 
 export type TierField = 'name' | 'nameAr' | 'description' | 'descriptionAr' | 'sortOrder' | 'perHour' | 'perDay' | 'maxConcurrent' | 'maxChannels' | 'captionMinutesMonth' | 'liveHoursMonth' | 'liveMaxConcurrent' | 'liveMaxStreamMinutes' | 'audioTracksPerVideo';
@@ -182,6 +186,8 @@ export function tierToForm(tier?: CreatorTier): TierFormValues {
     liveHoursMonth: tier?.liveHoursMonth || DEFAULT_CREATOR_TIER.liveHoursMonth,
     liveMaxConcurrent: tier?.liveMaxConcurrent || DEFAULT_CREATOR_TIER.liveMaxConcurrent,
     liveMaxStreamMinutes: tier?.liveMaxStreamMinutes || DEFAULT_CREATOR_TIER.liveMaxStreamMinutes,
+    // Imports count against the upload limits unless an admin turns that off (wiki AUN-YT-IMPORT)
+    importCountsAgainstLimits: tier?.importCountsAgainstLimits ?? true,
   };
 }
 

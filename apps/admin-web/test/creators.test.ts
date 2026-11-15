@@ -346,6 +346,25 @@ describe('rendered components', () => {
     const empty = render(el(TierEditor, { tiers: [pro], counts: {}, defaultTierId: 'member', canManage: true, actions: tierActions }));
     assert.doesNotMatch(empty, /disabled=""[^>]*data-testid="tier-pro-delete"|data-testid="tier-pro-delete"[^>]*disabled=""/);
   });
+
+  it('YouTube imports switch: on by default, saved with the form, disabled with a note for unlimited tiers (AUN-YT-IMPORT)', () => {
+    const html = render(el(TierEditor, { tiers: [{ ...CREATOR, importCountsAgainstLimits: false }, UNLIMITED], counts: {}, canManage: true, actions: tierActions }));
+    const creator = html.slice(html.indexOf('data-testid="tier-card-creator"'), html.indexOf('data-testid="tier-card-unlimited"'));
+    const creatorSwitch = /<input[^>]*data-testid="tier-creator-importCountsAgainstLimits"[^>]*>/.exec(creator)![0];
+    assert.doesNotMatch(creatorSwitch, /checked/);
+    assert.doesNotMatch(creatorSwitch, /disabled/);
+    assert.match(creator, /YouTube imports count against upload limits/);
+    const unlimited = html.slice(html.indexOf('data-testid="tier-card-unlimited"'));
+    const unlimitedSwitch = /<input[^>]*data-testid="tier-unlimited-importCountsAgainstLimits"[^>]*>/.exec(unlimited)![0];
+    assert.match(unlimitedSwitch, /disabled/);
+    assert.match(unlimited, /Unlimited tiers have no upload limits, so imports never count\./);
+    const newTier = html.slice(html.indexOf('data-testid="tier-card-new"'));
+    assert.match(/<input[^>]*data-testid="tier-new-importCountsAgainstLimits"[^>]*>/.exec(newTier)![0], /checked/, 'a new tier counts imports');
+    // The effect sentence says so when imports are free
+    assert.equal(tierEffect({ ...CREATOR, importCountsAgainstLimits: false }, tEn, 'en').endsWith('Videos imported from YouTube do not count against these limits.'), true);
+    assert.equal(tierEffect(CREATOR, tEn, 'en').includes('YouTube'), false);
+    assert.match(tierEffect({ ...CREATOR, importCountsAgainstLimits: false }, tAr, 'ar'), /يوتيوب/);
+  });
 });
 
 describe('caption minutes on the user page: overdraft and ledger', () => {

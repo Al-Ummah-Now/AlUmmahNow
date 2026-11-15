@@ -1,10 +1,11 @@
-import { getNotificationPlatformSettings, getNotificationSettingsHistory } from '@/lib/api/admin';
+import { getNotificationPlatformSettings, getNotificationSettingsHistory, getYoutubeImportSettings, saveYoutubeImportSettings } from '@/lib/api/admin';
 import { getAdminSession } from '@/lib/auth';
-import { canManagePlatformSettings } from '@/lib/roles';
+import { canManageMedia, canManagePlatformSettings } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
 import { ErrorAlert } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { NotificationMenuSetting } from './NotificationMenuSetting';
+import { YoutubeImportSetting } from './YoutubeImportSetting';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +16,17 @@ export const dynamic = 'force-dynamic';
 export default async function PlatformSettingsPage() {
   const { t } = await getI18n();
   const session = await getAdminSession();
-  const [settingsResult, historyResult] = await Promise.allSettled([getNotificationPlatformSettings(), getNotificationSettingsHistory()]);
+  // YouTube import (wiki AUN-YT-IMPORT): admin-api needs media:manage even to read it, so only those roles load it
+  const showYoutube = canManageMedia(session?.user.role);
+  const [settingsResult, historyResult, youtubeResult] = await Promise.allSettled([
+    getNotificationPlatformSettings(),
+    getNotificationSettingsHistory(),
+    showYoutube ? getYoutubeImportSettings() : Promise.resolve(null),
+  ]);
+  if (youtubeResult.status === 'rejected') {
+    logger.error('[platform-settings] Could not load the YouTube import settings', { error: String(youtubeResult.reason) });
+  }
+  const youtube = youtubeResult.status === 'fulfilled' ? youtubeResult.value : null;
   if (settingsResult.status === 'rejected') {
     logger.error('[platform-settings] Could not load the notification settings', { error: String(settingsResult.reason) });
   }
@@ -33,6 +44,12 @@ export default async function PlatformSettingsPage() {
       ) : (
         <ErrorAlert testId="platform-settings-error">{t('platformSettings.loadFailed')}</ErrorAlert>
       )}
+      {showYoutube &&
+        (youtube ? (
+          <YoutubeImportSetting view={youtube} canEdit={canManageMedia(session?.user.role)} save={saveYoutubeImportSettings} />
+        ) : (
+          <ErrorAlert testId="youtube-import-load-error">{t('youtubeImport.loadFailed')}</ErrorAlert>
+        ))}
     </div>
   );
 }
