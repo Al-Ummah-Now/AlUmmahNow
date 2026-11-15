@@ -760,7 +760,6 @@ export async function listStaffDevices(userId: string): Promise<ActionResult<{ d
 export async function signOutStaffDevice(userId: string, installId: string): Promise<ActionResult<{ installId: string }>> {
   return mutate(`/api/review-alerts/devices/${encodeURIComponent(installId)}?userId=${encodeURIComponent(userId)}`, 'DELETE', {});
 }
-}
 
 // Social posting (admin-api /api/social, wiki AUN-SOCIAL SOC-1): kill switches, the X spend cap, network setup
 // (X app, Telegram bot), 7-day activity and failures. Every admin role reads; changes need settings:manage, audited.
