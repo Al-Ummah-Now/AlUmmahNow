@@ -217,8 +217,10 @@ test.describe('Side drawer', () => {
     const box = await drawer.boundingBox();
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
-    // No links to other sites in the header: the drawer carries the Website link
-    await expect(drawer.getByTestId('nav-www')).toBeInViewport();
+    // Its last item (Status) scrolls into view; no Website item in the drawer (owner, 2026-11-15)
+    await expect(drawer.getByTestId('nav-www')).toHaveCount(0);
+    await drawer.getByTestId('nav-status').scrollIntoViewIfNeeded();
+    await expect(drawer.getByTestId('nav-status')).toBeInViewport();
   });
 });
 

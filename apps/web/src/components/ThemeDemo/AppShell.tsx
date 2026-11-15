@@ -6,8 +6,7 @@ import { useEffect, useState, type MouseEvent } from 'react';
 import Link from '@/components/common/AppLink';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { ChevronLeft, ChevronRight, CircleHelp, CircleUserRound, Clock, Compass, Globe, Heart, History, Home, Menu, ShieldCheck, Tv, BookOpen, Mail, Activity, Info, X, type LucideIcon } from 'lucide-react';
-import { appLinks } from '@al-ummah/shared-types';
+import { ChevronLeft, ChevronRight, CircleHelp, CircleUserRound, Clock, Compass, Heart, History, Home, Menu, ShieldCheck, Tv, BookOpen, Mail, Activity, Info, X, type LucideIcon } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { saveLanguagePreference } from '@/lib/i18n/utils';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
@@ -17,7 +16,7 @@ import { HeaderBrand, HeaderEnvBadge, HeaderLangButton, HeaderMenuButton, Header
 import { BRAND_LOGO } from '@/components/brand/BrandLogo';
 import { useRailMotion } from './rail-breakpoint';
 import { statusPageUrl } from '@/lib/navigation/destinations';
-import { getEnvironment, getWwwUrl } from '@/lib/runtime-config';
+import { getEnvironment } from '@/lib/runtime-config';
 import { IdentityTour } from '@/components/help/IdentityTour';
 
 const L = {
@@ -43,9 +42,6 @@ export function AppShell() {
 
   // One build serves stage and production: the env's status host is known only in the browser
   const [statusHref, setStatusHref] = useState(() => statusPageUrl('', lang));
-  // www on this environment's hosts (shared-types app-links): the rail and drawer's Website link (never in the header)
-  const sites = appLinks({ current: 'videos', lang, urls: { www: getWwwUrl() } }).filter((a) => a.id === 'www');
-  const wwwHref = sites[0]?.href;
   useEffect(() => { setMounted(true); setStatusHref(statusPageUrl(window.location.hostname, lang)); }, [lang]);
   useRailMotion(open);
   useEffect(() => { setOpen(false); }, [pathname]);
@@ -78,9 +74,6 @@ export function AppShell() {
       { label: t.contact.navLabel, href: `${base}/contact`, icon: Mail },
       // The public status page (apps/status): its own host, so it opens even when this site is down
       { label: c.status, href: statusHref, icon: Activity, external: true, testId: 'nav-status' },
-      // The header has no links to other sites (owner, 2026-11-15; docs/design/NAV.md): the website is
-      // here at every width, for signed-out visitors too (the account menu's apps need a sign-in)
-      ...(wwwHref ? [{ label: t.navigation.appWww, href: wwwHref, icon: Globe, external: true, testId: 'nav-www' }] : []),
     ] },
   ];
 

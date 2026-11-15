@@ -64,9 +64,17 @@ the same elements as JSX and their tests compare the result with the builders.
 **Order** (reading order; it mirrors in Arabic; `HEADER_ORDER` in `nav/header.js`: menu, brand, env,
 primary, actions, lang, mode, account):
 
-**No links to other sites in the header** (owner, 2026-11-15): no Website / Videos pills. The logo
-leads to the app's own home; the other apps are in the account menu's "Al Ummah Now apps" (and, on
-status, which has no account menu, the page footer).
+**No links to other sites in the header or side rail** (owner, 2026-11-15): no Website / Videos
+pills, and no "Website" item in the videos side rail or drawer, at any width. The logo leads to the
+app's own home; the other apps are in the account menu's "Al Ummah Now apps" (and, on status, which
+has no account menu, the page footer). Pages with no account menu and no footer link (the sign-in
+pages, a scholar site whose platform mark is "none") have no route to www; that is accepted
+(owner, 2026-11-15).
+
+**Scholar sites keep their own theme colours** (owner, 2026-11-15). The header's layout, sizes and
+controls are the same as every app's; its colours come from the site's admin-chosen theme through the
+nav tokens (`--fanous-c-nav-*`, `--aun-header-bg`), so a Nahas site has Nahas's dark header. No app
+CSS overrides the header colours.
 
 | # | Slot | Class | Notes |
 |---|---|---|---|
