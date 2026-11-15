@@ -42,7 +42,7 @@ export const SERVICE_RETRIES: Record<string, { binding: keyof AdminBindings; pat
   // lib/youtube-import/jobs.ts); an R2 backfill item or a Bunny removal that failed runs again (api-videos
   // lib/media/backfill/).
   // Never a CSAM path: those retry from the case page, super admins only (docs/specs/CSAM-RESPONSE.md)
-  'api-videos': { binding: 'VIDEOS', paths: ['/internal/playlist-adds/retry', '/internal/captions/jobs/retry', '/internal/media/health/check', '/internal/channel-comments/retry', '/internal/youtube-import/retry', '/internal/media/backfill/items/retry', '/internal/media/backfill/removals/retry'] },
+  'api-videos': { binding: 'VIDEOS', paths: ['/internal/playlist-adds/retry', '/internal/captions/jobs/retry', '/internal/media/health/check', '/internal/channel-comments/retry', '/internal/youtube-import/retry', '/internal/media/backfill/items/retry', '/internal/media/backfill/removals/retry', '/internal/social/deliveries/retry'] },
 };
 
 export const BUILTIN_RETRIES: Record<string, (env: AdminBindings, args: Record<string, string>, attempt: string) => Promise<RetryOutcome>> = {

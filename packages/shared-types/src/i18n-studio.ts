@@ -1,6 +1,8 @@
 /** Creator Studio strings (docs/specs/CREATOR-STUDIO.md). */
+import { SOCIAL_STUDIO_AR, SOCIAL_STUDIO_EN } from './i18n-social';
 
 export const STUDIO_EN = {
+  social: SOCIAL_STUDIO_EN,
   title: 'Studio',
   navLabel: 'Studio',
   openMenu: 'Open Studio menu',
@@ -15,6 +17,7 @@ export const STUDIO_EN = {
     comments: 'Comments',
     playlists: 'Playlists',
     customisation: 'Customisation',
+    social: 'Social',
     site: 'Site',
     settings: 'Settings',
   },
@@ -521,6 +524,7 @@ export const STUDIO_EN = {
 export type StudioTranslations = typeof STUDIO_EN;
 
 export const STUDIO_AR: StudioTranslations = {
+  social: SOCIAL_STUDIO_AR,
   title: 'الاستوديو',
   navLabel: 'الاستوديو',
   openMenu: 'فتح قائمة الاستوديو',
@@ -535,6 +539,7 @@ export const STUDIO_AR: StudioTranslations = {
     comments: 'التعليقات',
     playlists: 'قوائم التشغيل',
     customisation: 'التخصيص',
+    social: 'التواصل الاجتماعي',
     site: 'الموقع',
     settings: 'الإعدادات',
   },

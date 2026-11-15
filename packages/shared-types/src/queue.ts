@@ -171,6 +171,13 @@ export enum MessageType {
   // over the job's audio chunks, then the draft), on the videos queue with retry and the DLQ; the
   // last attempt fails the job, refunds its minutes and flags the admin. Payload: CaptionJobPayload.
   CaptionJob = 262,
+  // Social auto-post (wiki AUN-SOCIAL, SOC-1; processor social/consumer.ts): something announceable
+  // happened on a channel (new video, Short, live, post). Sent by the processor beside the subscriber
+  // fan-out; api-videos plans one delivery per matching rule and webhook. Payload: SocialEventPayload.
+  SocialEvent = 280,
+  // One post to one connected account, or one webhook call: api-videos does the network call, the
+  // processor retries with backoff, the last attempt fails it and flags the admin. Payload: SocialDeliveryPayload.
+  SocialDelivery = 281,
 }
 
 /** Payload of MessageType.QuranContentSync. */

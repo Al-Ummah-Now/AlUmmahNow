@@ -17,6 +17,7 @@
  *
  * State is in memory and dies with the stack, like every other piece of local state.
  */
+import { registerSocialFakes, socialControl } from './fake-social.ts';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { existsSync, readFileSync } from 'node:fs';
 import { extname, join, normalize } from 'node:path';
@@ -410,6 +411,7 @@ export function registerFakes(): void {
   FAKES.set('www.googleapis.com', youtubeApi);
   FAKES.set('youtube.googleapis.com', youtubeApi);
   FAKES.set('i.ytimg.com', ytimg);
+  registerSocialFakes(FAKES);
 }
 
 
@@ -462,6 +464,7 @@ async function readBody(req: IncomingMessage): Promise<string> {
  * - GET /__fake/resend/emails
  * - PUT | GET /__fake/images/<path>: seed or check one stored image (Bunny Storage)
  * - GET /__fake/google, POST /__fake/google/consent?mode=…|quota?on=1|reset (fake-google.ts)
+ * - GET /__fake/social/posts[?network=] | /webhooks, POST /__fake/social/telegram/post | /fail?network=&status= (fake-social.ts)
  * - POST /__stack/d1/<database name> with SQL as the body: { results } (seed, fast-path fixtures)
  * - GET | PUT | DELETE /__stack/r2/<bucket name>/<key>: one object (fixtures a spec seeds in R2)
  * - GET /__stack/r2/<bucket name>?prefix=<p>[&cursor=<c>]: { keys, cursor } (teardowns find what a run wrote)
@@ -539,6 +542,7 @@ async function control(req: IncomingMessage, url: URL): Promise<Response> {
     }
     return storage.has(path) ? json({ path }) : json({ error: 'not stored' }, 404);
   }
+  if (url.pathname.startsWith('/__fake/social/')) return socialControl(req.method ?? 'GET', url, () => readBody(req));
   const [, , kind, , guid, action] = url.pathname.split('/');
   if (kind === 'resend') return json(emails);
   if (kind === 'google') return googleControl(req.method, url);

@@ -191,8 +191,10 @@ describe('push fan-out', () => {
         device(`i-${u}`, u);
       }
       await p.processMessage(message(MessageType.NotificationFanout, { kind: 'live_started', channelId: 'ch1', entityId: 'live1', isHighlight: true }), env(send));
-      expect(send).toHaveBeenCalledTimes(1);
-      const queued = send.mock.calls[0][0] as AlUmmahMessage;
+      // Push is queued once; the other message announces the live stream to social auto-post
+      const sent = send.mock.calls.map((c) => c[0] as AlUmmahMessage);
+      expect(sent.map((m) => m.type).sort()).toEqual([MessageType.PushDispatch, MessageType.SocialEvent].sort());
+      const queued = sent.find((m) => m.type === MessageType.PushDispatch)!;
       const result = await p.processMessage(queued, env(send));
       expect(result.success).toBe(true);
       expect(provider.sent.map((s) => s.target.installId).sort()).toEqual(['i-s1', 'i-s2']);

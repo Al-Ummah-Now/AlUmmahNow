@@ -4,6 +4,7 @@ import { headers } from 'next/headers';
 import type { Channel } from '@al-ummah/shared-types';
 import { channelPath } from '@/lib/channel-url';
 import { originFromHost } from '@/lib/embed/request-origin';
+import { oembedEndpointUrl } from '@/lib/embed/snippets';
 import { ogImages, twitterImages } from '@/lib/seo/site-share-image';
 import { channelFallbackDescription, channelLd, siteName } from '@/lib/seo/structured-data';
 
@@ -42,6 +43,8 @@ export async function buildChannelMetadata(channel: Channel | null, locale: stri
           canonical: `${origin}${path}`,
           // Each language is its own canonical; x-default is English (D-SEO-1)
           languages: { [locale]: `${origin}${path}`, [otherLocale]: `${origin}${channelPath(otherLocale, channel)}`, 'x-default': `${origin}${channelPath('en', channel)}` },
+          // oEmbed discovery (a link card: name and avatar), like the watch page's
+          types: { 'application/json+oembed': [{ url: oembedEndpointUrl(origin, `${origin}${path}`), title }] },
         }
       : undefined,
     // The channel's own card (it used to inherit the site's, with og:url = the site root)

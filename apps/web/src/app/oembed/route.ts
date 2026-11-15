@@ -6,7 +6,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger-server';
 import { loadPublicPlaylist, loadPublicVideo, localizedTitle, videoAspect } from '@/lib/embed/content';
-import { buildOEmbed, fitSize, parseContentUrl, type OEmbedContent } from '@/lib/embed/oembed';
+import { buildChannelOEmbed, buildOEmbed, fitSize, parseChannelUrl, parseContentUrl, type OEmbedContent } from '@/lib/embed/oembed';
+import { loadChannelByHandle, loadChannelById } from '@/lib/channel-loaders';
 import { channelPath } from '@/lib/channel-url';
 import { requestOrigin } from '@/lib/embed/request-origin';
 import { shareImageUrl } from '@/lib/embed/share-image';
@@ -38,7 +39,22 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const origin = requestOrigin(request);
   let ref = parseContentUrl(url, new URL(origin).host);
-  if (!ref) return json({ error: 'URL not recognised' }, 404);
+  if (!ref) {
+    // A channel page: a link card (scheduler tools and chat apps show its name and avatar)
+    const channelRef = parseChannelUrl(url, new URL(origin).host);
+    if (!channelRef) return json({ error: 'URL not recognised' }, 404);
+    const channel = 'handle' in channelRef ? await loadChannelByHandle(channelRef.handle) : await loadChannelById(channelRef.id);
+    if (!channel?.id || (channel as { isHidden?: boolean }).isHidden || (channel as { isPrivate?: boolean }).isPrivate) return json({ error: 'Not found' }, 404);
+    return json(
+      buildChannelOEmbed(origin, channel.id, {
+        title: channel.nameLocalized?.en || channel.name,
+        url: `${origin}${channelPath('en', { id: channel.id, handle: channel.handle ?? undefined })}`,
+        thumbnailUrl: channel.avatarUrl || undefined,
+      }),
+      200,
+      300,
+    );
+  }
 
   let size = fitSize(searchParams.get('maxwidth'), searchParams.get('maxheight'));
   let content: OEmbedContent | null = null;

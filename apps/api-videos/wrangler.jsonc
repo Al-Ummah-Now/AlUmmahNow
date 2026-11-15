@@ -363,6 +363,8 @@
 		// White-label scholar sites (wiki AUN-SCHOLAR-SITES): host suffix <slug>.{alummahnow.org | stage. | qa.}; revoked sites redirect to the channel here
 		"SITES_ENV": "production",
 		"VIDEOS_WEB_URL": "https://videos.alummahnow.net",
+		// This API's public origin: social OAuth callbacks, the Bluesky client metadata and the Telegram webhook
+		"VIDEOS_API_URL": "https://videos.api.alummahnow.net",
 		// Error reports to the admin Errors page (docs/features/error-reporting.md)
 		"ERRORS_INGEST_URL": "https://admin.api.alummahnow.net/internal/errors",
 		// Mobile apps settings (videos admin): attestation switches for the native proof (lib/attestation)
@@ -713,6 +715,7 @@
 				// White-label scholar sites (wiki AUN-SCHOLAR-SITES): host suffix <slug>.{alummahnow.org | stage. | qa.}; revoked sites redirect to the channel here
 				"SITES_ENV": "stage",
 				"VIDEOS_WEB_URL": "https://videos.stage.alummahnow.net",
+				"VIDEOS_API_URL": "https://videos.api.stage.alummahnow.net",
 				// Error reports to the admin Errors page (docs/features/error-reporting.md)
 				"ERRORS_INGEST_URL": "https://admin.api.stage.alummahnow.net/internal/errors",
 				// Mobile apps settings (videos admin): attestation switches for the native proof (lib/attestation)
