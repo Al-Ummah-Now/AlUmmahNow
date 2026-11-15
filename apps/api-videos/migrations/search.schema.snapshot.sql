@@ -38,6 +38,7 @@
 --   apps/api-videos/migrations/search/0050_video_categories.sql
 --   apps/api-videos/migrations/search/0055_channel_invites_audit.sql
 --   apps/api-videos/migrations/search/0056_audio_tracks_per_video.sql
+--   apps/api-videos/migrations/search/0058_transcript_search.sql
 --   apps/api-videos/migrations/search/0059_media_start_times.sql
 --   apps/api-videos/migrations/search/0060_live_tiers.sql
 --   apps/api-videos/migrations/search/0061_caption_translation.sql
@@ -114,6 +115,13 @@ CREATE TABLE 'search_posts_fts_data'(id INTEGER PRIMARY KEY, block BLOB);
 CREATE TABLE 'search_posts_fts_docsize'(id INTEGER PRIMARY KEY, sz BLOB);
 CREATE TABLE 'search_posts_fts_idx'(segid, term, pgno, PRIMARY KEY(segid, term)) WITHOUT ROWID;
 CREATE TABLE search_tombstones (entity TEXT NOT NULL, id TEXT NOT NULL, version INTEGER NOT NULL, PRIMARY KEY (entity, id)) WITHOUT ROWID;
+CREATE TABLE search_transcripts (rowid INTEGER PRIMARY KEY, video_id TEXT NOT NULL, language TEXT NOT NULL, start_ms INTEGER NOT NULL, text TEXT NOT NULL, source_version INTEGER NOT NULL DEFAULT 0);
+CREATE VIRTUAL TABLE search_transcripts_fts USING fts5 (body, tokenize = 'unicode61 remove_diacritics 2');
+CREATE TABLE 'search_transcripts_fts_config'(k PRIMARY KEY, v) WITHOUT ROWID;
+CREATE TABLE 'search_transcripts_fts_content'(id INTEGER PRIMARY KEY, c0);
+CREATE TABLE 'search_transcripts_fts_data'(id INTEGER PRIMARY KEY, block BLOB);
+CREATE TABLE 'search_transcripts_fts_docsize'(id INTEGER PRIMARY KEY, sz BLOB);
+CREATE TABLE 'search_transcripts_fts_idx'(segid, term, pgno, PRIMARY KEY(segid, term)) WITHOUT ROWID;
 CREATE TABLE search_videos (rowid INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE, channel_id TEXT, visible INTEGER NOT NULL DEFAULT 1, language TEXT, category TEXT, duration INTEGER, is_verified INTEGER NOT NULL DEFAULT 0, is_live INTEGER NOT NULL DEFAULT 0, views INTEGER NOT NULL DEFAULT 0, created_at INTEGER, popularity REAL NOT NULL DEFAULT 0, payload TEXT NOT NULL, content_hash TEXT, indexed_at INTEGER NOT NULL DEFAULT 0, source_version INTEGER NOT NULL DEFAULT 0, is_short INTEGER NOT NULL DEFAULT 0);
 CREATE VIRTUAL TABLE search_videos_fts USING fts5 (title, body, tokenize = 'unicode61 remove_diacritics 2', prefix = '2 3');
 CREATE TABLE 'search_videos_fts_config'(k PRIMARY KEY, v) WITHOUT ROWID;
@@ -224,6 +232,7 @@ CREATE INDEX idx_search_playlists_indexed ON search_playlists (indexed_at);
 CREATE INDEX idx_search_posts_channel ON search_posts (channel_id);
 CREATE INDEX idx_search_posts_indexed ON search_posts (indexed_at);
 CREATE INDEX idx_search_tombstones_version ON search_tombstones (version);
+CREATE INDEX idx_search_transcripts_track ON search_transcripts (video_id, language);
 CREATE INDEX idx_search_videos_category ON search_videos (category, created_at);
 CREATE INDEX idx_search_videos_channel ON search_videos (channel_id);
 CREATE INDEX idx_search_videos_channel_created ON search_videos (channel_id, created_at);

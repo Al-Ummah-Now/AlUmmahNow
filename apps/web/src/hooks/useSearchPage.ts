@@ -7,7 +7,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import type { SearchResultItem } from '@al-ummah/shared-types';
+import type { SearchResultItem, SearchTranscriptMatch } from '@al-ummah/shared-types';
 import { searchContent } from '@/lib/api/search';
 import {
   SearchHistoryEntry,
@@ -45,6 +45,8 @@ export function useSearchPage() {
   const [status, setStatus] = useState<SearchStatus>('idle');
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [relaxed, setRelaxed] = useState(false);
+  // Videos whose captions say it (AUN-CAPTIONS §5.10): first page only
+  const [transcripts, setTranscripts] = useState<SearchTranscriptMatch[]>([]);
   const [loadingMore, setLoadingMore] = useState(false);
   const [history, setHistory] = useState<SearchHistoryEntry[]>([]);
   const requestId = useRef(0);
@@ -72,11 +74,13 @@ export function useSearchPage() {
     if (!response.ok) {
       logger.warn('[SearchPage] Search failed', { status: response.status });
       setResults([]);
+      setTranscripts([]);
       setNextCursor(null);
       setStatus('error');
       return;
     }
     setResults(response.data.results);
+    setTranscripts(response.data.transcripts ?? []);
     setNextCursor(response.data.nextCursor);
     setRelaxed(response.data.relaxed);
     setStatus('done');
@@ -89,6 +93,7 @@ export function useSearchPage() {
     } else {
       requestId.current++;
       setResults([]);
+      setTranscripts([]);
       setNextCursor(null);
       setStatus('idle');
     }
@@ -146,6 +151,7 @@ export function useSearchPage() {
     draft,
     setDraft,
     results,
+    transcripts,
     status,
     relaxed,
     hasMore: !!nextCursor,

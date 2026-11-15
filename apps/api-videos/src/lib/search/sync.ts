@@ -30,6 +30,8 @@ import {
   syncOwnership,
   r2Version,
   syncSearchDocument,
+  transcriptTrackForKey,
+  type TranscriptIndexSyncPayload,
 } from '@al-ummah/shared-types';
 import { logger } from '../logger';
 import { syncCommentIndex } from '../admin/commentIndex';
@@ -284,6 +286,47 @@ function wrapProfiles(bucket: R2Bucket, db: SearchDb): R2Bucket {
 }
 
 /**
+ * Published caption tracks (`{videoId}/{language}.vtt` in the subtitles bucket): after a put or a
+ * delete the processor rebuilds that track's transcript passages (MessageType.TranscriptIndexSync,
+ * search/transcripts.ts) with the queue's retries. Drafts and other keys are ignored. The message
+ * is sent after the write, outside the response: a send that fails is logged, and the next write
+ * of the track queues it again.
+ */
+export function wrapSubtitles(bucket: R2Bucket, producer: QueueBinding | undefined, waitUntil: (p: Promise<unknown>) => void): R2Bucket {
+  if (!producer) return bucket;
+  const notify = (key: string, version: number) => {
+    const track = transcriptTrackForKey(key);
+    if (!track) return;
+    const payload: TranscriptIndexSyncPayload = { ...track, version };
+    waitUntil(
+      producer.send({ id: crypto.randomUUID(), type: MessageType.TranscriptIndexSync, payload, timestamp: Date.now() }).catch((error) => {
+        logger.warn('[SearchSync] Could not queue the transcript index update', { ...track, error: error instanceof Error ? error.message : String(error) });
+      }),
+    );
+  };
+  return new Proxy(bucket, {
+    get(target, prop) {
+      if (prop === 'put') {
+        return async (key: string, value: unknown, options?: R2PutOptions) => {
+          const result = await target.put(key, value as Parameters<R2Bucket['put']>[1], options);
+          if (result !== null) notify(key, r2Version(result as { uploaded?: Date } | undefined) ?? Date.now());
+          return result;
+        };
+      }
+      if (prop === 'delete') {
+        return async (keys: string | string[]) => {
+          await target.delete(keys);
+          const version = Date.now();
+          for (const key of Array.isArray(keys) ? keys : [keys]) notify(key, version);
+        };
+      }
+      const value = Reflect.get(target, prop, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+}
+
+/**
  * Return a copy of the Worker env whose content buckets update the search index
  * after writes, and whose videos, channels, community, playlists and reports
  * buckets record privacy footprints (lib/privacy/footprints.ts) before a put
@@ -310,5 +353,7 @@ export function withSearchSync<E extends object>(env: E, ctx: Pick<ExecutionCont
   }
   const profiles = wrapped.profiles as R2Bucket | undefined;
   if (profiles && typeof profiles.put === 'function') wrapped.profiles = wrapProfiles(profiles, db);
+  const subtitles = wrapped.subtitles as R2Bucket | undefined;
+  if (subtitles && typeof subtitles.put === 'function') wrapped.subtitles = wrapSubtitles(subtitles, (env as { queue?: QueueBinding }).queue, promise => ctx.waitUntil(promise));
   return wrapped as E;
 }

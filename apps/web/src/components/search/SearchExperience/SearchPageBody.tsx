@@ -13,11 +13,12 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { SearchBar } from './SearchBar';
 import { ActiveFilterChips, SearchFilterButton, SearchFilterPanel, SearchTypeChips } from './SearchFilterPanel';
 import { SearchResultList, SearchResultSkeleton } from './SearchResultList';
+import { SearchTranscriptMatches } from './SearchTranscriptMatches';
 
 export function SearchPageBody({ model }: { model: SearchPageModel }) {
   const { t } = useLanguage();
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const { state, status, results } = model;
+  const { state, status, results, transcripts } = model;
 
   return (
     <main className="flex w-full flex-col gap-4 p-4 md:p-6" data-testid="search-page">
@@ -88,6 +89,7 @@ export function SearchPageBody({ model }: { model: SearchPageModel }) {
               {t.search.relaxedNotice}
             </p>
           )}
+          <SearchTranscriptMatches matches={transcripts} query={state.q} />
           {results.length > 0 ? (
             <>
               <SearchResultList results={results} />
@@ -105,7 +107,7 @@ export function SearchPageBody({ model }: { model: SearchPageModel }) {
                 </div>
               )}
             </>
-          ) : (
+          ) : transcripts.length > 0 ? null : (
             <div className="py-12 text-center" data-testid="search-empty">
               <h2 className="mb-2 text-lg font-semibold text-gray-700 dark:text-gray-200">{t.search.noResultsTitle}</h2>
               <p className="mb-4 text-gray-500 dark:text-gray-400">{t.search.noResultsMessage}</p>

@@ -63,6 +63,19 @@ export type SearchResultItem =
   | { type: 'playlist'; id: string; score: number; playlist: SearchPlaylistPayload; channel?: SearchChannelInfo }
   | { type: 'post'; id: string; score: number; post: SearchPostPayload; channel?: SearchChannelInfo };
 
+/** Where a video says what was searched for (AUN-CAPTIONS §5.10): one passage of a published caption track. */
+export interface SearchTranscriptMatch {
+  videoId: string;
+  /** The caption track's language */
+  language: string;
+  /** Where the passage starts: the watch page opens there (`?t=` seconds) */
+  startMs: number;
+  /** The passage as published (speech only; Quran is never indexed) */
+  text: string;
+  video: SearchVideoPayload;
+  channel?: SearchChannelInfo;
+}
+
 export interface SearchResponse {
   success: boolean;
   query: string;
@@ -72,6 +85,8 @@ export interface SearchResponse {
   hasMore: boolean;
   /** True when no result matched every word and results match any word instead. */
   relaxed: boolean;
+  /** First page of a text search that includes videos: videos whose captions say it, best passage each */
+  transcripts?: SearchTranscriptMatch[];
   searchTime: number;
 }
 
