@@ -68,11 +68,18 @@ describe('content match (renditions must be the source, not just well formed)', 
 		for (let i = 0; i < n; i++) b.writeInt16LE(Math.max(-32768, Math.min(32767, Math.round(f(i) * 32767))), i * 2);
 		return b;
 	};
-	it('spreads the compared frames over the video, never at 0 or the end', () => {
-		const t = matchTimes(120, 12);
-		assert.equal(t.length, 12);
-		assert.equal(t[0], 5);
-		assert.equal(t[11], 115);
+	it('compares one random instant in every stretch of the video', () => {
+		const low = matchTimes(120, 12, () => 0);
+		const high = matchTimes(120, 12, () => 0.999999);
+		assert.equal(low.length, 12);
+		for (let i = 0; i < 12; i++) {
+			// Inside stretch i (10 s each), never on its edges
+			assert.ok(low[i] > i * 10 && high[i] < (i + 1) * 10, `stretch ${i}: ${low[i]}..${high[i]}`);
+			assert.ok(high[i] - low[i] > 8, 'the instant can fall anywhere in the stretch');
+		}
+		assert.ok(high[11] <= 120 - 0.05);
+		assert.equal(matchTimes(120).length, 24);
+		assert.notDeepEqual(matchTimes(120), matchTimes(120), 'a new set every time');
 		assert.deepEqual(matchTimes(0), []);
 	});
 	it('a re-encode is close, a different picture is far', () => {
@@ -132,9 +139,10 @@ describe('verifyRenditions', () => {
 			assert.deepEqual(verifyRenditions({ ladder: LADDER, source: SOURCE, rungs }), { ok: false, reason, rung: rungs[1].name });
 		});
 	}
-	it('audio is not required for a silent source', () => {
+	it('audio is not required for a silent source, and an added sound track is refused', () => {
 		const rungs = good().map((r: any) => ({ ...r, probe: { video: r.probe.video } }));
 		assert.deepEqual(verifyRenditions({ ladder: LADDER, source: { durationSeconds: 30, hasAudio: false }, rungs }), { ok: true });
+		assert.deepEqual(verifyRenditions({ ladder: LADDER, source: { durationSeconds: 30, hasAudio: false }, rungs: good() }), { ok: false, reason: 'audio', rung: good()[0].name });
 	});
 });
 
