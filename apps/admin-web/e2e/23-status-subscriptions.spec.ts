@@ -111,10 +111,11 @@ test.describe('status page subscriptions', () => {
     expect(secret).toMatch(/^whsec_[0-9a-f]{64}$/);
     await expect(card.getByTestId('status-webhook-row').filter({ hasText: HOOK_NAME })).toBeVisible();
 
-    // An incident on a public component reaches both
+    // An incident on a public component reaches both (search: no other spec posts on it, so parallel
+    // specs that check a component's state, like STATUS-02 on playback, never see this incident)
     const created = await adminApi<Incident>('/api/status/incidents', {
       method: 'POST',
-      body: JSON.stringify({ kind: 'incident', titleEn: TITLE_EN, titleAr: TITLE_AR, impact: 'partial', components: ['playback', 'api'], bodyEn: 'Some videos are slow to start.', bodyAr: 'بعض المرئيات بطيئة في البدء.' }),
+      body: JSON.stringify({ kind: 'incident', titleEn: TITLE_EN, titleAr: TITLE_AR, impact: 'partial', components: ['search', 'api'], bodyEn: 'Some videos are slow to start.', bodyAr: 'بعض المرئيات بطيئة في البدء.' }),
     });
     expect(created.status).toBe(201);
     const incidentMail = await waitForMail(new RegExp(TITLE_AR));
@@ -125,12 +126,15 @@ test.describe('status page subscriptions', () => {
     expect(unsubscribeUrl, 'List-Unsubscribe header').toBeTruthy();
     expect(incidentMail.headers?.['List-Unsubscribe-Post']).toBe('List-Unsubscribe=One-Click');
 
+    // This incident's delivery: incidents other specs post while the webhook exists reach it too
+    const incidentId = created.body.result!.id;
+    const ours = (h: Hook) => h.url === HOOK_URL && (JSON.parse(h.body) as { incident?: { id?: string } }).incident?.id === incidentId;
     let delivery: Hook | undefined;
-    await expect.poll(async () => (delivery = (await hooks()).find((h) => h.url === HOOK_URL)) !== undefined, { timeout: 30_000 }).toBe(true);
+    await expect.poll(async () => (delivery = (await hooks()).find(ours)) !== undefined, { timeout: 30_000 }).toBe(true);
     const payload = JSON.parse(delivery!.body);
     expect(payload.type).toBe('incident.created');
-    expect(payload.incident.id).toBe(created.body.result!.id);
-    expect(payload.incident.components).toEqual(['playback']);
+    expect(payload.incident.id).toBe(incidentId);
+    expect(payload.incident.components).toEqual(['search']);
     const expected = `sha256=${createHmac('sha256', secret).update(`${delivery!.headers['x-aun-timestamp']}.${delivery!.body}`).digest('hex')}`;
     expect(delivery!.headers['x-aun-signature']).toBe(expected);
 
