@@ -386,10 +386,12 @@ async function applySubscription(env: BillingEnv, provider: PaymentProviderId, m
 	let accessUntil = existing?.access_until ?? null;
 	let endedAt = existing?.ended_at ?? null;
 	const periodEnd = sub.currentPeriodEnd ?? existing?.current_period_end ?? null;
+	const cancelAtPeriodEnd = stale ? Number(existing?.cancel_at_period_end ?? 0) === 1 : sub.cancelAtPeriodEnd ?? Number(existing?.cancel_at_period_end ?? 0) === 1;
 	if (!stale && providerStatus) {
 		status = providerStatus;
 		if (providerStatus === 'active' || providerStatus === 'past_due' || providerStatus === 'pending') {
-			accessUntil = null;
+			// Set to cancel at period end: access stops then even if the final event is lost (the sweep ends it)
+			accessUntil = cancelAtPeriodEnd && periodEnd ? periodEnd : null;
 			endedAt = null;
 		} else if (providerStatus === 'canceled') {
 			// Billing stopped now (PayGood): the paid period is kept
@@ -399,7 +401,6 @@ async function applySubscription(env: BillingEnv, provider: PaymentProviderId, m
 			endedAt = endedAt ?? at;
 		}
 	}
-	const cancelAtPeriodEnd = stale ? Number(existing?.cancel_at_period_end ?? 0) === 1 : sub.cancelAtPeriodEnd ?? Number(existing?.cancel_at_period_end ?? 0) === 1;
 	const lastEventAt = stale ? existing!.last_event_at : event.occurredAt;
 	const id = existing?.id ?? newId('bsub');
 	await db(env)
@@ -507,7 +508,11 @@ export async function markCanceled(env: BillingEnv, id: string, opts: { atPeriod
 	if (!row) throw new BillingError(404, 'billing_not_found');
 	const at = now.toISOString();
 	if (opts.atPeriodEnd && row.current_period_end && row.current_period_end > at) {
-		await db(env).prepare('UPDATE billing_subscriptions SET cancel_at_period_end = 1, updated_at = ?, entitlement_synced = 0 WHERE id = ?').bind(at, id).run();
+		// Access runs to the period end even if the provider's final event never arrives (the sweep ends it)
+		await db(env)
+			.prepare('UPDATE billing_subscriptions SET cancel_at_period_end = 1, access_until = current_period_end, updated_at = ?, entitlement_synced = 0 WHERE id = ?')
+			.bind(at, id)
+			.run();
 	} else {
 		const ended = !opts.atPeriodEnd;
 		const until = ended ? at : row.current_period_end && row.current_period_end > at ? row.current_period_end : at;
@@ -610,22 +615,16 @@ export async function syncEntitlement(env: BillingEnv, userId: string, now = new
  */
 export async function sweepEntitlements(env: BillingEnv, now = new Date(), limit = 50): Promise<{ synced: number; ended: number }> {
 	const at = now.toISOString();
+	// Time is up: manual comps past their date, canceled subscriptions, and ones set to cancel at period end
 	const ended = await db(env)
-		.prepare(`UPDATE billing_subscriptions SET status = 'ended', ended_at = ?, updated_at = ?, entitlement_synced = 0 WHERE provider = 'manual' AND status = 'active' AND access_until IS NOT NULL AND access_until <= ?`)
-		.bind(at, at, at)
+		.prepare(
+			`UPDATE billing_subscriptions SET status = 'ended', ended_at = COALESCE(ended_at, access_until), updated_at = ?, entitlement_synced = 0
+			 WHERE access_until IS NOT NULL AND access_until <= ?
+			   AND (status = 'canceled' OR (status IN ('active', 'past_due') AND (provider = 'manual' OR cancel_at_period_end = 1)))`,
+		)
+		.bind(at, at)
 		.run();
-	const due =
-		(
-			await db(env)
-				.prepare(
-					`SELECT DISTINCT user_id FROM billing_subscriptions
-					 WHERE entitlement_synced = 0 OR (status = 'canceled' AND access_until IS NOT NULL AND access_until <= ?) LIMIT ?`,
-				)
-				.bind(at, limit)
-				.all<{ user_id: string }>()
-		).results ?? [];
-	// A canceled subscription whose time is up has ended
-	await db(env).prepare(`UPDATE billing_subscriptions SET status = 'ended', ended_at = COALESCE(ended_at, access_until), updated_at = ? WHERE status = 'canceled' AND access_until IS NOT NULL AND access_until <= ?`).bind(at, at).run();
+	const due = (await db(env).prepare('SELECT DISTINCT user_id FROM billing_subscriptions WHERE entitlement_synced = 0 LIMIT ?').bind(limit).all<{ user_id: string }>()).results ?? [];
 	let synced = 0;
 	for (const { user_id } of due) {
 		try {
