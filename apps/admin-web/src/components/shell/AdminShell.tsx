@@ -20,8 +20,7 @@ import {
   NAV_COOKIE,
 } from './nav-model';
 import { REVIEW_ONLY_HOME } from '@/lib/roles';
-import { appLinks, appUrlsFromIssuer } from '@al-ummah/shared-types';
-import { HeaderAppLinks, HeaderBrand, HeaderEnvBadge, HeaderMenuButton } from './HeaderParts';
+import { HeaderBrand, HeaderEnvBadge, HeaderMenuButton } from './HeaderParts';
 
 interface AdminShellProps {
   userEmail?: string;
@@ -29,7 +28,7 @@ interface AdminShellProps {
   userName?: string;
   /** The signed-in account's roles (the account menu's app links). */
   userRoles?: readonly string[];
-  /** Auth server origin, for the account menu and the header's Website / Videos links */
+  /** Auth server origin, for the account menu (its "Al Ummah Now apps" links the other sites) */
   authIssuer?: string;
   /** NEXTJS_ENV: the header's QA / STAGE badge */
   environment?: string;
@@ -61,8 +60,6 @@ export function AdminShell({ userEmail, userName, userRoles, authIssuer, environ
   const current = activeItem(pathname, items);
   const crumbs = breadcrumbs(pathname, items);
   const home = access.reviewOnly ? REVIEW_ONLY_HOME : '/dashboard';
-  // The public sites (Website, Videos) on this environment's hosts, from the auth server's
-  const sites = appLinks({ current: 'admin', lang: locale, urls: appUrlsFromIssuer(authIssuer) }).filter((a) => a.id === 'www' || a.id === 'videos');
 
   // A new page closes the phone drawer
   useEffect(() => setDrawerOpen(false), [pathname]);
@@ -154,7 +151,7 @@ export function AdminShell({ userEmail, userName, userRoles, authIssuer, environ
 
       {/* The shared header (docs/design/NAV.md "Header"; pieces in shell/HeaderParts.tsx, checked against
           packages/fanous-tokens/nav/header.js), full width over the sidebar and the page as on videos: drawer
-          toggle, brand, env badge, breadcrumbs and the ⌘K search, then Website / Videos, language, light/dark
+          toggle, brand, env badge, breadcrumbs and the ⌘K search, then language, light/dark
           and the account; mirrored in RTL */}
       <header className="shell-header aun-header text-nav-text">
         <HeaderMenuButton
@@ -205,7 +202,6 @@ export function AdminShell({ userEmail, userName, userRoles, authIssuer, environ
           </button>
         </div>
         <div className="aun-header-tools">
-          <HeaderAppLinks lang={locale} links={sites} />
           <PreferencesControls />
           {/* The account button and menu (docs/design/NAV.md): avatar + name; sign-out lives in the menu */}
           {userEmail && authIssuer && (

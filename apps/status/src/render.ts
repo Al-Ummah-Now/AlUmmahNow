@@ -6,7 +6,7 @@
  */
 import type { ComponentState, IncidentStatus } from '@al-ummah/shared-types';
 // The shared header (docs/design/NAV.md "Header"): the same builders and classes as every app
-import { HEADER_LABELS, appLinksHtml, brandHtml, envBadgeHtml, langButtonHtml, modeButtonHtml, samePath } from '../../../packages/fanous-tokens/nav/header.js';
+import { brandHtml, envBadgeHtml, langButtonHtml, modeButtonHtml, samePath } from '../../../packages/fanous-tokens/nav/header.js';
 import { modeIconSvg, modeToggleLabel } from '../../../packages/fanous-tokens/nav/mode-toggle.js';
 import { host, type StatusEnvName } from './checks';
 import { componentName, formatDay, formatPercent, formatTime, stateLabel, t, type Locale } from './i18n';
@@ -68,12 +68,19 @@ export function siteLinks(locale: Locale, environment: string): { www: string; v
   return { www: `${host(env, 'www')}/${locale}/`, videos: `${host(env, 'videos')}/${locale}` };
 }
 
+/** The other sites' names, as the account menus' "Al Ummah Now apps" call them. */
+const SITE_NAMES = {
+  en: { apps: 'Al Ummah Now apps', www: 'Website', videos: 'Videos' },
+  ar: { apps: 'تطبيقات الأمة الآن', www: 'الموقع', videos: 'المرئيات' },
+} as const;
+
 /**
- * On phones the header's app links leave the bar (docs/design/NAV.md); this page has no drawer or
- * account menu, so the footer carries them there: the same names and icons, as plain page links.
+ * The way back to the other sites. The header has no links to other sites (owner, 2026-11-15;
+ * docs/design/NAV.md) and this page has no drawer or account menu, so the footer carries them at
+ * every width: the app icons and names, as plain page links.
  */
 function footApps(locale: Locale, apps: { id: 'www' | 'videos'; href: string }[]): string {
-  const l = HEADER_LABELS[locale];
+  const l = SITE_NAMES[locale];
   const items = apps
     .map((a) => `<a href="${esc(a.href)}"><img src="/aun-nav/icons/${a.id}.webp" alt="" width="20" height="20">${esc(l[a.id])}</a>`)
     .join(' ');
@@ -130,7 +137,6 @@ function shell(o: PageOptions, title: string, main: string): string {
     ${envBadgeHtml(o.environment, locale)}
     <div class="aun-header-primary"></div>
     <div class="aun-header-tools">
-      ${appLinksHtml({ lang: locale, links: apps })}
       ${langButtonHtml({ lang: locale, href: otherHref })}
       ${modeToggle(locale)}
     </div>

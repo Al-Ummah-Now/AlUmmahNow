@@ -548,8 +548,6 @@ html[data-rail=open] .nv-hub .nv-chev,.nv-panel[data-open=true] .nv-hub .nv-chev
 /* The drawer's foot keeps only its close button (language and light/dark are in the header, docs/design/NAV.md);
    the rail (from 1024px) has no foot. The Website entry is for phones, where the header's app links leave the bar. */
 @media(min-width:1024px){.nv-foot{display:none}}
-.nv-panel .nv.nv-phone{display:none}
-@media(max-width:639px){.nv-panel .nv.nv-phone{display:flex}}
 /* Below 1024px the videos bar (the search, Upload and the bell besides the shared tools) makes room: the logo alone
    (the wordmark stays the link's name), the search an icon that opens a sheet, Upload its icon (the label stays its
    name), so a long account name never pushes the tools onto a second line (docs/design/NAV.md "Phone") */

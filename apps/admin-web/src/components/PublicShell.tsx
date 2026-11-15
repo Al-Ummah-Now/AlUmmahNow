@@ -3,13 +3,13 @@ import { getI18n } from '@/i18n/server';
 import { getAdminSession } from '@/lib/auth';
 import { PreferencesControls } from './PreferencesControls';
 import { AccountMenu } from './AccountMenu';
-import { HeaderAppLinks, HeaderBrand, HeaderEnvBadge, HeaderSignIn } from './shell/HeaderParts';
+import { HeaderBrand, HeaderEnvBadge, HeaderSignIn } from './shell/HeaderParts';
 
 /**
  * Layout for pages outside the authenticated area (login errors, access denied, passkey needed,
- * not found): the shared header (docs/design/NAV.md "Header": brand, env badge, Website / Videos,
- * language, light/dark, then the account or Sign in), content centred. On phones the header's app
- * links leave the bar, so the footer carries them.
+ * not found): the shared header (docs/design/NAV.md "Header": brand, env badge, language,
+ * light/dark, then the account or Sign in), content centred. The header has no links to other
+ * sites (owner, 2026-11-15), so the footer links Website and Videos at every width.
  */
 export async function PublicShell({ children }: { children: React.ReactNode }) {
   const { locale, t } = await getI18n();
@@ -23,7 +23,6 @@ export async function PublicShell({ children }: { children: React.ReactNode }) {
         <HeaderEnvBadge environment={process.env.NEXTJS_ENV} lang={locale} />
         <div className="aun-header-primary" />
         <div className="aun-header-tools">
-          <HeaderAppLinks lang={locale} links={sites} />
           <PreferencesControls />
           {session && issuer ? (
             <AccountMenu issuer={issuer} currentEmail={session.user.email} roles={session.user.role ? [session.user.role] : []} />
@@ -36,7 +35,7 @@ export async function PublicShell({ children }: { children: React.ReactNode }) {
         {children}
       </main>
       {sites.length > 0 && (
-        <footer className="flex justify-center gap-4 px-4 pb-6 text-sm sm:hidden">
+        <footer className="flex justify-center gap-4 px-4 pb-6 text-sm">
           {sites.map((s) => (
             <a key={s.id} href={s.href} className="text-link underline-offset-2 hover:underline">
               {s.id === 'www' ? t('accounts.appWww') : t('accounts.appVideos')}

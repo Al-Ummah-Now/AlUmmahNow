@@ -5,7 +5,6 @@
  */
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
-  appLinksHtml,
   brandHtml,
   envBadgeHtml,
   langButtonHtml,
@@ -13,7 +12,7 @@ import {
   modeButtonHtml,
   signInHtml,
 } from '../../../../../../packages/fanous-tokens/nav/header.js';
-import { HeaderAppLinks, HeaderBrand, HeaderEnvBadge, HeaderLangButton, HeaderMenuButton, HeaderModeButton, HeaderSignIn, langSwitchHref } from '../HeaderParts';
+import { HeaderBrand, HeaderEnvBadge, HeaderLangButton, HeaderMenuButton, HeaderModeButton, HeaderSignIn, langSwitchHref } from '../HeaderParts';
 
 /** React's spelling → the builders': void tags, apostrophes; app-only attributes dropped. */
 const norm = (html: string) =>
@@ -36,12 +35,6 @@ describe.each(['en', 'ar'] as const)('header pieces equal the shared builders (%
     for (const env of ['qa', 'stage', 'production', 'development', '']) {
       expect(r(<span>{HeaderEnvBadge({ environment: env, lang })}</span>)).toBe(`<span>${envBadgeHtml(env, lang)}</span>`);
     }
-  });
-
-  it('app links', () => {
-    const links = [{ id: 'www', href: 'https://www.qa.alummahnow.net/en/' }, { id: 'videos', href: 'https://videos.qa.alummahnow.net/en' }];
-    expect(r(<HeaderAppLinks lang={lang} links={links} />)).toBe(norm(appLinksHtml({ lang, links })));
-    expect(r(<span><HeaderAppLinks lang={lang} links={[]} /></span>)).toBe('<span></span>');
   });
 
   it('language button', () => {
