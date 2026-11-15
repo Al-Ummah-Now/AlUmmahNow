@@ -53,14 +53,32 @@ function safeStorage(): Storage | undefined {
 }
 
 /**
- * The API's track for each player track: by position when the counts match (the master's order),
- * else by language and name. Missing entries stay null.
+ * The API's track for each player track, each used once: by language and name, then by language.
+ * Not by position: Safari's own HLS can list the tracks in another order than the master (seen on a
+ * reload). Only a player track with no language falls back to its position, when the counts match.
+ * Missing entries stay null.
  */
 export function matchTracks(players: ArrayLike<PlayerAudioTrack>, meta: readonly AudioTrackView[] | undefined): (AudioTrackView | null)[] {
   const list = Array.from(players);
   const m = meta ?? [];
-  if (m.length === list.length) return [...m];
-  return list.map((p) => m.find((x) => x.language === p.language && (x.label === p.label || !p.label)) ?? m.find((x) => x.language === p.language) ?? null);
+  const used = new Set<number>();
+  const take = (pred: (x: AudioTrackView) => boolean): AudioTrackView | null => {
+    const i = m.findIndex((x, j) => !used.has(j) && pred(x));
+    if (i < 0) return null;
+    used.add(i);
+    return m[i]!;
+  };
+  const out: (AudioTrackView | null)[] = list.map((p) => (p.language && p.label ? take((x) => x.language === p.language && x.label === p.label) : null));
+  list.forEach((p, i) => {
+    if (!out[i] && p.language) out[i] = take((x) => x.language === p.language);
+  });
+  list.forEach((p, i) => {
+    if (!out[i] && !p.language && m.length === list.length && !used.has(i)) {
+      used.add(i);
+      out[i] = m[i]!;
+    }
+  });
+  return out;
 }
 
 /** Index of the track to play first, or null to leave the player's own default. */
@@ -82,11 +100,15 @@ export function pickAudioTrack(meta: readonly (AudioTrackView | null)[], opts: {
   return def >= 0 ? def : null;
 }
 
-/** The menu's name of a track: "<label> · <kind>" (the label alone when it already says the kind). */
-export function audioTrackLabel(meta: AudioTrackView | null, player: PlayerAudioTrack, kindName: (kind: AudioTrackKind) => string, index: number): string {
-  if (!meta) return player.label || player.language || String(index + 1);
+/**
+ * The menu's name of a track: its label (in the track's language) and the kind (in the page's
+ * language), shown "<label> · <kind>"; no kind when the label already says it. Kept apart so the
+ * label alone carries the track's `lang` and direction.
+ */
+export function audioTrackLabel(meta: AudioTrackView | null, player: PlayerAudioTrack, kindName: (kind: AudioTrackKind) => string, index: number): { name: string; kind?: string } {
+  if (!meta) return { name: player.label || player.language || String(index + 1) };
   const kind = kindName(meta.kind);
-  return meta.label.toLocaleLowerCase().includes(kind.toLocaleLowerCase()) ? meta.label : `${meta.label} · ${kind}`;
+  return meta.label.toLocaleLowerCase().includes(kind.toLocaleLowerCase()) ? { name: meta.label } : { name: meta.label, kind };
 }
 
 /** Enable exactly one track. */
