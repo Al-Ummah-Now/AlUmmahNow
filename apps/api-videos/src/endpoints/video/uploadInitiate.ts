@@ -203,6 +203,7 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 					importedFrom: imported.metadata.importedFrom,
 					...(imported.metadata.language ? { language: imported.metadata.language } : {}),
 					...(imported.metadata.publishedAt ? { publishedAt: imported.metadata.publishedAt } : {}),
+					...(imported.metadata.commentSettings ? { commentSettings: imported.metadata.commentSettings } : {}),
 				}
 				: {};
 			if (fingerprint && fingerprint.size !== fileSize) {

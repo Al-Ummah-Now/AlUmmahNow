@@ -585,6 +585,8 @@ export interface ImportUpload {
 		importedFrom: ImportedFrom;
 		/** YouTube's publish date when it is public here at once (the order on the channel follows YouTube) */
 		publishedAt?: string;
+		/** Made for kids on YouTube: comments start off, as YouTube has them (wiki AUN-YT-IMPORT); the creator can turn them on */
+		commentSettings?: 'off';
 	};
 	/** A YouTube schedule still in the future: published here at that time */
 	scheduleAt: string | null;
@@ -630,6 +632,7 @@ export async function prepareImportUpload(env: YtEnv, who: YtCaller, channelId: 
 		visibility,
 		importedFrom: { platform: 'youtube', videoId: plain.ytVideoId, publishedAt: plain.publishedAt, madeForKids: plain.madeForKids, importId: importRow.id },
 		...(visibility === 'public' && !scheduleAt && plain.publishedAt ? { publishedAt: plain.publishedAt } : {}),
+		...(plain.madeForKids ? { commentSettings: 'off' as const } : {}),
 	};
 	return { importRow, item, metadata, scheduleAt };
 }
