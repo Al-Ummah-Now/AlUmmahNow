@@ -83,6 +83,13 @@ describe('middleware', () => {
     expect(response.status).toBe(200);
   });
 
+  it('does not locale-redirect the 1200x630 share cards /og/<kind>/<id>.jpg', async () => {
+    for (const path of ['/og/v/0174501b-cbc9-41b4-b386-93f9bb8429a7.jpg', '/og/c/c1.jpg', '/og/i/aHR0cHM6Ly9pbWFnZXMuYWx1bW1haG5vdy5uZXQvYS5qcGc.jpg']) {
+      const response = await middleware(request(path));
+      expect(response.headers.get('location')).toBeNull();
+    }
+  });
+
   it('still redirects unknown /embed paths to the localized 404', async () => {
     const response = await middleware(request('/embed/unknown'));
     expect(response.status).toBe(307);

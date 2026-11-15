@@ -6,7 +6,7 @@
  */
 import type { Metadata } from 'next';
 import { siteName } from '@/lib/seo/structured-data';
-import { ogImages, twitterImages } from '@/lib/seo/site-share-image';
+import { LARGE_CARD, ogImages, twitterImages } from '@/lib/seo/site-share-image';
 import type { CmsPage } from './cms-page';
 import { parseMarkdown, plainText } from './markdown';
 
@@ -35,6 +35,6 @@ export function aboutMetadata(page: CmsPage, locale: 'en' | 'ar', wwwUrl: string
     description,
     alternates: { canonical, languages },
     openGraph: { title, description, type: 'website', url: canonical, siteName: siteName(locale), images: ogImages(null, title) },
-    twitter: { card: 'summary', title, description, images: twitterImages(null) },
+    twitter: { card: LARGE_CARD, title, description, images: twitterImages(null) },
   };
 }

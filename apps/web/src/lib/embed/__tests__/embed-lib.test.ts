@@ -365,7 +365,8 @@ describe('buildWatchMetadata', () => {
     const short = toEmbedVideo({ id: 's2', title: 'Short', playUrl: 'https://vz/t/s2/playlist.m3u8', isPublic: true, width: 720, height: 1256, isShort: true });
     const meta = buildWatchMetadata(short, 'ar', HOST);
     expect(meta.twitter).toMatchObject({ players: [{ width: 413, height: 720 }] });
-    expect(meta.openGraph).toMatchObject({ videos: [{ width: 413, height: 720 }], images: [{ width: 413, height: 720 }] });
+    // the player keeps the Short's ratio; the share image is the 1200x630 card (its frame centred) for the large preview
+    expect(meta.openGraph).toMatchObject({ videos: [{ width: 413, height: 720 }], images: [{ url: `${HOST}/og/v/s2.jpg`, width: 1200, height: 630, type: 'image/jpeg' }] });
     expect(fitSize(null, null, 720 / 1256)).toEqual({ width: 367, height: 640 });
     // a landscape video keeps a 16:9 card
     const wide = toEmbedVideo({ id: 'w1', title: 'Wide', playUrl: 'https://vz/t/w1/playlist.m3u8', isPublic: true, width: 1920, height: 1080 });
@@ -384,7 +385,7 @@ describe('player box ratio', () => {
 
 describe('share images', () => {
   // 2026-11-12: crawlers cache og:image / twitter:image; a signed Bunny URL breaks once its token expires
-  it('og:image and twitter:image are the stable /thumb URL, never a signed CDN URL', () => {
+  it('og:image and twitter:image are the stable 1200x630 card URL, never a signed CDN URL', () => {
     for (const thumbnailUrl of [
       'https://vz-215a1ffd-a5a.b-cdn.net/bcdn_token=T&expires=1794459600&token_path=%2Fv1%2F/v1/thumbnail_1.jpg',
       'https://vz-215a1ffd-a5a.b-cdn.net/v1/thumbnail.jpg?token=T&expires=1794459600',
@@ -396,8 +397,8 @@ describe('share images', () => {
       const meta = buildWatchMetadata(signed, 'en', HOST);
       const images = JSON.stringify([meta.openGraph?.images, meta.twitter?.images]);
       expect(images).not.toMatch(/bcdn_token|token=/);
-      expect(meta.openGraph?.images).toEqual([expect.objectContaining({ url: `${HOST}/thumb/v1.jpg` })]);
-      expect(meta.twitter?.images).toEqual([`${HOST}/thumb/v1.jpg`]);
+      expect(meta.openGraph?.images).toEqual([expect.objectContaining({ url: `${HOST}/og/v/v1.jpg`, width: 1200, height: 630 })]);
+      expect(meta.twitter?.images).toEqual([`${HOST}/og/v/v1.jpg`]);
     }
   });
 });

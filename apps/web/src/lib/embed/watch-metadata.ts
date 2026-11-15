@@ -7,7 +7,7 @@
 import type { Metadata } from 'next';
 import { videoAspect, type EmbedVideo } from './content';
 import { canonicalWatchUrl, embedUrl, oembedEndpointUrl } from './snippets';
-import { shareImageUrl } from './share-image';
+import { cardOgImages, videoCardUrl } from '@/lib/share-card/layout';
 import { watchFallbackDescription } from '@/lib/seo/structured-data';
 import type { siteWatchCanonical } from '@/lib/seo/site-link';
 import { metaDescription } from '@/lib/seo/description';
@@ -42,10 +42,11 @@ export function buildWatchMetadata(video: EmbedVideo | null, locale: string, ori
   const pageUrl = onSite?.canonical ?? ownUrl;
   const player = embedUrl(origin, 'video', video.id, { lang });
   const size = declaredPlayerSize(video);
-  // Stable image on our domain: crawlers cache it, so never a signed CDN URL
-  const image = video.poster ? shareImageUrl(origin, video.id) : undefined;
+  // The 1200x630 card on our domain (a Short's frame centred on a landscape card): WhatsApp and the
+  // other apps show the large preview only for a wide image, and crawlers cache it, so never a signed CDN URL
+  const image = video.poster ? videoCardUrl(origin, video.id) : undefined;
   // type and secure_url: Meta's apps (WhatsApp, Facebook, Messenger) and LinkedIn read them for the large card
-  const images = image ? [{ url: image, secureUrl: image, type: 'image/jpeg', width: size.width, height: size.height, alt: title }] : undefined;
+  const images = image ? cardOgImages(image, title) : undefined;
 
   return {
     title,

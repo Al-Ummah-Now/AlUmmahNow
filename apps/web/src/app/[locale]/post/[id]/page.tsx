@@ -10,8 +10,8 @@ import { originFromHost } from '@/lib/embed/request-origin';
 import { ContentUnavailableError } from '@/lib/seo/availability';
 import { breadcrumbLd, siteName } from '@/lib/seo/structured-data';
 import { loadSiteLink, sitePostCanonical } from '@/lib/seo/site-link';
-import { ogImages, twitterImages } from '@/lib/seo/site-share-image';
-import { isIndexablePost, postChannelName, postDescription, postHeadline, postImage, postPermalink, socialMediaPostingLd } from '@/lib/seo/post';
+import { LARGE_CARD, ogImages, twitterImages } from '@/lib/seo/site-share-image';
+import { isIndexablePost, postChannelName, postDescription, postHeadline, postCardUrl, postPermalink, socialMediaPostingLd } from '@/lib/seo/post';
 
 interface PostPageProps {
   params: Promise<{ locale: string; id: string }>;
@@ -36,8 +36,8 @@ export async function generateMetadata({ params }: PostPageProps): Promise<Metad
   const { post } = read;
   const title = postHeadline(post, lang);
   const description = postDescription(post, lang);
-  const image = postImage(post);
   const host = (await headers()).get('host');
+  const image = host ? postCardUrl(post, originFromHost(host)) : undefined;
   const url = (l: string) => (host ? postPermalink(originFromHost(host), l, id) : `/${l}/post/${encodeURIComponent(id)}`);
   // A channel with a live scholar site: the post is canonical there (AUN-SCHOLAR-SITES §4.4)
   const onSite = sitePostCanonical(await loadSiteLink(post.channelId), lang, id);
@@ -46,8 +46,8 @@ export async function generateMetadata({ params }: PostPageProps): Promise<Metad
     title,
     description,
     alternates: { canonical, languages: onSite?.languages ?? { en: url('en'), ar: url('ar'), 'x-default': url('en') } },
-    openGraph: { type: 'article', siteName: siteName(lang), url: canonical, title, description, images: ogImages(image), ...(post.createdAt ? { publishedTime: post.createdAt } : {}) },
-    twitter: { card: image ? 'summary_large_image' : 'summary', title, description, images: twitterImages(image) },
+    openGraph: { type: 'article', siteName: siteName(lang), url: canonical, title, description, images: ogImages(image, title), ...(post.createdAt ? { publishedTime: post.createdAt } : {}) },
+    twitter: { card: LARGE_CARD, title, description, images: twitterImages(image) },
     ...(isIndexablePost(post) ? {} : { robots: { index: false, follow: false } }),
   };
 }

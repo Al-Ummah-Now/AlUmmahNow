@@ -5,6 +5,7 @@
  */
 import type { CommunityPost } from '@al-ummah/shared-types';
 import { WWW_ORGANIZATION_ID, siteName } from './structured-data';
+import { channelCardUrl, imageCardUrl, videoCardUrl } from '@/lib/share-card/layout';
 
 type PermalinkPost = Pick<CommunityPost, 'id' | 'channelId' | 'type' | 'content' | 'images' | 'gif' | 'poll' | 'createdAt' | 'updatedAt' | 'likes' | 'comments' | 'channelName' | 'channelNameLocalized' | 'channelAvatar' | 'visibility' | 'status'> & {
   article?: { title?: string; excerpt?: string | null; coverUrl?: string | null } | null;
@@ -51,6 +52,17 @@ export function postImage(post: PermalinkPost): string | undefined {
     post.gif?.url,
   ];
   return candidates.find((u): u is string => typeof u === 'string' && /^https:\/\//.test(u));
+}
+
+/**
+ * The post's 1200x630 share card (large previews): its picture or article cover, else the video it
+ * shares, else its channel's card (avatar on the cover banner).
+ */
+export function postCardUrl(post: PermalinkPost, origin: string): string {
+  const image = postImage(post);
+  if (image) return imageCardUrl(origin, image);
+  if (post.videoId) return videoCardUrl(origin, post.videoId);
+  return channelCardUrl(origin, post.channelId);
 }
 
 /** Only a published, public post is indexed: members-only, scheduled, held or deleted ones never are. */

@@ -361,3 +361,17 @@ export async function loadPublicComments(videoId: string, cursor?: string | null
 export function localizedTitle(video: Pick<EmbedVideo, 'title' | 'titleLocalized'>, lang: string): string {
   return getLocalizedValue(video.titleLocalized, video.title, lang) || video.title;
 }
+
+/** A channel's public share pictures (the /og/c card): avatar and cover banner, or null. */
+export interface PublicChannelImages {
+  id: string;
+  avatarUrl?: string;
+  coverUrl?: string;
+}
+
+export const loadPublicChannelImages = cache(async (channelId: string): Promise<PublicChannelImages | null> => {
+  const data = await anonymousGet<{ id?: string; avatarUrl?: unknown; coverUrl?: unknown; isDeleted?: unknown }>(`/api/channels/${encodeURIComponent(channelId)}`);
+  if (!data?.id || data.isDeleted === true) return null;
+  const https = (v: unknown) => (typeof v === 'string' && /^https:\/\//.test(v) ? v : undefined);
+  return { id: data.id, avatarUrl: https(data.avatarUrl), coverUrl: https(data.coverUrl) };
+});
