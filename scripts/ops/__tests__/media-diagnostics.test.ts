@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { namesFor, percentile, SEARCH_D1, START_TIMES_SQL, startTimeSummary } from '../media-diagnostics.ts';
+import { namesFor, percentile, SEARCH_D1, SLOWEST_STARTS_SQL, START_TIMES_SQL, startTimeSummary } from '../media-diagnostics.ts';
 import { readFileSync } from 'node:fs';
 
 test('production names are the al-ummah media resources only', () => {
@@ -37,6 +37,8 @@ test('start times: nearest-rank percentiles and a summary without ids', () => {
 
 test('start times read only: one SELECT, first attempts, and the D1 ids are the api-videos search databases', () => {
 	assert.match(START_TIMES_SQL, /^SELECT /);
+	assert.match(SLOWEST_STARTS_SQL, /^SELECT [\s\S]* LIMIT 3$/);
+	assert.doesNotMatch(SLOWEST_STARTS_SQL, /\b(INSERT|UPDATE|DELETE|DROP|ALTER|title|user)/i);
 	assert.doesNotMatch(START_TIMES_SQL, /\b(INSERT|UPDATE|DELETE|DROP|ALTER|video_id|job_id)\b/i);
 	const root = new URL('../../../apps/api-videos/', import.meta.url);
 	const prod = readFileSync(new URL('wrangler.jsonc', root), 'utf8');

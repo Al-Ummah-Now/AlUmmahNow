@@ -11,8 +11,10 @@
  *  - warn/error log lines of the media Worker, api-videos and admin-api over the window (Workers
  *    Observability query; these Workers log warn/error only)
  *  - transcode start times over the last 30 days: queued → the container running FFmpeg, p50/p95
- *    (one aggregate read-only SELECT of api-videos' own media_jobs timestamps in the search D1; no
- *    video ids or user data printed)
+ *    (a read-only SELECT of api-videos' own media_jobs timestamps in the search D1), then the three
+ *    slowest starts with their video and job ids, times, attempts and error, and the media Worker's
+ *    warn/error lines around each (to tell a backlog, a retry, a source wait or an image pull apart).
+ *    Video and job ids are opaque; no titles or user data are printed.
  *
  * Only al-ummah resources are named and read. Calls are GET lists/reads, the GraphQL Analytics
  * read and the Observability telemetry query (a POST that only reads). The token is never printed;
@@ -223,6 +225,11 @@ export function percentile(sorted: number[], p: number): number | null {
 export const START_TIMES_SQL = `SELECT CAST((julianday(started_at) - julianday(queued_at)) * 86400000 AS INTEGER) AS ms
  FROM media_jobs WHERE started_at IS NOT NULL AND queued_at >= datetime('now', '-30 days') AND attempts <= 1 ORDER BY ms LIMIT 5000`;
 
+/** The slowest first-attempt starts (read-only): what each waited on. */
+export const SLOWEST_STARTS_SQL = `SELECT video_id, job_id, status, reason, attempts, queued_at, started_at, ready_at, failed_at, error, container_seconds, instance_type,
+ CAST((julianday(started_at) - julianday(queued_at)) * 86400000 AS INTEGER) AS ms
+ FROM media_jobs WHERE started_at IS NOT NULL AND queued_at >= datetime('now', '-30 days') AND attempts <= 1 ORDER BY ms DESC LIMIT 3`;
+
 export function startTimeSummary(values: number[]): string {
 	const ms = values.filter((v) => Number.isFinite(v) && v >= 0).sort((a, b) => a - b);
 	if (!ms.length) return 'no transcodes started in the last 30 days';
@@ -241,6 +248,19 @@ async function startTimes(env: EnvName): Promise<void> {
 	const rows: { ms: number }[] = r.body?.result?.[0]?.results ?? [];
 	p(`- ${startTimeSummary(rows.map((x) => Number(x.ms)))}`);
 	p();
+	const slow = await post(`/accounts/${account}/d1/database/${SEARCH_D1[env]}/query`, { sql: SLOWEST_STARTS_SQL });
+	const worst: Record<string, unknown>[] = slow.ok ? (slow.body?.result?.[0]?.results ?? []) : [];
+	p('### Slowest starts');
+	if (!slow.ok) p(`- not readable: ${errs(slow)}`);
+	for (const w of worst) p(`- ${JSON.stringify(w)}`);
+	p();
+	// The media Worker's own lines around each slow start: why it waited
+	for (const w of worst) {
+		const queued = Date.parse(String(w.queued_at));
+		const started = Date.parse(String(w.started_at));
+		if (!Number.isFinite(queued) || !Number.isFinite(started)) continue;
+		await logs(namesFor(env).media, new Date(queued - 120_000), new Date(started + 120_000), '');
+	}
 }
 
 async function main(): Promise<void> {
