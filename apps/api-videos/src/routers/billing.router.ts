@@ -190,11 +190,12 @@ app.get('/users/:id', async (c) => {
 });
 
 // Retry a failed billing job (the Errors page's Retry, via admin-api SERVICE_RETRIES)
-const RetryBody = z.object({ jobId: z.string().uuid() }).strict();
+const RetryBody = z.object({ jobId: z.string().uuid(), kind: z.string().max(40).optional() }).strict();
 app.post('/jobs/retry', async (c) => {
-	const { jobId } = parse(RetryBody, await body(c));
+	const { jobId, kind } = parse(RetryBody, await body(c));
 	const job = await getJob(c.env, jobId);
-	if (!job || !job.kind.startsWith('billing.')) throw new BillingError(404, 'billing_not_found', 'No such billing job');
+	// The kind admin-api checked permissions for must be the job's own
+	if (!job || !job.kind.startsWith('billing.') || (kind !== undefined && kind !== job.kind)) throw new BillingError(404, 'billing_not_found', 'No such billing job');
 	if (job.status !== 'failed') {
 		// Already running or done: nothing to retry. A webhook job that gave up early (unmatched event) finished
 		// "succeeded" with its event marked failed, so it is queued again from its event

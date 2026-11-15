@@ -115,7 +115,8 @@ export function flagBillingJob(env: ServiceEnv, ctx: ExecutionContextLike | unde
 		itemType: 'billing-job',
 		itemId: job.id,
 		itemUrl: '/payments',
-		retry: { kind: 'service', service: 'api-videos', path: '/internal/billing/jobs/retry', body: { jobId: job.id } },
+		// The kind lets admin-api require the action's own permission on Retry (refunds: billing:refund)
+		retry: { kind: 'service', service: 'api-videos', path: '/internal/billing/jobs/retry', body: { jobId: job.id, kind: job.kind } },
 		retryLabel: 'Retry',
 		extra: { kind: job.kind, target: job.targetId },
 	});

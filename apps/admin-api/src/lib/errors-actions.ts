@@ -11,7 +11,7 @@
  * service in wrangler (all environments), and report items with that retry
  * spec (docs/features/error-reporting.md).
  */
-import type { NeedsActionRetry, NeedsActionStatus } from '@al-ummah/shared-types';
+import { ADMIN_JOB_PERMISSIONS, type AdminContentPermission, type NeedsActionRetry, type NeedsActionStatus } from '@al-ummah/shared-types';
 import type { AdminBindings } from '../base/types';
 import { deliveryStatus, recordDelivery, type MailKind } from './contact-store';
 import { CONTACT_MAIL_VERSION, enqueueContactMail, type ContactMailJob } from './contact-mail-queue';
@@ -39,10 +39,22 @@ export const SERVICE_RETRIES: Record<string, { binding: keyof AdminBindings; pat
   // a failed transcription job, run again free of charge (api-videos lib/captions/jobs.ts); a media
   // provider turned unhealthy: "Check now" runs a health pass (api-videos lib/media/health.ts); a
   // Studio comment index rebuild or the removed-comment purge that gave up is queued again (api-videos
-  // lib/channelComments/jobs.ts).
+  // lib/channelComments/jobs.ts); a payments job that gave up runs again (api-videos lib/billing/service.ts;
+  // Retry also needs the job's own billing permission, endpoints/errors/ErrorsAdmin.ts).
   // Never a CSAM path: those retry from the case page, super admins only (docs/specs/CSAM-RESPONSE.md)
-  'api-videos': { binding: 'VIDEOS', paths: ['/internal/playlist-adds/retry', '/internal/captions/jobs/retry', '/internal/media/health/check', '/internal/channel-comments/retry'] },
+  'api-videos': { binding: 'VIDEOS', paths: ['/internal/playlist-adds/retry', '/internal/captions/jobs/retry', '/internal/media/health/check', '/internal/channel-comments/retry', '/internal/billing/jobs/retry'] },
 };
+
+/**
+ * Content permissions a Retry needs on top of errors:manage: a payments job runs its action
+ * again, so it needs that action's own permission (a refund: billing:refund). An unknown
+ * billing kind needs billing:manage.
+ */
+export function retryPermissions(spec: NeedsActionRetry | null): AdminContentPermission[] {
+  if (!spec || spec.kind !== 'service' || spec.service !== 'api-videos' || spec.path !== '/internal/billing/jobs/retry') return [];
+  const kind = String((spec.body as { kind?: unknown } | undefined)?.kind ?? '');
+  return [...((ADMIN_JOB_PERMISSIONS as Readonly<Record<string, readonly AdminContentPermission[]>>)[kind] ?? ['billing:manage'])];
+}
 
 export const BUILTIN_RETRIES: Record<string, (env: AdminBindings, args: Record<string, string>, attempt: string) => Promise<RetryOutcome>> = {
   /** Queues a Contact us email that failed for good again (as the inbox's Retry does); a new failure reopens the item. */

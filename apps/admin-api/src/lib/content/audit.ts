@@ -28,7 +28,19 @@ export type ContentKind =
   /** A live session ended by an admin (id = session id). */
   | 'live-session'
   /** A white-label scholar site (id = channel id; wiki AUN-SCHOLAR-SITES). */
-  | 'site';
+  | 'site'
+  /** Payments (wiki AUN-SUBS): a provider's settings or credentials (id = provider; never the value). */
+  | 'billing-provider'
+  /** Payments: tax and seller details (id 'tax'). */
+  | 'billing-settings'
+  /** Payments: a tier price (id = tier:period:currency). */
+  | 'billing-price'
+  /** Payments: a subscription canceled by an admin (id = subscription id). */
+  | 'billing-subscription'
+  /** Payments: a refund (id = payment id). */
+  | 'billing-payment'
+  /** Payments: a billing job retried from the Jobs page (id = the job's target). */
+  | 'billing';
 
 /** Every live streaming audit key starts with this ('content:live-'); the range ends before 'content:live.'. */
 export const LIVE_AUDIT_PREFIX = `content:live-`;

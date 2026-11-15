@@ -397,9 +397,15 @@ export const BILLING_COMP_REASON_MAX = 500;
 export const BILLING_REFUND_REASON_MAX = 500;
 
 /** The admin-api Secrets Store secret name of a credential (env suffix added by the caller: '', '-qa', '-stage'). */
-export function paymentSecretName(provider: PaymentProviderId, field: PaymentCredentialField, mode: PaymentMode): string {
+/**
+ * The Secrets Store secret holding a credential. One store serves every
+ * environment, so QA and stage carry a suffix: pay-paddle-api-key-live (production),
+ * pay-paddle-api-key-live-qa, pay-paddle-api-key-live-stage.
+ */
+export function paymentSecretName(provider: PaymentProviderId, field: PaymentCredentialField, mode: PaymentMode, environment?: string | null): string {
   const f = field === 'apiKey' ? 'api-key' : 'webhook-secret';
-  return `pay-${provider}-${f}-${mode}`;
+  const suffix = environment === 'qa' || environment === 'stage' ? `-${environment}` : environment && environment !== 'production' ? '-dev' : '';
+  return `pay-${provider}-${f}-${mode}${suffix}`;
 }
 
 /** The api-videos binding that reads a credential (PAY_PADDLE_API_KEY_TEST, ...). */
