@@ -21,7 +21,7 @@ import * as path from 'path';
 import { randomBytes } from 'crypto';
 import { test, expect, type Page, type Route } from '@playwright/test';
 import { target } from './targets';
-import { apiFetch, createProfile, signUpOnWeb, type WebUser, submitPasswordSignIn } from './web-session';
+import { apiFetch, createProfile, signUpOnWeb, startSignIn, type WebUser, submitPasswordSignIn } from './web-session';
 import { grantCreatorTier } from './creator-tier';
 import { submitNewChannelInMenu } from './account-menu';
 
@@ -58,10 +58,8 @@ async function uploader(page: Page, prefix: string): Promise<Uploader> {
   const email = process.env.E2E_UPLOAD_EMAIL;
   const password = process.env.E2E_UPLOAD_PASSWORD;
   if (email && password && !process.env.E2E_CODE_SINK_SECRET) {
-    await page.goto(`${target().web}/en`);
-    await page.locator('[data-testid="nav-menu-trigger"]:visible').first().click(); // the header's account menu, not a card's "more" menu
-    await page.locator('[role="menu"] form button[type="submit"]').first().click();
-    await expect(page).toHaveURL(new RegExp(`^${target().auth}`), { timeout: 30000 });
+    // The signed-out header's Sign in button (no account menu since the unified header)
+    await startSignIn(page, 'en');
     await submitPasswordSignIn(page, email, password);
     await expect(page).toHaveURL(new RegExp(`^${target().web}/en`), { timeout: 30000 });
     const info = await page.evaluate(async () => (await (await fetch('/api/auth/token')).json()) as { accessToken: string; userId: string; channelId: string });

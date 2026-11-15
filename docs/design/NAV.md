@@ -138,7 +138,7 @@ width from 320px (the language, light/dark and account controls never move):
   leave the bar for the bottom tab bar (Home, Explore, Upload, Subscriptions, You, More; More opens
   the drawer).
 - *Videos admin.* Full width over the sidebar: the ⌘K search is an icon below 1280px and the
-  breadcrumbs show from 1024px; below 640px, beside the drawer button, the brand is the logo alone. Public pages (sign-in, access denied) have the same bar, with Sign in when signed out.
+  breadcrumbs show from 1024px; below 640px, beside the drawer button, the brand is the logo alone. Public pages (sign-in, access denied) have the same bar, with Sign in when signed out. Signed in to Al Ummah Now without the admin role (access denied), the bar shows the account menu, read from Auth (that person has no admin session), so they see who they are and can switch accounts; never Sign in.
 - *Status.* No drawer and no account: the page footer links Website and Videos.
 
 There is one sign-out entry, inside the account menu. The header has no separate "Log out" button.

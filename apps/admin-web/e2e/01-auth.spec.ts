@@ -123,6 +123,11 @@ test.describe('access denied page', () => {
     await expect(page.getByRole('heading', { name: 'Access Denied' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Log out' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Go to Main Site' })).toBeVisible();
+    // Signed in without the role: the header shows the account (to switch), never "Sign in"
+    // (release v2026.11.15.2, signed-in-everywhere.spec.ts)
+    const header = page.locator('header.aun-header');
+    await expect(header.getByTestId('account-menu-trigger')).toBeVisible();
+    await expect(header.getByTestId('header-sign-in')).toHaveCount(0);
     expect((await context.cookies()).find((c) => c.name === 'admin_session')).toBeUndefined();
     // Since auth #196 the auth server keeps an SSO session: /dashboard → /login →
     // /authorize answers silently with a code, and the callback checks the role

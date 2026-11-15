@@ -3,6 +3,7 @@ import { getI18n } from '@/i18n/server';
 import { getAdminSession } from '@/lib/auth';
 import { PreferencesControls } from './PreferencesControls';
 import { AccountMenu } from './AccountMenu';
+import { HeaderAccount } from './HeaderAccount';
 import { HeaderBrand, HeaderEnvBadge, HeaderSignIn } from './shell/HeaderParts';
 
 /**
@@ -26,6 +27,9 @@ export async function PublicShell({ children }: { children: React.ReactNode }) {
           <PreferencesControls />
           {session && issuer ? (
             <AccountMenu issuer={issuer} currentEmail={session.user.email} roles={session.user.role ? [session.user.role] : []} />
+          ) : issuer ? (
+            // No admin session (signed out, or signed in without an admin role): Auth decides
+            <HeaderAccount issuer={issuer} lang={locale} />
           ) : (
             <HeaderSignIn lang={locale} href="/login" />
           )}

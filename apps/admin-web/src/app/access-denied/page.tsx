@@ -1,7 +1,6 @@
 import { getAdminSession } from '@/lib/auth';
 import { getI18n } from '@/i18n/server';
 import { PublicShell } from '@/components/PublicShell';
-import { AccountMenu } from '@/components/AccountMenu';
 import { primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
@@ -46,14 +45,7 @@ export default async function AccessDeniedPage() {
           </div>
         )}
 
-        {/* Another account of this browser may have the role: switch to it here (signed in, the header's
-            account menu does it) */}
-        {process.env.Issuer && !session && (
-          <div className="flex justify-center" data-testid="access-denied-accounts">
-            <AccountMenu issuer={process.env.Issuer} />
-          </div>
-        )}
-
+        {/* Another account of this browser may have the role: the header's account menu switches to it */}
         <div className="mt-6 space-y-3">
           <p className="text-sm text-fg-muted">{t('accessDenied.contactAdmin')}</p>
 

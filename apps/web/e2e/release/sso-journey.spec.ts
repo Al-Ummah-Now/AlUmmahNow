@@ -19,7 +19,7 @@ import { test, expect, type BrowserContext, type Cookie, type Page } from '@play
 import { grantCreatorTier } from './creator-tier';
 import { promoteToAdmin } from './sink';
 import { target } from './targets';
-import { apiFetch, createProfile, signUpOnWeb, type Locale, submitPasswordSignIn } from './web-session';
+import { apiFetch, createProfile, signUpOnWeb, startSignIn, type Locale, submitPasswordSignIn } from './web-session';
 import { fetchRetry } from './net';
 
 // Types the password on the auth server: traces would hold it
@@ -200,9 +200,8 @@ test.describe('Release: SSO journey across every app', () => {
       await expect(page).toHaveURL(new RegExp(`^${target().auth}`), { timeout: 30000 }).catch(() => {});
       const deepLinkSignIn = await onSignInForm(page);
       if (!requireFixed('videos studio', deepLinkSignIn, `a signed-out studio deep link went to ${page.url()} instead of the sign-in form`)) {
-        await page.goto(`${target().web}/${locale}`);
-        await page.locator('[data-testid="nav-menu-trigger"]:visible').first().click();
-        await page.locator('[role="menu"] form button[type="submit"]').first().click();
+        // The signed-out header's Sign in button (no account menu since the unified header)
+        await startSignIn(page, locale);
         await expect(page).toHaveURL(new RegExp(`^${target().auth}`), { timeout: 30000 });
       }
       // The sign-in page follows the site language
