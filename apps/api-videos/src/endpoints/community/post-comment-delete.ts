@@ -6,7 +6,8 @@ import { z } from 'zod';
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import Queue, { MessageType } from '../../lib/queue';
-import type { PostComment, CommunityPost, PostCommentIndex } from '@al-ummah/shared-types';
+import type { PostComment, CommunityPost, PostCommentIndex, ChannelRole } from '@al-ummah/shared-types';
+import { can } from '@al-ummah/shared-types';
 
 const deleteCommentSchema = {
   tags: ['Community Posts - Comments'],
@@ -103,7 +104,8 @@ export class DeletePostComment extends AuthenticatedRoute {
 
     // 3. Check authorization (comment author OR post owner)
     const isCommentAuthor = comment.userId === userId;
-    const isPostOwner = post.channelId === userChannelId;
+    // Acting as the post's channel (the middleware checked the role) with comment.moderate
+    const isPostOwner = post.channelId === userChannelId && can(c.get('channelRole') as ChannelRole | null | undefined, 'comment.moderate');
 
     if (!isCommentAuthor && !isPostOwner) {
       return c.json(

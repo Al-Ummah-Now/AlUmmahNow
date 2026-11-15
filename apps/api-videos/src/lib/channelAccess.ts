@@ -95,6 +95,30 @@ export async function canManagePlaylist(env: ChannelAccessEnv, playlist: AccessP
 	}
 }
 
+/** The fields of a live stream record a manage check reads. */
+export interface AccessLiveStream {
+	userId?: string | null;
+	channelId?: string | null;
+}
+
+/**
+ * Whether `userId` may manage a live stream (edit, see its stream key, start,
+ * end, delete, see it while private). Its owner may, as before; anyone else
+ * needs `live.manage` on the stream's channel. Fails closed when the channel
+ * cannot be read.
+ */
+export async function canManageLiveStream(env: ChannelAccessEnv, stream: AccessLiveStream, userId: string | null | undefined): Promise<boolean> {
+	if (!userId) return false;
+	if (stream.userId && stream.userId === userId) return true;
+	if (!stream.channelId) return false;
+	try {
+		return can(await roleOnChannel(env, stream.channelId, userId), 'live.manage');
+	} catch (error) {
+		logger.warn('[ChannelAccess] Channel read failed; live stream access refused', { channelId: stream.channelId, error: error instanceof Error ? error.message : String(error) });
+		return false;
+	}
+}
+
 /**
  * Who owns a video created as `channelId`: the channel's owner, whoever
  * uploads it (spec §8). `video.userId` keeps meaning "the channel owner", so
@@ -143,6 +167,22 @@ const MEMBER_WRITE_ROUTES: ReadonlyArray<{ methods: ReadonlyArray<string>; path:
 	{ methods: ['PUT'], path: /^\/api\/channels\/(?!handles|by-handle|access)[^/]+\/?$/, capability: 'channel.edit' },
 	{ methods: ['PUT'], path: /^\/api\/channels\/[^/]+\/(?:avatar|cover|tabs)\/?$/, capability: 'channel.edit' },
 	{ methods: ['POST', 'PUT', 'PATCH', 'DELETE'], path: /^\/api\/channels\/[^/]+\/sections(?:\/|$)/, capability: 'channel.edit' },
+	// Community posts: write, edit, delete, their images and GIFs
+	{ methods: ['POST'], path: /^\/api\/community\/channels\/[^/]+\/posts\/?$/, capability: 'post.manage' },
+	{ methods: ['PUT', 'DELETE'], path: /^\/api\/community\/channels\/[^/]+\/posts\/[^/]+\/?$/, capability: 'post.manage' },
+	{ methods: ['POST'], path: /^\/api\/community\/media\/(?:upload\/images|upload\/gif|link-preview)\/?$/, capability: 'post.manage' },
+	// Acting as the channel on posts: likes, votes, comments (removing someone
+	// else's comment is checked for comment.moderate in the endpoint)
+	{ methods: ['POST', 'DELETE'], path: /^\/api\/community\/channels\/[^/]+\/posts\/[^/]+\/(?:like|vote)\/?$/, capability: 'channel.speak' },
+	{ methods: ['POST'], path: /^\/api\/community\/channels\/[^/]+\/posts\/[^/]+\/comments\/?$/, capability: 'channel.speak' },
+	{ methods: ['PUT', 'DELETE'], path: /^\/api\/community\/channels\/[^/]+\/posts\/[^/]+\/comments\/[^/]+\/?$/, capability: 'channel.speak' },
+	{ methods: ['POST', 'DELETE'], path: /^\/api\/community\/channels\/[^/]+\/posts\/[^/]+\/comments\/[^/]+\/like\/?$/, capability: 'channel.speak' },
+	// Post comment moderation
+	{ methods: ['POST', 'DELETE'], path: /^\/api\/community\/channels\/[^/]+\/posts\/[^/]+\/comments\/[^/]+\/(?:pin|heart)\/?$/, capability: 'comment.moderate' },
+	// Live streams: create, edit, delete, start, end (the stream key is a GET on /ingest)
+	{ methods: ['POST'], path: /^\/api\/live-streams\/?$/, capability: 'live.manage' },
+	{ methods: ['PATCH', 'DELETE'], path: /^\/api\/live-streams\/[^/]+\/?$/, capability: 'live.manage' },
+	{ methods: ['POST'], path: /^\/api\/live-streams\/[^/]+\/(?:start|end)\/?$/, capability: 'live.manage' },
 	// The channel's playlists: create, edit, delete, add, remove and reorder videos,
 	// queue adds for new uploads
 	{ methods: ['POST', 'PUT', 'PATCH', 'DELETE'], path: /^\/api\/playlists(?:\/|$)/, capability: 'playlist.manage' },

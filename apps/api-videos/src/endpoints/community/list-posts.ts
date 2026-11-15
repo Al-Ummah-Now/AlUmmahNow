@@ -1,5 +1,5 @@
 import { isPostHeldByReview } from '@al-ummah/shared-types';
-import { isChannelDeleted } from '../../lib/community-posts';
+import { isChannelDeleted, managesChannelPosts, postForViewer } from '../../lib/community-posts';
 import { withPostViews } from '../../lib/post-views';
 import { z } from 'zod';
 import { isUpcoming } from '../../lib/scheduled-posts';
@@ -88,6 +88,8 @@ export class ListCommunityPosts extends OptionalAuthRoute {
       }
 
       const index = await indexData.json() as { postIds: string[], lastUpdated: string };
+      // The owner and members with post.manage see scheduled and held posts and who wrote each
+      const manager = await managesChannelPosts(c.env.channels, postChannelId, viewerId);
 
       // Load posts from index
       const startIdx = (page - 1) * limit;
@@ -115,7 +117,7 @@ export class ListCommunityPosts extends OptionalAuthRoute {
 
           // A scheduled post waits for its time; only its author sees it before then (#1218)
           // Held by pre-publication review too (VR16): only its author sees it until it clears
-          if ((isUpcoming(post) || isPostHeldByReview(post as never)) && post.userId !== viewerId) {
+          if ((isUpcoming(post) || isPostHeldByReview(post as never)) && post.userId !== viewerId && !manager) {
             continue;
           }
 
@@ -137,7 +139,7 @@ export class ListCommunityPosts extends OptionalAuthRoute {
             }
           }
 
-          posts.push(post);
+          posts.push(postForViewer(post, manager));
         }
       }
 

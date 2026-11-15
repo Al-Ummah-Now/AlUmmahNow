@@ -17,7 +17,7 @@ import type {
 import { findPostComment, getChannelObject, topLevelCommentKey, recordReplyParent } from './post-comment-helpers';
 import { notifyUserInBackground } from '../../lib/websocket-notify';
 import { scanInBackground } from '../../lib/moderation-scan';
-import { resolveDisplayName, type NameFields } from '@al-ummah/shared-types';
+import { can, channelRoleOf, resolveDisplayName, type NameFields } from '@al-ummah/shared-types';
 
 // Sanitization configuration for comments
 // Allows basic formatting while preventing XSS attacks
@@ -194,11 +194,12 @@ export class CreatePostComment extends AuthenticatedRoute {
       const channelObj = await getChannelObject(c.env.channels, userChannelId);
       if (channelObj) {
         const channel = await channelObj.json<Channel>();
-        if (channel.userId !== userId) {
+        // The owner, or a member of the channel (every channel role may speak as it)
+        if (!can(channelRoleOf(channel as never, userId), 'channel.speak')) {
           return c.json(
             {
               success: false,
-              error: 'You can only comment as a channel you own',
+              error: 'You can only comment as a channel you own or help run',
             },
             403
           );

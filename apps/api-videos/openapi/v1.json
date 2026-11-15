@@ -11959,7 +11959,7 @@
         "tags": [
           "Community Posts - Comments"
         ],
-        "summary": "Heart a comment (channel owner only)",
+        "summary": "Heart a comment (channel owner, channel admin or channel moderator)",
         "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nMarks a comment as hearted by the post creator.",
         "operationId": "post_HeartPostComment",
         "parameters": [
@@ -12064,7 +12064,7 @@
             }
           },
           "403": {
-            "description": "Not the channel owner",
+            "description": "No comment.moderate role on the channel",
             "content": {
               "application/json": {
                 "schema": {
@@ -12113,7 +12113,7 @@
         "tags": [
           "Community Posts - Comments"
         ],
-        "summary": "Remove heart from a comment (channel owner only)",
+        "summary": "Remove heart from a comment (channel owner, channel admin or channel moderator)",
         "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nRemoves the creator heart from a comment.",
         "operationId": "delete_UnheartPostComment",
         "parameters": [
@@ -12218,7 +12218,7 @@
             }
           },
           "403": {
-            "description": "Not the channel owner",
+            "description": "No comment.moderate role on the channel",
             "content": {
               "application/json": {
                 "schema": {
@@ -12517,7 +12517,7 @@
         "tags": [
           "Community Posts - Comments"
         ],
-        "summary": "Pin a comment (channel owner only)",
+        "summary": "Pin a comment (channel owner, channel admin or channel moderator)",
         "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nPins a top-level comment to the top of the comment list. Replaces any previously pinned comment.",
         "operationId": "post_PinPostComment",
         "parameters": [
@@ -12622,7 +12622,7 @@
             }
           },
           "403": {
-            "description": "Not the channel owner",
+            "description": "No comment.moderate role on the channel",
             "content": {
               "application/json": {
                 "schema": {
@@ -12671,7 +12671,7 @@
         "tags": [
           "Community Posts - Comments"
         ],
-        "summary": "Unpin a comment (channel owner only)",
+        "summary": "Unpin a comment (channel owner, channel admin or channel moderator)",
         "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nRemoves the pinned state from a comment.",
         "operationId": "delete_UnpinPostComment",
         "parameters": [
@@ -12776,7 +12776,7 @@
             }
           },
           "403": {
-            "description": "Not the channel owner",
+            "description": "No comment.moderate role on the channel",
             "content": {
               "application/json": {
                 "schema": {

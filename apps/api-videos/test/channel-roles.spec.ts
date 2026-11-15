@@ -339,8 +339,28 @@ describe('acting as a channel with a role', () => {
 		assert.equal(memberMayActAs('moderator', 'GET', '/api/playlists/pl/items'), true);
 		assert.equal(memberMayActAs('admin', 'PATCH', '/api/playlists/p1'), true);
 		assert.equal(memberMayActAs('editor', 'POST', '/api/playlists/upload-adds'), true);
-		// Not listed: live streams, posts, channel delete
-		assert.equal(memberMayActAs('admin', 'POST', '/api/live-streams'), false);
+		// Live: live.manage (owner, channel admin)
+		assert.equal(memberMayActAs('admin', 'POST', '/api/live-streams'), true);
+		assert.equal(memberMayActAs('admin', 'POST', '/api/live-streams/s1/start'), true);
+		assert.equal(memberMayActAs('admin', 'PATCH', '/api/live-streams/s1'), true);
+		assert.equal(memberMayActAs('editor', 'POST', '/api/live-streams'), false);
+		assert.equal(memberMayActAs('editor', 'POST', '/api/live-streams/s1/end'), false);
+		assert.equal(memberMayActAs('moderator', 'DELETE', '/api/live-streams/s1'), false);
+		// Community posts: post.manage (owner, admin, editor)
+		assert.equal(memberMayActAs('editor', 'POST', '/api/community/channels/ch/posts'), true);
+		assert.equal(memberMayActAs('editor', 'PUT', '/api/community/channels/ch/posts/p1'), true);
+		assert.equal(memberMayActAs('admin', 'DELETE', '/api/community/channels/ch/posts/p1'), true);
+		assert.equal(memberMayActAs('editor', 'POST', '/api/community/media/upload/images'), true);
+		assert.equal(memberMayActAs('moderator', 'POST', '/api/community/channels/ch/posts'), false);
+		assert.equal(memberMayActAs('moderator', 'POST', '/api/community/media/upload/gif'), false);
+		// Post comments: speaking as the channel for every role; pin and heart need comment.moderate
+		assert.equal(memberMayActAs('editor', 'POST', '/api/community/channels/ch/posts/p1/comments'), true);
+		assert.equal(memberMayActAs('moderator', 'DELETE', '/api/community/channels/ch/posts/p1/comments/c1'), true);
+		assert.equal(memberMayActAs('moderator', 'POST', '/api/community/channels/ch/posts/p1/comments/c1/pin'), true);
+		assert.equal(memberMayActAs('moderator', 'DELETE', '/api/community/channels/ch/posts/p1/comments/c1/heart'), true);
+		assert.equal(memberMayActAs('editor', 'POST', '/api/community/channels/ch/posts/p1/comments/c1/pin'), false);
+		assert.equal(memberMayActAs('editor', 'POST', '/api/community/channels/ch/posts/p1/comments/c1/heart'), false);
+		// Not listed: channel delete
 		assert.equal(memberMayActAs('admin', 'DELETE', '/api/channels/team'), false);
 		assert.equal(memberMayActAs(null, 'GET', '/api/videos'), false);
 		assert.equal(memberMayActAs('owner', 'POST', '/api/live-streams'), true);

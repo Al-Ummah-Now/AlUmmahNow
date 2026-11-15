@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { Channel, PostMedia } from '@al-ummah/shared-types';
+import { can, channelRoleOf } from '@al-ummah/shared-types';
 import { AuthenticatedRoute, AppContext } from '../../base';
 import BunnyStorageClient from '../../lib/bunny/storage';
 import { requireSecret, requireEnvVar } from '../../lib/env-helpers';
@@ -46,7 +47,7 @@ export class CommunityLinkPreview extends AuthenticatedRoute {
     const channelData = await getChannelObject(c.env.channels, channelId);
     if (!channelData) return c.json({ error: 'Channel not found' }, 404);
     const channel = (await channelData.json()) as Channel;
-    if (channel.userId !== userId) return c.json({ error: 'User does not own this channel' }, 403);
+    if (!can(channelRoleOf(channel as never, userId), 'post.manage')) return c.json({ error: 'You cannot post on this channel' }, 403);
 
     let page;
     try {
