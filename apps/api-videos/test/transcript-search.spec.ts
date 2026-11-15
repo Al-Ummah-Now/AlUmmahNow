@@ -55,6 +55,11 @@ describe('transcript passages', () => {
 		assert.deepEqual(transcriptPassages(file), [{ startMs: 3723500, text: 'لا إله إلا الله' }]);
 	});
 
+	it('drops nested and broken tags in one pass, decoding entities once as plain text', () => {
+		const file = vtt(['00:00:01.000', '00:00:02.000', '<scr<script>ipt>a</b> &lt;b&gt; &amp;lt; tail<v Speaker']);
+		assert.deepEqual(transcriptPassages(file), [{ startMs: 1000, text: 'ipta <b> &lt; tail' }]);
+	});
+
 	it('knows a published track key from drafts and other keys', () => {
 		assert.deepEqual(transcriptTrackForKey('v1/en.vtt'), { videoId: 'v1', language: 'en' });
 		assert.deepEqual(transcriptTrackForKey('v1/pt-BR.vtt'), { videoId: 'v1', language: 'pt-BR' });
