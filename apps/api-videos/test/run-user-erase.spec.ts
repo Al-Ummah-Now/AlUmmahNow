@@ -84,6 +84,22 @@ describe('run-account erasure through the indexes (#887)', () => {
 		assert.deepEqual(db.db.prepare('SELECT user_id, target_id FROM privacy_footprints').all().map((r) => ({ ...(r as object) })), [{ user_id: 'other', target_id: 'pl-other' }]);
 	});
 
+	it('cancels its channel invitations and takes its id out of the team activity log', async () => {
+		const db = new SqliteD1();
+		const { env } = buckets();
+		const full = { ...env, SEARCH_DB: db };
+		for (const kind of ['channel', 'video', 'profile'] as const) await runOwnershipPass(full as never, kind, { maxPages: 10 });
+		const ins = db.db.prepare(`INSERT INTO channel_invites (id, channel_id, role, invitee_user_id, invitee_email, by_email, invited_by, status, created_at, expires_at) VALUES (?, 'chX', 'editor', ?, NULL, 0, ?, ?, '2026-11-01T00:00:00.000Z', '2099-01-01T00:00:00.000Z')`);
+		ins.run('i-open', 'run1', 'other', 'pending');
+		ins.run('i-done', 'run1', 'other', 'accepted');
+		db.db.prepare(`INSERT INTO channel_audit (id, channel_id, actor_id, action, target_user_id, created_at) VALUES ('a1', 'chX', 'other', 'invite_sent', 'run1', '2026-11-01T00:00:00.000Z'), ('a2', 'chX', 'run1', 'invite_accepted', 'run1', '2026-11-01T00:00:01.000Z')`).run();
+		const result = await eraseRunUserData(full as never, 'run1', new OperationBudget(900));
+		assert.equal(result.complete, true);
+		const rows = [...db.db.prepare('SELECT * FROM channel_invites').all(), ...db.db.prepare('SELECT * FROM channel_audit').all()];
+		assert.equal(JSON.stringify(rows).includes('run1'), false, 'no row names the run account');
+		assert.equal((db.db.prepare(`SELECT status FROM channel_invites WHERE id = 'i-open'`).get() as { status: string }).status, 'cancelled');
+	});
+
 	it('resumes from the step where its budget ran out', async () => {
 		const db = new SqliteD1();
 		const { env } = buckets();
