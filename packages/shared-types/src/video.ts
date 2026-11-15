@@ -7,6 +7,7 @@ import { Timestamps, SoftDelete, Moderation } from './common';
 import { SubtitleTrack } from './subtitle';
 import { VideoCategory } from './upload-defaults';
 import type { VideoFormat } from './video-format';
+import type { AudioPackageState, AudioTrack, AudioTrackView, DetectedAudioStream } from './audio-tracks';
 
 // Re-export VideoCategory for convenience
 export { VideoCategory };
@@ -101,6 +102,13 @@ export interface VideoObject extends Timestamps, SoftDelete, Moderation {
   subtitles?: SubtitleTrack[];
   hasSubtitles?: boolean; // Quick check flag
   subtitleLanguages?: string[]; // Quick lookup: ['en', 'ar', 'ur']
+
+  // Multiple audio tracks (wiki AUN-MULTI-AUDIO). Stored: every track and the package state.
+  // Public views (VideoView) replace `audioTracks` with only the tracks viewers can hear (AudioTrackView).
+  audioTracks?: AudioTrack[] | AudioTrackView[];
+  audioPackage?: AudioPackageState;
+  /** Audio streams found in the video's own file (the audio_probe job) */
+  audioDetected?: { streams: DetectedAudioStream[]; at: string; jobId?: string };
 
   // Timestamps
   dateCreated: string;

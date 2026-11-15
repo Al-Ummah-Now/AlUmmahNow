@@ -215,6 +215,19 @@ export async function getReview(env: ReviewEnv, reviewer: Reviewer, id: string) 
       manifestKey: stream?.review?.manifestKey ?? null,
     };
   }
+  if (row.subject_type === 'audio_track') {
+    // An extra audio track (AUN-MULTI-AUDIO MA8): the reviewer listens to the track itself (GET /:id/audio)
+    const track = await audioTrackSubject(env, row.subject_id);
+    return {
+      review: row,
+      findings: findings.results ?? [],
+      history: history.results ?? [],
+      subject: track
+        ? { id: track.videoId, trackId: track.trackId, title: track.title, description: '', tags: [], channelId: track.channelId, ownerId: track.ownerId, duration: track.duration, currentStatus: track.review?.status ?? null, track: { language: track.language, label: track.label, kind: track.kind }, audioUrl: `/api/review/${encodeURIComponent(row.id)}/audio` }
+        : null,
+      manifestKey: track?.review?.manifestKey ?? null,
+    };
+  }
   let video: VideoSummary | null = null;
   if (row.subject_type === 'video' && env.videos) {
     video = (await (await env.videos.get(row.subject_id))?.json<VideoSummary>()) ?? null;
@@ -257,12 +270,76 @@ async function liveSubject(env: ReviewEnv, streamId: string): Promise<LiveSubjec
   }
 }
 
-/** A media object of the review (frames, manifest), only under the subject's own review/ prefix. */
-export async function reviewMedia(env: ReviewEnv, reviewer: Reviewer, id: string, key: string) {
-  const row = await env.REPORTS_DB.prepare('SELECT id, subject_id, escalate FROM content_reviews WHERE id = ?').bind(id).first<Pick<ReviewRow, 'id' | 'subject_id' | 'escalate'>>();
+interface AudioTrackSubject {
+  videoId: string;
+  trackId: string;
+  title: string;
+  channelId?: string;
+  ownerId?: string;
+  duration?: number;
+  language: string;
+  label: string;
+  kind: string;
+  review: { status?: string; manifestKey?: string } | null;
+}
+
+/** `<videoId>:<trackId>` (shared-types reviewSubjectId) → its parts, or null. */
+export function audioTrackSubjectParts(subjectId: string): { videoId: string; trackId: string } | null {
+  const m = /^([A-Za-z0-9_-]{1,80}):(t[a-z0-9]{6,24})$/.exec(subjectId);
+  return m ? { videoId: m[1]!, trackId: m[2]! } : null;
+}
+
+/** Where a subject's review media live: review/<videoId>/ (an audio track: review/<videoId>/audio-<trackId>-). */
+export function reviewMediaPrefixOf(row: Pick<ReviewRow, 'subject_type' | 'subject_id'>): string | null {
+  if (row.subject_type !== 'audio_track') return `review/${row.subject_id}/`;
+  const parts = audioTrackSubjectParts(row.subject_id);
+  return parts ? `review/${parts.videoId}/audio-${parts.trackId}-` : null;
+}
+
+async function audioTrackSubject(env: ReviewEnv, subjectId: string): Promise<AudioTrackSubject | null> {
+  const parts = audioTrackSubjectParts(subjectId);
+  if (!env.VIDEOS || !parts) return null;
+  try {
+    const res = await env.VIDEOS.fetch(`https://videos.internal/internal/review/audio-track/${encodeURIComponent(parts.videoId)}/${encodeURIComponent(parts.trackId)}`, { headers: { 'X-API-Key': await secret(env.INTERNAL_API_KEY) } });
+    if (!res.ok) {
+      if (res.status !== 404) logger.warn('[Review] Audio track unavailable for the review page', { subjectId, status: res.status });
+      return null;
+    }
+    return ((await res.json()) as { result?: AudioTrackSubject }).result ?? null;
+  } catch (error) {
+    logger.warn('[Review] Audio track unavailable for the review page', { subjectId, error: error instanceof Error ? error.message : String(error) });
+    return null;
+  }
+}
+
+/** The audio track under review, streamed from api-videos (Range passed through). */
+export async function reviewAudio(env: ReviewEnv, reviewer: Reviewer, id: string, range: string | null): Promise<Response> {
+  const row = await env.REPORTS_DB.prepare('SELECT id, subject_type, subject_id, escalate FROM content_reviews WHERE id = ?').bind(id).first<Pick<ReviewRow, 'id' | 'subject_type' | 'subject_id' | 'escalate'>>();
   if (!row) throw new ReviewError(404, 'not_found', 'Review not found');
   assertMayOpen(row as ReviewRow, reviewer);
-  if (!key.startsWith(`review/${row.subject_id}/`) || key.includes('..')) throw new ReviewError(403, 'outside_review', 'Not a file of this review');
+  const parts = row.subject_type === 'audio_track' ? audioTrackSubjectParts(row.subject_id) : null;
+  if (!parts) throw new ReviewError(404, 'not_audio', 'This review has no audio track');
+  if (!env.VIDEOS) throw new ReviewError(502, 'not_configured', 'The VIDEOS service binding is not configured');
+  const headers: Record<string, string> = { 'X-API-Key': await secret(env.INTERNAL_API_KEY) };
+  if (range) headers.range = range;
+  const res = await env.VIDEOS.fetch(`https://videos.internal/internal/review/audio-track/${encodeURIComponent(parts.videoId)}/${encodeURIComponent(parts.trackId)}/audio`, { headers });
+  if (res.status === 404) throw new ReviewError(404, 'media_gone', 'The track file is gone');
+  if (!res.ok) throw new ReviewError(502, 'videos_refused', `api-videos answered ${res.status}`);
+  const out = new Headers({ 'content-type': 'audio/mp4', 'accept-ranges': 'bytes', 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff' });
+  for (const h of ['content-length', 'content-range']) {
+    const v = res.headers.get(h);
+    if (v) out.set(h, v);
+  }
+  return new Response(res.body, { status: res.status, headers: out });
+}
+
+/** A media object of the review (frames, manifest), only under the subject's own review/ prefix. */
+export async function reviewMedia(env: ReviewEnv, reviewer: Reviewer, id: string, key: string) {
+  const row = await env.REPORTS_DB.prepare('SELECT id, subject_type, subject_id, escalate FROM content_reviews WHERE id = ?').bind(id).first<Pick<ReviewRow, 'id' | 'subject_type' | 'subject_id' | 'escalate'>>();
+  if (!row) throw new ReviewError(404, 'not_found', 'Review not found');
+  assertMayOpen(row as ReviewRow, reviewer);
+  const prefix = reviewMediaPrefixOf(row);
+  if (!prefix || !key.startsWith(prefix) || key.includes('..')) throw new ReviewError(403, 'outside_review', 'Not a file of this review');
   const object = await env.REVIEW_MEDIA?.get(key);
   if (!object) throw new ReviewError(404, 'media_gone', 'The review media was purged or never extracted');
   return object;
@@ -282,13 +359,19 @@ async function secret(value: ReviewEnv['INTERNAL_API_KEY']): Promise<string> {
 }
 
 /** Subjects whose state api-videos keeps with the video review machine (decisions can be undone). */
-const VIDEO_LIKE = ['video', 'livestream'];
+const VIDEO_LIKE = ['video', 'livestream', 'audio_track'];
 
 /** api-videos applies the decision to the video (or the live stream's recording, VR9) first (single writer). */
 async function applyOnVideo(env: ReviewEnv, row: Pick<ReviewRow, 'subject_type' | 'subject_id'>, body: ReviewDecisionRequest): Promise<void> {
   if (!env.VIDEOS) throw new ReviewError(502, 'not_configured', 'The VIDEOS service binding is not configured');
   const id = encodeURIComponent(row.subject_id);
-  const path = row.subject_type === 'livestream' ? `/internal/review/livestream/${id}/decision` : `/internal/review/${id}/decision`;
+  const track = row.subject_type === 'audio_track' ? audioTrackSubjectParts(row.subject_id) : null;
+  if (row.subject_type === 'audio_track' && !track) throw new ReviewError(400, 'bad_subject', 'Not an audio track review');
+  const path = track
+    ? `/internal/review/audio-track/${encodeURIComponent(track.videoId)}/${encodeURIComponent(track.trackId)}/decision`
+    : row.subject_type === 'livestream'
+      ? `/internal/review/livestream/${id}/decision`
+      : `/internal/review/${id}/decision`;
   const res = await env.VIDEOS.fetch(`https://videos.internal${path}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'X-API-Key': await secret(env.INTERNAL_API_KEY) },
@@ -444,11 +527,12 @@ export async function purgeReviewMedia(env: ReviewEnv, now = new Date(), limit =
   const due = await env.REPORTS_DB.prepare(`SELECT id, subject_type, subject_id FROM content_reviews WHERE media_purge_after IS NOT NULL AND media_purge_after <= ? LIMIT ?`).bind(iso, limit).all<{ id: string; subject_type: string; subject_id: string }>();
   let purged = 0;
   for (const row of due.results ?? []) {
-    if (VIDEO_LIKE.includes(row.subject_type) && env.REVIEW_MEDIA) {
-      // The video's (or recording's) review media; a later review of it re-extracts from a new transcode
+    const mediaPrefix = reviewMediaPrefixOf(row);
+    if (VIDEO_LIKE.includes(row.subject_type) && env.REVIEW_MEDIA && mediaPrefix) {
+      // The video's (or recording's, or audio track's) review media; a later review re-extracts them
       let cursor: string | undefined;
       do {
-        const page = await env.REVIEW_MEDIA.list({ prefix: `review/${row.subject_id}/`, cursor, limit: 1000 });
+        const page = await env.REVIEW_MEDIA.list({ prefix: mediaPrefix, cursor, limit: 1000 });
         if (page.objects.length) await env.REVIEW_MEDIA.delete(page.objects.map((o) => o.key));
         cursor = page.truncated ? page.cursor : undefined;
       } while (cursor);

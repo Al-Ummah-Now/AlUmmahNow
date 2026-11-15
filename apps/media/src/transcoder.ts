@@ -6,13 +6,14 @@
  * start to this job's video, prefix and id.
  */
 import { Container, type OutboundHandlerContext } from '@cloudflare/containers';
-import { failRungs, MEDIA_MP4, mediaPrefix, sanitizeFailure, sanitizeMp4, type CaptionAudioJobMessage, type LiveReviewJobMessage, type Mp4JobMessage, sanitizeRungs, type R2RungProgress, type TranscodeFailure, type TranscodeJobEvent, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
+import { audioTrackFileKey, failRungs, MEDIA_MP4, mediaPrefix, sanitizeDetectedStreams, sanitizeFailure, sanitizeMp4, type AudioPackageJobMessage, type AudioProbeJobMessage, type AudioTrackJobMessage, type CaptionAudioJobMessage, type LiveReviewJobMessage, type Mp4JobMessage, sanitizeRungs, type R2RungProgress, type TranscodeFailure, type TranscodeJobEvent, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
 import type { TranscodeStartFailure, TranscoderJobView } from '@al-ummah/shared-types';
 import { bucketFor, errorText, log, type Env } from './env';
 import { cancelledJob, containerSeconds, hasWatchdogDue, jobView, startFailureNote, isInfraFailure, keyAllowed, selfTestDue, selfTestRuns, startFailureReason, type SelfTestResult, liveReviewPrefix, liveVodSource, liveVodTarget, newJob, onFailure, onMessage, onProgressEvent, stagedKey, watchdogVerdict, WATCHDOG_SECONDS, type JobState } from './jobs';
-import { reportCaptionAudio, reportEvent, reportLiveReviewMedia, reportMp4Event, sourceCandidates } from './videos-api';
+import { reportAudioPackage, reportAudioProbe, reportAudioTrack, reportCaptionAudio, reportEvent, reportLiveReviewMedia, reportMp4Event, sourceCandidates } from './videos-api';
 import { serveOriginal } from './originals';
 import { storeUpload } from './uploads';
+import { packageKeyAllowed, serveAudioUpload } from './audio';
 
 /** Source URL that answered, per video (isolate memory; a miss just re-probes). */
 const chosenSource = new Map<string, string>();
@@ -149,6 +150,41 @@ export class Transcoder extends Container<Env> {
 			if (range) headers.set('range', range);
 			const res = await fetch(target, { method: req.method, headers });
 			return new Response(res.body, { status: res.status, headers: { 'content-type': res.headers.get('content-type') ?? 'application/octet-stream', ...(res.headers.get('content-length') ? { 'content-length': res.headers.get('content-length')! } : {}), ...(res.headers.get('content-range') ? { 'content-range': res.headers.get('content-range')! } : {}) } });
+		},
+		/** GET http://audioin.internal/src (Range) → an uploaded audio track's file, its chunks concatenated (audio-track jobs) */
+		async audioin(req: Request, env: Env, ctx: OutboundHandlerContext<{ videoId: string; trackId: string; uploadId: string; bytes: number }>): Promise<Response> {
+			if (req.method !== 'GET' && req.method !== 'HEAD') return new Response('method', { status: 405 });
+			if (new URL(req.url).pathname !== '/src') return new Response('not the upload', { status: 403 });
+			return serveAudioUpload(env, ctx.params, req.headers.get('range'));
+		},
+		/** PUT http://audioout.internal/audio/<videoId>/<trackId>/track.m4a → MEDIA_ORIGINALS: the one object an audio-track job writes */
+		async audioout(req: Request, env: Env, ctx: OutboundHandlerContext<{ key: string }>): Promise<Response> {
+			const key = decodeURIComponent(new URL(req.url).pathname.slice(1));
+			if (req.method !== 'PUT') return new Response('method', { status: 405 });
+			if (key !== ctx.params.key || !env.MEDIA_ORIGINALS) return new Response('key outside the job', { status: 403 });
+			await storeUpload(env.MEDIA_ORIGINALS, key, req);
+			return new Response(null, { status: 201 });
+		},
+		/** GET http://trackin.internal/<trackId> → that track's normalised file, only the package's tracks (read only) */
+		async trackin(req: Request, env: Env, ctx: OutboundHandlerContext<{ videoId: string; trackIds: string[] }>): Promise<Response> {
+			if (req.method !== 'GET') return new Response('method', { status: 405 });
+			const trackId = decodeURIComponent(new URL(req.url).pathname.slice(1));
+			if (!ctx.params.trackIds.includes(trackId) || !env.MEDIA_ORIGINALS) return new Response('not a track of the job', { status: 403 });
+			const obj = await env.MEDIA_ORIGINALS.get(audioTrackFileKey(ctx.params.videoId, trackId));
+			if (!obj) return new Response('missing', { status: 404 });
+			return new Response(obj.body, { headers: { 'content-length': String(obj.size), 'content-type': 'audio/mp4' } });
+		},
+		/** GET|PUT http://pkg.internal/<key> → the package under <prefix>/a/ and its master_a<n>.m3u8 (GET only tells whether an object exists) */
+		async pkg(req: Request, env: Env, ctx: OutboundHandlerContext<{ prefix: string }>): Promise<Response> {
+			const key = decodeURIComponent(new URL(req.url).pathname.slice(1));
+			if (!packageKeyAllowed(ctx.params.prefix, key)) return new Response('key outside the job', { status: 403 });
+			if (req.method === 'GET') {
+				const head = await bucketFor(env, key).head(key);
+				return head ? new Response('1', { status: 200 }) : new Response('missing', { status: 404 });
+			}
+			if (req.method !== 'PUT') return new Response('method', { status: 405 });
+			await storeUpload(bucketFor(env, key), key, req);
+			return new Response(null, { status: 201 });
 		},
 		/** POST http://control.internal/event → this job's Durable Object */
 		async control(req: Request, env: Env, ctx: OutboundHandlerContext<{ videoId: string; jobId: string }>): Promise<Response> {
@@ -520,6 +556,111 @@ export class Transcoder extends Container<Env> {
 		}
 		if (!result.ok) log.error('[Transcoder] Self-test: the container did not start', { ...result, detail });
 		await this.ctx.storage.put('selftest', result);
+		return result;
+	}
+
+	/**
+	 * One audio track (AUN-MULTI-AUDIO MA5): the uploaded file or a stream of the video's own file,
+	 * padded or cut to the video, → track.m4a in the originals bucket; review chunks when asked. The
+	 * DO is named `audio:<videoId>`, so it never holds the video's transcode state.
+	 */
+	async prepareAudioTrack(msg: AudioTrackJobMessage): Promise<Mp4Outcome> {
+		const out = audioTrackFileKey(msg.videoId, msg.trackId);
+		let result: Mp4Outcome;
+		try {
+			const fromUpload = msg.source.type === 'upload';
+			await this.setOutboundByHosts({
+				...(msg.source.type === 'upload'
+					? { 'audioin.internal': { method: 'audioin', params: { videoId: msg.videoId, trackId: msg.trackId, uploadId: msg.source.uploadId, bytes: msg.source.bytes } } }
+					: { 'source.internal': { method: 'source', params: { videoId: msg.videoId } } }),
+				'audioout.internal': { method: 'audioout', params: { key: out } },
+				...(msg.reviewPrefix ? { 'review.internal': { method: 'review', params: { prefix: msg.reviewPrefix } } } : {}),
+			});
+			await this.startAndWaitForPorts();
+			const res = await this.containerFetch('http://container/audio-track', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					jobId: msg.jobId,
+					videoId: msg.videoId,
+					trackId: msg.trackId,
+					input: fromUpload ? 'http://audioin.internal/src' : 'http://source.internal/src',
+					...(msg.source.type === 'source_stream' ? { stream: msg.source.streamIndex } : {}),
+					durationSeconds: msg.durationSeconds,
+					out,
+					...(msg.reviewPrefix ? { reviewPrefix: msg.reviewPrefix } : {}),
+				}),
+			});
+			const body = (await res.json().catch(() => ({}))) as { durationSeconds?: unknown; reviewManifestKey?: unknown; error?: string; fatal?: boolean };
+			if (res.status === 409) return { outcome: 'busy' };
+			if (!res.ok) throw Object.assign(new Error(body.error || `audio track HTTP ${res.status}`), { fatal: !!body.fatal });
+			const manifest = typeof body.reviewManifestKey === 'string' && msg.reviewPrefix && body.reviewManifestKey.startsWith(msg.reviewPrefix) ? body.reviewManifestKey : undefined;
+			await reportAudioTrack(this.env, msg.videoId, msg.trackId, { jobId: msg.jobId, ok: true, durationSeconds: Number(body.durationSeconds) || msg.durationSeconds, ...(manifest ? { reviewManifestKey: manifest } : {}) });
+			result = { outcome: 'ready' };
+		} catch (error) {
+			result = { outcome: 'failed', error: errorText(error).slice(0, 300), fatal: !!(error as { fatal?: boolean })?.fatal };
+		} finally {
+			await this.stop().catch(() => undefined);
+		}
+		return result;
+	}
+
+	/** The source file's audio streams (multi-track sources), on the DO `audio:<videoId>`. */
+	async probeAudio(msg: AudioProbeJobMessage): Promise<Mp4Outcome> {
+		let result: Mp4Outcome;
+		try {
+			await this.setOutboundByHosts({ 'source.internal': { method: 'source', params: { videoId: msg.videoId } } });
+			await this.startAndWaitForPorts();
+			const res = await this.containerFetch('http://container/audio-probe', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ jobId: msg.jobId, videoId: msg.videoId }),
+			});
+			const body = (await res.json().catch(() => ({}))) as { streams?: unknown; error?: string };
+			if (!res.ok) throw new Error(body.error || `audio probe HTTP ${res.status}`);
+			await reportAudioProbe(this.env, msg.videoId, { jobId: msg.jobId, ok: true, streams: sanitizeDetectedStreams(body.streams) });
+			result = { outcome: 'ready' };
+		} catch (error) {
+			result = { outcome: 'failed', error: errorText(error).slice(0, 300), fatal: false };
+		} finally {
+			await this.stop().catch(() => undefined);
+		}
+		return result;
+	}
+
+	/**
+	 * The demuxed multi-audio package (MA2/MA3) of a ready rendition, beside its files under a/ and
+	 * master_a<version>.m3u8. On the video's own DO: waits ('busy') while a transcode runs. The result
+	 * goes to api-videos, which plays it only while the rendition is still the same rev and access.
+	 */
+	async packageAudio(msg: AudioPackageJobMessage): Promise<Mp4Outcome> {
+		const current = await this.job();
+		if (current && (current.status === 'running' || current.status === 'stopping' || current.status === 'waiting_retry')) return { outcome: 'busy' };
+		const prefix = mediaPrefix(msg.access, msg.videoId, msg.rev);
+		let result: Mp4Outcome;
+		try {
+			await this.setOutboundByHosts({
+				'rendition.internal': { method: 'rendition', params: { prefix } },
+				'trackin.internal': { method: 'trackin', params: { videoId: msg.videoId, trackIds: msg.tracks.map((t) => t.id).filter((id) => id !== 'orig') } },
+				'pkg.internal': { method: 'pkg', params: { prefix } },
+			});
+			await this.startAndWaitForPorts();
+			const res = await this.containerFetch('http://container/audio-package', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ jobId: msg.jobId, prefix, version: msg.version, tracks: msg.tracks }),
+			});
+			const body = (await res.json().catch(() => ({}))) as { master?: unknown; trackIds?: unknown; error?: string; fatal?: boolean };
+			if (res.status === 409) return { outcome: 'busy' };
+			const trackIds = Array.isArray(body.trackIds) ? body.trackIds.filter((id): id is string => typeof id === 'string' && msg.tracks.some((t) => t.id === id)) : [];
+			if (!res.ok || body.master !== `master_a${msg.version}.m3u8` || !trackIds.length) throw Object.assign(new Error(body.error || `audio package HTTP ${res.status}`), { fatal: !!body.fatal });
+			await reportAudioPackage(this.env, msg.videoId, { jobId: msg.jobId, rev: msg.rev, access: msg.access, ok: true, master: body.master, trackIds });
+			result = { outcome: 'ready' };
+		} catch (error) {
+			result = { outcome: 'failed', error: errorText(error).slice(0, 300), fatal: !!(error as { fatal?: boolean })?.fatal };
+		} finally {
+			await this.stop().catch(() => undefined);
+		}
 		return result;
 	}
 

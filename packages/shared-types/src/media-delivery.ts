@@ -229,7 +229,7 @@ export interface TranscodeJobMessage {
 	access: MediaAccess;
 	/** Upload complete (or retry) time, for time-to-playable */
 	queuedAt: string;
-	reason: 'upload' | 'retry' | 'sweep' | 'backfill';
+	reason: 'upload' | 'retry' | 'sweep' | 'backfill' | 'audio';
 	/** Pre-publication review: also extract frames and audio to MEDIA_PRIVATE review/<videoId>/<rev>/ (video-review.ts) */
 	review?: import('./video-review').ReviewExtractionOptions;
 	/** D11: renditions the creator pre-encoded, staged in MEDIA_PRIVATE (prebuiltStagingPrefix); verified before use */
@@ -536,6 +536,8 @@ export function mediaContentType(name: string): string {
 			return 'video/iso.segment';
 		case 'mp4':
 			return 'video/mp4';
+		case 'm4a':
+			return 'audio/mp4';
 		case 'ts':
 			return 'video/mp2t';
 		case 'jpg':

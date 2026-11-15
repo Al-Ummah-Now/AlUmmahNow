@@ -18,7 +18,7 @@
  */
 import { Hono, type Context } from 'hono';
 import { isAdmin, isReviewer, readVideoReviewSettings, writeVideoReviewSettings, effectiveReviewMode, type ReviewSettingsBucket } from '@al-ummah/shared-types';
-import { alertsOn, claimReview, decideReview, getReview, listQueue, recordReveal, reviewMedia, reviewStats, ReviewError, setAlerts, type QueueQuery, type Reviewer, type ReviewEnv } from '../lib/review/queue';
+import { alertsOn, claimReview, decideReview, getReview, listQueue, recordReveal, reviewAudio, reviewMedia, reviewStats, ReviewError, setAlerts, type QueueQuery, type Reviewer, type ReviewEnv } from '../lib/review/queue';
 import { logger } from '../lib/logger';
 import type { AuthContext } from '../base/types';
 
@@ -131,6 +131,12 @@ app.get('/:id/media', async (c) => {
       'x-content-type-options': 'nosniff',
     },
   });
+});
+
+// An audio track under review (AUN-MULTI-AUDIO MA8): the reviewer's <audio> player
+app.get('/:id/audio', async (c) => {
+  const reviewer = reviewerOf(c);
+  return reviewAudio(c.env, reviewer, c.req.param('id'), c.req.header('range') ?? null);
 });
 
 app.post('/:id/reveal', async (c) => {

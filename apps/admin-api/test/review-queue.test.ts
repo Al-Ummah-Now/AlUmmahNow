@@ -261,3 +261,76 @@ describe('live stream recordings (VR9, AlUmmahNow#1295)', () => {
     assert.equal(t.env.REVIEW_MEDIA.files.has(`review/${SID}/abc/frames/1.jpg`), false);
   });
 });
+
+describe('extra audio tracks (wiki AUN-MULTI-AUDIO MA8)', () => {
+  const TID = 'tabc123def456';
+  const SUBJECT = `v1:${TID}`;
+  function audio() {
+    const t = setup();
+    const calls: Array<{ method: string; path: string; range?: string | null; body?: any }> = [];
+    (t.env as any).VIDEOS = {
+      fetch: async (url: RequestInfo, init?: RequestInit) => {
+        const path = new URL(String(url)).pathname;
+        const method = init?.method ?? 'GET';
+        const range = (init?.headers as Record<string, string> | undefined)?.range ?? null;
+        calls.push({ method, path, range, ...(init?.body ? { body: JSON.parse(String(init.body)) } : {}) });
+        if (method === 'GET' && path.endsWith('/audio')) return new Response('m4a', { status: range ? 206 : 200, headers: { 'content-length': '3', ...(range ? { 'content-range': 'bytes 0-2/3' } : {}) } });
+        if (method === 'GET') return Response.json({ success: true, result: { videoId: 'v1', trackId: TID, title: 'Talk', channelId: 'ch1', ownerId: 'u1', duration: 60, language: 'en', label: 'English', kind: 'dub', review: { status: 'in_review', manifestKey: `review/v1/audio-${TID}-12345678/manifest.json` } } });
+        return Response.json({ success: true });
+      },
+    };
+    t.insert('A1', { subject_type: 'audio_track', subject_id: SUBJECT });
+    t.env.REVIEW_MEDIA.files.set(`review/v1/audio-${TID}-12345678/audio/000.mp3`, 'mp3');
+    return { ...t, calls };
+  }
+
+  it('the review page shows the track (language, label, kind) and its player URL', async () => {
+    const t = audio();
+    const r = await t.call('GET', '/api/review/A1');
+    assert.equal(r.status, 200);
+    assert.equal(t.calls[0].path, `/internal/review/audio-track/v1/${TID}`);
+    assert.deepEqual(r.body.result.subject.track, { language: 'en', label: 'English', kind: 'dub' });
+    assert.equal(r.body.result.subject.audioUrl, '/api/review/A1/audio');
+    assert.equal(r.body.result.manifestKey, `review/v1/audio-${TID}-12345678/manifest.json`);
+  });
+
+  it('streams the track to reviewers only, with Range passed through', async () => {
+    const t = audio();
+    const res = await t.call('GET', '/api/review/A1/audio', { roles: 'user' });
+    assert.equal(res.status, 403);
+    const { reviewAudio } = await import('../src/lib/review/queue');
+    const ok = await reviewAudio(t.env as never, { id: 'rev1', roles: ['content_reviewer'] }, 'A1', 'bytes=0-2');
+    assert.equal(ok.status, 206);
+    assert.equal(ok.headers.get('content-type'), 'audio/mp4');
+    assert.equal(ok.headers.get('cache-control'), 'private, no-store');
+    assert.equal(t.calls.at(-1)!.range, 'bytes=0-2');
+    assert.equal(t.calls.at(-1)!.path, `/internal/review/audio-track/v1/${TID}/audio`);
+  });
+
+  it('reads only the track\'s own review media, never the video\'s', async () => {
+    const t = audio();
+    const { reviewMedia } = await import('../src/lib/review/queue');
+    const reviewer = { id: 'rev1', roles: ['content_reviewer'] };
+    assert.ok(await reviewMedia(t.env as never, reviewer, 'A1', `review/v1/audio-${TID}-12345678/audio/000.mp3`));
+    await assert.rejects(reviewMedia(t.env as never, reviewer, 'A1', 'review/v1/rev/frames/000001.jpg'), /Not a file of this review/);
+  });
+
+  it('a decision goes to the track\'s decision route and can be undone', async () => {
+    const t = audio();
+    const r = await t.call('POST', '/api/review/A1/decision', { body: { decision: 'reject', reasonCode: 'hate' } });
+    assert.equal(r.status, 200);
+    const sent = t.calls.find((c) => c.method === 'POST')!;
+    assert.equal(sent.path, `/internal/review/audio-track/v1/${TID}/decision`);
+    assert.equal(sent.body.decision, 'reject');
+    const undo = await t.call('POST', '/api/review/A1/decision', { body: { decision: 'undo' } });
+    assert.equal(undo.status, 200);
+  });
+
+  it('retention purges the track\'s review media and leaves the video\'s', async () => {
+    const t = audio();
+    t.db.prepare('UPDATE content_reviews SET media_purge_after = ? WHERE id = ?').bind('2000-01-01T00:00:00.000Z', 'A1').run();
+    await purgeReviewMedia(t.env as never);
+    assert.equal(t.env.REVIEW_MEDIA.files.has(`review/v1/audio-${TID}-12345678/audio/000.mp3`), false);
+    assert.equal(t.env.REVIEW_MEDIA.files.has('review/v1/rev/manifest.json'), true);
+  });
+});

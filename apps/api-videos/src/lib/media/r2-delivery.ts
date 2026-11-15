@@ -31,6 +31,7 @@ import {
 	scrubMediaText,
 	MEDIA_MASTER,
 	MEDIA_THUMBNAIL,
+	audioPackageMaster,
 	type DeliverySettings,
 	type ErrorReporterEnv,
 	type ExecutionContextLike,
@@ -226,7 +227,8 @@ export async function enqueueTranscode(
 		const current = (await repo(env).getObject(videoId)) as (MediaVideo & { channelId?: string; media?: VideoMediaProviders }) | null;
 		if (!current) return { queued: false, why: 'video not found' };
 		const wantsR2 = current.media ? !!current.media.providers.r2 : ingestTargets(await readMediaSettings(env), current.channelId).includes('r2');
-		if (!wantsR2 && reason !== 'retry' && reason !== 'backfill') return { queued: false, why: 'R2 does not take this video' };
+		// Audio tracks (wiki AUN-MULTI-AUDIO MA4) play only from R2, so they ask for a rendition either way
+		if (!wantsR2 && reason !== 'retry' && reason !== 'backfill' && reason !== 'audio') return { queued: false, why: 'R2 does not take this video' };
 		// E2E run accounts skip R2 to spare the transcoder, unless R2 is the video's only copy
 		const onlyCopy = !!current.media && !current.media.providers.bunny;
 		if (reason === 'upload' && !onlyCopy && opts.uploaderId && (await isE2eUploader(env, opts.uploaderId))) return { queued: false, why: 'E2E run account' };
@@ -556,6 +558,11 @@ export async function applyJobEvent(
 		// Visibility changed while it transcoded: move it now
 		const drift = accessDrift(saved);
 		if (drift) await queueMediaMove(env, ev.videoId, drift);
+		// Audio tracks (wiki AUN-MULTI-AUDIO): a new rendition gets its own demuxed package
+		else {
+			const { onRenditionReady } = await import('../audio-tracks/service');
+			await onRenditionReady(env as never, ctx, saved as never).catch((error) => logger.warn('[Media] Could not queue the audio package', { videoId: ev.videoId, error: error instanceof Error ? error.message : String(error) }));
+		}
 		// Pre-publication review: the job extracted the review media (or tried to); a gated video is
 		// always checked, partially when there is no manifest (it then waits for a person)
 		const gated = (saved as { review?: { status?: string; scanQueuedAt?: string } }).review;
@@ -651,8 +658,10 @@ export async function r2Urls(env: MediaEnv, video: Pick<MediaVideo, 'id' | 'r2'>
 	if (!r2 || r2.status !== 'ready' || !env.MEDIA_PUBLIC_HOST) return null;
 	const sign = r2.access === 'priv' ? { key: await getSecret(env.MEDIA_SIGN_KEY, 'MEDIA_SIGN_KEY') } : undefined;
 	if (r2.access === 'priv' && !sign?.key) return null;
+	// A video with extra audio tracks plays its demuxed package (wiki AUN-MULTI-AUDIO MA1, MA3)
+	const master = audioPackageMaster(video as never) ?? MEDIA_MASTER;
 	return {
-		playUrl: await mediaPlayUrl(env.MEDIA_PUBLIC_HOST, r2.access, video.id, r2.rev, MEDIA_MASTER, sign),
+		playUrl: await mediaPlayUrl(env.MEDIA_PUBLIC_HOST, r2.access, video.id, r2.rev, master, sign),
 		// The frame alone: a file token (it may be shown where the playlist is not)
 		thumbnailUrl: sign ? await mediaFrameUrl(env.MEDIA_PUBLIC_HOST, video.id, r2.rev, sign.key) : await mediaPlayUrl(env.MEDIA_PUBLIC_HOST, 'pub', video.id, r2.rev, MEDIA_THUMBNAIL),
 	};
@@ -811,6 +820,9 @@ export async function purgeVideoMedia(env: MediaEnv, videoId: string): Promise<n
 	}
 	// The kept original (docs/media-delivery/ORIGINALS.md)
 	n += await deleteOriginal(env as never, videoId);
+	// Audio track files (wiki AUN-MULTI-AUDIO)
+	const { purgeVideoAudio } = await import('../audio-tracks/service');
+	n += await purgeVideoAudio(env as never, videoId);
 	// Its R2 backfill rows: verification, scheduled Bunny removal, run items (docs/media-delivery/BACKFILL.md)
 	const db = (env as { SEARCH_DB?: D1Database }).SEARCH_DB;
 	if (db) {
@@ -908,6 +920,9 @@ export async function moveMedia(env: MediaEnv, msg: MediaMoveMessage): Promise<'
 		if (!fresh.r2 || fresh.r2.rev !== r2.rev || fresh.r2.moving?.jobId !== msg.moveId) return false;
 		fresh.r2.access = msg.to;
 		delete fresh.r2.moving;
+		// The audio package's files moved with the prefix (wiki AUN-MULTI-AUDIO MA3)
+		const pkg = (fresh as { audioPackage?: { rev: string; access: MediaAccess } }).audioPackage;
+		if (pkg && pkg.rev === r2.rev) pkg.access = msg.to;
 		// The stored frame of an R2-only video follows its rendition to the other prefix
 		if (r2DecidesState(fresh as SoleCopyVideo)) refreshR2Frame(fresh as SoleCopyVideo, env.MEDIA_PUBLIC_HOST);
 		switched = true;

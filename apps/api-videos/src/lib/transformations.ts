@@ -4,7 +4,7 @@
 import { z } from "zod";
 import { Video as BusinessVideo, Channel as BusinessChannel, Profile as BusinessProfile, Playlist as BusinessPlaylist, Comment as BusinessComment } from "./types";
 import { VideoView, ChannelView, ProfileView, PlaylistView, CommentView } from "./model/view";
-import { can, channelRoleOf, creatorReviewView, isShort, resolveDisplayName, type ChannelRoleSource } from "@al-ummah/shared-types";
+import { audibleAudioTracks, can, channelRoleOf, creatorReviewView, isShort, resolveDisplayName, type ChannelRoleSource } from "@al-ummah/shared-types";
 import { isVideoReady } from './visibility';
 import { getCommentSettings, isCommentVisible, StoredComment, withoutDislikes } from './comments';
 import { PUBLIC_DISLIKES_COUNT } from './reactions';
@@ -23,7 +23,7 @@ import { PUBLIC_DISLIKES_COUNT } from './reactions';
 /** Stored fields no video view returns (server-only state). */
 type PrivateVideoField =
     | 'processingCheck' | 'processingIssue' | 'thumbnailPending' | 'reviewShadow'
-    | 'r2' | 'media' | 'mediaOverride' | 'bunnyLibraryId' | 'tusUpload' | 'uploadFingerprint' | 'lastInitiateAt' | 'abandoned' | 'processingAnnounced' | 'thumbnailCheck';
+    | 'r2' | 'media' | 'mediaOverride' | 'bunnyLibraryId' | 'tusUpload' | 'uploadFingerprint' | 'lastInitiateAt' | 'abandoned' | 'processingAnnounced' | 'thumbnailCheck' | 'audioPackage' | 'audioDetected';
 
 export function publicVideoFields<T extends Record<string, any>>(video: T): Omit<T, PrivateVideoField> & { processingIssueKind?: 'encode_failed' | 'needs_reupload' | 'stalled' } {
     // Review internals (hold cause, ids, the shadow marker) never leave the server; the creator-safe
@@ -36,9 +36,13 @@ export function publicVideoFields<T extends Record<string, any>>(video: T): Omit
         processingCheck: _check, processingIssue, thumbnailPending, review: storedReview, reviewShadow: _shadow,
         r2: _r2, media: _media, mediaOverride: _override, bunnyLibraryId: _library, tusUpload: _tus, uploadFingerprint: _fingerprint, lastInitiateAt: _initiate,
         abandoned: _abandoned, processingAnnounced: _announced, thumbnailCheck: _thumbCheck,
+        // Extra audio tracks (wiki AUN-MULTI-AUDIO): viewers get only the tracks the package plays
+        // (id, language, label, kind, default); uploads, jobs and review stay in the Studio view
+        audioTracks: _audioTracks, audioPackage: _audioPackage, audioDetected: _audioDetected,
         ...rest
     } = video as Record<string, any>;
     const review = creatorReviewView(storedReview);
+    const audioTracks = audibleAudioTracks(video as never);
     const hideThumbnail = (thumbnailPending || !isVideoReady(video)) && video.thumbnailType !== 'custom';
     return {
         ...rest,
@@ -46,6 +50,7 @@ export function publicVideoFields<T extends Record<string, any>>(video: T): Omit
         ...(Array.isArray(rest.comments) ? { comments: (rest.comments as StoredComment[]).map(withoutDislikes) } : {}),
         ...(processingIssue ? { processingIssueKind: processingIssue.kind } : {}),
         ...(review ? { review } : {}),
+        ...(audioTracks.length ? { audioTracks } : {}),
         ...(hideThumbnail ? { thumbnailUrl: undefined, thumbnailSizes: undefined } : {}),
     } as never;
 }

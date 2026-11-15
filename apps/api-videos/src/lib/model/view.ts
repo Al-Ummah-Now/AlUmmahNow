@@ -113,6 +113,13 @@ export const VideoView = z.object({
     processingIssueKind: z.enum(['encode_failed', 'needs_reupload', 'stalled']).optional().describe("Why processing did not finish"),
     format: z.enum(['short', 'video']).optional().describe("Uploader's choice of Short or video; absent = detected"),
     isShort: z.boolean().optional().describe("Short (≤ 3 min and vertical or square, or chosen by the uploader); shared rule"),
+    audioTracks: z.array(z.object({
+        id: Str().describe("Track id ('orig' is the original audio)"),
+        language: Str().describe("BCP 47 language code"),
+        label: Str().describe("The creator's label (e.g. 'Arabic dub')"),
+        kind: z.enum(['original', 'dub', 'commentary', 'description']),
+        isDefault: z.boolean().describe("The track that plays when the viewer has no saved choice and no track in their site language"),
+    })).optional().describe("Audio tracks in the HLS master (EXT-X-MEDIA TYPE=AUDIO, NAME = label, LANGUAGE = language); absent when the video has one track"),
     ...SoftDeleteFields,
     ...ModerationFields,
     // For detailed views, include recent comments

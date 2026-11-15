@@ -1,3 +1,4 @@
+import { AudioTrackComplete, AudioTrackCreate, AudioTrackDelete, AudioTrackRetry, AudioTrackUpdate, AudioTracksDetect, AudioTracksList } from '../endpoints/audio/audioTracks';
 import { VideoQoe } from "../endpoints/video/videoQoe";
 import { VideoPlayback } from "../endpoints/video/videoPlayback";
 import { VideoPublicPlay } from "../endpoints/video/publicPlay";
@@ -197,6 +198,15 @@ videoRouter.post('/:videoId/captions/jobs', CaptionJobCreate);
 videoRouter.get('/:videoId/captions/jobs', CaptionJobsList);
 videoRouter.post('/:videoId/captions/jobs/:jobId/cancel', CaptionJobCancel);
 videoRouter.get('/:videoId/captions/minutes', CaptionMinutesGet);
+
+// Audio tracks (wiki AUN-MULTI-AUDIO; owner or video.edit). The chunk upload is a raw route (endpoints/audio/upload.ts)
+videoRouter.get('/:videoId/audio-tracks', AudioTracksList);
+videoRouter.post('/:videoId/audio-tracks', AudioTrackCreate);
+videoRouter.post('/:videoId/audio-tracks/detect', AudioTracksDetect);
+videoRouter.post('/:videoId/audio-tracks/:trackId/complete', AudioTrackComplete);
+videoRouter.post('/:videoId/audio-tracks/:trackId/retry', AudioTrackRetry);
+videoRouter.patch('/:videoId/audio-tracks/:trackId', AudioTrackUpdate);
+videoRouter.delete('/:videoId/audio-tracks/:trackId', AudioTrackDelete);
 
 // ==========================================
 // VIDEO SCHEDULING

@@ -44,7 +44,7 @@ export const r2Provider: MediaProvider = {
 	},
 
 	async playback(env, video): Promise<ProviderPlayback | null> {
-		const urls = await r2Urls(env, { id: video.id, r2: video.r2 });
+		const urls = await r2Urls(env, { id: video.id, r2: video.r2, audioTracks: video.audioTracks, audioPackage: video.audioPackage } as never);
 		return urls ? { playUrl: urls.playUrl, thumbnailUrl: urls.thumbnailUrl } : null;
 	},
 

@@ -378,6 +378,10 @@ describe('retry runner', () => {
     const rebuild = await runRetry(env({ VIDEOS }), { kind: 'service', service: 'api-videos', path: '/internal/channel-comments/retry', body: { job: 'rebuild', channelId: 'ch1' } }, '1');
     assert.equal(rebuild.status, 'resolved');
     assert.deepEqual(calls[2], { url: 'https://api-videos.internal/internal/channel-comments/retry', body: '{"job":"rebuild","channelId":"ch1"}' });
+    // An audio track or multi-audio package that failed (wiki AUN-MULTI-AUDIO)
+    const audio = await runRetry(env({ VIDEOS }), { kind: 'service', service: 'api-videos', path: '/internal/audio-tracks/retry', body: { videoId: 'v1', trackId: 'tabc123def456' } }, '1');
+    assert.equal(audio.status, 'resolved');
+    assert.deepEqual(calls[3], { url: 'https://api-videos.internal/internal/audio-tracks/retry', body: '{"videoId":"v1","trackId":"tabc123def456"}' });
   });
 
   it('keeps the item open with the reason when the retry fails, dismisses a vanished item', async () => {

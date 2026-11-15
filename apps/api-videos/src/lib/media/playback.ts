@@ -16,6 +16,7 @@
  * Decisions are info (stage and QA; production runs at warn), fallbacks are warn (always kept).
  */
 import {
+	audioPackageMaster,
 	effectiveRules,
 	isMediaProviderId,
 	isPlaybackFallbackReason,
@@ -103,7 +104,11 @@ export async function choosePlayback(
 	const unhealthy = unhealthyProviders(await readHealth(env), settings.health);
 	const exclude = opts.exclude === undefined ? [] : Array.isArray(opts.exclude) ? opts.exclude : [opts.exclude];
 	const bucket = playBucket(rules, video.id, opts.draw ?? drawBucket);
-	const plan = planSources({ rules, enabled, ready, unhealthy, exclude, bucket });
+	// Extra audio tracks play only from R2's demuxed package (wiki AUN-MULTI-AUDIO MA4): R2 goes first
+	// whatever the split, Bunny (original audio only) stays the fallback; a disabled R2 is still skipped
+	const audioFirst = !!audioPackageMaster(video as never);
+	const planRules = audioFirst ? { ...rules, strategy: 'priority' as const, order: ['r2' as const, ...rules.order.filter((p) => p !== 'r2')] } : rules;
+	const plan = planSources({ rules: planRules, enabled, ready, unhealthy, exclude, bucket });
 
 	const sources: ResolvedSource[] = [];
 	const failed: MediaProviderId[] = [];

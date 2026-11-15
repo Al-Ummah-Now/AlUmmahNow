@@ -18,6 +18,7 @@ import { HUMAN_CHECK_AR } from '../i18n-human-check';
 import { HELP_AR } from '../i18n-help';
 import { UPLOAD_STATUS_AR } from '../i18n-upload-status';
 import { CAPTIONS_AR } from '../i18n-captions';
+import { AUDIO_TRACKS_AR } from '../i18n-audio-tracks';
 import { CHANNEL_ROLES_AR } from '../i18n-channel-roles';
 import { CHANNEL_SECTIONS_AR } from '../i18n-channel-sections';
 
@@ -43,6 +44,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
   help: HELP_AR,
   uploadStatus: UPLOAD_STATUS_AR,
   captions: CAPTIONS_AR,
+  audioTracks: AUDIO_TRACKS_AR,
   channelRoles: CHANNEL_ROLES_AR,
   channelSections: CHANNEL_SECTIONS_AR,
   notificationCenter: NOTIFICATION_CENTER_AR,

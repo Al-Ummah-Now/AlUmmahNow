@@ -31,6 +31,9 @@ export interface ProviderVideo {
 	playableAt?: string;
 	/** Set when the video was removed from its Bunny library after its R2 copy was verified: Bunny holds no copy */
 	bunnyRemoved?: { at: string; libraryId: number; guid: string };
+	/** Multiple audio tracks (wiki AUN-MULTI-AUDIO): a ready package makes R2 play first */
+	audioTracks?: unknown[];
+	audioPackage?: import('@al-ummah/shared-types').AudioPackageState;
 }
 
 /** Signed URLs one provider issues for one ready video. */

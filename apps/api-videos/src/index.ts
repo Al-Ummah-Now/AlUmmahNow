@@ -24,6 +24,8 @@ import { handlePlaylistAddBatch, isPlaylistAddMessage } from './lib/playlistUplo
 import { handleChannelCommentsBatch, isChannelCommentsMessage, startCommentPurge } from './lib/channelComments/jobs';
 import { createChannelCommentsInternalRouter } from './endpoints/channel/channelCommentsInternal';
 import { createPlaylistAddsInternalRouter } from './endpoints/playlist/playlistAddsInternal';
+import { createAudioUploadRouter } from './endpoints/audio/upload';
+import { createAudioTracksInternalRouter } from './endpoints/audio/audioTracksInternal';
 import { createCaptionJobsInternalRouter } from './endpoints/captions/captionJobsInternal';
 
 /** Every 10 minutes: start a processing-check loop for any video stuck without one */
@@ -303,6 +305,11 @@ app.use('/api/videos/tus/*', authMiddleware);
 // Mount the TUS proxy router
 const tusRouter = createTusRouter();
 app.route('/api/videos/tus', tusRouter);
+// Audio track file chunks (wiki AUN-MULTI-AUDIO): raw bodies, so not a chanfana route
+app.use('/api/videos/:videoId/audio-tracks/:trackId/upload', authMiddleware);
+app.route('/api/videos', createAudioUploadRouter() as never);
+// Audio tracks: media reports and the admin Errors page's Retry
+app.route('/internal/audio-tracks', createAudioTracksInternalRouter() as never);
 // Processing health / repair (internal; admin-api proxies with RBAC + audit)
 app.route('/internal/processing', createProcessingInternalRouter() as never);
 // Stale uploads (abandoned placeholders, Bunny orphans): the reaper's admin side

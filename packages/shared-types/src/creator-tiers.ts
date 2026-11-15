@@ -63,6 +63,11 @@ export interface CreatorTier {
    * before the field existed) means true: only an explicit false skips them.
    */
   importCountsAgainstLimits?: boolean;
+  /**
+   * Extra audio tracks per video (wiki AUN-MULTI-AUDIO MA9; the original is not counted).
+   * 0 = none; ignored when `unlimited` (still bounded by AUDIO_TRACKS_HARD_MAX).
+   */
+  audioTracksPerVideo: number;
   updatedAt: string | null;
   updatedBy: string | null;
 }
@@ -78,6 +83,7 @@ export const DEFAULT_CREATOR_TIER: Omit<CreatorTier, 'updatedAt' | 'updatedBy'> 
   maxChannels: 3,
   captionMinutesMonth: 0,
   importCountsAgainstLimits: true,
+  audioTracksPerVideo: 0,
 };
 
 export const DEFAULT_UNLIMITED_TIER: Omit<CreatorTier, 'updatedAt' | 'updatedBy'> = {
@@ -90,6 +96,7 @@ export const DEFAULT_UNLIMITED_TIER: Omit<CreatorTier, 'updatedAt' | 'updatedBy'
   maxChannels: null,
   captionMinutesMonth: 0,
   importCountsAgainstLimits: true,
+  audioTracksPerVideo: 0,
 };
 
 /** Bounds an admin may set on a tier (validation, not a policy). */
@@ -99,6 +106,7 @@ export const CREATOR_TIER_BOUNDS = {
   maxConcurrent: { min: 1, max: 1000 },
   maxChannels: { min: 1, max: 1000 },
   captionMinutesMonth: { min: 0, max: 1_000_000 },
+  audioTracksPerVideo: { min: 0, max: 16 },
 } as const;
 
 /** A user's tier assignment. */

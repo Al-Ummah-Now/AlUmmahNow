@@ -2,7 +2,7 @@
  * Review rows in reports D1 (admin-api migrations 0024, 0025; docs/specs/VIDEO-REVIEW.md §4).
  * Plain functions over D1 so they are unit tested with node:sqlite.
  */
-import type { D1Database, ReviewFinding, ReviewRouting, VideoReviewAppealPayload, VideoReviewScanPayload } from '@al-ummah/shared-types';
+import { reviewSubjectId, type D1Database, type ReviewFinding, type ReviewRouting, type VideoReviewAppealPayload, type VideoReviewScanPayload } from '@al-ummah/shared-types';
 
 export const REVIEW_PROMPT_VERSION = 'video-review-v1';
 
@@ -32,7 +32,7 @@ export async function startReviewRow(db: D1Database, p: VideoReviewScanPayload, 
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO NOTHING`,
     )
-    .bind(p.reviewId, subjectType, p.videoId, p.channelId ?? null, p.ownerId ?? null, p.mode === 'shadow' ? 'shadow' : 'checking', p.mode, p.timing, p.trigger, now, now)
+    .bind(p.reviewId, subjectType, reviewSubjectId(p), p.channelId ?? null, p.ownerId ?? null, p.mode === 'shadow' ? 'shadow' : 'checking', p.mode, p.timing, p.trigger, now, now)
     .run();
 }
 
