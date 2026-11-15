@@ -138,7 +138,9 @@
     // Upload initiations per user (on top of the D1 tier limits)
     { "name": "UPLOAD_INITIATE_LIMITER", "namespace_id": "2273", "simple": { "limit": 10, "period": 60 } },
     // Searches per user or IP (not Worker subrequests)
-    { "name": "SEARCH_LIMITER", "namespace_id": "2283", "simple": { "limit": 120, "period": 60 } }
+    { "name": "SEARCH_LIMITER", "namespace_id": "2283", "simple": { "limit": 120, "period": 60 } },
+    // Native app attestation challenges and proofs (routers/attestation.router.ts)
+    { "name": "ATTEST_LIMITER", "namespace_id": "2293", "simple": { "limit": 20, "period": 60 } }
   ],
   // Abuse counters for the admin Abuse panel (Turnstile outcomes, rate-limit hits; no personal data)
   "analytics_engine_datasets": [{ "binding": "ABUSE_EVENTS", "dataset": "al_ummah_now_abuse_qa" }],
@@ -283,6 +285,8 @@
     "VIDEOS_WEB_URL": "https://videos.qa.alummahnow.net",
     // Error reports to the admin Errors page (docs/features/error-reporting.md)
     "ERRORS_INGEST_URL": "https://admin.api.qa.alummahnow.net/internal/errors",
+    // Mobile apps settings (videos admin): attestation switches for the native proof (lib/attestation)
+    "ADMIN_API_URL": "https://admin.api.qa.alummahnow.net",
     // R2 delivery host (public renditions direct from R2, private ones via apps/media)
     "MEDIA_PUBLIC_HOST": "media.qa.alummahnow.net",
     // Cloudflare analytics filters for the daily cost inputs (lib/media/costs.ts)

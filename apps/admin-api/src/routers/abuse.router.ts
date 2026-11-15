@@ -23,7 +23,7 @@ export const ABUSE_DATASETS = {
 	qa: 'al_ummah_now_abuse_qa',
 } as const;
 export type AbuseEnv = keyof typeof ABUSE_DATASETS;
-export const ABUSE_KINDS = ['turnstile_pass', 'turnstile_fail', 'turnstile_missing', 'turnstile_error', 'rate_limited', 'bad_user_agent', 'bypass'] as const;
+export const ABUSE_KINDS = ['turnstile_pass', 'turnstile_fail', 'turnstile_missing', 'turnstile_error', 'rate_limited', 'bad_user_agent', 'native_proof_missing', 'bypass'] as const;
 const CACHE_SECONDS = 300;
 
 export interface AbuseRow {

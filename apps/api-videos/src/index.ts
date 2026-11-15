@@ -1,4 +1,5 @@
 import { edgeRateLimit, humanCheckStatus, requireHuman, scriptedClientBlock } from './middleware/bot-protection';
+import attestationRouter from './routers/attestation.router';
 import { constantTimeEqual, reportServerError, withErrorReporting, type ErrorReporterEnv } from '@al-ummah/shared-types';
 import { SUBSCRIPTION_IMPORT_CRON, importPendingSubscriptions } from './lib/subscription-import';
 import { handleProcessingCheckBatch, sweepProcessingVideos } from './lib/processing/loop';
@@ -255,6 +256,8 @@ app.use('/api/channels', channelCreateGate);
 app.use('/api/channels/', channelCreateGate);
 // What the signed-in user may do (Upload, Create channel) for the web UI
 app.get('/api/me/creator', authMiddleware, handleCreatorAccess);
+// Native app attestation: App Attest / Play Integrity → X-AUN-Native-Proof (lib/attestation, #1274)
+app.route('/api/apps/attestation', attestationRouter as never);
 // Whether the next comment/post/report needs a Turnstile token (middleware/bot-protection.ts)
 app.get('/api/me/human-check', authMiddleware, humanCheckStatus);
 

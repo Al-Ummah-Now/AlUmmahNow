@@ -63,8 +63,35 @@ use a library default that is on the list (curl, python-requests, Go-http-client
 desktop JVM). Auth's refusal covers only its `/password/*` form posts, which native apps never make
 (they use the browser).
 
-Stronger proof that a request comes from our app (App Attest / DeviceCheck on Apple, Play
-Integrity on Android) needs the owner's Apple and Google accounts; tracked in #1274.
+### App attestation (App Attest, Play Integrity; #1274, NAT-REL)
+
+Stronger proof that a request comes from our app, **off until configured** in videos admin →
+**Mobile apps** (admin-api `site_settings` key `mobile_apps`, audited; shared-types `mobile-apps.ts`).
+api-videos reads the settings from admin-api `/public/mobile-apps` (once a minute per isolate,
+`ADMIN_API_URL`) and turns a verified attestation into a one-hour **native proof**
+(`lib/attestation/`, `routers/attestation.router.ts`):
+
+| Call | What |
+| --- | --- |
+| `GET /api/apps/attestation/config` | `{apple:{enabled}, android:{enabled, cloudProjectNumber}}`; both false by default |
+| `POST /api/apps/attestation/challenge` | one-time challenge (32 bytes, base64url), 5 min |
+| `POST /api/apps/attestation/apple/register` | `{keyId, attestation, challenge, bundleId}`: chain to Apple's App Attestation Root CA, nonce, key id, rpIdHash of `<Team ID>.<bundle id>`, counter 0, AAGUID of the chosen environment → proof; the key is kept |
+| `POST /api/apps/attestation/apple/assert` | `{keyId, assertion, challenge, bundleId}`: signature with the kept key, rising counter → proof; `404 unknown_key` → register again |
+| `POST /api/apps/attestation/android` | `{token, challenge, packageName}`: Play Integrity standard token (requestHash = hex SHA-256 of the challenge), decoded with Google; `PLAY_RECOGNIZED` + device integrity → proof |
+
+clientDataHash (Apple) is SHA-256 of the UTF-8 challenge. A disabled platform answers
+`404 attestation_off`. Everything lives in KV `HUMAN_VERIFIED` (`att:c:`, `att:k:`, `att:p:` with only
+the proof's hash), rate limited by `ATTEST_LIMITER` (20/min). Play Integrity also needs the worker
+secret **`PLAY_INTEGRITY_SERVICE_ACCOUNT`** (the Google Cloud service account JSON key with the Play
+Integrity API) on `al-ummah-now-api` (and its QA / stage Workers); without it the Android endpoint
+answers `503 not_configured`.
+
+The apps send the proof in **`X-AUN-Native-Proof`** on writes. `requireHuman` accepts a valid proof in
+place of a Turnstile token. Native client ids listed under "Require a proof" in the admin lose the
+signed-client exemption: without a proof they get `403 native_proof_required` (counted as
+`native_proof_missing` on the Abuse page). Desktop and TV have no platform attestation and keep the
+exemption. Running cost: one KV write per challenge and per proof (about one per app per hour),
+nothing while it is off.
 
 ## Responses the clients handle
 
@@ -73,6 +100,7 @@ Integrity on Android) needs the owner's Apple and Google accounts; tracked in #1
 | 403 `human_check_required` (+ `siteKey`) | `useHumanCheck` runs the widget and the call is sent again with `X-Turnstile-Token` |
 | 429 `rate_limited`, `Retry-After: 60` | "You are doing that too often. Please wait a minute and try again." (en/ar) |
 | 403 `forbidden_client` | not shown in the web (browsers are never refused) |
+| 403 `native_proof_required` | native apps only: fetch a new proof once and send again |
 
 The web asks `GET /api/me/human-check?kind=comment|post|report` first and gets the token before
 submitting, so a first comment is not refused and resent. Contact us is anonymous: the page sends,

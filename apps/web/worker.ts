@@ -1,6 +1,7 @@
 /**
  * Worker entry (wrangler `main`): the OpenNext worker, plus the public host
- * kept across a skew-protection hop (src/lib/version-skew/skew-host.ts).
+ * kept across a skew-protection hop (src/lib/version-skew/skew-host.ts), and the domain
+ * association files for the native apps (src/lib/well-known/app-association.ts).
  * Build first: `opennextjs-cloudflare build` writes .open-next/worker.js.
  *
  * Each page/API request emits one summary line (logging policy,
@@ -17,6 +18,7 @@ import { logger } from './src/lib/logger-server';
 import { asServiceUnavailable } from './src/lib/seo/unavailable';
 import { asGoneIfPurged } from './src/lib/seo/gone';
 import { rootLocaleRedirect } from './src/lib/seo/root-locale';
+import { appAssociationResponse } from './src/lib/well-known/app-association';
 
 interface Handler {
   fetch(request: Request, env: unknown, ctx: unknown): Promise<Response>;
@@ -30,6 +32,9 @@ const worker: Handler = {
     // `/` → `/en` or `/ar` before Next runs (no middleware, session refresh or render): the cheapest hop
     const root = rootLocaleRedirect(request);
     if (root) return root;
+    // Universal links / App Links files from videos admin → Mobile apps, never redirected (Apple won't follow)
+    const association = await appAssociationResponse(request, env as { ADMIN_API_URL?: string });
+    if (association) return association;
     configureLogging(env as LoggingEnv);
     const startedAt = Date.now();
     const route = new URL(request.url).pathname;
