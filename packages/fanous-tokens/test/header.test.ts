@@ -91,7 +91,8 @@ test('language button: the other language, marked with its lang; the name holds 
     const html = langButtonHtml({ lang, href: '/x' });
     assert.doesNotMatch(html, /aria-label/i, lang);
     const visible = /<span lang="[a-z]+">([^<]+)<\/span>/.exec(html)![1];
-    const text = html.replace(/<[^>]+>/g, '');
+    // the text content: every run of text between tags, joined
+    const text = [...html.matchAll(/>([^<]*)</g)].map((m) => m[1]).join('');
     assert.equal(visible, HEADER_LABELS[lang].otherLang, lang);
     assert.ok(text.includes(visible), `${lang}: "${text}" contains "${visible}"`);
     assert.ok(text.startsWith(HEADER_LABELS[lang].switchLang), lang);

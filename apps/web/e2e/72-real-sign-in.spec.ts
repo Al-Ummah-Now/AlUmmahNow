@@ -21,6 +21,7 @@ const email =
 // Read when signing in, so collecting this file never needs the secret
 const password = () => process.env.E2E_SIGNIN_PASSWORD ?? e2eUserPassword();
 
+/** Opens the signed-in account menu (retried until the header's handlers are attached). */
 async function openMenu(page: Page): Promise<void> {
   const trigger = page.locator('[data-testid="nav-menu-trigger"]:visible').first();
   await expect(async () => {
@@ -30,8 +31,12 @@ async function openMenu(page: Page): Promise<void> {
 }
 
 async function signIn(page: Page): Promise<void> {
-  await openMenu(page);
-  await page.getByRole('menuitem', { name: 'Sign In' }).click();
+  // signed out, the header shows the solid Sign in button (no account menu); retried until hydrated
+  const button = page.locator('[data-testid="header-sign-in"]:visible').first();
+  await expect(async () => {
+    if (!(await page.locator('input[name="email"]').isVisible())) await button.click({ timeout: 5000 });
+    await expect(page.locator('input[name="email"]')).toBeVisible({ timeout: 10000 });
+  }).toPass({ timeout: 45000 });
   await page.waitForSelector('input[name="email"]', { timeout: 30000 });
   await page.fill('input[name="email"]', email as string);
   await fillSecret(page.locator('input[name="password"]'), password());

@@ -91,13 +91,19 @@ export async function openMenuUntil(page: Page, item: Locator, timeout = 45000):
   }).toPass({ timeout });
 }
 
-/** Opens the anonymous menu and starts sign-in (the login() server action). */
+/**
+ * Starts sign-in from the header's solid Sign in button (the login() server action). A click
+ * before React hydrates the form is dropped, so it is retried until the browser reaches Auth.
+ */
 export async function startSignIn(page: Page, locale: Locale): Promise<void> {
   await page.goto(`${target().web}/${locale}`);
-  const signIn = page.locator('[role="menu"] form button[type="submit"]:visible').first();
-  await openMenuUntil(page, signIn);
-  await signIn.click();
-  await expect(page).toHaveURL(new RegExp(`^${target().auth}`), { timeout: 30000 });
+  const signIn = page.locator('[data-testid="header-sign-in"]:visible').first();
+  await expectHydrated(signIn);
+  const auth = new RegExp(`^${target().auth}`);
+  await expect(async () => {
+    if (!auth.test(page.url())) await signIn.click({ timeout: 5000 });
+    await expect(page).toHaveURL(auth, { timeout: 10000 });
+  }).toPass({ timeout: 45000 });
 }
 
 /**
