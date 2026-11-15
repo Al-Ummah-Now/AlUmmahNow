@@ -63,7 +63,7 @@ the same elements as JSX and their tests compare the result with the builders.
 
 | # | Slot | Class | Notes |
 |---|---|---|---|
-| 1 | Menu | `.aun-icon-btn.aun-menu` | Lucide `menu`, named "Menu" / "القائمة", 40×40. Apps with a side rail or drawer (always shown), and sites with a panel (`.aun-menu-collapse`, below 1024px only). |
+| 1 | Menu | `.aun-icon-btn.aun-menu-btn` | Lucide `menu`, named "Menu" / "القائمة", 40×40 (never `.aun-menu`: that is the account menu's surface). Apps with a side rail or drawer (always shown), and sites with a panel (`.aun-menu-collapse`, below 1024px only). |
 | 2 | Brand | `.aun-brand` | Logo, wordmark, app name (below). Links to the app's own home. |
 | 3 | Environment badge | `.aun-env` | "QA" / "STAGE" right after the brand; never in production. |
 | 4 | The app's own links or search | `.aun-header-primary` | www links, the videos/CMS search, the admin ⌘K search. Takes only the room the other groups leave (`flex: 1 1 0%`), so a long primary area never pushes the tools to a second line. Present (empty) when an app has none. |

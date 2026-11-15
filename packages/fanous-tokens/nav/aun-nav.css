@@ -389,6 +389,17 @@
 .aun-signin:hover {
   background: color-mix(in srgb, var(--fanous-c-nav-active-text) 85%, var(--fanous-c-nav-text));
 }
+/* below 400px, signed out: the language button and Sign in are 4px narrower a side, so a search
+   button, the badge, language, light/dark and the Arabic «تسجيل الدخول» still fit one line at 320px
+   (after the rules above: same specificity) */
+@media (max-width: 24.99rem) {
+  .aun-lang {
+    padding-inline: var(--fanous-spacing-xs, 4px);
+  }
+  .aun-signin {
+    padding-inline: var(--fanous-spacing-md, 12px);
+  }
+}
 
 /* text for screen readers only (the language button's action) */
 .aun-visually-hidden {
