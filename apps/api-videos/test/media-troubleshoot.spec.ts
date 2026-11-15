@@ -52,6 +52,14 @@ describe('raw errors → plain reasons', () => {
 		const out = scrubOpsText('GET https://vz.b-cdn.net/x/original?token=abc&expires=1 Bearer eyJabc.def Authorization: secret123 "api_key":"k"');
 		assert.equal(/token=abc|secret123|"k"/.test(out), false);
 		assert.ok(out.includes('https://vz.b-cdn.net/x/original?…'));
+		assert.equal(scrubOpsText('see "http://a?x=1" and https://b/c'), 'see "http://a?…" and https://b/c');
+	});
+	it('stays linear on hostile log text (CodeQL polynomial ReDoS)', () => {
+		const t0 = performance.now();
+		scrubOpsText('http://'.repeat(50_000));
+		transcodeErrorReason('put '.repeat(50_000));
+		assert.ok(performance.now() - t0 < 1000, `took ${Math.round(performance.now() - t0)} ms`);
+		assert.equal(transcodeErrorReason('PUT pub/v/r/360p.m3u8 failed: 503'), 'upload_failed');
 	});
 });
 
