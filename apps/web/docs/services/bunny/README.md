@@ -27,7 +27,6 @@ Add these to your `.env.local` file (see `.env.example` for reference):
 ```bash
 NEXT_PUBLIC_BUNNY_PULL_ZONE_URL=vz-xxxxx.b-cdn.net
 NEXT_PUBLIC_BUNNY_LIBRARY_ID=12345
-NEXT_PUBLIC_BUNNY_API_KEY=your-api-key-here # Optional
 NEXT_PUBLIC_BUNNY_TOKEN_AUTH=false # Optional
 ```
 
@@ -168,12 +167,14 @@ const allUrls = service.getAllUrls('video-guid-123', [
 ### Types
 
 ```typescript
-interface BunnyConfig {
+// No apiKey: this runs in the browser. Server code that calls the
+// Bunny API uses a server-only secret.
+type BunnyStreamConfig = {
   pullZoneUrl: string;
   libraryId: string;
-  apiKey?: string;
   tokenAuthEnabled?: boolean;
-}
+  storageZone?: string;
+};
 
 type VideoQuality = '240p' | '360p' | '480p' | '720p' | '1080p';
 
@@ -232,9 +233,9 @@ Generate URLs for multiple captions with metadata.
 
 Generate all video URLs in a single object.
 
-#### `getConfig(): Omit<BunnyConfig, 'apiKey'>`
+#### `getConfig(): BunnyStreamConfig`
 
-Get current service configuration (without sensitive data).
+Get current service configuration.
 
 ## Integration with Video.js
 

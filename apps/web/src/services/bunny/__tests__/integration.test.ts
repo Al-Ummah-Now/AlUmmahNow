@@ -154,7 +154,6 @@ describe('BunnyStreamService Integration', () => {
   it('should handle configuration retrieval without exposing secrets', () => {
     const service = new BunnyStreamService({
       ...config,
-      apiKey: 'super-secret-key',
       tokenAuthEnabled: true,
     });
 
