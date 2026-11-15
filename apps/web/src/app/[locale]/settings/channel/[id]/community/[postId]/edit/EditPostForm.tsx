@@ -232,10 +232,10 @@ export default function EditPostForm({ locale, channelId, post, channelName, cha
               )}
               {/* Text and article forms show their own field problem; cards and links show it here */}
               {error && (post.type === PostType.CARDS || post.type === PostType.LINK) && (
-                <p role="alert" className="mt-4 text-sm text-destructive" data-testid="edit-post-error">{error}</p>
+                <p role="alert" className="mt-4 text-sm text-[var(--fanous-color-error-text)]" data-testid="edit-post-error">{error}</p>
               )}
               {actionError && (
-                <p role="alert" className="mt-4 text-sm text-destructive" data-testid="edit-post-error">{actionError}</p>
+                <p role="alert" className="mt-4 text-sm text-[var(--fanous-color-error-text)]" data-testid="edit-post-error">{actionError}</p>
               )}
             </Card>
           </div>
@@ -280,13 +280,15 @@ export default function EditPostForm({ locale, channelId, post, channelName, cha
                     </SelectContent>
                   </Select>
                 </div>
+                {/* Ids without "comments": the themes pad [id*="comments"] (the comment section) */}
                 <div className="flex items-center justify-between">
-                  <span id="edit-post-comments-label" className="text-sm font-medium md:text-base">{isRTL ? 'السماح بالتعليقات' : 'Allow Comments'}</span>
+                  <span id="edit-post-allow-comment-label" className="text-sm font-medium md:text-base">{isRTL ? 'السماح بالتعليقات' : 'Allow Comments'}</span>
                   <Button
                     variant={commentsEnabled ? 'default' : 'outline'}
                     size="sm"
+                    id="edit-post-allow-comment-toggle"
                     aria-pressed={commentsEnabled}
-                    aria-labelledby="edit-post-comments-label"
+                    aria-labelledby="edit-post-allow-comment-label edit-post-allow-comment-toggle"
                     onClick={() => setCommentsEnabled(!commentsEnabled)}
                   >
                     {commentsEnabled ? (isRTL ? 'مفعّل' : 'Enabled') : (isRTL ? 'معطّل' : 'Disabled')}

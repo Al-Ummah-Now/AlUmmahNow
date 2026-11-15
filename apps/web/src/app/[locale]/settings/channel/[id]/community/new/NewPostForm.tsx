@@ -428,7 +428,7 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
                 )}
 
                 {error && [PostType.ARTICLE, PostType.CARDS, PostType.LINK].includes(selectedType) && (
-                  <p role="alert" className="mt-4 text-sm text-destructive" data-testid="new-post-error">{error}</p>
+                  <p role="alert" className="mt-4 text-sm text-[var(--fanous-color-error-text)]" data-testid="new-post-error">{error}</p>
                 )}
               </Card>
             )}
@@ -487,12 +487,15 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <Label className="text-sm md:text-base">
+                  <Label id="new-post-allow-comment-label" className="text-sm md:text-base">
                     {isRTL ? 'السماح بالتعليقات' : 'Allow Comments'}
                   </Label>
                   <Button
                     variant={commentsEnabled ? 'default' : 'outline'}
                     size="sm"
+                    id="new-post-allow-comment-toggle"
+                    aria-pressed={commentsEnabled}
+                    aria-labelledby="new-post-allow-comment-label new-post-allow-comment-toggle"
                     onClick={() => setCommentsEnabled(!commentsEnabled)}
                   >
                     {commentsEnabled

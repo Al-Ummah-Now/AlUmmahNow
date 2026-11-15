@@ -50,6 +50,11 @@ export function scheduleStateFrom(iso?: string | null): ScheduleState {
   return iso ? { later: true, local: toLocalInput(new Date(iso)) } : { later: false, local: '' };
 }
 
+/** A `datetime-local` value from its date and time parts (incomplete until both are set). */
+export function joinLocal(date: string, time: string): string {
+  return date || time ? `${date}T${time}` : '';
+}
+
 /** The ISO time to send, or null for "publish now". */
 export function scheduledIso(state: ScheduleState): string | null {
   return state.later && state.local ? new Date(state.local).toISOString() : null;
@@ -79,6 +84,7 @@ export function PostSchedulePicker({ value, onChange, problem, disabled, timeOnl
   }, []);
   const problemText = problem === 'too_soon' ? texts.scheduleTooSoon : problem === 'too_far' ? texts.scheduleTooFar : problem === 'required' ? texts.scheduleRequired : '';
   const showTime = timeOnly || value.later;
+  const [date = '', time = ''] = value.local.split('T');
 
   return (
     <div className="space-y-3" data-testid="post-schedule">
@@ -107,26 +113,39 @@ export function PostSchedulePicker({ value, onChange, problem, disabled, timeOnl
       )}
       {showTime && (
         <div className="space-y-2">
-          <label htmlFor={`${id}-time`} className="block text-sm font-medium">
-            {texts.scheduleDateTime}
-          </label>
-          <div className="relative">
-            <Calendar className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-            <input
-              id={`${id}-time`}
-              type="datetime-local"
-              value={value.local}
-              onChange={(e) => onChange({ ...value, local: e.target.value })}
-              min={bounds?.min}
-              max={bounds?.max}
-              disabled={disabled}
-              required
-              aria-invalid={problem ? true : undefined}
-              aria-describedby={`${id}-zone${problem ? ` ${id}-problem` : ''}`}
-              data-testid="post-schedule-datetime"
-              className="h-10 w-full rounded-md border border-input bg-transparent ps-10 pe-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-          </div>
+          <fieldset className="space-y-2" data-testid="post-schedule-datetime">
+            <legend className="mb-2 text-sm font-medium">{texts.scheduleDateTime}</legend>
+            {/* Two fields, so each value shows in full in the composer's narrow side column */}
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-1">
+              {([
+                ['date', texts.scheduleDate, Calendar, date, bounds?.min.slice(0, 10), bounds?.max.slice(0, 10)],
+                ['time', texts.scheduleTime, Clock, time, undefined, undefined],
+              ] as const).map(([kind, label, Icon, fieldValue, min, max]) => (
+                <div key={kind} className="space-y-1">
+                  <label htmlFor={`${id}-${kind}`} className="block text-xs text-muted-foreground">
+                    {label}
+                  </label>
+                  <div className="relative">
+                    <Icon className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                    <input
+                      id={`${id}-${kind}`}
+                      type={kind}
+                      value={fieldValue}
+                      onChange={(e) => onChange({ ...value, local: kind === 'date' ? joinLocal(e.target.value, time) : joinLocal(date, e.target.value) })}
+                      min={min}
+                      max={max}
+                      disabled={disabled}
+                      required
+                      aria-invalid={problem ? true : undefined}
+                      aria-describedby={`${id}-zone${problem ? ` ${id}-problem` : ''}`}
+                      data-testid={`post-schedule-${kind}`}
+                      className="h-10 w-full rounded-md border border-input bg-transparent ps-10 pe-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </fieldset>
           <p id={`${id}-zone`} className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Clock className="h-3.5 w-3.5" aria-hidden="true" />
             {zone && (
@@ -138,7 +157,7 @@ export function PostSchedulePicker({ value, onChange, problem, disabled, timeOnl
             )}
           </p>
           {problem && (
-            <p id={`${id}-problem`} role="alert" className="text-sm text-destructive" data-testid="post-schedule-error">
+            <p id={`${id}-problem`} role="alert" className="text-sm text-[var(--fanous-color-error-text)]" data-testid="post-schedule-error">
               {problemText}
             </p>
           )}

@@ -248,7 +248,7 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
           </TabsList>
 
           {actionError && (
-            <p role="alert" className="mb-4 text-sm text-destructive" data-testid="community-action-error">{actionError}</p>
+            <p role="alert" className="mb-4 text-sm text-[var(--fanous-color-error-text)]" data-testid="community-action-error">{actionError}</p>
           )}
           <TabsContent value={activeTab} className="mt-0">
             {loading ? (

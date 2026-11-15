@@ -121,6 +121,13 @@ async function openNewPost(page: Page, locale: 'en' | 'ar' = 'en') {
 }
 
 /** Selects a post type card (retried: the first click can land before hydration) */
+/** The composer's date and time fields, from a `YYYY-MM-DDTHH:mm` local time. */
+async function fillSchedule(page: Page, local: string) {
+  const [date, time] = local.split('T');
+  await page.getByTestId('post-schedule-date').fill(date);
+  await page.getByTestId('post-schedule-time').fill(time);
+}
+
 async function selectType(page: Page, type: string) {
   const option = page.locator(`[role="radio"][data-post-type="${type}"]`);
   await clickUntil(option, async () => expect(option).toHaveAttribute('aria-checked', 'true', { timeout: 3000 }));
@@ -298,10 +305,10 @@ test.describe('Post manager', () => {
       await expect(page.getByTestId('new-post-submit')).toHaveText('Schedule');
       await expect(page.getByTestId('post-schedule-timezone')).toContainText('Time zone:');
       // Too soon is refused in the composer
-      await page.getByTestId('post-schedule-datetime').fill(localIn(60_000));
+      await fillSchedule(page, localIn(60_000));
       await page.getByTestId('new-post-submit').click();
       await expect(page.getByTestId('post-schedule-error')).toHaveText('Pick a time at least 5 minutes from now');
-      await page.getByTestId('post-schedule-datetime').fill(localIn(3 * 3600_000));
+      await fillSchedule(page, localIn(3 * 3600_000));
       await page.getByTestId('new-post-submit').click();
       await expect(page).toHaveURL(new RegExp(`/en/settings/channel/${channelId()}/community$`));
 

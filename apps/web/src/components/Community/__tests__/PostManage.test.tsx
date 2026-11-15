@@ -7,7 +7,7 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { CommunityPost } from '@al-ummah/shared-types';
 import PostCard from '../PostCard';
-import { scheduleProblem, scheduledIso, scheduleStateFrom, toLocalInput } from '../management/PostSchedulePicker';
+import { PostSchedulePicker, joinLocal, scheduleProblem, scheduledIso, scheduleStateFrom, toLocalInput } from '../management/PostSchedulePicker';
 import { editPostHref } from '../PostManageMenu';
 
 jest.mock('../PostEngagement', () => ({ __esModule: true, default: () => null }));
@@ -93,5 +93,23 @@ describe('schedule window', () => {
     expect(scheduledIso(state)).toBe(iso);
     expect(scheduledIso({ later: false, local: state.local })).toBeNull();
     expect(scheduleStateFrom(null)).toEqual({ later: false, local: '' });
+  });
+
+  it('builds the time from separate date and time fields; half of it is not a time', () => {
+    expect(joinLocal('2026-11-14', '10:06')).toBe('2026-11-14T10:06');
+    expect(joinLocal('', '')).toBe('');
+    expect(scheduleProblem(joinLocal('2026-11-14', ''), now)).toBe('required');
+    expect(scheduleProblem(joinLocal('', '10:06'), now)).toBe('required');
+  });
+
+  it('the picker edits the date and the time each on its own field', () => {
+    const onChange = jest.fn();
+    render(<PostSchedulePicker value={{ later: true, local: '2026-11-20T09:15' }} onChange={onChange} timeOnly />);
+    expect(screen.getByTestId('post-schedule-date')).toHaveValue('2026-11-20');
+    expect(screen.getByTestId('post-schedule-time')).toHaveValue('09:15');
+    fireEvent.change(screen.getByTestId('post-schedule-time'), { target: { value: '18:45' } });
+    expect(onChange).toHaveBeenLastCalledWith({ later: true, local: '2026-11-20T18:45' });
+    fireEvent.change(screen.getByTestId('post-schedule-date'), { target: { value: '2026-11-21' } });
+    expect(onChange).toHaveBeenLastCalledWith({ later: true, local: '2026-11-21T09:15' });
   });
 });

@@ -1536,6 +1536,8 @@ export const AR_TRANSLATIONS: AppTranslations = {
     scheduleOption: 'جدولة لوقت لاحق',
     scheduleHelp: 'يُنشر في الوقت الذي تختاره، ويُبلَّغ المشتركون حينها',
     scheduleDateTime: 'التاريخ والوقت',
+    scheduleDate: 'التاريخ',
+    scheduleTime: 'الوقت',
     scheduleTimezone: 'المنطقة الزمنية: {zone}',
     scheduleRequired: 'اختر التاريخ والوقت',
     scheduleTooSoon: 'اختر وقتًا بعد 5 دقائق على الأقل من الآن',

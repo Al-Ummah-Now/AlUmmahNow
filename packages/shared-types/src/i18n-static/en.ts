@@ -1538,6 +1538,8 @@ export const EN_TRANSLATIONS: AppTranslations = {
     scheduleOption: 'Schedule for later',
     scheduleHelp: 'It goes live at the time you pick, and subscribers are notified then',
     scheduleDateTime: 'Date and time',
+    scheduleDate: 'Date',
+    scheduleTime: 'Time',
     scheduleTimezone: 'Time zone: {zone}',
     scheduleRequired: 'Pick a date and time',
     scheduleTooSoon: 'Pick a time at least 5 minutes from now',

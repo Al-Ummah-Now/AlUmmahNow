@@ -1633,6 +1633,10 @@ export interface AppTranslations {
     scheduleOption: string;
     scheduleHelp: string;
     scheduleDateTime: string;
+    /** The date field of a post's scheduled time */
+    scheduleDate: string;
+    /** The time field of a post's scheduled time */
+    scheduleTime: string;
     scheduleTimezone: string;
     scheduleRequired: string;
     scheduleTooSoon: string;

@@ -186,7 +186,7 @@ export function PostCard({ post, locale, onView, onEdit, onDelete, onPublishNow 
                 )}
                 <DropdownMenuItem
                   onClick={() => setShowDeleteDialog(true)}
-                  className="text-destructive focus:text-destructive"
+                  className="text-[var(--fanous-color-error-text)] focus:text-[var(--fanous-color-error-text)]"
                 >
                   <Trash2 className="w-4 h-4 mr-2 rtl:ml-2 rtl:mr-0" />
                   {isRTL ? 'حذف' : 'Delete'}

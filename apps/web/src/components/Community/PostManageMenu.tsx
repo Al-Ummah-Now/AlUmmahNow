@@ -63,7 +63,8 @@ export default function PostManageMenu({ post, onDeleted }: PostManageMenuProps)
 
   return (
     <>
-      <DropdownMenu>
+      {/* Not modal: the rest of the page is never aria-hidden while it is open */}
+      <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" className="shrink-0 rounded-full" aria-label={texts.postActions} data-testid="post-owner-actions">
             <MoreVertical className="h-5 w-5" aria-hidden="true" />
@@ -78,7 +79,7 @@ export default function PostManageMenu({ post, onDeleted }: PostManageMenuProps)
           </DropdownMenuItem>
           <DropdownMenuItem
             onSelect={() => { setFailed(false); setConfirming(true); }}
-            className="text-destructive focus:text-destructive"
+            className="text-[var(--fanous-color-error-text)] focus:text-[var(--fanous-color-error-text)]"
             data-testid="post-owner-delete"
           >
             <Trash2 className="h-4 w-4 me-2" aria-hidden="true" />
@@ -94,7 +95,7 @@ export default function PostManageMenu({ post, onDeleted }: PostManageMenuProps)
             <AlertDialogDescription>{texts.deletePostBody}</AlertDialogDescription>
           </AlertDialogHeader>
           {failed && (
-            <p role="alert" className="text-sm text-destructive" data-testid="post-delete-error">
+            <p role="alert" className="text-sm text-[var(--fanous-color-error-text)]" data-testid="post-delete-error">
               {texts.deleteFailed}
             </p>
           )}
