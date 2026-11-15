@@ -21,8 +21,7 @@
  * answers 410 for it (D-SEO-4).
  *
  * Images: only files the item stored itself are deleted, from its own folder
- * (`/thumbnails/{videoId}/`, `/community-posts/{channelId}/`) or an admin upload named on the
- * record. A record can name another account's file (a pasted URL) or a shared legacy image, and
+ * (`/thumbnails/{videoId}/`, `/community-posts/{channelId}/`). A record can name another account's file (a pasted URL) or a shared legacy image, and
  * that file is not ours to delete. Every step is idempotent: a file or row already gone is done.
  */
 import { logger } from '../logger';
@@ -32,15 +31,17 @@ import { deleteImageFiles, fileUnder, imagePathOfUrl, imageStorageConfigured, li
 
 type Row = Record<string, any>;
 
-/** A thumbnail uploaded by an admin (lib/admin/images.ts storeImage: `/<uuid>_thumbnail.<ext>`). */
-const ADMIN_THUMBNAIL = /^\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_thumbnail\.(?:jpeg|jpg|png|webp)$/i;
-
 /** The folder where a video's custom thumbnails are stored on Bunny (lib/thumbnail/store.ts). */
 export const videoThumbnailFolder = (videoId: string) => `/thumbnails/${videoId}/`;
 /** The folder where a channel's post images are stored on Bunny (endpoints/community/upload-*.ts). */
 export const postImageFolder = (channelId: string) => `/community-posts/${channelId}/`;
 
-/** Image paths a video record names that belong to the video (its own folder, or an admin upload). */
+/**
+ * Image paths a video record names that belong to the video: files in its own folder only. A
+ * record can name any URL (another video's thumbnail, a pasted or legacy image), so a file
+ * outside the folder is never the purge's to delete. Admin uploads go to the folder too
+ * (lib/admin/images.ts); ones from before that stay where they are.
+ */
 export function ownedVideoImagePaths(videoId: string, record: Row | null | undefined): string[] {
 	if (!record) return [];
 	const urls: unknown[] = [record.thumbnailUrl, record.previousThumbnailUrl, record.customThumbnailUrl];
@@ -48,14 +49,14 @@ export function ownedVideoImagePaths(videoId: string, record: Row | null | undef
 	const paths = new Set<string>();
 	for (const url of urls) {
 		const path = imagePathOfUrl(url);
-		if (path && (fileUnder(path, videoThumbnailFolder(videoId)) || ADMIN_THUMBNAIL.test(path))) paths.add(path);
+		if (path && fileUnder(path, videoThumbnailFolder(videoId))) paths.add(path);
 	}
 	return [...paths];
 }
 
 /**
  * A video's custom thumbnails on Bunny Storage: every file in its folder (each upload had its own
- * path, so earlier ones are there too) and an admin upload the record names. Returns how many were
+ * path, so earlier ones are there too, admin uploads included). Returns how many were
  * deleted. No-op where image storage is not configured (local runs).
  */
 export async function eraseVideoImages(env: ImageFilesEnv, videoId: string, record: Row | null | undefined): Promise<number> {

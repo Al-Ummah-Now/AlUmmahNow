@@ -23,6 +23,7 @@ import { listChannels, listComments, listUsers, listVideos, type WaitUntil } fro
 import { searchUsers } from '../lib/admin/userSearch';
 import { AccountNoticeBody, accountEmailContact, accountNotice } from '../lib/admin/accountNotices';
 import { cleanLookup, lookup } from '../lib/admin/lookup';
+import { videoThumbnailFolder } from '../lib/admin/purgeCopies';
 import * as admin from '../lib/admin/service';
 import { checkImage, checkThumbnailShapeFor, storeImage } from '../lib/admin/images';
 import { countJobs, getJob, listJobs, retryJob } from '../lib/admin/jobs';
@@ -223,7 +224,8 @@ app.post('/videos/:id/thumbnail', async (c) => {
 	const form = await c.req.parseBody();
 	const file = checkImage(form.photo);
 	await checkThumbnailShapeFor(c.env as never, c.req.param('id'), file);
-	const url = await storeImage(c.env, file, 'thumbnail');
+	// In the video's own folder, so its purge erases it (lib/admin/purgeCopies.ts)
+	const url = await storeImage(c.env, file, 'thumbnail', videoThumbnailFolder(c.req.param('id')).slice(0, -1));
 	return ok(c, await admin.updateVideo(c.env, c.req.param('id'), { thumbnailUrl: url }));
 });
 app.post('/videos/:id/move', async (c) => {
