@@ -53,7 +53,7 @@ export const SIGN_IN_BANNER_EN: SignInBannerTranslations = {
 export const SIGN_IN_BANNER_AR: SignInBannerTranslations = {
   regionLabel: 'انضم إلى الأمة الآن',
   eyebrow: 'انضم إلى المجتمع',
-  title: 'سجّل الدخول لتشارك، واطلب صلاحية صانع المحتوى لتنشر مرئياتك',
+  title: 'سجل حسابك لتشارك',
   body: 'علّق وأعجب واشترك في القنوات واحفظ المرئيات لوقت لاحق. الرفع بطلب خلال المرحلة التجريبية: بعد تسجيل الدخول اطلب صلاحية صانع المحتوى لتنشئ مرئياتك وتنشرها.',
   perks: {
     comment: 'تعليق',
