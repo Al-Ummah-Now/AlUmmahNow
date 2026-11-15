@@ -84,11 +84,16 @@ export function SocialAccounts({ channelId, locale, accounts, networks, onAccoun
     else void start(network);
   }
 
-  async function save(account: SocialAccountView, patch: Parameters<typeof socialClient.updateAccount>[2]) {
+  /** `shown`: the account as the controls show it while saving (a ticked box ticks at once); put back on failure. */
+  async function save(account: SocialAccountView, patch: Parameters<typeof socialClient.updateAccount>[2], shown?: SocialAccountView) {
     setBusy(account.id);
+    if (shown) onAccounts(accounts.map((x) => (x.id === account.id ? shown : x)));
     const r = await socialClient.updateAccount(channelId, account.id, patch);
     setBusy(null);
-    if (!r.ok) return setMessage({ tone: 'error', text: errorText(r.code) });
+    if (!r.ok) {
+      if (shown) onAccounts(accounts);
+      return setMessage({ tone: 'error', text: errorText(r.code) });
+    }
     onAccounts(accounts.map((x) => (x.id === account.id ? r.data.account : x)));
     setMessage({ tone: 'ok', text: a.saved });
   }
@@ -98,7 +103,7 @@ export function SocialAccounts({ channelId, locale, accounts, networks, onAccoun
       const r = account.rules.find((x) => x.event === e) ?? { event: e, enabled: false, format: formatsFor(e)[0]!, includeLink: false };
       return e === event ? { ...r, ...change } : r;
     });
-    void save(account, { rules });
+    void save(account, { rules }, { ...account, rules });
   }
 
   async function remove(account: SocialAccountView) {
