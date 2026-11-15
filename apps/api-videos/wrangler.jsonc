@@ -312,6 +312,12 @@
 		"secret_name": "media-sign-key"
 	  },
 	  {
+		// Web Push VAPID public key, served to browsers by GET /api/devices/webpush-key (#1287; the processor holds the pair)
+		"binding": "VAPID_PUBLIC_KEY",
+		"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+		"secret_name": "vapid-public-key"
+	  },
+	  {
 	  	// Cloudflare token (Secrets Store media-cdn-api-token): CDN purge when a video turns private; R2 and media-host analytics for the daily costs
 	  	"binding": "MEDIA_CDN_API_TOKEN",
 	  	"store_id": "f8eddc9944d041919ed8dc7d08d32308",
@@ -627,6 +633,12 @@
 					"binding": "MEDIA_SIGN_KEY",
 					"store_id": "f8eddc9944d041919ed8dc7d08d32308",
 					"secret_name": "media-sign-key-stage"
+				},
+				{
+					// Web Push VAPID public key, served to browsers by GET /api/devices/webpush-key (#1287; the processor holds the pair)
+					"binding": "VAPID_PUBLIC_KEY",
+					"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+					"secret_name": "vapid-public-key-stage"
 				},
 				{
 					// Cloudflare token (Secrets Store media-cdn-api-token): CDN purge when a video turns private; R2 and media-host analytics for the daily costs

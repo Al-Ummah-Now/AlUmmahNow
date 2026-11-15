@@ -150,7 +150,9 @@
     { "binding": "FCM_SERVICE_ACCOUNT", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "fcm-service-account-qa" },
     { "binding": "FCM_PROJECT_ID", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "fcm-project-id-qa" },
     { "binding": "WNS_PACKAGE_SID", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "wns-package-sid-qa" },
-    { "binding": "WNS_CLIENT_SECRET", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "wns-client-secret-qa" }
+    { "binding": "WNS_CLIENT_SECRET", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "wns-client-secret-qa" },
+    { "binding": "VAPID_PUBLIC_KEY", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "vapid-public-key-qa" },
+    { "binding": "VAPID_PRIVATE_KEY", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "vapid-private-key-qa" }
   ],
 
   "observability": {

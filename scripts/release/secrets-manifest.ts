@@ -65,6 +65,7 @@ const API_VIDEOS_SECRETS: RequiredSecret[] = [
 	INTERNAL_API_KEY,
 	{ name: 'MEDIA_SIGN_KEY', purpose: 'Secrets Store media-sign-key[-qa|-stage]; path tokens of private R2 renditions (shared with apps/media)' },
 	TURNSTILE_SECRET,
+	{ name: 'VAPID_PUBLIC_KEY', purpose: 'Secrets Store vapid-public-key[-qa|-stage]; Web Push VAPID public key served by GET /api/devices/webpush-key (the processor holds the pair), #1287' },
 	{
 		name: 'CSAM_EVIDENCE_KEY',
 		purpose: 'Secrets Store csam-evidence-key[-qa|-stage]; AES-256-GCM key(s) of the CSAM evidence store, <version>:<base64 32 bytes>[,...] (lib/csam/crypto.ts, docs/specs/CSAM-RESPONSE.md §4). Never rotate by replacing: append a new version',
@@ -120,6 +121,8 @@ export const SECRETS_MANIFEST: WorkerSecrets[] = [
 			{ name: 'FCM_PROJECT_ID', purpose: 'Secrets Store fcm-project-id[-qa|-stage]; Firebase project id (placeholder = the JSON\'s project_id)' },
 			{ name: 'WNS_PACKAGE_SID', purpose: 'Secrets Store wns-package-sid[-qa|-stage]; Windows package SID (WNS OAuth client id)' },
 			{ name: 'WNS_CLIENT_SECRET', purpose: 'Secrets Store wns-client-secret[-qa|-stage]; WNS client secret' },
+			{ name: 'VAPID_PUBLIC_KEY', purpose: 'Secrets Store vapid-public-key[-qa|-stage]; Web Push VAPID public key (base64url, 65-byte P-256 point), #1287' },
+			{ name: 'VAPID_PRIVATE_KEY', purpose: 'Secrets Store vapid-private-key[-qa|-stage]; Web Push VAPID private key (base64url, 32 bytes), #1287' },
 		],
 	}),
 	...envs('scheduler', 'al-ummah-scheduler-qa', { required: [INTERNAL_API_KEY] }),

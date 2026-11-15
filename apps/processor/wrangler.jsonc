@@ -162,7 +162,9 @@
 		{ "binding": "FCM_SERVICE_ACCOUNT", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "fcm-service-account" },
 		{ "binding": "FCM_PROJECT_ID", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "fcm-project-id" },
 		{ "binding": "WNS_PACKAGE_SID", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "wns-package-sid" },
-		{ "binding": "WNS_CLIENT_SECRET", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "wns-client-secret" }
+		{ "binding": "WNS_CLIENT_SECRET", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "wns-client-secret" },
+		{ "binding": "VAPID_PUBLIC_KEY", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "vapid-public-key" },
+		{ "binding": "VAPID_PRIVATE_KEY", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "vapid-private-key" }
 	],
 
 	// Environment-specific configurations
@@ -297,7 +299,9 @@
 				{ "binding": "FCM_SERVICE_ACCOUNT", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "fcm-service-account-stage" },
 				{ "binding": "FCM_PROJECT_ID", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "fcm-project-id-stage" },
 				{ "binding": "WNS_PACKAGE_SID", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "wns-package-sid-stage" },
-				{ "binding": "WNS_CLIENT_SECRET", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "wns-client-secret-stage" }
+				{ "binding": "WNS_CLIENT_SECRET", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "wns-client-secret-stage" },
+				{ "binding": "VAPID_PUBLIC_KEY", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "vapid-public-key-stage" },
+				{ "binding": "VAPID_PRIVATE_KEY", "store_id": "f8eddc9944d041919ed8dc7d08d32308", "secret_name": "vapid-private-key-stage" }
 			]
 		},
 		// Development environment
