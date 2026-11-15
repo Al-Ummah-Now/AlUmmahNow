@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { AxeBuilder } from '@axe-core/playwright';
-import { applyTheme, LANGS, measureText, MODES, mockApi, signIn, THEMES } from './harness';
+import { applyTheme, computedTextContrast, LANGS, measureText, MODES, mockApi, signIn, THEMES, waitForStillBox } from './harness';
 
 /**
  * THEME-NOTIF: the header notifications dropdown is readable in every built-in theme, light and
@@ -19,10 +19,12 @@ for (const lang of LANGS) {
         // before the menu opens (opening it clears the badge) and at rest (the harness drops a text
         // that changed while it was measured): it must be there
         await expect(page.getByTestId('notification-badge')).toBeVisible();
-        const bell = await measureText(page, '[data-testid=notification-bell]');
-        expect(bell.some((t) => t.selector.startsWith('notification-badge')), 'the badge was measured').toBe(true);
-        const badge = bell.filter((t) => t.ratio < 4.5);
-        expect(badge, `badge: ${JSON.stringify(badge)}`).toEqual([]);
+        // Its count is 10px bold text: too few glyph pixels for a stable pixel sample, which once read
+        // the header behind it instead (#1470). Once it has settled, its computed colours against the
+        // nearest opaque background decide.
+        await waitForStillBox(page, '[data-testid=notification-badge]');
+        const badge = await computedTextContrast(page, '[data-testid=notification-badge]');
+        expect(badge.ratio, `badge: ${badge.fg} on ${badge.bg}`).toBeGreaterThanOrEqual(4.5);
 
         await page.getByTestId('notification-bell').click();
         const panel = page.getByTestId('notification-dropdown');

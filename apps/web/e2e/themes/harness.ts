@@ -135,6 +135,7 @@ export async function measureText(page: Page, root: string): Promise<Contrast[]>
 async function measureOnce(page: Page, root: string): Promise<Contrast[]> {
   const boxes = await page.evaluate((rootSel) => {
     const out: { text: string; x: number; y: number; w: number; h: number; selector: string }[] = [];
+    const measured: Node[] = [];
     const rootEl = document.querySelector(rootSel);
     if (!rootEl) return out;
     const walker = document.createTreeWalker(rootEl, NodeFilter.SHOW_TEXT);
@@ -173,7 +174,10 @@ async function measureOnce(page: Page, root: string): Promise<Contrast[]> {
       if (clipped) continue;
       const tid = el.closest('[data-testid]')?.getAttribute('data-testid') ?? '';
       out.push({ text: n.textContent.trim().slice(0, 40), x: r.left, y: r.top, w: r.width, h: r.height, selector: `${tid} ${el.tagName.toLowerCase()}` });
+      measured.push(n);
     }
+    // Kept to check, after the screenshots, that every text is still where it was measured (#1470)
+    (window as unknown as { __sweepNodes?: Node[] }).__sweepNodes = measured;
     return out;
   }, root);
   if (!boxes.length) return [];
@@ -194,8 +198,22 @@ async function measureOnce(page: Page, root: string): Promise<Contrast[]> {
   await page.evaluate(() => document.querySelectorAll('style[data-sweep]').forEach((s) => s.remove()));
   // The same state again: a text whose pixels moved between `shown` and `again` changed while it was measured
   const again = await page.screenshot({ animations: 'disabled', caret: 'hide', scale: 'css' });
+  // A text whose box moved since it was found (the header settling, a badge arriving) was sampled at
+  // the wrong place: the pixels behind it were someone else's (#1470: the bell badge read as the
+  // header's brown). Marked as moved, so measureText looks again.
+  const shifted = await page.evaluate((before) => {
+    const nodes = (window as unknown as { __sweepNodes?: Node[] }).__sweepNodes ?? [];
+    return before.map((b, i) => {
+      const n = nodes[i];
+      if (!n || !n.isConnected) return true;
+      const range = document.createRange();
+      range.selectNodeContents(n);
+      const r = range.getBoundingClientRect();
+      return Math.abs(r.left - b.x) > 0.5 || Math.abs(r.top - b.y) > 0.5 || Math.abs(r.width - b.w) > 0.5 || Math.abs(r.height - b.h) > 0.5;
+    });
+  }, boxes);
   await page.evaluate(() => document.querySelectorAll('style[data-sweep-still]').forEach((s) => s.remove()));
-  return page.evaluate(async ({ a, b, c, boxes }) => {
+  const result = await page.evaluate(async ({ a, b, c, boxes }) => {
     const load = async (b64: string) => {
       const img = new Image();
       img.src = `data:image/png;base64,${b64}`;
@@ -230,6 +248,62 @@ async function measureOnce(page: Page, root: string): Promise<Contrast[]> {
       return { text: bx.text, ratio: Math.round(core.r * 100) / 100, fg: hex(A.data, core.i), bg: hex(B.data, core.i), selector: bx.selector };
     });
   }, { a: shown.toString('base64'), b: hidden.toString('base64'), c: again.toString('base64'), boxes });
+  return result.map((t, i) => (shifted[i] ? { ...t, ratio: 0, fg: '~', bg: '~', unstable: true } : t));
+}
+
+/**
+ * Contrast of one element's text from its computed colours, deterministically: its `color` against
+ * the nearest opaque background behind it, compositing any translucent backgrounds on the way up
+ * (and the element's own opacity chain). For small, dense text (a 10px count badge) where a pixel
+ * sample has too few glyph pixels to be stable (#1470). Colours go through a canvas, so
+ * color-mix(), light-dark() and oklch() compare like plain colours.
+ */
+export async function computedTextContrast(page: Page, selector: string): Promise<{ ratio: number; fg: string; bg: string }> {
+  return page.locator(selector).first().evaluate((el) => {
+    const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true })!;
+    const rgba = (css: string): [number, number, number, number] => {
+      ctx.clearRect(0, 0, 1, 1);
+      ctx.fillStyle = 'rgba(0,0,0,0)';
+      ctx.fillStyle = css;
+      ctx.fillRect(0, 0, 1, 1);
+      const d = ctx.getImageData(0, 0, 1, 1).data;
+      return [d[0], d[1], d[2], d[3] / 255];
+    };
+    const over = (top: [number, number, number, number], under: [number, number, number]): [number, number, number] =>
+      [0, 1, 2].map((k) => top[k] * top[3] + under[k] * (1 - top[3])) as [number, number, number];
+    // Backgrounds from the element up, until one is opaque (the page's canvas is white otherwise)
+    const layers: [number, number, number, number][] = [];
+    for (let a: Element | null = el; a; a = a.parentElement) {
+      const bg = rgba(getComputedStyle(a).backgroundColor);
+      if (bg[3] > 0) layers.push(bg);
+      if (bg[3] >= 1) break;
+    }
+    let bg: [number, number, number] = [255, 255, 255];
+    for (const layer of layers.reverse()) bg = over(layer, bg);
+    let opacity = 1;
+    for (let a: Element | null = el; a; a = a.parentElement) opacity *= Number(getComputedStyle(a).opacity);
+    const fgColor = rgba(getComputedStyle(el).color);
+    const fg = over([fgColor[0], fgColor[1], fgColor[2], fgColor[3] * opacity], bg);
+    const lin = (v: number) => { const s = v / 255; return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; };
+    const lum = (c: number[]) => 0.2126 * lin(c[0]) + 0.7152 * lin(c[1]) + 0.0722 * lin(c[2]);
+    const [hi, lo] = [lum(fg), lum(bg)].sort((p, q) => q - p);
+    const hex = (c: number[]) => `#${c.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`;
+    return { ratio: Math.round(((hi + 0.05) / (lo + 0.05)) * 100) / 100, fg: hex(fg), bg: hex(bg) };
+  });
+}
+
+/** Waits until an element's box holds still for two animation frames (it has rendered and settled). */
+export async function waitForStillBox(page: Page, selector: string, timeout = 10_000): Promise<void> {
+  const box = () =>
+    page.locator(selector).first().evaluate(
+      (el) =>
+        new Promise<string>((resolve) => {
+          const at = () => JSON.stringify(el.getBoundingClientRect());
+          const a = at();
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve(a === at() ? a : '')));
+        }),
+    );
+  await expect.poll(async () => (await box()) !== '', { timeout, message: `${selector} never held still` }).toBe(true);
 }
 
 /**
