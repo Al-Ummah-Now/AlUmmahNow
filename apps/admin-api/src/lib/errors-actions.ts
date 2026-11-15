@@ -44,6 +44,18 @@ export const SERVICE_RETRIES: Record<string, { binding: keyof AdminBindings; pat
 
 export const BUILTIN_RETRIES: Record<string, (env: AdminBindings, args: Record<string, string>, attempt: string) => Promise<RetryOutcome>> = {
   /** Queues a Contact us email that failed for good again (as the inbox's Retry does); a new failure reopens the item. */
+  /** Runs a revoked invite's erase again (#716, lib/invite-erase.ts); a new failure reopens the item. */
+  'invite-videos-erase': async (env, args) => {
+    const { getInvite } = await import('./invites');
+    const { settleRevokedInvites } = await import('./invite-erase');
+    const row = args.id ? await getInvite(env.REPORTS_DB, args.id) : null;
+    if (!row) return { ok: true, status: 'resolved', result: 'The invite is already purged' };
+    if (!row.deleted_at) return { ok: false, status: 'dismissed', result: 'The invite was restored' };
+    const out = await settleRevokedInvites(env as never, [row], { resolve: async () => undefined });
+    if (out.failed.length) return { ok: false, status: 'open', result: `Not erased: ${out.failed[0].error}` };
+    if (out.waiting.length) return { ok: false, status: 'open', result: 'Auth still holds the invite; erased once auth purges it' };
+    return { ok: true, status: 'resolved', result: out.erased.length ? 'Videos data erased and the invite purged' : 'Nothing left on the videos side; the invite purged' };
+  },
   'contact-email': async (env, args) => {
     const kind = args.kind as MailKind;
     const id = args.id;
