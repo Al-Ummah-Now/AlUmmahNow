@@ -478,6 +478,9 @@ export async function updateTrack(env: AudioTracksEnv, ctx: ExecutionContextLike
 		const labelBefore = track.label;
 		if (v.label) track.label = v.label;
 		labelChanged = track.label !== labelBefore;
+		// Renamed while its first check runs: flagged in this same write, so no outcome can slip in
+		// between (recheckPendingLabel checks the name once the check has ended)
+		if (labelChanged && track.review?.status === 'checking') (track as AudioTrack & { labelCheckPending?: boolean }).labelCheckPending = true;
 		if (v.kind) track.kind = v.kind;
 		if (v.isDefault === true) {
 			if (isAudibleTrack(track)) settleDefault(tracks, track.id);
@@ -512,14 +515,8 @@ async function recheckTrackLabel(env: AudioTracksEnv, video: Video, track: Audio
 		// that check, so the name is checked once the check has ended (applyAudioTrackOutcome), when
 		// a hit can only pull the track back. A track waiting for a person shows the reviewer its
 		// current name; a rejected one is not heard.
-		if (r && r.status === 'checking' && gate.mode !== 'shadow') {
-			await repo(env).updateObject(video.id, (fresh) => {
-				const t = tracksOf(fresh).find((x) => x.id === track.id) as (AudioTrack & { labelCheckPending?: boolean }) | undefined;
-				if (!t?.review || t.review.reviewId !== r.reviewId || t.review.status !== 'checking') return false;
-				t.labelCheckPending = true;
-				return true;
-			});
-			// The check may have ended meanwhile: settle it now
+		if ((track as AudioTrack & { labelCheckPending?: boolean }).labelCheckPending) {
+			// The check may have ended since the save: settle it now (otherwise its outcome does)
 			const { recheckPendingLabel } = await import('../review/audio-track');
 			await recheckPendingLabel(env as never, video.id, track.id);
 		} else if (r && (r.status === 'approved' || r.status === 'post_review') && gate.mode !== 'shadow') {
