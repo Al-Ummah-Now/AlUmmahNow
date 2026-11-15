@@ -3,6 +3,7 @@ import { ANONYMOUS_STATE, AUTH_STATE, readSession } from './test-utils/auth-stat
 import { clickAndWaitForURL } from './test-utils/qa-content';
 import { closeSideDrawer, expectSideDrawerClosed, isDrawerLayout, isPhoneLayout, openSideDrawer } from './test-utils/navigation';
 import type { Page } from '@playwright/test';
+import { AxeBuilder } from '@axe-core/playwright';
 
 /**
  * The logo link's name holds the visible app name (WCAG 2.5.3, label in name). The
@@ -351,6 +352,34 @@ test.describe('Language toggle', () => {
     await expect(page).toHaveURL(/\/ar\/?$/);
   });
 });
+
+/**
+ * The header passes axe (WCAG 2.2 AA) in both languages, signed out and signed in, with the
+ * experimental label-content-name-mismatch rule switched on (WCAG 2.5.3: the language link's visible
+ * label is inside its name; docs/design/NAV.md "Header"). .options() replaces the whole options
+ * object, so it comes before .withTags() or the WCAG tag filter would be dropped.
+ */
+const headerAxe = (page: Page) =>
+  new AxeBuilder({ page })
+    .options({ rules: { 'label-content-name-mismatch': { enabled: true } } })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .include('header.aun-header')
+    .analyze();
+
+for (const [who, state] of [['signed out', ANONYMOUS_STATE], ['signed in', AUTH_STATE.single]] as const) {
+  test.describe(`Header accessibility (${who})`, () => {
+    test.use({ storageState: state });
+    for (const lang of ['en', 'ar'] as const) {
+      test(`NAV-050 axe finds no header violations (${lang}, ${who})`, async ({ page }) => {
+        await page.goto(`/${lang}/channels?sort=new`);
+        await expect(page.getByRole('banner').getByTestId('language-toggle')).toBeAttached();
+        await expect(page.getByRole('banner').locator('.aun-brand')).toBeVisible();
+        const { violations } = await headerAxe(page);
+        expect(violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.html).join(' | ')}`)).toEqual([]);
+      });
+    }
+  });
+}
 
 test.describe('Skip links', () => {
   test.use({ storageState: ANONYMOUS_STATE });

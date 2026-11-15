@@ -89,7 +89,9 @@ Focus everywhere is a 2px outline in `--fanous-c-nav-active-text`, offset 2px.
 - **Language** (`.aun-lang`). Shows the other language's own name in its own `lang`
   (`<span lang="ar">العربية</span>`), `hreflang` on the link. Its name starts with the action in the
   page's language and contains the visible label: "Switch to Arabic: العربية" /
-  "التبديل إلى الإنجليزية: English". It keeps the current page and query, each app's way of storing
+  "التبديل إلى الإنجليزية: English". No aria-label on the language button; the visible label must be
+  inside the accessible name (WCAG 2.5.3, axe `label-content-name-mismatch`, which every header axe
+  check switches on, in English and Arabic). It keeps the current page and query, each app's way of storing
   the choice (URL prefix, `?lang=`, cookie) and the RTL flip; hreflang alternates are not touched.
   A link built from the request path goes through `samePath()` (`nav/header.js`): leading slashes
   and backslashes collapse to one "/", so `//evil.example` can never become a protocol-relative link
