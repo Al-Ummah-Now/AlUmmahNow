@@ -19,6 +19,7 @@ import { AUTH_DIR, E2E_ENTITY_PREFIX, LOCAL_STACK, OPENAUTH_URL, RUN_ID, VIDEOS_
 import { getAccessToken } from './oauth';
 import { eraseRowsMentioning, runCron, stackLeftovers, stackR2, stackR2Keys, stackSql, topOfHour } from './local-stack';
 import { adminApi } from './api';
+import { ARCHIVE_BUCKETS, archiveHits } from './archive-hits';
 
 const LEDGER = path.join(AUTH_DIR, 'run-ledger.jsonl');
 
@@ -145,7 +146,7 @@ async function eraseLocalCopies(users: LedgerUser[]): Promise<void> {
   const markers = [RUN_ID, ...users.map((u) => u.userId)];
   for (const key of await stackR2Keys('reports', `report:${E2E_ENTITY_PREFIX}`)) await stackR2('DELETE', 'reports', key);
   for (const user of users) await stackR2('DELETE', 'profiles', user.userId);
-  for (const bucket of ['al-ummah-now-messages', 'admin-backups']) {
+  for (const bucket of ARCHIVE_BUCKETS) {
     const keys = await stackR2Keys(bucket);
     for (let i = 0; i < keys.length; i += 20) {
       await Promise.all(keys.slice(i, i + 20).map(async (key) => {
@@ -164,22 +165,37 @@ async function eraseLocalCopies(users: LedgerUser[]): Promise<void> {
   }
 }
 
+/**
+ * The processor's longest queue batch wait (max_batch_timeout 30 s, apps/processor/wrangler.jsonc)
+ * plus a second: a message sent as the last spec ended is archived by then.
+ */
+const ARCHIVE_SETTLE_MS = 31_000;
+
 /** Revocations outlive the tokens on purpose (the job's leftover check allows them too). */
 const KEPT_ON_PURPOSE = (h: { store: string; location: string }) =>
   h.store === 'kv:TOKEN_REVOCATIONS' || (h.store === 'd1:al-ummah-now-d1' && h.location.startsWith('user_revocations'));
 
 /**
  * Waits (up to 90 s) until the stack holds nothing of this run but revocations, so queued erasure
- * steps finish before the leftover check. Never fails the teardown: the check reports what is left.
+ * steps finish before the leftover check. Message-archive and backup copies the processor wrote
+ * after eraseLocalCopies swept (a report dismissed as the last spec ended) are deleted as each scan
+ * finds them (archive-hits.ts). Never fails the teardown: the check reports what is left.
  */
-async function waitForErasure(users: LedgerUser[], log: (line: string) => void, timeoutMs = 90_000): Promise<void> {
+async function waitForErasure(users: LedgerUser[], log: (line: string) => void, settledAt: number, timeoutMs = 90_000): Promise<void> {
   if (!LOCAL_STACK || !RUN_ID) return;
   const ids = users.map((u) => u.userId);
   const deadline = Date.now() + timeoutMs;
   let left: { store: string; location: string }[] = [];
   do {
     left = (await stackLeftovers(RUN_ID, ids)).filter((h) => !KEPT_ON_PURPOSE(h));
-    if (!left.length) return;
+    // Empty is only final once a message the last spec sent has had its batch time to be archived
+    if (!left.length && Date.now() >= settledAt) return;
+    const late = archiveHits(left);
+    if (late.length) {
+      await Promise.all(late.map(({ bucket, key }) => stackR2('DELETE', bucket, key)));
+      log(`[teardown] deleted ${late.length} message copies archived after the sweep`);
+      left = left.filter((h) => !archiveHits([h]).length);
+    }
     await new Promise((r) => setTimeout(r, 3000));
   } while (Date.now() < deadline);
   log(`[teardown] still on the stack after ${timeoutMs / 1000} s: ${left.slice(0, 10).map((h) => `${h.store} ${h.location}`).join('; ')}`);
@@ -191,6 +207,7 @@ async function waitForErasure(users: LedgerUser[], log: (line: string) => void, 
  */
 export async function teardownRun(log: (line: string) => void = () => undefined): Promise<void> {
   if (!RUN_ID) return;
+  const started = Date.now();
   const users = ledgerUsers();
   if (process.env.E2E_RUN_USER_IDS_FILE) writeRunUserIds(process.env.E2E_RUN_USER_IDS_FILE);
   const problems: string[] = [];
@@ -225,7 +242,7 @@ export async function teardownRun(log: (line: string) => void = () => undefined)
     await eraseLocalCopies(users).catch((error) => problems.push(`local copies: ${(error as Error).message}`));
     // The erasure's processor steps (UserDataErased: invites, error rows, category suggestions) run
     // from the queue: wait until they are done before the job's leftover check looks
-    await waitForErasure(users, log).catch((error) => log(`[teardown] could not wait for the erasure: ${(error as Error).message}`));
+    await waitForErasure(users, log, started + ARCHIVE_SETTLE_MS).catch((error) => log(`[teardown] could not wait for the erasure: ${(error as Error).message}`));
   }
   if (problems.length) throw new Error(`teardown left things behind:\n${problems.join('\n')}`);
 }
