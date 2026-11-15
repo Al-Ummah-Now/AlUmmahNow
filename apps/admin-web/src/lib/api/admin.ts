@@ -883,7 +883,8 @@ export async function saveMobileApps(settings: import('@al-ummah/shared-types').
 }
 
 // YouTube import (wiki AUN-YT-IMPORT; admin-api /api/youtube-import/settings, media:manage, audited
-// key youtube-import:settings). The client secret is never returned: only whether it is present.
+// key youtube-import:settings). The client secret is write only (PUT /client-secret, audited key
+// youtube-import:client-secret without the value): it is never returned, only whether it is present.
 
 export async function getYoutubeImportSettings(): Promise<import('@al-ummah/shared-types').YoutubeImportSettingsView> {
   return fetchAdmin('/api/youtube-import/settings');
@@ -893,4 +894,8 @@ export async function saveYoutubeImportSettings(
   patch: { enabled?: boolean; clientId?: string },
 ): Promise<ActionResult<import('@al-ummah/shared-types').YoutubeImportSettingsView>> {
   return mutate('/api/youtube-import/settings', 'PUT', patch);
+}
+
+export async function saveYoutubeImportClientSecret(value: string): Promise<ActionResult<import('@al-ummah/shared-types').YoutubeImportSettingsView>> {
+  return mutate('/api/youtube-import/client-secret', 'PUT', { value });
 }
