@@ -23,9 +23,12 @@ async function headerSignIn(page: Page): Promise<void> {
   await expect(signIn).toBeVisible({ timeout: 30000 });
   await expect(async () => {
     if (!page.url().startsWith(H.auth)) await signIn.click({ timeout: 5000 });
-    await expect(page).toHaveURL(new RegExp(`^${H.auth}`), { timeout: 10000 });
+    await expect(page).toHaveURL((url) => url.href.startsWith(H.auth), { timeout: 10000 });
   }).toPass({ timeout: 45000 });
 }
+
+/** A host as a literal inside a RegExp (its dots match only dots) */
+const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const H = {
   web: 'https://videos.alummahnow.net',
@@ -106,7 +109,7 @@ test('production: sign-up, sign-in on web, profile sign-in, admin refuses', asyn
   await expect(page.locator('input[name="code"]')).toBeVisible({ timeout: 20000 });
   await page.fill('input[name="code"]', await resendCode(EMAIL, sentAfter));
   await page.click('button[data-component="button"]:not([type="button"])');
-  await expect(page).toHaveURL(new RegExp(`^${H.web}/en(/|\\?|$)`), { timeout: 30000 });
+  await expect(page).toHaveURL(new RegExp(`^${esc(H.web)}/en(/|\\?|$)`), { timeout: 30000 });
   const token = await page.evaluate(async () => (await (await fetch('/api/auth/token')).json()) as { accessToken?: string });
   expect(token.accessToken, 'web session has an access token').toBeTruthy();
 
@@ -115,7 +118,7 @@ test('production: sign-up, sign-in on web, profile sign-in, admin refuses', asyn
   await page.goto(`${H.web}/en`);
   await headerSignIn(page);
   await password(page);
-  await expect(page).toHaveURL(new RegExp(`^${H.web}/en(/|\\?|$)`), { timeout: 30000 });
+  await expect(page).toHaveURL(new RegExp(`^${esc(H.web)}/en(/|\\?|$)`), { timeout: 30000 });
 
   // Profile app (separate OAuth client)
   await context.clearCookies();
@@ -126,7 +129,7 @@ test('production: sign-up, sign-in on web, profile sign-in, admin refuses', asyn
   const landingSignIn = page.locator('#loggedOutView button:has-text("Sign In")').filter({ visible: true });
   await expect(landingSignIn.or(page.locator('input[name="email"]').filter({ visible: true })).first()).toBeVisible({ timeout: 30000 });
   if (await landingSignIn.isVisible()) await landingSignIn.click();
-  await expect(page).toHaveURL(new RegExp(`^${H.auth}`), { timeout: 30000 });
+  await expect(page).toHaveURL(new RegExp(`^${esc(H.auth)}`), { timeout: 30000 });
   await password(page);
   await expect(page.locator('#loggedInView')).toBeVisible({ timeout: 30000 });
   await expect(page.locator('#loggedInView')).toContainText(EMAIL);
@@ -134,7 +137,7 @@ test('production: sign-up, sign-in on web, profile sign-in, admin refuses', asyn
   // Admin-web: a user without the admin role is refused
   await context.clearCookies();
   await page.goto(`${H.adminWeb}/login`);
-  await expect(page).toHaveURL(new RegExp(`^${H.auth}`), { timeout: 30000 });
+  await expect(page).toHaveURL(new RegExp(`^${esc(H.auth)}`), { timeout: 30000 });
   await password(page);
   await landsOn(page, `${H.adminWeb}/access-denied`, 'admin-web sign-in of a non-admin', 45000);
   await page.goto(`${H.adminWeb}/dashboard`);
