@@ -271,7 +271,8 @@ const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 /** `AUN-XXXX-XXXX`, no look-alike letters. */
 export function telegramCode(): string {
 	const b = crypto.getRandomValues(new Uint8Array(8));
-	const chars = [...b].map((x) => CODE_ALPHABET[x % CODE_ALPHABET.length]).join('');
+	// 32 letters, so the low 5 bits pick one evenly
+	const chars = [...b].map((x) => CODE_ALPHABET[x & 31]).join('');
 	return `AUN-${chars.slice(0, 4)}-${chars.slice(4)}`;
 }
 
