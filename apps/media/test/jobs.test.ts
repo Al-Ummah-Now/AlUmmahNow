@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { TranscodeJobMessage } from '@al-ummah/shared-types';
-import { ATTEMPT_LIMIT_MS, containerSeconds, keyAllowed, MAX_ATTEMPTS, newJob, onFailure, onMessage, onProgressEvent, PROGRESS_REPORT_MS, SILENCE_LIMIT_MS, watchdogVerdict } from '../src/jobs';
+import { ATTEMPT_LIMIT_MS, containerSeconds, hasWatchdogDue, keyAllowed, LAUNCH_LIMIT_MS, launchLost, MAX_ATTEMPTS, newJob, onFailure, onMessage, onProgressEvent, PROGRESS_REPORT_MS, SILENCE_LIMIT_MS, watchdogVerdict } from '../src/jobs';
 
 const msg = (over: Partial<TranscodeJobMessage> = {}): TranscodeJobMessage => ({
 	kind: 'transcode',
@@ -21,10 +21,25 @@ describe('job decisions', () => {
 	it('treats a redelivered message as a duplicate and a new job as superseding a running one', () => {
 		const job = newJob(msg(), 0);
 		assert.equal(onMessage(undefined, msg()), 'start');
-		assert.equal(onMessage(job, msg()), 'duplicate');
+		assert.equal(onMessage(job, msg(), 60_000), 'duplicate');
 		assert.equal(onMessage(job, msg({ jobId: 'job-2' })), 'supersede');
 		assert.equal(onMessage({ ...job, status: 'ready' }, msg({ jobId: 'job-2' })), 'start');
 		assert.equal(onMessage({ ...job, status: 'stopping' }, msg({ jobId: 'job-2' })), 'supersede');
+	});
+	it('starts a redelivered job again when its launch was lost (restart mid-start), never a live one', () => {
+		const job = newJob(msg(), 0);
+		const late = LAUNCH_LIMIT_MS + 1;
+		// The consumer died mid-launch (a deploy): saved as running, no container ever answered
+		assert.equal(launchLost(job, late), true);
+		assert.equal(onMessage(job, msg(), late), 'relaunch');
+		// Still inside the launch window: a plain duplicate
+		assert.equal(onMessage(job, msg(), LAUNCH_LIMIT_MS - 1), 'duplicate');
+		// Launched, or reporting in (jobs saved before launchedAt existed): a duplicate, never restarted
+		assert.equal(onMessage({ ...job, launchedAt: 1000 }, msg(), late), 'duplicate');
+		assert.equal(onMessage({ ...job, lastSeenAt: late - 1000 }, msg(), late), 'duplicate');
+		// Only a running attempt can have lost its launch
+		assert.equal(onMessage({ ...job, status: 'waiting_retry' }, msg(), late), 'duplicate');
+		assert.equal(onMessage({ ...job, status: 'ready' }, msg(), late), 'duplicate');
 	});
 	it('retries with growing delays, never past the attempt limit, never on fatal errors', () => {
 		const job = newJob(msg(), 0);
@@ -56,6 +71,16 @@ describe('watchdog', () => {
 		assert.equal(watchdogVerdict(job, null, SILENCE_LIMIT_MS + 1).kind, 'failed');
 		assert.equal(watchdogVerdict({ ...job, lastSeenAt: ATTEMPT_LIMIT_MS }, { status: 'transcoding', jobId: 'job-1' }, ATTEMPT_LIMIT_MS + 1).kind, 'failed');
 		assert.equal(watchdogVerdict(job, { status: 'transcoding', jobId: 'job-1' }, 60_000).kind, 'ok');
+	});
+	it('retries a launch that no container took (restart mid-start) after the launch limit, not the silence limit', () => {
+		const late = LAUNCH_LIMIT_MS + 1;
+		assert.deepEqual(watchdogVerdict(job, null, late), { kind: 'failed', error: 'launch_lost', fatal: false });
+		assert.equal(watchdogVerdict(job, null, LAUNCH_LIMIT_MS - 1).kind, 'ok');
+		// The container has the job: launched, whatever launchedAt says
+		assert.equal(watchdogVerdict(job, { status: 'transcoding', jobId: 'job-1' }, late).kind, 'ok');
+		// Launched and quiet for less than the silence limit: fine
+		assert.equal(watchdogVerdict({ ...job, launchedAt: 1 }, null, late).kind, 'ok');
+		assert.ok(LAUNCH_LIMIT_MS < SILENCE_LIMIT_MS);
 	});
 });
 
@@ -117,5 +142,23 @@ describe('review media (docs/specs/VIDEO-REVIEW.md §5)', () => {
 		const job = newJob(base, 0);
 		assert.equal(job.reviewPrefix, undefined);
 		assert.equal(job.review, undefined);
+	});
+});
+
+describe('hasWatchdogDue', () => {
+	const sqlWith = (n: number | Error) => ({
+		exec: (query: string, ...binds: unknown[]) => {
+			if (n instanceof Error) throw n;
+			assert.match(query, /container_schedules/);
+			assert.equal(binds[0], 1000);
+			return { toArray: () => [{ n }] };
+		},
+	});
+	it('sees a later watchdog run, so the launch does not start a second chain', () => {
+		assert.equal(hasWatchdogDue(sqlWith(1) as never, 1_000_000), true);
+		assert.equal(hasWatchdogDue(sqlWith(0) as never, 1_000_000), false);
+	});
+	it('counts an unreadable schedule table as none (one spare run beats an unwatched job)', () => {
+		assert.equal(hasWatchdogDue(sqlWith(new Error('no such table')) as never, 1_000_000), false);
 	});
 });

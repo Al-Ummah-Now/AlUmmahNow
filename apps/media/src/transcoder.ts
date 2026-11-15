@@ -8,7 +8,7 @@
 import { Container, type OutboundHandlerContext } from '@cloudflare/containers';
 import { failRungs, MEDIA_MP4, mediaPrefix, sanitizeFailure, sanitizeMp4, type CaptionAudioJobMessage, type LiveReviewJobMessage, type Mp4JobMessage, sanitizeRungs, type R2RungProgress, type TranscodeFailure, type TranscodeJobEvent, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
 import { bucketFor, errorText, log, type Env } from './env';
-import { containerSeconds, keyAllowed, liveReviewPrefix, liveVodSource, liveVodTarget, newJob, onFailure, onMessage, onProgressEvent, watchdogVerdict, WATCHDOG_SECONDS, type JobState } from './jobs';
+import { containerSeconds, hasWatchdogDue, keyAllowed, liveReviewPrefix, liveVodSource, liveVodTarget, newJob, onFailure, onMessage, onProgressEvent, watchdogVerdict, WATCHDOG_SECONDS, type JobState } from './jobs';
 import { reportCaptionAudio, reportEvent, reportLiveReviewMedia, reportMp4Event, sourceCandidates } from './videos-api';
 import { serveOriginal } from './originals';
 import { storeUpload } from './uploads';
@@ -158,11 +158,15 @@ export class Transcoder extends Container<Env> {
 		await this.ctx.storage.put('job', job);
 	}
 
-	/** Queue consumer entry. Idempotent per job id. */
-	async startJob(msg: TranscodeJobMessage): Promise<'started' | 'duplicate' | 'superseded'> {
+	/** Queue consumer entry. Idempotent per job id (a lost launch of the same job starts again). */
+	async startJob(msg: TranscodeJobMessage): Promise<'started' | 'duplicate' | 'superseded' | 'relaunched'> {
 		const current = await this.job();
-		const action = onMessage(current, msg);
+		const action = onMessage(current, msg, Date.now());
 		if (action === 'duplicate') return 'duplicate';
+		if (action === 'relaunch') {
+			log.warn('[Transcoder] Launch was lost (restarted mid-start); starting again', { videoId: msg.videoId, jobId: msg.jobId });
+			await this.destroy().catch(() => undefined);
+		}
 		if (action === 'supersede' && current) {
 			log.warn('[Transcoder] Newer job supersedes a running one', { videoId: msg.videoId, old: current.jobId, new: msg.jobId });
 			await this.destroy().catch(() => undefined);
@@ -171,6 +175,9 @@ export class Transcoder extends Container<Env> {
 		const job = newJob(msg, Date.now());
 		await this.save(job);
 		await this.ctx.storage.delete('progressReported');
+		// Armed before the launch: if this object or its container restarts mid-start (a deploy),
+		// the watchdog still finds the job and retries it (launch_lost) instead of it hanging
+		await this.armWatchdog();
 		try {
 			await this.launch(job);
 		} catch (error) {
@@ -179,7 +186,7 @@ export class Transcoder extends Container<Env> {
 			await this.destroy().catch(() => undefined);
 			throw error;
 		}
-		return action === 'supersede' ? 'superseded' : 'started';
+		return action === 'supersede' ? 'superseded' : action === 'relaunch' ? 'relaunched' : 'started';
 	}
 
 	private async launch(job: JobState): Promise<void> {
@@ -196,7 +203,9 @@ export class Transcoder extends Container<Env> {
 			body: JSON.stringify({ jobId: job.jobId, prefix: job.prefix, attempt: job.attempt, videoId: job.videoId, rev: job.rev, ...(job.review ? { review: job.review, reviewPrefix: job.reviewPrefix } : {}) }),
 		});
 		if (res.status !== 202 && res.status !== 200) throw new Error(`container refused the job: HTTP ${res.status} ${await res.text()}`);
-		await this.schedule(WATCHDOG_SECONDS, 'watchdog');
+		job.launchedAt = Date.now();
+		await this.save(job);
+		await this.armWatchdog();
 		await this.report(job, { type: 'started' });
 	}
 
@@ -206,6 +215,7 @@ export class Transcoder extends Container<Env> {
 		if (!job || job.jobId !== ev.jobId || job.status !== 'running') return;
 		const now = Date.now();
 		job.lastSeenAt = now;
+		job.launchedAt ??= now;
 		if (ev.type === 'progress') {
 			// At most one report per 10 s, but every rung state change at once (the admin chips)
 			const step = onProgressEvent(job, ev, await this.ctx.storage.get<{ at: number; states: string }>('progressReported'), now);
@@ -286,8 +296,10 @@ export class Transcoder extends Container<Env> {
 		job.lastSeenAt = job.attemptStartedAt;
 		job.progress = 0;
 		delete job.rungs;
+		delete job.launchedAt;
 		await this.ctx.storage.delete('progressReported');
 		await this.save(job);
+		await this.armWatchdog();
 		try {
 			await this.launch(job);
 		} catch (error) {
@@ -310,11 +322,21 @@ export class Transcoder extends Container<Env> {
 		const now = Date.now();
 		if (status?.jobId === job.jobId) {
 			job.lastSeenAt = now;
+			job.launchedAt ??= now;
 			await this.save(job);
 		}
 		const verdict = watchdogVerdict(job, status, now);
 		if (verdict.kind === 'ready') return this.finishReady(job, verdict.result);
-		if (verdict.kind === 'failed') return this.finishFailed(job, verdict.error, verdict.fatal, { stage: 'container', stopReason: `watchdog: ${verdict.error}` });
+		if (verdict.kind === 'failed') return this.finishFailed(job, verdict.error, verdict.fatal, { stage: verdict.error === 'launch_lost' ? 'start' : 'container', stopReason: `watchdog: ${verdict.error}` });
+		await this.schedule(WATCHDOG_SECONDS, 'watchdog');
+	}
+
+	/**
+	 * One watchdog chain per object: schedule the next run unless one is already due later (each
+	 * run deletes its own row after it returns and schedules the next itself).
+	 */
+	private async armWatchdog(): Promise<void> {
+		if (hasWatchdogDue(this.ctx.storage.sql, Date.now())) return;
 		await this.schedule(WATCHDOG_SECONDS, 'watchdog');
 	}
 
