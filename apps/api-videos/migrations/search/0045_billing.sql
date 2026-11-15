@@ -126,6 +126,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_billing_subscriptions_ref ON billing_subsc
 CREATE INDEX IF NOT EXISTS idx_billing_subscriptions_user ON billing_subscriptions (user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_billing_subscriptions_status ON billing_subscriptions (status, updated_at, id);
 CREATE INDEX IF NOT EXISTS idx_billing_subscriptions_comp_by ON billing_subscriptions (comp_by) WHERE comp_by IS NOT NULL;
+-- The 10-minute sweep: rows whose access date has passed
+CREATE INDEX IF NOT EXISTS idx_billing_subscriptions_access ON billing_subscriptions (access_until) WHERE access_until IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_billing_subscriptions_sync ON billing_subscriptions (entitlement_synced, access_until);
 
 -- Charges (billing history)

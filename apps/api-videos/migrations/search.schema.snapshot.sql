@@ -143,6 +143,7 @@ CREATE INDEX idx_billing_payments_sub ON billing_payments (subscription_id, occu
 CREATE INDEX idx_billing_payments_user ON billing_payments (user_id, occurred_at);
 CREATE INDEX idx_billing_price_links_ref ON billing_price_links (provider, mode, provider_ref);
 CREATE UNIQUE INDEX idx_billing_prices_key ON billing_prices (tier_id, period, currency);
+CREATE INDEX idx_billing_subscriptions_access ON billing_subscriptions (access_until) WHERE access_until IS NOT NULL;
 CREATE INDEX idx_billing_subscriptions_comp_by ON billing_subscriptions (comp_by) WHERE comp_by IS NOT NULL;
 CREATE UNIQUE INDEX idx_billing_subscriptions_ref ON billing_subscriptions (provider, mode, provider_ref) WHERE provider_ref IS NOT NULL;
 CREATE INDEX idx_billing_subscriptions_status ON billing_subscriptions (status, updated_at, id);
