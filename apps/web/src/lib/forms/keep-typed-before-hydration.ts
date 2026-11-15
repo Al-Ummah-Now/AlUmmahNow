@@ -38,7 +38,7 @@ function reactProps(el: Element): Record<string, unknown> | undefined {
 }
 
 /** Gives fields typed into before hydration their text back. Returns how many it restored. */
-export function keepTypedBeforeHydration(root: ParentNode = document): number {
+export function keepTypedBeforeHydration(root: Pick<ParentNode, "querySelectorAll"> = document): number {
   let restored = 0;
   for (const el of Array.from(root.querySelectorAll<Field>('input, textarea'))) {
     const typed = el[TYPED_PROP];
