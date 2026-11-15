@@ -6,12 +6,14 @@
  * Shown to signed-in users. With a channel active it lists that channel's
  * playlists; without one, the user's personal playlists (no channel needed).
  * A checkbox per playlist (checked = video is in it), and a new playlist the
- * video is added to immediately.
+ * video is added to immediately. It opens with the first page of playlists;
+ * "Show more playlists" pages on and the search box searches every playlist
+ * on the server (hooks/usePlaylistPages.ts).
  */
 
 import { playlistName } from '@/lib/playlists/playlist-names';
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ListPlus, Lock, Plus, X } from 'lucide-react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { ListPlus, Lock, Plus, Search, X } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useCurrentChannel } from '@/hooks/useMultiAccount';
@@ -19,10 +21,10 @@ import { logger } from '@/lib/logger-client';
 import {
   addVideoToPlaylist,
   createPlaylist,
-  listPlaylists,
   removeVideoFromPlaylist,
   type PlaylistWithVideos,
 } from '@/lib/api/playlists';
+import { usePlaylistPages } from '@/hooks/usePlaylistPages';
 import { normalizePlaylistTitle } from '@/lib/playlists/playlist-utils';
 import { menuShift } from './menu-shift';
 
@@ -36,7 +38,6 @@ interface SaveToPlaylistProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-const MAX_PLAYLISTS = 50;
 export default function SaveToPlaylist({ videoId, channelId: channelIdProp, className = '', open: openProp, onOpenChange }: SaveToPlaylistProps) {
   const { t, isRTL } = useLanguage();
   const { user } = useAuth();
@@ -51,8 +52,6 @@ export default function SaveToPlaylist({ videoId, channelId: channelIdProp, clas
     if (!controlled) setOpenState(value);
     onOpenChange?.(value);
   }, [controlled, onOpenChange, open]);
-  const [playlists, setPlaylists] = useState<PlaylistWithVideos[]>([]);
-  const [loading, setLoading] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [newTitle, setNewTitle] = useState('');
@@ -81,30 +80,40 @@ export default function SaveToPlaylist({ videoId, channelId: channelIdProp, clas
 
   // Playlists created in this dialog: a list load that started before them (it can take seconds,
   // #909) must not drop them when it lands
-  const createdHere = useRef(new Map<string, PlaylistWithVideos>());
-
-  const loadPlaylists = useCallback(async () => {
-    setLoading(true);
-    try {
-      // The active channel's playlists, or (no channel) the user's personal ones
-      const result = await listPlaylists(channelId ? { channelId, limit: MAX_PLAYLISTS } : { mine: true, limit: MAX_PLAYLISTS });
-      const loaded = result?.data || [];
-      const loadedIds = new Set(loaded.map((p) => p.id));
-      setPlaylists([...[...createdHere.current.values()].filter((p) => !loadedIds.has(p.id)), ...loaded]);
-    } catch (error) {
-      logger.error('[SaveToPlaylist] Failed to load playlists', { channelId, error });
-      setMessage({ type: 'error', text: t.playlist.loadFailed });
-    } finally {
-      setLoading(false);
-    }
-  }, [channelId, t]);
-
-  useEffect(() => {
+  const [createdHere, setCreatedHere] = useState<PlaylistWithVideos[]>([]);
+  // The video's membership after a toggle here (the loaded pages predate it)
+  const [videosOf, setVideosOf] = useState<Map<string, string[]>>(() => new Map());
+  const [search, setSearch] = useState('');
+  // Each opening starts afresh and reads the list again (set while rendering, so it is read once)
+  const [openings, setOpenings] = useState(open ? 1 : 0);
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
     if (open) {
       setMessage(null);
-      loadPlaylists();
+      setSearch('');
+      setVideosOf(new Map());
+      setOpenings((n) => n + 1);
     }
-  }, [open, loadPlaylists]);
+  }
+
+  // The active channel's playlists, or (no channel) the user's personal ones, a page at a time
+  const pages = usePlaylistPages(channelId, { enabled: open, query: search, reloadKey: openings });
+
+  useEffect(() => {
+    if (pages.failed) logger.warn('[SaveToPlaylist] Playlists not loaded', { channelId });
+  }, [pages.failed, channelId]);
+
+  const playlists = useMemo(() => {
+    const loadedIds = new Set(pages.items.map((p) => p.id));
+    // While searching, the server's matches only; otherwise the new ones first, then every loaded page
+    const created = pages.searched ? [] : createdHere.filter((p) => !loadedIds.has(p.id));
+    return [...created, ...pages.items].map((p) => {
+      const videos = videosOf.get(p.id);
+      return videos ? { ...p, videos } : p;
+    });
+  }, [pages.items, pages.searched, createdHere, videosOf]);
+  const loading = pages.loading;
 
   // Close on outside click / Escape
   useEffect(() => {
@@ -144,10 +153,10 @@ export default function SaveToPlaylist({ videoId, channelId: channelIdProp, clas
       return;
     }
 
-    setPlaylists((prev) => prev.map((p) => p.id !== playlist.id ? p : {
-      ...p,
-      videos: contains ? (p.videos || []).filter((id) => id !== videoId) : [...(p.videos || []), videoId],
-    }));
+    setVideosOf((prev) => new Map(prev).set(
+      playlist.id,
+      contains ? (playlist.videos || []).filter((id) => id !== videoId) : [...(playlist.videos || []), videoId],
+    ));
     setMessage({
       type: 'success',
       text: (contains ? t.playlist.removedFrom : t.playlist.addedTo).replace('{title}', title),
@@ -186,8 +195,8 @@ export default function SaveToPlaylist({ videoId, channelId: channelIdProp, clas
       title: playlist.title || title,
       videos: added?.success ? [videoId] : [],
     };
-    createdHere.current.set(entry.id, entry);
-    setPlaylists((prev) => [entry, ...prev.filter((p) => p.id !== entry.id)]);
+    setCreatedHere((prev) => [entry, ...prev.filter((p) => p.id !== entry.id)]);
+    setVideosOf((prev) => new Map(prev).set(entry.id, entry.videos || []));
     setMessage(added?.success
       ? { type: 'success', text: t.playlist.addedTo.replace('{title}', title) }
       : { type: 'error', text: t.playlist.saveFailed });
@@ -230,11 +239,32 @@ export default function SaveToPlaylist({ videoId, channelId: channelIdProp, clas
 
           {(
             <>
-              <div className="max-h-64 overflow-y-auto py-2">
+              <div className="px-3 pt-3" role="search">
+                <label className="sr-only" htmlFor={`playlist-search-${videoId}`}>{t.playlist.searchYourPlaylists}</label>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute start-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+                  <input
+                    id={`playlist-search-${videoId}`}
+                    type="search"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder={t.playlist.searchYourPlaylists}
+                    autoComplete="off"
+                    data-testid="save-to-playlist-search"
+                    className="w-full ps-8 pe-3 py-1.5 text-sm border dark:border-gray-600 rounded-lg dark:bg-gray-800 dark:text-white"
+                  />
+                </div>
+              </div>
+              <div className="max-h-64 overflow-y-auto py-2" aria-busy={loading || pages.loadingMore}>
                 {loading && playlists.length === 0 ? (
                   <p className="px-4 py-2 text-sm text-gray-500">{t.common.loading}</p>
+                ) : pages.failed && playlists.length === 0 ? (
+                  <p role="alert" className="px-4 py-2 text-sm text-red-600 dark:text-red-400">
+                    {t.playlist.loadFailed}{' '}
+                    <button type="button" className="underline" onClick={pages.retry}>{t.playlistTools.tryAgain}</button>
+                  </p>
                 ) : playlists.length === 0 ? (
-                  <p className="px-4 py-2 text-sm text-gray-500">{t.playlist.noPlaylists}</p>
+                  <p className="px-4 py-2 text-sm text-gray-500">{pages.searched ? t.playlist.noMatchingPlaylists : t.playlist.noPlaylists}</p>
                 ) : (
                   playlists.map((playlist) => {
                     const checked = (playlist.videos || []).includes(videoId);
@@ -260,6 +290,20 @@ export default function SaveToPlaylist({ videoId, channelId: channelIdProp, clas
                       </label>
                     );
                   })
+                )}
+                {!loading && (pages.hasMore || pages.moreFailed) && (
+                  <div className="px-4 pt-1">
+                    {pages.moreFailed && <p role="alert" className="text-xs text-red-600 dark:text-red-400">{t.playlist.morePlaylistsFailed}</p>}
+                    <button
+                      type="button"
+                      onClick={pages.loadMore}
+                      disabled={pages.loadingMore}
+                      data-testid="save-to-playlist-more"
+                      className="text-sm text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50"
+                    >
+                      {pages.loadingMore ? t.common.loading : t.playlist.showMorePlaylists}
+                    </button>
+                  </div>
                 )}
               </div>
 

@@ -11,10 +11,31 @@ import { withPlaylistCovers } from "../../lib/playlistCovers";
 import { logger } from "../../lib/logger";
 import { isSystemPlaylist } from "../../lib/library";
 import { scanFill } from "../../lib/listFill";
+import { normalizeTitleQuery } from "../video/videoList";
 
 // Bounds for scanning the playlists bucket when filtering by channel
 const CHANNEL_SCAN_PAGE_SIZE = 100;
 const CHANNEL_SCAN_MAX_PAGES = 20;
+
+/** Where a channelId/mine page starts: their cursor is the offset of the next page. */
+export function pageOffset(cursor: string | undefined): number {
+    const n = Number.parseInt(cursor ?? "", 10);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/** Whether the playlist's name (title, name or a translation) contains `query` (normalizeTitleQuery). */
+export function playlistMatches(playlist: { title?: unknown; name?: unknown; titleLocalized?: unknown }, query: string): boolean {
+    const localized = playlist.titleLocalized && typeof playlist.titleLocalized === "object" ? Object.values(playlist.titleLocalized as Record<string, unknown>) : [];
+    return [playlist.title, playlist.name, ...localized].some((text) => typeof text === "string" && text.normalize("NFKC").toLocaleLowerCase().includes(query));
+}
+
+/** One page of the sorted matches, and the cursor of the next ('' after the last). */
+function slicePage<T>(matches: T[], cursor: string | undefined, limit: number): { items: T[]; cursor: string } {
+    const offset = pageOffset(cursor);
+    const items = matches.slice(offset, offset + limit);
+    const next = offset + items.length;
+    return { items, cursor: next < matches.length ? String(next) : "" };
+}
 
 export class PlaylistsList extends OptionalAuthRoute {
     schema = {
@@ -30,9 +51,10 @@ export class PlaylistsList extends OptionalAuthRoute {
                     description: "The last cursor returned from the previous request",
                 }).optional(),
                 channelId: string({
-                    description: "Only return playlists that belong to this channel (cursor is ignored; up to `limit` newest playlists)",
+                    description: "Only return playlists that belong to this channel, newest first, `limit` at a time: follow `cursor` for the next page (empty after the last)",
                 }).optional(),
-                mine: z.enum(["true", "false"]).optional().describe("true (signed in): the caller's personal playlists, made without a channel, private and unlisted ones included, newest first (cursor is ignored; up to `limit`). Channel playlists are listed with channelId"),
+                mine: z.enum(["true", "false"]).optional().describe("true (signed in): the caller's personal playlists, made without a channel, private and unlisted ones included, newest first, `limit` at a time: follow `cursor` for the next page (empty after the last). Channel playlists are listed with channelId"),
+                q: Str({ description: "With channelId or mine: only playlists whose name (any language, case-insensitive) contains this text" }).max(200).optional(),
             }),
 			headers: z.object({
 				channelId: Str({ description: "Channel ID" }).optional().nullable(),
@@ -68,7 +90,9 @@ export class PlaylistsList extends OptionalAuthRoute {
 
     async handle(c: AppContext) {
         const request = await this.getValidatedData<typeof this.schema>();
-        const { limit, cursor, channelId: channelFilter, mine } = request.query;
+        const { limit, cursor, channelId: channelFilter, mine, q } = request.query;
+        const query = normalizeTitleQuery(q);
+        const named = <T extends { title?: unknown; name?: unknown; titleLocalized?: unknown }>(list: T[]) => query ? list.filter((p) => playlistMatches(p, query)) : list;
         const userId = this.getUserId(c);
 
         type PlaylistType = z.infer<typeof Playlist>;
@@ -100,11 +124,12 @@ export class PlaylistsList extends OptionalAuthRoute {
                 }
             }
             matches.sort((a, b) => (b.dateModified || '').localeCompare(a.dateModified || ''));
+            const page = slicePage(named(matches), cursor, limit);
             logger.debug('[PlaylistsList] Personal playlists listed', { userId, count: matches.length, source: indexed ? 'footprints' : 'scan' });
             return {
-                cursor: "",
+                cursor: page.cursor,
                 limit,
-                data: await withPlaylistCovers(c.env, matches.slice(0, limit).map(toPlaylistResponse), userId),
+                data: await withPlaylistCovers(c.env, page.items.map(toPlaylistResponse), userId),
             };
         }
 
@@ -126,6 +151,7 @@ export class PlaylistsList extends OptionalAuthRoute {
             }
 
             matches.sort((a, b) => (b.dateModified || '').localeCompare(a.dateModified || ''));
+            const page = slicePage(named(matches), cursor, limit);
 
             logger.debug('[PlaylistsList] Channel playlists listed', {
                 channelId: channelFilter,
@@ -133,9 +159,9 @@ export class PlaylistsList extends OptionalAuthRoute {
             });
 
             return {
-                cursor: "",
+                cursor: page.cursor,
                 limit,
-                data: await withPlaylistCovers(c.env, matches.slice(0, limit).map(toPlaylistResponse), userId),
+                data: await withPlaylistCovers(c.env, page.items.map(toPlaylistResponse), userId),
             };
         }
 

@@ -42,7 +42,11 @@ describe('SaveToPlaylist without a channel', () => {
     expect(mockList).toHaveBeenCalledWith({ mine: true, limit: 50 });
     expect(screen.queryByText(/channel/i)).toBeNull();
 
-    const box = await waitFor(() => container.querySelector('[data-playlist-id="pl_me"] input[type="checkbox"]') as HTMLInputElement);
+    const box = await waitFor(() => {
+      const found = container.querySelector('[data-playlist-id="pl_me"] input[type="checkbox"]') as HTMLInputElement | null;
+      expect(found).not.toBeNull();
+      return found!;
+    });
     await act(async () => { fireEvent.click(box); });
     expect(mockAdd).toHaveBeenCalledWith('pl_me', { videoId: 'v1' }, { channelId: '' });
     await waitFor(() => expect(box.checked).toBe(true));

@@ -12,19 +12,40 @@ import { callUploadApi } from '@/lib/api/upload-client';
 import type { PlaylistWithVideos } from '@/lib/api/playlists';
 import type { PlaylistAddStatus } from '@/lib/upload/playlist-adds';
 
-/** Playlists one channel can hold on the upload page's list (newest first). */
+/** Playlists per request on the upload page's list (newest first); the list follows the cursor to the end. */
 export const UPLOAD_PLAYLISTS_LIMIT = 100;
+/** A bound on the pages read, so a cursor that never ends cannot loop forever */
+const UPLOAD_PLAYLISTS_MAX_PAGES = 100;
 
-/** The channel's playlists (its private ones too, for its owner and managers); null when they could not be read. */
+/**
+ * Every playlist of the channel (its private ones too, for its owner and
+ * managers), page after page: the upload pickers search this list in place, so
+ * it must hold them all (it used to stop at the first 100). Null when any page
+ * could not be read, never a silently short list.
+ */
 export async function listChannelPlaylists(channelId: string): Promise<PlaylistWithVideos[] | null> {
-  const params = new URLSearchParams({ channelId, limit: String(UPLOAD_PLAYLISTS_LIMIT) });
-  const { accessToken: _token, ...res } = await callUploadApi<never>(
-    { method: 'GET', path: `/api/playlists?${params.toString()}`, channelId, retries: 1 },
-    'Playlists unavailable',
-  );
-  // The list answers { data } rather than { success, result }
-  const data = (res as unknown as { data?: PlaylistWithVideos[] }).data;
-  return Array.isArray(data) ? data : null;
+  const all: PlaylistWithVideos[] = [];
+  const seen = new Set<string>();
+  let cursor = '';
+  for (let page = 0; page < UPLOAD_PLAYLISTS_MAX_PAGES; page++) {
+    const params = new URLSearchParams({ channelId, limit: String(UPLOAD_PLAYLISTS_LIMIT) });
+    if (cursor) params.set('cursor', cursor);
+    const { accessToken: _token, ...res } = await callUploadApi<never>(
+      { method: 'GET', path: `/api/playlists?${params.toString()}`, channelId, retries: 1 },
+      'Playlists unavailable',
+    );
+    // The list answers { data, cursor } rather than { success, result }
+    const answer = res as unknown as { data?: PlaylistWithVideos[]; cursor?: string | null };
+    if (!Array.isArray(answer.data)) return null;
+    for (const playlist of answer.data) {
+      if (seen.has(playlist.id)) continue;
+      seen.add(playlist.id);
+      all.push(playlist);
+    }
+    if (!answer.cursor || answer.cursor === cursor) break;
+    cursor = answer.cursor;
+  }
+  return all;
 }
 
 export interface NewPlaylistInput {

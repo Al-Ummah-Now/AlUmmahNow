@@ -18,6 +18,28 @@ it("lists the channel's playlists", async () => {
   expect(await listChannelPlaylists('ch1')).toBeNull();
 });
 
+it('follows the cursor to every playlist of a channel with more than one page', async () => {
+  const all = Array.from({ length: 250 }, (_, i) => ({ id: `p${i + 1}` }));
+  callUploadApi.mockImplementation(async ({ path }: { path: string }) => {
+    const offset = Number(new URL(path, 'http://x').searchParams.get('cursor') || 0);
+    const data = all.slice(offset, offset + 100);
+    return { data, cursor: offset + 100 < all.length ? String(offset + 100) : '' };
+  });
+  const list = await listChannelPlaylists('ch1');
+  expect(list).toHaveLength(250);
+  expect(list?.[149]).toEqual({ id: 'p150' });
+  expect(callUploadApi.mock.calls.map((c) => c[0].path)).toEqual([
+    '/api/playlists?channelId=ch1&limit=100',
+    '/api/playlists?channelId=ch1&limit=100&cursor=100',
+    '/api/playlists?channelId=ch1&limit=100&cursor=200',
+  ]);
+});
+
+it('a later page that fails fails the list (no silently short list)', async () => {
+  callUploadApi.mockResolvedValueOnce({ data: [{ id: 'p1' }], cursor: '100' }).mockResolvedValueOnce({ success: false });
+  expect(await listChannelPlaylists('ch1')).toBeNull();
+});
+
 it('creates a playlist with its visibility and description', async () => {
   callUploadApi.mockResolvedValue({ success: true, result: { playlist: { id: 'p9', title: 'Duas' } } });
   expect(await createChannelPlaylist('ch1', { title: 'Duas', description: 'Daily', isPublic: false })).toEqual({ id: 'p9', title: 'Duas', videos: [] });

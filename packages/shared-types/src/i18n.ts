@@ -1761,6 +1761,10 @@ export interface AppTranslations {
     deleteFailed: string;
     loadFailed: string;
     noPlaylists: string;
+    searchYourPlaylists: string;
+    showMorePlaylists: string;
+    noMatchingPlaylists: string;
+    morePlaylistsFailed: string;
     viewPlaylist: string;
     saveToPlaylist: string;
     saveToPlaylistTitle: string;
