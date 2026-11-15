@@ -1,26 +1,37 @@
 import { cache } from 'react';
 import { notFound } from 'next/navigation';
 import type { Channel } from '@al-ummah/shared-types';
-import { getChannelForOwner } from '@/lib/api/channels';
+import { getChannelById, getChannelForOwner } from '@/lib/api/channels';
 import { getServerAuthContext } from '@/lib/api/server-auth';
 import { getFeatures } from '@/lib/features/server';
+import { getChannelRole } from '@/lib/channel-utils';
 import { checkPath, type StudioFeatures } from './nav';
-import { can } from './permissions';
+import { can, roleForChannel, type StudioRole } from './permissions';
 import { getStudioSite } from './site';
-import { roleForChannel, type StudioRole } from './permissions';
 
 export type StudioAccess =
   | { status: 'signed-out' }
   | { status: 'none' }
   | { status: 'ok'; channel: Channel; role: StudioRole };
 
-/** The caller's access to a channel, read once per request. Site roles play no part in it. */
+/**
+ * The caller's access to a channel, read once per request. Site roles play no part in it.
+ * The role comes from the caller's channel list (GET /api/channels/access), which covers
+ * every channel role. Only roles that may see the channel's private fields load the owner
+ * view; editors and moderators get the public channel (the owner view refuses them).
+ */
 export const getStudioAccess = cache(async (channelId: string): Promise<StudioAccess> => {
   const auth = await getServerAuthContext();
   if (!auth?.userId) return { status: 'signed-out' };
-  const channel = await getChannelForOwner(channelId);
-  const role = roleForChannel(channel, auth.userId);
-  return channel && role ? { status: 'ok', channel, role } : { status: 'none' };
+  const role = await getChannelRole(channelId);
+  if (!role) {
+    // The list can be unavailable: the owner view still answers owners and channel admins
+    const channel = await getChannelForOwner(channelId);
+    const ownRole = roleForChannel(channel, auth.userId);
+    return channel && ownRole ? { status: 'ok', channel, role: ownRole } : { status: 'none' };
+  }
+  const channel = can(role, 'channel.view_private') ? await getChannelForOwner(channelId) : await getChannelById(channelId);
+  return channel ? { status: 'ok', channel, role } : { status: 'none' };
 });
 
 /** The signed-in account's channels and active channel, loading them if the session has none yet. */

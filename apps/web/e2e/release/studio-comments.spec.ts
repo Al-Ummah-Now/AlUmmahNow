@@ -91,8 +91,12 @@ test.describe('Release: Studio Comments', () => {
         await expect(row.getByTestId('studio-comment-reply-form')).toHaveCount(0, { timeout: 30000 });
         await expect
           .poll(async () => {
-            const res = await apiFetch(owner, `/api/community/channels/${channelId}/posts/${postId}/comments?limit=50`);
-            return JSON.stringify(await res.json());
+            // The list has top-level comments only; the channel's reply is under the comment's replies
+            const base = `/api/community/channels/${channelId}/posts/${postId}/comments`;
+            const list = (await (await apiFetch(owner, `${base}?limit=50`)).json()) as { comments?: Array<{ id: string; content: string }> };
+            const parent = list.comments?.find((c) => c.content === marker);
+            if (!parent) return '';
+            return JSON.stringify(await (await apiFetch(owner, `${base}/${parent.id}/replies?limit=50`)).json());
           }, { timeout: 30000 })
           .toContain(reply);
 
