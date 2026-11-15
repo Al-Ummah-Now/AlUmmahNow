@@ -923,6 +923,12 @@ export interface AppTranslations {
     loadMore: string;
     loadingMore: string;
     relaxedNotice: string;
+    /** Transcript search (AUN-CAPTIONS §5.10) */
+    saidInVideos: string;
+    saidInVideosHint: string;
+    saidAt: string;
+    watchFrom: string;
+    fromCaptions: string;
     searchError: string;
     retry: string;
     removeFromHistory: string;

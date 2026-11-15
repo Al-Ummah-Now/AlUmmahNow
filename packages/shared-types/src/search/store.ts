@@ -8,6 +8,7 @@
  */
 
 import { SEARCH_TABLES, SearchEntityType, SearchRow, projectSearchDocument, searchRowHash } from './documents';
+import { removeVideoTranscriptStatements } from './transcripts';
 
 /** Minimal D1 surface used by the search index (structurally compatible with Cloudflare's D1Database). */
 export interface SearchDb {
@@ -205,6 +206,8 @@ export async function removeSearchDocument(
   } else {
     statements.push(db.prepare(`DELETE FROM ${base} WHERE id = ?${guard}`).bind(id));
   }
+  // A deleted video's transcript passages go with it (transcripts.ts); a hidden one is filtered at query time
+  if (type === 'video' && final) statements.push(...removeVideoTranscriptStatements(db, id));
   await db.batch(statements);
   return type === 'channel' ? 'hidden' : 'removed';
 }

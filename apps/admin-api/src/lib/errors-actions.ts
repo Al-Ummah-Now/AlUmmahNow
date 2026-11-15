@@ -36,7 +36,7 @@ type Fetcher = { fetch(input: string, init?: RequestInit): Promise<Response> };
 
 /** Service name in a retry spec → the binding and the paths Retry may POST to. */
 export const SERVICE_RETRIES: Record<string, { binding: keyof AdminBindings; paths: readonly string[] }> = {
-  processor: { binding: 'PROCESSOR', paths: ['/dlq/replay', '/internal/quran/sync', '/internal/captions/claim'] },
+  processor: { binding: 'PROCESSOR', paths: ['/dlq/replay', '/internal/quran/sync', '/internal/captions/claim', '/internal/search/transcript'] },
   scheduler: { binding: 'SCHEDULER', paths: ['/failed/retry'] },
   // A new upload that could not be added to its playlist (api-videos lib/playlistUploadAdds.ts);
   // a failed transcription job, run again free of charge (api-videos lib/captions/jobs.ts); a media

@@ -21,6 +21,7 @@ import {
   SearchResultItem,
   SearchPlaylistPayload,
   SearchStatement,
+  SearchTranscriptMatch,
   SearchVideoPayload,
   SuggestionType,
   getActiveVideoCategories,
@@ -209,6 +210,65 @@ export interface IndexSearchResult {
   hasMore: boolean;
   nextCursor: string | null;
   relaxed: boolean;
+  /** Videos whose captions say it (first page of a text search that includes videos) */
+  transcripts?: SearchTranscriptMatch[];
+}
+
+/** Videos listed with where they say it (best passage each) */
+export const TRANSCRIPT_MATCH_LIMIT = 6;
+/** Passages read to find them: several passages of one video often match */
+const TRANSCRIPT_CANDIDATES = 60;
+
+interface TranscriptRow {
+  video_id: string;
+  language: string;
+  start_ms: number;
+  text: string;
+  payload: string;
+  channel_payload: string | null;
+}
+
+/**
+ * Passages of published caption tracks that contain the query (AUN-CAPTIONS §5.10), best first,
+ * one per video, of visible videos of visible channels only, with the video filters of the search
+ * (language is the video's, not the track's). The watch page opens at `startMs`.
+ */
+export async function searchTranscripts(db: SearchDb, query: SearchQuery, match: string, now: number, limit = TRANSCRIPT_MATCH_LIMIT): Promise<SearchTranscriptMatch[]> {
+  const where = ['search_transcripts_fts MATCH ?', 'd.visible = 1', '(c.id IS NULL OR c.visible = 1)'];
+  const binds: unknown[] = [match];
+  if (query.language) { where.push('d.language = ?'); binds.push(query.language); }
+  if (query.category) { where.push('d.category = ?'); binds.push(query.category); }
+  if (query.channelId) { where.push('d.channel_id = ?'); binds.push(query.channelId); }
+  if (query.duration) {
+    const bounds = SEARCH_DURATION_BOUNDS[query.duration];
+    if (bounds.min !== undefined) { where.push('d.duration >= ?'); binds.push(bounds.min); }
+    if (bounds.max !== undefined) { where.push('d.duration < ?'); binds.push(bounds.max); }
+  }
+  if (query.format) where.push(query.format === 'short' ? 'd.is_short = 1' : '(d.is_short = 0 AND d.is_live = 0)');
+  if (query.date) { where.push('d.created_at >= ?'); binds.push(now - SEARCH_DATE_WINDOWS_MS[query.date]); }
+  if (query.verified) where.push('(d.is_verified = 1 OR c.is_verified = 1)');
+  const sql = `SELECT t.video_id AS video_id, t.language AS language, t.start_ms AS start_ms, t.text AS text,
+      d.payload AS payload, c.payload AS channel_payload
+    FROM search_transcripts_fts
+    JOIN search_transcripts t ON t.rowid = search_transcripts_fts.rowid
+    JOIN search_videos d ON d.id = t.video_id
+    LEFT JOIN search_channels c ON c.id = d.channel_id
+    WHERE ${where.join(' AND ')}
+    ORDER BY bm25(search_transcripts_fts) ASC, t.start_ms ASC
+    LIMIT ?`;
+  binds.push(TRANSCRIPT_CANDIDATES);
+  const { results } = await db.prepare(sql).bind(...binds).all<TranscriptRow>();
+  const out: SearchTranscriptMatch[] = [];
+  const seen = new Set<string>();
+  for (const row of results ?? []) {
+    if (seen.has(row.video_id)) continue;
+    const item = toResultItem('video', { id: row.video_id, payload: row.payload, created_at: null, views: 0, rank: 0, channel_payload: row.channel_payload });
+    if (!item || item.type !== 'video') continue;
+    seen.add(row.video_id);
+    out.push({ videoId: row.video_id, language: row.language, startMs: Number(row.start_ms) || 0, text: row.text, video: item.video, channel: item.channel });
+    if (out.length >= limit) break;
+  }
+  return out;
 }
 
 interface Ranked {
@@ -282,11 +342,19 @@ export async function searchIndex(
     relaxed = items.length > 0;
   }
 
+  // Where videos say it: first page only, when videos are searched
+  let transcripts: SearchTranscriptMatch[] | undefined;
+  if (hasText && offset === 0 && types.includes('video')) {
+    const match = buildFtsQuery(query.q, { mode: 'all' });
+    transcripts = match ? await searchTranscripts(db, query, match, now).catch(() => undefined) : undefined;
+  }
+
   return {
     results: items.map(r => r.item),
     hasMore,
     nextCursor: hasMore && offset + limit <= SEARCH_MAX_OFFSET ? encodeCursor(offset + limit) : null,
     relaxed,
+    ...(transcripts ? { transcripts } : {}),
   };
 }
 

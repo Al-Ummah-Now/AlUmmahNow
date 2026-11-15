@@ -180,6 +180,11 @@ export enum MessageType {
   // captions/metadata.ts): fills metadata_translations, capped by the inline-translation budget.
   // Payload: MetadataTranslatePayload (inline-translation.ts).
   MetadataTranslate = 264,
+  // Transcript search (AUN-CAPTIONS §5.10; processor search/transcripts.ts): a published caption
+  // track was written or deleted, so its passages in the search index are rebuilt from the stored
+  // WebVTT. Videos queue, retry with backoff, then the DLQ and an admin flag.
+  // Payload: TranscriptIndexSyncPayload (search/transcripts.ts).
+  TranscriptIndexSync = 265,
 
   // Social auto-post (wiki AUN-SOCIAL, SOC-1; processor social/consumer.ts): something announceable
   // happened on a channel (new video, Short, live, post). Sent by the processor beside the subscriber

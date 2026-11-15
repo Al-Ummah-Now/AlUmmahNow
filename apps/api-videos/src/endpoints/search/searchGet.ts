@@ -22,6 +22,15 @@ const ResultSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("post"), id: z.string(), score: z.number(), post: z.object({ id: z.string(), content: z.string() }).passthrough(), channel: ChannelInfoSchema }),
 ]);
 
+const TranscriptMatchSchema = z.object({
+  videoId: z.string(),
+  language: z.string(),
+  startMs: z.number().int(),
+  text: z.string(),
+  video: z.object({ id: z.string(), title: z.string() }).passthrough(),
+  channel: ChannelInfoSchema,
+});
+
 export const SearchQuerySchema = z.object({
   q: Str({ description: "Search text (Arabic and English; diacritics, alef/hamza forms, taa marbuta and digits are normalised)" }).max(200).optional(),
   type: z.enum(["video", "channel", "playlist", "post"]).optional().describe("Restrict to one result type (default: all types)"),
@@ -62,7 +71,7 @@ export class SearchGet extends OptionalAuthRoute {
   schema = {
     tags: ["Search"],
     summary: "Search (v2)",
-    description: "🔓 Public. Ranked search across videos, channels, playlists and community posts using the search index. Filters: type, duration, format (short | video), date, language, category, verified, channelId (search within a channel). Without `q`, returns the newest items matching the filters. When no result contains every word, results containing any word are returned with `relaxed: true`.",
+    description: "🔓 Public. Ranked search across videos, channels, playlists and community posts using the search index. Filters: type, duration, format (short | video), date, language, category, verified, channelId (search within a channel). Without `q`, returns the newest items matching the filters. When no result contains every word, results containing any word are returned with `relaxed: true`. On the first page of a text search that includes videos, `transcripts` lists up to 6 videos whose published captions say every word, each with the best passage and where it starts (`startMs`; open the watch page at `?t=` seconds). Only visible videos of visible channels; Quran recitation is never indexed.",
     request: { query: SearchQuerySchema },
     responses: {
       "200": {
@@ -77,6 +86,7 @@ export class SearchGet extends OptionalAuthRoute {
               nextCursor: z.string().nullable(),
               hasMore: z.boolean(),
               relaxed: z.boolean(),
+              transcripts: z.array(TranscriptMatchSchema).optional(),
               searchTime: z.number(),
             }),
           },

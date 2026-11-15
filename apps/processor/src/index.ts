@@ -27,6 +27,7 @@ import { isSocialMessage, processSocialMessages, type SocialQueueEnv, type Socia
 import { handleInternalTranslate, isMetadataTranslateMessage, processMetadataTranslateMessages, type InlineTranslateEnv, type MetadataTranslateQueueMessage } from './captions/inline';
 import { isCaptionTranslateMessage, processCaptionTranslateMessages, type CaptionTranslateEnv, type CaptionTranslateQueueMessage } from './captions/translate';
 import { captionClaimMessage, claimFromRetryBody, isCaptionClaimMessage, processCaptionClaimMessages, type CaptionClaimEnv, type CaptionClaimQueueMessage } from './captions/claim';
+import { isTranscriptIndexMessage, processTranscriptIndexMessages, transcriptIndexFromRetryBody, transcriptIndexMessage, type TranscriptIndexEnv, type TranscriptIndexQueueMessage } from './search/transcripts';
 import { captionClaimKey, type CaptionClaimState } from '@al-ummah/shared-types';
 import type { SearchDb } from '@al-ummah/shared-types';
 import { processReviewAlertBatch } from './review-alerts/consumer';
@@ -195,6 +196,18 @@ export async function handleCaptionClaimRequest(request: Request, env: QueueEnvi
   await subtitles?.put(captionClaimKey(payload.videoId, payload.language), JSON.stringify(state), { httpMetadata: { contentType: 'application/json' } });
   await env.MESSAGE_QUEUE.send(captionClaimMessage(payload) as unknown as AlUmmahMessage);
   logger.info('[Captions] Claim queued again by an admin', { videoId: payload.videoId, language: payload.language });
+  return json({ queued: true }, 202);
+}
+
+/** POST /internal/search/transcript (X-API-Key): the Errors page's Retry of a transcript index update that gave up. */
+export async function handleTranscriptIndexRequest(request: Request, env: QueueEnvironment, logger: ReturnType<typeof createLogger>): Promise<Response> {
+  if (!(await isInternalCaller(request, env))) return json({ error: 'Unauthorized' }, 401);
+  if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+  if (!env.MESSAGE_QUEUE) return json({ error: 'MESSAGE_QUEUE not bound' }, 503);
+  const payload = transcriptIndexFromRetryBody(await request.json().catch(() => null));
+  if (!payload) return json({ error: 'Invalid track' }, 400);
+  await env.MESSAGE_QUEUE.send(transcriptIndexMessage(payload) as unknown as AlUmmahMessage);
+  logger.info('[TranscriptIndex] Queued again by an admin', { videoId: payload.videoId, language: payload.language });
   return json({ queued: true }, 202);
 }
 
@@ -401,6 +414,13 @@ async function handleQueue(batch: MessageBatch<AlUmmahMessage>, env: QueueEnviro
     batch = { ...batch, messages: batch.messages.filter((m) => !isCaptionClaimMessage(m)) };
     if (batch.messages.length === 0) return;
   }
+  // Transcript search (AUN-CAPTIONS §5.10): a published caption track's passages, rebuilt from the stored file
+  const transcripts = batch.messages.filter(isTranscriptIndexMessage);
+  if (transcripts.length) {
+    await processTranscriptIndexMessages(transcripts as unknown as TranscriptIndexQueueMessage[], env as unknown as TranscriptIndexEnv, ctx, logger);
+    batch = { ...batch, messages: batch.messages.filter((m) => !isTranscriptIndexMessage(m)) };
+    if (batch.messages.length === 0) return;
+  }
   // On-demand transcription (AUN-CAPTIONS §5.1): one audio chunk per delivery, then the draft
   const captionJobs = batch.messages.filter(isCaptionJobMessage);
   if (captionJobs.length) {
@@ -538,6 +558,10 @@ async function handleFetch(request: Request, env: QueueEnvironment, ctx?: Execut
   // A caption claim that gave up, queued again (the Errors page's "Try again")
   if (url.pathname === '/internal/captions/claim') {
     return handleCaptionClaimRequest(request, env, logger);
+  }
+
+  if (url.pathname === '/internal/search/transcript') {
+    return handleTranscriptIndexRequest(request, env, logger);
   }
 
   // Health check endpoint

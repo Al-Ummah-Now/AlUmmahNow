@@ -28534,7 +28534,7 @@
           "Search"
         ],
         "summary": "Search (v2)",
-        "description": "🔓 Public. Ranked search across videos, channels, playlists and community posts using the search index. Filters: type, duration, format (short | video), date, language, category, verified, channelId (search within a channel). Without `q`, returns the newest items matching the filters. When no result contains every word, results containing any word are returned with `relaxed: true`.",
+        "description": "🔓 Public. Ranked search across videos, channels, playlists and community posts using the search index. Filters: type, duration, format (short | video), date, language, category, verified, channelId (search within a channel). Without `q`, returns the newest items matching the filters. When no result contains every word, results containing any word are returned with `relaxed: true`. On the first page of a text search that includes videos, `transcripts` lists up to 6 videos whose published captions say every word, each with the best passage and where it starts (`startMs`; open the watch page at `?t=` seconds). Only visible videos of visible channels; Quran recitation is never indexed.",
         "operationId": "get_SearchGet",
         "parameters": [
           {
@@ -28946,6 +28946,69 @@
                     },
                     "relaxed": {
                       "type": "boolean"
+                    },
+                    "transcripts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "videoId": {
+                            "type": "string"
+                          },
+                          "language": {
+                            "type": "string"
+                          },
+                          "startMs": {
+                            "type": "integer"
+                          },
+                          "text": {
+                            "type": "string"
+                          },
+                          "video": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "title"
+                            ]
+                          },
+                          "channel": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "avatarUrl": {
+                                "type": "string"
+                              },
+                              "isVerified": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "isVerified"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "videoId",
+                          "language",
+                          "startMs",
+                          "text",
+                          "video"
+                        ]
+                      }
                     },
                     "searchTime": {
                       "type": "number"
