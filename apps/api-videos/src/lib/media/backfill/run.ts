@@ -16,6 +16,7 @@ import {
 	DEFAULT_BACKFILL_SETTINGS,
 	reportNeedsAction,
 	resolveNeedsAction,
+	underHold,
 	withinBudget,
 	type BackfillRun,
 	type BackfillScope,
@@ -228,6 +229,12 @@ export async function toTranscode(env: BackfillEnv, ctx: Ctx, item: ItemRow, now
 }
 
 async function startItem(env: BackfillEnv, ctx: Ctx, item: ItemRow, now: Date): Promise<void> {
+	// Held since the estimate (CSAM containment, a suspension): left out, nothing copied or transcoded
+	const current = await new R2Repository<{ suspensionHolds?: unknown }>(env.videos).getObject(item.video_id);
+	if (underHold(current)) {
+		await transition(db(env), item.run_id, item.video_id, ['pending'], 'skipped', { skip_reason: 'held' }, now);
+		return;
+	}
 	if (!item.has_original) {
 		if (await transition(db(env), item.run_id, item.video_id, ['pending'], 'copying', { started_at: now.toISOString() }, now)) await send(env, { op: 'copy', runId: item.run_id, videoId: item.video_id, offset: item.copied_bytes || 0 });
 		return;
