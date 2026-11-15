@@ -14,7 +14,8 @@ import { ChannelOwnerFetch } from '../endpoints/channel/channelOwnerFetch';
 import { ChannelUpdate } from '../endpoints/channel/channelUpdate';
 import { ChannelDelete } from '../endpoints/channel/channelDelete';
 import { ChannelAbout, ChannelByHandleFetch, ChannelHandleAvailability } from '../endpoints/channel/channelHandle';
-import { ChannelAccessList, ChannelMemberAdd, ChannelMemberRemove, ChannelMemberUpdate, ChannelMembersList } from '../endpoints/channel/channelMembers';
+import { ChannelAuditList, ChannelInviteCancel, ChannelInviteCreate } from '../endpoints/channel/channelInvites';
+import { ChannelAccessList, ChannelMemberRemove, ChannelMemberUpdate, ChannelMembersList } from '../endpoints/channel/channelMembers';
 
 // Channel content endpoints
 import { ChannelVideosList } from '../endpoints/channel/channelVideosList';
@@ -129,9 +130,11 @@ channelRouter.get('/:id/subscriptions/status', SubscriptionStatus);
 
 // Channel members (per-channel roles, never site roles)
 channelRouter.get('/:id/members', ChannelMembersList);
-channelRouter.post('/:id/members', ChannelMemberAdd);
 channelRouter.put('/:id/members/:userId', ChannelMemberUpdate);
 channelRouter.delete('/:id/members/:userId', ChannelMemberRemove);
+channelRouter.post('/:id/invites', ChannelInviteCreate);
+channelRouter.delete('/:id/invites/:inviteId', ChannelInviteCancel);
+channelRouter.get('/:id/audit', ChannelAuditList);
 
 // ============================================================================
 // TABS

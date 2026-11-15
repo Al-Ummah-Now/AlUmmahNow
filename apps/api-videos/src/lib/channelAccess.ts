@@ -148,7 +148,10 @@ const MEMBER_WRITE_ROUTES: ReadonlyArray<{ methods: ReadonlyArray<string>; path:
 	{ methods: ['POST', 'PUT', 'PATCH', 'DELETE'], path: /^\/api\/(?:watch-history|library|watch-state|continue-watching)(?:\/|$)/, capability: 'channel.speak' },
 	{ methods: ['POST'], path: /^\/api\/moderation\/reports\/?$/, capability: 'channel.speak' },
 	// Members API: the endpoints decide who may change what
-	{ methods: ['POST', 'PUT', 'DELETE'], path: /^\/api\/channels\/[^/]+\/members(?:\/[^/]+)?\/?$/, capability: 'channel.speak' },
+	{ methods: ['PUT', 'DELETE'], path: /^\/api\/channels\/[^/]+\/members\/[^/]+\/?$/, capability: 'channel.speak' },
+	{ methods: ['POST', 'DELETE'], path: /^\/api\/channels\/[^/]+\/invites(?:\/[^/]+)?\/?$/, capability: 'channel.speak' },
+	// My own invitations: accepting or declining while another channel is active
+	{ methods: ['POST'], path: /^\/api\/channel-invites\/[^/]+\/(?:accept|decline)\/?$/, capability: 'channel.speak' },
 	// Comment moderation (Studio Comments, #771): video and post comments, the channel's comment list and blocks
 	{ methods: ['POST'], path: /^\/api\/videos\/[^/]+\/comments\/[^/]+\/(?:approve|restore|hold|pin|heart)\/?$/, capability: 'comment.moderate' },
 	{ methods: ['POST', 'DELETE'], path: /^\/api\/community\/channels\/[^/]+\/posts\/[^/]+\/comments\/[^/]+\/(?:pin|heart)\/?$/, capability: 'comment.moderate' },

@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from '@/components/common/AppLink';
-import { Bell, MessageCircle, Radio, Trash2, UserPlus, Video, AlertCircle, Check, Mail, ShieldAlert } from 'lucide-react';
+import { Bell, MessageCircle, Radio, Trash2, UserPlus, Video, AlertCircle, Check, Mail, ShieldAlert, Users } from 'lucide-react';
 import type { NotificationItem } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { localizeActionUrl, relativeTime, renderNotification } from '@/lib/notifications/render';
@@ -36,6 +36,12 @@ function Icon({ item }: { item: NotificationItem }) {
     case 'reviewRejected':
     case 'reviewNeeded':
       return <ShieldAlert className={cls} aria-hidden="true" />;
+    case 'channelInviteReceived':
+    case 'channelInviteAccepted':
+    case 'channelRoleChanged':
+    case 'channelMemberRemoved':
+    case 'channelMemberLeft':
+      return <Users className={cls} aria-hidden="true" />;
     case 'reviewApproved':
       return <Video className={cls} aria-hidden="true" />;
     default:

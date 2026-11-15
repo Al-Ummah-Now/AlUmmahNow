@@ -11,6 +11,9 @@
 ### Objective
 Verify that channel owners and administrators can effectively manage channel members, including joining, roles, permissions, and community engagement features.
 
+### Scope (CH-1)
+The cases that run are spec §15: the unit tests in `apps/api-videos/test/channel-invites.spec.ts` and `channel-roles.spec.ts`, and the release E2E `apps/web/e2e/release/channel-roles.spec.ts` (invite by email or @handle, accept on `/settings/channel-invites`, act, change role, remove, the Activity tab, Arabic). Public joining, bulk invitations, invitation messages, custom expiry dates and member messaging are out of scope (spec §1 Non-goals); steps below that use them are kept only as history.
+
 ### Requirements Tested
 - Member invitation and joining
 - Role and permission management
@@ -22,11 +25,14 @@ Verify that channel owners and administrators can effectively manage channel mem
 ## Test Environment
 
 ### User Roles Required
-- **Channel Owner**: Full member management permissions
-- **Channel Admin**: Limited member management permissions
-- **Channel Moderator**: Member moderation capabilities
-- **Channel Member**: Basic member access
-- **Guest User**: Non-member access
+Channel roles per [docs/specs/CHANNEL-ROLES.md](../../specs/CHANNEL-ROLES.md) §3 (updated for package CH-1, 2026-11-14). Channel roles are per channel and are not site roles.
+- **Owner** (`channel.userId`): every capability. Ownership moves only by a super admin transfer on the admin site.
+- **Channel admin** (`admin`): everything except the @handle, deleting the channel and managing other channel admins
+- **Editor** (`editor`): uploads, edits and schedules videos, posts and playlists; deletes only their own uploads
+- **Channel moderator** (`moderator`): moderates comments on videos and posts
+- **Subscriber or visitor**: no channel role ("Channel Member" in older versions of this case meant a subscriber)
+
+Team management is `members.view` and `members.manage` (owner and channel admins, editors and channel moderators only); inviting, changing or removing channel admins is `members.manage_admins` (owner only). Nobody gets a role without accepting an invitation.
 
 ### Test Data Required
 - User accounts with different roles

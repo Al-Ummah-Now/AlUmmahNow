@@ -35,6 +35,7 @@ import {
   ArrowLeft,
   PenLine,
   FileText,
+  UserPlus,
 } from 'lucide-react';
 import { ACCOUNT_MENU_PATHS } from '@/lib/navigation/destinations';
 import { ACCOUNT_MENU_EVENT, type AccountMenuRequest } from '@/lib/navigation/account-menu-events';
@@ -43,6 +44,7 @@ import { getAuthProfileUrl, getAuthUrl, getCmsUrl, getWwwUrl } from '@/lib/runti
 import { appLinks, type AppLinkId } from '@al-ummah/shared-types';
 import { cmsLinks, isScholar } from '@/lib/scholars/sites';
 import { buildChannelMenu } from '@/lib/channels/menu';
+import { useChannelInviteCount } from '@/lib/channels/invites-count';
 import type { ChannelRole } from '@al-ummah/shared-types';
 import { userDisplayName } from '@/lib/display-name';
 
@@ -160,6 +162,8 @@ export function UnifiedNavigation() {
     setIsOpenState(open);
     setView('main');
   };
+  // Channel invitations waiting for this account (docs/specs/CHANNEL-ROLES.md §14), counted when the menu opens
+  const inviteCount = useChannelInviteCount(!!user, isOpen);
   const creatorAccess = useCreatorAccess();
   const canCreateChannel = mayCreateChannel(creatorAccess);
   // The tier's channel limit is reached: say so where "Create channel" would be (channel_limit)
@@ -402,6 +406,12 @@ export function UnifiedNavigation() {
                 <Link href={`/${lang}${ACCOUNT_MENU_PATHS.studio}`} onClick={() => setIsOpen(false)} data-testid="nav-menu-studio" className="aun-menu-item" role="menuitem">
                   <Video className="aun-menu-icon" aria-hidden="true" />
                   <span className="aun-menu-text">{t.studio.title}</span>
+                </Link>
+              )}
+              {inviteCount > 0 && (
+                <Link href={`/${lang}${ACCOUNT_MENU_PATHS.channelInvites}`} onClick={() => setIsOpen(false)} data-testid="nav-menu-channel-invites" data-count={inviteCount} className="aun-menu-item" role="menuitem">
+                  <UserPlus className="aun-menu-icon" aria-hidden="true" />
+                  <span className="aun-menu-text">{t.channelRoles.invitationsCount.replace('{count}', inviteCount.toLocaleString(lang))}</span>
                 </Link>
               )}
               {/* No channel yet: creating one is right here (with channels it sits in the switcher) */}

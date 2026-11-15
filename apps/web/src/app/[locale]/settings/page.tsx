@@ -12,6 +12,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { SignInPrompt } from '@/components/common/SignInPrompt';
 import Link from '@/components/common/AppLink';
+import { ACCOUNT_MENU_PATHS } from '@/lib/navigation/destinations';
 import { NotificationSettingsPanel } from '@/components/notifications/NotificationSettingsPanel';
 import {
   Settings,
@@ -20,6 +21,7 @@ import {
   ChevronRight,
   Shield,
   Mail,
+  Users,
 } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -55,6 +57,13 @@ export default function SettingsPage() {
       description: t.privacy.settingsDescription,
       icon: Shield,
       href: `/${lang}/settings/privacy`,
+      available: true,
+    },
+    {
+      title: t.channelRoles.invitationsTitle,
+      description: t.channelRoles.invitationsDescription,
+      icon: Users,
+      href: `/${lang}${ACCOUNT_MENU_PATHS.channelInvites}`,
       available: true,
     },
     {

@@ -37,7 +37,8 @@ test.describe('Settings - channel owner', () => {
     await page.goto('/en/settings');
     await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible();
     const sections = page.getByTestId('settings-section');
-    await expect(sections).toHaveCount(4);
+    await expect(sections).toHaveCount(5);
+    await expect(sections.filter({ hasText: 'Channel invitations' })).toHaveAttribute('href', '/en/settings/channel-invites');
     await expect(sections.filter({ hasText: 'Upload Defaults' })).toHaveAttribute('href', '/en/settings/upload-defaults');
     await expect(sections.filter({ hasText: 'Profile Settings' })).toHaveAttribute('href', '/en/profile?from=settings');
     await expect(sections.filter({ hasText: 'Privacy & data' })).toHaveAttribute('href', '/en/settings/privacy');
@@ -66,9 +67,10 @@ test.describe('Settings - channel owner', () => {
 test.describe('Settings - no channel', () => {
   test.use({ storageState: AUTH_STATE.none });
 
-  test('SET-020 a user without a channel sees the same sections, none of them about channels', async ({ page }) => {
+  test('SET-020 a user without a channel sees the same sections, none of them channel settings', async ({ page }) => {
     await page.goto('/en/settings');
-    await expect(page.getByTestId('settings-section')).toHaveCount(4);
+    // Channel invitations is for anyone: a user without a channel can be invited to a team
+    await expect(page.getByTestId('settings-section')).toHaveCount(5);
     await expect(page.getByTestId('settings-section').filter({ hasText: 'Channel Settings' })).toHaveCount(0);
     await expect(page.getByText('Not available - requires an active channel')).toHaveCount(0);
   });

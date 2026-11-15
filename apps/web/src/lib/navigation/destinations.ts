@@ -21,6 +21,8 @@ export const ACCOUNT_MENU_PATHS = {
   /** The creator home: videos, scheduling, analytics, channel settings (/studio opens the active channel) */
   studio: '/studio',
   settings: '/settings',
+  /** Channel invitations waiting for this account (shown with their count) */
+  channelInvites: '/settings/channel-invites',
 } as const;
 
 export const HEADER_PATHS = {

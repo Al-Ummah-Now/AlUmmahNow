@@ -16,10 +16,14 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
-  addTeamMember, changeTeamRole, loadTeam, removeTeamMember,
-  TeamError, type TeamErrorCode, type TeamMember, type TeamState,
+  cancelTeamInvite, changeTeamRole, daysUntil, inviteTarget, inviteToTeam, loadTeam, removeTeamMember,
+  TeamError, type TeamMember, type TeamState,
 } from '@/lib/channels/team';
-import type { AppTranslations } from '@/lib/i18n';
+import { teamErrorMessage } from '@/lib/channels/team-errors';
+
+export { teamErrorMessage };
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import TeamActivity from './TeamActivity';
 import { Autocomplete, type AutocompleteOption } from '@/components/ui/Autocomplete';
 import { fetchSuggestions } from '@/lib/search/suggest-client';
 
@@ -28,20 +32,6 @@ interface ChannelTeamProps {
   /** The viewer's role on this channel (from the server guard) */
   role: ChannelRole;
   locale: string;
-}
-
-/** Friendly copy for a team failure; the raw error is never shown. */
-export function teamErrorMessage(t: AppTranslations, error: unknown): string {
-  const code: TeamErrorCode = error instanceof TeamError ? error.code : 'unknown';
-  const e = t.channelRoles.errors;
-  switch (code) {
-    case 'person_not_found': return e.personNotFound;
-    case 'already_member': return e.alreadyMember;
-    case 'cannot_invite_owner': return e.cannotInviteOwner;
-    case 'member_limit': return e.memberLimit;
-    case 'forbidden': return e.forbidden;
-    default: return e.generic;
-  }
 }
 
 // `c` is the theme's card material (theme/system.css).
@@ -57,7 +47,9 @@ export default function ChannelTeam({ channelId, role, locale }: ChannelTeamProp
   const ids = { handle: useId(), role: useId(), status: useId() };
 
   // People are found through their channels: suggest public channels by name or @handle
+  // (an email is typed in full and never looked up: §4.1)
   const loadPeople = useCallback(async (query: string, signal: AbortSignal): Promise<AutocompleteOption[]> => {
+    if ('email' in inviteTarget(query)) return [];
     const found = await fetchSuggestions(query.replace(/^@+/, ''), { types: ['channel'], limit: 6, signal });
     return found
       .filter((s) => s.handle && s.id !== channelId)
@@ -96,18 +88,29 @@ export default function ChannelTeam({ channelId, role, locale }: ChannelTeamProp
 
   useEffect(() => { void refresh(); }, [refresh]);
 
-  const onAdd = async (e: React.FormEvent) => {
+  const onInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!handle.trim() || busy) return;
-    setBusy('add');
+    setBusy('invite');
     setMessage(null);
     try {
-      const next = await addTeamMember(channelId, handle, newRole);
-      setTeam(next);
-      const added = next.members.find((m) => !m.isYou && m.role === newRole);
-      setMessage({ kind: 'ok', text: tr.added.replace('{name}', added?.displayName || `@${handle.trim().replace(/^@+/, '')}`) });
+      setTeam(await inviteToTeam(channelId, handle, newRole));
+      setMessage({ kind: 'ok', text: tr.invited });
       setHandle('');
-      void reloadChannels();
+    } catch (error) {
+      setMessage({ kind: 'error', text: teamErrorMessage(t, error) });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const onCancelInvite = async (inviteId: string) => {
+    if (busy) return;
+    setBusy(inviteId);
+    setMessage(null);
+    try {
+      setTeam(await cancelTeamInvite(channelId, inviteId));
+      setMessage({ kind: 'ok', text: tr.inviteCancelled });
     } catch (error) {
       setMessage({ kind: 'error', text: teamErrorMessage(t, error) });
     } finally {
@@ -170,103 +173,202 @@ export default function ChannelTeam({ channelId, role, locale }: ChannelTeamProp
         </p>
       )}
 
-      {can(role, 'members.manage') && (
-        <form onSubmit={onAdd} className={CARD} data-testid="team-add-form" aria-describedby={message ? ids.status : undefined}>
-          <h2 className="mb-4 text-lg font-semibold text-[var(--fanous-color-text-primary)]">{tr.addTitle}</h2>
-          <div className="grid gap-4 sm:grid-cols-[1fr_auto_auto] sm:items-end">
-            <div>
-              <label htmlFor={ids.handle} className="mb-1 block text-sm font-medium text-[var(--fanous-color-text-secondary)]">{tr.handleLabel}</label>
-              <Autocomplete
-                inputId={ids.handle}
-                value={handle}
-                onValueChange={(next) => setHandle(next.replace(/\s/g, ''))}
-                load={loadPeople}
-                loadKey={channelId}
-                minChars={2}
-                onSelect={(option) => setHandle(`@${option.value as string}`)}
-                hideNoMatches
-                listLabel={tr.handleLabel}
-                testId="team-add-handle"
-                optionTestId={() => 'team-add-suggestion'}
-                inputProps={{ dir: 'ltr', placeholder: tr.handlePlaceholder, autoCapitalize: 'off', maxLength: 64, disabled: busy === 'add' }}
-                inputClassName={FIELD}
-              />
-            </div>
-            <div>
-              <label htmlFor={ids.role} className="mb-1 block text-sm font-medium text-[var(--fanous-color-text-secondary)]">{tr.roleLabel}</label>
-              <select id={ids.role} value={newRole} onChange={(e) => setNewRole(e.target.value as ChannelMemberRole)}
-                disabled={busy === 'add'} className={FIELD} data-testid="team-add-role">
-                {grantable.map((r) => <option key={r} value={r}>{tr.roles[r]}</option>)}
-              </select>
-            </div>
-            <button type="submit" disabled={!handle.trim() || busy === 'add'} aria-busy={busy === 'add'}
-              className={`${BUTTON} bg-brand text-on-brand hover:bg-brand-hover`} data-testid="team-add-submit">
-              {busy === 'add' ? tr.adding : tr.add}
-            </button>
-          </div>
-          <p className="mt-3 text-sm text-[var(--fanous-color-text-secondary)] dark:text-[var(--fanous-color-text-muted)]">{tr.roleHelp[newRole]}</p>
-          {team && <p className="mt-1 text-xs text-[var(--fanous-color-text-muted)]">{tr.limit.replace('{count}', String(team.maxMembers))}</p>}
-        </form>
-      )}
-
-      <section className={CARD} aria-labelledby="team-list-title">
-        <h2 id="team-list-title" className="mb-4 text-lg font-semibold text-[var(--fanous-color-text-primary)]">{tr.team}</h2>
-        {!canView && me && (
-          <ul className="divide-y divide-[var(--fanous-color-divider)]">
-            <li className="flex items-center gap-3 py-3" data-testid="team-member" data-role={role}>
-              <span className="flex-1 text-sm font-medium text-[var(--fanous-color-text-primary)]">{tr.you}</span>
-              {roleBadge(role)}
-            </li>
-          </ul>
-        )}
-        {canView && loading && <p className="text-sm text-[var(--fanous-color-text-secondary)] dark:text-[var(--fanous-color-text-muted)]" role="status">{tr.teamLoading}</p>}
-        {canView && loadError && (
-          <div className="flex flex-wrap items-center gap-3" role="alert">
-            <p className="text-sm text-[var(--fanous-color-error-text)]">{loadError}</p>
-            <button type="button" onClick={() => void refresh()} className={`${BUTTON} b-primary`}>
-              {t.common.retry}
-            </button>
-          </div>
-        )}
-        {canView && team && (
-          <>
-            <ul className="divide-y divide-[var(--fanous-color-divider)]" data-testid="team-list">
-              {team.members.map((m) => {
-                const manageable = m.role !== 'owner' && !m.isYou && canManageRole(role, m.role as ChannelMemberRole);
-                return (
-                  <li key={m.userId} className="flex flex-wrap items-center gap-3 py-3" data-testid="team-member" data-role={m.role} data-you={m.isYou || undefined}>
-                    {m.avatarUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={m.avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" />
-                    ) : (
-                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--fanous-c-button-primary-bg)] text-sm font-semibold text-[var(--fanous-c-button-primary-text)]" aria-hidden="true">
-                        {nameOf(m).charAt(0).toUpperCase()}
-                      </span>
-                    )}
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--fanous-color-text-primary)]">
-                      {nameOf(m)}{m.isYou && m.displayName ? <span className="text-[var(--fanous-color-text-muted)]"> ({m.displayName})</span> : null}
-                    </span>
-                    {manageable ? (
-                      <select aria-label={tr.changeRole.replace('{name}', nameOf(m))} value={m.role}
-                        onChange={(e) => void onChangeRole(m, e.target.value as ChannelMemberRole)}
-                        disabled={busy === m.userId} className={`${FIELD} w-auto`} data-testid="team-member-role-select">
-                        {CHANNEL_MEMBER_ROLES.filter((r) => canManageRole(role, r)).map((r) => <option key={r} value={r}>{tr.roles[r]}</option>)}
+      {canView ? (
+        <Tabs defaultValue="team" dir={locale === 'ar' ? 'rtl' : 'ltr'}>
+          <TabsList aria-label={tr.team} className="mb-4 w-full">
+            <TabsTrigger value="team" data-testid="team-tab-team">{tr.tabTeam}</TabsTrigger>
+            <TabsTrigger value="activity" data-testid="team-tab-activity">{tr.tabActivity}</TabsTrigger>
+          </TabsList>
+          <TabsContent value="team" className="space-y-6">
+              {can(role, 'members.manage') && (
+                <form onSubmit={onInvite} className={CARD} data-testid="team-add-form" aria-describedby={message ? ids.status : undefined}>
+                  <h2 className="mb-4 text-lg font-semibold text-[var(--fanous-color-text-primary)]">{tr.inviteTitle}</h2>
+                  <div className="grid gap-4 sm:grid-cols-[1fr_auto_auto] sm:items-end">
+                    <div>
+                      <label htmlFor={ids.handle} className="mb-1 block text-sm font-medium text-[var(--fanous-color-text-secondary)]">{tr.inviteLabel}</label>
+                      <Autocomplete
+                        inputId={ids.handle}
+                        value={handle}
+                        onValueChange={(next) => setHandle(next.replace(/\s/g, ''))}
+                        load={loadPeople}
+                        loadKey={channelId}
+                        minChars={2}
+                        onSelect={(option) => setHandle(`@${option.value as string}`)}
+                        hideNoMatches
+                        listLabel={tr.inviteLabel}
+                        testId="team-add-handle"
+                        optionTestId={() => 'team-add-suggestion'}
+                        inputProps={{ dir: 'ltr', placeholder: tr.invitePlaceholder, autoCapitalize: 'off', autoComplete: 'off', inputMode: 'email', maxLength: 254, disabled: busy === 'invite' }}
+                        inputClassName={FIELD}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor={ids.role} className="mb-1 block text-sm font-medium text-[var(--fanous-color-text-secondary)]">{tr.roleLabel}</label>
+                      <select id={ids.role} value={newRole} onChange={(e) => setNewRole(e.target.value as ChannelMemberRole)}
+                        disabled={busy === 'invite'} className={FIELD} data-testid="team-add-role">
+                        {grantable.map((r) => <option key={r} value={r}>{tr.roles[r]}</option>)}
                       </select>
-                    ) : roleBadge(m.role)}
-                    {manageable && (
-                      <button type="button" onClick={() => setConfirm({ kind: 'remove', member: m })} disabled={busy === m.userId}
-                        className={`${BUTTON} b-danger`} data-testid="team-member-remove">
-                        {tr.remove}
-                      </button>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-            {team.members.length === 1 && <p className="mt-2 text-sm text-[var(--fanous-color-text-secondary)] dark:text-[var(--fanous-color-text-muted)]">{tr.noMembers}</p>}
-          </>
-        )}
-      </section>
+                    </div>
+                    <button type="submit" disabled={!handle.trim() || busy === 'invite'} aria-busy={busy === 'invite'}
+                      className={`${BUTTON} bg-brand text-on-brand hover:bg-brand-hover`} data-testid="team-add-submit">
+                      {busy === 'invite' ? tr.inviting : tr.invite}
+                    </button>
+                  </div>
+                  <p className="mt-3 text-sm text-[var(--fanous-color-text-secondary)] dark:text-[var(--fanous-color-text-muted)]">{tr.roleHelp[newRole]}</p>
+                  {team && <p className="mt-1 text-xs text-[var(--fanous-color-text-muted)]">{tr.limit.replace('{count}', String(team.maxMembers))}</p>}
+                </form>
+              )}
+
+              <section className={CARD} aria-labelledby="team-list-title">
+                <h2 id="team-list-title" className="mb-4 text-lg font-semibold text-[var(--fanous-color-text-primary)]">{tr.team}</h2>
+                {!canView && me && (
+                  <ul className="divide-y divide-[var(--fanous-color-divider)]">
+                    <li className="flex items-center gap-3 py-3" data-testid="team-member" data-role={role}>
+                      <span className="flex-1 text-sm font-medium text-[var(--fanous-color-text-primary)]">{tr.you}</span>
+                      {roleBadge(role)}
+                    </li>
+                  </ul>
+                )}
+                {canView && loading && <p className="text-sm text-[var(--fanous-color-text-secondary)] dark:text-[var(--fanous-color-text-muted)]" role="status">{tr.teamLoading}</p>}
+                {canView && loadError && (
+                  <div className="flex flex-wrap items-center gap-3" role="alert">
+                    <p className="text-sm text-[var(--fanous-color-error-text)]">{loadError}</p>
+                    <button type="button" onClick={() => void refresh()} className={`${BUTTON} b-primary`}>
+                      {t.common.retry}
+                    </button>
+                  </div>
+                )}
+                {canView && team && (
+                  <>
+                    <ul className="divide-y divide-[var(--fanous-color-divider)]" data-testid="team-list">
+                      {team.members.map((m) => {
+                        const manageable = m.role !== 'owner' && !m.isYou && canManageRole(role, m.role as ChannelMemberRole);
+                        return (
+                          <li key={m.userId} className="flex flex-wrap items-center gap-3 py-3" data-testid="team-member" data-role={m.role} data-you={m.isYou || undefined}>
+                            {m.avatarUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={m.avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" />
+                            ) : (
+                              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--fanous-c-button-primary-bg)] text-sm font-semibold text-[var(--fanous-c-button-primary-text)]" aria-hidden="true">
+                                {nameOf(m).charAt(0).toUpperCase()}
+                              </span>
+                            )}
+                            <span className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--fanous-color-text-primary)]">
+                              {nameOf(m)}{m.isYou && m.displayName ? <span className="text-[var(--fanous-color-text-muted)]"> ({m.displayName})</span> : null}
+                            </span>
+                            {manageable ? (
+                              <select aria-label={tr.changeRole.replace('{name}', nameOf(m))} value={m.role}
+                                onChange={(e) => void onChangeRole(m, e.target.value as ChannelMemberRole)}
+                                disabled={busy === m.userId} className={`${FIELD} w-auto`} data-testid="team-member-role-select">
+                                {CHANNEL_MEMBER_ROLES.filter((r) => canManageRole(role, r)).map((r) => <option key={r} value={r}>{tr.roles[r]}</option>)}
+                              </select>
+                            ) : roleBadge(m.role)}
+                            {manageable && (
+                              <button type="button" onClick={() => setConfirm({ kind: 'remove', member: m })} disabled={busy === m.userId}
+                                className={`${BUTTON} b-danger`} data-testid="team-member-remove">
+                                {tr.remove}
+                              </button>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    {team.members.length === 1 && <p className="mt-2 text-sm text-[var(--fanous-color-text-secondary)] dark:text-[var(--fanous-color-text-muted)]">{tr.noMembers}</p>}
+                  </>
+                )}
+              </section>
+              {canView && team && team.invites.length > 0 && (
+                <section className={CARD} aria-labelledby="team-pending-title" data-testid="team-pending">
+                  <h2 id="team-pending-title" className="mb-4 text-lg font-semibold text-[var(--fanous-color-text-primary)]">{tr.pendingTitle}</h2>
+                  <ul className="divide-y divide-[var(--fanous-color-divider)]">
+                    {team.invites.map((invite) => {
+                      const who = invite.inviteeName || invite.inviteeEmail || tr.someone;
+                      const days = daysUntil(invite.expiresAt);
+                      const meta = (days > 0 ? tr.pendingMeta.replace('{days}', days.toLocaleString(locale)) : tr.pendingMetaToday).replace('{role}', tr.roles[invite.role]);
+                      return (
+                        <li key={invite.id} className="flex flex-wrap items-center gap-3 py-3" data-testid="team-invite" data-role={invite.role}>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium text-[var(--fanous-color-text-primary)]" dir={invite.inviteeName ? 'auto' : 'ltr'}>{who}</span>
+                            <span className="block text-xs text-[var(--fanous-color-text-muted)]">{meta}</span>
+                          </span>
+                          {canManageRole(role, invite.role) && (
+                            <button type="button" onClick={() => void onCancelInvite(invite.id)} disabled={busy === invite.id}
+                              aria-label={tr.cancelInviteLabel.replace('{name}', who)}
+                              className={`${BUTTON} b-secondary`} data-testid="team-invite-cancel">
+                              {tr.cancelInvite}
+                            </button>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
+              )}
+          </TabsContent>
+          <TabsContent value="activity">
+            <TeamActivity channelId={channelId} />
+          </TabsContent>
+        </Tabs>
+      ) : (
+          <section className={CARD} aria-labelledby="team-list-title">
+            <h2 id="team-list-title" className="mb-4 text-lg font-semibold text-[var(--fanous-color-text-primary)]">{tr.team}</h2>
+            {!canView && me && (
+              <ul className="divide-y divide-[var(--fanous-color-divider)]">
+                <li className="flex items-center gap-3 py-3" data-testid="team-member" data-role={role}>
+                  <span className="flex-1 text-sm font-medium text-[var(--fanous-color-text-primary)]">{tr.you}</span>
+                  {roleBadge(role)}
+                </li>
+              </ul>
+            )}
+            {canView && loading && <p className="text-sm text-[var(--fanous-color-text-secondary)] dark:text-[var(--fanous-color-text-muted)]" role="status">{tr.teamLoading}</p>}
+            {canView && loadError && (
+              <div className="flex flex-wrap items-center gap-3" role="alert">
+                <p className="text-sm text-[var(--fanous-color-error-text)]">{loadError}</p>
+                <button type="button" onClick={() => void refresh()} className={`${BUTTON} b-primary`}>
+                  {t.common.retry}
+                </button>
+              </div>
+            )}
+            {canView && team && (
+              <>
+                <ul className="divide-y divide-[var(--fanous-color-divider)]" data-testid="team-list">
+                  {team.members.map((m) => {
+                    const manageable = m.role !== 'owner' && !m.isYou && canManageRole(role, m.role as ChannelMemberRole);
+                    return (
+                      <li key={m.userId} className="flex flex-wrap items-center gap-3 py-3" data-testid="team-member" data-role={m.role} data-you={m.isYou || undefined}>
+                        {m.avatarUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={m.avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" />
+                        ) : (
+                          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--fanous-c-button-primary-bg)] text-sm font-semibold text-[var(--fanous-c-button-primary-text)]" aria-hidden="true">
+                            {nameOf(m).charAt(0).toUpperCase()}
+                          </span>
+                        )}
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--fanous-color-text-primary)]">
+                          {nameOf(m)}{m.isYou && m.displayName ? <span className="text-[var(--fanous-color-text-muted)]"> ({m.displayName})</span> : null}
+                        </span>
+                        {manageable ? (
+                          <select aria-label={tr.changeRole.replace('{name}', nameOf(m))} value={m.role}
+                            onChange={(e) => void onChangeRole(m, e.target.value as ChannelMemberRole)}
+                            disabled={busy === m.userId} className={`${FIELD} w-auto`} data-testid="team-member-role-select">
+                            {CHANNEL_MEMBER_ROLES.filter((r) => canManageRole(role, r)).map((r) => <option key={r} value={r}>{tr.roles[r]}</option>)}
+                          </select>
+                        ) : roleBadge(m.role)}
+                        {manageable && (
+                          <button type="button" onClick={() => setConfirm({ kind: 'remove', member: m })} disabled={busy === m.userId}
+                            className={`${BUTTON} b-danger`} data-testid="team-member-remove">
+                            {tr.remove}
+                          </button>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+                {team.members.length === 1 && <p className="mt-2 text-sm text-[var(--fanous-color-text-secondary)] dark:text-[var(--fanous-color-text-muted)]">{tr.noMembers}</p>}
+              </>
+            )}
+          </section>
+      )}
 
       {role !== 'owner' && me && (
         <button type="button" onClick={() => setConfirm({ kind: 'leave', member: me })} disabled={busy === me.userId}

@@ -82,7 +82,12 @@ export type RealtimeNotificationKey =
   | 'accountWarning'
   | 'reviewApproved'
   | 'reviewRejected'
-  | 'reviewNeeded';
+  | 'reviewNeeded'
+  | 'channelInviteReceived'
+  | 'channelInviteAccepted'
+  | 'channelRoleChanged'
+  | 'channelMemberRemoved'
+  | 'channelMemberLeft';
 
 export interface NotificationEvent {
   type: 'notification';

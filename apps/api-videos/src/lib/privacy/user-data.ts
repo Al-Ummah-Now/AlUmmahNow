@@ -51,6 +51,7 @@ import { eraseYoutubeImports } from '../youtube-import/erase';
 import { eraseImageOwners } from '../csam/imageOwners';
 import { eraseChannelComments } from '../channelComments';
 import { purgePostComment } from '../channelComments/jobs';
+import { anonymizeTeamActivity, cancelInvitesOfUser } from '../channelTeam';
 
 /** Tombstone written in place of a user id on content kept after erasure. */
 export const DELETED_USER_ID = 'deleted-user';
@@ -263,6 +264,10 @@ export interface UserDataExport {
 	reportsFiled: Json[];
 	/** Notification preferences and when the notification menu was last opened (NOTIFICATIONS_DB). */
 	notificationState: Json[];
+	/** Roles held on other people's channels (docs/specs/CHANNEL-ROLES.md §12). */
+	channelMemberships: Json[];
+	/** Channel invitations sent to or by the account (SEARCH_DB channel_invites). */
+	channelInvites: Json[];
 }
 
 /** Array sections of the export; partial exports are merged by concatenating these. */
@@ -287,6 +292,8 @@ export const EXPORT_LIST_FIELDS = [
 	'studioBrandKit',
 	'reportsFiled',
 	'notificationState',
+	'channelMemberships',
+	'channelInvites',
 ] as const;
 
 const EXPORT_NOTES = [
@@ -392,6 +399,9 @@ export async function collectUserData(
 					const { subscriptions, ...rest } = channel;
 					out.channels.push({ ...rest, subscribersCount: Array.isArray(subscriptions) ? subscriptions.length : 0 });
 				}
+				for (const member of Array.isArray(channel.members) ? (channel.members as Json[]) : []) {
+					if (member?.userId === userId) out.channelMemberships.push({ channelId, channelName: channel.name, role: member.role, addedAt: member.addedAt ?? null });
+				}
 				for (const sub of (channel.subscriptions as Reaction[] | undefined) ?? []) {
 					// A member's own subscription is stored under a `user:` key, not a channel id
 					if (sub?.userId === userId) out.subscriptions.push({ ...sub, channelId: subscriberChannelOf(sub.channelId as string | undefined), subscribedToChannelId: channelId });
@@ -452,6 +462,32 @@ export async function collectUserData(
 				if (!env.NOTIFICATIONS_DB) return;
 				ctx.budget.spend();
 				out.subscriptions.push(...(await exportUserSubscriptions(env.NOTIFICATIONS_DB, userId)));
+			}),
+		// Channel invitations to or from the account. Sent ones leave out the
+		// invitee's email: that is the other person's data.
+		(ctx) =>
+			atomically(async () => {
+				const sdb = env.SEARCH_DB as D1Database | undefined;
+				if (!sdb) return;
+				ctx.budget.spend();
+				const { results } = await sdb
+					.prepare('SELECT id, channel_id, role, invitee_user_id, invitee_email, invited_by, status, created_at, expires_at, responded_at FROM channel_invites WHERE invitee_user_id = ? OR invited_by = ? ORDER BY created_at')
+					.bind(userId, userId)
+					.all<Json>();
+				for (const row of results ?? []) {
+					const received = row.invitee_user_id === userId;
+					out.channelInvites.push({
+						id: row.id,
+						direction: received ? 'received' : 'sent',
+						channelId: row.channel_id,
+						role: row.role,
+						status: row.status,
+						...(received ? { invitedBy: row.invited_by } : { inviteeUserId: row.invitee_user_id ?? null }),
+						createdAt: row.created_at,
+						expiresAt: row.expires_at,
+						respondedAt: row.responded_at ?? null,
+					});
+				}
 			}),
 		// Notification preferences and the menu-seen time (D1, one row each)
 		(ctx) =>
@@ -1110,6 +1146,11 @@ export async function eraseUserData(
 				// Move from YouTube: imports, snapshots, consents, staged captions (Google token revoked)
 				ctx.budget.spend(2);
 				await eraseYoutubeImports(db as unknown as D1Database, env as never, userId);
+				// Channel teams (docs/specs/CHANNEL-ROLES.md §12): invitations to or
+				// from the account are cancelled, its activity rows anonymized
+				const cancelled = await cancelInvitesOfUser(db as unknown as D1Database, userId);
+				if (cancelled.length) bump(summary.deleted, 'channelInvites', cancelled.length);
+				await anonymizeTeamActivity(db as unknown as D1Database, userId, DELETED_USER_ID);
 			}
 			const profiles = asBucket(env.profiles);
 			ctx.budget.spend();

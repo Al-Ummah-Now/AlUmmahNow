@@ -37,6 +37,8 @@ jest.mock('@/lib/runtime-config', () => ({
   getAuthProfileUrl: () => 'https://profile.test', getAuthUrl: () => 'https://auth.test', getCmsUrl: () => 'https://cms.test', getWwwUrl: () => 'https://www.test',
 }));
 jest.mock('@/lib/logger-client', () => ({ logger: { error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() } }));
+let inviteCount = 0;
+jest.mock('@/lib/channels/invites-count', () => ({ useChannelInviteCount: () => inviteCount, CHANNEL_INVITES_CHANGED: 'x' }));
 
 const channel = { id: 'ch1', name: 'Community Corner', userId: 'u1', isMain: true, role: 'owner' };
 
@@ -72,4 +74,22 @@ describe('account menu: Acting as', () => {
     expect(await screen.findByTestId('nav-channel-layer')).toHaveAccessibleName('تتصرّف باسم');
     expect(screen.getByTestId('nav-no-active-channel')).toHaveTextContent('اسمك الشخصي (بدون قناة)');
   });
+
+  it('shows waiting channel invitations with their count, and nothing when there are none', async () => {
+    user = { id: 'u1', email: 'amina@test.local', displayName: 'Amina', channel, channels: [channel] };
+    inviteCount = 2;
+    const { unmount } = render(<UnifiedNavigation />);
+    act(() => requestAccountMenu({ open: true }));
+    const link = await screen.findByTestId('nav-menu-channel-invites');
+    expect(link).toHaveTextContent('Channel invitations (2)');
+    expect(link).toHaveAttribute('href', '/en/settings/channel-invites');
+    unmount();
+    inviteCount = 0;
+    render(<UnifiedNavigation />);
+    act(() => requestAccountMenu({ open: true }));
+    await screen.findByTestId('nav-channel-layer');
+    expect(screen.queryByTestId('nav-menu-channel-invites')).toBeNull();
+    inviteCount = 0;
+  });
 });
+

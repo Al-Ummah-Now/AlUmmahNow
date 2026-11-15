@@ -20,7 +20,8 @@ import { withSearchSync } from '../src/lib/search/sync';
 import { runOwnershipPass } from '../src/lib/search/ownership';
 import { canOnVideo, memberMayActAs, uploadIdentity } from '../src/lib/channelAccess';
 import { channelIdMiddleware } from '../src/middleware/auth';
-import { ChannelAccessList, ChannelMemberAdd, ChannelMemberRemove, ChannelMemberUpdate, ChannelMembersList } from '../src/endpoints/channel/channelMembers';
+import { ChannelAuditList, ChannelInviteAccept, ChannelInviteCancel, ChannelInviteCreate, ChannelInviteDecline, MyChannelInvites } from '../src/endpoints/channel/channelInvites';
+import { ChannelAccessList, ChannelMemberRemove, ChannelMemberUpdate, ChannelMembersList } from '../src/endpoints/channel/channelMembers';
 import { ChannelUpdate } from '../src/endpoints/channel/channelUpdate';
 import { ChannelOwnerFetch } from '../src/endpoints/channel/channelOwnerFetch';
 import { VideoCreate } from '../src/endpoints/video/videoCreate';
@@ -102,12 +103,26 @@ function accessRows(db: SqliteD1) {
 const ROUTES = (r: any) => {
 	r.get('/api/channels/access', ChannelAccessList);
 	r.get('/api/channels/:id/members', ChannelMembersList);
-	r.post('/api/channels/:id/members', ChannelMemberAdd);
+	r.post('/api/channels/:id/invites', ChannelInviteCreate);
+	r.delete('/api/channels/:id/invites/:inviteId', ChannelInviteCancel);
+	r.get('/api/channels/:id/audit', ChannelAuditList);
+	r.get('/api/channel-invites', MyChannelInvites);
+	r.post('/api/channel-invites/:id/accept', ChannelInviteAccept);
+	r.post('/api/channel-invites/:id/decline', ChannelInviteDecline);
 	r.put('/api/channels/:id/members/:userId', ChannelMemberUpdate);
 	r.delete('/api/channels/:id/members/:userId', ChannelMemberRemove);
 };
 
 const json = (body: unknown) => ({ headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+
+/** Invite `userId` by the email in their test token, then accept as them: the only way onto a team. */
+async function inviteAndAccept(env: unknown, actorId: string, channelId: string, userId: string, role: string) {
+	const sent = await buildApp(ROUTES, { userId: actorId }).request(`/api/channels/${channelId}/invites`, { method: 'POST', ...json({ email: `${userId}@test.local`, role }) }, env as never);
+	if (sent.status !== 200) return sent;
+	const mine = await buildApp(ROUTES, { userId }).request('/api/channel-invites', {}, env as never);
+	const invite = ((await mine.json()) as any).data.invites.find((i: any) => i.channel.id === channelId);
+	return buildApp(ROUTES, { userId }).request(`/api/channel-invites/${invite.id}/accept`, { method: 'POST' }, env as never);
+}
 
 async function listAccess(env: unknown, userId: string) {
 	const res = await buildApp(ROUTES, { userId }).request('/api/channels/access', {}, env as never);
@@ -219,16 +234,18 @@ describe('GET /api/channels/access (owned + channel roles)', () => {
 		const write = (path: string, init: RequestInit) => owner.request(path, init, env as never).then(async r => { await flush(); return r; });
 
 		assert.deepEqual((await listAccess(raw, 'sara')).map(c => c.id), ['mine']);
-		const granted = await write('/api/channels/team/members', { method: 'POST', ...json({ userId: 'sara', role: 'admin' }) });
+		const granted = await inviteAndAccept(env, 'owner', 'team', 'sara', 'admin');
+		await flush();
 		assert.equal(granted.status, 200);
 		assert.deepEqual(accessRows(db), [{ channel_id: 'team', user_id: 'sara', role: 'admin' }]);
 		assert.deepEqual((await listAccess(raw, 'sara')).map(c => [c.id, c.role]), [['mine', 'owner'], ['team', 'admin']]);
 
-		// Granting again is refused, not duplicated
-		const again = await write('/api/channels/team/members', { method: 'POST', ...json({ userId: 'sara', role: 'editor' }) });
-		assert.equal(again.status, 409);
-		assert.equal(((await again.json()) as any).code, 'already_member');
+		// A second email invitation accepted while already a member changes nothing and adds no duplicate
+		const again = await inviteAndAccept(env, 'owner', 'team', 'sara', 'editor');
+		await flush();
+		assert.equal(again.status, 200);
 		assert.equal((await listAccess(raw, 'sara')).filter(c => c.id === 'team').length, 1);
+		assert.equal((await listAccess(raw, 'sara')).find(c => c.id === 'team')!.role, 'admin');
 
 		assert.equal((await write('/api/channels/team/members/sara', { method: 'PUT', ...json({ role: 'editor' }) })).status, 200);
 		assert.deepEqual(accessRows(db), [{ channel_id: 'team', user_id: 'sara', role: 'editor' }]);
@@ -267,38 +284,59 @@ describe('members API rules', () => {
 		saraMain: channel('saraMain', { userId: 'sara', handle: 'SaraTalks' }),
 	}, { channel_tabs: new MemoryBucket({ 'channel-handles/saratalks': { channelId: 'saraMain', handle: 'SaraTalks' } }) });
 
-	it('grants by @handle (resolves to that channel\'s owner)', async () => {
+	const inviteAs = (raw: unknown, actorId: string, body: unknown) =>
+		buildApp(ROUTES, { userId: actorId }).request('/api/channels/team/invites', { method: 'POST', ...json(body) }, raw as never);
+
+	it('invites by @handle (that channel\'s owner); the role only comes on accept', async () => {
 		const { raw } = env();
-		const res = await buildApp(ROUTES, { userId: 'owner' }).request('/api/channels/team/members', { method: 'POST', ...json({ handle: '@saratalks', role: 'moderator' }) }, raw as never);
+		const res = await inviteAs(raw, 'owner', { handle: '@saratalks', role: 'moderator' });
 		assert.equal(res.status, 200);
+		const body = (await res.json()) as any;
+		assert.deepEqual(body.data.invites.map((i: any) => [i.inviteeUserId, i.role, i.inviteeName]), [['sara', 'moderator', 'Sara']]);
+		assert.equal(channelRoleOf(raw.channels.read('team'), 'sara'), null);
+		const accepted = await buildApp(ROUTES, { userId: 'sara' }).request(`/api/channel-invites/${body.data.invites[0].id}/accept`, { method: 'POST' }, raw as never);
+		assert.equal(accepted.status, 200);
 		assert.equal(channelRoleOf(raw.channels.read('team'), 'sara'), 'moderator');
 	});
 
 	it('an unknown handle is a 404 with a code, not an internal error', async () => {
 		const { raw } = env();
-		const res = await buildApp(ROUTES, { userId: 'owner' }).request('/api/channels/team/members', { method: 'POST', ...json({ handle: 'nobody', role: 'editor' }) }, raw as never);
+		const res = await inviteAs(raw, 'owner', { handle: 'nobody', role: 'editor' });
 		assert.equal(res.status, 404);
 		assert.equal(((await res.json()) as any).code, 'person_not_found');
 	});
 
-	it('a channel admin grants editors but not admins; an editor grants nothing', async () => {
+	it('a channel admin invites editors but not admins; an editor invites nobody; owner is not a role', async () => {
 		const { raw } = env();
-		const asAdmin = buildApp(ROUTES, { userId: 'admin1' });
-		assert.equal((await asAdmin.request('/api/channels/team/members', { method: 'POST', ...json({ userId: 'sara', role: 'admin' }) }, raw as never)).status, 403);
-		assert.equal((await asAdmin.request('/api/channels/team/members', { method: 'POST', ...json({ userId: 'sara', role: 'editor' }) }, raw as never)).status, 200);
-		assert.equal((await buildApp(ROUTES, { userId: 'ed' }).request('/api/channels/team/members', { method: 'POST', ...json({ userId: 'omar', role: 'moderator' }) }, raw as never)).status, 403);
+		assert.equal((await inviteAs(raw, 'admin1', { email: 'sara@test.local', role: 'admin' })).status, 403);
+		assert.equal((await inviteAs(raw, 'admin1', { email: 'sara@test.local', role: 'editor' })).status, 200);
+		assert.equal((await inviteAs(raw, 'ed', { email: 'omar@test.local', role: 'moderator' })).status, 403);
+		const owner = await inviteAs(raw, 'owner', { email: 'x@test.local', role: 'owner' });
+		assert.equal(owner.status, 400);
+		assert.equal(((await owner.json()) as any).code, 'invalid_role');
 	});
 
-	it('an admin cannot remove another admin or the owner; nobody gives the owner a member role', async () => {
+	it('an admin cannot remove another admin or the owner; nobody invites the owner or themselves', async () => {
 		const { raw } = env();
-		const owner = buildApp(ROUTES, { userId: 'owner' });
-		await owner.request('/api/channels/team/members', { method: 'POST', ...json({ userId: 'sara', role: 'admin' }) }, raw as never);
+		assert.equal((await inviteAndAccept(raw, 'owner', 'team', 'sara', 'admin')).status, 200);
 		const asAdmin = buildApp(ROUTES, { userId: 'admin1' });
 		assert.equal((await asAdmin.request('/api/channels/team/members/sara', { method: 'DELETE' }, raw as never)).status, 403);
 		assert.equal((await asAdmin.request('/api/channels/team/members/owner', { method: 'DELETE' }, raw as never)).status, 403);
-		const ownerGrant = await owner.request('/api/channels/team/members', { method: 'POST', ...json({ userId: 'owner', role: 'admin' }) }, raw as never);
-		assert.equal(ownerGrant.status, 409);
-		assert.equal(((await ownerGrant.json()) as any).code, 'cannot_invite_owner');
+		const self = await inviteAs(raw, 'owner', { email: 'owner@test.local', role: 'admin' });
+		assert.equal(self.status, 409);
+		assert.equal(((await self.json()) as any).code, 'cannot_invite_owner');
+	});
+
+	it('inviting someone who already has a role, or twice, is refused with a code', async () => {
+		const { raw } = env();
+		assert.equal((await inviteAndAccept(raw, 'owner', 'team', 'sara', 'editor')).status, 200);
+		const member = await inviteAs(raw, 'owner', { handle: 'SaraTalks', role: 'moderator' });
+		assert.equal(member.status, 409);
+		assert.equal(((await member.json()) as any).code, 'already_member');
+		assert.equal((await inviteAs(raw, 'owner', { email: 'NEW@Example.com', role: 'editor' })).status, 200);
+		const twice = await inviteAs(raw, 'owner', { email: 'new@example.com ', role: 'moderator' });
+		assert.equal(twice.status, 409);
+		assert.equal(((await twice.json()) as any).code, 'already_invited');
 	});
 
 	it('any member may leave; leaving takes the channel out of their list', async () => {
