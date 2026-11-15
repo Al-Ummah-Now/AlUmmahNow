@@ -1,6 +1,6 @@
 import { accounts } from './support/env';
 import { test, expect } from './support/fixtures';
-import { accountControl, horizontalOverflow, openMainNav } from './support/ui';
+import { accountControl, horizontalOverflow, openMainNav, setPreferences } from './support/ui';
 
 const PAGES = [
   { path: '/dashboard', nav: 'Dashboard', heading: 'Admin Dashboard' },
@@ -92,4 +92,39 @@ test.describe('navigation', () => {
     await page.goForward();
     await expect(page).toHaveURL(/\/translations$/);
   });
+
+  for (const locale of ['en', 'ar'] as const) {
+    test(`NAV-07 the header is the shared bar: full width over the sidebar, one line, one typeface (${locale})`, async ({ page, isMobile }) => {
+      await setPreferences(page, { locale });
+      await page.goto('/dashboard');
+      const header = page.locator('header.aun-header');
+      await expect(header.locator('.aun-brand')).toBeVisible();
+      const bar = await header.evaluate((h) => {
+        const rtl = getComputedStyle(h).direction === 'rtl';
+        const box = h.getBoundingClientRect();
+        // the first control on screen (the drawer's menu button on phones, else the brand), from the inline start
+        const first = [...h.children].find((e) => e.getBoundingClientRect().width > 0)!.getBoundingClientRect();
+        const menu = h.querySelector('[data-testid="nav-open"]')!;
+        return {
+          x: box.x,
+          width: box.width,
+          height: box.height,
+          viewport: document.documentElement.clientWidth,
+          edge: rtl ? document.documentElement.clientWidth - first.right : first.left,
+          font: getComputedStyle(h).fontFamily,
+          menu: [menu.className, menu.getAttribute('aria-label')],
+        };
+      });
+      expect(bar.x).toBe(0);
+      expect(bar.width).toBe(bar.viewport);
+      expect(bar.edge).toBeLessThanOrEqual(16);
+      // exactly 64px (56px below 640px) with its border: no second row
+      expect(bar.height).toBe(bar.viewport < 640 ? 56 : 64);
+      expect(bar.font).toMatch(locale === 'ar' ? /^["']?Noto Naskh Arabic/ : /^system-ui/);
+      // the videos site's drawer toggle: the contract's menu button, named Menu / القائمة
+      expect(bar.menu[0]).toContain('aun-icon-btn aun-menu-btn');
+      expect(bar.menu[1]).toBe(locale === 'ar' ? 'القائمة' : 'Menu');
+      if (!isMobile) await expect(page.getByTestId('admin-sidebar')).toHaveCSS('position', 'sticky');
+    });
+  }
 });

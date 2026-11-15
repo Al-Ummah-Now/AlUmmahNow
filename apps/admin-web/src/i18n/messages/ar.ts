@@ -71,7 +71,6 @@ const ar: Messages = {
     groupSite: 'الموقع',
     breadcrumbs: 'مسار التنقل',
     quick: 'تنقل سريع',
-    open: 'فتح القائمة',
     close: 'إغلاق القائمة',
     collapse: 'طي الشريط الجانبي',
     expand: 'توسيع الشريط الجانبي',

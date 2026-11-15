@@ -72,19 +72,16 @@
   --scrollbar-thumb: var(--fanous-color-outline);
 }
 
-/* The shared header (docs/design/NAV.md "Header"). The drawer's menu button is for phones (the sidebar is always
-   there from 768px). Below 1024px the bar shows the logo alone (the wordmark stays the link's name), as on
-   videos: beside the 264px sidebar the admin's bar also holds the search, and Website / Videos, language,
-   light/dark and the account must stay on one line, so the account button is the avatar alone there too
-   (the name stays its accessible name). */
+/* The shared header (docs/design/NAV.md "Header"), full width over the sidebar. The drawer's menu button is
+   for phones (the sidebar is always there from 768px). On phones the bar holds that button as well as the
+   search, so the logo stands alone there (the wordmark stays the link's name), not only below 400px. */
 @media (min-width: 768px) {
   .aun-header .admin-menu-btn {
     display: none;
   }
 }
-@media (max-width: 1023px) {
-  .aun-header .aun-brand-text,
-  .aun-header .aun-acct-btn .aun-acct-name {
+@media (max-width: 639px) {
+  .aun-header .aun-brand-text {
     position: absolute;
     width: 1px;
     height: 1px;

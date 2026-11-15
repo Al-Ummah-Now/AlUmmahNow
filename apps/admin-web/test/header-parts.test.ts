@@ -8,9 +8,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import * as React from 'react';
-import { appLinksHtml, brandHtml, envBadgeHtml, langButtonHtml, modeButtonHtml, signInHtml } from '../../../packages/fanous-tokens/nav/header.js';
+import { appLinksHtml, brandHtml, envBadgeHtml, langButtonHtml, menuButtonHtml, modeButtonHtml, signInHtml } from '../../../packages/fanous-tokens/nav/header.js';
 import { modeIconSvg } from '../../../packages/fanous-tokens/nav/mode-toggle.js';
-import { HeaderAppLinks, HeaderBrand, HeaderEnvBadge, HeaderLangButton, HeaderModeButton, HeaderSignIn, selfHref } from '../src/components/shell/HeaderParts';
+import { HeaderAppLinks, HeaderBrand, HeaderEnvBadge, HeaderLangButton, HeaderMenuButton, HeaderModeButton, HeaderSignIn, selfHref } from '../src/components/shell/HeaderParts';
 
 // tsx compiles the components' JSX in classic mode (tsconfig jsx: preserve): they read the global React
 (globalThis as unknown as { React: unknown }).React = React;
@@ -46,6 +46,12 @@ for (const lang of ['en', 'ar'] as const) {
 
     it('language button: the current page and query (the language is a cookie)', () => {
       assert.equal(r(HeaderLangButton, { lang, href: '/videos?q=a&page=2' }), norm(langButtonHtml({ lang, href: '/videos?q=a&page=2' })));
+    });
+
+    it('drawer toggle: menuButtonHtml\'s button, icon and name, the same as the videos site\'s (no popovertarget: a drawer)', () => {
+      const want = norm(menuButtonHtml({ lang, panel: 'p' })).replace(' aun-menu-collapse', '').replace(' popovertarget="p"', '');
+      assert.equal(r(HeaderMenuButton, { lang }), want);
+      assert.equal(r(HeaderMenuButton, { lang, className: 'admin-menu-btn' }), want.replace('aun-menu-btn"', 'aun-menu-btn admin-menu-btn"'));
     });
 
     it('light / dark: the builder\'s button, with both icons (CSS shows the one for the mode on screen)', () => {
