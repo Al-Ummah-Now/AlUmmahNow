@@ -78,8 +78,8 @@ export function mediaPlaylist(pl) {
 // probed (review and stills also run on the published rung, server.mjs). Frames are compared as
 // tiny grey thumbnails at evenly spaced times, audio as a loudness envelope.
 
-/** Frames compared per video, evenly spaced (never the first or last instant). */
-export const MATCH_FRAMES = 12;
+/** Frames compared per rung: one at a random instant inside each of this many equal stretches. */
+export const MATCH_FRAMES = 24;
 /** Thumbnail size the frames are scaled to before comparing (grey, 1 byte per pixel). */
 export const MATCH_FRAME_SIZE = { width: 32, height: 18 };
 /** Mean absolute pixel difference (0–255) a re-encode stays under; a different picture does not. */
@@ -90,10 +90,18 @@ export const ENVELOPE_WINDOW_MS = 100;
 export const ENVELOPE_RATE = 2000;
 export const ENVELOPE_CORRELATION_MIN = 0.8;
 
-/** Times (s) frames are compared at. */
-export function matchTimes(durationSeconds, n = MATCH_FRAMES) {
+/**
+ * Times (s) frames are compared at: stratified random, one unpredictable instant in each of `n`
+ * equal stretches, so no part of the video goes unchecked and no gap can be planned around.
+ * @param {number} durationSeconds
+ * @param {number} [n]
+ * @param {() => number} [random] uniform in [0, 1), injectable for tests
+ */
+export function matchTimes(durationSeconds, n = MATCH_FRAMES, random = Math.random) {
 	if (!(durationSeconds > 0)) return [];
-	return Array.from({ length: n }, (_, i) => Number((((i + 0.5) / n) * durationSeconds).toFixed(3)));
+	const stretch = durationSeconds / n;
+	// Stay clear of the very end, where a decoder may have no frame left
+	return Array.from({ length: n }, (_, i) => Number(Math.min(durationSeconds - 0.05, (i + 0.05 + random() * 0.9) * stretch).toFixed(3))).filter((t) => t >= 0);
 }
 
 /** Mean absolute difference of two equal-size grey frames (Uint8Array / Buffer). */
@@ -201,6 +209,9 @@ export function verifyRenditions(o) {
 		if (o.source.hasAudio) {
 			const a = rung.probe?.audio;
 			if (!a || a.codec !== 'aac' || a.channels !== 2) return fail('audio');
+		} else if (rung.probe?.audio) {
+			// A silent source has silent renditions: an added sound track is never accepted
+			return fail('audio');
 		}
 		const longest = Math.max(...pl.segments.map((s) => s.seconds));
 		if (longest > SEGMENT_SECONDS + SEGMENT_SLACK_SECONDS) return fail('segment_length');

@@ -11,6 +11,7 @@
 // API (from the Worker): POST /jobs { jobId, prefix, attempt }, GET /status, GET /health.
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
+import { randomInt } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
@@ -296,19 +297,37 @@ async function loudness(input) {
 	return envelope(await runBuffer('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', '-i', input, '-map', 'a:0', '-ac', '1', '-ar', String(ENVELOPE_RATE), '-f', 's16le', 'pipe:1']));
 }
 
-/** Do the pre-encoded renditions show and sound like the source (prebuilt.mjs contentMatches)? */
-async function compareContent(src, rendition, info) {
-	const frameDistances = [];
-	for (const t of matchTimes(info.durationSeconds)) frameDistances.push(frameDistance(await greyFrame(src, t), await greyFrame(rendition, t)));
-	if (!info.hasAudio) return contentMatches({ frameDistances });
-	let sourceEnvelope;
-	let renditionEnvelope;
-	try {
-		[sourceEnvelope, renditionEnvelope] = [await loudness(src), await loudness(rendition)];
-	} catch {
-		return { ok: false, reason: 'audio_mismatch' };
+/**
+ * Do the pre-encoded renditions show and sound like the source (prebuilt.mjs contentMatches)? Every
+ * rung is compared at fresh random times; the source's frames are grabbed once per time.
+ */
+async function compareRungs(src, playlists, info) {
+	const times = matchTimes(info.durationSeconds, undefined, () => randomInt(0, 1_000_000) / 1_000_000);
+	const sourceFrames = [];
+	for (const t of times) sourceFrames.push(await greyFrame(src, t));
+	let sourceEnvelope = null;
+	if (info.hasAudio) {
+		try {
+			sourceEnvelope = await loudness(src);
+		} catch {
+			return { ok: false, reason: 'audio_mismatch', rung: Object.keys(playlists)[0] };
+		}
 	}
-	return contentMatches({ frameDistances, sourceEnvelope, renditionEnvelope });
+	for (const [name, playlist] of Object.entries(playlists)) {
+		const frameDistances = [];
+		for (let i = 0; i < times.length; i++) frameDistances.push(frameDistance(sourceFrames[i], await greyFrame(playlist, times[i])));
+		let renditionEnvelope = null;
+		if (sourceEnvelope) {
+			try {
+				renditionEnvelope = await loudness(playlist);
+			} catch {
+				return { ok: false, reason: 'audio_mismatch', rung: name };
+			}
+		}
+		const verdict = contentMatches({ frameDistances, sourceEnvelope, renditionEnvelope });
+		if (!verdict.ok) return { ...verdict, rung: name };
+	}
+	return { ok: true };
 }
 
 /**
@@ -365,14 +384,14 @@ async function usePrebuilt(job, src, info, rungs, out) {
 				return { used: false, reason: 'decode', rung: c.name };
 			}
 		}
-		// Same pictures and sound as the source the server probed (the top rung stands for all; the
-		// others were checked to be the same ladder, and review and stills run on the top rung)
-		const top = rungs[rungs.length - 1].name;
-		const match = await compareContent(src, join(out, top, 'index.m3u8'), info);
+		// Every rung shows and sounds like the source the server probed (review and stills then run
+		// on the top rung, the one viewers get at full size)
+		const match = await compareRungs(src, Object.fromEntries(checks.map((c) => [c.name, join(out, c.name, 'index.m3u8')])), info);
 		if (!match.ok) {
 			await cleanup();
-			return { used: false, reason: match.reason, rung: top };
+			return { used: false, reason: match.reason, rung: match.rung };
 		}
+		const top = rungs[rungs.length - 1].name;
 		const master = checks.map((c) => {
 			const r = rungs.find((x) => x.name === c.name);
 			const peak = Math.max(...c.playlist.segments.map((x) => (c.sizes[x.file] * 8) / x.seconds));
