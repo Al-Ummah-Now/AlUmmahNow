@@ -33,6 +33,7 @@
 --   apps/api-videos/migrations/search/0038_media_originals_keep.sql
 --   apps/api-videos/migrations/search/0039_channel_comments.sql
 --   apps/api-videos/migrations/search/0041_youtube_import.sql
+--   apps/api-videos/migrations/search/0042_media_backfill.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -64,10 +65,14 @@ CREATE TABLE live_qoe (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, stream_id 
 CREATE TABLE live_segments (session_id TEXT NOT NULL, rendition TEXT NOT NULL, seq INTEGER NOT NULL, uri TEXT NOT NULL, duration REAL NOT NULL, bytes INTEGER NOT NULL DEFAULT 0, received_at INTEGER NOT NULL, PRIMARY KEY (session_id, rendition, seq)) WITHOUT ROWID;
 CREATE TABLE live_sessions (id TEXT PRIMARY KEY, stream_id TEXT NOT NULL, channel_id TEXT, provider TEXT NOT NULL CHECK (provider IN ('bunny', 'selfhosted')), provider_ref TEXT, status TEXT NOT NULL DEFAULT 'provisioned' CHECK (status IN ('provisioned', 'live', 'ended', 'failed')), reason TEXT NOT NULL, preferred TEXT, seq INTEGER, failover_from TEXT, failover_error TEXT, key_version INTEGER NOT NULL DEFAULT 1, low_latency INTEGER NOT NULL DEFAULT 0, is_test INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, start_requested_at INTEGER, ingest_connected_at INTEGER, first_segment_at INTEGER, last_segment_at INTEGER, ended_at INTEGER, end_reason TEXT, vod_ready_at INTEGER, vod_url TEXT, playback_url TEXT, ingest_bytes INTEGER NOT NULL DEFAULT 0, segments INTEGER NOT NULL DEFAULT 0, reconnects INTEGER NOT NULL DEFAULT 0, edge_requests INTEGER NOT NULL DEFAULT 0, delivered_bytes INTEGER NOT NULL DEFAULT 0, cache_hits INTEGER NOT NULL DEFAULT 0, r2_reads INTEGER NOT NULL DEFAULT 0, r2_writes INTEGER NOT NULL DEFAULT 0, stored_bytes INTEGER NOT NULL DEFAULT 0, peak_viewers INTEGER NOT NULL DEFAULT 0, viewer_seconds INTEGER NOT NULL DEFAULT 0, error TEXT) WITHOUT ROWID;
 CREATE TABLE live_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_by TEXT, updated_at TEXT) WITHOUT ROWID;
+CREATE TABLE media_backfill_items (run_id TEXT NOT NULL, video_id TEXT NOT NULL, state TEXT NOT NULL, skip_reason TEXT, title TEXT, channel_id TEXT, library_id INTEGER, duration_seconds REAL, source_bytes INTEGER, source_file TEXT, has_original INTEGER NOT NULL DEFAULT 0, needs_transcode INTEGER NOT NULL DEFAULT 1, est_usd REAL NOT NULL DEFAULT 0, upload_id TEXT, copied_bytes INTEGER NOT NULL DEFAULT 0, parts TEXT, job_id TEXT, egress_bytes INTEGER NOT NULL DEFAULT 0, container_seconds INTEGER NOT NULL DEFAULT 0, stored_bytes INTEGER NOT NULL DEFAULT 0, class_a_ops INTEGER NOT NULL DEFAULT 0, spent_usd REAL NOT NULL DEFAULT 0, attempts INTEGER NOT NULL DEFAULT 0, error TEXT, error_step TEXT, checks TEXT, started_at TEXT, verified_at TEXT, updated_at TEXT NOT NULL, PRIMARY KEY (run_id, video_id)) WITHOUT ROWID;
+CREATE TABLE media_backfill_runs (id TEXT PRIMARY KEY, status TEXT NOT NULL, scope TEXT NOT NULL, settings TEXT NOT NULL, estimate TEXT, cursor TEXT, created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, started_at TEXT, finished_at TEXT, stop_reason TEXT, tick_at TEXT, last_start_at TEXT) WITHOUT ROWID;
+CREATE TABLE media_bunny_removals (video_id TEXT PRIMARY KEY, library_id INTEGER NOT NULL, guid TEXT, status TEXT NOT NULL, scheduled_by TEXT NOT NULL, scheduled_at TEXT NOT NULL, delete_after TEXT NOT NULL, removed_at TEXT, attempts INTEGER NOT NULL DEFAULT 0, error TEXT, updated_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE media_jobs (video_id TEXT PRIMARY KEY, job_id TEXT NOT NULL, status TEXT NOT NULL, access TEXT NOT NULL, reason TEXT, attempts INTEGER NOT NULL DEFAULT 0, queued_at TEXT NOT NULL, started_at TEXT, ready_at TEXT, failed_at TEXT, error TEXT, duration_seconds REAL, bytes INTEGER, objects INTEGER, rungs TEXT, container_seconds INTEGER, instance_type TEXT, bunny_ready_at TEXT, updated_at TEXT NOT NULL);
 CREATE TABLE media_originals (video_id TEXT PRIMARY KEY, upload_id TEXT NOT NULL, bytes INTEGER NOT NULL, parts INTEGER NOT NULL, completed_at TEXT NOT NULL, deleted_at TEXT, keep TEXT);
 CREATE TABLE media_provider_health (provider TEXT NOT NULL, minute TEXT NOT NULL, reporter TEXT NOT NULL, failures INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (provider, minute, reporter));
 CREATE TABLE media_provider_refs (provider TEXT NOT NULL, ref TEXT NOT NULL, video_id TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY (provider, ref));
+CREATE TABLE media_r2_verified (video_id TEXT PRIMARY KEY, run_id TEXT NOT NULL, rev TEXT NOT NULL, library_id INTEGER, channel_id TEXT, verified_at TEXT NOT NULL, checks TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE playback_fallback_daily (day TEXT NOT NULL, requested TEXT NOT NULL, actual TEXT NOT NULL, reason TEXT NOT NULL, server_fallbacks INTEGER NOT NULL DEFAULT 0, qoe_sessions INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, requested, actual, reason));
 CREATE TABLE playback_qoe_daily (day TEXT NOT NULL, provider TEXT NOT NULL, device TEXT NOT NULL, country TEXT NOT NULL, sessions INTEGER NOT NULL DEFAULT 0, started INTEGER NOT NULL DEFAULT 0, startup_ms_sum INTEGER NOT NULL DEFAULT 0, rebuffers INTEGER NOT NULL DEFAULT 0, rebuffer_ms INTEGER NOT NULL DEFAULT 0, watch_ms INTEGER NOT NULL DEFAULT 0, kbps_watch_s REAL NOT NULL DEFAULT 0, peak_kbps_sum INTEGER NOT NULL DEFAULT 0, switches INTEGER NOT NULL DEFAULT 0, errors INTEGER NOT NULL DEFAULT 0, fallbacks INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, provider, device, country));
 CREATE TABLE privacy_footprint_sigs (kind TEXT NOT NULL, target_id TEXT NOT NULL, sig TEXT NOT NULL, PRIMARY KEY (kind, target_id)) WITHOUT ROWID;
@@ -160,10 +165,15 @@ CREATE INDEX idx_live_qoe_session ON live_qoe (session_id, at);
 CREATE INDEX idx_live_sessions_created ON live_sessions (created_at, provider);
 CREATE INDEX idx_live_sessions_status ON live_sessions (status, provider);
 CREATE INDEX idx_live_sessions_stream ON live_sessions (stream_id, created_at);
+CREATE INDEX idx_media_backfill_items_state ON media_backfill_items (run_id, state, updated_at);
+CREATE INDEX idx_media_backfill_runs_status ON media_backfill_runs (status, created_at);
+CREATE INDEX idx_media_bunny_removals_due ON media_bunny_removals (status, delete_after);
+CREATE INDEX idx_media_bunny_removals_library ON media_bunny_removals (library_id, status);
 CREATE INDEX idx_media_jobs_queued ON media_jobs (queued_at);
 CREATE INDEX idx_media_jobs_status ON media_jobs (status, updated_at);
 CREATE INDEX idx_media_originals_due ON media_originals (deleted_at, completed_at);
 CREATE INDEX idx_media_provider_refs_video ON media_provider_refs (video_id);
+CREATE INDEX idx_media_r2_verified_library ON media_r2_verified (library_id, video_id);
 CREATE INDEX idx_privacy_footprints_target ON privacy_footprints (kind, target_id);
 CREATE INDEX idx_search_channels_created ON search_channels (visible, created_at);
 CREATE INDEX idx_search_channels_indexed ON search_channels (indexed_at);

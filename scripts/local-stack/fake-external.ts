@@ -232,7 +232,18 @@ export function cdnPath(pathname: string): string[] {
   return parts[0]?.startsWith('bcdn_token=') ? parts.slice(1) : parts;
 }
 
-function cdn(method: string, pathname: string): Response {
+/** One `bytes=a-b` range of a body (206 with Content-Range), like Bunny's CDN; the R2 backfill copies in ranges. */
+function ranged(body: Buffer, range: string | null | undefined, type: string, head: boolean): Response | null {
+  const m = range ? /^bytes=(\d+)-(\d*)$/.exec(range) : null;
+  if (!m) return null;
+  const start = Number(m[1]);
+  const end = Math.min(m[2] ? Number(m[2]) : body.length - 1, body.length - 1);
+  if (start > end) return new Response(null, { status: 416, headers: { ...CORS, 'content-range': `bytes */${body.length}` } });
+  const part = body.subarray(start, end + 1);
+  return new Response(head ? null : part, { status: 206, headers: { ...CORS, 'content-type': type, 'content-range': `bytes ${start}-${end}/${body.length}`, 'content-length': String(part.length), 'cache-control': 'no-store' } });
+}
+
+function cdn(method: string, pathname: string, range?: string | null): Response {
   const [guid, ...rest] = cdnPath(pathname);
   const file = rest.join('/');
   const video = bunny.videos.get(guid ?? '');
@@ -241,7 +252,7 @@ function cdn(method: string, pathname: string): Response {
   if (!video || video.status !== 4) return new Response(null, { status: 404, headers: CORS });
   const send = (body: Buffer | string, type: string) => new Response(head ? null : body, { status: 200, headers: { 'content-type': type, 'access-control-allow-origin': '*', 'cache-control': 'no-store' } });
   if (/^thumbnail(_\d+)?\.jpg$/.test(file) || file === 'preview.webp') return send(readFileSync(THUMBNAIL), 'image/jpeg');
-  if (/^(play_\d+p\.mp4|original)$/.test(file)) return send(video.bytes, 'video/mp4');
+  if (/^(play_\d+p\.mp4|original)$/.test(file)) return ranged(video.bytes, range, 'video/mp4', head) ?? send(video.bytes, 'video/mp4');
   const fixture = video.height > video.width ? 'short' : 'bright';
   const name = file === 'playlist.m3u8' ? 'master.m3u8' : file;
   const path = normalize(join(PLAYER_FIXTURES, fixture, name));
@@ -286,7 +297,8 @@ async function resend(request: Request): Promise<Response> {
  *   POST /__fake/media/transcode/<videoId>[?outcome=fail]
  *     ─► reads the record's queued job (r2.jobId/rev/access) and checks the kept original exists
  *     ─► POSTs the job events a real transcode sends (started, then ready with the result, or a
- *        final failure) to api-videos /internal/media/events
+ *        final failure) to api-videos /internal/media/events, and writes the rendition's objects
+ *        (playlists, init, segments, thumb.jpg) into the stack media bucket for the R2 backfill's verify
  *   media.local-stack.test/pub/<id>/<rev>/<file> and /priv/<token>/<id>/<rev>/<file>
  *     ─► the player's HLS fixture for a rendition this fake made ready (404 otherwise); /priv/ needs a
  *        token-shaped segment (the real check is apps/media/src/edge.ts, unit tested there)
@@ -297,6 +309,29 @@ export const FAKE_MEDIA_HOST = 'media.local-stack.test';
 const VIDEOS_BUCKET = 'videos';
 const ORIGINALS_BUCKET = 'al-ummah-now-media-originals';
 export const fakeMedia = { renditions: new Map<string, { rev: string; access: string }>(), down: false, downVideos: new Set<string>() };
+
+const MEDIA_BUCKETS: Record<string, string> = { pub: 'al-ummah-now-media', priv: 'al-ummah-now-media-private' };
+
+/**
+ * The objects a real transcode leaves in the media bucket (`<access>/<id>/<rev>/`): master, one playlist
+ * per rung, init + segments, thumb.jpg. Small placeholder bodies (the player is served the HLS fixture by
+ * mediaHost); what matters is that the R2 backfill's verify step finds every key the playlists name.
+ */
+async function writeRenditions(videoId: string, access: string, rev: string): Promise<void> {
+  const bucket = MEDIA_BUCKETS[access];
+  if (!bucket || !stackR2) return;
+  const prefix = `${access}/${videoId}/${rev}/`;
+  const rungs = ['360p', '720p'];
+  const put = (key: string, body: string) => stackR2!(bucket, `${prefix}${key}`, 'PUT', body);
+  await put('master.m3u8', ['#EXTM3U', ...rungs.flatMap((r) => [`#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=${r === '360p' ? '640x360' : '1280x720'}`, `${r}/index.m3u8`])].join('\n'));
+  for (const r of rungs) {
+    const segments = Array.from({ length: 9 }, (_, i) => `seg_${String(i + 1).padStart(5, '0')}.m4s`);
+    await put(`${r}/index.m3u8`, ['#EXTM3U', '#EXT-X-MAP:URI="init.mp4"', ...segments.flatMap((s) => ['#EXTINF:10.0,', s]), '#EXT-X-ENDLIST'].join('\n'));
+    await put(`${r}/init.mp4`, 'init');
+    for (const seg of segments) await put(`${r}/${seg}`, 'segment');
+  }
+  await put('thumb.jpg', 'jpeg');
+}
 
 export async function fakeTranscode(videoId: string, outcome: string): Promise<Response> {
   if (!stackR2) return json({ error: 'R2 is available once the stack is up' }, 405);
@@ -336,6 +371,7 @@ export async function fakeTranscode(videoId: string, outcome: string): Promise<R
       thumbnail: 'thumb.jpg',
     },
   });
+  await writeRenditions(videoId, r2.access, r2.rev);
   fakeMedia.renditions.set(videoId, { rev: r2.rev, access: r2.access });
   return json({ videoId, outcome: 'ready', rev: r2.rev, access: r2.access });
 }
@@ -362,7 +398,7 @@ function mediaHost(method: string, pathname: string): Response {
 /** Registers the fakes with the outbound router. */
 export function registerFakes(): void {
   FAKES.set('video.bunnycdn.com', bunnyStream);
-  FAKES.set(FAKE_CDN_HOST, (request, url) => cdn(request.method, url.pathname));
+  FAKES.set(FAKE_CDN_HOST, (request, url) => cdn(request.method, url.pathname, request.headers.get('range')));
   FAKES.set('storage.bunnycdn.com', images);
   FAKES.set('.storage.bunnycdn.com', images);
   FAKES.set(IMAGE_HOST, images);
@@ -549,7 +585,7 @@ export function startFakeCdn(): Promise<() => Promise<void>> {
       if (url.pathname.startsWith('/__fake/') || url.pathname.startsWith('/__stack/')) response = await control(req, url);
       // /images/<path> = the image host; anything else = the Bunny CDN
       else if (url.pathname.startsWith('/images/')) response = await images(new Request(`https://${IMAGE_HOST}${url.pathname.slice(7)}`, { method: req.method }), new URL(`https://${IMAGE_HOST}${url.pathname.slice(7)}`));
-      else response = cdn(req.method ?? 'GET', url.pathname);
+      else response = cdn(req.method ?? 'GET', url.pathname, req.headers.range);
     } catch (error) {
       response = json({ error: (error as Error).message }, 500);
     }

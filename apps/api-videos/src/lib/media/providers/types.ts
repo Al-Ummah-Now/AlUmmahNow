@@ -29,6 +29,8 @@ export interface ProviderVideo {
 	mediaOverride?: MediaOverride;
 	readyAt?: string;
 	playableAt?: string;
+	/** Set when the video was removed from its Bunny library after its R2 copy was verified: Bunny holds no copy */
+	bunnyRemoved?: { at: string; libraryId: number; guid: string };
 }
 
 /** Signed URLs one provider issues for one ready video. */

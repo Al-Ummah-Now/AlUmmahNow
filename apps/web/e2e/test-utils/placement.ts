@@ -208,6 +208,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/release/up-next-series.player.spec.ts': { placement: 'local', reason: 'series order from the recommendations index over its own uploads; fake Bunny HLS plays locally' },
   'apps/web/e2e/release/upload-channel.spec.ts': { placement: 'local', reason: 'upload page channel picker/switch decides channelId' },
   'apps/web/e2e/release/r2-only-upload.player.spec.ts': { placement: 'local', reason: 'R2-only ingest: own TUS target, R2 transcode events (stack fake pipeline), ready + published, plays from the media host' },
+  'apps/web/e2e/release/r2-backfill.player.spec.ts': { placement: 'local', reason: 'R2 backfill of its own Bunny-only upload: estimate, cap, start, ranged copy from the fake Bunny CDN, fake transcode writes renditions, verify, R2 first plays from the media host, undo' },
   'apps/web/e2e/release/provider-fallback.player.spec.ts': { placement: 'local', reason: 'Bunny + R2 copies, R2 first; the fake media host goes down and the player moves to Bunny by itself (sources list), QoE names the fallback; R2 again when it is up' },
   'apps/web/e2e/release/upload-modes.spec.ts': { placement: 'local', reason: 'visibility/thumbnail rules before/after ready; fake encode on demand' },
   'apps/web/e2e/release/upload-resume.spec.ts': { placement: 'local', reason: 'tus client resume across proxy failures (route interception)' },

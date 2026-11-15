@@ -18,6 +18,7 @@
  *   GET  /internal/media/providers         { settings, health, problems } provider settings (docs/media-delivery/PROVIDERS.md)
  *   PUT  /internal/media/providers         { settings, actorId } → 400 { problems } when unsafe
  *   POST /internal/media/health/check      one provider health pass now (the Errors page "Check now")
+ *   /internal/media/backfill/*            the R2 backfill and Bunny retirement (backfillInternal.ts)
  *   PUT  /internal/media/videos/:id/override  { override | null, actorId } a video's playback override
  *                                          (lib/media/video-override.ts) → { override, media };
  *                                          400 { problem } when it would leave the video unplayable
@@ -30,6 +31,7 @@ import { readQoeLive } from '../../lib/media/qoe-live';
 import { readHealth, runHealthCheck } from '../../lib/media/health';
 import { MediaSettingsError, readMediaSettings, saveMediaSettings } from '../../lib/media/settings';
 import { setVideoOverride } from '../../lib/media/video-override';
+import { createBackfillInternalRouter } from './backfillInternal';
 import type { LibraryHints } from '../../lib/bunny/libraries';
 import { applyJobEvent, applyMp4Event, enqueueTranscode, readDeliverySettings, sourceCandidates, writeDeliverySettings, type MediaEnv } from '../../lib/media/r2-delivery';
 
@@ -99,6 +101,9 @@ function isMp4Event(body: unknown): body is Mp4JobEvent {
 
 export function createMediaInternalRouter() {
 	const app = new Hono<{ Bindings: Env }>();
+
+	// R2 backfill of existing videos and Bunny retirement (backfillInternal.ts)
+	app.route('/backfill', createBackfillInternalRouter() as never);
 
 	app.get('/source/:videoId', async (c) => {
 		const id = c.req.param('videoId');

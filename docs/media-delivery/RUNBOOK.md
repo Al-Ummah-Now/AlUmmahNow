@@ -28,6 +28,12 @@ signing keys were created once, with `wrangler secrets-store secret create`.
 - **Manual rollback:** `cd apps/media && pnpm wrangler rollback -c wrangler.jsonc [--env stage]`.
 - **Viewers:** the production delivery switch defaults to Bunny. Uploads are dual-written to R2 from the first release. Viewers move only when an admin changes the switch on the Delivery page.
 
+## Backfilling existing videos
+
+Videos uploaded before R2 (only on Bunny) are moved by the admin on the videos admin's **R2 backfill** page, never by a
+script: estimate from real sizes, a budget cap, Start; then "Play R2 first" and, separately, retiring a legacy Bunny
+library after a grace period. See [BACKFILL.md](./BACKFILL.md). Failed videos are on the Errors page with Retry.
+
 ## Bunny originals
 
 The transcode reads `/{id}/original` first. Bunny serves it only when the Stream library has:
