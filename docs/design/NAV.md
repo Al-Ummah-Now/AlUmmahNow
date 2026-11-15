@@ -50,7 +50,7 @@ the same elements as JSX and their tests compare the result with the builders.
   16px from the screen's edge (12px on phones) in www, scholar sites, status and profile exactly as
   in videos web and the admins, so every header lines up.
 - **One typeface** in every header, set by the contract whatever the page uses: system-ui
-  (`--aun-header-font`), Arabic 'Noto Naskh Arabic' then Geeza Pro / Tahoma (`--aun-header-font-ar`).
+  (`--aun-header-font`), Arabic 'Noto Naskh Arabic' then Geeza Pro, then system-ui so Latin inside an Arabic header matches English (`--aun-header-font-ar`).
 - **One line on every screen.** The bar never wraps to a second row (`flex-wrap: nowrap`); when
   room runs out the brand is the one group that shrinks, and its wordmark (a long scholar site
   name too) ends in an ellipsis; below 400px it is hidden and the logo stays. Sites whose own links sit in
