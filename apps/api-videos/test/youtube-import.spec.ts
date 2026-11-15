@@ -526,7 +526,7 @@ describe('YouTube import: uploads, captions, thumbnails, playlists and the close
 		let bunnyCreates = 0;
 		globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
 			const url = String(input);
-			if (url.includes('video.bunnycdn.com')) {
+			if (URL.canParse(url) && new URL(url).hostname === 'video.bunnycdn.com') {
 				const method = init?.method ?? 'GET';
 				if (/\/library\/\d+\/videos\/?(\?.*)?$/.test(url) && method === 'POST') {
 					bunnyCreates++;
