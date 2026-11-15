@@ -120,9 +120,11 @@ cleanup handles an invite that was never accepted in four steps:
    from the audit row of that move. The give-back is a queued
    `channel.transfer` job, audited as a transfer by `system:trash-cleanup`, so
    the invite waits for the next run, which finds the channel moved and goes
-   on. If the previous owner is unknown, the give-back fails, or it has not
-   landed two days later, nothing is erased for that invite and the admin is
-   flagged: someone else's channel is never erased.
+   on. If the previous owner is unknown, the give-back fails or has not landed
+   two days later, the channel is in Recently deleted while still with the
+   invited user, or the invite's own move job has not settled (still running,
+   or failed and open to a Retry), nothing is erased for that invite and the
+   admin is flagged: someone else's channel is never erased.
 3. Once auth no longer has it (or it never reached auth), the user id goes to
    api-videos `POST /internal/admin/users/:id/erase-revoked-invite`. That runs
    the admin erase path: a soft delete by `system:trash-cleanup` and its purge

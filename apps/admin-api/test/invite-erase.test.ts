@@ -46,6 +46,8 @@ function harness(held: string[] = []) {
   let transferFails = false;
   const owners = new Map<string, string | null>();
   const transfers: [string, string][] = [];
+  const deleted = new Set<string>();
+  const jobs = new Map<string, string>();
   const deps: InviteEraseDeps = {
     now: NOW,
     auth: {
@@ -62,7 +64,8 @@ function harness(held: string[] = []) {
     },
     flag: async (row, reason) => void flagged.push({ id: row.id, reason }),
     resolve: async (row) => void resolved.push(row.id),
-    channelOwner: async (id) => (owners.has(id) ? { ownerId: owners.get(id) ?? null, isDeleted: false } : null),
+    channelOwner: async (id) => (owners.has(id) ? { ownerId: owners.get(id) ?? null, isDeleted: deleted.has(id) } : null),
+    jobStatus: async (id) => (jobs.get(id) ?? 'succeeded') as never,
     transferChannel: async (id, to) => {
       if (transferFails) throw new Error('videos 500');
       transfers.push([id, to]);
@@ -70,7 +73,7 @@ function harness(held: string[] = []) {
   };
   const env = { REPORTS_DB: db } as never;
   const remaining = async () => ((await db.prepare('SELECT id FROM creator_invites ORDER BY id').all<{ id: string }>()).results ?? []).map((r) => r.id);
-  return { db, env, deps, erased, flagged, resolved, asked, remaining, owners, transfers, downAuth: () => void (authDown = true), failErase: () => void (eraseFails = true), failTransfer: () => void (transferFails = true) };
+  return { db, env, deps, erased, flagged, resolved, asked, remaining, owners, transfers, deleted, jobs, downAuth: () => void (authDown = true), failErase: () => void (eraseFails = true), failTransfer: () => void (transferFails = true) };
 }
 
 const settle = async (h: ReturnType<typeof harness>) => settleRevokedInvites(h.env, await dueRevokedInvites(h.db as never, daysAgo(30), 50), h.deps);
@@ -212,6 +215,26 @@ describe('revoked invite erase (#716)', () => {
     await seedMovedChannel(h, 'left');
     h.owners.set('ch_moved', 'usr_someone');
     assert.deepEqual((await settle(h)).erased, ['left']);
+    assert.deepEqual(h.transfers, []);
+  });
+
+  it("never erases while the invite's own move has not settled, or a moved channel sits deleted", async () => {
+    for (const [status, reason] of [['running', /has not finished/], ['retrying', /has not finished/], ['failed', /could still be retried/]] as const) {
+      const h = harness();
+      await seedMovedChannel(h, 'mv');
+      h.owners.set('ch_moved', 'usr_prev'); // the move never landed
+      h.jobs.set('job_1', status);
+      const out = await settle(h);
+      assert.match(out.failed[0]!.error, reason, status);
+      assert.deepEqual(h.erased, []);
+      assert.deepEqual(h.flagged.map((f) => f.id), ['mv']);
+    }
+    const h = harness();
+    await seedMovedChannel(h, 'del');
+    h.deleted.add('ch_moved');
+    const out = await settle(h);
+    assert.match(out.failed[0]!.error, /Recently deleted/);
+    assert.deepEqual(h.erased, []);
     assert.deepEqual(h.transfers, []);
   });
 

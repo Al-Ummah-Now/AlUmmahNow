@@ -9,8 +9,10 @@
  * 2. gives back every channel the invite moved from someone else ('transferred' in its channels
  *    record) to its previous owner, read from the audit row of that move. The give-back is a queued
  *    channel.transfer job, so the invite waits for the next run, which finds the channel moved and
- *    goes on. A channel whose previous owner is unknown, or whose give-back fails or never lands,
- *    stops the erase for that invite and flags the admin: someone else's channel is never erased;
+ *    goes on. A channel whose previous owner is unknown, whose give-back fails or never lands, that
+ *    sits deleted with the invited user, or whose original move job has not settled (still running,
+ *    or failed and open to a Retry) stops the erase for that invite and flags the admin: someone
+ *    else's channel is never erased;
  * 3. once auth no longer has it (or it never reached auth), hands the user id to api-videos
  *    (POST /internal/admin/users/:id/erase-revoked-invite): the admin erase path, soft delete by
  *    system:trash-cleanup and its purge at once (the user.delete-data job: retries, DLQ, Errors
@@ -21,7 +23,7 @@
  * keeps the mirror row (the next hourly run retries) and flags the admin on the Errors page, with a
  * Retry that runs the same steps for that invite; a later success resolves the item.
  */
-import { newErrorRef, purgeCutoff, scrubEvent, type AdminChannelDetail } from '@al-ummah/shared-types';
+import { newErrorRef, purgeCutoff, scrubEvent, type AdminChannelDetail, type AdminJob, type AdminJobStatus } from '@al-ummah/shared-types';
 import type { AdminBindings } from '../base/types';
 import { auditKey, writeAudit } from './content/audit';
 import { callVideos, VideosError, type VideosClientEnv } from './content/videosClient';
@@ -50,6 +52,8 @@ export interface InviteEraseDeps {
   channelOwner?: (channelId: string) => Promise<{ ownerId: string | null; isDeleted: boolean } | null>;
   /** Queues the channel.transfer job that gives a channel back */
   transferChannel?: (channelId: string, newOwnerId: string) => Promise<void>;
+  /** An api-videos admin job's status; null when the job is gone */
+  jobStatus?: (jobId: string) => Promise<AdminJobStatus | null>;
   now?: number;
 }
 
@@ -109,7 +113,7 @@ const parse = (value: string | null): Record<string, any> | null => {
  * Gives back the channels the invite moved from someone else, before anything of the invited user is
  * erased. Done when none is still with the invited user; pending while a give-back is queued.
  */
-async function giveBackTransferredChannels(env: InviteEraseEnv, row: InviteRow, deps: Required<Pick<InviteEraseDeps, 'channelOwner' | 'transferChannel'>>, now: number): Promise<GiveBack> {
+async function giveBackTransferredChannels(env: InviteEraseEnv, row: InviteRow, deps: Required<Pick<InviteEraseDeps, 'channelOwner' | 'transferChannel' | 'jobStatus'>>, now: number): Promise<GiveBack> {
   let channels: InviteChannel[] = [];
   try {
     channels = JSON.parse(row.channels || '[]');
@@ -118,9 +122,17 @@ async function giveBackTransferredChannels(env: InviteEraseEnv, row: InviteRow, 
   }
   let pending = false;
   for (const channel of channels.filter((c) => c?.action === 'transferred')) {
+    const label = `channel ${channel.name} (${channel.id})`;
+    // The invite's own move must have settled: one still running, or failed and open to a Retry,
+    // could land after the erase and hand the channel to an erased account
+    const moveStatus = channel.jobId ? await deps.jobStatus(channel.jobId) : null;
+    if (moveStatus === 'queued' || moveStatus === 'running' || moveStatus === 'retrying') return { state: 'blocked', reason: `the invite's move of ${label} has not finished` };
+    if (moveStatus === 'failed') return { state: 'blocked', reason: `the invite's move of ${label} failed and could still be retried` };
     const current = await deps.channelOwner(channel.id);
-    // Gone, or already with someone else: nothing of the invited user to give back
-    if (!current || current.isDeleted || current.ownerId !== row.user_id) continue;
+    // Gone, or with someone else: nothing of the invited user to give back
+    if (!current || current.ownerId !== row.user_id) continue;
+    // Deleted while the invited user held it: the erase would purge it, and a give-back cannot move it
+    if (current.isDeleted) return { state: 'blocked', reason: `${label} was moved to the invite and is in Recently deleted; restore it or purge it first` };
     const { results } = await env.REPORTS_DB.prepare('SELECT old_value, new_value, created_at FROM site_settings_log WHERE key = ? ORDER BY created_at')
       .bind(auditKey('channel', channel.id))
       .all<AuditRow>();
@@ -174,6 +186,16 @@ export async function settleRevokedInvites(env: InviteEraseEnv, rows: InviteRow[
       deps.transferChannel ??
       (async (id: string, newOwnerId: string) => {
         await callVideos(env, `/channels/${encodeURIComponent(id)}/transfer`, { method: 'POST', json: { newOwnerId }, actorId: CLEANUP_ACTOR });
+      }),
+    jobStatus:
+      deps.jobStatus ??
+      (async (jobId: string) => {
+        try {
+          return (await callVideos<AdminJob>(env, `/jobs/${encodeURIComponent(jobId)}`, { actorId: CLEANUP_ACTOR })).status;
+        } catch (error) {
+          if (error instanceof VideosError && error.status === 404) return null;
+          throw error;
+        }
       }),
   };
 
