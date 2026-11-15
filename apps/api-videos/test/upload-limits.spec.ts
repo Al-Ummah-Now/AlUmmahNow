@@ -138,8 +138,10 @@ async function harness(opts: Options = {}) {
   app.post('/api/videos/upload/complete', (c) => c.json({ success: true }));
   app.route('/api/videos/tus', createTusRouter());
 
+  const channelRecords = new Map<string, unknown>();
   const fullEnv = {
     UPLOAD_RATE_LIMIT: 'on',
+    channels: { get: async (id: string) => (channelRecords.has(id) ? { json: async () => channelRecords.get(id) } : null) },
     ...opts.env,
     SEARCH_DB: db,
     TUS_SESSIONS: tusKv,
@@ -179,7 +181,16 @@ async function harness(opts: Options = {}) {
         | { count: number }
         | undefined)?.count ?? 0,
     );
-  return { db, d1, request, initiate, batch, chunk, startUpload, tusCreate, complete, createChannel, created, hour, channelsCreated, indexChannel, deleteChannel, removeChannel };
+  /** What initiate leaves in TUS_SESSIONS: the uploader and the channel the upload is for */
+  const issueSession = (sessionId: string, userId: string, channelId: string) =>
+    tusKv.put(`tus:session:${sessionId}`, JSON.stringify({ videoId: `vid-${sessionId}`, userId, channelId, tusEndpoint: 'https://bunny.test/tus', tusHeaders: {} }));
+  const continueHour = (user: string) =>
+    Number(
+      (db.db.prepare("SELECT count FROM upload_rate_windows WHERE user_id = ? AND operation = 'video_upload_continue' AND period = 'hour'").get(user) as
+        | { count: number }
+        | undefined)?.count ?? 0,
+    );
+  return { db, d1, request, initiate, batch, chunk, startUpload, tusCreate, complete, createChannel, created, hour, continueHour, channelsCreated, indexChannel, deleteChannel, removeChannel, channelRecords, issueSession };
 }
 
 describe('creator tiers: who may upload', () => {
@@ -366,6 +377,24 @@ describe('creator tiers: who may upload', () => {
     // An untiered owner's channel gives members nothing
     const untiered = await harness({ tiers: {}, channels: { 'ch-2': 'someone' } });
     assert.equal((await untiered.initiate('member', { channelId: 'ch-2' })).status, 403);
+  });
+
+  it('an editor without a tier starts the TUS upload of a channel upload under the owner\'s tier (#759)', async () => {
+    const h = await harness({ tiers: { owner: 'small' } });
+    h.channelRecords.set('ch-1', { id: 'ch-1', userId: 'owner', members: [{ userId: 'editor', role: 'editor' }] });
+    await h.issueSession('sess-1', 'editor', 'ch-1');
+    const meta = (id: string) => ({ 'upload-metadata': `tusSessionId ${btoa(id)}` });
+    // tus-js-client sends no channelId header: the session names the channel
+    assert.notEqual((await h.tusCreate('editor', meta('sess-1'))).status, 403);
+    assert.equal(h.continueHour('owner'), 1, 'counted against the owner');
+    assert.equal(h.continueHour('editor'), 0);
+    // Someone else's session does not borrow the owner's tier
+    assert.equal((await h.tusCreate('mallory-untiered', meta('sess-1'))).status, 403);
+    // A removed member, and an upload to their own (untiered) channel, get nothing
+    h.channelRecords.set('ch-1', { id: 'ch-1', userId: 'owner', members: [] });
+    assert.equal((await h.tusCreate('editor', meta('sess-1'))).status, 403);
+    await h.issueSession('sess-2', 'editor', 'editor');
+    assert.equal((await h.tusCreate('editor', meta('sess-2'))).status, 403);
   });
 
   it('a D1 failure on the tier lookup refuses (503), never lets the upload through', async () => {
