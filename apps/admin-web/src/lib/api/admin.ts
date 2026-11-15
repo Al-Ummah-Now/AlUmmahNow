@@ -671,3 +671,39 @@ export async function listStaffDevices(userId: string): Promise<ActionResult<{ d
 export async function signOutStaffDevice(userId: string, installId: string): Promise<ActionResult<{ installId: string }>> {
   return mutate(`/api/review-alerts/devices/${encodeURIComponent(installId)}?userId=${encodeURIComponent(userId)}`, 'DELETE', {});
 }
+
+// Mobile apps (admin-api /api/site-settings/mobile-apps, shared-types mobile-apps.ts): Apple Team ID and
+// bundle ids, Android packages and fingerprints, attestation switches. Every admin role reads;
+// admins and super admins change it; each change is audited.
+
+export interface MobileAppsView {
+  settings: import('@al-ummah/shared-types').MobileAppsSettings;
+  isDefault: boolean;
+  updatedBy: string | null;
+  updatedAt: string | null;
+  preview: {
+    appleAppSiteAssociation: import('@al-ummah/shared-types').AppleAppSiteAssociation | null;
+    assetLinks: import('@al-ummah/shared-types').AssetLinkStatement[] | null;
+    attestation: import('@al-ummah/shared-types').PublicAttestationConfig;
+  };
+}
+
+export interface MobileAppsChange {
+  id: string;
+  oldValue: import('@al-ummah/shared-types').MobileAppsSettings | null;
+  newValue: import('@al-ummah/shared-types').MobileAppsSettings;
+  actorId: string;
+  createdAt: string;
+}
+
+export async function getMobileApps(): Promise<MobileAppsView> {
+  return fetchAdmin('/api/site-settings/mobile-apps');
+}
+
+export async function getMobileAppsHistory(): Promise<MobileAppsChange[]> {
+  return (await fetchAdmin<{ entries: MobileAppsChange[] }>('/api/site-settings/mobile-apps/history?limit=10')).entries;
+}
+
+export async function saveMobileApps(settings: import('@al-ummah/shared-types').MobileAppsSettings): Promise<ActionResult<MobileAppsView>> {
+  return mutate('/api/site-settings/mobile-apps', 'PUT', { settings });
+}
