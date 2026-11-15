@@ -146,7 +146,8 @@ export async function ensureResources(cf: CfClient, wanted: Resources, log: (lin
 	if (wanted.turnstileHostnames) {
 		const { sitekey, hostnames } = wanted.turnstileHostnames;
 		try {
-			const added = await ensureTurnstileHostnames(cf, sitekey, hostnames);
+			const { added, covered } = await ensureTurnstileHostnames(cf, sitekey, hostnames);
+			for (const { host, by } of covered) log(`Turnstile widget ${sitekey} already allows ${host} (covered by ${by})`);
 			for (const host of added) {
 				created.push(`turnstile ${host}`);
 				log(`Turnstile widget ${sitekey} now allows ${host}`);
@@ -172,18 +173,25 @@ interface TurnstileWidget {
 const WIDGET_FIELDS = ['name', 'mode', 'bot_fight_mode', 'clearance_level', 'ephemeral_id', 'offlabel', 'region'] as const;
 
 /**
- * Appends to the widget's allowed domains each hostname no listed domain covers; returns those added.
+ * Appends to the widget's allowed domains each hostname no listed domain covers; returns those added
+ * and, for the rest, the listed domain that covers each.
  * Never removes or reorders a listed domain.
  */
-export async function ensureTurnstileHostnames(cf: CfClient, sitekey: string, hostnames: string[]): Promise<string[]> {
+export async function ensureTurnstileHostnames(cf: CfClient, sitekey: string, hostnames: string[]): Promise<{ added: string[]; covered: { host: string; by: string }[] }> {
 	const widget = await cf.request<TurnstileWidget>('GET', `/challenges/widgets/${encodeURIComponent(sitekey)}`);
 	const domains = widget.domains ?? [];
-	const missing = [...new Set(hostnames.map((h) => h.toLowerCase()))].filter((h) => !domains.some((d) => coveredBy(h, d)));
-	if (missing.length === 0) return [];
+	const covered: { host: string; by: string }[] = [];
+	const missing: string[] = [];
+	for (const host of new Set(hostnames.map((h) => h.toLowerCase()))) {
+		const by = domains.find((d) => coveredBy(host, d));
+		if (by) covered.push({ host, by });
+		else missing.push(host);
+	}
+	if (missing.length === 0) return { added: [], covered };
 	const body: Record<string, unknown> = { domains: [...domains, ...missing] };
 	for (const field of WIDGET_FIELDS) if (widget[field] !== undefined) body[field] = widget[field];
 	await cf.request('PUT', `/challenges/widgets/${encodeURIComponent(sitekey)}`, body);
-	return missing;
+	return { added: missing, covered };
 }
 
 interface LifecycleRule {
