@@ -3,13 +3,12 @@
  * upgrades: the first test pins React's behaviour this works around, the second the fix itself
  * (it uses React's per-node value tracker).
  */
-import React, { act, useState } from 'react';
+import React, { act, useEffect, useState } from 'react';
 import { renderToString } from 'react-dom/server';
 import { hydrateRoot } from 'react-dom/client';
 import { keepTypedBeforeHydration, TYPED_RECORDER_SCRIPT } from '../keep-typed-before-hydration';
 
 // The <head> recorder, as the page runs it before hydration
-// eslint-disable-next-line no-new-func
 new Function(TYPED_RECORDER_SCRIPT)();
 
 const state: Record<string, string> = {};
@@ -19,9 +18,10 @@ function Form() {
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('server text');
   const [other, setOther] = useState('');
-  state.subject = subject;
-  state.body = body;
-  state.other = other;
+  // What the test reads, copied after each render
+  useEffect(() => {
+    Object.assign(state, { subject, body, other });
+  });
   return (
     <form>
       <input aria-label="subject" value={subject} onChange={(e) => { changes.push('subject'); setSubject(e.target.value); }} />
