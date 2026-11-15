@@ -111,7 +111,7 @@ app.get('/audit', async (c) => {
   const id = c.req.query('videoId');
   const db = c.env.REPORTS_DB;
   const statement = id
-    ? db.prepare('SELECT id, key, new_value, actor_id, created_at FROM site_settings_log WHERE key = ? ORDER BY created_at DESC LIMIT ?').bind(`${PROCESSING_AUDIT_PREFIX}${id}`, limit)
+    ? db.prepare('SELECT id, key, new_value, actor_id, created_at FROM site_settings_log WHERE key = ? ORDER BY created_at DESC, rowid DESC LIMIT ?').bind(`${PROCESSING_AUDIT_PREFIX}${id}`, limit)
     : db.prepare("SELECT id, key, new_value, actor_id, created_at FROM site_settings_log WHERE key >= ? AND key < ? ORDER BY created_at DESC LIMIT ?").bind(PROCESSING_AUDIT_PREFIX, 'processing:video;', limit);
   const { results = [] } = await statement.all<{ id: string; key: string; new_value: string; actor_id: string; created_at: string }>();
   const entries = results.map((row) => {

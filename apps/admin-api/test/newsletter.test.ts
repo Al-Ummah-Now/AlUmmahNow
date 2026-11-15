@@ -276,7 +276,7 @@ describe('newsletter: admin issues and sending', () => {
     const detail = (await (await api('GET', `/issues/${id}`)).json()) as { result: { status: string; counts: Record<string, number> } };
     assert.equal(detail.result.status, 'sent');
     assert.equal(detail.result.counts.sent, 3);
-    const actions = await db.prepare("SELECT action FROM admin_audit_log WHERE target_type = 'newsletter_issue' ORDER BY created_at").all<{ action: string }>();
+    const actions = await db.prepare("SELECT action FROM admin_audit_log WHERE target_type = 'newsletter_issue' ORDER BY created_at, rowid").all<{ action: string }>();
     assert.deepEqual((actions.results as { action: string }[]).map((a) => a.action), ['newsletter.issue.create', 'newsletter.issue.edit', 'newsletter.issue.send']);
   });
 
