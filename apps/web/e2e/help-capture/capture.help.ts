@@ -222,45 +222,90 @@ async function openMenu(page: Page, view: 'main' | 'channels' = 'main'): Promise
   return menu;
 }
 
-/** Numbered markers at the inline-start top corner of each control (Arabic digits in Arabic) */
+/**
+ * Numbered markers beside each control (Arabic digits in Arabic), never over another control: header
+ * controls sit 8px apart, so a number on a control's edge would land on its neighbour. Each number
+ * takes the first free spot (on screen, clear of every other control and number) from: for a control
+ * in the header, centred just under the header's bottom edge; otherwise the scene's preference ('side':
+ * outside the inline start; 'above': over the inline-start top corner), then outside the inline end,
+ * centred below, centred above. Inline start/end follow the page direction (mirrored in Arabic).
+ */
 async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: string) => void, place: 'side' | 'above' = 'side'): Promise<void> {
-  const boxes = [];
+  await page.evaluate(() => document.querySelectorAll('[data-help-target]').forEach((n) => n.removeAttribute('data-help-target')));
+  let shownAny = false;
   for (const [i, t] of targets.entries()) {
     // A control this size or language hides (labels drop to icons, overflow menus) keeps its number
     // free rather than failing the whole picture; the run lists what was skipped
     const shown = await t.waitFor({ state: 'visible', timeout: 10_000 }).then(() => true, () => false);
-    if (!shown) note(`marker ${i + 1} not shown: ${t}`);
-    boxes.push(shown ? await t.boundingBox() : null);
+    if (!shown) {
+      note(`marker ${i + 1} not shown: ${t}`);
+      continue;
+    }
+    shownAny = true;
+    await t.evaluate((el, n) => el.setAttribute('data-help-target', String(n)), i + 1);
   }
-  if (!boxes.some(Boolean)) throw new Error('no marker target was shown');
-  await page.evaluate(({ boxes, rtl, above }) => {
+  if (!shownAny) throw new Error('no marker target was shown');
+  const unplaced = await page.evaluate(({ rtl, above }) => {
     document.querySelectorAll('[data-help-marker]').forEach((n) => n.remove());
-    boxes.forEach((box, i) => {
-      if (!box) return;
+    type Box = { x: number; y: number; w: number; h: number };
+    const S = 24;
+    const hit = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+    const visible = (el: Element) => {
+      const r = el.getBoundingClientRect();
+      const cs = getComputedStyle(el);
+      return r.width > 1 && r.height > 1 && cs.visibility !== 'hidden' && cs.opacity !== '0';
+    };
+    const targets = [...document.querySelectorAll<HTMLElement>('[data-help-target]')];
+    // Every other control on screen: a number must not cover any of them
+    const controls = [...document.querySelectorAll('a[href], button, input, select, textarea, [role="menuitem"], [role="button"], [role="tab"], [role="switch"]')]
+      .filter(visible)
+      .map((el) => ({ el, r: el.getBoundingClientRect() }));
+    const placed: Box[] = [];
+    let missed = 0;
+    for (const target of targets) {
+      const r = target.getBoundingClientRect();
+      const header = target.closest('header');
+      const others = controls
+        .filter((c) => c.el !== target && !c.el.contains(target) && !target.contains(c.el))
+        .map((c) => ({ x: c.r.x - 2, y: c.r.y - 2, w: c.r.width + 4, h: c.r.height + 4 }));
+      const cx = r.x + r.width / 2 - S / 2;
+      const sideY = r.y + r.height / 2 - S / 2;
+      const startOut = rtl ? r.right + 6 : r.x - S - 6;
+      const endOut = rtl ? r.x - S - 6 : r.right + 6;
+      const candidates: Array<[number, number]> = [];
+      if (header) candidates.push([cx, header.getBoundingClientRect().bottom + 4]);
+      candidates.push(above ? [rtl ? r.right - S : r.x, r.y - S - 4] : [startOut, sideY]);
+      candidates.push([endOut, sideY], [cx, r.bottom + 6], [cx, r.y - S - 6]);
+      const fits = ([x, y]: [number, number]) => {
+        const box = { x, y, w: S, h: S };
+        return x >= 2 && y >= 2 && x + S <= window.innerWidth - 2 && y + S <= window.innerHeight - 2
+          && !others.some((o) => hit(box, o)) && !placed.some((p) => hit(box, p));
+      };
+      const spot = candidates.find(fits);
+      if (!spot) missed++;
+      const [x, y] = spot ?? candidates[0];
+      placed.push({ x, y, w: S, h: S });
       const m = document.createElement('span');
       m.dataset.helpMarker = '';
-      m.textContent = (i + 1).toLocaleString(rtl ? 'ar-EG' : 'en');
-      // Outside the control at its inline start, so no label is covered; inside only at the screen edge
-      // Side: outside the control at its inline start. Above: over its inline-start corner, for
-      // controls in a row, where the side would cover the neighbour's label
-      const outside = above ? (rtl ? box.x + box.width - 24 : box.x) : (rtl ? box.x + box.width + 6 : box.x - 30);
-      const x = Math.min(window.innerWidth - 26, Math.max(2, outside));
-      const y = above ? box.y - 28 : box.y + box.height / 2 - 12;
+      m.textContent = Number(target.dataset.helpTarget).toLocaleString(rtl ? 'ar-EG' : 'en');
       Object.assign(m.style, {
-        position: 'fixed', left: `${x}px`, top: `${Math.max(2, y)}px`, zIndex: '2147483647',
-        width: '24px', height: '24px', borderRadius: '50%', display: 'grid', placeItems: 'center',
+        position: 'fixed', left: `${Math.min(window.innerWidth - S - 2, Math.max(2, x))}px`, top: `${Math.max(2, y)}px`, zIndex: '2147483647',
+        width: `${S}px`, height: `${S}px`, borderRadius: '50%', display: 'grid', placeItems: 'center',
         font: '700 13px/1 system-ui, sans-serif', background: 'var(--fanous-color-primary)', color: 'var(--fanous-color-on-primary)',
         boxShadow: '0 0 0 2px var(--fanous-color-surface), 0 2px 6px rgba(0,0,0,.35)', pointerEvents: 'none',
       });
       const ring = document.createElement('span');
       ring.dataset.helpMarker = '';
       Object.assign(ring.style, {
-        position: 'fixed', left: `${box.x - 3}px`, top: `${box.y - 3}px`, width: `${box.width + 6}px`, height: `${box.height + 6}px`,
+        position: 'fixed', left: `${r.x - 3}px`, top: `${r.y - 3}px`, width: `${r.width + 6}px`, height: `${r.height + 6}px`,
         border: '2px solid var(--fanous-color-primary)', borderRadius: '10px', zIndex: '2147483646', pointerEvents: 'none',
       });
       document.body.append(ring, m);
-    });
-  }, { boxes, rtl: lang === 'ar', above: place === 'above' });
+    }
+    return missed;
+  }, { rtl: lang === 'ar', above: place === 'above' });
+  // Not silent: the run lists every picture whose number had to sit on another control
+  if (unplaced) note(`${unplaced} marker(s) found no spot clear of other controls`);
 }
 
 /** A screenshot of the area around `region` (the whole viewport when empty), saved as WebP */
@@ -280,7 +325,9 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
   const viewport = page.viewportSize()!;
   let clip: { x: number; y: number; width: number; height: number } | undefined;
   if (region.length) {
-    const boxes = (await Promise.all(region.map((r) => r.boundingBox()))).filter(Boolean) as { x: number; y: number; width: number; height: number }[];
+    // The numbers too: a header control's number sits just under the header
+    const markers = await page.locator('[data-help-marker]').all();
+    const boxes = (await Promise.all([...region, ...markers].map((r) => r.boundingBox()))).filter(Boolean) as { x: number; y: number; width: number; height: number }[];
     const pad = 24;
     const x = Math.max(0, Math.min(...boxes.map((b) => b.x)) - pad);
     const y = Math.max(0, Math.min(...boxes.map((b) => b.y)) - pad);
