@@ -25,13 +25,13 @@ describe('container error reasons', () => {
 		assert.equal(errorReason(new Error('')), 'unknown error');
 	});
 
-	it('every 500 answer of the job server goes through errorReason', () => {
+	it('every 500 answer of the job server goes through errorReason (or audioFailure: fixed codes only)', () => {
 		const server = readFileSync(join(process.cwd(), 'container', 'server.mjs'), 'utf8') // run from apps/media (CommonJS: no import.meta);
 		const answers = server.split('\n').filter((l) => /send\(5\d\d,/.test(l));
 		assert.ok(answers.length >= 3, 'the remux, review and audio routes answer 500 on failure');
 		for (const line of answers) {
 			assert.doesNotMatch(line, /error\?\.message|String\(error/, line.trim());
-			assert.match(line, /errorReason\(error\)/, line.trim());
+			assert.match(line, /errorReason\(error\)|audioFailure\(error\)/, line.trim());
 		}
 	});
 });
