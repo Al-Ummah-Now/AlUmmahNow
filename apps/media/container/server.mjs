@@ -124,14 +124,21 @@ function run(cmd, args, onLine) {
 	});
 }
 
-/** A command's stdout as bytes (raw frames, PCM). */
-function runBuffer(cmd, args) {
+/** A command's stdout as bytes (raw frames, PCM), killed after `timeoutMs`. */
+function runBuffer(cmd, args, timeoutMs = 120_000) {
 	return new Promise((resolve, reject) => {
 		const p = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'ignore'] });
 		const chunks = [];
+		const timer = setTimeout(() => p.kill('SIGKILL'), timeoutMs);
 		p.stdout.on('data', (d) => chunks.push(d));
-		p.on('error', reject);
-		p.on('close', (code) => (code === 0 ? resolve(Buffer.concat(chunks)) : reject(Object.assign(new Error(`${cmd} exited ${code}`), { exitCode: code }))));
+		p.on('error', (e) => {
+			clearTimeout(timer);
+			reject(e);
+		});
+		p.on('close', (code) => {
+			clearTimeout(timer);
+			code === 0 ? resolve(Buffer.concat(chunks)) : reject(Object.assign(new Error(`${cmd} exited ${code}`), { exitCode: code }));
+		});
 	});
 }
 
@@ -281,6 +288,11 @@ async function probeRendition(dir, pl) {
 	}
 }
 
+const FRAME_TIMEOUT_MS = 30_000;
+const EXACT_FRAME_TIMEOUT_MS = 120_000;
+/** Frames per rung that may be decoded from the start when a seek fails; more counts as a mismatch. */
+const EXACT_FRAMES_PER_RUNG = 2;
+
 /**
  * One frame at `t` seconds as a tiny grey thumbnail (MATCH_FRAME_SIZE), or null. Seeks on the input
  * first (fast); `exact` decodes from the start instead, for files whose index does not seek there.
@@ -289,7 +301,7 @@ async function greyFrame(input, t, exact = false) {
 	const { width, height } = MATCH_FRAME_SIZE;
 	const seek = ['-ss', String(t)];
 	try {
-		const buf = await runBuffer('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', ...(exact ? [] : seek), '-i', input, ...(exact ? seek : []), '-frames:v', '1', '-vf', `scale=${width}:${height}:flags=area,format=gray`, '-f', 'rawvideo', 'pipe:1']);
+		const buf = await runBuffer('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', ...(exact ? [] : seek), '-i', input, ...(exact ? seek : []), '-frames:v', '1', '-vf', `scale=${width}:${height}:flags=area,format=gray`, '-f', 'rawvideo', 'pipe:1'], exact ? EXACT_FRAME_TIMEOUT_MS : FRAME_TIMEOUT_MS);
 		return buf.length === width * height ? buf : null;
 	} catch {
 		return null;
@@ -298,7 +310,8 @@ async function greyFrame(input, t, exact = false) {
 
 /** The loudness envelope of a file's first audio track. */
 async function loudness(input) {
-	return envelope(await runBuffer('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', '-i', input, '-map', 'a:0', '-ac', '1', '-ar', String(ENVELOPE_RATE), '-f', 's16le', 'pipe:1']));
+	// Decoding audio runs far faster than real time; a stuck decode is stopped
+	return envelope(await runBuffer('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', '-i', input, '-map', 'a:0', '-ac', '1', '-ar', String(ENVELOPE_RATE), '-f', 's16le', 'pipe:1'], 15 * 60_000));
 }
 
 /**
@@ -317,15 +330,24 @@ async function compareRungs(src, playlists, info) {
 			return { ok: false, reason: 'audio_mismatch', rung: Object.keys(playlists)[0] };
 		}
 	}
+	let sourceExact = 0;
 	for (const [name, playlist] of Object.entries(playlists)) {
 		const frameDistances = [];
+		let exact = 0;
 		for (let i = 0; i < times.length; i++) {
 			let frame = await greyFrame(playlist, times[i]);
 			let reference = sourceFrames[i];
 			// Some files do not seek everywhere (e.g. some muxers' last segment): decode up to the instant
-			// before calling it a mismatch
-			if (!frame) frame = await greyFrame(playlist, times[i], true);
-			if (!reference) reference = await greyFrame(src, times[i], true);
+			// before calling it a mismatch, a couple of times per rung at most (a file that never seeks
+			// is refused rather than decoded over and over)
+			if (!frame && exact < EXACT_FRAMES_PER_RUNG) {
+				exact++;
+				frame = await greyFrame(playlist, times[i], true);
+			}
+			if (frame && !reference && sourceExact < EXACT_FRAMES_PER_RUNG) {
+				sourceExact++;
+				reference = sourceFrames[i] = await greyFrame(src, times[i], true);
+			}
 			frameDistances.push(frameDistance(reference, frame));
 		}
 		let renditionEnvelope = null;
