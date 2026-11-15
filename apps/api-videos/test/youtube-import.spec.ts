@@ -19,7 +19,7 @@ import { SqliteD1 } from './search-sqlite-d1';
 import { MemoryBucket, MemoryQueue, buildApp } from './helpers';
 import { UploadInitiateEndpoint } from '../src/endpoints/video/uploadInitiate';
 import { decryptToken, encryptToken, pkcePair } from '../src/lib/youtube-import/crypto';
-import { readYtSettings, saveYtSettings, ytReadyConfig, ytSettingsView, YT_SETTINGS_KEY, YtSettingsError } from '../src/lib/youtube-import/settings';
+import { googleClientSecret, readYtSettings, saveYtClientSecret, saveYtSettings, ytReadyConfig, ytSettingsView, YT_SECRET_KEY, YT_SETTINGS_KEY, YtSettingsError } from '../src/lib/youtube-import/settings';
 import {
 	YtHttpError,
 	oauthCallback,
@@ -290,6 +290,59 @@ describe('YouTube import: token seal and settings', () => {
 		assert.equal((await readYtSettings(bare as never)).enabled, false);
 		await assert.rejects(saveYtSettings(bare as never, { clientId: 'nope' }, 'admin-1'), YtSettingsError);
 		await assert.rejects(saveYtSettings(bare as never, { enabled: 'yes' }, 'admin-1'), YtSettingsError);
+	});
+});
+
+describe('YouTube import: the admin-set client secret', () => {
+	const MASTER = 'internal-api-key-0123456789abcdef';
+	const ADMIN_SECRET = 'test-only-admin-set-secret-value-1234';
+
+	it('is sealed at rest, wins over the binding, and is never in the view', async () => {
+		const bucket = new MemoryBucket();
+		const env = { global_settings: bucket, INTERNAL_API_KEY: MASTER, GOOGLE_OAUTH_CLIENT_SECRET: 'bound-secret-from-secrets-store' };
+		const before = await ytSettingsView(env as never);
+		assert.equal(before.secretSource, 'binding');
+		const { hadAdminSecret } = await saveYtClientSecret(env as never, `  ${ADMIN_SECRET} `, 'admin-1', '2026-11-15T00:00:00Z');
+		assert.equal(hadAdminSecret, false);
+		const stored = await (await bucket.get(YT_SECRET_KEY))!.text();
+		assert.equal(stored.includes(ADMIN_SECRET), false, 'stored sealed, not in clear');
+		assert.equal(await googleClientSecret(env as never), ADMIN_SECRET, 'trimmed, and read ahead of the binding');
+		const view = await ytSettingsView(env as never);
+		assert.equal(view.secretPresent, true);
+		assert.equal(view.secretSource, 'admin');
+		assert.equal(view.secretUpdatedBy, 'admin-1');
+		assert.equal(view.secretUpdatedAt, '2026-11-15T00:00:00Z');
+		assert.equal(JSON.stringify(view).includes(ADMIN_SECRET), false);
+		assert.equal((await saveYtClientSecret(env as never, 'test-only-a-second-replacement-value', 'admin-2')).hadAdminSecret, true);
+		assert.equal(await googleClientSecret(env as never), 'test-only-a-second-replacement-value');
+	});
+
+	it('makes the feature ready without any Secrets Store value', async () => {
+		const { env } = makeEnv();
+		const noBinding = { ...env, GOOGLE_OAUTH_CLIENT_SECRET: 'unset', INTERNAL_API_KEY: MASTER };
+		assert.equal(await ytReadyConfig(noBinding as never), null);
+		await saveYtClientSecret(noBinding as never, ADMIN_SECRET, 'admin-1');
+		assert.equal((await ytReadyConfig(noBinding as never))?.clientSecret, ADMIN_SECRET);
+	});
+
+	it('reads as unreadable after the master changes, and falls back to the binding', async () => {
+		const bucket = new MemoryBucket();
+		await saveYtClientSecret({ global_settings: bucket, INTERNAL_API_KEY: MASTER } as never, ADMIN_SECRET, 'admin-1');
+		const rotated = { global_settings: bucket, INTERNAL_API_KEY: 'a-different-master-key-9876543210' };
+		const view = await ytSettingsView(rotated as never);
+		assert.equal(view.secretPresent, false);
+		assert.equal(view.secretUnreadable, true);
+		const withBinding = await ytSettingsView({ ...rotated, GOOGLE_OAUTH_CLIENT_SECRET: 'bound-secret-from-secrets-store' } as never);
+		assert.equal(withBinding.secretSource, 'binding');
+		assert.equal(withBinding.secretUnreadable, true);
+	});
+
+	it('refuses values that are not a client secret, and a deployment with no master', async () => {
+		const env = { global_settings: new MemoryBucket(), INTERNAL_API_KEY: MASTER };
+		for (const bad of ['short', 'has a space in it here', 'unset', 7, null]) {
+			await assert.rejects(saveYtClientSecret(env as never, bad, 'admin-1'), (e: unknown) => e instanceof YtSettingsError && e.code === 'invalid_secret');
+		}
+		await assert.rejects(saveYtClientSecret({ global_settings: new MemoryBucket() } as never, ADMIN_SECRET, 'admin-1'), (e: unknown) => e instanceof YtSettingsError && e.code === 'unavailable');
 	});
 });
 

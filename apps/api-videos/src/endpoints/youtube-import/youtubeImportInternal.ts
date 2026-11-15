@@ -5,6 +5,8 @@
  *
  *   GET  /internal/youtube-import/settings   { result: YoutubeImportSettingsView }
  *   PUT  /internal/youtube-import/settings   { enabled?, clientId?, actorId } → { result: view, previous }
+ *   PUT  /internal/youtube-import/client-secret  { value, actorId } → { result: view, hadAdminSecret }
+ *                                            seals and stores the Google client secret; never returned
  *   POST /internal/youtube-import/retry      { job } the Errors page's Retry of a step that gave up;
  *                                            404 when the import is gone or over
  */
@@ -12,7 +14,7 @@ import { Hono } from 'hono';
 import { logger } from '../../lib/logger';
 import { retryYtJob, type YtJobsEnv } from '../../lib/youtube-import/jobs';
 import { YtHttpError } from '../../lib/youtube-import/service';
-import { saveYtSettings, ytSettingsView, YtSettingsError } from '../../lib/youtube-import/settings';
+import { saveYtClientSecret, saveYtSettings, ytSettingsView, YtSettingsError } from '../../lib/youtube-import/settings';
 
 type Ctx = { waitUntil(promise: Promise<unknown>): void } | undefined;
 
@@ -42,6 +44,14 @@ export function createYoutubeImportInternalRouter() {
 		const actorId = typeof body.actorId === 'string' && body.actorId ? body.actorId.slice(0, 128) : 'admin';
 		const { previous } = await saveYtSettings(c.env, { enabled: body.enabled, clientId: body.clientId }, actorId);
 		return c.json({ success: true, result: await ytSettingsView(c.env), previous });
+	});
+
+	app.put('/client-secret', async (c) => {
+		const body = (await c.req.json().catch(() => null)) as { value?: unknown; actorId?: unknown } | null;
+		if (!body || typeof body !== 'object') return c.json({ success: false, code: 'invalid_secret', error: 'A JSON body is required' }, 400);
+		const actorId = typeof body.actorId === 'string' && body.actorId ? body.actorId.slice(0, 128) : 'admin';
+		const { hadAdminSecret } = await saveYtClientSecret(c.env, body.value, actorId);
+		return c.json({ success: true, result: await ytSettingsView(c.env), hadAdminSecret });
 	});
 
 	app.post('/retry', async (c) => {

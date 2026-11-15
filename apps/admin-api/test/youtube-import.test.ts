@@ -7,7 +7,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { Hono } from 'hono';
-import youtubeImportRouter, { YOUTUBE_IMPORT_SETTINGS_AUDIT_KEY, parseYoutubeImportSettings } from '../src/routers/youtubeImport.router';
+import youtubeImportRouter, { YOUTUBE_IMPORT_SECRET_AUDIT_KEY, YOUTUBE_IMPORT_SETTINGS_AUDIT_KEY, parseYoutubeImportSettings } from '../src/routers/youtubeImport.router';
 import { SERVICE_RETRIES } from '../src/lib/errors-actions';
 import { sqliteD1 } from './d1-sqlite';
 
@@ -26,7 +26,12 @@ function setup(roles: string[], failPut = false) {
         const body = init?.body ? JSON.parse(String(init.body)) : null;
         calls.push({ path: url.pathname, method, body });
         if (method === 'PUT' && failPut) return new Response(JSON.stringify({ success: false, error: 'boom' }), { status: 500 });
-        const result = method === 'PUT' ? { ...VIEW, enabled: body.enabled ?? VIEW.enabled, clientId: body.clientId ?? VIEW.clientId } : VIEW;
+        const result =
+          method !== 'PUT'
+            ? VIEW
+            : url.pathname.endsWith('/client-secret')
+              ? { ...VIEW, secretPresent: true, secretSource: 'admin', secretUpdatedAt: '2026-11-15T00:00:00Z', secretUpdatedBy: body.actorId }
+              : { ...VIEW, enabled: body.enabled ?? VIEW.enabled, clientId: body.clientId ?? VIEW.clientId };
         return new Response(JSON.stringify({ success: true, result }), { status: 200 });
       },
     },
@@ -94,5 +99,50 @@ describe('/api/youtube-import/settings', () => {
 
   it('lets the Errors page retry a step that gave up', () => {
     assert.ok(SERVICE_RETRIES['api-videos']!.paths.includes('/internal/youtube-import/retry'));
+  });
+});
+
+describe('/api/youtube-import/client-secret', () => {
+  const SECRET = 'test-only-abcdefghijklmnopqrstuvwxyz12';
+
+  it('refuses moderators before calling api-videos', async () => {
+    const { req, calls, audit } = setup(['Moderator']);
+    assert.equal((await req('/api/youtube-import/client-secret', put({ value: SECRET }))).status, 403);
+    assert.equal(calls.length, 0);
+    assert.equal((await audit()).length, 0);
+  });
+
+  it('forwards the value once, audits only present/missing, and never returns it', async () => {
+    const { req, calls, audit } = setup(['Admin']);
+    const res = await req('/api/youtube-import/client-secret', put({ value: SECRET }));
+    assert.equal(res.status, 200);
+    const text = await res.text();
+    assert.equal(text.includes(SECRET), false, 'the response never carries the secret');
+    assert.equal(JSON.parse(text).result.secretSource, 'admin');
+    const sent = calls.find((c) => c.method === 'PUT')!;
+    assert.equal(sent.path, '/internal/youtube-import/client-secret');
+    assert.deepEqual(sent.body, { value: SECRET, actorId: 'admin-1' });
+    const rows = await audit();
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].key, YOUTUBE_IMPORT_SECRET_AUDIT_KEY);
+    assert.deepEqual(JSON.parse(rows[0].old_value), { secret: 'present', source: null });
+    assert.deepEqual(JSON.parse(rows[0].new_value), { secret: 'replaced', source: 'admin' });
+    assert.equal(JSON.stringify(rows).includes(SECRET), false, 'the audit log never holds the secret');
+  });
+
+  it('refuses a value that cannot be a client secret, without auditing or calling api-videos', async () => {
+    const { req, calls, audit } = setup(['Admin']);
+    for (const value of ['short', 'has spaces in the middle of it', 'unset', 42, '']) {
+      assert.equal((await req('/api/youtube-import/client-secret', put({ value }))).status, 400);
+    }
+    assert.equal((await req('/api/youtube-import/client-secret', put(null))).status, 400);
+    assert.equal(calls.length, 0);
+    assert.equal((await audit()).length, 0);
+  });
+
+  it('drops the audit row when api-videos fails', async () => {
+    const { req, audit } = setup(['Admin'], true);
+    assert.equal((await req('/api/youtube-import/client-secret', put({ value: SECRET }))).status, 500);
+    assert.equal((await audit()).length, 0);
   });
 });
