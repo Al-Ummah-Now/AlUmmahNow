@@ -145,9 +145,11 @@ test('SOC-03 a webhook gets its secret once, a signed test ping, and is removed'
   const hook = page.getByTestId('social-webhook');
   await hook.getByTestId('social-webhook-test').click();
   await expect(page.getByRole('status').filter({ hasText: /test/i })).toBeVisible({ timeout: 30_000 });
-  const calls = await control<FakeHook[]>('/__fake/social/webhooks');
-  const ping = calls.find((c) => c.path === path);
-  expect(ping, 'the test ping reached the receiver').toBeTruthy();
+  // The ping goes out through the queue (api-videos → processor → receiver), after the page says it was sent
+  let ping: FakeHook | undefined;
+  await expect
+    .poll(async () => (ping = (await control<FakeHook[]>('/__fake/social/webhooks')).find((c) => c.path === path)), { message: 'the test ping reached the receiver', timeout: 60_000 })
+    .toBeTruthy();
   expect(JSON.parse(ping!.body)).toMatchObject({ event: 'ping', channel: { id: channelId } });
   expect(Object.keys(ping!.headers).some((h) => /signature/i.test(h))).toBe(true);
   // The secret is never shown again
