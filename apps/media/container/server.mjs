@@ -17,7 +17,7 @@ import { join, relative } from 'node:path';
 import { Readable } from 'node:stream';
 import { bandwidthOf, displaySize, ffmpegArgs, ladderFor, MP4_FILE, mp4Args, mp4Rung, playlistFiles, progressSeconds, stillsArgs } from './ladder.mjs';
 import { RungTracker, uploadByPlan, uploadPlan } from './rungs.mjs';
-import { avcCodec, decodeSamples, masterPlaylist, parseMediaPlaylist, stagedPathAllowed, verifyRenditions } from './prebuilt.mjs';
+import { ENVELOPE_RATE, MATCH_FRAME_SIZE, avcCodec, contentMatches, envelope, frameDistance, masterPlaylist, matchTimes, mediaPlaylist, parseMediaPlaylist, stagedPathAllowed, verifyRenditions } from './prebuilt.mjs';
 import { audioArgs, captionAudioManifestFor, frameInterval, frameTimes, framesArgs, manifestFor, reviewVariant, thinFrames } from './review.mjs';
 
 const PORT = 8080;
@@ -120,6 +120,17 @@ function run(cmd, args, onLine) {
 				? resolve(stdout)
 				: reject(Object.assign(new Error(`${cmd} exited ${code}`), { stderrTail: tail.split('\n').filter((l) => l.trim()).slice(-20), exitCode: code })),
 		);
+	});
+}
+
+/** A command's stdout as bytes (raw frames, PCM). */
+function runBuffer(cmd, args) {
+	return new Promise((resolve, reject) => {
+		const p = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'ignore'] });
+		const chunks = [];
+		p.stdout.on('data', (d) => chunks.push(d));
+		p.on('error', reject);
+		p.on('close', (code) => (code === 0 ? resolve(Buffer.concat(chunks)) : reject(Object.assign(new Error(`${cmd} exited ${code}`), { exitCode: code }))));
 	});
 }
 
@@ -269,13 +280,44 @@ async function probeRendition(dir, pl) {
 	}
 }
 
+/** One frame at `t` seconds as a tiny grey thumbnail (MATCH_FRAME_SIZE), or null. */
+async function greyFrame(input, t) {
+	const { width, height } = MATCH_FRAME_SIZE;
+	try {
+		const buf = await runBuffer('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', '-ss', String(t), '-i', input, '-frames:v', '1', '-vf', `scale=${width}:${height}:flags=area,format=gray`, '-f', 'rawvideo', 'pipe:1']);
+		return buf.length === width * height ? buf : null;
+	} catch {
+		return null;
+	}
+}
+
+/** The loudness envelope of a file's first audio track. */
+async function loudness(input) {
+	return envelope(await runBuffer('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', '-i', input, '-map', 'a:0', '-ac', '1', '-ar', String(ENVELOPE_RATE), '-f', 's16le', 'pipe:1']));
+}
+
+/** Do the pre-encoded renditions show and sound like the source (prebuilt.mjs contentMatches)? */
+async function compareContent(src, rendition, info) {
+	const frameDistances = [];
+	for (const t of matchTimes(info.durationSeconds)) frameDistances.push(frameDistance(await greyFrame(src, t), await greyFrame(rendition, t)));
+	if (!info.hasAudio) return contentMatches({ frameDistances });
+	let sourceEnvelope;
+	let renditionEnvelope;
+	try {
+		[sourceEnvelope, renditionEnvelope] = [await loudness(src), await loudness(rendition)];
+	} catch {
+		return { ok: false, reason: 'audio_mismatch' };
+	}
+	return contentMatches({ frameDistances, sourceEnvelope, renditionEnvelope });
+}
+
 /**
  * D11: use the renditions the creator encoded in desktop Studio when they match, exactly, what this
  * server would have encoded for this source (prebuilt.mjs). On a pass the rungs sit in `out` with
  * our own master playlist and the encode is skipped; anything else leaves `out` empty and says why,
  * and the normal encode runs. Never throws.
  */
-async function usePrebuilt(job, info, rungs, out) {
+async function usePrebuilt(job, src, info, rungs, out) {
 	const names = rungs.map((r) => r.name);
 	const cleanup = async () => {
 		for (const n of new Set([...names, ...job.prebuilt.rungs])) await rm(join(out, n), { recursive: true, force: true }).catch(() => undefined);
@@ -312,19 +354,24 @@ async function usePrebuilt(job, info, rungs, out) {
 			await cleanup();
 			return { used: false, reason: verdict.reason, ...(verdict.rung ? { rung: verdict.rung } : {}) };
 		}
-		// Decode first, middle and last segment of every rung end to end: any decoder error fails it
+		// Our own media playlists replace the uploaded ones before anything reads them
+		for (const c of checks) await writeFile(join(out, c.name, 'index.m3u8'), mediaPlaylist(c.playlist));
+		// Every segment of every rung decodes end to end: any decoder error fails it
 		for (const c of checks) {
-			for (const seg of decodeSamples(c.playlist.segments)) {
-				const file = await joined(join(out, c.name), c.playlist.init, seg);
-				try {
-					await run('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', '-xerror', '-i', file, '-f', 'null', '-']);
-				} catch {
-					await cleanup();
-					return { used: false, reason: 'decode', rung: c.name };
-				} finally {
-					await rm(file, { force: true });
-				}
+			try {
+				await run('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', '-xerror', '-i', join(out, c.name, 'index.m3u8'), '-f', 'null', '-']);
+			} catch {
+				await cleanup();
+				return { used: false, reason: 'decode', rung: c.name };
 			}
+		}
+		// Same pictures and sound as the source the server probed (the top rung stands for all; the
+		// others were checked to be the same ladder, and review and stills run on the top rung)
+		const top = rungs[rungs.length - 1].name;
+		const match = await compareContent(src, join(out, top, 'index.m3u8'), info);
+		if (!match.ok) {
+			await cleanup();
+			return { used: false, reason: match.reason, rung: top };
 		}
 		const master = checks.map((c) => {
 			const r = rungs.find((x) => x.name === c.name);
@@ -333,7 +380,7 @@ async function usePrebuilt(job, info, rungs, out) {
 			return { name: c.name, width: r.width, height: r.height, bandwidth: peak, codecs };
 		});
 		await writeFile(join(out, 'master.m3u8'), masterPlaylist(master));
-		return { used: true };
+		return { used: true, top: join(out, top, 'index.m3u8') };
 	} catch (error) {
 		await cleanup();
 		return { used: false, reason: 'error', detail: String(error?.message || error).slice(0, 120) };
@@ -391,7 +438,7 @@ async function runJob(job) {
 	let prebuilt;
 	if (job.prebuilt) {
 		setStage('verify_prebuilt', job.prebuilt.rungs?.join(','));
-		prebuilt = await usePrebuilt(job, info, rungs, out);
+		prebuilt = await usePrebuilt(job, src, info, rungs, out);
 		log('prebuilt', prebuilt);
 	}
 	if (!prebuilt?.used) {
@@ -409,8 +456,10 @@ async function runJob(job) {
 			if (tracker.due(Date.now())) progressEvent();
 		});
 	}
+	// Stills and review come from what viewers will get: the creator's top rung when it is used
+	const published = prebuilt?.used ? prebuilt.top : src;
 	setStage('stills');
-	const stills = stillsArgs({ input: src, out, durationSeconds: info.durationSeconds });
+	const stills = stillsArgs({ input: published, out, durationSeconds: info.durationSeconds });
 	await run('ffmpeg', stills.thumb);
 	await run('ffmpeg', stills.thumbSmall);
 	let preview;
@@ -433,8 +482,9 @@ async function runJob(job) {
 			await rm(join(out, MP4_FILE), { force: true });
 		}
 	}
-	// Review media from the same source, before it is deleted (only when the job asks for it)
-	const review = job.review && job.reviewPrefix ? await extractReview(job, src, info) : undefined;
+	// Review media from the published content (the source, or the creator's top rung), before the
+	// source is deleted (only when the job asks for it)
+	const review = job.review && job.reviewPrefix ? await extractReview(job, published, info) : undefined;
 	await rm(src, { force: true });
 	const tTranscode = Date.now();
 

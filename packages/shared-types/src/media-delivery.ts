@@ -130,6 +130,9 @@ export const PREBUILT_REJECTIONS = [
 	'keyframes',
 	'bitrate',
 	'decode',
+	// Valid files that do not show or sound like the source (frames / loudness compared)
+	'content_mismatch',
+	'audio_mismatch',
 	'error',
 ] as const;
 export type PrebuiltRejection = (typeof PREBUILT_REJECTIONS)[number];
