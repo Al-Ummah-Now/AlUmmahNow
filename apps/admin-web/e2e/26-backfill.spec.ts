@@ -27,8 +27,8 @@ test.describe('R2 backfill page', () => {
       await page.goto('/backfill');
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
       await expect(page.getByTestId('backfill-overview')).toBeVisible();
-      await expect(page.getByTestId('backfill-overview-likely-total')).toHaveText(/\d/);
-      await expect(page.getByTestId('backfill-overview-ceiling-total')).toHaveText(/\d/);
+      await expect(page.getByTestId('backfill-overview-likely-total')).toHaveText(/[0-9\u0660-\u0669]/);
+      await expect(page.getByTestId('backfill-overview-ceiling-total')).toHaveText(/[0-9\u0660-\u0669]/);
       await expect(page.getByTestId('backfill-new')).toBeVisible();
       await expect(page.getByTestId('backfill-flip')).toBeVisible();
       await expect(page.getByTestId('backfill-retire')).toBeVisible();
