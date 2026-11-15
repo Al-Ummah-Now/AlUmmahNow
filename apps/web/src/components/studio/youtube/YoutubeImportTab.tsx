@@ -149,7 +149,7 @@ export function YoutubeImportTab({ locale, channelId, channelHandle }: Props) {
             connected = (await finishOAuth(queryConnect)).id;
           } catch (error) {
             if (controller.signal.aborted) return;
-            const refused = finishErrorKey(error instanceof YtImportApiError ? error.status : undefined);
+            const refused = error instanceof YtImportApiError ? finishErrorKey(error.status, error.code) : null;
             errorKey = refused ?? 'failed';
             if (refused) {
               logger.debug('[YtImport] Connection refused at finish', { channelId, refused });

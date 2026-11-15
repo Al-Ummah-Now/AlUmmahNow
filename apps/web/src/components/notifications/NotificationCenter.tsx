@@ -15,7 +15,7 @@ import { dateTimeFormat } from '@al-ummah/shared-types';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Link from '@/components/common/AppLink';
 import { usePathname } from 'next/navigation';
-import { AlertCircle, BadgeCheck, Bell, Heart, MessageCircle, Radio, ShieldAlert, UserPlus, Video, X, Users } from 'lucide-react';
+import { AlertCircle, BadgeCheck, Bell, Heart, MessageCircle, Radio, ShieldAlert, UserPlus, Video, X, Users, Import } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useWebSocketSubscription } from '@/lib/websocket/WebSocketProvider';
@@ -81,6 +81,8 @@ function KindIcon({ kind }: { kind: string }) {
     case 'tierRequestReceived':
     case 'tierChanged':
       return <BadgeCheck {...props} />;
+    case 'youtubeImportFinished':
+      return <Import {...props} />;
     default:
       return <Bell {...props} />;
   }

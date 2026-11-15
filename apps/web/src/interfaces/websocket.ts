@@ -91,7 +91,9 @@ export type RealtimeNotificationKey =
   | 'tierRequestApproved'
   | 'tierRequestDeclined'
   | 'tierRequestReceived'
-  | 'tierChanged';
+  | 'tierChanged'
+  /** Move from YouTube finished (params: ready, failed, channelTitle; wiki AUN-YT-IMPORT) */
+  | 'youtubeImportFinished';
 
 export interface NotificationEvent {
   type: 'notification';

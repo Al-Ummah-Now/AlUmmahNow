@@ -72,13 +72,15 @@ describe('where the wizard opens', () => {
     expect(importErrorKey(null)).toBe('import_failed');
   });
 
-  it('reads oauth/finish refusals: 403 another account, other 4xx expired, the rest a failure', () => {
-    expect(finishErrorKey(403)).toBe('connect_other_account');
-    expect(finishErrorKey(400)).toBe('connect_expired');
-    expect(finishErrorKey(404)).toBe('connect_expired');
-    expect(finishErrorKey(410)).toBe('connect_expired');
-    expect(finishErrorKey(401)).toBeNull();
-    expect(finishErrorKey(500)).toBeNull();
+  it("reads oauth/finish refusals by the contract's codes", () => {
+    expect(finishErrorKey(403, 'forbidden')).toBe('connect_other_account');
+    expect(finishErrorKey(404, 'youtube_connect_expired')).toBe('connect_expired');
+    expect(finishErrorKey(404, null)).toBe('connect_expired');
+    expect(finishErrorKey(400, 'youtube_denied')).toBe('youtube_denied');
+    expect(finishErrorKey(409, 'youtube_no_channel')).toBe('youtube_no_channel');
+    expect(finishErrorKey(409, 'youtube_import_off')).toBe('youtube_import_off');
+    expect(finishErrorKey(502, 'failed')).toBeNull();
+    expect(finishErrorKey(401, null)).toBeNull();
     expect(finishErrorKey(undefined)).toBeNull();
   });
 });

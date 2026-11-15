@@ -85,8 +85,9 @@ describe('YoutubeImportTab', () => {
   });
 
   it.each([
-    [403, 'youtube_connect_other_account', text.errors.connect_other_account],
-    [410, 'youtube_state_expired', text.errors.connect_expired],
+    [403, 'forbidden', text.errors.connect_other_account],
+    [404, 'youtube_connect_expired', text.errors.connect_expired],
+    [409, 'youtube_no_channel', text.errors.youtube_no_channel],
   ])('a %i from finish shows a friendly message and Connect again', async (status, code, message) => {
     const { YtImportApiError } = jest.requireActual('@/lib/youtube-import/api');
     window.history.replaceState(null, '', '/en/studio/c1/content/youtube?connect=st-old');
@@ -108,7 +109,7 @@ describe('YoutubeImportTab', () => {
     const { YtImportApiError } = jest.requireActual('@/lib/youtube-import/api');
     window.history.replaceState(null, '', '/en/studio/c1/content/youtube?connect=st-1');
     getImportStatus.mockResolvedValue({ ready: true, captionsAvailable: true, import: null });
-    finishOAuth.mockRejectedValue(new YtImportApiError(500, 'internal', 'srv-1'));
+    finishOAuth.mockRejectedValue(new YtImportApiError(502, 'failed', 'srv-1'));
     render(<YoutubeImportTab locale="en" channelId="c1" channelHandle={null} />);
     const error = await screen.findByTestId('yt-connect-error');
     expect(error).toHaveTextContent(text.errors.failed.replace(/\.$/, ''));
