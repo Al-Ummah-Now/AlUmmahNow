@@ -171,6 +171,16 @@ export enum MessageType {
   // over the job's audio chunks, then the draft), on the videos queue with retry and the DLQ; the
   // last attempt fails the job, refunds its minutes and flags the admin. Payload: CaptionJobPayload.
   CaptionJob = 262,
+  // Transcript translation (processor captions/translate.ts): one batch of a translate caption job
+  // (the creator's corrected source draft, Quran masked as references, Workers AI DeepSeek then
+  // Gemma; DeepL when an admin turned it on), then the translated draft. Same queue, retries and
+  // DLQ as CaptionJob. Payload: CaptionTranslatePayload (caption-translation.ts).
+  CaptionTranslate = 263,
+  // Viewer-side machine translation of a video's title and description (O6; processor
+  // captions/metadata.ts): fills metadata_translations, capped by the inline-translation budget.
+  // Payload: MetadataTranslatePayload (inline-translation.ts).
+  MetadataTranslate = 264,
+
   // Social auto-post (wiki AUN-SOCIAL, SOC-1; processor social/consumer.ts): something announceable
   // happened on a channel (new video, Short, live, post). Sent by the processor beside the subscriber
   // fan-out; api-videos plans one delivery per matching rule and webhook. Payload: SocialEventPayload.

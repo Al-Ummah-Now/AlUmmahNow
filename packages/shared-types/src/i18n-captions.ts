@@ -86,6 +86,9 @@ export interface CaptionsTranslations {
       /** {done} {total} */
       transcribing: string;
       transcribingStart: string;
+      /** {done} {total}: batches of a translation */
+      translating: string;
+      translatingStart: string;
       postprocessing: string;
     };
     /** {language}: {step} */
@@ -100,7 +103,17 @@ export interface CaptionsTranslations {
     finishing: string;
     /** {language} */
     ready: string;
-    failed: { audio_unavailable: string; transcription_failed: string; no_speech: string; draft_exists: string; video_gone: string; failed: string };
+    failed: {
+      audio_unavailable: string;
+      transcription_failed: string;
+      no_speech: string;
+      draft_exists: string;
+      video_gone: string;
+      source_missing: string;
+      source_changed: string;
+      translation_failed: string;
+      failed: string;
+    };
     /** {minutes} */
     refunded: string;
     tryAgain: string;
@@ -168,6 +181,89 @@ export interface CaptionsTranslations {
     unconfirmedHint: string;
     textUnavailable: string;
     attribution: string;
+  };
+  /** Translating a caption draft into other languages (§3.3, caption minutes) */
+  translate: {
+    action: string;
+    title: string;
+    /** {language}: the source draft */
+    body: string;
+    languagesLabel: string;
+    /** {count}: the most languages one request may ask for */
+    limit: string;
+    /** {minutes} {remaining} */
+    cost: string;
+    /** {minutes} */
+    costUnlimited: string;
+    /** {minutes} {remaining} {over} */
+    costOver: string;
+    quranNote: string;
+    confirm: string;
+    cancel: string;
+    /** {language} */
+    replaceTitle: string;
+    /** {language} */
+    replaceBody: string;
+    replace: string;
+    started: string;
+    paused: string;
+    requestFailed: string;
+    notReady: string;
+    noMinutes: string;
+    /** {language}: on a translation draft */
+    from: string;
+    review: string;
+    /** {language}: the source changed after the translation was made */
+    sourceChanged: string;
+    cancelTitle: string;
+    cancelBody: string;
+    cancelConfirm: string;
+    keep: string;
+  };
+  /** The Translate button beside titles and descriptions (§3.4, O5) */
+  inline: {
+    working: string;
+    hint: string;
+    replaceTitle: string;
+    /** {language} */
+    replaceBody: string;
+    replace: string;
+    keep: string;
+    /** {time} */
+    fairUse: string;
+    paused: string;
+    budget: string;
+    failed: string;
+    quranKept: string;
+  };
+  /** Viewers: the caption menu and translated titles (§3.5, §5.9) */
+  viewer: {
+    /** Appended to a translated track's name in the caption menu */
+    machineTranslation: string;
+    translatedTitle: string;
+    showOriginal: string;
+    showTranslation: string;
+  };
+  /** Channel settings: the Quran translation shown in translated tracks (O7) and viewer-title opt-out */
+  channelSettings: {
+    title: string;
+    hint: string;
+    quranTitle: string;
+    quranHint: string;
+    language: string;
+    edition: string;
+    sourceChannel: string;
+    sourcePlatform: string;
+    sourceDefault: string;
+    save: string;
+    reset: string;
+    saved: string;
+    failed: string;
+    unavailable: string;
+    addLanguage: string;
+    viewerTitles: string;
+    viewerTitlesHint: string;
+    viewerTitlesOff: string;
   };
 }
 
@@ -241,6 +337,8 @@ export const CAPTIONS_EN: CaptionsTranslations = {
       extracting: 'Preparing audio',
       transcribing: 'Transcribing {done}/{total}',
       transcribingStart: 'Transcribing',
+      translating: 'Translating {done}/{total}',
+      translatingStart: 'Translating',
       postprocessing: 'Checking Quran',
     },
     chip: '{language}: {step}',
@@ -259,6 +357,9 @@ export const CAPTIONS_EN: CaptionsTranslations = {
       no_speech: 'No speech was found in this video.',
       draft_exists: 'A draft in this language already exists.',
       video_gone: 'This video is no longer available.',
+      source_missing: 'The draft to translate is gone.',
+      source_changed: 'The draft changed while it was being translated. Translate it again.',
+      translation_failed: "The translation didn't work.",
       failed: "The transcription didn't work. Our team has been told.",
     },
     refunded: 'Your {minutes} caption minutes were given back.',
@@ -319,6 +420,73 @@ export const CAPTIONS_EN: CaptionsTranslations = {
     unconfirmedHint: 'Until you confirm it, viewers see the reference with a quran.com link, not the text.',
     textUnavailable: "The official text isn't available right now. Viewers see the reference.",
     attribution: 'Quran text: Quran Foundation (quran.com)',
+  },
+  translate: {
+    action: 'Translate',
+    title: 'Translate this transcript',
+    body: 'Machine-translate your {language} draft into other languages. Each translation is a draft you check before publishing.',
+    languagesLabel: 'Languages',
+    limit: 'Up to {count} languages at a time.',
+    cost: 'Uses {minutes} caption minutes. {remaining} left this month.',
+    costUnlimited: 'Uses {minutes} caption minutes (no monthly limit).',
+    costOver: 'Uses {minutes} caption minutes, {over} more than the {remaining} you have left. The extra comes off next month.',
+    quranNote: 'Quran is never machine-translated: confirmed ayat show in the translation your channel picked, with its name.',
+    confirm: 'Translate',
+    cancel: 'Cancel',
+    replaceTitle: 'Replace the {language} draft?',
+    replaceBody: 'You already have a {language} draft. The translation replaces it and your edits.',
+    replace: 'Replace',
+    started: 'Translation started. The drafts appear here when they are ready.',
+    paused: 'Translation is paused right now. Try again later.',
+    requestFailed: "The translation couldn't start. Try again.",
+    notReady: "This video's length isn't known yet. Try again once it has finished processing.",
+    noMinutes: "You don't have enough caption minutes to translate.",
+    from: 'Machine translation from {language}',
+    review: 'Machine translation: check it before publishing.',
+    sourceChanged: 'The {language} draft changed after this translation was made.',
+    cancelTitle: 'Cancel the translation?',
+    cancelBody: 'The caption minutes it holds come back to you.',
+    cancelConfirm: 'Cancel translation',
+    keep: 'Keep translating',
+  },
+  inline: {
+    working: 'Translating…',
+    hint: 'Machine translation: review it before saving.',
+    replaceTitle: 'Replace your text?',
+    replaceBody: 'The {language} field already has text. Replace it with the translation?',
+    replace: 'Replace',
+    keep: 'Keep mine',
+    fairUse: "You've used today's translations. More at {time}.",
+    paused: 'Translation is paused right now.',
+    budget: "Translation isn't available right now. Try again tomorrow.",
+    failed: "Couldn't translate. Try again.",
+    quranKept: 'Quran in {…} was kept as written.',
+  },
+  viewer: {
+    machineTranslation: 'machine translation',
+    translatedTitle: 'Auto-translated',
+    showOriginal: 'Show original',
+    showTranslation: 'Show translation',
+  },
+  channelSettings: {
+    title: 'Translation',
+    hint: 'How translations of your videos appear to viewers.',
+    quranTitle: 'Quran translation',
+    quranHint: 'In machine-translated caption tracks, confirmed ayat show this Quran Foundation translation with its name. Arabic tracks show the Arabic text.',
+    language: 'Language',
+    edition: 'Translation',
+    sourceChannel: 'Your choice',
+    sourcePlatform: 'Site default',
+    sourceDefault: 'Default',
+    save: 'Save',
+    reset: 'Use the default',
+    saved: 'Saved.',
+    failed: "Couldn't save. Try again.",
+    unavailable: "Quran translations can't be loaded right now. Try again later.",
+    addLanguage: 'Add a language',
+    viewerTitles: 'Let viewers see machine-translated titles',
+    viewerTitlesHint: "When a video has no title in a viewer's language, they may see a labelled machine translation with “Show original”.",
+    viewerTitlesOff: 'Paused for the whole site right now; your choice applies again when it is back on.',
   },
 };
 
@@ -392,6 +560,8 @@ export const CAPTIONS_AR: CaptionsTranslations = {
       extracting: 'جارٍ تجهيز الصوت',
       transcribing: 'جارٍ التفريغ {done}/{total}',
       transcribingStart: 'جارٍ التفريغ',
+      translating: 'جارٍ الترجمة {done}/{total}',
+      translatingStart: 'جارٍ الترجمة',
       postprocessing: 'جارٍ التحقق من القرآن',
     },
     chip: '{language}: {step}',
@@ -410,6 +580,9 @@ export const CAPTIONS_AR: CaptionsTranslations = {
       no_speech: 'لم يُعثر على كلام في هذا المرئي.',
       draft_exists: 'توجد مسودة بهذه اللغة بالفعل.',
       video_gone: 'لم يعد هذا المرئي متاحًا.',
+      source_missing: 'المسودة المراد ترجمتها لم تعد موجودة.',
+      source_changed: 'تغيّرت المسودة أثناء ترجمتها. ترجمها مرة أخرى.',
+      translation_failed: 'لم تنجح الترجمة.',
       failed: 'لم ينجح التفريغ، وأُبلغ فريقنا.',
     },
     refunded: 'أُعيدت إليك {minutes} من دقائق الترجمة.',
@@ -470,5 +643,72 @@ export const CAPTIONS_AR: CaptionsTranslations = {
     unconfirmedHint: 'حتى تؤكده، يرى المشاهدون الموضع مع رابط quran.com دون النص.',
     textUnavailable: 'النص الرسمي غير متاح الآن، ويرى المشاهدون الموضع.',
     attribution: 'نص القرآن: مؤسسة القرآن (quran.com)',
+  },
+  translate: {
+    action: 'ترجمة',
+    title: 'ترجمة هذا النص',
+    body: 'ترجم مسودة {language} آليًا إلى لغات أخرى. كل ترجمة مسودة تراجعها قبل النشر.',
+    languagesLabel: 'اللغات',
+    limit: 'حتى {count} لغات في المرة الواحدة.',
+    cost: 'تستهلك {minutes} من دقائق الترجمة. يتبقى {remaining} هذا الشهر.',
+    costUnlimited: 'تستهلك {minutes} من دقائق الترجمة (بلا حد شهري).',
+    costOver: 'تستهلك {minutes} من دقائق الترجمة، أي {over} أكثر من {remaining} المتبقية لك. يُخصم الفرق من الشهر القادم.',
+    quranNote: 'لا يُترجَم القرآن آليًا أبدًا: تظهر الآيات المؤكدة بالترجمة التي اختارتها قناتك مع اسمها.',
+    confirm: 'ترجمة',
+    cancel: 'إلغاء',
+    replaceTitle: 'استبدال مسودة {language}؟',
+    replaceBody: 'لديك مسودة {language} بالفعل. الترجمة تستبدلها مع تعديلاتك.',
+    replace: 'استبدال',
+    started: 'بدأت الترجمة. تظهر المسودات هنا عند جهوزيتها.',
+    paused: 'الترجمة متوقفة حاليًا. حاول لاحقًا.',
+    requestFailed: 'تعذّر بدء الترجمة. حاول مرة أخرى.',
+    notReady: 'مدة هذا المرئي غير معروفة بعد. حاول مجددًا بعد انتهاء معالجته.',
+    noMinutes: 'ليست لديك دقائق ترجمة كافية للترجمة.',
+    from: 'ترجمة آلية من {language}',
+    review: 'ترجمة آلية: راجعها قبل النشر.',
+    sourceChanged: 'تغيّرت مسودة {language} بعد إعداد هذه الترجمة.',
+    cancelTitle: 'إلغاء الترجمة؟',
+    cancelBody: 'تعود إليك دقائق الترجمة المحجوزة لها.',
+    cancelConfirm: 'إلغاء الترجمة',
+    keep: 'متابعة الترجمة',
+  },
+  inline: {
+    working: 'جارٍ الترجمة…',
+    hint: 'ترجمة آلية: راجعها قبل الحفظ.',
+    replaceTitle: 'استبدال نصك؟',
+    replaceBody: 'في حقل {language} نص بالفعل. هل تستبدله بالترجمة؟',
+    replace: 'استبدال',
+    keep: 'الإبقاء على نصي',
+    fairUse: 'استنفدت ترجمات اليوم. تتجدد في {time}.',
+    paused: 'الترجمة متوقفة حاليًا.',
+    budget: 'الترجمة غير متاحة الآن. حاول غدًا.',
+    failed: 'تعذّرت الترجمة. حاول مرة أخرى.',
+    quranKept: 'بقي القرآن بين {…} كما كُتب.',
+  },
+  viewer: {
+    machineTranslation: 'ترجمة آلية',
+    translatedTitle: 'مترجم آليًا',
+    showOriginal: 'عرض الأصل',
+    showTranslation: 'عرض الترجمة',
+  },
+  channelSettings: {
+    title: 'الترجمة',
+    hint: 'كيف تظهر ترجمات مرئياتك للمشاهدين.',
+    quranTitle: 'ترجمة القرآن',
+    quranHint: 'في مسارات الترجمة الآلية، تظهر الآيات المؤكدة بترجمة Quran Foundation هذه مع اسمها. المسارات العربية تعرض النص العربي.',
+    language: 'اللغة',
+    edition: 'الترجمة',
+    sourceChannel: 'اختيارك',
+    sourcePlatform: 'الافتراضي للموقع',
+    sourceDefault: 'الافتراضية',
+    save: 'حفظ',
+    reset: 'استخدام الافتراضية',
+    saved: 'تم الحفظ.',
+    failed: 'تعذّر الحفظ. حاول مرة أخرى.',
+    unavailable: 'تعذّر تحميل ترجمات القرآن الآن. حاول لاحقًا.',
+    addLanguage: 'إضافة لغة',
+    viewerTitles: 'السماح للمشاهدين برؤية عناوين مترجمة آليًا',
+    viewerTitlesHint: 'إن لم يكن للمرئي عنوان بلغة المشاهد، فقد يرى ترجمة آلية موسومة مع «عرض الأصل».',
+    viewerTitlesOff: 'متوقفة الآن في الموقع كله، ويسري اختيارك عند إعادة تشغيلها.',
   },
 };

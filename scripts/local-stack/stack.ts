@@ -177,6 +177,8 @@ export const WORKERS: StackWorker[] = [
       // local Secrets Store fallback. Used only while no admin settings file exists.
       YOUTUBE_IMPORT_DEFAULT_ENABLED: 'true',
       YOUTUBE_IMPORT_DEFAULT_CLIENT_ID: '123456789012-localstackfakeclient.apps.googleusercontent.com',
+      // Quran Foundation translations: fixed editions and texts, never the real API
+      QURAN_PROVIDER: 'fixture',
       ...TURNSTILE_TEST_VARS,
     },
   },
@@ -229,6 +231,9 @@ export const WORKERS: StackWorker[] = [
       AI_MODERATION_ENABLED: 'false',
       AI_CATEGORIZE_ENABLED: 'false',
       CATEGORY_AI_TEST_HOOK: 'true',
+      // Captions: transcription and translation (Studio and the Translate button) answer with fixtures
+      CAPTION_PROVIDER: 'fixture',
+      TRANSLATION_PROVIDER: 'fixture',
     },
   },
   {

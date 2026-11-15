@@ -1,0 +1,286 @@
+/**
+ * Transcript translation, Quran translation editions, inline title translation and viewer-side
+ * titles (AUN-CAPTIONS §5.7–§5.9, O5–O7; search migration 0041). No AI and no Quran Foundation:
+ * a fake processor and the fixture Quran provider.
+ */
+import { afterEach, beforeEach, describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import { MessageType, captionDraftKey, renderCaptionVtt, type CaptionDraft, type VideoObject } from '@al-ummah/shared-types';
+import { assignTier, saveTier } from '../src/lib/creatorTiers';
+import { finishJob, requestTranslationJob, type CaptionJobsEnv } from '../src/lib/captions/jobs';
+import { captionSubject, eraseCaptionMinutes, readUsage } from '../src/lib/captions/minutes';
+import { QF_AYAT_PER_TRACK, fillServedTrack } from '../src/lib/captions/drafts';
+import { editionFor } from '../src/lib/quran/translations';
+import { channelEditions, platformEditions } from '../src/endpoints/quran/quranTranslations';
+import { channelAllowsViewerTitles, deleteViewerTranslations, readFairUse, saveViewerTranslation, setChannelViewerTitles, translateInline, viewerTranslation } from '../src/lib/translate/inline';
+import { readCaptionSettings } from '../src/lib/captions/jobs';
+import { SqliteD1 } from './search-sqlite-d1';
+
+const NOV = new Date('2026-11-14T12:00:00.000Z');
+
+function bucket(objects: Record<string, string> = {}) {
+	return {
+		objects,
+		async get(key: string) {
+			return key in objects ? { text: async () => objects[key] } : null;
+		},
+		async put(key: string, value: string) {
+			objects[key] = value;
+		},
+		async head(key: string) {
+			return key in objects ? {} : null;
+		},
+		async list({ prefix }: { prefix: string }) {
+			return { objects: Object.keys(objects).filter((k) => k.startsWith(prefix)).map((key) => ({ key })), truncated: false };
+		},
+		async delete(keys: string | string[]) {
+			for (const k of [keys].flat()) delete objects[k];
+		},
+	};
+}
+function queue() {
+	const sent: Array<{ type: MessageType; payload: Record<string, unknown> }> = [];
+	return { sent, async send(m: never) { sent.push(m); } };
+}
+
+const video = (over: Partial<VideoObject> = {}): VideoObject =>
+	({ id: 'v1', userId: 'alice', channelId: 'c1', title: 'A talk about patience', description: 'Patience in hard times', duration: 125, uploadStatus: 'ready', ...over }) as VideoObject;
+
+const source = (over: Partial<CaptionDraft> = {}): CaptionDraft => ({
+	v: 1,
+	videoId: 'v1',
+	language: 'ar',
+	version: 3,
+	kind: 'source',
+	origin: 'transcription',
+	edited: true,
+	cues: [
+		{ id: 'c1', startMs: 0, endMs: 4000, segments: [{ type: 'speech', text: 'قال الله تعالى' }, { type: 'quran', range: '112:1:1-112:2:2', status: 'confirmed' }] },
+	],
+	createdAt: NOV.toISOString(),
+	updatedAt: NOV.toISOString(),
+	updatedBy: 'alice',
+	...over,
+});
+
+let reports: unknown[] = [];
+const realFetch = globalThis.fetch;
+beforeEach(() => {
+	reports = [];
+	globalThis.fetch = (async (_url: unknown, init?: { body?: string }) => {
+		reports.push(JSON.parse(String(init?.body ?? '{}')));
+		return new Response('{}');
+	}) as typeof fetch;
+});
+afterEach(() => {
+	globalThis.fetch = realFetch;
+});
+
+async function setup(minutes = 10) {
+	const db = new SqliteD1();
+	const d1 = db as unknown as D1Database;
+	await saveTier(d1, 'captions', { name: 'Captions', perHour: 5, perDay: 10, maxConcurrent: 2, maxChannels: 1, captionMinutesMonth: minutes }, 'admin-1', { create: true });
+	await assignTier(d1, 'alice', 'captions', 'admin-1');
+	const processorCalls: Array<Record<string, unknown>> = [];
+	let processorAnswer: (body: { items: Array<{ id: string; text: string }> }) => Response = (body) =>
+		Response.json({ items: body.items.map((i) => ({ id: i.id, text: `ترجمة ${i.text.length}` })), provider: 'workers-ai', model: '@cf/google/gemma-4-26b-a4b-it', usd: 0 });
+	const env = {
+		SEARCH_DB: d1,
+		MEDIA_PRIVATE: bucket(),
+		subtitles: bucket({ [captionDraftKey('v1', 'ar')]: JSON.stringify(source()) }),
+		global_settings: bucket(),
+		queue: queue(),
+		TRANSCODE_QUEUE: queue(),
+		ERRORS_INGEST_URL: 'https://admin.example/internal/errors',
+		INTERNAL_API_KEY: 'k',
+		QURAN_PROVIDER: 'fixture',
+		PROCESSOR: {
+			fetch: async (_url: RequestInfo, init?: RequestInit) => {
+				const body = JSON.parse(String(init?.body));
+				processorCalls.push(body);
+				return processorAnswer(body);
+			},
+		},
+	};
+	const remaining = async () => (await readUsage(d1, await captionSubject(d1, { userId: 'alice' }), NOV)).remaining;
+	return { env, d1, remaining, asEnv: env as unknown as CaptionJobsEnv, processorCalls, answer: (f: typeof processorAnswer) => (processorAnswer = f) };
+}
+
+const translate = (env: CaptionJobsEnv, over: Partial<{ video: VideoObject; language: string; sourceLanguage: string; replace: boolean }> = {}) =>
+	requestTranslationJob(env, { video: over.video ?? video(), userId: 'alice', sourceLanguage: over.sourceLanguage ?? 'ar', language: over.language ?? 'en', replace: over.replace ?? false }, NOV);
+
+describe('transcript translation jobs', () => {
+	it('queues a translate job on the source version, reserving the video’s minutes per language', async () => {
+		const { env, asEnv, remaining } = await setup(10);
+		const out = await translate(asEnv);
+		assert.ok('job' in out && !out.existing);
+		assert.equal(out.job.kind, 'translate');
+		assert.equal(out.job.sourceLanguage, 'ar');
+		assert.equal(out.job.sourceVersion, 3);
+		assert.equal(out.job.minutesReserved, 3, '125 s = 3 minutes');
+		assert.equal(await remaining(), 7);
+		const msg = env.queue.sent[0]!;
+		assert.equal(msg.type, MessageType.CaptionTranslate);
+		assert.equal(msg.payload.provider, 'workers-ai', 'DeepL is off by default');
+		assert.equal(msg.payload.model, '@cf/deepseek-ai/deepseek-v4.1-flash-1017');
+		assert.equal(msg.payload.fallbackModel, '@cf/google/gemma-4-26b-a4b-it');
+		const again = await translate(asEnv);
+		assert.ok('job' in again && again.existing && again.job.id === out.job.id);
+		assert.equal(await remaining(), 7);
+	});
+
+	it('the minutes are charged when it ends, and come back when it fails', async () => {
+		const { asEnv, remaining } = await setup(10);
+		const a = await translate(asEnv);
+		assert.ok('job' in a);
+		await finishJob(asEnv, a.job.id, { outcome: 'ready', minutesUsed: 0 }, undefined, NOV);
+		assert.equal(await remaining(), 7);
+		const b = await translate(asEnv, { language: 'fr' });
+		assert.ok('job' in b);
+		await finishJob(asEnv, b.job.id, { outcome: 'failed', error: 'translation_failed' }, undefined, NOV);
+		assert.equal(await remaining(), 7);
+	});
+
+	it('refuses: same language, no source, a translation as source, an existing draft, a video not ready, paused by the admin', async () => {
+		const { env, asEnv } = await setup();
+		await assert.rejects(translate(asEnv, { language: 'ar' }), /same_language/);
+		await assert.rejects(translate(asEnv, { sourceLanguage: 'fr' }), /source_missing/);
+		env.subtitles.objects[captionDraftKey('v1', 'en')] = JSON.stringify(source({ language: 'en', kind: 'translation' }));
+		await assert.rejects(translate(asEnv, { sourceLanguage: 'en', language: 'fr' }), /source_is_translation/);
+		await assert.rejects(translate(asEnv), /draft_exists/);
+		await assert.rejects(translate(asEnv, { language: 'de', video: video({ duration: 0 } as never) }), /video_not_ready/);
+		env.global_settings.objects['captions/settings.json'] = JSON.stringify({ translation: { enabled: false } });
+		await assert.rejects(translate(asEnv, { language: 'de' }), /translation_paused/);
+	});
+});
+
+describe('Quran translation editions (O7)', () => {
+	it('channel pick over the platform’s over the shipped default (Saheeh International)', async () => {
+		const { env, d1 } = await setup();
+		assert.deepEqual(await editionFor(env as never, 'c1', 'en'), { id: 20, name: 'Saheeh International', author: 'Saheeh International', language: 'en' });
+		assert.equal(await editionFor(env as never, 'c1', 'sw'), null, 'no edition: the Arabic text');
+		await d1.prepare("INSERT INTO quran_translation_defaults (lang, qf_translation_id, name, updated_by, updated_at) VALUES ('en', 85, 'M.A.S. Abdel Haleem', 'admin', ?)").bind(NOV.toISOString()).run();
+		assert.equal((await editionFor(env as never, 'c1', 'en'))!.id, 85);
+		await d1.prepare("INSERT INTO channel_quran_translations (channel_id, lang, qf_translation_id, name, updated_by, updated_at) VALUES ('c1', 'en', 20, 'Saheeh International', 'alice', ?)").bind(NOV.toISOString()).run();
+		assert.equal((await editionFor(env as never, 'c1', 'en'))!.id, 20);
+		assert.equal((await editionFor(env as never, 'c2', 'en'))!.id, 85);
+		assert.deepEqual((await channelEditions(d1, 'c1')).map((e) => [e.language, e.source]), [['en', 'channel']]);
+		assert.deepEqual((await platformEditions(d1)).map((e) => [e.language, e.id, e.source]), [['en', 85, 'platform']]);
+	});
+
+	it('a served translated track shows the edition’s text with its name; past the QF cap or with QF down, the reference', async () => {
+		const draft = { ...source({ language: 'en', kind: 'translation' }), cues: [{ id: 'c1', startMs: 0, endMs: 4000, segments: [{ type: 'speech' as const, text: 'Allah the Exalted said' }, { type: 'quran' as const, range: '112:1:1-112:2:2', status: 'accepted' as const }] }] };
+		const vtt = renderCaptionVtt(draft);
+		const env = { QURAN_PROVIDER: 'fixture' };
+		const served = await fillServedTrack(vtt, 'en', undefined, { env: env as never, edition: { id: 20, name: 'Saheeh International', language: 'en' } });
+		assert.match(served, /“\[fixture translation 20 of 112:1\] \[fixture translation 20 of 112:2\]” \(Saheeh International · Surah 112 112:1–2\)/);
+		assert.doesNotMatch(served, //);
+
+		const many = { ...draft, cues: Array.from({ length: 8 }, (_, i) => ({ id: `c${i}`, startMs: i * 5000, endMs: i * 5000 + 4000, segments: [{ type: 'quran' as const, range: '2:1:1-2:20:5', status: 'accepted' as const }] })) };
+		const capped = await fillServedTrack(renderCaptionVtt(many), 'en', undefined, { env: env as never, edition: { id: 20, name: 'Saheeh International', language: 'en' } });
+		assert.equal((capped.match(/fixture translation/g) ?? []).length, QF_AYAT_PER_TRACK, 'QF is asked for at most the cap of ayat per track');
+		assert.match(capped, /quran\.com\/2\/1-20/);
+
+		const down = await fillServedTrack(vtt, 'en', undefined, { env: {} as never, edition: { id: 20, name: 'Saheeh International', language: 'en' }, fetchImpl: (async () => new Response('', { status: 503 })) as typeof fetch });
+		assert.match(down, /quran\.com\/112\/1-2/);
+		assert.doesNotMatch(down, /Saheeh/);
+	});
+});
+
+describe('inline translation (O5)', () => {
+	it('translates through the processor with the day’s budget share and counts texts against fair use', async () => {
+		const { asEnv, processorCalls } = await setup();
+		const out = await translateInline(asEnv as never, { userId: 'alice', items: [{ id: 'title', text: 'A talk' }, { id: 'empty', text: '  ' }], from: 'en', to: 'ar', field: 'title' }, NOV);
+		assert.equal(out.items[0]!.text, 'ترجمة 6');
+		assert.equal(out.items[1]!.text, '', 'an empty text is never sent');
+		assert.equal(processorCalls.length, 1);
+		assert.equal((processorCalls[0]!.items as unknown[]).length, 1);
+		assert.equal(processorCalls[0]!.dailyBudgetUsd, Math.round((2 / 30) * 10_000) / 10_000);
+		assert.equal(out.fairUse.used, 1);
+		assert.equal(out.fairUse.limit, 100);
+		assert.equal(out.fairUse.resetsAt, '2026-11-15T00:00:00.000Z');
+	});
+
+	it('the daily limit refuses with 429 and when it resets; a failed call gives the texts back', async () => {
+		const { env, asEnv, answer } = await setup();
+		env.global_settings.objects['captions/settings.json'] = JSON.stringify({ inline: { dailyItems: 2 } });
+		await translateInline(asEnv as never, { userId: 'alice', items: [{ id: 'a', text: 'one' }, { id: 'b', text: 'two' }], from: 'en', to: 'ar', field: 'title' }, NOV);
+		await assert.rejects(
+			translateInline(asEnv as never, { userId: 'alice', items: [{ id: 'c', text: 'three' }], from: 'en', to: 'ar', field: 'title' }, NOV),
+			(e: { status: number; code: string; extra: { limit: number; resetsAt: string } }) => e.status === 429 && e.code === 'fair_use_limit' && e.extra.limit === 2 && e.extra.resetsAt === '2026-11-15T00:00:00.000Z',
+		);
+		assert.equal((await readFairUse(asEnv, 'bob', await readCaptionSettings(asEnv), NOV)).used, 0, 'per user');
+		answer(() => new Response('{}', { status: 502 }));
+		await assert.rejects(translateInline(asEnv as never, { userId: 'bob', items: [{ id: 'a', text: 'one' }], from: 'en', to: 'ar', field: 'title' }, NOV), /translation_failed/);
+		assert.equal((await readFairUse(asEnv, 'bob', await readCaptionSettings(asEnv), NOV)).used, 0);
+		const tomorrow = new Date('2026-11-15T01:00:00.000Z');
+		answer((body) => Response.json({ items: body.items.map((i) => ({ id: i.id, text: 'نص' })), provider: 'workers-ai', model: 'm', usd: 0 }));
+		const next = await translateInline(asEnv as never, { userId: 'alice', items: [{ id: 'c', text: 'three' }], from: 'en', to: 'ar', field: 'title' }, tomorrow);
+		assert.equal(next.fairUse.used, 1);
+	});
+
+	it('the kill switch pauses it; a spent budget is 503 budget_spent; every request is audited without its text', async () => {
+		const { env, d1, asEnv, answer } = await setup();
+		answer(() => Response.json({ error: 'budget_spent' }, { status: 503 }));
+		await assert.rejects(translateInline(asEnv as never, { userId: 'alice', items: [{ id: 'a', text: 'one' }], from: 'en', to: 'ar', field: 'title' }, NOV), /budget_spent/);
+		env.global_settings.objects['captions/settings.json'] = JSON.stringify({ inline: { enabled: false } });
+		await assert.rejects(translateInline(asEnv as never, { userId: 'alice', items: [{ id: 'a', text: 'one' }], from: 'en', to: 'ar', field: 'title' }, NOV), /translation_paused/);
+		delete env.global_settings.objects['captions/settings.json'];
+		answer((body) => Response.json({ items: body.items.map((i) => ({ id: i.id, text: 'نص' })), provider: 'workers-ai', model: 'm', usd: 0 }));
+		await translateInline(asEnv as never, { userId: 'alice', items: [{ id: 'a', text: 'secret title' }], from: 'en', to: 'ar', field: 'title', videoId: 'v1' }, NOV);
+		const rows = (await d1.prepare('SELECT * FROM translation_audit').all<Record<string, unknown>>()).results ?? [];
+		assert.equal(rows.length, 1);
+		assert.equal(rows[0]!.kind, 'inline');
+		assert.equal(rows[0]!.video_id, 'v1');
+		assert.equal(rows[0]!.chars, 12);
+		assert.doesNotMatch(JSON.stringify(rows), /secret/);
+		await eraseCaptionMinutes(d1, 'alice', NOV);
+		assert.equal(((await d1.prepare('SELECT user_id FROM translation_audit').first<{ user_id: string }>())!).user_id, 'erased-user');
+		assert.equal((await d1.prepare('SELECT COUNT(*) AS n FROM inline_translation_usage').first<{ n: number }>())!.n, 0);
+	});
+
+	it('validates the request', async () => {
+		const { asEnv } = await setup();
+		await assert.rejects(translateInline(asEnv as never, { userId: 'a', items: [{ id: 'a', text: 'x' }], from: 'en', to: 'en', field: 'title' }), /same_language/);
+		await assert.rejects(translateInline(asEnv as never, { userId: 'a', items: [{ id: 'a', text: 'x'.repeat(5001) }], from: 'en', to: 'ar', field: 'title' }), /text_too_long/);
+		await assert.rejects(translateInline(asEnv as never, { userId: 'a', items: [{ id: 'a', text: 'x' }, { id: 'a', text: 'y' }], from: 'en', to: 'ar', field: 'title' }), /invalid_id/);
+	});
+});
+
+describe('viewer-side titles (O6: on, channel opt-out, admin pause)', () => {
+	it('paused by an admin: nothing is queued', async () => {
+		const { env, asEnv } = await setup();
+		env.global_settings.objects['captions/settings.json'] = JSON.stringify({ viewerTitles: { enabled: false } });
+		assert.deepEqual(await viewerTranslation(asEnv as never, video(), 'ar', NOV), { translation: null, pending: false });
+		assert.equal(env.queue.sent.length, 0);
+	});
+
+	it('on by default: queues once, serves the stored translation, a title edit makes it stale; channel opt-out and creator text win', async () => {
+		const { env, asEnv } = await setup();
+		const first = await viewerTranslation(asEnv as never, video(), 'ar', NOV);
+		assert.deepEqual(first, { translation: null, pending: true });
+		const msg = env.queue.sent[0]!;
+		assert.equal(msg.type, MessageType.MetadataTranslate);
+		assert.equal(msg.payload.from, 'en');
+		await saveViewerTranslation(asEnv, video(), { lang: 'ar', sourceHash: msg.payload.sourceHash as string, title: 'محاضرة عن الصبر', description: 'الصبر في الشدائد', provider: 'workers-ai', model: 'm' }, NOV);
+		const served = await viewerTranslation(asEnv as never, video(), 'ar', NOV);
+		assert.equal(served.translation?.title, 'محاضرة عن الصبر');
+		assert.equal(served.translation?.from, 'en');
+
+		const edited = video({ title: 'A talk about gratitude' });
+		await assert.rejects(saveViewerTranslation(asEnv, edited, { lang: 'ar', sourceHash: msg.payload.sourceHash as string, title: 'x', description: null, provider: 'p', model: 'm' }), /source_changed/);
+		assert.deepEqual(await viewerTranslation(asEnv as never, edited, 'ar', NOV), { translation: null, pending: true });
+
+		assert.equal((await viewerTranslation(asEnv as never, video({ titleLocalized: { ar: 'عنوان المنشئ' } } as never), 'ar', NOV)).translation, null, 'the creator’s own title wins');
+		assert.equal((await viewerTranslation(asEnv as never, video(), 'en', NOV)).translation, null, 'already in that language');
+		await setChannelViewerTitles(asEnv, 'c1', false, 'alice', NOV);
+		assert.equal(await channelAllowsViewerTitles(asEnv, 'c1'), false);
+		assert.deepEqual(await viewerTranslation(asEnv as never, video(), 'ar', NOV), { translation: null, pending: false });
+
+		await deleteViewerTranslations(asEnv, 'v1');
+		await setChannelViewerTitles(asEnv, 'c1', true, 'alice', NOV);
+		const sent = env.queue.sent.length;
+		assert.deepEqual(await viewerTranslation(asEnv as never, video(), 'ar', NOV), { translation: null, pending: true }, 'gone with the video: asked again');
+		assert.equal(env.queue.sent.length, sent + 1);
+	});
+});

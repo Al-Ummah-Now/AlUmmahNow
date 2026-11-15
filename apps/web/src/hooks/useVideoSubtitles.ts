@@ -9,9 +9,12 @@ import { getApiUrl } from '@/lib/runtime-config';
 import { logger } from '@/lib/logger-client';
 import { toPlayerTextTracks, type PlayerTextTrack } from '@/lib/video/subtitle-tracks';
 import type { ApiSubtitleTrack } from '@/lib/api/subtitle-utils';
+import { useLanguage } from '@/hooks/useLanguage';
 
 export function useVideoSubtitles(videoId: string | undefined, uiLocale: string, enabled = true): PlayerTextTrack[] {
   const [tracks, setTracks] = useState<PlayerTextTrack[]>([]);
+  const { t } = useLanguage();
+  const machineLabel = t.captions?.viewer?.machineTranslation;
 
   useEffect(() => {
     if (!enabled || !videoId) {
@@ -33,7 +36,7 @@ export function useVideoSubtitles(videoId: string | undefined, uiLocale: string,
         }
         const data = await response.json();
         const apiTracks = (data?.data?.tracks || []) as ApiSubtitleTrack[];
-        setTracks(toPlayerTextTracks(apiTracks, { apiUrl, videoId, uiLocale }));
+        setTracks(toPlayerTextTracks(apiTracks, { apiUrl, videoId, uiLocale, ...(machineLabel ? { machineLabel } : {}) }));
       } catch (error) {
         if (controller.signal.aborted) return;
         logger.warn('[useVideoSubtitles] Failed to load subtitles', { videoId, error });
@@ -42,7 +45,7 @@ export function useVideoSubtitles(videoId: string | undefined, uiLocale: string,
     })();
 
     return () => controller.abort();
-  }, [videoId, uiLocale, enabled]);
+  }, [videoId, uiLocale, enabled, machineLabel]);
 
   return tracks;
 }

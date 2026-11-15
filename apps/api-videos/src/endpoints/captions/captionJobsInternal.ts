@@ -7,12 +7,17 @@
  *   POST /internal/captions/jobs/:jobId/finish    { outcome: 'ready', minutesUsed } | { outcome: 'failed', error }
  *   POST /internal/captions/jobs/retry            { jobId } the admin Errors page's Retry (free of charge);
  *                                                 404 when the video is gone or a newer job of it runs
+ *   POST /internal/captions/metadata-translations { videoId, lang, sourceHash, title, description, provider, model }
+ *                                                 the processor's viewer-side title translation (§5.9); 409 when the
+ *                                                 video changed meanwhile, 404 when it is gone or no longer public
  */
 import { Hono } from 'hono';
 import { CAPTION_JOB_ERRORS, type CaptionAudioReport, type CaptionJobError, type CaptionJobStatus, type VideoObject } from '@al-ummah/shared-types';
 import R2Repository from '../../lib/r2Repo';
 import { CaptionJobHttpError, finishJob, onAudioReport, onProgress, readJob, retryJob, type CaptionJobsEnv } from '../../lib/captions/jobs';
 import { logger } from '../../lib/logger';
+import { canViewVideo } from '../../lib/playlists';
+import { saveViewerTranslation, TranslateHttpError } from '../../lib/translate/inline';
 
 type Env = CaptionJobsEnv & { videos: R2Bucket };
 type Ctx = { waitUntil(promise: Promise<unknown>): void } | undefined;
@@ -50,6 +55,27 @@ export function createCaptionJobsInternalRouter() {
 			if (error instanceof CaptionJobHttpError && ['video_gone', 'newer_job_active'].includes(error.code)) return c.json({ success: false, error: error.code }, 404);
 			throw error;
 		}
+	});
+
+	app.post('/metadata-translations', async (c) => {
+		const body = (await c.req.json().catch(() => null)) as Partial<{ videoId: string; lang: string; sourceHash: string; title: string; description: string | null; provider: string; model: string }> | null;
+		if (!body || typeof body.videoId !== 'string' || typeof body.lang !== 'string' || typeof body.sourceHash !== 'string' || typeof body.title !== 'string') return c.json({ success: false, error: 'invalid' }, 400);
+		const stored = await video(c.env, body.videoId);
+		if (!stored || !canViewVideo(stored as never, null)) return c.json({ success: false, error: 'video_gone' }, 404);
+		try {
+			await saveViewerTranslation(c.env, stored, {
+				lang: body.lang,
+				sourceHash: body.sourceHash,
+				title: body.title,
+				description: typeof body.description === 'string' ? body.description : null,
+				provider: String(body.provider ?? 'unknown'),
+				model: String(body.model ?? 'unknown'),
+			});
+		} catch (error) {
+			if (error instanceof TranslateHttpError) return c.json({ success: false, error: error.code }, error.status as 400);
+			throw error;
+		}
+		return c.json({ success: true });
 	});
 
 	app.post('/jobs/:jobId/audio', async (c) => {

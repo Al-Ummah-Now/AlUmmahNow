@@ -17,6 +17,10 @@ export interface SubtitleTrack {
   origin?: 'upload' | 'machine' | 'machine_edited';
   /** Machine tracks: the caption draft version that was published (captions.ts) */
   version?: number;
+  /** AUN-CAPTIONS §3.2: a machine translation of another track (the player labels it so) */
+  machineTranslation?: boolean;
+  /** Machine translations: the language translated from */
+  sourceLanguage?: string;
   uploadedBy: string; // User ID who uploaded
   uploadedAt: string; // ISO timestamp
   fileSize: number; // Size in bytes

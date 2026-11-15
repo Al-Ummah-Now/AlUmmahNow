@@ -18,6 +18,7 @@ import "@/theme/fawanees.css";
 import backdrops from "@/theme/demo-backdrops.json";
 import Navigation from "@/components/navigation";
 import AuthProvider from "@/components/AuthProvider";
+import InlineTranslatorRegistrar from "@/components/translate/InlineTranslatorRegistrar";
 import { WebSocketProvider } from "@/lib/websocket/WebSocketProvider";
 import { NotificationCenter } from "@/components/notifications/NotificationCenter";
 import { TranslationSyncProvider } from "@/components/TranslationSyncProvider";
@@ -281,6 +282,9 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
                           <div id="page-content" className="flex flex-1 flex-col">
                             {children}
                           </div>
+
+                          {/* Translate buttons beside English/Arabic fields (signed in only) */}
+                          <InlineTranslatorRegistrar />
 
                           {/* Real-time notification center */}
                           <NotificationCenter />

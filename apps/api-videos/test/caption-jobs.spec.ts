@@ -80,7 +80,13 @@ describe('caption jobs', () => {
 		assert.equal((await readCaptionSettings(asEnv)).monthlyBudgetUsd, 5);
 		assert.equal((await readCaptionSettings({ ...asEnv, ENVIRONMENT: 'production' })).monthlyBudgetUsd, 100);
 		env.global_settings.objects['captions/settings.json'] = JSON.stringify({ monthlyBudgetUsd: 40, model: 'not a model' });
-		assert.deepEqual(await readCaptionSettings(asEnv), { monthlyBudgetUsd: 40, model: '@cf/openai/whisper-large-v3-turbo' });
+		const read = await readCaptionSettings(asEnv);
+		assert.equal(read.monthlyBudgetUsd, 40);
+		assert.equal(read.model, '@cf/openai/whisper-large-v3-turbo');
+		assert.deepEqual(read.viewerTitles, { enabled: true }, 'viewer-side titles are on (O6); an admin can pause them');
+		assert.equal(read.translation.deepl, false, 'DeepL is off by default');
+		assert.deepEqual(read.inline, { enabled: true, dailyItems: 100, monthlyBudgetUsd: 2 });
+		assert.equal((await readCaptionSettings({ ...asEnv, ENVIRONMENT: 'production' })).inline.monthlyBudgetUsd, 20);
 	});
 
 	it('extracts the audio when the review has none, reserving started minutes', async () => {

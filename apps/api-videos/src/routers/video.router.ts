@@ -43,7 +43,8 @@ import { SubtitlesList } from '../endpoints/video/subtitlesList';
 import { SubtitlesGet } from '../endpoints/video/subtitlesGet';
 import { SubtitlesDelete } from '../endpoints/video/subtitlesDelete';
 import { SubtitlesSetDefault } from '../endpoints/video/subtitlesSetDefault';
-import { CaptionJobCancel, CaptionJobCreate, CaptionJobsList, CaptionMinutesGet } from '../endpoints/captions/captionJobs';
+import { VideoTranslatedMetadataGet } from '../endpoints/translate/translate';
+import { CaptionJobCancel, CaptionJobCreate, CaptionJobsList, CaptionMinutesGet, CaptionTranslateCreate } from '../endpoints/captions/captionJobs';
 import { RenditionFilePut, RenditionsCancel, RenditionsComplete, RenditionsCreate } from '../endpoints/video/renditions';
 import { CaptionDraftDelete, CaptionDraftGet, CaptionDraftPublish, CaptionDraftSave, CaptionDraftsList, OnDeviceTranscriptSubmit, ReviewTranscriptClaim } from '../endpoints/captions/captionDrafts';
 
@@ -198,6 +199,9 @@ videoRouter.post('/:videoId/captions/jobs', CaptionJobCreate);
 videoRouter.get('/:videoId/captions/jobs', CaptionJobsList);
 videoRouter.post('/:videoId/captions/jobs/:jobId/cancel', CaptionJobCancel);
 videoRouter.get('/:videoId/captions/minutes', CaptionMinutesGet);
+videoRouter.post('/:videoId/captions/translations', CaptionTranslateCreate);
+// Viewer-side translated title and description (AUN-CAPTIONS §5.9, O6: on, channel opt-out, admin pause)
+videoRouter.get('/:videoId/translated-metadata', VideoTranslatedMetadataGet);
 
 // Audio tracks (wiki AUN-MULTI-AUDIO; owner or video.edit). The chunk upload is a raw route (endpoints/audio/upload.ts)
 videoRouter.get('/:videoId/audio-tracks', AudioTracksList);

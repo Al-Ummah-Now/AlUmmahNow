@@ -316,6 +316,8 @@ export default function VideoEdit({
             labels={{ en: t.video.titleEnglish ?? t.bulkEdit.rename.langEn, ar: t.video.titleArabic ?? t.bulkEdit.rename.langAr }}
             textOf={(lang) => (lang === 'en' ? formData.titleEn : formData.titleAr)}
             onTranslated={(lang, text) => handleInputChange(lang === 'en' ? 'titleEn' : 'titleAr', text)}
+            field="title"
+            videoId={video.id}
             idPrefix="video-edit-title"
             testId="video-edit-title-pair"
           >
@@ -338,6 +340,8 @@ export default function VideoEdit({
             labels={{ en: t.video.descriptionEnglish ?? t.bulkEdit.fields.descriptionEn, ar: t.video.descriptionArabic ?? t.bulkEdit.fields.descriptionAr }}
             textOf={(lang) => (lang === 'en' ? formData.descriptionEn : formData.descriptionAr)}
             onTranslated={(lang, text) => handleInputChange(lang === 'en' ? 'descriptionEn' : 'descriptionAr', text)}
+            field="description"
+            videoId={video.id}
             idPrefix="video-edit-description"
             testId="video-edit-description-pair"
           >

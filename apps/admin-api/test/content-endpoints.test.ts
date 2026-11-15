@@ -650,3 +650,62 @@ describe('content endpoints: soft deletes', () => {
     assert.equal(log.length, 0);
   });
 });
+
+describe('content endpoints: caption and translation settings', () => {
+  const view = (settings: Record<string, unknown>) => ({
+    settings,
+    deeplKeyBound: false,
+    editions: [{ language: 'en', id: 20, name: 'Saheeh International', source: 'default' }],
+    translations30d: [],
+  });
+
+  it('a settings change needs creators:manage, is audited with the previous settings, and the page reads the history back', async () => {
+    const { db, log } = fakeDb();
+    let settings: Record<string, unknown> = { inline: { enabled: true, dailyItems: 100, monthlyBudgetUsd: 20 }, viewerTitles: { enabled: false } };
+    const { fetcher, calls } = fakeVideos({
+      'GET /captions/settings': () => ({ body: { success: true, result: view(settings) } }),
+      'PUT /captions/settings': (call) => {
+        settings = { ...settings, ...(call.body as object) };
+        return { body: { success: true, result: { settings } } };
+      },
+    });
+    const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
+    const pause = { inline: { enabled: false, dailyItems: 100, monthlyBudgetUsd: 20 } };
+    assert.equal((await call('/api/content/captions/settings', { method: 'PUT', roles: 'moderator', json: pause })).status, 403);
+    assert.ok(!calls.some((c) => c.method === 'PUT'), 'a moderator change never reaches api-videos');
+
+    assert.equal((await call('/api/content/captions/settings', { method: 'PUT', roles: 'admin', user: 'admin-7', json: pause })).status, 200);
+    assert.equal(log.length, 1);
+    assert.equal(log[0].key, 'content:captions-settings:settings');
+    assert.deepEqual(JSON.parse(log[0].new_value), { action: 'edit', details: pause });
+    assert.deepEqual(JSON.parse(log[0].old_value!), { inline: { enabled: true, dailyItems: 100, monthlyBudgetUsd: 20 }, viewerTitles: { enabled: false } });
+    const page = (await (await call('/api/content/captions/settings', { roles: 'moderator' })).json()) as { result: { settings: { inline: { enabled: boolean } }; audit: unknown[] } };
+    assert.equal(page.result.settings.inline.enabled, false);
+    assert.equal(page.result.audit.length, 1);
+  });
+
+  it("the platform's Quran edition: creators:manage, audited with the edition it replaces; a reset is audited too", async () => {
+    const { db, log } = fakeDb();
+    const { fetcher, calls } = fakeVideos({
+      'GET /captions/settings': () => ({ body: { success: true, result: view({}) } }),
+      'GET /captions/quran-translations/editions': (call) => ({ body: { success: true, result: { editions: [{ id: 85, name: 'Abdel Haleem', language: new URLSearchParams(call.search).get('language') }] } } }),
+    });
+    const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
+    const listed = (await (await call('/api/content/captions/quran-translations/editions?language=en', { roles: 'moderator' })).json()) as { result: { editions: Array<{ language: string }> } };
+    assert.equal(listed.result.editions[0].language, 'en');
+    assert.equal((await call('/api/content/captions/quran-translations/editions', { roles: 'admin' })).status, 400);
+
+    assert.equal((await call('/api/content/captions/quran-translations/en', { method: 'PUT', roles: 'moderator', json: { id: 85 } })).status, 403);
+    assert.equal((await call('/api/content/captions/quran-translations/EN!', { method: 'PUT', roles: 'admin', json: { id: 85 } })).status, 400);
+    assert.equal((await call('/api/content/captions/quran-translations/en', { method: 'PUT', roles: 'admin', json: { id: 85 } })).status, 200);
+    assert.equal((await call('/api/content/captions/quran-translations/en', { method: 'DELETE', roles: 'admin' })).status, 200);
+    assert.deepEqual(log.map((r) => [r.key, JSON.parse(r.new_value), r.old_value ? JSON.parse(r.old_value) : null]), [
+      ['content:captions-settings:quran-en', { action: 'quran-edition', details: { language: 'en', edition: 85 } }, { edition: 20, name: 'Saheeh International' }],
+      ['content:captions-settings:quran-en', { action: 'quran-edition-reset', details: { language: 'en' } }, null],
+    ]);
+    assert.deepEqual(calls.filter((c) => c.method !== 'GET').map((c) => [c.method, c.path, c.body]), [
+      ['PUT', '/captions/quran-translations/en', { id: 85 }],
+      ['DELETE', '/captions/quran-translations/en', null],
+    ]);
+  });
+});

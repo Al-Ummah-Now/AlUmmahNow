@@ -24,6 +24,8 @@ import type { CategorizeEnv } from './categorize/job';
 import { isQuranSyncMessage, processQuranSyncMessages, quranSyncMessage, runQuranDaily, type QuranQueueMessage, type QuranSyncEnv } from './quran/sync';
 import { isCaptionJobMessage, processCaptionJobMessages, type CaptionJobEnv, type CaptionJobQueueMessage } from './captions/job';
 import { isSocialMessage, processSocialMessages, type SocialQueueEnv, type SocialQueueMessage } from './social/consumer';
+import { handleInternalTranslate, isMetadataTranslateMessage, processMetadataTranslateMessages, type InlineTranslateEnv, type MetadataTranslateQueueMessage } from './captions/inline';
+import { isCaptionTranslateMessage, processCaptionTranslateMessages, type CaptionTranslateEnv, type CaptionTranslateQueueMessage } from './captions/translate';
 import { captionClaimMessage, claimFromRetryBody, isCaptionClaimMessage, processCaptionClaimMessages, type CaptionClaimEnv, type CaptionClaimQueueMessage } from './captions/claim';
 import { captionClaimKey, type CaptionClaimState } from '@al-ummah/shared-types';
 import type { SearchDb } from '@al-ummah/shared-types';
@@ -413,6 +415,20 @@ async function handleQueue(batch: MessageBatch<AlUmmahMessage>, env: QueueEnviro
     batch = { ...batch, messages: batch.messages.filter((m) => !isSocialMessage(m)) };
     if (batch.messages.length === 0) return;
   }
+  // Transcript translation (AUN-CAPTIONS §5.7): one cue batch per delivery, then the draft
+  const translateJobs = batch.messages.filter(isCaptionTranslateMessage);
+  if (translateJobs.length) {
+    await processCaptionTranslateMessages(translateJobs as unknown as CaptionTranslateQueueMessage[], env as unknown as CaptionTranslateEnv, ctx, logger);
+    batch = { ...batch, messages: batch.messages.filter((m) => !isCaptionTranslateMessage(m)) };
+    if (batch.messages.length === 0) return;
+  }
+  // Viewer-side translated titles (AUN-CAPTIONS §5.9): written back to api-videos
+  const metadataJobs = batch.messages.filter(isMetadataTranslateMessage);
+  if (metadataJobs.length) {
+    await processMetadataTranslateMessages(metadataJobs as unknown as MetadataTranslateQueueMessage[], env as unknown as InlineTranslateEnv, ctx, logger);
+    batch = { ...batch, messages: batch.messages.filter((m) => !isMetadataTranslateMessage(m)) };
+    if (batch.messages.length === 0) return;
+  }
   if (batch.queue?.includes('moderation')) {
     await processModerationBatch(batch, env, logger);
     return;
@@ -511,6 +527,12 @@ async function handleFetch(request: Request, env: QueueEnvironment, ctx?: Execut
   if (url.pathname.startsWith('/internal/review-alerts/') || url.pathname.startsWith('/internal/push-devices')) {
     if (!(await isInternalCaller(request, env))) return json({ error: 'Unauthorized' }, 401);
     return handleReviewAlertsInternal(request, url, env, logger);
+  }
+
+  // Inline title/description translation for api-videos' Translate button (AUN-CAPTIONS §5.8)
+  if (url.pathname === '/internal/translate') {
+    if (!(await isInternalCaller(request, env))) return json({ error: 'Unauthorized' }, 401);
+    return handleInternalTranslate(request, env as unknown as InlineTranslateEnv, logger, ctx);
   }
 
   // A caption claim that gave up, queued again (the Errors page's "Try again")

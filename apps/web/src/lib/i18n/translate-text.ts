@@ -1,16 +1,34 @@
 'use client';
 
 /**
- * Extension point for "Translate" beside English/Arabic field pairs
- * (BilingualPair). No provider is registered yet: the inline-translation
- * track registers one with `registerTranslator`, and every pair (bulk edit,
- * upload "Set values", the video editor) then shows a Translate button
- * (English → Arabic, or Arabic → English). Until then nothing is shown.
+ * "Translate" beside English/Arabic field pairs (BilingualPair; AUN-CAPTIONS §5.8). Signed-in
+ * visitors get a translator backed by POST /api/translate (InlineTranslatorRegistrar); every pair
+ * (bulk edit, upload "Set values", the video editor, playlists) then shows a Translate button
+ * (English → Arabic, or Arabic → English). Signed out, nothing is shown.
  */
 import { useSyncExternalStore } from 'react';
-import type { TitleLanguage } from '@al-ummah/shared-types';
+import type { InlineTranslateField, TitleLanguage } from '@al-ummah/shared-types';
 
-export type Translator = (text: string, from: TitleLanguage, to: TitleLanguage) => Promise<string>;
+/** What is being translated: the field kind, and the video it belongs to (its title is used as context). */
+export interface TranslateContext {
+  field?: InlineTranslateField;
+  videoId?: string;
+}
+
+export type Translator = (text: string, from: TitleLanguage, to: TitleLanguage, context?: TranslateContext) => Promise<string>;
+
+export type TranslateFailureCode = 'fair_use_limit' | 'translation_paused' | 'budget_spent' | 'failed';
+
+/** A refusal the pair explains to the creator (the daily limit with its reset time, paused, budget spent). */
+export class TranslateFailure extends Error {
+  constructor(
+    readonly code: TranslateFailureCode,
+    readonly resetsAt?: string,
+  ) {
+    super(code);
+    this.name = 'TranslateFailure';
+  }
+}
 
 let current: Translator | null = null;
 const listeners = new Set<() => void>();

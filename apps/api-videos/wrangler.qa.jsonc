@@ -15,8 +15,9 @@
     "head_sampling_rate": 1,
     "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": false }
   },
-  // The media Worker (apps/media): the Transcoder's job view and the admin's Cancel / Retry now (lib/media/troubleshoot.ts)
-  "services": [{ "binding": "MEDIA_WORKER", "service": "al-ummah-now-media-qa" }],
+  // The media Worker (apps/media): the Transcoder's job view and the admin's Cancel / Retry now (lib/media/troubleshoot.ts);
+  // inline title/description translation runs in the processor (AUN-CAPTIONS §5.8)
+  "services": [{ "binding": "MEDIA_WORKER", "service": "al-ummah-now-media-qa" }, { "binding": "PROCESSOR", "service": "al-ummah-now-processor-qa" }],
   // Per-video view counter (realtime worker, apps/websocket-server/src/view-counter.ts). Cross-script binding: the class lives in the comms worker of the same environment.
   "durable_objects": {
     "bindings": [
@@ -271,6 +272,17 @@
       "secret_name": "internal-api-key-qa"
     },
     {
+      // Quran Foundation translations for translated caption tracks (AUN-CAPTIONS O7): the production client, as the processor
+      "binding": "QF_CLIENT_ID",
+      "store_id": "f8eddc9944d041919ed8dc7d08d32308",
+      "secret_name": "quran-foundation-prod-client-id"
+    },
+    {
+      "binding": "QF_CLIENT_SECRET",
+      "store_id": "f8eddc9944d041919ed8dc7d08d32308",
+      "secret_name": "quran-foundation-prod-client-secret"
+    },
+    {
       // Bunny Stream CDN token authentication key (signs video URLs)
       "binding": "BUNNY_TOKEN_KEY",
       "store_id": "f8eddc9944d041919ed8dc7d08d32308",
@@ -301,6 +313,9 @@
     }
   ],
   "vars": {
+    // Quran Foundation hosts (translated caption tracks, AUN-CAPTIONS O7): production QF in every env
+    "QF_OAUTH_HOST": "https://oauth2.quran.foundation",
+    "QF_API_HOST": "https://apis.quran.foundation",
     // Pre-publication video review (wiki AUN-VIDEO-REVIEW): production only, never QA
     "VIDEO_REVIEW_ALLOWED": "false",
     // Self-hosted live edge host (custom domain on this worker, attached with the Workers domains API like videos.api.qa)

@@ -7,6 +7,8 @@ import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { removeUnwantedChars } from '@/lib/utility';
 import { WatchChannelMeta } from './WatchSubscribe';
+import { useLanguage } from '@/hooks/useLanguage';
+import { useViewerTranslation } from '@/hooks/useViewerTranslation';
 import type { PlayerOptions } from './interface';
 
 interface VideoDetailsProps {
@@ -21,10 +23,14 @@ interface VideoDetailsProps {
  * Title, then one row: channel avatar, the name (linking to the channel) over
  * its subscriber count, and Subscribe. Shared by both reading directions.
  * Videos without a channel id (legacy imports) have no channel to link to or
- * subscribe to, so they show the avatar and name only.
+ * subscribe to, so they show the avatar and name only. A viewer of another
+ * language may see a machine translation of the title (admin switch, off by
+ * default), labelled, with "Show original".
  */
 export function VideoDetails({ title, channelName, channelHref, options, avatarAlt = '' }: VideoDetailsProps) {
   const { user, loading } = useMultiAccount();
+  const { t, lang } = useLanguage();
+  const viewer = useViewerTranslation(options, lang);
   // Kept across the remount when the account changes, so the count doesn't blank
   const lastCount = useRef<number | undefined>(undefined);
   const rememberCount = useCallback((count: number) => { lastCount.current = count; }, []);
@@ -36,7 +42,17 @@ export function VideoDetails({ title, channelName, channelHref, options, avatarA
     : <span className="watch-channel-name">{name}{badge}</span>;
   return (
     <div className="watch-details">
-      <h1 className="watch-title">{removeUnwantedChars(title)}</h1>
+      <h1 className="watch-title" {...(viewer.showing ? { lang: viewer.translation!.lang, dir: 'auto' } : {})} data-testid="watch-title" data-machine-translation={viewer.showing || undefined}>
+        {removeUnwantedChars(viewer.showing ? viewer.translation!.title : title)}
+      </h1>
+      {viewer.translation && (
+        <p className="watch-mt" data-testid="watch-machine-translation">
+          {viewer.showing && <span>{t.captions.viewer.translatedTitle}</span>}
+          <button type="button" className="watch-mt-toggle" onClick={viewer.toggle} aria-pressed={!viewer.showing} data-testid="watch-translation-toggle">
+            {viewer.showing ? t.captions.viewer.showOriginal : t.captions.viewer.showTranslation}
+          </button>
+        </p>
+      )}
       <div className="watch-channel" data-testid="watch-channel">
         {channelHref ? <Link href={channelHref} className="watch-avatar" tabIndex={-1} aria-hidden={avatarAlt ? undefined : true}>{avatar}</Link> : <span className="watch-avatar">{avatar}</span>}
         {options.channelId ? (

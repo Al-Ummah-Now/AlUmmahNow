@@ -289,6 +289,11 @@ app.use('/api/community/media/upload/images', rateLimitMiddleware('image_upload'
 app.use('/api/community/media/upload/gif', rateLimitMiddleware('image_upload'));
 app.use('/api/community/media/link-preview', rateLimitMiddleware('image_upload'));
 app.use('/api/videos/:id/thumbnail', rateLimitMiddleware('image_upload'));
+// Translate button (AUN-CAPTIONS §5.8): the daily fair-use limit counts texts; this caps request bursts
+app.use('/api/translate', rateLimitMiddleware('inline_translate', {
+	limits: () => ({ perMinute: 20, perHour: 200, perDay: 1000, maxConcurrent: 3 }),
+	methods: ['POST'],
+}));
 // AI category suggestions: forms debounce typing; this caps a client that does not
 app.use('/api/videos/category-suggestions', rateLimitMiddleware('category_suggest', {
 	limits: () => ({ perMinute: 10, perHour: 60, perDay: 300, maxConcurrent: 3 }),

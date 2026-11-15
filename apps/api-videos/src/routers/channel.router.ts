@@ -1,4 +1,6 @@
 import { Hono } from 'hono';
+import { ChannelTranslationSettingsGet, ChannelTranslationSettingsSet } from '../endpoints/translate/translate';
+import { ChannelQuranTranslationReset, ChannelQuranTranslationSet, ChannelQuranTranslationsGet } from '../endpoints/quran/quranTranslations';
 import { fromHono } from 'chanfana';
 import { ChannelContentList, ChannelContentSummary } from '../endpoints/channel/channelContent';
 import { ChannelDeletedVideos } from '../endpoints/video/videoTrash';
@@ -67,6 +69,13 @@ channelRouter.get('/handles/:handle/availability', ChannelHandleAvailability);
 // My channels with my role on each (owned + channel roles); before '/:id'
 channelRouter.get('/access', ChannelAccessList);
 channelRouter.get('/by-handle/:handle', ChannelByHandleFetch);
+
+// Quran translation editions and translation settings (AUN-CAPTIONS O7, §5.9; channel.edit)
+channelRouter.get('/:channelId/quran-translations', ChannelQuranTranslationsGet);
+channelRouter.put('/:channelId/quran-translations/:language', ChannelQuranTranslationSet);
+channelRouter.delete('/:channelId/quran-translations/:language', ChannelQuranTranslationReset);
+channelRouter.get('/:channelId/translation-settings', ChannelTranslationSettingsGet);
+channelRouter.put('/:channelId/translation-settings', ChannelTranslationSettingsSet);
 
 // Get channel by ID (public)
 channelRouter.get('/:id', ChannelFetch);

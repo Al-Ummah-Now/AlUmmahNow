@@ -49,7 +49,8 @@ export interface CaptionDraft {
   /** Goes up by one on every save */
   version: number;
   kind: 'source' | 'translation';
-  /** Translations: the source draft version they were made from */
+  /** Translations: the source draft's language and the version they were made from */
+  sourceLanguage?: string;
   sourceVersion?: number;
   origin: CaptionDraftOrigin;
   /** The creator changed the machine output (the published track is then `machine_edited`) */
@@ -219,9 +220,17 @@ export const CONFIDENT_QURAN_CLASSES: ReadonlySet<CaptionQuranStatus> = new Set(
 const MARK_OPEN = '\uE000';
 const MARK_CLOSE = '\uE001';
 const MARK_CHARS = /[\uE000\uE001]/g;
-const MARKER = /\uE000Q\|([tr])\|([0-9:-]{5,32})\uE001/g;
+const MARKER = /\uE000Q\|([trx])\|([0-9:-]{5,32})\uE001/g;
 
-export type CaptionMarkerMode = 'text' | 'reference';
+/**
+ * - `text`: the official Arabic text (an accepted span in a source track, or an Arabic translation)
+ * - `translation`: the official translation of the channel's chosen QF edition for the track's
+ *   language, fetched live (an accepted span in a translated track, AUN-CAPTIONS §5.7). Quran is
+ *   never machine-translated: with no edition for the language it shows the Arabic text.
+ * - `reference`: a suggestion not confirmed yet: a reference with a quran.com link, no text
+ */
+export type CaptionMarkerMode = 'text' | 'translation' | 'reference';
+const MODE_CODE: Record<CaptionMarkerMode, string> = { text: 't', translation: 'x', reference: 'r' };
 
 function cleanText(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -331,7 +340,15 @@ const escapeVtt = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&
 
 /** A published Quran marker: filled when the track is served (fillCaptionQuranMarkers). */
 export function captionQuranMarker(range: string, mode: CaptionMarkerMode): string {
-  return `${MARK_OPEN}Q|${mode === 'text' ? 't' : 'r'}|${range}${MARK_CLOSE}`;
+  return `${MARK_OPEN}Q|${MODE_CODE[mode]}|${range}${MARK_CLOSE}`;
+}
+
+/** Languages whose Quran is the Arabic text itself (no translation edition). */
+export const isArabicCaptionLanguage = (language: string) => language.split('-')[0]!.toLowerCase() === 'ar';
+
+/** How an accepted span of a draft is published (a translated track shows the official translation). */
+export function acceptedMarkerMode(draft: Pick<CaptionDraft, 'kind' | 'language'>): CaptionMarkerMode {
+  return draft.kind === 'translation' && !isArabicCaptionLanguage(draft.language) ? 'translation' : 'text';
 }
 
 /**
@@ -339,12 +356,13 @@ export function captionQuranMarker(range: string, mode: CaptionMarkerMode): stri
  * for a span the creator accepted, `reference` for one still a suggestion. No Quran text and no
  * ASR text of a Quran span is written.
  */
-export function renderCaptionVtt(draft: Pick<CaptionDraft, 'language' | 'cues'>): string {
+export function renderCaptionVtt(draft: Pick<CaptionDraft, 'language' | 'cues'> & Partial<Pick<CaptionDraft, 'kind'>>): string {
   const rtl = RTL_CAPTION_LANGUAGES.has(draft.language.split('-')[0]!.toLowerCase());
+  const accepted = acceptedMarkerMode({ kind: draft.kind ?? 'source', language: draft.language });
   const out = ['WEBVTT', ''];
   for (const cue of draft.cues) {
     const body = cue.segments
-      .map((s) => (s.type === 'speech' ? escapeVtt(s.text) : captionQuranMarker(s.range, s.status === 'accepted' ? 'text' : 'reference')))
+      .map((s) => (s.type === 'speech' ? escapeVtt(s.text) : captionQuranMarker(s.range, s.status === 'accepted' ? accepted : 'reference')))
       .join(' ')
       .split('\n')
       .map((line) => (rtl ? `‏${line.trim()}` : line.trim()))
@@ -377,19 +395,49 @@ export function quranCueText(text: string, surahName: string, range: string, lan
 }
 
 /**
+ * The official translation of an accepted span as a translated cue shows it, with the edition name
+ * (O7) and the reference: “text” (Saheeh International · Āl ʿImrān 3:166–167). Never trimmed.
+ */
+export function quranTranslationCueText(text: string, edition: string, surahName: string, range: string): string {
+  const r = parseQuranRange(range);
+  const label = r ? quranAyahLabel(r) : range;
+  return `“${escapeVtt(text)}” (${escapeVtt(edition)} · ${escapeVtt(surahName)} ${label})`;
+}
+
+/**
  * Replaces each marker of a published track. `resolve` returns the official cue text of a range
  * (quranCueText) or null when there is none (no fresh copy, range not found): the reference then.
+ * `resolveTranslation` does the same for a translated track's spans (quranTranslationCueText, or the
+ * Arabic cue text when the language has no edition); null (Quran Foundation unreachable) shows the
+ * reference with a quran.com link. Without it a translated span shows the Arabic text.
  */
 export async function fillCaptionQuranMarkers(
   vtt: string,
   language: string,
   resolve: (range: string) => Promise<string | null>,
+  resolveTranslation?: (range: string) => Promise<string | null>,
 ): Promise<string> {
   const wanted = new Set<string>();
-  for (const m of vtt.matchAll(MARKER)) if (m[1] === 't') wanted.add(m[2]!);
+  const wantedTr = new Set<string>();
+  for (const m of vtt.matchAll(MARKER)) {
+    if (m[1] === 't') wanted.add(m[2]!);
+    else if (m[1] === 'x') wantedTr.add(m[2]!);
+  }
   const texts = new Map<string, string | null>();
+  const translations = new Map<string, string | null>();
+  for (const range of wantedTr) {
+    if (resolveTranslation) translations.set(range, await resolveTranslation(range).catch(() => null));
+    else wanted.add(range);
+  }
   for (const range of wanted) texts.set(range, await resolve(range).catch(() => null));
   return vtt
-    .replace(MARKER, (_, mode: string, range: string) => (mode === 't' && texts.get(range)) || quranReferenceText(range, language))
+    .replace(MARKER, (_, mode: string, range: string) => (mode === 'x' ? (resolveTranslation ? translations.get(range) : texts.get(range)) : mode === 't' ? texts.get(range) : null) || quranReferenceText(range, language))
     .replace(MARK_CHARS, '');
+}
+
+/** The ranges of a track's markers, per mode (the serving side fetches what it needs). */
+export function captionMarkerRanges(vtt: string): { text: string[]; translation: string[]; reference: string[] } {
+  const out = { text: new Set<string>(), translation: new Set<string>(), reference: new Set<string>() };
+  for (const m of vtt.matchAll(MARKER)) (m[1] === 't' ? out.text : m[1] === 'x' ? out.translation : out.reference).add(m[2]!);
+  return { text: [...out.text], translation: [...out.translation], reference: [...out.reference] };
 }

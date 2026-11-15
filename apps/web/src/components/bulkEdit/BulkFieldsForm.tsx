@@ -108,6 +108,7 @@ export function BulkFieldsForm({ variant, form, onChange, subjects, fields, play
             tickTestId={(lang) => `bulk-${variant}-desc-${lang}-enabled`}
             textOf={(lang) => form.description[lang].text}
             onTranslated={(lang, text) => setDescription(lang, { text })}
+            field="description"
             idPrefix={`bulk-${variant}-desc-pair`}
             testId={`bulk-${variant}-desc-pair`}
           >

@@ -93,6 +93,8 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/categories', label: 'nav.categories', icon: 'tag', group: 'content' },
   { href: '/category-suggestions', label: 'nav.categorySuggestions', icon: 'tag', group: 'content' },
   { href: '/translations', label: 'nav.translations', icon: 'globe', group: 'content' },
+  // Captions & translation (AUN-CAPTIONS): budgets, models, DeepL, inline fair use, viewer titles, Quran editions; creators:manage changes
+  { href: '/captions-settings', label: 'nav.captionSettings', icon: 'sliders', group: 'content' },
 
   { href: '/users', label: 'nav.users', icon: 'user', group: 'people' },
   // Creator tier limits (a user's tier is set on the Users list and the user page); every admin reads, creators:manage changes

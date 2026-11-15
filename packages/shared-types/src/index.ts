@@ -10,6 +10,8 @@ export * from './captions';
 export * from './caption-minutes';
 export * from './caption-jobs';
 export * from './audio-tracks';
+export * from './caption-translation';
+export * from './inline-translation';
 export * from './channel-name';
 export * from './video-format';
 export * from './video-format-ops';

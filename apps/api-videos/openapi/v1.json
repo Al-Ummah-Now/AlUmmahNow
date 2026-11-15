@@ -3137,6 +3137,557 @@
         }
       }
     },
+    "/api/v1/channels/{channelId}/quran-translations": {
+      "get": {
+        "tags": [
+          "Quran"
+        ],
+        "summary": "A channel's Quran translation editions",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nPer language: the edition translated caption tracks show, and whether the channel picked it, the platform set it, or it is the shipped default.",
+        "operationId": "get_ChannelQuranTranslationsGet",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Channel ID"
+            },
+            "required": true,
+            "description": "Channel ID",
+            "name": "channelId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Editions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "editions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "language": {
+                                "type": "string"
+                              },
+                              "id": {
+                                "type": "number"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "source": {
+                                "type": "string",
+                                "enum": [
+                                  "channel",
+                                  "platform",
+                                  "default"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "language",
+                              "id",
+                              "name",
+                              "source"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "editions"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Channel not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/channels/{channelId}/quran-translations/{language}": {
+      "put": {
+        "tags": [
+          "Quran"
+        ],
+        "summary": "Pick a channel's Quran translation edition for a language",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nThe id must be a Quran Foundation edition of that language. 503 while Quran Foundation cannot be reached (nothing changes).",
+        "operationId": "put_ChannelQuranTranslationSet",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Channel ID"
+            },
+            "required": true,
+            "description": "Channel ID",
+            "name": "channelId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "ISO 639-1"
+            },
+            "required": true,
+            "description": "ISO 639-1",
+            "name": "language",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  }
+                },
+                "required": [
+                  "id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "editions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "language": {
+                                "type": "string"
+                              },
+                              "id": {
+                                "type": "number"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "source": {
+                                "type": "string",
+                                "enum": [
+                                  "channel",
+                                  "platform",
+                                  "default"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "language",
+                              "id",
+                              "name",
+                              "source"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "editions"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`unknown_edition` or `invalid_language`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Channel not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Quran Foundation unreachable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Quran"
+        ],
+        "summary": "Use the platform's Quran translation edition for a language again",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).",
+        "operationId": "delete_ChannelQuranTranslationReset",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Channel ID"
+            },
+            "required": true,
+            "description": "Channel ID",
+            "name": "channelId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "ISO 639-1"
+            },
+            "required": true,
+            "description": "ISO 639-1",
+            "name": "language",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reset",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "editions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "language": {
+                                "type": "string"
+                              },
+                              "id": {
+                                "type": "number"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "source": {
+                                "type": "string",
+                                "enum": [
+                                  "channel",
+                                  "platform",
+                                  "default"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "language",
+                              "id",
+                              "name",
+                              "source"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "editions"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Channel not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/channels/{channelId}/sections": {
       "get": {
         "tags": [
@@ -4474,6 +5025,285 @@
                     }
                   },
                   "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/channels/{channelId}/translation-settings": {
+      "get": {
+        "tags": [
+          "Translation"
+        ],
+        "summary": "A channel's translation settings",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).",
+        "operationId": "get_ChannelTranslationSettingsGet",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Channel ID"
+            },
+            "required": true,
+            "description": "Channel ID",
+            "name": "channelId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "viewerTitles": {
+                          "type": "boolean",
+                          "description": "Viewers of other languages may see a machine translation of titles and descriptions (when the platform has it on)"
+                        },
+                        "platformEnabled": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "viewerTitles",
+                        "platformEnabled"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Channel not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Translation"
+        ],
+        "summary": "Change a channel's translation settings",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).",
+        "operationId": "put_ChannelTranslationSettingsSet",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Channel ID"
+            },
+            "required": true,
+            "description": "Channel ID",
+            "name": "channelId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "viewerTitles": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "viewerTitles"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "viewerTitles": {
+                          "type": "boolean",
+                          "description": "Viewers of other languages may see a machine translation of titles and descriptions (when the platform has it on)"
+                        },
+                        "platformEnabled": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "viewerTitles",
+                        "platformEnabled"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Channel not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
                     "error"
                   ]
                 }
@@ -27407,6 +28237,108 @@
         }
       }
     },
+    "/api/v1/quran/translations": {
+      "get": {
+        "tags": [
+          "Quran"
+        ],
+        "summary": "Quran translation editions",
+        "description": "The Quran Foundation translation editions, optionally for one language (ISO 639-1). 503 while Quran Foundation cannot be reached.",
+        "operationId": "get_QuranTranslationsList",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "language",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Editions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "editions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "number"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "author": {
+                                "type": "string"
+                              },
+                              "language": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "language"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "editions"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Quran Foundation unreachable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/recommendations": {
       "get": {
         "tags": [
@@ -29719,6 +30651,386 @@
                     "success",
                     "error"
                   ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/translate": {
+      "post": {
+        "tags": [
+          "Translation"
+        ],
+        "summary": "Translate titles or descriptions",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nA machine-translation suggestion for each text (the Translate button beside a title or description), to review before saving. Free with a daily fair-use limit per user (`429 fair_use_limit` with `limit`, `used` and `resetsAt`); answers served from the cache are not counted. Text inside {…} is a Quran quotation: it stays as written, followed by its reference when it is found in exactly one place. With `videoId` the caller must be able to edit that video. `503 translation_paused` while an admin has paused translation, `503 budget_spent` once the day's translation budget is spent.",
+        "operationId": "post_TranslateCreate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^[A-Za-z0-9_.:-]{1,80}$"
+                        },
+                        "text": {
+                          "type": "string",
+                          "maxLength": 5000
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "text"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 50
+                  },
+                  "from": {
+                    "type": "string",
+                    "description": "Language of the texts (ISO 639-1)"
+                  },
+                  "to": {
+                    "type": "string",
+                    "description": "Language wanted"
+                  },
+                  "field": {
+                    "type": "string",
+                    "enum": [
+                      "title",
+                      "description",
+                      "tag",
+                      "playlist",
+                      "post"
+                    ],
+                    "default": "title"
+                  },
+                  "videoId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "items",
+                  "from",
+                  "to"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Suggestions, in the order asked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "text": {
+                                "type": "string"
+                              },
+                              "quran": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "range": {
+                                      "type": "string"
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "range",
+                                    "label"
+                                  ]
+                                }
+                              },
+                              "cached": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "text",
+                              "cached"
+                            ]
+                          }
+                        },
+                        "provider": {
+                          "type": "string"
+                        },
+                        "machineTranslation": {
+                          "type": "boolean",
+                          "enum": [
+                            true
+                          ]
+                        },
+                        "fairUse": {
+                          "type": "object",
+                          "properties": {
+                            "used": {
+                              "type": "number"
+                            },
+                            "limit": {
+                              "type": "number",
+                              "description": "Texts per UTC day; cache hits are not counted"
+                            },
+                            "resetsAt": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "used",
+                            "limit",
+                            "resetsAt"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "items",
+                        "provider",
+                        "machineTranslation",
+                        "fairUse"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed to edit the video",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Daily fair-use limit reached",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Paused by an admin, or the day's budget is spent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/translate/usage": {
+      "get": {
+        "tags": [
+          "Translation"
+        ],
+        "summary": "Today's translation allowance",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).",
+        "operationId": "get_TranslateUsageGet",
+        "responses": {
+          "200": {
+            "description": "Allowance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "enabled": {
+                          "type": "boolean"
+                        },
+                        "fairUse": {
+                          "type": "object",
+                          "properties": {
+                            "used": {
+                              "type": "number"
+                            },
+                            "limit": {
+                              "type": "number",
+                              "description": "Texts per UTC day; cache hits are not counted"
+                            },
+                            "resetsAt": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "used",
+                            "limit",
+                            "resetsAt"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "enabled",
+                        "fairUse"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
                 }
               }
             }
@@ -48173,6 +49485,14 @@
                               "updatedAt": {
                                 "type": "string"
                               },
+                              "sourceLanguage": {
+                                "type": "string",
+                                "description": "A machine translation: the draft it was translated from"
+                              },
+                              "sourceVersion": {
+                                "type": "number",
+                                "description": "A machine translation: the source draft version translated"
+                              },
                               "publishedVersion": {
                                 "type": "number"
                               },
@@ -48490,6 +49810,14 @@
                         "updatedAt": {
                           "type": "string"
                         },
+                        "sourceLanguage": {
+                          "type": "string",
+                          "description": "A machine translation: the draft it was translated from"
+                        },
+                        "sourceVersion": {
+                          "type": "number",
+                          "description": "A machine translation: the source draft version translated"
+                        },
                         "publishedVersion": {
                           "type": "number"
                         },
@@ -48706,6 +50034,14 @@
                         },
                         "updatedAt": {
                           "type": "string"
+                        },
+                        "sourceLanguage": {
+                          "type": "string",
+                          "description": "A machine translation: the draft it was translated from"
+                        },
+                        "sourceVersion": {
+                          "type": "number",
+                          "description": "A machine translation: the source draft version translated"
                         },
                         "publishedVersion": {
                           "type": "number"
@@ -49095,6 +50431,14 @@
                             },
                             "updatedAt": {
                               "type": "string"
+                            },
+                            "sourceLanguage": {
+                              "type": "string",
+                              "description": "A machine translation: the draft it was translated from"
+                            },
+                            "sourceVersion": {
+                              "type": "number",
+                              "description": "A machine translation: the source draft version translated"
                             },
                             "publishedVersion": {
                               "type": "number"
@@ -49586,8 +50930,31 @@
                               "videoId": {
                                 "type": "string"
                               },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "transcribe",
+                                  "translate"
+                                ],
+                                "description": "transcribe: speech to a draft; translate: a draft into another language"
+                              },
                               "language": {
-                                "type": "string"
+                                "type": "string",
+                                "description": "The draft's language (spoken, or the translation's target)"
+                              },
+                              "sourceLanguage": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "description": "translate: the source draft"
+                              },
+                              "sourceVersion": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ],
+                                "description": "translate: the source draft version translated"
                               },
                               "replace": {
                                 "type": "boolean",
@@ -49600,6 +50967,7 @@
                                   "waiting_budget",
                                   "extracting",
                                   "transcribing",
+                                  "translating",
                                   "postprocessing",
                                   "ready",
                                   "failed",
@@ -49649,6 +51017,9 @@
                                   "no_speech",
                                   "draft_exists",
                                   "video_gone",
+                                  "source_missing",
+                                  "source_changed",
+                                  "translation_failed",
                                   "failed"
                                 ]
                               },
@@ -49668,7 +51039,10 @@
                             "required": [
                               "id",
                               "videoId",
+                              "kind",
                               "language",
+                              "sourceLanguage",
+                              "sourceVersion",
                               "replace",
                               "status",
                               "progress",
@@ -49834,8 +51208,31 @@
                             "videoId": {
                               "type": "string"
                             },
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "transcribe",
+                                "translate"
+                              ],
+                              "description": "transcribe: speech to a draft; translate: a draft into another language"
+                            },
                             "language": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "The draft's language (spoken, or the translation's target)"
+                            },
+                            "sourceLanguage": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "description": "translate: the source draft"
+                            },
+                            "sourceVersion": {
+                              "type": [
+                                "number",
+                                "null"
+                              ],
+                              "description": "translate: the source draft version translated"
                             },
                             "replace": {
                               "type": "boolean",
@@ -49848,6 +51245,7 @@
                                 "waiting_budget",
                                 "extracting",
                                 "transcribing",
+                                "translating",
                                 "postprocessing",
                                 "ready",
                                 "failed",
@@ -49897,6 +51295,9 @@
                                 "no_speech",
                                 "draft_exists",
                                 "video_gone",
+                                "source_missing",
+                                "source_changed",
+                                "translation_failed",
                                 "failed"
                               ]
                             },
@@ -49916,7 +51317,10 @@
                           "required": [
                             "id",
                             "videoId",
+                            "kind",
                             "language",
+                            "sourceLanguage",
+                            "sourceVersion",
                             "replace",
                             "status",
                             "progress",
@@ -49975,8 +51379,31 @@
                             "videoId": {
                               "type": "string"
                             },
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "transcribe",
+                                "translate"
+                              ],
+                              "description": "transcribe: speech to a draft; translate: a draft into another language"
+                            },
                             "language": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "The draft's language (spoken, or the translation's target)"
+                            },
+                            "sourceLanguage": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "description": "translate: the source draft"
+                            },
+                            "sourceVersion": {
+                              "type": [
+                                "number",
+                                "null"
+                              ],
+                              "description": "translate: the source draft version translated"
                             },
                             "replace": {
                               "type": "boolean",
@@ -49989,6 +51416,7 @@
                                 "waiting_budget",
                                 "extracting",
                                 "transcribing",
+                                "translating",
                                 "postprocessing",
                                 "ready",
                                 "failed",
@@ -50038,6 +51466,9 @@
                                 "no_speech",
                                 "draft_exists",
                                 "video_gone",
+                                "source_missing",
+                                "source_changed",
+                                "translation_failed",
                                 "failed"
                               ]
                             },
@@ -50057,7 +51488,10 @@
                           "required": [
                             "id",
                             "videoId",
+                            "kind",
                             "language",
+                            "sourceLanguage",
+                            "sourceVersion",
                             "replace",
                             "status",
                             "progress",
@@ -50416,8 +51850,31 @@
                             "videoId": {
                               "type": "string"
                             },
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "transcribe",
+                                "translate"
+                              ],
+                              "description": "transcribe: speech to a draft; translate: a draft into another language"
+                            },
                             "language": {
-                              "type": "string"
+                              "type": "string",
+                              "description": "The draft's language (spoken, or the translation's target)"
+                            },
+                            "sourceLanguage": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "description": "translate: the source draft"
+                            },
+                            "sourceVersion": {
+                              "type": [
+                                "number",
+                                "null"
+                              ],
+                              "description": "translate: the source draft version translated"
                             },
                             "replace": {
                               "type": "boolean",
@@ -50430,6 +51887,7 @@
                                 "waiting_budget",
                                 "extracting",
                                 "transcribing",
+                                "translating",
                                 "postprocessing",
                                 "ready",
                                 "failed",
@@ -50479,6 +51937,9 @@
                                 "no_speech",
                                 "draft_exists",
                                 "video_gone",
+                                "source_missing",
+                                "source_changed",
+                                "translation_failed",
                                 "failed"
                               ]
                             },
@@ -50498,7 +51959,10 @@
                           "required": [
                             "id",
                             "videoId",
+                            "kind",
                             "language",
+                            "sourceLanguage",
+                            "sourceVersion",
                             "replace",
                             "status",
                             "progress",
@@ -50809,6 +52273,397 @@
           },
           "404": {
             "description": "Video not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/videos/{videoId}/captions/translations": {
+      "post": {
+        "tags": [
+          "Captions"
+        ],
+        "summary": "Translate a caption draft into other languages",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nStarts one background job per target language over the source draft as it is now (the creator's corrected text). Quran is never machine-translated: Quran spans stay references and the player shows the official translation of the channel's edition. Each language reserves `ceil(duration in minutes)` caption minutes; 402 `upgrade_required` refuses the whole request (nothing starts). 409 `draft_exists` (with `language`) unless `replace`; 404 `source_missing`; 503 `translation_paused` while an admin has it switched off.",
+        "operationId": "post_CaptionTranslateCreate",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video ID"
+            },
+            "required": true,
+            "description": "Video ID",
+            "name": "videoId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sourceLanguage": {
+                    "type": "string",
+                    "description": "The source draft language"
+                  },
+                  "languages": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 1,
+                    "maxItems": 6
+                  },
+                  "replace": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "sourceLanguage",
+                  "languages"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Started (or already running)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "jobs": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "videoId": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "transcribe",
+                                  "translate"
+                                ],
+                                "description": "transcribe: speech to a draft; translate: a draft into another language"
+                              },
+                              "language": {
+                                "type": "string",
+                                "description": "The draft's language (spoken, or the translation's target)"
+                              },
+                              "sourceLanguage": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "description": "translate: the source draft"
+                              },
+                              "sourceVersion": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ],
+                                "description": "translate: the source draft version translated"
+                              },
+                              "replace": {
+                                "type": "boolean",
+                                "description": "Replaces the existing draft of the language when it ends"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "queued",
+                                  "waiting_budget",
+                                  "extracting",
+                                  "transcribing",
+                                  "translating",
+                                  "postprocessing",
+                                  "ready",
+                                  "failed",
+                                  "cancelled"
+                                ]
+                              },
+                              "progress": {
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
+                                "properties": {
+                                  "done": {
+                                    "type": "number"
+                                  },
+                                  "total": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "done",
+                                  "total"
+                                ],
+                                "description": "Audio chunks transcribed"
+                              },
+                              "minutesReserved": {
+                                "type": "number"
+                              },
+                              "minutesCharged": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "waived": {
+                                "type": "boolean",
+                                "description": "Run again by an admin free of charge"
+                              },
+                              "error": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ],
+                                "enum": [
+                                  "audio_unavailable",
+                                  "transcription_failed",
+                                  "no_speech",
+                                  "draft_exists",
+                                  "video_gone",
+                                  "source_missing",
+                                  "source_changed",
+                                  "translation_failed",
+                                  "failed"
+                                ]
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              },
+                              "updatedAt": {
+                                "type": "string"
+                              },
+                              "finishedAt": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "videoId",
+                              "kind",
+                              "language",
+                              "sourceLanguage",
+                              "sourceVersion",
+                              "replace",
+                              "status",
+                              "progress",
+                              "minutesReserved",
+                              "minutesCharged",
+                              "waived",
+                              "error",
+                              "createdAt",
+                              "updatedAt",
+                              "finishedAt"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "jobs"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unsupported or same language",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Not enough caption minutes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Video or source draft not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`draft_exists` or `source_is_translation`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Translation is paused or could not start; nothing was charged",
             "content": {
               "application/json": {
                 "schema": {
@@ -52568,6 +54423,130 @@
                   "properties": {
                     "success": {
                       "type": "boolean"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/videos/{videoId}/translated-metadata": {
+      "get": {
+        "tags": [
+          "Translation"
+        ],
+        "summary": "A public video's title and description translated for the viewer",
+        "description": "A machine translation of the title and description for a viewer of `lang`, shown labelled with \"Show original\". `translation` is null while an admin has paused it, when the channel opted out, when the creator wrote a title in that language, or when it is being made (`pending`). Never written into the creator's own text.",
+        "operationId": "get_VideoTranslatedMetadataGet",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video ID"
+            },
+            "required": true,
+            "description": "Video ID",
+            "name": "videoId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "lang",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The translation, or null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "translation": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "lang": {
+                              "type": "string"
+                            },
+                            "from": {
+                              "type": "string"
+                            },
+                            "title": {
+                              "type": "string"
+                            },
+                            "description": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
+                            "provider": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "lang",
+                            "from",
+                            "title",
+                            "description",
+                            "provider"
+                          ]
+                        },
+                        "pending": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "translation",
+                        "pending"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Video not found or not public",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
                     },
                     "error": {
                       "type": "string"

@@ -19,6 +19,9 @@ export interface CaptionDraftSummary {
   cues: number;
   pendingQuran: number;
   updatedAt: string;
+  /** A machine translation: the draft and version it was made from */
+  sourceLanguage?: string;
+  sourceVersion?: number;
   publishedVersion?: number;
   publishedAt?: string;
   track: 'none' | 'machine' | 'upload';
@@ -103,7 +106,7 @@ export async function publishCaptionDraft(videoId: string, language: string, bas
 }
 
 /** What Studio shows of a transcription job */
-export type CaptionJobView = Pick<CaptionJob, 'id' | 'videoId' | 'language' | 'replace' | 'status' | 'progress' | 'minutesReserved' | 'minutesCharged' | 'waived' | 'error' | 'createdAt' | 'updatedAt' | 'finishedAt'>;
+export type CaptionJobView = Pick<CaptionJob, 'id' | 'videoId' | 'kind' | 'sourceLanguage' | 'language' | 'replace' | 'status' | 'progress' | 'minutesReserved' | 'minutesCharged' | 'waived' | 'error' | 'createdAt' | 'updatedAt' | 'finishedAt'>;
 
 const jobsBase = (videoId: string) => `/api/videos/${encodeURIComponent(videoId)}/captions/jobs`;
 
@@ -124,6 +127,16 @@ export async function startCaptionJob(videoId: string, language: string, replace
 /** Cancel a job; its minutes come back. 409 `job_finishing` while the draft is being written. */
 export async function cancelCaptionJob(videoId: string, jobId: string): Promise<ActionResult<{ job: CaptionJobView }>> {
   return call(`${jobsBase(videoId)}/${encodeURIComponent(jobId)}/cancel`, { method: 'POST' });
+}
+
+/**
+ * Translate the `sourceLanguage` draft into `languages` (AUN-CAPTIONS §3.3), each a job that ends
+ * with a machine-translation draft to review. Refusals: 402 `upgrade_required` (details:
+ * minutesNeeded, usage; nothing starts), 409 `draft_exists` (details: language) unless `replace`,
+ * 404 `source_missing`, 503 `translation_paused`.
+ */
+export async function startCaptionTranslation(videoId: string, sourceLanguage: string, languages: string[], replace = false): Promise<ActionResult<{ jobs: CaptionJobView[] }>> {
+  return call(`/api/videos/${encodeURIComponent(videoId)}/captions/translations`, { method: 'POST', body: { sourceLanguage, languages, ...(replace ? { replace: true } : {}) } });
 }
 
 /** The caller's caption minutes and what transcribing this video takes (null until its length is known). */

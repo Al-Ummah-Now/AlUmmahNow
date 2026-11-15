@@ -138,12 +138,12 @@ function parseJsonObject(text: unknown): Record<string, unknown> | null {
 
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0);
 
-function chatText(result: unknown): unknown {
+export function chatText(result: unknown): unknown {
   const r = result as { response?: unknown; choices?: Array<{ message?: { content?: unknown } }> } | null;
   return r?.choices?.[0]?.message?.content ?? r?.response ?? result;
 }
 
-function tokenUsage(result: unknown): { in: number; out: number } {
+export function tokenUsage(result: unknown): { in: number; out: number } {
   const u = (result as { usage?: { prompt_tokens?: number; completion_tokens?: number; input_tokens?: number; output_tokens?: number } } | null)?.usage;
   return { in: u?.prompt_tokens ?? u?.input_tokens ?? 0, out: u?.completion_tokens ?? u?.output_tokens ?? 0 };
 }

@@ -28,7 +28,9 @@ export type ContentKind =
   /** A white-label scholar site (id = channel id; wiki AUN-SCHOLAR-SITES). */
   | 'site'
   /** A video category (id = its value; '*order' for a reorder). */
-  | 'category';
+  | 'category'
+  /** Captions & translation settings (id 'settings') and the platform Quran editions (id = language; AUN-CAPTIONS). */
+  | 'captions-settings';
 
 /** Every live streaming audit key starts with this ('content:live-'); the range ends before 'content:live.'. */
 export const LIVE_AUDIT_PREFIX = `content:live-`;
