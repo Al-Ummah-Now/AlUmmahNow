@@ -12,6 +12,20 @@ import { logger } from '@/lib/logger-client';
 
 export const NAVIGATION_FALLBACK_MS = 2000;
 
+/**
+ * True once the fallback has started a page load: this document is about to be replaced. The
+ * client-side move can still commit in the moment before that load lands (Firefox, #1137: it
+ * committed 50 ms after the fallback fired); state meant for the loaded page must survive it.
+ */
+let pageLoadPending = false;
+export function isPageLoadPending(): boolean {
+  return pageLoadPending;
+}
+/** Tests only */
+export function resetPageLoadPending(): void {
+  pageLoadPending = false;
+}
+
 export function navigateOrLoad(
   push: (href: string) => void,
   href: string,
@@ -30,6 +44,7 @@ export function navigateOrLoad(
   window.setTimeout(() => {
     if (window.location.pathname + window.location.search !== from) return;
     logger.warn('[Navigation] Client navigation did not commit; loading the page', { href });
+    pageLoadPending = true;
     load(target.toString());
   }, timeoutMs);
 }
