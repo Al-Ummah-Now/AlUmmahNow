@@ -7,8 +7,9 @@
  */
 import { Container, type OutboundHandlerContext } from '@cloudflare/containers';
 import { failRungs, MEDIA_MP4, mediaPrefix, sanitizeFailure, sanitizeMp4, type CaptionAudioJobMessage, type LiveReviewJobMessage, type Mp4JobMessage, sanitizeRungs, type R2RungProgress, type TranscodeFailure, type TranscodeJobEvent, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
+import type { TranscodeStartFailure, TranscoderJobView } from '@al-ummah/shared-types';
 import { bucketFor, errorText, log, type Env } from './env';
-import { containerSeconds, hasWatchdogDue, isInfraFailure, keyAllowed, selfTestDue, selfTestRuns, startFailureReason, type SelfTestResult, liveReviewPrefix, liveVodSource, liveVodTarget, newJob, onFailure, onMessage, onProgressEvent, stagedKey, watchdogVerdict, WATCHDOG_SECONDS, type JobState } from './jobs';
+import { cancelledJob, containerSeconds, hasWatchdogDue, jobView, startFailureNote, isInfraFailure, keyAllowed, selfTestDue, selfTestRuns, startFailureReason, type SelfTestResult, liveReviewPrefix, liveVodSource, liveVodTarget, newJob, onFailure, onMessage, onProgressEvent, stagedKey, watchdogVerdict, WATCHDOG_SECONDS, type JobState } from './jobs';
 import { reportCaptionAudio, reportEvent, reportLiveReviewMedia, reportMp4Event, sourceCandidates } from './videos-api';
 import { serveOriginal } from './originals';
 import { storeUpload } from './uploads';
@@ -189,6 +190,8 @@ export class Transcoder extends Container<Env> {
 		await this.armWatchdog();
 		try {
 			await this.launch(job);
+			// Started: the earlier failed starts no longer explain anything (the admin panel)
+			await this.ctx.storage.delete('startFailure');
 		} catch (error) {
 			// Not started: forget it, so the queue's redelivery starts it again (not a "duplicate")
 			await this.ctx.storage.delete('job');
@@ -523,6 +526,65 @@ export class Transcoder extends Container<Env> {
 	/** Admin/diagnostics: the job as stored. */
 	async jobState(): Promise<JobState | null> {
 		return (await this.job()) ?? null;
+	}
+
+	/**
+	 * The queue consumer could not start `jobId` (handleTranscodeStart): kept so the admin's
+	 * troubleshooting panel shows the delivery count, the next try and why (the job itself is not
+	 * stored until a start succeeds).
+	 */
+	async noteStartFailure(jobId: string, error: string, deliveries: number): Promise<void> {
+		const current = await this.job();
+		// A newer job already runs here: an older message's failure explains nothing
+		if (current && current.jobId !== jobId && (current.status === 'running' || current.status === 'waiting_retry')) return;
+		await this.ctx.storage.put('startFailure', startFailureNote(jobId, error, deliveries, Date.now()));
+	}
+
+	/** Admin troubleshooting view: the job, the last failed start and this object's id (the Containers API names it). */
+	async troubleshootState(): Promise<{ job: TranscoderJobView | null; startFailure: TranscodeStartFailure | null; durableObjectId: string }> {
+		const job = await this.job();
+		const startFailure = (await this.ctx.storage.get<TranscodeStartFailure>('startFailure')) ?? null;
+		return { job: job ? jobView(job) : null, startFailure, durableObjectId: this.ctx.id.toString() };
+	}
+
+	/**
+	 * Admin "Cancel" (videos admin → Delivery): stops the container, marks the job cancelled (so a
+	 * pending retry and any later delivery of it do nothing) and deletes its partial output. A job
+	 * that never started gets a cancelled stand-in for the same reason. Idempotent.
+	 */
+	async cancelJob(input: { videoId: string; jobId: string; rev: string; access: 'pub' | 'priv'; queuedAt: string }): Promise<'cancelled' | 'already_finished'> {
+		const current = await this.job();
+		const now = Date.now();
+		if (current && current.jobId === input.jobId) {
+			if (current.status === 'ready' || current.status === 'failed') return 'already_finished';
+			if (current.status === 'cancelled') return 'cancelled';
+			current.priorSeconds = containerSeconds(current, now);
+			// Before destroy(): onStop must see our own teardown, not a crash
+			current.status = 'cancelled';
+			current.error = 'cancelled';
+			current.finishedAt = now;
+			delete current.nextRetryAt;
+			await this.save(current);
+			await this.destroy().catch(() => undefined);
+			await deletePrefix(bucketFor(this.env, current.prefix), `${current.prefix}/`).catch((e) => log.warn('[Transcoder] Cancel cleanup failed', { videoId: current.videoId, error: errorText(e) }));
+			if (current.reviewPrefix) await deletePrefix(this.env.MEDIA_PRIVATE, current.reviewPrefix).catch(() => undefined);
+		} else {
+			// Never started here (or an older job is stored): a stand-in makes later deliveries duplicates
+			const stub = cancelledJob(input, now);
+			await this.save(stub);
+			await deletePrefix(bucketFor(this.env, stub.prefix), `${stub.prefix}/`).catch(() => undefined);
+		}
+		await this.ctx.storage.delete('startFailure');
+		log.warn('[Transcoder] Job cancelled by an admin', { videoId: input.videoId, jobId: input.jobId });
+		return 'cancelled';
+	}
+
+	/** Admin "Retry now": runs a scheduled retry at once. Anything else is left alone. */
+	async retryNow(jobId: string): Promise<'started' | 'not_waiting'> {
+		const job = await this.job();
+		if (!job || job.jobId !== jobId || job.status !== 'waiting_retry') return 'not_waiting';
+		await this.retry(jobId);
+		return 'started';
 	}
 
 	// -----------------------------------------------------------------------
