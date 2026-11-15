@@ -13,6 +13,9 @@ import {
 import { useOwnData, type CreatedVideo, type Creator } from './release/builders';
 import { apiFetch, expectHydrated } from './release/web-session';
 
+/** Escapes every regular-expression metacharacter, backslash included. */
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 /** A channel's page: /{locale}/@{handle} for a channel with a handle (/channels/{id} 308s there), else /channels/{id} */
 const channelPageUrl = (locale: string, id: string, rest = '') => new RegExp(`/${locale}/(channels/${id}|@[^/?#]+)${rest}`);
 
@@ -157,7 +160,7 @@ test.describe('Access', () => {
       for (const [old, studio] of [...STUDIO_PAGES, ['/videos', '/content/videos'] as [string, string]]) {
         const res = await page.request.get(`/en/settings/channel/${main.id}${old}`, { maxRedirects: 0 });
         expect(res.status(), `settings${old || ' overview'}`).toBe(301);
-        expect(res.headers()['location']).toMatch(new RegExp(`${studioUrl('en', main.id, studio).replace(/[?]/g, '\\?')}$`));
+        expect(res.headers()['location']).toMatch(new RegExp(`${escapeRegExp(studioUrl('en', main.id, studio))}$`));
         // Studio renders no channel page for a signed-out visitor (it sends them to sign in)
         const page2 = await page.request.get(studioUrl('en', main.id, studio));
         expect(await page2.text(), `studio${studio}`).not.toContain('data-testid="studio-frame"');
