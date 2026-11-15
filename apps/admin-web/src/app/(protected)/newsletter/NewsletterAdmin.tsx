@@ -114,7 +114,8 @@ export function IssueEditor({ issue, confirmed }: { issue: (NewsletterIssueConte
               busy={busy === 'delete'}
               disabled={busy !== null}
               onConfirm={async () => {
-                if (await run('delete', () => deleteNewsletterIssue(issue.id), { refresh: false })) router.push('/newsletter');
+                // DELETE answers no data: success is anything but run()'s null
+                if ((await run('delete', () => deleteNewsletterIssue(issue.id), { refresh: false })) !== null) router.push('/newsletter');
               }}
               testId="newsletter-delete"
             />

@@ -378,4 +378,18 @@ describe('newsletter: admin issues and sending', () => {
     const a = await db.prepare("SELECT metadata FROM admin_audit_log WHERE action = 'newsletter.subscriber.delete'").first<{ metadata: string }>();
     assert.equal(a!.metadata.includes('@'), false);
   });
+
+  it('finds a subscriber by a full address longer than D1\'s 50-byte LIKE limit', async () => {
+    const { db, api } = setup();
+    const email = 'newsletter-12345678901-1-local-mhz1abcd@e2e.alummahnow.net';
+    assert.ok(email.length > 50);
+    await requestSignup(db, { email, locale: 'ar', ipHash: 'ip', now: new Date(), perIpHour: 99 });
+    const res = await api('GET', `/subscribers?q=${encodeURIComponent(email.toUpperCase())}`);
+    assert.equal(res.status, 200);
+    const list = (await res.json()) as { result: { items: { email: string; status: string }[]; total: number } };
+    assert.deepEqual(list.result.items.map((i) => [i.email, i.status]), [[email, 'pending']]);
+    // % and _ are plain characters, not wildcards
+    const none = (await (await api('GET', '/subscribers?q=%25')).json()) as { result: { total: number } };
+    assert.equal(none.result.total, 0);
+  });
 });
