@@ -186,3 +186,17 @@ export function folderUploadOrder(files) {
 	const media = files.filter((f) => f !== 'index.m3u8').sort();
 	return files.includes('index.m3u8') ? [...media, 'index.m3u8'] : media;
 }
+
+/**
+ * Failure codes the audio endpoints may send back to the Worker. Anything else (a tool's exit,
+ * an upload's HTTP status, an exception's text) becomes a generic code: the full error and its
+ * stack stay in the container's own log, never in the response.
+ */
+export const AUDIO_FAILURE_CODES = new Set(['track_missing', 'no_tracks', 'no_audio', 'stream_missing', 'bad_master', 'bad_playlist', 'rendition_missing', 'source_missing', 'source_empty', 'source_unavailable']);
+
+/** The response body of a failed audio job: a fixed code and whether a retry can help. */
+export function audioFailure(error) {
+	const word = typeof error?.message === 'string' ? error.message.split(' ')[0] : '';
+	const code = AUDIO_FAILURE_CODES.has(word) ? word : error?.exitCode !== undefined ? 'tool_failed' : 'audio_failed';
+	return { error: code, fatal: !!error?.fatal };
+}
