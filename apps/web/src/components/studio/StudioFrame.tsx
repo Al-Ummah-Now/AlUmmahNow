@@ -4,8 +4,10 @@ import { useMemo, useState, type ReactNode } from 'react';
 import Image from 'next/image';
 import Link from '@/components/common/AppLink';
 import { usePathname, useRouter } from 'next/navigation';
-import { Check, ChevronsUpDown, ExternalLink, Menu, Plus, Radio, UploadCloud } from 'lucide-react';
+import { Check, ChevronsUpDown, ExternalLink, FileText, LogOut, Menu, PenLine, Plus, Radio, UploadCloud } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useConfirm } from '@/components/ui/confirm-dialog';
+import { useOptionalAuth } from '@/components/AuthProvider/authContext';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import {
   DropdownMenu,
@@ -17,10 +19,14 @@ import {
 import { useLanguage } from '@/hooks/useLanguage';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { channelPath, formatHandle } from '@/lib/channel-url';
-import { itemPath, legacyHref, STUDIO_NAV, switchedPath, visibleNav, visibleTabs, type StudioFeatures } from '@/lib/studio/nav';
+import { itemPath, STUDIO_NAV, switchedPath, visibleNav, visibleTabs, type StudioFeatures } from '@/lib/studio/nav';
 import { studioLiveHref, studioUploadHref } from '@/lib/studio/links';
 import { can, roleForChannel, type StudioRole } from '@/lib/studio/permissions';
 import { cn } from '@/lib/utils';
+import { removeTeamMember } from '@/lib/channels/team';
+import { logger } from '@/lib/logger-client';
+import { getCmsUrl } from '@/lib/runtime-config';
+import { cmsLinks, isScholar } from '@/lib/scholars/sites';
 
 export interface StudioChannel {
   id: string;
@@ -48,11 +54,34 @@ function Avatar({ url, name }: { url?: string; name: string }) {
   );
 }
 
-function ChannelSwitcher({ locale, channel, segments }: { locale: string; channel: StudioChannel; segments: string[] }) {
+function ChannelSwitcher({ locale, channel, segments, role }: { locale: string; channel: StudioChannel; segments: string[]; role: StudioRole }) {
   const { t } = useLanguage();
   const router = useRouter();
-  const { user, switchToChannel } = useMultiAccount();
+  const { user, switchToChannel, reloadChannels } = useMultiAccount();
+  const { confirm, dialog } = useConfirm();
+  const [leaveError, setLeaveError] = useState<string | null>(null);
   const channels = user?.channels ?? [];
+
+  // Anyone but the owner can leave (spec §3.3): most roles can't open Settings
+  const leave = async () => {
+    if (!user) return;
+    const ok = await confirm({
+      title: t.studio.switcher.leaveTitle.replace('{channel}', channel.name),
+      description: t.studio.switcher.leaveBody,
+      confirmLabel: t.studio.switcher.leaveConfirm,
+      testId: 'studio-leave-dialog',
+    });
+    if (!ok) return;
+    setLeaveError(null);
+    try {
+      await removeTeamMember(channel.id, user.id);
+      await reloadChannels();
+      router.push(`/${locale}/studio`);
+    } catch (error) {
+      logger.error('[Studio] Leaving the channel failed', { channelId: channel.id, error });
+      setLeaveError(t.studio.switcher.leaveFailed);
+    }
+  };
 
   const open = async (id: string, ownerId: string, listedRole?: StudioRole | null) => {
     if (!user || id === channel.id) return;
@@ -63,6 +92,7 @@ function ChannelSwitcher({ locale, channel, segments }: { locale: string; channe
   };
 
   return (
+    <>
     <DropdownMenu>
       {/* Named by its content (WCAG 2.5.3): an aria-label would replace the visible channel name.
           The sr-only prefix still tells screen-reader users what the button does. */}
@@ -99,12 +129,34 @@ function ChannelSwitcher({ locale, channel, segments }: { locale: string; channe
             {t.studio.switcher.createChannel}
           </Link>
         </DropdownMenuItem>
+        {role !== 'owner' && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => void leave()} data-testid="studio-leave-channel" className="text-destructive focus:text-destructive">
+              <LogOut aria-hidden="true" className="me-2 h-4 w-4" />
+              {t.studio.switcher.leave}
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
+    {dialog}
+    {leaveError && <p role="alert" className="text-xs text-destructive" data-testid="studio-leave-error">{leaveError}</p>}
+    </>
   );
 }
 
-function NavLinks({ locale, role, channelId, active, features, onNavigate }: { locale: string; role: StudioRole; channelId: string; active?: string; features?: StudioFeatures; onNavigate?: () => void }) {
+/**
+ * Scholars write articles in the CMS (AlUmmahNowCMS docs/SCHOLARS.md, #744).
+ * Scholar is a site role for the CMS, never a channel role; the CMS signs the
+ * browser in through SSO, so the editor opens without a second sign-in.
+ */
+function useScholarLinks(locale: string) {
+  const { user } = useOptionalAuth();
+  return isScholar(user?.roles) ? cmsLinks(getCmsUrl(), locale) : null;
+}
+
+function NavLinks({ locale, role, channelId, active, features, onNavigate, articlesHref }: { locale: string; role: StudioRole; channelId: string; active?: string; features?: StudioFeatures; onNavigate?: () => void; articlesHref?: string }) {
   const { t } = useLanguage();
   const settings = visibleNav(role, features).filter((item) => item.id === 'settings');
   const main = visibleNav(role, features).filter((item) => item.id !== 'settings');
@@ -113,7 +165,7 @@ function NavLinks({ locale, role, channelId, active, features, onNavigate }: { l
     return (
       <Link
         key={item.id}
-        href={legacyHref(locale, channelId, itemPath(role, item, features)) ?? `/${locale}/studio/${encodeURIComponent(channelId)}/${itemPath(role, item, features)}`}
+        href={`/${locale}/studio/${encodeURIComponent(channelId)}/${itemPath(role, item, features)}`}
         aria-current={current ? 'page' : undefined}
         onClick={onNavigate}
         data-testid={`studio-nav-${item.id}`}
@@ -129,6 +181,18 @@ function NavLinks({ locale, role, channelId, active, features, onNavigate }: { l
   return (
     <nav aria-label={t.studio.navLabel} className="flex flex-1 flex-col gap-1">
       {main.map(link)}
+      {articlesHref && (
+        <a
+          href={articlesHref}
+          onClick={onNavigate}
+          data-testid="studio-nav-articles"
+          className="flex min-h-11 items-center gap-2 rounded-md px-3 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <FileText aria-hidden="true" className="h-4 w-4" />
+          {t.studio.articles.mine}
+          <span className="sr-only"> {t.studio.articles.opensCms}</span>
+        </a>
+      )}
       {settings.length > 0 && <div className="mt-auto pt-4">{settings.map(link)}</div>}
     </nav>
   );
@@ -136,9 +200,10 @@ function NavLinks({ locale, role, channelId, active, features, onNavigate }: { l
 
 function Rail({ locale, role, channel, segments, features, onNavigate, className }: { locale: string; role: StudioRole; channel: StudioChannel; segments: string[]; features?: StudioFeatures; onNavigate?: () => void; className?: string }) {
   const { t } = useLanguage();
+  const articles = useScholarLinks(locale);
   return (
     <div className={cn('flex h-full flex-col gap-3 p-3', className)}>
-      <ChannelSwitcher locale={locale} channel={channel} segments={segments} />
+      <ChannelSwitcher locale={locale} channel={channel} segments={segments} role={role} />
       {can(role, 'video.upload') && features?.upload && (
         <Button asChild>
           <Link href={studioUploadHref(locale, channel.id)} onClick={onNavigate} data-testid="studio-upload">
@@ -155,7 +220,16 @@ function Rail({ locale, role, channel, segments, features, onNavigate, className
           </Link>
         </Button>
       )}
-      <NavLinks locale={locale} role={role} channelId={channel.id} active={segments[0]} features={features} onNavigate={onNavigate} />
+      {articles && (
+        <Button asChild variant="outline">
+          <a href={articles.write} onClick={onNavigate} data-testid="studio-write-article">
+            <PenLine aria-hidden="true" className="me-2 h-4 w-4" />
+            {t.studio.articles.write}
+            <span className="sr-only"> {t.studio.articles.opensCms}</span>
+          </a>
+        </Button>
+      )}
+      <NavLinks locale={locale} role={role} channelId={channel.id} active={segments[0]} features={features} onNavigate={onNavigate} articlesHref={articles?.articles} />
     </div>
   );
 }
@@ -207,7 +281,7 @@ export function StudioFrame({ locale, role, channel, features, children }: Props
               return (
                 <Link
                   key={tab.id}
-                  href={legacyHref(locale, channel.id, `${item.id}/${tab.id}`) ?? `${base}/${item.id}/${tab.id}`}
+                  href={`${base}/${item.id}/${tab.id}`}
                   aria-current={current ? 'page' : undefined}
                   data-testid={`studio-tab-${tab.id}`}
                   className={cn(

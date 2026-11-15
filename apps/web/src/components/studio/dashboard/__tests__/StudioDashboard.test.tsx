@@ -20,11 +20,15 @@ jest.mock('@/lib/api/studio-content', () => ({
   getChannelContentCounts: (...args: unknown[]) => counts(...args),
   listChannelContent: (...args: unknown[]) => list(...args),
 }));
+const summary = jest.fn();
 jest.mock('@/lib/api/studio-analytics', () => ({
   getStudioChannelAnalytics: (...args: unknown[]) => channel(...args),
   getStudioVideoAnalytics: (...args: unknown[]) => video(...args),
 }));
-jest.mock('@/lib/api/studio-comments', () => ({ listHeldComments: (...args: unknown[]) => held(...args) }));
+jest.mock('@/lib/api/studio-comments', () => ({
+  listHeldComments: (...args: unknown[]) => held(...args),
+  getChannelCommentSummary: (...args: unknown[]) => summary(...args),
+}));
 
 const mockStudio = STUDIO_EN;
 const text = STUDIO_EN.dashboard;
@@ -59,6 +63,26 @@ describe('StudioDashboard', () => {
     channel.mockResolvedValue({ totalViews: 500, totalSubscribers: 9, recentMetrics: [day(10)] });
     video.mockResolvedValue({ watchTime: 90 });
     held.mockResolvedValue({ items: [comment('h1'), comment('h2')], total: 7 });
+    summary.mockResolvedValue({ inbox: 4, held: 2, removed: 0, recent: [{ id: 'k1', kind: 'video', targetId: 'v1', targetTitle: 'Video v1', targetUrlPath: '/video/v1', parentId: null, text: 'Great video', createdAt: '2026-11-01T00:00:00.000Z', author: { userId: 'u2', channelId: null, displayName: 'Amina' }, status: 'published', isPinned: false, isHearted: false, repliesCount: 0, hasChannelReply: false }] });
+  });
+
+  it('shows recent comments and the held count to roles that moderate', async () => {
+    show('owner');
+    expect(await screen.findByTestId('studio-dash-comment')).toHaveTextContent('Great video');
+    expect(screen.getByTestId('studio-dash-comments-held')).toHaveAttribute('href', '/en/studio/c1/comments?tab=held');
+    expect(screen.getByTestId('studio-dash-comments-all')).toHaveAttribute('href', '/en/studio/c1/comments');
+  });
+
+  it('gives a moderator the recent comments too', async () => {
+    show('moderator');
+    expect(await screen.findByTestId('studio-dash-comment')).toHaveTextContent('Amina');
+  });
+
+  it('shows no comments card to an editor', async () => {
+    show('editor');
+    await screen.findByTestId('studio-dashboard');
+    expect(screen.queryByTestId('studio-dash-comments')).toBeNull();
+    expect(summary).not.toHaveBeenCalled();
   });
 
   it('shows the latest video, totals and tasks', async () => {

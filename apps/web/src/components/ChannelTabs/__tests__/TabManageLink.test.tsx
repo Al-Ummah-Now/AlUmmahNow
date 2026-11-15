@@ -30,14 +30,14 @@ describe('TabManageLink', () => {
   });
 
   it.each([
-    ['home', '/en/settings/channel/ch-1/sections'],
-    ['videos', '/en/settings/channel/ch-1/videos'],
-    ['shorts', '/en/settings/channel/ch-1/videos'],
-    ['live', '/en/settings/channel/ch-1/videos'],
-    ['playlists', '/en/settings/channel/ch-1/playlists'],
-    ['community', '/en/settings/channel/ch-1/community'],
-    ['channels', '/en/settings/channel/ch-1/sections'],
-    ['about', '/en/settings/channel/ch-1/edit'],
+    ['home', '/en/studio/ch-1/customisation/layout?view=sections'],
+    ['videos', '/en/studio/ch-1/content/videos'],
+    ['shorts', '/en/studio/ch-1/content/videos'],
+    ['live', '/en/studio/ch-1/content/videos'],
+    ['playlists', '/en/studio/ch-1/playlists'],
+    ['community', '/en/studio/ch-1/content/posts'],
+    ['channels', '/en/studio/ch-1/customisation/layout?view=sections'],
+    ['about', '/en/studio/ch-1/customisation/profile'],
   ] as const)('gives the owner a manage link on %s', (tab, href) => {
     renderTab(tab, true);
     expect(screen.getByTestId('tab-manage-link')).toHaveAttribute('href', href);
@@ -46,10 +46,10 @@ describe('TabManageLink', () => {
   it('follows the member role: an editor manages videos and playlists (playlist.manage)', () => {
     asMember('editor');
     const videos = renderTab('videos');
-    expect(screen.getByTestId('tab-manage-link')).toHaveAttribute('href', '/en/settings/channel/ch-1/videos');
+    expect(screen.getByTestId('tab-manage-link')).toHaveAttribute('href', '/en/studio/ch-1/content/videos');
     videos.unmount();
     renderTab('playlists');
-    expect(screen.getByTestId('tab-manage-link')).toHaveAttribute('href', '/en/settings/channel/ch-1/playlists');
+    expect(screen.getByTestId('tab-manage-link')).toHaveAttribute('href', '/en/studio/ch-1/playlists');
   });
 
   it('a moderator gets no playlist manage link', () => {

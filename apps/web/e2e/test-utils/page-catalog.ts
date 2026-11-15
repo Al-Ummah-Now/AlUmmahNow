@@ -48,7 +48,8 @@ export function catalogFromOwnData(own: { videoId: string; channelId: string; pl
 
 /** The full page inventory for a role */
 export function catalog(d: CatalogData): CatalogPage[] {
-  const ch = `/settings/channel/${d.singleChannelId}`;
+  // The channel settings pages are in Studio (the old /settings/channel/{id}/… URLs 301 there)
+  const ch = `/studio/${d.singleChannelId}`;
   const pages: CatalogPage[] = [
     // Public pages (anonymous)
     { id: 'home', path: '', role: 'anon' },
@@ -85,14 +86,15 @@ export function catalog(d: CatalogData): CatalogPage[] {
     { id: 'profile-edit', path: '/profile/edit', role: 'single' },
     { id: 'settings', path: '/settings', role: 'single' },
     { id: 'upload-defaults', path: '/settings/upload-defaults', role: 'single' },
-    { id: 'channel-settings', path: ch, role: 'single' },
-    { id: 'channel-settings-edit', path: `${ch}/edit`, role: 'single' },
-    { id: 'channel-settings-tabs', path: `${ch}/tabs`, role: 'single' },
-    { id: 'channel-settings-sections', path: `${ch}/sections`, role: 'single' },
+    { id: 'channel-settings', path: `${ch}/settings/general`, role: 'single' },
+    { id: 'channel-settings-edit', path: `${ch}/customisation/profile`, role: 'single' },
+    { id: 'channel-settings-tabs', path: `${ch}/customisation/layout?view=tabs`, role: 'single' },
+    { id: 'channel-settings-sections', path: `${ch}/customisation/layout?view=sections`, role: 'single' },
     { id: 'channel-settings-playlists', path: `${ch}/playlists`, role: 'single' },
-    { id: 'channel-settings-community', path: `${ch}/community`, role: 'single' },
-    { id: 'channel-settings-community-new', path: `${ch}/community/new`, role: 'single' },
-    { id: 'channel-settings-videos', path: `/studio/${d.singleChannelId}/content/videos`, role: 'single' },
+    { id: 'channel-settings-community', path: `${ch}/content/posts`, role: 'single' },
+    { id: 'channel-settings-community-new', path: `${ch}/content/posts/new`, role: 'single' },
+    { id: 'channel-settings-videos', path: `${ch}/content/videos`, role: 'single' },
+    { id: 'channel-settings-permissions', path: `${ch}/settings/permissions`, role: 'single' },
     { id: 'analytics', path: '/studio/go/analytics', role: 'single' },
     { id: 'feed', path: '/subscriptions', role: 'single' },
     { id: 'subscriptions', path: '/subscriptions/manage', role: 'single' },

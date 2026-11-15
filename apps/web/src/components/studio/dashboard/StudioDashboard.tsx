@@ -14,13 +14,13 @@ import { getChannelContentCounts, listChannelContent, type StudioVideo } from '@
 import { logger } from '@/lib/logger-client';
 import { changePercent, rangeDates, sumMetrics } from '@/lib/studio/analytics';
 import { can, type StudioRole } from '@/lib/studio/permissions';
-import { legacyHref } from '@/lib/studio/nav';
 import { studioVideoTitle } from '@/lib/studio/videos';
 import { studioLiveHref, studioUploadHref } from '@/lib/studio/links';
 import { InviteWelcome } from '@/components/onboarding/InviteWelcome';
 
 /** The dashboard's recent window («آخر ٢٨ يومًا» / "last 28 days"). */
 const RECENT_DAYS = 28;
+import { RecentComments } from './RecentComments';
 
 interface Props {
   locale: string;
@@ -143,8 +143,8 @@ export function StudioDashboard({ locale, channelId, role, liveOn = false, uploa
   const quickLinks = [
     can(role, 'video.upload') && uploadOn && { label: text.quick.upload, href: studioUploadHref(locale, channelId) },
     can(role, 'live.manage') && liveOn && { label: text.quick.goLive, href: studioLiveHref(locale, channelId) },
-    can(role, 'post.manage') && { label: text.quick.newPost, href: legacyHref(locale, channelId, 'content/posts/new')! },
-    can(role, 'channel.edit') && { label: text.quick.customise, href: legacyHref(locale, channelId, 'customisation/profile')! },
+    can(role, 'post.manage') && { label: text.quick.newPost, href: `/${locale}/studio/${encodeURIComponent(channelId)}/content/posts/new` },
+    can(role, 'channel.edit') && { label: text.quick.customise, href: `/${locale}/studio/${encodeURIComponent(channelId)}/customisation/profile` },
   ].filter((link): link is { label: string; href: string } => Boolean(link));
 
   const heading = (
@@ -208,7 +208,12 @@ export function StudioDashboard({ locale, channelId, role, liveOn = false, uploa
     return (
       <div data-testid="studio-dashboard">
         {heading}
-        <div className="grid items-start gap-4 md:grid-cols-2">{heldCard}</div>
+        <div className="grid items-start gap-4 md:grid-cols-2">
+          {heldCard}
+          <Card title={text.recentComments.title} testId="studio-dash-comments">
+            <RecentComments locale={locale} channelId={channelId} />
+          </Card>
+        </div>
       </div>
     );
   }
@@ -358,6 +363,11 @@ export function StudioDashboard({ locale, channelId, role, liveOn = false, uploa
           </Card>
         )}
 
+        {can(role, 'comment.moderate') && (
+          <Card title={text.recentComments.title} testId="studio-dash-comments">
+            <RecentComments locale={locale} channelId={channelId} />
+          </Card>
+        )}
         {links && <Card title={text.quick.title} testId="studio-dash-quick">{links}</Card>}
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { checkPath, itemPath, legacyHref, STUDIO_NAV, studioHomePath, switchedPath, visibleNav, visibleTabs } from '../nav';
+import { checkPath, itemPath, STUDIO_NAV, studioHomePath, switchedPath, visibleNav, visibleTabs } from '../nav';
 import { can, roleForChannel, type StudioRole } from '../permissions';
 
 const LIVE = { live: true };
@@ -7,11 +7,11 @@ const tabs = (role: StudioRole, id: string) => visibleTabs(role, STUDIO_NAV.find
 
 describe('navigation per role', () => {
   it.each<[StudioRole, string[]]>([
-    ['owner', ['dashboard', 'content', 'analytics', 'playlists', 'customisation', 'settings']],
-    ['admin', ['dashboard', 'content', 'analytics', 'playlists', 'customisation', 'settings']],
+    ['owner', ['dashboard', 'content', 'analytics', 'comments', 'playlists', 'customisation', 'settings']],
+    ['admin', ['dashboard', 'content', 'analytics', 'comments', 'playlists', 'customisation', 'settings']],
     ['editor', ['dashboard', 'content', 'playlists']],
-    // Comments has no creator page yet; a moderator reaches Content → Live (live.moderate)
-    ['moderator', ['dashboard', 'content']],
+    // A moderator reviews Comments and reaches Content → Live (live.moderate)
+    ['moderator', ['dashboard', 'content', 'comments']],
   ])('%s sees exactly its items', (role, expected) => {
     expect(ids(role)).toEqual(expected);
   });
@@ -28,15 +28,6 @@ describe('navigation per role', () => {
   it('shows the Permissions tab to roles that can see members', () => {
     expect(tabs('owner', 'settings')).toEqual(['general', 'permissions']);
     expect(checkPath('owner', ['settings', 'permissions'])).toEqual({ status: 'ok' });
-  });
-
-  it('opens the existing channel settings pages for sections Studio has not rebuilt', () => {
-    expect(legacyHref('ar', 'c1', 'playlists')).toBe('/ar/settings/channel/c1/playlists');
-    expect(legacyHref('en', 'c1', 'content/posts/new')).toBe('/en/settings/channel/c1/community/new');
-    expect(legacyHref('en', 'c1', 'customisation/profile')).toBe('/en/settings/channel/c1/edit');
-    expect(legacyHref('en', 'c1', 'settings/general')).toBe('/en/settings/channel/c1');
-    expect(legacyHref('en', 'c1', 'settings/permissions')).toBe('/en/settings/channel/c1/team');
-    expect(legacyHref('en', 'c1', 'content/videos')).toBeNull();
   });
 
   it('opens Content on the first tab the role can use', () => {
@@ -68,6 +59,21 @@ describe('checkPath', () => {
     ['moderator', ['customisation'], 'forbidden'],
     ['editor', ['settings', 'general'], 'forbidden'],
     ['owner', ['content', 'posts', 'new'], 'ok'],
+    ['admin', ['content', 'posts', 'p1', 'edit'], 'ok'],
+    ['moderator', ['content', 'posts', 'new'], 'forbidden'],
+    ['owner', ['content', 'posts', 'p1'], 'unknown'],
+    ['owner', ['content', 'posts', 'p1', 'nope'], 'unknown'],
+    ['owner', ['playlists'], 'ok'],
+    ['moderator', ['comments'], 'ok'],
+    ['editor', ['comments'], 'forbidden'],
+    ['owner', ['comments', 'x'], 'unknown'],
+    ['editor', ['playlists', 'new'], 'ok'],
+    ['editor', ['playlists', 'pl1'], 'ok'],
+    ['owner', ['playlists', 'pl1', 'x'], 'unknown'],
+    ['admin', ['customisation', 'profile'], 'ok'],
+    ['owner', ['customisation', 'layout', 'x'], 'unknown'],
+    ['owner', ['settings', 'general'], 'ok'],
+    ['owner', ['settings', 'permissions', 'x'], 'unknown'],
     ['owner', ['nope'], 'unknown'],
     ['owner', ['dashboard', 'extra'], 'unknown'],
     ['owner', ['content', 'nope'], 'unknown'],

@@ -31,7 +31,7 @@ interface PlaylistManagerProps {
 
 /** Manage Playlists of a channel, or (channelId '') the user's personal playlists under You. */
 export function managePlaylistsHref(lang: string, channelId: string, playlistId?: string): string {
-  const base = channelId ? `/${lang}/settings/channel/${channelId}/playlists` : `/${lang}/library/playlists`;
+  const base = channelId ? `/${lang}/studio/${encodeURIComponent(channelId)}/playlists` : `/${lang}/library/playlists`;
   return playlistId ? `${base}/${encodeURIComponent(playlistId)}` : base;
 }
 

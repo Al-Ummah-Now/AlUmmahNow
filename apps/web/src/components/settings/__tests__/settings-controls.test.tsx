@@ -17,7 +17,6 @@ jest.mock('@/hooks/useLanguage', () => ({
 
 import { Switch } from '@/components/common/Switch';
 import { BreadcrumbTrail, openedFromSettings, settingsTrail } from '../SettingsBreadcrumb';
-import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
 
 describe('Switch', () => {
   it('is a button[role=switch] whose aria-checked follows the value and toggles on click', () => {
@@ -99,32 +98,4 @@ describe('BreadcrumbTrail', () => {
     expect(screen.getByRole('navigation', { name: 'Trail' })).toHaveAttribute('dir', 'rtl');
   });
 
-  it('channel pages: <channel> › Settings › page, back to the channel settings overview', () => {
-    render(<ChannelSettingsBreadcrumb channelId="c1" channelName="My Channel" channelHandle="mychan" locale="en" currentPage="sections" />);
-    const nav = screen.getByTestId('channel-settings-breadcrumb');
-    expect(nav).toHaveTextContent(/^My Channel.*Settings.*Manage Sections$/);
-    expect(nav).not.toHaveTextContent(/Channel Settings/);
-    // The channel name opens the channel; Settings opens this channel's settings, never the user's /settings
-    expect(screen.getByRole('link', { name: 'My Channel' })).toHaveAttribute('href', '/en/@mychan');
-    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/en/settings/channel/c1');
-    expect(document.querySelector('a[href="/en/settings"]')).toBeNull();
-    expect(screen.getByTestId('settings-back')).toHaveAttribute('href', '/en/settings/channel/c1');
-  });
-
-  it('a channel without a handle links by id; while the name loads the trail starts at Settings', () => {
-    const { unmount } = render(<ChannelSettingsBreadcrumb channelId="c1" channelName="My Channel" locale="en" currentPage="videos" />);
-    expect(screen.getByRole('link', { name: 'My Channel' })).toHaveAttribute('href', '/en/channels/c1');
-    unmount();
-    render(<ChannelSettingsBreadcrumb channelId="c1" locale="en" currentPage="videos" />);
-    expect(screen.getByTestId('channel-settings-breadcrumb')).toHaveTextContent(/^Settings.*Video Management$/);
-  });
-
-  it('the channel overview goes back to the channel; a new post goes back to Community', () => {
-    const { unmount } = render(<ChannelSettingsBreadcrumb channelId="c1" channelName="My Channel" channelHandle="mychan" locale="en" currentPage="overview" />);
-    expect(screen.getByTestId('channel-settings-breadcrumb')).toHaveTextContent(/^My Channel.*Settings$/);
-    expect(screen.getByTestId('settings-back')).toHaveAttribute('href', '/en/@mychan');
-    unmount();
-    render(<ChannelSettingsBreadcrumb channelId="c1" locale="en" currentPage="communityNew" />);
-    expect(screen.getByTestId('settings-back')).toHaveAttribute('href', '/en/settings/channel/c1/community');
-  });
 });

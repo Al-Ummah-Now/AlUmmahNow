@@ -222,6 +222,8 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/release/studio-draft-path.spec.ts': { placement: 'local', reason: 'Studio draft/schedule/publish lifecycle; encode only gates Drafts listing' },
   'apps/web/e2e/release/studio-frame.spec.ts': { placement: 'local', reason: 'Studio routing, nav, 404, RTL' },
   'apps/web/e2e/release/studio-home.spec.ts': { placement: 'local', reason: 'redirects into Studio, soft delete/restore' },
+  'apps/web/e2e/release/studio-posts.spec.ts': { placement: 'local', reason: 'Studio posts new/edit/delete, Customisation and Settings pages' },
+  'apps/web/e2e/release/studio-redirects.spec.ts': { placement: 'local', reason: 'old channel settings URLs 301 into Studio (static redirects)' },
   'apps/web/e2e/release/studio-list-speed.spec.ts': { placement: 'local', reason: 'client-cache back navigation timing', load: true },
   'apps/web/e2e/release/studio-video-editor.spec.ts': { placement: 'local', reason: 'editor 404 for foreign video' },
   'apps/web/e2e/release/studio-videos.spec.ts': { placement: 'local', reason: 'Studio Videos statuses, filters, phone layout' },

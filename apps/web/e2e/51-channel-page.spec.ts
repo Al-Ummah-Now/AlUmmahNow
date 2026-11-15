@@ -124,16 +124,17 @@ test.describe('Channel header - owner', () => {
       await expect(header.getByTestId('channel-subscribe-button')).toHaveCount(0);
       // Owner actions: Customize / Manage videos, settings in the "More actions" menu
       const actions = header.getByTestId('channel-owner-actions');
-      await expect(actions.getByTestId('channel-customize')).toHaveAttribute('href', `/${locale}/settings/channel/${main.id}/edit`);
+      await expect(actions.getByTestId('channel-customize')).toHaveAttribute('href', `/${locale}/studio/${main.id}/customisation/profile`);
       await expect(actions.getByTestId('channel-manage-videos')).toHaveAttribute('href', `/${locale}/studio/${main.id}/content/videos`);
       const more = actions.getByRole('button', { name: locale === 'ar' ? 'إجراءات أخرى' : 'More actions' });
       const link = page.getByTestId('channel-settings-link');
       await clickUntil(more, async () => expect(link).toBeVisible({ timeout: 3000 }));
       await expect(link).toHaveText(/^(Channel Settings|إعدادات القناة)$/);
-      await expect(link).toHaveAttribute('href', `/${locale}/settings/channel/${main.id}`);
+      await expect(link).toHaveAttribute('href', `/${locale}/studio/${main.id}/dashboard`);
       // One click: the menu closes as navigation starts, so a retry would find no link
       await link.click();
-      await expect(page).toHaveURL(new RegExp(`/${locale}/settings/channel/${main.id}$`), { timeout: 20000 });
+      await expect(page).toHaveURL(new RegExp(`/${locale}/studio/${main.id}/dashboard$`), { timeout: 20000 });
+      await expect(page.getByTestId('studio-frame')).toBeVisible();
     });
   }
 });

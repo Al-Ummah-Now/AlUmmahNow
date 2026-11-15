@@ -42,7 +42,7 @@ test.describe('Settings - channel owner', () => {
     await expect(sections.filter({ hasText: 'Upload Defaults' })).toHaveAttribute('href', '/en/settings/upload-defaults');
     await expect(sections.filter({ hasText: 'Profile Settings' })).toHaveAttribute('href', '/en/profile?from=settings');
     await expect(sections.filter({ hasText: 'Privacy & data' })).toHaveAttribute('href', '/en/settings/privacy');
-    // Channel settings belong to the channel (opened from it), not to the user's Settings
+    // Channel settings are in Studio (the old /settings/channel/ pages 301 there), not the user's Settings
     await expect(sections.filter({ hasText: 'Channel Settings' })).toHaveCount(0);
     await expect(page.locator('a[href*="/settings/channel/"]')).toHaveCount(0);
   });
