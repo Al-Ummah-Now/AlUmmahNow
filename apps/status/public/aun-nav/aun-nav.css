@@ -635,9 +635,10 @@
   cursor: progress;
   opacity: 0.6;
 }
-/* the current account and a context line are not actions: no busy look */
+/* the current account, a context line and the identity you act as are not actions: no busy look */
 .aun-menu-item[disabled][aria-current='true'],
-.aun-menu-item[aria-disabled='true'].aun-menu-who-sub {
+.aun-menu-item[aria-disabled='true'].aun-menu-who-sub,
+.aun-menu-item[aria-disabled='true'].aun-menu-context-current {
   cursor: default;
   opacity: 1;
 }
