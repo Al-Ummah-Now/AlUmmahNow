@@ -1,32 +1,33 @@
 'use client';
-// Prototype only: the redesigned application shell. One component for both directions.
+// The application shell: the shared header (docs/design/NAV.md "Header"), the side rail / drawer and the
+// phone tab bar. One component for both directions.
 import { HeaderSearch } from '@/components/Header/HeaderSearch';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type MouseEvent } from 'react';
 import Link from '@/components/common/AppLink';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { ChevronLeft, ChevronRight, CircleHelp, CircleUserRound, Clock, Compass, Heart, History, Home, Languages, Menu, Moon, ShieldCheck, Sun, Tv, BookOpen, Mail, Activity, Info, X, type LucideIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CircleHelp, CircleUserRound, Clock, Compass, Globe, Heart, History, Home, Menu, ShieldCheck, Tv, BookOpen, Mail, Activity, Info, X, type LucideIcon } from 'lucide-react';
+import { appLinks } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { saveLanguagePreference } from '@/lib/i18n/utils';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { UnifiedNavigation } from '@/components/UnifiedNavigation';
-import { UnifiedNavigationRTL } from '@/components/UnifiedNavigation/rtl';
 import { UploadAction } from '@/components/Header/UploadAction';
-import { BrandLogo } from '@/components/brand/BrandLogo';
+import { HeaderAppLinks, HeaderBrand, HeaderEnvBadge, HeaderLangButton, HeaderModeButton, langSwitchHref } from '@/components/Header/HeaderParts';
+import { BRAND_LOGO } from '@/components/brand/BrandLogo';
 import { useRailMotion } from './rail-breakpoint';
 import { statusPageUrl } from '@/lib/navigation/destinations';
+import { getEnvironment, getWwwUrl } from '@/lib/runtime-config';
 import { IdentityTour } from '@/components/help/IdentityTour';
-// The Light / Dark names every app uses (docs/design/NAV.md); the icons stay lucide-react's Sun / Moon
-import { MODE_TOGGLE_LABELS } from '../../../../../packages/fanous-tokens/nav/mode-toggle.js';
 
 const L = {
-  en: { about: 'About', status: 'Status', browse: 'Browse', create: 'Create', more: 'More', history: 'History', watchLater: 'Watch later', liked: 'Liked videos', settings: 'Settings', search: 'Search videos', lightMode: MODE_TOGGLE_LABELS.en.toLight, darkMode: MODE_TOGGLE_LABELS.en.toDark, other: 'العربية', otherLabel: 'التبديل إلى العربية', menu: 'Menu', close: 'Close menu' },
-  ar: { about: 'من نحن', status: 'حالة الخدمات', browse: 'تصفّح', create: 'إنشاء', more: 'المزيد', history: 'السجل', watchLater: 'المشاهدة لاحقًا', liked: 'المرئيات التي أعجبتك', settings: 'الإعدادات', search: 'ابحث عن مرئيات', lightMode: MODE_TOGGLE_LABELS.ar.toLight, darkMode: MODE_TOGGLE_LABELS.ar.toDark, other: 'English', otherLabel: 'Switch to English', menu: 'القائمة', close: 'إغلاق القائمة' },
+  en: { about: 'About', status: 'Status', browse: 'Browse', more: 'More', history: 'History', watchLater: 'Watch later', liked: 'Liked videos', menu: 'Menu', close: 'Close menu' },
+  ar: { about: 'من نحن', status: 'حالة الخدمات', browse: 'تصفّح', more: 'المزيد', history: 'السجل', watchLater: 'المشاهدة لاحقًا', liked: 'المرئيات التي أعجبتك', menu: 'القائمة', close: 'إغلاق القائمة' },
 };
 
 /** `hub`: the "You" entry. In the collapsed rail it is an icon item; in the open rail and the drawer it reads as
  * the section's heading link ("You ›") over History, Watch later and Liked videos (owner, 2026-11-13). */
-interface Item { label: string; href: string; icon: LucideIcon; tab?: boolean; hub?: boolean; external?: boolean }
+interface Item { label: string; href: string; icon: LucideIcon; tab?: boolean; hub?: boolean; external?: boolean; /** only in the phone drawer */ phone?: boolean }
 
 export function AppShell() {
   const { t, lang, oppositeLanguage } = useLanguage();
@@ -42,6 +43,9 @@ export function AppShell() {
 
   // One build serves stage and production: the env's status host is known only in the browser
   const [statusHref, setStatusHref] = useState(() => statusPageUrl('', lang));
+  // The public sites other than this one (Website), on this environment's hosts (shared-types app-links)
+  const sites = appLinks({ current: 'videos', lang, urls: { www: getWwwUrl() } }).filter((a) => a.id === 'www');
+  const wwwHref = sites[0]?.href;
   useEffect(() => { setMounted(true); setStatusHref(statusPageUrl(window.location.hostname, lang)); }, [lang]);
   useRailMotion(open);
   useEffect(() => { setOpen(false); }, [pathname]);
@@ -74,6 +78,8 @@ export function AppShell() {
       { label: t.contact.navLabel, href: `${base}/contact`, icon: Mail },
       // The public status page (apps/status): its own host, so it opens even when this site is down
       { label: c.status, href: statusHref, icon: Activity, external: true },
+      // On phones the header's app links leave the bar (docs/design/NAV.md): the website stays one tap away here
+      ...(wwwHref ? [{ label: t.navigation.appWww, href: wwwHref, icon: Globe, external: true, phone: true }] : []),
     ] },
   ];
 
@@ -82,32 +88,40 @@ export function AppShell() {
     return clean === base ? pathname === base || pathname === `${base}/` : pathname === clean || pathname.startsWith(`${clean}/`);
   };
 
-  const switchLanguage = () => {
+  // The same page and query in the other language (the locale prefix swapped)
+  const langHref = langSwitchHref(pathname, lang, params?.toString());
+  const switchLanguage = (e: MouseEvent<HTMLAnchorElement>) => {
+    // A modified click (new tab or window) follows the link itself
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+    e.preventDefault();
     saveLanguagePreference(oppositeLanguage);
-    const next = pathname.replace(base, `/${oppositeLanguage}`) || `/${oppositeLanguage}`;
-    const qs = params?.toString();
-    router.push(qs ? `${next}?${qs}` : next);
+    router.push(langHref);
   };
 
   const dark = mounted && resolvedTheme === 'dark';
+  const environment = getEnvironment();
   const tabs = groups.flatMap((g) => g.items).filter((i) => i.tab);
+  const tab = (it: Item) => (
+    <Link key={it.href} href={it.href} className="tb" aria-current={isCurrent(it.href) ? 'page' : undefined}><it.icon aria-hidden="true" /><span>{it.label}</span></Link>
+  );
 
   return (
     <div dir={rtl ? 'rtl' : 'ltr'}>
-      <header className="ah">
-        <div className="ah-start">
-          <button type="button" className="ic" aria-label={open ? c.close : c.menu} aria-expanded={open} data-testid="nav-drawer-toggle" onClick={() => setOpen(!open)}><Menu aria-hidden="true" /></button>
-          <Link href={`${base}/`} className="ah-brand" aria-label={t.a11y.goToHomePage}>
-            <BrandLogo className="ah-logo" />
-            <span>{t.common.appName}</span>
-          </Link>
-        </div>
-        <HeaderSearch />
-        <div className="ah-end">
-          {/* The action cluster (docs/design/NAV.md): Upload, notifications, account; mirrored in RTL */}
+      {/* The shared header (docs/design/NAV.md "Header"; pieces in Header/HeaderParts.tsx, checked against
+          packages/fanous-tokens/nav/header.js): drawer toggle, brand, env badge, search, then Upload, the
+          bell, the Website link, language, light/dark and the account (or Sign in); mirrored in RTL */}
+      <header className="ah aun-header">
+        <button type="button" className="aun-icon-btn ah-menu" aria-label={open ? c.close : c.menu} aria-expanded={open} data-testid="nav-drawer-toggle" onClick={() => setOpen(!open)}><Menu aria-hidden="true" /></button>
+        <HeaderBrand lang={lang} href={`${base}/`} app={t.navigation.appVideos} link={Link} img={{ srcSet: BRAND_LOGO.srcSet, loading: 'eager', fetchPriority: 'high', decoding: 'async', 'data-testid': 'brand-logo' }} />
+        <HeaderEnvBadge environment={environment} lang={lang} />
+        <div className="aun-header-primary ah-primary"><HeaderSearch /></div>
+        <div className="aun-header-tools ah-end">
           <UploadAction />
           <NotificationBell dir={rtl ? 'rtl' : 'ltr'} />
-          {rtl ? <UnifiedNavigationRTL /> : <UnifiedNavigation />}
+          {wwwHref && <HeaderAppLinks lang={lang} links={sites} />}
+          <HeaderLangButton lang={lang} href={langHref} onClick={switchLanguage} />
+          <HeaderModeButton lang={lang} dark={dark} onClick={() => setTheme(dark ? 'light' : 'dark')} />
+          <UnifiedNavigation />
         </div>
       </header>
 
@@ -118,7 +132,7 @@ export function AppShell() {
             <div className="nv-group" key={g.title ?? i}>
               {g.title && <div className="nv-heading">{g.title}</div>}
               {g.items.map((it) => it.external ? (
-                <a key={it.label} href={it.href} className="nv" data-testid="nav-status" title={it.label}>
+                <a key={it.label} href={it.href} className={it.phone ? 'nv nv-phone' : 'nv'} data-testid={it.phone ? 'nav-www' : 'nav-status'} title={it.label}>
                   <it.icon aria-hidden="true" /><span>{it.label}</span>
                 </a>
               ) : (
@@ -130,13 +144,8 @@ export function AppShell() {
             </div>
           ))}
         </div>
+        {/* Language and light/dark live in the header (docs/design/NAV.md); the drawer keeps its close button */}
         <div className="nv-foot">
-          <button type="button" className="ic ic-sm" data-testid="theme-toggle" aria-label={dark ? c.lightMode : c.darkMode} title={dark ? c.lightMode : c.darkMode} onClick={() => setTheme(dark ? 'light' : 'dark')} suppressHydrationWarning>
-            {dark ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
-          </button>
-          <button type="button" className="ic ic-sm nv-lang" data-testid="language-toggle" aria-label={c.otherLabel} title={c.otherLabel} onClick={switchLanguage}>
-            <Languages aria-hidden="true" /><span lang={rtl ? 'en' : 'ar'}>{c.other}</span>
-          </button>
           <button type="button" className="ic ic-sm nv-close" aria-label={c.close} onClick={() => setOpen(false)}><X aria-hidden="true" /></button>
         </div>
       </nav>
@@ -144,10 +153,13 @@ export function AppShell() {
       {/* The identity tour: offered once per account, re-opened from Help */}
       <IdentityTour />
 
+      {/* Phone tab bar. Below 640px it also carries Upload (centre) and More (the drawer), which leave the header
+          there so that language, light/dark and the account fit beside the logo (docs/design/NAV.md "Phone") */}
       <nav className="tabbar" aria-label={c.browse}>
-        {tabs.map((it) => (
-          <Link key={it.href} href={it.href} className="tb" aria-current={isCurrent(it.href) ? 'page' : undefined}><it.icon aria-hidden="true" /><span>{it.label}</span></Link>
-        ))}
+        {tabs.slice(0, 2).map(tab)}
+        <UploadAction variant="tab" />
+        {tabs.slice(2).map(tab)}
+        <button type="button" className="tb tb-phone" aria-expanded={open} data-testid="nav-more-tab" onClick={() => setOpen(!open)}><Menu aria-hidden="true" /><span>{c.more}</span></button>
       </nav>
     </div>
   );

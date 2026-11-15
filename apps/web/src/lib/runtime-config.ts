@@ -19,6 +19,8 @@ export interface RuntimeConfig {
   WWW_URL?: string;
   /** Short share links host (alummahnow.link, wiki AUN-SHORT-LINKS). '' = share the page's own URL. */
   SHORT_LINK_URL?: string;
+  /** NEXTJS_ENV (qa, stage, production, ...): the header's QA / STAGE badge. One build serves stage and production. */
+  ENVIRONMENT?: string;
 }
 
 /**
@@ -82,6 +84,7 @@ export function getRuntimeConfig(): RuntimeConfig {
       CMS_URL: deriveCmsUrl(process.env.OPENAUTH_ISSUER || process.env.Issuer, process.env.CMS_URL),
       WWW_URL: deriveWwwUrl(process.env.OPENAUTH_ISSUER || process.env.Issuer, process.env.WWW_URL),
       SHORT_LINK_URL: deriveShortLinkUrl(process.env.API_URL || process.env.NEXT_PUBLIC_API_URL, process.env.SHORT_LINK_URL),
+      ENVIRONMENT: process.env.NEXTJS_ENV || '',
     };
   }
 
@@ -119,4 +122,9 @@ export function getAuthProfileUrl(): string {
 
 export function getAuthUrl(): string {
   return getRuntimeConfig().AUTH_URL || '';
+}
+
+/** This deployment's environment name ('' when unknown). */
+export function getEnvironment(): string {
+  return getRuntimeConfig().ENVIRONMENT || '';
 }

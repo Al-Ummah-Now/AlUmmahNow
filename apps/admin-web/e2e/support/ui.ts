@@ -21,11 +21,6 @@ export async function uiLogin(page: Page, account: Account, expectedPath: RegExp
 }
 
 /**
- * Pick a theme in the header select and wait for the server refresh it starts
- * (PreferencesControls: router.refresh() in a transition, aria-busy while
- * pending). Navigating while it is in flight is interrupted by it in WebKit.
- */
-/**
  * The main navigation (sidebar). On phones it is a drawer behind the menu button and hidden from
  * the accessibility tree until opened, so open it first; on wider screens it is always there.
  * PR runs test the deployed QA build, which may still have the old top nav (no admin-sidebar):
@@ -83,16 +78,52 @@ export async function expectColorMode(page: Page, mode: Theme | null) {
 }
 
 /**
- * Switch to Light or Dark with the main nav's toggle (one icon button named for the mode it
+ * A language / light-dark control. Since the unified header (docs/design/NAV.md "Header") they sit in
+ * the top bar at every width; the deployed QA build a PR runs against may still have them in the
+ * sidebar footer, behind the phone drawer, so the drawer is opened only when the control is not shown.
+ */
+export async function headerControl(page: Page, testId: 'theme-toggle' | 'language-toggle') {
+  const control = page.getByTestId(testId);
+  await control.waitFor({ state: 'attached' });
+  if (!(await control.isVisible())) await openMainNav(page);
+  return control;
+}
+
+/**
+ * Wait for the server refresh a preference starts (PreferencesControls: router.refresh() in a
+ * transition, aria-busy while pending). Navigating while it is in flight is interrupted by it in WebKit.
+ */
+async function preferenceSettled(page: Page, control: ReturnType<Page['getByTestId']>) {
+  await expect(page.locator('[aria-busy]').filter({ has: control })).toHaveAttribute('aria-busy', 'false', { timeout: 15_000 });
+}
+
+/**
+ * Switch the language with the header's language button (the other language's own name; the
+ * admin_locale cookie, then a refresh of this page), or the old select on a build before it.
+ */
+export async function chooseLanguage(page: Page, locale: Locale) {
+  const toggle = page.getByTestId('language-toggle');
+  await toggle.or(page.getByTestId('language-select')).first().waitFor({ state: 'attached' });
+  if ((await toggle.count()) > 0) {
+    if ((await page.locator('html').getAttribute('lang')) !== locale) await toggle.click();
+    await expectDirection(page, locale);
+    await preferenceSettled(page, toggle);
+    return;
+  }
+  await openMainNav(page);
+  await page.getByTestId('language-select').selectOption(locale);
+}
+
+/**
+ * Switch to Light or Dark with the header's toggle (one icon button named for the mode it
  * switches to, as on the videos site), and wait for the refresh. A no-op when it already shows.
  */
 export async function chooseTheme(page: Page, theme: Theme) {
-  await openMainNav(page);
-  const button = page.getByTestId('theme-toggle');
+  const button = await headerControl(page, 'theme-toggle');
   const shown = (await page.locator('html').getAttribute('class'))?.split(/\s+/).includes('dark') ? 'dark' : 'light';
   if (shown !== theme) await button.click();
   await expect(button).toHaveAccessibleName(theme === 'dark' ? /^(Switch to light mode|التبديل إلى الوضع الفاتح)$/ : /^(Switch to dark mode|التبديل إلى الوضع الداكن)$/);
-  await expect(page.locator('[aria-busy]').filter({ has: button })).toHaveAttribute('aria-busy', 'false', { timeout: 15_000 });
+  await preferenceSettled(page, button);
 }
 
 /** Persist UI preferences the same way the preference selects do. */

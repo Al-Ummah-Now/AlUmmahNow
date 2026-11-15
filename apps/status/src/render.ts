@@ -5,7 +5,8 @@
  * (line breaks kept), never HTML.
  */
 import type { ComponentState, IncidentStatus } from '@al-ummah/shared-types';
-// The Light / Dark control shared by every app (docs/design/NAV.md): Lucide sun/moon, action names
+// The shared header (docs/design/NAV.md "Header"): the same builders and classes as every app
+import { HEADER_LABELS, appLinksHtml, brandHtml, envBadgeHtml, langButtonHtml, modeButtonHtml, samePath } from '../../../packages/fanous-tokens/nav/header.js';
 import { modeIconSvg, modeToggleLabel } from '../../../packages/fanous-tokens/nav/mode-toggle.js';
 import { host, type StatusEnvName } from './checks';
 import { componentName, formatDay, formatPercent, formatTime, stateLabel, t, type Locale } from './i18n';
@@ -44,6 +45,8 @@ export interface PageOptions {
   locale: Locale;
   /** Path without the locale prefix ('' or /incidents/<id>) */
   path: string;
+  /** The request's query ("?…" or ''), kept by the language button */
+  search?: string;
   assetVersion: string;
   environment: string;
 }
@@ -65,25 +68,40 @@ export function siteLinks(locale: Locale, environment: string): { www: string; v
   return { www: `${host(env, 'www')}/${locale}/`, videos: `${host(env, 'videos')}/${locale}` };
 }
 
-/** One app link with that app's own favicon (docs/design/NAV.md: /aun-nav/icons/<id>.webp). */
-function appLink(id: 'www' | 'videos', href: string, label: string): string {
-  return `<a class="tool app" href="${esc(href)}" data-testid="status-app-${id}"><img class="app-icon" src="/aun-nav/icons/${id}.webp" width="20" height="20" alt="" decoding="async"><span>${esc(label)}</span></a>`;
+/**
+ * On phones the header's app links leave the bar (docs/design/NAV.md); this page has no drawer or
+ * account menu, so the footer carries them there: the same names and icons, as plain page links.
+ */
+function footApps(locale: Locale, apps: { id: 'www' | 'videos'; href: string }[]): string {
+  const l = HEADER_LABELS[locale];
+  const items = apps
+    .map((a) => `<a href="${esc(a.href)}"><img src="/aun-nav/icons/${a.id}.webp" alt="" width="20" height="20">${esc(l[a.id])}</a>`)
+    .join(' ');
+  return `<nav class="foot-apps" aria-label="${esc(l.apps)}">${items}</nav>`;
 }
 
-/** Light / Dark: shown by mode.js (it needs JS); the icon for the mode on screen comes from CSS. */
-function modeToggle(locale: Locale): string {
+/**
+ * Light / Dark: the shared button (header.js modeButtonHtml) with both icons, as the page is cached
+ * and the mode is chosen on the device: CSS shows the moon in light and the sun in dark, and mode.js
+ * names it for the mode it switches to (data-label-*) and shows it (it needs JS, so it starts hidden).
+ */
+export function modeToggle(locale: Locale): string {
   const toDark = modeToggleLabel(locale, false);
   const toLight = modeToggleLabel(locale, true);
-  return `<button class="tool icon-btn" type="button" id="mode-toggle" data-testid="theme-toggle" data-label-dark="${esc(toDark)}" data-label-light="${esc(toLight)}" aria-label="${esc(toDark)}" title="${esc(toDark)}" hidden>${modeIconSvg('moon', 'mode-icon mode-moon')}${modeIconSvg('sun', 'mode-icon mode-sun')}</button>`;
+  return modeButtonHtml({ lang: locale, dark: false })
+    .replace(' aria-label=', ` data-label-dark="${esc(toDark)}" data-label-light="${esc(toLight)}" hidden aria-label=`)
+    .replace('</button>', `${modeIconSvg('sun')}</button>`);
 }
 
 function shell(o: PageOptions, title: string, main: string): string {
   const { locale } = o;
   const other: Locale = locale === 'ar' ? 'en' : 'ar';
-  const otherHref = `${prefix(other)}${o.path}` || '/';
+  const query = o.search && o.search !== '?' ? o.search : '';
+  // the same page and query in the other language; samePath keeps it on this host whatever the path
+  const otherHref = samePath(`${prefix(other)}${o.path}` || '/') + query;
   const self = `${prefix(locale)}${o.path}` || '/';
-  const envTag = o.environment === 'production' ? '' : `<span class="env">${esc(o.environment.toUpperCase())}</span>`;
   const sites = siteLinks(locale, o.environment);
+  const apps = [{ id: 'www' as const, href: sites.www }, { id: 'videos' as const, href: sites.videos }];
   return `<!doctype html>
 <html lang="${locale}" dir="${locale === 'ar' ? 'rtl' : 'ltr'}">
 <head>
@@ -93,6 +111,8 @@ function shell(o: PageOptions, title: string, main: string): string {
 <meta name="description" content="${esc(t(locale, 'description'))}">
 <meta name="color-scheme" content="light dark">
 <script src="/mode.js?v=${esc(o.assetVersion)}"></script>
+<link rel="stylesheet" href="/fanous/tokens.css?v=${esc(o.assetVersion)}">
+<link rel="stylesheet" href="/aun-nav/aun-nav.css?v=${esc(o.assetVersion)}">
 <link rel="stylesheet" href="/status.css?v=${esc(o.assetVersion)}">
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -104,18 +124,14 @@ function shell(o: PageOptions, title: string, main: string): string {
 </head>
 <body>
 <a class="skip" href="#main">${esc(t(locale, 'skip'))}</a>
-<header class="top">
-  <div class="wrap top-row">
-    <div class="brand-row">
-      <a class="brand" href="${esc(sites.www)}" aria-label="${esc(t(locale, 'homeLabel'))}" data-testid="status-brand"><img src="/apple-touch-icon.png" alt="" width="32" height="32"><span>${esc(t(locale, 'siteName'))}</span></a>
-      <a class="brand-sub" href="${prefix(locale) || '/'}">${esc(t(locale, 'title'))}</a>${envTag}
-    </div>
-    <nav class="apps" aria-label="${esc(t(locale, 'apps'))}">
-      ${appLink('www', sites.www, t(locale, 'appWww'))}
-      ${appLink('videos', sites.videos, t(locale, 'appVideos'))}
-    </nav>
-    <div class="tools">
-      <a class="tool" href="${esc(otherHref)}" hreflang="${other}" lang="${other}" aria-label="${esc(t(locale, 'otherLanguageLabel'))}">${esc(t(locale, 'otherLanguage'))}</a>
+<header class="aun-header">
+  <div class="aun-header-row">
+    ${brandHtml({ lang: locale, href: prefix(locale) || '/', app: t(locale, 'title') })}
+    ${envBadgeHtml(o.environment, locale)}
+    <div class="aun-header-primary"></div>
+    <div class="aun-header-tools">
+      ${appLinksHtml({ lang: locale, links: apps })}
+      ${langButtonHtml({ lang: locale, href: otherHref })}
       ${modeToggle(locale)}
     </div>
   </div>
@@ -124,6 +140,7 @@ function shell(o: PageOptions, title: string, main: string): string {
 ${main}
 </main>
 <footer class="wrap foot">
+  ${footApps(locale, apps)}
   <p>${esc(t(locale, 'footerNote'))}</p>
   <p class="feeds"><span>${esc(t(locale, 'feeds'))}:</span> <a href="${prefix(locale)}/feed.atom">${esc(t(locale, 'atom'))}</a> <a href="${prefix(locale)}/feed.rss">${esc(t(locale, 'rss'))}</a> <a href="/api/status.json">${esc(t(locale, 'json'))}</a></p>
 </footer>

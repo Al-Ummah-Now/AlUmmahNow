@@ -1,7 +1,9 @@
 'use client';
-// The one Upload action: the first item of the header's action cluster (before notifications and the
-// account), a header pill like the account button with an upload icon (a tray with an arrow up, the
-// menus' stroke icon set; owner decision 2026-11-13, replacing the "+") and a short label, icon only on phones.
+// The one Upload action: the first item of the header's app actions (before notifications; docs/design/NAV.md
+// "Header"), a 40px header pill with an upload icon (a tray with an arrow up, the menus' stroke icon set; owner
+// decision 2026-11-13, replacing the "+") and a short label. On phones (below 640px) the header has no room
+// left once language and light/dark sit in it, so Upload is the centre item of the bottom tab bar instead
+// (variant "tab", the YouTube pattern); the header's copy is hidden there.
 import Link from '@/components/common/AppLink';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/components/AuthProvider/authContext';
@@ -15,7 +17,7 @@ const Icon = () => (
   </svg>
 );
 
-export function UploadAction() {
+export function UploadAction({ variant = 'header' }: { variant?: 'header' | 'tab' }) {
   const { t, lang } = useLanguage();
   const { user } = useAuth();
   const { user: account } = useMultiAccount();
@@ -26,8 +28,16 @@ export function UploadAction() {
   // Uploading is by invitation: no Upload for a signed-in user without a creator tier
   if (user && !mayUpload(creator)) return null;
   // Signed in without a channel: nowhere to upload to yet
+  const tab = variant === 'tab';
   if (user && !account?.channel) {
     const why = t.upload.createChannelToUpload;
+    if (tab) {
+      return (
+        <span className="tb tb-phone" role="link" aria-disabled="true" aria-label={`${label}. ${why}`} title={why} data-testid="tab-upload" data-state="disabled">
+          <Icon /><span>{short}</span>
+        </span>
+      );
+    }
     return (
       <span className="upload-action" role="link" aria-disabled="true" aria-label={`${label}. ${why}`} title={why} data-testid="header-upload" data-state="disabled">
         <Icon /><span className="upload-action-label">{short}</span>
@@ -37,6 +47,13 @@ export function UploadAction() {
   // Studio's upload for the active channel (the page's picker preselects it);
   // signed out goes to the upload page too, which asks them to sign in first
   const href = account?.channel?.id ? studioUploadHref(lang, account.channel.id) : `/${lang}/upload`;
+  if (tab) {
+    return (
+      <Link href={href} className="tb tb-phone" aria-label={label} data-testid="tab-upload" data-state={user ? 'ready' : 'signed-out'}>
+        <Icon /><span>{short}</span>
+      </Link>
+    );
+  }
   return (
     <Link href={href} className="upload-action" aria-label={label} title={label} data-testid="header-upload" data-state={user ? 'ready' : 'signed-out'}>
       <Icon /><span className="upload-action-label">{short}</span>

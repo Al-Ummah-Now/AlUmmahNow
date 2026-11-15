@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
 import { ANONYMOUS_STATE, AUTH_STATE, readSession } from './test-utils/auth-state';
 import { clickAndWaitForURL } from './test-utils/qa-content';
-import { closeSideDrawer, expectSideDrawerClosed, isDrawerLayout, openSideDrawer } from './test-utils/navigation';
+import { closeSideDrawer, expectSideDrawerClosed, isDrawerLayout, isPhoneLayout, openSideDrawer } from './test-utils/navigation';
 import type { Page } from '@playwright/test';
 
 /**
@@ -13,43 +13,43 @@ import type { Page } from '@playwright/test';
 const HOME_LINK = { en: /Al Ummah Now/, ar: /الأمة الآن/ } as const;
 
 /**
- * The top bar reads: menu button, logo, search, then the action cluster: Upload, bell, account
- * (docs/design/NAV.md; owner review rev 5). Upload is the first item of the cluster, after the
- * search: to its right in LTR, to its left in RTL. A deployed build from before still has Upload
- * right after the logo, so that layout passes too until this ships.
+ * The top bar reads: menu button, logo, search, then the tools: Upload, bell, Website, language,
+ * light/dark, account (docs/design/NAV.md "Header"). Upload is the first of the tools, after the
+ * search: to its right in LTR, to its left in RTL. Below 640px Upload is in the tab bar instead.
  */
-async function expectUploadAfterLogo(page: Page, lang: 'en' | 'ar', rtl: boolean): Promise<void> {
+async function expectUploadAfterSearch(page: Page, rtl: boolean): Promise<void> {
   const banner = page.getByRole('banner');
-  const logo = await banner.getByRole('link', { name: HOME_LINK[lang] }).boundingBox();
+  const logo = await banner.locator('.aun-brand').boundingBox();
   const upload = await banner.getByTestId('header-upload').boundingBox();
   const searchInput = banner.getByTestId('header-search-input');
   const search = await ((await searchInput.isVisible()) ? searchInput : banner.getByTestId('header-search-open')).boundingBox();
   if (!logo || !upload || !search) throw new Error('header controls not laid out');
-  const inCluster = (await banner.locator('.ah-end [data-testid="header-upload"]').count()) > 0;
-  if (inCluster) {
-    // Signed-out visitors have no bell: never wait for it
-    const bellLoc = banner.getByTestId('notification-bell');
-    const bell = (await bellLoc.count()) > 0 ? await bellLoc.first().boundingBox() : null;
-    if (rtl) {
-      expect(upload.x + upload.width, 'Upload follows the search (RTL)').toBeLessThanOrEqual(search.x + 1);
-      if (bell) expect(bell.x + bell.width, 'the bell follows Upload (RTL)').toBeLessThanOrEqual(upload.x + 1);
-    } else {
-      expect(upload.x, 'Upload follows the search').toBeGreaterThanOrEqual(search.x + search.width - 1);
-      if (bell) expect(bell.x, 'the bell follows Upload').toBeGreaterThanOrEqual(upload.x + upload.width - 1);
-    }
-    expect(upload.height, 'Upload is no taller than a header control').toBeLessThanOrEqual(44.5);
-  } else if (rtl) {
-    expect(upload.x + upload.width, 'Upload follows the logo (RTL)').toBeLessThanOrEqual(logo.x + 1);
-    expect(search.x + search.width, 'search follows Upload (RTL)').toBeLessThanOrEqual(upload.x + 1);
+  await expect(banner.locator('.ah-end [data-testid="header-upload"]')).toHaveCount(1);
+  // Signed-out visitors have no bell: never wait for it
+  const bellLoc = banner.getByTestId('notification-bell');
+  const bell = (await bellLoc.count()) > 0 ? await bellLoc.first().boundingBox() : null;
+  if (rtl) {
+    expect(upload.x + upload.width, 'Upload follows the search (RTL)').toBeLessThanOrEqual(search.x + 1);
+    if (bell) expect(bell.x + bell.width, 'the bell follows Upload (RTL)').toBeLessThanOrEqual(upload.x + 1);
   } else {
-    expect(upload.x, 'Upload follows the logo').toBeGreaterThanOrEqual(logo.x + logo.width - 1);
-    expect(search.x, 'search follows Upload').toBeGreaterThanOrEqual(upload.x + upload.width - 1);
+    expect(upload.x, 'Upload follows the search').toBeGreaterThanOrEqual(search.x + search.width - 1);
+    if (bell) expect(bell.x, 'the bell follows Upload').toBeGreaterThanOrEqual(upload.x + upload.width - 1);
   }
+  expect(Math.round(upload.height), 'Upload is a 40px header control').toBe(40);
   expect(Math.abs(upload.y + upload.height / 2 - (logo.y + logo.height / 2)), 'Upload and the logo share a line').toBeLessThanOrEqual(2);
 }
 
+/** Phones: Upload is the tab bar's centre item (the header's copy is not shown) */
+async function expectUploadInTabBar(page: Page, href: string, state: string): Promise<void> {
+  const tab = page.getByTestId('tab-upload');
+  await expect(tab).toBeVisible();
+  await expect(tab).toHaveAttribute('href', href);
+  await expect(tab).toHaveAttribute('data-state', state);
+  await expect(page.getByRole('banner').getByTestId('header-upload')).toBeHidden();
+}
+
 /**
- * Header, side drawer (theme / language / main links) and skip links.
+ * Header (language and light/dark included), side drawer (main links) and skip links.
  * Account menu cases live in 62-account-menu; the basic drawer cases in
  * 08-unified-navigation.
  */
@@ -60,43 +60,59 @@ test.describe('Header', () => {
   test('NAV-001 logo links home and the drawer toggle reports its state', async ({ page }) => {
     await page.goto('/en/search');
     const header = page.getByRole('banner');
-    const toggle = page.getByTestId('nav-drawer-toggle');
-    await expect(toggle).toHaveAccessibleName('Menu');
-    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    if (isPhoneLayout(page)) {
+      // Phones: no menu button in the bar; the tab bar's More opens the drawer
+      await expect(page.getByTestId('nav-drawer-toggle')).toBeHidden();
+      const more = page.getByTestId('nav-more-tab');
+      await expect(more).toHaveAttribute('aria-expanded', 'false');
+      await openSideDrawer(page);
+      await expect(more).toHaveAttribute('aria-expanded', 'true');
+      await closeSideDrawer(page);
+    } else {
+      const toggle = page.getByTestId('nav-drawer-toggle');
+      await expect(toggle).toHaveAccessibleName('Menu');
+      await expect(toggle).toHaveAttribute('aria-expanded', 'false');
 
-    await openSideDrawer(page);
-    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-    await expect(toggle).toHaveAccessibleName('Close menu');
-    await closeSideDrawer(page);
-    await expect(toggle).toHaveAccessibleName('Menu');
+      await openSideDrawer(page);
+      await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+      await expect(toggle).toHaveAccessibleName('Close menu');
+      await closeSideDrawer(page);
+      await expect(toggle).toHaveAccessibleName('Menu');
+    }
 
-    await clickAndWaitForURL(page, header.getByRole('link', { name: 'Al Ummah Now home' }), /\/en\/?$/);
+    // The logo lockup's name is its visible text: the wordmark and the app (WCAG 2.5.3)
+    const logo = header.locator('.aun-brand');
+    await expect(logo).toHaveAccessibleName(/Al Ummah Now\s*Videos/);
+    await clickAndWaitForURL(page, logo, /\/en\/?$/);
   });
 
   test('NAV-002 Arabic header is RTL with Arabic labels', async ({ page }) => {
     await page.goto('/ar');
     const header = page.getByRole('banner');
     await expect(header.getByRole('link', { name: HOME_LINK.ar })).toHaveAttribute('href', /^\/ar\/?$/);
-    await expect(page.getByTestId('nav-drawer-toggle')).toHaveAccessibleName('القائمة');
+    if (!isPhoneLayout(page)) await expect(page.getByTestId('nav-drawer-toggle')).toHaveAccessibleName('القائمة');
     const direction = await header.evaluate((el) => getComputedStyle(el).direction);
     expect(direction).toBe('rtl');
   });
 
-  test('NAV-003 signed-out visitors see Upload once, after the logo and before search, in both directions', async ({ page, isMobile }) => {
+  test('NAV-003 signed-out visitors see Sign in and Upload once, after the search, in both directions', async ({ page }) => {
     for (const [lang, rtl] of [['en', false], ['ar', true]] as const) {
       await page.goto(`/${lang}`);
-      await expect(page.getByTestId('nav-menu-trigger')).toBeVisible();
-      // Exactly one Upload anywhere on the page, and it is in the top bar
+      // Signed out the account control is the solid Sign in
+      await expect(page.getByTestId('header-sign-in')).toBeVisible();
+      await expect(page.getByTestId('header-sign-in')).toHaveText(lang === 'ar' ? 'تسجيل الدخول' : 'Sign in');
+      await expect(page.getByTestId('nav-menu-trigger')).toHaveCount(0);
+      // One Upload in the header, one in the phone tab bar; only one is shown at any width
       await expect(page.getByTestId('header-upload')).toHaveCount(1);
-      const upload = page.getByRole('banner').getByTestId('header-upload');
-      await expect(upload).toHaveAttribute('href', `/${lang}/upload`);
-      await expect(upload).toHaveAttribute('data-state', 'signed-out');
-      await expectUploadAfterLogo(page, lang, rtl);
-      if (isMobile) {
-        // A 44px icon button; the label stays its accessible name
-        const box = (await upload.boundingBox())!;
-        expect(Math.round(box.width)).toBe(44);
-        expect(Math.round(box.height)).toBe(44);
+      await expect(page.getByTestId('tab-upload')).toHaveCount(1);
+      if (isPhoneLayout(page)) {
+        await expectUploadInTabBar(page, `/${lang}/upload`, 'signed-out');
+      } else {
+        const upload = page.getByRole('banner').getByTestId('header-upload');
+        await expect(upload).toHaveAttribute('href', `/${lang}/upload`);
+        await expect(upload).toHaveAttribute('data-state', 'signed-out');
+        await expect(page.getByTestId('tab-upload')).toBeHidden();
+        await expectUploadAfterSearch(page, rtl);
       }
     }
   });
@@ -105,34 +121,39 @@ test.describe('Header', () => {
 test.describe('Header - channel owner', () => {
   test.use({ storageState: AUTH_STATE.single });
 
-  test('NAV-004 shows the upload shortcut after the logo (text hidden on phones)', async ({ page, isMobile }) => {
+  test('NAV-004 shows the upload shortcut after the search (icon only below 1024px, in the tab bar on phones)', async ({ page }) => {
     await page.goto('/en');
-    const upload = page.getByRole('banner').getByRole('link', { name: /Upload Video/ });
     // Upload opens on the active channel (3883fa94: the upload page's picker reads ?channel=)
     const { activeChannelId } = readSession('single');
     expect(activeChannelId, 'single user has an active channel').toBeTruthy();
-    await expect(upload).toHaveAttribute('href', `/en/upload?channel=${encodeURIComponent(activeChannelId!)}`);
+    const href = `/en/upload?channel=${encodeURIComponent(activeChannelId!)}`;
+    if (isPhoneLayout(page)) {
+      await expectUploadInTabBar(page, href, 'ready');
+      await expect(page.getByTestId('tab-upload')).toHaveAccessibleName('Upload Video');
+      await page.goto('/ar');
+      await expect(page.getByTestId('tab-upload')).toHaveAttribute('data-state', 'ready');
+      return;
+    }
+    const upload = page.getByRole('banner').getByRole('link', { name: /Upload Video/ });
+    await expect(upload).toHaveAttribute('href', href);
     await expect(upload).toHaveAttribute('data-state', 'ready');
     await expect(page.getByTestId('header-upload')).toHaveCount(1);
-    // Signed in it keeps its place: after the logo, before search, mirrored in Arabic
-    await expectUploadAfterLogo(page, 'en', false);
+    // Signed in it keeps its place: after the search, mirrored in Arabic
+    await expectUploadAfterSearch(page, false);
     await page.goto('/ar');
     await expect(page.getByRole('banner').getByTestId('header-upload')).toHaveAttribute('data-state', 'ready');
-    await expectUploadAfterLogo(page, 'ar', true);
+    await expectUploadAfterSearch(page, true);
     // Back to English: `upload` is found by its English name
     await page.goto('/en');
-    if (isMobile) {
-      // A 44px icon button; the label is visually hidden but stays its accessible name
-      await expect(upload).toHaveAccessibleName('Upload Video');
-      const box = await upload.boundingBox();
-      // The visible label is the short "Upload" since the shared nav ("Upload Video" before; the name stays)
-      const label = await upload.getByText(/^Upload( Video)?$/).boundingBox();
-      expect(Math.round(box!.width)).toBe(44);
+    await expect(upload).toHaveAccessibleName('Upload Video');
+    const box = (await upload.boundingBox())!;
+    const label = await upload.getByText(/^Upload( Video)?$/).boundingBox();
+    if (isDrawerLayout(page)) {
+      // Below 1024px a 40px icon button; the label is visually hidden but stays its accessible name
+      expect(Math.round(box.width)).toBe(40);
       expect(label!.width).toBeLessThanOrEqual(1);
-      expect(label!.height).toBeLessThanOrEqual(1);
     } else {
       await expect(upload).toContainText(/Upload( Video)?/);
-      await expect(upload).toHaveAccessibleName('Upload Video');
     }
   });
 });
@@ -182,7 +203,10 @@ test.describe('Side drawer', () => {
     await expect(drawer).toHaveCSS('direction', 'rtl');
     await expect(drawer.getByRole('link', { name: 'الرئيسية' })).toHaveAttribute('href', /^\/ar\/?$/);
     await expect(drawer.getByRole('link', { name: 'الاشتراكات' })).toHaveAttribute('href', '/ar/subscriptions');
-    await expect(drawer.getByTestId('theme-toggle')).toBeVisible();
+    // Language and light/dark are in the header, never in the drawer (docs/design/NAV.md)
+    await expect(drawer.getByTestId('theme-toggle')).toHaveCount(0);
+    await expect(drawer.getByTestId('language-toggle')).toHaveCount(0);
+    await expect(page.getByRole('banner').getByTestId('theme-toggle')).toBeVisible();
   });
 
   test('NAV-014 drawer fits a phone screen and stays inside the viewport', async ({ page, isMobile }) => {
@@ -192,7 +216,8 @@ test.describe('Side drawer', () => {
     const box = await drawer.boundingBox();
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
-    await expect(drawer.getByTestId('language-toggle')).toBeInViewport();
+    // The Website link leaves the bar on phones: the drawer carries it
+    await expect(drawer.getByTestId('nav-www')).toBeInViewport();
   });
 });
 
@@ -204,8 +229,8 @@ test.describe('Theme toggle', () => {
     const html = page.locator('html');
     await expect(html).not.toHaveClass(/\bdark\b/);
 
-    let drawer = await openSideDrawer(page);
-    await drawer.getByTestId('theme-toggle').click();
+    const toggle = page.getByRole('banner').getByTestId('theme-toggle');
+    await toggle.click();
     await expect(html).toHaveClass(/\bdark\b/);
     expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe('dark');
 
@@ -215,9 +240,8 @@ test.describe('Theme toggle', () => {
     await page.goto('/ar/search');
     await expect(html).toHaveClass(/\bdark\b/);
 
-    drawer = await openSideDrawer(page);
-    await expect(drawer.getByTestId('theme-toggle')).toHaveAccessibleName('التبديل إلى الوضع الفاتح');
-    await drawer.getByTestId('theme-toggle').click();
+    await expect(toggle).toHaveAccessibleName('التبديل إلى الوضع الفاتح');
+    await toggle.click();
     await expect(html).not.toHaveClass(/\bdark\b/);
     expect(await page.evaluate(() => localStorage.getItem('theme'))).toBe('light');
   });
@@ -268,8 +292,7 @@ test.describe('Light / Dark: first visit, no flash, no System', () => {
       await recordDarkAtBody(page, null);
       await page.goto('/en');
       expect(await darkAtBody(page)).toBe(scheme === 'dark');
-      const drawer = await openSideDrawer(page);
-      await expect(drawer.getByTestId('theme-toggle')).toHaveAccessibleName(scheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+      await expect(page.getByRole('banner').getByTestId('theme-toggle')).toHaveAccessibleName(scheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
       await expect(page.getByRole('button', { name: /^system$/i })).toHaveCount(0);
       await expect(page.getByRole('option', { name: /^system$/i })).toHaveCount(0);
     });
@@ -302,21 +325,23 @@ test.describe('Language toggle', () => {
 
   test('NAV-030 keeps the current path and query when switching en -> ar -> en', async ({ page }) => {
     await page.goto('/en/channels?sort=new');
-    let drawer = await openSideDrawer(page);
-    await drawer.getByTestId('language-toggle').click();
+    const toggle = page.getByRole('banner').getByTestId('language-toggle');
+    // a real link to the same page and query in the other language (a new tab works too)
+    await expect(toggle).toHaveAttribute('href', '/ar/channels?sort=new');
+    await expect(toggle).toHaveAttribute('hreflang', 'ar');
+    await expect(toggle).toHaveAccessibleName('Switch to Arabic: العربية');
+    await toggle.click();
     await expect(page).toHaveURL(/\/ar\/channels\?sort=new$/);
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
 
-    drawer = await openSideDrawer(page);
-    await drawer.getByTestId('language-toggle').click();
+    await toggle.click();
     await expect(page).toHaveURL(/\/en\/channels\?sort=new$/);
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   });
 
   test('NAV-031 remembers the chosen language', async ({ page, context }) => {
     await page.goto('/en/search');
-    const drawer = await openSideDrawer(page);
-    await drawer.getByTestId('language-toggle').click();
+    await page.getByRole('banner').getByTestId('language-toggle').click();
     await expect(page).toHaveURL(/\/ar\/search$/);
     await expect
       .poll(async () => (await context.cookies()).find((c) => /lang|locale/i.test(c.name))?.value)

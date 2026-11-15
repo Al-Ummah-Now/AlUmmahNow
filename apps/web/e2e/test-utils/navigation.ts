@@ -57,10 +57,10 @@ export async function waitForQuietNetwork(page: Page, quietMs = 750, timeout = 1
 }
 
 /**
- * The side navigation (main links, theme and language). From 1024px it is a
- * rail that is always on screen and the menu button widens it (html
- * data-rail="open"); below that it is an off-canvas drawer with a scrim and a
- * close button, and the phone tab bar holds the main destinations.
+ * The side navigation (main links; language and light/dark are in the header). From 1024px it is
+ * a rail that is always on screen and the menu button widens it (html data-rail="open"); below
+ * that it is an off-canvas drawer with a scrim and a close button, and the phone tab bar holds the
+ * main destinations. Below 640px the header has no menu button: the tab bar's More opens the drawer.
  */
 export function sideNav(page: Page): Locator {
   return page.getByTestId('side-nav');
@@ -71,10 +71,20 @@ export function isDrawerLayout(page: Page): boolean {
   return (page.viewportSize()?.width ?? 1280) < 1024;
 }
 
+/** True below 640px (phones): Upload and More are in the tab bar, not the header */
+export function isPhoneLayout(page: Page): boolean {
+  return (page.viewportSize()?.width ?? 1280) < 640;
+}
+
+/** What opens the drawer at this width: the header's menu button, or on phones the tab bar's More */
+export function drawerOpener(page: Page): Locator {
+  return page.getByTestId(isPhoneLayout(page) ? 'nav-more-tab' : 'nav-drawer-toggle');
+}
+
 /** Opens the side navigation (expands the rail or slides the drawer in) and returns it */
 export async function openSideDrawer(page: Page): Promise<Locator> {
   const drawer = sideNav(page);
-  const toggle = page.getByTestId('nav-drawer-toggle');
+  const toggle = drawerOpener(page);
   // Retried: a click that lands before hydration has no handler yet
   await expect(async () => {
     if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();

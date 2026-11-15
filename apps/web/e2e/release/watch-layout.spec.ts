@@ -102,7 +102,7 @@ async function expectHeader(page: Page, locale: Locale, width: number): Promise<
     const uploadInCluster = !!(end && upload && end.contains(upload));
     const named: Array<[string, Element | null]> = [
       ['menu', document.querySelector('[data-testid="nav-drawer-toggle"]')],
-      ['logo', header?.querySelector('.ah-brand') ?? null],
+      ['logo', header?.querySelector('.aun-brand') ?? null],
       ...(uploadInCluster ? [] : [['upload', upload] as [string, Element | null]]),
       ['search', header?.querySelector('.ah-search-wrap .ah-search, [data-testid="header-search-open"]') ?? null],
       ...(uploadInCluster ? [['upload', upload] as [string, Element | null]] : []),

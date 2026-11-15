@@ -1,6 +1,7 @@
 import { test, expect } from './fixtures';
 import type { APIRequestContext, Page } from '@playwright/test';
 import { ANONYMOUS_STATE, AUTH_STATE } from './test-utils/auth-state';
+import { openSideDrawer } from './test-utils/navigation';
 import { API_URL, userApi } from './test-utils/e2e-videos';
 import { ownPublicVideos } from './test-utils/own-public-video';
 
@@ -84,7 +85,7 @@ test.describe('Library (signed in)', () => {
     const seeded = !testInfo.project.name.startsWith('Mobile');
     if (seeded) await seedHub(request, cleanup, unlike);
     await page.goto('/en');
-    await page.getByTestId('nav-drawer-toggle').click();
+    await openSideDrawer(page);
     await page.getByTestId('side-nav').getByRole('link', { name: 'You', exact: true }).click();
     await expect(page).toHaveURL(/\/en\/library$/);
 

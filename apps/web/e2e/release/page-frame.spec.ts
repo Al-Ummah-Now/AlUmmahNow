@@ -1,8 +1,9 @@
 /**
- * Release regression: the redesigned page frame (#525). The top bar holds the
- * menu button, the logo with Upload right after it, the header search (#475)
- * and the account menu; desktop has a sidebar the menu button widens, phones
- * have a drawer and a bottom tab bar. Upload is a link for signed-out visitors
+ * Release regression: the page frame (#525) with the unified header (docs/design/NAV.md
+ * "Header"). The top bar holds the menu button, the logo lockup, the header search (#475), then
+ * Upload, the bell, Website, language, light/dark and the account (Sign in when signed out);
+ * desktop has a sidebar the menu button widens; phones have a drawer and a bottom tab bar that
+ * also carries Upload and More (the drawer). Upload is a link for signed-out visitors
  * (the upload page asks them to sign in), disabled for a signed-in user with
  * no channel, and opens the upload form once they have one.
  */
@@ -30,29 +31,20 @@ async function expectNoSidewaysScroll(page: Page): Promise<void> {
 }
 
 /**
- * Upload is the first item of the header's action cluster (after the search, before the bell and the
- * account; docs/design/NAV.md, owner review rev 5), on the reading side: right of the search in
- * English, left of it in Arabic. A deployed build from before has it directly after the logo and
- * before the search; that passes too until this ships.
+ * Upload is the first of the header's tools (after the search, before the bell and the account;
+ * docs/design/NAV.md), on the reading side: right of the search in English, left of it in Arabic.
  */
-async function expectUploadAfterLogo(page: Page, locale: Locale): Promise<void> {
+async function expectUploadAfterSearch(page: Page, locale: Locale): Promise<void> {
   const header = page.locator('header.ah');
-  const logo = (await header.locator('.ah-brand').boundingBox())!;
+  const logo = (await header.locator('.aun-brand').boundingBox())!;
   const upload = (await header.getByTestId('header-upload').boundingBox())!;
   const input = header.getByTestId('header-search-input');
   const search = (await ((await input.isVisible()) ? header.locator('.ah-search-wrap .ah-search') : header.getByTestId('header-search-open')).boundingBox())!;
   const rtl = locale === 'ar';
-  if ((await header.locator('.ah-end [data-testid="header-upload"]').count()) > 0) {
-    const fromSearch = rtl ? search.x - (upload.x + upload.width) : upload.x - (search.x + search.width);
-    expect(fromSearch, `Upload does not follow the search (gap ${fromSearch}px)`).toBeGreaterThanOrEqual(0);
-    expect(upload.height, 'Upload is no taller than a header control').toBeLessThanOrEqual(44.5);
-  } else {
-    const gap = rtl ? logo.x - (upload.x + upload.width) : upload.x - (logo.x + logo.width);
-    expect(gap, `Upload does not follow the logo (gap ${gap}px)`).toBeGreaterThanOrEqual(0);
-    expect(gap, `Upload is not beside the logo (gap ${gap}px)`).toBeLessThanOrEqual(24);
-    const toSearch = rtl ? upload.x - (search.x + search.width) : search.x - (upload.x + upload.width);
-    expect(toSearch, `Search does not follow Upload (gap ${toSearch}px)`).toBeGreaterThanOrEqual(0);
-  }
+  await expect(header.locator('.ah-end [data-testid="header-upload"]')).toHaveCount(1);
+  const fromSearch = rtl ? search.x - (upload.x + upload.width) : upload.x - (search.x + search.width);
+  expect(fromSearch, `Upload does not follow the search (gap ${fromSearch}px)`).toBeGreaterThanOrEqual(0);
+  expect(Math.round(upload.height), 'Upload is a 40px header control').toBe(40);
   expect(Math.abs(upload.y + upload.height / 2 - (logo.y + logo.height / 2)), 'Upload and the logo are not on one line').toBeLessThanOrEqual(2);
 }
 
@@ -73,13 +65,17 @@ test.describe('Release: page frame', () => {
         const upload = header.getByTestId('header-upload');
         await expect(toggle).toBeVisible();
         await expect(upload).toBeVisible();
-        await expectUploadAfterLogo(page, locale);
+        await expectUploadAfterSearch(page, locale);
         // Labelled on desktop, and a link to the upload page for a signed-out visitor
         await expect(upload).toHaveAttribute('data-state', 'signed-out');
         await expect(upload).toHaveAttribute('href', `/${locale}/upload`);
         await expect(upload).toHaveAccessibleName(UPLOAD_LABEL[locale]);
         await expect(upload.locator('.upload-action-label')).toBeVisible();
-        await expect(header.getByTestId('nav-menu-trigger')).toBeVisible();
+        // Signed out the account control is the solid Sign in; language and light/dark sit beside it
+        await expect(header.getByTestId('header-sign-in')).toBeVisible();
+        await expect(header.getByTestId('nav-menu-trigger')).toHaveCount(0);
+        await expect(header.getByTestId('language-toggle')).toBeVisible();
+        await expect(header.getByTestId('theme-toggle')).toBeVisible();
 
         // Sidebar rail, no phone tab bar; the menu button widens the rail
         const side = page.getByTestId('side-nav');
@@ -131,30 +127,35 @@ test.describe('Release: page frame', () => {
     test.describe(`phone (${locale})`, () => {
       test.use({ viewport: PHONE, hasTouch: true, isMobile: true });
 
-      test('tab bar, drawer and a 44px Upload button', async ({ page, context }) => {
+      test('tab bar with Upload and More, drawer, and the header tools', async ({ page, context }) => {
         await answerConsent(context);
         await page.goto(`${target().web}/${locale}`);
-        const toggle = page.getByTestId('nav-drawer-toggle');
-        const upload = page.getByTestId('header-upload');
+        // Below 640px Upload and the drawer's button leave the header for the tab bar
+        const toggle = page.getByTestId('nav-more-tab');
+        const upload = page.getByTestId('tab-upload');
+        await expect(page.getByTestId('nav-drawer-toggle')).toBeHidden();
+        await expect(page.getByTestId('header-upload')).toBeHidden();
         await expect(upload).toBeVisible();
-        await expectUploadAfterLogo(page, locale);
-        // An icon button on phones: 44px, its label kept for screen readers only
-        const box = (await upload.boundingBox())!;
-        expect(`${Math.round(box.width)}x${Math.round(box.height)}`).toBe('44x44');
+        await expect(upload).toHaveAttribute('href', `/${locale}/upload`);
         await expect(upload).toHaveAccessibleName(UPLOAD_LABEL[locale]);
+        // The header keeps the logo, search, language, light/dark and Sign in on one 56px line
+        const header = page.locator('header.ah');
+        expect(Math.round((await header.boundingBox())!.height)).toBe(56);
+        for (const id of ['language-toggle', 'theme-toggle', 'header-sign-in']) await expect(header.getByTestId(id)).toBeVisible();
         // The full search box gives way to a search button
         await expect(page.getByTestId('header-search-open')).toBeVisible();
         await expect(page.getByTestId('header-search-input')).toBeHidden();
 
-        // Bottom tab bar: home, explore, subscriptions, library; home is current
+        // Bottom tab bar: home, explore, Upload, subscriptions, library, More; home is current
         const tabs = page.locator('nav.tabbar a');
         await expect(page.locator('nav.tabbar')).toBeVisible();
-        await expect(tabs).toHaveCount(4);
+        await expect(tabs).toHaveCount(5);
+        await expect(tabs.nth(2)).toHaveAttribute('data-testid', 'tab-upload');
         await expect(tabs.nth(0)).toHaveAttribute('aria-current', 'page');
         const bar = (await page.locator('nav.tabbar').boundingBox())!;
         expect(Math.round(bar.y + bar.height)).toBe(PHONE.height);
 
-        // The drawer is off screen until the menu button opens it, from the start side
+        // The drawer is off screen until More opens it, from the start side
         const side = page.getByTestId('side-nav');
         await expect(side).toHaveAttribute('data-open', 'false');
         await expect.poll(async () => {

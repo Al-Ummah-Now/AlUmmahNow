@@ -134,8 +134,8 @@ export const HELP_EN: HelpTranslations = {
           id: 'sign-in',
           heading: 'Sign in',
           blocks: [
-            { type: 'p', text: 'Select **Sign In** at the end of the header. One Al Ummah Now account works on all our sites — videos, the main site and your profile — so you sign in once.' },
-            { type: 'figure', picture: 'start-signin', alt: 'The header with the Sign In button at its end', markers: ['Sign In'] },
+            { type: 'p', text: 'Select **Sign in** at the end of the header. One Al Ummah Now account works on all our sites — videos, the main site and your profile — so you sign in once.' },
+            { type: 'figure', picture: 'start-signin', alt: 'The header with the Sign in button at its end', markers: ['Sign in'] },
             { type: 'tip', text: 'Add a **passkey** in your account to sign in without a password, using a passkey saved on this device, in your password manager, on your phone or on a security key.' },
           ],
         },
@@ -410,8 +410,8 @@ export const HELP_EN: HelpTranslations = {
           id: 'language',
           heading: 'Language',
           blocks: [
-            { type: 'p', text: 'At the foot of the side menu, select **العربية** (or **English**) to switch the whole site, including the player.' },
-            { type: 'figure', picture: 'appearance-rail', alt: 'The foot of the side menu with the language and light/dark buttons', markers: ['Light or dark', 'Language'] },
+            { type: 'p', text: 'In the top bar, select **العربية** (or **English**) to switch the whole site, including the player. You stay on the same page.' },
+            { type: 'figure', picture: 'appearance-rail', alt: 'The top bar with the language and light/dark buttons', markers: ['Light or dark', 'Language'] },
           ],
         },
         {
@@ -747,8 +747,8 @@ export const HELP_AR: HelpTranslations = {
           id: 'language',
           heading: 'اللغة',
           blocks: [
-            { type: 'p', text: 'في أسفل القائمة الجانبية اختر **English** (أو **العربية**) لتبديل لغة الموقع كله، ومنه المشغّل.' },
-            { type: 'figure', picture: 'appearance-rail', alt: 'أسفل القائمة الجانبية وفيه زرّا اللغة والوضع الفاتح والداكن', markers: ['فاتح أو داكن', 'اللغة'] },
+            { type: 'p', text: 'في الشريط العلوي اختر **English** (أو **العربية**) لتبديل لغة الموقع كله، ومنه المشغّل، وتبقى في الصفحة نفسها.' },
+            { type: 'figure', picture: 'appearance-rail', alt: 'الشريط العلوي وفيه زرّا اللغة والوضع الفاتح والداكن', markers: ['فاتح أو داكن', 'اللغة'] },
           ],
         },
         {

@@ -10,7 +10,13 @@ import { test, expect, type Page } from '@playwright/test';
  * must reach the element it paints: night is the header.
  */
 const ROOT = join(__dirname, '../../../..');
-const SITE_CSS = ['font-faces.css', 'system.css', 'pages.css'].map((f) => readFileSync(join(ROOT, 'apps/web/src/theme', f), 'utf8')).join('\n');
+// The same files in the same order as admin-kit.ts: font faces, the shared header (aun-nav.css), system.css, pages.css
+const SITE_CSS = [
+  join(ROOT, 'apps/web/src/theme/font-faces.css'),
+  join(ROOT, 'packages/fanous-tokens/nav/aun-nav.css'),
+  join(ROOT, 'apps/web/src/theme/system.css'),
+  join(ROOT, 'apps/web/src/theme/pages.css'),
+].map((f) => readFileSync(f, 'utf8')).join('\n');
 const lantern = JSON.parse(readFileSync(join(ROOT, 'packages/theme-packages/themes/lantern/theme.json'), 'utf8')) as ThemePackage;
 
 // The theme package is loaded at run time: it is ESM (built by the workflow before this suite), which a
@@ -78,7 +84,7 @@ test.describe('theme builder preview', () => {
     const light = theme.tokens.color.light;
     await expect(page.locator('.home-hero h2')).toHaveCSS('color', rgb(light.textPrimary));
     await expect(page.getByRole('button', { name: 'Lectures' })).toHaveCSS('color', rgb(light.textPrimary));
-    await expect(page.locator('.ah-brand')).toHaveCSS('color', rgb(lantern.components.header.colors!.light.text));
+    await expect(page.locator('.aun-brand-name')).toHaveCSS('color', rgb(lantern.components.header.colors!.light.text));
     // Browser dark modes (Chrome auto dark, Dark Reader) are told to leave the preview alone
     await expect(page.locator('meta[name="color-scheme"]')).toHaveAttribute('content', 'only light');
     await expect(page.locator('meta[name="darkreader-lock"]')).toHaveCount(1);

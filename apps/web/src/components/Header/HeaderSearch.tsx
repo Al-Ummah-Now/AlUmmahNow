@@ -84,14 +84,14 @@ function HeaderSearchInner() {
 
   return (
     <>
-      <div className="ah-search-wrap hidden sm:block w-full max-w-md">{bar(false)}</div>
-      <button type="button" onClick={() => setPhoneOpen(true)} data-testid="header-search-open" aria-label={t.navigation.search} className="ic ah-search-phone sm:hidden grid h-9 w-9 place-items-center rounded-full hover:bg-white/10">
-        <Search className="h-[18px] w-[18px]" aria-hidden="true" />
+      <div className="ah-search-wrap hidden lg:block w-full max-w-md">{bar(false)}</div>
+      <button type="button" onClick={() => setPhoneOpen(true)} data-testid="header-search-open" aria-label={t.navigation.search} className="aun-icon-btn ah-search-phone lg:hidden">
+        <Search aria-hidden="true" />
       </button>
       {phoneOpen && (
         <div
           data-testid="header-search-sheet"
-          className="ah-search-sheet fixed inset-x-0 top-0 z-[70] flex h-14 items-center gap-1 bg-[#093041] px-2 sm:hidden"
+          className="ah-search-sheet fixed inset-x-0 top-0 z-[70] flex h-14 items-center gap-1 bg-[#093041] px-2 lg:hidden"
           onKeyDown={(event) => { if (event.key === 'Escape' && !draft) setPhoneOpen(false); }}
         >
           <button type="button" onClick={() => setPhoneOpen(false)} data-testid="header-search-back" aria-label={t.common.back} className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-white hover:bg-white/10">
@@ -104,10 +104,10 @@ function HeaderSearchInner() {
   );
 }
 
-/** Search box with suggestions and history; on phones an icon opens it over the header. */
+/** Search box with suggestions and history; below 1024px an icon opens it over the header (the tools need the room). */
 export function HeaderSearch() {
   return (
-    <Suspense fallback={<div className="hidden sm:block h-9 w-full max-w-md" />}>
+    <Suspense fallback={<div className="hidden lg:block h-10 w-full max-w-md" />}>
       <HeaderSearchInner />
     </Suspense>
   );

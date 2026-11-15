@@ -26,7 +26,6 @@ import {
   Plus,
   LogOut,
   LogIn,
-  User,
   Tv,
   Crown,
   Video,
@@ -45,6 +44,7 @@ import { cmsLinks, isScholar } from '@/lib/scholars/sites';
 import { buildChannelMenu } from '@/lib/channels/menu';
 import type { ChannelRole } from '@al-ummah/shared-types';
 import { userDisplayName } from '@/lib/display-name';
+import { HeaderSignIn } from '@/components/Header/HeaderParts';
 
 type MenuView = 'main' | 'channels';
 
@@ -215,36 +215,13 @@ export function UnifiedNavigation() {
     return <span className="aun-acct-btn" aria-hidden="true"><span className="aun-avatar" /></span>;
   }
 
-  // Anonymous user - show menu icon with Sign In option
+  // Signed out: the header's solid "Sign in" (docs/design/NAV.md), never hidden in a menu. It posts the
+  // sign-in action, which starts the OAuth flow and comes back to this page.
   if (!user) {
     return (
-      <div className="relative">
-        <button
-          type="button"
-          onClick={() => setIsOpen(!isOpen)}
-          className="aun-acct-btn"
-          aria-label={t.navigation.navigationMenu}
-          aria-expanded={isOpen}
-          aria-haspopup="menu"
-          data-testid="nav-menu-trigger"
-        >
-          <span className="aun-avatar" aria-hidden="true"><User className="h-4 w-4" /></span>
-          <ChevronDown className="aun-caret" aria-hidden="true" />
-        </button>
-        {isOpen && (
-          <>
-            <MenuBackdrop onClose={() => setIsOpen(false)} />
-            <div ref={menuRef} className="aun-menu" role="menu" data-testid="nav-menu" aria-orientation="vertical">
-              <form action={login.bind(null, lang)}>
-                <button type="submit" className="aun-menu-item" role="menuitem">
-                  <User className="aun-menu-icon" aria-hidden="true" />
-                  <span className="aun-menu-text">{t.navigation.signIn}</span>
-                </button>
-              </form>
-            </div>
-          </>
-        )}
-      </div>
+      <form action={login.bind(null, lang)} className="contents">
+        <HeaderSignIn lang={lang} />
+      </form>
     );
   }
 

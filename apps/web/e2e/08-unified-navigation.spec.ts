@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
 import { AUTH_STATE, ANONYMOUS_STATE, readAccount, readSession } from './test-utils/auth-state';
 import { webAuthConfig } from './test-utils/session-login';
-import { closeSideDrawer, menuTrigger, openAccountMenu, openSideDrawer, showMenuView } from './test-utils/navigation';
+import { closeSideDrawer, expectSideDrawerClosed, isPhoneLayout, menuTrigger, openAccountMenu, openSideDrawer, showMenuView } from './test-utils/navigation';
 
 /**
  * Unified Navigation (header account menu + side drawer)
@@ -14,55 +14,38 @@ import { closeSideDrawer, menuTrigger, openAccountMenu, openSideDrawer, showMenu
 test.describe('Unified Navigation - anonymous', () => {
   test.use({ storageState: ANONYMOUS_STATE });
 
-  test('menu offers only Sign In', async ({ page }) => {
+  test('signed out, the account control is the solid Sign in (no account menu)', async ({ page }) => {
     await page.goto('/en');
-    const menu = await openAccountMenu(page);
-
-    await expect(menu.getByRole('menuitem', { name: /sign in/i })).toBeVisible();
-    await showMenuView(menu, 'main');
-    await expect(menu.getByTestId('nav-active-context')).toHaveCount(0);
+    const signIn = page.getByRole('banner').getByTestId('header-sign-in');
+    await expect(signIn).toBeVisible();
+    await expect(signIn).toHaveText('Sign in');
+    await expect(signIn).toHaveClass(/\baun-signin\b/);
+    await expect(page.getByTestId('nav-menu-trigger')).toHaveCount(0);
+    await expect(page.getByRole('menu')).toHaveCount(0);
   });
 
-  test('Sign In in the menu takes the visitor to the auth server', async ({ page }) => {
+  test('Sign in takes the visitor to the auth server', async ({ page }) => {
     await page.goto('/en');
-    const menu = await openAccountMenu(page);
-    const signIn = menu.getByRole('menuitem', { name: /sign in/i });
-
-    // Nothing covers the menu: the click-away layer stays under it whatever
-    // stacking context the theme wraps the page in
+    const signIn = page.getByRole('banner').getByTestId('header-sign-in');
+    await expect(signIn).toBeVisible();
+    // Nothing covers it, whatever stacking context the theme wraps the page in
     const covering = await signIn.evaluate((button) => {
       const r = button.getBoundingClientRect();
       const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
       return top && button.contains(top) ? null : top?.getAttribute('data-testid') || top?.tagName || 'nothing';
     });
-    expect(covering, 'the element on top of Sign In').toBeNull();
+    expect(covering, 'the element on top of Sign in').toBeNull();
 
     await signIn.click();
     const authOrigin = new URL(webAuthConfig().openAuthUrl).origin;
     await expect.poll(() => new URL(page.url()).origin, { timeout: 30_000 }).toBe(authOrigin);
   });
 
-  test('menu closes on Escape and on backdrop click', async ({ page }) => {
-    await page.goto('/en');
-    const menu = await openAccountMenu(page);
-
-    await page.keyboard.press('Escape');
-    await expect(menu).toBeHidden();
-    await expect(menuTrigger(page)).toHaveAttribute('aria-expanded', 'false');
-
-    await openAccountMenu(page);
-    // The backdrop covers the page; click away from the menu
-    await page.mouse.click(5, page.viewportSize()!.height - 5);
-    await expect(menu).toBeHidden();
-  });
-
-  test('Arabic menu is RTL with Arabic Sign In', async ({ page }) => {
+  test('Arabic header is RTL with the Arabic Sign in', async ({ page }) => {
     await page.goto('/ar');
-    const menu = await openAccountMenu(page);
-
-    // One direction-aware menu: it lays out right-to-left inside the Arabic page
-    await expect(menu).toHaveCSS('direction', 'rtl');
-    await expect(menu.getByRole('menuitem', { name: 'تسجيل الدخول' })).toBeVisible();
+    const banner = page.getByRole('banner');
+    await expect(banner).toHaveCSS('direction', 'rtl');
+    await expect(banner.getByTestId('header-sign-in')).toHaveText('تسجيل الدخول');
   });
 });
 
@@ -176,6 +159,19 @@ test.describe('Unified Navigation - English (LTR)', () => {
     await expect(menu.getByRole('menuitem', { name: /Sign out of all accounts/ })).toHaveCount(0);
   });
 
+  test('menu closes on Escape and on backdrop click', async ({ page }) => {
+    const menu = await openAccountMenu(page);
+
+    await page.keyboard.press('Escape');
+    await expect(menu).toBeHidden();
+    await expect(menuTrigger(page)).toHaveAttribute('aria-expanded', 'false');
+
+    await openAccountMenu(page);
+    // The backdrop covers the page; click away from the menu
+    await page.mouse.click(5, page.viewportSize()!.height - 5);
+    await expect(menu).toBeHidden();
+  });
+
   test('is keyboard accessible', async ({ page }) => {
     const trigger = menuTrigger(page);
     await trigger.focus();
@@ -259,15 +255,13 @@ test.describe('Unified Navigation - Arabic (RTL)', () => {
   });
 });
 
-test.describe('Side drawer - theme and language', () => {
+test.describe('Header - language and light/dark; drawer links', () => {
   test.use({ storageState: ANONYMOUS_STATE });
 
-  test('toggles dark mode', async ({ page }) => {
+  test('toggles dark mode from the header', async ({ page }) => {
     await page.goto('/en');
     const html = page.locator('html');
-    const drawer = await openSideDrawer(page);
-
-    const toggle = drawer.getByTestId('theme-toggle');
+    const toggle = page.getByRole('banner').getByTestId('theme-toggle');
     const wasDark = ((await html.getAttribute('class')) || '').includes('dark');
     await toggle.click();
     // The button is named for what it does next
@@ -280,12 +274,12 @@ test.describe('Side drawer - theme and language', () => {
     }
   });
 
-  test('switches English to Arabic', async ({ page }) => {
+  test('switches English to Arabic from the header', async ({ page }) => {
     await page.goto('/en');
-    const drawer = await openSideDrawer(page);
-
-    const toggle = drawer.getByTestId('language-toggle');
-    await expect(toggle).toHaveAccessibleName('التبديل إلى العربية');
+    const toggle = page.getByRole('banner').getByTestId('language-toggle');
+    // The other language's own name; the name starts with the action (WCAG 2.5.3)
+    await expect(toggle).toHaveText('Switch to Arabic: العربية');
+    await expect(toggle).toHaveAccessibleName('Switch to Arabic: العربية');
     await toggle.click();
 
     await expect(page).toHaveURL(/\/ar\/?$/);
@@ -293,12 +287,10 @@ test.describe('Side drawer - theme and language', () => {
     await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
   });
 
-  test('switches Arabic to English', async ({ page }) => {
+  test('switches Arabic to English from the header', async ({ page }) => {
     await page.goto('/ar');
-    const drawer = await openSideDrawer(page);
-
-    const toggle = drawer.getByTestId('language-toggle');
-    await expect(toggle).toHaveAccessibleName('Switch to English');
+    const toggle = page.getByRole('banner').getByTestId('language-toggle');
+    await expect(toggle).toHaveAccessibleName('التبديل إلى الإنجليزية: English');
     await toggle.click();
 
     await expect(page).toHaveURL(/\/en\/?$/);
@@ -310,8 +302,10 @@ test.describe('Side drawer - theme and language', () => {
     const drawer = await openSideDrawer(page);
 
     await expect(drawer.getByRole('link', { name: 'Home' })).toHaveAttribute('href', /^\/en\/?$/);
-    // Upload lives in the top bar, never in the drawer
+    // Upload lives in the top bar (the tab bar on phones), never in the drawer; so do language and light/dark
     await expect(drawer.getByRole('link', { name: /Upload/ })).toHaveCount(0);
+    await expect(drawer.getByTestId('theme-toggle')).toHaveCount(0);
+    await expect(drawer.getByTestId('language-toggle')).toHaveCount(0);
 
     await closeSideDrawer(page);
   });
@@ -320,11 +314,14 @@ test.describe('Side drawer - theme and language', () => {
 test.describe('Side drawer - channel owner', () => {
   test.use({ storageState: AUTH_STATE.single });
 
-  test('Upload is in the top bar, not in the drawer', async ({ page }) => {
+  test('Upload is in the top bar (the tab bar on phones), not in the drawer', async ({ page }) => {
     await page.goto('/en');
     const drawer = await openSideDrawer(page);
     await expect(drawer.getByRole('link', { name: /Upload/ })).toHaveCount(0);
-    const upload = page.getByRole('banner').getByTestId('header-upload');
+    await page.keyboard.press('Escape');
+    await expectSideDrawerClosed(page);
+    const upload = isPhoneLayout(page) ? page.getByTestId('tab-upload') : page.getByRole('banner').getByTestId('header-upload');
+    await expect(upload).toBeVisible();
     // Upload opens on the active channel (the upload page's picker reads ?channel=)
     const { activeChannelId } = readSession('single');
     expect(activeChannelId, 'single user has an active channel').toBeTruthy();

@@ -4,7 +4,6 @@ import { STATUS_COMPONENTS, STATUS_LABELS, type ComponentState, type IncidentSta
 export type Locale = 'en' | 'ar';
 
 const en = {
-  siteName: 'Al Ummah Now',
   title: 'Status',
   pageTitle: 'Al Ummah Now status',
   description: 'Live status of Al Ummah Now: the website, videos, sign-in, uploads, playback and more.',
@@ -43,12 +42,6 @@ const en = {
   atom: 'Atom feed',
   rss: 'RSS feed',
   json: 'JSON',
-  apps: 'Al Ummah Now apps',
-  appWww: 'Website',
-  appVideos: 'Videos',
-  homeLabel: 'Al Ummah Now website',
-  otherLanguage: 'العربية',
-  otherLanguageLabel: 'Arabic',
   footerNote: 'This page runs separately from the services it watches, so it stays up when they are down.',
   notFound: 'Incident not found',
   notFoundBody: 'It may have been removed.',
@@ -59,7 +52,6 @@ const en = {
 type Messages = Record<keyof typeof en, string>;
 
 const ar: Messages = {
-  siteName: 'الأمة الآن',
   title: 'الحالة',
   pageTitle: 'حالة خدمات الأمة الآن',
   description: 'الحالة المباشرة لخدمات الأمة الآن: الموقع والمرئيات وتسجيل الدخول والرفع والتشغيل وغيرها.',
@@ -98,12 +90,6 @@ const ar: Messages = {
   atom: 'موجز Atom',
   rss: 'موجز RSS',
   json: 'JSON',
-  apps: 'تطبيقات الأمة الآن',
-  appWww: 'الموقع',
-  appVideos: 'المرئيات',
-  homeLabel: 'موقع الأمة الآن',
-  otherLanguage: 'English',
-  otherLanguageLabel: 'الإنجليزية',
   footerNote: 'تعمل هذه الصفحة بمعزل عن الخدمات التي تراقبها، فتبقى متاحة حين تتعطل.',
   notFound: 'الحادثة غير موجودة',
   notFoundBody: 'ربما حُذفت.',
