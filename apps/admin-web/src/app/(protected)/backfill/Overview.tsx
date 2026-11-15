@@ -25,7 +25,7 @@ export function Overview({ overview, environment }: { overview: BackfillOverview
         {' '}
         {overview.bunnyStoredBytes === null ? t('mediaBackfill.overviewBunnyUnknown') : t('mediaBackfill.overviewBunny', { size: f.gb(overview.bunnyStoredBytes / 1e9) })}
       </p>
-      <div className="mt-4 overflow-x-auto">
+      <div className="mt-4 overflow-x-auto rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-focus" tabIndex={0} role="region" aria-labelledby="backfill-overview-title">
         <table className="w-full text-sm">
           <caption className="sr-only">{t('mediaBackfill.overviewCaption')}</caption>
           <thead>
