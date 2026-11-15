@@ -96,6 +96,8 @@ describe('YouTube import settings: the section', () => {
     assert.match(html, /https:\/\/videos\.api\.qa\.alummahnow\.net\/api\/youtube-import\/oauth\/callback/);
     assert.match(html, /youtube\.readonly/);
     assert.match(html, /youtube\.force-ssl/);
+    // api-videos counts the Secrets Store placeholder "unset" as no secret: say so while it is missing
+    assert.match(html, /data-testid="youtube-import-secret-placeholder"[^>]*>[^<]*&quot;unset&quot;/);
     assert.match(html, /data-testid="youtube-import-save"[^>]*disabled|disabled[^>]*data-testid="youtube-import-save"/, 'nothing to save yet');
   });
 
@@ -106,6 +108,7 @@ describe('YouTube import settings: the section', () => {
     assert.match(html, /Creators can connect/);
     assert.match(html, /data-testid="youtube-import-read-only"/);
     assert.match(html, /usr_admin/);
+    assert.doesNotMatch(html, /youtube-import-secret-placeholder/);
     const arabic = render(el(YoutubeImportSetting, { view: ready, canEdit: true, save }), 'ar');
     assert.match(arabic, /النقل من يوتيوب/);
     assert.match(arabic, /يمكن لصنّاع المحتوى الربط/);
