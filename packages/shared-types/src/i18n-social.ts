@@ -93,7 +93,8 @@ export const SOCIAL_STUDIO_EN = {
     url: 'URL',
     urlHint: 'https only',
     events: 'Send for',
-    eventNames: { 'video.published': 'New videos', 'short.published': 'New Shorts', 'live.started': 'Live streams', 'post.published': 'Community posts' },
+    /** Keyed by the webhook event with `_` for `.` (translation paths are dot-joined) */
+    eventNames: { video_published: 'New videos', short_published: 'New Shorts', live_started: 'Live streams', post_published: 'Community posts' },
     create: 'Add',
     secretTitle: 'Signing secret',
     secretOnce: 'Copy this secret now. It is shown only once.',
@@ -249,7 +250,7 @@ export const SOCIAL_STUDIO_AR: SocialStudioTranslations = {
     url: 'الرابط',
     urlHint: 'https فقط',
     events: 'الإرسال عند',
-    eventNames: { 'video.published': 'المرئيات الجديدة', 'short.published': 'المقاطع القصيرة الجديدة', 'live.started': 'البث المباشر', 'post.published': 'منشورات المجتمع' },
+    eventNames: { video_published: 'المرئيات الجديدة', short_published: 'المقاطع القصيرة الجديدة', live_started: 'البث المباشر', post_published: 'منشورات المجتمع' },
     create: 'إضافة',
     secretTitle: 'سرّ التوقيع',
     secretOnce: 'انسخ هذا السرّ الآن، فهو لا يظهر إلا مرة واحدة.',
