@@ -26,7 +26,7 @@ test.describe('transcript search', () => {
   for (const locale of LOCALES) {
     test(`search finds where a video says it and opens it there (${locale})`, async ({ browser, ownData }) => {
       test.setTimeout(240000);
-      const creator = await ownData.createCreator(browser, `tsr-${locale}`, { locale });
+      const creator = await ownData.createCreator(browser, `tsr-${locale}`);
       const channelId = creator.channelIds[0]!;
       // Letters only: one word the index keeps whole, unique to this run
       const word = `zephyr${Date.now().toString(36).replace(/[0-9]/g, (d) => 'abcdefghij'[Number(d)]!)}`;

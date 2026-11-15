@@ -19,18 +19,17 @@ class FakeDb {
   batches: Array<Array<{ sql: string; values: unknown[] }>> = [];
   indexedVersion: number | null = null;
   fail = false;
-  prepare(sql: string) {
-    const db = this;
+  prepare = (sql: string) => {
     const stmt = (values: unknown[]) => ({
       sql,
       values,
       bind: (...v: unknown[]) => stmt(v),
-      first: async () => ({ v: db.indexedVersion }),
+      first: async () => ({ v: this.indexedVersion }),
       all: async () => ({ results: [] }),
       run: async () => ({}),
     });
     return stmt([]);
-  }
+  };
   async batch(statements: Array<{ sql: string; values: unknown[] }>) {
     if (this.fail) throw new Error('D1 overloaded');
     this.batches.push(statements.map((s) => ({ sql: s.sql, values: s.values })));
