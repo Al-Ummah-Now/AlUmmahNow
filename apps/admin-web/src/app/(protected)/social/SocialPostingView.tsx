@@ -2,6 +2,7 @@
 
 import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { SOCIAL_NETWORKS, X_LINK_POST_COST_MICROS, X_MONTHLY_CAP_MAX_USD, X_POST_COST_MICROS, type SocialNetwork, type SocialPlatformSettings } from '@al-ummah/shared-types';
 import { clearSocialCredentials, saveSocialCredentials, saveSocialSettings, type SocialAdminView, type SocialHistoryEntry } from '@/lib/api/admin';
 import { useConfirm } from '@/components/content/actions';
@@ -314,7 +315,7 @@ export function SocialPostingView({ view, history, canEdit }: { view: SocialAdmi
       <section className={cardClass} aria-labelledby={`${ids}-failures`}>
         <h2 id={`${ids}-failures`} className="text-lg font-semibold text-fg mb-1">{t('socialPosting.failuresTitle')}</h2>
         <p className="text-sm text-fg-muted mb-4">
-          <a className={linkClass} href="/errors">{t('socialPosting.failuresHint')}</a>
+          <Link className={linkClass} href="/errors">{t('socialPosting.failuresHint')}</Link>
         </p>
         {view.recentFailures.length === 0 ? (
           <p className="text-sm text-fg-muted">{t('socialPosting.failuresNone')}</p>

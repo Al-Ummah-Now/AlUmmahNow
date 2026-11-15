@@ -6,7 +6,7 @@
  */
 import { test, expect } from './support/fixtures';
 import { adminApi, readTokens } from './support/api';
-import { LOCAL_STACK, storageStatePath } from './support/env';
+import { LOCAL_STACK, VIDEOS_API_URL, storageStatePath } from './support/env';
 import { expectDirection, expectNoAxeViolations, setPreferences } from './support/ui';
 
 const BOT_TOKEN = '7000001:LocalStackFakeBotTokenForE2EOnly_abcdefgh';
@@ -31,7 +31,14 @@ test.describe('social posting', () => {
   test.afterAll(async () => {
     if (!before) return;
     const token = readTokens().superadmin;
-    await adminApi('/api/social/settings', { method: 'PUT', token, body: JSON.stringify(before.settings) });
+    // Put the settings back straight on api-videos (the local stack's fixed internal key) rather than through
+    // admin-api: that write would record the run's super admin as updated_by, a row of the run left behind
+    const res = await fetch(`${VIDEOS_API_URL}/internal/social/admin/settings`, {
+      method: 'PUT',
+      headers: { 'X-API-Key': 'local-stack-internal-key', 'X-Admin-Actor': 'e2e', 'Content-Type': 'application/json' },
+      body: JSON.stringify(before.settings),
+    });
+    expect(res.status, `restore social settings: ${await res.text()}`).toBe(200);
     if (!before.readiness.telegram?.configured) await adminApi('/api/social/credentials/telegram', { method: 'DELETE', token });
   });
 

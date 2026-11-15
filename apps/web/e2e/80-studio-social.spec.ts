@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures';
+import { test as fixturesTest, expect } from './fixtures';
 import { AxeBuilder } from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 import { ns, onLocalStack, useOwnData, type Creator } from './release/builders';
@@ -25,12 +25,29 @@ const CONTROL = process.env.LOCAL_STACK_CONTROL_URL || 'http://127.0.0.1:3190';
 const INTERNAL_KEY = 'local-stack-internal-key';
 const BOT_TOKEN = '7000001:LocalStackFakeBotTokenForE2EOnly_abcdefgh';
 
-const data = useOwnData(test);
+const data = useOwnData(fixturesTest);
 let owner: Creator;
 let channelId: string;
 
+/**
+ * The creator is made in a worker fixture, not beforeAll: Playwright resolves storageState (a context option)
+ * before beforeAll runs, and applies it to browser.newContext() too, so a creator made in beforeAll was still
+ * undefined there ("reading 'state'"; same fix as 21-watch-later-per-user). Deleted by the file's DataScope.
+ */
+const test = fixturesTest.extend<object, { creators: { owner: Creator } }>({
+  creators: [
+    async ({ browser }, use) => {
+      owner = await data.createCreator(browser, 'social');
+      channelId = owner.channelIds[0];
+      await use({ owner });
+    },
+    { scope: 'worker', timeout: 300_000 },
+  ],
+});
+
+test.skip(!onLocalStack(), 'the social networks are faked on the local stack only');
 test.describe.configure({ mode: 'serial' });
-test.use({ storageState: async ({}, use) => use(owner.state) });
+test.use({ storageState: async ({ creators }, use) => use(creators.owner.state) });
 
 interface FakePost { network: string; text: string; account: string }
 interface FakeHook { path: string; headers: Record<string, string>; body: string }
@@ -61,10 +78,8 @@ async function axe(page: Page, label: string) {
   expect(scan.violations.map((v) => `${label}: ${v.id} (${v.nodes.length})`)).toEqual([]);
 }
 
-test.beforeAll(async ({ browser }) => {
-  test.skip(!onLocalStack(), 'the social networks are faked on the local stack only');
-  owner = await data.createCreator(browser, 'social');
-  channelId = owner.channelIds[0];
+test.beforeAll(async ({ creators }) => {
+  void creators;
   await setTelegramBot();
 });
 
