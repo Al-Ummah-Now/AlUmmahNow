@@ -157,9 +157,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ kind
       if (!bytes) return siteCard(request, env);
       card = await composeImageCard(env.IMAGES, bytes);
     } else {
-      // The banner when it loads, else the avatar
-      const cover = what.cover ? await fetchImage(what.cover) : null;
-      const avatar = cover ? null : await fetchImage(what.avatar as string);
+      // The logo in front of the banner; either alone when the other does not load
+      const [avatar, cover] = await Promise.all([fetchImage(what.avatar as string), what.cover ? fetchImage(what.cover) : Promise.resolve(null)]);
       if (!avatar && !cover) return siteCard(request, env);
       card = await composeChannelCard(env.IMAGES, avatar, cover);
     }

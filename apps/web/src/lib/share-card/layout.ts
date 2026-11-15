@@ -23,8 +23,8 @@ const FILL_MAX_ASPECT = 2.3;
  * - `fill`: a wide image (a landscape video frame), cropped to 1200x630 around its centre.
  * - `framed`: the whole image, as large as fits, centred on a blurred, dimmed copy of itself
  *   (a Short's vertical frame, a square image). Nothing is added: no logo, badge or text.
- * - `avatar`: a channel without a cover banner: its avatar at 420x420 centred on a blurred, dimmed
- *   copy of itself. A channel with a banner gets the banner as a `fill` or `framed` card.
+ * - `avatar`: a channel: its logo, a 420px circle, centred on its banner cropped to fill the card
+ *   (compose.ts composeChannelCard), or on CHANNEL_PAGE_COLOUR without a banner.
  */
 export type CardLayout =
   | { kind: 'fill' }
@@ -32,6 +32,9 @@ export type CardLayout =
   | { kind: 'avatar'; size: number; left: number; top: number };
 
 export const AVATAR_SIZE = 420;
+
+/** The page colour behind a channel logo without a banner: production's theme (Lantern), dark page */
+export const CHANNEL_PAGE_COLOUR = '#093041';
 
 export function cardLayout(width: number, height: number): CardLayout {
   if (!(width > 0) || !(height > 0)) return { kind: 'fill' };
