@@ -8,6 +8,7 @@ import {
   ADMIN_USER_TIER_FILTERS,
   CREATOR_TIER_BOUNDS,
   CREATOR_TIER_IDS,
+  CREATOR_TIER_TEXT,
   NO_CREATOR_TIER,
   type AdminUserTierFilter,
   type CreatorTier,
@@ -16,20 +17,30 @@ import {
 import type { Locale } from '@/i18n/config';
 import { formatNumber, type MessageKey, type Translator } from '@/i18n/translate';
 
-export type TierLimits = Pick<CreatorTier, 'unlimited' | 'perHour' | 'perDay' | 'maxConcurrent' | 'maxChannels'> & Partial<Pick<CreatorTier, 'captionMinutesMonth'>>;
+export type TierLimits = Pick<CreatorTier, 'unlimited' | 'perHour' | 'perDay' | 'maxConcurrent' | 'maxChannels'> &
+  Partial<Pick<CreatorTier, 'captionMinutesMonth' | 'uploads' | 'channels' | 'pages'>>;
 
-/** What holding `tier` lets a user do; null = no tier. */
+/** What holding `tier` lets a user do; null = no tier. Missing flags read as allowed (tiers before the flags). */
 export function tierEffect(tier: TierLimits | null, t: Translator, locale: Locale): string {
   if (!tier) return t('creators.effectNone');
   if (tier.unlimited) return t('creators.effectUnlimited');
   const n = (value: number) => formatNumber(value, locale);
-  const uploads = t('creators.effectLimited', {
-    perHour: n(tier.perHour),
-    perDay: n(tier.perDay),
-    concurrent: n(tier.maxConcurrent),
-    channels: tier.maxChannels === null ? t('creators.effectChannelsAny') : t('creators.effectChannels', { count: n(tier.maxChannels) }),
-  });
-  return tier.captionMinutesMonth ? `${uploads} ${t('creators.effectCaptions', { minutes: n(tier.captionMinutesMonth) })}` : uploads;
+  const uploads = tier.uploads !== false;
+  const channels = tier.channels !== false;
+  const channelText = tier.maxChannels === null ? t('creators.effectChannelsAny') : t('creators.effectChannels', { count: n(tier.maxChannels) });
+  const limits = { perHour: n(tier.perHour), perDay: n(tier.perDay), concurrent: n(tier.maxConcurrent), channels: channelText };
+  const parts = [
+    uploads && channels
+      ? t('creators.effectLimited', limits)
+      : uploads
+        ? t('creators.effectUploadsOnly', limits)
+        : channels
+          ? t('creators.effectChannelsOnly', limits)
+          : t('creators.effectWatchOnly'),
+  ];
+  if (tier.pages) parts.push(t('creators.effectPages'));
+  if (tier.captionMinutesMonth) parts.push(t('creators.effectCaptions', { minutes: n(tier.captionMinutesMonth) }));
+  return parts.join(' ');
 }
 
 /** The confirmation of a change from one tier to another (or none). */
@@ -50,7 +61,15 @@ export const ORIGIN_LABEL: Record<CreatorTierOrigin, MessageKey> = {
 export interface TierFormValues {
   id?: string;
   name: string;
+  nameAr: string;
+  description: string;
+  descriptionAr: string;
   unlimited: boolean;
+  uploads: boolean;
+  channels: boolean;
+  pages: boolean;
+  requestable: boolean;
+  sortOrder: number;
   perHour: number;
   perDay: number;
   maxConcurrent: number;
@@ -58,7 +77,7 @@ export interface TierFormValues {
   captionMinutesMonth: number;
 }
 
-export type TierField = 'id' | 'name' | 'perHour' | 'perDay' | 'maxConcurrent' | 'maxChannels' | 'captionMinutesMonth';
+export type TierField = 'id' | 'name' | 'nameAr' | 'description' | 'descriptionAr' | 'sortOrder' | 'perHour' | 'perDay' | 'maxConcurrent' | 'maxChannels' | 'captionMinutesMonth';
 export type TierFormErrors = Partial<Record<TierField, { key: MessageKey; params?: Record<string, string | number> }>>;
 
 export const TIER_ID_PATTERN = /^[a-z0-9][a-z0-9-]{1,39}$/;
@@ -69,12 +88,19 @@ export function validateTierForm(form: TierFormValues, opts: { create?: boolean 
   if (opts.create && !TIER_ID_PATTERN.test(form.id ?? '')) errors.id = { key: 'creators.errorId' };
   if (opts.create && Object.values(CREATOR_TIER_IDS).includes((form.id ?? '') as never)) errors.id = { key: 'creators.errorIdTaken' };
   const name = form.name.trim();
-  if (!name || name.length > 60) errors.name = { key: 'creators.errorName' };
-  if (form.unlimited) return errors;
+  if (!name || name.length > CREATOR_TIER_TEXT.name) errors.name = { key: 'creators.errorName' };
+  const text = (field: 'nameAr' | 'description' | 'descriptionAr', max: number) => {
+    if (form[field].trim().length > max) errors[field] = { key: 'creators.errorText', params: { max } };
+  };
+  text('nameAr', CREATOR_TIER_TEXT.name);
+  text('description', CREATOR_TIER_TEXT.description);
+  text('descriptionAr', CREATOR_TIER_TEXT.description);
   const inRange = (field: keyof typeof CREATOR_TIER_BOUNDS, value: number) => {
     const { min, max } = CREATOR_TIER_BOUNDS[field];
     if (!Number.isInteger(value) || value < min || value > max) errors[field] = { key: 'creators.errorRange', params: { min, max } };
   };
+  inRange('sortOrder', form.sortOrder);
+  if (form.unlimited) return errors;
   inRange('perHour', form.perHour);
   inRange('perDay', form.perDay);
   inRange('maxConcurrent', form.maxConcurrent);
@@ -82,6 +108,37 @@ export function validateTierForm(form: TierFormValues, opts: { create?: boolean 
   inRange('captionMinutesMonth', form.captionMinutesMonth);
   if (!errors.perHour && !errors.perDay && form.perDay < form.perHour) errors.perDay = { key: 'creators.errorPerDay' };
   return errors;
+}
+
+/** The form for a saved tier (or a new one): what the editor starts from. */
+export function tierToForm(tier?: CreatorTier): TierFormValues {
+  return {
+    id: tier?.id ?? '',
+    name: tier?.name ?? '',
+    nameAr: tier?.nameAr ?? '',
+    description: tier?.description ?? '',
+    descriptionAr: tier?.descriptionAr ?? '',
+    unlimited: tier?.unlimited ?? false,
+    // A new tier allows uploads and channels, as api-videos assumes
+    uploads: tier?.uploads ?? true,
+    channels: tier?.channels ?? true,
+    pages: tier?.pages ?? false,
+    requestable: tier?.requestable ?? false,
+    sortOrder: tier?.sortOrder ?? 50,
+    perHour: tier?.perHour || 300,
+    perDay: tier?.perDay || 2000,
+    maxConcurrent: tier?.maxConcurrent || 20,
+    maxChannels: tier ? tier.maxChannels : 3,
+    captionMinutesMonth: tier?.captionMinutesMonth ?? 0,
+  };
+}
+
+/** What a tier save sends to admin-api: optional text is null when empty (the English name or description is used). */
+export type TierPayload = Omit<TierFormValues, 'nameAr' | 'description' | 'descriptionAr'> & { nameAr: string | null; description: string | null; descriptionAr: string | null };
+
+export function tierFormPayload(form: TierFormValues): TierPayload {
+  const orNull = (v: string) => v.trim() || null;
+  return { ...form, name: form.name.trim(), nameAr: orNull(form.nameAr), description: orNull(form.description), descriptionAr: orNull(form.descriptionAr) };
 }
 
 // --- Users list tier filter ---------------------------------------------------

@@ -70,7 +70,9 @@ export function CreatorTierControl({ userId, userName, current: serverCurrent, t
   const locked = superAdmin && !unlocked;
   const tierOf = (id: string | null | undefined) => (id ? tiers.find((tier) => tier.id === id) ?? null : null);
   const currentTier = tierOf(current?.tierId);
-  const currentName = current ? currentTier?.name ?? current.tierId : t('creators.none');
+  // No assignment means Member (wiki AUN-TIER-REQUESTS): named as such, offered once as the empty choice
+  const memberName = tierOf(CREATOR_TIER_IDS.member)?.name ?? t('creators.none');
+  const currentName = current ? currentTier?.name ?? current.tierId : memberName;
 
   async function apply(tierId: string | null) {
     setPending(undefined);
@@ -150,7 +152,7 @@ export function CreatorTierControl({ userId, userName, current: serverCurrent, t
             className={`${fieldClass} py-1 text-sm`}
           >
             <option value="">{t('creators.noTier')}</option>
-            {tiers.map((tier) => (
+            {tiers.filter((tier) => tier.id !== CREATOR_TIER_IDS.member).map((tier) => (
               <option key={tier.id} value={tier.id}>{tier.name}</option>
             ))}
           </select>

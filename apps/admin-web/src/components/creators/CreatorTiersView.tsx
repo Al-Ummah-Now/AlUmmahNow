@@ -1,5 +1,5 @@
 import Link from '@/components/AppLink';
-import type { AdminAuditEntry, CreatorTiersList } from '@al-ummah/shared-types';
+import { CREATOR_TIER_IDS, type AdminAuditEntry, type CreatorTiersList } from '@al-ummah/shared-types';
 import type { Locale } from '@/i18n/config';
 import { formatDate, formatNumber, type MessageKey, type Translator } from '@/i18n/translate';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
@@ -13,6 +13,15 @@ const FIELD_LABEL: Record<string, MessageKey> = {
   perDay: 'creators.tierPerDay',
   maxConcurrent: 'creators.tierConcurrent',
   maxChannels: 'creators.tierChannels',
+  captionMinutesMonth: 'creators.tierCaptions',
+  nameAr: 'creators.tierNameAr',
+  description: 'creators.tierDescription',
+  descriptionAr: 'creators.tierDescriptionAr',
+  uploads: 'creators.tierUploadsFlag',
+  channels: 'creators.tierChannelsFlag',
+  pages: 'creators.tierPagesFlag',
+  requestable: 'creators.tierRequestable',
+  sortOrder: 'creators.tierSortOrder',
 };
 
 /** What a tier audit row changed, in words (never raw JSON). */
@@ -23,6 +32,11 @@ function auditSummary(entry: AdminAuditEntry, t: Translator): string {
   if (entry.action === 'create') return t('creators.auditCreate');
   if (entry.action === 'delete') return t('creators.auditDelete');
   return t('creators.auditEdit', { fields: fields.filter((f) => FIELD_LABEL[f]).map((f) => t(FIELD_LABEL[f])).join(', ') || '—' });
+}
+
+/** Users per tier; Member also counts everyone with no tier assigned (no assignment row means Member). */
+export function memberCounts(list: CreatorTiersList): Record<string, number> {
+  return { ...list.counts.byTier, [CREATOR_TIER_IDS.member]: (list.counts.byTier[CREATOR_TIER_IDS.member] ?? 0) + list.counts.none };
 }
 
 export interface CreatorTiersViewProps {
@@ -52,7 +66,7 @@ export function CreatorTiersView({ list, audit, canManage, t, locale, actions }:
         </p>
       )}
       {!canManage && <p className="mb-4 text-sm text-fg-muted">{t('creators.noAccess')}</p>}
-      {list ? <TierEditor tiers={list.items} counts={list.counts.byTier} canManage={canManage} actions={actions} /> : <ErrorAlert testId="tiers-load-failed">{t('creators.loadFailed')}</ErrorAlert>}
+      {list ? <TierEditor tiers={list.items} counts={memberCounts(list)} canManage={canManage} actions={actions} /> : <ErrorAlert testId="tiers-load-failed">{t('creators.loadFailed')}</ErrorAlert>}
       <section className={`${cardClass} mt-8`} aria-labelledby="tiers-audit" data-testid="tiers-audit">
         <h2 id="tiers-audit" className="text-lg font-semibold text-fg mb-3">{t('creators.tiersAudit')}</h2>
         {audit.length === 0 ? (
