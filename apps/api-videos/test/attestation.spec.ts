@@ -426,7 +426,7 @@ describe('requireHuman with native proofs', () => {
 		const enforced = app(enforcedSettings());
 		const res = await enforced.call({ Authorization: `Bearer ${jwt(NATIVE)}` });
 		assert.equal(res.status, 403);
-		assert.equal(((await res.json()) as { code: string }).code, 'native_proof_required');
+		assert.deepEqual(await res.json(), { success: false, code: 'native_proof_required', error: 'native_proof_required' });
 		assert.equal((await enforced.call({ Authorization: `Bearer ${jwt(NATIVE)}`, 'X-AUN-Native-Proof': 'A'.repeat(43) })).status, 403);
 		const { proof } = await issueProof(enforced.HUMAN_VERIFIED, { platform: 'android', app: 'net.alummahnow.studio' });
 		assert.equal((await enforced.call({ Authorization: `Bearer ${jwt(NATIVE)}`, 'X-AUN-Native-Proof': proof })).status, 201);

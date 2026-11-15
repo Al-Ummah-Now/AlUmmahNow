@@ -175,7 +175,8 @@ export function requireHuman(endpoint: string, policy: 'always' | 'first') {
 		if (isNativeClient(c, env)) {
 			if ((await nativeProofDecision(c, env)) === 'refuse') {
 				recordAbuse(env, endpoint, 'native_proof_missing');
-				return c.json({ success: false, code: 'native_proof_required', error: 'Please update the app and try again.' }, 403);
+				// aun-core keeps only the message of a 403, so the message is the code the apps match on
+				return c.json({ success: false, code: 'native_proof_required', error: 'native_proof_required' }, 403);
 			}
 			return next();
 		}
