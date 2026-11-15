@@ -47,13 +47,16 @@ export const SERVICE_RETRIES: Record<string, { binding: keyof AdminBindings; pat
 
 /**
  * Content permissions a Retry needs on top of errors:manage: a payments job runs its action
- * again, so it needs that action's own permission (a refund: billing:refund). An unknown
- * billing kind needs billing:manage.
+ * again, so it needs that action's own permission (a refund: billing:refund). A missing or
+ * unknown kind needs every billing permission (deny by default); api-videos also refuses a
+ * retry whose kind is not the job's own.
  */
+const ALL_BILLING: AdminContentPermission[] = ['billing:read', 'billing:manage', 'billing:refund', 'billing:providers'];
 export function retryPermissions(spec: NeedsActionRetry | null): AdminContentPermission[] {
   if (!spec || spec.kind !== 'service' || spec.service !== 'api-videos' || spec.path !== '/internal/billing/jobs/retry') return [];
-  const kind = String((spec.body as { kind?: unknown } | undefined)?.kind ?? '');
-  return [...((ADMIN_JOB_PERMISSIONS as Readonly<Record<string, readonly AdminContentPermission[]>>)[kind] ?? ['billing:manage'])];
+  const kind = (spec.body as { kind?: unknown } | undefined)?.kind;
+  const known = typeof kind === 'string' && kind.startsWith('billing.') ? (ADMIN_JOB_PERMISSIONS as Readonly<Record<string, readonly AdminContentPermission[]>>)[kind] : undefined;
+  return known ? [...known] : ALL_BILLING;
 }
 
 export const BUILTIN_RETRIES: Record<string, (env: AdminBindings, args: Record<string, string>, attempt: string) => Promise<RetryOutcome>> = {

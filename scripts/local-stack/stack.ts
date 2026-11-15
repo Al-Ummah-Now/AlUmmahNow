@@ -161,6 +161,10 @@ export const WORKERS: StackWorker[] = [
       // White-label scholar sites: <slug>.sites.localhost hosts, revoked sites redirect to the local web app
       SITES_ENV: 'local',
       VIDEOS_WEB_URL: url('web'),
+      // Payments (wiki AUN-SUBS): the test provider's checkout page and webhooks live on this worker;
+      // E2E pays with it, no money moves (lib/billing/fake.ts)
+      PUBLIC_API_URL: url('api-videos'),
+      PAYMENTS_FAKE_PROVIDER: '1',
       // Mobile apps settings (attestation switches, NAT-REL) come from the stack's admin-api
       ADMIN_API_URL: url('admin-api'),
       // The fake Bunny CDN (fake-external.ts FAKE_CDN_HOST): workers reach it through the outbound

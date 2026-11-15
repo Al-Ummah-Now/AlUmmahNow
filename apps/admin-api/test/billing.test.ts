@@ -11,6 +11,7 @@ import { hasContentPermission, paymentSecretName, type NeedsActionRetry } from '
 import billingRouter from '../src/routers/billing.router';
 import { retryPermissions } from '../src/lib/errors-actions';
 import { UNSET_VALUE, writeCredential } from '../src/lib/billing-secrets';
+import { STEP_UP_ROUTES } from '../src/middleware/step-up-routes';
 import { sqliteD1 } from './d1-sqlite';
 
 const SECRET_VALUE = 'pdl_sdbx_apikey_SYNTHETIC_0123456789';
@@ -201,13 +202,22 @@ describe('credentials', () => {
   });
 });
 
+describe('step-up', () => {
+  it('credentials, provider switches, refunds, cancels and comps need a recent sign-in', () => {
+    const paths = STEP_UP_ROUTES.map((r) => `${r.method} ${r.path}`);
+    for (const p of ['PUT /api/billing/providers/:id/credentials', 'PUT /api/billing/providers/:id', 'POST /api/billing/payments/:id/refund', 'POST /api/billing/subscriptions/:id/cancel', 'POST /api/billing/comps']) assert.ok(paths.includes(p), p);
+  });
+});
+
 describe('Errors page Retry of a payments job', () => {
   const spec = (kind?: string): NeedsActionRetry => ({ kind: 'service', service: 'api-videos', path: '/internal/billing/jobs/retry', body: { jobId: 'j', ...(kind ? { kind } : {}) } });
   it('needs the action’s own permission', () => {
     assert.deepEqual(retryPermissions(spec('billing.refund')), ['billing:refund']);
     assert.deepEqual(retryPermissions(spec('billing.sync-prices')), ['billing:providers']);
     assert.deepEqual(retryPermissions(spec('billing.webhook')), ['billing:manage']);
-    assert.deepEqual(retryPermissions(spec()), ['billing:manage']);
+    // No kind, or one that is not a billing job: every billing permission (deny by default)
+    assert.deepEqual(retryPermissions(spec()), ['billing:read', 'billing:manage', 'billing:refund', 'billing:providers']);
+    assert.deepEqual(retryPermissions(spec('user.erase')), ['billing:read', 'billing:manage', 'billing:refund', 'billing:providers']);
     assert.deepEqual(retryPermissions({ kind: 'service', service: 'api-videos', path: '/internal/captions/jobs/retry', body: {} }), []);
     assert.deepEqual(retryPermissions(null), []);
   });
