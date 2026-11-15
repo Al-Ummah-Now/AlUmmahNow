@@ -41,6 +41,7 @@ import { deleteOriginal } from '../media/originals';
 import { evidenceKeys } from './crypto';
 import { copyStep, planEvidence, writeManifest, type CopyState, type EvidenceEnv, type PlannedFile } from './evidence';
 import { forgetImageOwner } from './imageOwners';
+import { deleteImageFile } from '../media/imageFiles';
 
 export type ContainEnv = AdminServiceEnv & EvidenceEnv & Partial<MediaEnv> & ErrorReporterEnv & Record<string, unknown>;
 
@@ -203,14 +204,8 @@ export async function startContainment(env: ContainEnv, input: { caseId: string;
 // 2. The job
 // ---------------------------------------------------------------------------
 
-async function deleteStoredImage(env: ContainEnv, path: string): Promise<'deleted' | 'gone'> {
-	const key = env.image_storage_key ? await getSecret(env.image_storage_key, 'image_storage_key') : '';
-	if (!key || !env.ZONE) throw new Error('Image storage is not configured');
-	const res = await fetch(`https://storage.bunnycdn.com/${env.ZONE}${path.split('/').map(encodeURIComponent).join('/')}`, { method: 'DELETE', headers: { AccessKey: key } });
-	if (res.status === 404) return 'gone';
-	if (!res.ok) throw new Error(`Image storage delete answered ${res.status}`);
-	return 'deleted';
-}
+/** Deletes one stored image (lib/media/imageFiles.ts); a file already gone counts as done. */
+const deleteStoredImage = (env: ContainEnv, path: string) => deleteImageFile(env, path);
 
 /** Bunny's own edge (images are pulled through it): purged when an account API key is set. */
 async function purgeBunnyEdge(env: ContainEnv, urls: string[]): Promise<CdnPurge> {

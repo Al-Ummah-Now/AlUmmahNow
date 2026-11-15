@@ -16,6 +16,7 @@
 --   apps/processor/migrations-notifications/0014_archive_title_refs.sql
 --   apps/processor/migrations-notifications/0015_dead_letter_hashed_ids.sql
 --   apps/processor/migrations-notifications/0016_review_alerts.sql
+--   apps/processor/migrations-notifications/0017_notifications_hidden.sql
 
 CREATE TABLE analytics_daily (entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, day TEXT NOT NULL, metric TEXT NOT NULL, dim TEXT NOT NULL DEFAULT '', value REAL NOT NULL DEFAULT 0, PRIMARY KEY (entity_type, entity_id, day, metric, dim)) WITHOUT ROWID;
 CREATE TABLE analytics_rollup_imports (r2_key TEXT PRIMARY KEY, imported_at TEXT NOT NULL) WITHOUT ROWID;
@@ -31,7 +32,7 @@ CREATE TABLE liked_videos (user_id TEXT NOT NULL, video_id TEXT NOT NULL, liked_
 CREATE TABLE notification_email_prefs (user_id TEXT PRIMARY KEY, account_email INTEGER NOT NULL DEFAULT 1, email_locale TEXT CHECK (email_locale IN ('en', 'ar')), updated_at INTEGER NOT NULL);
 CREATE TABLE notification_seen (user_id TEXT PRIMARY KEY, seen_at INTEGER NOT NULL) WITHOUT ROWID;
 CREATE TABLE notification_settings (user_id TEXT NOT NULL, category TEXT NOT NULL, enabled INTEGER NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY (user_id, category));
-CREATE TABLE notifications (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, category TEXT NOT NULL, notification_type TEXT NOT NULL, notification_key TEXT NOT NULL, params_json TEXT NOT NULL DEFAULT '{}', action_url TEXT, actor_id TEXT, entity_id TEXT, dedupe_key TEXT, is_read INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, read_at INTEGER, pushed_at INTEGER);
+CREATE TABLE notifications (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, category TEXT NOT NULL, notification_type TEXT NOT NULL, notification_key TEXT NOT NULL, params_json TEXT NOT NULL DEFAULT '{}', action_url TEXT, actor_id TEXT, entity_id TEXT, dedupe_key TEXT, is_read INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, read_at INTEGER, pushed_at INTEGER, hidden_at INTEGER);
 CREATE TABLE poll_votes (post_id TEXT NOT NULL, user_id TEXT NOT NULL, option_ids TEXT NOT NULL, day TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (post_id, user_id)) WITHOUT ROWID;
 CREATE TABLE post_counter_imports (post_id TEXT NOT NULL, kind TEXT NOT NULL, cursor TEXT, done INTEGER NOT NULL DEFAULT 0, lease_owner TEXT, lease_until INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL, PRIMARY KEY (post_id, kind)) WITHOUT ROWID;
 CREATE TABLE post_likes (post_id TEXT NOT NULL, user_id TEXT NOT NULL, liked INTEGER NOT NULL, day TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (post_id, user_id)) WITHOUT ROWID;

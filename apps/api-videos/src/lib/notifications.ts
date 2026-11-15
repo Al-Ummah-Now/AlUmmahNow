@@ -117,7 +117,7 @@ export async function listNotifications(
 ): Promise<{ items: NotificationItem[]; nextCursor: string | null }> {
 	const limit = clampLimit(options.limit);
 	const after = decodeCursor(options.cursor);
-	const clauses = ['user_id = ?'];
+	const clauses = ['user_id = ?', 'hidden_at IS NULL'];
 	const params: unknown[] = [userId];
 	if (options.unreadOnly) clauses.push('is_read = 0');
 	if (after) {
@@ -141,9 +141,44 @@ export async function listNotifications(
 	};
 }
 
+/** Entity ids per UPDATE (D1 binds at most 100 parameters). */
+const HIDE_CHUNK = 90;
+
+/**
+ * Hides (or, `hidden: false`, shows again) every notification about these entities: a video or
+ * channel that was soft-deleted is hidden at once, and a restore brings its rows back (#702).
+ * The purge deletes them for good. Idempotent; returns how many rows changed.
+ */
+export async function setNotificationsHidden(db: D1Database, entityIds: string[], hidden: boolean, now = Date.now()): Promise<number> {
+	const ids = [...new Set(entityIds.filter((id) => typeof id === 'string' && id))];
+	let changed = 0;
+	for (let i = 0; i < ids.length; i += HIDE_CHUNK) {
+		const chunk = ids.slice(i, i + HIDE_CHUNK);
+		const marks = chunk.map(() => '?').join(', ');
+		const result = hidden
+			? await db.prepare(`UPDATE notifications SET hidden_at = ? WHERE entity_id IN (${marks}) AND hidden_at IS NULL`).bind(now, ...chunk).run()
+			: await db.prepare(`UPDATE notifications SET hidden_at = NULL WHERE entity_id IN (${marks}) AND hidden_at IS NOT NULL`).bind(...chunk).run();
+		changed += Number(result.meta?.changes ?? 0);
+	}
+	return changed;
+}
+
+/**
+ * Best effort for a request that already changed the item (delete or restore): a failure is logged,
+ * not thrown, and the purge deletes the rows in the end anyway. Jobs call setNotificationsHidden.
+ */
+export async function hideNotificationsOf(env: { NOTIFICATIONS_DB?: unknown }, entityIds: string[], hidden: boolean): Promise<void> {
+	if (!env.NOTIFICATIONS_DB) return;
+	try {
+		await setNotificationsHidden(env.NOTIFICATIONS_DB as D1Database, entityIds, hidden);
+	} catch (error) {
+		logger.warn('[Notifications] Could not change the hidden state of notifications', { count: entityIds.length, hidden, error: error instanceof Error ? error.message : String(error) });
+	}
+}
+
 export async function countUnread(db: D1Database, userId: string): Promise<number> {
 	const count = await db
-		.prepare('SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND is_read = 0')
+		.prepare('SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND is_read = 0 AND hidden_at IS NULL')
 		.bind(userId)
 		.first<number>('n');
 	return Number(count || 0);
@@ -158,7 +193,7 @@ export async function countState(db: D1Database, userId: string): Promise<Notifi
 		.prepare(
 			`SELECT COUNT(*) AS unread,
 			        COALESCE(SUM(CASE WHEN created_at > COALESCE((SELECT seen_at FROM notification_seen WHERE user_id = ?1), 0) THEN 1 ELSE 0 END), 0) AS unseen
-			 FROM notifications WHERE user_id = ?1 AND is_read = 0`,
+			 FROM notifications WHERE user_id = ?1 AND is_read = 0 AND hidden_at IS NULL`,
 		)
 		.bind(userId)
 		.first<{ unread: number; unseen: number }>();

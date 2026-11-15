@@ -633,7 +633,7 @@ Owner, 2026-11-11: "dont burn it on qa with testing".
   - `metadata_translations` rows;
   - FTS rows;
   - `captions-work/{jobId}/**`.
-- **Gap found:** today's purge has no step for the subtitles bucket. It is fixed in [#814](https://github.com/Al-Ummah-Now/AlUmmahNow/issues/814) and covered by this spec's tests.
+- **Built:** the purge deletes `subtitles/{videoId}/**` (`deleteVideoSideRecords`, [#814](https://github.com/Al-Ummah-Now/AlUmmahNow/issues/814)) and the video's `caption_jobs` rows with their `captions-work/{jobId}/**` files, cancelling an active job first (`eraseCaptionJobs` in `apps/api-videos/src/lib/admin/purgeCopies.ts`, which lists where every copy of a video lives). `caption_tracks`, `metadata_translations` and caption FTS rows do not exist yet; their purge step is added with them.
 - **Third-party copies:** jobs at a third-party provider are deleted through its API after success, where the API allows it.
 
 ### 9.3 Moderation
@@ -782,7 +782,7 @@ Every phase ships behind an environment flag. Tests go into the release E2E suit
 ## 13. Follow-ups found during research
 
 1. **The processor's moderation translates with `@cf/meta/m2m100-1.2b`**, which R§3.1 and CMS §1.5 show is unusable for Arabic. It should move to the shared translation provider: [#813](https://github.com/Al-Ummah-Now/AlUmmahNow/issues/813).
-2. **The purge job doesn't delete the subtitles bucket objects** for a video (§9.2): [#814](https://github.com/Al-Ummah-Now/AlUmmahNow/issues/814).
+2. ~~**The purge job doesn't delete the subtitles bucket objects** for a video (§9.2)~~: fixed ([#814](https://github.com/Al-Ummah-Now/AlUmmahNow/issues/814)).
 3. **`docs/research/transcription-and-search-architecture.md` (2025)** compares RunPod and Bunny at old prices. Mark it superseded by R§5.
 
 ## 14. Open decisions for the owner

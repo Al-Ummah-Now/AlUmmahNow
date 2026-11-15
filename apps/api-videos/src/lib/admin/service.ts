@@ -46,6 +46,8 @@ import { BunnyStreamClient } from '../bunny/stream';
 import { bunnyClientForVideo, type LibraryHints } from '../bunny/libraries';
 import { removeCollectionsFor, renameCollectionsForChannel, renameCollectionsForUser, userCollectionName } from '../channelCollection';
 import { purgeVideoMedia, type MediaEnv } from '../media/r2-delivery';
+import { hideNotificationsOf, setNotificationsHidden } from '../notifications';
+import { dropVideoReferences, eraseCaptionJobs, eraseChannelPostImages, erasePostImages, eraseVideoImages } from './purgeCopies';
 import { deleteVideoSideRecords } from '../videoSideRecords';
 import { readAssignment } from '../creatorTiers';
 import { bansFor, deleteBan, readBan, writeBan } from './bans';
@@ -361,8 +363,19 @@ async function syncChannelHolds(env: AdminServiceEnv, job: AdminJob): Promise<Jo
 		const deletion = follow(r, deletedHold, deleted);
 		return suspension || deletion;
 	};
-	const videos = await cascade(env.videos, await idsOf(env, 'video', { channelId: id }), mutate);
+	const videoIds = await idsOf(env, 'video', { channelId: id });
+	const videos = await cascade(env.videos, videoIds, mutate);
 	const live = await cascadeLiveStreams(env, { channelId: id }, mutate);
+	// Notifications about the channel and its videos follow its deletion (#702). On restore, a
+	// video deleted on its own stays hidden. A failure throws, so the job retries.
+	if (env.NOTIFICATIONS_DB) {
+		const db = env.NOTIFICATIONS_DB as D1Database;
+		if (deleted) await setNotificationsHidden(db, [id, ...videoIds], true);
+		else {
+			const records = await readMany(env.videos, videoIds);
+			await setNotificationsHidden(db, [id, ...videoIds.filter((v) => records.get(v)?.isDeleted !== true)], false);
+		}
+	}
 	// A soft-deleted channel's playlists are hidden with it (restored with it)
 	const playlistIds = Array.isArray(channel.playlists) ? (channel.playlists as unknown[]).filter((p): p is string => typeof p === 'string') : [];
 	const playlists = await cascade(env.playlists, playlistIds, (r) => (r.channelId === id ? follow(r, deletedHold, deleted) : false));
@@ -473,11 +486,20 @@ async function purgeVideo(
 	videoId: string,
 	video: Row | null,
 	bunnyClient?: { client: BunnyStreamClient; libraryId: number } | null,
-	opts: { strict?: boolean } = { strict: true },
+	opts: { strict?: boolean; keepReferences?: boolean } = { strict: true },
 ): Promise<void> {
 	// The record names the Bunny library and the schedule entry: read it before it is gone
 	const stored = (await repo(env.videos).getObject(videoId).catch(() => null)) as Row | null;
 	const hints: LibraryHints | null = video?.bunnyLibraryId || video?.playUrl ? video : (stored ?? video);
+	const record = stored ?? video;
+	// Bunny Storage thumbnails before the record: the record names an admin upload, and a retry
+	// after a storage failure must still find it (lib/admin/purgeCopies.ts)
+	try {
+		await eraseVideoImages(env as never, videoId, record);
+	} catch (error) {
+		logger.warn('[Admin] Video thumbnails erase failed', { videoId, error: error instanceof Error ? error.message : String(error) });
+		if (opts.strict) throw error;
+	}
 	await env.videos.delete(videoId);
 	// Subtitles, the upload marker and the scheduler entry name the uploader: they go with the video
 	try {
@@ -485,6 +507,20 @@ async function purgeVideo(
 	} catch (error) {
 		logger.warn('[Admin] Video side records delete failed', { videoId, error: error instanceof Error ? error.message : String(error) });
 		if (opts.strict) throw error;
+	}
+	// Caption jobs and the id in its channel's sections and playlists (lib/admin/purgeCopies.ts
+	// lists where every copy lives); strict jobs retry when one fails
+	for (const [step, run] of [
+		['caption jobs', () => eraseCaptionJobs(env as never, videoId)],
+		// A channel purge deletes the sections and playlists themselves (keepReferences)
+		['references', () => (opts.keepReferences ? Promise.resolve(0) : dropVideoReferences(env as never, videoId, (record?.channelId as string | undefined) ?? null))],
+	] as const) {
+		try {
+			await run();
+		} catch (error) {
+			logger.warn(`[Admin] Video ${step} erase failed`, { videoId, error: error instanceof Error ? error.message : String(error) });
+			if (opts.strict) throw error;
+		}
 	}
 	// R2 renditions (epic #687), both buckets; strict jobs retry when it fails
 	try {
@@ -657,15 +693,17 @@ async function purgeChannel(env: AdminServiceEnv, job: AdminJob): Promise<JobOut
 		await eachLimited(videoIds, 6, async (videoId) => {
 			try {
 				// Each video is deleted from its own Bunny library
-				await purgeVideo(env, videoId, { userId, channelId: id });
+				await purgeVideo(env, videoId, { userId, channelId: id }, undefined, { strict: true, keepReferences: true });
 			} catch (error) {
 				failed++;
 				logger.warn('[Admin] Video purge failed', { videoId, error: error instanceof Error ? error.message : String(error) });
 			}
 		});
 		if (failed > 0) return finish({ videos: videoIds.length - failed }, failed);
+		// Post images first (Bunny Storage, the channel's upload folder; #699): a failure retries this step
+		const postImages = await eraseChannelPostImages(env as never, id);
 		const { posts, sections } = await removeChannelPostsAndSections(env, id);
-		const result = { videos: videoIds.length, posts, sections };
+		const result = { videos: videoIds.length, posts, sections, postImages };
 		return { done: false, params: { ...p, stage: 'playlists', ...result, playlists: 0, scanned: 0 }, result };
 	}
 	const step = await softDeleteChannelObjectsStep(env.playlists, id, { cursor: p.cursor as string | undefined, budget: PLAYLIST_SCAN_STEP, hard: true });
@@ -886,6 +924,8 @@ export async function deleteVideo(env: AdminServiceEnv, id: string, actorId: str
 		reason: mark.reason,
 		deletedAt: at,
 	});
+	// Its notifications leave the lists at once and come back on restore (#702)
+	await hideNotificationsOf(env, [id], true);
 	await send(env, MessageType.VideoEdit, { videoId: id, userId: saved.userId, channelId: saved.channelId, action: 'deleted' });
 	return { deletion };
 }
@@ -913,6 +953,7 @@ export async function restoreVideo(env: AdminServiceEnv, id: string): Promise<Ro
 	});
 	if (!saved) throw new AdminError(404, 'video_not_found');
 	await removeDeletion(env.SEARCH_DB!, 'video', id);
+	await hideNotificationsOf(env, [id], false);
 	await send(env, MessageType.VideoEdit, { videoId: id, userId: saved.userId, channelId: saved.channelId, action: 'restored' });
 	return saved;
 }
@@ -1201,10 +1242,12 @@ export async function restorePost(env: AdminServiceEnv, postId: string): Promise
 	const deletion = await restorable(env, 'post', postId);
 	const channelId = deletion.parentId!;
 	const saved = await repo(env.community_posts).updateObject(postKey(channelId, postId), (post) => {
-		const mark = post.adminDeletion as (AdminDeletionMark & { previousStatus?: string }) | undefined;
+		// An admin restores admin deletes and the owner's own deletes alike
+		const mark = (post.adminDeletion ?? post.ownerDeletion) as (AdminDeletionMark & { previousStatus?: string }) | undefined;
 		if (!mark || post.status !== 'deleted') return false;
 		post.status = mark.previousStatus ?? 'published';
 		delete post.adminDeletion;
+		delete post.ownerDeletion;
 		post.updatedAt = now();
 		return true;
 	});
@@ -1576,6 +1619,8 @@ export async function purgeDeletion(env: AdminServiceEnv, d: AdminDeletion): Pro
 			const post = await repo(env.community_posts).getObject(key);
 			if (!post) return { state: 'skipped', reason: 'post_gone' };
 			if (post.status !== 'deleted') return { state: 'skipped', reason: 'post_not_deleted' };
+			// Its images go first (#699): a failure leaves the post, so the next cleanup retries
+			await erasePostImages(env as never, post, d.parentId!);
 			await env.community_posts.delete(key);
 			await env.community_posts.delete(postLocationKey(d.id));
 			return { state: 'purged' };
