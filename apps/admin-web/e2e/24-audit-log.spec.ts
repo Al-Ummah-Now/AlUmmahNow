@@ -1,7 +1,8 @@
 /**
  * Audit log page and names instead of ids (#711, #745) on the local stack.
  *
- * Data: a videos profile (the actor) and a video (the item) in R2, and two audit rows in the
+ * Data: a videos profile (the actor) and a video (the item) in R2, the video's admin index row
+ * (content_ownership: item titles are read from the index, as its sync writes them), and two audit rows in the
  * reports DB (a content action on the video naming its channel, and a settings change), all
  * carrying this run's marker, written through the stack's control API: the rows are what admin
  * actions write, and the spec is about reading them. Everything is removed afterwards.
@@ -14,6 +15,7 @@ import { stackR2, stackSql } from './support/local-stack';
 import { horizontalOverflow, setPreferences } from './support/ui';
 
 const REPORTS = 'al-ummah-now-reports';
+const SEARCH = 'al-ummah-now-search';
 const hex = crypto.randomBytes(6).toString('hex');
 const actorId = `${E2E_ENTITY_PREFIX}audit-actor-${hex}`;
 const videoId = `${E2E_ENTITY_PREFIX}audit-v-${hex}`;
@@ -39,6 +41,14 @@ test.describe('audit log', () => {
     const now = new Date().toISOString();
     expect((await stackR2('PUT', 'profiles', actorId, { id: actorId, displayName: actorName, email: `${hex}@e2e.example`, dateCreated: now })).ok).toBe(true);
     expect((await stackR2('PUT', 'videos', videoId, { id: videoId, title: videoTitle, userId: actorId, channelId, dateCreated: now, dateModified: now, comments: [], likes: [] })).ok).toBe(true);
+    const ms = Date.now();
+    // admin_cols = OWNERSHIP_ADMIN_COLS_VERSION (shared-types search/ownership.ts): an older value
+    // would mark the whole admin index stale for every spec running beside this one
+    await stackSql(
+      SEARCH,
+      `INSERT OR REPLACE INTO content_ownership (kind, id, owner_id, channel_id, title, admin_title, admin_cols, created_at, updated_at, indexed_at)
+       VALUES ('video', '${videoId}', '${actorId}', '${channelId}', '${videoTitle}', '${videoTitle}', 1, ${ms}, ${ms}, ${ms})`,
+    );
     await stackSql(
       REPORTS,
       `INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at) VALUES
@@ -50,6 +60,7 @@ test.describe('audit log', () => {
   test.afterAll(async () => {
     if (!LOCAL_STACK) return;
     await stackSql(REPORTS, `DELETE FROM site_settings_log WHERE id IN ('${rows.join("','")}')`);
+    await stackSql(SEARCH, `DELETE FROM content_ownership WHERE kind = 'video' AND id = '${videoId}'`);
     await stackR2('DELETE', 'videos', videoId);
     await stackR2('DELETE', 'profiles', actorId);
   });
