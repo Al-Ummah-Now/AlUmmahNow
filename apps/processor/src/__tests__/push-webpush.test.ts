@@ -16,6 +16,7 @@ import {
   encryptWebPush,
   fromBase64url,
   importVapidKeys,
+  normalizePrivateScalar,
   parseSubscription,
   resetVapidJwtCache,
 } from '../push/senders/webpush';
@@ -170,7 +171,50 @@ describe('VAPID', () => {
   it('rejects keys in the wrong format', async () => {
     const keys = vapidPair();
     await expect(importVapidKeys(keys.publicKey, base64url(new Uint8Array(31)))).rejects.toThrow('VAPID_PRIVATE_KEY');
+    await expect(importVapidKeys(keys.publicKey, '')).rejects.toThrow('VAPID_PRIVATE_KEY');
+    await expect(importVapidKeys(keys.publicKey, base64url(new Uint8Array(33).fill(7)))).rejects.toThrow('VAPID_PRIVATE_KEY');
     await expect(importVapidKeys(base64url(new Uint8Array(65)), keys.privateKey)).rejects.toThrow('VAPID_PUBLIC_KEY');
+  });
+
+  // #1444: a valid key whose scalar starts with zero bytes arrives short (Node's getPrivateKey() and
+  // other integer printers drop them; ~1 key in 256) or with an ASN.1 sign byte. Each form must sign
+  // a JWT that verifies with the public key. Fixed scalars, so this never depends on luck.
+  describe('private keys with leading zero bytes (#1444)', () => {
+    const scalar = (zeros: number, fill: number) => Buffer.concat([Buffer.alloc(zeros), Buffer.alloc(32 - zeros, fill)]);
+    const pairFor = (d: Buffer) => {
+      const ecdh = createECDH('prime256v1');
+      ecdh.setPrivateKey(d);
+      return { publicKey: base64url(ecdh.getPublicKey()), d };
+    };
+    const cases: [string, Buffer, (d: Buffer) => Buffer][] = [
+      ['one leading zero, sent as 31 bytes', scalar(1, 0x11), (d) => d.subarray(1)],
+      ['one leading zero, sent as 32 bytes', scalar(1, 0x11), (d) => d],
+      ['two leading zeros, sent as 30 bytes', scalar(2, 0x22), (d) => d.subarray(2)],
+      ['a full scalar with an ASN.1 sign byte, 33 bytes', scalar(0, 0x81), (d) => Buffer.concat([Buffer.alloc(1), d])],
+    ];
+
+    it.each(cases)('%s: imported and its JWT verifies', async (_name, d, encode) => {
+      const { publicKey } = pairFor(d);
+      resetVapidJwtCache();
+      const b = browser();
+      const { sent, fetchImpl } = recorder();
+      const provider = new WebPushProvider({ VAPID_PUBLIC_KEY: publicKey, VAPID_PRIVATE_KEY: base64url(encode(d)) }, new LogOnlyPushProvider(), fetchImpl, () => 1_800_000_000_000);
+      expect(await provider.send(target(b.token), message)).toEqual({ ok: true });
+      const [, jwt] = /^vapid t=([^,]+), k=/.exec(sent[0]!.headers.authorization!)!;
+      const [h, c, sig] = jwt!.split('.');
+      const pub = fromBase64url(publicKey);
+      const key = createPublicKey({ key: { kty: 'EC', crv: 'P-256', x: base64url(pub.slice(1, 33)), y: base64url(pub.slice(33)) }, format: 'jwk' });
+      expect(verify('sha256', Buffer.from(`${h}.${c}`), { key, dsaEncoding: 'ieee-p1363' }, Buffer.from(sig!, 'base64url'))).toBe(true);
+    });
+
+    it('normalizePrivateScalar left-pads short scalars, trims sign bytes and refuses the rest', () => {
+      const full = scalar(1, 0x11);
+      expect(Buffer.from(normalizePrivateScalar(full.subarray(1))!)).toEqual(full);
+      expect(Buffer.from(normalizePrivateScalar(Buffer.concat([Buffer.alloc(2), full]))!)).toEqual(full);
+      expect(normalizePrivateScalar(new Uint8Array(0))).toBeNull();
+      expect(normalizePrivateScalar(new Uint8Array(32))).toBeNull();
+      expect(normalizePrivateScalar(new Uint8Array(33).fill(1))).toBeNull();
+    });
   });
 });
 
