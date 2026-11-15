@@ -8,7 +8,7 @@ The Community Posts System is a YouTube-style feature that allows channel owners
 
 ### Post Types
 1. **Text Posts** - Simple text updates (no explicit character limit found, likely 5000+)
-2. **Image Posts** - Up to 10 images per post, 16 MB max each, JPG/PNG/GIF/WEBP
+2. **Image Posts** - Up to 10 images per post, 5 MB max each (GIF posts: 10 MB), JPG/PNG/GIF/WEBP; limits in `@al-ummah/shared-types` `COMMUNITY_UPLOAD_LIMITS`
 3. **Poll Posts** - Text polls with 2-5 options (65 chars each) or image polls (36 char captions)
 4. **Quiz Posts** - Interactive quizzes with up to 80 char answers, 500 char explanations
 5. **Video Link Posts** - Share existing videos from the channel or other channels
@@ -696,7 +696,7 @@ export async function validateCreatePost(data: any, user: any) {
       // Validate each image
       data.images?.forEach((img, idx) => {
         if (img.size > 16 * 1024 * 1024) {
-          errors.push(`Image ${idx + 1} exceeds 16MB limit`);
+          errors.push(`Image ${idx + 1} exceeds 5MB limit`);
         }
         if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(img.mimeType)) {
           errors.push(`Image ${idx + 1} has invalid format`);
@@ -822,7 +822,7 @@ export async function validateUpdatePost(data: any, existingPost: any, user: any
 2. **Authorization**: Only channel owner can create/edit/delete their posts
 3. **Rate Limiting**: Limit posts per channel per 24 hours (e.g., 10 posts/day)
 4. **Input Validation**: Strict validation on all inputs, especially file uploads
-5. **File Size Limits**: 16MB per image, max 10 images per post
+5. **File Size Limits**: 5MB per image and 10MB per GIF (`COMMUNITY_UPLOAD_LIMITS`, shared by the API and the web composer; over the limit the API answers 413 `file_too_large`), max 10 images per post
 6. **Character Limits**: Enforce all character limits from YouTube's implementation
 7. **Vote Fraud Prevention**: One vote per authenticated user, IP tracking for anonymous
 8. **Content Moderation**: Consider implementing content scanning for inappropriate material

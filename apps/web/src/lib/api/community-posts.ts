@@ -10,6 +10,8 @@ import {
   CreateCommunityPostRequest,
   UpdateCommunityPostRequest,
   type PostMedia,
+  type CommunityFileTooLargeBody,
+  COMMUNITY_FILE_TOO_LARGE,
 } from "@al-ummah/shared-types";
 import { apiRequestServer, buildApiUrl, buildQueryParams } from "./api-client";
 import { getServerAuthContext } from "./server-auth";
@@ -215,14 +217,20 @@ export interface UploadedCommunityImage {
   mimeType: string;
 }
 
+/** The answer of an image upload: the stored images, or why it failed (`tooLarge` when the API refused a file's size). */
+export type CommunityImageUploadResult =
+  | { ok: true; images: UploadedCommunityImage[] }
+  | { ok: false; tooLarge: { fileName: string; size: number; maxBytes: number } | null };
+
 /**
  * Upload images for a post (covers, cards, image posts). `formData` carries the files under
- * `images`. Resolves to their URLs, or null when the upload failed (the caller shows its own text).
+ * `images`. A file over the API's size limit comes back as `tooLarge` (413, code file_too_large)
+ * so the composer can name the file and the limit; any other failure has `tooLarge: null`.
  */
 export async function uploadCommunityImages(
   channelId: string,
   formData: FormData
-): Promise<UploadedCommunityImage[] | null> {
+): Promise<CommunityImageUploadResult> {
   const authContext = await getServerAuthContext();
   try {
     const response = await fetch(buildApiUrl('/api/community/media/upload/images'), {
@@ -235,13 +243,19 @@ export async function uploadCommunityImages(
     });
     if (!response.ok) {
       logger.warn('[uploadCommunityImages] upload refused', { channelId, status: response.status });
-      return null;
+      if (response.status === 413) {
+        const body = (await response.json().catch(() => null)) as Partial<CommunityFileTooLargeBody> | null;
+        if (body?.code === COMMUNITY_FILE_TOO_LARGE && typeof body.maxBytes === 'number') {
+          return { ok: false, tooLarge: { fileName: String(body.fileName ?? ''), size: Number(body.size ?? 0), maxBytes: body.maxBytes } };
+        }
+      }
+      return { ok: false, tooLarge: null };
     }
     const body = (await response.json()) as { images?: UploadedCommunityImage[] };
-    return Array.isArray(body.images) ? body.images : null;
+    return Array.isArray(body.images) ? { ok: true, images: body.images } : { ok: false, tooLarge: null };
   } catch (error) {
     logger.error('[uploadCommunityImages] upload failed', { channelId, error });
-    return null;
+    return { ok: false, tooLarge: null };
   }
 }
 

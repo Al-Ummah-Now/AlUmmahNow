@@ -1,12 +1,15 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useId, useState, useRef } from 'react';
+import { COMMUNITY_UPLOAD_LIMITS } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { Upload, X, Image as ImageIcon } from 'lucide-react';
 import Image from 'next/image';
+import { useLanguage } from '@/hooks/useLanguage';
+import { formatUploadSize, overLimit, tooLargeMessage } from '@/lib/community/upload-limits';
 
 export interface ImageWithCaption {
   file?: File;
@@ -26,11 +29,12 @@ interface ImagePostFormProps {
 }
 
 const MAX_IMAGES = 10;
-const MAX_FILE_SIZE = 16 * 1024 * 1024; // 16MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
 export function ImagePostForm({ images, onChange, locale, error }: ImagePostFormProps) {
   const isRTL = locale === 'ar';
+  const { t, lang } = useLanguage();
+  const errorId = `${useId()}-image-error`;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadError, setUploadError] = useState<string>('');
 
@@ -47,21 +51,21 @@ export function ImagePostForm({ images, onChange, locale, error }: ImagePostForm
     }
 
     const newImages: ImageWithCaption[] = [];
+    const problems: string[] = [];
 
     for (const file of files) {
       if (!ALLOWED_TYPES.includes(file.type)) {
-        setUploadError(isRTL
+        problems.push(isRTL
           ? 'نوع الملف غير مدعوم'
           : 'Unsupported file type'
         );
         continue;
       }
 
-      if (file.size > MAX_FILE_SIZE) {
-        setUploadError(isRTL
-          ? 'حجم الملف يجب أن يكون أقل من 16MB'
-          : 'File size must be less than 16MB'
-        );
+      // The API's limit (@al-ummah/shared-types): refused here, before anything is uploaded
+      const tooLarge = overLimit(file, 'image', COMMUNITY_UPLOAD_LIMITS);
+      if (tooLarge) {
+        problems.push(tooLargeMessage(t, lang, 'image', tooLarge));
         continue;
       }
 
@@ -70,6 +74,7 @@ export function ImagePostForm({ images, onChange, locale, error }: ImagePostForm
       img.src = url;
 
       await new Promise((resolve) => {
+        img.onerror = () => resolve(null);
         img.onload = () => {
           newImages.push({
             file,
@@ -85,6 +90,7 @@ export function ImagePostForm({ images, onChange, locale, error }: ImagePostForm
       });
     }
 
+    setUploadError(problems.join(' '));
     onChange([...images, ...newImages]);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -122,12 +128,15 @@ export function ImagePostForm({ images, onChange, locale, error }: ImagePostForm
               onChange={handleFileSelect}
               className="hidden"
               id="image-upload"
+              aria-invalid={uploadError ? true : undefined}
+              aria-describedby={error || uploadError ? errorId : undefined}
             />
             <Button
               type="button"
               variant="outline"
               onClick={() => fileInputRef.current?.click()}
               className="w-full sm:w-auto"
+              aria-describedby={error || uploadError ? errorId : undefined}
             >
               <Upload className="w-4 h-4 mr-2 rtl:ml-2 rtl:mr-0" />
               {isRTL ? 'رفع صور' : 'Upload Images'}
@@ -136,7 +145,7 @@ export function ImagePostForm({ images, onChange, locale, error }: ImagePostForm
         )}
 
         {(error || uploadError) && (
-          <p className="text-destructive text-xs md:text-sm mt-2">
+          <p id={errorId} role="alert" className="text-destructive text-xs md:text-sm mt-2">
             {error || uploadError}
           </p>
         )}
@@ -208,7 +217,7 @@ export function ImagePostForm({ images, onChange, locale, error }: ImagePostForm
             {isRTL ? 'لم يتم رفع صور بعد' : 'No images uploaded yet'}
           </p>
           <p className="text-xs md:text-sm mt-2">
-            {isRTL ? 'JPG, PNG, GIF, WEBP - حتى 16MB' : 'JPG, PNG, GIF, WEBP - up to 16MB'}
+            {t.community.imageUploadHint.replace('{limit}', formatUploadSize(COMMUNITY_UPLOAD_LIMITS.imageBytes, lang))}
           </p>
         </div>
       )}

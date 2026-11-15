@@ -1,17 +1,17 @@
 'use client';
 
 import { useId, useRef, useState } from 'react';
-import type { PostMedia } from '@al-ummah/shared-types';
+import { COMMUNITY_UPLOAD_LIMITS, type PostMedia } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useLanguage } from '@/hooks/useLanguage';
 import { uploadCommunityImages } from '@/lib/api/community-posts';
 import { reportError } from '@/lib/errors/reporter';
+import { overLimit, tooLargeMessage, type TooLargeFile } from '@/lib/community/upload-limits';
 import { Loader2, Upload, X } from 'lucide-react';
 
 const ALLOWED = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-const MAX_BYTES = 16 * 1024 * 1024;
 
 /** The displayed size of an image file (for the frame's shape on www and the videos site). */
 async function sizeOf(file: File): Promise<{ width: number | null; height: number | null }> {
@@ -25,15 +25,24 @@ async function sizeOf(file: File): Promise<{ width: number | null; height: numbe
   }
 }
 
-/** Uploads one image to the channel's community media and returns it as a PostMedia (alt kept). */
-export async function uploadPostImage(channelId: string, file: File, alt: string | null): Promise<PostMedia | null> {
-  if (!ALLOWED.includes(file.type) || file.size > MAX_BYTES) return null;
+/** One post image upload: the stored image, or why not (`tooLarge` names the file and the limit). */
+export type PostImageUpload = { ok: true; media: PostMedia } | { ok: false; tooLarge: TooLargeFile | null };
+
+/**
+ * Uploads one image to the channel's community media and returns it as a PostMedia (alt kept). A file
+ * over the API's limit (@al-ummah/shared-types) is refused here, before it is sent.
+ */
+export async function uploadPostImage(channelId: string, file: File, alt: string | null): Promise<PostImageUpload> {
+  if (!ALLOWED.includes(file.type)) return { ok: false, tooLarge: null };
+  const tooLarge = overLimit(file, 'image', COMMUNITY_UPLOAD_LIMITS);
+  if (tooLarge) return { ok: false, tooLarge };
   const form = new FormData();
   form.append('images', file);
   const [uploaded, size] = await Promise.all([uploadCommunityImages(channelId, form), sizeOf(file)]);
-  const first = uploaded?.[0];
-  if (!first?.url) return null;
-  return { url: first.url, alt, width: size.width, height: size.height };
+  if (!uploaded.ok) return { ok: false, tooLarge: uploaded.tooLarge };
+  const first = uploaded.images[0];
+  if (!first?.url) return { ok: false, tooLarge: null };
+  return { ok: true, media: { url: first.url, alt, width: size.width, height: size.height } };
 }
 
 interface PostImageFieldProps {
@@ -50,25 +59,25 @@ interface PostImageFieldProps {
 
 /** One image of a post: upload, preview, alt text and remove. */
 export function PostImageField({ channelId, label, value, onChange, altRequired = false, error, testId }: PostImageFieldProps) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const id = useId();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
 
   const pick = async (file: File | undefined) => {
     if (!file) return;
     setBusy(true);
-    setFailed(false);
+    setFailed(null);
     try {
-      const media = await uploadPostImage(channelId, file, value?.alt ?? null);
-      if (!media) {
-        setFailed(true);
+      const result = await uploadPostImage(channelId, file, value?.alt ?? null);
+      if (!result.ok) {
+        setFailed(result.tooLarge ? tooLargeMessage(t, lang, 'image', result.tooLarge) : t.community.errorUpload);
         return;
       }
-      onChange(media);
+      onChange(result.media);
     } catch (err) {
-      setFailed(true);
+      setFailed(t.community.errorUpload);
       reportError(err, { shown: true, extra: { where: 'community-post-image' } });
     } finally {
       setBusy(false);
@@ -76,7 +85,7 @@ export function PostImageField({ channelId, label, value, onChange, altRequired 
     }
   };
 
-  const message = failed ? t.community.errorUpload : error;
+  const message = failed ?? error;
   return (
     <div className="space-y-2" data-testid={testId}>
       <Label htmlFor={`${id}-file`} className="text-sm md:text-base">{label}</Label>
@@ -98,6 +107,7 @@ export function PostImageField({ channelId, label, value, onChange, altRequired 
         className="sr-only"
         onChange={(e) => void pick(e.target.files?.[0])}
         aria-describedby={message ? `${id}-error` : undefined}
+        aria-invalid={failed ? true : undefined}
       />
       <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => input.current?.click()}>
         {busy ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <Upload className="w-4 h-4" aria-hidden="true" />}

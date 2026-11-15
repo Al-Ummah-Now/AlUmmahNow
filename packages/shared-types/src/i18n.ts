@@ -1585,6 +1585,11 @@ export interface AppTranslations {
     errorAlt: string;
     errorLink: string;
     errorUpload: string;
+    /** {name} file name, {size} its size, {limit} the largest allowed (both formatted in the UI language) */
+    imageTooLarge: string;
+    gifTooLarge: string;
+    /** {limit} the largest image allowed */
+    imageUploadHint: string;
     errorTooMany: string;
     onWww: string;
     cardCount: string;
