@@ -139,6 +139,12 @@ export function canManagePlatformSettings(role?: string): boolean {
   return r === 'admin' || r === 'super_admin';
 }
 
+/** media:read: every admin role sees the live transcodes and the max concurrent transcodes (Delivery). */
+export function canReadMedia(role?: string): boolean {
+  const r = normalizeRole(role);
+  return r === 'admin' || r === 'super_admin' || r === 'moderator';
+}
+
 export function canManageMedia(role?: string): boolean {
   const r = normalizeRole(role);
   return r === 'admin' || r === 'super_admin';

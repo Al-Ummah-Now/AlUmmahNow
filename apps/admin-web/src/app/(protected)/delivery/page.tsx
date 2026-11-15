@@ -1,10 +1,10 @@
 import Link from '@/components/AppLink';
-import { getMediaQoeLive, getMediaSummary, getTranscodeTroubleshoot, listMediaJobs } from '@/lib/api/admin';
+import { getMediaLive, getMediaQoeLive, getMediaSummary, getTranscodeTroubleshoot, listMediaJobs } from '@/lib/api/admin';
 import { getMonthlyBudget } from '@/lib/api/costs';
 import { DEFAULT_MONTHLY_BUDGET_USD } from '@al-ummah/shared-types';
 import type { MediaJob, MediaSummary } from '@/lib/api/types';
 import { getAdminSession } from '@/lib/auth';
-import { canManageMedia, isSuperAdmin } from '@/lib/roles';
+import { canManageMedia, canReadMedia, isSuperAdmin } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
 import type { MessageKey } from '@/i18n/translate';
 import { ErrorAlert, cardClass, fieldClass, linkClass, secondaryButtonClass } from '@/components/ui';
@@ -13,6 +13,7 @@ import { JobsTable } from './JobsTable';
 import { LiveTranscodes } from './LiveTranscodes';
 import { LiveQoe } from './LiveQoe';
 import { TranscodeTroubleshooting } from './TranscodeTroubleshooting';
+import { R2_SETTINGS_ID } from '../media-providers/limit-form';
 import { CostSection, PlaybackSection, SpeedSection } from './sections';
 import { JOB_FILTERS, JOB_STATUS_LABEL, PERIODS, parseJobFilter, parsePeriod } from './metrics';
 
@@ -35,7 +36,8 @@ function settled<T>(result: PromiseSettledResult<T>, what: string): T | null {
  * Phase 3), measurements only: live transcodes and playback quality, then (under the period
  * buttons that filter them) time to playable, playback quality per source and cost with the
  * projection against the monthly cap, and recent R2 transcodes with "Transcode again". Transcode
- * troubleshooting (TranscodeTroubleshooting.tsx) sits under the live figures; ?video=<id> focuses one video. The provider
+ * troubleshooting (TranscodeTroubleshooting.tsx) sits under the live figures (moderators see only the
+ * live figures; the max concurrent transcodes setting is on Video providers, linked from them); ?video=<id> focuses one video. The provider
  * settings have their own page (media-providers/page.tsx), linked from the header.
  */
 export default async function DeliveryComparisonPage({ searchParams }: PageProps) {
@@ -44,8 +46,21 @@ export default async function DeliveryComparisonPage({ searchParams }: PageProps
   const filter = parseJobFilter(params.status);
   const { t, locale } = await getI18n();
   const session = await getAdminSession();
-  if (!canManageMedia(session?.user.role)) {
+  if (!canReadMedia(session?.user.role)) {
     return <ErrorAlert testId="delivery-no-access">{t('mediaDelivery.noAccess')}</ErrorAlert>;
+  }
+  if (!canManageMedia(session?.user.role)) {
+    // Moderators (media:read): the live transcodes and their limit, read only
+    const live = await getMediaLive().then((r) => (r.ok ? r.data : null)).catch(() => null);
+    return (
+      <div>
+        <div className="mb-6 max-w-3xl">
+          <h1 className="text-3xl font-bold text-fg">{t('mediaDelivery.title')}</h1>
+          <p className="text-fg-muted mt-1" data-testid="delivery-read-only">{t('mediaDelivery.readOnlyNote')}</p>
+        </div>
+        <LiveTranscodes initial={live} />
+      </div>
+    );
   }
 
   const [summaryResult, jobsResult, qoeLiveResult, troubleshootResult, budgetResult] = await Promise.allSettled([
@@ -80,7 +95,8 @@ export default async function DeliveryComparisonPage({ searchParams }: PageProps
 
       {summary && (
         <>
-          <LiveTranscodes initial={summary.live ?? null} />
+          {/* "N of <setting>"; the setting itself is on Video providers → Cloudflare R2 settings */}
+          <LiveTranscodes initial={summary.live ?? null} settingsHref={`/media-providers#${R2_SETTINGS_ID}`} />
           <LiveQoe initial={qoeLive} />
         </>
       )}

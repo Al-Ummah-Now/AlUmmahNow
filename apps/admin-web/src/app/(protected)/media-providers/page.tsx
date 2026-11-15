@@ -1,11 +1,12 @@
 import Link from '@/components/AppLink';
-import { getMediaProviders } from '@/lib/api/admin';
+import { getMediaProviders, getTranscodeLimit } from '@/lib/api/admin';
 import { getAdminSession } from '@/lib/auth';
 import { canManageMedia } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
 import { ErrorAlert, linkClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { ProviderSettings } from './ProviderSettings';
+import { R2Settings } from './R2Settings';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,7 +15,8 @@ const TITLE_ID = 'media-providers-title';
 /**
  * Video providers (docs/media-delivery/PROVIDERS.md): which providers take uploads (with per-channel
  * overrides) and serve playback, health thresholds and thumbnails. The measurements live on the
- * Delivery page; each page links to the other. Same gate as Delivery (media:manage).
+ * Delivery page; each page links to the other. Media:manage only. Cloudflare R2's settings (max concurrent
+ * transcodes, R2Settings.tsx) sit under the provider settings.
  */
 export default async function MediaProvidersPage() {
   const { t } = await getI18n();
@@ -23,10 +25,14 @@ export default async function MediaProvidersPage() {
     return <ErrorAlert testId="providers-no-access">{t('mediaProviders.noAccess')}</ErrorAlert>;
   }
 
-  const providers = await getMediaProviders().catch((error: unknown) => {
-    logger.error('[media-providers] Failed to load provider settings', { error: error instanceof Error ? error.message : String(error) });
-    return null;
-  });
+  const [providers, limit] = await Promise.all([
+    getMediaProviders().catch((error: unknown) => {
+      logger.error('[media-providers] Failed to load provider settings', { error: error instanceof Error ? error.message : String(error) });
+      return null;
+    }),
+    getTranscodeLimit(),
+  ]);
+  if (!limit.ok) logger.warn('[media-providers] Transcode limit unavailable', { status: limit.status });
 
   return (
     <div>
@@ -45,6 +51,9 @@ export default async function MediaProvidersPage() {
       ) : (
         <ErrorAlert testId="providers-load-error">{t('mediaProviders.loadFailed')}</ErrorAlert>
       )}
+
+      {/* Cloudflare R2's own settings (max concurrent transcodes); Delivery's live figure links here */}
+      <R2Settings initial={limit.ok ? limit.data : null} />
     </div>
   );
 }

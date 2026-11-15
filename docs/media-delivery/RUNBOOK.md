@@ -129,7 +129,8 @@ from R2 on every request, at Class B cost and with no edge cache.
 - **`source_missing`:** Bunny didn't keep the original. "Keep original files" must be on in the
   library's Encoding settings.
 - **"Could not start job" (`reason` in the log line):** `capacity full` means all `max_instances`
-  containers are busy, expected under bursts; `container start failed` means the container exited
+  containers are busy (rare now that the dispatcher keeps starts under the admin's limit, see
+  Capacity); `container start failed` means the container exited
   while starting, which is a broken image or the platform, never load. The consumer tries again
   after 15 s, 30 s, 60 s, 2 min, then every 5 min (`START_RETRY_DELAYS` in `apps/media/src/jobs.ts`),
   so a job resumes within seconds once the cause clears. After the queue's last delivery (9) the
@@ -146,10 +147,50 @@ from R2 on every request, at Class B cost and with no edge cache.
 - **Deploys:** `rollout_active_grace_period` (1 h) lets running transcodes finish before a rollout
   replaces their instance. One cut off after that (SIGTERM, exit 143), a lost launch or a
   restarted container retries after 15 s without using up one of its 3 attempts (up to 6 in a row).
-- **Capacity:** raising `max_instances` raises the peak spend. The Delivery page's
-  "Transcoder now" card shows transcoding now out of the maximum, the jobs waiting and the oldest
-  wait (from `media_jobs`, refreshed every 30 s). The maximum is api-videos' `MEDIA_MAX_TRANSCODES`
-  var: change it with `max_instances` in `apps/media/wrangler*.jsonc` (production 4, stage and QA 2).
+- **Capacity: concurrent transcodes** is an autoscaling **min–max range**, a setting of the R2
+  provider: videos admin → **Video providers → Cloudflare R2 settings** (`/media-providers#r2-settings`;
+  admins change it, audited as `media:transcode-limit` in `site_settings_log` with old and new range,
+  Undo in the toast). Default 4–4 (a fixed 4, as before ranges). Rules: 1 ≤ min ≤ max ≤ the
+  **Cloudflare limit** (shown as "Cloudflare limit: N" in the admin). We set no ceiling of our own:
+  the container's `max_instances` is what Cloudflare allows. Containers have no per-application cap,
+  only account-wide concurrency (15,000 vCPU, 60 TiB memory, 300 TB disk; Containers docs → Limits →
+  [Account limits](https://developers.cloudflare.com/containers/platform-details/limits/#account-limits);
+  `max_instances` has no documented maximum, Wrangler configuration → containers). vCPU binds first:
+  15,000 / 4 vCPU per standard-4 = **3,750 instances in production**. The account limit is shared by
+  production, stage, QA and every other Worker on the account, so stage and QA stay at 2. Cloudflare
+  raises account limits on request (account team or Support). The value reaches apps/media and
+  api-videos as `MEDIA_TRANSCODE_CEILING`. The value lives in
+  `global_settings/ops/media-transcode-limit.json` (written by api-videos; the first version's
+  `{ limit }` reads as min = max), read by both Workers with a 30 s cache, so a change applies within a
+  minute.
+  - **Autoscaling** (`TranscodeSlots` Durable Object in apps/media, one object `global`;
+    `src/slot-state.ts`, decision `scaleStep` in shared-types `transcode-limit.ts`): up to `min`
+    transcodes run at once. A job that can't start waits: its message is sent again in 60 s and the
+    delivery acked, so waiting never uses up one of its 9 deliveries; the oldest waiting job gets the
+    next free slot. While jobs wait, one more slot opens each time a transcode starts or finishes,
+    until nothing waits or `max` is reached. When a transcode finishes with nothing waiting, it falls
+    back to `min`. Running transcodes are never stopped: over the allowance, new starts wait.
+  - **Billing:** `min` is a concurrency floor, not warm instances. Cloudflare Containers bill an
+    instance only while it runs (memory and disk per 10 ms while awake, CPU on active use only, nothing
+    once it sleeps; developers.cloudflare.com/containers/pricing), and a transcoder starts only for a
+    job, so idle slots cost nothing.
+  - **Slots:** the Transcoder's watchdog renews its slot every minute (a job waiting for a retry keeps
+    it until 10 min after its retry time) and gives it back when the job is ready, failed for good or
+    cancelled; a slot nobody renews lapses after 10 min. If the slots object can't be reached the job
+    starts anyway, under `max_instances`. Remux, caption-audio and live-review jobs are short and are not
+    counted; they share the `max_instances` ceiling.
+  - While at least `min` transcode, a job waiting in `queued` is its turn coming, not stuck: the
+    10-min sweep doesn't re-queue it and the troubleshooting panel doesn't flag `queued_too_long`.
+  - The Delivery page's "Transcoder now" card shows "N running · M waiting · range min–max", the range
+    and the ceiling, the jobs waiting and the oldest wait (from `media_jobs`, refreshed every 30 s), and
+    links admins to the R2 settings. The R2 settings show the estimated cost of one more slot next to
+    the fields: about $0.40 an hour while it transcodes (standard-4 list price, the same as
+    `lib/media/costs.ts`), about $289 a month if busy all month, and the worst case with every slot up
+    to `max` busy.
+  - If Cloudflare raises the account limit, change `max_instances` and `MEDIA_TRANSCODE_CEILING` in
+    `apps/media/wrangler*.jsonc` and `apps/api-videos/wrangler*.jsonc` together (a unit test checks
+    they match) and release. The cost line shows the worst case at the admin's max, so keep max within
+    the $500/month budget: each busy slot is about $0.40 an hour.
 - **One video:** its admin page has an R2 card with the status, the failure details when a
   transcode failed, and "Transcode again" (`media:manage`).
 - **Dead letters** (`al-ummah-now-transcode-dlq-*`): only when api-videos could not be told that a

@@ -509,12 +509,29 @@ export interface MediaCostRow {
   value: number;
 }
 
-/** What the transcoder is doing now (api-videos media_jobs; MEDIA_MAX_TRANSCODES). */
+/** What the transcoder is doing now (api-videos media_jobs; the admin's concurrent transcodes range). */
 export interface MediaLive {
   transcoding: number;
   queued: number;
-  /** Max concurrent transcodes (the container's max_instances); null when not configured */
-  maxTranscodes: number | null;
+  /** The concurrent transcodes range enforced now (the admin's setting under the ceiling, autoscaled); null when unknown */
+  rangeMin: number | null;
+  rangeMax: number | null;
+  /** The hard ceiling (the container's max_instances); null or absent when unknown */
+  ceiling?: number | null;
+  /**
+   * How long transcodes took to start over the last days (api-videos lib/media/start-times.ts): the
+   * attempt began → FFmpeg running, p50/p95 overall and per cold or warm start. Absent from older APIs.
+   */
+  startTimes?: {
+    days: number;
+    samples: number;
+    p50Ms: number | null;
+    p95Ms: number | null;
+    cold: { samples: number; p50Ms: number | null; p95Ms: number | null };
+    warm: { samples: number; p50Ms: number | null; p95Ms: number | null };
+    coldReadyP50Ms: number | null;
+    dispatchP50Ms: number | null;
+  } | null;
   oldestQueuedAt: string | null;
   /** Age of the oldest waiting job by the server clock */
   oldestQueuedSeconds: number | null;

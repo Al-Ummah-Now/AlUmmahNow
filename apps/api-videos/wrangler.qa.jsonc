@@ -319,8 +319,8 @@
     "MEDIA_BUCKET_NAMES": "al-ummah-now-media-qa,al-ummah-now-media-private-qa,al-ummah-now-media-originals-qa",
     "ORIGINALS_RETENTION_DAYS": "30",
     "ORIGINALS_MAX_DAYS": "90",
-    // Max concurrent transcodes: max_instances of the QA transcoder container (apps/media/wrangler.qa.jsonc)
-    "MEDIA_MAX_TRANSCODES": "2",
+    // Ceiling of the admin's max concurrent transcodes: max_instances of the QA transcoder (apps/media/wrangler.qa.jsonc)
+    "MEDIA_TRANSCODE_CEILING": "2",
     // Logging policy (docs/operations/logging.md): warn on production, stage and QA (only warnings, errors, slow requests); debug locally
     "LOG_LEVEL": "warn",
     // Bot protection (docs/features/bot-protection.md): off | monitor | enforce; Cloudflare test keys outside production

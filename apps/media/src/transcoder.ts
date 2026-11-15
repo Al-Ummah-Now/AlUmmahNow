@@ -14,6 +14,7 @@ import { reportAudioPackage, reportAudioProbe, reportAudioTrack, reportCaptionAu
 import { serveOriginal } from './originals';
 import { storeUpload } from './uploads';
 import { packageKeyAllowed, serveAudioUpload } from './audio';
+import { LEASE_MS, slotsOf } from './slot-state';
 
 /** Source URL that answered, per video (isolate memory; a miss just re-probes). */
 const chosenSource = new Map<string, string>();
@@ -208,7 +209,11 @@ export class Transcoder extends Container<Env> {
 	async startJob(msg: TranscodeJobMessage): Promise<'started' | 'duplicate' | 'superseded' | 'relaunched'> {
 		const current = await this.job();
 		const action = onMessage(current, msg, Date.now());
-		if (action === 'duplicate') return 'duplicate';
+		if (action === 'duplicate') {
+			// The consumer took a slot for it: a job that is over gives it back at once
+			if (current && current.status !== 'running' && current.status !== 'waiting_retry' && current.status !== 'stopping') await this.freeSlot(current);
+			return 'duplicate';
+		}
 		if (action === 'relaunch') {
 			log.warn('[Transcoder] Launch was lost (restarted mid-start); starting again', { videoId: msg.videoId, jobId: msg.jobId });
 			await this.destroy().catch(() => undefined);
@@ -232,6 +237,7 @@ export class Transcoder extends Container<Env> {
 			// Not started: forget it, so the queue's redelivery starts it again (not a "duplicate")
 			await this.ctx.storage.delete('job');
 			await this.destroy().catch(() => undefined);
+			await this.freeSlot(job);
 			throw error;
 		}
 		return action === 'supersede' ? 'superseded' : action === 'relaunch' ? 'relaunched' : 'started';
@@ -313,6 +319,7 @@ export class Transcoder extends Container<Env> {
 		await this.save(job);
 		await this.dropStaging(job);
 		await this.report(job, { type: 'ready', result });
+		await this.freeSlot(job);
 		await this.stop().catch(() => undefined);
 	}
 
@@ -350,6 +357,8 @@ export class Transcoder extends Container<Env> {
 			job.nextRetryAt = now + next.delaySeconds * 1000;
 			await this.save(job);
 			await this.report(job, { type: 'failed', error, final: false, failure, ...(job.rungs ? { rungs: job.rungs } : {}) });
+			// Keeps its slot while it waits for the retry
+			await this.holdSlot(job, (job.nextRetryAt ?? now) + LEASE_MS);
 			await this.schedule(next.delaySeconds, 'retry', job.jobId);
 			return;
 		}
@@ -359,6 +368,7 @@ export class Transcoder extends Container<Env> {
 		await this.dropStaging(job);
 		log.error('[Transcoder] Job failed', { videoId: job.videoId, jobId: job.jobId, attempt: job.attempt, error });
 		await this.report(job, { type: 'failed', error, final: true, failure, ...(job.rungs ? { rungs: job.rungs } : {}) });
+		await this.freeSlot(job);
 	}
 
 	/** schedule() callback: next attempt of a failed job. */
@@ -405,6 +415,7 @@ export class Transcoder extends Container<Env> {
 			await this.save(job);
 		}
 		const verdict = watchdogVerdict(job, status, now);
+		if (verdict.kind === 'ok') await this.holdSlot(job, now + LEASE_MS);
 		if (verdict.kind === 'ready') return this.finishReady(job, verdict.result);
 		if (verdict.kind === 'failed') return this.finishFailed(job, verdict.error, verdict.fatal, { stage: verdict.error === 'launch_lost' ? 'start' : 'container', stopReason: `watchdog: ${verdict.error}` });
 		await this.schedule(WATCHDOG_SECONDS, 'watchdog');
@@ -724,6 +735,7 @@ export class Transcoder extends Container<Env> {
 			await this.destroy().catch(() => undefined);
 			await deletePrefix(bucketFor(this.env, current.prefix), `${current.prefix}/`).catch((e) => log.warn('[Transcoder] Cancel cleanup failed', { videoId: current.videoId, error: errorText(e) }));
 			if (current.reviewPrefix) await deletePrefix(this.env.MEDIA_PRIVATE, current.reviewPrefix).catch(() => undefined);
+			await this.freeSlot(current);
 		} else {
 			// Never started here (or an older job is stored): a stand-in makes later deliveries duplicates
 			const stub = cancelledJob(input, now);
@@ -741,6 +753,22 @@ export class Transcoder extends Container<Env> {
 		if (!job || job.jobId !== jobId || job.status !== 'waiting_retry') return 'not_waiting';
 		await this.retry(jobId);
 		return 'started';
+	}
+
+	// -----------------------------------------------------------------------
+	// Slots (the admin's max concurrent transcodes, slot-state.ts): never fail the job over them
+	// -----------------------------------------------------------------------
+
+	private async holdSlot(job: JobState, until: number): Promise<void> {
+		await slotsOf(this.env)
+			.renew(job.videoId, job.jobId, until)
+			.catch((e: unknown) => log.warn('[Transcoder] Could not renew the slot', { videoId: job.videoId, jobId: job.jobId, error: errorText(e) }));
+	}
+
+	private async freeSlot(job: JobState): Promise<void> {
+		await slotsOf(this.env)
+			.release(job.videoId, job.jobId)
+			.catch((e: unknown) => log.warn('[Transcoder] Could not free the slot', { videoId: job.videoId, jobId: job.jobId, error: errorText(e) }));
 	}
 
 	// -----------------------------------------------------------------------

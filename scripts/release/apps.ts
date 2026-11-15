@@ -260,12 +260,18 @@ export const APPS: AppRule[] = [
 			env: null,
 			name: 'al-ummah-now-media',
 			requireRoutes: true,
+			// The container's max_instances: the ceiling of the admin's max concurrent transcodes
+			vars: { MEDIA_TRANSCODE_CEILING: '3750' },
 			requiredBindings: [
 				INTERNAL_API_KEY,
 				{ kind: 'secrets_store_secrets', name: 'MEDIA_SIGN_KEY' },
 				{ kind: 'r2_buckets', name: 'MEDIA' },
 				{ kind: 'r2_buckets', name: 'MEDIA_PRIVATE' },
 				{ kind: 'durable_objects', name: 'TRANSCODER' },
+				// The admin's max concurrent transcodes (apps/media/src/slot-state.ts)
+				{ kind: 'durable_objects', name: 'TRANSCODE_SLOTS' },
+				{ kind: 'r2_buckets', name: 'GLOBAL_SETTINGS' },
+				{ kind: 'queue_producer', name: 'TRANSCODE_QUEUE' },
 				{ kind: 'services', name: 'VIDEOS' },
 				{ kind: 'queue_consumer', name: 'al-ummah-now-transcode' },
 			],
@@ -274,7 +280,16 @@ export const APPS: AppRule[] = [
 		stage: stageRule({
 			name: 'al-ummah-now-media-stage',
 			requireRoutes: true,
-			requiredBindings: [INTERNAL_API_KEY, { kind: 'r2_buckets', name: 'MEDIA' }, { kind: 'r2_buckets', name: 'MEDIA_PRIVATE' }, { kind: 'queue_consumer', name: 'al-ummah-now-transcode-stage' }],
+			vars: { MEDIA_TRANSCODE_CEILING: '2' },
+			requiredBindings: [
+				INTERNAL_API_KEY,
+				{ kind: 'r2_buckets', name: 'MEDIA' },
+				{ kind: 'r2_buckets', name: 'MEDIA_PRIVATE' },
+				{ kind: 'queue_consumer', name: 'al-ummah-now-transcode-stage' },
+				{ kind: 'durable_objects', name: 'TRANSCODE_SLOTS' },
+				{ kind: 'r2_buckets', name: 'GLOBAL_SETTINGS' },
+				{ kind: 'queue_producer', name: 'TRANSCODE_QUEUE' },
+			],
 		}),
 	},
 	{

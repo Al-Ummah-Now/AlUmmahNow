@@ -19,31 +19,49 @@
 			"image": "./container/Dockerfile",
 			"image_build_context": "./container",
 			"instance_type": "standard-4",
-			// Bounds spend: at most this many transcodes at once (the queue backs off when full)
-			"max_instances": 4,
+			// Cloudflare's own limit, not one of ours: Containers have no per-application cap, only account-wide
+			// concurrency (15,000 vCPU, 60 TiB memory, 300 TB disk; https://developers.cloudflare.com/containers/platform-details/limits/#account-limits),
+			// and vCPU binds first: 15,000 / 4 vCPU per standard-4 = 3,750 instances. The admin's min–max range
+			// (Video providers → Cloudflare R2 settings, enforced by TranscodeSlots) decides how many run.
+			// Instances that are not running cost nothing. The account limit is shared with stage, QA and every
+			// other Worker on the account, so stage and QA stay small.
+			"max_instances": 3750,
 			// A deploy lets running transcodes finish (up to 1 h) before their instance is replaced;
 			// one cut off after that retries at once without using up an attempt (jobs.ts isInfraFailure)
 			"rollout_active_grace_period": 3600
 		}
 	],
-	"durable_objects": { "bindings": [{ "name": "TRANSCODER", "class_name": "Transcoder" }] },
-	"migrations": [{ "tag": "v1", "new_sqlite_classes": ["Transcoder"] }],
+	"durable_objects": {
+		"bindings": [
+			{ "name": "TRANSCODER", "class_name": "Transcoder" },
+			// One object: the slots that enforce the admin's max concurrent transcodes (src/slot-state.ts)
+			{ "name": "TRANSCODE_SLOTS", "class_name": "TranscodeSlots" }
+		]
+	},
+	"migrations": [
+		{ "tag": "v1", "new_sqlite_classes": ["Transcoder"] },
+		{ "tag": "v2", "new_sqlite_classes": ["TranscodeSlots"] }
+	],
 	// MEDIA: public renditions (pub/…), served by the R2 custom domain. MEDIA_PRIVATE: private and
 	// unlisted ones (priv/…), with no public access at all: only /priv/ (token checked) reads it.
 	"r2_buckets": [
 		{ "binding": "MEDIA", "bucket_name": "al-ummah-now-media" },
 		{ "binding": "MEDIA_PRIVATE", "bucket_name": "al-ummah-now-media-private" },
 		// Uploads as received (read only): the transcode source (docs/media-delivery/ORIGINALS.md)
-		{ "binding": "MEDIA_ORIGINALS", "bucket_name": "al-ummah-now-media-originals" }
+		{ "binding": "MEDIA_ORIGINALS", "bucket_name": "al-ummah-now-media-originals" },
+		// Read only here: the admin's max concurrent transcodes (ops/media-transcode-limit.json, written by api-videos)
+		{ "binding": "GLOBAL_SETTINGS", "bucket_name": "global-settings" }
 	],
 	"services": [{ "binding": "VIDEOS", "service": "videos" }],
 	"queues": {
+		// A job with no free slot is sent again later (src/dispatch.ts)
+		"producers": [{ "binding": "TRANSCODE_QUEUE", "queue": "al-ummah-now-transcode" }],
 		"consumers": [
 			{
 				"queue": "al-ummah-now-transcode",
 				"max_batch_size": 1,
 				"max_batch_timeout": 5,
-				"max_concurrency": 4,
+				"max_concurrency": 10,
 				"max_retries": 8,
 				"dead_letter_queue": "al-ummah-now-transcode-dlq"
 			}
@@ -55,7 +73,8 @@
 	],
 	// The deployed version: the release self-test runs a few real starts per version, not per call
 	"version_metadata": { "binding": "CF_VERSION_METADATA" },
-	"vars": { "TRANSCODER_INSTANCE": "standard-4", "LOG_LEVEL": "warn" },
+	// MEDIA_TRANSCODE_CEILING: max_instances above (the admin's setting can't go higher)
+	"vars": { "TRANSCODER_INSTANCE": "standard-4", "LOG_LEVEL": "warn", "MEDIA_TRANSCODE_CEILING": "3750" },
 
 	"env": {
 		"stage": {
@@ -69,21 +88,32 @@
 					"image": "./container/Dockerfile",
 					"image_build_context": "./container",
 					"instance_type": "standard-4",
+					// Kept small: Cloudflare's account-wide limit is shared with production (see the top level)
 					"max_instances": 2,
 					// A deploy lets running transcodes finish (up to 1 h) before their instance is replaced;
 					// one cut off after that retries at once without using up an attempt (jobs.ts isInfraFailure)
 					"rollout_active_grace_period": 3600
 				}
 			],
-			"durable_objects": { "bindings": [{ "name": "TRANSCODER", "class_name": "Transcoder" }] },
-			"migrations": [{ "tag": "v1", "new_sqlite_classes": ["Transcoder"] }],
+			"durable_objects": {
+				"bindings": [
+					{ "name": "TRANSCODER", "class_name": "Transcoder" },
+					{ "name": "TRANSCODE_SLOTS", "class_name": "TranscodeSlots" }
+				]
+			},
+			"migrations": [
+				{ "tag": "v1", "new_sqlite_classes": ["Transcoder"] },
+				{ "tag": "v2", "new_sqlite_classes": ["TranscodeSlots"] }
+			],
 			"r2_buckets": [
 				{ "binding": "MEDIA", "bucket_name": "al-ummah-now-media-stage" },
 				{ "binding": "MEDIA_PRIVATE", "bucket_name": "al-ummah-now-media-private-stage" },
-				{ "binding": "MEDIA_ORIGINALS", "bucket_name": "al-ummah-now-media-originals-stage" }
+				{ "binding": "MEDIA_ORIGINALS", "bucket_name": "al-ummah-now-media-originals-stage" },
+				{ "binding": "GLOBAL_SETTINGS", "bucket_name": "global-settings-stage" }
 			],
 			"services": [{ "binding": "VIDEOS", "service": "videos-stage" }],
 			"queues": {
+				"producers": [{ "binding": "TRANSCODE_QUEUE", "queue": "al-ummah-now-transcode-stage" }],
 				"consumers": [
 					{
 						"queue": "al-ummah-now-transcode-stage",
@@ -101,7 +131,7 @@
 			],
 			// The deployed version: the release self-test runs a few real starts per version, not per call
 			"version_metadata": { "binding": "CF_VERSION_METADATA" },
-			"vars": { "TRANSCODER_INSTANCE": "standard-4", "LOG_LEVEL": "warn" }
+			"vars": { "TRANSCODER_INSTANCE": "standard-4", "LOG_LEVEL": "warn", "MEDIA_TRANSCODE_CEILING": "2" }
 		}
 	}
 }

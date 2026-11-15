@@ -177,7 +177,7 @@ async function makeEnv(videos: Record<string, unknown>) {
 		TRANSCODE_QUEUE: new Queue(),
 		PROCESSING_CHECK_QUEUE: new Queue(),
 		MEDIA_PUBLIC_HOST: 'media.qa.alummahnow.net',
-		MEDIA_MAX_TRANSCODES: '2',
+		MEDIA_TRANSCODE_CEILING: '2',
 		bunny_stream_library_id: String(PRIMARY_LIB),
 		'bunny-stream-key': 'primary-key',
 		bunny_hostname: 'vz-primary.b-cdn.net',

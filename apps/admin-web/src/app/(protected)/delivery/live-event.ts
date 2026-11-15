@@ -19,7 +19,9 @@ export function mediaLiveFromEvent(e: AdminLiveEvent): MediaLive | null {
   return {
     transcoding,
     queued,
-    maxTranscodes: num(e.maxTranscodes),
+    rangeMin: num(e.rangeMin),
+    rangeMax: num(e.rangeMax),
+    ceiling: num(e.ceiling),
     oldestQueuedAt,
     oldestQueuedSeconds: Number.isFinite(age) ? Math.max(0, age) : null,
     at,

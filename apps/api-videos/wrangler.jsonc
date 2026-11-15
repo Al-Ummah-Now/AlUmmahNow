@@ -380,8 +380,9 @@
 		// Kept originals: at least this many days, and until the R2 rendition is ready; never past the ceiling
 		"ORIGINALS_RETENTION_DAYS": "30",
 		"ORIGINALS_MAX_DAYS": "90",
-		// Max concurrent transcodes: max_instances of the transcoder container (apps/media/wrangler.jsonc); the Delivery page shows "N of M"
-		"MEDIA_MAX_TRANSCODES": "4",
+		// Hard ceiling of the admin's max concurrent transcodes: max_instances of the transcoder container
+		// (apps/media/wrangler.jsonc). The setting itself is global_settings/ops/media-transcode-limit.json
+		"MEDIA_TRANSCODE_CEILING": "3750",
 		// Logging policy (docs/operations/logging.md): warn on production, stage and QA (only warnings, errors, slow requests); debug locally
 		"LOG_LEVEL": "warn",
 		"ENVIRONMENT": "production",
@@ -735,8 +736,8 @@
 				"MEDIA_BUCKET_NAMES": "al-ummah-now-media-stage,al-ummah-now-media-private-stage,al-ummah-now-media-originals-stage",
 				"ORIGINALS_RETENTION_DAYS": "30",
 				"ORIGINALS_MAX_DAYS": "90",
-				// max_instances of the stage transcoder container (apps/media/wrangler.jsonc env.stage)
-				"MEDIA_MAX_TRANSCODES": "2",
+				// Ceiling of the admin's max concurrent transcodes: max_instances of the stage transcoder (apps/media env.stage)
+				"MEDIA_TRANSCODE_CEILING": "2",
 				// Logging policy (docs/operations/logging.md): warn on production, stage and QA (only warnings, errors, slow requests); debug locally
 				"LOG_LEVEL": "warn",
 				"ENVIRONMENT": "stage",

@@ -19,7 +19,7 @@ export const LIVE_REFRESH_MS = 30_000;
  * while the page is visible, and at once when it becomes visible again after
  * a longer gap. A failed refresh keeps the last figures and says so.
  */
-export function LiveTranscodes({ initial }: { initial: MediaLive | null }) {
+export function LiveTranscodes({ initial, settingsHref }: { initial: MediaLive | null; settingsHref?: string }) {
   const { t, locale } = useLanguage();
   const router = useRouter();
   const [live, setLive] = useState<MediaLive | null>(initial);
@@ -54,7 +54,8 @@ export function LiveTranscodes({ initial }: { initial: MediaLive | null }) {
       const figures = update.events.map(mediaLiveFromEvent).filter((f): f is MediaLive => f !== null).at(-1);
       if (figures) {
         last.current = Date.now();
-        setLive(figures);
+        // The socket event is small and carries no start times: keep the last ones read from the API
+        setLive((prev) => ({ ...figures, startTimes: figures.startTimes ?? prev?.startTimes }));
         setStale(false);
       } else if (update.resync) {
         void refresh();
@@ -78,5 +79,5 @@ export function LiveTranscodes({ initial }: { initial: MediaLive | null }) {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [refresh, socketLive]);
 
-  return <LiveFigures live={live} t={t} locale={locale} stale={stale} />;
+  return <LiveFigures live={live} t={t} locale={locale} stale={stale} settingsHref={settingsHref} />;
 }

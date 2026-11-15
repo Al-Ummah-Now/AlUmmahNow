@@ -34,7 +34,7 @@ import {
 } from '@al-ummah/shared-types';
 import R2Repository from '../r2Repo';
 import { logger } from '../logger';
-import { enqueueTranscode, pushMediaLive, recordJob, type MediaEnv, type MediaVideo } from './r2-delivery';
+import { enqueueTranscode, pushMediaLive, recordJob, transcodeSlotsFull, type MediaEnv, type MediaVideo } from './r2-delivery';
 
 type SecretLike = string | { get(): Promise<string> };
 
@@ -310,11 +310,13 @@ export async function flagStalledTranscodes(env: TroubleshootEnv & ErrorReporter
 	let flagged = 0;
 	try {
 		const rows = await activeRows(env);
+		// Every slot busy: jobs that never started are waiting their turn, not stalled
+		const slotsFull = rows.length ? await transcodeSlotsFull(env as never, now) : false;
 		for (const row of rows) {
 			const answer = env.MEDIA_WORKER ? await askTranscoder(env, row.video_id) : null;
 			// The transcoder could not be asked: only the "never started" rule can be judged from our own record
 			if (env.MEDIA_WORKER && !answer) continue;
-			const stall = transcodeStall(row, answer?.view ?? null, now);
+			const stall = transcodeStall(row, answer?.view ?? null, now, { slotsFull });
 			if (!stall || !stallIsNew(stall)) continue;
 			const view = answer?.view && answer.view.jobId === row.job_id ? answer.view : null;
 			const start = answer?.startFailure && answer.startFailure.jobId === row.job_id ? answer.startFailure : null;

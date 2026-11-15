@@ -18,10 +18,12 @@ import { handlePrivate } from './edge';
 import { errorText, log, type Env } from './env';
 import { withNoIndex } from './crawlers';
 import { handleInternalJob } from './internal-jobs';
+import { gateTranscode } from './dispatch';
 import type { Mp4Outcome } from './transcoder';
 
 export { ContainerProxy } from '@cloudflare/containers';
 export { Transcoder } from './transcoder';
+export { TranscodeSlots } from './slots';
 
 function isJob(body: unknown): body is TranscodeJobMessage {
 	const b = body as Partial<TranscodeJobMessage> | null;
@@ -153,13 +155,15 @@ async function handleLiveReviewJob(msg: Message<LiveReviewJobMessage>, env: Env)
 }
 
 /**
- * A transcode job: start it on its video's Transcoder. A start that fails (container start failed,
+ * A transcode job: once it has a slot (gateTranscode), start it on its video's Transcoder. A start that fails (container start failed,
  * capacity full) comes back after a short delay (startRetry); the last delivery reports the job
  * failed to api-videos, which marks it and raises the Errors page item (Transcode again), instead
  * of the message falling silently into the DLQ.
  */
 export async function handleTranscodeStart(msg: Message<TranscodeJobMessage>, env: Env): Promise<void> {
 	const job = msg.body;
+	// The admin's max concurrent transcodes: no free slot, the job waits its turn (dispatch.ts)
+	if (!(await gateTranscode(msg, env))) return;
 	try {
 		await env.TRANSCODER.get(env.TRANSCODER.idFromName(job.videoId)).startJob(job);
 		msg.ack();

@@ -114,7 +114,8 @@ export const NAV_ITEMS: NavItem[] = [
   },
   { href: '/indices', label: 'nav.indices', icon: 'database', group: 'operations' },
   { href: '/video-formats', label: 'nav.videoFormats', icon: 'file', group: 'operations', requires: (a) => a.contact },
-  { href: '/delivery', label: 'nav.delivery', icon: 'film', group: 'operations', requires: (a) => a.media },
+  // Delivery: every admin role sees the live transcodes and the max concurrent transcodes (media:read); the rest is media:manage
+  { href: '/delivery', label: 'nav.delivery', icon: 'film', group: 'operations' },
   // Video providers (docs/media-delivery/PROVIDERS.md): uploads, playback order, overrides; same media:manage gate as Delivery
   { href: '/media-providers', label: 'nav.mediaProviders', icon: 'sliders', group: 'operations', requires: (a) => a.media },
   // R2 backfill of existing videos, R2-first flips and Bunny library retirement (docs/media-delivery/BACKFILL.md); media:manage
