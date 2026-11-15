@@ -152,7 +152,7 @@ test('the stylesheet defines every class the builders use, one control height an
   assert.match(row, /min-height: calc\(var\(--aun-header-height\) - 1px\);/);
   // one typeface, and the bar is full width in every app (never centred in a max width)
   assert.match(bar, /font-family: var\(--aun-header-font, system-ui/);
-  assert.match(css, /\.aun-header:lang\(ar\) \{\n  font-family: var\(--aun-header-font-ar, 'Noto Naskh Arabic'/);
+  assert.match(css, /\.aun-header:lang\(ar\) \{\n(  \/\*[^]*?\*\/\n)?  font-family: var\(--aun-header-font-ar, 'Noto Naskh Arabic', 'Geeza Pro', system-ui,/);
   assert.doesNotMatch(row, /max-width/);
   // one line at every width: nothing wraps, the brand is the group that shrinks, its name truncates
   assert.match(bar, /flex-wrap: nowrap;/);
