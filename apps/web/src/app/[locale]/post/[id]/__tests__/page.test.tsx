@@ -32,6 +32,23 @@ const post = (over: Record<string, unknown> = {}) => ({
 describe('post permalink page', () => {
   beforeEach(() => jest.clearAllMocks());
 
+  it('share card: always the large 1200x630 card (picture, else shared video, else channel), en and ar', async () => {
+    const O = 'https://videos.alummahnow.net';
+    load.mockResolvedValue(post({ images: [{ url: 'https://images.alummahnow.net/p/1.jpg' }] }));
+    const pic = await generateMetadata(params('en'));
+    const picCard = `${O}/og/i/${Buffer.from('https://images.alummahnow.net/p/1.jpg').toString('base64url')}.jpg`;
+    expect(pic.openGraph?.images).toEqual([{ url: picCard, secureUrl: picCard, type: 'image/jpeg', width: 1200, height: 630, alt: 'Eid prayer times' }]);
+    expect(pic.twitter).toMatchObject({ card: 'summary_large_image', images: [picCard] });
+
+    load.mockResolvedValue(post({ type: 'video', videoId: 'v9' }));
+    expect((await generateMetadata(params('ar'))).twitter).toMatchObject({ card: 'summary_large_image', images: [`${O}/og/v/v9.jpg`] });
+
+    load.mockResolvedValue(post());
+    const text = await generateMetadata(params('ar'));
+    expect(text.twitter).toMatchObject({ card: 'summary_large_image', images: [`${O}/og/c/c1.jpg`] });
+    expect(text.openGraph).toMatchObject({ siteName: 'الأمة الآن', images: [{ width: 1200, height: 630 }] });
+  });
+
   it('metadata: title, description, self-canonical with the en/ar pair and x-default', async () => {
     load.mockResolvedValue(post());
     const meta = await generateMetadata(params('ar'));

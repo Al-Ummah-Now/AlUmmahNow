@@ -3,6 +3,7 @@
  * (docs/embeds/README.md §3, spec 25.3). Public data, CORS *, no credentials.
  */
 
+import { channelCardUrl } from '@/lib/share-card/layout';
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger-server';
 import { loadPublicPlaylist, loadPublicVideo, localizedTitle, videoAspect } from '@/lib/embed/content';
@@ -49,7 +50,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       buildChannelOEmbed(origin, channel.id, {
         title: channel.nameLocalized?.en || channel.name,
         url: `${origin}${channelPath('en', { id: channel.id, handle: channel.handle ?? undefined })}`,
-        thumbnailUrl: channel.avatarUrl || undefined,
+        // The channel's 1200x630 card (avatar on its cover banner), like its page's og:image
+        thumbnailUrl: channel.avatarUrl || channel.coverUrl ? channelCardUrl(origin, channel.id) : undefined,
       }),
       200,
       300,

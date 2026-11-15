@@ -5,7 +5,8 @@ import type { Channel } from '@al-ummah/shared-types';
 import { channelPath } from '@/lib/channel-url';
 import { originFromHost } from '@/lib/embed/request-origin';
 import { oembedEndpointUrl } from '@/lib/embed/snippets';
-import { ogImages, twitterImages } from '@/lib/seo/site-share-image';
+import { LARGE_CARD, ogImages, twitterImages } from '@/lib/seo/site-share-image';
+import { channelCardUrl } from '@/lib/share-card/layout';
 import { channelFallbackDescription, channelLd, siteName } from '@/lib/seo/structured-data';
 
 /** Absolute origin of the current request (canonical links need absolute URLs). */
@@ -34,7 +35,8 @@ export async function buildChannelMetadata(channel: Channel | null, locale: stri
   const origin = await requestOrigin();
   const path = channelPath(locale, channel);
   const otherLocale = locale === 'ar' ? 'en' : 'ar';
-  const image = channel.avatarUrl || undefined;
+  // The channel's 1200x630 card (avatar on its cover banner); the site's card without either picture
+  const image = origin && (channel.avatarUrl || channel.coverUrl) ? channelCardUrl(origin, channel.id) : undefined;
   return {
     title,
     description,
@@ -57,7 +59,7 @@ export async function buildChannelMetadata(channel: Channel | null, locale: stri
       // This object replaces the root layout's openGraph: a channel without an avatar gets the site's image
       images: ogImages(image, title),
     },
-    twitter: { card: 'summary', title, description, images: twitterImages(image) },
+    twitter: { card: LARGE_CARD, title, description, images: twitterImages(image) },
   };
 }
 

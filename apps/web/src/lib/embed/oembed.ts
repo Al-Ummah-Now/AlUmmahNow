@@ -106,8 +106,8 @@ export interface OEmbedLinkResponse {
   aun_channel_id: string;
 }
 
-/** Channel avatars are square; providers want the size with the URL */
-export const CHANNEL_THUMBNAIL_SIZE = 400;
+/** A channel's thumbnail is its 1200x630 share card (/og/c/<id>.jpg); providers want the size with the URL */
+export const CHANNEL_THUMBNAIL_SIZE = { width: 1200, height: 630 } as const;
 
 export function buildChannelOEmbed(origin: string, channelId: string, channel: OEmbedChannel): OEmbedLinkResponse {
   return {
@@ -118,7 +118,7 @@ export function buildChannelOEmbed(origin: string, channelId: string, channel: O
     title: channel.title,
     author_name: channel.title,
     author_url: channel.url,
-    ...(channel.thumbnailUrl ? { thumbnail_url: channel.thumbnailUrl, thumbnail_width: CHANNEL_THUMBNAIL_SIZE, thumbnail_height: CHANNEL_THUMBNAIL_SIZE } : {}),
+    ...(channel.thumbnailUrl ? { thumbnail_url: channel.thumbnailUrl, thumbnail_width: CHANNEL_THUMBNAIL_SIZE.width, thumbnail_height: CHANNEL_THUMBNAIL_SIZE.height } : {}),
     aun_channel_id: channelId,
   };
 }

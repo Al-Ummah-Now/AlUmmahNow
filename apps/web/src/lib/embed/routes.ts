@@ -14,9 +14,9 @@ export function isOEmbedPath(pathname: string): boolean {
   return pathname === '/oembed' || pathname === '/oembed/';
 }
 
-/** Stable share images: /thumb/<videoId>.jpg (lib/embed/share-image.ts) */
+/** Stable share images: /thumb/<videoId>.jpg (lib/embed/share-image.ts) and the 1200x630 cards /og/<kind>/<id>.jpg (lib/share-card) */
 export function isShareImagePath(pathname: string): boolean {
-  return /^\/thumb\/[^/]+\.jpg$/.test(pathname);
+  return /^\/thumb\/[^/]+\.jpg$/.test(pathname) || /^\/og\/[vci]\/[^/]+\.jpg$/.test(pathname);
 }
 
 /** Channel RSS feeds for scheduler tools (app/feeds, wiki AUN-SOCIAL): no locale redirect */

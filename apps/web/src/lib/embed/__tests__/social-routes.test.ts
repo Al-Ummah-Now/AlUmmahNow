@@ -78,8 +78,8 @@ describe('channel oEmbed', () => {
     expect(parseContentUrl(`https://${HOST}/ar/shorts/s1`, HOST)).toEqual({ kind: 'video', id: 's1' });
   });
 
-  it('builds a link card with the avatar', () => {
-    expect(buildChannelOEmbed(`https://${HOST}`, 'ch1', { title: 'Noor', url: `https://${HOST}/en/@noor`, thumbnailUrl: 'https://x.b-cdn.net/a.jpg' })).toEqual({
+  it('builds a link card with the channel\'s 1200x630 share card', () => {
+    expect(buildChannelOEmbed(`https://${HOST}`, 'ch1', { title: 'Noor', url: `https://${HOST}/en/@noor`, thumbnailUrl: `https://${HOST}/og/c/ch1.jpg` })).toEqual({
       version: '1.0',
       type: 'link',
       provider_name: expect.any(String),
@@ -87,9 +87,9 @@ describe('channel oEmbed', () => {
       title: 'Noor',
       author_name: 'Noor',
       author_url: `https://${HOST}/en/@noor`,
-      thumbnail_url: 'https://x.b-cdn.net/a.jpg',
-      thumbnail_width: 400,
-      thumbnail_height: 400,
+      thumbnail_url: `https://${HOST}/og/c/ch1.jpg`,
+      thumbnail_width: 1200,
+      thumbnail_height: 630,
       aun_channel_id: 'ch1',
     });
   });
