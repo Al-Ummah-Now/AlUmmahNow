@@ -16,6 +16,12 @@
  * a note when there is nothing and a retry when it fails. The current value is
  * marked when the admin changes it.
  *
+ * Own search source (the channel transfer, issue #713): `source` replaces the
+ * suggest API for the opening list and for typed queries; its items may carry a
+ * line of facts (`meta`) and be listed but not choosable (`disabled`: banned
+ * users). With `chosen="card"` the chosen item shows as a card with its facts
+ * and one button to choose again, which takes the focus.
+ *
  * Accessibility: WAI-ARIA 1.2 combobox with a listbox popup (see
  * autocomplete-model.ts for the keys). The result count is announced in a
  * polite live region. Layout uses logical properties, so it is correct in RTL;
@@ -40,6 +46,8 @@ import {
   initialUrl,
   showInitial,
   keyDown,
+  phaseOf,
+  selectable,
   avatarInitial,
   isArabicInitial,
   ARABIC_INITIAL_STYLE,
@@ -47,6 +55,7 @@ import {
   resolveUrl,
   suggestUrl,
   typed,
+  type AutocompleteItem,
   type AutocompleteMode,
   type AutocompleteOption,
   type AutocompleteState,
@@ -76,6 +85,34 @@ export interface AutocompleteProps {
   initialResults?: boolean;
   /** Show each item's id beside it (default yes). Off on pages where internal ids mean nothing to the admin; the email then wraps instead of being cut. */
   showIds?: boolean;
+  /**
+   * The box's own search instead of the suggest API: called with '' for the opening list
+   * (then with the next cursor) and with the typed text. Keep it stable (useCallback).
+   */
+  source?: AutocompleteSource;
+  /** pick: offer "Use this ID" for a pasted id (default yes; off where only listed items may be chosen) */
+  allowIds?: boolean;
+  /** pick: how the chosen item shows: a chip with Change and Remove (default), or a card with its facts and one Change button */
+  chosen?: 'chip' | 'card';
+  /** The card's Change button (default "Change") */
+  changeLabel?: string;
+  /** Words for this box's list, where the general ones would not fit ("No videos user matches …") */
+  messages?: AutocompleteMessages;
+  /** Show the status line under the box (it is always read to screen readers) */
+  showStatus?: boolean;
+}
+
+export type AutocompleteSource = (query: string, cursor: string | null, signal: AbortSignal) => Promise<{ items: AutocompleteItem[]; next?: string | null }>;
+
+export interface AutocompleteMessages {
+  /** The opening list has items */
+  recent?: (count: number) => string;
+  /** The opening list is empty */
+  emptyList?: string;
+  /** A typed query found nothing */
+  noMatches?: (query: string) => string;
+  /** A typed query found some */
+  count?: (count: number) => string;
 }
 
 const KIND_LABEL: Record<AdminSuggestKind, MessageKey> = {
@@ -116,8 +153,16 @@ export function Autocomplete({
   disabled = false,
   initialResults,
   showIds = true,
+  source,
+  allowIds = true,
+  chosen = 'chip',
+  changeLabel,
+  messages,
+  showStatus = false,
 }: AutocompleteProps) {
   const initialOn = initialResults ?? mode === 'pick';
+  const rules = { allowIds };
+  const changeRef = useRef<HTMLButtonElement>(null);
   const { t } = useLanguage();
   const ids = useId();
   const inputId = `${ids}-input`;
@@ -130,7 +175,7 @@ export function Autocomplete({
   const listRef = useRef<HTMLUListElement>(null);
   const [state, setState] = useState<AutocompleteState>(() => initialState(mode === 'search' ? defaultValue : ''));
   // pick mode: the chosen id and what it is (null while it is being looked up or when nothing has that id)
-  const [picked, setPicked] = useState<{ id: string; item: AdminSuggestion | null; missing: boolean } | null>(() =>
+  const [picked, setPicked] = useState<{ id: string; item: AutocompleteItem | null; missing: boolean } | null>(() =>
     mode === 'pick' && defaultValue ? { id: defaultValue, item: defaultItem?.id === defaultValue ? defaultItem : null, missing: false } : null,
   );
   const [editing, setEditing] = useState(false);
@@ -148,7 +193,7 @@ export function Autocomplete({
       initialRef.current = loading;
       setInitial(loading);
       if (!cursor) setState((s) => showInitial(s, loading));
-      getJson<{ items: AdminSuggestion[]; next?: string | null }>(initialUrl(kind, cursor), controller.signal)
+      (source ? source('', cursor, controller.signal) : getJson<{ items: AdminSuggestion[]; next?: string | null }>(initialUrl(kind, cursor), controller.signal))
         .then(({ items, next }) => {
           const list = addPage(initialRef.current, { items, next: next ?? null }, !!cursor);
           initialRef.current = list;
@@ -164,7 +209,7 @@ export function Autocomplete({
           setState((s) => showInitial(s, list));
         });
     },
-    [kind],
+    [kind, source],
   );
   useEffect(() => () => initialAbort.current?.abort(), []);
 
@@ -182,6 +227,11 @@ export function Autocomplete({
   // Look up the name of an id that came from the URL, for the chip
   useEffect(() => {
     if (!picked || picked.item || picked.missing) return;
+    // An own source has no lookup by id: the page passes the chosen item
+    if (source) {
+      setPicked((p) => (p && p.id === picked.id ? { ...p, missing: true } : p));
+      return;
+    }
     const controller = new AbortController();
     getJson<{ item: AdminSuggestion | null }>(resolveUrl(kind, picked.id), controller.signal)
       .then(({ item }) => setPicked((p) => (p && p.id === picked.id ? { ...p, item, missing: !item } : p)))
@@ -191,7 +241,7 @@ export function Autocomplete({
         setPicked((p) => (p && p.id === picked.id ? { ...p, missing: true } : p));
       });
     return () => controller.abort();
-  }, [kind, picked]);
+  }, [kind, picked, source]);
 
   // Ask for suggestions after the admin stops typing; a newer query aborts the older request
   const query = state.query;
@@ -200,19 +250,19 @@ export function Autocomplete({
     if (q.length < MIN_QUERY) return;
     const controller = new AbortController();
     const timer = setTimeout(() => {
-      getJson<{ items: AdminSuggestion[] }>(suggestUrl(kind, q), controller.signal)
-        .then(({ items }) => setState((s) => received(s, mode, q, items)))
+      (source ? source(q, null, controller.signal) : getJson<{ items: AdminSuggestion[] }>(suggestUrl(kind, q), controller.signal))
+        .then(({ items }) => setState((s) => received(s, mode, q, items, { allowIds })))
         .catch((error: unknown) => {
           if (controller.signal.aborted) return;
           logger.warn('[Autocomplete] Suggestions failed', { kind, error: error instanceof Error ? error.message : String(error) });
-          setState((s) => failed(s, mode, q));
+          setState((s) => failed(s, mode, q, { allowIds }));
         });
     }, DEBOUNCE_MS);
     return () => {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [kind, mode, query]);
+  }, [kind, mode, query, source, allowIds]);
 
   // Arrowing onto the last option of the initial list asks for the next page
   useEffect(() => {
@@ -243,12 +293,15 @@ export function Autocomplete({
       if (initialRef.current) setState((s) => showInitial(s, initialRef.current));
       onChange?.(id, item);
       if (submitOnChange) submitForm();
+      // The box is replaced by the card: its button takes the focus, so the keyboard stays in place
+      if (id && chosen === 'card') changeRef.current?.focus();
     },
-    [onChange, submitOnChange, submitForm],
+    [onChange, submitOnChange, submitForm, chosen],
   );
 
   const choose = useCallback(
     (option: AutocompleteOption) => {
+      if (!selectable(option)) return;
       if (option.type === 'searchAll') {
         flushSync(() => setState((s) => closed({ ...s, query: option.query })));
         submitForm();
@@ -274,7 +327,7 @@ export function Autocomplete({
       setEditing(false);
       return;
     }
-    const result = keyDown(state, mode, e.key, e.altKey);
+    const result = keyDown(state, mode, e.key, e.altKey, rules);
     if (result.preventDefault) e.preventDefault();
     setState(result.state);
     if (result.effect.type === 'choose') choose(result.effect.option);
@@ -300,12 +353,13 @@ export function Autocomplete({
       : state.status === 'error'
         ? t(showingInitial ? 'autocomplete.listFailed' : 'autocomplete.failed')
         : emptyInitial
-          ? t('autocomplete.emptyList')
+          ? (messages?.emptyList ?? t('autocomplete.emptyList'))
           : suggestionCount === 0
-            ? t('autocomplete.noMatches')
+            ? (messages?.noMatches?.(state.query.trim()) ?? t('autocomplete.noMatches'))
             : showingInitial && !state.query.trim()
-              ? t('autocomplete.recent', { count: suggestionCount })
-              : t('autocomplete.count', { count: suggestionCount });
+              ? (messages?.recent?.(suggestionCount) ?? t('autocomplete.recent', { count: suggestionCount }))
+              : (messages?.count?.(suggestionCount) ?? t('autocomplete.count', { count: suggestionCount }));
+  const phase = phaseOf(state);
 
   return (
     <div className={`flex flex-col gap-1 ${className}`} data-testid={testId} data-mode={mode} data-kind={kind}>
@@ -314,7 +368,12 @@ export function Autocomplete({
       </label>
       {mode === 'pick' && name !== undefined && <input ref={hiddenRef} type="hidden" name={name} value={picked?.id ?? ''} />}
 
-      {showChip ? (
+      {showChip && chosen === 'card' ? (
+        <PickedCard picked={picked} label={changeLabel ?? t('autocomplete.change')} buttonRef={changeRef} disabled={disabled} onChange={() => {
+            flushSync(() => setEditing(true));
+            inputRef.current?.focus();
+          }} testId={testId} />
+      ) : showChip ? (
         <PickedChip
           picked={picked}
           kindLabel={t(KIND_LABEL[kind])}
@@ -390,17 +449,20 @@ export function Autocomplete({
                 id={optionId(i)}
                 role="option"
                 aria-selected={i === state.active}
+                aria-disabled={!selectable(option) || undefined}
                 // mousedown would blur the input first and close the list
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
+                  if (!selectable(option)) return;
                   setState(closed);
                   choose(option);
                 }}
-                onMouseMove={() => i !== state.active && setState((s) => ({ ...s, active: i }))}
-                className={`flex cursor-pointer items-center gap-3 px-3 py-2 text-sm ${i === state.active ? 'bg-surface-2 outline outline-2 -outline-offset-2 outline-focus' : ''}`}
+                onMouseMove={() => i !== state.active && selectable(option) && setState((s) => ({ ...s, active: i }))}
+                className={`flex items-center gap-3 px-3 py-2 text-sm ${selectable(option) ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'} ${i === state.active ? 'bg-surface-2 outline outline-2 -outline-offset-2 outline-focus' : ''}`}
                 data-testid={testId ? `${testId}-option` : undefined}
                 data-option={option.type}
                 data-id={option.type === 'suggestion' ? option.suggestion.id : undefined}
+                data-user-id={option.type === 'suggestion' && option.suggestion.kind === 'user' ? option.suggestion.id : undefined}
               >
                 <OptionContent option={option} kind={kind} current={picked?.id} showIds={showIds} />
               </li>
@@ -455,9 +517,20 @@ export function Autocomplete({
           {hint}
         </p>
       )}
-      <p role="status" aria-live="polite" className="sr-only">
+      <p
+        role="status"
+        aria-live="polite"
+        className={showStatus ? 'min-h-4 text-xs text-fg-muted' : 'sr-only'}
+        data-testid={testId ? `${testId}-status` : undefined}
+        data-status={phase}
+      >
         {announcement}
       </p>
+      {chosen === 'card' && picked?.item && !editing && (
+        <span className="sr-only" aria-live="polite">
+          {t('autocomplete.selected', { name: picked.item.label })}
+        </span>
+      )}
     </div>
   );
 }
@@ -529,8 +602,64 @@ function OptionContent({ option, kind, current, showIds = true }: { option: Auto
             </bdi>
           )}
         </span>
+        {s.meta && <span className={`text-xs ${s.disabled ? 'text-danger-fg' : 'text-fg-subtle'}`}>{s.meta}</span>}
       </span>
     </>
+  );
+}
+
+/** The chosen item as a card: picture, name, secondary line and facts, and one button to choose again. */
+function PickedCard({
+  picked,
+  label,
+  buttonRef,
+  disabled,
+  onChange,
+  testId,
+}: {
+  picked: { id: string; item: AutocompleteItem | null; missing: boolean };
+  label: string;
+  buttonRef: React.Ref<HTMLButtonElement>;
+  disabled: boolean;
+  onChange: () => void;
+  testId?: string;
+}) {
+  const { t } = useLanguage();
+  const { id, item, missing } = picked;
+  return (
+    <div
+      className="flex flex-wrap items-center justify-between gap-3 rounded border border-border bg-surface-2 p-3"
+      data-testid={testId ? `${testId}-selected` : undefined}
+      data-id={id}
+    >
+      <span className="flex min-w-0 items-center gap-3">
+        {item ? <Thumb suggestion={item} /> : <span aria-hidden="true" className="h-9 w-1" />}
+        <span className="flex min-w-0 flex-col">
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="truncate font-medium text-fg" dir="auto">
+              {item?.label ?? (missing ? id : t('autocomplete.lookingUp'))}
+            </span>
+            {item && <InvitedBadge suggestion={item} />}
+          </span>
+          {item?.secondary && (
+            <span className="text-xs text-fg-muted [overflow-wrap:anywhere]" dir="auto">
+              {item.secondary}
+            </span>
+          )}
+          {item?.meta && <span className="text-xs text-fg-subtle">{item.meta}</span>}
+        </span>
+      </span>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={onChange}
+        disabled={disabled}
+        className="rounded border border-border bg-surface px-3 py-1.5 text-sm text-fg hover:bg-surface-2 max-sm:min-h-11 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+        data-testid={testId ? `${testId}-change` : undefined}
+      >
+        {label}
+      </button>
+    </div>
   );
 }
 

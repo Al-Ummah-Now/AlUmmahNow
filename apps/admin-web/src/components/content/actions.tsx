@@ -13,7 +13,7 @@ import type { MessageKey } from '@/i18n/translate';
 import { fieldClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
 import { dangerButtonClass, smallButtonClass } from './parts';
-import { confirmMatches } from './userPickerModel';
+import { confirmMatches } from './transfer-model';
 
 export function useContentAction() {
   const router = useRouter();

@@ -5,7 +5,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { adminUserName } from '../src/lib/user-name';
-import { userName } from '../src/components/content/userPickerModel';
+import { userName } from '../src/components/content/transfer-model';
 
 describe('adminUserName', () => {
 	it('shows the resolved name the API sends (first + last for a profile without a display name)', () => {
