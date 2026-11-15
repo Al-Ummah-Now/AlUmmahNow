@@ -1,6 +1,6 @@
 'use server';
 
-import type { AdminJob, AdminJobStatus, AdminVideoMedia, ErrorStatus, LegacyRestorePlan, MediaHealthSnapshot, MediaOverride, MediaSettings, Report, ReportStats, TroubleshootLogs, TroubleshootTokenView } from '@al-ummah/shared-types';
+import type { AdminJob, AdminJobStatus, AdminVideoMedia, BackfillItem, BackfillItemState, BackfillRun, BackfillScope, BackfillSettings, BunnyLibrarySummary, BunnyRemoval, ErrorStatus, LegacyRestorePlan, MediaHealthSnapshot, MediaOverride, MediaSettings, Report, ReportStats, TroubleshootLogs, TroubleshootTokenView } from '@al-ummah/shared-types';
 import { AdminApiError, type ActionResult } from './errors';
 import { fetchAdmin, requestAdmin, navigateForPasskey } from './request';
 import type { TranscodeTroubleshoot, TroubleshootTokenTest } from './types';
@@ -414,6 +414,80 @@ export async function checkMediaProviderHealth(): Promise<ActionResult<MediaHeal
 /** Pin (or with null, clear) one video's playback providers (audited per video). */
 export async function setVideoPlaybackOverride(videoId: string, override: MediaOverride | null): Promise<ActionResult<{ override: MediaOverride | null; media: AdminVideoMedia | null }>> {
   return mutate(`/api/media/videos/${encodeURIComponent(videoId)}/override`, 'PUT', { override });
+}
+
+// R2 backfill of existing videos and Bunny retirement (admin-api /api/media/backfill/*, docs/media-delivery/BACKFILL.md)
+
+export type BunnyLibraryView = BunnyLibrarySummary & { nextDeleteAfter: string | null };
+export interface BackfillFlipResult {
+  flipped?: string[];
+  refused?: { videoId: string; problem: string }[];
+  verification?: { videos: number; verified: number };
+}
+
+export async function listBackfillRuns(): Promise<BackfillRun[]> {
+  return (await fetchAdmin<{ runs: BackfillRun[] }>('/api/media/backfill/runs?limit=20')).runs;
+}
+
+export async function getBackfillRun(id: string): Promise<ActionResult<{ run: BackfillRun }>> {
+  return mutate(`/api/media/backfill/runs/${encodeURIComponent(id)}`, 'GET', undefined);
+}
+
+export async function listBackfillItems(id: string, params: { state?: BackfillItemState; cursor?: string | null } = {}): Promise<ActionResult<{ items: BackfillItem[]; cursor: string | null }>> {
+  const query = new URLSearchParams({ limit: '50' });
+  if (params.state) query.set('state', params.state);
+  if (params.cursor) query.set('cursor', params.cursor);
+  return mutate(`/api/media/backfill/runs/${encodeURIComponent(id)}/items?${query}`, 'GET', undefined);
+}
+
+/** A new run: api-videos estimates it in the background (status estimating → estimated). */
+export async function createBackfillRun(scope: BackfillScope): Promise<ActionResult<{ run: BackfillRun }>> {
+  return mutate('/api/media/backfill/runs', 'POST', { scope });
+}
+
+export async function saveBackfillSettings(id: string, settings: Partial<BackfillSettings>): Promise<ActionResult<{ run: BackfillRun }>> {
+  return mutate(`/api/media/backfill/runs/${encodeURIComponent(id)}/settings`, 'PUT', { settings });
+}
+
+export async function backfillRunAction(id: string, action: 'start' | 'pause' | 'cancel' | 'retry-failed'): Promise<ActionResult<{ run: BackfillRun; retried?: number }>> {
+  return mutate(`/api/media/backfill/runs/${encodeURIComponent(id)}/${action}`, 'POST', {});
+}
+
+export async function retryBackfillItem(runId: string, videoId: string): Promise<ActionResult<{ retried: boolean; why?: string }>> {
+  return mutate('/api/media/backfill/items/retry', 'POST', { runId, videoId });
+}
+
+/** Play R2 first (Bunny stays the fallback): verified videos, a channel, or everywhere; `undo` puts it back. */
+export async function flipBackfill(input: { target: 'videos'; videoIds: string[]; undo?: boolean } | { target: 'channel'; channelId: string; undo?: boolean } | { target: 'global'; undo?: boolean }): Promise<ActionResult<BackfillFlipResult>> {
+  return mutate('/api/media/backfill/flip', 'POST', input);
+}
+
+export async function getChannelVerification(channelId: string): Promise<ActionResult<{ videos: number; verified: number }>> {
+  return mutate(`/api/media/backfill/channels/${encodeURIComponent(channelId)}/verification`, 'GET', undefined);
+}
+
+export async function listBunnyLibraries(): Promise<BunnyLibraryView[]> {
+  return (await fetchAdmin<{ libraries: BunnyLibraryView[] }>('/api/media/backfill/libraries')).libraries;
+}
+
+export async function listBunnyRemovals(libraryId: number, params: { status?: string; cursor?: string | null } = {}): Promise<ActionResult<{ removals: BunnyRemoval[]; cursor: string | null }>> {
+  const query = new URLSearchParams({ limit: '50' });
+  if (params.status) query.set('status', params.status);
+  if (params.cursor) query.set('cursor', params.cursor);
+  return mutate(`/api/media/backfill/libraries/${libraryId}/removals?${query}`, 'GET', undefined);
+}
+
+/** Retire a Bunny library: schedule its verified videos for removal after the grace period (typed confirmation). */
+export async function scheduleBunnyRemovals(libraryId: number, graceDays: number, confirm: string): Promise<ActionResult<{ scheduled: number; deleteAfter: string }>> {
+  return mutate(`/api/media/backfill/libraries/${libraryId}/removals`, 'POST', { graceDays, confirm });
+}
+
+export async function cancelBunnyRemovals(libraryId: number): Promise<ActionResult<{ cancelled: number }>> {
+  return mutate(`/api/media/backfill/libraries/${libraryId}/removals/cancel`, 'POST', {});
+}
+
+export async function retryBunnyRemoval(videoId: string): Promise<ActionResult<unknown>> {
+  return mutate('/api/media/backfill/removals/retry', 'POST', { videoId });
 }
 
 // Admin jobs (heavy actions queued in api-videos; admin-api /api/content/jobs)
