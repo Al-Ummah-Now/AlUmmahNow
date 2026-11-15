@@ -186,7 +186,7 @@ export function MobileAppsForm({ state, history, canEdit, siteUrl }: { state: Mo
               {draft.apple.map((app, i) => (
                 <li key={i} className="flex flex-wrap items-start gap-2">
                   <select
-                    className={`${fieldClass} w-40`}
+                    className={`${fieldClass} min-w-0 flex-1 sm:flex-none sm:w-40`}
                     value={app.role}
                     aria-label={t('mobileApps.appRole')}
                     onChange={(e) => set({ apple: draft.apple.map((a, j) => (j === i ? { ...a, role: e.target.value as MobileAppRole } : a)) })}
@@ -195,7 +195,7 @@ export function MobileAppsForm({ state, history, canEdit, siteUrl }: { state: Mo
                       <option key={r} value={r}>{t(ROLE_LABEL[r])}</option>
                     ))}
                   </select>
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 basis-full order-last sm:order-none sm:basis-0 sm:flex-1">
                     <input
                       className={`${fieldClass} w-full font-mono`}
                       value={app.bundleId}
@@ -254,7 +254,7 @@ export function MobileAppsForm({ state, history, canEdit, siteUrl }: { state: Mo
               <li key={i} className="rounded border border-border p-4">
                 <div className="flex flex-wrap items-start gap-2">
                   <select
-                    className={`${fieldClass} w-40`}
+                    className={`${fieldClass} min-w-0 flex-1 sm:flex-none sm:w-40`}
                     value={app.role}
                     aria-label={t('mobileApps.appRole')}
                     onChange={(e) => set({ android: draft.android.map((a, j) => (j === i ? { ...a, role: e.target.value as MobileAppRole } : a)) })}
@@ -264,7 +264,7 @@ export function MobileAppsForm({ state, history, canEdit, siteUrl }: { state: Mo
                     ))}
                   </select>
                   <input
-                    className={`${fieldClass} min-w-0 flex-1 font-mono`}
+                    className={`${fieldClass} min-w-0 basis-full order-last sm:order-none sm:basis-0 sm:flex-1 font-mono`}
                     value={app.packageName}
                     dir="ltr"
                     spellCheck={false}
