@@ -18,6 +18,8 @@ import { CONTACT_MAIL_VERSION, enqueueContactMail, type ContactMailJob } from '.
 import { getWarning, recordWarningEmail } from './content/warnings';
 import { enqueueWarningMail } from './warning-mail';
 import { enqueueRejectionMail, rejectionMailJob } from './review/rejection-mail';
+import { enqueueTierRequestMail, tierRequestMailJob, type DecidedRequest } from './tier-request-mail';
+import { callVideos, VideosError } from './content/videosClient';
 import { logger } from './logger';
 
 export interface RetryOutcome {
@@ -71,6 +73,21 @@ export const BUILTIN_RETRIES: Record<string, (env: AdminBindings, args: Record<s
     if (!(await enqueueRejectionMail(env, rejectionMailJob(id, decidedAt, args.locale === 'ar' ? 'ar' : 'en'), 0))) {
       return { ok: false, status: 'open', result: 'Could not queue the email' };
     }
+    return { ok: true, status: 'resolved', result: 'Queued again' };
+  },
+  /** Delivers a tier request decision again (notice + email), if the request still has that decision. */
+  'tier-request-delivery': async (env, args) => {
+    const { id, decidedAt } = args;
+    if (!id || !decidedAt) return { ok: false, status: 'open', result: 'Not a tier request' };
+    let request: DecidedRequest;
+    try {
+      request = (await callVideos<{ request: DecidedRequest }>(env as never, `/tier-requests/${encodeURIComponent(id)}`)).request;
+    } catch (error) {
+      if (error instanceof VideosError && error.status === 404) return { ok: false, status: 'dismissed', result: 'Request no longer exists' };
+      throw error;
+    }
+    if (request.decidedAt !== decidedAt) return { ok: true, status: 'resolved', result: 'Nothing to deliver: the request was decided again' };
+    if (!(await enqueueTierRequestMail(env, tierRequestMailJob(id, decidedAt)))) return { ok: false, status: 'open', result: 'Could not queue the delivery' };
     return { ok: true, status: 'resolved', result: 'Queued again' };
   },
   'warning-email': async (env, args) => {

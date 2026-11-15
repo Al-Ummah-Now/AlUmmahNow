@@ -17,6 +17,8 @@ export type ContentKind =
   | 'post'
   | 'user'
   | 'creator-tier'
+  /** A tier request's decision (id = request id; wiki AUN-TIER-REQUESTS). */
+  | 'tier-request'
   /** Live streaming routing settings (id 'routing'). */
   | 'live-settings'
   /** A channel forced to one live provider (id = channel id). */
