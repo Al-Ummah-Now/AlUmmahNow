@@ -27439,6 +27439,973 @@
         }
       }
     },
+    "/api/v1/studio/assets": {
+      "get": {
+        "tags": [
+          "Studio"
+        ],
+        "summary": "The account's shared assets (institution mode)",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).",
+        "operationId": "get_StudioAssetsList",
+        "responses": {
+          "200": {
+            "description": "Assets, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "assets": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "image",
+                                  "video",
+                                  "audio"
+                                ]
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "contentType": {
+                                "type": "string"
+                              },
+                              "bytes": {
+                                "type": "number"
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "kind",
+                              "name",
+                              "contentType",
+                              "bytes",
+                              "createdAt"
+                            ]
+                          }
+                        },
+                        "bytes": {
+                          "type": "number"
+                        },
+                        "limits": {
+                          "type": "object",
+                          "properties": {
+                            "maxAssets": {
+                              "type": "number"
+                            },
+                            "maxAssetBytes": {
+                              "type": "number"
+                            },
+                            "maxTotalBytes": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "maxAssets",
+                            "maxAssetBytes",
+                            "maxTotalBytes"
+                          ]
+                        },
+                        "canEdit": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "assets",
+                        "bytes",
+                        "limits",
+                        "canEdit"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Studio"
+        ],
+        "summary": "Add a shared asset",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nRaw body: PNG, JPEG or WebP image; MP4 or MOV video; MP3, M4A or WAV audio (the type comes from the bytes). ≤ 95 MB each, 50 assets and 1 GB per account (409 `library_full`). Account owner only.",
+        "operationId": "post_StudioAssetCreate",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Display name, ≤ 80 characters"
+            },
+            "required": true,
+            "description": "Display name, ≤ 80 characters",
+            "name": "name",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Added",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "image",
+                            "video",
+                            "audio"
+                          ]
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "contentType": {
+                          "type": "string"
+                        },
+                        "bytes": {
+                          "type": "number"
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "kind",
+                        "name",
+                        "contentType",
+                        "bytes",
+                        "createdAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Empty, too large or not a supported file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not the account owner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Library full",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/studio/assets/{assetId}": {
+      "get": {
+        "tags": [
+          "Studio"
+        ],
+        "summary": "Download a shared asset",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).",
+        "operationId": "get_StudioAssetGet",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Asset id"
+            },
+            "required": true,
+            "description": "Asset id",
+            "name": "assetId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The bytes"
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such asset",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Studio"
+        ],
+        "summary": "Remove a shared asset",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nAlso clears it from the brand kit (logo, intro, outro). Account owner only.",
+        "operationId": "delete_StudioAssetDelete",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Asset id"
+            },
+            "required": true,
+            "description": "Asset id",
+            "name": "assetId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Removed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not the account owner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such asset",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/studio/brand-kit": {
+      "get": {
+        "tags": [
+          "Studio"
+        ],
+        "summary": "The account brand kit (institution mode)",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).",
+        "operationId": "get_BrandKitGet",
+        "responses": {
+          "200": {
+            "description": "Kit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "kit": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "object",
+                              "properties": {
+                                "en": {
+                                  "type": "string"
+                                },
+                                "ar": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "colors": {
+                              "type": "object",
+                              "properties": {
+                                "primary": {
+                                  "type": "string"
+                                },
+                                "secondary": {
+                                  "type": "string"
+                                },
+                                "text": {
+                                  "type": "string"
+                                },
+                                "background": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "primary",
+                                "secondary",
+                                "text",
+                                "background"
+                              ]
+                            },
+                            "logo": {
+                              "type": "string"
+                            },
+                            "intro": {
+                              "type": "string"
+                            },
+                            "outro": {
+                              "type": "string"
+                            },
+                            "lowerThird": {
+                              "type": "object",
+                              "properties": {
+                                "style": {
+                                  "type": "string",
+                                  "enum": [
+                                    "bar",
+                                    "box",
+                                    "minimal"
+                                  ]
+                                },
+                                "position": {
+                                  "type": "string",
+                                  "enum": [
+                                    "start",
+                                    "center",
+                                    "end"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "style",
+                                "position"
+                              ]
+                            },
+                            "watermark": {
+                              "type": "string",
+                              "enum": [
+                                "none",
+                                "top-start",
+                                "top-end",
+                                "bottom-start",
+                                "bottom-end"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "colors",
+                            "lowerThird",
+                            "watermark"
+                          ]
+                        },
+                        "saved": {
+                          "type": "boolean"
+                        },
+                        "canEdit": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "kit",
+                        "saved",
+                        "canEdit"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Storage unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Studio"
+        ],
+        "summary": "Save the account brand kit",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nColours are #rrggbb. `logo` must be an image and `intro`/`outro` videos from the asset library. Account owner only (403 when acting as someone else's channel).",
+        "operationId": "put_BrandKitPut",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "object",
+                    "properties": {
+                      "en": {
+                        "type": "string"
+                      },
+                      "ar": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "colors": {
+                    "type": "object",
+                    "properties": {
+                      "primary": {
+                        "type": "string"
+                      },
+                      "secondary": {
+                        "type": "string"
+                      },
+                      "text": {
+                        "type": "string"
+                      },
+                      "background": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "primary",
+                      "secondary",
+                      "text",
+                      "background"
+                    ]
+                  },
+                  "logo": {
+                    "type": "string"
+                  },
+                  "intro": {
+                    "type": "string"
+                  },
+                  "outro": {
+                    "type": "string"
+                  },
+                  "lowerThird": {
+                    "type": "object",
+                    "properties": {
+                      "style": {
+                        "type": "string",
+                        "enum": [
+                          "bar",
+                          "box",
+                          "minimal"
+                        ]
+                      },
+                      "position": {
+                        "type": "string",
+                        "enum": [
+                          "start",
+                          "center",
+                          "end"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "style",
+                      "position"
+                    ]
+                  },
+                  "watermark": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "top-start",
+                      "top-end",
+                      "bottom-start",
+                      "bottom-end"
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "colors",
+                  "lowerThird",
+                  "watermark"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "kit": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "object",
+                              "properties": {
+                                "en": {
+                                  "type": "string"
+                                },
+                                "ar": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "colors": {
+                              "type": "object",
+                              "properties": {
+                                "primary": {
+                                  "type": "string"
+                                },
+                                "secondary": {
+                                  "type": "string"
+                                },
+                                "text": {
+                                  "type": "string"
+                                },
+                                "background": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "primary",
+                                "secondary",
+                                "text",
+                                "background"
+                              ]
+                            },
+                            "logo": {
+                              "type": "string"
+                            },
+                            "intro": {
+                              "type": "string"
+                            },
+                            "outro": {
+                              "type": "string"
+                            },
+                            "lowerThird": {
+                              "type": "object",
+                              "properties": {
+                                "style": {
+                                  "type": "string",
+                                  "enum": [
+                                    "bar",
+                                    "box",
+                                    "minimal"
+                                  ]
+                                },
+                                "position": {
+                                  "type": "string",
+                                  "enum": [
+                                    "start",
+                                    "center",
+                                    "end"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "style",
+                                "position"
+                              ]
+                            },
+                            "watermark": {
+                              "type": "string",
+                              "enum": [
+                                "none",
+                                "top-start",
+                                "top-end",
+                                "bottom-start",
+                                "bottom-end"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "colors",
+                            "lowerThird",
+                            "watermark"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "kit"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid kit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not the account owner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/trending": {
       "get": {
         "tags": [
@@ -44058,7 +45025,8 @@
                                 "enum": [
                                   "review_transcript",
                                   "transcription",
-                                  "translation"
+                                  "translation",
+                                  "on_device"
                                 ]
                               },
                               "edited": {
@@ -44289,7 +45257,8 @@
                           "enum": [
                             "review_transcript",
                             "transcription",
-                            "translation"
+                            "translation",
+                            "on_device"
                           ]
                         },
                         "edited": {
@@ -44590,7 +45559,8 @@
                           "enum": [
                             "review_transcript",
                             "transcription",
-                            "translation"
+                            "translation",
+                            "on_device"
                           ]
                         },
                         "edited": {
@@ -44978,7 +45948,8 @@
                               "enum": [
                                 "review_transcript",
                                 "transcription",
-                                "translation"
+                                "translation",
+                                "on_device"
                               ]
                             },
                             "edited": {
@@ -45134,6 +46105,282 @@
           },
           "409": {
             "description": "Draft changed, or would replace an uploaded track",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/videos/{videoId}/captions/drafts/{language}/transcript": {
+      "post": {
+        "tags": [
+          "Captions"
+        ],
+        "summary": "Turn a transcript made on the creator's computer into a caption draft",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nD10: desktop Studio can transcribe on the creator's computer (free, Core's whisper.cpp). It sends the timed segments here; a queued job runs the same Quran matcher as server transcription and writes the draft of `language` (origin `on_device`), with Quran shown only as references to the official text. Uses no caption minutes. 202 when queued; 400 `invalid_transcript` (with `reason` and `segment`); 409 `draft_exists` (pass `replace`) or `claim_pending`.",
+        "operationId": "post_OnDeviceTranscriptSubmit",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video ID"
+            },
+            "required": true,
+            "description": "Video ID",
+            "name": "videoId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "ISO 639-1 code"
+            },
+            "required": true,
+            "description": "ISO 639-1 code",
+            "name": "language",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "segments": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "startMs": {
+                          "type": "number"
+                        },
+                        "endMs": {
+                          "type": "number"
+                        },
+                        "text": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "startMs",
+                        "endMs",
+                        "text"
+                      ]
+                    },
+                    "description": "Timed speech, in order"
+                  },
+                  "engine": {
+                    "type": "object",
+                    "properties": {
+                      "provider": {
+                        "type": "string",
+                        "description": "e.g. whisper.cpp"
+                      },
+                      "model": {
+                        "type": "string",
+                        "description": "e.g. large-v3-turbo-q5_0"
+                      }
+                    },
+                    "required": [
+                      "provider"
+                    ]
+                  },
+                  "replace": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "segments",
+                  "engine"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "queued"
+                          ]
+                        },
+                        "segments": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "segments"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unsupported language or invalid transcript",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such video",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A draft exists, or a claim is in progress",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Could not queue the job",
             "content": {
               "application/json": {
                 "schema": {
@@ -46431,6 +47678,806 @@
           },
           "404": {
             "description": "Video not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/videos/{videoId}/renditions": {
+      "post": {
+        "tags": [
+          "Videos"
+        ],
+        "summary": "Start uploading renditions encoded on the creator's computer",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nD11 (optional pre-encode in desktop Studio). Declares the HLS rungs (`360p`, `480p`, `720p`, `1080p`) and every file (`<rung>/index.m3u8`, `<rung>/init.mp4`, `<rung>/seg_00001.m4s` …) with its size. Returns a staging id for the uploads. Must happen before the original upload completes: 409 `too_late` once the server transcode has started. Replaces an earlier unfinished pre-encoded upload of the video. The server verifies the renditions before use and encodes itself if they fail.",
+        "operationId": "post_RenditionsCreate",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video ID"
+            },
+            "required": true,
+            "description": "Video ID",
+            "name": "videoId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "rungs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "files": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "path": {
+                          "type": "string"
+                        },
+                        "bytes": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "path",
+                        "bytes"
+                      ]
+                    }
+                  },
+                  "encoder": {
+                    "type": "string",
+                    "description": "e.g. \"Media Foundation (NVENC)\""
+                  }
+                },
+                "required": [
+                  "rungs",
+                  "files"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Staged; upload the files",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "stagingId": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "uploading",
+                            "ready",
+                            "queued"
+                          ]
+                        },
+                        "rungs": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "files": {
+                          "type": "number"
+                        },
+                        "bytes": {
+                          "type": "number"
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "encoder": {
+                          "type": "string"
+                        },
+                        "maxFileBytes": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "stagingId",
+                        "status",
+                        "rungs",
+                        "files",
+                        "bytes",
+                        "createdAt",
+                        "maxFileBytes"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid rungs or files",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Video not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The server transcode already started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Storage unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/videos/{videoId}/renditions/{stagingId}": {
+      "delete": {
+        "tags": [
+          "Videos"
+        ],
+        "summary": "Drop a pre-encoded upload",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nDeletes the staged files; the server encodes the video itself. 409 `too_late` once the transcode took them.",
+        "operationId": "delete_RenditionsCancel",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video ID"
+            },
+            "required": true,
+            "description": "Video ID",
+            "name": "videoId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "From POST /renditions"
+            },
+            "required": true,
+            "description": "From POST /renditions",
+            "name": "stagingId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dropped",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such staged upload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already handed to the transcode",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/videos/{videoId}/renditions/{stagingId}/complete": {
+      "post": {
+        "tags": [
+          "Videos"
+        ],
+        "summary": "Finish a pre-encoded upload",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nChecks every declared file is there with its size; 409 `files_missing` lists up to 50 that are not. Then the renditions wait for the original upload to complete, and its transcode job verifies them.",
+        "operationId": "post_RenditionsComplete",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video ID"
+            },
+            "required": true,
+            "description": "Video ID",
+            "name": "videoId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "From POST /renditions"
+            },
+            "required": true,
+            "description": "From POST /renditions",
+            "name": "stagingId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "stagingId": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "uploading",
+                            "ready",
+                            "queued"
+                          ]
+                        },
+                        "rungs": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "files": {
+                          "type": "number"
+                        },
+                        "bytes": {
+                          "type": "number"
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "encoder": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "stagingId",
+                        "status",
+                        "rungs",
+                        "files",
+                        "bytes",
+                        "createdAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such staged upload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Files missing, or too late",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/videos/{videoId}/renditions/{stagingId}/files/{rung}/{file}": {
+      "put": {
+        "tags": [
+          "Videos"
+        ],
+        "summary": "Upload one pre-encoded rendition file",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nRaw body. The path must be one declared in POST /renditions, with exactly the declared size (400 `size_mismatch`). Uploading a file again replaces it.",
+        "operationId": "put_RenditionFilePut",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video ID"
+            },
+            "required": true,
+            "description": "Video ID",
+            "name": "videoId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "From POST /renditions"
+            },
+            "required": true,
+            "description": "From POST /renditions",
+            "name": "stagingId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Rung, e.g. 720p"
+            },
+            "required": true,
+            "description": "Rung, e.g. 720p",
+            "name": "rung",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "File name, e.g. seg_00001.m4s"
+            },
+            "required": true,
+            "description": "File name, e.g. seg_00001.m4s",
+            "name": "file",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Stored"
+          },
+          "400": {
+            "description": "Not a declared file, or the wrong size",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such staged upload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already handed to the transcode",
             "content": {
               "application/json": {
                 "schema": {
