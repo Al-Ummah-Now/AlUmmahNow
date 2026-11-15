@@ -338,6 +338,10 @@ const TierBody = z
 		captionMinutesMonth: z.coerce.number().optional(),
 		importCountsAgainstLimits: z.boolean().optional(),
 		audioTracksPerVideo: z.coerce.number().optional(),
+		live: z.boolean().optional(),
+		liveHoursMonth: z.coerce.number().optional(),
+		liveMaxConcurrent: z.coerce.number().optional(),
+		liveMaxStreamMinutes: z.coerce.number().optional(),
 	})
 	.strict();
 const searchDb = (c: Context<Env>) => c.env.SEARCH_DB as D1Database;

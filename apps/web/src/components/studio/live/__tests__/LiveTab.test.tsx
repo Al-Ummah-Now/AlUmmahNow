@@ -20,6 +20,8 @@ jest.mock('@/lib/live/api', () => {
     deleteStream: (...a: unknown[]) => remove(...a),
   };
 });
+const mockCreator = jest.fn();
+jest.mock('@/hooks/useCreatorAccess', () => ({ useCreatorAccess: () => mockCreator() }));
 jest.mock('@/lib/logger-client', () => ({ logger: { error: jest.fn(), debug: jest.fn() } }));
 
 const mockStudio = STUDIO_EN;
@@ -29,6 +31,7 @@ const row = (id: string, status = 'scheduled') => ({ id, title: `Stream ${id}`, 
 describe('Studio LiveTab', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockCreator.mockReturnValue({ status: 'loading' });
     list.mockResolvedValue({ items: [row('a'), row('b', 'live')], cursor: null });
   });
 
@@ -97,5 +100,47 @@ describe('Studio LiveTab', () => {
     list.mockResolvedValue({ items: [], cursor: null });
     render(<LiveTab locale="en" channelId="c1" role="owner" />);
     expect(await screen.findByTestId('studio-live-empty')).toHaveTextContent(text.empty);
+  });
+
+  describe('creator tier', () => {
+    const live = (over: Record<string, unknown>) => ({ status: 'ready', access: { live: { allowed: true, reason: null, unlimited: false, hoursMonth: 20, usedMinutes: 90, maxConcurrent: 1, maxStreamMinutes: 240, ...over } } });
+
+    it('shows the month\'s usage to an owner whose tier allows live', async () => {
+      mockCreator.mockReturnValue(live({}));
+      render(<LiveTab locale="en" channelId="c1" role="owner" />);
+      expect(await screen.findByTestId('studio-live-usage')).toHaveTextContent('1.5');
+      expect(screen.getByTestId('studio-live-create')).toBeInTheDocument();
+    });
+
+    it('explains a tier without live, hides the form and links Request access to /upgrade', async () => {
+      mockCreator.mockReturnValue(live({ allowed: false, reason: 'not_in_tier' }));
+      render(<LiveTab locale="ar" channelId="c1" role="owner" />);
+      const gate = await screen.findByTestId('studio-live-gate');
+      expect(gate).toHaveAttribute('data-reason', 'not_in_tier');
+      expect(gate).toHaveTextContent(text.gate.notInTierTitle);
+      expect(screen.getByTestId('studio-live-request-access')).toHaveAttribute('href', '/ar/upgrade');
+      expect(screen.queryByTestId('studio-live-create')).not.toBeInTheDocument();
+      // The streams already made stay listed
+      expect(await screen.findAllByTestId('studio-live-row')).toHaveLength(2);
+    });
+
+    it('says the month\'s hours are used, without a request link', async () => {
+      mockCreator.mockReturnValue(live({ allowed: false, reason: 'hours_used', usedMinutes: 1200 }));
+      render(<LiveTab locale="en" channelId="c1" role="owner" />);
+      expect(await screen.findByTestId('studio-live-gate')).toHaveTextContent(text.gate.hoursUsedTitle);
+      expect(screen.queryByTestId('studio-live-request-access')).not.toBeInTheDocument();
+    });
+
+    it('a channel admin sees the server\'s live_not_in_tier refusal with Request access', async () => {
+      const { LiveApiError } = jest.requireActual('@/lib/live/api');
+      create.mockRejectedValue(new LiveApiError(403, 'live_not_in_tier'));
+      render(<LiveTab locale="en" channelId="c1" role="admin" />);
+      fireEvent.change(await screen.findByTestId('studio-live-title'), { target: { value: 'Talk' } });
+      fireEvent.click(screen.getByTestId('studio-live-create'));
+      const error = await screen.findByTestId('studio-live-error');
+      expect(error).toHaveTextContent(text.errors.live_not_in_tier);
+      expect(screen.getByTestId('studio-live-request-access')).toHaveAttribute('href', '/en/upgrade');
+      expect(mockCreator.mock.results.length).toBeGreaterThan(0);
+    });
   });
 });

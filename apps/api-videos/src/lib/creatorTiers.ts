@@ -54,8 +54,27 @@ interface TierRow {
 	caption_minutes_month?: number | null;
 	import_counts_limits?: number | null;
 	audio_tracks_per_video?: number | null;
+	live?: number | null;
+	live_hours_month?: number | null;
+	live_max_concurrent?: number | null;
+	live_max_stream_minutes?: number | null;
 	updated_at: string | null;
 	updated_by: string | null;
+}
+
+function liveFields(row: TierRow): Pick<CreatorTier, 'live' | 'liveHoursMonth' | 'liveMaxConcurrent' | 'liveMaxStreamMinutes'> {
+	const shipped = row.id === DEFAULT_UNLIMITED_TIER.id ? DEFAULT_UNLIMITED_TIER : row.id === DEFAULT_CREATOR_TIER.id ? DEFAULT_CREATOR_TIER : null;
+	if (row.live === undefined || row.live === null) {
+		return shipped
+			? { live: shipped.live, liveHoursMonth: shipped.liveHoursMonth, liveMaxConcurrent: shipped.liveMaxConcurrent, liveMaxStreamMinutes: shipped.liveMaxStreamMinutes }
+			: { live: false, liveHoursMonth: DEFAULT_CREATOR_TIER.liveHoursMonth, liveMaxConcurrent: DEFAULT_CREATOR_TIER.liveMaxConcurrent, liveMaxStreamMinutes: DEFAULT_CREATOR_TIER.liveMaxStreamMinutes };
+	}
+	return {
+		live: Number(row.live) === 1,
+		liveHoursMonth: Number(row.live_hours_month) || DEFAULT_CREATOR_TIER.liveHoursMonth,
+		liveMaxConcurrent: Number(row.live_max_concurrent) || DEFAULT_CREATOR_TIER.liveMaxConcurrent,
+		liveMaxStreamMinutes: Number(row.live_max_stream_minutes) || DEFAULT_CREATOR_TIER.liveMaxStreamMinutes,
+	};
 }
 
 function toTier(row: TierRow): CreatorTier {
@@ -71,6 +90,8 @@ function toTier(row: TierRow): CreatorTier {
 		// Migration 0041: YouTube imports count against the upload limits unless the tier says otherwise
 		importCountsAgainstLimits: row.import_counts_limits === undefined || row.import_counts_limits === null ? true : Number(row.import_counts_limits) === 1,
 		audioTracksPerVideo: Number(row.audio_tracks_per_video ?? 0) || 0,
+		// Rows from before migration 0040 have no live columns: the shipped tier's defaults
+		...liveFields(row),
 		updatedAt: row.updated_at ?? null,
 		updatedBy: row.updated_by ?? null,
 	};
@@ -243,6 +264,10 @@ export interface TierInput {
 	captionMinutesMonth?: unknown;
 	importCountsAgainstLimits?: unknown;
 	audioTracksPerVideo?: unknown;
+	live?: unknown;
+	liveHoursMonth?: unknown;
+	liveMaxConcurrent?: unknown;
+	liveMaxStreamMinutes?: unknown;
 }
 
 function intIn(value: unknown, field: keyof typeof CREATOR_TIER_BOUNDS): number {
@@ -262,7 +287,9 @@ export function validateTier(id: string, input: TierInput, current?: CreatorTier
 	const rawImport = input.importCountsAgainstLimits ?? current?.importCountsAgainstLimits ?? true;
 	if (typeof rawImport !== 'boolean') throw new CreatorTierError(400, 'invalid_tier', 'importCountsAgainstLimits must be true or false');
 	const importCountsAgainstLimits = rawImport;
-	if (unlimited) return { id, name, unlimited, perHour: 0, perDay: 0, maxConcurrent: 0, maxChannels: null, captionMinutesMonth: 0, importCountsAgainstLimits, audioTracksPerVideo: 0 };
+	if (unlimited) {
+		return { id, name, unlimited, perHour: 0, perDay: 0, maxConcurrent: 0, maxChannels: null, captionMinutesMonth: 0, importCountsAgainstLimits, audioTracksPerVideo: 0, live: true, liveHoursMonth: 0, liveMaxConcurrent: 0, liveMaxStreamMinutes: 0 };
+	}
 	const pick = (field: 'perHour' | 'perDay' | 'maxConcurrent') => intIn(input[field] ?? current?.[field], field);
 	const perHour = pick('perHour');
 	const perDay = pick('perDay');
@@ -271,7 +298,16 @@ export function validateTier(id: string, input: TierInput, current?: CreatorTier
 	const maxChannels = rawChannels === null || rawChannels === '' ? null : intIn(rawChannels, 'maxChannels');
 	const captionMinutesMonth = intIn(input.captionMinutesMonth ?? current?.captionMinutesMonth ?? 0, 'captionMinutesMonth');
 	const audioTracksPerVideo = intIn(input.audioTracksPerVideo ?? current?.audioTracksPerVideo ?? 0, 'audioTracksPerVideo');
-	return { id, name, unlimited, perHour, perDay, maxConcurrent: pick('maxConcurrent'), maxChannels, captionMinutesMonth, importCountsAgainstLimits, audioTracksPerVideo };
+	// Live: a boolean, and its limits are kept (validated) even while live is off, so turning it back on restores them
+	if (input.live !== undefined && typeof input.live !== 'boolean') throw new CreatorTierError(400, 'invalid_tier', 'live must be true or false');
+	const live: boolean = input.live === undefined ? current?.live ?? false : input.live === true;
+	// A limit left at an unlimited tier's 0 (the tier just stopped being unlimited) starts from the Creator default
+	const liveLimit = (field: 'liveHoursMonth' | 'liveMaxConcurrent' | 'liveMaxStreamMinutes') =>
+		intIn(input[field] ?? (current?.[field] || DEFAULT_CREATOR_TIER[field]), field);
+	return {
+		id, name, unlimited, perHour, perDay, maxConcurrent: pick('maxConcurrent'), maxChannels, captionMinutesMonth, importCountsAgainstLimits, audioTracksPerVideo,
+		live, liveHoursMonth: liveLimit('liveHoursMonth'), liveMaxConcurrent: liveLimit('liveMaxConcurrent'), liveMaxStreamMinutes: liveLimit('liveMaxStreamMinutes'),
+	};
 }
 
 /** Creates (new id) or replaces a tier definition. */
@@ -294,13 +330,20 @@ export async function saveTier(
 	const tier = { ...validateTier(id, input, previous), updatedAt: now, updatedBy: actorId };
 	await db
 		.prepare(
-			`INSERT INTO creator_tiers (id, name, unlimited, per_hour, per_day, max_concurrent, max_channels, caption_minutes_month, import_counts_limits, audio_tracks_per_video, updated_at, updated_by)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			`INSERT INTO creator_tiers (id, name, unlimited, per_hour, per_day, max_concurrent, max_channels, caption_minutes_month, import_counts_limits, audio_tracks_per_video,
+			   live, live_hours_month, live_max_concurrent, live_max_stream_minutes, updated_at, updated_by)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			 ON CONFLICT (id) DO UPDATE SET name = excluded.name, unlimited = excluded.unlimited, per_hour = excluded.per_hour,
 			   per_day = excluded.per_day, max_concurrent = excluded.max_concurrent, max_channels = excluded.max_channels,
-			   caption_minutes_month = excluded.caption_minutes_month, import_counts_limits = excluded.import_counts_limits, audio_tracks_per_video = excluded.audio_tracks_per_video, updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
+			   caption_minutes_month = excluded.caption_minutes_month, import_counts_limits = excluded.import_counts_limits, audio_tracks_per_video = excluded.audio_tracks_per_video,
+			   live = excluded.live, live_hours_month = excluded.live_hours_month,
+			   live_max_concurrent = excluded.live_max_concurrent, live_max_stream_minutes = excluded.live_max_stream_minutes,
+			   updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
 		)
-		.bind(id, tier.name, tier.unlimited ? 1 : 0, tier.perHour, tier.perDay, tier.maxConcurrent, tier.maxChannels, tier.captionMinutesMonth, tier.importCountsAgainstLimits ? 1 : 0, tier.audioTracksPerVideo, now, actorId)
+		.bind(
+			id, tier.name, tier.unlimited ? 1 : 0, tier.perHour, tier.perDay, tier.maxConcurrent, tier.maxChannels, tier.captionMinutesMonth, tier.importCountsAgainstLimits ? 1 : 0, tier.audioTracksPerVideo,
+			tier.live ? 1 : 0, tier.liveHoursMonth, tier.liveMaxConcurrent, tier.liveMaxStreamMinutes, now, actorId,
+		)
 		.run();
 	return { previous, tier };
 }

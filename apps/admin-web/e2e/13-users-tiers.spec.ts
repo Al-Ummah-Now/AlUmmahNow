@@ -165,6 +165,24 @@ test.describe('creator tiers on Users and Tiers', () => {
     await expectNoAxeViolations(page, '/tiers');
   });
 
+  test('CRE-08 each tier has live streaming: Creator allowed with limits, Unlimited without, a too-short stream length is refused without saving', async ({ page }) => {
+    await page.goto('/tiers');
+    const live = page.getByTestId('tier-creator-live');
+    await expect(live.getByTestId('tier-creator-liveAllowed')).toBeChecked();
+    await expect(page.getByTestId('tier-creator-effect')).toContainText(/Live: [\d,]+ hours a month/);
+    await expect(page.getByTestId('tier-unlimited-live-unlimited')).toBeVisible();
+    await page.getByTestId('tier-creator-liveMaxStreamMinutes').fill('5');
+    await page.getByTestId('tier-creator-save').click();
+    await expect(page.getByTestId('tier-creator-liveMaxStreamMinutes-error')).toBeVisible();
+    await expect(page.getByTestId('tier-creator-confirm-dialog')).toBeHidden();
+    // Turning live off hides the limits (kept for turning it back on); nothing saved here
+    await live.getByTestId('tier-creator-liveAllowed').uncheck();
+    await expect(page.getByTestId('tier-creator-liveMaxStreamMinutes')).toBeHidden();
+    await live.getByTestId('tier-creator-liveAllowed').check();
+    await expect(page.getByTestId('tier-creator-liveHoursMonth')).toBeVisible();
+    await expectNoAxeViolations(page, '/tiers');
+  });
+
   test('CRE-05 caption minutes on the user page: a grant needs a reason, adds minutes, is audited, and a revoke takes them back', async ({ page }) => {
     // Grants stay as rows (revoked, never deleted): only on this run's own account, erased with it
     test.skip(!RUN_ID, 'Run accounts only: grants are kept in the history');

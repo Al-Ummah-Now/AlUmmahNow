@@ -16,7 +16,8 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { LivePlayer } from '@/components/live/LivePlayer';
 import { useLanguage } from '@/hooks/useLanguage';
-import { LiveApiError, endStream, getIngest, getState, getStream, liveErrorCode, startStream, type LiveStreamRow } from '@/lib/live/api';
+import { LIVE_TIER_CODES, LiveApiError, endStream, getIngest, getState, getStream, liveErrorCode, startStream, type LiveStreamRow } from '@/lib/live/api';
+import { LiveRequestAccessLink } from './LiveTierNotice';
 import { logger } from '@/lib/logger-client';
 import { studioLiveHref } from './LiveTab';
 
@@ -53,6 +54,7 @@ export function GoLive({ locale, channelId, streamId }: { locale: string; channe
   const [started, setStarted] = useState(false);
   const [busy, setBusy] = useState<'start' | 'end' | null>(null);
   const [error, setError] = useState('');
+  const [errorCode, setErrorCode] = useState('');
   const [revealed, setRevealed] = useState(false);
   const [copied, setCopied] = useState('');
   const [confirmEnd, setConfirmEnd] = useState(false);
@@ -67,12 +69,13 @@ export function GoLive({ locale, channelId, streamId }: { locale: string; channe
       setLoad('ready');
     } catch (err) {
       if (signal?.aborted) return;
+      const code = liveErrorCode(err);
       if (err instanceof LiveApiError && err.status === 404) setLoad('missing');
-      else if (err instanceof LiveApiError && err.status === 403) setLoad('forbidden');
+      else if (err instanceof LiveApiError && err.status === 403 && !LIVE_TIER_CODES.includes(code)) setLoad('forbidden');
       else {
-        const code = liveErrorCode(err);
         if (code === 'generic') logger.error('[StudioGoLive] Could not load the stream', { streamId, error: err });
         setError(code === 'generic' ? '' : errors[code]);
+        setErrorCode(code);
         setLoad('failed');
       }
     }
@@ -97,6 +100,7 @@ export function GoLive({ locale, channelId, streamId }: { locale: string; channe
   const goLive = async () => {
     setBusy('start');
     setError('');
+    setErrorCode('');
     try {
       const out = await startStream(streamId);
       // A provider that failed to start hands the stream to the other one: its settings replace these
@@ -107,6 +111,7 @@ export function GoLive({ locale, channelId, streamId }: { locale: string; channe
       const code = liveErrorCode(err);
       if (code === 'generic') logger.error('[StudioGoLive] Go live failed', { streamId, error: err });
       setError(errors[code]);
+      setErrorCode(code);
     } finally {
       setBusy(null);
     }
@@ -156,7 +161,10 @@ export function GoLive({ locale, channelId, streamId }: { locale: string; channe
     return (
       <div data-testid={`studio-golive-${load}`}>
         {back}
-        <p className="py-8 text-foreground">{message}</p>
+        <p className="py-8 text-foreground" data-code={errorCode}>
+          {message}
+          {load === 'failed' && errorCode === 'live_not_in_tier' && <LiveRequestAccessLink locale={locale} />}
+        </p>
         {load === 'failed' && <Button onClick={() => { setLoad('loading'); void fetchAll(); }}>{t.studio.live.retry}</Button>}
       </div>
     );
@@ -189,7 +197,12 @@ export function GoLive({ locale, channelId, streamId }: { locale: string; channe
             {text.watching.replace('{count}', new Intl.NumberFormat(locale === 'ar' ? 'ar' : 'en').format(state.viewers))}
           </p>
         )}
-        {error && <p role="alert" className="mt-2 text-sm text-destructive" data-testid="studio-golive-error">{error}</p>}
+        {error && (
+          <p role="alert" className="mt-2 text-sm text-destructive" data-testid="studio-golive-error" data-code={errorCode}>
+            {error}
+            {errorCode === 'live_not_in_tier' && <LiveRequestAccessLink locale={locale} />}
+          </p>
+        )}
         <div className="mt-3 flex flex-wrap gap-2">
           {phase === 'ready' && (
             <Button onClick={() => void goLive()} disabled={busy !== null} className="min-h-11" data-testid="studio-golive-start">

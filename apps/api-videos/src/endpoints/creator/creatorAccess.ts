@@ -15,6 +15,7 @@ import { logger } from '../../lib/logger';
 import { cachedPendingUserDeletion } from '../../lib/admin/pendingUserDeletion';
 import { invitationOnly, UPLOAD_SESSION_OPERATION } from '../../middleware/upload-limits';
 import { windowStart } from '../../middleware/rate-limit';
+import { liveAccess } from '../../lib/live/tier-gate';
 
 type RolesAuth = { payload?: { roles?: string[] } } | undefined;
 
@@ -73,10 +74,11 @@ export async function memberUploadChannelIds(db: D1Database, userId: string, rol
 
 export async function creatorAccess(db: D1Database, userId: string, roles: readonly string[] | undefined): Promise<CreatorAccess> {
 	const creator = await resolveCreator(db, { userId, roles });
-	const [channelsOwned, usage, uploadChannelIds] = await Promise.all([
+	const [channelsOwned, usage, uploadChannelIds, live] = await Promise.all([
 		countChannelSlots(db, userId),
 		uploadUsage(db, userId),
 		memberUploadChannelIds(db, userId, roles),
+		liveAccess(db, userId, roles),
 	]);
 	const tier = creator.tier;
 	const maxChannels = !tier || tier.unlimited ? null : tier.maxChannels;
@@ -90,6 +92,7 @@ export async function creatorAccess(db: D1Database, userId: string, roles: reado
 		maxChannels: tier ? maxChannels : 0,
 		limits: tier && !tier.unlimited ? { perHour: tier.perHour, perDay: tier.perDay, maxConcurrent: tier.maxConcurrent } : null,
 		usage,
+		live,
 	};
 }
 
@@ -99,7 +102,9 @@ export async function handleCreatorAccess(c: Context) {
 	try {
 		const [access, deletion] = await Promise.all([creatorAccess(c.env.SEARCH_DB, userId, rolesOf(c)), cachedPendingUserDeletion(c.env.SEARCH_DB, userId)]);
 		// A pending admin deletion of their videos data refuses every upload and create (#701)
-		const result: CreatorAccess = deletion ? { ...access, canUpload: false, canCreateChannel: false, uploadChannelIds: [], pendingDeletion: true } : access;
+		const result: CreatorAccess = deletion
+			? { ...access, canUpload: false, canCreateChannel: false, uploadChannelIds: [], live: { ...access.live, allowed: false, reason: 'pending_deletion' }, pendingDeletion: true }
+			: access;
 		return c.json({ success: true, result });
 	} catch (error) {
 		logger.error('[Creator] Access lookup failed', { userId, error: error instanceof Error ? error.message : String(error) });

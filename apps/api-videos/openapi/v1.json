@@ -18858,6 +18858,56 @@
               }
             }
           },
+          "402": {
+            "description": "This month's live streaming hours are used (code live_hours_used)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Live streaming is not in the channel owner's creator tier (code live_not_in_tier)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
           "500": {
             "description": "Internal server error",
             "content": {
@@ -19635,8 +19685,33 @@
               }
             }
           },
+          "402": {
+            "description": "This month's live hours are used (live_hours_used)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
           "403": {
-            "description": "Not the owner",
+            "description": "Not the owner, or live is not in the creator tier (live_not_in_tier)",
             "content": {
               "application/json": {
                 "schema": {
@@ -19829,8 +19904,33 @@
               }
             }
           },
+          "402": {
+            "description": "This month's live hours are used (live_hours_used)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
           "403": {
-            "description": "Not the owner or suspended",
+            "description": "Not the owner, suspended, live not in the creator tier (live_not_in_tier) or at the tier's streams-at-once limit (live_concurrent_limit)",
             "content": {
               "application/json": {
                 "schema": {

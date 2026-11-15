@@ -19,6 +19,8 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { createStream, deleteStream, listChannelStreams, liveErrorCode, type LiveStreamRow } from '@/lib/live/api';
 import { logger } from '@/lib/logger-client';
 import { can, type StudioRole } from '@/lib/studio/permissions';
+import { useCreatorAccess } from '@/hooks/useCreatorAccess';
+import { LiveRequestAccessLink, LiveTierNotice } from './LiveTierNotice';
 
 interface Props {
   locale: string;
@@ -35,6 +37,11 @@ export function LiveTab({ locale, channelId, role }: Props) {
   const router = useRouter();
   const ids = useId();
   const canManage = can(role, 'live.manage');
+  // The owner's own tier decides (GET /api/me/creator); a channel admin works under the owner's,
+  // which only the server knows: it answers live_not_in_tier and the form shows that
+  const creator = useCreatorAccess();
+  const tierLive = role === 'owner' && creator.status === 'ready' ? creator.access.live : null;
+  const blocked = !!tierLive && !tierLive.allowed;
 
   const [items, setItems] = useState<LiveStreamRow[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -46,6 +53,7 @@ export function LiveTab({ locale, channelId, role }: Props) {
   const [isPrivate, setIsPrivate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [formError, setFormError] = useState('');
+  const [formErrorCode, setFormErrorCode] = useState('');
   const [pendingDelete, setPendingDelete] = useState<LiveStreamRow | null>(null);
 
   const load = useCallback(async (more?: string | null, signal?: AbortSignal) => {
@@ -76,6 +84,7 @@ export function LiveTab({ locale, channelId, role }: Props) {
     }
     setCreating(true);
     setFormError('');
+    setFormErrorCode('');
     try {
       const stream = await createStream(channelId, { title: title.trim(), description: description.trim(), isPrivate });
       router.push(studioLiveHref(locale, channelId, stream.id));
@@ -83,6 +92,7 @@ export function LiveTab({ locale, channelId, role }: Props) {
       const code = liveErrorCode(error);
       if (code === 'generic') logger.error('[StudioLive] Could not create a live stream', { channelId, error });
       setFormError(text.errors[code]);
+      setFormErrorCode(code);
       setCreating(false);
     }
   };
@@ -107,7 +117,8 @@ export function LiveTab({ locale, channelId, role }: Props) {
     <div data-testid="studio-live">
       <h1 className="sr-only">{t.studio.tabs.live}</h1>
 
-      {canManage ? (
+      {canManage && tierLive && <LiveTierNotice locale={locale} live={tierLive} />}
+      {canManage && blocked ? null : canManage ? (
         <form onSubmit={(e) => void submit(e)} className="mb-6 grid gap-3 rounded-lg border border-border bg-card p-4" data-testid="studio-live-form" noValidate>
           <h2 className="text-base font-semibold text-foreground">{text.newStream}</h2>
           <div className="grid gap-1">
@@ -125,7 +136,12 @@ export function LiveTab({ locale, channelId, role }: Props) {
               <p id={`${ids}-private-hint`} className="text-xs text-muted-foreground">{text.form.privateHint}</p>
             </div>
           </div>
-          {formError && <p role="alert" className="text-sm text-destructive" data-testid="studio-live-error">{formError}</p>}
+          {formError && (
+            <p role="alert" className="text-sm text-destructive" data-testid="studio-live-error" data-code={formErrorCode}>
+              {formError}
+              {formErrorCode === 'live_not_in_tier' && <LiveRequestAccessLink locale={locale} />}
+            </p>
+          )}
           <div>
             <Button type="submit" disabled={creating} className="min-h-11" data-testid="studio-live-create">
               {creating ? text.form.creating : text.form.create}

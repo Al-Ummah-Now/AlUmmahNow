@@ -38,8 +38,8 @@ const ARABIC = /[؀-ۿ]/;
 const tEn = createTranslator('en');
 const tAr = createTranslator('ar');
 
-const CREATOR: CreatorTier = { id: 'creator', name: 'Creator', unlimited: false, perHour: 300, perDay: 2000, maxConcurrent: 20, maxChannels: 3, captionMinutesMonth: 0, audioTracksPerVideo: 0, updatedAt: null, updatedBy: null };
-const UNLIMITED: CreatorTier = { id: 'unlimited', name: 'Unlimited', unlimited: true, perHour: 0, perDay: 0, maxConcurrent: 0, maxChannels: null, captionMinutesMonth: 0, audioTracksPerVideo: 0, updatedAt: null, updatedBy: null };
+const CREATOR: CreatorTier = { id: 'creator', name: 'Creator', unlimited: false, perHour: 300, perDay: 2000, maxConcurrent: 20, maxChannels: 3, captionMinutesMonth: 0, audioTracksPerVideo: 0, live: true, liveHoursMonth: 20, liveMaxConcurrent: 1, liveMaxStreamMinutes: 240, updatedAt: null, updatedBy: null };
+const UNLIMITED: CreatorTier = { id: 'unlimited', name: 'Unlimited', unlimited: true, perHour: 0, perDay: 0, maxConcurrent: 0, maxChannels: null, captionMinutesMonth: 0, audioTracksPerVideo: 0, live: true, liveHoursMonth: 0, liveMaxConcurrent: 0, liveMaxStreamMinutes: 0, updatedAt: null, updatedBy: null };
 const TIERS = [CREATOR, UNLIMITED];
 
 const setTier = async () => ({ ok: true as const, data: null });
@@ -58,8 +58,16 @@ function render(element: React.ReactElement, locale: 'en' | 'ar' = 'en'): string
 
 describe('tier effect (stated in every confirmation)', () => {
   it('states the limits, with numbers formatted for the locale', () => {
-    assert.equal(tierEffect(CREATOR, tEn, 'en'), 'They can upload up to 300 videos per hour and 2,000 per day (20 starting at once), and own up to 3 channels.');
-    assert.equal(tierEffect({ ...CREATOR, maxChannels: null }, tEn, 'en').endsWith('own any number of channels.'), true);
+    assert.equal(
+      tierEffect(CREATOR, tEn, 'en'),
+      'They can upload up to 300 videos per hour and 2,000 per day (20 starting at once), and own up to 3 channels. Live: 20 hours a month, one stream at a time, up to 240 minutes per stream.',
+    );
+    // Live: off says so; several at once; a tier from before live says nothing about it
+    assert.equal(tierEffect({ ...CREATOR, live: false }, tEn, 'en').endsWith('No live streaming.'), true);
+    assert.equal(tierEffect({ ...CREATOR, liveMaxConcurrent: 3 }, tEn, 'en').includes('Live: 20 hours a month, 3 at once, up to 240 minutes per stream.'), true);
+    assert.equal(tierEffect({ ...CREATOR, live: undefined }, tEn, 'en').includes('Live'), false);
+    assert.match(tierEffect({ ...CREATOR, live: false }, tAr, 'ar'), /بلا بث مباشر/);
+    assert.equal(tierEffect({ ...CREATOR, maxChannels: null, live: undefined }, tEn, 'en').endsWith('own any number of channels.'), true);
     // Caption minutes join the sentence only when the tier gives some
     assert.equal(tierEffect({ ...CREATOR, captionMinutesMonth: 600 }, tEn, 'en').endsWith('Caption minutes: 600 a month.'), true);
     assert.equal(tierEffect({ ...CREATOR, audioTracksPerVideo: 3 }, tEn, 'en').endsWith('Audio tracks per video: 3.'), true);
@@ -77,7 +85,7 @@ describe('tier effect (stated in every confirmation)', () => {
 });
 
 describe('tier form validation (same bounds and rules as api-videos)', () => {
-  const base: TierFormValues = { id: 'gold', name: 'Gold', unlimited: false, perHour: 10, perDay: 100, maxConcurrent: 5, maxChannels: 2, captionMinutesMonth: 0, audioTracksPerVideo: 0 };
+  const base: TierFormValues = { id: 'gold', name: 'Gold', unlimited: false, perHour: 10, perDay: 100, maxConcurrent: 5, maxChannels: 2, captionMinutesMonth: 0, audioTracksPerVideo: 0, live: true, liveHoursMonth: 20, liveMaxConcurrent: 1, liveMaxStreamMinutes: 240 };
 
   it('accepts a valid tier and an unlimited one without limits', () => {
     assert.deepEqual(validateTierForm(base, { create: true }), {});
@@ -87,6 +95,13 @@ describe('tier form validation (same bounds and rules as api-videos)', () => {
     // Audio tracks per video (wiki AUN-MULTI-AUDIO MA9): 0 to 16
     assert.deepEqual(validateTierForm({ ...base, audioTracksPerVideo: 17 }).audioTracksPerVideo?.key, 'creators.errorRange');
     assert.equal(validateTierForm({ ...base, audioTracksPerVideo: 16 }).audioTracksPerVideo, undefined);
+  });
+
+  it('checks the live limits only while live is allowed', () => {
+    const bad = { ...base, liveHoursMonth: 0, liveMaxConcurrent: 101, liveMaxStreamMinutes: 5 };
+    assert.deepEqual(Object.keys(validateTierForm(bad)).sort(), ['liveHoursMonth', 'liveMaxConcurrent', 'liveMaxStreamMinutes']);
+    assert.deepEqual(validateTierForm({ ...bad, live: false }), {});
+    assert.deepEqual(validateTierForm(bad).liveMaxStreamMinutes, { key: 'creators.errorRange', params: { min: 10, max: 1440 } });
   });
 
   it('flags each field outside CREATOR_TIER_BOUNDS, a daily limit under the hourly one, and bad ids or names', () => {

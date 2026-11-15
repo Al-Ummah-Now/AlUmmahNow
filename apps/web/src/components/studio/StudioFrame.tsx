@@ -4,7 +4,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import Image from 'next/image';
 import Link from '@/components/common/AppLink';
 import { usePathname, useRouter } from 'next/navigation';
-import { Check, ChevronsUpDown, ExternalLink, Menu, Plus, UploadCloud } from 'lucide-react';
+import { Check, ChevronsUpDown, ExternalLink, Menu, Plus, Radio, UploadCloud } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import {
@@ -18,7 +18,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { channelPath, formatHandle } from '@/lib/channel-url';
 import { itemPath, legacyHref, STUDIO_NAV, switchedPath, visibleNav, visibleTabs } from '@/lib/studio/nav';
-import { studioUploadHref } from '@/lib/studio/links';
+import { studioLiveHref, studioUploadHref } from '@/lib/studio/links';
 import { can, roleForChannel, type StudioRole } from '@/lib/studio/permissions';
 import { cn } from '@/lib/utils';
 
@@ -143,6 +143,14 @@ function Rail({ locale, role, channel, segments, features, onNavigate }: { local
           <Link href={studioUploadHref(locale, channel.id)} onClick={onNavigate} data-testid="studio-upload">
             <UploadCloud aria-hidden="true" className="me-2 h-4 w-4" />
             {t.studio.upload}
+          </Link>
+        </Button>
+      )}
+      {can(role, 'live.manage') && (
+        <Button asChild variant="outline">
+          <Link href={studioLiveHref(locale, channel.id)} onClick={onNavigate} data-testid="studio-golive-link">
+            <Radio aria-hidden="true" className="me-2 h-4 w-4" />
+            {t.studio.goLive}
           </Link>
         </Button>
       )}

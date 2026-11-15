@@ -12,7 +12,7 @@ import R2Repository from '../r2Repo';
 import { logger } from '../logger';
 import { announceLiveStarted } from '../notification-events';
 import type { LiveEnv } from './providers';
-import { currentBitrateKbps, endSession, provisionSession, refreshBunnySession, sessionIngest, sessionState, startSession, setOnSessionEnded } from './service';
+import { currentBitrateKbps, endSession, provisionSession, refreshBunnySession, sessionIngest, sessionState, startSession, setOnSessionEnded, type SessionTier } from './service';
 import { readSession, type LiveSessionRow } from './store';
 import { setOnVodReady } from './vod-ready';
 import { startLiveVodReview, type LiveReviewEnv } from '../review/live';
@@ -48,8 +48,8 @@ export async function readStream(env: StreamsEnv, id: string): Promise<LiveStrea
 }
 
 /** Provisions the stream's first (or next) session and stores it on the record. */
-export async function attachSession(env: StreamsEnv, stream: LiveStreamRecord, now = Date.now()): Promise<{ stream: LiveStreamRecord; session: LiveSessionRow }> {
-	const { session } = await provisionSession(env, { id: stream.id, title: stream.title, userId: stream.userId, channelId: stream.channelId, providerMove: stream.providerMove ?? null, isTest: stream.isTest }, now);
+export async function attachSession(env: StreamsEnv, stream: LiveStreamRecord, now = Date.now(), tier: SessionTier = {}): Promise<{ stream: LiveStreamRecord; session: LiveSessionRow }> {
+	const { session } = await provisionSession(env, { id: stream.id, title: stream.title, userId: stream.userId, channelId: stream.channelId, providerMove: stream.providerMove ?? null, isTest: stream.isTest }, now, tier);
 	const updated = await repo(env).updateObject(streamKey(stream.id), (fresh) => {
 		fresh.provider = session.provider;
 		fresh.sessionId = session.id;
@@ -65,7 +65,7 @@ export async function attachSession(env: StreamsEnv, stream: LiveStreamRecord, n
 }
 
 /** The stream's current session, provisioning one when it has none or its last one is over. */
-export async function currentSession(env: StreamsEnv, stream: LiveStreamRecord, opts: { provision: boolean; now?: number }): Promise<{ stream: LiveStreamRecord; session: LiveSessionRow | null }> {
+export async function currentSession(env: StreamsEnv, stream: LiveStreamRecord, opts: { provision: boolean; now?: number; tier?: SessionTier }): Promise<{ stream: LiveStreamRecord; session: LiveSessionRow | null }> {
 	const now = opts.now ?? Date.now();
 	const existing = stream.sessionId && env.SEARCH_DB ? await readSession(env.SEARCH_DB, stream.sessionId) : null;
 	const reusable = existing && (existing.status === 'provisioned' || existing.status === 'live');
@@ -74,18 +74,18 @@ export async function currentSession(env: StreamsEnv, stream: LiveStreamRecord, 
 	if (reusable && !moved) return { stream, session: existing };
 	if (!opts.provision) return { stream, session: existing };
 	if (moved) await endSession(env, existing!, 'moved', now);
-	return attachSession(env, stream, now);
+	return attachSession(env, stream, now, opts.tier);
 }
 
-export async function streamIngest(env: StreamsEnv, stream: LiveStreamRecord) {
-	const { stream: s, session } = await currentSession(env, stream, { provision: stream.status !== 'ended' && stream.status !== 'cancelled' });
+export async function streamIngest(env: StreamsEnv, stream: LiveStreamRecord, tier: SessionTier = {}) {
+	const { stream: s, session } = await currentSession(env, stream, { provision: stream.status !== 'ended' && stream.status !== 'cancelled', tier });
 	if (!session) return { stream: s, session: null, ingest: null };
 	return { stream: s, session, ingest: await sessionIngest(env, session) };
 }
 
-export async function streamStart(env: StreamsEnv, stream: LiveStreamRecord, now = Date.now()) {
-	const { stream: s, session } = await currentSession(env, { ...stream, status: 'scheduled' }, { provision: true, now });
-	const started = await startSession(env, session!, s, now);
+export async function streamStart(env: StreamsEnv, stream: LiveStreamRecord, now = Date.now(), tier: SessionTier = {}) {
+	const { stream: s, session } = await currentSession(env, { ...stream, status: 'scheduled' }, { provision: true, now, tier });
+	const started = await startSession(env, session!, s, now, tier);
 	let record = s;
 	if (started.id !== session!.id) {
 		record = (await repo(env).updateObject(streamKey(stream.id), (fresh) => {

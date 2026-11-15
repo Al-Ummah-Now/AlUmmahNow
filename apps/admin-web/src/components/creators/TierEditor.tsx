@@ -2,7 +2,7 @@
 
 import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CREATOR_TIER_BOUNDS, CREATOR_TIER_IDS, type CreatorTier } from '@al-ummah/shared-types';
+import { CREATOR_TIER_BOUNDS, CREATOR_TIER_IDS, DEFAULT_CREATOR_TIER, type CreatorTier } from '@al-ummah/shared-types';
 import type { ActionResult } from '@/lib/api/errors';
 import { isUnexpectedFailure, tierActionMessage, tierEffect, validateTierForm, type TierField, type TierFormValues } from '@/lib/creator-tiers';
 import { useLanguage } from '@/i18n/I18nProvider';
@@ -35,16 +35,26 @@ function toForm(tier?: CreatorTier): TierFormValues {
     maxChannels: tier ? tier.maxChannels : 3,
     captionMinutesMonth: tier?.captionMinutesMonth ?? 0,
     audioTracksPerVideo: tier?.audioTracksPerVideo ?? 0,
+    // A new tier starts without live; its limits start from the Creator tier's
+    live: tier?.live ?? false,
+    liveHoursMonth: tier?.liveHoursMonth || DEFAULT_CREATOR_TIER.liveHoursMonth,
+    liveMaxConcurrent: tier?.liveMaxConcurrent || DEFAULT_CREATOR_TIER.liveMaxConcurrent,
+    liveMaxStreamMinutes: tier?.liveMaxStreamMinutes || DEFAULT_CREATOR_TIER.liveMaxStreamMinutes,
   };
 }
 
-const HELP: Record<'perHour' | 'perDay' | 'maxConcurrent' | 'maxChannels' | 'captionMinutesMonth' | 'audioTracksPerVideo', MessageKey> = {
+type NumberField = 'perHour' | 'perDay' | 'maxConcurrent' | 'captionMinutesMonth' | 'liveHoursMonth' | 'liveMaxConcurrent' | 'liveMaxStreamMinutes' | 'audioTracksPerVideo';
+
+const HELP: Record<NumberField | 'maxChannels', MessageKey> = {
   perHour: 'creators.helpPerHour',
   perDay: 'creators.helpPerDay',
   maxConcurrent: 'creators.helpConcurrent',
   maxChannels: 'creators.helpChannels',
   captionMinutesMonth: 'creators.helpCaptions',
   audioTracksPerVideo: 'creators.helpAudioTracks',
+  liveHoursMonth: 'creators.helpLiveHours',
+  liveMaxConcurrent: 'creators.helpLiveConcurrent',
+  liveMaxStreamMinutes: 'creators.helpLiveMaxMinutes',
 };
 
 /** One tier's limits, editable by admins (creators:manage); saved through admin-api with an audit row. */
@@ -98,7 +108,7 @@ function TierCard({ tier, users, canManage, actions, create = false }: { tier?: 
     ) : null;
   const described = (field: TierField) => [help(field), shown[field] ? `${ids}-${field}-error` : ''].filter(Boolean).join(' ');
 
-  const number = (field: 'perHour' | 'perDay' | 'maxConcurrent' | 'captionMinutesMonth' | 'audioTracksPerVideo', label: string) => {
+  const number = (field: NumberField, label: string) => {
     const { min, max } = CREATOR_TIER_BOUNDS[field];
     return (
       <label className="flex flex-col gap-1 text-sm text-fg-muted">
@@ -230,6 +240,37 @@ function TierCard({ tier, users, canManage, actions, create = false }: { tier?: 
           {number('audioTracksPerVideo', t('creators.tierAudioTracks'))}
         </div>
       )}
+      <fieldset className="flex flex-col gap-3 border-t border-border pt-4" data-testid={`tier-${key}-live`}>
+        <legend className="text-fg font-medium text-sm">{t('creators.tierLive')}</legend>
+        {form.unlimited ? (
+          <p className="text-xs text-fg-muted" data-testid={`tier-${key}-live-unlimited`}>{t('creators.helpLiveUnlimited')}</p>
+        ) : (
+          <>
+            <div className="flex flex-col gap-1 text-sm">
+              <label className="flex items-center gap-2 text-fg">
+                <input
+                  type="checkbox"
+                  checked={form.live}
+                  disabled={!canManage}
+                  aria-describedby={`${ids}-live-help`}
+                  onChange={(e) => set('live', e.target.checked)}
+                  className="h-4 w-4 accent-accent"
+                  data-testid={`tier-${key}-liveAllowed`}
+                />
+                {t('creators.tierLiveAllowed')}
+              </label>
+              <span id={`${ids}-live-help`} className="text-xs text-fg-muted">{t('creators.helpLive')}</span>
+            </div>
+            {form.live && (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {number('liveHoursMonth', t('creators.tierLiveHours'))}
+                {number('liveMaxConcurrent', t('creators.tierLiveConcurrent'))}
+                {number('liveMaxStreamMinutes', t('creators.tierLiveMaxMinutes'))}
+              </div>
+            )}
+          </>
+        )}
+      </fieldset>
       {canManage && (
         <div className="flex flex-wrap items-center gap-2">
           <button type="submit" className={confirmButtonClass} disabled={busy} data-testid={`tier-${key}-save`}>
