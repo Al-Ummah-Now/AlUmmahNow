@@ -44,7 +44,12 @@ test.describe('operations', () => {
     expect(overview.status).toBe(200);
     await expect(page.getByTestId('ops-tiles')).toBeVisible();
     await expect(page.getByTestId('ops-tile-dlq')).toHaveText(String(overview.body.result!.queues.dlqMessages));
-    await expect(page.getByTestId('ops-cap-bar')).toHaveAttribute('aria-valuemax', String(overview.body.result!.cost.capUsd));
+    // One budget (Costs → Alert settings, #1427): the overview cap and the spend meter agree
+    const costs = await adminApi<{ budget: { capUsd: number } }>('/api/ops/costs?env=all');
+    if (costs.status === 200) {
+      expect(costs.body.result!.budget.capUsd).toBe(overview.body.result!.cost.capUsd);
+      await expect(page.getByTestId('ops-budget-meter')).toHaveAttribute('aria-valuemax', String(overview.body.result!.cost.capUsd));
+    }
     await expect(page.getByTestId('ops-chart-requests')).toBeVisible();
   });
 

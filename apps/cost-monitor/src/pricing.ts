@@ -30,9 +30,6 @@ export const PRICES = {
 /** Workers Paid: the monthly subscription every account pays, whatever the usage. */
 export const PLAN_BASE_USD = 5;
 
-/** The monthly infrastructure cap the admin shows usage against (owner constraint). */
-export const MONTHLY_CAP_USD = 500;
-
 const GB = 1024 ** 3;
 const DAYS_PER_MONTH = 30;
 

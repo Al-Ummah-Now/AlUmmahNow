@@ -223,8 +223,8 @@ describe('settings and alerts', () => {
   it('the alert tick follows the settings and emails each new alert to its subscribers once', async () => {
     const db = costsD1();
     const now = new Date('2026-11-14T15:00:00Z');
-    await db.prepare("INSERT INTO cost_settings (key, value, updated_at) VALUES ('alerts', ?, 'x')").bind(JSON.stringify({ budgetUsd: 10, budgetLevels: [0.5], projectedAlert: false })).run();
-    await db.prepare("INSERT INTO ops_daily (day, resource_id, kind, env, name, cost_usd, updated_at) VALUES ('2026-11-10', 'worker:videos', 'worker', 'production', 'videos', 6, 'x')").run();
+    await db.prepare("INSERT INTO cost_settings (key, value, updated_at) VALUES ('alerts', ?, 'x')").bind(JSON.stringify({ budgetUsd: 50, budgetLevels: [0.5], projectedAlert: false })).run();
+    await db.prepare("INSERT INTO ops_daily (day, resource_id, kind, env, name, cost_usd, updated_at) VALUES ('2026-11-10', 'worker:videos', 'worker', 'production', 'videos', 30, 'x')").run();
     for (const kind of ['budget', 'spike']) await db.prepare("INSERT INTO cost_alert_subscriptions (user_id, kind, email, locale, created_at) VALUES ('u1', ?, 'owner@example.com', 'ar', 'x')").bind(kind).run();
     const sent: unknown[] = [];
     const queueEnv = { COSTS_DB: db, CONTACT_MAIL_QUEUE: { sendBatch: async (m: unknown[]) => void sent.push(...m), send: async () => undefined } as never };
@@ -234,7 +234,7 @@ describe('settings and alerts', () => {
     };
     const first = await syncCostAlerts({ COSTS_DB: db, ENVIRONMENT: 'production' } as never, sink, now, notify as never);
     assert.ok(first.opened >= 1);
-    assert.equal(sent.length, 1, 'one email: the 50% level of a $10 budget');
+    assert.equal(sent.length, 1, 'one email: the 50% level of a $50 budget');
     await syncCostAlerts({ COSTS_DB: db, ENVIRONMENT: 'production' } as never, sink, now, notify as never);
     assert.equal(sent.length, 1, 'already open: not emailed again');
     const row = await db.prepare('SELECT fingerprint, status, kind FROM cost_alert_deliveries').first<{ fingerprint: string; status: string; kind: string }>();

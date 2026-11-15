@@ -1,5 +1,7 @@
 import Link from '@/components/AppLink';
 import { getMediaQoeLive, getMediaSummary, getTranscodeTroubleshoot, listMediaJobs } from '@/lib/api/admin';
+import { getMonthlyBudget } from '@/lib/api/costs';
+import { DEFAULT_MONTHLY_BUDGET_USD } from '@al-ummah/shared-types';
 import type { MediaJob, MediaSummary } from '@/lib/api/types';
 import { getAdminSession } from '@/lib/auth';
 import { canManageMedia, isSuperAdmin } from '@/lib/roles';
@@ -46,16 +48,19 @@ export default async function DeliveryComparisonPage({ searchParams }: PageProps
     return <ErrorAlert testId="delivery-no-access">{t('mediaDelivery.noAccess')}</ErrorAlert>;
   }
 
-  const [summaryResult, jobsResult, qoeLiveResult, troubleshootResult] = await Promise.allSettled([
+  const [summaryResult, jobsResult, qoeLiveResult, troubleshootResult, budgetResult] = await Promise.allSettled([
     getMediaSummary(days),
     listMediaJobs({ status: filter === 'all' ? undefined : filter, limit: 50 }),
     getMediaQoeLive(),
     getTranscodeTroubleshoot(),
+    getMonthlyBudget(),
   ]);
   const troubleshoot = troubleshootResult.status === 'fulfilled' && troubleshootResult.value.ok ? troubleshootResult.value.data : null;
   if (troubleshootResult.status === 'fulfilled' && !troubleshootResult.value.ok) logger.warn('[delivery] Troubleshoot view unavailable', { status: troubleshootResult.value.status });
   const videoParam = Array.isArray(params.video) ? params.video[0] : params.video;
   const focusVideo = typeof videoParam === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(videoParam) ? videoParam : null;
+  // The one admin-set budget (Costs → Alert settings); the default only if admin-api can't say
+  const budgetUsd = settled(budgetResult, 'budget') ?? DEFAULT_MONTHLY_BUDGET_USD;
   const qoeLive = qoeLiveResult.status === 'fulfilled' && qoeLiveResult.value.ok ? qoeLiveResult.value.data : null;
   const summary: MediaSummary | null = settled(summaryResult, 'summary');
   const jobs: MediaJob[] | null = settled(jobsResult, 'jobs');
@@ -108,7 +113,7 @@ export default async function DeliveryComparisonPage({ searchParams }: PageProps
         <>
           <SpeedSection summary={summary} t={t} locale={locale} />
           <PlaybackSection summary={summary} t={t} locale={locale} />
-          <CostSection summary={summary} t={t} locale={locale} />
+          <CostSection summary={summary} t={t} locale={locale} budgetUsd={budgetUsd} />
         </>
       ) : (
         <div className="mb-6"><ErrorAlert testId="delivery-summary-error">{t('mediaDelivery.summaryFailed')}</ErrorAlert></div>

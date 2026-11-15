@@ -8,7 +8,6 @@ import { cardClass } from '@/components/ui';
 import { DailyChart, SeriesSwatch } from './DailyChart';
 import { deliveryFormats } from './format';
 import {
-  MONTHLY_CAP_USD,
   PROVIDERS,
   SCALES,
   dailySeries,
@@ -156,11 +155,11 @@ function CapBadge({ fits, t }: { fits: boolean; t: Translator }) {
   );
 }
 
-export function CostSection({ summary, t, locale }: SectionProps) {
+export function CostSection({ summary, t, locale, budgetUsd }: SectionProps & { budgetUsd: number }) {
   const f = deliveryFormats(locale);
   const used = transcodeCost(summary.jobs);
   const unit = unitCosts(summary.jobs, summary.costs, playbackTotals(summary.qoe));
-  const projections = SCALES.map((scale) => projectMonthlyCost(scale, unit));
+  const projections = SCALES.map((scale) => projectMonthlyCost(scale, unit, budgetUsd));
   const none = t('mediaDelivery.noValue');
   const range = (low: number, high: number) => t('mediaDelivery.range', { low: f.usd(low), high: f.usd(high) });
   const scaleName = { small: t('mediaDelivery.scaleSmall'), medium: t('mediaDelivery.scaleMedium'), large: t('mediaDelivery.scaleLarge') };
@@ -192,7 +191,7 @@ export function CostSection({ summary, t, locale }: SectionProps) {
         <Stat label={t('mediaDelivery.storedGb')} value={f.gb(used.storedGb)} testId="delivery-stored" />
       </dl>
 
-      <h3 className="font-semibold text-fg mb-1">{t('mediaDelivery.projectionTitle', { cap: f.usd(MONTHLY_CAP_USD) })}</h3>
+      <h3 className="font-semibold text-fg mb-1">{t('mediaDelivery.projectionTitle', { cap: f.usd(budgetUsd) })}</h3>
       <p className="text-fg-muted text-sm mb-3">{t('mediaDelivery.projectionIntro')}</p>
       <div className="relative overflow-x-auto mb-4 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-focus" tabIndex={0} role="region" aria-labelledby="delivery-cost-title">
         <table className="w-full text-sm" data-testid="delivery-projection">

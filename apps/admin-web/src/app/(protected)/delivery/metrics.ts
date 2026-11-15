@@ -130,7 +130,6 @@ export const ASSUMED = {
   storageMonths: 12,
 } as const;
 
-export const MONTHLY_CAP_USD = 500;
 
 export interface Scale {
   id: 'small' | 'medium' | 'large';
@@ -195,7 +194,8 @@ export interface Projection {
 }
 
 /** Monthly cost of one scale, US dollars. Storage is the month after `ASSUMED.storageMonths` of uploads. */
-export function projectMonthlyCost(scale: Scale, unit: UnitCosts, cap = MONTHLY_CAP_USD): Projection {
+/** `cap` is the admin-set monthly budget (admin-api /api/costs/budget, #1427). */
+export function projectMonthlyCost(scale: Scale, unit: UnitCosts, cap: number): Projection {
   const videoMinutes = scale.uploadHours * 60;
   const storedGb = videoMinutes * unit.storedGbPerVideoMinute * ASSUMED.storageMonths;
   const transcode = videoMinutes * unit.containerSecondsPerVideoMinute * PRICES.containerSecond;

@@ -9,7 +9,8 @@ import { join } from 'node:path';
 import { readdirSync, readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { Hono } from 'hono';
-import opsRouter, { MONTHLY_CAP_USD, parseThresholdInput, projectMonth, THRESHOLD_AUDIT_PREFIX } from '../src/routers/ops.router';
+import { DEFAULT_MONTHLY_BUDGET_USD } from '@al-ummah/shared-types';
+import opsRouter, { parseThresholdInput, projectMonth, THRESHOLD_AUDIT_PREFIX } from '../src/routers/ops.router';
 import { budgetStatus, findSpikes, idleProjection, levelOf, syncCostAlerts, wantedAlerts, PLAN_BASE_USD, type AlertSink, type ResourceDay } from '../src/lib/opsCost';
 import { hasPermission } from '../src/lib/roles';
 import { sqliteD1 } from './d1-sqlite';
@@ -115,10 +116,19 @@ describe('/api/ops reads', () => {
     assert.equal(result.d1.latencyP99, 5.2);
     assert.deepEqual(result.queues.worst, { name: 'al-ummah-now-videos-qa', backlog: 12 });
     assert.equal(result.queues.dlqMessages, 3);
-    assert.equal(result.cost.capUsd, MONTHLY_CAP_USD);
+    assert.equal(result.cost.capUsd, DEFAULT_MONTHLY_BUDGET_USD);
     assert.ok(result.cost.all.mtd >= result.cost.env.mtd);
     assert.equal(result.stale, false);
     assert.equal(result.alerts.length, 1);
+  });
+
+  it('overview: the cap is the budget saved in Costs → Alert settings, not a constant (#1427)', async () => {
+    const { req, env } = setup(['Admin']);
+    await seed(env.COSTS_DB!);
+    const cap = async () => ((await (await req('/api/ops/overview?env=qa')).json()) as { result: any }).result.cost.capUsd;
+    assert.equal(await cap(), DEFAULT_MONTHLY_BUDGET_USD);
+    await env.COSTS_DB!.prepare("INSERT INTO cost_settings (key, value, updated_at) VALUES ('alerts', ?, ?)").bind(JSON.stringify({ budgetUsd: 750 }), new Date().toISOString()).run();
+    assert.equal(await cap(), 750);
   });
 
   it('rejects unknown env, kind, metric, range and resource', async () => {

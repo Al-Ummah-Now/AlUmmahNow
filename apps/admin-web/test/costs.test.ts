@@ -154,22 +154,24 @@ describe('costs model: alert settings form', () => {
 
   it('accepts and refuses exactly what admin-api accepts and refuses', () => {
     const cases: Partial<Record<'budgetUsd' | 'budgetLevels' | 'spikeFactor' | 'spikeMinUsd' | 'spikeTotalMinUsd', string>>[] = [
-      { budgetUsd: '0' },
-      { budgetUsd: '1' },
-      { budgetUsd: '100000' },
-      { budgetUsd: '100001' },
-      { spikeFactor: '1.1' },
-      { spikeFactor: '1.09' },
-      { spikeFactor: '100' },
-      { spikeFactor: '101' },
+      { budgetUsd: '49' },
+      { budgetUsd: '50' },
+      { budgetUsd: '5000' },
+      { budgetUsd: '5001' },
+      { spikeFactor: '1.2' },
+      { spikeFactor: '1.19' },
+      { spikeFactor: '10' },
+      { spikeFactor: '10.1' },
       { spikeMinUsd: '0' },
       { spikeMinUsd: '-1' },
-      { spikeMinUsd: '10000' },
-      { spikeTotalMinUsd: '10001' },
+      { spikeMinUsd: '100' },
+      { spikeTotalMinUsd: '101' },
       { budgetLevels: '50, 80, 100, 120, 150' },
       { budgetLevels: '50, 60, 70, 80, 90, 100' },
-      { budgetLevels: '200' },
-      { budgetLevels: '201' },
+      { budgetLevels: '10' },
+      { budgetLevels: '9' },
+      { budgetLevels: '150' },
+      { budgetLevels: '151' },
       { budgetLevels: '' },
     ];
     const base = settingsToForm(COST_ALERT_DEFAULTS);
@@ -194,7 +196,7 @@ describe('costs model: alert settings form', () => {
   it('names the field and the range', () => {
     const { errors } = validateSettingsForm({ ...settingsToForm(COST_ALERT_DEFAULTS), budgetUsd: 'abc', budgetLevels: '50, 300' });
     assert.equal(errors.budgetUsd?.key, 'costs.thresholds.errors.range');
-    assert.deepEqual(errors.budgetUsd?.params, { min: '1', max: '100000' });
+    assert.deepEqual(errors.budgetUsd?.params, { min: '50', max: '5000' });
     assert.equal(errors.budgetLevels?.key, 'costs.thresholds.errors.levelsRange');
   });
 

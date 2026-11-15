@@ -173,7 +173,7 @@ test.describe('costs (super admin)', () => {
 
     await budget.fill('0');
     await page.getByTestId('costs-thresholds-save').click();
-    await expect(page.getByTestId('costs-threshold-budgetUsd-error')).toHaveText('Enter a number from 1 to 100000.');
+    await expect(page.getByTestId('costs-threshold-budgetUsd-error')).toHaveText('Enter a number from 50 to 5000.');
     expect((await dashboard()).result!.settings.budgetUsd).toBe(before);
 
     await budget.fill(String(changed));

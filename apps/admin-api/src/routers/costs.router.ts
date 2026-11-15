@@ -14,8 +14,9 @@
  *   PUT    /subscriptions/me         { kinds: ['budget'|'spike'|'digest'], locale }
  */
 import { Hono, type Context } from 'hono';
-import { isCostProvider, validateCostCredential } from '@al-ummah/shared-types';
+import { DEFAULT_MONTHLY_BUDGET_USD, isCostProvider, validateCostCredential } from '@al-ummah/shared-types';
 import { hasPermission, normalizeRoles } from '../lib/roles';
+import { loadCostSettings } from '../lib/opsCost';
 import { logger } from '../lib/logger';
 import type { AdminBindings, AuthContext } from '../base/types';
 import {
@@ -43,7 +44,22 @@ export function actorOf(auth: AuthContext | undefined): Actor {
   return { id: auth?.userId ?? 'unknown', name: name?.trim().slice(0, 120) ?? auth?.email ?? null };
 }
 
+/**
+ * The platform's monthly budget, the one admin-set value (#1427), for pages that project against
+ * it without the Costs page's ops:read (Delivery's projection is for media managers). Only the
+ * number; the default when COSTS_DB is missing or nothing is saved yet.
+ */
+app.get('/budget', async (c) => {
+  c.header('Cache-Control', 'private, no-store');
+  if (!hasPermission(roles(c), 'ops:read') && !hasPermission(roles(c), 'media:manage')) {
+    return c.json({ success: false, code: 'forbidden', error: 'The ops:read or media:manage permission is required' }, 403);
+  }
+  const budgetUsd = c.env.COSTS_DB ? (await loadCostSettings(c.env.COSTS_DB)).budgetUsd : DEFAULT_MONTHLY_BUDGET_USD;
+  return c.json({ success: true, result: { budgetUsd } });
+});
+
 app.use('*', async (c, next) => {
+  if (c.req.method === 'GET' && c.req.path.endsWith('/costs/budget')) return next();
   c.header('Cache-Control', 'private, no-store');
   if (!hasPermission(roles(c), 'ops:read')) {
     logger.warn('[Costs] Permission denied', { userId: c.get('auth')?.userId, path: c.req.path });
