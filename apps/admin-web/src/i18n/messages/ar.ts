@@ -4409,6 +4409,7 @@ const ar: Messages = {
     historyTitle: 'التغييرات الأخيرة',
     historyEmpty: 'لا تغييرات بعد.',
     historyEntry: '{date}: {summary} بواسطة {actor}',
+  },
   captionSettings: {
     title: 'الترجمة النصية والترجمة',
     subtitle: 'ميزانيات ونماذج الترجمة النصية والترجمة الآلية، والترجمة الفورية للعناوين والأوصاف، وترجمات القرآن المعتمدة.',

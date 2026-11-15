@@ -4410,6 +4410,7 @@ const en = {
     historyTitle: 'Recent changes',
     historyEmpty: 'No changes yet.',
     historyEntry: '{date}: {summary} by {actor}',
+  },
   captionSettings: {
     title: 'Captions & translation',
     subtitle: 'Budgets and models for captions and machine translation, inline translation of titles and descriptions, and the Quran translation editions.',
