@@ -56,6 +56,7 @@ const VideoPlayer: React.FC<WatchPlayerProps> = ({ options, startTime, onPlayerR
             isLive={false}
             isShort={options.isShort === true}
             lang="en"
+            audioTracks={options.audioTracks}
             className="w-full"
             ariaLabel={t.a11y.videoPlayerFor.replace('{title}', removeUnwantedChars(title))}
             title={removeUnwantedChars(title)}

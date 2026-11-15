@@ -34,15 +34,17 @@ function toForm(tier?: CreatorTier): TierFormValues {
     maxConcurrent: tier?.maxConcurrent || 20,
     maxChannels: tier ? tier.maxChannels : 3,
     captionMinutesMonth: tier?.captionMinutesMonth ?? 0,
+    audioTracksPerVideo: tier?.audioTracksPerVideo ?? 0,
   };
 }
 
-const HELP: Record<'perHour' | 'perDay' | 'maxConcurrent' | 'maxChannels' | 'captionMinutesMonth', MessageKey> = {
+const HELP: Record<'perHour' | 'perDay' | 'maxConcurrent' | 'maxChannels' | 'captionMinutesMonth' | 'audioTracksPerVideo', MessageKey> = {
   perHour: 'creators.helpPerHour',
   perDay: 'creators.helpPerDay',
   maxConcurrent: 'creators.helpConcurrent',
   maxChannels: 'creators.helpChannels',
   captionMinutesMonth: 'creators.helpCaptions',
+  audioTracksPerVideo: 'creators.helpAudioTracks',
 };
 
 /** One tier's limits, editable by admins (creators:manage); saved through admin-api with an audit row. */
@@ -96,7 +98,7 @@ function TierCard({ tier, users, canManage, actions, create = false }: { tier?: 
     ) : null;
   const described = (field: TierField) => [help(field), shown[field] ? `${ids}-${field}-error` : ''].filter(Boolean).join(' ');
 
-  const number = (field: 'perHour' | 'perDay' | 'maxConcurrent' | 'captionMinutesMonth', label: string) => {
+  const number = (field: 'perHour' | 'perDay' | 'maxConcurrent' | 'captionMinutesMonth' | 'audioTracksPerVideo', label: string) => {
     const { min, max } = CREATOR_TIER_BOUNDS[field];
     return (
       <label className="flex flex-col gap-1 text-sm text-fg-muted">
@@ -225,6 +227,7 @@ function TierCard({ tier, users, canManage, actions, create = false }: { tier?: 
             {errorOf('maxChannels')}
           </label>
           {number('captionMinutesMonth', t('creators.tierCaptions'))}
+          {number('audioTracksPerVideo', t('creators.tierAudioTracks'))}
         </div>
       )}
       {canManage && (

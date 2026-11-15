@@ -22,6 +22,7 @@ import { useCategorySuggestion } from '@/hooks/useCategorySuggestion';
 import VideoPreview from '@/components/videoPreview/index';
 import VideoPreviewRTL from '@/components/videoPreview/rtl/index';
 import ThumbnailSelector from './ThumbnailSelector';
+import AudioTracksPanel from './audio/AudioTracksPanel';
 import SubtitleUploadSection from './SubtitleUploadSection';
 import ChapterEditor from './ChapterEditor';
 import ChapterUpload from './ChapterUpload';
@@ -520,6 +521,9 @@ export default function VideoEdit({
           posterUrl={video.thumbnailUrl}
           spokenLanguage={formData.language === 'both' ? undefined : formData.language}
         />
+
+        {/* Audio tracks: dubs, commentary, audio description (AUN-MULTI-AUDIO) */}
+        <AudioTracksPanel videoId={video.id} spokenLanguage={formData.language === 'both' ? undefined : formData.language} />
 
         {/* Video Chapters Section */}
         <div>
