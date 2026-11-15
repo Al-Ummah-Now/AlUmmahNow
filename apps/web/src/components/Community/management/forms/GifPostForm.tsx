@@ -1,11 +1,14 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useId, useState, useRef } from 'react';
+import { COMMUNITY_UPLOAD_LIMITS } from '@al-ummah/shared-types';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Upload, X } from 'lucide-react';
 import Image from 'next/image';
+import { useLanguage } from '@/hooks/useLanguage';
+import { overLimit, tooLargeMessage } from '@/lib/community/upload-limits';
 
 export interface GifData {
   file?: File;
@@ -22,10 +25,10 @@ interface GifPostFormProps {
   error?: string;
 }
 
-const MAX_FILE_SIZE = 16 * 1024 * 1024; // 16MB
-
 export function GifPostForm({ gif, onChange, locale, error }: GifPostFormProps) {
   const isRTL = locale === 'ar';
+  const { t, lang } = useLanguage();
+  const errorId = `${useId()}-gif-error`;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadError, setUploadError] = useState<string>('');
 
@@ -40,11 +43,11 @@ export function GifPostForm({ gif, onChange, locale, error }: GifPostFormProps) 
       return;
     }
 
-    if (file.size > MAX_FILE_SIZE) {
-      setUploadError(isRTL
-        ? 'حجم الملف يجب أن يكون أقل من 16MB'
-        : 'File size must be less than 16MB'
-      );
+    // The API's limit (@al-ummah/shared-types): refused here, before anything is uploaded
+    const tooLarge = overLimit(file, 'gif', COMMUNITY_UPLOAD_LIMITS);
+    if (tooLarge) {
+      setUploadError(tooLargeMessage(t, lang, 'gif', tooLarge));
+      if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
 
@@ -102,12 +105,15 @@ export function GifPostForm({ gif, onChange, locale, error }: GifPostFormProps) 
                 onChange={handleFileSelect}
                 className="hidden"
                 id="gif-upload"
+                aria-invalid={uploadError ? true : undefined}
+                aria-describedby={error || uploadError ? errorId : undefined}
               />
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => fileInputRef.current?.click()}
                 className="w-full sm:w-auto"
+                aria-describedby={error || uploadError ? errorId : undefined}
               >
                 <Upload className="w-4 h-4 mr-2 rtl:ml-2 rtl:mr-0" />
                 {isRTL ? 'رفع GIF' : 'Upload GIF'}
@@ -160,7 +166,7 @@ export function GifPostForm({ gif, onChange, locale, error }: GifPostFormProps) 
         )}
 
         {(error || uploadError) && (
-          <p className="text-destructive text-xs md:text-sm mt-2">
+          <p id={errorId} role="alert" className="text-destructive text-xs md:text-sm mt-2">
             {error || uploadError}
           </p>
         )}

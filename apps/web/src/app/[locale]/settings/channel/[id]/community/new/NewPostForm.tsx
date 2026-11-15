@@ -23,6 +23,7 @@ import { ArticlePostForm, ArticleFormData, emptyArticle } from '@/components/Com
 import { CardsPostForm, CardsFormData, emptyCards } from '@/components/Community/management/forms/CardsPostForm';
 import { LinkPostForm, LinkFormData, emptyLink } from '@/components/Community/management/forms/LinkPostForm';
 import { uploadPostImage } from '@/components/Community/management/forms/PostImageField';
+import { tooLargeMessage } from '@/lib/community/upload-limits';
 import { createCommunityPost } from '@/lib/api/community-posts';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 
@@ -36,7 +37,7 @@ interface NewPostFormProps {
 
 export default function NewPostForm({ locale, id, channelName, channelHandle }: NewPostFormProps) {
   const router = useRouter();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const { ensureHuman } = useHumanCheck();
   const isRTL = locale === 'ar';
   const [loading, setLoading] = useState(false);
@@ -154,14 +155,17 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
         case PostType.IMAGE: {
           // Upload first: the post stores the uploads' URLs (never the browser's preview URLs)
           const uploaded = await Promise.all(images.map((img) => (img.file ? uploadPostImage(id, img.file, img.caption || null) : null)));
-          if (uploaded.some((u) => !u)) {
-            setError(t.community.errorUpload);
+          const media = uploaded.map((u) => (u?.ok ? u.media : null));
+          if (media.some((m) => !m)) {
+            // The API refused a file's size (the composer checks first, so only when the limits differ)
+            const tooLarge = uploaded.find((u) => u && !u.ok && u.tooLarge);
+            setError(tooLarge && !tooLarge.ok && tooLarge.tooLarge ? tooLargeMessage(t, lang, 'image', tooLarge.tooLarge) : t.community.errorUpload);
             return;
           }
           baseData.images = images.map((img, i) => ({
-            url: uploaded[i]!.url,
-            width: uploaded[i]!.width ?? img.width,
-            height: uploaded[i]!.height ?? img.height,
+            url: media[i]!.url,
+            width: media[i]!.width ?? img.width,
+            height: media[i]!.height ?? img.height,
             caption: img.caption,
             mimeType: img.mimeType,
             size: img.size

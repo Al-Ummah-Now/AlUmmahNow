@@ -26,6 +26,7 @@ export * from './short-links';
 export * from './common';
 export * from './watch-history';
 export * from './community-post';
+export * from './community-upload-limits';
 // PostV2: the one post format shared with the CMS and www (vendored by both; keep it self-contained)
 export * from './post-schema';
 export * from './post-comment';

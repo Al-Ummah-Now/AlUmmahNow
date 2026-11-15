@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { can, channelRoleOf, type Channel } from '@al-ummah/shared-types';
+import { can, channelRoleOf, communityFileTooLarge, COMMUNITY_UPLOAD_LIMITS, type Channel } from '@al-ummah/shared-types';
 import { AuthenticatedRoute, AppContext } from '../../base';
 import BunnyStorageClient from '../../lib/bunny/storage';
 import { requireSecret, requireEnvVar } from '../../lib/env-helpers';
@@ -9,8 +9,6 @@ import { generateUniqueFilename } from '../../lib/security/filename-sanitize';
 import { logger } from '../../lib/logger';
 import { getChannelObject } from './post-comment-helpers';
 import { recordImageOwner } from '../../lib/csam/imageOwners';
-
-const MAX_GIF_SIZE = 10 * 1024 * 1024; // 10MB for GIFs
 
 const Str = (opts: { description: string }) => z.string().openapi(opts);
 
@@ -27,7 +25,7 @@ export class UploadCommunityPostGif extends AuthenticatedRoute {
         content: {
           'multipart/form-data': {
             schema: z.object({
-              gif: z.any().describe('GIF file (max 10MB)'),
+              gif: z.any().describe(`GIF file (max ${COMMUNITY_UPLOAD_LIMITS.gifBytes / (1024 * 1024)} MB)`),
             }),
           },
         },
@@ -46,6 +44,20 @@ export class UploadCommunityPostGif extends AuthenticatedRoute {
                 height: z.number(),
                 duration: z.number(),
               }),
+            }),
+          },
+        },
+      },
+      413: {
+        description: 'The GIF is over the size limit',
+        content: {
+          'application/json': {
+            schema: z.object({
+              error: z.string(),
+              code: z.literal('file_too_large'),
+              fileName: z.string(),
+              size: z.number(),
+              maxBytes: z.number(),
             }),
           },
         },
@@ -90,6 +102,10 @@ export class UploadCommunityPostGif extends AuthenticatedRoute {
       if (!file || !(file instanceof File)) {
         return c.json({ error: 'No GIF file provided' }, 400);
       }
+
+      // Size limit shared with the web composer (@al-ummah/shared-types)
+      const tooLarge = communityFileTooLarge('gif', file.name, file.size);
+      if (tooLarge) return c.json(tooLarge, 413);
 
       // SECURITY: Validate file type using magic bytes (not just Content-Type header)
       try {
@@ -140,11 +156,6 @@ export class UploadCommunityPostGif extends AuthenticatedRoute {
         return c.json({
           error: 'Failed to validate GIF file'
         }, 500);
-      }
-
-      // Validate file size
-      if (file.size > MAX_GIF_SIZE) {
-        return c.json({ error: 'GIF size exceeds 10MB' }, 400);
       }
 
       // Get Bunny.net credentials

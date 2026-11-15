@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { can, channelRoleOf, type Channel } from '@al-ummah/shared-types';
+import { can, channelRoleOf, communityFileTooLarge, COMMUNITY_UPLOAD_LIMITS, type Channel } from '@al-ummah/shared-types';
 import { AuthenticatedRoute, AppContext } from '../../base';
 import BunnyStorageClient from '../../lib/bunny/storage';
 import { requireSecret, requireEnvVar } from '../../lib/env-helpers';
@@ -11,7 +11,6 @@ import { getChannelObject } from './post-comment-helpers';
 import { recordImageOwner } from '../../lib/csam/imageOwners';
 
 const MAX_IMAGES = 10;
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB per image
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
 const Str = (opts: { description: string }) => z.string().openapi(opts);
@@ -29,7 +28,7 @@ export class UploadCommunityPostImages extends AuthenticatedRoute {
         content: {
           'multipart/form-data': {
             schema: z.object({
-              images: z.any().describe('Image files (up to 10, max 5MB each)'),
+              images: z.any().describe(`Image files (up to 10, max ${COMMUNITY_UPLOAD_LIMITS.imageBytes / (1024 * 1024)} MB each)`),
             }),
           },
         },
@@ -49,6 +48,20 @@ export class UploadCommunityPostImages extends AuthenticatedRoute {
                 size: z.number(),
                 mimeType: z.string(),
               })),
+            }),
+          },
+        },
+      },
+      413: {
+        description: 'An image is over the size limit',
+        content: {
+          'application/json': {
+            schema: z.object({
+              error: z.string(),
+              code: z.literal('file_too_large'),
+              fileName: z.string(),
+              size: z.number(),
+              maxBytes: z.number(),
             }),
           },
         },
@@ -107,6 +120,12 @@ export class UploadCommunityPostImages extends AuthenticatedRoute {
         return c.json({ error: `Maximum ${MAX_IMAGES} images allowed` }, 400);
       }
 
+      // Size limit shared with the web composer (@al-ummah/shared-types), checked before anything is stored
+      for (const file of files) {
+        const tooLarge = communityFileTooLarge('image', file.name, file.size);
+        if (tooLarge) return c.json(tooLarge, 413);
+      }
+
       // Get Bunny.net credentials
       const key = await requireSecret(c.env.image_storage_key, 'image_storage_key');
       const zone = requireEnvVar(c.env, 'ZONE');
@@ -156,13 +175,6 @@ export class UploadCommunityPostImages extends AuthenticatedRoute {
           return c.json({
             error: 'Failed to validate image file'
           }, 500);
-        }
-
-        // Validate file size
-        if (file.size > MAX_FILE_SIZE) {
-          return c.json({
-            error: `File size exceeds 5MB: ${file.name}`
-          }, 400);
         }
 
         // SECURITY: Sanitize filename to prevent path traversal attacks

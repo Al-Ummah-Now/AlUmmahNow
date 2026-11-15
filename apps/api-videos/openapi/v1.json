@@ -15070,7 +15070,7 @@
                 "type": "object",
                 "properties": {
                   "gif": {
-                    "description": "GIF file (max 10MB)"
+                    "description": "GIF file (max 10 MB)"
                   }
                 }
               }
@@ -15157,6 +15157,43 @@
                 }
               }
             }
+          },
+          "413": {
+            "description": "The GIF is over the size limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "file_too_large"
+                      ]
+                    },
+                    "fileName": {
+                      "type": "string"
+                    },
+                    "size": {
+                      "type": "number"
+                    },
+                    "maxBytes": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code",
+                    "fileName",
+                    "size",
+                    "maxBytes"
+                  ]
+                }
+              }
+            }
           }
         }
       }
@@ -15190,7 +15227,7 @@
                 "type": "object",
                 "properties": {
                   "images": {
-                    "description": "Image files (up to 10, max 5MB each)"
+                    "description": "Image files (up to 10, max 5 MB each)"
                   }
                 }
               }
@@ -15281,6 +15318,43 @@
                       "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
                     }
                   }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "An image is over the size limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "file_too_large"
+                      ]
+                    },
+                    "fileName": {
+                      "type": "string"
+                    },
+                    "size": {
+                      "type": "number"
+                    },
+                    "maxBytes": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "code",
+                    "fileName",
+                    "size",
+                    "maxBytes"
+                  ]
                 }
               }
             }
