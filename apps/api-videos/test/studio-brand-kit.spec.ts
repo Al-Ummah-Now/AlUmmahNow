@@ -85,7 +85,9 @@ describe('brand kit', () => {
 		for (const [body, field] of cases) {
 			const res = await putKit(env, body);
 			assert.equal(res.status, 400, field);
-			assert.equal(((await res.json()) as any).field, field);
+			// Enum values the request schema documents are refused by request validation (errors[].path); the rest by checkBrandKit (field)
+			const out = (await res.json()) as { field?: string; errors?: Array<{ path: string[] }> };
+			assert.ok(out.field === field || !!out.errors?.some((e) => e.path.slice(1).join('.').startsWith(field)), `${field}: ${JSON.stringify(out)}`);
 		}
 	});
 });
