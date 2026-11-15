@@ -53,18 +53,26 @@ describe('matchTracks', () => {
   it('matches by language and name otherwise', () => {
     expect(matchTracks([{ language: 'en', label: 'English', enabled: false }, { language: 'fr', enabled: false }], ALL)).toEqual([EN, null]);
   });
+  it('follows the player order, not the master order (Safari can list them differently)', () => {
+    const safari = [{ language: 'en', label: 'English', enabled: false }, { language: 'ar', label: 'العربية', enabled: true }];
+    expect(matchTracks(safari, [ORIG, EN])).toEqual([EN, ORIG]);
+  });
+  it('uses each API track once: two English tracks get the dub and the description', () => {
+    const two = [{ language: 'en', label: 'English', enabled: true }, { language: 'en', label: 'English (AD)', enabled: false }];
+    expect(matchTracks(two, [EN, EN_DESC])).toEqual([EN, EN_DESC]);
+  });
 });
 
 describe('audioTrackLabel', () => {
   const kind = (k: string) => ({ original: 'Original', dub: 'Dubbed', commentary: 'Commentary', description: 'Audio description' })[k]!;
-  it('names a track "label · kind"', () => {
-    expect(audioTrackLabel(EN, { enabled: false }, kind as never, 1)).toBe('English · Dubbed');
-    expect(audioTrackLabel(ORIG, { enabled: true }, kind as never, 0)).toBe('العربية · Original');
+  it('names a track by its label and kind, kept apart', () => {
+    expect(audioTrackLabel(EN, { enabled: false }, kind as never, 1)).toEqual({ name: 'English', kind: 'Dubbed' });
+    expect(audioTrackLabel(ORIG, { enabled: true }, kind as never, 0)).toEqual({ name: 'العربية', kind: 'Original' });
   });
   it('keeps a label that already says its kind, and the player label without metadata', () => {
-    expect(audioTrackLabel({ ...EN_DESC, label: 'Audio description (English)' }, { enabled: false }, kind as never, 2)).toBe('Audio description (English)');
-    expect(audioTrackLabel(null, { label: 'Track', enabled: false }, kind as never, 4)).toBe('Track');
-    expect(audioTrackLabel(null, { enabled: false }, kind as never, 4)).toBe('5');
+    expect(audioTrackLabel({ ...EN_DESC, label: 'Audio description (English)' }, { enabled: false }, kind as never, 2)).toEqual({ name: 'Audio description (English)' });
+    expect(audioTrackLabel(null, { label: 'Track', enabled: false }, kind as never, 4)).toEqual({ name: 'Track' });
+    expect(audioTrackLabel(null, { enabled: false }, kind as never, 4)).toEqual({ name: '5' });
   });
 });
 

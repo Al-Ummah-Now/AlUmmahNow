@@ -11,8 +11,10 @@ export type PanelId = 'root' | 'quality' | 'speed' | 'captions' | 'audio';
 export interface MenuOption {
   id: string;
   label: string;
-  /** The option's language (audio tracks), set as its `lang` for screen readers */
+  /** The language of `label` (audio tracks): set as its `lang`, with its own direction */
   lang?: string;
+  /** Shown after `label` in the page's language (an audio track's kind) */
+  suffix?: string;
 }
 
 export interface QualityLevelLike {

@@ -265,16 +265,27 @@ export function SettingsMenu({ player, lang, onShowShortcuts, audioTracks }: Set
   const captionId = currentCaptionId(text);
   const playerAudio = p.audioTracks?.();
   const audioMeta = playerAudio ? matchTracks(playerAudio, audioTracks) : [];
-  const audio = audioOptions(playerAudio).map((o, i) => {
-    const meta = audioMeta[i] ?? null;
-    return { ...o, label: audioTrackLabel(meta, playerAudio![i] as PlayerAudioTrack, (kind) => t.chrome.audioKinds[kind], i), ...(meta ? { lang: meta.language } : {}) };
-  });
+  // In the creator's order (the API's), whatever order the engine lists them in (Safari's own HLS
+  // can list them differently); option ids stay the player's indexes
+  const apiOrder = (i: number) => {
+    const at = audioMeta[i] ? (audioTracks ?? []).indexOf(audioMeta[i]!) : -1;
+    return at < 0 ? Number.MAX_SAFE_INTEGER : at;
+  };
+  const audio = audioOptions(playerAudio)
+    .map((o, i) => {
+      const meta = audioMeta[i] ?? null;
+      const { name, kind } = audioTrackLabel(meta, playerAudio![i] as PlayerAudioTrack, (k) => t.chrome.audioKinds[k], i);
+      return { ...o, label: name, ...(kind ? { suffix: kind } : {}), ...(meta ? { lang: meta.language } : {}), order: apiOrder(i) };
+    })
+    .sort((x, y) => x.order - y.order)
+    .map(({ order: _order, ...o }) => o);
   const audioId = currentAudioId(playerAudio);
   const chooseAudio = (id: string) => {
-    selectAudio(playerAudio, id);
-    // Remembered for the next video with a track of this language and kind
+    // Saved first: the next video starts on a track of this language and kind, and the first-track
+    // rule (useAudioTrackChoice), which re-applies itself when the track changes, now agrees
     const meta = audioMeta[Number(id)];
     if (meta) writeAudioPreference({ language: meta.language, kind: meta.kind });
+    selectAudio(playerAudio, id);
   };
   const captionStyle = p.getChild('textTrackSettings') ?? p.getChild('TextTrackSettings');
 
@@ -316,7 +327,10 @@ export function SettingsMenu({ player, lang, onShowShortcuts, audioTracks }: Set
             onClick={() => choose(() => apply(o.id), panel)}
           >
             <span className="vjs-fanous-mi-icon vjs-fanous-mi-check" aria-hidden="true">{o.id === current && <Check />}</span>
-            <span className="vjs-fanous-mi-label" {...(o.lang ? { lang: o.lang, dir: 'auto' } : {})}>{o.label}</span>
+            <span className="vjs-fanous-mi-label">
+              {o.lang ? <bdi lang={o.lang} dir="auto">{o.label}</bdi> : o.label}
+              {o.suffix && ` · ${o.suffix}`}
+            </span>
           </button>
         ))}
       </div>
