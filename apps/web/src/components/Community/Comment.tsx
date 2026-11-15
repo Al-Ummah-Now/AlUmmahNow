@@ -19,6 +19,8 @@ import {
   unpinPostComment,
 } from '@/lib/api/post-comments';
 import { useLanguage } from '@/hooks/useLanguage';
+import Link from '@/components/common/AppLink';
+import { userProfilePath } from '@/lib/user-url';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 
 interface CommentProps {
@@ -88,7 +90,9 @@ export default function Comment({
   viewerAvatar,
   viewerName = '',
 }: CommentProps) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
+  // The only way to a user's profile: their name on a comment they posted as themselves
+  const authorHref = comment.userHandle && !comment.deletedAt ? userProfilePath(lang, comment.userHandle) : undefined;
   const { confirm, dialog: confirmDialog } = useConfirm();
   const [liked, setLiked] = useState(Boolean(comment.isLikedByViewer));
   const [likes, setLikes] = useState(comment.likes);
@@ -275,10 +279,14 @@ export default function Comment({
       {confirmDialog}
       {/* Avatar */}
       <div className="relative w-10 h-10 flex-shrink-0">
+        {authorHref && (
+          // Pointer-only second target; the name is the link for keyboards and screen readers
+          <Link href={authorHref} tabIndex={-1} aria-hidden="true" className="absolute inset-0 z-10 rounded-full" data-testid="post-comment-author-avatar-link" />
+        )}
         {comment.userAvatarUrl && !comment.deletedAt ? (
           <Image
             src={comment.userAvatarUrl}
-            alt={comment.userDisplayName}
+            alt={authorHref ? '' : comment.userDisplayName}
             fill
             className="rounded-full object-cover"
           />
@@ -307,7 +315,11 @@ export default function Comment({
           <div className={cn('flex-1', isRTL && 'text-right')}>
             <div className={cn('flex items-center gap-2 flex-wrap', isRTL && 'flex-row-reverse')}>
               <span className="font-medium text-gray-900 dark:text-gray-100">
-                {comment.deletedAt ? (isRTL ? '[محذوف]' : '[deleted]') : comment.userDisplayName}
+                {comment.deletedAt
+                  ? (isRTL ? '[محذوف]' : '[deleted]')
+                  : authorHref
+                    ? <Link href={authorHref} className="hover:underline" data-testid="post-comment-author-link">{comment.userDisplayName}</Link>
+                    : comment.userDisplayName}
               </span>
               {pinned && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">

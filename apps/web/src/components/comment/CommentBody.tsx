@@ -10,11 +10,14 @@
 import { formatNumber } from '@al-ummah/shared-types';
 import React, { useId, useState } from "react";
 import { ThumbsUp, Trash2, Pencil, MessageSquare, Check } from "lucide-react";
+import Link from "@/components/common/AppLink";
 import { useLanguage } from "@/hooks/useLanguage";
 import { dispatchPlayerSeek, parseCommentTimestamps } from "@/lib/video/comment-timestamps";
 
 export interface CommentProps {
   author: string;
+  /** The author's public profile (/u/@handle), only when they commented as themselves and have one */
+  authorHref?: string;
   text: string;
   time: string;
   avatar: string;
@@ -81,6 +84,7 @@ export function CommentText({ text, videoId }: { text: string; videoId?: string 
 export function CommentBody({
   dir,
   author,
+  authorHref,
   text,
   time,
   avatar,
@@ -119,11 +123,21 @@ export function CommentBody({
 
   return (
     <div className="flex items-start gap-3" dir={dir} data-testid={testId || (isReply ? 'comment-reply' : 'comment')}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={avatar} alt={t.comments.authorAvatar.replace('{name}', author)} className={`${avatarSize} rounded-full flex-shrink-0`} />
+      {authorHref ? (
+        // The name below is the link for keyboards and screen readers; the avatar is a second, pointer-only target
+        <Link href={authorHref} tabIndex={-1} aria-hidden="true" className="flex-shrink-0" data-testid="comment-author-avatar-link">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={avatar} alt="" className={`${avatarSize} rounded-full`} />
+        </Link>
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={avatar} alt={t.comments.authorAvatar.replace('{name}', author)} className={`${avatarSize} rounded-full flex-shrink-0`} />
+      )}
       <div className="flex-1 min-w-0">
         <div className="flex flex-wrap items-baseline gap-x-2">
-          <h4 className="font-bold">{author}</h4>
+          <h4 className="font-bold">
+            {authorHref ? <Link href={authorHref} className="hover:underline" data-testid="comment-author-link">{author}</Link> : author}
+          </h4>
           <p className="text-sm text-gray-500 dark:text-gray-400">
             {time}
             {isEdited && <span className="ms-1" data-testid="comment-edited">{t.comments.edited}</span>}

@@ -15,20 +15,18 @@ jest.mock('@/lib/errors/reporter', () => ({ reportError: jest.fn(() => 'ref'), f
 
 const mockApi = {
   getPublicUserSubscriptions: jest.fn(),
-  getPublicUserLikes: jest.fn(),
   getMyPublicProfileSettings: jest.fn(),
   updatePublicProfileSettings: jest.fn(),
   checkUserHandleAvailability: jest.fn(),
 };
 jest.mock('@/lib/api/public-profile', () => ({
   getPublicUserSubscriptions: (...a: unknown[]) => mockApi.getPublicUserSubscriptions(...a),
-  getPublicUserLikes: (...a: unknown[]) => mockApi.getPublicUserLikes(...a),
   getMyPublicProfileSettings: (...a: unknown[]) => mockApi.getMyPublicProfileSettings(...a),
   updatePublicProfileSettings: (...a: unknown[]) => mockApi.updatePublicProfileSettings(...a),
   checkUserHandleAvailability: (...a: unknown[]) => mockApi.checkUserHandleAvailability(...a),
 }));
 
-import { PublicProfileView } from '../PublicProfileView';
+import { PublicProfileView, nameInitial } from '../PublicProfileView';
 import { PublicProfileSettings } from '../PublicProfileSettings';
 
 const profile = {
@@ -39,10 +37,9 @@ const profile = {
   bio: 'Hello',
   dateCreated: '2026-01-15T00:00:00.000Z',
   channels: [{ id: 'c1', name: 'Noor', handle: 'noor' }],
-  sections: { subscriptions: true, playlists: true, likes: true },
+  sections: { subscriptions: true, playlists: true },
 };
 const channel = (id: string) => ({ id, name: `Channel ${id}`, handle: id }) as never;
-const video = (id: string) => ({ id, title: `Video ${id}` }) as never;
 
 beforeEach(() => {
   Object.values(mockApi).forEach((fn) => fn.mockReset());
@@ -55,7 +52,7 @@ describe('PublicProfileView', () => {
         profile={profile}
         locale="en"
         isOwner={false}
-        initial={{ subscriptions: { items: [channel('a')], page: 1, hasMore: false }, playlists: [{ id: 'p1' } as never], likes: { items: [video('v1')], nextCursor: null } }}
+        initial={{ subscriptions: { items: [channel('a')], page: 1, hasMore: false }, playlists: [{ id: 'p1' } as never] }}
       />,
     );
     expect(screen.getByRole('heading', { level: 1, name: 'Sara' })).toBeInTheDocument();
@@ -64,21 +61,21 @@ describe('PublicProfileView', () => {
     expect(screen.getByRole('heading', { name: /Channels/ })).toBeInTheDocument();
     expect(screen.getAllByTestId('profile-channel').map((el) => el.getAttribute('href'))).toEqual(['/en/@noor', '/en/@a']);
     expect(screen.getByTestId('playlist-card')).toHaveTextContent('p1');
-    expect(screen.getAllByTestId('profile-liked-video')).toHaveLength(1);
+    // Liked videos are never public (owner, 2026-11-14)
+    expect(screen.queryByTestId('profile-section-likes')).not.toBeInTheDocument();
     expect(screen.queryByTestId('public-profile-owner-note')).not.toBeInTheDocument();
   });
 
   it('leaves out hidden lists and shows empty states', () => {
     render(
       <PublicProfileView
-        profile={{ ...profile, channels: [], sections: { subscriptions: false, playlists: true, likes: false } }}
+        profile={{ ...profile, channels: [], sections: { subscriptions: false, playlists: true } }}
         locale="en"
         isOwner
-        initial={{ subscriptions: null, playlists: [], likes: null }}
+        initial={{ subscriptions: null, playlists: [] }}
       />,
     );
     expect(screen.queryByTestId('profile-section-subscriptions')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('profile-section-likes')).not.toBeInTheDocument();
     expect(screen.queryByTestId('profile-section-channels')).not.toBeInTheDocument();
     expect(screen.getByText(PUBLIC_PROFILE_EN.page.emptyPlaylists)).toBeInTheDocument();
     expect(screen.getByTestId('public-profile-owner-note')).toHaveTextContent(PUBLIC_PROFILE_EN.page.ownerNote);
@@ -86,38 +83,35 @@ describe('PublicProfileView', () => {
   });
 
   it('Arabic: right to left, localized name, handle stays LTR', () => {
-    render(<PublicProfileView profile={profile} locale="ar" isOwner={false} initial={{ subscriptions: { items: [], page: 1, hasMore: false }, playlists: [], likes: { items: [], nextCursor: null } }} />);
+    render(<PublicProfileView profile={profile} locale="ar" isOwner={false} initial={{ subscriptions: { items: [], page: 1, hasMore: false }, playlists: [] }} />);
     expect(screen.getByTestId('public-profile')).toHaveAttribute('dir', 'rtl');
     expect(screen.getByRole('heading', { level: 1, name: 'سارة' })).toBeInTheDocument();
     expect(screen.getByTestId('public-profile-handle')).toHaveAttribute('dir', 'ltr');
     expect(screen.getByText(PUBLIC_PROFILE_AR.page.emptySubscriptions)).toBeInTheDocument();
   });
 
-  it('Show more loads the next subscriptions page and next likes', async () => {
+  it('Show more loads the next subscriptions page', async () => {
     mockApi.getPublicUserSubscriptions.mockResolvedValue({ items: [channel('b')], page: 2, hasMore: false });
-    mockApi.getPublicUserLikes.mockResolvedValue({ items: [video('v2')], nextCursor: null });
-    render(
-      <PublicProfileView
-        profile={profile}
-        locale="en"
-        isOwner={false}
-        initial={{ subscriptions: { items: [channel('a')], page: 1, hasMore: true }, playlists: [], likes: { items: [video('v1')], nextCursor: 'c1' } }}
-      />,
-    );
+    render(<PublicProfileView profile={profile} locale="en" isOwner={false} initial={{ subscriptions: { items: [channel('a')], page: 1, hasMore: true }, playlists: [] }} />);
     fireEvent.click(screen.getByTestId('profile-subscriptions-more'));
     await waitFor(() => expect(screen.queryByTestId('profile-subscriptions-more')).not.toBeInTheDocument());
     expect(mockApi.getPublicUserSubscriptions).toHaveBeenCalledWith('Sara', 2);
-    fireEvent.click(screen.getByTestId('profile-likes-more'));
-    await waitFor(() => expect(screen.getAllByTestId('profile-liked-video')).toHaveLength(2));
-    expect(mockApi.getPublicUserLikes).toHaveBeenCalledWith('Sara', 'c1');
   });
 
   it('a failed page shows an alert and keeps the button', async () => {
-    mockApi.getPublicUserLikes.mockResolvedValue(null);
-    render(<PublicProfileView profile={profile} locale="en" isOwner={false} initial={{ subscriptions: null, playlists: [], likes: { items: [video('v1')], nextCursor: 'c1' } }} />);
-    fireEvent.click(screen.getByTestId('profile-likes-more'));
+    mockApi.getPublicUserSubscriptions.mockResolvedValue(null);
+    render(<PublicProfileView profile={profile} locale="en" isOwner={false} initial={{ subscriptions: { items: [channel('a')], page: 1, hasMore: true }, playlists: [] }} />);
+    fireEvent.click(screen.getByTestId('profile-subscriptions-more'));
     await waitFor(() => expect(screen.getAllByRole('alert').some((el) => el.textContent === PUBLIC_PROFILE_EN.page.loadError)).toBe(true));
-    expect(screen.getByTestId('profile-likes-more')).toBeInTheDocument();
+    expect(screen.getByTestId('profile-subscriptions-more')).toBeInTheDocument();
+  });
+
+  it('the avatar initial is the first letter of the name, Arabic too, past marks and punctuation', () => {
+    expect(nameInitial('sara Ahmed')).toBe('S');
+    expect(nameInitial('سارة أحمد')).toBe('س');
+    expect(nameInitial('\u200f«عَلي»')).toBe('ع');
+    expect(nameInitial('  @noor')).toBe('N');
+    expect(nameInitial('😀')).toBe('');
   });
 });
 
@@ -132,9 +126,9 @@ describe('PublicProfileSettings', () => {
   };
 
   it('loads the settings, checks a new handle and saves handle and switches', async () => {
-    mockApi.getMyPublicProfileSettings.mockResolvedValue({ handle: null, showSubscriptions: false, showPlaylists: true, showLikes: false });
+    mockApi.getMyPublicProfileSettings.mockResolvedValue({ handle: null, showSubscriptions: false, showPlaylists: true });
     mockApi.checkUserHandleAvailability.mockResolvedValue({ available: true, handle: 'sara' });
-    mockApi.updatePublicProfileSettings.mockResolvedValue({ ok: true, settings: { handle: 'sara', showSubscriptions: false, showPlaylists: true, showLikes: true } });
+    mockApi.updatePublicProfileSettings.mockResolvedValue({ ok: true, settings: { handle: 'sara', showSubscriptions: true, showPlaylists: true } });
     render(<PublicProfileSettings locale="en" />);
     await settled();
     expect(screen.getByTestId('public-profile-handle-status')).toHaveTextContent(PUBLIC_PROFILE_EN.settings.noHandle);
@@ -149,18 +143,20 @@ describe('PublicProfileSettings', () => {
     expect(mockApi.checkUserHandleAvailability).toHaveBeenCalledWith('sara');
     expect(screen.getByTestId('public-profile-handle-status')).toHaveTextContent('@sara is available');
 
-    const likes = screen.getByRole('switch', { name: PUBLIC_PROFILE_EN.settings.showLikes });
-    expect(likes).toHaveAttribute('aria-checked', 'false');
-    fireEvent.click(likes);
+    // Only two switches: liked videos are never public
+    expect(screen.getAllByRole('switch')).toHaveLength(2);
+    const subs = screen.getByRole('switch', { name: PUBLIC_PROFILE_EN.settings.showSubscriptions });
+    expect(subs).toHaveAttribute('aria-checked', 'false');
+    fireEvent.click(subs);
     fireEvent.click(screen.getByTestId('public-profile-save'));
     await settled();
-    expect(mockApi.updatePublicProfileSettings).toHaveBeenCalledWith({ handle: 'sara', showSubscriptions: false, showPlaylists: true, showLikes: true });
+    expect(mockApi.updatePublicProfileSettings).toHaveBeenCalledWith({ handle: 'sara', showSubscriptions: true, showPlaylists: true });
     expect(screen.getByTestId('public-profile-save-result')).toHaveTextContent(PUBLIC_PROFILE_EN.settings.saved);
     expect(screen.getByTestId('public-profile-view-link')).toHaveAttribute('href', '/en/u/@sara');
   });
 
   it('format problems show without a request; a taken handle blocks saving', async () => {
-    mockApi.getMyPublicProfileSettings.mockResolvedValue({ handle: 'mine', showSubscriptions: false, showPlaylists: true, showLikes: false });
+    mockApi.getMyPublicProfileSettings.mockResolvedValue({ handle: 'mine', showSubscriptions: false, showPlaylists: true });
     mockApi.checkUserHandleAvailability.mockResolvedValue({ available: false, handle: 'taken', reason: 'taken' });
     render(<PublicProfileSettings locale="en" />);
     await settled();
@@ -178,15 +174,18 @@ describe('PublicProfileSettings', () => {
   });
 
   it('removing the handle saves null; Arabic is right to left', async () => {
-    mockApi.getMyPublicProfileSettings.mockResolvedValue({ handle: 'mine', showSubscriptions: false, showPlaylists: true, showLikes: false });
-    mockApi.updatePublicProfileSettings.mockResolvedValue({ ok: true, settings: { handle: null, showSubscriptions: false, showPlaylists: true, showLikes: false } });
+    mockApi.getMyPublicProfileSettings.mockResolvedValue({ handle: 'mine', showSubscriptions: false, showPlaylists: true });
+    mockApi.updatePublicProfileSettings.mockResolvedValue({ ok: true, settings: { handle: null, showSubscriptions: false, showPlaylists: true } });
     render(<PublicProfileSettings locale="ar" />);
     await settled();
     expect(screen.getByTestId('public-profile-settings')).toHaveAttribute('dir', 'rtl');
+    // The profile URL stays left to right inside the Arabic help text
+    expect(screen.getByTestId('public-profile-url')).toHaveAttribute('dir', 'ltr');
+    expect(screen.getByTestId('public-profile-url')).toHaveTextContent('/ar/u/@mine');
     fireEvent.click(screen.getByRole('button', { name: PUBLIC_PROFILE_AR.settings.removeHandle }));
     fireEvent.click(screen.getByTestId('public-profile-save'));
     await settled();
-    expect(mockApi.updatePublicProfileSettings).toHaveBeenCalledWith({ handle: null, showSubscriptions: false, showPlaylists: true, showLikes: false });
+    expect(mockApi.updatePublicProfileSettings).toHaveBeenCalledWith({ handle: null, showSubscriptions: false, showPlaylists: true });
     expect(screen.queryByTestId('public-profile-view-link')).not.toBeInTheDocument();
   });
 

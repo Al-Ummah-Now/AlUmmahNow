@@ -5,6 +5,7 @@ import { ThemedSelect } from '@/components/ui/ThemedSelect';
 import { logger } from '@/lib/logger-client';
 import React, { useId, useState } from "react";
 import CommentLTR, { CommentProps } from "@/components/comment";
+import { userProfilePath } from "@/lib/user-url";
 import CommentRTL from "@/components/comment/rtl";
 import ReportContentButton from "@/components/moderation/ReportContentButton";
 import { Comments } from "@/interfaces";
@@ -150,6 +151,8 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
 
     return {
       author: authorName,
+      // The only way to a user's profile: their name on a comment they posted as themselves
+      authorHref: comment.author?.handle && !comment.author.channelId ? userProfilePath(lang, comment.author.handle) : undefined,
       text: comment.text,
       time: formatRelativeTime(comment.dateCreated, lang),
       avatar: authorAvatar,

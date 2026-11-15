@@ -24,7 +24,7 @@ import { logger } from '@/lib/logger-client';
 import { reportError } from '@/lib/errors/reporter';
 
 type HandleStatus = { state: 'idle' | 'checking' | 'available' | 'current' } | { state: 'unavailable'; reason: HandleProblem };
-type Toggle = 'showSubscriptions' | 'showPlaylists' | 'showLikes';
+type Toggle = 'showSubscriptions' | 'showPlaylists';
 
 export function PublicProfileSettings({ locale }: { locale: string }) {
   const t = publicProfileTranslations(locale).settings;
@@ -34,7 +34,7 @@ export function PublicProfileSettings({ locale }: { locale: string }) {
   const [loaded, setLoaded] = useState<Settings | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [handle, setHandle] = useState('');
-  const [toggles, setToggles] = useState<Record<Toggle, boolean>>({ showSubscriptions: false, showPlaylists: true, showLikes: false });
+  const [toggles, setToggles] = useState<Record<Toggle, boolean>>({ showSubscriptions: false, showPlaylists: true });
   const [status, setStatus] = useState<HandleStatus>({ state: 'idle' });
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<'saved' | 'failed' | null>(null);
@@ -52,7 +52,7 @@ export function PublicProfileSettings({ locale }: { locale: string }) {
         }
         setLoaded(settings);
         setHandle(settings.handle ?? '');
-        setToggles({ showSubscriptions: settings.showSubscriptions, showPlaylists: settings.showPlaylists, showLikes: settings.showLikes });
+        setToggles({ showSubscriptions: settings.showSubscriptions, showPlaylists: settings.showPlaylists });
       })
       .catch((error) => {
         if (cancelled) return;
@@ -113,7 +113,6 @@ export function PublicProfileSettings({ locale }: { locale: string }) {
     normalized !== (current ?? '')
     || toggles.showSubscriptions !== loaded.showSubscriptions
     || toggles.showPlaylists !== loaded.showPlaylists
-    || toggles.showLikes !== loaded.showLikes
   );
   const canSave = dirty && !saving && status.state !== 'checking' && status.state !== 'unavailable';
 
@@ -155,7 +154,6 @@ export function PublicProfileSettings({ locale }: { locale: string }) {
   const rows: Array<{ key: Toggle; label: string; help: string }> = [
     { key: 'showPlaylists', label: t.showPlaylists, help: t.showPlaylistsHelp },
     { key: 'showSubscriptions', label: t.showSubscriptions, help: t.showSubscriptionsHelp },
-    { key: 'showLikes', label: t.showLikes, help: t.showLikesHelp },
   ];
 
   return (
@@ -205,7 +203,17 @@ export function PublicProfileSettings({ locale }: { locale: string }) {
               </button>
             )}
           </div>
-          <p id={ids.help} className="mt-2 break-words text-sm text-[var(--fanous-color-text-muted)]">{t.handleHelp.replace('{url}', previewUrl)}</p>
+          <p id={ids.help} className="mt-2 break-words text-sm text-[var(--fanous-color-text-muted)]">{(() => {
+            // The URL is isolated left to right so its dots and slashes don't reorder inside the Arabic sentence
+            const [before, after = ''] = t.handleHelp.split('{url}');
+            return (
+              <>
+                {before}
+                <bdi dir="ltr" data-testid="public-profile-url">{previewUrl}</bdi>
+                {after}
+              </>
+            );
+          })()}</p>
           <p id={ids.status} className="mt-1 text-sm" aria-live="polite" data-testid="public-profile-handle-status" data-state={status.state}>
             {status.state === 'checking' && <span className="text-[var(--fanous-color-text-muted)]">{t.handleChecking}</span>}
             {status.state === 'available' && <span className="text-[var(--fanous-color-success-text)]">{t.handleAvailable.replace('{handle}', normalized)}</span>}

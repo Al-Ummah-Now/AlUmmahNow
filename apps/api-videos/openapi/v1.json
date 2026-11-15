@@ -26080,17 +26080,13 @@
                                 },
                                 "showPlaylists": {
                                   "type": "boolean"
-                                },
-                                "showLikes": {
-                                  "type": "boolean"
                                 }
                               },
                               "required": [
                                 "showSubscriptions",
-                                "showPlaylists",
-                                "showLikes"
+                                "showPlaylists"
                               ],
-                              "description": "What the public profile shows, defaults filled in (subscriptions and likes off, public playlists on)"
+                              "description": "What the public profile shows, defaults filled in (subscriptions off, public playlists on)"
                             },
                             "channels": {
                               "type": "array",
@@ -26380,17 +26376,13 @@
                                 },
                                 "showPlaylists": {
                                   "type": "boolean"
-                                },
-                                "showLikes": {
-                                  "type": "boolean"
                                 }
                               },
                               "required": [
                                 "showSubscriptions",
-                                "showPlaylists",
-                                "showLikes"
+                                "showPlaylists"
                               ],
-                              "description": "What the public profile shows, defaults filled in (subscriptions and likes off, public playlists on)"
+                              "description": "What the public profile shows, defaults filled in (subscriptions off, public playlists on)"
                             },
                             "channels": {
                               "type": "array",
@@ -26908,10 +26900,6 @@
                   "showPlaylists": {
                     "type": "boolean",
                     "description": "Show your public playlists"
-                  },
-                  "showLikes": {
-                    "type": "boolean",
-                    "description": "Show the public videos you liked"
                   }
                 }
               }
@@ -27023,17 +27011,13 @@
                                 },
                                 "showPlaylists": {
                                   "type": "boolean"
-                                },
-                                "showLikes": {
-                                  "type": "boolean"
                                 }
                               },
                               "required": [
                                 "showSubscriptions",
-                                "showPlaylists",
-                                "showLikes"
+                                "showPlaylists"
                               ],
-                              "description": "What the public profile shows, defaults filled in (subscriptions and likes off, public playlists on)"
+                              "description": "What the public profile shows, defaults filled in (subscriptions off, public playlists on)"
                             },
                             "channels": {
                               "type": "array",
@@ -27891,17 +27875,13 @@
                                 },
                                 "showPlaylists": {
                                   "type": "boolean"
-                                },
-                                "showLikes": {
-                                  "type": "boolean"
                                 }
                               },
                               "required": [
                                 "showSubscriptions",
-                                "showPlaylists",
-                                "showLikes"
+                                "showPlaylists"
                               ],
-                              "description": "What the public profile shows, defaults filled in (subscriptions and likes off, public playlists on)"
+                              "description": "What the public profile shows, defaults filled in (subscriptions off, public playlists on)"
                             },
                             "channels": {
                               "type": "array",
@@ -33058,15 +33038,11 @@
                                 },
                                 "playlists": {
                                   "type": "boolean"
-                                },
-                                "likes": {
-                                  "type": "boolean"
                                 }
                               },
                               "required": [
                                 "subscriptions",
-                                "playlists",
-                                "likes"
+                                "playlists"
                               ],
                               "description": "Which lists the owner shows (each has its own endpoint, 404 when hidden)"
                             }
@@ -33093,78 +33069,6 @@
                 }
               }
             }
-          },
-          "404": {
-            "description": "No public profile with this handle, or the list is hidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "default": false
-                    },
-                    "error": {
-                      "type": "string"
-                    },
-                    "message": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/users/by-handle/{handle}/likes": {
-      "get": {
-        "tags": [
-          "Profiles"
-        ],
-        "summary": "Public videos a user liked (when they show them)",
-        "operationId": "get_UserLikesPublicList",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "description": "The user's @handle (with or without the @)"
-            },
-            "required": true,
-            "description": "The user's @handle (with or without the @)",
-            "name": "handle",
-            "in": "path"
-          },
-          {
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 50,
-              "default": 24
-            },
-            "required": false,
-            "name": "limit",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "description": "nextCursor from the previous page"
-            },
-            "required": false,
-            "description": "nextCursor from the previous page",
-            "name": "cursor",
-            "in": "query"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "{ items, nextCursor } newest like first"
           },
           "404": {
             "description": "No public profile with this handle, or the list is hidden",
@@ -42474,6 +42378,10 @@
                                   },
                                   "avatarUrl": {
                                     "type": "string"
+                                  },
+                                  "handle": {
+                                    "type": "string",
+                                    "description": "Posted as the member (no channel) and they have a public profile: link the name and avatar to /{locale}/u/@{handle}"
                                   }
                                 },
                                 "required": [
@@ -42723,6 +42631,10 @@
                                 },
                                 "avatarUrl": {
                                   "type": "string"
+                                },
+                                "handle": {
+                                  "type": "string",
+                                  "description": "Posted as the member (no channel) and they have a public profile: link the name and avatar to /{locale}/u/@{handle}"
                                 }
                               },
                               "required": [
@@ -44310,6 +44222,10 @@
                                   },
                                   "avatarUrl": {
                                     "type": "string"
+                                  },
+                                  "handle": {
+                                    "type": "string",
+                                    "description": "Posted as the member (no channel) and they have a public profile: link the name and avatar to /{locale}/u/@{handle}"
                                   }
                                 },
                                 "required": [

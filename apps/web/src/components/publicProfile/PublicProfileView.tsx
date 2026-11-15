@@ -10,19 +10,17 @@
 
 import React, { useState } from 'react';
 import Link from '@/components/common/AppLink';
-import { publicProfileTranslations, type Channel, type Playlist, type VideoObject } from '@al-ummah/shared-types';
+import { publicProfileTranslations, type Channel, type Playlist } from '@al-ummah/shared-types';
 import { PlaylistCard } from '@/components/PlaylistCard';
-import { LibraryVideoTile } from '@/components/library/LibraryVideoTile';
 import { VerifiedBadge } from '@/components/VerifiedBadge';
 import { channelPath, formatHandle } from '@/lib/channel-url';
-import { getPublicUserLikes, getPublicUserSubscriptions, type PublicProfileChannel, type PublicUserProfile } from '@/lib/api/public-profile';
+import { getPublicUserSubscriptions, type PublicProfileChannel, type PublicUserProfile } from '@/lib/api/public-profile';
 import { profileBio, profileName } from '@/lib/user-profile-metadata';
 import { logger } from '@/lib/logger-client';
 
 export interface PublicProfileInitial {
   subscriptions: { items: Channel[]; page: number; hasMore: boolean } | null;
   playlists: Playlist[] | null;
-  likes: { items: VideoObject[]; nextCursor: string | null } | null;
 }
 
 interface PublicProfileViewProps {
@@ -38,9 +36,15 @@ function joinedLabel(template: string, date: string, locale: string): string {
   return template.replace('{date}', new Intl.DateTimeFormat(locale === 'ar' ? 'ar' : 'en', { year: 'numeric', month: 'long' }).format(parsed));
 }
 
+/** First letter or digit of the name (whole code point), skipping direction marks, combining marks and punctuation */
+export function nameInitial(name: string): string {
+  const letter = Array.from(name.replace(/[\p{Cf}\p{M}]/gu, '')).find((ch) => /[\p{L}\p{N}]/u.test(ch));
+  return letter ? letter.toLocaleUpperCase() : '';
+}
+
 function Avatar({ src, alt, size }: { src?: string | null; alt: string; size: 'lg' | 'sm' }) {
   const box = size === 'lg' ? 'h-24 w-24 md:h-32 md:w-32 text-4xl' : 'h-16 w-16 text-xl';
-  const initial = alt.trim().charAt(0).toUpperCase();
+  const initial = nameInitial(alt);
   // A picture that fails to load falls back to the initial (never the alt text spilling out)
   const [failed, setFailed] = useState(false);
   return (
@@ -114,9 +118,6 @@ export function PublicProfileView({ profile, locale, initial, isOwner }: PublicP
   const [subs, setSubs] = useState(initial.subscriptions);
   const [subsBusy, setSubsBusy] = useState(false);
   const [subsError, setSubsError] = useState(false);
-  const [likes, setLikes] = useState(initial.likes);
-  const [likesBusy, setLikesBusy] = useState(false);
-  const [likesError, setLikesError] = useState(false);
 
   const moreSubs = async () => {
     if (!subs) return;
@@ -131,22 +132,6 @@ export function PublicProfileView({ profile, locale, initial, isOwner }: PublicP
       setSubsError(true);
     } finally {
       setSubsBusy(false);
-    }
-  };
-
-  const moreLikes = async () => {
-    if (!likes?.nextCursor) return;
-    setLikesBusy(true);
-    setLikesError(false);
-    try {
-      const next = await getPublicUserLikes(profile.handle, likes.nextCursor);
-      if (!next) throw new Error('likes page failed');
-      setLikes({ items: [...likes.items, ...next.items], nextCursor: next.nextCursor });
-    } catch (error) {
-      logger.error('[PublicProfile] More likes failed', { handle: profile.handle, error });
-      setLikesError(true);
-    } finally {
-      setLikesBusy(false);
     }
   };
 
@@ -225,20 +210,6 @@ export function PublicProfileView({ profile, locale, initial, isOwner }: PublicP
                   </div>
                   {subs.hasMore && <ShowMore onClick={moreSubs} busy={subsBusy} label={t.showMore} testId="profile-subscriptions-more" />}
                   {errorLine(subsError)}
-                </>
-              )}
-            </Section>
-          )}
-
-          {profile.sections.likes && (
-            <Section id="likes" title={t.likes} locale={locale}>
-              {likes === null ? errorLine(true) : likes.items.length === 0 ? empty(t.emptyLikes) : (
-                <>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    {likes.items.map((video) => <LibraryVideoTile key={video.id} video={video as never} testId="profile-liked-video" />)}
-                  </div>
-                  {likes.nextCursor && <ShowMore onClick={moreLikes} busy={likesBusy} label={t.showMore} testId="profile-likes-more" />}
-                  {errorLine(likesError)}
                 </>
               )}
             </Section>

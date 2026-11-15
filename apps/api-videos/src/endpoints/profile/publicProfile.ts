@@ -2,14 +2,13 @@
  * Public profile (Story 29.5).
  *
  * Owner (signed in):
- *   PUT /api/profile/public                          { handle?, showSubscriptions?, showPlaylists?, showLikes? }
+ *   PUT /api/profile/public                          { handle?, showSubscriptions?, showPlaylists? }
  *   GET /api/profile/handle-availability?handle=     { available, handle, reason? }
  *
  * Anyone:
  *   GET /api/users/by-handle/:handle                 the profile: name, picture, bio, public channels, which lists show
  *   GET /api/users/by-handle/:handle/subscriptions   public channels the user subscribes to (404 when hidden)
  *   GET /api/users/by-handle/:handle/playlists       the user's public personal playlists (404 when hidden)
- *   GET /api/users/by-handle/:handle/likes           public videos the user liked (404 when hidden)
  *
  * A hidden list answers exactly like an unknown handle's (404 not_found), so a request can't tell
  * "hidden" from "empty". Only public things are ever listed: private, unlisted, deleted, hidden or
@@ -39,8 +38,8 @@ import { isChannelVisibleTo } from "../../lib/channelAbout";
 import { toPublicChannels } from "../../lib/public-views";
 import { subscribedChannelIds } from "../../lib/subscription-store";
 import { collectPersonalPlaylists } from "../../lib/personalPlaylists";
-import { canViewPlaylist, canViewVideo, isPersonalPlaylist, toPlaylistResponse, type VideoType } from "../../lib/playlists";
-import { isSystemPlaylist, listLikedIds, toLibraryVideoViews } from "../../lib/library";
+import { canViewPlaylist, isPersonalPlaylist, toPlaylistResponse } from "../../lib/playlists";
+import { isSystemPlaylist } from "../../lib/library";
 import { withPlaylistCovers } from "../../lib/playlistCovers";
 import { cachedBan } from "../../lib/admin/bans";
 import { edgeCacheUrl, readEdgeCache, writeEdgeCache } from "../../lib/edge-cache";
@@ -68,7 +67,6 @@ export const PublicProfileSettingsInput = z.object({
 	handle: z.string().max(64).nullable().optional().describe("Claim or change the @handle; null or \"\" removes it (and the public profile with it)"),
 	showSubscriptions: z.boolean().optional().describe("Show the channels you subscribe to"),
 	showPlaylists: z.boolean().optional().describe("Show your public playlists"),
-	showLikes: z.boolean().optional().describe("Show the public videos you liked"),
 });
 
 export class PublicProfileSettingsUpdate extends AuthenticatedRoute {
@@ -111,7 +109,7 @@ export class PublicProfileSettingsUpdate extends AuthenticatedRoute {
 		}
 
 		const toggles: Partial<PublicProfilePrivacy> = {};
-		for (const key of ['showSubscriptions', 'showPlaylists', 'showLikes'] as const) {
+		for (const key of ['showSubscriptions', 'showPlaylists'] as const) {
 			if (typeof body[key] === 'boolean') toggles[key] = body[key];
 		}
 
@@ -239,7 +237,7 @@ export class UserByHandleFetch extends OptionalAuthRoute {
 				...(ch.avatarUrl ? { avatarUrl: ch.avatarUrl } : {}),
 				...((ch as { isVerified?: boolean }).isVerified ? { isVerified: true } : {}),
 			})),
-			sections: { subscriptions: privacy.showSubscriptions, playlists: privacy.showPlaylists, likes: privacy.showLikes },
+			sections: { subscriptions: privacy.showSubscriptions, playlists: privacy.showPlaylists },
 		};
 		return { success: true, result: { profile: view } };
 	}
@@ -306,42 +304,6 @@ export class UserPlaylistsPublicList extends OptionalAuthRoute {
 		playlists.sort((a, b) => (b.dateModified || '').localeCompare(a.dateModified || ''));
 		const items = await withPlaylistCovers(c.env, playlists.slice(0, PLAYLISTS_MAX).map(toPlaylistResponse), null);
 		const response = { success: true, result: { items } };
-		if (key) writeEdgeCache(key, response, PUBLIC_CACHE_SECONDS, waitUntilOf(c as never));
-		return response;
-	}
-}
-
-export class UserLikesPublicList extends OptionalAuthRoute {
-	schema = {
-		tags: ["Profiles"],
-		summary: "Public videos a user liked (when they show them)",
-		request: {
-			params: HandleParam,
-			query: z.object({
-				limit: z.coerce.number().int().min(1).max(50).optional().default(24),
-				cursor: Str({ description: "nextCursor from the previous page" }).optional(),
-			}),
-		},
-		responses: { "200": { description: "{ items, nextCursor } newest like first" }, ...NotFoundResponse },
-	};
-
-	async handle(c: AppContext) {
-		const { params, query } = await this.getValidatedData<typeof this.schema>();
-		const key = cacheKey(c, `likes/${normalizeHandleInput(params.handle).toLowerCase()}/${query.limit}/${encodeURIComponent(query.cursor || '')}`);
-		if (key) {
-			const hit = await readEdgeCache<unknown>(key);
-			if (hit) return hit;
-		}
-		const found = await loadPublicUser(c.env, params.handle);
-		if (!found || !found.privacy.showLikes) return notFound(c);
-		const db = c.env.NOTIFICATIONS_DB;
-		if (!db) return c.json({ success: true, result: { items: [], nextCursor: null } });
-		const page = await listLikedIds(db, found.userId, { limit: query.limit, cursor: query.cursor });
-		const repo = new R2Repository<VideoType>(c.env.videos);
-		const videos = await Promise.all(page.items.map((item) => repo.getObject(item.videoId).catch(() => null)));
-		// Publicly visible videos only (the visitor view, also for the owner)
-		const visible = videos.filter((video): video is VideoType => !!video && canViewVideo(video, null));
-		const response = { success: true, result: { items: await toLibraryVideoViews(c.env.channels, visible), nextCursor: page.nextCursor } };
 		if (key) writeEdgeCache(key, response, PUBLIC_CACHE_SECONDS, waitUntilOf(c as never));
 		return response;
 	}

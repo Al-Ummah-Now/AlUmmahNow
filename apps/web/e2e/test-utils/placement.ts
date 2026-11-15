@@ -106,7 +106,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/78-shorts.spec.ts': { placement: 'local', reason: 'Shorts page (D-SEO-10): /video→/shorts 308, ?list= stays, non-Short back to /video, next/previous by button, keys and swipe' },
   'apps/web/e2e/79-server-rendered.spec.ts': { placement: 'local', reason: 'server-rendered pages without JavaScript (AUN-SEO phase 4): watch, home, channel by id and @handle, playlist' },
   'apps/web/e2e/80-studio-social.spec.ts': { placement: 'local', reason: 'Studio Social (AUN-SOCIAL): Mastodon OAuth + a post delivered through queue/processor to the fake instance, Telegram code connect/disconnect, signed webhook ping, RSS feed, channel oEmbed, en/ar phone axe; fake networks exist on the local stack only' },
-  'apps/web/e2e/81-public-profile.spec.ts': { placement: 'local', reason: 'public profile (29.5): handle + switches in settings, /u/@handle visitor view, SEO tags, 301, ar, 404; own video and run account' },
+  'apps/web/e2e/81-public-profile.spec.ts': { placement: 'local', reason: 'public profile (29.5): handle + switches in settings, reached from a comment author link, noindex (meta + X-Robots-Tag), not in search, 301, ar, 404; own video, comment and run account' },
   'apps/web/e2e/31-video-player.spec.ts': { placement: 'local', reason: 'player controls/error screen; needs H.264 HLS fixture with renditions, captions, chapters' },
   'apps/web/e2e/32-comments.spec.ts': { placement: 'local', reason: 'comment post/delete and sign-in redirect on a lecture' },
   'apps/web/e2e/33-watch-history.spec.ts': { placement: 'local', reason: 'watch history records and lists via API' },

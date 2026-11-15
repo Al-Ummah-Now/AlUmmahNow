@@ -325,8 +325,7 @@ async function ensurePublicProfiles(sessions: Sessions): Promise<void> {
     const current = res.status === 404 ? undefined : res.data?.result?.profile;
     const same = current?.handle === want.handle
       && current?.publicProfile?.showSubscriptions === want.showSubscriptions
-      && current?.publicProfile?.showPlaylists === want.showPlaylists
-      && current?.publicProfile?.showLikes === want.showLikes;
+      && current?.publicProfile?.showPlaylists === want.showPlaylists;
     if (same) {
       record('public-profile', `${account.email} @${want.handle}`, 'exists');
       continue;

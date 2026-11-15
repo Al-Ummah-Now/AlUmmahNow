@@ -179,8 +179,7 @@ export const ProfileView = z.object({
     publicProfile: z.object({
         showSubscriptions: z.boolean(),
         showPlaylists: z.boolean(),
-        showLikes: z.boolean(),
-    }).describe("What the public profile shows, defaults filled in (subscriptions and likes off, public playlists on)"),
+    }).describe("What the public profile shows, defaults filled in (subscriptions off, public playlists on)"),
     // For detailed views, include channel info
     channels: z.array(z.object({
         id: Str(),
@@ -230,7 +229,6 @@ export const PublicUserProfileView = z.object({
     sections: z.object({
         subscriptions: z.boolean(),
         playlists: z.boolean(),
-        likes: z.boolean(),
     }).describe("Which lists the owner shows (each has its own endpoint, 404 when hidden)"),
 });
 

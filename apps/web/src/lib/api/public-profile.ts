@@ -3,12 +3,13 @@
 /**
  * Public profile server actions (Story 29.5).
  *
- * Public reads (anyone): GET /api/users/by-handle/:handle[/subscriptions|/playlists|/likes].
+ * Public reads (anyone): GET /api/users/by-handle/:handle[/subscriptions|/playlists]. Liked videos are
+ * never public (owner, 2026-11-14).
  * Owner: GET /api/profile (handle + settings), PUT /api/profile/public, GET /api/profile/handle-availability.
  * Like channel-profile.ts, the owner calls keep the API's structured error (409 taken, 400 + reason).
  */
 
-import type { Channel, Playlist, VideoObject } from '@al-ummah/shared-types';
+import type { Channel, Playlist } from '@al-ummah/shared-types';
 import { apiRequestServer, buildApiUrl } from './api-client';
 import { getServerAuthContext } from './server-auth';
 import type { HandleProblem } from './channel-profile';
@@ -35,14 +36,13 @@ export interface PublicUserProfile {
   coverUrl?: string;
   dateCreated: string;
   channels: PublicProfileChannel[];
-  sections: { subscriptions: boolean; playlists: boolean; likes: boolean };
+  sections: { subscriptions: boolean; playlists: boolean };
 }
 
 export interface PublicProfileSettings {
   handle: string | null;
   showSubscriptions: boolean;
   showPlaylists: boolean;
-  showLikes: boolean;
 }
 
 export type PublicProfileSettingsInput = Partial<Omit<PublicProfileSettings, 'handle'>> & { handle?: string | null };
@@ -84,24 +84,11 @@ export async function getPublicUserPlaylists(handle: string): Promise<Playlist[]
   return response?.result?.items ?? null;
 }
 
-/** GET …/likes (null: hidden or failed) */
-export async function getPublicUserLikes(handle: string, cursor?: string | null): Promise<{ items: VideoObject[]; nextCursor: string | null } | null> {
-  const query = new URLSearchParams({ limit: '24' });
-  if (cursor) query.set('cursor', cursor);
-  const response = await apiRequestServer<{ success: boolean; result?: { items: VideoObject[]; nextCursor: string | null } }>({
-    method: 'GET',
-    url: buildApiUrl(`${handlePath(handle)}/likes?${query.toString()}`),
-    functionName: 'getPublicUserLikes',
-  }, getServerAuthContext, false);
-  return response?.result ?? null;
-}
-
 function toSettings(profile: { handle?: string; publicProfile?: Partial<PublicProfileSettings> } | undefined): PublicProfileSettings {
   return {
     handle: profile?.handle || null,
     showSubscriptions: profile?.publicProfile?.showSubscriptions === true,
     showPlaylists: profile?.publicProfile?.showPlaylists !== false,
-    showLikes: profile?.publicProfile?.showLikes === true,
   };
 }
 

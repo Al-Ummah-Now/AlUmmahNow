@@ -23,6 +23,7 @@ const CommentAuthorSchema = z.object({
 	channelId: z.string().nullable().describe("null: posted by the member themselves, without a channel"),
 	displayName: z.string(),
 	avatarUrl: z.string().optional(),
+	handle: z.string().optional().describe("Posted as the member (no channel) and they have a public profile: link the name and avatar to /{locale}/u/@{handle}"),
 });
 
 export const CommentListItemSchema = z.object({

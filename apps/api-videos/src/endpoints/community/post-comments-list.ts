@@ -12,6 +12,7 @@ import {
   pinnedPointerKey,
   presentComment,
   topLevelCommentKey,
+  withAuthorHandles,
   withViewerLikes,
 } from './post-comment-helpers';
 
@@ -168,7 +169,7 @@ export class ListPostComments extends OptionalAuthRoute {
 
     const response: PostCommentListResponse = {
       success: true,
-      comments: await withViewerLikes(bucket, postId, comments, viewerUserId),
+      comments: await withViewerLikes(bucket, postId, await withAuthorHandles(c.env.profiles, comments), viewerUserId),
       pagination: {
         limit,
         cursor: paginatedIds.length > 0 ? paginatedIds[paginatedIds.length - 1] : undefined,
