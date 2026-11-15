@@ -70,6 +70,16 @@ describe('fake Bunny', () => {
     assert.equal((await call('https://images.alummahnow.net/b_avatar.jpeg')).status, 200);
   });
 
+  it('lists a storage folder like Bunny (files directly in it) for the purges', async () => {
+    await call('https://storage.bunnycdn.com/zone/thumbnails/v1/a.jpg', { method: 'PUT', body: fixture('e2e-thumbnail.jpg') });
+    await call('https://storage.bunnycdn.com/zone/thumbnails/v1/sub/b.jpg', { method: 'PUT', body: fixture('e2e-thumbnail.jpg') });
+    const listed = (await (await call('https://storage.bunnycdn.com/zone/thumbnails/v1/')).json()) as Array<{ ObjectName: string; IsDirectory: boolean }>;
+    assert.deepEqual(listed.map((f) => f.ObjectName), ['a.jpg']);
+    assert.equal((await call('https://storage.bunnycdn.com/zone/thumbnails/none/')).status, 404);
+    await call('https://storage.bunnycdn.com/zone/thumbnails/v1/a.jpg', { method: 'DELETE' });
+    assert.equal((await call('https://images.alummahnow.net/thumbnails/v1/a.jpg')).status, 404);
+  });
+
   it('the browser proxy serves faked HTTPS hosts and refuses everything else', async () => {
     const { startBrowserProxy } = await import('../browser-proxy.ts');
     const { PORTS } = await import('../stack.ts');

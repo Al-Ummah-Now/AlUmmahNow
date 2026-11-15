@@ -4,6 +4,7 @@ import { AuthenticatedRoute, AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import Queue, { MessageType } from '../../lib/queue';
 import { logger } from '../../lib/logger';
+import { recordDeletion } from '../../lib/admin/deletions';
 import R2Repository, { rethrowBusy } from '../../lib/r2Repo';
 
 export class DeleteCommunityPost extends AuthenticatedRoute {
@@ -85,14 +86,33 @@ export class DeleteCommunityPost extends AuthenticatedRoute {
       // Soft delete - mark as deleted but preserve data. Conditional write on
       // the fresh post (SCALABILITY-AUDIT AV-9) so no concurrent writer's
       // stale copy can bring it back, and nothing they stored is lost.
-      const deleted = await new R2Repository<CommunityPost>(c.env.community_posts).updateObject(postKey, (fresh) => {
+      const at = new Date().toISOString();
+      let changed = false;
+      const deleted = await new R2Repository<CommunityPost & { ownerDeletion?: unknown }>(c.env.community_posts).updateObject(postKey, (fresh) => {
         if (fresh.status === PostStatus.DELETED) return false;
+        // What a restore (admin "Recently deleted") puts back
+        fresh.ownerDeletion = { at, by: userId, previousStatus: fresh.status ?? PostStatus.PUBLISHED };
         fresh.status = PostStatus.DELETED;
-        fresh.updatedAt = new Date().toISOString();
+        fresh.updatedAt = at;
+        changed = true;
         return true;
       });
       if (!deleted) {
         return c.json({ error: 'Post not found' }, 404);
+      }
+
+      // The hourly cleanup erases it, with its images, after 30 days (lib/admin/deletions.ts; #699)
+      if (changed && c.env.SEARCH_DB) {
+        await recordDeletion(c.env.SEARCH_DB as never, {
+          kind: 'post',
+          id: postId,
+          parentId: postChannelId,
+          title: typeof deleted.content === 'string' ? deleted.content : '',
+          ownerId: (deleted as { userId?: string }).userId ?? userId,
+          channelId: postChannelId,
+          deletedBy: userId,
+          deletedAt: at,
+        });
       }
 
       // Remove from channel index

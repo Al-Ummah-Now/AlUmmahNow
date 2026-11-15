@@ -260,6 +260,12 @@ async function images(request: Request, url: URL): Promise<Response> {
     storage.delete(path);
     return json({ HttpCode: 200, Message: 'File deleted successfully.' });
   }
+  // Storage folder listing (GET /<zone>/<folder>/): the files directly in it, as Bunny's JSON (purges)
+  if (url.hostname !== IMAGE_HOST && path.endsWith('/')) {
+    const files = [...storage.keys()].filter((key) => key.startsWith(path) && key.length > path.length && !key.slice(path.length).includes('/'));
+    if (!files.length) return new Response('not found', { status: 404 });
+    return json(files.map((key) => ({ ObjectName: key.slice(path.length), IsDirectory: false, Length: storage.get(key)!.body.length })));
+  }
   const hit = storage.get(path);
   if (!hit) return new Response('not found', { status: 404 });
   return new Response(request.method === 'HEAD' ? null : hit.body, { status: 200, headers: { 'content-type': hit.type, 'access-control-allow-origin': '*' } });
@@ -410,6 +416,7 @@ async function readBody(req: IncomingMessage): Promise<string> {
  * - GET /__fake/bunny/videos[/<guid>], POST /__fake/bunny/videos/<guid>/encode|fail|hold|tus-head-404[?count=n]
  * - POST /__fake/media/transcode/<videoId>[?outcome=fail], POST /__fake/media/down | /up[?video=<id>] (the R2 media pipeline)
  * - GET /__fake/resend/emails
+ * - PUT | GET /__fake/images/<path>: seed or check one stored image (Bunny Storage)
  * - POST /__stack/d1/<database name> with SQL as the body: { results } (seed, fast-path fixtures)
  * - GET | PUT | DELETE /__stack/r2/<bucket name>/<key>: one object (fixtures a spec seeds in R2)
  * - GET /__stack/r2/<bucket name>?prefix=<p>[&cursor=<c>]: { keys, cursor } (teardowns find what a run wrote)
@@ -477,6 +484,15 @@ async function control(req: IncomingMessage, url: URL): Promise<Response> {
     } catch (error) {
       return json({ error: (error as Error).message }, 400);
     }
+  }
+  // A spec seeds or checks one stored image (PUT stores the body; GET answers 200 or 404)
+  if (url.pathname.startsWith('/__fake/images/')) {
+    const path = `/${decodeURIComponent(url.pathname.slice('/__fake/images/'.length))}`.replace(/\/{2,}/g, '/');
+    if (req.method === 'PUT') {
+      storage.set(path, { body: Buffer.from(await readBody(req)), type: req.headers['content-type'] ?? 'image/jpeg' });
+      return json({ stored: path }, 201);
+    }
+    return storage.has(path) ? json({ path }) : json({ error: 'not stored' }, 404);
   }
   const [, , kind, , guid, action] = url.pathname.split('/');
   if (kind === 'resend') return json(emails);

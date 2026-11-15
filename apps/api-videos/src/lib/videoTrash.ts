@@ -37,6 +37,7 @@ import {
 import R2Repository from './r2Repo';
 import Queue, { MessageType } from './queue';
 import { logger } from './logger';
+import { hideNotificationsOf } from './notifications';
 import { getDeletion, pendingDeletion, purgeDeletionNow, recordDeletion, removeDeletion, requestPurge } from './admin/deletions';
 import { purgeDeletion, type AdminServiceEnv } from './admin/service';
 import { publicVideoFields } from './transformations';
@@ -188,6 +189,8 @@ export async function softDeleteVideo(env: TrashEnv, id: string, actorId: string
 		reason: OWNER_DELETE_REASON,
 		deletedAt: at,
 	});
+	// Its notifications leave the lists at once and come back on restore (#702)
+	await hideNotificationsOf(env as never, [id], true);
 	await notify(env, { ...saved, id }, 'deleted', actorId);
 	logger.debug('[VideoTrash] Video soft-deleted', { videoId: id, actorId });
 	return { deletedAt: at, restorableUntil: restorableUntilOf(at), alreadyDeleted: false };
@@ -227,6 +230,7 @@ export async function restoreDeletedVideo(env: TrashEnv, video: Row, actorId: st
 	});
 	if (!saved) throw new TrashError('video_not_found');
 	await removeDeletion(db(env), 'video', video.id);
+	await hideNotificationsOf(env as never, [video.id], false);
 	await notify(env, { ...saved, id: video.id }, 'restored', actorId);
 	logger.debug('[VideoTrash] Video restored', { videoId: video.id, actorId });
 	return { restoredAt: at };
