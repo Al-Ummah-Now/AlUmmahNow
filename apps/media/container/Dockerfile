@@ -3,7 +3,7 @@
 FROM node:22-alpine
 RUN apk add --no-cache ffmpeg && ffmpeg -hide_banner -encoders | grep -q libx264 && ffmpeg -hide_banner -encoders | grep -q libwebp
 WORKDIR /app
-COPY ladder.mjs rungs.mjs server.mjs ./
+COPY *.mjs ./
 USER node
 EXPOSE 8080
 CMD ["node", "server.mjs"]
