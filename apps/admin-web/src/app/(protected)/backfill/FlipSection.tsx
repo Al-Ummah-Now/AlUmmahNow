@@ -14,8 +14,9 @@ import { useConfirm } from '@/components/content/actions';
 import { smallButtonClass } from '@/components/content/parts';
 import { ErrorAlert, cardClass, fieldClass, secondaryButtonClass } from '@/components/ui';
 import { PROVIDER_LABEL } from '@/lib/media/providers-form';
+import { useFormats } from './useFormats';
 import { logger } from '@/lib/logger-client';
-import { useFormats } from './labels';
+
 
 export function FlipSection({ globalOrder }: { globalOrder: MediaProviderId[] | null }) {
   const { t } = useLanguage();
