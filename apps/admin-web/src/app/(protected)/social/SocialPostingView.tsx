@@ -271,7 +271,7 @@ export function SocialPostingView({ view, history, canEdit }: { view: SocialAdmi
           {view.deliveries7d.length === 0 ? (
             <p className="text-sm text-fg-muted">{t('socialPosting.activityNone')}</p>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-focus" tabIndex={0} role="region" aria-labelledby={`${ids}-activity`}>
               <table className="w-full text-sm" data-testid="social-activity">
                 <thead><tr><th className={th}>{t('socialPosting.colNetwork')}</th><th className={th}>{t('socialPosting.colStatus')}</th><th className={th}>{t('socialPosting.colCount')}</th></tr></thead>
                 <tbody>
@@ -293,7 +293,7 @@ export function SocialPostingView({ view, history, canEdit }: { view: SocialAdmi
           {view.accounts.length === 0 ? (
             <p className="text-sm text-fg-muted">{t('socialPosting.accountsNone')}</p>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-focus" tabIndex={0} role="region" aria-labelledby={`${ids}-accounts`}>
               <table className="w-full text-sm" data-testid="social-accounts">
                 <thead><tr><th className={th}>{t('socialPosting.colNetwork')}</th><th className={th}>{t('socialPosting.colStatus')}</th><th className={th}>{t('socialPosting.colCount')}</th></tr></thead>
                 <tbody>
@@ -319,7 +319,7 @@ export function SocialPostingView({ view, history, canEdit }: { view: SocialAdmi
         {view.recentFailures.length === 0 ? (
           <p className="text-sm text-fg-muted">{t('socialPosting.failuresNone')}</p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-focus" tabIndex={0} role="region" aria-labelledby={`${ids}-failures`}>
             <table className="w-full text-sm" data-testid="social-failures">
               <thead>
                 <tr><th className={th}>{t('socialPosting.colNetwork')}</th><th className={th}>{t('socialPosting.colItem')}</th><th className={th}>{t('socialPosting.colChannel')}</th><th className={th}>{t('socialPosting.colError')}</th><th className={th}>{t('socialPosting.colWhen')}</th></tr>
