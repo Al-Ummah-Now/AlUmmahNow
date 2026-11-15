@@ -154,7 +154,24 @@ describe('AudioTracksPanel', () => {
     listAudioTracks.mockResolvedValue(ok(view({ tracks: [], ready: false, limit: { allowed: 3, used: 0, unlimited: false } })));
     render(<AudioTracksPanel videoId="v1" />);
     expect(await screen.findByTestId('audio-tracks-limit')).toHaveTextContent('finished processing');
-    expect(screen.getByTestId('audio-tracks-empty')).toBeInTheDocument();
+    // No invitation to add while adding is off
+    expect(screen.queryByTestId('audio-tracks-empty')).not.toBeInTheDocument();
+  });
+
+  it('a tier with no tracks says so once, without a count or an invitation', async () => {
+    listAudioTracks.mockResolvedValue(ok(view({ tracks: [], limit: { allowed: 0, used: 0, unlimited: false } })));
+    render(<AudioTracksPanel videoId="v1" />);
+    expect(await screen.findByTestId('audio-tracks-limit')).toHaveTextContent('does not include extra audio tracks');
+    expect(screen.queryByTestId('audio-tracks-usage')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('audio-tracks-empty')).not.toBeInTheDocument();
+    expect(screen.getByTestId('audio-track-add')).toBeDisabled();
+  });
+
+  it('invites a first track when one can be added', async () => {
+    listAudioTracks.mockResolvedValue(ok(view({ tracks: [], limit: { allowed: 3, used: 0, unlimited: false } })));
+    render(<AudioTracksPanel videoId="v1" />);
+    expect(await screen.findByTestId('audio-tracks-empty')).toBeInTheDocument();
+    expect(screen.getByTestId('audio-tracks-usage')).toHaveTextContent('0 of 3 audio tracks used');
   });
 
   it('adds an uploaded track, sends the file and finishes the upload', async () => {

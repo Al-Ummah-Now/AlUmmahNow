@@ -196,9 +196,12 @@ export default function AudioTracksPanel({ videoId, spokenLanguage }: AudioTrack
             {ta.title}
           </h3>
           <p className="text-xs text-muted-foreground md:text-sm">{ta.hint}</p>
-          <p data-testid="audio-tracks-usage" className="text-xs font-medium text-foreground">
-            {usage}
-          </p>
+          {/* Not shown when the tier gives none: the notice below says so */}
+          {(view.limit.unlimited || view.limit.allowed > 0) && (
+            <p data-testid="audio-tracks-usage" className="text-xs font-medium text-foreground">
+              {usage}
+            </p>
+          )}
         </div>
         <button
           type="button"
@@ -232,7 +235,8 @@ export default function AudioTracksPanel({ videoId, spokenLanguage }: AudioTrack
         </p>
       )}
 
-      {view.tracks.length === 0 && (
+      {/* Only an invitation when a track can be added; otherwise the notice above explains why not */}
+      {view.tracks.length === 0 && canAdd && (
         <p data-testid="audio-tracks-empty" className="rounded-xl border border-dashed border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
           {ta.empty}
         </p>
@@ -280,7 +284,7 @@ export default function AudioTracksPanel({ videoId, spokenLanguage }: AudioTrack
                       aria-valuemin={0}
                       aria-valuemax={100}
                       aria-valuenow={percent}
-                      className="h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-muted"
+                      className="h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-muted ring-1 ring-inset ring-border"
                     >
                       <div className="h-full rounded-full bg-brand transition-[width]" style={{ width: `${percent}%` }} />
                     </div>
