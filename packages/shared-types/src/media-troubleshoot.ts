@@ -74,7 +74,8 @@ export function transcodeErrorReason(raw: string | null | undefined): TranscodeR
   if (/source_missing|source missing/i.test(error)) return 'source_missing';
   if (/no_video_stream/i.test(error)) return 'no_video_stream';
   if (/^launch:/i.test(error)) return 'start_failed';
-  if (/upload|PUT .*(4|5)\d\d|R2/i.test(error) && !/ffmpeg/i.test(error)) return 'upload_failed';
+  // bounded gap: an unbounded `.*` here backtracks polynomially on long error text (CodeQL js/polynomial-redos)
+  if (/upload|PUT [^\n]{0,200}?\b[45]\d\d\b|R2/i.test(error) && !/ffmpeg/i.test(error)) return 'upload_failed';
   if (/ffmpeg|encode|exit code|codec|invalid data/i.test(error)) return 'encode_failed';
   return 'unknown';
 }
@@ -223,7 +224,11 @@ export function transcodeStall(
  */
 export function scrubOpsText(text: string): string {
   return text
-    .replace(/(https?:\/\/[^\s"'?]+)\?[^\s"']*/g, '$1?…')
+    .replace(/https?:\/\/[^\s"']*/g, (url) => {
+      // One greedy pass per URL, then cut at the query (linear; a `[^?]+\?` pattern backtracks on long input)
+      const q = url.indexOf('?');
+      return q >= 0 ? `${url.slice(0, q)}?…` : url;
+    })
     .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer …')
     .replace(/eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+/g, '…jwt…')
     .replace(/("?(?:[a-z_-]*(?:token|secret|password|signature|api[_-]?key|authorization|x-amz-[a-z-]+))"?\s*[:=]\s*)("[^"]*"|[^\s,}&]+)/gi, '$1"…"');
