@@ -42,9 +42,12 @@ CREATE TABLE IF NOT EXISTS yt_oauth_states (
   verifier TEXT NOT NULL,
   -- Google's code, kept by the callback until the signed-in creator finishes (POST oauth/finish)
   code TEXT,
+  -- SHA-256 (hex) of the connect token only the consenting browser was given; finish looks it up
+  connect_hash TEXT,
   expires_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_yt_oauth_states_expires ON yt_oauth_states (expires_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_yt_oauth_states_connect ON yt_oauth_states (connect_hash);
 
 CREATE TABLE IF NOT EXISTS yt_import_items (
   id TEXT PRIMARY KEY,

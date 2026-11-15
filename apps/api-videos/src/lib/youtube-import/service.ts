@@ -179,7 +179,13 @@ interface StateRow {
 	captions: number;
 	verifier: string;
 	code: string | null;
+	connect_hash: string | null;
 	expires_at: string;
+}
+
+async function sha256Hex(text: string): Promise<string> {
+	const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+	return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 /** Google's code waits this long for the signed-in creator to finish the connection. */
@@ -187,11 +193,13 @@ export const OAUTH_CODE_TTL_MS = 5 * 60_000;
 
 /**
  * Google sent the browser back. Nothing is exchanged here: this request
- * carries no sign-in, so a consent link someone else started must never bind
- * the visitor's YouTube to it (login CSRF). The code is kept on the state row
- * (once, OAUTH_CODE_TTL_MS) and the wizard finishes with POST oauth/finish,
- * which checks the caller is the user who started. Always answers where to send
- * the browser: the wizard with `?connect=<state>` or `?error=`.
+ * carries no sign-in. The code is kept on the state row (once,
+ * OAUTH_CODE_TTL_MS) with the hash of a fresh connect token, and only this
+ * browser gets the token (`?connect=`). The state is never handed back: whoever
+ * started the consent knows it, so it must not redeem a consent another person
+ * gave (a phished victim's YouTube). POST oauth/finish takes the token and
+ * checks the caller is the user who started. Always answers where to send the
+ * browser: the wizard with `?connect=<token>` or `?error=`.
  */
 export async function oauthCallback(env: YtEnv, query: { code?: string; state?: string; error?: string }, now = new Date()): Promise<string> {
 	const db = ytDb(env);
@@ -209,23 +217,29 @@ export async function oauthCallback(env: YtEnv, query: { code?: string; state?: 
 		await db.prepare('DELETE FROM yt_oauth_states WHERE state = ?').bind(state).run();
 		return back({ error: YT_IMPORT_ERRORS.denied });
 	}
+	const connect = randomToken(32);
 	// Single use: only the first callback stores its code
 	const kept = await db
-		.prepare('UPDATE yt_oauth_states SET code = ?, expires_at = ? WHERE state = ? AND code IS NULL AND expires_at >= ?')
-		.bind(query.code, new Date(now.getTime() + OAUTH_CODE_TTL_MS).toISOString(), state, nowIso)
+		.prepare('UPDATE yt_oauth_states SET code = ?, connect_hash = ?, expires_at = ? WHERE state = ? AND code IS NULL AND expires_at >= ?')
+		.bind(query.code, await sha256Hex(connect), new Date(now.getTime() + OAUTH_CODE_TTL_MS).toISOString(), state, nowIso)
 		.run();
 	if (!Number(kept.meta?.changes ?? 0)) return back({ error: 'failed' });
-	return back({ connect: state });
+	return back({ connect });
 }
 
 /**
- * The signed-in creator finishes the connection the callback prepared: only
- * the user who started the consent, while they may still import into its
- * channel. The state is used up whatever happens. Answers the import.
+ * The signed-in creator finishes the connection the callback prepared, with
+ * the connect token only the consenting browser received: only the user who
+ * started the consent, while they may still import into its channel. The
+ * consent is used up whatever happens. Answers the import.
  */
-export async function finishOAuth(env: YtEnv, who: YtCaller, state: string, now = new Date()): Promise<{ import: YtImport }> {
+export async function finishOAuth(env: YtEnv, who: YtCaller, connect: string, now = new Date()): Promise<{ import: YtImport }> {
 	const db = ytDb(env);
-	const row = state && state.length <= 128 ? await db.prepare('DELETE FROM yt_oauth_states WHERE state = ? RETURNING *').bind(state).first<StateRow>() : null;
+	// The connect token from the callback (never the state); single use
+	const row =
+		connect && connect.length <= 128
+			? await db.prepare('DELETE FROM yt_oauth_states WHERE connect_hash = ? RETURNING *').bind(await sha256Hex(connect)).first<StateRow>()
+			: null;
 	if (!row || !row.code || Date.parse(row.expires_at) < now.getTime()) throw new YtHttpError(404, YT_IMPORT_ERRORS.connectExpired, 'This connection has expired; connect again');
 	if (row.user_id !== who.userId) {
 		logger.warn('[YouTubeImport] Connection finished by another user; refused', { startedBy: row.user_id, finishedBy: who.userId, channelId: row.channel_id });

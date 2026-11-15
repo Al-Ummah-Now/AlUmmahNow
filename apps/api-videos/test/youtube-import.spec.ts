@@ -323,11 +323,16 @@ describe('YouTube import: connecting', () => {
 		google.codes.set('code-1', consent.searchParams.get('code_challenge')!);
 		const back = new URL(await oauthCallback(env as never, { code: 'code-1', state }, NOW));
 		assert.equal(`${back.origin}${back.pathname}`, `${WEB}/ar/studio/${CHANNEL}/content/youtube`);
-		assert.equal(back.searchParams.get('connect'), state);
+		const connect = back.searchParams.get('connect')!;
+		assert.match(connect, /^[A-Za-z0-9_-]{43}$/, '32 random bytes, base64url');
+		assert.notEqual(connect, state, 'the state is never handed back');
+		assert.equal(back.searchParams.get('state'), null);
 		assert.equal(google.codes.size, 1, 'nothing is exchanged by the unauthenticated callback');
 		assert.equal(q.sent.length, 0);
+		const stored = db.db.prepare('SELECT connect_hash FROM yt_oauth_states').get() as { connect_hash: string };
+		assert.ok(stored.connect_hash && !stored.connect_hash.includes(connect), 'only the token’s hash is stored');
 
-		const { import: imp } = await finishOAuth(env as never, caller, state, NOW);
+		const { import: imp } = await finishOAuth(env as never, caller, connect, NOW);
 		const row = (await readImportRow(env.SEARCH_DB, imp.id))!;
 		assert.equal(row.status, 'listing');
 		assert.equal(row.captions, 1);
@@ -340,25 +345,34 @@ describe('YouTube import: connecting', () => {
 		const again = new URL(await oauthCallback(env as never, { code: 'code-1', state }, NOW));
 		assert.equal(again.pathname, '/en/studio');
 		assert.equal(again.searchParams.get('error'), 'failed');
-		await assert.rejects(finishOAuth(env as never, caller, state, NOW), (e: YtHttpError) => e.status === 404 && e.code === 'youtube_connect_expired');
+		await assert.rejects(finishOAuth(env as never, caller, connect, NOW), (e: YtHttpError) => e.status === 404 && e.code === 'youtube_connect_expired');
 	});
 
-	it('a consent link opened by another account never links its YouTube (login CSRF)', async () => {
+	it('the starter cannot redeem a consent someone else gave: the state does not finish, the victim’s browser burns it', async () => {
 		const { env, q, db } = makeEnv({ channels: new MemoryBucket({ [CHANNEL]: { id: CHANNEL, userId: OWNER, isDeleted: false }, 'victim-channel': { id: 'victim-channel', userId: 'victim', isDeleted: false } }) });
-		// The attacker starts a consent for their own channel and sends the link to the victim
+		// The attacker starts a consent for their own channel and phishes the victim into it
 		const { url } = await startOAuth(env as never, caller, { channelId: CHANNEL, captions: false, locale: 'en' }, NOW);
 		const consent = new URL(url);
 		const state = consent.searchParams.get('state')!;
 		google.codes.set('victim-code', consent.searchParams.get('code_challenge')!);
-		// The victim consents with their Google account; the callback lands them on the wizard
+		// The victim consents with their Google account; only the victim's browser gets the connect token
 		const back = new URL(await oauthCallback(env as never, { code: 'victim-code', state }, NOW));
-		assert.equal(back.searchParams.get('connect'), state);
-		// The victim's signed-in wizard tries to finish: refused, nothing exchanged, state gone
-		await assert.rejects(finishOAuth(env as never, { userId: 'victim', roles: ['Super Admin'] }, state, NOW), (e: YtHttpError) => e.status === 403);
+		const connect = back.searchParams.get('connect')!;
+		assert.ok(connect && connect !== state);
+
+		// The attacker knows the state and finishes with their own (matching) account: refused, nothing exchanged
+		await assert.rejects(finishOAuth(env as never, caller, state, NOW), (e: YtHttpError) => e.status === 404 && e.code === 'youtube_connect_expired');
 		assert.equal(google.codes.size, 1, 'the victim’s code was never exchanged');
+		assert.equal(db.db.prepare('SELECT COUNT(*) AS n FROM yt_oauth_states').get()!.n, 1);
+
+		// The victim's signed-in Studio finishes with the token: another account started it, 403, the consent is burnt
+		await assert.rejects(finishOAuth(env as never, { userId: 'victim', roles: ['Super Admin'] }, connect, NOW), (e: YtHttpError) => e.status === 403);
 		assert.equal(db.db.prepare('SELECT COUNT(*) AS n FROM yt_oauth_states').get()!.n, 0);
-		// And the attacker cannot finish it afterwards either
+		assert.equal(google.codes.size, 1);
+
+		// Nothing is left to redeem, with the state or the token
 		await assert.rejects(finishOAuth(env as never, caller, state, NOW), (e: YtHttpError) => e.status === 404);
+		await assert.rejects(finishOAuth(env as never, caller, connect, NOW), (e: YtHttpError) => e.status === 404);
 		assert.equal(db.db.prepare('SELECT COUNT(*) AS n FROM yt_imports').get()!.n, 0);
 		assert.equal(q.sent.length, 0);
 	});
