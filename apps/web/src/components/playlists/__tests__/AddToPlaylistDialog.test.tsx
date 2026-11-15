@@ -119,6 +119,8 @@ it('a queued add in the dialog shows background progress', async () => {
 });
 
 describe('a channel with more playlists than one page', () => {
+  // 150 playlists paged through the dialog: about 0.4 s locally, near Jest's 5 s default on CI runners
+  jest.setTimeout(20_000);
   const { manyPlaylists, pagedList } = jest.requireActual('./manyPlaylists') as typeof import('./manyPlaylists');
 
   it('"Show more playlists" reaches playlist #150 and adds the videos to it', async () => {
