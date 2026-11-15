@@ -7,12 +7,13 @@
  *   DELETE /api/videos/:videoId/captions/drafts/:language            delete the draft (the live track stays)
  *   POST   /api/videos/:videoId/captions/drafts/:language/publish    publish baseVersion as the track
  *   POST   /api/videos/:videoId/review/transcript/claim               the review transcript → a draft (queued)
+ *   POST   /api/videos/:videoId/captions/drafts/:language/transcript  an on-device transcript (desktop Studio, D10) → a draft (queued)
  *
  * Owner or a channel role with `video.edit`. Drafts are never shown to viewers.
  */
 import { Str } from 'chanfana';
 import { z } from 'zod';
-import { validateCaptionCues, type VideoObject } from '@al-ummah/shared-types';
+import { onDeviceTranscriptKey, validateCaptionCues, validateOnDeviceTranscript, type VideoObject } from '@al-ummah/shared-types';
 import { AuthenticatedRoute, type AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { canOnVideo } from '../../lib/channelAccess';
@@ -39,7 +40,7 @@ const Summary = z.object({
 	language: z.string(),
 	version: z.number(),
 	kind: z.enum(['source', 'translation']),
-	origin: z.enum(['review_transcript', 'transcription', 'translation']),
+	origin: z.enum(['review_transcript', 'transcription', 'translation', 'on_device']),
 	edited: z.boolean(),
 	cues: z.number(),
 	pendingQuran: z.number().describe('Quran suggestions not yet accepted'),
@@ -319,5 +320,79 @@ export class ReviewTranscriptClaim extends AuthenticatedRoute {
 		if (outcome.status === 'draft_exists') return c.json({ success: false, error: 'draft_exists' }, 409);
 		if (outcome.status === 'pending') return c.json({ success: false, error: 'claim_pending' }, 409);
 		return c.json({ success: true, data: { status: 'queued' as const } }, 202);
+	}
+}
+
+const ENGINE_PROVIDER = /^[a-z0-9][a-z0-9.+-]{0,39}$/;
+const ENGINE_MODEL = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,79}$/;
+
+export class OnDeviceTranscriptSubmit extends AuthenticatedRoute {
+	schema = addAuthToSchema(
+		{
+			tags: ['Captions'],
+			summary: 'Turn a transcript made on the creator\'s computer into a caption draft',
+			description:
+				'D10: desktop Studio can transcribe on the creator\'s computer (free, Core\'s whisper.cpp). It sends the timed segments here; a queued job runs the same Quran matcher as server transcription and writes the draft of `language` (origin `on_device`), with Quran shown only as references to the official text. Uses no caption minutes. 202 when queued; 400 `invalid_transcript` (with `reason` and `segment`); 409 `draft_exists` (pass `replace`) or `claim_pending`.',
+			request: {
+				params,
+				body: {
+					content: {
+						'application/json': {
+							schema: z.object({
+								segments: z.array(z.object({ startMs: z.number(), endMs: z.number(), text: z.string() })).describe('Timed speech, in order'),
+								engine: z.object({ provider: z.string().describe('e.g. whisper.cpp'), model: z.string().optional().describe('e.g. large-v3-turbo-q5_0') }),
+								replace: z.boolean().optional(),
+							}),
+						},
+					},
+				},
+			},
+			responses: {
+				'202': { description: 'Queued', content: { 'application/json': { schema: z.object({ success: z.literal(true), data: z.object({ status: z.literal('queued'), segments: z.number() }) }) } } },
+				'400': { description: 'Unsupported language or invalid transcript', content: Err },
+				'403': { description: 'Not allowed', content: Err },
+				'404': { description: 'No such video', content: Err },
+				'409': { description: 'A draft exists, or a claim is in progress', content: Err },
+				'503': { description: 'Could not queue the job', content: Err },
+			},
+		},
+		'required',
+	);
+
+	async handle(c: AppContext) {
+		const { params, body } = await this.getValidatedData<typeof this.schema>();
+		const userId = this.getUserId(c);
+		const access = await editableVideo(c, params.videoId, userId);
+		if ('response' in access) return access.response;
+		if (!validLanguage(params.language)) return c.json({ success: false, error: 'unsupported_language' }, 400);
+		if (!ENGINE_PROVIDER.test(body.engine.provider) || (body.engine.model !== undefined && !ENGINE_MODEL.test(body.engine.model))) {
+			return c.json({ success: false, error: 'invalid_transcript', reason: 'engine' }, 400);
+		}
+		const checked = validateOnDeviceTranscript(body.segments);
+		if (!checked.ok) {
+			const failed = checked as Extract<typeof checked, { ok: false }>;
+			return c.json({ success: false, error: 'invalid_transcript', reason: failed.error, ...(failed.segment !== undefined ? { segment: failed.segment } : {}) }, 400);
+		}
+		const segments = (checked as Extract<typeof checked, { ok: true }>).segments;
+		const exists = !!(await readDraft(c.env.subtitles, params.videoId, params.language));
+		if (exists && !body.replace) return c.json({ success: false, error: 'draft_exists' }, 409);
+		const transcriptKey = onDeviceTranscriptKey(params.videoId, params.language);
+		const engine = { provider: body.engine.provider, ...(body.engine.model ? { model: body.engine.model } : {}) };
+		let outcome;
+		try {
+			await c.env.subtitles.put(transcriptKey, JSON.stringify({ videoId: params.videoId, segments }), { httpMetadata: { contentType: 'application/json' } });
+			outcome = await queueClaim(
+				{ subtitles: c.env.subtitles, queue: c.env.queue },
+				{ videoId: params.videoId, language: params.language, transcriptKey, source: 'on_device', engine, requestedBy: userId, ...(body.replace ? { replace: true } : {}) },
+				exists,
+			);
+		} catch (error) {
+			logger.error('[Captions] On-device transcript could not be queued', { videoId: params.videoId, error: error instanceof Error ? error.message : String(error) });
+			return c.json({ success: false, error: 'queue_unavailable' }, 503);
+		}
+		if (outcome.status === 'draft_exists') return c.json({ success: false, error: 'draft_exists' }, 409);
+		if (outcome.status === 'pending') return c.json({ success: false, error: 'claim_pending' }, 409);
+		logger.info('[Captions] On-device transcript queued', { videoId: params.videoId, language: params.language, segments: segments.length, engine: engine.provider });
+		return c.json({ success: true, data: { status: 'queued' as const, segments: segments.length } }, 202);
 	}
 }

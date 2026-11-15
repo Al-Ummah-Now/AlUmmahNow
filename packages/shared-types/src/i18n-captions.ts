@@ -8,7 +8,7 @@ export interface CaptionsTranslations {
   draftsTitle: string;
   /** Drafts are private until published */
   draftsHint: string;
-  origin: { review_transcript: string; transcription: string; translation: string };
+  origin: { review_transcript: string; transcription: string; translation: string; on_device: string };
   status: { draft: string; published: string; outdated: string };
   /** {count} Quran suggestions not confirmed yet */
   quranPending: string;
@@ -177,6 +177,7 @@ export const CAPTIONS_EN: CaptionsTranslations = {
   origin: {
     review_transcript: 'From the automatic transcript',
     transcription: 'Automatic transcription',
+    on_device: 'Transcribed on your computer',
     translation: 'Automatic translation',
   },
   status: { draft: 'Draft', published: 'Published', outdated: 'Edited since publishing' },
@@ -327,6 +328,7 @@ export const CAPTIONS_AR: CaptionsTranslations = {
   origin: {
     review_transcript: 'من النص التلقائي',
     transcription: 'تفريغ تلقائي',
+    on_device: 'فُرِّغ على حاسوبك',
     translation: 'ترجمة تلقائية',
   },
   status: { draft: 'مسودة', published: 'منشورة', outdated: 'عُدّلت بعد النشر' },
