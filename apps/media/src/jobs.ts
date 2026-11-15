@@ -2,7 +2,7 @@
  * Transcode job state and decisions (pure; tested in test/jobs.test.ts). The
  * Transcoder Durable Object (transcoder.ts) keeps one JobState per video.
  */
-import { reviewMediaPrefix, type ReviewExtractionOptions } from '@al-ummah/shared-types';
+import { reviewMediaPrefix, type ReviewExtractionOptions, type TranscodeStartup } from '@al-ummah/shared-types';
 import { mediaPrefix, prebuiltStagingPrefix, sanitizeRungs, scrubOpsText, startFailureReason, type MediaAccess, type R2RungProgress, type TranscodeFailure, type TranscodeJobMessage, type TranscodeResult, type TranscodeStartFailure, type TranscoderJobView } from '@al-ummah/shared-types';
 
 /** Plain words for a start failure (shared with the admin's troubleshooting panel, media-troubleshoot.ts). */
@@ -70,6 +70,8 @@ export interface JobState {
 	attemptStartedAt: number;
 	/** When the container accepted this attempt (POST /jobs answered, or it reported in); unset while starting */
 	launchedAt?: number;
+	/** How this attempt started (Transcoder.launch; FFmpeg's time added when the container reports it) */
+	startup?: TranscodeStartup;
 	lastSeenAt: number;
 	progress: number;
 	/** Per-rung state from the container's latest progress event */
@@ -393,3 +395,18 @@ export const liveReviewQueueAction = (result: { outcome: 'ready' | 'busy' | 'fai
 
 /** The review media prefix of a live recording job. */
 export const liveReviewPrefix = (streamId: string, rev: string) => reviewMediaPrefix(streamId, rev);
+
+/**
+ * The startup times of an attempt (TranscodeStartup): `t0` when the Transcoder began it, `ready` when the
+ * container answered on its port, `accepted` when it took the job. A retry has no dispatch time (it
+ * waited on purpose). Pure.
+ */
+export function startupTimes(job: Pick<JobState, 'queuedAt' | 'attempt'>, cold: boolean, t0: number, ready: number, accepted: number, firstAttempt: boolean): TranscodeStartup {
+	const queued = Date.parse(job.queuedAt);
+	return {
+		cold,
+		readyMs: Math.max(0, ready - t0),
+		acceptMs: Math.max(0, accepted - t0),
+		...(firstAttempt && Number.isFinite(queued) ? { dispatchMs: Math.max(0, t0 - queued) } : {}),
+	};
+}

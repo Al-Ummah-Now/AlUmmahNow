@@ -41,6 +41,7 @@ import { createBackfillInternalRouter } from './backfillInternal';
 import type { LibraryHints } from '../../lib/bunny/libraries';
 import { readTroubleshootJobs, type TroubleshootEnv } from '../../lib/media/troubleshoot';
 import { createJob, getJob, retryJob, type JobEnv } from '../../lib/admin/jobs';
+import { readStartTimes, type StartTimeStats } from '../../lib/media/start-times';
 import { applyJobEvent, applyMp4Event, enqueueTranscode, readDeliverySettings, sourceCandidates, writeDeliverySettings, type MediaEnv } from '../../lib/media/r2-delivery';
 
 const MAX_IDS = 50;
@@ -62,6 +63,8 @@ export interface MediaLive {
 	/** queued_at of the oldest waiting job, and its age in seconds (server clock) */
 	oldestQueuedAt: string | null;
 	oldestQueuedSeconds: number | null;
+	/** How long transcodes took to start over the last days (p50/p95, cold vs warm); null without data access */
+	startTimes: StartTimeStats | null;
 	at: string;
 }
 
@@ -74,7 +77,7 @@ export async function readMediaLive(env: Env, now: number = Date.now()): Promise
 	const at = new Date(now).toISOString();
 	const maxTranscodes = maxTranscodesOf(env.MEDIA_MAX_TRANSCODES);
 	const db = env.SEARCH_DB;
-	if (!db) return { transcoding: 0, queued: 0, maxTranscodes, oldestQueuedAt: null, oldestQueuedSeconds: null, at };
+	if (!db) return { transcoding: 0, queued: 0, maxTranscodes, oldestQueuedAt: null, oldestQueuedSeconds: null, startTimes: null, at };
 	const row = await db
 		.prepare(
 			`SELECT SUM(status = 'transcoding') AS transcoding, SUM(status = 'queued') AS queued,
@@ -82,6 +85,8 @@ export async function readMediaLive(env: Env, now: number = Date.now()): Promise
 			 FROM media_jobs WHERE status IN ('queued', 'transcoding')`,
 		)
 		.first<{ transcoding: number | null; queued: number | null; oldest_queued_at: string | null }>();
+	// Start times are a nice-to-have: a failing read never hides the live figures
+	const startTimes = await readStartTimes(db, now).catch(() => null);
 	const oldest = row?.oldest_queued_at ?? null;
 	const oldestMs = oldest ? Date.parse(oldest) : NaN;
 	return {
@@ -90,6 +95,7 @@ export async function readMediaLive(env: Env, now: number = Date.now()): Promise
 		maxTranscodes,
 		oldestQueuedAt: oldest,
 		oldestQueuedSeconds: Number.isFinite(oldestMs) ? Math.max(0, Math.round((now - oldestMs) / 1000)) : null,
+		startTimes,
 		at,
 	};
 }
