@@ -16,6 +16,9 @@
  * log lines are printed as the Workers wrote them (the logger redacts secrets, tokens and emails).
  */
 
+import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
+
 const API = 'https://api.cloudflare.com/client/v4';
 
 type EnvName = 'production' | 'stage' | 'qa';
@@ -176,7 +179,7 @@ async function main(): Promise<void> {
 	process.stdout.write(out.join('\n') + '\n');
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
 	main().catch((error) => {
 		process.stderr.write(`media-diagnostics failed: ${error instanceof Error ? error.message : String(error)}\n`);
 		process.exit(1);
