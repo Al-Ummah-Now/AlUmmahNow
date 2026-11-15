@@ -48,6 +48,7 @@ import { eraseChannelHandleHistory } from './handle-history';
 import { footprintTargets, footprintsComplete, forgetFootprints } from './footprints';
 import { eraseCaptionMinutes } from '../captions/minutes';
 import { eraseYoutubeImports } from '../youtube-import/erase';
+import { eraseLiveSessionOwner } from '../live/store';
 import { eraseImageOwners } from '../csam/imageOwners';
 import { eraseChannelComments } from '../channelComments';
 import { purgePostComment } from '../channelComments/jobs';
@@ -1153,6 +1154,8 @@ export async function eraseUserData(
 				const cancelled = await cancelInvitesOfUser(db as unknown as D1Database, userId);
 				if (cancelled.length) bump(summary.deleted, 'channelInvites', cancelled.length);
 				await anonymizeTeamActivity(db as unknown as D1Database, userId, DELETED_USER_ID);
+				// Their live sessions' tier owner (search migration 0040)
+				await eraseLiveSessionOwner(db as unknown as D1Database, userId);
 			}
 			const profiles = asBucket(env.profiles);
 			ctx.budget.spend();

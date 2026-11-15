@@ -284,3 +284,12 @@ export function estimateCost(
 		(u.storedBytes / GB) * r.perStoredGbMonthUsd
 	);
 }
+
+/**
+ * Account erasure (lib/privacy/user-data.ts): the sessions stay for the provider comparison and
+ * the tier's monthly usage, without the person. A session still live is no longer tied to anyone
+ * the tier sweep could end it for; it ends at its idle timeout or by an admin.
+ */
+export async function eraseLiveSessionOwner(db: D1Database, userId: string): Promise<void> {
+	await db.prepare('UPDATE live_sessions SET owner_id = NULL WHERE owner_id = ?').bind(userId).run();
+}
