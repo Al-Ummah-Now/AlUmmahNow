@@ -1,10 +1,11 @@
 import { fileReusedVideo, uploadCollection } from "../../lib/channelCollection";
+import { categoryRefusal } from "../../lib/categories";
 import { uploadIdentity } from "../../lib/channelAccess";
 import { Str, Num } from "chanfana";
 import { createUploadRecord } from '../../lib/upload/uploadRecord';
 import { AuthenticatedRoute, AppContext } from '../../base';
 import { z } from "zod";
-import { VideoCategory } from "@al-ummah/shared-types";
+import { CATEGORY_SLUG_PATTERN } from "@al-ummah/shared-types";
 import { Video as BusinessVideo, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import { BunnyStreamClient as stream } from "../../lib/bunny/stream";
@@ -44,7 +45,7 @@ const BatchVideoSchema = z.object({
 
 const SharedMetadataSchema = z.object({
 	channelId: z.string().optional().describe("Channel ID for all videos (defaults to the channelId header)"),
-	category: z.nativeEnum(VideoCategory).optional().describe("Category for all videos"),
+	category: z.string().regex(CATEGORY_SLUG_PATTERN).optional().describe("Category for all videos"),
 	isPublic: z.boolean().optional().describe("Visibility for all videos"),
 	visibility: z.enum(VIDEO_VISIBILITIES).optional().describe("public | unlisted | private for all videos (wins over isPublic; a draft is always private)"),
 });
@@ -142,6 +143,9 @@ export class UploadBatchInitiateEndpoint extends AuthenticatedRoute {
 
 		try {
 			const request = await this.getValidatedData<typeof this.schema>();
+			// An active category of the admin-managed list (400 unknown_category / retired_category)
+			const refused = categoryRefusal(c, request.body.sharedMetadata?.category);
+			if (refused) return refused;
 			const { videos: requestedVideos, sharedMetadata } = request.body;
 			// The creator tier's limits fit only part of the batch: start the first
 			// `allowed` videos, tell the client which were deferred and when they can start

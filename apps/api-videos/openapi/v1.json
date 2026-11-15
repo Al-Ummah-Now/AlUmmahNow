@@ -28854,23 +28854,7 @@
                       },
                       "category": {
                         "type": "string",
-                        "enum": [
-                          "quran_recitation",
-                          "quran_tafsir",
-                          "hadith_studies",
-                          "islamic_history",
-                          "fiqh",
-                          "aqeedah",
-                          "dawah",
-                          "khutbah",
-                          "islamic_lectures",
-                          "islamic_nasheed",
-                          "islamic_kids",
-                          "islamic_news",
-                          "hajj_umrah",
-                          "ramadan",
-                          "islamic_lifestyle"
-                        ]
+                        "pattern": "^[a-z][a-z0-9_]{1,39}$"
                       },
                       "visibility": {
                         "type": "string",
@@ -29320,23 +29304,7 @@
                       },
                       "category": {
                         "type": "string",
-                        "enum": [
-                          "quran_recitation",
-                          "quran_tafsir",
-                          "hadith_studies",
-                          "islamic_history",
-                          "fiqh",
-                          "aqeedah",
-                          "dawah",
-                          "khutbah",
-                          "islamic_lectures",
-                          "islamic_nasheed",
-                          "islamic_kids",
-                          "islamic_news",
-                          "hajj_umrah",
-                          "ramadan",
-                          "islamic_lifestyle"
-                        ]
+                        "pattern": "^[a-z][a-z0-9_]{1,39}$"
                       },
                       "visibility": {
                         "type": "string",
@@ -29849,23 +29817,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "quran_recitation",
-                "quran_tafsir",
-                "hadith_studies",
-                "islamic_history",
-                "fiqh",
-                "aqeedah",
-                "dawah",
-                "khutbah",
-                "islamic_lectures",
-                "islamic_nasheed",
-                "islamic_kids",
-                "islamic_news",
-                "hajj_umrah",
-                "ramadan",
-                "islamic_lifestyle"
-              ],
+              "pattern": "^[a-z][a-z0-9_]{1,39}$",
               "description": "Filter by video category (e.g., 'quran_recitation', 'islamic_history')"
             },
             "required": false,
@@ -30441,23 +30393,7 @@
                   },
                   "category": {
                     "type": "string",
-                    "enum": [
-                      "quran_recitation",
-                      "quran_tafsir",
-                      "hadith_studies",
-                      "islamic_history",
-                      "fiqh",
-                      "aqeedah",
-                      "dawah",
-                      "khutbah",
-                      "islamic_lectures",
-                      "islamic_nasheed",
-                      "islamic_kids",
-                      "islamic_news",
-                      "hajj_umrah",
-                      "ramadan",
-                      "islamic_lifestyle"
-                    ],
+                    "pattern": "^[a-z][a-z0-9_]{1,39}$",
                     "description": "Video category (e.g., 'quran_recitation', 'hadith_studies')"
                   },
                   "tags": {
@@ -31027,23 +30963,7 @@
                           "string",
                           "null"
                         ],
-                        "enum": [
-                          "quran_recitation",
-                          "quran_tafsir",
-                          "hadith_studies",
-                          "islamic_history",
-                          "fiqh",
-                          "aqeedah",
-                          "dawah",
-                          "khutbah",
-                          "islamic_lectures",
-                          "islamic_nasheed",
-                          "islamic_kids",
-                          "islamic_news",
-                          "hajj_umrah",
-                          "ramadan",
-                          "islamic_lifestyle"
-                        ]
+                        "pattern": "^[a-z][a-z0-9_]{1,39}$"
                       },
                       "addTags": {
                         "type": "array",
@@ -32000,23 +31920,7 @@
                           "string",
                           "null"
                         ],
-                        "enum": [
-                          "quran_recitation",
-                          "quran_tafsir",
-                          "hadith_studies",
-                          "islamic_history",
-                          "fiqh",
-                          "aqeedah",
-                          "dawah",
-                          "khutbah",
-                          "islamic_lectures",
-                          "islamic_nasheed",
-                          "islamic_kids",
-                          "islamic_news",
-                          "hajj_umrah",
-                          "ramadan",
-                          "islamic_lifestyle"
-                        ]
+                        "pattern": "^[a-z][a-z0-9_]{1,39}$"
                       },
                       "addTags": {
                         "type": "array",
@@ -33841,23 +33745,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "quran_recitation",
-                "quran_tafsir",
-                "hadith_studies",
-                "islamic_history",
-                "fiqh",
-                "aqeedah",
-                "dawah",
-                "khutbah",
-                "islamic_lectures",
-                "islamic_nasheed",
-                "islamic_kids",
-                "islamic_news",
-                "hajj_umrah",
-                "ramadan",
-                "islamic_lifestyle"
-              ],
+              "pattern": "^[a-z][a-z0-9_]{1,39}$",
               "description": "Video category to filter by"
             },
             "required": true,
@@ -33975,23 +33863,7 @@
                           },
                           "category": {
                             "type": "string",
-                            "enum": [
-                              "quran_recitation",
-                              "quran_tafsir",
-                              "hadith_studies",
-                              "islamic_history",
-                              "fiqh",
-                              "aqeedah",
-                              "dawah",
-                              "khutbah",
-                              "islamic_lectures",
-                              "islamic_nasheed",
-                              "islamic_kids",
-                              "islamic_news",
-                              "hajj_umrah",
-                              "ramadan",
-                              "islamic_lifestyle"
-                            ]
+                            "pattern": "^[a-z][a-z0-9_]{1,39}$"
                           },
                           "isPublic": {
                             "type": "boolean"
@@ -34017,23 +33889,7 @@
                       "properties": {
                         "category": {
                           "type": "string",
-                          "enum": [
-                            "quran_recitation",
-                            "quran_tafsir",
-                            "hadith_studies",
-                            "islamic_history",
-                            "fiqh",
-                            "aqeedah",
-                            "dawah",
-                            "khutbah",
-                            "islamic_lectures",
-                            "islamic_nasheed",
-                            "islamic_kids",
-                            "islamic_news",
-                            "hajj_umrah",
-                            "ramadan",
-                            "islamic_lifestyle"
-                          ]
+                          "pattern": "^[a-z][a-z0-9_]{1,39}$"
                         },
                         "totalCount": {
                           "type": "number"
@@ -34188,23 +34044,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "quran_recitation",
-                "quran_tafsir",
-                "hadith_studies",
-                "islamic_history",
-                "fiqh",
-                "aqeedah",
-                "dawah",
-                "khutbah",
-                "islamic_lectures",
-                "islamic_nasheed",
-                "islamic_kids",
-                "islamic_news",
-                "hajj_umrah",
-                "ramadan",
-                "islamic_lifestyle"
-              ],
+              "pattern": "^[a-z][a-z0-9_]{1,39}$",
               "description": "Filter by video category"
             },
             "required": false,
@@ -34286,23 +34126,7 @@
                           },
                           "category": {
                             "type": "string",
-                            "enum": [
-                              "quran_recitation",
-                              "quran_tafsir",
-                              "hadith_studies",
-                              "islamic_history",
-                              "fiqh",
-                              "aqeedah",
-                              "dawah",
-                              "khutbah",
-                              "islamic_lectures",
-                              "islamic_nasheed",
-                              "islamic_kids",
-                              "islamic_news",
-                              "hajj_umrah",
-                              "ramadan",
-                              "islamic_lifestyle"
-                            ]
+                            "pattern": "^[a-z][a-z0-9_]{1,39}$"
                           },
                           "isPublic": {
                             "type": "boolean"
@@ -34453,23 +34277,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "quran_recitation",
-                "quran_tafsir",
-                "hadith_studies",
-                "islamic_history",
-                "fiqh",
-                "aqeedah",
-                "dawah",
-                "khutbah",
-                "islamic_lectures",
-                "islamic_nasheed",
-                "islamic_kids",
-                "islamic_news",
-                "hajj_umrah",
-                "ramadan",
-                "islamic_lifestyle"
-              ],
+              "pattern": "^[a-z][a-z0-9_]{1,39}$",
               "description": "Filter by video category"
             },
             "required": false,
@@ -34554,23 +34362,7 @@
                           },
                           "category": {
                             "type": "string",
-                            "enum": [
-                              "quran_recitation",
-                              "quran_tafsir",
-                              "hadith_studies",
-                              "islamic_history",
-                              "fiqh",
-                              "aqeedah",
-                              "dawah",
-                              "khutbah",
-                              "islamic_lectures",
-                              "islamic_nasheed",
-                              "islamic_kids",
-                              "islamic_news",
-                              "hajj_umrah",
-                              "ramadan",
-                              "islamic_lifestyle"
-                            ]
+                            "pattern": "^[a-z][a-z0-9_]{1,39}$"
                           },
                           "isPublic": {
                             "type": "boolean"
@@ -34802,23 +34594,7 @@
                           },
                           "category": {
                             "type": "string",
-                            "enum": [
-                              "quran_recitation",
-                              "quran_tafsir",
-                              "hadith_studies",
-                              "islamic_history",
-                              "fiqh",
-                              "aqeedah",
-                              "dawah",
-                              "khutbah",
-                              "islamic_lectures",
-                              "islamic_nasheed",
-                              "islamic_kids",
-                              "islamic_news",
-                              "hajj_umrah",
-                              "ramadan",
-                              "islamic_lifestyle"
-                            ]
+                            "pattern": "^[a-z][a-z0-9_]{1,39}$"
                           },
                           "isPublic": {
                             "type": "boolean"
@@ -34987,23 +34763,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "quran_recitation",
-                "quran_tafsir",
-                "hadith_studies",
-                "islamic_history",
-                "fiqh",
-                "aqeedah",
-                "dawah",
-                "khutbah",
-                "islamic_lectures",
-                "islamic_nasheed",
-                "islamic_kids",
-                "islamic_news",
-                "hajj_umrah",
-                "ramadan",
-                "islamic_lifestyle"
-              ],
+              "pattern": "^[a-z][a-z0-9_]{1,39}$",
               "description": "Filter by video category"
             },
             "required": false,
@@ -35085,23 +34845,7 @@
                           },
                           "category": {
                             "type": "string",
-                            "enum": [
-                              "quran_recitation",
-                              "quran_tafsir",
-                              "hadith_studies",
-                              "islamic_history",
-                              "fiqh",
-                              "aqeedah",
-                              "dawah",
-                              "khutbah",
-                              "islamic_lectures",
-                              "islamic_nasheed",
-                              "islamic_kids",
-                              "islamic_news",
-                              "hajj_umrah",
-                              "ramadan",
-                              "islamic_lifestyle"
-                            ]
+                            "pattern": "^[a-z][a-z0-9_]{1,39}$"
                           },
                           "isPublic": {
                             "type": "boolean"
@@ -35610,23 +35354,7 @@
                       },
                       "category": {
                         "type": "string",
-                        "enum": [
-                          "quran_recitation",
-                          "quran_tafsir",
-                          "hadith_studies",
-                          "islamic_history",
-                          "fiqh",
-                          "aqeedah",
-                          "dawah",
-                          "khutbah",
-                          "islamic_lectures",
-                          "islamic_nasheed",
-                          "islamic_kids",
-                          "islamic_news",
-                          "hajj_umrah",
-                          "ramadan",
-                          "islamic_lifestyle"
-                        ],
+                        "pattern": "^[a-z][a-z0-9_]{1,39}$",
                         "description": "Category for all videos"
                       },
                       "isPublic": {
@@ -36287,23 +36015,7 @@
                   },
                   "category": {
                     "type": "string",
-                    "enum": [
-                      "quran_recitation",
-                      "quran_tafsir",
-                      "hadith_studies",
-                      "islamic_history",
-                      "fiqh",
-                      "aqeedah",
-                      "dawah",
-                      "khutbah",
-                      "islamic_lectures",
-                      "islamic_nasheed",
-                      "islamic_kids",
-                      "islamic_news",
-                      "hajj_umrah",
-                      "ramadan",
-                      "islamic_lifestyle"
-                    ],
+                    "pattern": "^[a-z][a-z0-9_]{1,39}$",
                     "description": "Video category"
                   },
                   "format": {
@@ -37512,23 +37224,7 @@
                       "string",
                       "null"
                     ],
-                    "enum": [
-                      "quran_recitation",
-                      "quran_tafsir",
-                      "hadith_studies",
-                      "islamic_history",
-                      "fiqh",
-                      "aqeedah",
-                      "dawah",
-                      "khutbah",
-                      "islamic_lectures",
-                      "islamic_nasheed",
-                      "islamic_kids",
-                      "islamic_news",
-                      "hajj_umrah",
-                      "ramadan",
-                      "islamic_lifestyle"
-                    ],
+                    "pattern": "^[a-z][a-z0-9_]{1,39}$",
                     "description": "Video category (e.g., 'quran_recitation', 'hadith_studies'); null clears it"
                   },
                   "tags": {

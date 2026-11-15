@@ -35,6 +35,7 @@
 --   apps/api-videos/migrations/search/0041_youtube_import.sql
 --   apps/api-videos/migrations/search/0042_media_backfill.sql
 --   apps/api-videos/migrations/search/0046_social.sql
+--   apps/api-videos/migrations/search/0050_video_categories.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
@@ -122,6 +123,7 @@ CREATE TABLE social_webhooks (id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, url
 CREATE TABLE upload_limit_hits (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, period TEXT NOT NULL, tier_id TEXT, hit_at INTEGER NOT NULL) WITHOUT ROWID;
 CREATE TABLE upload_rate_leases (user_id TEXT NOT NULL, operation TEXT NOT NULL, lease_id TEXT NOT NULL, expires_at INTEGER NOT NULL, PRIMARY KEY (user_id, operation, lease_id)) WITHOUT ROWID;
 CREATE TABLE upload_rate_windows (user_id TEXT NOT NULL, operation TEXT NOT NULL, period TEXT NOT NULL, window_start INTEGER NOT NULL, count INTEGER NOT NULL, PRIMARY KEY (user_id, operation, period)) WITHOUT ROWID;
+CREATE TABLE video_categories (value TEXT PRIMARY KEY, label_en TEXT NOT NULL, label_ar TEXT NOT NULL, hint TEXT, position INTEGER NOT NULL, retired INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, updated_by TEXT);
 CREATE TABLE videos_bans (user_id TEXT PRIMARY KEY, reason TEXT, banned_by TEXT NOT NULL, banned_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE yt_import_items (id TEXT PRIMARY KEY, import_id TEXT NOT NULL, channel_id TEXT NOT NULL, yt_video_id TEXT NOT NULL, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', title_localized TEXT, description_localized TEXT, tags TEXT, language TEXT, published_at TEXT, publish_at TEXT, duration_seconds INTEGER, yt_visibility TEXT NOT NULL, made_for_kids INTEGER NOT NULL DEFAULT 0, thumbnail_url TEXT, selected INTEGER NOT NULL DEFAULT 0, match_json TEXT, video_id TEXT, state TEXT NOT NULL DEFAULT 'available', thumbnail_state TEXT NOT NULL DEFAULT 'none', captions_state TEXT NOT NULL DEFAULT 'none', caption_languages TEXT, captions_attached TEXT, error TEXT, attempts INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL, UNIQUE (import_id, yt_video_id));
 CREATE TABLE yt_import_playlists (import_id TEXT NOT NULL, yt_playlist_id TEXT NOT NULL, position INTEGER NOT NULL DEFAULT 0, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', yt_visibility TEXT NOT NULL, video_ids_json TEXT NOT NULL DEFAULT '[]', selected INTEGER NOT NULL DEFAULT 0, playlist_id TEXT, state TEXT NOT NULL DEFAULT 'none', PRIMARY KEY (import_id, yt_playlist_id));

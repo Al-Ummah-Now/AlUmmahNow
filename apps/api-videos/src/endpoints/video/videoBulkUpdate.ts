@@ -1,8 +1,9 @@
 import { bunnyRef } from '../../lib/media/providers';
+import { categoryRefusal } from "../../lib/categories";
 import { bunnyClientForVideo, type LibraryHints } from '../../lib/bunny/libraries';
 import { Bool, Str } from "chanfana";
 import { z } from "zod";
-import { can, VideoCategory, type ChannelRole, VIDEO_VISIBILITIES } from "@al-ummah/shared-types";
+import { can, type ChannelRole, VIDEO_VISIBILITIES, CATEGORY_SLUG_PATTERN } from "@al-ummah/shared-types";
 import { Video as BusinessVideo, Playlist as BusinessPlaylist, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
@@ -57,7 +58,7 @@ const languageText = <T extends z.ZodTypeAny>(value: T) => z.object({ en: value.
 const Changes = z.object({
 	isPublic: z.boolean().optional(),
 	visibility: z.enum(VIDEO_VISIBILITIES).optional().describe("public | unlisted | private (wins over isPublic)"),
-	category: z.nativeEnum(VideoCategory).nullable().optional(),
+	category: z.string().regex(CATEGORY_SLUG_PATTERN).nullable().optional(),
 	addTags: z.array(tag).max(MAX_TAGS).optional(),
 	removeTags: z.array(tag).max(MAX_TAGS).optional(),
 	replaceTags: z.array(tag).max(MAX_TAGS).optional().describe("The whole tag list (not with addTags/removeTags)"),
@@ -171,6 +172,9 @@ export class VideoBulkUpdate extends AuthenticatedRoute {
 	async handle(c: AppContext) {
 		const { body, headers } = await this.getValidatedData<typeof this.schema>();
 		const changes = body.changes as BulkVideoChanges;
+		// Bulk edits set only active categories of the admin-managed list
+		const refused = categoryRefusal(c, changes.category);
+		if (refused) return refused;
 		const perVideo = (body.perVideo ?? {}) as Record<string, PerVideoChanges>;
 		const videoIds = Array.from(new Set(body.ids ?? body.videoIds ?? []));
 		const operationId = body.operationId;

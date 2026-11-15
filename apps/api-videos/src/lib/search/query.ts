@@ -23,7 +23,7 @@ import {
   SearchStatement,
   SearchVideoPayload,
   SuggestionType,
-  VIDEO_CATEGORIES,
+  getActiveVideoCategories,
   buildFtsQuery,
   detectTextLanguage,
   normalizeSearchText,
@@ -419,7 +419,7 @@ export async function suggestFromIndex(db: SearchDb, q: string, limit: number, o
   if (want.has('video')) rank('video', rowsOf('video').flatMap(row => videoSuggestion(row, q, lang)));
   if (want.has('playlist')) rank('playlist', rowsOf('playlist').flatMap(row => playlistSuggestion(row, q, lang)));
   if (want.has('category')) {
-    const items = VIDEO_CATEGORIES.map(category => ({
+    const items = getActiveVideoCategories().map(category => ({
       text: lang === 'ar' ? category.label.ar : category.label.en,
       type: 'category' as const,
       metadata: { category: category.value },
@@ -490,7 +490,7 @@ export async function initialSuggestionsFromIndex(db: SearchDb, limit: number, o
     if (type === 'video' && indexed.includes('video')) out.push(...rows.flatMap(row => videoSuggestion(row, '', undefined)));
     if (type === 'playlist' && indexed.includes('playlist')) out.push(...rows.flatMap(row => playlistSuggestion(row)));
     if (type === 'category' && types.includes('category')) {
-      out.push(...VIDEO_CATEGORIES.slice(offset, offset + limit).map(category => ({ text: category.label.en, type: 'category' as const, metadata: { category: category.value } })));
+      out.push(...getActiveVideoCategories().slice(offset, offset + limit).map(category => ({ text: category.label.en, type: 'category' as const, metadata: { category: category.value } })));
     }
   }
   return out.map(({ alt: _alt, ...s }: RankedSuggestion) => s);

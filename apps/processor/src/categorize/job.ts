@@ -17,11 +17,12 @@ import type { Logger } from '@al-ummah/logger';
 import {
   CATEGORY_DRAFT_BUDGET_SHARE,
   CATEGORY_MODEL,
-  CATEGORY_SYSTEM_PROMPT,
   CATEGORY_TEST_HOOK_MODEL,
   CATEGORIZE_CONFIG_KEY,
   buildCategoryText,
   categoryInputHash,
+  categorySystemPrompt,
+  loadVideoCategories,
   categoryPatchForVideo,
   categoryUserMessage,
   findCategorySuggestionByHash,
@@ -84,7 +85,7 @@ export function isCategorizePayload(value: unknown): value is CategorySuggestPay
 
 /** Worst-case neurons of one suggestion (prompt + text in, the JSON answer out), with margin. */
 export function estimateCategorizeNeurons(text: string): number {
-  return neuronsFor(CATEGORY_MODEL, estimateTokens(CATEGORY_SYSTEM_PROMPT) + estimateTokens(text) + 30, MAX_OUTPUT_TOKENS) * 1.25;
+  return neuronsFor(CATEGORY_MODEL, estimateTokens(categorySystemPrompt()) + estimateTokens(text) + 30, MAX_OUTPUT_TOKENS) * 1.25;
 }
 
 async function loadConfig(env: CategorizeEnv) {
@@ -210,6 +211,8 @@ export async function handleCategorySuggest(
   }
   const db = env.SEARCH_DB as unknown as SearchDb;
   const { subjectId, subjectType } = payload;
+  // The admin-managed list: the prompt names only active categories, and answers map onto them
+  await loadVideoCategories(db);
 
   let row: CategorySuggestionRow | null = await getCategorySuggestion(db, subjectId);
   if (!row) {
@@ -292,6 +295,7 @@ export async function handleCategorySuggest(
       logger.warn('[Categorize] Daily neuron cap reached; flagged for admin, retried by the daily sweep', { alert: 'category_suggest_budget', subjectId, cap: config.dailyNeuronCap });
       return { status: 'done', result: 'budget' };
     }
+    const systemPrompt = categorySystemPrompt();
     const ctx: AiContext = { ai: env.AI, db: env.REPORTS_DB, logger, gatewayId: env.AI_GATEWAY_ID || undefined, surface: `category_${subjectType}`, spent: 0, now, feature: CATEGORIZE_FEATURE };
     try {
       const result = await runModel(
@@ -299,13 +303,13 @@ export async function handleCategorySuggest(
         CATEGORY_MODEL,
         {
           messages: [
-            { role: 'system', content: CATEGORY_SYSTEM_PROMPT },
+            { role: 'system', content: systemPrompt },
             { role: 'user', content: categoryUserMessage(text) },
           ],
           max_tokens: MAX_OUTPUT_TOKENS,
           temperature: 0,
         },
-        estimateTokens(CATEGORY_SYSTEM_PROMPT) + estimateTokens(text),
+        estimateTokens(systemPrompt) + estimateTokens(text),
         (r) => estimateTokens(typeof (r as { response?: unknown })?.response === 'string' ? (r as { response: string }).response : JSON.stringify((r as { response?: unknown })?.response ?? '')),
       );
       scores = parseCategoryResponse(result);

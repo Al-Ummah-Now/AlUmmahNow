@@ -1,6 +1,6 @@
 import { Bool, DateTime, Str } from "chanfana";
 import { z } from "zod";
-import { PLAYLIST_SORT_DIRECTIONS, PLAYLIST_SORT_FIELDS, PLAYLIST_SORT_MODES, VideoCategory, type VideoMediaProviders } from "@al-ummah/shared-types";
+import { PLAYLIST_SORT_DIRECTIONS, PLAYLIST_SORT_FIELDS, PLAYLIST_SORT_MODES, type VideoMediaProviders, CATEGORY_SLUG_PATTERN } from "@al-ummah/shared-types";
 
 // Pure business/database models - represent data as stored in R2
 
@@ -166,7 +166,7 @@ export const Video = z.object({
     }).optional(),
     isDraft: z.boolean().optional(),
     tags: z.array(z.string()).default([]),
-    category: z.nativeEnum(VideoCategory).optional(),
+    category: z.string().regex(CATEGORY_SLUG_PATTERN).optional(),
     // Who set the category: the uploader, the AI (a reviewable suggestion) or an admin
     categorySource: z.enum(['uploader', 'ai', 'admin']).optional(),
     language: z.enum(['en', 'ar', 'ur', 'fr']).optional(),

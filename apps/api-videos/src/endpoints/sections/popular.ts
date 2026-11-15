@@ -1,4 +1,4 @@
-import { isShortOrFlag } from "@al-ummah/shared-types";
+import { isShortOrFlag, CATEGORY_SLUG_PATTERN } from "@al-ummah/shared-types";
 import { PublicRoute, AppContext } from "../../base";
 import { isVideoPubliclyVisible } from "../../lib/visibility";
 import { Num, Str } from "chanfana";
@@ -27,7 +27,7 @@ const VideoResponseSchema = z.object({
   isShort: z.boolean().optional(),
   commentsCount: z.number(),
   duration: z.number().optional(),
-  category: z.nativeEnum(VideoCategory).optional(),
+  category: z.string().regex(CATEGORY_SLUG_PATTERN).optional(),
   isPublic: z.boolean().optional(),
   engagementRate: z.number().optional(),
 });
@@ -59,7 +59,7 @@ export class PopularVideosSection extends PublicRoute {
           description: "Pagination cursor from previous response",
         }).optional(),
         period: z.enum(['all', 'monthly', 'weekly', 'daily']).optional().default('all').describe("Time period for popularity calculation"),
-        category: z.nativeEnum(VideoCategory).optional().describe("Filter by video category"),
+        category: z.string().regex(CATEGORY_SLUG_PATTERN).optional().describe("Filter by video category"),
         minViews: Num({
           description: "Minimum view count threshold",
           default: 0,

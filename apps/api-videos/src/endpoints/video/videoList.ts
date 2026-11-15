@@ -1,4 +1,4 @@
-import { can, isShort } from "@al-ummah/shared-types";
+import { can, isShort, CATEGORY_SLUG_PATTERN } from "@al-ummah/shared-types";
 import { Num, Str } from "chanfana";
 import { publicVideoFields, uploaderProcessingIssue } from '../../lib/transformations';
 import { string, z } from "zod";
@@ -64,7 +64,7 @@ export class VideosList extends OptionalAuthRoute {
 				sort: z.enum(["date", "views", "title", "likes"]).optional().default("date").describe("Sort order for videos"),
 				filter: z.enum(["all", "public", "private", "live"]).optional().default("all").describe("Filter videos by type"),
 				channelId: Str({ description: "Filter by specific channel ID" }).optional().nullable(),
-				category: z.nativeEnum(VideoCategory).optional().describe("Filter by video category (e.g., 'quran_recitation', 'islamic_history')"),
+				category: z.string().regex(CATEGORY_SLUG_PATTERN).optional().describe("Filter by video category (e.g., 'quran_recitation', 'islamic_history')"),
 				format: z.enum(["video", "short"]).optional().describe("Only Shorts (`short`) or everything but Shorts (`video`)"),
 				q: Str({ description: "Only videos whose title contains this text (any language, case-insensitive). A page can come back short with a cursor: keep following it." }).max(200).optional(),
 			}),

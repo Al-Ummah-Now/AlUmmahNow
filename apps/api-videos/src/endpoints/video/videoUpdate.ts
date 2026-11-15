@@ -1,4 +1,5 @@
 import { bunnyRef } from '../../lib/media/providers';
+import { categoryRefusal } from "../../lib/categories";
 import { bunnyClientForVideo, type LibraryHints } from '../../lib/bunny/libraries';
 import { verifyThumbnailUrl } from "../../lib/thumbnail/repair";
 import { unsignedBunnyUrl } from "../../lib/bunny-signing";
@@ -147,6 +148,10 @@ export class VideoUpdate extends AuthenticatedRoute {
 				403
 			);
 		}
+
+		// An active category, or the (possibly retired) one the video already has
+		const refused = categoryRefusal(c, videoUpdateInput.category, existingVideo.category);
+		if (refused) return refused;
 
 		// A new thumbnail must have the video's shape (lib/thumbnail/shape.ts)
 		let thumbnailType: 'auto' | 'custom' | undefined;

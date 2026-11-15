@@ -14,6 +14,7 @@ import {
   CreateTemplateRequest,
   TemplateListResponse,
 } from '@al-ummah/shared-types';
+import { categoryAssignability } from '@al-ummah/shared-types';
 import {
   CreateTemplateRequestSchema,
   validateCreateTemplateRequest,
@@ -250,6 +251,12 @@ export class CreateUploadDefaultEndpoint extends AuthenticatedRoute {
           },
           400
         );
+      }
+
+      // A default category must be an active category of the admin-managed list
+      const templateCategory = (requestData.template as { category?: string } | undefined)?.category;
+      if (templateCategory && categoryAssignability(templateCategory) !== 'ok') {
+        return c.json({ success: false, code: `${categoryAssignability(templateCategory)}_category`, error: 'Validation failed' }, 400);
       }
 
       // Check template size

@@ -4,16 +4,7 @@
  */
 
 import { z } from 'zod';
-import {
-  VideoCategory,
-  VideoVisibility,
-  CommentModeration,
-  VideoLicense,
-  LocalizedText,
-  TemplateFields,
-  CreateTemplateRequest,
-  UpdateTemplateRequest,
-} from '@al-ummah/shared-types';
+import { VideoVisibility, CommentModeration, VideoLicense, LocalizedText, TemplateFields, CreateTemplateRequest, UpdateTemplateRequest, CATEGORY_SLUG_PATTERN } from '@al-ummah/shared-types';
 import { validateTemplateVariables } from './variables';
 
 /**
@@ -60,7 +51,7 @@ export const TemplateFieldsSchema = z.object({
   description: z.string().max(5000).optional(),
   descriptionLocalized: LocalizedTextSchema.optional(),
   tags: z.array(z.string().max(50)).max(30).optional(),
-  category: z.nativeEnum(VideoCategory).optional(),
+  category: z.string().regex(CATEGORY_SLUG_PATTERN).optional(),
   visibility: z.enum(['public', 'private', 'unlisted'] as const).optional(),
   language: z.enum(['en', 'ar', 'ur', 'fr'] as const).optional(),
   commentSettings: CommentSettingsSchema.optional(),

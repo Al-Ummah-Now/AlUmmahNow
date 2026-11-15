@@ -1,4 +1,4 @@
-import { isShortOrFlag } from "@al-ummah/shared-types";
+import { isShortOrFlag, CATEGORY_SLUG_PATTERN, findVideoCategory } from "@al-ummah/shared-types";
 import { PublicRoute, AppContext } from "../../base";
 import { isVideoPubliclyVisible } from "../../lib/visibility";
 import { Num, Str } from "chanfana";
@@ -27,7 +27,7 @@ const VideoResponseSchema = z.object({
   isShort: z.boolean().optional(),
   commentsCount: z.number(),
   duration: z.number().optional(),
-  category: z.nativeEnum(VideoCategory).optional(),
+  category: z.string().regex(CATEGORY_SLUG_PATTERN).optional(),
   isPublic: z.boolean().optional(),
 });
 
@@ -36,7 +36,7 @@ const CategoryVideosResponseSchema = z.object({
   data: z.array(VideoResponseSchema),
   cursor: z.string().optional(),
   metadata: z.object({
-    category: z.nativeEnum(VideoCategory),
+    category: z.string().regex(CATEGORY_SLUG_PATTERN),
     totalCount: z.number().optional(),
     lastUpdated: z.string(),
     sortBy: z.enum(['recent', 'popular', 'trending']),
@@ -51,7 +51,7 @@ export class CategoryVideosSection extends PublicRoute {
     description: "Get videos filtered by a specific category with various sorting options.",
     request: {
       params: z.object({
-        category: z.nativeEnum(VideoCategory).describe("Video category to filter by"),
+        category: z.string().regex(CATEGORY_SLUG_PATTERN).describe("Video category to filter by"),
       }),
       query: z.object({
         limit: Num({
@@ -119,8 +119,8 @@ export class CategoryVideosSection extends PublicRoute {
       const { category } = data.params;
       const { limit, cursor, sort = 'recent', subCategory } = data.query;
 
-      // Validate category exists in enum
-      if (!Object.values(VideoCategory).includes(category)) {
+      // A category of the admin-managed list (retired ones keep their pages)
+      if (!findVideoCategory(category)) {
         return c.json(
           {
             success: false,
