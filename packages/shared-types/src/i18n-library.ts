@@ -156,6 +156,18 @@ export interface NotificationCenterTranslations {
     languages: { en: string; ar: string };
     alwaysInApp: string;
   };
+  /** Settings: Web Push on this browser (#1287). */
+  browserSettings: {
+    title: string;
+    description: string;
+    toggle: string;
+    toggleDescription: string;
+    denied: string;
+    unsupported: string;
+    iosHint: string;
+    enableError: string;
+    disableError: string;
+  };
   justNow: string;
   minutesAgo: string;
   hoursAgo: string;
@@ -323,6 +335,17 @@ export const NOTIFICATION_CENTER_EN: NotificationCenterTranslations = {
     languages: { en: 'English', ar: 'العربية' },
     alwaysInApp: 'Account notices always appear in your notifications.',
   },
+  browserSettings: {
+    title: 'Browser notifications',
+    description: 'Get notifications on this device, even when Al Ummah Now isn’t open.',
+    toggle: 'Notifications in this browser',
+    toggleDescription: 'Follows the categories you turned on above.',
+    denied: 'Notifications are blocked for this site. Allow them in your browser’s site settings, then turn them on here.',
+    unsupported: 'This browser can’t receive notifications.',
+    iosHint: 'On iPhone and iPad, add Al Ummah Now to your Home Screen, then open it from there to turn notifications on.',
+    enableError: 'Couldn’t turn on browser notifications. Try again.',
+    disableError: 'Couldn’t turn off browser notifications. Try again.',
+  },
   justNow: 'Just now',
   minutesAgo: '{count} min ago',
   hoursAgo: '{count} h ago',
@@ -418,6 +441,17 @@ export const NOTIFICATION_CENTER_AR: NotificationCenterTranslations = {
     languageDescription: 'لغة الرسائل التي نرسلها إليك',
     languages: { en: 'English', ar: 'العربية' },
     alwaysInApp: 'تظهر إشعارات الحساب دائمًا في إشعاراتك.',
+  },
+  browserSettings: {
+    title: 'إشعارات المتصفح',
+    description: 'تصلك الإشعارات على هذا الجهاز حتى حين لا يكون الأمة الآن مفتوحًا.',
+    toggle: 'الإشعارات في هذا المتصفح',
+    toggleDescription: 'تتبع الفئات التي فعّلتها أعلاه.',
+    denied: 'الإشعارات محظورة لهذا الموقع. اسمح بها من إعدادات الموقع في متصفحك، ثم فعّلها هنا.',
+    unsupported: 'لا يستطيع هذا المتصفح استقبال الإشعارات.',
+    iosHint: 'على iPhone وiPad، أضف الأمة الآن إلى الشاشة الرئيسية، ثم افتحه منها لتفعيل الإشعارات.',
+    enableError: 'تعذّر تفعيل إشعارات المتصفح. حاول مرة أخرى.',
+    disableError: 'تعذّر إيقاف إشعارات المتصفح. حاول مرة أخرى.',
   },
   justNow: 'الآن',
   minutesAgo: 'منذ {count} دقيقة',

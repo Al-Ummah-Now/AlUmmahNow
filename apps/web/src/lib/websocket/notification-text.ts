@@ -88,3 +88,32 @@ export function resolveNotificationText(
     message: event.message || '',
   };
 }
+
+/** One key's templates: `{name}` placeholders, filled from the notification's params. */
+export interface NotificationTemplate {
+  title: string;
+  message: string;
+  /** accountWarning: the reason code → words (`{reason}`). */
+  reasons?: Record<string, string>;
+}
+
+/**
+ * Every stored notification key's templates in one language, as resolveNotificationText reads
+ * them: the Web Push service worker (/push-sw.js) renders with these, so a pushed
+ * notification reads like the same row in the notification center.
+ */
+export function notificationTemplates(t: AppTranslations): Record<RealtimeNotificationKey, NotificationTemplate> {
+  const texts = t.notifications.realtime;
+  const out = {} as Record<RealtimeNotificationKey, NotificationTemplate>;
+  for (const [key, mapping] of Object.entries(KEY_TO_TEXT) as Array<[Exclude<RealtimeNotificationKey, 'accountWarning'>, (typeof KEY_TO_TEXT)[keyof typeof KEY_TO_TEXT]]>) {
+    out[key] = { title: texts[mapping.title], message: texts[mapping.message] };
+  }
+  const upload = t.uploadStatus?.notification;
+  if (upload) {
+    out.uploadReady = { title: upload.readyTitle, message: upload.readyMessage };
+    out.uploadFailed = { title: upload.failedTitle, message: upload.failedMessage };
+  }
+  const warning = t.notificationCenter.accountWarning;
+  out.accountWarning = { title: warning.title, message: warning.message, reasons: { ...(warning.reasons as Record<string, string>) } };
+  return out;
+}
