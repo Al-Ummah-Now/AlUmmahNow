@@ -137,10 +137,15 @@ test.describe('Release: Studio Comments', () => {
         // The Dashboard's Recent comments lists it
         await page.goto(`${studio}/dashboard`);
         const recent = page.getByTestId('studio-dash-comment').filter({ hasText: marker });
+        // Reload only once the card has loaded without it (the index fills in from a queue);
+        // the Dashboard shows skeletons until all of its cards' data is in
         await expect(async () => {
-          if (!(await recent.isVisible())) await page.reload();
-          await expect(recent).toBeVisible({ timeout: 8000 });
-        }).toPass({ timeout: 60000 });
+          await expect(page.getByTestId('studio-dash-comments-body')).toBeVisible({ timeout: 45000 });
+          if (!(await recent.isVisible())) {
+            await page.reload();
+            throw new Error('not in Recent comments yet');
+          }
+        }).toPass({ timeout: 120000 });
         if (locale === 'ar') await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
       } finally {
         if (blocked) await apiFetch(owner, `/api/channels/${channelId}/blocks/${commenter.user.userId}`, { method: 'DELETE', headers: { channelId } });
