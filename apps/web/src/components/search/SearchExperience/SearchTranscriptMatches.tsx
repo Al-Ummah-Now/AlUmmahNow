@@ -74,10 +74,12 @@ export function SearchTranscriptMatches({ matches, query }: { matches: SearchTra
                 </div>
                 <div className="min-w-0 flex-1 space-y-1">
                   <p dir="auto" className="line-clamp-2 text-sm font-semibold text-foreground">{title}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {channelLabel({ channelName: m.channel?.name ?? m.video.channelName ?? '', channelNameLocalized: m.channel?.nameLocalized ?? m.video.channelNameLocalized }, lang)}
-                    {' · '}
-                    {fill(t.search.saidAt, { time })}
+                  <p className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+                    <span className="shrink-0">{fill(t.search.saidAt, { time })}</span>
+                    <span aria-hidden="true">·</span>
+                    <span dir="auto" className="truncate">
+                      {channelLabel({ channelName: m.channel?.name ?? m.video.channelName ?? '', channelNameLocalized: m.channel?.nameLocalized ?? m.video.channelNameLocalized }, lang)}
+                    </span>
                   </p>
                   <blockquote dir="auto" lang={m.language} data-testid="search-transcript-text" className="line-clamp-3 border-s-2 border-brand ps-2 text-sm text-foreground">
                     {markPassage(m.text, query).map((part, i) =>
