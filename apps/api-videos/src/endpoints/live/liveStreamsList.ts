@@ -8,6 +8,8 @@ import R2Repository from "../../lib/r2Repo";
 import { logger } from '../../lib/logger';
 import { scanFill } from '../../lib/listFill';
 import { PUBLIC_DISLIKES_COUNT } from "../../lib/reactions";
+import { can } from "@al-ummah/shared-types";
+import { roleOnChannel } from "../../lib/channelAccess";
 
 export class LiveStreamsList extends OptionalAuthRoute {
 	schema = {
@@ -71,11 +73,23 @@ export class LiveStreamsList extends OptionalAuthRoute {
 			// returned empty pages with a cursor when the first streams were private,
 			// hidden or of another status/channel.
 			const auth = c.get('auth');
+			// Listing one channel: a member with live.manage on it sees its streams
+			// as the owner does (docs/specs/CHANNEL-ROLES.md). Resolved once.
+			let channelManager = false;
+			if (auth?.userId && channelId) {
+				try {
+					channelManager = can(await roleOnChannel(c.env as never, channelId, auth.userId), 'live.manage');
+				} catch (error) {
+					logger.warn('[LiveStreamsList] Channel read failed; listed as a visitor', { channelId, error: error instanceof Error ? error.message : String(error) });
+				}
+			}
+			const managesStream = (stream: { userId?: string; channelId?: string | null }) =>
+				!!auth && (stream.userId === auth.userId || (channelManager && stream.channelId === channelId));
 			const isListed = (stream: LiveStreamType | null): stream is LiveStreamType => {
 				if (!stream) return false;
 				if (status && stream.status !== status) return false;
 				if (channelId && stream.channelId !== channelId) return false;
-				const isOwner = !!auth && stream.userId === auth.userId;
+				const isOwner = managesStream(stream);
 				// Hidden streams (suspended channel, banned owner, moderation) reach their owner only
 				if ((stream as { isHidden?: boolean }).isHidden && !isOwner) return false;
 				// Private streams only for their owner
@@ -103,11 +117,13 @@ export class LiveStreamsList extends OptionalAuthRoute {
 			const streams = scan.items;
 
 			// Transform to view models
-			const streamViews = streams.map(({ review, reviewShadow: _rs, reviewSessionId: _ri, liveAgainSessionId: _la, ...stream }: LiveStreamType & { review?: unknown; reviewShadow?: unknown; reviewSessionId?: unknown; liveAgainSessionId?: unknown }) => ({
+			const streamViews = streams.map(({ review, reviewShadow: _rs, reviewSessionId: _ri, liveAgainSessionId: _la, createdBy, ...stream }: LiveStreamType & { review?: unknown; reviewShadow?: unknown; reviewSessionId?: unknown; liveAgainSessionId?: unknown; createdBy?: string }) => ({
 				...stream,
+				// Who created it (a channel member) is for those who manage the channel's live
+				...(managesStream(stream) && createdBy ? { createdBy } : {}),
 				// The recording's review is the owner's (Studio); a held recording's URL is theirs only (VR9)
-				...(auth?.userId === stream.userId && review ? { review } : {}),
-				...(recordingHidden({ review }, auth?.userId === stream.userId) ? { vodUrl: null } : {}),
+				...(managesStream(stream) && review ? { review } : {}),
+				...(recordingHidden({ review }, managesStream(stream)) ? { vodUrl: null } : {}),
 				likesCount: stream.likes?.length || 0,
 				dislikes: [],
 				dislikesCount: PUBLIC_DISLIKES_COUNT,
@@ -118,7 +134,7 @@ export class LiveStreamsList extends OptionalAuthRoute {
 					: undefined,
 				// Remove sensitive data for public view
 				streamKey: undefined,
-				rtmpUrl: auth?.userId === stream.userId ? stream.rtmpUrl : undefined,
+				rtmpUrl: managesStream(stream) ? stream.rtmpUrl : undefined,
 			}));
 
 			// Sort by date created (newest first) and status (live streams first)

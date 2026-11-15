@@ -42,7 +42,7 @@ function buildPinSchema(summary: string, description: string) {
           },
         },
         '400': { description: 'Comment cannot be pinned', content: { 'application/json': { schema: errorSchema } } },
-        '403': { description: 'Not the channel owner', content: { 'application/json': { schema: errorSchema } } },
+        '403': { description: 'No comment.moderate role on the channel', content: { 'application/json': { schema: errorSchema } } },
         '404': { description: 'Post or comment not found', content: { 'application/json': { schema: errorSchema } } },
       },
     },
@@ -95,13 +95,13 @@ async function setCommentPinned(
 }
 
 /**
- * Pin a top-level comment. Only the owner of the post's channel may pin.
+ * Pin a top-level comment. The post's channel owner, a channel admin or a channel moderator may pin.
  * A post has at most one pinned comment: pinning a new one unpins the previous.
  * Replies cannot be pinned (they are only shown inside their thread).
  */
 export class PinPostComment extends AuthenticatedRoute {
   schema = buildPinSchema(
-    'Pin a comment (channel owner only)',
+    'Pin a comment (channel owner, channel admin or channel moderator)',
     'Pins a top-level comment to the top of the comment list. Replaces any previously pinned comment.'
   );
 
@@ -140,10 +140,10 @@ export class PinPostComment extends AuthenticatedRoute {
 }
 
 /**
- * Unpin a comment. Only the owner of the post's channel may unpin. Idempotent.
+ * Unpin a comment. The post's channel owner, a channel admin or a channel moderator may unpin. Idempotent.
  */
 export class UnpinPostComment extends AuthenticatedRoute {
-  schema = buildPinSchema('Unpin a comment (channel owner only)', 'Removes the pinned state from a comment.');
+  schema = buildPinSchema('Unpin a comment (channel owner, channel admin or channel moderator)', 'Removes the pinned state from a comment.');
 
   async handle(c: AppContext) {
     const userId = this.getUserId(c);

@@ -21,7 +21,7 @@ import { imageGate, queueImageScan } from '../../lib/review/images';
 import { CHANNEL_SUSPENDED_CODE } from '../../middleware/auth';
 import { channelNameFields } from '../../lib/channelName';
 import { markScheduled } from '../../lib/scheduled-posts';
-import { parsePostFields } from '@al-ummah/shared-types';
+import { can, channelRoleOf, parsePostFields } from '@al-ummah/shared-types';
 import { platformMediaHost, postFieldsMessage } from '../../lib/post-v2';
 
 // Sanitization configuration for community posts
@@ -207,10 +207,14 @@ export class CreateCommunityPost extends AuthenticatedRoute {
 
       const channel = (await channelData.json()) as Channel;
 
-      // Verify user owns this channel
-      if (channel.userId !== userId) {
-        return c.json({ error: 'User does not own this channel' }, 403);
+      // The owner, or a member whose channel role grants post.manage
+      // (docs/specs/CHANNEL-ROLES.md); channel roles are not site roles
+      if (!can(channelRoleOf(channel as never, userId), 'post.manage')) {
+        return c.json({ error: 'You cannot post on this channel' }, 403);
       }
+      // The post belongs to the channel's owner, like a member's upload;
+      // authorId records the member who wrote it (never in public views)
+      const ownerId = channel.userId;
 
       // A suspended channel publishes nothing new (admin content management)
       if (channel.isSuspended || (channel as { isDeleted?: boolean }).isDeleted) {
@@ -221,7 +225,8 @@ export class CreateCommunityPost extends AuthenticatedRoute {
       const post: CommunityPost = {
         id: crypto.randomUUID(),
         channelId: channelId,
-        userId: userId,
+        userId: ownerId,
+        ...(ownerId !== userId ? { authorId: userId } : {}),
         type: body.type,
         ...v2.value,
         content: body.content ? sanitizeHtml(body.content, sanitizeOptions) : undefined,
@@ -289,7 +294,7 @@ export class CreateCommunityPost extends AuthenticatedRoute {
       }
 
       if (gate?.scans) {
-        await queueImageScan(c.env as never, gate, { subject: 'post', subjectId: `${channelId}/${post.id}`, reviewId, ownerId: userId, channelId, images: imageUrls.slice(0, 10), text: communityPostScanText(post) });
+        await queueImageScan(c.env as never, gate, { subject: 'post', subjectId: `${channelId}/${post.id}`, reviewId, ownerId, channelId, images: imageUrls.slice(0, 10), text: communityPostScanText(post) });
       }
 
       // Send to processor queue for notifications (if published; a post held for review is announced when it clears)

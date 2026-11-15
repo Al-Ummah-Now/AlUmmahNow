@@ -5,6 +5,7 @@
  * (SCALABILITY-AUDIT AV-9), so none of them undoes another's.
  */
 import R2Repository from './r2Repo';
+import { can, channelRoleOf } from '@al-ummah/shared-types';
 
 /** Adds `delta` to the post's `comments` count (never below 0). Resolves false when the post is gone. */
 export async function bumpPostComments(bucket: R2Bucket, postKey: string, delta: number): Promise<boolean> {
@@ -12,6 +13,26 @@ export async function bumpPostComments(bucket: R2Bucket, postKey: string, delta:
 		post.comments = Math.max(0, (Number(post.comments) || 0) + delta);
 	});
 	return saved !== null;
+}
+
+/**
+ * Whether `viewerId` manages the channel's posts: its owner, or a member
+ * whose channel role grants post.manage (docs/specs/CHANNEL-ROLES.md). They
+ * see scheduled and held posts, and who wrote each one (`authorId`).
+ */
+export async function managesChannelPosts(channels: R2Bucket | undefined, channelId: string, viewerId: string | null | undefined): Promise<boolean> {
+	if (!channels || !viewerId) return false;
+	const object = await channels.get(channelId);
+	if (!object) return false;
+	const channel = (await object.json()) as { userId?: string; members?: unknown } | null;
+	return can(channelRoleOf(channel, viewerId), 'post.manage');
+}
+
+/** A post as a viewer sees it: `authorId` only for those who manage the channel's posts. */
+export function postForViewer<T extends { authorId?: string }>(post: T, manager: boolean): T {
+	if (manager || post.authorId === undefined) return post;
+	const { authorId: _authorId, ...rest } = post;
+	return rest as T;
 }
 
 /**

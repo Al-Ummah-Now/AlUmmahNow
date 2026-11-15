@@ -336,6 +336,8 @@ export const LiveStream = z.object({
     title: Str(),
     description: Str().optional(),
     userId: Str(),
+    /** The channel member who created it, when not the channel's owner (`userId`) */
+    createdBy: Str().optional(),
     channelId: Str(),
     dateCreated: DateTime(),
     dateModified: DateTime(),

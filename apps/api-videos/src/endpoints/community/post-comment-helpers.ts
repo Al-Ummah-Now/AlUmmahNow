@@ -1,4 +1,5 @@
 import type { Channel, CommunityPost, PostComment } from '@al-ummah/shared-types';
+import { can, channelRoleOf } from '@al-ummah/shared-types';
 
 /**
  * Shared helpers for community post comment endpoints.
@@ -102,8 +103,8 @@ export type PostOwnerCheck =
   | { ok: false; status: 403 | 404; error: string };
 
 /**
- * Load a post and verify the user owns the channel the post belongs to.
- * Ownership is resolved from the channel object in the channels bucket.
+ * Load a post and verify the user may moderate its comments: the owner of
+ * the post's channel, or a member holding comment.moderate on it.
  */
 export async function loadPostForChannelOwner(
   env: { community_posts: R2Bucket; channels: R2Bucket },
@@ -123,11 +124,13 @@ export async function loadPostForChannelOwner(
   }
   const channel = await channelObj.json<Channel>();
 
-  if (channel.userId !== userId) {
+  // The owner, or a member whose channel role grants comment.moderate
+  // (docs/specs/CHANNEL-ROLES.md: channel admins and channel moderators)
+  if (!can(channelRoleOf(channel as never, userId), 'comment.moderate')) {
     return {
       ok: false,
       status: 403,
-      error: 'Only the channel owner can perform this action',
+      error: 'Only the channel owner or a channel moderator can perform this action',
     };
   }
 

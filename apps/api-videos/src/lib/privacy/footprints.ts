@@ -85,6 +85,8 @@ export function footprintNeedsValue(bucket: FootprintBucket, key: string): boole
 export function videoUserIds(video: unknown): string[] {
 	const ids: Array<string | null> = [];
 	const v = (video ?? {}) as Json;
+	// The channel member who uploaded or created it (docs/specs/CHANNEL-ROLES.md §7)
+	ids.push(userIdOf(v.uploadedBy), userIdOf(v.createdBy));
 	for (const kind of ['likes', 'dislikes']) {
 		if (Array.isArray(v[kind])) for (const r of v[kind]) ids.push(userIdOf(r?.userId));
 	}
@@ -117,16 +119,19 @@ export function footprintsOf(bucket: FootprintBucket, key: string, value?: unkno
 		case 'channels': {
 			if (!v) return [];
 			const subs = Array.isArray(v.subscriptions) ? v.subscriptions : [];
-			return [{ kind: 'channel', targetId: key, userIds: uniqueSorted(subs.map((s: Json) => userIdOf(s?.userId))), whole: true }];
+			// Channel members (channel roles) are named on the record too
+			const members = Array.isArray(v.members) ? v.members : [];
+			return [{ kind: 'channel', targetId: key, userIds: uniqueSorted([...subs, ...members].map((s: Json) => userIdOf(s?.userId))), whole: true }];
 		}
 		case 'playlists': {
-			const owner = userIdOf(v?.userId);
-			return owner ? [{ kind: 'playlist', targetId: key, userIds: [owner], whole: false }] : [];
+			const ids = uniqueSorted([userIdOf(v?.userId), userIdOf(v?.createdBy)]);
+			return ids.length ? [{ kind: 'playlist', targetId: key, userIds: ids, whole: false }] : [];
 		}
 		case 'community_posts': {
 			if (isCommunityPostKey(key)) {
-				const author = userIdOf(v?.userId);
-				return author ? [{ kind: 'post-author', targetId: key, userIds: [author], whole: false }] : [];
+				// The channel owner, and the member who wrote it (authorId)
+				const authors = uniqueSorted([userIdOf(v?.userId), userIdOf(v?.authorId)]);
+				return authors.length ? [{ kind: 'post-author', targetId: key, userIds: authors, whole: false }] : [];
 			}
 			const parts = key.split('/');
 			const postId = parts[1];

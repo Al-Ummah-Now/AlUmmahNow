@@ -3,6 +3,7 @@ import { Str } from "chanfana";
 import { z } from "zod";
 import { LiveStream as BusinessLiveStream, ResponseError } from "../../lib/types";
 import { LiveStreamUpdateInput } from "../../lib/model/input";
+import { canManageLiveStream } from "../../lib/channelAccess";
 import { LiveStreamView } from "../../lib/model/view";
 import R2Repository, { rethrowBusy } from "../../lib/r2Repo";
 import { addAuthToSchema } from "../../lib/openapi-auth";
@@ -117,8 +118,9 @@ export class LiveStreamUpdate extends AuthenticatedRoute {
 				);
 			}
 
-			// Check if user owns the stream
-			if (existingStream.userId !== userId) {
+			// The owner, or a channel member with live.manage (docs/specs/CHANNEL-ROLES.md)
+			const mayManage = await canManageLiveStream(c.env as never, existingStream, userId);
+			if (!mayManage) {
 				return c.json(
 					{
 						success: false,
@@ -145,7 +147,8 @@ export class LiveStreamUpdate extends AuthenticatedRoute {
 			// (SCALABILITY-AUDIT AV-3)
 			let previousStatus = existingStream.status;
 			const { data: updatedStream, rejected } = await repository.updateObjectOrReject<true>(`livestream:${id}`, (fresh) => {
-				if (fresh.userId !== userId || hasSuspensionHolds(fresh as Record<string, unknown>)) return { reject: true };
+				// The stream's owner and channel never change under an update
+				if (fresh.userId !== existingStream.userId || fresh.channelId !== existingStream.channelId || hasSuspensionHolds(fresh as Record<string, unknown>)) return { reject: true };
 				previousStatus = fresh.status;
 				Object.assign(fresh, updateData, { dateModified: new Date().toISOString() });
 

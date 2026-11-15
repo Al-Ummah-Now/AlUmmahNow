@@ -1,5 +1,5 @@
 import { isPostHeldByReview } from '@al-ummah/shared-types';
-import { isChannelDeleted } from '../../lib/community-posts';
+import { isChannelDeleted, managesChannelPosts, postForViewer } from '../../lib/community-posts';
 import { recordPostView, withPostViews } from '../../lib/post-views';
 import { z } from 'zod';
 import { isUpcoming } from '../../lib/scheduled-posts';
@@ -57,7 +57,10 @@ export class GetCommunityPost extends OptionalAuthRoute {
 
       // Don't show deleted posts, nor the posts of a deleted channel
       // A scheduled post waits for its time; only its author sees it before then (#1218)
-      if (post.status === PostStatus.DELETED || ((isUpcoming(post) || isPostHeldByReview(post as never)) && post.userId !== this.getUserId(c)) || (await isChannelDeleted(c.env.channels, postChannelId))) {
+      // Channel members with post.manage see them too (docs/specs/CHANNEL-ROLES.md)
+      const viewerId = this.getUserId(c);
+      const manager = !!viewerId && (post.userId === viewerId || await managesChannelPosts(c.env.channels, postChannelId, viewerId));
+      if (post.status === PostStatus.DELETED || ((isUpcoming(post) || isPostHeldByReview(post as never)) && !manager) || (await isChannelDeleted(c.env.channels, postChannelId))) {
         return c.json({ error: 'Post not found' }, 404);
       }
 
@@ -82,7 +85,7 @@ export class GetCommunityPost extends OptionalAuthRoute {
       await withPostCounts(c.env.NOTIFICATIONS_DB, [post]);
 
       // The channel's name in every language (lib/channelNames.ts)
-      const [named] = await withChannelNames(c.env.channels, [post]);
+      const [named] = await withChannelNames(c.env.channels, [postForViewer(post, manager)]);
       return c.json(named);
     } catch (error) {
       logger.error('Error getting community post:', error);

@@ -23,6 +23,7 @@ import { deleteStream, readStream, streamEnd, streamIngest, streamStart, streamS
 import { readLiveRouting } from '../../lib/live/store';
 import { parseBeacon, QoeRejected, recordBeacon } from '../../lib/live/qoe';
 import { signLiveVodUrl } from '../../lib/live/vod-sign';
+import { canManageLiveStream } from '../../lib/channelAccess';
 import { isLiveVodWithheld } from '@al-ummah/shared-types';
 
 const Params = z.object({ id: Str({ description: 'Live stream id' }) });
@@ -51,7 +52,7 @@ export function recordingHidden(s: object, isOwner: boolean): boolean {
 
 /** Public fields of a stream; encoder settings never leave the owner endpoints. */
 export function publicStream(s: LiveStreamRecord, isOwner: boolean) {
-	const { streamKey: _k, rtmpUrl: _r, providerMove, isTest: _t, likes, dislikes, comments, review, reviewShadow: _rs, reviewSessionId: _ri, liveAgainSessionId: _la, ...rest } = s as LiveStreamRecord & { likes?: unknown[]; dislikes?: unknown[]; comments?: unknown[] };
+	const { streamKey: _k, rtmpUrl: _r, providerMove, isTest: _t, createdBy, likes, dislikes, comments, review, reviewShadow: _rs, reviewSessionId: _ri, liveAgainSessionId: _la, ...rest } = s as LiveStreamRecord & { likes?: unknown[]; dislikes?: unknown[]; comments?: unknown[]; createdBy?: string };
 	return {
 		...rest,
 		// The recording's review is the owner's business (Studio shows it); the marker never leaves
@@ -61,12 +62,15 @@ export function publicStream(s: LiveStreamRecord, isOwner: boolean) {
 		dislikesCount: Array.isArray(dislikes) ? dislikes.length : 0,
 		commentsCount: Array.isArray(comments) ? comments.length : 0,
 		...(isOwner ? { providerMove: providerMove ?? null } : {}),
+		// The channel member who created it, for those who manage the channel's live
+		...(isOwner && createdBy ? { createdBy } : {}),
 	};
 }
 
 async function visibleStream(c: AppContext, id: string, userId: string | undefined): Promise<LiveStreamRecord | Response> {
 	const stream = await readStream(env(c), id);
-	const isOwner = !!stream && !!userId && stream.userId === userId;
+	// The owner, or a channel member with live.manage (docs/specs/CHANNEL-ROLES.md)
+	const isOwner = !!stream && !!userId && await canManageLiveStream(c.env as never, stream, userId);
 	if (!stream || ((stream.isPrivate || stream.isHidden) && !isOwner)) return fail(c, 404, 'not_found', 'Live stream not found');
 	// A recording held for review (or rejected) reaches its owner only, like a held video (VR9)
 	if (!isOwner && liveRecordingWithheld(stream)) return fail(c, 404, 'not_found', 'Live stream not found');
@@ -76,7 +80,7 @@ async function visibleStream(c: AppContext, id: string, userId: string | undefin
 async function ownedStream(c: AppContext, id: string, userId: string): Promise<LiveStreamRecord | Response> {
 	const stream = await readStream(env(c), id);
 	if (!stream) return fail(c, 404, 'not_found', 'Live stream not found');
-	if (stream.userId !== userId) return fail(c, 403, 'forbidden', 'Insufficient permissions for this stream');
+	if (!(await canManageLiveStream(c.env as never, stream, userId))) return fail(c, 403, 'forbidden', 'Insufficient permissions for this stream');
 	return stream;
 }
 
@@ -111,7 +115,7 @@ export class LiveStreamGet extends OptionalAuthRoute {
 		const userId = this.getUserId(c);
 		const stream = await visibleStream(c, params.id, userId);
 		if (stream instanceof Response) return stream;
-		const view = publicStream(stream, stream.userId === userId);
+		const view = publicStream(stream, await canManageLiveStream(c.env as never, stream, userId));
 		return { success: true, result: { stream: { ...view, vodUrl: await signVod(c, (view.vodUrl as string | null) ?? null) } } };
 	}
 }
@@ -129,7 +133,7 @@ export class LiveStreamStateGet extends OptionalAuthRoute {
 		const stream = await visibleStream(c, params.id, this.getUserId(c));
 		if (stream instanceof Response) return stream;
 		const state = await streamState(env(c), stream);
-		const hideRecording = recordingHidden(stream, stream.userId === this.getUserId(c));
+		const hideRecording = recordingHidden(stream, await canManageLiveStream(c.env as never, stream, this.getUserId(c)));
 		const settings = env(c).SEARCH_DB ? await readLiveRouting(env(c).SEARCH_DB!) : null;
 		c.header('cache-control', 'no-store');
 		return {

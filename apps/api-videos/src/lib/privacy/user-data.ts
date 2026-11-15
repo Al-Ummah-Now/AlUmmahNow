@@ -684,17 +684,23 @@ export async function eraseUserData(
 			await eraseChannelHandleHistory(asBucket(env.channel_tabs), channelId, ctx.budget);
 			return;
 		}
-		if (stripUserReactions(channel.subscriptions, userId).removed === 0) return;
-		// Conditional rewrite of the fresh channel (SCALABILITY-AUDIT AV-23)
+		const isMember = (list: unknown) => Array.isArray(list) && list.some((m: Json) => m?.userId === userId);
+		if (stripUserReactions(channel.subscriptions, userId).removed === 0 && !isMember(channel.members)) return;
+		// Conditional rewrite of the fresh channel (SCALABILITY-AUDIT AV-23):
+		// the user's subscription and their channel role (docs/specs/CHANNEL-ROLES.md §12)
 		let removed = 0;
+		let membership = false;
 		await updateJson<Json>(channels, key, (fresh) => {
 			const stripped = stripUserReactions(fresh.subscriptions, userId);
 			removed = stripped.removed;
-			if (removed === 0) return false;
-			fresh.subscriptions = stripped.list;
+			membership = isMember(fresh.members);
+			if (removed === 0 && !membership) return false;
+			if (removed > 0) fresh.subscriptions = stripped.list;
+			if (membership) fresh.members = (fresh.members as Json[]).filter((m) => m?.userId !== userId);
 			return true;
 		}, ctx.budget);
 		if (removed > 0) bump(summary.deleted, 'subscriptions', removed);
+		if (membership) bump(summary.deleted, 'channelMemberships');
 	};
 
 	/** An owned video is deleted (subtitles, media, record); another loses the user's reactions and comments. */
@@ -715,7 +721,11 @@ export async function eraseUserData(
 		}
 		// Strip and anonymise on the fresh video with a conditional write
 		// (SCALABILITY-AUDIT AV-23), counting only the attempt that landed
+		// A video or stream the user uploaded or created as a channel member stays
+		// with the channel; only the record of who did it is anonymised
+		const namedAs = (record: Json) => (['uploadedBy', 'createdBy'] as const).filter((field) => record[field] === userId);
 		const needsChange = (['likes', 'dislikes'] as const).some((kind) => stripUserReactions(video[kind], userId).removed > 0)
+			|| namedAs(video).length > 0
 			|| anonymizeVideoComments(structuredClone(video.comments), userId, newErasureSummary());
 		if (!needsChange) return;
 		let attempt = newErasureSummary();
@@ -729,6 +739,11 @@ export async function eraseUserData(
 					bump(attempt.deleted, 'videoReactions', removed);
 					changed = true;
 				}
+			}
+			for (const field of namedAs(fresh)) {
+				fresh[field] = DELETED_USER_ID;
+				bump(attempt.anonymized, 'memberUploads');
+				changed = true;
 			}
 			if (anonymizeVideoComments(fresh.comments, userId, attempt)) changed = true;
 			return changed;
@@ -748,7 +763,21 @@ export async function eraseUserData(
 		let postId = file.replace(/\.json$/, '');
 		if (!owned) {
 			const post = await readJson<Json>(community, key, ctx.budget);
-			if (!post || post.userId !== userId) return;
+			if (!post) return;
+			if (post.userId !== userId) {
+				// Written as a member of someone else's channel: the post stays with
+				// the channel, the author is anonymised (docs/specs/CHANNEL-ROLES.md §12)
+				if (post.authorId !== userId) return;
+				let anonymized = false;
+				await updateJson<Json>(community, key, (fresh) => {
+					anonymized = fresh.authorId === userId;
+					if (!anonymized) return false;
+					fresh.authorId = DELETED_USER_ID;
+					return true;
+				}, ctx.budget);
+				if (anonymized) bump(summary.anonymized, 'memberPosts');
+				return;
+			}
 			postId = post.id ?? postId;
 		}
 		for (const prefix of [`comments/${postId}/`, `likes/${postId}/`, `votes/${postId}/`, `comment-likes/${postId}/`]) {
@@ -801,6 +830,17 @@ export async function eraseUserData(
 	const erasePlaylistKey = async (ctx: PhaseContext, key: string, mine: string[]) => {
 		const playlist = await readJson<Json>(playlists, key, ctx.budget);
 		if (playlist && playlist.userId === userId) mine.push(key);
+		else if (playlist && playlist.createdBy === userId) {
+			// Created as a member of someone else's channel: kept, creator anonymised
+			let anonymized = false;
+			await updateJson<Json>(playlists, key, (fresh) => {
+				anonymized = fresh.createdBy === userId;
+				if (!anonymized) return false;
+				fresh.createdBy = DELETED_USER_ID;
+				return true;
+			}, ctx.budget);
+			if (anonymized) bump(summary.anonymized, 'memberPlaylists');
+		}
 	};
 
 	/** The touched posts (comments, likes, votes, comment likes) from the footprints. */

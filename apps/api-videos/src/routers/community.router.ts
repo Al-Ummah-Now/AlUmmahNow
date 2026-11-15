@@ -69,7 +69,7 @@ communityRouter.delete('/channels/:channelId/posts/:postId/comments/:commentId/l
 // Comments - Replies (public list; create via POST /comments with parentCommentId)
 communityRouter.get('/channels/:channelId/posts/:postId/comments/:commentId/replies', ListPostCommentReplies);
 
-// Comments - Creator moderation (auth required, channel owner only)
+// Comments - Creator moderation (auth required; comment.moderate channel role)
 communityRouter.post('/channels/:channelId/posts/:postId/comments/:commentId/pin', PinPostComment);
 communityRouter.delete('/channels/:channelId/posts/:postId/comments/:commentId/pin', UnpinPostComment);
 communityRouter.post('/channels/:channelId/posts/:postId/comments/:commentId/heart', HeartPostComment);

@@ -8,6 +8,7 @@ import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { addAuthToSchema } from "../../lib/openapi-auth";
 import { attachSession, type LiveStreamRecord, type StreamsEnv } from "../../lib/live/streams";
+import { uploadIdentity } from "../../lib/channelAccess";
 import { LiveRefusedError } from "../../lib/live/service";
 import { logger } from '../../lib/logger';
 import { PUBLIC_DISLIKES_COUNT } from "../../lib/reactions";
@@ -79,10 +80,15 @@ export class LiveStreamCreate extends AuthenticatedRoute {
 		const inputStream = request.body;
 
 		// Create the business live stream object
+		// A channel member creates the stream for the channel: it belongs to the
+		// channel's owner and records the member in createdBy
+		// (docs/specs/CHANNEL-ROLES.md §7; channelIdMiddleware checked live.manage)
+		const { ownerId, uploadedBy: createdBy } = uploadIdentity(c, userId);
 		const liveStream = {
 			...inputStream,
 			id: crypto.randomUUID(), // Generate a unique ID for the live stream
-			userId,
+			userId: ownerId,
+			...(createdBy ? { createdBy } : {}),
 			channelId,
 			dateCreated: new Date().toISOString(),
 			dateModified: new Date().toISOString(),
@@ -128,7 +134,7 @@ export class LiveStreamCreate extends AuthenticatedRoute {
 		const queue = new Queue(c.env.queue);
 		await queue.send(MessageType.LiveStreamCreate, { // Using dedicated LiveStreamCreate message type
 			liveStreamId: liveStream.id,
-			userId: userId,
+			userId: ownerId,
 			channelId: channelId,
 			timestamp: new Date().toISOString(),
 			title: liveStream.title,

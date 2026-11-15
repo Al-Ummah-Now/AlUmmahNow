@@ -10,7 +10,9 @@ import type { PostV2Fields, PostMedia } from './post-schema';
 export interface CommunityPost extends SoftDelete, Moderation, Omit<PostV2Fields, 'article'> {
   id: string;                        // UUID
   channelId: string;                 // Channel that created the post
-  userId: string;                    // User ID of the post creator
+  userId: string;                    // The channel owner (whoever wrote it; docs/specs/CHANNEL-ROLES.md §7)
+  /** The channel member who wrote it, when not the owner. Never in public views. */
+  authorId?: string;
   type: PostType;                    // text, image, poll, quiz, video, gif
   content?: string;                  // Text content (optional for image-only posts)
 
