@@ -407,13 +407,18 @@ describe('review of a track (MA8)', () => {
 		const track = await uploadedTrack(t);
 		await prepared(t, track.id);
 		const reviewId = t.read().audioTracks![1]!.review!.reviewId;
-		// Renamed while the first check runs: the new name gets its own check
+		// Renamed while the first check runs: no text-only result may finish that check, so the new
+		// name is checked once the check has ended (and then it can only pull the track back)
 		const queued = t.env.MODERATION_QUEUE.sent.length;
 		await updateTrack(t.asEnv, undefined, t.read() as never, track.id, { label: 'While checking' }, NOW);
-		assert.equal(t.env.MODERATION_QUEUE.sent.length, queued + 1);
-		assert.match((t.env.MODERATION_QUEUE.sent.at(-1) as { payload: { metadataText: string } }).payload.metadataText, /While checking/);
+		assert.equal(t.env.MODERATION_QUEUE.sent.length, queued, 'nothing queued while the check runs');
 		await applyAudioTrackOutcome(t.asEnv as never, 'v1', track.id, { reviewId, mode: 'enforce', routing: { route: 'approve', reasons: [] } } as never);
 		assert.equal(t.read().audioTracks![1]!.review!.status, 'approved');
+		assert.equal(t.env.MODERATION_QUEUE.sent.length, queued + 1, 'the name is checked once the check ended');
+		const late = t.env.MODERATION_QUEUE.sent.at(-1) as { payload: { metadataText: string; trigger: string } };
+		assert.equal(late.payload.trigger, 'metadata_edit');
+		assert.match(late.payload.metadataText, /While checking/);
+		assert.equal((t.read().audioTracks![1] as { labelCheckPending?: boolean }).labelCheckPending, undefined);
 		const before = t.env.MODERATION_QUEUE.sent.length;
 		await updateTrack(t.asEnv, undefined, t.read() as never, track.id, { kind: 'commentary' }, NOW);
 		assert.equal(t.env.MODERATION_QUEUE.sent.length, before, 'no text changed: no new check');
