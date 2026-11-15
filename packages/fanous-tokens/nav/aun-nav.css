@@ -111,7 +111,8 @@
   z-index: 40;
   box-sizing: border-box;
   display: flex;
-  flex-wrap: wrap;
+  /* one line at every width: the wordmark shrinks (ellipsis) before anything wraps */
+  flex-wrap: nowrap;
   align-items: center;
   column-gap: var(--aun-header-gap);
   row-gap: 0;
@@ -131,7 +132,8 @@
 .aun-header-row {
   box-sizing: border-box;
   display: flex;
-  flex-wrap: wrap;
+  /* one line at every width: the wordmark shrinks (ellipsis) before anything wraps */
+  flex-wrap: nowrap;
   align-items: center;
   column-gap: var(--aun-header-gap);
   row-gap: 0;
@@ -234,7 +236,8 @@
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  flex: none;
+  /* the only group that shrinks: a long (scholar) site name truncates instead of pushing the tools */
+  flex: 0 1 auto;
   min-width: 0;
   min-height: 2.5rem;
   padding-block: var(--fanous-spacing-xs, 4px);
@@ -260,11 +263,14 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  overflow: hidden;
   line-height: 1.15;
 }
 .aun-brand-name {
+  overflow: hidden;
   font-size: 1rem;
   font-weight: 700;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 .aun-brand-name:lang(ar) {
