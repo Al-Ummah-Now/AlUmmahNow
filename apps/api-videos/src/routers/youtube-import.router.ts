@@ -9,6 +9,7 @@ import {
 	YoutubeImportGet,
 	YoutubeImportLinkBack,
 	YoutubeImportMatches,
+	YoutubeImportOAuthFinish,
 	YoutubeImportOAuthStart,
 	YoutubeImportRetryItem,
 	YoutubeImportSelection,
@@ -19,6 +20,7 @@ import {
 export const youtubeImportRouter = fromHono(new Hono(), { base: '/api/youtube-import' });
 youtubeImportRouter.get('/status', YoutubeImportStatus);
 youtubeImportRouter.post('/oauth/start', YoutubeImportOAuthStart);
+youtubeImportRouter.post('/oauth/finish', YoutubeImportOAuthFinish);
 youtubeImportRouter.get('/:importId', YoutubeImportGet);
 youtubeImportRouter.put('/:importId/selection', YoutubeImportSelection);
 youtubeImportRouter.put('/:importId/matches', YoutubeImportMatches);

@@ -27,7 +27,8 @@ import { uploadVisibility } from '../../lib/visibility';
 import { planIngest } from "../../lib/media/ingest";
 import { storeCustomThumbnail } from "../../lib/thumbnail/store";
 import { bunnyRef } from "../../lib/media/providers";
-import { prepareImportUpload, recordImportUpload, YtHttpError, type ImportUpload, type YtEnv } from "../../lib/youtube-import/service";
+import { prepareImportUpload, recordImportUpload, youtubeItemClaimKey, YtHttpError, type ImportUpload, type YtEnv } from "../../lib/youtube-import/service";
+import { confirmYoutubeImportItem } from "../../middleware/upload-limits";
 import { applySchedule, announceSchedule, scheduleDateProblem } from "../../lib/videoSchedule";
 
 export class UploadInitiateEndpoint extends AuthenticatedRoute {
@@ -234,7 +235,13 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 				throw new Error('R2 bucket binding "videos" is not configured');
 			}
 			const repository = new R2Repository<VideoType>(bucket);
-			const claimKey = fingerprint ? await fingerprintKey(channelId, userId, fingerprint) : undefined;
+			// The claim: the file's fingerprint, or for a Move from YouTube item the item itself, so
+			// two parallel initiates of one item make one video (the second reuses it)
+			const claimKey = imported
+				? await youtubeItemClaimKey(imported.importRow.id, imported.item.id)
+				: fingerprint
+					? await fingerprintKey(channelId, userId, fingerprint)
+					: undefined;
 
 			// Metadata the uploader entered (applied on create and on reuse)
 			const metadata = {
@@ -338,19 +345,15 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 
 			let videoId: string;
 			let reused = false;
-			// An import item's earlier video is resumed while it can take the upload
+			// An import item whose video already finished uploading is not uploaded twice
 			const itemVideo = imported?.item.video_id ?? null;
 			if (itemVideo) {
 				const verdict = await checkReusable(c.env as never, itemVideo, { ownerId, uploadedBy, channelId });
-				if (verdict.kind === 'reuse') {
-					videoId = itemVideo;
-					reused = true;
-				} else if (verdict.why === 'finished' || verdict.why === 'finished at Bunny') {
+				if (verdict.kind !== 'reuse' && (verdict.why === 'finished' || verdict.why === 'finished at Bunny')) {
 					return c.json({ success: false, code: 'youtube_item_taken', error: 'This video is already here' }, 409);
-				} else {
-					videoId = await create();
 				}
-			} else if (claimKey) {
+			}
+			if (claimKey) {
 				const outcome = await initiateOnce(claimKey, {
 					store: c.env.global_settings as never,
 					userId,
@@ -365,8 +368,12 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 				videoId = await create();
 			}
 
-			if (imported && !(await recordImportUpload(c.env as unknown as YtEnv, imported, videoId))) {
-				return c.json({ success: false, code: 'youtube_item_taken', error: 'This video is already here' }, 409);
+			if (imported) {
+				if (!(await recordImportUpload(c.env as unknown as YtEnv, imported, videoId))) {
+					return c.json({ success: false, code: 'youtube_item_taken', error: 'This video is already here' }, 409);
+				}
+				// A valid item: the upload limits may give this session back (middleware/upload-limits.ts)
+				confirmYoutubeImportItem(c);
 			}
 
 			let stored: PlaceholderRecord | null = null;

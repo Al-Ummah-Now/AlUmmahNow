@@ -106,6 +106,17 @@ describe('secrets manifest', () => {
 		assert.deepEqual(failures(await checkWorker(entry, next([]))), ['secret INTERNAL_API_KEY']);
 		assert.deepEqual(failures(await checkWorker(entry, next([{ name: 'internal-api-key', status: 'disabled' }]))), ['secret INTERNAL_API_KEY']);
 	});
+
+	it('passes a binding to a secret ensure-resources creates before the deploy, and only that one', async () => {
+		const next: Deps = { ...deps([], { store: [] }), declared: async () => ({ store_id: 's', secret_name: 'google-oauth-client-secret' }) };
+		const placeholder = { ...videos, clientIdVars: [], required: [{ name: 'GOOGLE_OAUTH_CLIENT_SECRET', purpose: 'p', createdOnDeploy: true }] };
+		const fs = await checkWorker(placeholder, next);
+		assert.deepEqual(failures(fs), []);
+		assert.match(fs.find((f) => f.check === 'secret GOOGLE_OAUTH_CLIENT_SECRET')!.detail ?? '', /placeholder/);
+		// Once deployed, the bound secret must exist like any other
+		const deployed = await checkWorker(placeholder, deps([{ name: 'GOOGLE_OAUTH_CLIENT_SECRET', type: 'secrets_store_secret', store_id: 's', secret_name: 'google-oauth-client-secret' } as WorkerBinding]));
+		assert.deepEqual(failures(deployed), ['secret GOOGLE_OAUTH_CLIENT_SECRET']);
+	});
 });
 
 describe('a worker not deployed yet', () => {

@@ -21,6 +21,11 @@ export const AUTH_DBS: Record<EnvName, string> = {
 export interface RequiredSecret {
 	name: string;
 	purpose: string;
+	/**
+	 * A Secrets Store secret that ensure-resources.ts creates (as a placeholder) right before the
+	 * deploy: before this release's first deploy it may not exist yet, and that passes.
+	 */
+	createdOnDeploy?: boolean;
 }
 
 export interface WorkerSecrets {
@@ -65,6 +70,7 @@ const API_VIDEOS_SECRETS: RequiredSecret[] = [
 	INTERNAL_API_KEY,
 	{
 		name: 'GOOGLE_OAUTH_CLIENT_SECRET',
+		createdOnDeploy: true,
 		purpose:
 			"Secrets Store google-oauth-client-secret[-qa|-stage]; Move from YouTube's Google OAuth client secret (docs/features/youtube-import.md). Created by ensure-resources.ts as the placeholder `unset` (feature not ready) until the owner pastes Google's value",
 	},

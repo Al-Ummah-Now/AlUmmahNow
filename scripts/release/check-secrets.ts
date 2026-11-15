@@ -114,8 +114,11 @@ export async function checkWorker(entry: WorkerSecrets, deps: Deps): Promise<Fin
 			const next = (await deps.declared?.(entry, req.name)) ?? null;
 			if (next) {
 				const s = (await deps.storeSecrets(next.store_id)).find((x) => x.name === next.secret_name);
-				const ok = !!s && (s.status ?? 'active') === 'active';
-				out.push({ ...base, ok, check, detail: `not deployed yet; this release binds Secrets Store ${next.secret_name}${ok ? '' : s ? ` (${s.status})` : ', which does not exist'}` });
+				// A secret ensure-resources creates before the deploy (a placeholder) need not exist yet
+				const pending = !s && req.createdOnDeploy === true;
+				const ok = pending || (!!s && (s.status ?? 'active') === 'active');
+				const state = pending ? ', created as a placeholder by ensure-resources before the deploy' : ok ? '' : s ? ` (${s.status})` : ', which does not exist';
+				out.push({ ...base, ok, check, detail: `not deployed yet; this release binds Secrets Store ${next.secret_name}${state}` });
 			} else {
 				out.push({ ...base, ok: false, check, detail: `missing (${req.purpose})` });
 			}

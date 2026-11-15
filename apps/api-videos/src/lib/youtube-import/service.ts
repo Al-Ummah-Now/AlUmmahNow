@@ -3,7 +3,8 @@
  * what the Studio wizard calls. The endpoints (endpoints/youtube-import/) are
  * thin; the rules live here.
  *
- *   connect     POST oauth/start → Google consent → GET oauth/callback: the
+ *   connect     POST oauth/start → Google consent → GET oauth/callback (keeps
+ *               the code) → POST oauth/finish (the signed-in starter): the
  *               import row (status listing) and the listing job
  *   list        the queue lists the channel's videos and playlists (jobs.ts)
  *   pick        PUT selection / PUT matches (the browser matched Takeout files)
@@ -127,10 +128,12 @@ export async function requireImporter(env: YtEnv, who: YtCaller, channelId: stri
 	return { ownerId };
 }
 
-/** The caller's import (only the user who connected manages it). */
+/** The caller's import (only the user who connected manages it, while they may still import into its channel). */
 export async function requireOwnImport(env: YtEnv, who: YtCaller, importId: string): Promise<ImportRow> {
 	const row = await readImportRow(ytDb(env), importId);
 	if (!row || row.user_id !== who.userId) throw new YtHttpError(404, YT_IMPORT_ERRORS.notFound, 'Import not found');
+	// A channel role taken away (or the tier) stops the import's actions too
+	await requireImporter(env, who, row.channel_id);
 	return row;
 }
 
@@ -175,64 +178,103 @@ interface StateRow {
 	locale: string;
 	captions: number;
 	verifier: string;
+	code: string | null;
 	expires_at: string;
 }
 
+/** Google's code waits this long for the signed-in creator to finish the connection. */
+export const OAUTH_CODE_TTL_MS = 5 * 60_000;
+
 /**
- * Google sent the creator back. Always answers where to send the browser
- * (never an error page of ours): the wizard with `?import=` or `?error=`.
+ * Google sent the browser back. Nothing is exchanged here: this request
+ * carries no sign-in, so a consent link someone else started must never bind
+ * the visitor's YouTube to it (login CSRF). The code is kept on the state row
+ * (once, OAUTH_CODE_TTL_MS) and the wizard finishes with POST oauth/finish,
+ * which checks the caller is the user who started. Always answers where to send
+ * the browser: the wizard with `?connect=<state>` or `?error=`.
  */
 export async function oauthCallback(env: YtEnv, query: { code?: string; state?: string; error?: string }, now = new Date()): Promise<string> {
 	const db = ytDb(env);
 	const state = query.state && query.state.length <= 128 ? query.state : '';
-	// Single use: the row is gone whatever happens next
-	const row = state ? await db.prepare('DELETE FROM yt_oauth_states WHERE state = ? RETURNING *').bind(state).first<StateRow>() : null;
-	if (!row || Date.parse(row.expires_at) < now.getTime()) {
-		logger.info('[YouTubeImport] Callback without a valid state', { hasState: !!state, expired: !!row });
+	const row = state ? await db.prepare('SELECT * FROM yt_oauth_states WHERE state = ?').bind(state).first<StateRow>() : null;
+	const nowIso = now.toISOString();
+	if (!row || row.code || Date.parse(row.expires_at) < now.getTime()) {
+		// Unknown, expired, or a second callback for the same consent: the consent is over
+		if (row) await db.prepare('DELETE FROM yt_oauth_states WHERE state = ?').bind(state).run();
+		logger.info('[YouTubeImport] Callback without a valid state', { hasState: !!state, found: !!row });
 		return `${(env.VIDEOS_WEB_URL ?? '').replace(/\/$/, '')}/en/studio?${new URLSearchParams({ error: 'failed' })}`;
 	}
 	const back = (q: Record<string, string>) => studioUrl(env, row.locale, row.channel_id, q);
-	if (query.error || !query.code) return back({ error: YT_IMPORT_ERRORS.denied });
-	const cfg = await ytReadyConfig(env);
-	if (!cfg) return back({ error: YT_IMPORT_ERRORS.notEnabled });
-	try {
-		const tokens = await exchangeCode(cfg, query.code, row.verifier);
-		const granted = new Set(tokens.scope.split(/\s+/).filter(Boolean));
-		// Google's granular consent lets the creator untick a scope
-		if (granted.size && !granted.has(YT_SCOPE_READONLY) && !granted.has(YT_SCOPE_CAPTIONS)) return back({ error: YT_IMPORT_ERRORS.denied });
-		if (!tokens.refreshToken) {
-			logger.warn('[YouTubeImport] Google gave no refresh token', { userId: row.user_id });
-			return back({ error: 'failed' });
-		}
-		const captions = Number(row.captions) === 1 && (granted.size === 0 || granted.has(YT_SCOPE_CAPTIONS));
-		const channel = await myChannel(tokens.accessToken);
-		if (!channel) {
-			await revokeToken(tokens.refreshToken);
-			return back({ error: YT_IMPORT_ERRORS.noChannel });
-		}
-		const importId = await connectImport(env, cfg, {
-			userId: row.user_id,
-			channelId: row.channel_id,
-			ownerId: row.owner_id,
-			captions,
-			scopes: [...granted].join(' '),
-			refreshToken: tokens.refreshToken,
-			ytChannel: {
-				id: channel.id,
-				title: channel.snippet?.title ?? '',
-				thumbnailUrl: channel.snippet?.thumbnails?.default?.url ?? channel.snippet?.thumbnails?.medium?.url ?? null,
-				videoCount: channel.statistics?.videoCount ? Number(channel.statistics.videoCount) : null,
-				uploadsPlaylistId: channel.contentDetails?.relatedPlaylists?.uploads ?? null,
-			},
-			now,
-		});
-		logger.info('[YouTubeImport] Connected', { importId, userId: row.user_id, channelId: row.channel_id, captions });
-		return back({ import: importId });
-	} catch (error) {
-		if (error instanceof YtAuthError) return back({ error: YT_IMPORT_ERRORS.denied });
-		logger.error('[YouTubeImport] Callback failed', { userId: row.user_id, channelId: row.channel_id, error: error instanceof Error ? error.message : String(error) });
-		return back({ error: 'failed' });
+	if (query.error || !query.code || query.code.length > 2048) {
+		await db.prepare('DELETE FROM yt_oauth_states WHERE state = ?').bind(state).run();
+		return back({ error: YT_IMPORT_ERRORS.denied });
 	}
+	// Single use: only the first callback stores its code
+	const kept = await db
+		.prepare('UPDATE yt_oauth_states SET code = ?, expires_at = ? WHERE state = ? AND code IS NULL AND expires_at >= ?')
+		.bind(query.code, new Date(now.getTime() + OAUTH_CODE_TTL_MS).toISOString(), state, nowIso)
+		.run();
+	if (!Number(kept.meta?.changes ?? 0)) return back({ error: 'failed' });
+	return back({ connect: state });
+}
+
+/**
+ * The signed-in creator finishes the connection the callback prepared: only
+ * the user who started the consent, while they may still import into its
+ * channel. The state is used up whatever happens. Answers the import.
+ */
+export async function finishOAuth(env: YtEnv, who: YtCaller, state: string, now = new Date()): Promise<{ import: YtImport }> {
+	const db = ytDb(env);
+	const row = state && state.length <= 128 ? await db.prepare('DELETE FROM yt_oauth_states WHERE state = ? RETURNING *').bind(state).first<StateRow>() : null;
+	if (!row || !row.code || Date.parse(row.expires_at) < now.getTime()) throw new YtHttpError(404, YT_IMPORT_ERRORS.connectExpired, 'This connection has expired; connect again');
+	if (row.user_id !== who.userId) {
+		logger.warn('[YouTubeImport] Connection finished by another user; refused', { startedBy: row.user_id, finishedBy: who.userId, channelId: row.channel_id });
+		throw new YtHttpError(403, 'forbidden', 'This connection was started by another account');
+	}
+	const { ownerId } = await requireImporter(env, who, row.channel_id);
+	const cfg = await ytReadyConfig(env);
+	if (!cfg) throw new YtHttpError(409, YT_IMPORT_ERRORS.notEnabled, 'Moving from YouTube is not available yet');
+	let tokens: Awaited<ReturnType<typeof exchangeCode>>;
+	try {
+		tokens = await exchangeCode(cfg, row.code, row.verifier);
+	} catch (error) {
+		if (error instanceof YtAuthError) throw new YtHttpError(400, YT_IMPORT_ERRORS.denied, 'Google refused the connection');
+		throw error;
+	}
+	const granted = new Set(tokens.scope.split(/\s+/).filter(Boolean));
+	// Google's granular consent lets the creator untick a scope
+	if (granted.size && !granted.has(YT_SCOPE_READONLY) && !granted.has(YT_SCOPE_CAPTIONS)) {
+		if (tokens.refreshToken) await revokeToken(tokens.refreshToken);
+		throw new YtHttpError(400, YT_IMPORT_ERRORS.denied, 'YouTube access was not granted');
+	}
+	if (!tokens.refreshToken) {
+		logger.warn('[YouTubeImport] Google gave no refresh token', { userId: row.user_id });
+		throw new YtHttpError(502, 'failed', 'Google gave no lasting access; connect again');
+	}
+	const captions = Number(row.captions) === 1 && (granted.size === 0 || granted.has(YT_SCOPE_CAPTIONS));
+	const channel = await myChannel(tokens.accessToken);
+	if (!channel) {
+		await revokeToken(tokens.refreshToken);
+		throw new YtHttpError(409, YT_IMPORT_ERRORS.noChannel, 'This Google account has no YouTube channel');
+	}
+	const importId = await connectImport(env, cfg, {
+		userId: row.user_id,
+		channelId: row.channel_id,
+		ownerId,
+		captions,
+		scopes: [...granted].join(' '),
+		refreshToken: tokens.refreshToken,
+		ytChannel: {
+			id: channel.id,
+			title: channel.snippet?.title ?? '',
+			thumbnailUrl: channel.snippet?.thumbnails?.default?.url ?? channel.snippet?.thumbnails?.medium?.url ?? null,
+			videoCount: channel.statistics?.videoCount ? Number(channel.statistics.videoCount) : null,
+			uploadsPlaylistId: channel.contentDetails?.relatedPlaylists?.uploads ?? null,
+		},
+		now,
+	});
+	logger.info('[YouTubeImport] Connected', { importId, userId: row.user_id, channelId: row.channel_id, captions });
+	return { import: await importView(db, (await readImportRow(db, importId)) as ImportRow) };
 }
 
 /**
@@ -534,6 +576,15 @@ export interface ImportUpload {
 	scheduleAt: string | null;
 }
 
+/**
+ * The upload claim of an item (lib/uploads/initiateOnce.ts): parallel
+ * initiates of the same item make one video, the others reuse it.
+ */
+export async function youtubeItemClaimKey(importId: string, itemId: string): Promise<string> {
+	const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(['youtube-import', importId, itemId])));
+	return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 /** Title length our records take (the same cap the upload page applies). */
 const TITLE_MAX = 200;
 
@@ -549,6 +600,7 @@ export async function prepareImportUpload(env: YtEnv, who: YtCaller, channelId: 
 	if (!importRow || importRow.user_id !== who.userId || importRow.channel_id !== channelId || importRow.status !== 'importing') {
 		throw new YtHttpError(404, YT_IMPORT_ERRORS.notFound, 'Import not found');
 	}
+	await requireImporter(env, who, channelId);
 	const item = await readItemRow(db, ref.importId, ref.itemId);
 	if (!item || Number(item.selected) !== 1) throw new YtHttpError(404, YT_IMPORT_ERRORS.notFound, 'Import item not found');
 	if (item.state === 'imported' || item.state === 'ready' || item.state === 'processing') throw new YtHttpError(409, YT_IMPORT_ERRORS.itemTaken, 'This video is already here');
