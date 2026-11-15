@@ -13,6 +13,8 @@ type Requires = readonly StudioCapability[];
 export interface StudioFeatures {
   site?: boolean;
   live?: boolean;
+  /** Social auto-post: on and at least one network set up (socialAutopost) */
+  social?: boolean;
 }
 export type StudioFeature = keyof StudioFeatures;
 
@@ -26,7 +28,7 @@ export interface StudioTab {
 }
 
 export interface StudioNavItem {
-  id: 'dashboard' | 'content' | 'analytics' | 'comments' | 'playlists' | 'customisation' | 'site' | 'settings';
+  id: 'dashboard' | 'content' | 'analytics' | 'comments' | 'playlists' | 'customisation' | 'social' | 'site' | 'settings';
   /** Shown only while this feature is on for the channel (StudioFrame `features`) */
   feature?: StudioFeature;
   requires: Requires;
@@ -80,6 +82,8 @@ export const STUDIO_NAV: readonly StudioNavItem[] = [
       { id: 'layout', requires: ['channel.edit'] },
     ],
   },
+  // Social auto-post, feeds and webhooks for scheduler tools (wiki AUN-SOCIAL): owner and channel admins
+  { id: 'social', requires: ['channel.edit'], feature: 'social' },
   // White-label scholar site (wiki AUN-SCHOLAR-SITES §7.1): owner and channel admins, only when the channel has a site
   { id: 'site', requires: ['channel.edit'], feature: 'site' },
   {

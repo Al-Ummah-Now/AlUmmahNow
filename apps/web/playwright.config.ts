@@ -66,7 +66,7 @@ const OUTPUT_SUFFIX = /^[a-z0-9-]{1,32}$/.test(process.env.E2E_OUTPUT_SUFFIX ?? 
  * parallel with other runs; these run in the `shared-state` project only, which
  * e2e-tests.yml runs under the cross-run lock (scripts/ci/qa-lock.ts, qa-global).
  */
-const SHARED_STATE_SPECS = /\/(30-watch-page|32-comments|75-site-theme)\.spec\.ts$/;
+const SHARED_STATE_SPECS = /\/(30-watch-page|32-comments|75-site-theme|80-studio-social)\.spec\.ts$/;
 /** testIgnore of a browser/device project: the dedicated dirs and shared-state specs, plus the upload specs unless this project runs them. */
 const browserIgnore = (runsUploads: boolean) =>
   runsUploads && !SKIP_UPLOAD_SPECS ? [...DEDICATED_DIRS, SHARED_STATE_SPECS] : [...DEDICATED_DIRS, SHARED_STATE_SPECS, UPLOAD_SPECS];

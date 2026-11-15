@@ -760,6 +760,57 @@ export async function listStaffDevices(userId: string): Promise<ActionResult<{ d
 export async function signOutStaffDevice(userId: string, installId: string): Promise<ActionResult<{ installId: string }>> {
   return mutate(`/api/review-alerts/devices/${encodeURIComponent(installId)}?userId=${encodeURIComponent(userId)}`, 'DELETE', {});
 }
+}
+
+// Social posting (admin-api /api/social, wiki AUN-SOCIAL SOC-1): kill switches, the X spend cap, network setup
+// (X app, Telegram bot), 7-day activity and failures. Every admin role reads; changes need settings:manage, audited.
+
+export interface SocialAdminView {
+  settings: import('@al-ummah/shared-types').SocialPlatformSettings;
+  readiness: Record<import('@al-ummah/shared-types').SocialNetwork, { configured: boolean; missing?: string }>;
+  telegramBot: string | null;
+  callbacks: { x: string };
+  spend: { month: string; x: { costUsd: number; posts: number; capUsd: number } };
+  deliveries7d: { network: string; status: string; n: number }[];
+  accounts: { network: string; status: string; n: number }[];
+  recentFailures: { id: string; channel_id: string; network: string; event: string; entity_id: string; entity_title: string | null; last_error: string | null; updated_at: string }[];
+}
+
+export interface SocialHistoryEntry {
+  id: string;
+  key: string;
+  oldValue: string | null;
+  newValue: string;
+  actorId: string;
+  createdAt: string;
+}
+
+export async function getSocialAdmin(): Promise<SocialAdminView> {
+  return fetchAdmin('/api/social');
+}
+
+export async function getSocialHistory(): Promise<{ entries: SocialHistoryEntry[] }> {
+  return fetchAdmin('/api/social/history?limit=10');
+}
+
+export async function saveSocialSettings(settings: import('@al-ummah/shared-types').SocialPlatformSettings): Promise<ActionResult<{ settings: import('@al-ummah/shared-types').SocialPlatformSettings }>> {
+  return mutate('/api/social/settings', 'PUT', settings);
+}
+
+export async function saveSocialCredentials(network: 'x' | 'telegram', values: Record<string, string>): Promise<ActionResult<{ readiness: unknown }>> {
+  return mutate(`/api/social/credentials/${network}`, 'PUT', values);
+}
+
+export async function clearSocialCredentials(network: 'x' | 'telegram'): Promise<ActionResult<{ readiness: unknown }>> {
+  try {
+    const data = await fetchAdmin<{ readiness: unknown }>(`/api/social/credentials/${network}`, { method: 'DELETE' });
+    return { ok: true, data };
+  } catch (error) {
+    await navigateForPasskey(error);
+    if (error instanceof AdminApiError) return { ok: false, status: error.status, error: error.message };
+    return { ok: false, status: 500, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
 
 // Mobile apps (admin-api /api/site-settings/mobile-apps, shared-types mobile-apps.ts): Apple Team ID and
 // bundle ids, Android packages and fingerprints, attestation switches. Every admin role reads;

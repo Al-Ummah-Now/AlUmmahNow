@@ -6,8 +6,8 @@ const tabs = (role: StudioRole, id: string) => visibleTabs(role, STUDIO_NAV.find
 
 describe('navigation per role', () => {
   it.each<[StudioRole, string[]]>([
-    ['owner', ['dashboard', 'content', 'analytics', 'playlists', 'customisation', 'settings']],
-    ['admin', ['dashboard', 'content', 'analytics', 'playlists', 'customisation', 'settings']],
+    ['owner', ['dashboard', 'content', 'analytics', 'playlists', 'customisation', 'social', 'settings']],
+    ['admin', ['dashboard', 'content', 'analytics', 'playlists', 'customisation', 'social', 'settings']],
     ['editor', ['dashboard', 'content', 'playlists']],
     // Comments has no creator page yet; a moderator reaches Content → Live (live.moderate)
     ['moderator', ['dashboard', 'content']],
@@ -118,6 +118,16 @@ describe('permissions', () => {
     expect(roleForChannel({ userId: 'u1' }, 'u1')).toBe('owner');
     expect(roleForChannel({ userId: 'u1' }, 'u2')).toBeNull();
     expect(roleForChannel(null, 'u1')).toBeNull();
+  });
+});
+
+describe('Social item (wiki AUN-SOCIAL)', () => {
+  it('is for owners and channel admins (channel.edit), with no tabs', () => {
+    expect(checkPath('owner', ['social'])).toEqual({ status: 'ok' });
+    expect(checkPath('admin', ['social'])).toEqual({ status: 'ok' });
+    expect(checkPath('editor', ['social'])).toEqual({ status: 'forbidden' });
+    expect(checkPath('moderator', ['social'])).toEqual({ status: 'forbidden' });
+    expect(checkPath('owner', ['social', 'x'])).toEqual({ status: 'unknown' });
   });
 });
 

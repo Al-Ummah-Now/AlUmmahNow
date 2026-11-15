@@ -18,6 +18,9 @@ jest.mock('@/components/videoEdit/index', () => ({
     </div>
   ),
 }));
+jest.mock('@/components/studio/social/ShareKit', () => ({
+  ShareKit: ({ videoId }: { videoId: string }) => <span data-testid="share-kit">{videoId}</span>,
+}));
 jest.mock('@/components/SaveToPlaylist', () => ({
   __esModule: true,
   default: ({ videoId, channelId }: { videoId: string; channelId?: string }) => <span data-testid="playlist">{`${videoId}/${channelId}`}</span>,

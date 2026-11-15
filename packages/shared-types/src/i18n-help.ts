@@ -10,7 +10,7 @@
  * «المقاطع القصيرة» for Shorts (CLAUDE.md, wiki glossary).
  */
 
-export const HELP_TOPIC_IDS = ['start', 'watching', 'identity', 'creating', 'community', 'privacy', 'appearance'] as const;
+export const HELP_TOPIC_IDS = ['start', 'watching', 'identity', 'creating', 'social', 'community', 'privacy', 'appearance'] as const;
 export type HelpTopicId = (typeof HELP_TOPIC_IDS)[number];
 
 /** Still pictures made by the capture script, one per language × desktop/phone × light/dark */
@@ -354,6 +354,50 @@ export const HELP_EN: HelpTranslations = {
         },
       ],
     },
+    social: {
+      title: 'Social accounts and scheduler tools',
+      summary: 'Post new uploads to X, Telegram, Bluesky and Mastodon, or use your channel feed in Hootsuite, Zapier, Make or IFTTT.',
+      sections: [
+        {
+          id: 'auto-post',
+          heading: 'Post automatically',
+          blocks: [
+            { type: 'p', text: 'In **Studio → Social**, connect X, Telegram, Bluesky or Mastodon. For each account, choose the language it posts in and what it posts: new videos, Shorts, live streams and community posts, as the video itself or as a link.' },
+            { type: 'steps', items: ['Open **Studio → Social** and select **Connect** next to the network.', 'Sign in to the network and allow posting. For Telegram, add the bot named on the page to your channel as an administrator and post the code it shows.', 'Tick what the account should post. Edit the **Post text** if you like.'] },
+            { type: 'tip', text: 'If a post fails, **Recent posts** says why and offers **Try again**. A video that is too long or too large for a network can be posted as a link instead.' },
+          ],
+        },
+        {
+          id: 'feeds',
+          heading: 'Use your channel feed',
+          blocks: [
+            { type: 'p', text: 'Every channel has RSS feeds: one for everything it publishes, and one each for videos, Shorts, posts and live. In **Studio → Social → Scheduler tools**, select **Copy feed URL** next to the feed you want. Choose Arabic for titles and links in Arabic.' },
+          ],
+        },
+        {
+          id: 'hootsuite',
+          heading: 'Hootsuite',
+          blocks: [
+            { type: 'p', text: 'In Hootsuite, add a new RSS feed (or use an RSS app from the Hootsuite App Directory), paste the feed URL, and choose the social accounts it posts to.' },
+          ],
+        },
+        {
+          id: 'buffer',
+          heading: 'Buffer, Zapier, Make and IFTTT',
+          blocks: [
+            { type: 'p', text: 'Buffer adds RSS items to your queue through Zapier or IFTTT: start with their RSS trigger, paste the feed URL, and choose Buffer as the action. Make works the same way.' },
+            { type: 'p', text: 'To have each new item sent the moment it is published, add a webhook in **Studio → Social → Webhooks** and use the webhook trigger of Zapier or Make. Each request is signed with your webhook secret.' },
+          ],
+        },
+        {
+          id: 'previews',
+          heading: 'Link previews',
+          blocks: [
+            { type: 'p', text: 'Links to videos, Shorts, posts and channels show a preview card with the title and thumbnail when you paste them into X, Facebook, WhatsApp, Telegram, LinkedIn, Slack or Discord. In **Studio → Content**, a video’s **Share kit** has its post text in English and Arabic, its link and its thumbnail.' },
+          ],
+        },
+      ],
+    },
     community: {
       title: 'Community',
       summary: 'Posts, polls, comments and the community guidelines.',
@@ -687,6 +731,50 @@ export const HELP_AR: HelpTranslations = {
           heading: 'الجدولة',
           blocks: [
             { type: 'p', text: 'اختر تاريخ النشر ووقته عند الرفع أو في الاستوديو، ويبقى المرئي خاصًا حتى ذلك الحين.' },
+          ],
+        },
+      ],
+    },
+    social: {
+      title: 'حسابات التواصل وأدوات الجدولة',
+      summary: 'انشر ما ترفعه في X وتيليجرام وBluesky وماستودون، أو استخدم خلاصة قناتك في Hootsuite أو Zapier أو Make أو IFTTT.',
+      sections: [
+        {
+          id: 'auto-post',
+          heading: 'النشر التلقائي',
+          blocks: [
+            { type: 'p', text: 'في **الاستوديو ← التواصل الاجتماعي** اربط X أو تيليجرام أو Bluesky أو ماستودون. اختر لكل حساب لغة النشر وما يُنشر: المرئيات والمقاطع القصيرة والبث المباشر ومنشورات المجتمع الجديدة، بالمرئي نفسه أو برابط.' },
+            { type: 'steps', items: ['افتح **الاستوديو ← التواصل الاجتماعي** واختر **ربط** بجانب الشبكة.', 'سجّل الدخول إلى الشبكة واسمح بالنشر. في تيليجرام، أضف البوت المذكور في الصفحة إلى قناتك مشرفًا وانشر الرمز الذي يظهر.', 'حدّد ما ينشره الحساب، وعدّل **نص المنشور** إن شئت.'] },
+            { type: 'tip', text: 'إذا فشل منشور، توضّح **المنشورات الأخيرة** السبب وتعرض **إعادة المحاولة**. ويمكن نشر المرئي الأطول أو الأكبر مما تقبله الشبكة رابطًا بدلًا من ذلك.' },
+          ],
+        },
+        {
+          id: 'feeds',
+          heading: 'استخدام خلاصة قناتك',
+          blocks: [
+            { type: 'p', text: 'لكل قناة خلاصات RSS: واحدة لكل ما تنشره، وواحدة لكل من المرئيات والمقاطع القصيرة والمنشورات والبث المباشر. في **الاستوديو ← التواصل الاجتماعي ← أدوات الجدولة** اختر **نسخ رابط الخلاصة** بجانب الخلاصة التي تريدها. اختر العربية لتحصل على العناوين والروابط بالعربية.' },
+          ],
+        },
+        {
+          id: 'hootsuite',
+          heading: 'Hootsuite',
+          blocks: [
+            { type: 'p', text: 'في Hootsuite، أضف خلاصة RSS جديدة (أو استخدم أحد تطبيقات RSS من دليل تطبيقات Hootsuite)، والصق رابط الخلاصة، واختر حسابات التواصل التي تنشر فيها.' },
+          ],
+        },
+        {
+          id: 'buffer',
+          heading: 'Buffer وZapier وMake وIFTTT',
+          blocks: [
+            { type: 'p', text: 'يضيف Buffer عناصر RSS إلى قائمة الانتظار عبر Zapier أو IFTTT: ابدأ بمُشغِّل RSS لديهما، والصق رابط الخلاصة، واختر Buffer إجراءً. ويعمل Make بالطريقة نفسها.' },
+            { type: 'p', text: 'ليصلك كل عنصر جديد فور نشره، أضف Webhook من **الاستوديو ← التواصل الاجتماعي ← Webhooks** واستخدم مُشغِّل الـ Webhook في Zapier أو Make. كل طلب موقَّع بسرّ الـ Webhook الخاص بك.' },
+          ],
+        },
+        {
+          id: 'previews',
+          heading: 'معاينات الروابط',
+          blocks: [
+            { type: 'p', text: 'تظهر روابط المرئيات والمقاطع القصيرة والمنشورات والقنوات ببطاقة معاينة فيها العنوان والصورة المصغّرة عند لصقها في X وفيسبوك وواتساب وتيليجرام ولينكدإن وSlack وDiscord. وفي **الاستوديو ← المحتوى** تضم **حزمة المشاركة** لكل مرئي نص المنشور بالعربية والإنجليزية ورابطه وصورته المصغّرة.' },
           ],
         },
       ],
