@@ -84,6 +84,10 @@ const API_VIDEOS_SECRETS: RequiredSecret[] = [
 	// Translated caption tracks show the channel's Quran Foundation translation edition (AUN-CAPTIONS O7, lib/quran/translations.ts)
 	{ name: 'QF_CLIENT_ID', purpose: 'Secrets Store quran-foundation-prod-client-id (all envs); QF OAuth client (translations, content scopes), shared with the processor' },
 	{ name: 'QF_CLIENT_SECRET', purpose: 'Secrets Store quran-foundation-prod-client-secret (all envs); QF OAuth client secret' },
+	{
+		name: 'SOCIAL_TOKEN_KEK',
+		purpose: 'Secrets Store social-token-kek[-qa|-stage]; AES-256-GCM key(s) sealing social auto-post tokens, network credentials and webhook secrets, <version>:<base64 32 bytes>[,...] (lib/social/crypto.ts). Never rotate by replacing: append a new version',
+	},
 ];
 
 const CLIENT_REQUIRED = [{ name: 'ClientId', required: true }];
