@@ -11,6 +11,11 @@
  * known is created with the value `unset` (the code treats it as missing) and
  * the `workers` scope. Create only: an existing secret, placeholder or real, is
  * never read or changed; the owner pastes the real value over the placeholder.
+ *
+ * Turnstile: the production widget (admin-api and api-videos TURNSTILE_SITE_KEY) must allow the
+ * env's www host, where the newsletter form renders it (AlUmmahNowUI apps/www). Hostnames are only
+ * ever appended; an existing one, or a parent domain that already covers it, is left alone.
+ * Needs the token permission Account → Turnstile → Edit; without it the run warns and goes on.
  */
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
@@ -29,7 +34,20 @@ export interface Resources {
 	expireAfterDays?: Record<string, number>;
 	/** Secrets Store secrets created with PLACEHOLDER_SECRET_VALUE when missing (store id → names). */
 	placeholderSecrets?: Record<string, string[]>;
+	/** Hostnames the Turnstile widget must allow (appended when missing, never removed). */
+	turnstile?: { sitekey: string; hostnames: string[] };
 }
+
+/** The production Turnstile widget (apps/admin-api and apps/api-videos wrangler.jsonc TURNSTILE_SITE_KEY). */
+export const TURNSTILE_SITEKEY = '0x4AAAAAAF_3KPNkPlEGf_dP';
+/** The permission a token needs to read and update it. */
+export const TURNSTILE_PERMISSION = 'Account → Turnstile → Edit (Turnstile Sites Write)';
+/** www's host per environment (AlUmmahNowUI apps/www wrangler.jsonc routes). */
+export const WWW_HOSTS: Record<ResourceEnv, string> = {
+	production: 'www.alummahnow.net',
+	stage: 'www.stage.alummahnow.net',
+	qa: 'www.qa.alummahnow.net',
+};
 
 /** The account's Secrets Store (every app's secrets_store_secrets bindings). */
 export const SECRETS_STORE_ID = 'f8eddc9944d041919ed8dc7d08d32308';
@@ -56,6 +74,8 @@ export function resourcesFor(env: ResourceEnv): Resources {
 		...(SOURCEMAP_DAYS[env] ? { expireAfterDays: { [`al-ummah-now-sourcemaps${s}`]: SOURCEMAP_DAYS[env]! } } : {}),
 		// Move from YouTube: the Google OAuth client secret (api-videos GOOGLE_OAUTH_CLIENT_SECRET, docs/features/youtube-import.md)
 		placeholderSecrets: { [SECRETS_STORE_ID]: [`google-oauth-client-secret${s}`] },
+		// Newsletter sign-up on www (AlUmmahNowUI#6): the widget renders on the env's www host
+		turnstile: { sitekey: TURNSTILE_SITEKEY, hostnames: [WWW_HOSTS[env]] },
 	};
 }
 
@@ -118,12 +138,73 @@ export async function ensureResources(cf: CfClient, wanted: Resources, log: (lin
 	return { created };
 }
 
+interface TurnstileWidget {
+	sitekey: string;
+	name: string;
+	domains: string[];
+	mode: string;
+	bot_fight_mode?: boolean;
+	clearance_level?: string;
+	ephemeral_id?: boolean;
+	offlabel?: boolean;
+	region?: string;
+}
+
+/** A widget hostname also allows its subdomains, so a parent already in the list covers the host. */
+export function coveredBy(domains: string[], host: string): string | undefined {
+	const h = host.toLowerCase();
+	return domains.find((d) => {
+		const x = d.toLowerCase();
+		return h === x || h.endsWith(`.${x}`);
+	});
+}
+
+/**
+ * Appends the missing hostnames to the widget's allowed domains. The PUT replaces the widget's
+ * settings, so every field it had is sent back unchanged; domains are only added.
+ */
+export async function ensureTurnstileHostnames(cf: CfClient, want: { sitekey: string; hostnames: string[] }, log: (line: string) => void = console.log): Promise<{ added: string[] }> {
+	const path = `/challenges/widgets/${encodeURIComponent(want.sitekey)}`;
+	const widget = await cf.request<TurnstileWidget>('GET', path);
+	const domains = [...(widget.domains ?? [])];
+	const added: string[] = [];
+	for (const host of want.hostnames) {
+		const cover = coveredBy(domains, host);
+		if (cover) {
+			if (cover !== host) log(`Turnstile widget ${widget.name}: ${host} is covered by ${cover}`);
+			continue;
+		}
+		domains.push(host);
+		added.push(host);
+	}
+	if (!added.length) return { added };
+	const body: Record<string, unknown> = { name: widget.name, domains, mode: widget.mode };
+	for (const k of ['bot_fight_mode', 'clearance_level', 'ephemeral_id', 'offlabel', 'region'] as const) if (widget[k] !== undefined) body[k] = widget[k];
+	await cf.request('PUT', path, body);
+	log(`Turnstile widget ${widget.name}: allowed ${added.join(', ')}`);
+	return { added };
+}
+
 interface LifecycleRule {
 	id: string;
 	enabled: boolean;
 	conditions: { prefix: string };
 	deleteObjectsTransition?: { condition?: { type: 'Age'; maxAge: number } };
 	[key: string]: unknown;
+}
+
+/** The Turnstile step on its own: a token without Turnstile access warns, naming the permission. */
+async function ensureTurnstile(cf: CfClient, wanted: Resources): Promise<void> {
+	if (!wanted.turnstile) return;
+	try {
+		await ensureTurnstileHostnames(cf, wanted.turnstile);
+	} catch (error) {
+		if (error instanceof CfApiError && (error.status === 403 || error.status === 401)) {
+			console.log(`::warning::Turnstile widget not checked (${error.message}): the token needs ${TURNSTILE_PERMISSION}`);
+			return;
+		}
+		throw error;
+	}
 }
 
 const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
@@ -134,8 +215,11 @@ if (isMain) {
 		process.stderr.write('usage: ensure-resources.ts --env qa|stage|production\n');
 		process.exit(2);
 	}
-	ensureResources(createCfClient(), resourcesFor(env))
+	const cf = createCfClient();
+	const wanted = resourcesFor(env);
+	ensureResources(cf, wanted)
 		.then(({ created }) => console.log(created.length ? `Created: ${created.join(', ')}` : `All ${env} resources exist.`))
+		.then(() => ensureTurnstile(cf, wanted))
 		.catch((error) => {
 			// A token without Queues/R2 permission cannot check; the resources were created
 			// when they were added (this script, run with an account login), so deploy goes on
