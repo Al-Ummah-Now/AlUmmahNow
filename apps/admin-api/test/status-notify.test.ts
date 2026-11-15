@@ -275,10 +275,11 @@ describe('email rendering', () => {
 describe('admin endpoints', () => {
   it('webhook URLs must be public https', () => {
     assert.deepEqual(validateWebhookUrl('https://hooks.example.com/x#frag'), { url: 'https://hooks.example.com/x' });
-    for (const bad of ['http://hooks.example.com', 'https://localhost/x', 'https://127.0.0.1/x', 'https://[::1]/x', 'https://user:pw@hooks.example.com', 'https://box.internal/x', 'https://intranet/x', 'ftp://x.com', 42]) {
+    for (const bad of ['http://hooks.example.com', 'https://localhost/x', 'https://127.0.0.1/x', 'https://[::1]/x', 'https://user:pw@hooks.example.com', 'https://box.internal/x', 'https://intranet/x', 'https://localhost./x', 'https://box.internal../x', 'https://127.0.0.1./x', 'https://0x7f.1/x', 'https://metadata.google.internal./x', 'ftp://x.com', 42]) {
       assert.ok('error' in validateWebhookUrl(bad), String(bad));
     }
     assert.ok('error' in validateWebhookUrl('https://webhooks.local-stack.test/x', 'production'));
+    assert.ok('error' in validateWebhookUrl('https://webhooks.local-stack.test./x', 'production'));
     assert.ok('url' in validateWebhookUrl('https://webhooks.local-stack.test/x', 'qa'));
   });
 

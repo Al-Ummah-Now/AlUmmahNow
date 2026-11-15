@@ -352,7 +352,9 @@ export function validateWebhookUrl(raw: unknown, environment?: string): { url: s
   }
   if (u.protocol !== 'https:') return { error: 'url must use https' };
   if (u.username || u.password) return { error: 'url must not contain a user name or password' };
-  const host = u.hostname.toLowerCase();
+  // A fully qualified name may end in dots (`localhost.`); strip them so the suffix rules see the real name
+  const host = u.hostname.toLowerCase().replace(/\.+$/, '');
+  if (!host) return { error: 'url must use a public host name' };
   if (!host.includes('.') || /^[\d.]+$/.test(host) || host.startsWith('[') || /(^|\.)(localhost|local|internal|lan|home|arpa)$/.test(host)) return { error: 'url must use a public host name' };
   // Reserved for testing (RFC 2606): the local stack's fake receiver lives under .test
   if (environment === 'production' && /\.(test|example|invalid)$/.test(host)) return { error: 'url must use a public host name' };
