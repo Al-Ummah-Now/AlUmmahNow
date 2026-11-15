@@ -56,6 +56,12 @@ export interface CreatorTier {
    * unless an admin grants minutes; ignored when `unlimited`.
    */
   captionMinutesMonth: number;
+  /**
+   * YouTube imports (wiki AUN-YT-IMPORT) count against perHour/perDay like
+   * uploads (true, the default) or skip those counters (false). A tier is
+   * still needed to import; ignored when `unlimited`.
+   */
+  importCountsAgainstLimits: boolean;
   updatedAt: string | null;
   updatedBy: string | null;
 }
@@ -70,6 +76,7 @@ export const DEFAULT_CREATOR_TIER: Omit<CreatorTier, 'updatedAt' | 'updatedBy'> 
   maxConcurrent: 20,
   maxChannels: 3,
   captionMinutesMonth: 0,
+  importCountsAgainstLimits: true,
 };
 
 export const DEFAULT_UNLIMITED_TIER: Omit<CreatorTier, 'updatedAt' | 'updatedBy'> = {
@@ -81,6 +88,7 @@ export const DEFAULT_UNLIMITED_TIER: Omit<CreatorTier, 'updatedAt' | 'updatedBy'
   maxConcurrent: 0,
   maxChannels: null,
   captionMinutesMonth: 0,
+  importCountsAgainstLimits: true,
 };
 
 /** Bounds an admin may set on a tier (validation, not a policy). */
