@@ -226,7 +226,7 @@ export async function eraseRunUserData(
 			budget.spend(2);
 			await cancelInvitesOfUser(db, userId);
 			await anonymizeTeamActivity(db, userId, DELETED_USER_ID);
-			// Their live sessions' tier owner (search migration 0040), as the full erasure does
+			// Their live sessions' tier owner (search migration 0060), as the full erasure does
 			budget.spend();
 			await eraseLiveSessionOwner(db, userId);
 			budget.spend();
