@@ -49,10 +49,10 @@ import { purgeVideoMedia, type MediaEnv } from '../media/r2-delivery';
 import { hideNotificationsOf, setNotificationsHidden } from '../notifications';
 import { dropVideoReferences, eraseCaptionJobs, eraseChannelPostImages, erasePostImages, eraseVideoImages } from './purgeCopies';
 import { deleteVideoSideRecords } from '../videoSideRecords';
-import { readAssignment } from '../creatorTiers';
+import { assignTier, readAssignment } from '../creatorTiers';
 import { bansFor, deleteBan, readBan, writeBan } from './bans';
 import { createJob, type JobHandler, type JobOutcome, type JobQueue } from './jobs';
-import { pendingDeletion, recordDeletion, removeDeletion, requestPurge, type PurgeOutcome } from './deletions';
+import { pendingDeletion, purgeDeletionNow, recordDeletion, removeDeletion, requestPurge, type PurgeOutcome } from './deletions';
 import { forgetPendingUserDeletion } from './pendingUserDeletion';
 import { approvedFromPlan, planLegacyRestore, runLegacyRestore, type ApprovedRestore, type AuthUsersDb } from './legacy-restore';
 import { OWNER_DELETED_HOLD } from '../videoTrashMarks';
@@ -1412,6 +1412,43 @@ export async function deleteUserData(env: AdminServiceEnv, userId: string, actor
 	forgetPendingUserDeletion(userId);
 	await send(env, MessageType.ProfileUpdate, { userId, action: 'deleted' });
 	return { deletion, job: await createJob(env, { kind: 'user.sync-holds', targetKind: 'user', targetId: userId, actorId }) };
+}
+
+/** What a revoked invite left on the videos side, and whether its erase was handed to the cleanup. */
+export interface RevokedInviteErase {
+	/** A profile, channel or video was found and its purge started (user.delete-data job) */
+	erased: boolean;
+	/** The creator tier the invite assigned was removed */
+	tierRemoved: boolean;
+}
+
+/**
+ * The videos-side data of a revoked invite whose auth account auth has purged (#716; admin-api's
+ * hourly trash cleanup calls this before it drops the invite's mirror row, never for an accepted
+ * invite): the provisioned profile, channels made or moved for the invite (their @handles are
+ * freed) and anything else under that user id go through the admin erase path, soft delete and its
+ * purge at once (the user.delete-data job: retries, DLQ, Errors page), and the creator tier the
+ * invite assigned is removed. Idempotent: a second call finds the deletion already purging.
+ */
+export async function eraseRevokedInviteUser(env: AdminServiceEnv, userId: string, actorId: string, now = Date.now()): Promise<RevokedInviteErase> {
+	const db = env.SEARCH_DB!;
+	// An id the tiers table cannot hold has no tier to remove
+	const previous = /^[A-Za-z0-9_-]{1,128}$/.test(userId) ? (await assignTier(db as unknown as D1Database, userId, null, actorId)).previous : null;
+	const owns = async (kind: 'channel' | 'video') =>
+		!!(await (db as unknown as D1Database).prepare('SELECT 1 FROM content_ownership WHERE kind = ? AND owner_id = ? LIMIT 1').bind(kind, userId).first());
+	const pending = await pendingDeletion(db, 'user', userId);
+	const found = !!pending || !!(await repo(env.profiles).getObject(userId)) || (await owns('channel')) || (await owns('video'));
+	if (!found) return { erased: false, tierRemoved: !!previous };
+	if (!pending) {
+		try {
+			await deleteUserData(env, userId, actorId, 'Revoked invite purged on the auth server');
+		} catch (error) {
+			// Deleted meanwhile (an admin, a second cleanup run): purge what is pending
+			if (!(error instanceof AdminError && error.code === 'already_deleted')) throw error;
+		}
+	}
+	await purgeDeletionNow(env as never, 'user', userId, actorId, (d) => purgeDeletion(env, d), now);
+	return { erased: true, tierRemoved: !!previous };
 }
 
 export async function restoreUser(env: AdminServiceEnv, userId: string, actorId: string): Promise<{ job: AdminJob }> {

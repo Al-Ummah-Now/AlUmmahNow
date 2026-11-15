@@ -278,6 +278,8 @@ app.patch('/users/:id', async (c) => ok(c, await admin.updateUser(c.env, c.req.p
 app.post('/users/:id/ban', async (c) => ok(c, await admin.banUser(c.env, c.req.param('id'), actor(c), parse(Reason, await body(c)).reason)));
 app.post('/users/:id/unban', async (c) => ok(c, await admin.unbanUser(c.env, c.req.param('id'), actor(c))));
 app.post('/users/:id/delete-data', async (c) => ok(c, await admin.deleteUserData(c.env, c.req.param('id'), actor(c), parse(Reason, await body(c)).reason)));
+// A revoked invite's data once auth purged its account (#716); called by admin-api's trash cleanup only
+app.post('/users/:id/erase-revoked-invite', async (c) => ok(c, await admin.eraseRevokedInviteUser(c.env, c.req.param('id'), actor(c))));
 // Account notices (warn-user): the in-app notice, and what an account email needs (admin-api sends it)
 app.post('/users/:id/account-notices', async (c) => ok(c, await accountNotice(c.env as never, c.req.param('id'), parse(AccountNoticeBody, await body(c)) as AccountNoticeRequest)));
 app.get('/users/:id/account-email', async (c) => ok(c, await accountEmailContact(c.env as never, c.req.param('id'))));

@@ -423,8 +423,25 @@ describe('Recently deleted (admin soft-delete framework)', () => {
     assert.equal(result.invite.purged, 0);
     await t.drain();
     assert.ok(t.auth.calls.some((c) => c.path.endsWith(`/${inv.id}/purge`)));
-    result = await runTrashCleanup(env);
-    assert.equal(result.invite.purged, 1);
+    // Auth has the request but its cleanup has not removed the account yet: the mirror waits (#716)
+    const erased: string[] = [];
+    const deps = {
+      erase: async (row: { user_id: string }) => {
+        erased.push(row.user_id);
+        return { erased: true, tierRemoved: true };
+      },
+      flag: async () => undefined,
+      resolve: async () => undefined,
+      auth: AuthInviteClient.fromEnv(env, t.auth.fetchImpl),
+    };
+    result = await runTrashCleanup(env, new Date(), undefined, deps as never);
+    assert.deepEqual(result.invite, { purged: 0, failed: 0 });
+    assert.deepEqual(erased, []);
+    // Auth's cleanup purged it: the videos side is erased, then the mirror goes
+    t.auth.invites.delete(inv.id);
+    result = await runTrashCleanup(env, new Date(), undefined, deps as never);
+    assert.deepEqual(result.invite, { purged: 1, failed: 0 });
+    assert.deepEqual(erased, [inv.userId]);
     assert.equal((await t.call('GET', `/api/invites/${inv.id}`)).status, 404);
   });
 });

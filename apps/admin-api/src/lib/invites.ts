@@ -593,25 +593,6 @@ export async function listRevokedInvites(db: D1Database, limit = 500): Promise<I
   return results ?? [];
 }
 
-/**
- * The hourly trash cleanup's part: drops the mirror of revoked invites past
- * their 30 days, or queued for permanent deletion once auth has that request
- * (no change still pending). Auth removes the account on its own cleanup.
- */
-export async function purgeRevokedInviteMirrors(db: D1Database, cutoff: string, limit: number): Promise<string[]> {
-  const { results } = await db
-    .prepare(
-      `SELECT id FROM creator_invites WHERE deleted_at IS NOT NULL
-         AND (deleted_at <= ? OR (purge_requested_at IS NOT NULL AND (pending_op IS NULL OR delivery_status != 'sent')))
-       ORDER BY deleted_at LIMIT ?`
-    )
-    .bind(cutoff, limit)
-    .all<{ id: string }>();
-  const ids = (results ?? []).map((r) => r.id);
-  for (const id of ids) await db.prepare('DELETE FROM creator_invites WHERE id = ? AND deleted_at IS NOT NULL').bind(id).run();
-  return ids;
-}
-
 /** A SHA-256 hex digest (the "copy link" token goes to auth only as this). */
 export async function sha256Hex(value: string): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));

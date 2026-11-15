@@ -28,9 +28,10 @@ import { logger } from './logger';
 import { hasAdminRole, hasPermission } from './roles';
 import { ThemeError, ThemeStore } from './themePackages';
 import { CLEANUP_ACTOR, writeTrashAudit } from './trash-audit';
-import { InviteStateError, getInvite, listRevokedInvites, purgeRevokedInviteMirrors, requestInvitePurge, restoreInvite, type InviteQueueEnv } from './invites';
+import { InviteStateError, getInvite, listRevokedInvites, requestInvitePurge, restoreInvite, type InviteQueueEnv } from './invites';
+import { dueRevokedInvites, settleRevokedInvites, type InviteEraseDeps } from './invite-erase';
 
-export type TrashEnv = Pick<AdminBindings, 'REPORTS_DB' | 'theme_packages'> & VideosClientEnv;
+export type TrashEnv = Pick<AdminBindings, 'REPORTS_DB' | 'theme_packages'> & VideosClientEnv & Partial<Pick<AdminBindings, 'ENVIRONMENT' | 'Issuer' | 'AUTH_MODERATION_CLIENT_ID' | 'AUTH_MODERATION_CLIENT_SECRET' | 'AUTH_REQUESTS_QUEUE'>>;
 
 /** Items purged per kind per cleanup run (bounded so a run stays well inside the cron's CPU budget). */
 export const CLEANUP_LIMIT = 50;
@@ -185,7 +186,7 @@ export type CleanupResult = Record<TrashKind, CleanupCounts>;
  * with the purged and failed counts per kind. Safe to run twice: purged rows are gone, and every
  * purge re-checks its row is still deleted, so a restore that lands first wins.
  */
-export async function runTrashCleanup(env: TrashEnv, now = new Date(), limit = CLEANUP_LIMIT): Promise<CleanupResult> {
+export async function runTrashCleanup(env: TrashEnv, now = new Date(), limit = CLEANUP_LIMIT, inviteDeps: InviteEraseDeps = {}): Promise<CleanupResult> {
   const cutoff = purgeCutoff(now);
   const result: CleanupResult = {
     'contact-message': { purged: 0, failed: 0 },
@@ -235,9 +236,11 @@ export async function runTrashCleanup(env: TrashEnv, now = new Date(), limit = C
   }
 
   try {
-    const ids = await purgeRevokedInviteMirrors(env.REPORTS_DB, cutoff, limit);
-    result.invite.purged = ids.length;
-    await audit('invite', ids);
+    // Never-accepted invites first erase what they left on the videos side (#716, lib/invite-erase.ts)
+    const settled = await settleRevokedInvites(env as never, await dueRevokedInvites(env.REPORTS_DB, cutoff, limit), { now: now.getTime(), ...inviteDeps });
+    result.invite = { purged: settled.purged.length, failed: settled.failed.length };
+    await audit('invite', settled.purged);
+    if (settled.erased.length || settled.waiting.length) logger.info('[Trash] Revoked invites settled', { erased: settled.erased.length, waitingForAuth: settled.waiting.length });
   } catch (error) {
     result.invite.failed += 1;
     logger.error('[Trash] Invite purge failed', { error: error instanceof Error ? error.message : String(error) });
