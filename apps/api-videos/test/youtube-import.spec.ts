@@ -724,6 +724,10 @@ describe('YouTube import: upkeep and erasure', () => {
 	it('deletes stale consents, ends idle imports and empties old snapshots', async () => {
 		const { env, q, db } = makeEnv();
 		const { importId } = await listedImport(env, q);
+		// The listing stamps rows with the wall clock: pin them to the test's clock, so "idle for 14 days"
+		// is measured from NOW and the test does not start failing once the real date passes NOW
+		db.db.prepare('UPDATE yt_imports SET updated_at = ? WHERE id = ?').run(NOW.toISOString(), importId);
+		db.db.prepare('UPDATE yt_import_items SET updated_at = ? WHERE import_id = ?').run(NOW.toISOString(), importId);
 		await startOAuth(env as never, caller, { channelId: CHANNEL, captions: false, locale: 'en' }, NOW);
 		const later = new Date(NOW.getTime() + 15 * 86_400_000);
 		const first = await sweepYoutubeImports(env as never, later);
