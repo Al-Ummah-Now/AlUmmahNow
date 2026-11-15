@@ -76,8 +76,10 @@ export function IssueEditor({ issue, confirmed }: { issue: (NewsletterIssueConte
     <section className={`${cardClass} mb-6`} aria-labelledby={`${id}-title`} data-testid="newsletter-editor">
       <h2 id={`${id}-title`} className="text-lg font-semibold text-fg mb-1">{issue ? t('newsletter.editTitle') : t('newsletter.newTitle')}</h2>
       <p id={`${id}-body-hint`} className="text-sm text-fg-muted mb-4">{t('newsletter.bodyHint')}</p>
+      {/* The action row sits outside the form: ConfirmButton's dialog is a form of its own */}
       <form
-        className="space-y-4"
+        id={`${id}-form`}
+        className="space-y-4 mb-4"
         onSubmit={(e) => {
           e.preventDefault();
           void save();
@@ -85,8 +87,10 @@ export function IssueEditor({ issue, confirmed }: { issue: (NewsletterIssueConte
       >
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">{field('subject_en')}{field('subject_ar')}</div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">{field('body_en')}{field('body_ar')}</div>
+      </form>
+      <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-3">
-          <button type="submit" className={secondaryButtonClass} disabled={busy !== null || !dirty} data-testid="newsletter-save">
+          <button type="submit" form={`${id}-form`} className={secondaryButtonClass} disabled={busy !== null || !dirty} data-testid="newsletter-save">
             {busy === 'save' ? t('content.working') : t('newsletter.saveDraft')}
           </button>
           <ConfirmButton
@@ -119,7 +123,7 @@ export function IssueEditor({ issue, confirmed }: { issue: (NewsletterIssueConte
         {!complete && <p className="text-sm text-fg-muted" data-testid="newsletter-incomplete">{t('newsletter.bothLanguages')}</p>}
         {complete && confirmed === 0 && <p className="text-sm text-fg-muted" data-testid="newsletter-no-subscribers">{t('newsletter.noConfirmed')}</p>}
         <ActionFeedback error={error} message={message} testId="newsletter-feedback" />
-      </form>
+      </div>
     </section>
   );
 }
