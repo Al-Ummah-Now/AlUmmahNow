@@ -51,7 +51,7 @@ describe('SearchTranscriptMatches', () => {
     render(<SearchTranscriptMatches matches={[match()]} query="patience prayer" />);
     const section = screen.getByTestId('search-transcripts');
     expect(within(section).getByRole('heading', { name: en.search.saidInVideos })).toBeInTheDocument();
-    const link = within(section).getByRole('link', { name: /Friday reminder.*At 12:34.*patience/ });
+    const link = within(section).getByRole('link', { name: /Friday reminder.*At 12:34.*Demo channel.*patience/ });
     expect(link).toHaveAttribute('href', '/en/video/v1?t=754');
     expect(within(section).getByText('At 12:34', { exact: false })).toBeInTheDocument();
     expect(Array.from(section.querySelectorAll('mark')).map((m) => m.textContent)).toEqual(['patience', 'prayer']);
