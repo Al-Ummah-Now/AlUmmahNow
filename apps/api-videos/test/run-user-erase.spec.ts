@@ -100,6 +100,24 @@ describe('run-account erasure through the indexes (#887)', () => {
 		assert.equal((db.db.prepare(`SELECT status FROM channel_invites WHERE id = 'i-open'`).get() as { status: string }).status, 'cancelled');
 	});
 
+	it('clears it as the tier owner of its live sessions, not someone else\'s', async () => {
+		const db = new SqliteD1();
+		const { env } = buckets();
+		const full = { ...env, SEARCH_DB: db };
+		for (const kind of ['channel', 'video', 'profile'] as const) await runOwnershipPass(full as never, kind, { maxPages: 10 });
+		for (const [id, owner] of [['s1', 'run1'], ['s2', 'other']]) {
+			db.db
+				.prepare("INSERT INTO live_sessions (id, stream_id, provider, reason, created_at, owner_id) VALUES (?, 'st', 'selfhosted', 'round_robin', 1, ?)")
+				.run(id, owner);
+		}
+		const result = await eraseRunUserData(full as never, 'run1', new OperationBudget(900));
+		assert.equal(result.complete, true);
+		assert.deepEqual(db.db.prepare('SELECT id, owner_id FROM live_sessions ORDER BY id').all().map((r) => ({ ...(r as object) })), [
+			{ id: 's1', owner_id: null },
+			{ id: 's2', owner_id: 'other' },
+		]);
+	});
+
 	it('resumes from the step where its budget ran out', async () => {
 		const db = new SqliteD1();
 		const { env } = buckets();
