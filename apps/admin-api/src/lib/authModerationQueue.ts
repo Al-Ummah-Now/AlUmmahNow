@@ -17,6 +17,7 @@
  */
 import { logger } from './logger';
 import { deadLetterInvite, processInvite, type AuthInviteClient, type InviteMessage, type InviteQueueEnv } from './invites';
+import { deadLetterDeviceRevocation, isDeviceRevocationMessage, processDeviceRevocation, type DeviceRevocationEnv, type DeviceRevocationMessage } from './deviceTokenRevocation';
 import type { D1Database } from './types';
 import {
   AuthApiError,
@@ -197,7 +198,7 @@ const isInviteMessage = (body: unknown): body is InviteMessage =>
   !!body && typeof body === 'object' && (body as { type?: unknown }).type === 'invite' && typeof (body as { id?: unknown }).id === 'string';
 
 export async function handleAuthRequestBatch(
-  batch: MessageBatch<AuthRequestMessage | InviteMessage>,
+  batch: MessageBatch<AuthRequestMessage | InviteMessage | DeviceRevocationMessage>,
   env: QueueEnv,
   client?: AuthModerationClient,
   inviteClient?: AuthInviteClient
@@ -223,7 +224,25 @@ export async function handleAuthRequestBatch(
       }
       continue;
     }
-    if (!body || !['send', 'sync', 'info'].includes(body.type) || !body.id) {
+    // "Sign out this device" revocations at auth (lib/deviceTokenRevocation.ts) share this queue and client
+    if (isDeviceRevocationMessage(body)) {
+      const denv = env as unknown as DeviceRevocationEnv;
+      try {
+        if (dlq) {
+          await deadLetterDeviceRevocation(denv, body);
+          msg.ack();
+          continue;
+        }
+        const outcome = await processDeviceRevocation(denv, body, msg.attempts, client);
+        if (outcome === 'retry') msg.retry({ delaySeconds: retryDelaySeconds(msg.attempts) });
+        else msg.ack();
+      } catch (error) {
+        logger.error('[DeviceSignOut] queue handler error', { userId: body.userId, installId: body.installId, error: errorText(error) });
+        msg.retry({ delaySeconds: retryDelaySeconds(msg.attempts) });
+      }
+      continue;
+    }
+    if (!body || !['send', 'sync', 'info'].includes((body as AuthRequestMessage).type) || !(body as AuthRequestMessage).id) {
       msg.ack();
       continue;
     }

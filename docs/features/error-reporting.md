@@ -170,7 +170,9 @@ and only what is registered there:
 - `{ kind: 'builtin', handler, args }` — a handler in `BUILTIN_RETRIES`
   (today: `contact-email` queues a Contact us email that failed for good
   again; `lib/contact-mail-queue.ts` raises that item when the mail queue gives
-  up, and the inbox's own Retry closes it).
+  up, and the inbox's own Retry closes it; `device-tokens` queues a "Sign out
+  this device" revocation at auth again, raised by
+  `lib/deviceTokenRevocation.ts` when that call gives up, #442).
 - `{ kind: 'service', service, path, body }` — POST with the internal API key
   to an allowlisted path of a Worker admin-api has a service binding to
   (`SERVICE_RETRIES`; today: `processor` `/dlq/replay` replays a dead letter,

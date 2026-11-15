@@ -290,7 +290,7 @@ Key facts that drive most findings:
 | Upload rate limits | KV `RATE_LIMIT_KV` | `rate_limit:<operation>:<userId>` | Blind KV RMW (get→put), no CAS possible |
 | Watch-time rate limit | CF Rate Limiting binding `WATCH_TIME_LIMITER` | `<session>:<video>` | Native limiter (OK) |
 | TUS proxy sessions | KV `TUS_SESSIONS` | session key | KV put on create; get→put per PATCH (offset taken from Bunny response) |
-| Token revocations | KV `TOKEN_REVOCATIONS` (written by auth worker) | `u:<userId>` | read-only here + 30 s isolate cache |
+| Token revocations | KV `TOKEN_REVOCATIONS` (written by auth worker) | `u:<userId>`, `s:<sid>` (one signed-out device, #442) | read-only here + 30 s isolate cache |
 | App config / flags | KV (APP_CONFIG) | `flags`, `config`, `versions` | Admin full-document replace; 60 s isolate cache |
 | Edge caches | Cache API (per colo) | `<origin>/__edge-cache/...` | anon first page of videos, recommendations (per user-hash key) |
 | In-memory | module scope | openauth client, revocation map, app-config map | see OK section |
@@ -701,7 +701,7 @@ Worker `al-ummah-now-comms` + Durable Object `WebSocketDurableObject` (migration
 |---|---|---|
 | All sockets, sessions, channel→subscriber sets, per-session rate limits | In-memory Maps on ONE DO instance `idFromName('websocket-instance')` (index.ts:50,102,137; websocket.ts:24-28; channels.ts:11-14) | plain in-memory mutation; nothing persisted, no `serializeAttachment`, no `ctx.getWebSockets()` |
 | Presence `presence:<userId>` → JSON array of session ids | KV PRESENCE_KV, TTL 300 s | read-modify-write, no CAS (presence.ts:18-118) |
-| Token revocation lookups | KV TOKEN_REVOCATIONS `u:<userId>`, module-level Map cache 30 s, max 5000 (token-revocation.ts:35-52) | read only |
+| Token revocation lookups | KV TOKEN_REVOCATIONS `u:<userId>` and `s:<sid>` (token with a `sid` claim), module-level Map cache 30 s, max 5000 (token-revocation.ts) | read only |
 | JWKS per issuer | module-level Map of `createRemoteJWKSet` (auth.ts:61-69) | cache of public keys |
 
 #### Defects
