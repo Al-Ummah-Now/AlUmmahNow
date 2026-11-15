@@ -36,3 +36,4 @@ E2E Temp *
 !e2e-sample-90s.mp4
 # 4s 240x240 (1:1) H.264/AAC clip (~60KB): a square video (embed-frame-sound spec)
 !e2e-sample-square.mp4
+# 4s 440 Hz mono AAC tone (~26KB): the dub uploaded by audio-tracks.player.spec.ts (not ignored: .m4a)

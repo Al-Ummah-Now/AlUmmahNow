@@ -38,7 +38,7 @@ const SHARED_MODE = process.env.E2E_SHARED_STATE;
  * under a cross-run lock with a few slots (scripts/ci/qa-lock.ts --slots, #838): E2E_ENCODE=skip
  * in the main part, =only in the encode part. Unset (local runs): everything together.
  */
-const ENCODE_SPECS = '(bulk-rename-edit|upload-modes|studio-draft-path|embed-frame-sound|uploads|upload-reuse|media-delivery)\\.spec\\.ts|processing\\.player\\.spec\\.ts|player\\.spec\\.ts';
+const ENCODE_SPECS = '(bulk-rename-edit|upload-modes|studio-draft-path|embed-frame-sound|uploads|upload-reuse|media-delivery)\\.spec\\.ts|(processing|audio-tracks)\\.player\\.spec\\.ts|player\\.spec\\.ts';
 const ENCODE = new RegExp(`/(${ENCODE_SPECS})$`);
 const NOT_ENCODE = new RegExp(`^(?!.*/(${ENCODE_SPECS})$)`);
 const ENCODE_MODE = process.env.E2E_ENCODE;
