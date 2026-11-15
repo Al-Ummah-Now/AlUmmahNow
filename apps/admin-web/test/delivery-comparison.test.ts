@@ -21,6 +21,8 @@ import {
   projectMonthlyCost,
   transcodeCost,
   unitCosts,
+  MIN_SAMPLE,
+  MAX_CLASS_B_PER_VIEWER_HOUR,
 } from '../src/app/(protected)/delivery/metrics';
 import type { MediaJobsSummary, MediaQoeRow } from '../src/lib/api/types';
 import { canManageMedia } from '../src/lib/roles';
@@ -122,13 +124,14 @@ describe('cost', () => {
   });
 
   it('uses measured unit costs when the period has them, and says which', () => {
-    const jobs: MediaJobsSummary = { jobs: 3, ready: 3, failed: 0, running: 0, r2_seconds_to_playable: 90, bunny_seconds_to_playable: 120, video_seconds: 600, container_seconds: 300, bytes: 200e6 };
-    const plays = playbackTotals([qoe('2026-11-11', 'bunny', { watch_ms: 2 * 3_600_000 }), qoe('2026-11-11', 'r2', { watch_ms: 3_600_000 })]);
+    // Enough to be a rate (MIN_SAMPLE): 100 video-minutes, 250 Bunny and 300 R2 viewer-hours
+    const jobs: MediaJobsSummary = { jobs: 30, ready: 30, failed: 0, running: 0, r2_seconds_to_playable: 90, bunny_seconds_to_playable: 120, video_seconds: 6000, container_seconds: 3000, bytes: 2e9 };
+    const plays = playbackTotals([qoe('2026-11-11', 'bunny', { watch_ms: 250 * 3_600_000 }), qoe('2026-11-11', 'r2', { watch_ms: 300 * 3_600_000 })]);
     const unit = unitCosts(jobs, [
-      { day: '2026-11-11', provider: 'bunny', metric: 'egress_gb', value: 1 },
-      { day: '2026-11-11', provider: 'r2', metric: 'class_b_ops', value: 100 },
+      { day: '2026-11-11', provider: 'bunny', metric: 'egress_gb', value: 125 },
+      { day: '2026-11-11', provider: 'r2', metric: 'class_b_ops', value: 30_000 },
     ], plays);
-    assert.equal(unit.containerSecondsPerVideoMinute, 30); // 300 s over 10 video-minutes
+    assert.equal(unit.containerSecondsPerVideoMinute, 30); // 3000 s over 100 video-minutes
     near(unit.storedGbPerVideoMinute, 0.02, 1e-9);
     assert.equal(unit.gbPerViewerHour, 0.5);
     assert.equal(unit.classBPerViewerHour, 100);
@@ -136,6 +139,38 @@ describe('cost', () => {
     assert.deepEqual(unit.measured, { transcode: true, storage: true, classA: false, classB: true, delivery: true });
     // Cheaper transcode than assumed: 30 s x $0.0001114 per video-minute
     near(projectMonthlyCost(SCALES[0], unit, 500).r2.transcode, 1200 * 30 * 0.0001114);
+  });
+
+  it('a sample too small to be a rate falls back to the plan (prod 2026-11-15: 12.5 video-minutes, 0.25 R2 viewer-hours)', () => {
+    // Production's 30 days on 2026-11-15: 6 transcodes, 0.25 R2 and 0.57 Bunny viewer-hours, 3,140 Class B reads
+    const jobs: MediaJobsSummary = { jobs: 6, ready: 6, failed: 0, running: 0, r2_seconds_to_playable: 60, bunny_seconds_to_playable: 90, video_seconds: 749.39, container_seconds: 374, bytes: 347_770_824 };
+    const plays = playbackTotals([qoe('2026-11-14', 'bunny', { watch_ms: 2_048_371 }), qoe('2026-11-14', 'r2', { watch_ms: 890_771 })]);
+    const costs = [
+      { day: '2026-11-14', provider: 'bunny', metric: 'egress_gb', value: 0.214625 },
+      { day: '2026-11-14', provider: 'r2', metric: 'class_a_ops', value: 182 },
+      { day: '2026-11-14', provider: 'r2', metric: 'class_b_ops', value: 3140 },
+    ];
+    const unit = unitCosts(jobs, costs, plays);
+    assert.deepEqual(unit.measured, { transcode: false, storage: false, classA: false, classB: false, delivery: false });
+    const medium = projectMonthlyCost(SCALES[1], unit, 500);
+    // R2 wins with the plan's units: about $150 against Bunny's $340–565
+    near(medium.r2.total, 150, 1);
+    near(medium.bunny.totalLow, 340, 1);
+    near(medium.bunny.totalHigh, 565, 1);
+    assert.ok(medium.r2.ops < 5, `ops ${medium.r2.ops}`);
+  });
+
+  it('an implausible Class B rate (more than every segment missing the cache) is not used even with enough plays', () => {
+    const plays = playbackTotals([qoe('2026-11-11', 'r2', { watch_ms: 300 * 3_600_000 })]);
+    const unit = unitCosts(null, [{ day: '2026-11-11', provider: 'r2', metric: 'class_b_ops', value: 300 * (MAX_CLASS_B_PER_VIEWER_HOUR + 1) }], plays);
+    assert.equal(unit.measured.classB, false);
+    assert.equal(unit.classBPerViewerHour, ASSUMED.classBPerViewerHour);
+    const ok = unitCosts(null, [{ day: '2026-11-11', provider: 'r2', metric: 'class_b_ops', value: 300 * 900 }], plays);
+    assert.deepEqual([ok.measured.classB, ok.classBPerViewerHour], [true, 900]);
+  });
+
+  it('the thresholds are a minimum sample, not a cap', () => {
+    assert.deepEqual(MIN_SAMPLE, { videoMinutes: 60, viewerHours: 200 });
   });
 
   it('measured transcode cost per video-minute', () => {

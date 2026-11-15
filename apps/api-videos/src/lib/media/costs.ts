@@ -56,7 +56,10 @@ export function metricsFromRecords(input: {
 	r2StoredBytes?: number;
 	/** Kept originals (al-ummah-now-media-originals; docs/media-delivery/ORIGINALS.md) */
 	originalsStoredBytes?: number;
+	/** Class B reads of the playback buckets (media, media-private) */
 	r2ClassB?: number;
+	/** Class B reads of the originals bucket: real spend, but not per viewer (transcoder source, backfill verify) */
+	r2ClassBOriginals?: number;
 }): Metric[] {
 	const out: Metric[] = [];
 	const add = (provider: Metric['provider'], metric: string, value: number | undefined) => {
@@ -84,7 +87,7 @@ export function metricsFromRecords(input: {
 		input.jobs.containerSeconds * PRICES.containerInstanceSecond +
 		((storedR2 + (input.originalsStoredBytes ?? 0)) / GB) * (PRICES.r2GbMonth / 30) +
 		(input.jobs.objects / 1e6) * PRICES.r2ClassAPerMillion +
-		((input.r2ClassB ?? 0) / 1e6) * PRICES.r2ClassBPerMillion;
+		(((input.r2ClassB ?? 0) + (input.r2ClassBOriginals ?? 0)) / 1e6) * PRICES.r2ClassBPerMillion;
 	add('r2', 'cost_usd', r2Cost);
 
 	add('bunny', 'viewer_hours', bunny.hours);
@@ -138,24 +141,50 @@ const CLASS_B = new Set(['GetObject', 'HeadObject', 'HeadBucket', 'UsageSummary'
  * R2 storage and operations (Account Analytics Read) and the media host's requests, bytes and
  * cache status (Zone Analytics Read). A refused one leaves its metrics out, never the other's.
  */
-async function cloudflareDay(env: CostEnv, day: string): Promise<{ r2StoredBytes?: number; r2ClassB?: number; extra: Metric[] }> {
+/**
+ * Whether a bucket serves playback. Class B reads of the originals bucket are the transcoder fetching
+ * its source and the backfill verifying copies, not viewers: counted apart (class_b_ops_originals),
+ * never in the per-viewer-hour unit cost.
+ */
+export function isPlaybackBucket(name: string): boolean {
+	return !/-originals(-|$)/.test(name);
+}
+
+/** Class B reads per bucket kind from r2OperationsAdaptiveGroups rows (actionType, bucketName). */
+export function classBByKind(groups: { sum?: { requests?: number }; dimensions?: { actionType?: string; bucketName?: string } }[]): { playback: number; originals: number } {
+	const out = { playback: 0, originals: 0 };
+	for (const g of groups) {
+		if (!CLASS_B.has(g.dimensions?.actionType ?? '')) continue;
+		const n = g.sum?.requests ?? 0;
+		if (isPlaybackBucket(g.dimensions?.bucketName ?? '')) out.playback += n;
+		else out.originals += n;
+	}
+	return out;
+}
+
+async function cloudflareDay(env: CostEnv, day: string): Promise<{ r2StoredBytes?: number; r2ClassB?: number; r2ClassBOriginals?: number; extra: Metric[] }> {
 	const token = await getSecret(env.MEDIA_ANALYTICS_TOKEN, 'MEDIA_ANALYTICS_TOKEN');
 	if (!token) return { extra: [] };
 	const buckets = (env.MEDIA_BUCKET_NAMES ?? '').split(',').filter(Boolean);
 	const next = new Date(Date.parse(`${day}T00:00:00Z`) + 86400_000).toISOString().slice(0, 10);
-	const out: { r2StoredBytes?: number; r2ClassB?: number; extra: Metric[] } = { extra: [] };
+	const out: { r2StoredBytes?: number; r2ClassB?: number; r2ClassBOriginals?: number; extra: Metric[] } = { extra: [] };
 	try {
 		const data = await graphql(
 			token,
 			`query($a: String!, $b: [String!], $d: Date!, $n: Date!) { viewer { accounts(filter: { accountTag: $a }) {
 				r2StorageAdaptiveGroups(limit: 100, filter: { date_geq: $d, date_lt: $n, bucketName_in: $b }) { max { payloadSize metadataSize } dimensions { bucketName } }
-				r2OperationsAdaptiveGroups(limit: 100, filter: { date_geq: $d, date_lt: $n, bucketName_in: $b }) { sum { requests } dimensions { actionType } } } } }`,
+				r2OperationsAdaptiveGroups(limit: 200, filter: { date_geq: $d, date_lt: $n, bucketName_in: $b }) { sum { requests } dimensions { actionType bucketName } } } } }`,
 			{ a: env.CLOUDFLARE_ACCOUNT_ID || ACCOUNT_ID, b: buckets, d: day, n: next },
 		);
 		const acct = data?.viewer?.accounts?.[0] ?? {};
 		const stored = (acct.r2StorageAdaptiveGroups ?? []).reduce((n: number, g: any) => n + (g.max?.payloadSize ?? 0) + (g.max?.metadataSize ?? 0), 0);
 		out.r2StoredBytes = stored || undefined;
-		out.r2ClassB = (acct.r2OperationsAdaptiveGroups ?? []).filter((g: any) => CLASS_B.has(g.dimensions?.actionType)).reduce((n: number, g: any) => n + (g.sum?.requests ?? 0), 0);
+		// Playback buckets only (class_b_ops: the Delivery page divides it by viewer-hours); the originals'
+		// reads (transcoder source, backfill verify) are kept apart so they never count against playback
+		const classB = classBByKind(acct.r2OperationsAdaptiveGroups ?? []);
+		out.r2ClassB = classB.playback;
+		out.r2ClassBOriginals = classB.originals;
+		out.extra.push({ provider: 'r2', metric: 'class_b_ops_originals', value: classB.originals });
 	} catch (error) {
 		logger.warn('[MediaCosts] R2 analytics unavailable', { error: error instanceof Error ? error.message : String(error) });
 	}
@@ -211,6 +240,7 @@ export async function collectDeliveryCosts(env: CostEnv, now = new Date()): Prom
 				r2StoredBytes: cf.r2StoredBytes,
 				originalsStoredBytes: await originalsStoredBytes(env as never),
 				r2ClassB: cf.r2ClassB,
+				r2ClassBOriginals: cf.r2ClassBOriginals,
 			}),
 			...cf.extra,
 		];
