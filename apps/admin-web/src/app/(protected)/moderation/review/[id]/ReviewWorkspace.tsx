@@ -7,7 +7,8 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AUDIO_TRACK_LANGUAGES, REVIEW_REASON_CODES } from '@al-ummah/shared-types';
+import { REVIEW_REASON_CODES } from '@al-ummah/shared-types';
+import { audioTrackLanguageName } from '@/lib/audio-track-line';
 import { VideoPlayer } from '../../../videos/[id]/VideoPlayer';
 import { claimReview, decideReview, revealReviewItem, type ReviewDetailView, type ReviewFindingView } from '@/lib/api/review';
 import { useLanguage } from '@/i18n/I18nProvider';
@@ -36,6 +37,7 @@ export function ReviewWorkspace({ detail, media }: Props) {
   const { t, locale } = useLanguage();
   const router = useRouter();
   const { review, findings, subject } = detail;
+  const trackLanguage = subject?.track ? audioTrackLanguageName(subject.track.language, subject.track.label, locale) : null;
   const playerBox = useRef<HTMLDivElement>(null);
   const [speed, setSpeed] = useState(1);
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
@@ -116,10 +118,9 @@ export function ReviewWorkspace({ detail, media }: Props) {
               {review.subject_type === 'audio_track' && subject?.track && (
                 <p className="mt-1 text-sm text-fg-muted" data-testid="review-audio-track">
                   <span className="me-2 rounded border border-border px-1.5 py-0.5 text-xs font-medium text-fg">{t('review.audioTrack')}</span>
-                  <bdi dir="auto">{subject.track.label}</bdi>
+                  <bdi dir="auto" lang={subject.track.language}>{subject.track.label}</bdi>
                   {' · '}
-                  <span lang={subject.track.language}>{AUDIO_TRACK_LANGUAGES.find((l) => l.code === subject.track!.language)?.name ?? subject.track.language}</span>
-                  {' · '}
+                  {trackLanguage && <>{trackLanguage}{' · '}</>}
                   {translateDynamic(t, 'review.audioKind', subject.track.kind)}
                 </p>
               )}
