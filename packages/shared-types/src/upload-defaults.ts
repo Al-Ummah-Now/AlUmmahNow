@@ -6,25 +6,32 @@
 import { Timestamps } from './common';
 
 /**
- * Video categories specific to Islamic content
+ * The built-in video categories (the seed of the admin-managed list).
+ *
+ * Categories are admin-managed since 2026-11-15 (search D1 `video_categories`,
+ * video-categories.ts): a category value is any slug in the live list, so the
+ * `VideoCategory` type is a string. These constants stay for code that names a
+ * built-in category (AI aliases, tests) and as the fallback list.
  */
-export enum VideoCategory {
-  QURAN_RECITATION = 'quran_recitation',
-  QURAN_TAFSIR = 'quran_tafsir',
-  HADITH_STUDIES = 'hadith_studies',
-  ISLAMIC_HISTORY = 'islamic_history',
-  FIQH = 'fiqh',
-  AQEEDAH = 'aqeedah',
-  DAWAH = 'dawah',
-  KHUTBAH = 'khutbah',
-  ISLAMIC_LECTURES = 'islamic_lectures',
-  ISLAMIC_NASHEED = 'islamic_nasheed',
-  ISLAMIC_KIDS = 'islamic_kids',
-  ISLAMIC_NEWS = 'islamic_news',
-  HAJJ_UMRAH = 'hajj_umrah',
-  RAMADAN = 'ramadan',
-  ISLAMIC_LIFESTYLE = 'islamic_lifestyle',
-}
+export const VideoCategory = {
+  QURAN_RECITATION: 'quran_recitation',
+  QURAN_TAFSIR: 'quran_tafsir',
+  HADITH_STUDIES: 'hadith_studies',
+  ISLAMIC_HISTORY: 'islamic_history',
+  FIQH: 'fiqh',
+  AQEEDAH: 'aqeedah',
+  DAWAH: 'dawah',
+  KHUTBAH: 'khutbah',
+  ISLAMIC_LECTURES: 'islamic_lectures',
+  ISLAMIC_NASHEED: 'islamic_nasheed',
+  ISLAMIC_KIDS: 'islamic_kids',
+  ISLAMIC_NEWS: 'islamic_news',
+  HAJJ_UMRAH: 'hajj_umrah',
+  RAMADAN: 'ramadan',
+  ISLAMIC_LIFESTYLE: 'islamic_lifestyle',
+} as const;
+/** A category value (slug). Built-ins are in `VideoCategory`; admins add more. */
+export type VideoCategory = string;
 
 /**
  * Comment moderation settings

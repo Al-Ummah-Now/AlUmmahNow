@@ -6,6 +6,7 @@ import { handlePollVoteEvent } from './handlers/poll-vote';
 import { handlePostLikeEvent } from './handlers/post-like';
 import { eraseUserPostInteractions } from './lib/post-counters';
 import { applyModerationToSearchIndex, handleSearchIndexSync } from './handlers/search-index';
+import { handleCategoryRelabel } from './handlers/category-relabel';
 import { recordRetentionRollup, recordViewRollup, recordWatchTimeRollup } from './lib/analytics-rollup';
 import { CounterBatch } from './lib/analytics-counters';
 import { notifyLiveStream, notifyVideoProcessing, ProcessingStatus, uploadResultActionUrl, uploadResultDedupeKey } from './lib/websocket-notify';
@@ -315,6 +316,11 @@ export class MessageProcessor {
       // Search index (Story 29.9): content written outside api-videos
       case MessageType.SearchIndexSync:
         await handleSearchIndexSync(message, env, this.logger);
+        break;
+
+      // Admin renamed a video category: its labels in the search index text
+      case MessageType.CategoryRelabel:
+        await handleCategoryRelabel(message, env, this.logger);
         break;
 
       // Channel tab events: tabs are frontend-only, there is no backend processing.

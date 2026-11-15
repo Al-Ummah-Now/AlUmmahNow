@@ -8,7 +8,7 @@
 import { Num, Str } from 'chanfana';
 import { z } from 'zod';
 import { HTTPException } from 'hono/http-exception';
-import { VideoCategory, type SearchDb } from '@al-ummah/shared-types';
+import { CATEGORY_SLUG_PATTERN, categoryAssignability, loadVideoCategories, type SearchDb } from '@al-ummah/shared-types';
 import { AdminRoute, AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { logger } from '../../lib/logger';
@@ -53,7 +53,7 @@ export class CategorySuggestionsList extends AdminRoute {
     request: {
       query: z.object({
         view: z.enum(SUGGESTION_VIEWS as [string, ...string[]]).optional(),
-        category: z.nativeEnum(VideoCategory).optional(),
+        category: z.string().regex(CATEGORY_SLUG_PATTERN).optional(),
         videoId: Str({ required: false, description: 'Only this video (deep link from a video page)' }),
         limit: Num({ required: false }),
         offset: Num({ required: false }),
@@ -64,6 +64,7 @@ export class CategorySuggestionsList extends AdminRoute {
 
   async handle(c: AppContext) {
     const { query } = await this.getValidatedData<typeof this.schema>();
+    await loadVideoCategories(searchDb(c));
     const result = await listSuggestions(searchDb(c), c.env.videos as never, query as never);
     return { success: true, result: { ...result, canEdit: this.isAdmin(c) } };
   }
@@ -93,6 +94,7 @@ export class CategorySuggestionsAccept extends EditRoute {
   async handle(c: AppContext) {
     this.requireAdmin(c);
     const { body } = await this.getValidatedData<typeof this.schema>();
+    await loadVideoCategories(searchDb(c));
     const results = await applyAdminCategory({ db: searchDb(c), reports: reports(c), videos: videos(c) }, body.videoIds, { kind: 'accept' }, this.getUserId(c));
     logger.info('[CategorySuggestions] Accepted', { actorId: this.getUserId(c), total: results.length, ok: results.filter((r) => r.ok).length });
     return { success: true, result: { results } };
@@ -103,13 +105,17 @@ export class CategorySuggestionsSet extends EditRoute {
   schema = addAuthToSchema({
     tags: ['Category suggestions'],
     summary: 'Set a category on each video (change a suggestion; Super Admin / Admin)',
-    request: { body: { content: { 'application/json': { schema: z.object({ videoIds: ids, category: z.nativeEnum(VideoCategory) }) } } } },
+    request: { body: { content: { 'application/json': { schema: z.object({ videoIds: ids, category: z.string().regex(CATEGORY_SLUG_PATTERN) }) } } } },
     responses: ok('Per-video results'),
   });
 
   async handle(c: AppContext) {
     this.requireAdmin(c);
     const { body } = await this.getValidatedData<typeof this.schema>();
+    // An active category of the admin-managed list
+    await loadVideoCategories(searchDb(c));
+    const verdict = categoryAssignability(body.category);
+    if (verdict !== 'ok') return c.json({ success: false, code: `${verdict}_category`, error: 'Pick an available category' }, 400);
     const results = await applyAdminCategory({ db: searchDb(c), reports: reports(c), videos: videos(c) }, body.videoIds, { kind: 'set', category: body.category }, this.getUserId(c));
     logger.info('[CategorySuggestions] Category set', { actorId: this.getUserId(c), category: body.category, total: results.length, ok: results.filter((r) => r.ok).length });
     return { success: true, result: { results } };

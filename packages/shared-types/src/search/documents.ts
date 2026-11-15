@@ -13,7 +13,7 @@
 
 import { isVideoPubliclyVisible, type VideoVisibilityFields } from '../video-visibility';
 import { isPostHeldByReview } from '../video-review';
-import { VIDEO_CATEGORIES } from '../upload-defaults';
+import { findVideoCategory } from '../video-categories';
 import { isShort, type VideoFormatInput } from '../video-format';
 import { buildIndexText, detectTextLanguage } from './normalize';
 import { publicMp4Path } from '../media-delivery';
@@ -205,7 +205,8 @@ function round(n: number): number {
 
 function categoryLabels(category: string | undefined): string[] {
   if (!category) return [];
-  const def = VIDEO_CATEGORIES.find(c => c.value === category);
+  // The live list this isolate loaded (video-categories.ts); a rename re-syncs the rows (processor category relabel)
+  const def = findVideoCategory(category);
   return def ? [def.label.en, def.label.ar] : [category.replace(/_/g, ' ')];
 }
 

@@ -1,4 +1,4 @@
-import { isShortOrFlag } from "@al-ummah/shared-types";
+import { isShortOrFlag, CATEGORY_SLUG_PATTERN } from "@al-ummah/shared-types";
 import { PublicRoute, AppContext } from "../../base";
 import { isVideoPubliclyVisible } from "../../lib/visibility";
 import { Num, Str } from "chanfana";
@@ -27,7 +27,7 @@ const VideoResponseSchema = z.object({
   isShort: z.boolean().optional(),
   commentsCount: z.number(),
   duration: z.number().optional(),
-  category: z.nativeEnum(VideoCategory).optional(),
+  category: z.string().regex(CATEGORY_SLUG_PATTERN).optional(),
   isPublic: z.boolean().optional(),
 });
 
@@ -59,7 +59,7 @@ export class RecentVideosSection extends PublicRoute {
         channelId: Str({
           description: "Filter by specific channel ID",
         }).optional(),
-        category: z.nativeEnum(VideoCategory).optional().describe("Filter by video category"),
+        category: z.string().regex(CATEGORY_SLUG_PATTERN).optional().describe("Filter by video category"),
         excludeChannels: z.array(z.string()).optional().describe("Exclude specific channel IDs"),
       }),
     },

@@ -33,6 +33,7 @@ export * from './queue';
 export * from './subtitle';
 export * from './upload';
 export * from './upload-defaults';
+export * from './video-categories';
 
 // API types
 export * from './api-response';

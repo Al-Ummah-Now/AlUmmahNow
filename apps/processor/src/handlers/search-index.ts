@@ -22,6 +22,7 @@ import {
   SearchIndexSyncPayload,
   applyOwnershipModeration,
   invalidateOwnership,
+  loadVideoCategories,
   ownershipKindFor,
   removeSearchDocument,
   syncOwnershipSafely,
@@ -65,6 +66,8 @@ export async function handleSearchIndexSync(message: AlUmmahMessage, env: QueueE
       throw new Error(`Ownership index write failed for ${entity} ${id}: ${ownership.error}`);
     }
   }
+  // Category labels in the index text come from the admin-managed list
+  await loadVideoCategories(db);
   const result = await syncSearchDocument(db, entity, id, object ?? null, { version });
   logger.debug('Search index synced', { entity, id, version, result });
 }

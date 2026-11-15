@@ -1,4 +1,4 @@
-import { PLAYLIST_SORT_DIRECTIONS, PLAYLIST_SORT_FIELDS, PLAYLIST_SORT_MODES } from "@al-ummah/shared-types";
+import { PLAYLIST_SORT_DIRECTIONS, PLAYLIST_SORT_FIELDS, PLAYLIST_SORT_MODES, CATEGORY_SLUG_PATTERN } from "@al-ummah/shared-types";
 import { Bool, DateTime, Str } from "chanfana";
 import { z } from "zod";
 import { VideoCategory, VIDEO_VISIBILITIES } from "@al-ummah/shared-types";
@@ -23,7 +23,7 @@ export const VideoInput = z.object({
     isUnlisted: z.boolean().optional().describe("Unlisted: not public, open to anyone with the link (never listed, noindex)"),
     visibility: z.enum(VIDEO_VISIBILITIES).optional().describe("public | unlisted | private; wins over isPublic / isUnlisted"),
     isLive: z.boolean().optional(),
-    category: z.nativeEnum(VideoCategory).optional().describe("Video category (e.g., 'quran_recitation', 'hadith_studies')"),
+    category: z.string().regex(CATEGORY_SLUG_PATTERN).optional().describe("Video category (e.g., 'quran_recitation', 'hadith_studies')"),
     tags: z.array(z.string()).optional().describe("Video tags for search and categorization"),
     language: z.enum(['en', 'ar', 'ur', 'fr']).optional().describe("Primary language of the video content"),
     format: z.enum(['short', 'video', 'auto']).optional().describe("Publish as a Short or as a video; 'auto' (default) detects it"),
@@ -84,7 +84,7 @@ export const VideoUpdateInput = z.object({
     isUnlisted: z.boolean().optional().describe("Unlisted: not public, open to anyone with the link (never listed, noindex)"),
     visibility: z.enum(VIDEO_VISIBILITIES).optional().describe("public | unlisted | private; wins over isPublic / isUnlisted"),
     isLive: z.boolean().optional(),
-    category: z.nativeEnum(VideoCategory).nullable().optional().describe("Video category (e.g., 'quran_recitation', 'hadith_studies'); null clears it"),
+    category: z.string().regex(CATEGORY_SLUG_PATTERN).nullable().optional().describe("Video category (e.g., 'quran_recitation', 'hadith_studies'); null clears it"),
     tags: z.array(z.string().trim().min(1).max(50)).max(30).optional().describe("Video tags for search and categorization (replaces existing tags)"),
     language: z.enum(['en', 'ar', 'ur', 'fr']).optional().describe("Primary language of the video content"),
     commentSettings: z.enum(['on', 'held', 'off']).optional().describe("Comments: on, held for the owner's review, or off"),

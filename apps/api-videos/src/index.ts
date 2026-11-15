@@ -74,6 +74,7 @@ import { buildContractDocument } from './lib/api-contract';
 import { sweepStalledUploads } from "./lib/uploads/lifecycle";
 import { createTusRouter } from "./endpoints/video/tus";
 import { createProcessingInternalRouter } from "./endpoints/video/processingInternal";
+import { handleInvalidateCategories, handleListCategories, videoCategoriesMiddleware } from "./lib/categories";
 import scholarsInternalRouter from "./routers/scholars-internal.router";
 import postsInternalRouter from "./routers/posts-internal.router";
 import { sitesInternalRouter, sitesRouter } from "./routers/sites.router";
@@ -146,6 +147,9 @@ for (const p of INTERNAL_PATHS) {
 
 // Add comprehensive logging middleware for ALL routes
 app.use('*', loggingMiddleware);
+// Admin-managed video categories: this isolate's list, refreshed at most once a minute (lib/categories.ts)
+app.use('/api/*', videoCategoriesMiddleware);
+app.use('/internal/*', videoCategoriesMiddleware);
 // A delete, edit or hide drops the cached anonymous first page of the list (#1131)
 app.use('*', videoListInvalidation);
 
@@ -263,6 +267,9 @@ for (const path of ['/api/search', '/api/videos/search']) {
 // Channel creation is by invitation too: a creator tier, within its channel limit
 app.use('/api/channels', channelCreateGate);
 app.use('/api/channels/', channelCreateGate);
+// Video categories (admin-managed; edge-cached for a minute) and the admin-api invalidation hook
+app.get('/api/categories', handleListCategories);
+app.post('/internal/categories/invalidate', handleInvalidateCategories);
 // What the signed-in user may do (Upload, Create channel) for the web UI
 app.get('/api/me/creator', authMiddleware, handleCreatorAccess);
 // Native app attestation: App Attest / Play Integrity → X-AUN-Native-Proof (lib/attestation, #1274)

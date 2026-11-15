@@ -1,5 +1,6 @@
 import { uploadIdentity } from "../../lib/channelAccess";
-import { reportServerError } from "@al-ummah/shared-types";
+import { categoryRefusal } from "../../lib/categories";
+import { reportServerError, CATEGORY_SLUG_PATTERN } from "@al-ummah/shared-types";
 import { Str, Num } from "chanfana";
 import { createUploadRecord } from '../../lib/upload/uploadRecord';
 import { checkThumbnailShape, imageSize, videoSizeOf } from '../../lib/thumbnail/shape';
@@ -53,7 +54,7 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 							// Arabic title/description and the category chosen on upload were lost
 							titleLocalized: z.record(z.string()).optional().describe("Multi-language titles, e.g. {en, ar}"),
 							descriptionLocalized: z.record(z.string()).optional().describe("Multi-language descriptions, e.g. {en, ar}"),
-							category: z.nativeEnum(VideoCategory).optional().describe("Video category"),
+							category: z.string().regex(CATEGORY_SLUG_PATTERN).optional().describe("Video category"),
 							format: z.enum(['short', 'video', 'auto']).optional().describe("Upload as a Short or as a video; 'auto' (default) detects it from length and shape"),
 							categorySuggestionKey: z.string().min(8).max(80).regex(/^[A-Za-z0-9_-]+$/).optional()
 								.describe("draftKey of the form's AI category suggestion (POST /api/videos/category-suggestions): the video adopts it and records whether the uploader kept it"),
@@ -150,6 +151,9 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 		// Validated outside the catch-all below: a bad request is a 400 with the
 		// issues (chanfana), not a 500
 		const request = await this.getValidatedData<typeof this.schema>();
+		// An active category of the admin-managed list (400 unknown_category / retired_category)
+		const refused = categoryRefusal(c, request.body.category);
+		if (refused) return refused;
 		try {
 			const body = request.body;
 			let { title, description, isPublic, visibility, isDraft, tags, titleLocalized, descriptionLocalized, category, fingerprint, categorySuggestionKey } = body;

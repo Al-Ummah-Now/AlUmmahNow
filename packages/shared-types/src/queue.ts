@@ -178,6 +178,12 @@ export enum MessageType {
   // One post to one connected account, or one webhook call: api-videos does the network call, the
   // processor retries with backoff, the last attempt fails it and flags the admin. Payload: SocialDeliveryPayload.
   SocialDelivery = 281,
+
+  // Admin-managed video categories (video-categories.ts). Range 290-299.
+  // An admin renamed a category: the processor swaps its old labels for the new ones in the search
+  // index text of the videos and channels that have it, one page per delivery (retry with backoff,
+  // then the DLQ and the admin Errors page). Payload: CategoryRelabelPayload.
+  CategoryRelabel = 290,
 }
 
 /** Payload of MessageType.QuranContentSync. */

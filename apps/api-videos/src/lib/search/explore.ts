@@ -11,7 +11,7 @@ import {
   SearchChannelPayload,
   SearchDb,
   SearchVideoPayload,
-  VIDEO_CATEGORIES,
+  getActiveVideoCategories,
 } from '@al-ummah/shared-types';
 import { logger } from '../logger';
 import { categoryCounts, searchIndex } from './query';
@@ -48,11 +48,11 @@ export async function loadSeasonalConfig(bucket: R2Bucket | undefined): Promise<
 
 /**
  * Explore tiles: only categories with at least one public, ready video in the
- * index (categoryCounts counts visible rows only), in the canonical order.
+ * index (categoryCounts counts visible rows only), in the admin-managed order (retired ones hidden).
  * Never an empty tile; AI-suggested categories count like any other.
  */
 export function nonEmptyCategories(counts: Map<string, number>): ExploreCategory[] {
-  return VIDEO_CATEGORIES
+  return getActiveVideoCategories()
     .map(category => ({ value: category.value, label: category.label, count: counts.get(category.value) ?? 0 }))
     .filter(category => category.count > 0);
 }

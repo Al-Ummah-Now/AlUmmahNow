@@ -11,6 +11,7 @@ import R2Repository, { rethrowBusy } from '../../lib/r2Repo';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { getAuthContext } from '../../middleware/auth';
 import { UploadTemplate, UpdateTemplateRequest } from '@al-ummah/shared-types';
+import { categoryAssignability } from '@al-ummah/shared-types';
 import {
   UpdateTemplateRequestSchema,
   validateUpdateTemplateRequest,
@@ -322,6 +323,12 @@ export class UpdateUploadDefaultEndpoint extends ValidatedRoute {
       const mergedTemplate = requestData.template
         ? { ...template.template, ...requestData.template }
         : template.template;
+      // A default category: an active one, or the (possibly retired) one this template already has
+      const nextCategory = (mergedTemplate as { category?: string }).category;
+      const verdict = nextCategory ? categoryAssignability(nextCategory, (template.template as { category?: string }).category ?? null) : 'ok';
+      if (verdict !== 'ok') {
+        return c.json({ success: false, code: `${verdict}_category`, error: 'Validation failed' }, 400);
+      }
       const sizeValidation = validateTemplateSize(mergedTemplate);
       if (!sizeValidation.isValid) {
         return c.json(

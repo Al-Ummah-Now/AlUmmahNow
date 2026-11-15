@@ -1,4 +1,4 @@
-import { isShortOrFlag } from "@al-ummah/shared-types";
+import { isShortOrFlag, CATEGORY_SLUG_PATTERN } from "@al-ummah/shared-types";
 import { PublicRoute, AppContext } from "../../base";
 import { publicVideoFields } from '../../lib/transformations';
 import { isVideoPubliclyVisible } from "../../lib/visibility";
@@ -37,7 +37,7 @@ const TrendingVideoResponseSchema = z.object({
   isShort: z.boolean().optional(),
   commentsCount: z.number(),
   duration: z.number().optional(),
-  category: z.nativeEnum(VideoCategory).optional(),
+  category: z.string().regex(CATEGORY_SLUG_PATTERN).optional(),
   isPublic: z.boolean().optional(),
   trendingMetadata: TrendingMetadataSchema,
 });
@@ -70,7 +70,7 @@ export class TrendingVideosSection extends PublicRoute {
         }).optional(),
         algorithm: z.enum(['velocity', 'engagement', 'hybrid']).optional().default('hybrid').describe("Trending algorithm to use"),
         timeWindow: z.enum(['6h', '12h', '24h', '48h']).optional().default('24h').describe("Time window for trending calculation"),
-        category: z.nativeEnum(VideoCategory).optional().describe("Filter by video category"),
+        category: z.string().regex(CATEGORY_SLUG_PATTERN).optional().describe("Filter by video category"),
         region: Str({
           description: "Geographic region for trending (future enhancement)",
         }).optional(),
