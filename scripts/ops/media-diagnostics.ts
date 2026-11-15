@@ -190,9 +190,10 @@ async function discover(names: Names, since: Date, until: Date): Promise<void> {
 	const keys = (k.body?.result ?? []).map((x: any) => String(x.key)).filter((x: string) => /contain|instance|exit|stream|service|dataset|app/i.test(x));
 	p(`- keys: ${k.ok ? JSON.stringify(keys).slice(0, 2000) : errs(k)}`);
 	// Container output, wherever it is: every event whose service names the transcoder application
-	for (const value of [`${names.media}-transcoder`, `${names.media}-transcoder-stage`]) {
-		await logs(value, since, until, '', '$container.appName', true);
-	}
+	// By application id (from the Containers API), so only our own application is read
+	const apps = await get(`/accounts/${account}/containers/applications`);
+	const mine = (apps.body?.result ?? []).filter((a: any) => typeof a.name === 'string' && a.name.startsWith(names.media) && (names.media !== 'al-ummah-now-media' || !/-(stage|qa)/.test(a.name)));
+	for (const a of mine) await logs(a.id, since, until, '', '$container.applicationId', true);
 	p();
 }
 
