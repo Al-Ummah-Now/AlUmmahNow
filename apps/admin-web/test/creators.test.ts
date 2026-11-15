@@ -38,8 +38,8 @@ const ARABIC = /[؀-ۿ]/;
 const tEn = createTranslator('en');
 const tAr = createTranslator('ar');
 
-const CREATOR: CreatorTier = { id: 'creator', name: 'Creator', unlimited: false, perHour: 300, perDay: 2000, maxConcurrent: 20, maxChannels: 3, captionMinutesMonth: 0, updatedAt: null, updatedBy: null };
-const UNLIMITED: CreatorTier = { id: 'unlimited', name: 'Unlimited', unlimited: true, perHour: 0, perDay: 0, maxConcurrent: 0, maxChannels: null, captionMinutesMonth: 0, updatedAt: null, updatedBy: null };
+const CREATOR: CreatorTier = { id: 'creator', name: 'Creator', unlimited: false, perHour: 300, perDay: 2000, maxConcurrent: 20, maxChannels: 3, captionMinutesMonth: 0, audioTracksPerVideo: 0, updatedAt: null, updatedBy: null };
+const UNLIMITED: CreatorTier = { id: 'unlimited', name: 'Unlimited', unlimited: true, perHour: 0, perDay: 0, maxConcurrent: 0, maxChannels: null, captionMinutesMonth: 0, audioTracksPerVideo: 0, updatedAt: null, updatedBy: null };
 const TIERS = [CREATOR, UNLIMITED];
 
 const setTier = async () => ({ ok: true as const, data: null });
