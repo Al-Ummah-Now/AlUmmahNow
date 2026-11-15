@@ -257,7 +257,9 @@ function text(v: unknown, max: number, i: number, field: string): string {
    if (s.length > max) throw new BlockError('too_long', i, `${field} is longer than ${max} characters`);
    return s;
 }
-const line = (v: unknown, max: number, i: number, field: string) => text(v, max, i, field).replace(/\s*\n\s*/g, ' ').trim();
+/** Lines joined with one space (linear: no backtracking regex over long whitespace runs). */
+const oneLine = (s: string) => s.split('\n').map((l) => l.trim()).filter(Boolean).join(' ');
+const line = (v: unknown, max: number, i: number, field: string) => oneLine(text(v, max, i, field));
 
 function oneOf<T extends string | number>(v: unknown, values: readonly T[], def: T, i: number, field: string): T {
    if (v === undefined || v === null || v === '') return def;
@@ -611,7 +613,7 @@ export function pageBlocksToMarkdown(blocks: PageBlock[]): string {
             parts.push([h(b.heading), ...b.items.filter((x) => x.q && x.a).map((x) => `**${x.q}**\n\n${x.a}`)].filter(Boolean).join('\n\n'));
             break;
          case 'stats':
-            parts.push([h(b.heading), b.items.filter((x) => x.label).map((x) => `- ${[x.value, x.label].filter(Boolean).join(' ')}${x.text ? `: ${x.text.replace(/\s*\n\s*/g, ' ')}` : ''}`).join('\n')].filter(Boolean).join('\n\n'));
+            parts.push([h(b.heading), b.items.filter((x) => x.label).map((x) => `- ${[x.value, x.label].filter(Boolean).join(' ')}${x.text ? `: ${oneLine(x.text)}` : ''}`).join('\n')].filter(Boolean).join('\n\n'));
             break;
          case 'contact':
             parts.push([b.heading ? `**${b.heading}**` : '', b.text, mdLink(b.label, b.kind === 'email' ? `mailto:${b.email}` : CONTACT_PATH)].filter(Boolean).join('\n\n'));
