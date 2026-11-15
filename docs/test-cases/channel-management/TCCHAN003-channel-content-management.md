@@ -22,11 +22,14 @@ Verify that channel owners and authorized users can effectively manage channel c
 ## Test Environment
 
 ### User Roles Required
-- **Channel Owner**: Full content management permissions
-- **Channel Admin**: Content management with some restrictions
-- **Content Moderator**: Content approval and moderation
-- **Content Creator**: Can upload and manage own content
-- **Channel Member**: View-only access to content
+Channel roles per [docs/specs/CHANNEL-ROLES.md](../../specs/CHANNEL-ROLES.md) §3 (updated for package CH-1, 2026-11-14). Channel roles are per channel and are not site roles.
+- **Owner** (`channel.userId`): every capability. Ownership moves only by a super admin transfer on the admin site.
+- **Channel admin** (`admin`): everything except the @handle, deleting the channel and managing other channel admins
+- **Editor** (`editor`): uploads, edits and schedules videos, posts and playlists; deletes only their own uploads
+- **Channel moderator** (`moderator`): moderates comments on videos and posts
+- **Subscriber or visitor**: no channel role ("Channel Member" in older versions of this case meant a subscriber)
+
+Content is `video.upload`, `video.edit`, `video.schedule`, `post.manage` and `playlist.manage`: owner, channel admins and editors. `video.delete`: owner and channel admins, editors only their own uploads. Everything a member creates belongs to the channel owner.
 
 ### Test Data Required
 - Various content types (videos, audio, documents, images)

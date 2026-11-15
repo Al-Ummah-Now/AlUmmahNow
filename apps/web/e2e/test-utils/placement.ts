@@ -148,7 +148,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/release/bulk-rename-order.spec.ts': { placement: 'local', reason: 'Studio bulk rename ordering on initiated (byte-less) records' },
   'apps/web/e2e/release/callback-errors.spec.ts': { placement: 'local', reason: 'web callback error handling with bogus codes; no real sign-in' },
   'apps/web/e2e/release/category-suggestions.spec.ts': { placement: 'local', reason: 'processor AI test hook (mocked) + upload form + admin accept page' },
-  'apps/web/e2e/release/channel-roles.spec.ts': { placement: 'local', reason: 'account menu channel roles via members API, two users' },
+  'apps/web/e2e/release/channel-roles.spec.ts': { placement: 'local', reason: 'channel roles: invite, accept, act, change, remove, two users' },
   'apps/web/e2e/release/channel-shorts.spec.ts': { placement: 'local', reason: 'API lists seeded Short on channel Shorts tab' },
   'apps/web/e2e/release/chapters.player.spec.ts': { placement: 'local', reason: 'chapter bar navigation on seeded video with chapters' },
   'apps/web/e2e/release/about.spec.ts': { placement: 'deployed', reason: 'cross-app: the About page comes from the deployed CMS (AlUmmahNowCMS migration 0021), canonical to the deployed www' },

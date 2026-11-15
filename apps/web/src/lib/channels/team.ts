@@ -1,14 +1,14 @@
 'use client';
 
 /**
- * The channel Team page's API calls (GET/POST /api/channels/:id/members,
- * PUT/DELETE /api/channels/:id/members/:userId), straight from the browser
- * with the session's token. Failures come back as a `TeamError` with the
+ * The channel Team and Invitations pages' API calls (docs/specs/CHANNEL-ROLES.md §13):
+ * members, invitations, the activity log and my own invitations, straight
+ * from the browser with the session's token. Failures come back as a `TeamError` with the
  * API's machine code; the page shows friendly copy for it and the failure is
  * reported (never the raw message).
  */
 
-import type { ChannelMemberRole, ChannelRole } from '@al-ummah/shared-types';
+import type { ChannelAuditEntry, ChannelInviteView, ChannelMemberRole, ChannelRole, MyChannelInvite } from '@al-ummah/shared-types';
 import { getApiUrl } from '@/lib/runtime-config';
 import { fetchClientAuthInfo } from '@/lib/auth/client-token';
 import { reportChannelListFailure } from './report';
@@ -24,7 +24,13 @@ export interface TeamMember {
 
 export interface TeamState {
   members: TeamMember[];
+  invites: ChannelInviteView[];
   maxMembers: number;
+}
+
+export interface TeamActivityPage {
+  entries: ChannelAuditEntry[];
+  nextCursor: string | null;
 }
 
 /** API codes the page has copy for; anything else shows the generic message. */
@@ -34,10 +40,19 @@ export type TeamErrorCode =
   | 'cannot_invite_owner'
   | 'member_limit'
   | 'forbidden'
+  | 'already_invited'
+  | 'pending_limit'
+  | 'rate_limited'
+  | 'shared_limit'
+  | 'invite_not_found'
+  | 'invalid_email'
   | 'signed_out'
   | 'unknown';
 
-const KNOWN: ReadonlyArray<TeamErrorCode> = ['person_not_found', 'already_member', 'cannot_invite_owner', 'member_limit', 'forbidden'];
+const KNOWN: ReadonlyArray<TeamErrorCode> = [
+  'person_not_found', 'already_member', 'cannot_invite_owner', 'member_limit', 'forbidden',
+  'already_invited', 'pending_limit', 'rate_limited', 'shared_limit', 'invite_not_found', 'invalid_email',
+];
 
 export class TeamError extends Error {
   constructor(readonly code: TeamErrorCode, readonly status?: number) {
@@ -46,7 +61,7 @@ export class TeamError extends Error {
   }
 }
 
-type TeamAction = 'team-load' | 'team-add' | 'team-update' | 'team-remove';
+type TeamAction = 'team-load' | 'team-invite' | 'team-invite-cancel' | 'team-update' | 'team-remove' | 'team-activity' | 'invites-load' | 'invite-accept' | 'invite-decline';
 
 async function teamRequest<T>(action: TeamAction, path: string, init: { method: string; body?: unknown }): Promise<T> {
   const url = `${getApiUrl().replace(/\/$/, '')}${path}`;
@@ -89,8 +104,42 @@ export function loadTeam(channelId: string): Promise<TeamState> {
   return teamRequest<TeamState>('team-load', base(channelId), { method: 'GET' });
 }
 
-export function addTeamMember(channelId: string, handle: string, role: ChannelMemberRole): Promise<TeamState> {
-  return teamRequest<TeamState>('team-add', base(channelId), { method: 'POST', body: { handle: handle.trim().replace(/^@+/, ''), role } });
+/** Email when it looks like one, otherwise an @handle (§4.1). */
+export function inviteTarget(input: string): { email: string } | { handle: string } {
+  const value = input.trim();
+  if (!value.startsWith('@') && value.includes('@')) return { email: value };
+  return { handle: value.replace(/^@+/, '') };
+}
+
+export function inviteToTeam(channelId: string, who: string, role: ChannelMemberRole): Promise<TeamState> {
+  return teamRequest<TeamState>('team-invite', `/api/channels/${encodeURIComponent(channelId)}/invites`, { method: 'POST', body: { ...inviteTarget(who), role } });
+}
+
+export function cancelTeamInvite(channelId: string, inviteId: string): Promise<TeamState> {
+  return teamRequest<TeamState>('team-invite-cancel', `/api/channels/${encodeURIComponent(channelId)}/invites/${encodeURIComponent(inviteId)}`, { method: 'DELETE' });
+}
+
+export function loadTeamActivity(channelId: string, cursor?: string | null): Promise<TeamActivityPage> {
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+  return teamRequest<TeamActivityPage>('team-activity', `/api/channels/${encodeURIComponent(channelId)}/audit${query}`, { method: 'GET' });
+}
+
+export async function loadMyInvites(): Promise<MyChannelInvite[]> {
+  return (await teamRequest<{ invites: MyChannelInvite[] }>('invites-load', '/api/channel-invites', { method: 'GET' })).invites;
+}
+
+export function acceptInvite(inviteId: string): Promise<{ channelId: string; role: ChannelMemberRole }> {
+  return teamRequest('invite-accept', `/api/channel-invites/${encodeURIComponent(inviteId)}/accept`, { method: 'POST' });
+}
+
+export async function declineInvite(inviteId: string): Promise<void> {
+  await teamRequest<unknown>('invite-decline', `/api/channel-invites/${encodeURIComponent(inviteId)}/decline`, { method: 'POST' });
+}
+
+/** Whole days until `iso` (0 = today), never negative. */
+export function daysUntil(iso: string, now = Date.now()): number {
+  const ms = new Date(iso).getTime() - now;
+  return Number.isFinite(ms) ? Math.max(0, Math.floor(ms / 86_400_000)) : 0;
 }
 
 export function changeTeamRole(channelId: string, userId: string, role: ChannelMemberRole): Promise<TeamState> {

@@ -22,10 +22,14 @@ Verify that channel owners and administrators can access comprehensive analytics
 ## Test Environment
 
 ### User Roles Required
-- **Channel Owner**: Full analytics access
-- **Channel Admin**: Limited analytics access
-- **Content Creator**: Content-specific analytics
-- **Channel Member**: Basic public analytics
+Channel roles per [docs/specs/CHANNEL-ROLES.md](../../specs/CHANNEL-ROLES.md) §3 (updated for package CH-1, 2026-11-14). Channel roles are per channel and are not site roles.
+- **Owner** (`channel.userId`): every capability. Ownership moves only by a super admin transfer on the admin site.
+- **Channel admin** (`admin`): everything except the @handle, deleting the channel and managing other channel admins
+- **Editor** (`editor`): uploads, edits and schedules videos, posts and playlists; deletes only their own uploads
+- **Channel moderator** (`moderator`): moderates comments on videos and posts
+- **Subscriber or visitor**: no channel role ("Channel Member" in older versions of this case meant a subscriber)
+
+Analytics is `analytics.view`: the owner and channel admins.
 
 ### Test Data Required
 - Historical channel data

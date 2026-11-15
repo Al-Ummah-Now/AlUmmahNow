@@ -200,3 +200,92 @@ export function groupChannelsByRole<T extends { id: string; role?: ChannelRole |
     .sort((a, b) => CHANNEL_ROLE_ORDER.indexOf(a.role!) - CHANNEL_ROLE_ORDER.indexOf(b.role!) || name(a).localeCompare(name(b)));
   return { owned, managed };
 }
+
+// ---------------------------------------------------------------------------
+// Invitations and the activity log (docs/specs/CHANNEL-ROLES.md §4, §9, §11)
+// ---------------------------------------------------------------------------
+
+/** Days an invitation stays open. */
+export const CHANNEL_INVITE_DAYS = 14;
+/** Pending invitations one channel can have. */
+export const MAX_PENDING_CHANNEL_INVITES = 50;
+/** Channels one account can hold a role on. */
+export const MAX_SHARED_CHANNELS = 50;
+/** Invitations one person can send per hour, and one channel can receive per day. */
+export const CHANNEL_INVITE_RATE = { perInviterHour: 30, perChannelDay: 100 } as const;
+/** Activity log rows are kept this many days. */
+export const CHANNEL_AUDIT_RETENTION_DAYS = 365;
+
+/** `claimed` is transient: an accept in flight, settled within the request (or by the daily sweep). */
+export type ChannelInviteStatus = 'pending' | 'claimed' | 'accepted' | 'declined' | 'cancelled' | 'expired';
+
+/** Lower-cased, trimmed email, or null when it isn't one. */
+export function normalizeInviteEmail(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const email = value.trim().toLowerCase();
+  if (email.length > 254 || /\s/.test(email)) return null;
+  // One @, a local part, and a domain with a dot that neither starts nor ends it
+  // (split, not one regex: a backtracking pattern here is a ReDoS)
+  const at = email.indexOf('@');
+  if (at < 1 || at !== email.lastIndexOf('@')) return null;
+  const domain = email.slice(at + 1);
+  const dot = domain.lastIndexOf('.');
+  return dot > 0 && dot < domain.length - 1 ? email : null;
+}
+
+/** A pending invitation as the Team page shows it. */
+export interface ChannelInviteView {
+  id: string;
+  role: ChannelMemberRole;
+  /** Set for @handle invitations, and for email ones once the invitee has seen them. */
+  inviteeUserId?: string;
+  inviteeName?: string;
+  inviteeAvatarUrl?: string;
+  /** Set for email invitations (the inviter typed it). */
+  inviteeEmail?: string;
+  invitedBy: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+/** One of my pending invitations (GET /api/channel-invites). */
+export interface MyChannelInvite {
+  id: string;
+  role: ChannelMemberRole;
+  channel: { id: string; name: string; nameLocalized?: Record<string, string>; handle?: string; avatarUrl?: string };
+  invitedBy: { userId: string; displayName?: string };
+  createdAt: string;
+  expiresAt: string;
+}
+
+export const CHANNEL_AUDIT_ACTIONS = [
+  'invite_sent',
+  'invite_cancelled',
+  'invite_accepted',
+  'invite_declined',
+  'invite_expired',
+  'role_changed',
+  'member_removed',
+  'member_left',
+  'member_removed_account_deleted',
+  'transfer_kept_old_owner',
+  'video_deleted',
+  'channel_edited',
+  'stream_key_rotated',
+  'comment_removed',
+  'post_deleted',
+] as const;
+export type ChannelAuditAction = (typeof CHANNEL_AUDIT_ACTIONS)[number];
+
+/** One activity log row (GET /api/channels/:id/audit). Never carries an email address. */
+export interface ChannelAuditEntry {
+  id: string;
+  action: ChannelAuditAction;
+  actorId: string;
+  actorName?: string;
+  targetUserId?: string;
+  targetName?: string;
+  oldRole?: ChannelMemberRole;
+  newRole?: ChannelMemberRole;
+  createdAt: string;
+}

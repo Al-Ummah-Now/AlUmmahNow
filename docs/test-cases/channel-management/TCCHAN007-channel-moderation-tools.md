@@ -22,11 +22,14 @@ Verify that channel moderators have comprehensive tools to manage content, enfor
 ## Test Environment
 
 ### User Roles Required
-- **Channel Owner**: Full moderation access and configuration
-- **Channel Admin**: Advanced moderation capabilities
-- **Content Moderator**: Standard moderation tools
-- **Channel Member**: Reporting and content interaction
-- **Blocked User**: Restriction testing
+Channel roles per [docs/specs/CHANNEL-ROLES.md](../../specs/CHANNEL-ROLES.md) §3 (updated for package CH-1, 2026-11-14). Channel roles are per channel and are not site roles.
+- **Owner** (`channel.userId`): every capability. Ownership moves only by a super admin transfer on the admin site.
+- **Channel admin** (`admin`): everything except the @handle, deleting the channel and managing other channel admins
+- **Editor** (`editor`): uploads, edits and schedules videos, posts and playlists; deletes only their own uploads
+- **Channel moderator** (`moderator`): moderates comments on videos and posts
+- **Subscriber or visitor**: no channel role ("Channel Member" in older versions of this case meant a subscriber)
+
+Comment moderation is `comment.moderate`: owner, channel admins and channel moderators (approve, remove, pin, heart, on videos and posts). Live chat moderation (`live.moderate`) is not built yet.
 
 ### Test Data Required
 - Content requiring moderation

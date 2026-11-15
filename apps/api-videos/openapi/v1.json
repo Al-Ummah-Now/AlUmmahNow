@@ -1947,6 +1947,299 @@
         }
       }
     },
+    "/api/v1/channel-invites": {
+      "get": {
+        "tags": [
+          "Channels"
+        ],
+        "summary": "My pending channel invitations",
+        "description": "Invitations to my account, and email invitations to the verified email in my token (tied to my account the first time they are seen).",
+        "operationId": "get_MyChannelInvites",
+        "responses": {
+          "200": {
+            "description": "Invitations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "invites": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "role": {
+                                "type": "string",
+                                "enum": [
+                                  "admin",
+                                  "editor",
+                                  "moderator"
+                                ]
+                              },
+                              "channel": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "nameLocalized": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "handle": {
+                                    "type": "string"
+                                  },
+                                  "avatarUrl": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name"
+                                ]
+                              },
+                              "invitedBy": {
+                                "type": "object",
+                                "properties": {
+                                  "userId": {
+                                    "type": "string"
+                                  },
+                                  "displayName": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "userId"
+                                ]
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              },
+                              "expiresAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "role",
+                              "channel",
+                              "invitedBy",
+                              "createdAt",
+                              "expiresAt"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "invites"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/channel-invites/{id}/accept": {
+      "post": {
+        "tags": [
+          "Channels"
+        ],
+        "summary": "Accept a channel invitation",
+        "description": "Adds you to the channel's team with the invited role. Expired, closed and other people's invitations all answer 404 invite_not_found.",
+        "operationId": "post_ChannelInviteAccept",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Invitation id"
+            },
+            "required": true,
+            "description": "Invitation id",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "channelId": {
+                          "type": "string"
+                        },
+                        "role": {
+                          "type": "string",
+                          "enum": [
+                            "admin",
+                            "editor",
+                            "moderator"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "channelId",
+                        "role"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "invite_not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "member_limit or shared_limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/channel-invites/{id}/decline": {
+      "post": {
+        "tags": [
+          "Channels"
+        ],
+        "summary": "Decline a channel invitation",
+        "description": "Closes the invitation. Nobody is notified; the channel's Activity tab shows it.",
+        "operationId": "post_ChannelInviteDecline",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Invitation id"
+            },
+            "required": true,
+            "description": "Invitation id",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Declined",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "invite_not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/channels": {
       "get": {
         "tags": [
@@ -5309,6 +5602,184 @@
         }
       }
     },
+    "/api/v1/channels/{id}/audit": {
+      "get": {
+        "tags": [
+          "Channels"
+        ],
+        "summary": "A channel's team activity, newest first",
+        "description": "Needs members.view (owner or channel admin). Rows are kept for one year.",
+        "operationId": "get_ChannelAuditList",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Channel ID"
+            },
+            "required": true,
+            "description": "Channel ID",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Activity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "entries": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "action": {
+                                "type": "string"
+                              },
+                              "actorId": {
+                                "type": "string"
+                              },
+                              "actorName": {
+                                "type": "string"
+                              },
+                              "targetUserId": {
+                                "type": "string"
+                              },
+                              "targetName": {
+                                "type": "string"
+                              },
+                              "oldRole": {
+                                "type": "string",
+                                "enum": [
+                                  "admin",
+                                  "editor",
+                                  "moderator"
+                                ]
+                              },
+                              "newRole": {
+                                "type": "string",
+                                "enum": [
+                                  "admin",
+                                  "editor",
+                                  "moderator"
+                                ]
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "action",
+                              "actorId",
+                              "createdAt"
+                            ]
+                          }
+                        },
+                        "nextCursor": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "entries",
+                        "nextCursor"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Channel not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/channels/{id}/blocks": {
       "get": {
         "tags": [
@@ -7901,6 +8372,500 @@
         }
       }
     },
+    "/api/v1/channels/{id}/invites": {
+      "post": {
+        "tags": [
+          "Channels"
+        ],
+        "summary": "Invite someone to a role on a channel",
+        "description": "By the exact @handle of one of their channels, or by email. Owners invite to any role; channel admins invite editors and moderators. Nobody gets the role until they accept. Every email gets the same answer, so the form cannot reveal who has an account.",
+        "operationId": "post_ChannelInviteCreate",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Channel ID"
+            },
+            "required": true,
+            "description": "Channel ID",
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "handle": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "email": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 254
+                  },
+                  "role": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 32
+                  }
+                },
+                "required": [
+                  "role"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Members and invitations after the invite",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "members": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "userId": {
+                                "type": "string"
+                              },
+                              "role": {
+                                "type": "string",
+                                "enum": [
+                                  "owner",
+                                  "admin",
+                                  "editor",
+                                  "moderator"
+                                ]
+                              },
+                              "displayName": {
+                                "type": "string"
+                              },
+                              "avatarUrl": {
+                                "type": "string"
+                              },
+                              "addedAt": {
+                                "type": "string"
+                              },
+                              "isYou": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "userId",
+                              "role",
+                              "isYou"
+                            ]
+                          }
+                        },
+                        "invites": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "role": {
+                                "type": "string",
+                                "enum": [
+                                  "admin",
+                                  "editor",
+                                  "moderator"
+                                ]
+                              },
+                              "inviteeUserId": {
+                                "type": "string"
+                              },
+                              "inviteeName": {
+                                "type": "string"
+                              },
+                              "inviteeAvatarUrl": {
+                                "type": "string"
+                              },
+                              "inviteeEmail": {
+                                "type": "string"
+                              },
+                              "invitedBy": {
+                                "type": "string"
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              },
+                              "expiresAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "role",
+                              "invitedBy",
+                              "createdAt",
+                              "expiresAt"
+                            ]
+                          }
+                        },
+                        "maxMembers": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "members",
+                        "invites",
+                        "maxMembers"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_role, or no handle or email",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Channel or handle not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "cannot_invite_owner, already_member, already_invited, member_limit or pending_limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate_limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/channels/{id}/invites/{inviteId}": {
+      "delete": {
+        "tags": [
+          "Channels"
+        ],
+        "summary": "Cancel a pending channel invitation",
+        "description": "Needs the capability to invite to the invitation's role.",
+        "operationId": "delete_ChannelInviteCancel",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Channel ID"
+            },
+            "required": true,
+            "description": "Channel ID",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Invitation id"
+            },
+            "required": true,
+            "description": "Invitation id",
+            "name": "inviteId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Members and invitations after the change",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "members": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "userId": {
+                                "type": "string"
+                              },
+                              "role": {
+                                "type": "string",
+                                "enum": [
+                                  "owner",
+                                  "admin",
+                                  "editor",
+                                  "moderator"
+                                ]
+                              },
+                              "displayName": {
+                                "type": "string"
+                              },
+                              "avatarUrl": {
+                                "type": "string"
+                              },
+                              "addedAt": {
+                                "type": "string"
+                              },
+                              "isYou": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "userId",
+                              "role",
+                              "isYou"
+                            ]
+                          }
+                        },
+                        "invites": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "role": {
+                                "type": "string",
+                                "enum": [
+                                  "admin",
+                                  "editor",
+                                  "moderator"
+                                ]
+                              },
+                              "inviteeUserId": {
+                                "type": "string"
+                              },
+                              "inviteeName": {
+                                "type": "string"
+                              },
+                              "inviteeAvatarUrl": {
+                                "type": "string"
+                              },
+                              "inviteeEmail": {
+                                "type": "string"
+                              },
+                              "invitedBy": {
+                                "type": "string"
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              },
+                              "expiresAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "role",
+                              "invitedBy",
+                              "createdAt",
+                              "expiresAt"
+                            ]
+                          }
+                        },
+                        "maxMembers": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "members",
+                        "invites",
+                        "maxMembers"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Channel or invitation not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/channels/{id}/live": {
       "get": {
         "tags": [
@@ -8434,8 +9399,8 @@
         "tags": [
           "Channels"
         ],
-        "summary": "List a channel's owner and members",
-        "description": "Needs the members.view channel capability (owner or channel admin).",
+        "summary": "List a channel's owner, members and open invitations",
+        "description": "Needs the members.view channel capability (owner or channel admin). `maxMembers` is the channel's seat limit (studio.teamSeats on the owner's plan, at most 50).",
         "operationId": "get_ChannelMembersList",
         "parameters": [
           {
@@ -8500,12 +9465,60 @@
                             ]
                           }
                         },
+                        "invites": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "role": {
+                                "type": "string",
+                                "enum": [
+                                  "admin",
+                                  "editor",
+                                  "moderator"
+                                ]
+                              },
+                              "inviteeUserId": {
+                                "type": "string"
+                              },
+                              "inviteeName": {
+                                "type": "string"
+                              },
+                              "inviteeAvatarUrl": {
+                                "type": "string"
+                              },
+                              "inviteeEmail": {
+                                "type": "string"
+                              },
+                              "invitedBy": {
+                                "type": "string"
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              },
+                              "expiresAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "role",
+                              "invitedBy",
+                              "createdAt",
+                              "expiresAt"
+                            ]
+                          }
+                        },
                         "maxMembers": {
                           "type": "number"
                         }
                       },
                       "required": [
                         "members",
+                        "invites",
                         "maxMembers"
                       ]
                     }
@@ -8569,228 +9582,6 @@
             }
           }
         }
-      },
-      "post": {
-        "tags": [
-          "Channels"
-        ],
-        "summary": "Give someone a role on a channel",
-        "description": "Identify the person by the @handle of one of their channels, or by user id. Owners grant any role; channel admins grant editor and moderator. The owner holds no member role, and ownership itself only moves by a super admin transfer.",
-        "operationId": "post_ChannelMemberAdd",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "description": "Channel ID"
-            },
-            "required": true,
-            "description": "Channel ID",
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "handle": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 64
-                  },
-                  "userId": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 200
-                  },
-                  "role": {
-                    "type": "string",
-                    "enum": [
-                      "admin",
-                      "editor",
-                      "moderator"
-                    ]
-                  }
-                },
-                "required": [
-                  "role"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Members after the change",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "members": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "userId": {
-                                "type": "string"
-                              },
-                              "role": {
-                                "type": "string",
-                                "enum": [
-                                  "owner",
-                                  "admin",
-                                  "editor",
-                                  "moderator"
-                                ]
-                              },
-                              "displayName": {
-                                "type": "string"
-                              },
-                              "avatarUrl": {
-                                "type": "string"
-                              },
-                              "addedAt": {
-                                "type": "string"
-                              },
-                              "isYou": {
-                                "type": "boolean"
-                              }
-                            },
-                            "required": [
-                              "userId",
-                              "role",
-                              "isYou"
-                            ]
-                          }
-                        },
-                        "maxMembers": {
-                          "type": "number"
-                        }
-                      },
-                      "required": [
-                        "members",
-                        "maxMembers"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "default": false
-                    },
-                    "error": {
-                      "type": "string"
-                    },
-                    "message": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "No permission",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "default": false
-                    },
-                    "error": {
-                      "type": "string"
-                    },
-                    "message": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Channel or person not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "default": false
-                    },
-                    "error": {
-                      "type": "string"
-                    },
-                    "message": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Already a member, the owner, or the team is full",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "default": false
-                    },
-                    "error": {
-                      "type": "string"
-                    },
-                    "message": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "error"
-                  ]
-                }
-              }
-            }
-          }
-        }
       }
     },
     "/api/v1/channels/{id}/members/{userId}": {
@@ -8799,7 +9590,7 @@
           "Channels"
         ],
         "summary": "Change a member's role on a channel",
-        "description": "Owners change any member; channel admins change editors and moderators, and only to editor or moderator.",
+        "description": "Owners change any member; channel admins change editors and moderators, and only to editor or moderator. Logged on the channel's activity and notified to the member.",
         "operationId": "put_ChannelMemberUpdate",
         "parameters": [
           {
@@ -8896,12 +9687,60 @@
                             ]
                           }
                         },
+                        "invites": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "role": {
+                                "type": "string",
+                                "enum": [
+                                  "admin",
+                                  "editor",
+                                  "moderator"
+                                ]
+                              },
+                              "inviteeUserId": {
+                                "type": "string"
+                              },
+                              "inviteeName": {
+                                "type": "string"
+                              },
+                              "inviteeAvatarUrl": {
+                                "type": "string"
+                              },
+                              "inviteeEmail": {
+                                "type": "string"
+                              },
+                              "invitedBy": {
+                                "type": "string"
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              },
+                              "expiresAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "role",
+                              "invitedBy",
+                              "createdAt",
+                              "expiresAt"
+                            ]
+                          }
+                        },
                         "maxMembers": {
                           "type": "number"
                         }
                       },
                       "required": [
                         "members",
+                        "invites",
                         "maxMembers"
                       ]
                     }
@@ -8971,7 +9810,7 @@
           "Channels"
         ],
         "summary": "Remove a member from a channel, or leave it",
-        "description": "Owners remove anyone; channel admins remove editors and moderators; any member may remove themselves (leave). The owner cannot be removed: ownership only moves by a super admin transfer. Takes effect on the member's next request.",
+        "description": "Owners remove anyone; channel admins remove editors and moderators; any member may remove themselves (leave). The owner cannot be removed: ownership only moves by a super admin transfer. Takes effect on the member's next request; logged and notified.",
         "operationId": "delete_ChannelMemberRemove",
         "parameters": [
           {

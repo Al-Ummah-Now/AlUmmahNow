@@ -201,12 +201,18 @@ test.describe('Release: channel editors upload under the owner\'s tier (#759)', 
       expect(created.status, `POST /api/channels: ${createdText}`).toBeLessThan(300);
       channelId = (JSON.parse(createdText) as { result?: { channel?: { id?: string } } }).result?.channel?.id ?? '';
       expect(channelId, 'channel create returned no id').toBeTruthy();
-      const grant = await apiFetch(owner.user, `/api/channels/${channelId}/members`, {
+      // Roles are given by invitation only (docs/specs/CHANNEL-ROLES.md §4): the owner invites, the editor accepts
+      const sent = await apiFetch(owner.user, `/api/channels/${channelId}/invites`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: editor.user.userId, role: 'editor' }),
+        body: JSON.stringify({ email: editor.user.email, role: 'editor' }),
       });
-      expect(grant.status, `grant: ${await grant.clone().text()}`).toBe(200);
+      expect(sent.status, `invite: ${await sent.clone().text()}`).toBe(200);
+      const mine = (await (await apiFetch(editor.user, '/api/channel-invites')).json()) as { data?: { invites?: Array<{ id: string; channel: { id: string } }> } };
+      const invitation = mine.data?.invites?.find((i) => i.channel.id === channelId);
+      expect(invitation, 'the editor does not see the invitation').toBeTruthy();
+      const accepted = await apiFetch(editor.user, `/api/channel-invites/${invitation!.id}/accept`, { method: 'POST' });
+      expect(accepted.status, `accept: ${await accepted.clone().text()}`).toBe(200);
 
       // The API names the channel for the editor, who has no tier of their own
       const access = async () =>

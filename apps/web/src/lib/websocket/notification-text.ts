@@ -15,7 +15,14 @@ const KEY_TO_TEXT: Record<Exclude<RealtimeNotificationKey, 'accountWarning'>, { 
   reviewApproved: { title: 'reviewApprovedTitle', message: 'reviewApprovedMessage' },
   reviewRejected: { title: 'reviewRejectedTitle', message: 'reviewRejectedMessage' },
   reviewNeeded: { title: 'reviewNeededTitle', message: 'reviewNeededMessage' },
+  channelInviteReceived: { title: 'channelInviteReceivedTitle', message: 'channelInviteReceivedMessage' },
+  channelInviteAccepted: { title: 'channelInviteAcceptedTitle', message: 'channelInviteAcceptedMessage' },
+  channelRoleChanged: { title: 'channelRoleChangedTitle', message: 'channelRoleChangedMessage' },
+  channelMemberRemoved: { title: 'channelMemberRemovedTitle', message: 'channelMemberRemovedMessage' },
+  channelMemberLeft: { title: 'channelMemberLeftTitle', message: 'channelMemberLeftMessage' },
 };
+
+const CHANNEL_TEAM_KEYS = new Set<string>(['channelInviteReceived', 'channelInviteAccepted', 'channelRoleChanged', 'channelMemberRemoved', 'channelMemberLeft']);
 
 function interpolate(template: string, params: Record<string, string | number> = {}): string {
   return template.replace(/\{(\w+)\}/g, (_, name: string) => (params[name] !== undefined ? String(params[name]) : ''));
@@ -65,6 +72,13 @@ export function resolveNotificationText(
     const reasons = warning.reasons as Record<string, string>;
     const params = { ...event.params, reason: reasons[code] ?? reasons.other };
     return { title: interpolate(warning.title, params), message: interpolate(warning.message, params) };
+  }
+
+  // Channel team notifications send the role as a code: it reads as the reader's role name
+  if (event.params && typeof event.params.role === 'string' && CHANNEL_TEAM_KEYS.has(event.notificationKey as string)) {
+    const roles = t.channelRoles?.roles as Record<string, string> | undefined;
+    const role = roles?.[event.params.role];
+    if (role) event.params = { ...event.params, role } as NotificationEvent['params'];
   }
 
   const mapping = event.notificationKey && event.notificationKey !== 'accountWarning' ? KEY_TO_TEXT[event.notificationKey] : undefined;

@@ -22,11 +22,14 @@ Verify that channel owners can configure and manage privacy settings effectively
 ## Test Environment
 
 ### User Roles Required
-- **Channel Owner**: Full privacy configuration access
-- **Channel Admin**: Limited privacy settings access
-- **Channel Member**: Privacy-aware access
-- **Guest User**: Public access testing
-- **Blocked User**: Access restriction testing
+Channel roles per [docs/specs/CHANNEL-ROLES.md](../../specs/CHANNEL-ROLES.md) §3 (updated for package CH-1, 2026-11-14). Channel roles are per channel and are not site roles.
+- **Owner** (`channel.userId`): every capability. Ownership moves only by a super admin transfer on the admin site.
+- **Channel admin** (`admin`): everything except the @handle, deleting the channel and managing other channel admins
+- **Editor** (`editor`): uploads, edits and schedules videos, posts and playlists; deletes only their own uploads
+- **Channel moderator** (`moderator`): moderates comments on videos and posts
+- **Subscriber or visitor**: no channel role ("Channel Member" in older versions of this case meant a subscriber)
+
+Privacy settings are `channel.edit` and `channel.view_private`: the owner and channel admins.
 
 ### Test Data Required
 - Privacy configuration scenarios

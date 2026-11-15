@@ -22,6 +22,7 @@ import quranRouter from './quran.router';
 import { continueWatchingRouter, watchStateRouter } from './watch-state.router';
 import { devicesRouter } from './devices.router';
 import { youtubeImportRouter } from './youtube-import.router';
+import { channelInvitesRouter } from './channel-invites.router';
 
 /**
  * Register all feature routers with the main OpenAPI instance.
@@ -57,6 +58,8 @@ export function registerAllRouters(openapi: any) {
 
   // Channel domain - channel CRUD, subscriptions, tabs, sections, content lists
   openapi.route('/api/channels', channelRouter);
+  // My channel invitations (accept, decline)
+  openapi.route('/api/channel-invites', channelInvitesRouter);
 
   // Playlist domain - playlist CRUD, video management
   openapi.route('/api/playlists', playlistRouter);

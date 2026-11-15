@@ -95,6 +95,8 @@ export const GLOBAL_EVENT_ALLOWLIST: ReadonlySet<string> = new Set([
   'session-updated',
   // Comment timestamps seek the watch-page player (lib/video/comment-timestamps.ts)
   'aun:player-seek',
+  // Accepting or declining a channel invitation refreshes the account menu's count (lib/channels/invites-count.ts)
+  'aun:channel-invites-changed',
   // Radix DismissableLayer re-renders open layers through this document event;
   // without it a dialog's content keeps pointer-events: none (dialogs can't be clicked)
   'dismissableLayer.update',

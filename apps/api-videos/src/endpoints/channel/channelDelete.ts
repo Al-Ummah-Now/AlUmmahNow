@@ -12,6 +12,8 @@ import { inBackground } from "../../lib/websocket-notify";
 import { logger } from "../../lib/logger";
 import { removeCollectionsFor } from "../../lib/channelCollection";
 import { disconnectChannel } from "../../lib/social/connect";
+import { cancelChannelInvites } from "../../lib/channelTeam";
+import { reportServerError } from "@al-ummah/shared-types";
 
 export class ChannelDelete extends AuthenticatedRoute {
 	schema = {
@@ -135,6 +137,19 @@ export class ChannelDelete extends AuthenticatedRoute {
 			await c.env.channel_tabs.delete(`channel-tabs/${id}`);
 		} catch (error) {
 			logger.warn('[ChannelDelete] Could not release handle/tabs', { channelId: id, error: error instanceof Error ? error.message : String(error) });
+		}
+
+		// Its pending team invitations (docs/specs/CHANNEL-ROLES.md §12); the
+		// member entries went with the record
+		if (c.env.SEARCH_DB) {
+			try {
+				await cancelChannelInvites(c.env.SEARCH_DB as D1Database, id);
+			} catch (error) {
+				logger.error('[ChannelDelete] Could not cancel the channel\'s invitations', { channelId: id, error: error instanceof Error ? error.message : String(error) });
+				let ctx: ExecutionContext | undefined;
+				try { ctx = c.executionCtx as ExecutionContext; } catch { ctx = undefined; }
+				reportServerError('api-videos', c.env as never, ctx, error, { route: c.req.path, method: c.req.method, extra: { step: 'cancel-invites', channelId: id } });
+			}
 		}
 
 		// Its Bunny collections: the record is gone, so nothing could find them later

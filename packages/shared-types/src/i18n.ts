@@ -1635,6 +1635,16 @@ export interface AppTranslations {
       reviewRejectedMessage: string;
       reviewNeededTitle: string;
       reviewNeededMessage: string;
+      channelInviteReceivedTitle: string;
+      channelInviteReceivedMessage: string;
+      channelInviteAcceptedTitle: string;
+      channelInviteAcceptedMessage: string;
+      channelRoleChangedTitle: string;
+      channelRoleChangedMessage: string;
+      channelMemberRemovedTitle: string;
+      channelMemberRemovedMessage: string;
+      channelMemberLeftTitle: string;
+      channelMemberLeftMessage: string;
       uploadReadyMessage: string;
       uploadFailedTitle: string;
       uploadFailedMessage: string;

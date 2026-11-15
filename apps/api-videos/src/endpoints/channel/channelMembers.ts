@@ -3,10 +3,10 @@
  *
  * - GET    /api/channels/access                 channels the caller owns or holds a role on
  * - GET    /api/channels/:id/members            the owner and members (members.view)
- * - POST   /api/channels/:id/members            grant a role by @handle or user id
  * - PUT    /api/channels/:id/members/:userId    change a member's role
  * - DELETE /api/channels/:id/members/:userId    remove a member, or leave (yourself)
  *
+ * Nobody gets a role without accepting an invitation (channelInvites.ts).
  * Roles are stored on the R2 channel record (`members`) and written with a
  * conditional put, so a grant never drops a concurrent channel update. The
  * channel_access index follows every write through the shared ownership sync.
@@ -18,7 +18,8 @@ import { Str } from "chanfana";
 import { z } from "zod";
 import {
 	CHANNEL_MEMBER_ROLES,
-	MAX_CHANNEL_MEMBERS,
+	reportServerError,
+	type ChannelInviteView,
 	canManageRole,
 	capabilitiesOf,
 	channelMembersOf,
@@ -34,11 +35,11 @@ import R2Repository from "../../lib/r2Repo";
 import { AuthenticatedRoute, AppContext } from "../../base";
 import { logger } from "../../lib/logger";
 import { FALLBACK_SCAN_OBJECTS } from "../../lib/scanBudget";
-import { normalizeHandleInput, resolveHandle } from "../../lib/channelHandles";
+import { cancelInvitesSentBy, notifyTeam, pendingChannelInvites, recordTeamActivity, rotateChannelLiveKeys, teamSeatLimit } from "../../lib/channelTeam";
 import { memberChannelRoles, ownedChannelIds, scheduleOwnershipHeal, waitUntilOf } from "../../lib/search/ownership";
 import { resolveDisplayName, type NameFields } from '@al-ummah/shared-types';
 
-type ChannelType = z.infer<typeof BusinessChannel> & { isSuspended?: boolean; suspension?: { at?: string; reason?: string } };
+export type ChannelType = z.infer<typeof BusinessChannel> & { isSuspended?: boolean; suspension?: { at?: string; reason?: string } };
 
 const RoleEnum = z.enum(['owner', 'admin', 'editor', 'moderator']);
 const MemberRoleEnum = z.enum(CHANNEL_MEMBER_ROLES as [ChannelMemberRole, ...ChannelMemberRole[]]);
@@ -66,10 +67,10 @@ const MemberView = z.object({
 	isYou: z.boolean(),
 });
 
-const NO_STORE = { 'Cache-Control': 'private, no-store' };
+export const NO_STORE = { 'Cache-Control': 'private, no-store' };
 
 /** Error body: a stable code for the client to translate, never internals. */
-function fail(c: AppContext, status: 400 | 403 | 404 | 409 | 503, code: string, message: string) {
+export function fail(c: AppContext, status: 400 | 403 | 404 | 409 | 429 | 503, code: string, message: string) {
 	return c.json({ success: false, code, error: message }, status, NO_STORE);
 }
 
@@ -172,7 +173,7 @@ export class ChannelAccessList extends AuthenticatedRoute {
 }
 
 /** Display fields from the member's profile (best effort: a missing profile just shows no name). */
-async function profileSummary(c: AppContext, userId: string): Promise<{ displayName?: string; avatarUrl?: string }> {
+export async function profileSummary(c: AppContext, userId: string): Promise<{ displayName?: string; avatarUrl?: string }> {
 	try {
 		const object = await c.env.profiles?.get(userId);
 		if (!object) return {};
@@ -187,7 +188,7 @@ async function profileSummary(c: AppContext, userId: string): Promise<{ displayN
 	}
 }
 
-async function loadLiveChannel(c: AppContext, id: string): Promise<ChannelType | null> {
+export async function loadLiveChannel(c: AppContext, id: string): Promise<ChannelType | null> {
 	const channel = await new R2Repository<ChannelType>(c.env.channels).getObject(id);
 	return channel && !channel.isDeleted ? channel : null;
 }
@@ -204,13 +205,57 @@ async function memberViews(c: AppContext, channel: ChannelType, viewerId: string
 	})));
 }
 
-const MembersResponse = z.object({ success: z.boolean(), data: z.object({ members: z.array(MemberView), maxMembers: z.number() }) });
+/** The channel's open invitations as the Team page shows them. */
+async function inviteViews(c: AppContext, channelId: string): Promise<ChannelInviteView[]> {
+	const db = c.env.SEARCH_DB as D1Database | undefined;
+	if (!db) return [];
+	const rows = await pendingChannelInvites(db, channelId);
+	return Promise.all(rows.map(async (row) => {
+		// An email invitation shows only the email the inviter typed, even once
+		// the invitee has seen it: naming the account would tell the inviter who
+		// owns that address (§4.1). Only @handle invitations show the person.
+		if (row.invitee_email) {
+			return { id: row.id, role: row.role, inviteeEmail: row.invitee_email, invitedBy: row.invited_by, createdAt: row.created_at, expiresAt: row.expires_at };
+		}
+		const profile = row.invitee_user_id ? await profileSummary(c, row.invitee_user_id) : {};
+		return {
+			id: row.id,
+			role: row.role,
+			...(row.invitee_user_id ? { inviteeUserId: row.invitee_user_id } : {}),
+			...(profile.displayName ? { inviteeName: profile.displayName } : {}),
+			...(profile.avatarUrl ? { inviteeAvatarUrl: profile.avatarUrl } : {}),
+			invitedBy: row.invited_by,
+			createdAt: row.created_at,
+			expiresAt: row.expires_at,
+		};
+	}));
+}
+
+/** Members, open invitations and the seat limit (GET /members and every change). */
+export async function teamState(c: AppContext, channel: ChannelType, viewerId: string) {
+	const [members, invites] = await Promise.all([memberViews(c, channel, viewerId), inviteViews(c, channel.id)]);
+	return { members, invites, maxMembers: teamSeatLimit(channel.userId) };
+}
+
+const InviteView = z.object({
+	id: Str(),
+	role: MemberRoleEnum,
+	inviteeUserId: Str().optional(),
+	inviteeName: Str().optional(),
+	inviteeAvatarUrl: Str().optional(),
+	inviteeEmail: Str().optional(),
+	invitedBy: Str(),
+	createdAt: Str(),
+	expiresAt: Str(),
+});
+
+export const MembersResponse = z.object({ success: z.boolean(), data: z.object({ members: z.array(MemberView), invites: z.array(InviteView), maxMembers: z.number() }) });
 
 export class ChannelMembersList extends AuthenticatedRoute {
 	schema = {
 		tags: ["Channels"],
-		summary: "List a channel's owner and members",
-		description: "Needs the members.view channel capability (owner or channel admin).",
+		summary: "List a channel's owner, members and open invitations",
+		description: "Needs the members.view channel capability (owner or channel admin). `maxMembers` is the channel's seat limit (studio.teamSeats on the owner's plan, at most 50).",
 		request: { params: z.object({ id: Str({ description: "Channel ID" }) }) },
 		responses: {
 			"200": { description: "Members", content: { "application/json": { schema: MembersResponse } } },
@@ -225,17 +270,17 @@ export class ChannelMembersList extends AuthenticatedRoute {
 		const channel = await loadLiveChannel(c, params.id);
 		if (!channel) return fail(c, 404, 'channel_not_found', 'Channel not found');
 		if (!can(channelRoleOf(channel, userId), 'members.view')) return fail(c, 403, 'forbidden', 'You cannot view this channel\'s team');
-		return c.json({ success: true, data: { members: await memberViews(c, channel, userId), maxMembers: MAX_CHANNEL_MEMBERS } }, 200, NO_STORE);
+		return c.json({ success: true, data: await teamState(c, channel, userId) }, 200, NO_STORE);
 	}
 }
 
-type Rejection = { status: 400 | 403 | 404 | 409; code: string; message: string };
+export type Rejection = { status: 400 | 403 | 404 | 409 | 429; code: string; message: string };
 
 /**
  * Apply one membership change on the fresh channel record (conditional put),
  * re-checking the actor's role on every attempt.
  */
-async function changeMembers(
+export async function changeMembers(
 	c: AppContext,
 	channelId: string,
 	actorId: string,
@@ -255,59 +300,43 @@ async function changeMembers(
 	return { channel: data, rejected };
 }
 
-const GrantBody = z.object({
-	handle: z.string().min(1).max(64).optional(),
-	userId: z.string().min(1).max(200).optional(),
-	role: MemberRoleEnum,
-}).refine(b => !!b.handle !== !!b.userId, { message: 'Give exactly one of handle or userId' });
+function executionCtx(c: AppContext): { waitUntil(p: Promise<unknown>): void } | undefined {
+	try {
+		return c.executionCtx;
+	} catch {
+		return undefined;
+	}
+}
 
-export class ChannelMemberAdd extends AuthenticatedRoute {
-	schema = {
-		tags: ["Channels"],
-		summary: "Give someone a role on a channel",
-		description: "Identify the person by the @handle of one of their channels, or by user id. Owners grant any role; channel admins grant editor and moderator. The owner holds no member role, and ownership itself only moves by a super admin transfer.",
-		request: {
-			params: z.object({ id: Str({ description: "Channel ID" }) }),
-			body: { content: { "application/json": { schema: GrantBody } } },
-		},
-		responses: {
-			"200": { description: "Members after the change", content: { "application/json": { schema: MembersResponse } } },
-			"400": { description: "Invalid request", content: { "application/json": { schema: ResponseError } } },
-			"403": { description: "No permission", content: { "application/json": { schema: ResponseError } } },
-			"404": { description: "Channel or person not found", content: { "application/json": { schema: ResponseError } } },
-			"409": { description: "Already a member, the owner, or the team is full", content: { "application/json": { schema: ResponseError } } },
-		},
-	};
-
-	async handle(c: AppContext) {
-		const { params, body } = await this.getValidatedData<typeof this.schema>();
-		const actorId = this.getUserId(c);
-
-		let targetId = body.userId ?? null;
-		if (body.handle) {
-			const handle = normalizeHandleInput(body.handle);
-			const handleChannelId = await resolveHandle(c.env.channel_tabs, handle);
-			const handleChannel = handleChannelId ? await loadLiveChannel(c, handleChannelId) : null;
-			if (!handleChannel || (handleChannel.handle || '').toLowerCase() !== handle.toLowerCase()) {
-				return fail(c, 404, 'person_not_found', 'No channel has that handle');
+/**
+ * After a member lost a role (removed, left, or changed to a smaller one):
+ * cancel the invitations they sent if they can no longer manage members, and
+ * give the channel's unstarted live sessions new keys if they had seen them
+ * (docs/specs/CHANNEL-ROLES.md §4.3). Failures are reported, never thrown:
+ * the membership change already happened.
+ */
+export async function afterRoleLoss(c: AppContext, channelId: string, actorId: string, memberId: string, oldRole: ChannelRole, newRole: ChannelRole | null) {
+	const ctx = executionCtx(c);
+	const db = c.env.SEARCH_DB as D1Database | undefined;
+	if (db && can(oldRole, 'members.manage') && !can(newRole, 'members.manage')) {
+		try {
+			const cancelled = await cancelInvitesSentBy(db, channelId, memberId);
+			if (cancelled.length) {
+				await recordTeamActivity(c.env as never, ctx, cancelled.map((row) => ({ channelId, actorId, action: 'invite_cancelled' as const, targetUserId: row.invitee_user_id, newRole: row.role })));
 			}
-			targetId = handleChannel.userId;
-		} else if (targetId && !(await c.env.profiles?.head(targetId))) {
-			return fail(c, 404, 'person_not_found', 'No account with that id');
+		} catch (error) {
+			logger.error('[ChannelMembers] Cancelling the member\'s invitations failed', { channelId, memberId, error: error instanceof Error ? error.message : String(error) });
+			reportServerError('api-videos', c.env as never, ctx, error, { route: c.req.path, method: c.req.method, extra: { step: 'cancel-invites', channelId } });
 		}
-		if (!targetId) return fail(c, 400, 'invalid_request', 'Give a handle or a user id');
-
-		const now = new Date().toISOString();
-		const { channel, rejected } = await changeMembers(c, params.id, actorId, (fresh, actorRole, members) => {
-			if (!canManageRole(actorRole, body.role)) return { status: 403, code: 'forbidden', message: 'You cannot give this role on this channel' };
-			if (targetId === fresh.userId) return { status: 409, code: 'cannot_invite_owner', message: 'The owner already has every permission' };
-			if (members.some(m => m.userId === targetId)) return { status: 409, code: 'already_member', message: 'This person already has a role on this channel' };
-			if (members.length >= MAX_CHANNEL_MEMBERS) return { status: 409, code: 'member_limit', message: 'This channel\'s team is full' };
-			return [...members, { userId: targetId!, role: body.role, addedBy: actorId, addedAt: now }];
-		});
-		if (rejected) return fail(c, rejected.status, rejected.code, rejected.message);
-		logger.debug('[ChannelMembers] Role granted', { channelId: params.id, actorId, targetId, role: body.role });
-		return c.json({ success: true, data: { members: await memberViews(c, channel!, actorId), maxMembers: MAX_CHANNEL_MEMBERS } }, 200, NO_STORE);
+	}
+	if (can(oldRole, 'live.manage') && !can(newRole, 'live.manage')) {
+		try {
+			const ended = await rotateChannelLiveKeys(c.env as never, channelId);
+			if (ended) await recordTeamActivity(c.env as never, ctx, [{ channelId, actorId, action: 'stream_key_rotated', targetUserId: memberId }]);
+		} catch (error) {
+			logger.error('[ChannelMembers] Live key rotation failed', { channelId, memberId, error: error instanceof Error ? error.message : String(error) });
+			reportServerError('api-videos', c.env as never, ctx, error, { route: c.req.path, method: c.req.method, extra: { step: 'rotate-live-keys', channelId } });
+		}
 	}
 }
 
@@ -315,7 +344,7 @@ export class ChannelMemberUpdate extends AuthenticatedRoute {
 	schema = {
 		tags: ["Channels"],
 		summary: "Change a member's role on a channel",
-		description: "Owners change any member; channel admins change editors and moderators, and only to editor or moderator.",
+		description: "Owners change any member; channel admins change editors and moderators, and only to editor or moderator. Logged on the channel's activity and notified to the member.",
 		request: {
 			params: z.object({ id: Str({ description: "Channel ID" }), userId: Str({ description: "Member's user id" }) }),
 			body: { content: { "application/json": { schema: z.object({ role: MemberRoleEnum }) } } },
@@ -330,18 +359,31 @@ export class ChannelMemberUpdate extends AuthenticatedRoute {
 	async handle(c: AppContext) {
 		const { params, body } = await this.getValidatedData<typeof this.schema>();
 		const actorId = this.getUserId(c);
+		let oldRole: ChannelMemberRole | null = null;
 		const { channel, rejected } = await changeMembers(c, params.id, actorId, (_fresh, actorRole, members) => {
 			const target = members.find(m => m.userId === params.userId);
 			if (!target) return { status: 404, code: 'member_not_found', message: 'This person has no role on this channel' };
 			if (!canManageRole(actorRole, target.role) || !canManageRole(actorRole, body.role)) {
 				return { status: 403, code: 'forbidden', message: 'You cannot change this person\'s role' };
 			}
+			oldRole = target.role;
 			if (target.role === body.role) return false;
 			return members.map(m => (m.userId === target.userId ? { ...m, role: body.role, updatedAt: new Date().toISOString() } : m));
 		});
 		if (rejected) return fail(c, rejected.status, rejected.code, rejected.message);
+		if (oldRole && oldRole !== body.role) {
+			await recordTeamActivity(c.env as never, executionCtx(c), [{ channelId: params.id, actorId, action: 'role_changed', targetUserId: params.userId, oldRole, newRole: body.role }]);
+			await notifyTeam(c.env as never, params.userId, actorId, {
+				notificationKey: 'channelRoleChanged',
+				params: { channel: channel!.name, role: body.role },
+				actionUrl: `/settings/channel/${params.id}/team`,
+				entityId: params.id,
+				dedupeKey: `channel-role:${params.id}:${params.userId}:${body.role}:${Date.now()}`,
+			});
+			await afterRoleLoss(c, params.id, actorId, params.userId, oldRole, body.role);
+		}
 		logger.debug('[ChannelMembers] Role changed', { channelId: params.id, actorId, targetId: params.userId, role: body.role });
-		return c.json({ success: true, data: { members: await memberViews(c, channel!, actorId), maxMembers: MAX_CHANNEL_MEMBERS } }, 200, NO_STORE);
+		return c.json({ success: true, data: await teamState(c, channel!, actorId) }, 200, NO_STORE);
 	}
 }
 
@@ -349,7 +391,7 @@ export class ChannelMemberRemove extends AuthenticatedRoute {
 	schema = {
 		tags: ["Channels"],
 		summary: "Remove a member from a channel, or leave it",
-		description: "Owners remove anyone; channel admins remove editors and moderators; any member may remove themselves (leave). The owner cannot be removed: ownership only moves by a super admin transfer. Takes effect on the member's next request.",
+		description: "Owners remove anyone; channel admins remove editors and moderators; any member may remove themselves (leave). The owner cannot be removed: ownership only moves by a super admin transfer. Takes effect on the member's next request; logged and notified.",
 		request: { params: z.object({ id: Str({ description: "Channel ID" }), userId: Str({ description: "Member's user id" }) }) },
 		responses: {
 			"200": { description: "Removed", content: { "application/json": { schema: z.object({ success: z.boolean() }) } } },
@@ -361,15 +403,39 @@ export class ChannelMemberRemove extends AuthenticatedRoute {
 	async handle(c: AppContext) {
 		const { params } = await this.getValidatedData<typeof this.schema>();
 		const actorId = this.getUserId(c);
-		const { rejected } = await changeMembers(c, params.id, actorId, (fresh, actorRole, members) => {
+		const leaving = params.userId === actorId;
+		let removedRole: ChannelMemberRole | null = null;
+		const { channel, rejected } = await changeMembers(c, params.id, actorId, (fresh, actorRole, members) => {
 			if (params.userId === fresh.userId) return { status: 403, code: 'cannot_remove_owner', message: 'The owner cannot be removed' };
 			const target = members.find(m => m.userId === params.userId);
 			if (!target) return { status: 404, code: 'member_not_found', message: 'This person has no role on this channel' };
-			const leaving = params.userId === actorId;
 			if (!leaving && !canManageRole(actorRole, target.role)) return { status: 403, code: 'forbidden', message: 'You cannot remove this person' };
+			removedRole = target.role;
 			return members.filter(m => m.userId !== target.userId);
 		});
 		if (rejected) return fail(c, rejected.status, rejected.code, rejected.message);
+		if (removedRole && channel) {
+			await recordTeamActivity(c.env as never, executionCtx(c), [{ channelId: params.id, actorId, action: leaving ? 'member_left' : 'member_removed', targetUserId: params.userId, oldRole: removedRole }]);
+			if (leaving) {
+				const { displayName } = await profileSummary(c, actorId);
+				await notifyTeam(c.env as never, channel.userId, actorId, {
+					notificationKey: 'channelMemberLeft',
+					params: { member: displayName ?? '', channel: channel.name },
+					actionUrl: `/settings/channel/${params.id}/team`,
+					entityId: params.id,
+					dedupeKey: `channel-left:${params.id}:${actorId}:${Date.now()}`,
+				});
+			} else {
+				await notifyTeam(c.env as never, params.userId, actorId, {
+					notificationKey: 'channelMemberRemoved',
+					params: { channel: channel.name },
+					actionUrl: `/channels/${params.id}`,
+					entityId: params.id,
+					dedupeKey: `channel-removed:${params.id}:${params.userId}:${Date.now()}`,
+				});
+			}
+			await afterRoleLoss(c, params.id, actorId, params.userId, removedRole, null);
+		}
 		logger.debug('[ChannelMembers] Member removed', { channelId: params.id, actorId, targetId: params.userId });
 		return c.json({ success: true }, 200, NO_STORE);
 	}

@@ -57,6 +57,16 @@ export const NOTIFICATION_KEYS = [
   'reviewNeeded',
   /** Move from YouTube (wiki AUN-YT-IMPORT) finished (params: ready, failed = counts; channelTitle) */
   'youtubeImportFinished',
+  /** Channel roles (docs/specs/CHANNEL-ROLES.md §10). params: inviter, channel, role (role code); always on */
+  'channelInviteReceived',
+  /** To the inviter. params: member, channel, role */
+  'channelInviteAccepted',
+  /** To the member. params: channel, role */
+  'channelRoleChanged',
+  /** To the member. params: channel */
+  'channelMemberRemoved',
+  /** To the owner. params: member, channel */
+  'channelMemberLeft',
 ] as const;
 export type NotificationKey = (typeof NOTIFICATION_KEYS)[number];
 
@@ -74,6 +84,11 @@ export const NOTIFICATION_KEY_CATEGORY: Record<NotificationKey, NotificationCate
   reviewRejected: 'account',
   reviewNeeded: 'account',
   youtubeImportFinished: 'uploads',
+  channelInviteReceived: 'account',
+  channelInviteAccepted: 'account',
+  channelRoleChanged: 'account',
+  channelMemberRemoved: 'account',
+  channelMemberLeft: 'account',
 };
 
 /** Legacy realtime notification type (drives the toast icon). */
@@ -92,6 +107,11 @@ export const NOTIFICATION_KEY_TYPE: Record<NotificationKey, RealtimeNotification
   reviewRejected: 'system',
   reviewNeeded: 'system',
   youtubeImportFinished: 'upload',
+  channelInviteReceived: 'system',
+  channelInviteAccepted: 'system',
+  channelRoleChanged: 'system',
+  channelMemberRemoved: 'system',
+  channelMemberLeft: 'system',
 };
 
 /** Per-channel bell: every upload & live, highlights (long-form uploads & live), or nothing. */

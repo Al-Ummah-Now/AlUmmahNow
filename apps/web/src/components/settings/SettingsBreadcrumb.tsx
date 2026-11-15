@@ -43,6 +43,7 @@ export function settingsTrail(pathname: string, lang: string, t: AppTranslations
   }
   if (path === `${settings}/upload-defaults`) return [root, { label: t.settings?.uploadDefaults || 'Upload Defaults', href: path }];
   if (path === `${settings}/privacy`) return [root, { label: t.privacy.settingsTitle, href: path }];
+  if (path === `${settings}/channel-invites`) return [root, { label: t.channelRoles.invitationsTitle, href: path }];
   return null;
 }
 

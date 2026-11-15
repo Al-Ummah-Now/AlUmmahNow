@@ -39,6 +39,8 @@ import { Hono } from "hono";
 import { cors } from 'hono/cors'
 import { isAllowedOrigin } from './lib/cors';
 import { authMiddleware, optionalAuthMiddleware, channelIdMiddleware } from "./middleware/auth";
+import { expireInvites, pruneTeamActivity, resolveStaleClaims } from "./lib/channelTeam";
+import { roleOnChannel } from "./lib/channelAccess";
 import { videosBanMiddleware } from "./middleware/videos-ban";
 import { videosPendingDeletionMiddleware } from "./middleware/videos-pending-deletion";
 import adminInternalRouter from "./routers/admin.router";
@@ -744,6 +746,27 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 			} catch (error) {
 				logger.error('[RateLimit] Prune failed', { error: error instanceof Error ? error.message : String(error) });
 				reportJobFailure(rawEnv, ctx, 'rate-limit-prune', error);
+			}
+		})(),
+	);
+	ctx.waitUntil(
+		(async () => {
+			// Channel teams (docs/specs/CHANNEL-ROLES.md §9, §11): close invitations
+			// past 14 days, delete activity rows older than a year.
+			if (!rawEnv.SEARCH_DB) return;
+			try {
+				const stale = await resolveStaleClaims(rawEnv.SEARCH_DB, (channelId, userId) => roleOnChannel(rawEnv as never, channelId, userId));
+				let expired = 0;
+				for (let batch = 0; batch < 10; batch++) {
+					const closed = await expireInvites(rawEnv.SEARCH_DB);
+					expired += closed;
+					if (closed < 500) break;
+				}
+				const pruned = await pruneTeamActivity(rawEnv.SEARCH_DB);
+				logger.info('[ChannelTeam] Daily sweep finished', { stale, expired, pruned });
+			} catch (error) {
+				logger.error('[ChannelTeam] Daily sweep failed', { error: error instanceof Error ? error.message : String(error) });
+				reportJobFailure(rawEnv, ctx, 'channel-team', error);
 			}
 		})(),
 	);
