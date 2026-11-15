@@ -71,14 +71,14 @@ function needManage(c: C) {
 
 async function readRows(d: SearchDb): Promise<VideoCategoryRow[]> {
   const { results } = await d
-    .prepare('SELECT value, label_en, label_ar, hint, position, retired, created_at, updated_at, updated_by FROM video_categories ORDER BY position, value')
+    .prepare('SELECT value, label_en, label_ar, hint, position, retired, created_at, updated_at FROM video_categories ORDER BY position, value')
     .all<VideoCategoryRow>();
   return results ?? [];
 }
 
 async function readRow(d: SearchDb, value: string): Promise<VideoCategoryRow | null> {
   return d
-    .prepare('SELECT value, label_en, label_ar, hint, position, retired, created_at, updated_at, updated_by FROM video_categories WHERE value = ?')
+    .prepare('SELECT value, label_en, label_ar, hint, position, retired, created_at, updated_at FROM video_categories WHERE value = ?')
     .bind(value)
     .first<VideoCategoryRow>();
 }
@@ -88,7 +88,6 @@ const view = (row: VideoCategoryRow, counts: Map<string, number>) => ({
   hint: row.hint ?? '',
   videoCount: counts.get(row.value) ?? 0,
   updatedAt: row.updated_at ?? null,
-  updatedBy: row.updated_by ?? null,
 });
 
 /** Videos per category: an index-only pass over idx_search_videos_category (the same count Explore makes). */
@@ -189,8 +188,8 @@ app.post('/', async (c) => {
   const auditId = await writeAudit(c.env.REPORTS_DB, { kind: 'category', id: value, action: 'create', actorId: actorOf(c), details: created });
   try {
     await d
-      .prepare('INSERT INTO video_categories (value, label_en, label_ar, hint, position, retired, created_at, updated_at, updated_by) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)')
-      .bind(value, created.labelEn, created.labelAr, created.hint, position, now, now, actorOf(c))
+      .prepare('INSERT INTO video_categories (value, label_en, label_ar, hint, position, retired, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 0, ?, ?)')
+      .bind(value, created.labelEn, created.labelAr, created.hint, position, now, now)
       .run();
   } catch (error) {
     await dropAudit(c.env.REPORTS_DB, auditId).catch(() => undefined);
@@ -217,7 +216,7 @@ app.put('/order', async (c) => {
   const now = Date.now();
   const auditId = await writeAudit(c.env.REPORTS_DB, { kind: 'category', id: '*order', action: 'reorder', actorId: actorOf(c), details: { values }, previous: { values: before } });
   try {
-    await d.batch(values.map((v, i) => d.prepare('UPDATE video_categories SET position = ?, updated_at = ?, updated_by = ? WHERE value = ?').bind((i + 1) * POSITION_STEP, now, actorOf(c), v)));
+    await d.batch(values.map((v, i) => d.prepare('UPDATE video_categories SET position = ?, updated_at = ? WHERE value = ?').bind((i + 1) * POSITION_STEP, now, v)));
   } catch (error) {
     await dropAudit(c.env.REPORTS_DB, auditId).catch(() => undefined);
     throw error;
@@ -269,8 +268,8 @@ app.patch('/:value', async (c) => {
     previous: Object.fromEntries(Object.keys(changed).map((k) => [k, previous[k as keyof typeof previous]])),
   });
   const write = (v: typeof next) => d
-    .prepare('UPDATE video_categories SET label_en = ?, label_ar = ?, hint = ?, retired = ?, updated_at = ?, updated_by = ? WHERE value = ?')
-    .bind(v.labelEn, v.labelAr, v.hint, v.retired ? 1 : 0, now, actorOf(c), value)
+    .prepare('UPDATE video_categories SET label_en = ?, label_ar = ?, hint = ?, retired = ?, updated_at = ? WHERE value = ?')
+    .bind(v.labelEn, v.labelAr, v.hint, v.retired ? 1 : 0, now, value)
     .run();
   try {
     await write(next);
