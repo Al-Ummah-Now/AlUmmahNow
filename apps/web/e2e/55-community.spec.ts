@@ -259,7 +259,7 @@ test.describe('Post manager', () => {
     await selectType(page, 'text');
     await page.getByRole('button', { name: 'Publish' }).click();
     await expect(page.getByText('Content is required')).toBeVisible();
-    await expect(page).toHaveURL(/\/community\/new$/);
+    await expect(page).toHaveURL(/\/content\/posts\/new$/);
   });
 
   test('COMM-007 edits a text post in Studio and keeps it published', async ({ page }) => {
