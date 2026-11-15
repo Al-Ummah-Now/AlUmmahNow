@@ -725,7 +725,6 @@ export const AR_TRANSLATIONS: AppTranslations = {
     saidInVideos: 'قيل في المرئيات',
     saidInVideosHint: 'وُجدت في الترجمة، ويفتح كل مرئي عند موضعها.',
     saidAt: 'عند {time}',
-    watchFrom: 'شاهد {title} من {time}',
     fromCaptions: 'من الترجمة {language}',
     searchError: 'البحث غير متاح حاليًا. يُرجى المحاولة مرة أخرى.',
     retry: 'حاول مرة أخرى',

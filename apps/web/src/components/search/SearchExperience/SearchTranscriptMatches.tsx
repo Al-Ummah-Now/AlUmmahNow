@@ -63,7 +63,6 @@ export function SearchTranscriptMatches({ matches, query }: { matches: SearchTra
             <li key={m.videoId} data-testid="search-transcript" data-video-id={m.videoId} data-start-ms={m.startMs}>
               <Link
                 href={`/${lang}/video/${encodeURIComponent(m.videoId)}?t=${Math.floor(m.startMs / 1000)}`}
-                aria-label={fill(t.search.watchFrom, { title, time })}
                 className="group flex gap-3 rounded-lg p-2 hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <div className="relative w-36 shrink-0 overflow-hidden rounded-md sm:w-44">
