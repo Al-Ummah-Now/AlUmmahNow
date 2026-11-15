@@ -11,13 +11,13 @@ import { normalize } from './normalize';
 import { finishRun, prune, rollupDay, startRun, upsertHourly } from './store';
 import { alertTitle, evaluateThresholds, formatValue, type ThresholdChange } from './thresholds';
 import { logger } from './logger';
+import { cloudflareToken, type CredentialEnv } from './credentials';
+import type { JobsEnv } from './jobs';
 
-type SecretBinding = string | { get(): Promise<string> } | undefined;
+export { secretValue } from './credentials';
 
-export interface CollectorEnv extends ErrorReporterEnv {
+export interface CollectorEnv extends ErrorReporterEnv, CredentialEnv, JobsEnv {
   COSTS_DB: D1Database;
-  /** Account Analytics Read (Secrets Store media-cdn-api-token until al-ummah-cost-monitor-read exists). */
-  CF_ANALYTICS_TOKEN?: SecretBinding;
   CLOUDFLARE_ACCOUNT_ID?: string;
   /** Envs this deployment collects: production collects all three, QA and stage only themselves. */
   COLLECT_ENVS?: string;
@@ -25,15 +25,6 @@ export interface CollectorEnv extends ErrorReporterEnv {
 }
 
 export const WINDOW_HOURS = 3;
-
-export async function secretValue(binding: SecretBinding): Promise<string> {
-  if (typeof binding === 'string') return binding;
-  try {
-    return (await binding?.get()) ?? '';
-  } catch {
-    return '';
-  }
-}
 
 export function hourStart(d: Date): Date {
   const h = new Date(d);
@@ -98,7 +89,8 @@ export async function resourcesFor(
 }
 
 export interface HourlyOutcome {
-  status: 'ok' | 'partial' | 'failed';
+  /** skipped: no Cloudflare token anywhere (the Costs page asks for one); nothing is recorded as failed. */
+  status: 'ok' | 'partial' | 'failed' | 'skipped';
   queries: number;
   rows: number;
   dropped: number;
@@ -108,12 +100,16 @@ export interface HourlyOutcome {
 export async function runHourly(env: CollectorEnv, ctx: ExecutionContextLike | undefined, now = new Date(), fetchImpl: typeof fetch = fetch): Promise<HourlyOutcome> {
   const startedAt = Date.now();
   const envs: OpsEnv[] = parseEnvs(env.COLLECT_ENVS);
-  const runId = await startRun(env.COSTS_DB, 'hourly', now);
   const outcome: HourlyOutcome = { status: 'ok', queries: 0, rows: 0, dropped: 0, changes: 0 };
-  const detail: Record<string, unknown> = { envs };
+  const { token, source } = await cloudflareToken(env);
+  if (!token) {
+    logger.debug('[ops] No Cloudflare token set; hourly collection skipped');
+    return { ...outcome, status: 'skipped' };
+  }
+  const runId = await startRun(env.COSTS_DB, 'hourly', now);
+  const detail: Record<string, unknown> = { envs, token: source };
   try {
-    const token = await secretValue(env.CF_ANALYTICS_TOKEN);
-    if (!token || !env.CLOUDFLARE_ACCOUNT_ID || envs.length === 0) throw new Error('collector is not configured (token, account id or COLLECT_ENVS missing)');
+    if (!env.CLOUDFLARE_ACCOUNT_ID || envs.length === 0) throw new Error('collector is not configured (account id or COLLECT_ENVS missing)');
     const scope = await resourcesFor(env, token, envs, now, fetchImpl);
     detail.resources = scope.resources.length;
     // A failed listing (e.g. a token without list access) keeps the static manifest and the stored
@@ -147,20 +143,20 @@ export async function runHourly(env: CollectorEnv, ctx: ExecutionContextLike | u
     detail.error = error instanceof Error ? error.message.slice(0, 300) : String(error).slice(0, 300);
     logger.error('[ops] Hourly collection failed', { error: detail.error });
   }
-  await finishRun(env.COSTS_DB, runId, { status: outcome.status, queries: outcome.queries, rowsWritten: outcome.rows, detail: { ...detail, dropped: outcome.dropped, changes: outcome.changes } }, new Date());
+  await finishRun(env.COSTS_DB, runId, { status: outcome.status === 'skipped' ? 'ok' : outcome.status, queries: outcome.queries, rowsWritten: outcome.rows, detail: { ...detail, dropped: outcome.dropped, changes: outcome.changes } }, new Date());
   logger.job({ job: 'ops.hourly', outcome: outcome.status, durationMs: Date.now() - startedAt, rows: outcome.rows, queries: outcome.queries, changes: outcome.changes });
   return outcome;
 }
 
 /** Daily: resource discovery, final rollup of yesterday, retention. */
-export async function runDaily(env: CollectorEnv, now = new Date(), fetchImpl: typeof fetch = fetch): Promise<{ rolled: number; pruned: number; discovered: number }> {
+export async function runDaily(env: CollectorEnv, now = new Date(), fetchImpl: typeof fetch = fetch): Promise<{ rolled: number; pruned: number; discovered: number; status: 'ok' | 'failed' }> {
   const runId = await startRun(env.COSTS_DB, 'daily', now);
   let rolled = 0;
   let pruned = 0;
   let discovered = 0;
   let status: 'ok' | 'failed' = 'ok';
   try {
-    const token = await secretValue(env.CF_ANALYTICS_TOKEN);
+    const { token } = await cloudflareToken(env);
     const envs = parseEnvs(env.COLLECT_ENVS);
     if (token && env.CLOUDFLARE_ACCOUNT_ID && envs.length) {
       const scope = await resourcesFor(env, token, envs, now, fetchImpl, true);
@@ -174,5 +170,5 @@ export async function runDaily(env: CollectorEnv, now = new Date(), fetchImpl: t
     logger.error('[ops] Daily rollup failed', { error: error instanceof Error ? error.message : String(error) });
   }
   await finishRun(env.COSTS_DB, runId, { status, queries: 0, rowsWritten: rolled, detail: { pruned, discovered } }, new Date());
-  return { rolled, pruned, discovered };
+  return { rolled, pruned, discovered, status };
 }

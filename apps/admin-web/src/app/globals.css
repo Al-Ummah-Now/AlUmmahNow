@@ -292,3 +292,107 @@ body:lang(ar) {
    lanterns lie behind text and the street stays at the theme's faint opacity (every text colour
    keeps 4.5:1 over it). */
 html.fanous-street { --fanous-street-opacity: var(--fanous-street-faint); }
+
+/* Costs page (COST-1): the theme's materials (materials.css) on its panels, so the page has the
+   same depth as the site's cards in every theme; plain tokens when a custom package has none. */
+.cost-banner,
+.cost-bar-fill {
+  --cost-to-end: to right;
+}
+
+[dir='rtl'] .cost-banner,
+[dir='rtl'] .cost-bar-fill {
+  --cost-to-end: to left;
+}
+
+.cost-hero {
+  background: var(--m-hero, var(--surface-2));
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl, 0.75rem);
+  box-shadow: var(--m-card-edge, none);
+}
+
+.cost-panel {
+  border: 1px solid transparent;
+  background: var(--m-card, var(--surface)) padding-box, var(--m-border, linear-gradient(var(--border), var(--border))) border-box;
+  border-radius: var(--r-lg, 0.5rem);
+  box-shadow: var(--m-card-edge, none);
+}
+
+.cost-tile {
+  background: var(--m-control, var(--surface-2));
+  border: 1px solid var(--border);
+  border-radius: var(--r-md, 0.5rem);
+  box-shadow: var(--m-control-edge, none);
+}
+
+.cost-banner {
+  border: 1px solid var(--warning-fg);
+  border-inline-start-width: 4px;
+  border-radius: var(--r-lg, 0.5rem);
+  background: linear-gradient(var(--cost-to-end), color-mix(in srgb, var(--warning-fg) 16%, var(--surface)), var(--surface) 75%);
+  box-shadow: var(--m-card-edge, none);
+}
+
+.cost-note {
+  border: 1px dashed var(--border);
+  border-radius: var(--r-md, 0.5rem);
+  background: color-mix(in srgb, var(--info-fg) 7%, var(--surface));
+}
+
+.cost-bar-track {
+  background: color-mix(in srgb, var(--fg) 8%, var(--surface));
+  border-radius: 999px;
+}
+
+.cost-bar-fill {
+  background: linear-gradient(var(--cost-to-end), color-mix(in srgb, var(--accent) 55%, var(--surface)), var(--accent));
+  border-radius: 999px;
+  box-shadow: 0 0 10px -2px var(--m-glow, transparent);
+}
+
+.cost-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--m-control, var(--surface-2));
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8125rem;
+}
+
+.cost-pill[data-tone='warn'] {
+  border-color: var(--warning-fg);
+  color: var(--fg);
+  background: color-mix(in srgb, var(--warning-fg) 16%, var(--surface));
+}
+
+.cost-pill[data-tone='good'] {
+  border-color: color-mix(in srgb, var(--success-fg) 60%, var(--border));
+}
+
+.cost-pill[data-tone='bad'] {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger-fg);
+}
+
+.cost-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: currentColor;
+  flex: none;
+}
+
+.cost-primary {
+  background: var(--m-primary, var(--accent));
+  color: var(--on-accent);
+  box-shadow: var(--m-primary-edge, none);
+}
+
+.cost-primary:hover:not(:disabled) {
+  background: var(--m-primary-hover, var(--accent-hover));
+}

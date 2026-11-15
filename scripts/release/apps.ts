@@ -324,13 +324,28 @@ export const APPS: AppRule[] = [
 			env: null,
 			name: 'al-ummah-cost-monitor',
 			vars: { ENVIRONMENT: 'production', COLLECT_ENVS: 'production,stage,qa', ERRORS_INGEST_URL: 'https://admin.api.alummahnow.net/internal/errors' },
-			requiredBindings: [INTERNAL_API_KEY, { kind: 'd1_databases', name: 'COSTS_DB' }, { kind: 'secrets_store_secrets', name: 'CF_ANALYTICS_TOKEN' }],
+			requiredBindings: [
+				INTERNAL_API_KEY,
+				{ kind: 'd1_databases', name: 'COSTS_DB' },
+				{ kind: 'secrets_store_secrets', name: 'CF_ANALYTICS_TOKEN' },
+				// COST-1: the crons only plan jobs; the queue runs them with retry and a DLQ
+				{ kind: 'queue_producer', name: 'COST_JOBS_QUEUE' },
+				{ kind: 'queue_consumer', name: 'al-ummah-cost-jobs' },
+				{ kind: 'queue_consumer', name: 'al-ummah-cost-jobs-dlq' },
+			],
 			...PROD_GUARDS,
 		},
 		stage: stageRule({
 			name: 'al-ummah-cost-monitor-stage',
 			vars: { ENVIRONMENT: 'stage', COLLECT_ENVS: 'stage' },
-			requiredBindings: [INTERNAL_API_KEY, { kind: 'd1_databases', name: 'COSTS_DB' }, { kind: 'secrets_store_secrets', name: 'CF_ANALYTICS_TOKEN' }],
+			requiredBindings: [
+				INTERNAL_API_KEY,
+				{ kind: 'd1_databases', name: 'COSTS_DB' },
+				{ kind: 'secrets_store_secrets', name: 'CF_ANALYTICS_TOKEN' },
+				{ kind: 'queue_producer', name: 'COST_JOBS_QUEUE' },
+				{ kind: 'queue_consumer', name: 'al-ummah-cost-jobs-stage' },
+				{ kind: 'queue_consumer', name: 'al-ummah-cost-jobs-dlq-stage' },
+			],
 		}),
 	},
 	{

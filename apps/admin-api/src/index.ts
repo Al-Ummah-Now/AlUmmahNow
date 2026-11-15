@@ -22,6 +22,9 @@ import { purgeReviewMedia, reviewStats } from './lib/review/queue';
 import { writeReviewQueueMinutes } from '@al-ummah/shared-types';
 import { scheduledReportMetaSync } from './lib/moderation/reportMeta';
 import { errorsPipelineSink, syncCostAlerts } from './lib/opsCost';
+import { costAlertNotifier } from './lib/cost-alert-mail';
+import { runWeeklyDigest } from './lib/costs';
+import costsRouter from './routers/costs.router';
 import invitesRouter from './routers/invites.router';
 import sitesRouter from './routers/sites.router';
 import { staffSiteDomainsRouter, studioSiteDomainsRouter } from './routers/siteDomains.router';
@@ -262,6 +265,8 @@ app.route('/api/app-config', appConfigRouter);
 
 // Platform analytics (Operations page, docs/admin/LIVE_OPS.md): reads apps/cost-monitor's rollups; ops:read / ops:manage
 app.route('/api/ops', opsRouter);
+// Costs page (COST-1): connections, alert settings, opt-in alert emails, the cost dashboard
+app.route('/api/costs', costsRouter);
 // Abuse panel: Turnstile and rate-limit counters from Analytics Engine (routers/abuse.router.ts); ops:read
 app.route('/api/abuse', abuseRouter);
 app.route('/api/vitals', vitalsRouter);
@@ -330,9 +335,15 @@ async function scheduled(controller: ScheduledController, env: AdminBindings, ct
         .catch((error) => logger.error('[Reports] E2E report purge failed', { error: String(error) })),
     );
     ctx.waitUntil(
-      syncCostAlerts(env as never, errorsPipelineSink(env), new Date(controller.scheduledTime))
+      syncCostAlerts(env as never, errorsPipelineSink(env), new Date(controller.scheduledTime), costAlertNotifier(env as never))
         .then(() => undefined)
         .catch((error) => logger.error('[OpsCost] Spend alert check failed', { error: String(error) })),
+    );
+    // Weekly cost digest to the admins who opted in (COST-1), on the Costs page's weekday and hour
+    ctx.waitUntil(
+      runWeeklyDigest(env as never, new Date(controller.scheduledTime))
+        .then((queued) => { if (queued) logger.info('[Costs] Weekly digest queued', { queued }); })
+        .catch((error) => logger.error('[Costs] Weekly digest failed', { error: String(error) })),
     );
   }
   // CSAM evidence past its retention (never before the report + retention days, never under a hold)

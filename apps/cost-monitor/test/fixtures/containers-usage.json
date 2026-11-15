@@ -1,0 +1,5 @@
+{"data":{"viewer":{"accounts":[{"c":[
+ {"dimensions":{"applicationId":"a1b2c3d4-0000-4000-8000-000000000001","date":"2026-11-13"},"sum":{"cpuTimeSec":1200,"allocatedMemory":1546188226560,"allocatedDisk":2000000000000}},
+ {"dimensions":{"applicationId":"a1b2c3d4-0000-4000-8000-000000000002","date":"2026-11-13"},"sum":{"cpuTimeSec":300,"allocatedMemory":386547056640,"allocatedDisk":500000000000}},
+ {"dimensions":{"applicationId":"a1b2c3d4-0000-4000-8000-000000000003","date":"2026-11-13"},"sum":{"cpuTimeSec":99999,"allocatedMemory":999999999999999,"allocatedDisk":9999999999999}}
+]}]}},"errors":null}

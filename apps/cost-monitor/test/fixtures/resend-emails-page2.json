@@ -1,0 +1,5 @@
+{"object":"list","has_more":true,"data":[
+ {"id":"e-0003","to":["x@e2e.alummahnow.net"],"from":"Al Ummah Now <no-reply@alummahnow.net>","created_at":"2026-11-13 00:00:01.000000+00","subject":"s","last_event":"delivered"},
+ {"id":"e-0002","to":["x@e2e.alummahnow.net"],"from":"Al Ummah Now <no-reply@alummahnow.net>","created_at":"2026-11-12 22:00:00.000000+00","subject":"s","last_event":"delivered"},
+ {"id":"e-0001","to":["x@e2e.alummahnow.net"],"from":"Al Ummah Now <no-reply@alummahnow.net>","created_at":"2026-11-12 21:00:00.000000+00","subject":"s","last_event":"delivered"}
+]}

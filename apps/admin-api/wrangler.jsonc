@@ -34,7 +34,10 @@
 			// Platform analytics rollups (read; writes only ops_thresholds). Migrations in apps/cost-monitor.
 			"binding": "COSTS_DB",
 			"database_name": "al-ummah-now-costs",
-			"database_id": "af54e39e-6faa-4923-bba3-8dd7b3e58cf7"
+			"database_id": "af54e39e-6faa-4923-bba3-8dd7b3e58cf7",
+			// Read only by the local stack (scripts/local-stack boot migrates it); releases migrate this
+			// database from apps/cost-monitor (scripts/release/d1-migrate.ts)
+			"migrations_dir": "../cost-monitor/migrations"
 		},
 		{
 			// Public status page incidents (migrations in apps/status)
@@ -116,6 +119,8 @@
 			{ "binding": "CONTACT_MAIL_QUEUE", "queue": "al-ummah-now-contact-mail" },
 			// Status page subscriptions: confirmation mail, incident fan-out and deliveries (lib/status-notify.ts), consumed below
 			{ "binding": "STATUS_NOTIFY_QUEUE", "queue": "al-ummah-now-status-notify" },
+			// cost-monitor jobs (apps/cost-monitor src/jobs.ts): the Errors page "Run again" of a failed cost job (COST-1)
+			{ "binding": "COST_JOBS_QUEUE", "queue": "al-ummah-cost-jobs" },
 			// Final mail failures → platform DLQ (processor stores them in dead_letters)
 			{ "binding": "ERRORS_DLQ", "queue": "al-ummah-now-dlq" },
 			// Requests to auth: sends, answers and status reads, with retries (src/lib/authModerationQueue.ts)
@@ -311,6 +316,8 @@
 					{ "binding": "CONTACT_MAIL_QUEUE", "queue": "al-ummah-now-contact-mail-stage" },
 					// Status page subscriptions: confirmation mail, incident fan-out and deliveries (lib/status-notify.ts), consumed below
 					{ "binding": "STATUS_NOTIFY_QUEUE", "queue": "al-ummah-now-status-notify-stage" },
+					// cost-monitor jobs (apps/cost-monitor src/jobs.ts): the Errors page "Run again" of a failed cost job (COST-1)
+					{ "binding": "COST_JOBS_QUEUE", "queue": "al-ummah-cost-jobs-stage" },
 					// Final mail failures → platform DLQ (processor stores them in dead_letters)
 					{ "binding": "ERRORS_DLQ", "queue": "al-ummah-now-dlq-stage" },
 					// Requests to auth: sends, answers and status reads, with retries (src/lib/authModerationQueue.ts)

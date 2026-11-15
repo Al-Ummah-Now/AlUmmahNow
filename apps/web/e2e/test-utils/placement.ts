@@ -64,6 +64,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/admin-web/e2e/24-audit-log.spec.ts': { placement: 'local', reason: 'Audit log page (#711) and names instead of ids (#745): own profile, video and audit rows via the stack control API, removed afterwards' },
   'apps/admin-web/e2e/25-app-config.spec.ts': { placement: 'local', reason: 'Remote config editor (#413): problems on their field, save + audit history, dry run of the drafts, conflict and load latest through admin-api and api-videos APP_CONFIG; global documents, so shared-state and restored afterwards' },
   'apps/admin-web/e2e/26-backfill.spec.ts': { placement: 'local', reason: 'R2 Backfill page renders (en/ar, light/dark, axe), refuses a bad scope client-side, primary Bunny library not retirable, moderators refused; read-only, creates no run' },
+  'apps/admin-web/e2e/27-costs.spec.ts': { placement: 'local', reason: 'Costs page against the local admin-api and costs D1: no-token banner, a key set (only last4 shown back), connection test, thresholds saved and alert opt-ins, en and ar; removed afterwards' },
   'apps/web/e2e/01-homepage.spec.ts': { placement: 'local', reason: 'anonymous home page layout and content' },
   'apps/web/e2e/02-video-player.spec.ts': { placement: 'local', reason: 'player loads a seed video; any playable HLS will do' },
   'apps/web/e2e/03-profile.spec.ts': { placement: 'local', reason: 'profile page and profile guard with stored sessions' },

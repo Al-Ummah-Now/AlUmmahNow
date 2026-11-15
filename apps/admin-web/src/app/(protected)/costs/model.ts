@@ -1,0 +1,260 @@
+/**
+ * Costs page model (COST-1): how old the data is, whether the collector has a token, the open
+ * alerts as readable lines, the connection states and test results, week-on-week deltas and the
+ * alert settings form with the same limits as admin-api (shared-types mergeCostAlertSettings).
+ * Pure: server and client safe.
+ */
+import { chartLocale, COST_ALERT_KINDS, RESEND_PLANS, type CostAlertKind, type CostAlertSettings, type CostCredentialView, type CostProvider, type ResendPlan } from '@al-ummah/shared-types';
+import type { MessageKey, TranslateParams } from '@/i18n/translate';
+import type { CostCollectorState } from '@/lib/api/costs-types';
+
+/** Data older than this reads as stale (the collector runs hourly). */
+export const STALE_AFTER_MS = 2 * 3_600_000;
+
+export function dataAge(dataAsOf: string | null, now: Date): { never: boolean; stale: boolean } {
+  if (!dataAsOf) return { never: true, stale: true };
+  const at = Date.parse(dataAsOf);
+  if (!Number.isFinite(at)) return { never: true, stale: true };
+  return { never: false, stale: now.getTime() - at > STALE_AFTER_MS };
+}
+
+export type TokenNotice = 'missing' | 'release' | null;
+
+/**
+ * The header's token notice: 'missing' when the collector has no token (or never reported one) and
+ * no Cloudflare connection is set; 'release' while it borrows the release token.
+ */
+export function tokenNotice(collector: Pick<CostCollectorState, 'tokenSource'>, connections: Pick<CostCredentialView, 'provider' | 'set'>[]): TokenNotice {
+  const cloudflareSet = connections.some((c) => c.provider === 'cloudflare' && c.set);
+  if ((collector.tokenSource === 'none' || collector.tokenSource === 'unknown') && !cloudflareSet) return 'missing';
+  if (collector.tokenSource === 'release' && !cloudflareSet) return 'release';
+  return null;
+}
+
+export type AlertLine =
+  | { type: 'budget'; month: string; percent: number }
+  | { type: 'projected'; month: string }
+  | { type: 'spike'; env: string; total: boolean; resource: string }
+  | { type: 'other'; key: string };
+
+/** ops-cost:budget:2026-11:80, ops-cost:projected:2026-11, ops-cost:spike:<env>:<resource|total>. */
+export function parseAlertKey(key: string): AlertLine {
+  const parts = key.split(':');
+  if (parts[0] !== 'ops-cost') return { type: 'other', key };
+  if (parts[1] === 'budget' && parts.length === 4 && /^\d{4}-\d{2}$/.test(parts[2]) && /^\d+$/.test(parts[3])) {
+    return { type: 'budget', month: parts[2], percent: Number(parts[3]) };
+  }
+  if (parts[1] === 'projected' && parts.length === 3 && /^\d{4}-\d{2}$/.test(parts[2])) return { type: 'projected', month: parts[2] };
+  if (parts[1] === 'spike' && parts.length >= 4) {
+    // A resource id may itself hold colons
+    const resource = parts.slice(3).join(':');
+    return { type: 'spike', env: parts[2], total: resource === 'total', resource };
+  }
+  return { type: 'other', key };
+}
+
+export type CredentialState = 'unset' | 'set' | 'unreadable';
+
+export function credentialState(view: Pick<CostCredentialView, 'set' | 'unreadable'> | undefined): CredentialState {
+  if (!view?.set) return 'unset';
+  return view.unreadable ? 'unreadable' : 'set';
+}
+
+/** Connection test codes admin-api stores (lib/costs.ts); each has a translated line. */
+export const TEST_CODES = [
+  'cf_ok',
+  'cf_partial',
+  'cf_no_analytics',
+  'cf_invalid',
+  'cf_inactive',
+  'bunny_ok',
+  'bunny_invalid',
+  'bunny_unavailable',
+  'bunny_not_account',
+  'resend_ok',
+  'resend_sending_only',
+  'resend_invalid',
+  'resend_unavailable',
+  'unreachable',
+  'unreadable',
+] as const;
+export type TestCode = (typeof TEST_CODES)[number];
+
+/** A test's code (or a stored "<code>: <english>" line); null for an unknown one. */
+export function testCodeOf(message: string | null | undefined): TestCode | null {
+  const code = (message ?? '').split(':')[0]?.trim();
+  return (TEST_CODES as readonly string[]).includes(code) ? (code as TestCode) : null;
+}
+
+/** Cloudflare listings the collector reads besides Account Analytics. */
+export const CF_LISTINGS = ['workers', 'd1', 'kv', 'r2', 'queues', 'containers'] as const;
+export type CfListing = (typeof CF_LISTINGS)[number];
+
+/** The listings a partial Cloudflare token cannot read, from the test's checks (just run or stored). */
+export function missingListings(checks: readonly { name: string; ok: boolean }[] | undefined): CfListing[] {
+  const known = (n: string): n is CfListing => (CF_LISTINGS as readonly string[]).includes(n);
+  return (checks ?? []).filter((c) => !c.ok && known(c.name)).map((c) => c.name as CfListing);
+}
+
+export type KeyProblem = 'short' | 'spaces' | 'resendPrefix';
+
+/** The same shape check admin-api runs (shared-types validateCostCredential), as a translatable code. */
+export function keyProblem(provider: CostProvider, value: string): KeyProblem | null {
+  const v = value.trim();
+  if (v.length < 20 || v.length > 400) return 'short';
+  if (/\s/.test(v)) return 'spaces';
+  if (provider === 'resend' && !v.startsWith('re_')) return 'resendPrefix';
+  return null;
+}
+
+export type Direction = 'up' | 'down' | 'flat';
+
+/** Last 7 days against the 7 before: the change, its share (null from nothing) and its direction. */
+export function weekDelta(last7: number, prev7: number): { change: number; share: number | null; direction: Direction } {
+  const change = Math.round((last7 - prev7) * 100) / 100;
+  const direction: Direction = Math.abs(change) < 0.005 ? 'flat' : change > 0 ? 'up' : 'down';
+  return { change, share: prev7 > 0 ? change / prev7 : null, direction };
+}
+
+/** Each product's share of the month so far (0..1), for the ranked bars. */
+export function shareOf(value: number, total: number): number {
+  return total > 0 ? Math.max(0, Math.min(1, value / total)) : 0;
+}
+
+// ---------------------------------------------------------------------------------------------
+// My alert emails
+// ---------------------------------------------------------------------------------------------
+
+/** Kinds in the canonical order, unknown ones dropped. */
+export function normalizeKinds(kinds: readonly string[]): CostAlertKind[] {
+  return COST_ALERT_KINDS.filter((k) => kinds.includes(k));
+}
+
+export function toggleKind(kinds: readonly CostAlertKind[], kind: CostAlertKind, on: boolean): CostAlertKind[] {
+  return normalizeKinds(on ? [...kinds, kind] : kinds.filter((k) => k !== kind));
+}
+
+// ---------------------------------------------------------------------------------------------
+// Alert settings form (super admins)
+// ---------------------------------------------------------------------------------------------
+
+export interface SettingsForm {
+  budgetUsd: string;
+  /** Percentages, comma separated: "50, 80, 100". */
+  budgetLevels: string;
+  projectedAlert: boolean;
+  spikeFactor: string;
+  spikeMinUsd: string;
+  spikeTotalMinUsd: string;
+  digestEnabled: boolean;
+  digestWeekday: number;
+  digestHour: number;
+  resendPlan: ResendPlan;
+}
+
+export type SettingsField = 'budgetUsd' | 'budgetLevels' | 'spikeFactor' | 'spikeMinUsd' | 'spikeTotalMinUsd';
+
+/** The limits mergeCostAlertSettings applies (budget levels in percent here). */
+export const SETTINGS_LIMITS = {
+  budgetUsd: { min: 1, max: 100_000 },
+  spikeFactor: { min: 1.1, max: 100 },
+  spikeMinUsd: { min: 0, max: 10_000 },
+  spikeTotalMinUsd: { min: 0, max: 10_000 },
+  levelPercent: { min: 1, max: 200 },
+  levelCount: { min: 1, max: 5 },
+} as const;
+
+const trimNumber = (v: number) => String(Math.round(v * 100) / 100);
+
+export function settingsToForm(s: CostAlertSettings): SettingsForm {
+  return {
+    budgetUsd: trimNumber(s.budgetUsd),
+    budgetLevels: s.budgetLevels.map((l) => trimNumber(l * 100)).join(', '),
+    projectedAlert: s.projectedAlert,
+    spikeFactor: trimNumber(s.spikeFactor),
+    spikeMinUsd: trimNumber(s.spikeMinUsd),
+    spikeTotalMinUsd: trimNumber(s.spikeTotalMinUsd),
+    digestEnabled: s.digestEnabled,
+    digestWeekday: s.digestWeekday,
+    digestHour: s.digestHour,
+    resendPlan: s.resendPlan in RESEND_PLANS ? s.resendPlan : 'free',
+  };
+}
+
+export interface FieldError {
+  key: MessageKey;
+  params?: TranslateParams;
+}
+
+/** Reads a number typed with Latin or Arabic-Indic digits (and an Arabic decimal comma). */
+export function readNumber(text: string): number | null {
+  const latin = text
+    .trim()
+    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
+    .replace('٫', '.');
+  if (!/^-?\d+(\.\d+)?$/.test(latin)) return null;
+  const n = Number(latin);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Percentages "50, 80, 100" (also "٥٠، ٨٠") → shares, or null when one is not a number. */
+export function readLevels(text: string): number[] | null {
+  const parts = text.split(/[,،\s]+/).filter(Boolean);
+  const out: number[] = [];
+  for (const p of parts) {
+    const n = readNumber(p.replace(/%$/, ''));
+    if (n === null) return null;
+    out.push(n);
+  }
+  return out;
+}
+
+/** Validates the form; the settings to send when every field is in range. */
+export function validateSettingsForm(form: SettingsForm): { errors: Partial<Record<SettingsField, FieldError>>; value: CostAlertSettings | null } {
+  const errors: Partial<Record<SettingsField, FieldError>> = {};
+  const num = (field: Exclude<SettingsField, 'budgetLevels'>): number => {
+    const { min, max } = SETTINGS_LIMITS[field];
+    const n = readNumber(form[field]);
+    if (n === null || n < min || n > max) errors[field] = { key: 'costs.thresholds.errors.range', params: { min: String(min), max: String(max) } };
+    return n ?? 0;
+  };
+  const budgetUsd = num('budgetUsd');
+  const spikeFactor = num('spikeFactor');
+  const spikeMinUsd = num('spikeMinUsd');
+  const spikeTotalMinUsd = num('spikeTotalMinUsd');
+  const levels = readLevels(form.budgetLevels);
+  const { levelPercent, levelCount } = SETTINGS_LIMITS;
+  if (levels === null) errors.budgetLevels = { key: 'costs.thresholds.errors.levelsNumbers' };
+  else if (levels.length < levelCount.min || levels.length > levelCount.max) errors.budgetLevels = { key: 'costs.thresholds.errors.levelsCount', params: { max: String(levelCount.max) } };
+  else if (levels.some((l) => l < levelPercent.min || l > levelPercent.max)) errors.budgetLevels = { key: 'costs.thresholds.errors.levelsRange', params: { min: String(levelPercent.min), max: String(levelPercent.max) } };
+  if (Object.keys(errors).length) return { errors, value: null };
+  const shares = [...new Set(levels!.map((l) => Math.round(l) / 100))].sort((a, b) => a - b);
+  return {
+    errors,
+    value: {
+      budgetUsd,
+      budgetLevels: shares,
+      projectedAlert: form.projectedAlert,
+      spikeFactor,
+      spikeMinUsd,
+      spikeTotalMinUsd,
+      digestEnabled: form.digestEnabled,
+      digestWeekday: Math.min(6, Math.max(0, Math.trunc(form.digestWeekday))),
+      digestHour: Math.min(23, Math.max(0, Math.trunc(form.digestHour))),
+      resendPlan: form.resendPlan,
+    },
+  };
+}
+
+/** Weekday names (0 = Sunday) in the locale. */
+export function weekdayNames(locale: string): string[] {
+  const f = new Intl.DateTimeFormat(chartLocale(locale), { weekday: 'long', timeZone: 'UTC' });
+  // 2026-11-01 is a Sunday
+  return Array.from({ length: 7 }, (_, i) => f.format(new Date(Date.UTC(2026, 10, 1 + i, 12))));
+}
+
+/** An hour of the day (0..23) as the locale writes it ("9 AM", "٩ ص"). */
+export function hourName(hour: number, locale: string): string {
+  return new Intl.DateTimeFormat(chartLocale(locale), { hour: 'numeric', timeZone: 'UTC' }).format(new Date(Date.UTC(2026, 10, 1, hour)));
+}

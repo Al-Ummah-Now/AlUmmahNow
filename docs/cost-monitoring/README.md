@@ -1,6 +1,14 @@
 # Cost monitoring: usage, cost and alerts in the admin
 
-**Status:** spec draft, revised with the owner's decisions of 2026-11-08 (§13). Nothing here is built yet.
+**Status:** spec revised with the owner's decisions of 2026-11-08 (§13). **Built (2026-11-14, COST-1):**
+- The collector `apps/cost-monitor` with crons that plan jobs onto a queue (retry, DLQ, failures flagged on the Errors page). It collects Workers, D1, R2, KV, Queues, Durable Objects, Containers (billing dataset), Bunny (account billing) and Resend (sent emails).
+- The videos admin **Costs** page (`/costs`):
+  - month to date against the budget, the forecast, products, environments and top movers;
+  - **Connections**: the super admin sets a read-only Cloudflare token and optional Bunny/Resend keys there. They are encrypted, shown back only as the last 4 characters with who set them and when, can be tested from the page, and every change is audited;
+  - editable thresholds, opt-in alert emails and a weekly digest.
+- Owner wording of 2026-11-14 that differs from this spec: a **weekly** digest (not daily); keys set **in the admin** (not only in the Secrets Store).
+
+Not built from this spec: the per-alert drilldown pages, quiet hours and in-app notifications (§6.3–6.4); the allowance and health alert kinds; invoice reconciliation (§2.2, Phase 4); per-channel cost (§12, decision O24 "later").
 **Scope:** only **Al Ummah Now's own** workers, buckets, databases, queues and namespaces in Cloudflare account `0e4b6e7f9faf280c3c9bf95995edc64f`, as listed in the attribution manifest (§3). Other Hamza Labs projects share the account (`cfcost-*`, zajel, tamma, maktaba, daleel, …). They are **never collected, stored or shown** (§3.2). Also in scope: Bunny.net (Stream: video storage, encoding and delivery) and Resend (email).
 **Surface:** `admin.alummahnow.net` (apps `admin-web` and `admin-api`, Super Admin and Admin only) and a new scheduled collector worker. Phase 5 adds per-channel cost in the creator studio (§12).
 

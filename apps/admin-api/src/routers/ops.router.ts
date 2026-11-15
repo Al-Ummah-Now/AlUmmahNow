@@ -23,9 +23,11 @@ import {
   findSpikes,
   fullDays,
   idleProjection,
+  loadCostSettings,
   loadExtraDays,
   loadResourceDays,
   projectMonth,
+  spikeRuleOf,
   sumByDay,
 } from '../lib/opsCost';
 
@@ -238,10 +240,11 @@ app.get('/costs', async (c) => {
   if (envFilter !== 'all' && !(OPS_ENVS as readonly string[]).includes(envFilter)) return bad(c, 'env must be all, production, stage or qa');
   const now = new Date();
   const since = costWindowStart(now);
-  const [resourceDays, extras] = await Promise.all([loadResourceDays(c.env, since), loadExtraDays(c.env, since)]);
-  const budget = budgetStatus({ cloudflare: sumByDay(resourceDays), ...extras }, now);
+  const [resourceDays, extras, settings] = await Promise.all([loadResourceDays(c.env, since), loadExtraDays(c.env, since), loadCostSettings(c.env.COSTS_DB)]);
+  // The budget and its levels are the ones set in Costs → Alert settings, same as the Costs page
+  const budget = budgetStatus({ cloudflare: sumByDay(resourceDays), ...extras }, now, settings.budgetUsd, settings.budgetLevels);
   const idle = idleProjection(resourceDays, extras, now);
-  const spikes = findSpikes(resourceDays, now);
+  const spikes = findSpikes(resourceDays, now, spikeRuleOf(settings));
 
   // Daily trend: 30 days, one value per env plus the non-Cloudflare sources
   const trendDays = [...fullDays(now, 29), now.toISOString().slice(0, 10)];

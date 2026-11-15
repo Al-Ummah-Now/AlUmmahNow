@@ -19,6 +19,10 @@ export interface AdminBindings {
   REPORTS_DB: D1Database;
   /** Platform analytics rollups written by apps/cost-monitor (docs/admin/LIVE_OPS.md); absent in local dev. */
   COSTS_DB?: D1Database;
+  /** cost-monitor's job queue (al-ummah-cost-jobs[-env]): the Errors page "Run again" of a cost job (COST-1). */
+  COST_JOBS_QUEUE?: Queue<unknown>;
+  /** Optional dedicated master secret for cost credentials; INTERNAL_API_KEY otherwise (shared-types cost-credentials.ts). */
+  COST_CREDENTIALS_KEY?: string | { get(): Promise<string> };
   /** Public status page's D1 (apps/status): incidents written here, checks read; absent in local dev. */
   STATUS_DB?: D1Database;
   /** Search index (api-videos owns it); the section index rebuild reads it (AA-4). */
