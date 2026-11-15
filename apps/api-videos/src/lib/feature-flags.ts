@@ -12,11 +12,12 @@
  * matches is left out (clients use their built-in default).
  */
 import { z } from 'zod';
+import { APP_CONFIG_MAX_RULES, APP_CONFIG_RULE_KEY } from '@al-ummah/shared-types';
 import { APPS, PLATFORMS, SEMVER, compareVersions } from './app-config';
 import type { AppName, Platform } from './app-config';
 import { readAppConfigDocument } from './app-config-store';
 
-const KEY = /^[a-z][a-z0-9_.-]{0,63}$/;
+const KEY = APP_CONFIG_RULE_KEY;
 
 export const FlagRuleSchema = z
 	.object({
@@ -39,10 +40,10 @@ export const FlagRuleSchema = z
 	});
 export type FlagRule = z.infer<typeof FlagRuleSchema>;
 
-export const RulesDocumentSchema = z.array(FlagRuleSchema).max(500);
+export const RulesDocumentSchema = z.array(FlagRuleSchema).max(APP_CONFIG_MAX_RULES);
 export const ConfigRulesDocumentSchema = z.array(
 	FlagRuleSchema.refine((r) => r.value !== undefined, { message: 'config rules need a value' }),
-).max(500);
+).max(APP_CONFIG_MAX_RULES);
 
 export interface FlagContext {
 	platform: Platform;

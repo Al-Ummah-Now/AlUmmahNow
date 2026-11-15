@@ -4,8 +4,10 @@
  * lives with each document's schema (lib/app-config.ts, lib/feature-flags.ts).
  */
 
-export const APP_CONFIG_KEYS = ['flags', 'config', 'versions'] as const;
-export type AppConfigKey = (typeof APP_CONFIG_KEYS)[number];
+import { APP_CONFIG_DOCUMENT_KEYS, type AppConfigDocumentKey } from '@al-ummah/shared-types';
+
+export const APP_CONFIG_KEYS = APP_CONFIG_DOCUMENT_KEYS;
+export type AppConfigKey = AppConfigDocumentKey;
 
 const ISOLATE_TTL_MS = 60_000;
 const caches = new WeakMap<KVNamespace, Map<string, { at: number; value: unknown }>>();

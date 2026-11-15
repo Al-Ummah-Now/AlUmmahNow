@@ -9,7 +9,7 @@ import ar from '../src/i18n/messages/ar';
 import { createTranslator } from '../src/i18n/translate';
 
 const moderator: NavAccess = { contact: false, processing: false, errors: false, manageUsers: false, staleUploads: false, media: false, ops: false };
-const admin: NavAccess = { contact: true, processing: true, errors: true, manageUsers: true, staleUploads: true, media: true, ops: true, audit: true };
+const admin: NavAccess = { contact: true, processing: true, errors: true, manageUsers: true, staleUploads: true, media: true, ops: true, audit: true, settings: true };
 const hrefs = (access: NavAccess) => visibleItems(access).map((i) => i.href);
 
 describe('nav model', () => {
@@ -21,7 +21,13 @@ describe('nav model', () => {
 
   it('hides from moderators exactly what the old nav hid', () => {
     const hidden = hrefs(admin).filter((h) => !hrefs(moderator).includes(h)).sort();
-    assert.deepEqual(hidden, ['/audit', '/contact', '/delivery', '/media-providers', '/errors', '/legacy-profiles', '/operations', '/processing', '/stale-uploads', '/status', '/abuse', '/web-vitals', '/video-formats', '/newsletter'].sort());
+    assert.deepEqual(hidden, ['/audit', '/contact', '/delivery', '/media-providers', '/errors', '/legacy-profiles', '/operations', '/processing', '/stale-uploads', '/status', '/abuse', '/web-vitals', '/video-formats', '/newsletter', '/app-config'].sort());
+  });
+
+  it('shows Remote config only with settings:manage (#413)', () => {
+    assert.ok(hrefs(admin).includes('/app-config'));
+    assert.ok(!hrefs({ ...admin, settings: false }).includes('/app-config'));
+    assert.ok(!hrefs(moderator).includes('/app-config'));
   });
 
   it('shows Errors to whoever has errors:read or videos:processing', () => {

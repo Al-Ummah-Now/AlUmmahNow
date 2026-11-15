@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildApp } from './helpers';
 import { AppConfigGet } from '../src/endpoints/app-config/appConfigGet';
-import { AppConfigDocumentGet, AppConfigDocumentPut } from '../src/endpoints/app-config/appConfigAdmin';
+import { AppConfigDocumentGet, AppConfigDocumentPut, AppConfigEvaluate } from '../src/endpoints/app-config/appConfigAdmin';
 import { readAppConfigDocument } from '../src/lib/app-config-store';
 import {
 	ConfigRulesDocumentSchema,
@@ -193,5 +193,50 @@ describe('/internal/app-config/:key', () => {
 	it('503 when the namespace is not bound', async () => {
 		const res = await admin().request('/internal/app-config/flags', {}, {});
 		assert.equal(res.status, 503);
+	});
+});
+
+describe('POST /internal/app-config/evaluate (admin dry run)', () => {
+	const json = { 'Content-Type': 'application/json' };
+	const admin = () => buildApp((r) => r.post('/internal/app-config/evaluate', AppConfigEvaluate));
+	const run = (body: unknown, kv = new MemoryKV()) => admin().request('/internal/app-config/evaluate', { method: 'POST', headers: json, body: JSON.stringify(body) }, { APP_CONFIG: kv });
+	const context = { platform: 'ios', app: 'viewer', version: '1.4.0', locale: 'ar-EG' };
+
+	it('evaluates the drafts as the app would see them, without writing anything', async () => {
+		const kv = new MemoryKV({ flags: [{ key: 'stored', enabled: true }] });
+		const res = await run(
+			{
+				context,
+				documents: {
+					flags: [{ key: 'downloads', enabled: true, platforms: ['ios'] }, { key: 'arabic_ui', enabled: true, locales: ['ar'] }, { key: 'tv_only', enabled: true, platforms: ['tvos'] }],
+					config: [{ key: 'max_quality', enabled: true, value: '1080p' }],
+					versions: { 'viewer/ios': { minimumVersion: '1.5.0', latestVersion: '1.6.0' } },
+				},
+			},
+			kv,
+		);
+		assert.equal(res.status, 200);
+		const { result }: any = await res.json();
+		assert.deepEqual(result.flags, { downloads: true, arabic_ui: true, tv_only: false });
+		assert.deepEqual(result.config, { max_quality: '1080p' });
+		assert.equal(result.update.status, 'required');
+		assert.deepEqual(kv.values.flags, [{ key: 'stored', enabled: true }], 'a dry run never writes');
+	});
+
+	it('a key without a draft uses the stored document', async () => {
+		const res = await run({ context }, new MemoryKV({ flags: [{ key: 'stored', enabled: true }] }));
+		assert.deepEqual(((await res.json()) as any).result.flags, { stored: true });
+	});
+
+	it('an invalid draft is refused with its problems, naming the key', async () => {
+		const res = await run({ context, documents: { config: [{ key: 'no_value', enabled: true }] } });
+		assert.equal(res.status, 400);
+		const body: any = await res.json();
+		assert.equal(body.key, 'config');
+		assert.ok(Array.isArray(body.problems) && body.problems.length > 0);
+	});
+
+	it('an invalid context is refused', async () => {
+		assert.equal((await run({ context: { ...context, version: 'one' } })).status, 400);
 	});
 });

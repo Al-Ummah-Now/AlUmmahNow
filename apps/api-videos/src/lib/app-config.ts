@@ -8,26 +8,20 @@
  */
 import { z } from 'zod';
 import { CURRENT_API_VERSION, SUPPORTED_API_VERSIONS } from './api-version';
+import { APP_CONFIG_APPS, APP_CONFIG_PLATFORMS, APP_CONFIG_SEMVER, APP_CONFIG_VERSIONS_KEY, compareAppVersions } from '@al-ummah/shared-types';
+import type { AppConfigApp, AppConfigPlatform } from '@al-ummah/shared-types';
 import { readAppConfigDocument } from './app-config-store';
 
-export const PLATFORMS = ['ios', 'ipados', 'tvos', 'macos', 'android', 'androidtv', 'firetv', 'windows', 'linux', 'tizen', 'webos', 'web'] as const;
-export const APPS = ['viewer', 'studio', 'kids'] as const;
-export type Platform = (typeof PLATFORMS)[number];
-export type AppName = (typeof APPS)[number];
+// One list of platforms and apps, one version format, shared with the videos admin's editor (#413)
+export const PLATFORMS = APP_CONFIG_PLATFORMS;
+export const APPS = APP_CONFIG_APPS;
+export type Platform = AppConfigPlatform;
+export type AppName = AppConfigApp;
 
-export const SEMVER = /^(\d{1,6})\.(\d{1,6})\.(\d{1,6})(?:[-+][0-9A-Za-z.-]+)?$/;
+export const SEMVER = APP_CONFIG_SEMVER;
 
 /** -1 / 0 / 1. Pre-release and build suffixes are ignored (1.2.0-beta counts as 1.2.0). */
-export function compareVersions(a: string, b: string): number {
-	const pa = SEMVER.exec(a);
-	const pb = SEMVER.exec(b);
-	if (!pa || !pb) throw new Error(`invalid version: ${!pa ? a : b}`);
-	for (let i = 1; i <= 3; i++) {
-		const d = Number(pa[i]) - Number(pb[i]);
-		if (d !== 0) return d < 0 ? -1 : 1;
-	}
-	return 0;
-}
+export const compareVersions = compareAppVersions;
 
 export const VersionPolicySchema = z.object({
 	minimumVersion: z.string().regex(SEMVER),
@@ -37,7 +31,7 @@ export const VersionPolicySchema = z.object({
 export type VersionPolicy = z.infer<typeof VersionPolicySchema>;
 
 /** KV `versions` document: `{ "<app>/<platform>": VersionPolicy }`, plus optional `"<app>/*"` fallbacks. */
-export const VersionsDocumentSchema = z.record(z.string().regex(/^[a-z]+\/([a-z]+|\*)$/), VersionPolicySchema);
+export const VersionsDocumentSchema = z.record(z.string().regex(APP_CONFIG_VERSIONS_KEY), VersionPolicySchema);
 export type VersionsDocument = z.infer<typeof VersionsDocumentSchema>;
 
 export const DEFAULT_POLICY: VersionPolicy = { minimumVersion: '0.0.0' };

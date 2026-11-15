@@ -33,6 +33,7 @@ import youtubeImportRouter from './routers/youtubeImport.router';
 import notificationSettingsRouter from './routers/notificationSettings.router';
 import socialRouter from './routers/social.router';
 import videoCategoriesRouter from './routers/videoCategories.router';
+import appConfigRouter from './routers/appConfig.router';
 import opsRouter from './routers/ops.router';
 import abuseRouter from './routers/abuse.router';
 import vitalsRouter from './routers/vitals.router';
@@ -256,6 +257,7 @@ app.route('/api/notification-settings', notificationSettingsRouter);
 app.route('/api/social', socialRouter);
 // Video categories (admin-managed list in the search D1): videos:categories to change, audited
 app.route('/api/video-categories', videoCategoriesRouter);
+app.route('/api/app-config', appConfigRouter);
 
 // Platform analytics (Operations page, docs/admin/LIVE_OPS.md): reads apps/cost-monitor's rollups; ops:read / ops:manage
 app.route('/api/ops', opsRouter);

@@ -146,3 +146,4 @@ export * from './takeout-zip';
 export * from './social';
 // R2 transcode troubleshooting: reason codes, per-job view, stall rules, log scrubbing (videos admin → Delivery)
 export * from './media-troubleshoot';
+export * from './app-config';
