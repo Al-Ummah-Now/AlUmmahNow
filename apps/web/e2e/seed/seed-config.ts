@@ -16,6 +16,8 @@ export interface SeedAccount {
   bio: string;
   /** D1 rbac role id to assign, if any */
   rbacRoleId?: 'role_super_admin' | 'role_admin' | 'role_moderator';
+  /** Public profile (Story 29.5): the @handle and what /u/@handle shows */
+  publicProfile?: { handle: string; showSubscriptions: boolean; showPlaylists: boolean; showLikes: boolean };
 }
 
 /**
@@ -57,6 +59,7 @@ export const SEED_ACCOUNTS: readonly SeedAccount[] = [
     displayName: 'QA Creator',
     displayNameAr: 'منشئ محتوى الاختبار',
     bio: 'Seeded QA content creator account.',
+    publicProfile: { handle: 'qa-creator-profile', showSubscriptions: false, showPlaylists: true, showLikes: false },
   },
   {
     key: 'viewer',
@@ -64,6 +67,7 @@ export const SEED_ACCOUNTS: readonly SeedAccount[] = [
     displayName: 'QA Viewer',
     displayNameAr: 'مشاهد الاختبار',
     bio: 'Seeded QA viewer account.',
+    publicProfile: { handle: 'qa-viewer-profile', showSubscriptions: true, showPlaylists: true, showLikes: true },
   },
   // Dedicated to ONE spec each, used by nothing else: the SSO journeys of
   // AlUmmahNowUI and AlUmmahNowCMS end with "sign out -> signed out of every

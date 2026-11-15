@@ -258,6 +258,13 @@ export const Profile = z.object({
     channels: z.array(Str()).default([]), // Array of channel IDs
     watchHistory: z.array(WatchHistoryEntry).default([]), // Watch history tracking
     subscribedTo: z.array(Str()).default([]), // Channel IDs user is subscribed to (reverse index)
+    // Story 29.5: public profile at /{locale}/u/@{handle} (lib/userHandles.ts). No handle, no public page
+    handle: Str().optional(),
+    publicProfile: z.object({
+        showSubscriptions: z.boolean().optional(),
+        showPlaylists: z.boolean().optional(),
+        showLikes: z.boolean().optional(),
+    }).optional(),
 });
 
 export const Channel = z.object({

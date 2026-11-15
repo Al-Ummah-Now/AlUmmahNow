@@ -14,7 +14,7 @@ import Link from '@/components/common/AppLink';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
-import type { AppTranslations } from '@al-ummah/shared-types';
+import { publicProfileTranslations, type AppTranslations } from '@al-ummah/shared-types';
 
 export interface Crumb {
   label: string;
@@ -46,6 +46,7 @@ export function settingsTrail(pathname: string, lang: string, t: AppTranslations
   if (path === `${settings}/channel-invites`) return [root, { label: t.channelRoles.invitationsTitle, href: path }];
   if (path === `${settings}/tier`) return [root, { label: t.upgrade.settingsTier.title, href: path }];
   if (path === `${settings}/billing`) return [root, { label: t.billing.settings.title, href: path }];
+  if (path === `${settings}/public-profile`) return [root, { label: publicProfileTranslations(lang).settings.title, href: path }];
   return null;
 }
 

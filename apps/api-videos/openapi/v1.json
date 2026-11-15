@@ -26068,6 +26068,30 @@
                             "channelsCount": {
                               "type": "number"
                             },
+                            "handle": {
+                              "type": "string",
+                              "description": "The user's @handle (Story 29.5); the public profile is /{locale}/u/@{handle}. Absent: no public profile"
+                            },
+                            "publicProfile": {
+                              "type": "object",
+                              "properties": {
+                                "showSubscriptions": {
+                                  "type": "boolean"
+                                },
+                                "showPlaylists": {
+                                  "type": "boolean"
+                                },
+                                "showLikes": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "showSubscriptions",
+                                "showPlaylists",
+                                "showLikes"
+                              ],
+                              "description": "What the public profile shows, defaults filled in (subscriptions and likes off, public playlists on)"
+                            },
                             "channels": {
                               "type": "array",
                               "items": {
@@ -26100,7 +26124,8 @@
                             "resolvedDisplayName",
                             "dateCreated",
                             "dateModified",
-                            "channelsCount"
+                            "channelsCount",
+                            "publicProfile"
                           ]
                         }
                       },
@@ -26343,6 +26368,30 @@
                             "channelsCount": {
                               "type": "number"
                             },
+                            "handle": {
+                              "type": "string",
+                              "description": "The user's @handle (Story 29.5); the public profile is /{locale}/u/@{handle}. Absent: no public profile"
+                            },
+                            "publicProfile": {
+                              "type": "object",
+                              "properties": {
+                                "showSubscriptions": {
+                                  "type": "boolean"
+                                },
+                                "showPlaylists": {
+                                  "type": "boolean"
+                                },
+                                "showLikes": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "showSubscriptions",
+                                "showPlaylists",
+                                "showLikes"
+                              ],
+                              "description": "What the public profile shows, defaults filled in (subscriptions and likes off, public playlists on)"
+                            },
                             "channels": {
                               "type": "array",
                               "items": {
@@ -26375,7 +26424,8 @@
                             "resolvedDisplayName",
                             "dateCreated",
                             "dateModified",
-                            "channelsCount"
+                            "channelsCount",
+                            "publicProfile"
                           ]
                         }
                       },
@@ -26514,6 +26564,66 @@
                   },
                   "required": [
                     "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profile/handle-availability": {
+      "get": {
+        "tags": [
+          "Profiles"
+        ],
+        "summary": "Whether you can take this @handle for your profile",
+        "operationId": "get_UserHandleAvailability",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Handle to check (with or without @)"
+            },
+            "required": true,
+            "description": "Handle to check (with or without @)",
+            "name": "handle",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Availability",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "available": {
+                          "type": "boolean"
+                        },
+                        "handle": {
+                          "type": "string"
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "available",
+                        "handle"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "result"
                   ]
                 }
               }
@@ -26763,6 +26873,289 @@
                       "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
                     }
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profile/public": {
+      "put": {
+        "tags": [
+          "Profiles"
+        ],
+        "summary": "Set your @handle and what your public profile shows",
+        "operationId": "put_PublicProfileSettingsUpdate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "handle": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 64,
+                    "description": "Claim or change the @handle; null or \"\" removes it (and the public profile with it)"
+                  },
+                  "showSubscriptions": {
+                    "type": "boolean",
+                    "description": "Show the channels you subscribe to"
+                  },
+                  "showPlaylists": {
+                    "type": "boolean",
+                    "description": "Show your public playlists"
+                  },
+                  "showLikes": {
+                    "type": "boolean",
+                    "description": "Show the public videos you liked"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The updated profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "profile": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "email": {
+                              "type": "string",
+                              "format": "email"
+                            },
+                            "userName": {
+                              "type": "string"
+                            },
+                            "firstName": {
+                              "type": "string"
+                            },
+                            "firstNameLocalized": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              },
+                              "description": "Multi-language first names"
+                            },
+                            "lastName": {
+                              "type": "string"
+                            },
+                            "lastNameLocalized": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              },
+                              "description": "Multi-language last names"
+                            },
+                            "displayName": {
+                              "type": "string",
+                              "description": "The display name the user typed (may be empty); use resolvedDisplayName to show the user"
+                            },
+                            "displayNameLocalized": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              },
+                              "description": "Multi-language display names"
+                            },
+                            "resolvedDisplayName": {
+                              "type": "string",
+                              "description": "The name to show for the user (resolveDisplayName in @al-ummah/shared-types: display name in the request language (?lang), plain display name, first + last). Empty when the profile has no name; never the email"
+                            },
+                            "bio": {
+                              "type": "string"
+                            },
+                            "bioLocalized": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              },
+                              "description": "Multi-language bios"
+                            },
+                            "avatarUrl": {
+                              "type": "string"
+                            },
+                            "coverUrl": {
+                              "type": "string"
+                            },
+                            "timezone": {
+                              "type": "string",
+                              "description": "User timezone (IANA format, e.g., 'America/New_York', 'Asia/Dubai')"
+                            },
+                            "dateCreated": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "dateModified": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "channelsCount": {
+                              "type": "number"
+                            },
+                            "handle": {
+                              "type": "string",
+                              "description": "The user's @handle (Story 29.5); the public profile is /{locale}/u/@{handle}. Absent: no public profile"
+                            },
+                            "publicProfile": {
+                              "type": "object",
+                              "properties": {
+                                "showSubscriptions": {
+                                  "type": "boolean"
+                                },
+                                "showPlaylists": {
+                                  "type": "boolean"
+                                },
+                                "showLikes": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "showSubscriptions",
+                                "showPlaylists",
+                                "showLikes"
+                              ],
+                              "description": "What the public profile shows, defaults filled in (subscriptions and likes off, public playlists on)"
+                            },
+                            "channels": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "isMain": {
+                                    "type": "boolean"
+                                  },
+                                  "avatarUrl": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "isMain"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "email",
+                            "resolvedDisplayName",
+                            "dateCreated",
+                            "dateModified",
+                            "channelsCount",
+                            "publicProfile"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "profile"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "result"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Handle format problem: too_short, too_long, invalid_characters or reserved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Profile not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Handle taken",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
                 }
               }
             }
@@ -27207,6 +27600,10 @@
                               },
                               "channelsCount": {
                                 "type": "number"
+                              },
+                              "handle": {
+                                "type": "string",
+                                "description": "The user's @handle: their public profile is /{locale}/u/@{handle}"
                               }
                             },
                             "required": [
@@ -27482,6 +27879,30 @@
                             "channelsCount": {
                               "type": "number"
                             },
+                            "handle": {
+                              "type": "string",
+                              "description": "The user's @handle (Story 29.5); the public profile is /{locale}/u/@{handle}. Absent: no public profile"
+                            },
+                            "publicProfile": {
+                              "type": "object",
+                              "properties": {
+                                "showSubscriptions": {
+                                  "type": "boolean"
+                                },
+                                "showPlaylists": {
+                                  "type": "boolean"
+                                },
+                                "showLikes": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "showSubscriptions",
+                                "showPlaylists",
+                                "showLikes"
+                              ],
+                              "description": "What the public profile shows, defaults filled in (subscriptions and likes off, public playlists on)"
+                            },
                             "channels": {
                               "type": "array",
                               "items": {
@@ -27514,7 +27935,8 @@
                             "resolvedDisplayName",
                             "dateCreated",
                             "dateModified",
-                            "channelsCount"
+                            "channelsCount",
+                            "publicProfile"
                           ]
                         }
                       },
@@ -28086,6 +28508,10 @@
                             },
                             "channelsCount": {
                               "type": "number"
+                            },
+                            "handle": {
+                              "type": "string",
+                              "description": "The user's @handle: their public profile is /{locale}/u/@{handle}"
                             }
                           },
                           "required": [
@@ -32497,6 +32923,392 @@
                   },
                   "required": [
                     "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/by-handle/{handle}": {
+      "get": {
+        "tags": [
+          "Profiles"
+        ],
+        "summary": "A user's public profile by @handle",
+        "operationId": "get_UserByHandleFetch",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "The user's @handle (with or without the @)"
+            },
+            "required": true,
+            "description": "The user's @handle (with or without the @)",
+            "name": "handle",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 16,
+              "description": "Language to resolve user names in (en or ar); other values are ignored"
+            },
+            "required": false,
+            "description": "Language to resolve user names in (en or ar); other values are ignored",
+            "name": "lang",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The public profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "profile": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "handle": {
+                              "type": "string"
+                            },
+                            "displayName": {
+                              "type": "string"
+                            },
+                            "resolvedDisplayName": {
+                              "type": "string"
+                            },
+                            "displayNameLocalized": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              }
+                            },
+                            "bio": {
+                              "type": "string"
+                            },
+                            "bioLocalized": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
+                              }
+                            },
+                            "avatarUrl": {
+                              "type": "string"
+                            },
+                            "coverUrl": {
+                              "type": "string"
+                            },
+                            "dateCreated": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "channels": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "nameLocalized": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "handle": {
+                                    "type": "string"
+                                  },
+                                  "avatarUrl": {
+                                    "type": "string"
+                                  },
+                                  "isVerified": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name"
+                                ]
+                              },
+                              "description": "The user's public channels"
+                            },
+                            "sections": {
+                              "type": "object",
+                              "properties": {
+                                "subscriptions": {
+                                  "type": "boolean"
+                                },
+                                "playlists": {
+                                  "type": "boolean"
+                                },
+                                "likes": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "subscriptions",
+                                "playlists",
+                                "likes"
+                              ],
+                              "description": "Which lists the owner shows (each has its own endpoint, 404 when hidden)"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "handle",
+                            "resolvedDisplayName",
+                            "dateCreated",
+                            "channels",
+                            "sections"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "profile"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "result"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No public profile with this handle, or the list is hidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/by-handle/{handle}/likes": {
+      "get": {
+        "tags": [
+          "Profiles"
+        ],
+        "summary": "Public videos a user liked (when they show them)",
+        "operationId": "get_UserLikesPublicList",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "The user's @handle (with or without the @)"
+            },
+            "required": true,
+            "description": "The user's @handle (with or without the @)",
+            "name": "handle",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 24
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "nextCursor from the previous page"
+            },
+            "required": false,
+            "description": "nextCursor from the previous page",
+            "name": "cursor",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{ items, nextCursor } newest like first"
+          },
+          "404": {
+            "description": "No public profile with this handle, or the list is hidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/by-handle/{handle}/playlists": {
+      "get": {
+        "tags": [
+          "Profiles"
+        ],
+        "summary": "A user's public playlists (when they show them)",
+        "operationId": "get_UserPlaylistsPublicList",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "The user's @handle (with or without the @)"
+            },
+            "required": true,
+            "description": "The user's @handle (with or without the @)",
+            "name": "handle",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{ items } newest first, up to 100"
+          },
+          "404": {
+            "description": "No public profile with this handle, or the list is hidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/by-handle/{handle}/subscriptions": {
+      "get": {
+        "tags": [
+          "Profiles"
+        ],
+        "summary": "Public channels a user subscribes to (when they show them)",
+        "operationId": "get_UserSubscriptionsPublicList",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "The user's @handle (with or without the @)"
+            },
+            "required": true,
+            "description": "The user's @handle (with or without the @)",
+            "name": "handle",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 1
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 48,
+              "default": 24
+            },
+            "required": false,
+            "name": "pageSize",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{ items, page, hasMore }"
+          },
+          "404": {
+            "description": "No public profile with this handle, or the list is hidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
                     "error"
                   ]
                 }

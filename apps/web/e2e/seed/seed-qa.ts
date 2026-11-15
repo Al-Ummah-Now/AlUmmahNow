@@ -314,6 +314,33 @@ async function ensureProfiles(sessions: Sessions): Promise<void> {
   log.groupEnd();
 }
 
+/** Public profiles (Story 29.5): the accounts with `publicProfile` get their @handle and toggles. */
+async function ensurePublicProfiles(sessions: Sessions): Promise<void> {
+  log.group('Public profiles');
+  for (const account of SEED_ACCOUNTS) {
+    const session = sessions.get(account.key);
+    if (!session || !account.publicProfile) continue;
+    const want = account.publicProfile;
+    const res = await api.get<{ result?: { profile?: { handle?: string; publicProfile?: Record<string, boolean> } } }>('/api/profile', { token: session.accessToken, allowStatus: [404] });
+    const current = res.status === 404 ? undefined : res.data?.result?.profile;
+    const same = current?.handle === want.handle
+      && current?.publicProfile?.showSubscriptions === want.showSubscriptions
+      && current?.publicProfile?.showPlaylists === want.showPlaylists
+      && current?.publicProfile?.showLikes === want.showLikes;
+    if (same) {
+      record('public-profile', `${account.email} @${want.handle}`, 'exists');
+      continue;
+    }
+    if (MODE === 'check') {
+      record('public-profile', `${account.email} @${want.handle}`, 'missing');
+      continue;
+    }
+    await api.put('/api/profile/public', want, { token: session.accessToken });
+    record('public-profile', `${account.email} @${want.handle}`, current?.handle ? 'updated' : 'created');
+  }
+  log.groupEnd();
+}
+
 function profileInput(account: SeedAccount) {
   return {
     email: account.email,
@@ -793,6 +820,7 @@ async function main(): Promise<void> {
   }
 
   await ensureProfiles(sessions);
+  await ensurePublicProfiles(sessions);
 
   const creator = sessions.get('creator');
   const viewer = sessions.get('viewer');

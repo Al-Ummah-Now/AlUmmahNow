@@ -236,7 +236,15 @@ export async function eraseRunUserData(
 			const profiles = asBucket(env.profiles);
 			const stored = await profiles.get(userId);
 			if (stored) {
-				if (hooks.onProfileDeleted) await hooks.onProfileDeleted(userId, await stored.json().catch(() => null));
+				const storedProfile = await stored.json<Json>().catch(() => null);
+				// Free the user's @handle (public profile, lib/userHandles.ts) if the index entry is theirs
+				if (storedProfile && typeof storedProfile.handle === 'string' && storedProfile.handle) {
+					const tabs = asBucket(env.channel_tabs);
+					const handleKey = `channel-handles/${storedProfile.handle.toLowerCase()}`;
+					const entry = await readJson<Json>(tabs, handleKey, budget);
+					if (entry?.kind === 'user' && entry.userId === userId && !entry.channelId) await deleteKeys(tabs, [handleKey], budget);
+				}
+				if (hooks.onProfileDeleted) await hooks.onProfileDeleted(userId, storedProfile);
 				bump('profile', await deleteKeys(profiles, [userId], budget));
 			}
 			// Who uploaded which image (lib/csam/imageOwners.ts); CSAM evidence is never erased here

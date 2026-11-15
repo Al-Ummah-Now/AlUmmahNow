@@ -199,7 +199,8 @@ export async function checkHandleAvailability(
 	const problem = validateHandleFormat(normalized, options);
 	if (problem) return { available: false, handle: normalized, reason: problem };
 	const [entry, history] = await Promise.all([readHandleEntry(bucket, normalized), readHandleHistory(bucket, normalized)]);
-	if (entry && entry.channelId !== channelId) return { available: false, handle: normalized, reason: 'taken' };
+	// An entry without a channelId is a user's handle (lib/userHandles.ts): taken for every channel
+	if (entry && (!entry.channelId || entry.channelId !== channelId)) return { available: false, handle: normalized, reason: 'taken' };
 	// Recently replaced by another channel: held for it (its old links still redirect)
 	if (!entry && isHandleOnHold(history, channelId)) return { available: false, handle: normalized, reason: 'taken' };
 	return { available: true, handle: normalized };
