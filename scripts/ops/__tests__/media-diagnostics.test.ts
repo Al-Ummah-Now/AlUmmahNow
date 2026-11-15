@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { namesFor, percentile, SEARCH_D1, SLOWEST_STARTS_SQL, START_TIMES_SQL, startTimeSummary } from '../media-diagnostics.ts';
+import { COST_INPUT_SQL, namesFor, percentile, SEARCH_D1, SLOWEST_STARTS_SQL, START_TIMES_SQL, startTimeSummary } from '../media-diagnostics.ts';
 import { readFileSync } from 'node:fs';
 
 test('production names are the al-ummah media resources only', () => {
@@ -44,4 +44,11 @@ test('start times read only: one SELECT, first attempts, and the D1 ids are the 
 	const prod = readFileSync(new URL('wrangler.jsonc', root), 'utf8');
 	assert.ok(prod.includes(SEARCH_D1.production) && prod.includes(SEARCH_D1.stage));
 	assert.ok(readFileSync(new URL('wrangler.qa.jsonc', root), 'utf8').includes(SEARCH_D1.qa));
+});
+
+test('cost inputs are read-only aggregates without ids', () => {
+	for (const sql of Object.values(COST_INPUT_SQL)) {
+		assert.match(sql, /^SELECT /);
+		assert.doesNotMatch(sql, /\b(INSERT|UPDATE|DELETE|DROP|ALTER|video_id|job_id|user)/i);
+	}
 });

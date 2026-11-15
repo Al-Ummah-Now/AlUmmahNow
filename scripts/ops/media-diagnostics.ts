@@ -10,6 +10,8 @@
  *  - the Transcoder container application and its instances (state, as Cloudflare reports it)
  *  - warn/error log lines of the media Worker, api-videos and admin-api over the window (Workers
  *    Observability query; these Workers log warn/error only)
+ *  - the Delivery page's cost inputs over 30 days: R2 jobs by status, retries and length, the
+ *    collector's daily cost metrics per provider, viewer-hours per provider (read-only aggregates)
  *  - transcode start times over the last 30 days: queued → the container running FFmpeg, p50/p95
  *    (a read-only SELECT of api-videos' own media_jobs timestamps in the search D1), then the three
  *    slowest starts with their video and job ids, times, attempts and error, and the media Worker's
@@ -263,6 +265,35 @@ async function startTimes(env: EnvName): Promise<void> {
 	}
 }
 
+/**
+ * The Delivery page's cost inputs over 30 days (read-only aggregates, the same tables its /summary
+ * reads): R2 jobs (seconds of video, container seconds, bytes) split by status, attempts and length,
+ * the collector's daily cost metrics per provider, and viewer-hours per provider from the players.
+ */
+export const COST_INPUT_SQL = {
+	jobs: `SELECT status, attempts > 1 AS retried, duration_seconds < 60 AS short, COUNT(*) AS n, SUM(duration_seconds) AS video_s,
+ SUM(container_seconds) AS container_s, SUM(bytes) AS bytes FROM media_jobs WHERE queued_at >= datetime('now', '-30 days')
+ GROUP BY status, retried, short ORDER BY status, retried, short`,
+	costs: `SELECT provider, metric, COUNT(*) AS days, SUM(value) AS total FROM delivery_cost_daily
+ WHERE day >= date('now', '-30 days') GROUP BY provider, metric ORDER BY provider, metric`,
+	viewers: `SELECT provider, SUM(sessions) AS sessions, SUM(watch_ms) / 3600000.0 AS viewer_hours, SUM(kbps_watch_s) AS kbps_watch_s,
+ SUM(watch_ms) AS watch_ms FROM playback_qoe_daily WHERE day >= date('now', '-30 days') GROUP BY provider`,
+} as const;
+
+async function costInputs(env: EnvName): Promise<void> {
+	p('## Delivery cost inputs (30 days)');
+	for (const [name, sql] of Object.entries(COST_INPUT_SQL)) {
+		const r = await post(`/accounts/${account}/d1/database/${SEARCH_D1[env]}/query`, { sql });
+		p(`### ${name}`);
+		if (!r.ok) {
+			p(`- not readable: ${errs(r)}`);
+			continue;
+		}
+		for (const row of r.body?.result?.[0]?.results ?? []) p(`- ${JSON.stringify(row)}`);
+	}
+	p();
+}
+
 async function main(): Promise<void> {
 	if (!token || !account) throw new Error('CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are required');
 	const env = arg('env', 'production') as EnvName;
@@ -278,6 +309,7 @@ async function main(): Promise<void> {
 	await queues(names, since, until);
 	await containers(names);
 	await startTimes(env);
+	await costInputs(env);
 	for (const s of [names.media, names.videos, names.admin]) await logs(s, since, until, search);
 	// Where the transcoder container's own output (stdout/stderr, exits) is: services and keys that mention it
 	await discover(names, since, until);
