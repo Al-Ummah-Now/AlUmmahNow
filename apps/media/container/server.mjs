@@ -12,6 +12,7 @@
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import { randomInt } from 'node:crypto';
+import { clearTimeout, setTimeout } from 'node:timers';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
@@ -137,7 +138,8 @@ function runBuffer(cmd, args, timeoutMs = 120_000) {
 		});
 		p.on('close', (code) => {
 			clearTimeout(timer);
-			code === 0 ? resolve(Buffer.concat(chunks)) : reject(Object.assign(new Error(`${cmd} exited ${code}`), { exitCode: code }));
+			if (code === 0) resolve(Buffer.concat(chunks));
+			else reject(Object.assign(new Error(`${cmd} exited ${code}`), { exitCode: code }));
 		});
 	});
 }
