@@ -2,7 +2,7 @@
  * Scheduling and editing community posts (Story 29.4): create with a time inside the scheduled-video
  * window (5 minutes to a year ahead), move a scheduled post, publish it now (the cron's go-live step:
  * index first, CommunityPostCreated for the subscriber notification), never schedule a published post,
- * and edited text is sanitised like new text. `posts.scheduled` refuses with 402 when a plan says no.
+ * and edited text is sanitised like new text; only a channel role with post.manage edits. `posts.scheduled` refuses with 402 when a plan says no.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -158,8 +158,11 @@ describe('editing a post', () => {
 		assert.equal(e.community_posts.read(`posts/${CH}/p1.json`).content, 'Hi <b>there</b> ');
 	});
 
-	it('only the owning channel edits', async () => {
-		const res = await owner.request(`/api/channels/${CH}/posts/p1`, { method: 'PUT', headers: { 'Content-Type': 'application/json', channelId: 'other' }, body: JSON.stringify({ content: 'x' }) }, env());
+	it('a user with no role on the channel cannot edit', async () => {
+		const stranger = buildApp(routes, { userId: 'stranger' });
+		const e = env();
+		const res = await stranger.request(`/api/channels/${CH}/posts/p1`, { method: 'PUT', headers: { 'Content-Type': 'application/json', channelId: 'other' }, body: JSON.stringify({ content: 'x' }) }, e);
 		assert.equal(res.status, 403);
+		assert.equal(e.community_posts.read(`posts/${CH}/p1.json`).content, 'Original');
 	});
 });
