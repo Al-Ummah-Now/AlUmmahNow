@@ -110,24 +110,33 @@ the invite stay with that user id until the purge. The revoke dialog says so:
 transfer them first if they should go to someone else.
 
 At the purge (#716, `apps/admin-api/src/lib/invite-erase.ts`), the hourly trash
-cleanup handles an invite that was never accepted in three steps:
+cleanup handles an invite that was never accepted in four steps:
 
 1. It asks auth, in one batched read, whether it still holds the invite. While
    it does, auth's own cleanup has not removed the account yet, and the mirror
    row waits for the next run.
-2. Once auth no longer has it (or it never reached auth), the user id goes to
+2. It gives back every channel the invite moved from someone else (marked
+   "transferred" in the invite's channels record) to its previous owner, read
+   from the audit row of that move. The give-back is a queued
+   `channel.transfer` job, audited as a transfer by `system:trash-cleanup`, so
+   the invite waits for the next run, which finds the channel moved and goes
+   on. If the previous owner is unknown, the give-back fails, or it has not
+   landed two days later, nothing is erased for that invite and the admin is
+   flagged: someone else's channel is never erased.
+3. Once auth no longer has it (or it never reached auth), the user id goes to
    api-videos `POST /internal/admin/users/:id/erase-revoked-invite`. That runs
    the admin erase path: a soft delete by `system:trash-cleanup` and its purge
    at once (the `user.delete-data` job, with its retries and DLQ). It erases the
    provisioned profile and the channels with their videos, and frees their
    @handles. It also removes the creator tier the invite assigned.
-3. Only then does the mirror row go, audited as a purge.
+4. Only then does the mirror row go, audited as a purge.
 
 An accepted invite is never erased: the person signed in, so the data is theirs.
 A step that fails keeps the mirror row, so the next hourly run tries again, and
 flags the admin on the Errors page ("Revoked invite data not erased", with an
 **Erase now** Retry). If auth still holds an invite two days after its purge
-was due, that is flagged too.
+was due, that is flagged too. The Retry runs the same steps and only for an
+invite the cleanup is due to purge; it never erases ahead of the 30-day window.
 
 ## Recently deleted
 
