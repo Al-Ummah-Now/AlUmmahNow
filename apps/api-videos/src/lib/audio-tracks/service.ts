@@ -498,7 +498,7 @@ export async function updateTrack(env: AudioTracksEnv, ctx: ExecutionContextLike
 }
 
 /**
- * A cleared track's new name is checked again as text, like an edited video title (VIDEO-REVIEW §2):
+ * A cleared (or still checked) track's new name is checked again as text, like an edited video title (VIDEO-REVIEW §2):
  * it stays audible meanwhile, and an NSFW or escalation hit pulls it back to a person, which takes
  * it out of the package. Never throws.
  */
@@ -508,7 +508,9 @@ async function recheckTrackLabel(env: AudioTracksEnv, video: Video, track: Audio
 		if (!scansInMode(gate.mode)) return;
 		const { queueAudioTrackScan } = await import('../review/audio-track');
 		const r = track.review;
-		if (r && (r.status === 'approved' || r.status === 'post_review') && gate.mode !== 'shadow') {
+		// Checking too: the scan in flight read the old name, so the new one gets its own text check.
+		// A track waiting for a person shows the reviewer its current name; a rejected one is not heard.
+		if (r && (r.status === 'checking' || r.status === 'approved' || r.status === 'post_review') && gate.mode !== 'shadow') {
 			await queueAudioTrackScan(env as never, video, track, { reviewId: r.reviewId, mode: gate.mode as 'enforce' | 'enforce_nsfw', trigger: 'metadata_edit', now });
 		} else if (track.reviewShadow && gate.mode === 'shadow') {
 			await queueAudioTrackScan(env as never, video, track, { reviewId: track.reviewShadow.reviewId, mode: 'shadow', trigger: 'metadata_edit', now });
