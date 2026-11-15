@@ -1154,7 +1154,7 @@ export async function eraseUserData(
 				const cancelled = await cancelInvitesOfUser(db as unknown as D1Database, userId);
 				if (cancelled.length) bump(summary.deleted, 'channelInvites', cancelled.length);
 				await anonymizeTeamActivity(db as unknown as D1Database, userId, DELETED_USER_ID);
-				// Their live sessions' tier owner (search migration 0040)
+				// Their live sessions' tier owner (search migration 0060)
 				await eraseLiveSessionOwner(db as unknown as D1Database, userId);
 			}
 			const profiles = asBucket(env.profiles);

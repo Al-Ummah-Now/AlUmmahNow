@@ -180,7 +180,7 @@ export interface LiveSessionRow {
 	peak_viewers: number;
 	viewer_seconds: number;
 	error: string | null;
-	/** The tier holder this session counts against (migration 0040); null on older sessions */
+	/** The tier holder this session counts against (migration 0060); null on older sessions */
 	owner_id?: string | null;
 	/** Longest it may stay live, in minutes (tier-gate.ts); null = no limit */
 	limit_minutes?: number | null;

@@ -90,7 +90,7 @@ function toTier(row: TierRow): CreatorTier {
 		// Migration 0041: YouTube imports count against the upload limits unless the tier says otherwise
 		importCountsAgainstLimits: row.import_counts_limits === undefined || row.import_counts_limits === null ? true : Number(row.import_counts_limits) === 1,
 		audioTracksPerVideo: Number(row.audio_tracks_per_video ?? 0) || 0,
-		// Rows from before migration 0040 have no live columns: the shipped tier's defaults
+		// Rows from before migration 0060 have no live columns: the shipped tier's defaults
 		...liveFields(row),
 		updatedAt: row.updated_at ?? null,
 		updatedBy: row.updated_by ?? null,

@@ -1,6 +1,6 @@
 /**
  * Live streaming within the channel owner's creator tier (packages/shared-types
- * creator-tiers.ts `live*`, migration search/0040).
+ * creator-tiers.ts `live*`, migration search/0060).
  *
  * Checked before any provider is asked, on create, ingest (it provisions a
  * session) and start:

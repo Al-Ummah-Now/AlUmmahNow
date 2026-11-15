@@ -1,5 +1,5 @@
 /**
- * Live streaming in creator tiers (search migration 0040, lib/live/tier-gate.ts):
+ * Live streaming in creator tiers (search migration 0060, lib/live/tier-gate.ts):
  * the channel owner's tier decides whether a stream may be created, provisioned
  * and started, within its monthly hours and streams at once; the live sweep ends
  * a session past its limit.
