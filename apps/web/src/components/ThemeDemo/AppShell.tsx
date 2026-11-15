@@ -13,7 +13,7 @@ import { saveLanguagePreference } from '@/lib/i18n/utils';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { UnifiedNavigation } from '@/components/UnifiedNavigation';
 import { UploadAction } from '@/components/Header/UploadAction';
-import { HeaderAppLinks, HeaderBrand, HeaderEnvBadge, HeaderLangButton, HeaderModeButton, langSwitchHref } from '@/components/Header/HeaderParts';
+import { HeaderAppLinks, HeaderBrand, HeaderEnvBadge, HeaderLangButton, HeaderMenuButton, HeaderModeButton, langSwitchHref } from '@/components/Header/HeaderParts';
 import { BRAND_LOGO } from '@/components/brand/BrandLogo';
 import { useRailMotion } from './rail-breakpoint';
 import { statusPageUrl } from '@/lib/navigation/destinations';
@@ -21,8 +21,8 @@ import { getEnvironment, getWwwUrl } from '@/lib/runtime-config';
 import { IdentityTour } from '@/components/help/IdentityTour';
 
 const L = {
-  en: { about: 'About', status: 'Status', browse: 'Browse', more: 'More', history: 'History', watchLater: 'Watch later', liked: 'Liked videos', menu: 'Menu', close: 'Close menu' },
-  ar: { about: 'من نحن', status: 'حالة الخدمات', browse: 'تصفّح', more: 'المزيد', history: 'السجل', watchLater: 'المشاهدة لاحقًا', liked: 'المرئيات التي أعجبتك', menu: 'القائمة', close: 'إغلاق القائمة' },
+  en: { about: 'About', status: 'Status', browse: 'Browse', more: 'More', history: 'History', watchLater: 'Watch later', liked: 'Liked videos', close: 'Close menu' },
+  ar: { about: 'من نحن', status: 'حالة الخدمات', browse: 'تصفّح', more: 'المزيد', history: 'السجل', watchLater: 'المشاهدة لاحقًا', liked: 'المرئيات التي أعجبتك', close: 'إغلاق القائمة' },
 };
 
 /** `hub`: the "You" entry. In the collapsed rail it is an icon item; in the open rail and the drawer it reads as
@@ -111,7 +111,7 @@ export function AppShell() {
           packages/fanous-tokens/nav/header.js): drawer toggle, brand, env badge, search, then Upload, the
           bell, the Website link, language, light/dark and the account (or Sign in); mirrored in RTL */}
       <header className="ah aun-header">
-        <button type="button" className="aun-icon-btn ah-menu" aria-label={open ? c.close : c.menu} aria-expanded={open} data-testid="nav-drawer-toggle" onClick={() => setOpen(!open)}><Menu aria-hidden="true" /></button>
+        <HeaderMenuButton lang={lang} label={open ? c.close : undefined} className="ah-menu" aria-expanded={open} data-testid="nav-drawer-toggle" onClick={() => setOpen(!open)} />
         <HeaderBrand lang={lang} href={`${base}/`} app={t.navigation.appVideos} link={Link} img={{ srcSet: BRAND_LOGO.srcSet, loading: 'eager', fetchPriority: 'high', decoding: 'async', 'data-testid': 'brand-logo' }} />
         <HeaderEnvBadge environment={environment} lang={lang} />
         <div className="aun-header-primary ah-primary"><HeaderSearch /></div>
