@@ -19,6 +19,7 @@ const statusChip: Record<string, string> = {
   transcoding: 'bg-chip-reviewing-bg text-chip-reviewing-fg',
   ready: 'bg-chip-resolved-bg text-chip-resolved-fg',
   failed: 'bg-danger-bg text-danger-fg',
+  cancelled: 'bg-chip-dismissed-bg text-chip-dismissed-fg',
 };
 
 /** Recent R2 transcodes; a failed one has "Transcode again" (admin-api, audited per video). */
@@ -87,7 +88,7 @@ export function JobsTable({ jobs }: { jobs: MediaJob[] }) {
                   <td className={`${tdClass} tabular-nums`}>{job.container_seconds == null ? '—' : f.integer(job.container_seconds)}</td>
                   <td className={`${tdClass} max-w-xs break-words text-danger-fg`}>{job.error ?? ''}</td>
                   <td className={tdClass}>
-                    {job.status === 'failed' && (
+                    {(job.status === 'failed' || job.status === 'cancelled') && (
                       <button
                         type="button"
                         className={`${secondaryButtonClass} !py-2 !px-3 text-sm disabled:opacity-60`}

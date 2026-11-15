@@ -247,7 +247,7 @@ export function parsePeriod(value: unknown): Period {
   return (PERIODS as readonly number[]).includes(n) ? (n as Period) : 30;
 }
 
-export const JOB_FILTERS = ['all', 'failed', 'queued', 'transcoding', 'ready'] as const;
+export const JOB_FILTERS = ['all', 'failed', 'queued', 'transcoding', 'ready', 'cancelled'] as const;
 export type JobFilter = (typeof JOB_FILTERS)[number];
 
 export function parseJobFilter(value: unknown): JobFilter {
@@ -260,4 +260,5 @@ export const JOB_STATUS_LABEL: Record<string, MessageKey> = {
   transcoding: 'mediaDelivery.statusTranscoding',
   ready: 'mediaDelivery.statusReady',
   failed: 'mediaDelivery.statusFailed',
+  cancelled: 'mediaDelivery.statusCancelled',
 };

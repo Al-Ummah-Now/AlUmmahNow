@@ -16,9 +16,10 @@ const STATUS_LABEL: Record<AdminVideoR2Badge['status'], MessageKey> = {
   transcoding: 'mediaDelivery.statusTranscoding',
   ready: 'mediaDelivery.statusReady',
   failed: 'mediaDelivery.statusFailed',
+  cancelled: 'mediaDelivery.statusCancelled',
 };
 
-const TONE: Record<R2BadgeState, ChipTone> = { queued: 'warn', transcoding: 'info', ready: 'good', failed: 'bad', none: 'neutral' };
+const TONE: Record<R2BadgeState, ChipTone> = { queued: 'warn', transcoding: 'info', ready: 'good', failed: 'bad', cancelled: 'neutral', none: 'neutral' };
 
 export function r2StateOf(r2: AdminVideoR2Badge | null | undefined): R2BadgeState {
   return r2 && r2.status in STATUS_LABEL ? r2.status : 'none';

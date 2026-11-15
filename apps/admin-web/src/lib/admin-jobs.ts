@@ -17,6 +17,8 @@ export const JOB_KIND_LABEL: Record<AdminJobKind, MessageKey> = {
   'playlist.add-videos': 'adminJobs.kinds.playlistAddVideos',
   'csam.contain': 'adminJobs.kinds.csamContain',
   'images.index-owners': 'adminJobs.kinds.imagesIndexOwners',
+  'media.transcode-retry': 'adminJobs.kinds.mediaTranscodeRetry',
+  'media.transcode-cancel': 'adminJobs.kinds.mediaTranscodeCancel',
 };
 
 export const JOB_STATUS_LABEL: Record<AdminJobStatus, MessageKey> = {
