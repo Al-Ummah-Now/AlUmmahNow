@@ -69,6 +69,14 @@ export const MAX_PLAYLIST_ITEMS = 5_000;
 export const MAX_VIDEOS = 20_000;
 /** A video still on its way: the finishing step looks again after this long... */
 export const FINALIZE_WAIT_S = 600;
+/** ...but every minute for its first ten minutes, when most videos turn ready (a short one in seconds). */
+export const FINALIZE_WAIT_SOON_S = 60;
+const FINALIZE_SOON_FOR_MS = 10 * 60_000;
+
+/** How long the finishing step waits before looking at a video `ageMs` old again. */
+export function finalizeWaitS(ageMs: number): number {
+	return ageMs < FINALIZE_SOON_FOR_MS ? FINALIZE_WAIT_SOON_S : FINALIZE_WAIT_S;
+}
 /** ...for at most this long after the video was created (then the thumbnail goes on without the video's size). */
 export const FINALIZE_WAIT_MAX_MS = 48 * 3600_000;
 /** YouTube thumbnails: only from YouTube's image host, at most 6 MB. */
@@ -450,7 +458,7 @@ async function finalizeStep(env: YtJobsEnv, row: ImportRow, itemId: string, ctx:
 		const created = Date.parse(String(video.dateCreated ?? '')) || now.getTime();
 		// The shape check needs the video's size: wait for the video while it is on its way
 		if (!size && video.uploadStatus !== 'ready' && video.uploadStatus !== 'failed' && now.getTime() - created < FINALIZE_WAIT_MAX_MS) {
-			await enqueue(env, { kind: 'yt-finalize', importId: row.id, itemId }, FINALIZE_WAIT_S);
+			await enqueue(env, { kind: 'yt-finalize', importId: row.id, itemId }, finalizeWaitS(now.getTime() - created));
 			return;
 		}
 		await importThumbnail(env, item, video, size);

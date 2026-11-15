@@ -35,7 +35,7 @@ import {
 	cancelImport,
 	linkBack,
 } from '../src/lib/youtube-import/service';
-import { handleYtImportBatch, itemFieldsOf, runYtJob, captionStagingKey, retryYtJob } from '../src/lib/youtube-import/jobs';
+import { handleYtImportBatch, itemFieldsOf, runYtJob, captionStagingKey, retryYtJob, finalizeWaitS, FINALIZE_WAIT_S, FINALIZE_WAIT_SOON_S } from '../src/lib/youtube-import/jobs';
 import { sweepYoutubeImports } from '../src/lib/youtube-import/sweep';
 import { eraseYoutubeImports } from '../src/lib/youtube-import/erase';
 import { readImportRow, readItemRows, readPlaylistRows } from '../src/lib/youtube-import/rows';
@@ -258,6 +258,16 @@ afterEach(() => {
 });
 
 // ---------------------------------------------------------------------------
+
+describe('YouTube import: finishing a video still on its way', () => {
+	it('looks again every minute at first, then every ten minutes', () => {
+		assert.equal(finalizeWaitS(0), FINALIZE_WAIT_SOON_S);
+		assert.equal(finalizeWaitS(9 * 60_000), FINALIZE_WAIT_SOON_S);
+		assert.equal(finalizeWaitS(10 * 60_000), FINALIZE_WAIT_S);
+		assert.equal(finalizeWaitS(5 * 3600_000), FINALIZE_WAIT_S);
+		assert.ok(FINALIZE_WAIT_SOON_S < FINALIZE_WAIT_S);
+	});
+});
 
 describe('YouTube import: token seal and settings', () => {
 	it('seals the refresh token to its import', async () => {
@@ -659,7 +669,10 @@ describe('YouTube import: uploads, captions, thumbnails, playlists and the close
 		await recordImportUpload(env as never, upload, 'v1', NOW);
 		q.sent.length = 0;
 		await runYtJob(env as never, { kind: 'yt-finalize', importId, itemId: byYt.ytPUB.id }, undefined, NOW);
-		assert.deepEqual(q.sent, [{ body: { kind: 'yt-finalize', importId, itemId: byYt.ytPUB.id }, delaySeconds: 600 }]);
+		assert.deepEqual(q.sent, [{ body: { kind: 'yt-finalize', importId, itemId: byYt.ytPUB.id }, delaySeconds: FINALIZE_WAIT_SOON_S }], 'a new video: look again in a minute');
+		q.sent.length = 0;
+		await runYtJob(env as never, { kind: 'yt-finalize', importId, itemId: byYt.ytPUB.id }, undefined, new Date(NOW.getTime() + 30 * 60_000));
+		assert.deepEqual(q.sent, [{ body: { kind: 'yt-finalize', importId, itemId: byYt.ytPUB.id }, delaySeconds: FINALIZE_WAIT_S }], 'a slow one: every ten minutes');
 	});
 
 	it('a second upload of a video already here is refused', async () => {
