@@ -27,6 +27,8 @@ import { uploadVisibility } from '../../lib/visibility';
 import { planIngest } from "../../lib/media/ingest";
 import { storeCustomThumbnail } from "../../lib/thumbnail/store";
 import { bunnyRef } from "../../lib/media/providers";
+import { prepareImportUpload, recordImportUpload, YtHttpError, type ImportUpload, type YtEnv } from "../../lib/youtube-import/service";
+import { applySchedule, announceSchedule, scheduleDateProblem } from "../../lib/videoSchedule";
 
 export class UploadInitiateEndpoint extends AuthenticatedRoute {
 	schema = {
@@ -62,6 +64,8 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 								video: z.object({ width: z.number().int().positive(), height: z.number().int().positive() }).optional()
 									.describe("The video file's size as the browser reads it: an image of another shape is not stored (Bunny's frame is used instead)"),
 							}).optional().describe("Thumbnail configuration"),
+							youtubeImport: z.object({ importId: z.string().min(1).max(64), itemId: z.string().min(1).max(64) }).optional()
+								.describe("Move from YouTube (wiki AUN-YT-IMPORT): the import item this file is. Title, description, tags, languages, visibility, schedule and publish date come from the item (the body's values for those are ignored); retrying the same item resumes its video"),
 							fingerprint: UploadFingerprintSchema.optional().describe("File fingerprint (name, size, lastModified, SHA-256 of the first and last MiB). With it, retrying the same file reuses its unfinished video (same id, upload resumed at its offset) instead of creating a new one."),
 						}),
 					},
@@ -111,6 +115,14 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 					},
 				},
 			},
+			"404": {
+				description: "youtubeImport: no such running import or item of yours on this channel (code youtube_import_not_found)",
+				content: { "application/json": { schema: ResponseError } },
+			},
+			"409": {
+				description: "youtubeImport: the item's video is already here (code youtube_item_taken)",
+				content: { "application/json": { schema: ResponseError } },
+			},
 			"503": {
 				description: "Another request is starting the same file's upload, or a store is unavailable: retry",
 				content: {
@@ -138,7 +150,9 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 		// issues (chanfana), not a 500
 		const request = await this.getValidatedData<typeof this.schema>();
 		try {
-			const { title, description, fileSize, mimeType, isPublic, visibility, isDraft, tags, thumbnail, titleLocalized, descriptionLocalized, category, format, fingerprint, categorySuggestionKey } = request.body;
+			const body = request.body;
+			let { title, description, isPublic, visibility, isDraft, tags, titleLocalized, descriptionLocalized, category, fingerprint, categorySuggestionKey } = body;
+			const { fileSize, mimeType, thumbnail, format, youtubeImport } = body;
 
 			// Validate required fields
 			if (!fileSize || fileSize <= 0) {
@@ -158,6 +172,38 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 			const channelId = c.req.header('channelId') || userId;
 			// A channel member's upload belongs to the channel's owner (lib/channelAccess.ts)
 			const { ownerId, uploadedBy } = uploadIdentity(c, userId);
+			// Move from YouTube: the item's snapshot decides the metadata (lib/youtube-import/service.ts)
+			let imported: ImportUpload | null = null;
+			if (youtubeImport) {
+				try {
+					const roles = (this.getAuth(c).payload as { roles?: string[] } | undefined)?.roles ?? null;
+					imported = await prepareImportUpload(c.env as unknown as YtEnv, { userId, roles }, channelId, youtubeImport as { importId: string; itemId: string });
+				} catch (error) {
+					if (error instanceof YtHttpError) return c.json({ success: false, code: error.code, error: error.message }, error.status as 404);
+					throw error;
+				}
+				const m = imported.metadata;
+				title = m.title;
+				description = m.description;
+				tags = m.tags;
+				titleLocalized = m.titleLocalized;
+				descriptionLocalized = m.descriptionLocalized;
+				visibility = m.visibility;
+				isPublic = m.visibility === 'public';
+				isDraft = false;
+				category = undefined;
+				categorySuggestionKey = undefined;
+				// The item is the claim: retrying it reuses its video (below), not a file fingerprint
+				fingerprint = undefined;
+			}
+			// Record fields only an import sets
+			const importFields = imported
+				? {
+					importedFrom: imported.metadata.importedFrom,
+					...(imported.metadata.language ? { language: imported.metadata.language } : {}),
+					...(imported.metadata.publishedAt ? { publishedAt: imported.metadata.publishedAt } : {}),
+				}
+				: {};
 			if (fingerprint && fingerprint.size !== fileSize) {
 				return c.json({ success: false, error: "fingerprint.size must equal fileSize" }, 400);
 			}
@@ -205,6 +251,7 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 				...(format && format !== 'auto' && { format }),
 				fileSize,
 				originalFormat: mimeType,
+				...importFields,
 			};
 
 			// Creates the Bunny video and its record (the claim, when there is
@@ -253,6 +300,7 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 					}),
 					...(claimKey ? { uploadFingerprint: claimKey, lastInitiateAt: now } : {}),
 					...(isDraft ? { isDraft: true } : {}),
+					...importFields,
 				};
 				try {
 					await repository.putObject(videoId, video as VideoType);
@@ -290,7 +338,19 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 
 			let videoId: string;
 			let reused = false;
-			if (claimKey) {
+			// An import item's earlier video is resumed while it can take the upload
+			const itemVideo = imported?.item.video_id ?? null;
+			if (itemVideo) {
+				const verdict = await checkReusable(c.env as never, itemVideo, { ownerId, uploadedBy, channelId });
+				if (verdict.kind === 'reuse') {
+					videoId = itemVideo;
+					reused = true;
+				} else if (verdict.why === 'finished' || verdict.why === 'finished at Bunny') {
+					return c.json({ success: false, code: 'youtube_item_taken', error: 'This video is already here' }, 409);
+				} else {
+					videoId = await create();
+				}
+			} else if (claimKey) {
 				const outcome = await initiateOnce(claimKey, {
 					store: c.env.global_settings as never,
 					userId,
@@ -303,6 +363,10 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 				if (outcome.replaced) logger.debug('[UploadInitiate] Earlier video of this file not reusable; created a new one', { videoId, why: outcome.replaced });
 			} else {
 				videoId = await create();
+			}
+
+			if (imported && !(await recordImportUpload(c.env as unknown as YtEnv, imported, videoId))) {
+				return c.json({ success: false, code: 'youtube_item_taken', error: 'This video is already here' }, 409);
 			}
 
 			let stored: PlaceholderRecord | null = null;
@@ -332,6 +396,11 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 				stored = (await repository.getObject(videoId)) as unknown as PlaceholderRecord | null;
 				thumbnailUrl = stored?.thumbnailUrl as string | undefined;
 				thumbnailSizes = stored?.thumbnailSizes as Record<string, string> | undefined;
+			}
+
+			// A video scheduled on YouTube is published here at the same time (never announced as new before then)
+			if (imported?.scheduleAt && stored && !(stored as { scheduledPublishStatus?: string }).scheduledPublishStatus) {
+				await this.scheduleImported(c, repository as never, videoId, ownerId, userId, imported.scheduleAt);
 			}
 
 			// TUS proxy session (no Bunny credentials reach the client); for a
@@ -399,6 +468,27 @@ export class UploadInitiateEndpoint extends AuthenticatedRoute {
 				details: errorMessage,
 				reference,
 			}, 500);
+		}
+	}
+
+	/**
+	 * Schedules an imported video that YouTube had scheduled: at its YouTube
+	 * time, or in a few minutes when that is closer than scheduling allows. One
+	 * more than a year away stays private, unscheduled.
+	 */
+	private async scheduleImported(c: AppContext, repository: R2Repository<any>, videoId: string, ownerId: string, userId: string, at: string): Promise<void> {
+		const now = new Date();
+		let date = new Date(at);
+		const problem = scheduleDateProblem(date, now);
+		if (problem === 'too_far' || problem === 'invalid') return;
+		if (problem === 'too_soon') date = new Date(now.getTime() + 6 * 60_000);
+		const saved = await patchVideo(repository, videoId, (fresh: any) => {
+			if (fresh.isPublic || fresh.scheduledPublishStatus) return false;
+			applySchedule(fresh, { date, timezone: 'UTC', userId, now });
+			return {};
+		}, { ownerId });
+		if (saved.status === 'ok' && saved.changed) {
+			await announceSchedule(c.env as never, saved.video as never, { date, timezone: 'UTC', notifyOnPublish: false, userId });
 		}
 	}
 

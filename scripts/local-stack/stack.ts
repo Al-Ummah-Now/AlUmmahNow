@@ -167,6 +167,10 @@ export const WORKERS: StackWorker[] = [
       // fakes, the browser through Playwright routes to PORTS['fake-cdn']
       bunny_hostname: 'vz-local-stack.b-cdn.net',
       BUNNY_TEST_LIBRARY: 'true',
+      // Move from YouTube on, against the fake Google (fake-google.ts); the client secret is the
+      // local Secrets Store fallback. Used only while no admin settings file exists.
+      YOUTUBE_IMPORT_DEFAULT_ENABLED: 'true',
+      YOUTUBE_IMPORT_DEFAULT_CLIENT_ID: '123456789012-localstackfakeclient.apps.googleusercontent.com',
       ...TURNSTILE_TEST_VARS,
     },
   },

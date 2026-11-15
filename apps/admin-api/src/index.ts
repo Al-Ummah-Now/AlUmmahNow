@@ -28,6 +28,7 @@ import { runDomainChecks } from './lib/sites/domains';
 import { scheduleInviteSyncs } from './lib/invites';
 import processingRouter from './routers/processing.router';
 import mediaRouter from './routers/media.router';
+import youtubeImportRouter from './routers/youtubeImport.router';
 import notificationSettingsRouter from './routers/notificationSettings.router';
 import opsRouter from './routers/ops.router';
 import abuseRouter from './routers/abuse.router';
@@ -235,6 +236,9 @@ app.route('/api/processing', processingRouter);
 
 // Delivery comparison (Bunny vs R2, epic #687): the switch, transcode jobs, QoE and cost; permission-checked, audited proxy to api-videos
 app.route('/api/media', mediaRouter);
+
+// Move from YouTube (wiki AUN-YT-IMPORT): on/off and the Google client id; media:manage, audited proxy to api-videos
+app.route('/api/youtube-import', youtubeImportRouter);
 
 // Platform notification settings (what opening the notification menu does): settings:manage to change, audited proxy to api-videos
 app.route('/api/notification-settings', notificationSettingsRouter);

@@ -6,6 +6,11 @@
  *
  * Idempotent: existing queues and buckets are left alone. Add a resource here
  * in the same PR that first binds it.
+ *
+ * Secrets Store placeholders: a secret a config binds before its real value is
+ * known is created with the value `unset` (the code treats it as missing) and
+ * the `workers` scope. Create only: an existing secret, placeholder or real, is
+ * never read or changed; the owner pastes the real value over the placeholder.
  */
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
@@ -22,7 +27,14 @@ export interface Resources {
 	 * per main push): a stack older than that is not symbolicated, nothing else changes.
 	 */
 	expireAfterDays?: Record<string, number>;
+	/** Secrets Store secrets created with PLACEHOLDER_SECRET_VALUE when missing (store id → names). */
+	placeholderSecrets?: Record<string, string[]>;
 }
+
+/** The account's Secrets Store (every app's secrets_store_secrets bindings). */
+export const SECRETS_STORE_ID = 'f8eddc9944d041919ed8dc7d08d32308';
+/** What a placeholder holds; lib/youtube-import/settings.ts UNSET_SECRET reads it as no secret. */
+export const PLACEHOLDER_SECRET_VALUE = 'unset';
 
 /** Days a source map is kept, by environment; production keeps every release's. */
 const SOURCEMAP_DAYS: Partial<Record<ResourceEnv, number>> = { qa: 14, stage: 30 };
@@ -34,13 +46,16 @@ export function resourcesFor(env: ResourceEnv): Resources {
 	return {
 		// Errors page: async ingest and its dead letters (apps/admin-api ErrorsIngest.ts)
 		// R2 video delivery (apps/media): transcode jobs and their dead letters (DLQ name ends in the env, see queue-consumers)
-		queues: [`al-ummah-now-errors${s}`, `al-ummah-now-errors-dlq${s}`, `al-ummah-now-transcode${s}`, `al-ummah-now-transcode-dlq${s}`],
+		// Move from YouTube jobs (apps/api-videos lib/youtube-import/jobs.ts; dead letters go to the shared al-ummah-now-dlq)
+		queues: [`al-ummah-now-errors${s}`, `al-ummah-now-errors-dlq${s}`, `al-ummah-now-transcode${s}`, `al-ummah-now-transcode-dlq${s}`, `al-ummah-now-yt-import${s}`],
 		// Private source maps of the web apps (apps/admin-api lib/sourcemaps.ts; upload-sourcemaps.ts)
 		// Renditions served from media.<env>.alummahnow.net (docs/media-delivery/R2-DELIVERY-PLAN.md)
 		// (public, behind the R2 custom domain) and private/unlisted ones (no public access; the media Worker serves them)
 		// CSAM evidence (docs/specs/CSAM-RESPONSE.md §4): private, never public, no lifecycle rule
 		buckets: [`al-ummah-now-sourcemaps${s}`, `al-ummah-now-media${s}`, `al-ummah-now-media-private${s}`, `al-ummah-now-media-originals${s}`, `al-ummah-now-csam-evidence${s}`],
 		...(SOURCEMAP_DAYS[env] ? { expireAfterDays: { [`al-ummah-now-sourcemaps${s}`]: SOURCEMAP_DAYS[env]! } } : {}),
+		// Move from YouTube: the Google OAuth client secret (api-videos GOOGLE_OAUTH_CLIENT_SECRET, docs/features/youtube-import.md)
+		placeholderSecrets: { [SECRETS_STORE_ID]: [`google-oauth-client-secret${s}`] },
 	};
 }
 
@@ -83,6 +98,22 @@ export async function ensureResources(cf: CfClient, wanted: Resources, log: (lin
 		await cf.request('PUT', `/r2/buckets/${encodeURIComponent(name)}/lifecycle`, { rules: next });
 		created.push(`lifecycle ${name} ${days}d`);
 		log(`Objects in ${name} now expire after ${days} days`);
+	}
+	for (const [storeId, names] of Object.entries(wanted.placeholderSecrets ?? {})) {
+		const present = new Set<string>();
+		for (let page = 1; page <= 20; page++) {
+			const secrets = await cf.request<{ name: string }[]>('GET', `/secrets_store/stores/${storeId}/secrets?page=${page}&per_page=100`);
+			for (const secret of secrets ?? []) present.add(secret.name);
+			if (!secrets || secrets.length < 100) break;
+		}
+		for (const name of names) {
+			if (present.has(name)) continue;
+			await cf.request('POST', `/secrets_store/stores/${storeId}/secrets`, [
+				{ name, value: PLACEHOLDER_SECRET_VALUE, scopes: ['workers'], comment: 'Placeholder: paste the real value over it' },
+			]);
+			created.push(`secret ${name} (placeholder)`);
+			log(`Created Secrets Store placeholder ${name}`);
+		}
 	}
 	return { created };
 }

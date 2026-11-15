@@ -55,6 +55,8 @@ export const NOTIFICATION_KEYS = [
   'reviewRejected',
   /** To reviewers: a video waits in the review queue (params: videoTitle, escalated = 0 | 1) */
   'reviewNeeded',
+  /** Move from YouTube (wiki AUN-YT-IMPORT) finished (params: ready, failed = counts; channelTitle) */
+  'youtubeImportFinished',
 ] as const;
 export type NotificationKey = (typeof NOTIFICATION_KEYS)[number];
 
@@ -71,6 +73,7 @@ export const NOTIFICATION_KEY_CATEGORY: Record<NotificationKey, NotificationCate
   reviewApproved: 'account',
   reviewRejected: 'account',
   reviewNeeded: 'account',
+  youtubeImportFinished: 'uploads',
 };
 
 /** Legacy realtime notification type (drives the toast icon). */
@@ -88,6 +91,7 @@ export const NOTIFICATION_KEY_TYPE: Record<NotificationKey, RealtimeNotification
   reviewApproved: 'system',
   reviewRejected: 'system',
   reviewNeeded: 'system',
+  youtubeImportFinished: 'upload',
 };
 
 /** Per-channel bell: every upload & live, highlights (long-form uploads & live), or nothing. */

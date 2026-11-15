@@ -13,6 +13,10 @@ import { collectDeliveryCosts } from './lib/media/costs';
 import { sweepOriginals } from './lib/media/originals';
 import { createMediaInternalRouter } from './endpoints/media/mediaInternal';
 import { createReviewInternalRouter } from './endpoints/review/reviewInternal';
+import { createYoutubeImportInternalRouter } from './endpoints/youtube-import/youtubeImportInternal';
+import { oauthCallback, type YtEnv } from './lib/youtube-import/service';
+import { handleYtImportBatch } from './lib/youtube-import/jobs';
+import { sweepYoutubeImports } from './lib/youtube-import/sweep';
 import { createNotificationsInternalRouter } from './endpoints/notifications/notificationsInternal';
 import { sweepRunUsers } from './lib/e2e/runUserSweep';
 import { handlePlaylistAddBatch, isPlaylistAddMessage } from './lib/playlistUploadAdds';
@@ -311,6 +315,16 @@ app.route('/internal/media', createMediaInternalRouter() as never);
 app.route('/internal/notifications', createNotificationsInternalRouter() as never);
 // Pre-publication review: the processor's outcomes and admin-api's decisions (docs/specs/VIDEO-REVIEW.md)
 app.route('/internal/review', createReviewInternalRouter() as never);
+// Move from YouTube (wiki AUN-YT-IMPORT): admin settings (admin-api proxies with media:manage + audit), Errors page retry
+app.route('/internal/youtube-import', createYoutubeImportInternalRouter() as never);
+// Google's redirect after the creator's consent (no bearer token: the single-use state names the import's owner)
+app.get('/api/youtube-import/oauth/callback', async (c) => {
+	const q = c.req.query();
+	const target = await oauthCallback(c.env as unknown as YtEnv, { code: q.code, state: q.state, error: q.error });
+	c.header('Cache-Control', 'no-store');
+	c.header('Referrer-Policy', 'no-referrer');
+	return c.redirect(target, 302);
+});
 
 // ==========================================
 // PROFILE/CHANNEL IMAGE UPLOADS
@@ -623,6 +637,17 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 			sweepStalledUploads(withSearchSync(rawEnv, ctx) as never)
 				.catch((error) => logger.error('[Uploads] Stalled-upload sweep failed', { error: error instanceof Error ? error.message : String(error) })),
 		);
+		// Hourly: Move from YouTube upkeep: stale consents, settled imports closed, idle ones ended,
+		// old snapshots emptied (lib/youtube-import/sweep.ts)
+		ctx.waitUntil(
+			sweepYoutubeImports(withSearchSync(rawEnv, ctx) as never).then(
+				() => undefined,
+				(error) => {
+					logger.error('[YouTubeImport] Sweep failed', { error: error instanceof Error ? error.message : String(error) });
+					reportJobFailure(rawEnv, ctx, 'youtube-import-sweep', error);
+				},
+			),
+		);
 		return;
 	}
 	// Retention deletes go through the search-sync wrapper so removed content leaves the index.
@@ -737,6 +762,7 @@ async function handleFetch(request: Request, env: AppBindings, ctx: ExecutionCon
  * Queue consumers, by queue name (prod name, or with its -stage / -qa suffix):
  * - al-ummah-now-admin-jobs*: heavy admin actions (lib/admin/jobs.ts).
  * - al-ummah-now-run-erase*: E2E run-account erasures, admin jobs on their own queue (#887).
+ * - al-ummah-now-yt-import*: Move from YouTube jobs (lib/youtube-import/jobs.ts).
  * - otherwise PROCESSING_CHECK_QUEUE, which carries the per-video
  *   processing-check loop, the upload reaper's checks (kind "upload-reaper")
  *   new uploads' playlist adds (kind "playlist-add"), Bunny deletes after an
@@ -753,6 +779,11 @@ async function queue(batch: MessageBatch<unknown>, env: AppBindings, ctx: Execut
 		// Run-account erasures (#887) are admin jobs on their own capped queue
 		if (batch.queue.startsWith('al-ummah-now-admin-jobs') || batch.queue.startsWith('al-ummah-now-run-erase')) {
 			await handleAdminJobBatch(batch as unknown as { messages: readonly JobMessage[] }, withSearchSync(env, ctx) as never, ADMIN_JOB_HANDLERS);
+			return;
+		}
+		// Move from YouTube jobs (lib/youtube-import/jobs.ts), one per invocation
+		if (batch.queue.startsWith('al-ummah-now-yt-import')) {
+			await handleYtImportBatch(batch as never, withSearchSync(env, ctx) as never, ctx);
 			return;
 		}
 		const synced = withSearchSync(env, ctx) as never;

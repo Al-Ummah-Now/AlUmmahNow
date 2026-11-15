@@ -37,9 +37,10 @@ export const SERVICE_RETRIES: Record<string, { binding: keyof AdminBindings; pat
   // a failed transcription job, run again free of charge (api-videos lib/captions/jobs.ts); a media
   // provider turned unhealthy: "Check now" runs a health pass (api-videos lib/media/health.ts); a
   // Studio comment index rebuild or the removed-comment purge that gave up is queued again (api-videos
-  // lib/channelComments/jobs.ts).
+  // lib/channelComments/jobs.ts); a Move from YouTube step that gave up runs again (api-videos
+  // lib/youtube-import/jobs.ts).
   // Never a CSAM path: those retry from the case page, super admins only (docs/specs/CSAM-RESPONSE.md)
-  'api-videos': { binding: 'VIDEOS', paths: ['/internal/playlist-adds/retry', '/internal/captions/jobs/retry', '/internal/media/health/check', '/internal/channel-comments/retry'] },
+  'api-videos': { binding: 'VIDEOS', paths: ['/internal/playlist-adds/retry', '/internal/captions/jobs/retry', '/internal/media/health/check', '/internal/channel-comments/retry', '/internal/youtube-import/retry'] },
 };
 
 export const BUILTIN_RETRIES: Record<string, (env: AdminBindings, args: Record<string, string>, attempt: string) => Promise<RetryOutcome>> = {

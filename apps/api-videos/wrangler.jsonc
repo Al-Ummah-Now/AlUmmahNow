@@ -228,6 +228,15 @@
 				"max_batch_timeout": 5,
 				"max_retries": 5,
 				"dead_letter_queue": "al-ummah-now-dlq"
+			},
+			{
+				// Move from YouTube jobs (lib/youtube-import/jobs.ts): one per invocation; a give-up flags the admin Errors page
+				"queue": "al-ummah-now-yt-import",
+				"max_batch_size": 1,
+				"max_batch_timeout": 5,
+				"max_retries": 5,
+				"retry_delay": 60,
+				"dead_letter_queue": "al-ummah-now-dlq"
 			}
 		],
 		"producers": [
@@ -246,6 +255,10 @@
 			{
 				"queue": "al-ummah-now-admin-jobs",
 				"binding": "ADMIN_JOBS_QUEUE"
+			},
+			{
+				"queue": "al-ummah-now-yt-import",
+				"binding": "YT_IMPORT_QUEUE"
 			},
 			{
 				// R2 transcodes (apps/media consumes)
@@ -267,6 +280,12 @@
 		"binding": "LIVE_INGEST_SECRET",
 		"store_id": "f8eddc9944d041919ed8dc7d08d32308",
 		"secret_name": "live-ingest-secret"
+	  },
+	  {
+	  	// Google OAuth Web client secret of Move from YouTube (lib/youtube-import/settings.ts); the client id is an admin setting
+	  	"binding": "GOOGLE_OAUTH_CLIENT_SECRET",
+	  	"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+	  	"secret_name": "google-oauth-client-secret"
 	  },
 	  {
 		"binding": "image_storage_key",
@@ -573,6 +592,15 @@
 						"max_batch_timeout": 5,
 						"max_retries": 5,
 						"dead_letter_queue": "al-ummah-now-dlq-stage"
+					},
+					{
+						// Move from YouTube jobs (lib/youtube-import/jobs.ts): one per invocation; a give-up flags the admin Errors page
+						"queue": "al-ummah-now-yt-import-stage",
+						"max_batch_size": 1,
+						"max_batch_timeout": 5,
+						"max_retries": 5,
+						"retry_delay": 60,
+						"dead_letter_queue": "al-ummah-now-dlq-stage"
 					}
 				],
 				"producers": [
@@ -593,6 +621,10 @@
 						"binding": "ADMIN_JOBS_QUEUE"
 					},
 					{
+						"queue": "al-ummah-now-yt-import-stage",
+						"binding": "YT_IMPORT_QUEUE"
+					},
+					{
 						"queue": "al-ummah-now-transcode-stage",
 						"binding": "TRANSCODE_QUEUE"
 					}
@@ -609,6 +641,12 @@
 					"binding": "LIVE_INGEST_SECRET",
 					"store_id": "f8eddc9944d041919ed8dc7d08d32308",
 					"secret_name": "live-ingest-secret-stage"
+				},
+				{
+					// Google OAuth Web client secret of Move from YouTube (lib/youtube-import/settings.ts); the client id is an admin setting
+					"binding": "GOOGLE_OAUTH_CLIENT_SECRET",
+					"store_id": "f8eddc9944d041919ed8dc7d08d32308",
+					"secret_name": "google-oauth-client-secret-stage"
 				},
 				{
 					"binding": "image_storage_key",

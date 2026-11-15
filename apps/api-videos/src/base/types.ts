@@ -65,6 +65,8 @@ export interface AppBindings {
   MODERATION_QUEUE?: Queue;
   /** Per-video processing-check loop (lib/processing/loop.ts). Optional: no loop when unbound. */
   PROCESSING_CHECK_QUEUE?: Queue;
+  /** Move from YouTube jobs (lib/youtube-import/jobs.ts). Optional: imports answer 503 without it. */
+  YT_IMPORT_QUEUE?: Queue;
 
   // Secrets (accessed via .text() method)
   image_storage_key: { text(): Promise<string> };
@@ -95,6 +97,12 @@ export interface AppBindings {
   LIVE_PUBLIC_HOST?: string;
   BUNNY_LIVE_INGEST_URL?: string;
   BUNNY_LIVE_ENABLED?: string;
+  /** The videos site (redirects back to Studio) */
+  VIDEOS_WEB_URL?: string;
+  // Move from YouTube (wiki AUN-YT-IMPORT): Google OAuth client secret (Secrets Store), local-stack defaults
+  GOOGLE_OAUTH_CLIENT_SECRET?: { get(): Promise<string> } | string;
+  YOUTUBE_IMPORT_DEFAULT_ENABLED?: string;
+  YOUTUBE_IMPORT_DEFAULT_CLIENT_ID?: string;
 }
 
 /**

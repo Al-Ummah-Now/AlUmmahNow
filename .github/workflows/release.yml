@@ -322,6 +322,13 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm release:queue-consumers --config apps/processor/wrangler.jsonc --env stage
 
+      # api-videos' Move from YouTube consumer (al-ummah-now-yt-import-stage) is new to an existing Worker
+      - name: Queue consumers, api-videos (stage)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm release:queue-consumers --config apps/api-videos/wrangler.jsonc --env stage
+
       # Platform analytics collector (apps/cost-monitor, docs/admin/LIVE_OPS.md): crons only, no
       # route, so no smoke; its D1 was migrated with the others (d1-migrate.ts).
       - name: Deploy cost monitor (stage)
@@ -709,6 +716,13 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm release:queue-consumers --config apps/processor/wrangler.jsonc
+
+      # api-videos' Move from YouTube consumer (al-ummah-now-yt-import) is new to an existing Worker
+      - name: Queue consumers, api-videos (production)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm release:queue-consumers --config apps/api-videos/wrangler.jsonc
 
       # Platform analytics collector (apps/cost-monitor, docs/admin/LIVE_OPS.md): crons only, no
       # route, so no smoke; its D1 was migrated with the others (d1-migrate.ts).

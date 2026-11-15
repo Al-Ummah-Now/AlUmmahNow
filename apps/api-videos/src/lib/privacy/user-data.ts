@@ -45,6 +45,7 @@ import { postLocationKey } from '../community-posts';
 import { eraseChannelHandleHistory } from './handle-history';
 import { footprintTargets, footprintsComplete, forgetFootprints } from './footprints';
 import { eraseCaptionMinutes } from '../captions/minutes';
+import { eraseYoutubeImports } from '../youtube-import/erase';
 import { eraseImageOwners } from '../csam/imageOwners';
 import { eraseChannelComments } from '../channelComments';
 import { purgePostComment } from '../channelComments/jobs';
@@ -1087,6 +1088,9 @@ export async function eraseUserData(
 				await eraseChannelComments(db, userId, ctx.checkpoint.o);
 				// The search binding is the D1 database; the minutes need its batch and all()
 				await eraseCaptionMinutes(db as unknown as D1Database, userId);
+				// Move from YouTube: imports, snapshots, consents, staged captions (Google token revoked)
+				ctx.budget.spend(2);
+				await eraseYoutubeImports(db as unknown as D1Database, env as never, userId);
 			}
 			const profiles = asBucket(env.profiles);
 			ctx.budget.spend();

@@ -30,15 +30,20 @@ interface PublishableVideo {
 	scheduledPublishStatus?: string;
 	processingCheck?: { loopId?: string };
 	processingIssue?: { at?: string };
+	/** Brought from YouTube (wiki AUN-YT-IMPORT): never announced to subscribers, it is not new */
+	importedFrom?: unknown;
 }
 
 interface EventsEnv extends NotificationsEnv {
 	channels: R2Bucket;
 }
 
-/** Publicly visible (the shared rule: public, ready, released, not removed) with a channel: subscribers may be told about it. */
+/**
+ * Publicly visible (the shared rule: public, ready, released, not removed) with a channel: subscribers may be told about it.
+ * A video imported from YouTube never is: the channel's back catalogue arriving is not news (wiki AUN-YT-IMPORT).
+ */
 export function isAnnounceable(video: PublishableVideo | null | undefined): boolean {
-	return !!video?.channelId && isVideoPubliclyVisible(video);
+	return !!video?.channelId && isVideoPubliclyVisible(video) && !video.importedFrom;
 }
 
 /** Long-form uploads are highlights; Shorts (Lamahat, shared rule) only reach bell = all. */

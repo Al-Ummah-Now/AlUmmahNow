@@ -165,6 +165,8 @@ const MEMBER_WRITE_ROUTES: ReadonlyArray<{ methods: ReadonlyArray<string>; path:
 	// Uploads
 	{ methods: ['POST'], path: /^\/api\/videos\/?$/, capability: 'video.upload' },
 	{ methods: ['POST', 'PATCH', 'HEAD', 'DELETE'], path: /^\/api\/videos\/(?:upload|tus)(?:\/|$)/, capability: 'video.upload' },
+	// Move from YouTube (wiki AUN-YT-IMPORT): importing is uploading
+	{ methods: ['POST', 'PUT'], path: /^\/api\/youtube-import(?:\/|$)/, capability: 'video.upload' },
 	// Editing the channel's videos
 	{ methods: ['PUT'], path: /^\/api\/videos\/(?!bulk-|upload|tus|scheduled|search)[^/]+\/?$/, capability: 'video.edit' },
 	{ methods: ['POST'], path: /^\/api\/videos\/[^/]+\/thumbnail\/?$/, capability: 'video.edit' },

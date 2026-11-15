@@ -1633,6 +1633,8 @@ export interface AppTranslations {
       uploadReadyMessage: string;
       uploadFailedTitle: string;
       uploadFailedMessage: string;
+      youtubeImportFinishedTitle: string;
+      youtubeImportFinishedMessage: string;
       newVideoTitle: string;
       newVideoMessage: string;
       liveStartedTitle: string;

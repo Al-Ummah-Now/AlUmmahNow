@@ -334,6 +334,7 @@ const TierBody = z
 		maxConcurrent: z.coerce.number().optional(),
 		maxChannels: z.coerce.number().nullable().optional(),
 		captionMinutesMonth: z.coerce.number().optional(),
+		importCountsAgainstLimits: z.boolean().optional(),
 	})
 	.strict();
 const searchDb = (c: Context<Env>) => c.env.SEARCH_DB as D1Database;

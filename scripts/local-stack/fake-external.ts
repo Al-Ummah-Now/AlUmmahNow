@@ -13,6 +13,7 @@
  *   videos), thumbnail.jpg / thumbnail_N.jpg / preview.webp, play_<res>p.mp4, original.
  * - Bunny Storage (storage.bunnycdn.com) + the image host (images.alummahnow.net): PUT stores, GET serves.
  * - Resend (api.resend.com): emails are kept, never sent: GET /__fake/resend/emails.
+ * - Google and YouTube (Move from YouTube): fake-google.ts.
  *
  * State is in memory and dies with the stack, like every other piece of local state.
  */
@@ -21,6 +22,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { extname, join, normalize } from 'node:path';
 import { FAKES } from './outbound.ts';
 import { LOCAL_SECRETS, PORTS, ROOT, url as stackUrl } from './stack.ts';
+import { googleAccounts, googleControl, googleOAuth, youtubeApi, ytimg } from './fake-google.ts';
 
 /** The CDN hostname api-videos signs and the browser loads (Playwright routes it to the fake CDN). */
 export const FAKE_CDN_HOST = 'vz-local-stack.b-cdn.net';
@@ -366,6 +368,12 @@ export function registerFakes(): void {
   FAKES.set(IMAGE_HOST, images);
   FAKES.set('api.resend.com', resend);
   FAKES.set(FAKE_MEDIA_HOST, (request, url) => mediaHost(request.method, url.pathname));
+  // Move from YouTube: Google's consent, tokens, the YouTube Data API and thumbnails (fake-google.ts)
+  FAKES.set('accounts.google.com', googleAccounts);
+  FAKES.set('oauth2.googleapis.com', googleOAuth);
+  FAKES.set('www.googleapis.com', youtubeApi);
+  FAKES.set('youtube.googleapis.com', youtubeApi);
+  FAKES.set('i.ytimg.com', ytimg);
 }
 
 
@@ -417,6 +425,7 @@ async function readBody(req: IncomingMessage): Promise<string> {
  * - POST /__fake/media/transcode/<videoId>[?outcome=fail], POST /__fake/media/down | /up[?video=<id>] (the R2 media pipeline)
  * - GET /__fake/resend/emails
  * - PUT | GET /__fake/images/<path>: seed or check one stored image (Bunny Storage)
+ * - GET /__fake/google, POST /__fake/google/consent?mode=…|quota?on=1|reset (fake-google.ts)
  * - POST /__stack/d1/<database name> with SQL as the body: { results } (seed, fast-path fixtures)
  * - GET | PUT | DELETE /__stack/r2/<bucket name>/<key>: one object (fixtures a spec seeds in R2)
  * - GET /__stack/r2/<bucket name>?prefix=<p>[&cursor=<c>]: { keys, cursor } (teardowns find what a run wrote)
@@ -496,6 +505,7 @@ async function control(req: IncomingMessage, url: URL): Promise<Response> {
   }
   const [, , kind, , guid, action] = url.pathname.split('/');
   if (kind === 'resend') return json(emails);
+  if (kind === 'google') return googleControl(req.method, url);
   if (kind === 'media') {
     const [, , , step, videoId] = url.pathname.split('/');
     if (req.method !== 'POST') return json({ error: 'POST /__fake/media/transcode/<videoId> | /down | /up' }, 405);
