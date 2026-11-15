@@ -37,6 +37,7 @@ const theming = ['light_dark', 'colours', 'fonts', 'full'] as const;
 export const ENTITLEMENT_CATALOGUE: readonly EntitlementDefinition[] = [
   { key: 'channel.max', type: 'number', unit: 'channels', fallback: UNLIMITED, epic: 27, description_en: 'Channels a user can own', description_ar: 'عدد القنوات التي يمكن للمستخدم امتلاكها', at_limit: 'New channel refused; existing channels are kept' },
   { key: 'channel.handle', type: 'boolean', fallback: true, epic: 29, description_en: 'Claim and change a channel @handle', description_ar: 'حجز وتغيير معرّف القناة @', at_limit: 'n/a' },
+  { key: 'profile.public', type: 'boolean', fallback: true, epic: 29, description_en: 'Public profile at /u/@handle with privacy toggles', description_ar: 'ملف شخصي عام على ‎/u/@handle مع إعدادات الخصوصية', at_limit: 'n/a' },
   { key: 'channel.about.links.max', type: 'number', unit: 'links', fallback: 10, epic: 29, description_en: 'Links on the channel About tab', description_ar: 'الروابط في تبويب "حول" للقناة', at_limit: 'Adding links refused; existing links can stay' },
   { key: 'comments.replies', type: 'boolean', fallback: true, epic: 29, description_en: 'Replies on video comments', description_ar: 'الردود على تعليقات المرئيات', at_limit: 'n/a' },
   { key: 'comments.settings', type: 'boolean', fallback: true, epic: 29, description_en: 'Per-video comment settings', description_ar: 'إعدادات التعليقات لكل مرئي', at_limit: 'n/a' },

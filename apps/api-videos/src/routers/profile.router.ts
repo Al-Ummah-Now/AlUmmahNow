@@ -17,6 +17,7 @@ import handleAvatarUpdate from '../endpoints/profile/profileAvatarUpdate';
 import handleCoverUpdate from '../endpoints/profile/profileCoverUpdate';
 import { SubscriptionsList } from '../endpoints/channel/SubscriptionsList';
 import { SubscriptionFeed } from '../endpoints/channel/SubscriptionFeed';
+import { PublicProfileSettingsUpdate, UserHandleAvailability } from '../endpoints/profile/publicProfile';
 
 const app = new Hono();
 
@@ -63,6 +64,10 @@ profileRouter.put('/profile/playback', PlaybackSettingsUpdate);
 // Auth required: first-run guides seen (the identity tour shows once per account)
 profileRouter.get('/profile/onboarding', OnboardingGet);
 profileRouter.put('/profile/onboarding', OnboardingUpdate);
+
+// Auth required: @handle and what the public profile shows (Story 29.5)
+profileRouter.put('/profile/public', PublicProfileSettingsUpdate);
+profileRouter.get('/profile/handle-availability', UserHandleAvailability);
 
 profileRouter.get('/profile/subscriptions', SubscriptionsList);
 profileRouter.get('/profile/subscriptions/feed', SubscriptionFeed);

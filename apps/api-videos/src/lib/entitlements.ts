@@ -18,6 +18,7 @@ export interface EntitlementDeclaration {
 
 export const ENTITLEMENTS: ReadonlyArray<EntitlementDeclaration> = [
 	{ key: 'channel.handle', type: 'boolean', free: true, story: '29.1', description: 'Claim and change a channel @handle', atLimit: 'n/a (all plans)' },
+	{ key: 'profile.public', type: 'boolean', free: true, story: '29.5', description: 'Public profile at /u/@handle with privacy toggles (subscriptions, playlists, likes)', atLimit: 'n/a (all plans)' },
 	{ key: 'channel.about.links.max', type: 'number', free: 10, story: '29.1', description: 'Links on the channel About tab', atLimit: '400 validation error; settings UI stops adding rows' },
 	{ key: 'comments.replies', type: 'boolean', free: true, story: '29.2', description: 'Replies (one level) on video comments', atLimit: 'n/a (all plans)' },
 	{ key: 'comments.settings', type: 'boolean', free: true, story: '29.2', description: 'Per-video comment settings: on / off', atLimit: 'n/a (all plans)' },

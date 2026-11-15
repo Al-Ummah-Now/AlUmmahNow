@@ -65,6 +65,7 @@ describe('settingsTrail', () => {
       { label: 'Tier', href: '/en/settings/tier' },
     ]);
     expect(settingsTrail('/ar/settings/tier', 'ar', AR_TRANSLATIONS)?.[1].label).toBe('الفئة');
+    expect(settingsTrail('/ar/settings/public-profile', 'ar', AR_TRANSLATIONS)?.[1]).toEqual({ label: 'الملف الشخصي العام', href: '/ar/settings/public-profile' });
   });
 
   it('shows on the profile page only when opened from Settings', () => {

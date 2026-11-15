@@ -1,3 +1,4 @@
+import { releaseUserHandle } from "../../lib/userHandles";
 import { removeCollectionsFor } from "../../lib/channelCollection";
 import { inBackground } from "../../lib/websocket-notify";
 import { Bool } from "chanfana";
@@ -51,6 +52,8 @@ export class ProfileDelete extends AuthenticatedRoute {
 		const repository = new R2Repository<ProfileType>(bucket);
 		const profile = await repository.getObject(userId);
 		await repository.deleteObject(userId);
+		// Its @handle (public profile) is free again
+		if (profile?.handle) await releaseUserHandle(c.env.channel_tabs, profile.handle, userId);
 		// The profile is gone for good: so is the user's Bunny collection (lib/channelCollection.ts)
 		if (profile) inBackground(c, 'user-collection-remove', () => removeCollectionsFor(c.env as never, userId, profile as never));
 

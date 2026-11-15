@@ -175,6 +175,12 @@ export const ProfileView = z.object({
     dateCreated: DateTime(),
     dateModified: DateTime(),
     channelsCount: z.number(),
+    handle: Str().optional().describe("The user's @handle (Story 29.5); the public profile is /{locale}/u/@{handle}. Absent: no public profile"),
+    publicProfile: z.object({
+        showSubscriptions: z.boolean(),
+        showPlaylists: z.boolean(),
+        showLikes: z.boolean(),
+    }).describe("What the public profile shows, defaults filled in (subscriptions and likes off, public playlists on)"),
     // For detailed views, include channel info
     channels: z.array(z.object({
         id: Str(),
@@ -198,6 +204,34 @@ export const PublicProfileView = z.object({
     dateCreated: DateTime(),
     dateModified: DateTime(),
     channelsCount: z.number(),
+    handle: Str().optional().describe("The user's @handle: their public profile is /{locale}/u/@{handle}"),
+});
+
+// The public profile page (Story 29.5): GET /api/users/by-handle/:handle
+export const PublicUserProfileView = z.object({
+    id: Str(),
+    handle: Str(),
+    displayName: Str().optional(),
+    resolvedDisplayName: Str(),
+    displayNameLocalized: z.record(z.string()).optional(),
+    bio: Str().optional(),
+    bioLocalized: z.record(z.string()).optional(),
+    avatarUrl: Str().optional(),
+    coverUrl: Str().optional(),
+    dateCreated: DateTime(),
+    channels: z.array(z.object({
+        id: Str(),
+        name: Str(),
+        nameLocalized: z.record(z.string()).optional(),
+        handle: Str().optional(),
+        avatarUrl: Str().optional(),
+        isVerified: z.boolean().optional(),
+    })).describe("The user's public channels"),
+    sections: z.object({
+        subscriptions: z.boolean(),
+        playlists: z.boolean(),
+        likes: z.boolean(),
+    }).describe("Which lists the owner shows (each has its own endpoint, 404 when hidden)"),
 });
 
 // Fields returned for a channel to anyone (see lib/public-views.ts)

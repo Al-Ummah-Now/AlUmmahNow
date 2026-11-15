@@ -72,6 +72,7 @@ export function toPublicProfile(profile: StoredProfile, locale?: string): z.infe
 		dateCreated: profile.dateCreated,
 		dateModified: profile.dateModified,
 		channelsCount: profile.channels?.length || 0,
+		...(profile.handle ? { handle: profile.handle } : {}),
 	};
 }
 

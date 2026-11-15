@@ -9,6 +9,7 @@
 'use client';
 
 import { useLanguage } from '@/hooks/useLanguage';
+import { publicProfileTranslations } from '@al-ummah/shared-types';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useFeatures } from '@/hooks/useFeatures';
 import { SignInPrompt } from '@/components/common/SignInPrompt';
@@ -26,6 +27,7 @@ import {
   Users,
   BadgeCheck,
   CreditCard,
+  AtSign,
 } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -55,6 +57,13 @@ export default function SettingsPage() {
       description: t.settings?.profileSettingsDesc || 'Update your profile information and preferences',
       icon: User,
       href: `/${lang}/profile?from=settings`,
+    },
+    {
+      title: publicProfileTranslations(lang).settings.cardTitle,
+      description: publicProfileTranslations(lang).settings.cardDescription,
+      icon: AtSign,
+      href: `/${lang}/settings/public-profile`,
+      available: true,
     },
     {
       title: t.privacy.settingsTitle,

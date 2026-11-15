@@ -5,8 +5,7 @@ import { Playlist, PaginationResponse, ResponseError } from "../../lib/types";
 import R2Repository from "../../lib/r2Repo";
 import { OptionalAuthRoute, AppContext } from "../../base";
 import { toPlaylistResponse, canViewPlaylist, isPersonalPlaylist } from "../../lib/playlists";
-import { footprintsComplete, footprintTargets } from "../../lib/privacy/footprints";
-import type { SearchDb } from "@al-ummah/shared-types";
+import { collectPersonalPlaylists } from "../../lib/personalPlaylists";
 import { withPlaylistCovers } from "../../lib/playlistCovers";
 import { logger } from "../../lib/logger";
 import { isSystemPlaylist } from "../../lib/library";
@@ -103,29 +102,10 @@ export class PlaylistsList extends OptionalAuthRoute {
             const own = (playlist: PlaylistType | null): playlist is PlaylistType =>
                 !!playlist && playlist.userId === userId && isPersonalPlaylist(playlist)
                 && !playlist.isDeleted && !playlist.isHidden && !isSystemPlaylist(playlist);
-            const matches: PlaylistType[] = [];
-            // The privacy footprints name every playlist's owner: read just those once the
-            // index is trusted (a superset: the record decides); otherwise a bounded scan
-            const db = (c.env as { SEARCH_DB?: SearchDb }).SEARCH_DB;
-            const indexed = db && await footprintsComplete(db, 'playlists').catch(() => false)
-                ? await footprintTargets(db, userId, 'playlist').catch(() => null)
-                : null;
-            if (indexed) {
-                for (const p of await Promise.all(indexed.map((key) => repository.getObject(key).catch(() => null)))) {
-                    if (own(p)) matches.push(p);
-                }
-            } else {
-                let scanCursor: string | undefined;
-                for (let page = 0; page < CHANNEL_SCAN_MAX_PAGES; page++) {
-                    const result = await repository.listObjects(CHANNEL_SCAN_PAGE_SIZE, scanCursor);
-                    for (const playlist of result.items || []) if (own(playlist)) matches.push(playlist);
-                    if (!result.cursor) break;
-                    scanCursor = result.cursor;
-                }
-            }
+            const { playlists: matches, source } = await collectPersonalPlaylists(c.env, userId, own);
             matches.sort((a, b) => (b.dateModified || '').localeCompare(a.dateModified || ''));
             const page = slicePage(named(matches), cursor, limit);
-            logger.debug('[PlaylistsList] Personal playlists listed', { userId, count: matches.length, source: indexed ? 'footprints' : 'scan' });
+            logger.debug('[PlaylistsList] Personal playlists listed', { userId, count: matches.length, source });
             return {
                 cursor: page.cursor,
                 limit,

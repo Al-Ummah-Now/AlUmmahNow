@@ -35,6 +35,7 @@ import { EMBED_REQUEST_HEADER, isEmbedPath, isFeedPath, isOEmbedPath, isShareIma
 import { parseEmbedLang } from '@/lib/embed/params';
 import { NONCE_HEADER } from '@/lib/security/nonce-header';
 import { handleRewritePath, legacyHandlePath } from '@/lib/channel-url';
+import { legacyUserProfilePath, userProfileRewritePath } from '@/lib/user-url';
 import { refreshSessionCookie } from '@/lib/auth/middleware-refresh';
 import { presentSessionCookieNames, sessionCookieOptions, writeSessionValue } from '@/lib/auth/session-cookie';
 import { isProductionDeployment, legacyWatchRedirect, robotsHeaderFor } from '@/lib/seo/robots';
@@ -171,6 +172,24 @@ function routeRequest(request: NextRequest): NextResponse {
     const target = new URL(legacyHandle, request.url);
     target.search = request.nextUrl.search;
     return NextResponse.redirect(target, 301);
+  }
+
+  // Public profiles (Story 29.5): /{locale}/u/{handle} opened directly 301s to /{locale}/u/@{handle};
+  // the @ form is rewritten to /u/{handle} (handles may contain `.`, so before the static-file check)
+  const legacyProfile = legacyUserProfilePath(pathname);
+  if (legacyProfile) {
+    const target = new URL(legacyProfile, request.url);
+    target.search = request.nextUrl.search;
+    return NextResponse.redirect(target, 301);
+  }
+  const profileRoute = userProfileRewritePath(pathname);
+  if (profileRoute && getSupportedLocaleCodes().includes(profileRoute.locale)) {
+    const target = request.nextUrl.clone();
+    target.pathname = profileRoute.path;
+    const response = nextWithSecurityHeaders(request, isDevelopment, profileRoute.locale, target);
+    response.headers.set('X-Locale', profileRoute.locale);
+    response.headers.set('X-Text-Direction', getTextDirection(profileRoute.locale));
+    return response;
   }
 
   // Channel @handle URLs (Story 29.1): handles may contain `.`, so this runs

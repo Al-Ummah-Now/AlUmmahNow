@@ -15,6 +15,7 @@ import i18nRouter from './i18n.router';
 import discoveryRouter from './discovery.router';
 import privacyRouter from './privacy.router';
 import libraryRouter from './library.router';
+import usersRouter from './users.router';
 import notificationsRouter from './notifications.router';
 import searchRouter from './search.router';
 import appConfigRouter, { appConfigAdminRouter } from './app-config.router';
@@ -101,6 +102,9 @@ export function registerAllRouters(openapi: any) {
   // Library domain - Watch later, liked videos, saved posts (Story 29.6)
   openapi.route('/api/library', libraryRouter);
 
+  // Public profiles by @handle (Story 29.5)
+  openapi.route('/api/users', usersRouter);
+
   // Notifications domain - notification center, settings, per-channel bell (Story 29.10)
   openapi.route('/api/notifications', notificationsRouter);
   // App config (Epic 9.3) - API versions and minimum supported app version
@@ -144,6 +148,7 @@ export {
   monitoringRouter,
   privacyRouter,
   libraryRouter,
+  usersRouter,
   notificationsRouter,
   searchRouter,
 };

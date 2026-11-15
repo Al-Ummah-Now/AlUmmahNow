@@ -1,3 +1,4 @@
+import { resolvePublicProfilePrivacy } from './userHandles';
 // Transformation utilities for converting business models to view models
 // This reduces code duplication across endpoints
 
@@ -159,6 +160,8 @@ export function transformProfileToView(profile: z.infer<typeof BusinessProfile>,
         dateCreated: profile.dateCreated,
         dateModified: profile.dateModified,
         channelsCount: profile.channels?.length || 0,
+        ...(profile.handle ? { handle: profile.handle } : {}),
+        publicProfile: resolvePublicProfilePrivacy(profile.publicProfile),
         // For detailed views, channels array can be populated separately
         channels: undefined,
     };
