@@ -4,7 +4,7 @@
  * Bunny's Content-Range for the copy and this environment's finished transcodes (media_jobs) for
  * the transcode time, the rendition bytes and the R2 writes.
  */
-import { backfillCost, type BackfillEstimate, type BackfillScope, type BackfillSkipReason, type VideoR2State } from '@al-ummah/shared-types';
+import { backfillCost, underHold, type BackfillEstimate, type BackfillScope, type BackfillSkipReason, type VideoR2State } from '@al-ummah/shared-types';
 import R2Repository from '../../r2Repo';
 import { bunnyRef } from '../providers';
 import type { LibraryHints } from '../../bunny/libraries';
@@ -89,6 +89,7 @@ export async function measuredBasis(db: Db): Promise<BackfillEstimate['basis']> 
 }
 
 interface PlanVideo extends LibraryHints {
+	suspensionHolds?: unknown;
 	id: string;
 	title?: string;
 	channelId?: string | null;
@@ -142,6 +143,8 @@ export async function planItem(env: BackfillEnv, row: ScopeRow, scope: BackfillS
 	if (!video) return { ...base, skipReason: 'not_found' };
 	if (video.isDeleted) return { ...base, skipReason: 'deleted' };
 	if (video.isLive || row.is_live) return { ...base, skipReason: 'live' };
+	// CSAM containment or a suspension: never copied or transcoded (the Bunny copy may be evidence)
+	if (underHold(video)) return { ...base, skipReason: 'held' };
 	const r2Ready = video.r2?.status === 'ready' && !!video.r2.result;
 	if (scope.onlyMissing && r2Ready) return { ...base, skipReason: 'has_rendition' };
 	if (r2Ready) {

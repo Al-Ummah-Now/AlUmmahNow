@@ -24,7 +24,9 @@ admin: Play R2 first (video / channel / global)      │   admin: Retire library
 2. **Estimate** (`op: estimate`, one page per message). For each video, the item is planned from real sizes: a
    kept original (`media_originals`) needs no copy; otherwise Bunny's best file (`original`, else the largest
    `play_<res>p.mp4`) is measured with a one-byte range request (Content-Range gives the real size). Deleted videos,
-   live streams, videos still processing or already verified are left out with a reason. Costs use `PRICES`
+   live streams, videos still processing or already verified are left out with a reason, and so is any video under a
+   suspension hold (CSAM containment, a suspended or deleted channel or user): it is never copied or transcoded, and the
+   check runs again when the video would start. Costs use `PRICES`
    (`lib/media/costs.ts`) with ratios measured from this environment's finished transcodes (`media_jobs`): container
    seconds, rendition bytes and objects per second of video. With no finished transcode yet the ratios are assumed and
    the page says so. The cap starts at the estimate (rounded up to the cent).
@@ -73,7 +75,8 @@ A separate action on the same page, with a typed confirmation (the library id) a
 - **Schedule** — every video verified in that library gets a row in `media_bunny_removals` with `delete_after` = now +
   the grace period (7–90 days). Cancel puts scheduled rows back to cancelled.
 - **Remove** (sweep cron queues due rows, `op: removal`, 2 s apart) — right before the delete, the video is checked
-  again: it must still be verified at its current rev, else the removal fails and flags the admin. A thumbnail hosted on
+  again: a video under any suspension hold is cancelled (a CSAM hold's Bunny copy is preserved evidence, never deleted),
+  and it must still be verified at its current rev, else the removal fails and flags the admin. A thumbnail hosted on
   Bunny is copied byte for byte to R2 (`pub/thumbs/<id>/kept-<uuid>.<ext>`) first, never replaced by another frame.
   The video's Bunny provider entry is removed and `bunnyRemoved` is set, then the Bunny video is deleted
   (`deleteBunnyVideo` in that library). Failures: needs-action `media-bunny-removal:<videoId>`, Retry through

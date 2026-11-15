@@ -38,7 +38,15 @@ export type BackfillRunStatus = 'estimating' | 'estimated' | 'running' | 'paused
 export type BackfillItemState = 'pending' | 'copying' | 'transcoding' | 'verifying' | 'verified' | 'failed' | 'skipped' | 'cancelled';
 
 /** Why an item needs no work (estimate time). */
-export type BackfillSkipReason = 'deleted' | 'live' | 'not_found' | 'no_source' | 'already_verified' | 'has_rendition' | 'not_ready';
+export type BackfillSkipReason = 'deleted' | 'live' | 'not_found' | 'no_source' | 'already_verified' | 'has_rendition' | 'not_ready' | 'held';
+
+/**
+ * Under a suspension hold (CSAM containment, a suspended or deleted channel or user: admin-content.ts holds)?
+ * A backfill never copies, transcodes or deletes such a video: a CSAM hold's Bunny copy is preserved evidence.
+ */
+export function underHold(record: { suspensionHolds?: unknown } | null | undefined): boolean {
+	return Array.isArray(record?.suspensionHolds) && record!.suspensionHolds.length > 0;
+}
 
 /** Cost lines. Bytes and seconds are the inputs; usd is the list price (lib/media/costs.ts PRICES). */
 export interface BackfillCost {

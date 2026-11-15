@@ -10,7 +10,7 @@
  * it any more (bunnyRef → null), then deletes the video from that Bunny library. Library settings are
  * never changed (notably "Block Direct Url File Access" is left as it is).
  */
-import { BACKFILL_LIMITS, reportNeedsAction, resolveNeedsAction, type BunnyLibrarySummary, type BunnyRemoval, type VideoMediaProviders, type VideoR2State } from '@al-ummah/shared-types';
+import { BACKFILL_LIMITS, underHold, reportNeedsAction, resolveNeedsAction, type BunnyLibrarySummary, type BunnyRemoval, type VideoMediaProviders, type VideoR2State } from '@al-ummah/shared-types';
 import { logger } from '../../logger';
 import R2Repository from '../../r2Repo';
 import { bunnyHostOf, bunnyLibraries, type BunnyLibrary } from '../../bunny/libraries';
@@ -52,6 +52,7 @@ export interface RemovedBunnyCopy {
 }
 
 interface RemovalVideo {
+	suspensionHolds?: unknown;
 	id: string;
 	isDeleted?: boolean;
 	bunnyLibraryId?: number;
@@ -214,6 +215,11 @@ export async function removeFromBunny(env: BackfillEnv, ctx: Ctx, videoId: strin
 		if (!video || video.isDeleted) {
 			// The deletion paths own a deleted video's Bunny copy (restore needs it until the purge)
 			await setStatus(env, videoId, 'cancelled', { error: 'The video was deleted; its own purge removes it from Bunny' }, now);
+			return;
+		}
+		if (underHold(video)) {
+			// CSAM containment or a suspension: Bunny's copy stays (a CSAM hold's copy is preserved evidence)
+			await setStatus(env, videoId, 'cancelled', { error: 'The video is under a hold (containment or suspension); its Bunny copy is kept' }, now);
 			return;
 		}
 		const verified = await db(env).prepare('SELECT rev FROM media_r2_verified WHERE video_id = ?1').bind(videoId).first<{ rev: string }>();

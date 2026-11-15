@@ -296,14 +296,14 @@ describe('backfill estimate', () => {
 	});
 
 	it('estimates from real sizes and measured ratios, and skips what needs nothing', async () => {
-		const env = await makeEnv({ [id(1)]: legacyVideo(1), [id(2)]: legacyVideo(2, { isLive: true }) });
-		const run = await createRun(env, { kind: 'videos', videoIds: [id(1), id(2), id(9)], onlyMissing: false }, 'admin-1');
+		const env = await makeEnv({ [id(1)]: legacyVideo(1), [id(2)]: legacyVideo(2, { isLive: true }), [id(3)]: legacyVideo(3, { suspensionHolds: ['csam'], isHidden: true }) });
+		const run = await createRun(env, { kind: 'videos', videoIds: [id(1), id(2), id(3), id(9)], onlyMissing: false }, 'admin-1');
 		assert.equal(run.status, 'estimating');
 		await drain(env);
 		const done = (await readRun(env.SEARCH_DB, run.id))!;
 		assert.equal(done.status, 'estimated');
 		assert.equal(done.estimate!.videos, 1);
-		assert.deepEqual(done.estimate!.skipped, { live: 1, not_found: 1 });
+		assert.deepEqual(done.estimate!.skipped, { live: 1, not_found: 1, held: 1 }, 'a held (CSAM) video is never copied');
 		assert.equal(done.estimate!.egressBytes, SOURCE.length, "Bunny's Content-Range size");
 		assert.equal(done.estimate!.transcodeSeconds, 45, '90 s × 0.5 measured');
 		assert.equal(done.estimate!.basis.assumed, false);
@@ -396,6 +396,19 @@ describe('backfill run', () => {
 		// A cap that covers the next video resumes it
 		await changeSettings(env, run.id, { concurrency: 1, spacingSeconds: 0, budgetUsd: 5 });
 		assert.equal((await startRun(env, undefined, run.id)).status, 'running');
+	});
+
+	it('a video put under a hold after the estimate is left out at start, nothing copied', async () => {
+		const env = await makeEnv({ [id(1)]: legacyVideo(1) });
+		const run = await createRun(env, { kind: 'all', onlyMissing: false }, 'admin-1');
+		await drain(env);
+		await env.videos.put(id(1), JSON.stringify({ ...env.videos.read(id(1)), suspensionHolds: ['csam'], isHidden: true }));
+		await changeSettings(env, run.id, { concurrency: 1, spacingSeconds: 0, budgetUsd: 5 });
+		await startRun(env, undefined, run.id);
+		await drain(env, { ticks: 2 });
+		const item = (await getItem(env.SEARCH_DB, run.id, id(1)))!;
+		assert.deepEqual([item.state, item.skip_reason], ['skipped', 'held']);
+		assert.equal(env.MEDIA_ORIGINALS.store.size, 0, 'nothing copied');
 	});
 
 	it('pause starts nothing; cancel cancels what has not started', async () => {
@@ -496,6 +509,20 @@ describe('retiring a Bunny library', () => {
 		assert.deepEqual(bunnyDeletes, [`${LEGACY_LIB}/${id(1)}`]);
 		const row = await env.SEARCH_DB.prepare('SELECT status FROM media_bunny_removals WHERE video_id = ?').bind(id(1)).first();
 		assert.equal(row.status, 'removed');
+	});
+
+	it('a video under a hold (CSAM evidence) is never deleted from Bunny', async () => {
+		const env = await verified();
+		const now = new Date();
+		await scheduleRemovals(env, LEGACY_LIB, 7, 'admin-1', now);
+		await env.videos.put(id(1), JSON.stringify({ ...env.videos.read(id(1)), suspensionHolds: ['csam'], isHidden: true }));
+		await queueDueRemovals(env, new Date(now.getTime() + 8 * 86_400_000));
+		await drain(env);
+		assert.deepEqual(bunnyDeletes, []);
+		assert.equal(env.videos.read(id(1)).bunnyRemoved, undefined);
+		const row = await env.SEARCH_DB.prepare('SELECT status, error FROM media_bunny_removals WHERE video_id = ?').bind(id(1)).first();
+		assert.equal(row.status, 'cancelled');
+		assert.match(row.error, /under a hold/);
 	});
 
 	it('cancel stops scheduled removals; a re-transcoded (unverified) rendition is never removed', async () => {
