@@ -47,6 +47,7 @@ export interface VideoSideRecordsEnv {
 	global_settings?: unknown;
 	SCHEDULED_VIDEOS?: unknown;
 	'scheduled-videos'?: unknown;
+	SEARCH_DB?: unknown;
 }
 
 /** The scheduler's key for a video scheduled at `date` (UTC day and hour). */
@@ -75,6 +76,12 @@ export async function deleteVideoSideRecords(
 		if (typeof record?.uploadFingerprint === 'string' && record.uploadFingerprint) {
 			if (await releaseClaimFor(settings as never, record.uploadFingerprint, videoId)) deleted.push(`global_settings/upload-fingerprint/${record.uploadFingerprint}`);
 		}
+	}
+	// Viewer-side machine translations of the title and description (AUN-CAPTIONS §5.9)
+	const search = env.SEARCH_DB as { prepare(sql: string): { bind(...v: unknown[]): { run(): Promise<unknown> } } } | undefined;
+	if (search?.prepare) {
+		await search.prepare('DELETE FROM metadata_translations WHERE video_id = ?').bind(videoId).run();
+		deleted.push(`search_db/metadata_translations/${videoId}`);
 	}
 	const scheduled = (env.SCHEDULED_VIDEOS ?? env['scheduled-videos']) as DeletableBucket | undefined;
 	const when = typeof record?.scheduledPublishDate === 'string' ? new Date(record.scheduledPublishDate) : null;

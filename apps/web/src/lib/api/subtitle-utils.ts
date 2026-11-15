@@ -20,6 +20,9 @@ export interface ApiSubtitleTrack {
   fileSize?: number;
   url: string;
   status?: 'processing' | 'ready' | 'error';
+  /** A machine translation of another track (AUN-CAPTIONS §3.5): labelled as such in the menu */
+  machineTranslation?: boolean;
+  sourceLanguage?: string;
 }
 
 /**

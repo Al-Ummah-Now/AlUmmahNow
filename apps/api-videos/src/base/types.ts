@@ -49,6 +49,17 @@ export interface AppBindings {
   // D1 search index (Epic 29, migrations/search); also holds the upload rate limits (middleware/rate-limit.ts).
   // Optional so local setups without it still run.
   SEARCH_DB?: D1Database;
+  /** The processor (service binding): inline and viewer-side translation run there (AUN-CAPTIONS §5.8) */
+  PROCESSOR?: Fetcher;
+  /** Quran Foundation client (translated caption tracks, O7) */
+  QF_CLIENT_ID?: { get(): Promise<string> } | string;
+  QF_CLIENT_SECRET?: { get(): Promise<string> } | string;
+  QF_OAUTH_HOST?: string;
+  QF_API_HOST?: string;
+  /** "fixture": Quran translations from fixtures (local stack, E2E) */
+  QURAN_PROVIDER?: string;
+  /** DeepL API Pro key (O2); unbound = DeepL is never used */
+  AI_KEY_DEEPL?: { get(): Promise<string> } | string;
 
   // KV Namespaces
   /** Workers rate limiting: watch-time reports per playback session (#235). Optional: unlimited without it. */

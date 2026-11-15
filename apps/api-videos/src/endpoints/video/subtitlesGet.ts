@@ -4,7 +4,9 @@
 
 import { Str, Enumeration } from 'chanfana';
 import { z } from 'zod';
+import { captionMarkerRanges } from '@al-ummah/shared-types';
 import { fillServedTrack, quranCopyTag } from '../../lib/captions/drafts';
+import { editionFor } from '../../lib/quran/translations';
 import { logger } from '../../lib/logger';
 import { PublicRoute, AppContext } from '../../base';
 
@@ -101,7 +103,18 @@ export class SubtitlesGet extends PublicRoute {
       // A published caption draft carries Quran markers (AUN-CAPTIONS), filled from our Quran
       // Foundation copy as it is served: the copy version is part of the ETag
       const quranTrack = key.endsWith('.vtt') && subtitleObject.customMetadata?.quran === '1';
-      const etag = quranTrack ? `"${subtitleObject.etag.replace(/"/g, '')}-${await quranCopyTag(c.env.MEDIA_PRIVATE)}"` : subtitleObject.etag;
+      // A translated track (customMetadata.qtr) shows the official translation of the channel's
+      // edition for its language, fetched live (O7): the edition is part of the ETag too
+      const translatedTrack = quranTrack && subtitleObject.customMetadata?.qtr === '1';
+      let edition: Awaited<ReturnType<typeof editionFor>> = null;
+      if (translatedTrack) {
+        const videoObj = await c.env.videos?.get(videoId).catch(() => null);
+        const channelId = videoObj ? ((await videoObj.json().catch(() => null)) as { channelId?: string } | null)?.channelId : null;
+        edition = await editionFor(c.env as never, channelId, language);
+      }
+      const etag = quranTrack
+        ? `"${subtitleObject.etag.replace(/"/g, '')}-${await quranCopyTag(c.env.MEDIA_PRIVATE)}${translatedTrack ? `-e${edition?.id ?? 0}` : ''}"`
+        : subtitleObject.etag;
 
       // Check If-None-Match header for conditional request
       const ifNoneMatch = c.req.header('If-None-Match');
@@ -117,7 +130,9 @@ export class SubtitlesGet extends PublicRoute {
       }
 
       const raw = await subtitleObject.text();
-      const content = quranTrack ? await fillServedTrack(raw, language, c.env.MEDIA_PRIVATE) : raw;
+      const content = quranTrack
+        ? await fillServedTrack(raw, language, c.env.MEDIA_PRIVATE, translatedTrack && captionMarkerRanges(raw).translation.length ? { env: c.env as never, edition } : undefined)
+        : raw;
 
       // Return raw subtitle content with ETag for cache validation
       return new Response(content, {

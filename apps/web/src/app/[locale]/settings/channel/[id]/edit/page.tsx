@@ -16,6 +16,7 @@ import { useConfirm } from '@/components/ui/confirm-dialog';
 import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
 import { logger } from '@/lib/logger-client';
 import { can } from '@al-ummah/shared-types';
+import ChannelTranslationSettings from '@/components/settings/ChannelTranslationSettings';
 
 interface ChannelData {
   id: string;
@@ -480,6 +481,11 @@ function ChannelEditPage() {
               </Link>
             </div>
           </form>
+        </div>
+
+        {/* Quran translation in translated captions, and machine-translated titles for viewers */}
+        <div className="mt-6">
+          <ChannelTranslationSettings channelId={channelId} />
         </div>
       </div>
     </div>

@@ -24,6 +24,10 @@ const NEURONS_PER_M: Record<string, [number, number]> = {
   '@cf/google/gemma-4-26b-a4b-it': [9091, 27273], // $0.10 / $0.30 per M
   // Speech to text is priced per audio minute ($0.000513); usage counts seconds as "input tokens"
   '@cf/openai/whisper-large-v3-turbo': [777273, 0],
+  // Transcript translation (AUN-CAPTIONS §1; the CMS's measured catalog price, $0.30 / $1.20 per M)
+  '@cf/deepseek-ai/deepseek-v4.1-flash-1017': [27273, 109091],
+  // DeepL API Pro, $27.50 per 1M characters (usage counts characters as "input tokens")
+  'deepl-pro': [2500000, 0],
 };
 
 /** Unknown models are priced like the most expensive known input/output rates (never under-count). */

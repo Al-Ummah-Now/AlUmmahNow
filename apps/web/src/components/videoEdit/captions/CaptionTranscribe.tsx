@@ -53,6 +53,8 @@ export function jobStepText(t: CaptionsTranslations['jobs'], job: CaptionJobView
   switch (job.status) {
     case 'transcribing':
       return job.progress && job.progress.total > 0 ? t.step.transcribing.replace('{done}', String(job.progress.done)).replace('{total}', String(job.progress.total)) : t.step.transcribingStart;
+    case 'translating':
+      return job.progress && job.progress.total > 0 ? t.step.translating.replace('{done}', String(job.progress.done)).replace('{total}', String(job.progress.total)) : t.step.translatingStart;
     case 'queued':
     case 'waiting_budget':
     case 'extracting':
@@ -75,7 +77,8 @@ export default function CaptionTranscribe({ videoId, spokenLanguage, jobs, minut
 
   const { usage, minutesNeeded } = refusal ?? minutes;
   const resets = new Intl.DateTimeFormat(lang === 'ar' ? 'ar' : 'en', { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(usage.resetsAt));
-  const shown = visibleJobs(jobs);
+  // Translations show with their source draft (CaptionTranslate); a running one doesn't block this form
+  const shown = visibleJobs(jobs.filter((j) => j.kind !== 'translate'));
   /** One job at a time: while one runs, its chip replaces the form */
   const running = shown.some((j) => isCaptionJobActive(j.status));
   const retry = shown.some((j) => j.language === language && j.status === 'failed');

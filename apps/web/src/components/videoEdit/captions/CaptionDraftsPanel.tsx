@@ -9,7 +9,7 @@
  */
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { isCaptionJobActive } from '@al-ummah/shared-types';
-import { AudioLines, BookOpen, FilePenLine, Loader2, Trash2, UploadCloud } from 'lucide-react';
+import { AudioLines, BookOpen, FilePenLine, Languages, Loader2, Trash2, UploadCloud } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { reportError } from '@/lib/errors/reporter';
@@ -27,6 +27,7 @@ import {
 } from '@/lib/api/caption-drafts';
 import CaptionDraftEditor from './CaptionDraftEditor';
 import CaptionTranscribe, { type CaptionMinutes } from './CaptionTranscribe';
+import CaptionTranslate, { TranslationJobs } from './CaptionTranslate';
 
 export interface CaptionDraftsPanelProps {
   videoId: string;
@@ -49,6 +50,8 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
+  /** The source draft whose Translate form is open */
+  const [translating, setTranslating] = useState<string | null>(null);
   const [claims, setClaims] = useState<CaptionClaim[]>([]);
   const [transcript, setTranscript] = useState(false);
   const [claimLang, setClaimLang] = useState('ar');
@@ -125,6 +128,8 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
     return l ? (lang === 'ar' ? l.nameAr : l.name) : code;
   };
 
+  const sourceVersion = (language: string) => drafts?.find((x) => x.language === language)?.version;
+
   const upsert = (summary?: CaptionDraftSummary) => {
     if (!summary) return;
     setDrafts((d) => (d ? d.map((x) => (x.language === summary.language ? summary : x)) : d));
@@ -198,6 +203,8 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
           reload={load}
         />
       )}
+      {minutes && <TranslationJobs videoId={videoId} jobs={jobs} t={tc} label={label} confirm={confirm} reload={load} />}
+
       {(!!drafts?.length || transcript || claims.length > 0) && (
         <div>
           <h4 className="text-base font-semibold text-foreground">{tc.draftsTitle}</h4>
@@ -306,7 +313,19 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
                       {statusLabel}
                     </span>
                   </div>
-                  <p className="text-xs text-muted-foreground">{tc.origin[d.origin]}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {d.kind === 'translation' && d.sourceLanguage ? tc.translate.from.replace('{language}', label(d.sourceLanguage)) : tc.origin[d.origin]}
+                  </p>
+                  {d.kind === 'translation' && !isPublished && (
+                    <p data-testid="caption-draft-machine" className="text-xs font-medium text-brand-ink">
+                      {tc.translate.review}
+                    </p>
+                  )}
+                  {d.kind === 'translation' && d.sourceLanguage && d.sourceVersion !== undefined && sourceVersion(d.sourceLanguage) !== undefined && sourceVersion(d.sourceLanguage)! > d.sourceVersion && (
+                    <p data-testid="caption-draft-source-changed" className="text-xs text-muted-foreground">
+                      {tc.translate.sourceChanged.replace('{language}', label(d.sourceLanguage))}
+                    </p>
+                  )}
                   {d.pendingQuran > 0 && (
                     <p className="inline-flex items-center gap-1 text-xs font-medium text-brand-ink">
                       <BookOpen className="h-3.5 w-3.5" aria-hidden />
@@ -324,6 +343,18 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
                     <FilePenLine className="h-4 w-4" aria-hidden />
                     {tc.edit}
                   </button>
+                  {d.kind === 'source' && minutes && (
+                    <button
+                      type="button"
+                      data-testid="caption-draft-translate"
+                      aria-expanded={translating === d.language}
+                      onClick={() => setTranslating((cur) => (cur === d.language ? null : d.language))}
+                      className="inline-flex h-10 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-sm text-foreground hover:bg-muted"
+                    >
+                      <Languages className="h-4 w-4" aria-hidden />
+                      {tc.translate.action}
+                    </button>
+                  )}
                   <button
                     type="button"
                     data-testid="caption-draft-publish"
@@ -347,6 +378,21 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
                   </button>
                 </div>
               </div>
+              {translating === d.language && minutes && (
+                <CaptionTranslate
+                  videoId={videoId}
+                  sourceLanguage={d.language}
+                  jobs={jobs}
+                  minutes={minutes}
+                  draftLanguages={(drafts ?? []).map((x) => x.language)}
+                  t={tc}
+                  lang={lang}
+                  confirm={confirm}
+                  label={label}
+                  reload={load}
+                  onClose={() => setTranslating(null)}
+                />
+              )}
             </li>
           );
         })}

@@ -34,6 +34,7 @@ import { enableWatchPageFeatures, getPlayerUi, subscribePlayerUi, updatePlayerUi
 import { CommentsSkeleton, WatchDetailsSkeleton } from "@/components/video/WatchPageSkeleton";
 import { PlaylistPane } from "@/components/video/PlaylistPane";
 import { usePlaylistPlayback } from "@/hooks/usePlaylistPlayback";
+import { useViewerTranslation } from "@/hooks/useViewerTranslation";
 import { shareableList } from "@/lib/playlists/playback";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { clearAutoplayIntent, hasAutoplayIntent, isAutoAdvance, requestAutoplay } from "@/lib/video/autoplay-intent";
@@ -383,7 +384,7 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
                     is on hover or focus, and in full when expanded */}
                 <WatchMetaSummary video={videoDetails} views={videoDetails.views} lang={lang} describedById="watch-meta-tip" />
                 <WatchMetaDetail video={videoDetails} views={videoDetails.views} lang={lang} />
-                {videoDetails.description && <p>{videoDetails.description}</p>}
+                <WatchDescription video={videoDetails} lang={lang} />
               </details>
             </div>
           )}
@@ -416,4 +417,12 @@ export default function WatchPageContent({ videoId, skeleton }: { videoId: strin
       </div>
     </main>
   );
+}
+
+/** The description, or its machine translation while the title shows one (same "Show original" choice). */
+function WatchDescription({ video, lang }: { video: { id: string; title: string; titleLocalized?: Record<string, string>; description?: string | null }; lang: string }) {
+  const viewer = useViewerTranslation(video, lang);
+  const translated = viewer.showing ? viewer.translation!.description : null;
+  if (translated) return <p lang={viewer.translation!.lang} dir="auto" data-machine-translation="true">{translated}</p>;
+  return video.description ? <p>{video.description}</p> : null;
 }

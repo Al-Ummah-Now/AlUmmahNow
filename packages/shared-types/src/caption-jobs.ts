@@ -17,15 +17,18 @@
  * retry of a platform failure is free.
  */
 
-export const CAPTION_JOB_STATUSES = ['queued', 'waiting_budget', 'extracting', 'transcribing', 'postprocessing', 'ready', 'failed', 'cancelled'] as const;
+export const CAPTION_JOB_STATUSES = ['queued', 'waiting_budget', 'extracting', 'transcribing', 'translating', 'postprocessing', 'ready', 'failed', 'cancelled'] as const;
 export type CaptionJobStatus = (typeof CAPTION_JOB_STATUSES)[number];
 
 export const CAPTION_JOB_TERMINAL: readonly CaptionJobStatus[] = ['ready', 'failed', 'cancelled'];
 export const isCaptionJobActive = (status: CaptionJobStatus) => !CAPTION_JOB_TERMINAL.includes(status);
 
 /** Why a job failed (Studio maps each to an en/ar message). */
-export const CAPTION_JOB_ERRORS = ['audio_unavailable', 'transcription_failed', 'no_speech', 'draft_exists', 'video_gone', 'failed'] as const;
+export const CAPTION_JOB_ERRORS = ['audio_unavailable', 'transcription_failed', 'no_speech', 'draft_exists', 'video_gone', 'source_missing', 'source_changed', 'translation_failed', 'failed'] as const;
 export type CaptionJobError = (typeof CAPTION_JOB_ERRORS)[number];
+
+export const CAPTION_JOB_KINDS = ['transcribe', 'translate'] as const;
+export type CaptionJobKind = (typeof CAPTION_JOB_KINDS)[number];
 
 export interface CaptionJob {
   id: string;
@@ -34,15 +37,19 @@ export interface CaptionJob {
   /** Who pays (the tier holder; caption-minutes.ts) */
   subjectId: string;
   requestedBy: string;
-  kind: 'transcribe';
-  /** The language spoken in the video, the draft's language */
+  /** transcribe: speech to a source draft; translate: a source draft into another language (§5.7) */
+  kind: CaptionJobKind;
+  /** The draft's language: the language spoken (transcribe) or the target (translate) */
   language: string;
+  /** translate: the source draft's language and the version translated (the creator's corrected text) */
+  sourceLanguage: string | null;
+  sourceVersion: number | null;
   /** Replace a draft that exists in that language */
   replace: boolean;
   provider: string;
   model: string;
   status: CaptionJobStatus;
-  /** Chunks transcribed so far, of `total` (Studio's "Transcribing 3/7") */
+  /** Chunks transcribed (or cue batches translated) so far, of `total` (Studio's "Transcribing 3/7") */
   progress: { done: number; total: number } | null;
   minutesReserved: number;
   minutesCharged: number | null;

@@ -179,6 +179,7 @@ export default function PlaylistDetailsFields({ value, onChange, idPrefix, compa
         labels={{ en: p.nameEnglish, ar: p.nameArabic }}
         textOf={(language) => (language === 'en' ? value.titleEn : value.titleAr)}
         onTranslated={(language, text) => set(language === 'en' ? { titleEn: text } : { titleAr: text })}
+        field="playlist"
         idPrefix={`${idPrefix}-title`}
         testId={`${idPrefix}-title-pair`}
       >
@@ -208,6 +209,7 @@ export default function PlaylistDetailsFields({ value, onChange, idPrefix, compa
           labels={{ en: p.descriptionEnglish, ar: p.descriptionArabic }}
           textOf={(language) => (language === 'en' ? value.descriptionEn : value.descriptionAr)}
           onTranslated={(language, text) => set(language === 'en' ? { descriptionEn: text } : { descriptionAr: text })}
+          field="playlist"
           idPrefix={`${idPrefix}-description`}
           testId={`${idPrefix}-description-pair`}
         >

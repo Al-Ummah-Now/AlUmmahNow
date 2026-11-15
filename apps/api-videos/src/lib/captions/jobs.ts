@@ -11,7 +11,12 @@
 import {
 	CAPTION_JOB_ERRORS,
 	CAPTION_JOB_STATUSES,
+	CAPTION_TRANSLATE_MODELS,
+	INLINE_TRANSLATE_DEFAULT_DAILY_ITEMS,
 	MessageType,
+	type CaptionDraft,
+	type CaptionTranslatePayload,
+	type TranslationProvider,
 	captionDraftKey,
 	captionMinutesFor,
 	captionWorkPrefix,
@@ -58,6 +63,8 @@ export interface CaptionJobsEnv {
 	ENVIRONMENT?: string;
 	INTERNAL_API_KEY?: unknown;
 	ERRORS_INGEST_URL?: string;
+	/** DeepL API Pro key (Secrets Store `AI_KEY_DEEPL`, O2); unbound = DeepL is never used */
+	AI_KEY_DEEPL?: unknown;
 }
 
 export class CaptionJobHttpError extends Error {
@@ -75,21 +82,92 @@ const db = (env: CaptionJobsEnv) => {
 export interface CaptionSettings {
 	monthlyBudgetUsd: number;
 	model: string;
+	/** Transcript translation (§5.7, §10): Workers AI models; DeepL only when an admin turned it on (O2) */
+	translation: {
+		enabled: boolean;
+		model: string;
+		fallbackModel: string;
+		deepl: boolean;
+		/** Target languages DeepL is used for; empty = every language it supports */
+		deeplLanguages: string[];
+	};
+	/** Inline title/description translation (§5.8): free on every tier, fair use per day (O5), budget backstop */
+	inline: {
+		/** The admin kill switch */
+		enabled: boolean;
+		/** Texts one user may translate per UTC day (cache hits don't count) */
+		dailyItems: number;
+		/** The month's budget for inline and viewer-side translation; a day may spend 1/30 of it */
+		monthlyBudgetUsd: number;
+	};
+	/** Viewer-side translated titles (§5.9, O6 / P4): off until an admin turns it on */
+	viewerTitles: { enabled: boolean };
+}
+
+const MODEL_ID = /^@cf\/[a-z0-9._-]+\/[a-z0-9._-]+$/i;
+const LANG = /^[a-z]{2,3}(?:-[A-Za-z]{2,4})?$/;
+
+export function defaultCaptionSettings(env: Pick<CaptionJobsEnv, 'ENVIRONMENT'>): CaptionSettings {
+	return {
+		monthlyBudgetUsd: env.ENVIRONMENT === 'production' ? 100 : 5,
+		model: CAPTION_MODEL,
+		translation: { enabled: true, model: CAPTION_TRANSLATE_MODELS.primary, fallbackModel: CAPTION_TRANSLATE_MODELS.fallback, deepl: false, deeplLanguages: [] },
+		inline: { enabled: true, dailyItems: INLINE_TRANSLATE_DEFAULT_DAILY_ITEMS, monthlyBudgetUsd: env.ENVIRONMENT === 'production' ? 20 : 2 },
+		// O6 (decided 2026-11-11): on, labelled, each channel can opt out; the admin can pause it
+		viewerTitles: { enabled: true },
+	};
+}
+
+/** Cleans stored or submitted settings over `base`: unknown or invalid values keep `base`. */
+export function cleanCaptionSettings(raw: unknown, base: CaptionSettings): CaptionSettings {
+	const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<CaptionSettings> & { translation?: Partial<CaptionSettings['translation']> };
+	const tr = (r.translation && typeof r.translation === 'object' ? r.translation : {}) as Partial<CaptionSettings['translation']>;
+	const inl = (r.inline && typeof r.inline === 'object' ? r.inline : {}) as Partial<CaptionSettings['inline']>;
+	const vt = (r.viewerTitles && typeof r.viewerTitles === 'object' ? r.viewerTitles : {}) as Partial<CaptionSettings['viewerTitles']>;
+	return {
+		monthlyBudgetUsd: typeof r.monthlyBudgetUsd === 'number' && r.monthlyBudgetUsd >= 0 && r.monthlyBudgetUsd <= 500 ? r.monthlyBudgetUsd : base.monthlyBudgetUsd,
+		model: typeof r.model === 'string' && MODEL_ID.test(r.model) ? r.model : base.model,
+		translation: {
+			enabled: typeof tr.enabled === 'boolean' ? tr.enabled : base.translation.enabled,
+			model: typeof tr.model === 'string' && MODEL_ID.test(tr.model) ? tr.model : base.translation.model,
+			fallbackModel: typeof tr.fallbackModel === 'string' && MODEL_ID.test(tr.fallbackModel) ? tr.fallbackModel : base.translation.fallbackModel,
+			deepl: typeof tr.deepl === 'boolean' ? tr.deepl : base.translation.deepl,
+			deeplLanguages: Array.isArray(tr.deeplLanguages) ? [...new Set(tr.deeplLanguages.filter((l): l is string => typeof l === 'string' && LANG.test(l)).map((l) => l.toLowerCase()))].slice(0, 40) : base.translation.deeplLanguages,
+		},
+		inline: {
+			enabled: typeof inl.enabled === 'boolean' ? inl.enabled : base.inline.enabled,
+			dailyItems: Number.isInteger(inl.dailyItems) && (inl.dailyItems as number) >= 0 && (inl.dailyItems as number) <= 10_000 ? (inl.dailyItems as number) : base.inline.dailyItems,
+			monthlyBudgetUsd: typeof inl.monthlyBudgetUsd === 'number' && inl.monthlyBudgetUsd >= 0 && inl.monthlyBudgetUsd <= 200 ? inl.monthlyBudgetUsd : base.inline.monthlyBudgetUsd,
+		},
+		viewerTitles: { enabled: typeof vt.enabled === 'boolean' ? vt.enabled : base.viewerTitles.enabled },
+	};
 }
 
 export async function readCaptionSettings(env: CaptionJobsEnv): Promise<CaptionSettings> {
-	const fallback: CaptionSettings = { monthlyBudgetUsd: env.ENVIRONMENT === 'production' ? 100 : 5, model: CAPTION_MODEL };
+	const fallback = defaultCaptionSettings(env);
 	try {
 		const stored = await env.global_settings?.get(SETTINGS_KEY);
 		if (!stored) return fallback;
-		const raw = JSON.parse(await stored.text()) as Partial<CaptionSettings>;
-		const budget = typeof raw.monthlyBudgetUsd === 'number' && raw.monthlyBudgetUsd >= 0 && raw.monthlyBudgetUsd <= 500 ? raw.monthlyBudgetUsd : fallback.monthlyBudgetUsd;
-		const model = typeof raw.model === 'string' && /^@cf\/[a-z0-9._-]+\/[a-z0-9._-]+$/i.test(raw.model) ? raw.model : fallback.model;
-		return { monthlyBudgetUsd: budget, model };
+		return cleanCaptionSettings(JSON.parse(await stored.text()), fallback);
 	} catch (error) {
 		logger.warn('[CaptionJobs] Settings unreadable; using defaults', { error: error instanceof Error ? error.message : String(error) });
 		return fallback;
 	}
+}
+
+/** Saves the admin's settings (admin-api audits the change). */
+export async function writeCaptionSettings(env: CaptionJobsEnv & { global_settings?: Bucket & { put(key: string, value: string, opts?: unknown): Promise<unknown> } }, patch: unknown): Promise<CaptionSettings> {
+	const next = cleanCaptionSettings(patch, await readCaptionSettings(env));
+	if (!env.global_settings) throw new CaptionJobHttpError(503, 'unavailable');
+	await (env.global_settings as unknown as { put(key: string, value: string, opts?: unknown): Promise<unknown> }).put(SETTINGS_KEY, JSON.stringify(next), { httpMetadata: { contentType: 'application/json' } });
+	return next;
+}
+
+/** The provider of a translate job: DeepL when an admin turned it on for the language and its key is bound. */
+export function translationProviderFor(settings: CaptionSettings, language: string, deeplKeyBound: boolean): TranslationProvider {
+	const t = settings.translation;
+	if (!t.deepl || !deeplKeyBound) return 'workers-ai';
+	return !t.deeplLanguages.length || t.deeplLanguages.includes(language.split('-')[0]!.toLowerCase()) ? 'deepl' : 'workers-ai';
 }
 
 interface JobRow {
@@ -98,8 +176,10 @@ interface JobRow {
 	channel_id: string | null;
 	subject_id: string;
 	requested_by: string;
-	kind: 'transcribe';
+	kind: 'transcribe' | 'translate';
 	language: string;
+	source_language: string | null;
+	source_version: number | null;
 	replace_draft: number;
 	provider: string;
 	model: string;
@@ -123,8 +203,10 @@ const toJob = (r: JobRow): CaptionJob => ({
 	channelId: r.channel_id,
 	subjectId: r.subject_id,
 	requestedBy: r.requested_by,
-	kind: 'transcribe',
+	kind: r.kind === 'translate' ? 'translate' : 'transcribe',
 	language: r.language,
+	sourceLanguage: r.source_language ?? null,
+	sourceVersion: r.source_version === null || r.source_version === undefined ? null : Number(r.source_version),
 	replace: Number(r.replace_draft) === 1,
 	provider: r.provider,
 	model: r.model,
@@ -208,7 +290,37 @@ async function setStatus(env: CaptionJobsEnv, jobId: string, fields: { status: C
 }
 
 /** Sends the job's audio work: the transcription when its audio exists, else the extraction. */
+function translateMessage(job: CaptionJob, video: VideoObject, settings: CaptionSettings, now: Date): { id: string; type: MessageType; payload: CaptionTranslatePayload; timestamp: number } {
+	return {
+		id: crypto.randomUUID(),
+		type: MessageType.CaptionTranslate,
+		payload: {
+			jobId: job.id,
+			videoId: job.videoId,
+			sourceLanguage: job.sourceLanguage!,
+			sourceVersion: job.sourceVersion!,
+			language: job.language,
+			replace: job.replace,
+			requestedBy: job.requestedBy,
+			nextBatch: 0,
+			provider: job.provider === 'deepl' ? 'deepl' : 'workers-ai',
+			model: job.model,
+			fallbackModel: settings.translation.fallbackModel,
+			dailyBudgetUsd: Math.round((settings.monthlyBudgetUsd / 30) * 100) / 100,
+			context: { ...(video.title ? { title: video.title.slice(0, 200) } : {}), ...(video.channelName ? { channel: String(video.channelName).slice(0, 120) } : {}) },
+			requestedAt: now.toISOString(),
+		},
+		timestamp: now.getTime(),
+	};
+}
+
 async function dispatch(env: CaptionJobsEnv, job: CaptionJob, video: VideoObject, now: Date): Promise<CaptionJobStatus> {
+	if (job.kind === 'translate') {
+		if (!env.queue) throw new CaptionJobHttpError(503, 'queue_unavailable');
+		await env.queue.send(translateMessage(job, video, await readCaptionSettings(env), now));
+		await setStatus(env, job.id, { status: 'queued' }, now);
+		return 'queued';
+	}
 	const manifest = await reviewAudioManifest(env, video);
 	if (manifest) {
 		if (!env.queue) throw new CaptionJobHttpError(503, 'queue_unavailable');
@@ -278,6 +390,81 @@ export async function requestCaptionJob(
 		await setStatus(env, jobId, { status: 'failed', error: 'failed', finished: true }, now);
 		logger.error('[CaptionJobs] Could not send the job', { jobId, videoId: video.id, error: error instanceof Error ? error.message : String(error) });
 		throw error instanceof CaptionJobHttpError ? error : new CaptionJobHttpError(503, 'queue_unavailable');
+	}
+}
+
+/**
+ * A creator asks for a translation of a caption draft (§5.7; access already checked). The input is
+ * the source draft as it is now (the creator's corrected text), recorded as `sourceVersion`. One
+ * caption minute per video-minute per target language. Asking again while a job of the same
+ * source and target runs returns that job.
+ */
+export async function requestTranslationJob(
+	env: CaptionJobsEnv,
+	input: { video: VideoObject; userId: string; roles?: readonly string[] | null; sourceLanguage: string; language: string; replace: boolean },
+	now = new Date(),
+): Promise<RequestOutcome> {
+	const { video } = input;
+	if (input.sourceLanguage === input.language) throw new CaptionJobHttpError(400, 'same_language');
+	const settings = await readCaptionSettings(env);
+	if (!settings.translation.enabled) throw new CaptionJobHttpError(503, 'translation_paused');
+	const source = await readJsonDraft(env, video.id, input.sourceLanguage);
+	if (!source || !source.cues.length) throw new CaptionJobHttpError(404, 'source_missing');
+	if (source.kind !== 'source') throw new CaptionJobHttpError(409, 'source_is_translation');
+	const provider = translationProviderFor(settings, input.language, !!env.AI_KEY_DEEPL);
+	const key = await sha256(`${video.id}|translate|${input.language}|${provider}|${input.sourceLanguage}`);
+	const active = await db(env)
+		.prepare("SELECT * FROM caption_jobs WHERE idempotency_key = ? AND status NOT IN ('ready', 'failed', 'cancelled')")
+		.bind(key)
+		.first<JobRow>();
+	if (active) return { job: toJob(active), existing: true };
+
+	// Charged on the video's own duration, like transcription (never on draft timestamps a creator can edit)
+	if (video.uploadStatus && video.uploadStatus !== 'ready') throw new CaptionJobHttpError(409, 'video_not_ready');
+	const duration = videoDurationSeconds(video);
+	if (!duration) throw new CaptionJobHttpError(409, 'video_not_ready');
+	if (!input.replace && (await env.subtitles?.get(captionDraftKey(video.id, input.language)))) throw new CaptionJobHttpError(409, 'draft_exists');
+
+	const subject = await captionSubject(db(env), { userId: input.userId, roles: input.roles, channelOwnerId: video.userId });
+	const minutes = captionMinutesFor(duration, 1);
+	const jobId = crypto.randomUUID();
+	const reserved = await reserveMinutes(db(env), subject, jobId, minutes, now);
+	if ('usage' in reserved) return { refused: 'upgrade_required', usage: reserved.usage, minutes };
+
+	const at = now.toISOString();
+	const model = provider === 'deepl' ? 'deepl-pro' : settings.translation.model;
+	const inserted = await db(env)
+		.prepare(
+			`INSERT OR IGNORE INTO caption_jobs (id, idempotency_key, video_id, channel_id, subject_id, requested_by, kind, language, source_language, source_version, replace_draft, provider, model, status, minutes_reserved, waived, attempts, created_at, updated_at)
+			 VALUES (?, ?, ?, ?, ?, ?, 'translate', ?, ?, ?, ?, ?, ?, 'queued', ?, 0, 1, ?, ?)`,
+		)
+		.bind(jobId, key, video.id, video.channelId ?? null, subject.subjectId, input.userId, input.language, input.sourceLanguage, source.version, input.replace ? 1 : 0, provider, model, minutes, at, at)
+		.run();
+	if ((inserted.meta?.changes ?? 0) === 0) {
+		await releaseMinutes(db(env), jobId, now);
+		const winner = await db(env).prepare("SELECT * FROM caption_jobs WHERE idempotency_key = ? AND status NOT IN ('ready', 'failed', 'cancelled')").bind(key).first<JobRow>();
+		if (winner) return { job: toJob(winner), existing: true };
+		throw new CaptionJobHttpError(409, 'try_again');
+	}
+	const job = (await readJob(env, jobId))!;
+	try {
+		const status = await dispatch(env, job, video, now);
+		return { job: { ...job, status }, existing: false };
+	} catch (error) {
+		await releaseMinutes(db(env), jobId, now);
+		await setStatus(env, jobId, { status: 'failed', error: 'failed', finished: true }, now);
+		logger.error('[CaptionJobs] Could not send the translate job', { jobId, videoId: video.id, error: error instanceof Error ? error.message : String(error) });
+		throw error instanceof CaptionJobHttpError ? error : new CaptionJobHttpError(503, 'queue_unavailable');
+	}
+}
+
+async function readJsonDraft(env: CaptionJobsEnv, videoId: string, language: string): Promise<CaptionDraft | null> {
+	const obj = await env.subtitles?.get(captionDraftKey(videoId, language));
+	if (!obj) return null;
+	try {
+		return JSON.parse(await obj.text()) as CaptionDraft;
+	} catch {
+		return null;
 	}
 }
 
@@ -371,7 +558,7 @@ export async function onAudioReport(env: CaptionJobsEnv, jobId: string, report: 
 
 /** The processor's progress; 409 once the job is no longer active (cancelled: the processor stops). */
 export async function onProgress(env: CaptionJobsEnv, jobId: string, p: { status: CaptionJobStatus; done?: number; total?: number }, now = new Date()): Promise<boolean> {
-	if (!['waiting_budget', 'transcribing', 'postprocessing'].includes(p.status)) throw new CaptionJobHttpError(400, 'invalid_status');
+	if (!['waiting_budget', 'transcribing', 'translating', 'postprocessing'].includes(p.status)) throw new CaptionJobHttpError(400, 'invalid_status');
 	const changed = await db(env)
 		.prepare(
 			`UPDATE caption_jobs SET status = ?, progress_done = COALESCE(?, progress_done), progress_total = COALESCE(?, progress_total), updated_at = ?
@@ -399,7 +586,9 @@ export async function finishJob(
 	}
 	const at = now.toISOString();
 	if (end.outcome === 'ready') {
-		const hold = Number(row.waived) === 1 ? null : await commitMinutes(db(env), jobId, end.minutesUsed, now);
+		// A translation costs the video's minutes per language produced (the estimate it reserved)
+		const used = row.kind === 'translate' ? Number(row.minutes_reserved) : end.minutesUsed;
+		const hold = Number(row.waived) === 1 ? null : await commitMinutes(db(env), jobId, used, now);
 		await db(env)
 			.prepare("UPDATE caption_jobs SET status = 'ready', minutes_charged = ?, error = NULL, finished_at = ?, updated_at = ? WHERE id = ?")
 			.bind(hold?.charged ?? 0, at, at, jobId)

@@ -45,6 +45,8 @@ const Summary = z.object({
 	cues: z.number(),
 	pendingQuran: z.number().describe('Quran suggestions not yet accepted'),
 	updatedAt: z.string(),
+	sourceLanguage: z.string().optional().describe('A machine translation: the draft it was translated from'),
+	sourceVersion: z.number().optional().describe('A machine translation: the source draft version translated'),
 	publishedVersion: z.number().optional(),
 	publishedAt: z.string().optional(),
 	track: z.enum(['none', 'machine', 'upload']).describe('The live track of this language, if any'),

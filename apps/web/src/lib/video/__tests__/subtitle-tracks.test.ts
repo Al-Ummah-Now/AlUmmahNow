@@ -48,4 +48,12 @@ describe('subtitle-tracks', () => {
     expect(tracks.filter((t) => t.default)).toHaveLength(1);
     expect(tracks[0].default).toBe(true);
   });
+
+  it('labels machine-translated tracks in the caption menu', () => {
+    const tracks = toPlayerTextTracks([
+      { language: 'en', url: '/x/en', status: 'ready' },
+      { language: 'fr', url: '/x/fr', status: 'ready', machineTranslation: true, sourceLanguage: 'en' },
+    ], { ...opts, machineLabel: 'machine translation' });
+    expect(tracks.map((t) => t.label)).toEqual(['English', 'French (machine translation)']);
+  });
 });

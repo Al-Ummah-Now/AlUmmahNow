@@ -31,10 +31,11 @@ export function getSubtitleLabel(language: string, uiLocale: string, fallback?: 
  * - Only ready tracks with a URL are used.
  * - Relative URLs are resolved against the API base URL.
  * - At most one track is default: the API's default track, if any.
+ * - A machine-translated track says so after its name: "French (machine translation)".
  */
 export function toPlayerTextTracks(
   tracks: ApiSubtitleTrack[],
-  options: { apiUrl: string; videoId: string; uiLocale: string }
+  options: { apiUrl: string; videoId: string; uiLocale: string; machineLabel?: string }
 ): PlayerTextTrack[] {
   const apiBase = options.apiUrl.replace(/\/+$/, '');
   let defaultAssigned = false;
@@ -52,7 +53,9 @@ export function toPlayerTextTracks(
       return {
         src,
         srclang: track.language,
-        label: getSubtitleLabel(track.language, options.uiLocale, track.label),
+        label: track.machineTranslation && options.machineLabel
+          ? `${getSubtitleLabel(track.language, options.uiLocale, track.label)} (${options.machineLabel})`
+          : getSubtitleLabel(track.language, options.uiLocale, track.label),
         kind: track.kind === 'captions' ? 'captions' : 'subtitles',
         default: isDefault,
       } satisfies PlayerTextTrack;

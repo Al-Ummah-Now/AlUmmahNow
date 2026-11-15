@@ -38,6 +38,9 @@ import { compareProviders } from '../lib/live/qoe';
 import { readStream, streamEnd, type LiveStreamRecord } from '../lib/live/streams';
 import { bulkAssignTier, limitHitsSince, listCreators, tierCounts, withCreatorInfo } from '../lib/admin/creators';
 import { createChannelFor, lookupAccount, provisionProfile } from '../lib/admin/invites';
+import { readCaptionSettings, writeCaptionSettings } from '../lib/captions/jobs';
+import { listTranslationEditions } from '../lib/quran/translations';
+import { platformEditions } from '../endpoints/quran/quranTranslations';
 import { addGrant, CaptionMinutesError, listGrants, listLedger, readUsage, revokeGrant, subjectOfUser } from '../lib/captions/minutes';
 import { assignTier, CreatorTierError, deleteTier, purgeTiers, readAssignment, readDeletedTiers, readTiers, requestTierPurge, restoreTier, saveTier } from '../lib/creatorTiers';
 import { shortLinkClicksReport, siteVisitsReport } from '../lib/site-visits';
@@ -403,6 +406,51 @@ const GrantRevoke = z.object({ reason: z.string().max(500) }).strict();
 app.post('/users/:id/caption-minutes/grants/:grantId/revoke', async (c) =>
 	ok(c, { grant: await revokeGrant(searchDb(c), c.req.param('id'), c.req.param('grantId'), parse(GrantRevoke, await body(c)).reason, actor(c)) }),
 );
+
+// Captions & translation settings (AUN-CAPTIONS §10, O2, O4, O5, O6, O7); admin-api audits each change
+const deeplKeyBound = async (c: Context<Env>) => {
+	const v = (c.env as { AI_KEY_DEEPL?: string | { get(): Promise<string> } }).AI_KEY_DEEPL;
+	return !!v && !!(typeof v === 'string' ? v : await v.get().catch(() => ''));
+};
+app.get('/captions/settings', async (c) => {
+	const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
+	const [settings, editions, translations] = await Promise.all([
+		readCaptionSettings(c.env as never),
+		platformEditions(searchDb(c)),
+		searchDb(c).prepare('SELECT kind, COUNT(*) AS requests, SUM(items) AS items, SUM(cached) AS cached FROM translation_audit WHERE at >= ? GROUP BY kind').bind(since).all<{ kind: string; requests: number; items: number; cached: number }>(),
+	]);
+	return ok(c, { settings, deeplKeyBound: await deeplKeyBound(c), editions, translations30d: translations.results ?? [] });
+});
+app.put('/captions/settings', async (c) => ok(c, { settings: await writeCaptionSettings(c.env as never, await body(c)), deeplKeyBound: await deeplKeyBound(c) }));
+app.get('/captions/quran-translations/editions', async (c) => {
+	const lang = (c.req.query('language') ?? '').toLowerCase();
+	if (!/^[a-z]{2,3}$/.test(lang)) throw new admin.AdminError(400, 'invalid_language', 'a language code is required');
+	const editions = await listTranslationEditions(c.env as never, lang);
+	if (!editions) throw new admin.AdminError(409, 'quran_unavailable', 'Quran Foundation cannot be reached');
+	return ok(c, { editions });
+});
+const EditionBody = z.object({ id: z.coerce.number().int().positive() }).strict();
+app.put('/captions/quran-translations/:lang', async (c) => {
+	const lang = c.req.param('lang').toLowerCase();
+	if (!/^[a-z]{2,3}$/.test(lang) || lang === 'ar') throw new admin.AdminError(400, 'invalid_language', 'a language code other than ar');
+	const { id } = parse(EditionBody, await body(c));
+	const editions = await listTranslationEditions(c.env as never, lang);
+	if (!editions) throw new admin.AdminError(409, 'quran_unavailable', 'Quran Foundation cannot be reached; nothing changed');
+	const edition = editions.find((e) => e.id === id);
+	if (!edition) throw new admin.AdminError(400, 'unknown_edition', `no ${lang} edition ${id}`);
+	await searchDb(c)
+		.prepare(
+			`INSERT INTO quran_translation_defaults (lang, qf_translation_id, name, updated_by, updated_at) VALUES (?, ?, ?, ?, ?)
+			 ON CONFLICT (lang) DO UPDATE SET qf_translation_id = excluded.qf_translation_id, name = excluded.name, updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
+		)
+		.bind(lang, edition.id, edition.name.slice(0, 200), actor(c), new Date().toISOString())
+		.run();
+	return ok(c, { editions: await platformEditions(searchDb(c)) });
+});
+app.delete('/captions/quran-translations/:lang', async (c) => {
+	await searchDb(c).prepare('DELETE FROM quran_translation_defaults WHERE lang = ?').bind(c.req.param('lang').toLowerCase()).run();
+	return ok(c, { editions: await platformEditions(searchDb(c)) });
+});
 
 // Admin jobs (heavy actions run from the admin-jobs queue; see lib/admin/jobs.ts)
 const JobQuery = z.object({

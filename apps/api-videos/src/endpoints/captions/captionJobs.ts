@@ -7,6 +7,7 @@
  *   GET  /api/videos/:videoId/captions/jobs                  recent jobs of the video
  *   POST /api/videos/:videoId/captions/jobs/:jobId/cancel    cancel; the minutes come back
  *   GET  /api/videos/:videoId/captions/minutes               caption minutes left for this video's channel
+ *   POST /api/videos/:videoId/captions/translations          { sourceLanguage, languages[], replace? } translate a draft (§5.7)
  *
  * Owner or a channel role with `video.edit`. Minutes come from the channel
  * owner's creator tier and admin grants (lib/captions/minutes.ts); 402
@@ -14,11 +15,11 @@
  */
 import { Str } from 'chanfana';
 import { z } from 'zod';
-import { CAPTION_JOB_ERRORS, CAPTION_JOB_STATUSES, CAPTION_MINUTES_ENTITLEMENT, captionMinutesFor } from '@al-ummah/shared-types';
+import { CAPTION_JOB_ERRORS, CAPTION_JOB_KINDS, CAPTION_JOB_STATUSES, CAPTION_MINUTES_ENTITLEMENT, captionMinutesCanStart, captionMinutesFor } from '@al-ummah/shared-types';
 import { AuthenticatedRoute, type AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { SubtitleService } from '../../lib/subtitles';
-import { CaptionJobHttpError, cancelJob, listJobs, minutesForVideo, requestCaptionJob } from '../../lib/captions/jobs';
+import { CaptionJobHttpError, cancelJob, listJobs, minutesForVideo, requestCaptionJob, requestTranslationJob } from '../../lib/captions/jobs';
 import { CaptionMinutesError } from '../../lib/captions/minutes';
 import { logger } from '../../lib/logger';
 import { editableVideo } from './captionDrafts';
@@ -26,7 +27,10 @@ import { editableVideo } from './captionDrafts';
 const Job = z.object({
 	id: z.string(),
 	videoId: z.string(),
-	language: z.string(),
+	kind: z.enum(CAPTION_JOB_KINDS).describe('transcribe: speech to a draft; translate: a draft into another language'),
+	language: z.string().describe("The draft's language (spoken, or the translation's target)"),
+	sourceLanguage: z.string().nullable().describe('translate: the source draft'),
+	sourceVersion: z.number().nullable().describe('translate: the source draft version translated'),
 	replace: z.boolean().describe('Replaces the existing draft of the language when it ends'),
 	status: z.enum(CAPTION_JOB_STATUSES),
 	progress: z.object({ done: z.number(), total: z.number() }).nullable().describe('Audio chunks transcribed'),
@@ -60,7 +64,7 @@ type RolesAuth = { payload?: { roles?: string[] } } | undefined;
 const rolesOf = (c: AppContext) => (c.get('auth' as never) as RolesAuth)?.payload?.roles;
 
 /** Strips the internal fields of a job for the Studio. */
-const publicJob = ({ subjectId: _s, requestedBy: _r, channelId: _c, provider: _p, model: _m, kind: _k, ...job }: Awaited<ReturnType<typeof listJobs>>[number]) => job;
+const publicJob = ({ subjectId: _s, requestedBy: _r, channelId: _c, provider: _p, model: _m, ...job }: Awaited<ReturnType<typeof listJobs>>[number]) => job;
 
 function failure(c: AppContext, error: unknown) {
 	if (error instanceof CaptionJobHttpError || error instanceof CaptionMinutesError) {
@@ -211,6 +215,93 @@ export class CaptionMinutesGet extends AuthenticatedRoute {
 			return c.json({ success: true, data: { usage, minutesNeeded: typeof duration === 'number' && duration > 0 ? captionMinutesFor(duration, 1) : null } });
 		} catch (error) {
 			return failure(c, error);
+		}
+	}
+}
+
+/** Most target languages in one request (the dialog's chips). */
+export const MAX_TRANSLATION_TARGETS = 6;
+
+export class CaptionTranslateCreate extends AuthenticatedRoute {
+	schema = addAuthToSchema(
+		{
+			tags: ['Captions'],
+			summary: 'Translate a caption draft into other languages',
+			description:
+				'Starts one background job per target language over the source draft as it is now (the creator\'s corrected text). ' +
+				'Quran is never machine-translated: Quran spans stay references and the player shows the official translation of the channel\'s edition. ' +
+				'Each language reserves `ceil(duration in minutes)` caption minutes; 402 `upgrade_required` refuses the whole request (nothing starts). ' +
+				'409 `draft_exists` (with `language`) unless `replace`; 404 `source_missing`; 503 `translation_paused` while an admin has it switched off.',
+			request: {
+				params: videoParams,
+				body: {
+					content: {
+						'application/json': {
+							schema: z.object({
+								sourceLanguage: Str({ description: 'The source draft language' }),
+								languages: z.array(z.string()).min(1).max(MAX_TRANSLATION_TARGETS),
+								replace: z.boolean().optional(),
+							}),
+						},
+					},
+				},
+			},
+			responses: {
+				'202': { description: 'Started (or already running)', content: { 'application/json': { schema: z.object({ success: z.literal(true), data: z.object({ jobs: z.array(Job) }) }) } } },
+				'400': { description: 'Unsupported or same language', content: Err },
+				'402': { description: 'Not enough caption minutes', content: Err },
+				'403': { description: 'Not allowed', content: Err },
+				'404': { description: 'Video or source draft not found', content: Err },
+				'409': { description: '`draft_exists` or `source_is_translation`', content: Err },
+				'503': { description: 'Translation is paused or could not start; nothing was charged', content: Err },
+			},
+		},
+		'required',
+	);
+
+	async handle(c: AppContext) {
+		const { params, body } = await this.getValidatedData<typeof this.schema>();
+		const userId = this.getUserId(c);
+		const access = await editableVideo(c, params.videoId, userId);
+		if ('response' in access) return access.response;
+		const service = new SubtitleService();
+		const sourceLanguage = body.sourceLanguage.toLowerCase();
+		const languages: string[] = [...new Set((body.languages as string[]).map((l) => l.toLowerCase()))];
+		if (![sourceLanguage, ...languages].every((l) => service.validateLanguage(l))) return c.json({ success: false, error: 'unsupported_language' }, 400);
+		if (languages.includes(sourceLanguage)) return c.json({ success: false, error: 'same_language' }, 400);
+		try {
+			const usage = await minutesForVideo(c.env as never, access.video, userId, rolesOf(c));
+			const duration = access.video.duration;
+			const each = typeof duration === 'number' && duration > 0 ? captionMinutesFor(duration, 1) : 1;
+			if (!captionMinutesCanStart(usage)) {
+				return c.json({ success: false, error: 'upgrade_required', entitlement: CAPTION_MINUTES_ENTITLEMENT, minutesNeeded: each * languages.length, usage }, 402);
+			}
+			const started: Awaited<ReturnType<typeof requestTranslationJob>>[] = [];
+			for (const language of languages) {
+				let outcome: Awaited<ReturnType<typeof requestTranslationJob>>;
+				try {
+					outcome = await requestTranslationJob(c.env as never, { video: access.video, userId, roles: rolesOf(c), sourceLanguage, language, replace: body.replace === true });
+				} catch (error) {
+					// No partial surprises: the jobs this request started are cancelled and refunded
+					await this.undo(c, params.videoId, started);
+					if (error instanceof CaptionJobHttpError && error.code === 'draft_exists') return c.json({ success: false, error: 'draft_exists', language }, 409);
+					throw error;
+				}
+				if ('refused' in outcome) {
+					await this.undo(c, params.videoId, started);
+					return c.json({ success: false, error: 'upgrade_required', entitlement: CAPTION_MINUTES_ENTITLEMENT, minutesNeeded: each * languages.length, usage: outcome.usage }, 402);
+				}
+				started.push(outcome);
+			}
+			return c.json({ success: true, data: { jobs: started.map((o) => publicJob((o as { job: Parameters<typeof publicJob>[0] }).job)) } }, 202);
+		} catch (error) {
+			return failure(c, error);
+		}
+	}
+
+	private async undo(c: AppContext, videoId: string, started: Awaited<ReturnType<typeof requestTranslationJob>>[]) {
+		for (const o of started) {
+			if ('job' in o && !o.existing) await cancelJob(c.env as never, videoId, o.job.id).catch((e) => logger.warn('[CaptionJobs] Could not undo a translate job', { jobId: o.job.id, error: e instanceof Error ? e.message : String(e) }));
 		}
 	}
 }

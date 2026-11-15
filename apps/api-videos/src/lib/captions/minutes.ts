@@ -529,4 +529,7 @@ export async function eraseCaptionMinutes(db: D1Database, userId: string, now = 
 	}
 	// The jobs they paid for; a running one ends at the processor's next report (404)
 	await db.prepare('DELETE FROM caption_jobs WHERE subject_id = ?').bind(userId).run();
+	// Translation (§5.8): the fair-use counter goes; the audit rows stay for the platform, anonymised
+	await db.prepare('DELETE FROM inline_translation_usage WHERE user_id = ?').bind(userId).run();
+	await db.prepare("UPDATE translation_audit SET user_id = 'erased-user' WHERE user_id = ?").bind(userId).run();
 }

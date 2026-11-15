@@ -19,6 +19,7 @@ import notificationsRouter from './notifications.router';
 import searchRouter from './search.router';
 import appConfigRouter, { appConfigAdminRouter } from './app-config.router';
 import quranRouter from './quran.router';
+import translateRouter from './translate.router';
 import { continueWatchingRouter, watchStateRouter } from './watch-state.router';
 import { devicesRouter } from './devices.router';
 import { youtubeImportRouter } from './youtube-import.router';
@@ -107,6 +108,9 @@ export function registerAllRouters(openapi: any) {
   openapi.route('/internal/app-config', appConfigAdminRouter);
   // Quran text from our Quran Foundation copy (AUN-CAPTIONS)
   openapi.route('/api/quran', quranRouter);
+
+  // Machine translation of titles and descriptions (AUN-CAPTIONS §5.8)
+  openapi.route('/api/translate', translateRouter);
   openapi.route('/api/watch-state', watchStateRouter);
   openapi.route('/api/continue-watching', continueWatchingRouter);
   // Push device registration (Epic 9.4)

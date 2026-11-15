@@ -727,6 +727,55 @@ app.post('/users/:id/caption-minutes/grants/:grantId/revoke', async (c) => {
 });
 
 /**
+ * Captions & translation settings (AUN-CAPTIONS §10, O2, O4–O7): the caption budget, translation
+ * models and DeepL (off by default), inline translation's kill switch, daily fair-use limit and
+ * budget, viewer-side titles (off by default) and the platform's Quran edition per language.
+ * Reads for every admin; changes need creators:manage and are audited with the previous values.
+ */
+const CAPTION_LANG = /^[a-z]{2,3}$/;
+type CaptionSettingsView = { settings: Record<string, unknown>; editions: Array<{ language: string; id: number; name: string }> };
+
+app.get('/captions/settings', async (c) => {
+  const [current, audit] = await Promise.all([
+    videos<CaptionSettingsView>(c, '/captions/settings'),
+    readAudit(c.env.REPORTS_DB, { kind: 'captions-settings', id: 'settings', limit: 20 }),
+  ]);
+  return ok(c, { ...current, audit });
+});
+
+app.put('/captions/settings', async (c) => {
+  need(c, 'creators:manage');
+  const patch = await body(c);
+  const current = await videos<CaptionSettingsView>(c, '/captions/settings');
+  return ok(c, await audited(c, { kind: 'captions-settings', id: 'settings', action: 'edit', details: patch, previous: current.settings }, () =>
+    videos(c, '/captions/settings', { method: 'PUT', json: patch })));
+});
+
+app.get('/captions/quran-translations/editions', async (c) => {
+  const language = c.req.query('language') ?? '';
+  if (!CAPTION_LANG.test(language)) return c.json({ success: false, code: 'invalid_request', error: 'A language code is required' }, 400);
+  return ok(c, await videos(c, '/captions/quran-translations/editions', { query: { language } }));
+});
+
+app.put('/captions/quran-translations/:lang', async (c) => {
+  need(c, 'creators:manage');
+  const lang = c.req.param('lang');
+  if (!CAPTION_LANG.test(lang)) return c.json({ success: false, code: 'invalid_request', error: 'A language code is required' }, 400);
+  const id = Number((await body(c)).id);
+  const before = (await videos<CaptionSettingsView>(c, '/captions/settings')).editions.find((e) => e.language === lang);
+  return ok(c, await audited(c, { kind: 'captions-settings', id: `quran-${lang}`, action: 'quran-edition', details: { language: lang, edition: id }, ...(before ? { previous: { edition: before.id, name: before.name } } : {}) }, () =>
+    videos(c, `/captions/quran-translations/${lang}`, { method: 'PUT', json: { id } })));
+});
+
+app.delete('/captions/quran-translations/:lang', async (c) => {
+  need(c, 'creators:manage');
+  const lang = c.req.param('lang');
+  if (!CAPTION_LANG.test(lang)) return c.json({ success: false, code: 'invalid_request', error: 'A language code is required' }, 400);
+  return ok(c, await audited(c, { kind: 'captions-settings', id: `quran-${lang}`, action: 'quran-edition-reset', details: { language: lang } }, () =>
+    videos(c, `/captions/quran-translations/${lang}`, { method: 'DELETE' })));
+});
+
+/**
  * One tier (or none) for the selected users. Light work (one D1 batch of at
  * most MAX_BULK_CREATOR_TIER rows), so it runs inline rather than as a queued
  * admin job. Plans first (dry run), audits each user who changes, then
