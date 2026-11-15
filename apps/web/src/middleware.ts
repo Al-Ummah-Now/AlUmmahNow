@@ -35,7 +35,7 @@ import { EMBED_REQUEST_HEADER, isEmbedPath, isFeedPath, isOEmbedPath, isShareIma
 import { parseEmbedLang } from '@/lib/embed/params';
 import { NONCE_HEADER } from '@/lib/security/nonce-header';
 import { handleRewritePath, legacyHandlePath } from '@/lib/channel-url';
-import { legacyUserProfilePath, userProfileRewritePath } from '@/lib/user-url';
+import { PROFILE_X_ROBOTS, legacyUserProfilePath, userProfileRewritePath } from '@/lib/user-url';
 import { refreshSessionCookie } from '@/lib/auth/middleware-refresh';
 import { presentSessionCookieNames, sessionCookieOptions, writeSessionValue } from '@/lib/auth/session-cookie';
 import { isProductionDeployment, legacyWatchRedirect, robotsHeaderFor } from '@/lib/seo/robots';
@@ -175,12 +175,15 @@ function routeRequest(request: NextRequest): NextResponse {
   }
 
   // Public profiles (Story 29.5): /{locale}/u/{handle} opened directly 301s to /{locale}/u/@{handle};
-  // the @ form is rewritten to /u/{handle} (handles may contain `.`, so before the static-file check)
+  // the @ form is rewritten to /u/{handle} (handles may contain `.`, so before the static-file check).
+  // Never indexed (owner, 2026-11-14: "searching users? nope"), on the page and on the redirect
   const legacyProfile = legacyUserProfilePath(pathname);
   if (legacyProfile) {
     const target = new URL(legacyProfile, request.url);
     target.search = request.nextUrl.search;
-    return NextResponse.redirect(target, 301);
+    const redirect = NextResponse.redirect(target, 301);
+    redirect.headers.set('X-Robots-Tag', PROFILE_X_ROBOTS);
+    return redirect;
   }
   const profileRoute = userProfileRewritePath(pathname);
   if (profileRoute && getSupportedLocaleCodes().includes(profileRoute.locale)) {
@@ -189,6 +192,7 @@ function routeRequest(request: NextRequest): NextResponse {
     const response = nextWithSecurityHeaders(request, isDevelopment, profileRoute.locale, target);
     response.headers.set('X-Locale', profileRoute.locale);
     response.headers.set('X-Text-Direction', getTextDirection(profileRoute.locale));
+    response.headers.set('X-Robots-Tag', PROFILE_X_ROBOTS);
     return response;
   }
 

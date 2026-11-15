@@ -38,23 +38,22 @@ export interface UserHandleIndexEntry {
 export interface PublicProfilePrivacy {
 	showSubscriptions: boolean;
 	showPlaylists: boolean;
-	showLikes: boolean;
 }
 
 /**
  * Defaults (issue #371: "public playlists, subscriptions if public"): public playlists show,
- * subscriptions and likes stay private until the owner turns them on.
+ * subscriptions stay private until the owner turns them on. Liked videos are never public
+ * (owner, 2026-11-14: "others see your likes? nope").
  */
 export const PUBLIC_PROFILE_DEFAULTS: Readonly<PublicProfilePrivacy> = Object.freeze({
 	showSubscriptions: false,
 	showPlaylists: true,
-	showLikes: false,
 });
 
 /** The stored settings with defaults filled in (anything not a boolean takes the default). */
 export function resolvePublicProfilePrivacy(stored: Partial<Record<keyof PublicProfilePrivacy, unknown>> | null | undefined): PublicProfilePrivacy {
 	const pick = (key: keyof PublicProfilePrivacy) => (typeof stored?.[key] === 'boolean' ? (stored[key] as boolean) : PUBLIC_PROFILE_DEFAULTS[key]);
-	return { showSubscriptions: pick('showSubscriptions'), showPlaylists: pick('showPlaylists'), showLikes: pick('showLikes') };
+	return { showSubscriptions: pick('showSubscriptions'), showPlaylists: pick('showPlaylists') };
 }
 
 export function isUserHandleEntry(entry: unknown): entry is UserHandleIndexEntry {
@@ -130,4 +129,15 @@ export async function resolveUserHandle(bucket: R2Bucket, handle: string): Promi
 	if (problem === 'invalid_characters' || problem === 'too_long' || problem === 'too_short') return null;
 	const entry = await readHandleEntry(bucket, handle);
 	return isUserHandleEntry(entry) ? entry.userId : null;
+}
+
+/**
+ * The handle a comment author's name and avatar link to (/{locale}/u/@{handle}), or undefined when
+ * there is no public page: no handle, or removed by an admin. Comments are the only way to reach a
+ * user's profile (owner, 2026-11-14: "only way you reach a user profile is if he comments on a video
+ * or post"). A banned user's page still answers 404 (loadPublicUser checks the ban list).
+ */
+export function linkableUserHandle(profile: { handle?: string | null; adminDeletion?: unknown } | null | undefined): string | undefined {
+	if (!profile?.handle || profile.adminDeletion) return undefined;
+	return profile.handle;
 }

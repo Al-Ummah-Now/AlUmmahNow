@@ -1,4 +1,5 @@
 import { can, channelRoleOf, type Channel, type CommunityPost, type PostComment } from '@al-ummah/shared-types';
+import { linkableUserHandle } from '../../lib/userHandles';
 
 /**
  * Shared helpers for community post comment endpoints.
@@ -208,4 +209,25 @@ export async function withViewerLikes(
 export async function getChannelObject(bucket: R2Bucket, channelId: string): Promise<R2ObjectBody | null> {
   if (!channelId) return null;
   return (await bucket.get(channelId)) ?? (await bucket.get(`${channelId}/channel.json`));
+}
+
+/**
+ * Adds `userHandle` (never stored) to comments the member posted as themselves (channelId is their
+ * user id), so their name and avatar link to their public profile. Each distinct author's profile is
+ * read once; a missing or unreadable profile just means no link.
+ */
+export async function withAuthorHandles<T extends PostComment>(profiles: R2Bucket | undefined, comments: T[]): Promise<T[]> {
+  if (!profiles) return comments;
+  const memberIds = [...new Set(comments.filter((cm) => cm.userId && cm.channelId === cm.userId && !cm.deletedAt).map((cm) => cm.userId))];
+  if (memberIds.length === 0) return comments;
+  const handles = new Map<string, string | undefined>();
+  await Promise.all(memberIds.map(async (uid) => {
+    const obj = await profiles.get(uid).catch(() => null);
+    const profile = obj ? ((await obj.json().catch(() => null)) as { handle?: string; adminDeletion?: unknown } | null) : null;
+    handles.set(uid, linkableUserHandle(profile));
+  }));
+  return comments.map((cm) => {
+    const handle = cm.channelId === cm.userId && !cm.deletedAt ? handles.get(cm.userId) : undefined;
+    return handle ? { ...cm, userHandle: handle } : cm;
+  });
 }

@@ -8,6 +8,7 @@ import {
   replyCommentKey,
   repliesIndexKey,
   topLevelCommentKey,
+  withAuthorHandles,
   withViewerLikes,
 } from './post-comment-helpers';
 
@@ -107,7 +108,7 @@ export class ListPostCommentReplies extends OptionalAuthRoute {
 
     const response: PostCommentListResponse = {
       success: true,
-      comments: await withViewerLikes(bucket, postId, replies, viewerUserId),
+      comments: await withViewerLikes(bucket, postId, await withAuthorHandles(c.env.profiles, replies), viewerUserId),
       pagination: {
         limit,
         cursor: pageIds.length > 0 ? pageIds[pageIds.length - 1] : undefined,

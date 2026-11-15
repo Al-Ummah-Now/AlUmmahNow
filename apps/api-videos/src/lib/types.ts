@@ -263,7 +263,6 @@ export const Profile = z.object({
     publicProfile: z.object({
         showSubscriptions: z.boolean().optional(),
         showPlaylists: z.boolean().optional(),
-        showLikes: z.boolean().optional(),
     }).optional(),
 });
 

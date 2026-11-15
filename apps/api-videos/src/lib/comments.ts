@@ -5,6 +5,7 @@
  * video object stored in R2, so listing/pagination happens in memory.
  */
 
+import { linkableUserHandle } from './userHandles';
 import { PUBLIC_DISLIKES_COUNT } from './reactions';
 import { resolveDisplayName, type NameFields } from '@al-ummah/shared-types';
 
@@ -77,6 +78,8 @@ export interface CommentAuthor {
 	channelId: string | null;
 	displayName: string;
 	avatarUrl?: string;
+	/** The member's public profile handle (/u/@handle); only on comments posted as the member, not as a channel */
+	handle?: string;
 }
 
 export interface CommentListItem {
@@ -237,7 +240,7 @@ export function removeStoredComment<T extends StoredComment>(comments: T[], comm
 export function resolveCommentAuthor(
 	comment: Pick<StoredComment, 'userId' | 'channelId'>,
 	channel: { name?: string; avatarUrl?: string } | null | undefined,
-	profile: (NameFields & { avatarUrl?: string }) | null | undefined,
+	profile: (NameFields & { avatarUrl?: string; handle?: string; adminDeletion?: unknown }) | null | undefined,
 	locale?: string,
 ): CommentAuthor {
 	// The channel the comment was posted as, else the user's name (resolveDisplayName: display name, else first + last; never the email)
@@ -248,6 +251,8 @@ export function resolveCommentAuthor(
 		channelId: comment.channelId ?? null,
 		displayName: channel?.name?.trim() || profileName || '',
 		avatarUrl: channel?.avatarUrl || profile?.avatarUrl || undefined,
+		// Posted as the member themselves: their name links to their public profile, if they have one
+		...(!comment.channelId && linkableUserHandle(profile) ? { handle: linkableUserHandle(profile) } : {}),
 	};
 }
 

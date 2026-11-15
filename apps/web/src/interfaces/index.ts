@@ -215,6 +215,8 @@ export interface CommentAuthor {
     channelId: string;
     displayName: string;
     avatarUrl?: string;
+    /** Their public profile handle: only on comments posted as the member, when they have one */
+    handle?: string;
 }
 
 export interface Likes {

@@ -11,10 +11,8 @@ export interface PublicProfileTranslations {
     channels: string;
     subscriptions: string;
     playlists: string;
-    likes: string;
     emptySubscriptions: string;
     emptyPlaylists: string;
-    emptyLikes: string;
     showMore: string;
     loadError: string;
     /** Shown to the owner on their own profile */
@@ -51,8 +49,6 @@ export interface PublicProfileTranslations {
     showSubscriptionsHelp: string;
     showPlaylists: string;
     showPlaylistsHelp: string;
-    showLikes: string;
-    showLikesHelp: string;
     save: string;
     saving: string;
     saved: string;
@@ -70,10 +66,8 @@ export const PUBLIC_PROFILE_EN: PublicProfileTranslations = {
     channels: 'Channels',
     subscriptions: 'Subscriptions',
     playlists: 'Playlists',
-    likes: 'Liked videos',
     emptySubscriptions: 'No public subscriptions yet.',
     emptyPlaylists: 'No public playlists yet.',
-    emptyLikes: 'No liked videos yet.',
     showMore: 'Show more',
     loadError: "This list couldn't load. Try again.",
     ownerNote: 'This is how others see your profile.',
@@ -86,7 +80,7 @@ export const PUBLIC_PROFILE_EN: PublicProfileTranslations = {
     cardTitle: 'Public profile',
     cardDescription: 'Your @handle and what others see on your profile',
     title: 'Public profile',
-    intro: 'Pick a @handle to get a public profile page. It shows your name, picture, bio and public channels, plus the lists you turn on below. Remove the handle to take the page down.',
+    intro: 'Pick a @handle to get a public profile page. People reach it from your name on your comments, and it never shows in search. It shows your name, picture, bio and public channels, plus the lists you turn on below. Remove the handle to take the page down.',
     handleLabel: 'Handle',
     handleHelp: 'Your profile URL: {url}. 3 to 30 characters: Latin letters, digits, periods, underscores and hyphens.',
     handlePlaceholder: 'yourhandle',
@@ -101,14 +95,12 @@ export const PUBLIC_PROFILE_EN: PublicProfileTranslations = {
     noHandle: "You don't have a public profile yet.",
     removeHandle: 'Remove handle',
     showTitle: 'What your profile shows',
-    showHelp: 'Only public things are ever listed: private and unlisted channels, playlists and videos stay hidden.',
+    showHelp: 'Only public things are ever listed: private and unlisted channels and playlists stay hidden.',
     alwaysShown: 'Always shown: your name, picture, bio and public channels.',
     showSubscriptions: 'Subscriptions',
     showSubscriptionsHelp: 'The public channels you subscribe to',
     showPlaylists: 'Playlists',
     showPlaylistsHelp: 'Your public playlists',
-    showLikes: 'Liked videos',
-    showLikesHelp: 'The public videos you liked',
     save: 'Save',
     saving: 'Saving…',
     saved: 'Saved',
@@ -126,10 +118,8 @@ export const PUBLIC_PROFILE_AR: PublicProfileTranslations = {
     channels: 'القنوات',
     subscriptions: 'الاشتراكات',
     playlists: 'قوائم التشغيل',
-    likes: 'المرئيات المعجب بها',
     emptySubscriptions: 'لا توجد اشتراكات عامة بعد.',
     emptyPlaylists: 'لا توجد قوائم تشغيل عامة بعد.',
-    emptyLikes: 'لا توجد مرئيات معجب بها بعد.',
     showMore: 'عرض المزيد',
     loadError: 'تعذّر تحميل هذه القائمة. حاول مرة أخرى.',
     ownerNote: 'هكذا يرى الآخرون ملفك الشخصي.',
@@ -142,7 +132,7 @@ export const PUBLIC_PROFILE_AR: PublicProfileTranslations = {
     cardTitle: 'الملف الشخصي العام',
     cardDescription: 'معرّفك @ وما يراه الآخرون في ملفك الشخصي',
     title: 'الملف الشخصي العام',
-    intro: 'اختر معرّفًا @ لتحصل على صفحة ملف شخصي عامة. تعرض اسمك وصورتك ونبذتك وقنواتك العامة، والقوائم التي تفعّلها أدناه. احذف المعرّف لإزالة الصفحة.',
+    intro: 'اختر معرّفًا @ لتحصل على صفحة ملف شخصي عامة. يصل إليها الناس من اسمك في تعليقاتك، ولا تظهر في البحث أبدًا. تعرض اسمك وصورتك ونبذتك وقنواتك العامة، والقوائم التي تفعّلها أدناه. احذف المعرّف لإزالة الصفحة.',
     handleLabel: 'المعرّف',
     handleHelp: 'رابط ملفك الشخصي: {url}. من 3 إلى 30 حرفًا: أحرف لاتينية وأرقام ونقاط وشرطات سفلية وشرطات.',
     handlePlaceholder: 'yourhandle',
@@ -157,14 +147,12 @@ export const PUBLIC_PROFILE_AR: PublicProfileTranslations = {
     noHandle: 'ليس لديك ملف شخصي عام بعد.',
     removeHandle: 'حذف المعرّف',
     showTitle: 'ما يعرضه ملفك الشخصي',
-    showHelp: 'لا يُعرض إلا ما هو عام: القنوات وقوائم التشغيل والمرئيات الخاصة وغير المدرجة تبقى مخفية.',
+    showHelp: 'لا يُعرض إلا ما هو عام: القنوات وقوائم التشغيل الخاصة وغير المدرجة تبقى مخفية.',
     alwaysShown: 'يُعرض دائمًا: اسمك وصورتك ونبذتك وقنواتك العامة.',
     showSubscriptions: 'الاشتراكات',
     showSubscriptionsHelp: 'القنوات العامة التي تشترك فيها',
     showPlaylists: 'قوائم التشغيل',
     showPlaylistsHelp: 'قوائم التشغيل العامة الخاصة بك',
-    showLikes: 'المرئيات المعجب بها',
-    showLikesHelp: 'المرئيات العامة التي أعجبتك',
     save: 'حفظ',
     saving: 'جارٍ الحفظ…',
     saved: 'تم الحفظ',

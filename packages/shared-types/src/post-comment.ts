@@ -38,6 +38,8 @@ export interface PostComment extends SoftDelete, Moderation {
 
   // Viewer state (computed per request, never stored)
   isLikedByViewer?: boolean;         // Present when the request is authenticated
+  /** The member's public profile handle, on comments posted as the member (computed per request, never stored) */
+  userHandle?: string;
 
   // Review state (Studio Comments, #771). Absent = published.
   /** 'held': seen only by its author (and in Studio) until approved */

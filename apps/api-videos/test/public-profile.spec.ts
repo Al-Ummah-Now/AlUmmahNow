@@ -1,14 +1,17 @@
 /**
  * Public profile (Story 29.5): user @handles share the channel handle index, the profile shows
- * only public things, and each list (subscriptions, playlists, likes) follows its owner's toggle.
+ * only public things, and each list (subscriptions, playlists) follows its owner's toggle. Liked videos
+ * are never public and profiles are never indexed (owner, 2026-11-14).
  */
 import { describe, it } from 'node:test';
+import { usersRouter } from '../src/routers/users.router';
+import { resolveCommentAuthor } from '../src/lib/comments';
+import { withAuthorHandles } from '../src/endpoints/community/post-comment-helpers';
 import assert from 'node:assert/strict';
 import {
 	PublicProfileSettingsUpdate,
 	UserByHandleFetch,
 	UserHandleAvailability,
-	UserLikesPublicList,
 	UserPlaylistsPublicList,
 	UserSubscriptionsPublicList,
 } from '../src/endpoints/profile/publicProfile';
@@ -74,7 +77,6 @@ function routes(r: any) {
 	r.get('/api/users/by-handle/:handle', UserByHandleFetch);
 	r.get('/api/users/by-handle/:handle/subscriptions', UserSubscriptionsPublicList);
 	r.get('/api/users/by-handle/:handle/playlists', UserPlaylistsPublicList);
-	r.get('/api/users/by-handle/:handle/likes', UserLikesPublicList);
 }
 
 async function call(e: any, path: string, init: RequestInit = {}, userId: string | null = null) {
@@ -85,17 +87,17 @@ const put = (e: any, body: unknown, userId = 'me') =>
 	call(e, '/api/profile/public', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }, userId);
 
 describe('public profile settings', () => {
-	it('defaults: public playlists on, subscriptions and likes off', () => {
-		assert.deepEqual(resolvePublicProfilePrivacy(undefined), { showSubscriptions: false, showPlaylists: true, showLikes: false });
-		assert.deepEqual(resolvePublicProfilePrivacy({ showLikes: true, showPlaylists: 'yes' as never }), { ...PUBLIC_PROFILE_DEFAULTS, showLikes: true });
+	it('defaults: public playlists on, subscriptions off', () => {
+		assert.deepEqual(resolvePublicProfilePrivacy(undefined), { showSubscriptions: false, showPlaylists: true });
+		assert.deepEqual(resolvePublicProfilePrivacy({ showSubscriptions: true, showPlaylists: 'yes' as never }), { ...PUBLIC_PROFILE_DEFAULTS, showSubscriptions: true });
 	});
 
 	it('claims a handle into the shared index and returns the profile with the settings', async () => {
 		const e = env();
-		const res = await put(e, { handle: '@Sara.K', showLikes: true });
+		const res = await put(e, { handle: '@Sara.K', showSubscriptions: true });
 		assert.equal(res.status, 200);
 		assert.equal(res.body.result.profile.handle, 'Sara.K');
-		assert.deepEqual(res.body.result.profile.publicProfile, { showSubscriptions: false, showPlaylists: true, showLikes: true });
+		assert.deepEqual(res.body.result.profile.publicProfile, { showSubscriptions: true, showPlaylists: true });
 		assert.equal(e.profiles.read('me').handle, 'Sara.K');
 		assert.deepEqual(e.channel_tabs.read('channel-handles/sara.k').kind, 'user');
 		assert.equal(e.channel_tabs.read('channel-handles/sara.k').userId, 'me');
@@ -194,7 +196,7 @@ describe('public profile reads', () => {
 		assert.equal(p.bio, 'Hello');
 		assert.deepEqual(p.channels.map((c: any) => c.id), ['pub']);
 		assert.equal(p.channels[0].handle, 'mychannel');
-		assert.deepEqual(p.sections, { subscriptions: false, playlists: true, likes: false });
+		assert.deepEqual(p.sections, { subscriptions: false, playlists: true });
 		assert.equal(p.email, undefined, 'never the email');
 		assert.equal(p.subscribedTo, undefined);
 	});
@@ -230,14 +232,45 @@ describe('public profile reads', () => {
 		assert.equal((await call(e, '/api/users/by-handle/sara/playlists')).status, 404);
 	});
 
-	it('likes: 404 while hidden; when shown, public videos only', async () => {
+	it('liked videos are never public: a showLikes setting is dropped and there is no likes list', async () => {
+		const e = env();
+		const res = await put(e, { handle: 'Sara', showLikes: true });
+		assert.equal(res.status, 200);
+		assert.deepEqual(res.body.result.profile.publicProfile, { showSubscriptions: false, showPlaylists: true });
+		assert.equal('showLikes' in (e.profiles.read('me').publicProfile ?? {}), false);
+		const profile = (await call(e, '/api/users/by-handle/sara')).body.result.profile;
+		assert.equal('likes' in profile.sections, false);
+	});
+
+	it('every /api/users response says noindex, nofollow', async () => {
 		const e = env();
 		await put(e, { handle: 'Sara' });
-		e.NOTIFICATIONS_DB.raw.prepare("INSERT INTO liked_videos VALUES ('me', 'v1', 2), ('me', 'v2', 1)").run();
-		assert.equal((await call(e, '/api/users/by-handle/sara/likes')).status, 404);
-		await put(e, { showLikes: true });
-		const res = await call(e, '/api/users/by-handle/sara/likes');
-		assert.equal(res.status, 200);
-		assert.deepEqual(res.body.result.items.map((v: any) => v.id), ['v1']);
+		for (const path of ['/api/users/by-handle/sara', '/api/users/by-handle/nobody']) {
+			const res = await usersRouter.request(path, {}, e);
+			assert.equal(res.headers.get('X-Robots-Tag'), 'noindex, nofollow', path);
+		}
+	});
+
+});
+
+describe('comment authors link to public profiles (the only way in)', () => {
+	it('video comments: a member comment carries the handle; a channel comment, a handle-less or removed profile does not', () => {
+		const member = { userId: 'me', channelId: null } as never;
+		assert.equal(resolveCommentAuthor(member, null, { displayName: 'Sara', handle: 'Sara' }).handle, 'Sara');
+		assert.equal(resolveCommentAuthor({ userId: 'me', channelId: 'c1' } as never, { name: 'Sara Talks' }, { displayName: 'Sara', handle: 'Sara' }).handle, undefined);
+		assert.equal(resolveCommentAuthor(member, null, { displayName: 'Sara' }).handle, undefined);
+		assert.equal(resolveCommentAuthor(member, null, { displayName: 'Sara', handle: 'Sara', adminDeletion: { at: 'x' } }).handle, undefined);
+	});
+
+	it('post comments: userHandle on comments posted as the member, read once per author, never on channel or deleted comments', async () => {
+		const profiles = new MemoryBucket({ me: { id: 'me', handle: 'Sara' }, plain: { id: 'plain' } });
+		const base = { postId: 'p', content: 'x', userDisplayName: 'n', channelVerified: false, likes: 0, repliesCount: 0, isPinned: false, isEdited: false, isHeartedByCreator: false, createdAt: 't' };
+		const out = await withAuthorHandles(profiles as never, [
+			{ ...base, id: '1', userId: 'me', channelId: 'me' },
+			{ ...base, id: '2', userId: 'me', channelId: 'c1' },
+			{ ...base, id: '3', userId: 'plain', channelId: 'plain' },
+			{ ...base, id: '4', userId: 'me', channelId: 'me', deletedAt: 't' },
+		] as never[]);
+		assert.deepEqual(out.map((cm: any) => cm.userHandle), ['Sara', undefined, undefined, undefined]);
 	});
 });

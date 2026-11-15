@@ -1,7 +1,7 @@
 /**
  * Public profile URLs (Story 29.5).
  *
- * Canonical: /{locale}/u/@{handle}, served by the /{locale}/u/{handle} route through a middleware
+ * The URL is /{locale}/u/@{handle} (never indexed, so no canonical tag), served by the /{locale}/u/{handle} route through a middleware
  * rewrite (App Router folders starting with `@` are parallel-route slots, as for channel @handles
  * in channel-url.ts). /{locale}/u/{handle} opened directly 301s to the @ form.
  */
@@ -25,3 +25,6 @@ export function legacyUserProfilePath(pathname: string): string | null {
 export function userProfilePath(locale: string, handle: string): string {
   return `/${locale}/u/@${handle.replace(/^@+/, '')}`;
 }
+
+/** Sent with every public profile response: profiles are never indexed (owner decision 2026-11-14) */
+export const PROFILE_X_ROBOTS = 'noindex, nofollow';
