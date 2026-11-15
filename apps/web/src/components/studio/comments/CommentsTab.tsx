@@ -474,7 +474,8 @@ function CommentRow({ locale, lang, comment, tab, base, channel, canSpeak, selec
                 <MessageSquareReply aria-hidden="true" className="me-1.5 h-4 w-4" />{text.actions.reply}
               </Button>
             )}
-            <DropdownMenu>
+            {/* Non-modal: a modal menu that opens a dialog leaves pointer-events: none on the page after the dialog closes */}
+            <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
                 <Button size="sm" variant="ghost" className="min-h-11 min-w-11" aria-label={text.actions.label} data-testid="studio-comment-more">
                   <MoreVertical aria-hidden="true" className="h-4 w-4" />
