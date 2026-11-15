@@ -118,7 +118,11 @@ test.describe('public profile page (signed out)', () => {
     ]) {
       const res = await request.get(`${API_URL}${path}`);
       expect(res.ok(), path).toBe(true);
-      expect(JSON.stringify(await res.json()), path).not.toContain(HANDLE);
+      // The response echoes the query, so only the results are checked: no user, and nothing carries the handle
+      const { query: _query, ...rest } = (await res.json()) as Record<string, unknown>;
+      const body = JSON.stringify(rest);
+      expect(body, path).not.toContain(HANDLE);
+      expect(body, path).not.toMatch(/"type":"user"/);
     }
   });
 
