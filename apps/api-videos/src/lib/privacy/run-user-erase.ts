@@ -31,6 +31,7 @@ import { deleteVideoSideRecords } from '../videoSideRecords';
 import { watchLaterId } from '../library';
 import { footprintTargets, forgetFootprints } from './footprints';
 import { eraseCaptionMinutes } from '../captions/minutes';
+import { eraseYoutubeImports } from '../youtube-import/erase';
 import { sectionOrderKey } from '../channelSectionOrder';
 import { eraseUserSubscriptions } from '../subscription-store';
 import { isOwnershipComplete } from '../search/ownership';
@@ -214,6 +215,9 @@ export async function eraseRunUserData(
 			budget.spend(3);
 			await forgetFootprints(db as never, userId);
 			await eraseCaptionMinutes(db, userId);
+			// Move from YouTube: imports, snapshots, consents, staged captions (Google token revoked)
+			budget.spend(2);
+			await eraseYoutubeImports(db, env as never, userId);
 			budget.spend();
 			const profiles = asBucket(env.profiles);
 			const stored = await profiles.get(userId);

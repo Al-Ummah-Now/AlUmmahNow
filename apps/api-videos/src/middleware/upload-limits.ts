@@ -24,6 +24,9 @@
  * page (upload_limit_hits), with a friendly `upload_limit` answer and
  * `retryAfter`; the client says when uploading works again.
  *
+ * A tier with `importCountsAgainstLimits: false` lets Move from YouTube
+ * initiates (wiki AUN-YT-IMPORT) skip the counters; the tier gate still applies.
+ *
  * UPLOAD_RATE_LIMIT="off" (and development/preview by default) stops counting
  * the limits; the tier gate itself applies everywhere.
  */
@@ -101,6 +104,17 @@ export async function uploadSessionWeight(c: Context): Promise<number> {
     return Array.isArray(body?.videos) ? Math.min(MAX_BATCH_SIZE, Math.max(1, body.videos.length)) : 1;
   } catch {
     return 1;
+  }
+}
+
+/** A single initiate that uploads a Move from YouTube item (`youtubeImport` in the body). */
+export async function isYoutubeImportInitiate(c: Context): Promise<boolean> {
+  if (!c.req.path.endsWith('/upload/initiate') || c.req.path.endsWith('/batch/initiate')) return false;
+  try {
+    const body = (await c.req.raw.clone().json()) as { youtubeImport?: { importId?: unknown; itemId?: unknown } };
+    return typeof body?.youtubeImport?.importId === 'string' && typeof body.youtubeImport.itemId === 'string';
+  } catch {
+    return false;
   }
 }
 
@@ -219,6 +233,8 @@ function creatorUploadMiddleware(options: GateOptions) {
     }
     c.set('creatorTier', creator);
     if (creator.tier.unlimited || !uploadLimitsEnforced(c.env ?? {})) return next();
+    // Move from YouTube: a tier may let imports skip the counters (the initiate still checks the item)
+    if (options.sessions && creator.tier.importCountsAgainstLimits === false && (await isYoutubeImportInitiate(c))) return next();
 
     const limits = options.limitsOf(creator.tier);
     const subject = creator.subjectId;

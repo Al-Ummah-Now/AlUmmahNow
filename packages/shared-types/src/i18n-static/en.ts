@@ -1542,6 +1542,8 @@ export const EN_TRANSLATIONS: AppTranslations = {
       uploadReadyMessage: 'Your video "{videoTitle}" has finished processing',
       uploadFailedTitle: 'Upload Failed',
       uploadFailedMessage: 'Your video "{videoTitle}" could not be processed',
+      youtubeImportFinishedTitle: 'Your YouTube import finished',
+      youtubeImportFinishedMessage: '{ready} imported, {failed} need another try',
       newVideoTitle: 'New video',
       newVideoMessage: '{channelName} uploaded "{videoTitle}"',
       liveStartedTitle: 'Live now',

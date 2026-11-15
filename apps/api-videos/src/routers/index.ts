@@ -20,6 +20,7 @@ import appConfigRouter, { appConfigAdminRouter } from './app-config.router';
 import quranRouter from './quran.router';
 import { continueWatchingRouter, watchStateRouter } from './watch-state.router';
 import { devicesRouter } from './devices.router';
+import { youtubeImportRouter } from './youtube-import.router';
 
 /**
  * Register all feature routers with the main OpenAPI instance.
@@ -103,6 +104,9 @@ export function registerAllRouters(openapi: any) {
   openapi.route('/api/continue-watching', continueWatchingRouter);
   // Push device registration (Epic 9.4)
   openapi.route('/api/devices', devicesRouter);
+
+  // Move from YouTube (wiki AUN-YT-IMPORT): the Studio wizard's import API
+  openapi.route('/api/youtube-import', youtubeImportRouter);
 
   // Search v2 domain - index-backed search, explore, internal backfill (root level)
   openapi.route('', searchRouter);

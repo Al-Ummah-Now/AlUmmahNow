@@ -82,11 +82,33 @@ on its own port:
     serves the landscape player fixture for renditions it made ready (`/pub/…`, and `/priv/…` with a
     token-shaped segment; the real token check is unit tested in `apps/media`).
     `POST /__fake/media/down|up` makes the host answer 503, for fallback specs.
+  - **Google and YouTube** (Move from YouTube, `scripts/local-stack/fake-google.ts`):
+    `accounts.google.com` (the consent screen, which sends the browser straight back with a code, or
+    with `error=access_denied`), `oauth2.googleapis.com` (`/token` checks the PKCE verifier and the
+    redirect URI, refreshes, `/revoke`), `www.googleapis.com` / `youtube.googleapis.com` (the
+    YouTube Data API v3 reads: channels, playlistItems in pages of 2, videos, playlists, captions and
+    caption downloads as WebVTT) and `i.ytimg.com` (every thumbnail is
+    `apps/web/e2e/test-fixtures/e2e-thumbnail.jpg`). api-videos runs with the feature on
+    (`YOUTUBE_IMPORT_DEFAULT_ENABLED`, a fake client id; the client secret is the local Secrets Store
+    value) until an admin saves settings. The fixture channel `UCaunFixtureChannel0001`:
+    | YouTube id | On YouTube | Takeout file |
+    |---|---|---|
+    | `AUNytPUB001` | public, captions ar + en (an automatic en track too, never imported), maxres custom thumbnail, tags, en/ar localizations, chapters in the description | `Fixture public talk [AUNytPUB001].mp4` |
+    | `AUNytUNL002` | unlisted, made for kids, no captions | `Fixture unlisted kids video.mp4` (no id: matched by title) |
+    | `AUNytPRV003` | private, scheduled 30 days after the request (`publishAt`) | `Fixture scheduled video [AUNytPRV003].mp4` |
+
+    The playlist `PLaunFixture0001` "Fixture playlist" holds `AUNytPUB001` and `AUNytUNL002`. A spec
+    zips any MP4 fixture under those names to stand in for a Takeout download.
 - **Control API.** `http://127.0.0.1:3190` (loopback only) has:
   - `GET /__fake/bunny/videos[/<guid>]`;
   - `POST /__fake/bunny/videos/<guid>/encode|fail|hold`;
   - `POST /__fake/media/transcode/<videoId>[?outcome=fail]`, `POST /__fake/media/down|up`;
   - `GET /__fake/resend/emails`;
+  - `GET /__fake/google` (consent mode, quota switch, outstanding codes and refresh tokens, revocations,
+    the last 200 calls such as `consent`, `token:code`, `api:captions`, `revoke`),
+    `POST /__fake/google/consent?mode=allow|deny|no-channel|no-captions` (`no-channel`: the account has no
+    YouTube channel; `no-captions`: the consent grants only the read-only scope),
+    `POST /__fake/google/quota?on=1|0` (captions calls answer `quotaExceeded`), `POST /__fake/google/reset`;
   - `POST /__stack/d1/<database name>`, which runs the request body as SQL. The seed uses it for roles
     and creator tiers, and specs that are not about auth can use it as a fast path;
   - `GET|PUT|DELETE /__stack/r2/<bucket name>/<key>`: one object of a stack R2 bucket (fixtures a spec

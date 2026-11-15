@@ -8,10 +8,10 @@ import { Str, Bool } from 'chanfana';
 import { z } from 'zod';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import R2Repository from '../../lib/r2Repo';
-import { patchVideo } from '../../lib/videoWrites';
 import { SubtitleService } from '../../lib/subtitles';
+import { storeSubtitleTrack, type StoreSubtitleResult } from '../../lib/subtitles/store';
 import Queue, { MessageType } from '../../lib/queue';
-import { VideoObject, SubtitleTrack, SubtitleMetadata } from '@al-ummah/shared-types';
+import { VideoObject } from '@al-ummah/shared-types';
 import { logger } from '../../lib/logger';
 
 export class SubtitlesUpload extends AuthenticatedRoute {
@@ -175,64 +175,22 @@ export class SubtitlesUpload extends AuthenticatedRoute {
         );
       }
 
-      // Process subtitle file
-      const result = await subtitleService.processSubtitle(file, language, userId);
-
-      // Store WebVTT file in R2
-      const vttKey = `${videoId}/${language}.vtt`;
-      await subtitleBucket.put(vttKey, result.webvttContent, {
-        httpMetadata: {
-          contentType: 'text/vtt',
-        },
+      // The WebVTT file, its original, the metadata and the video record (lib/subtitles/store.ts)
+      const saved = await storeSubtitleTrack({ videos: c.env.videos, subtitles: subtitleBucket }, video, {
+        file,
+        language,
+        label,
+        isDefault,
+        userId,
+        apiBaseUrl: c.env.Audience || new URL(c.req.url).origin,
       });
-
-      // Store original file as backup
-      const originalKey = `${videoId}/original/${language}.${result.originalFormat}`;
-      await subtitleBucket.put(originalKey, file, {
-        httpMetadata: {
-          contentType: 'text/plain',
-        },
-      });
-
-      // Generate API URL for WebVTT file
-      // Subtitles are served directly via the API endpoint (no separate CDN needed)
-      const apiBaseUrl = c.env.Audience || new URL(c.req.url).origin;
-      const subtitleUrl = `${apiBaseUrl}/api/videos/${videoId}/subtitles/${language}`;
-
-      // Create complete track with URL
-      const track: SubtitleTrack = {
-        ...result.track,
-        url: subtitleUrl,
-        label: label || result.track.label,
-        isDefault: isDefault || false,
-      };
-
-      // Add the track to the subtitle metadata and the video with conditional
-      // writes (SCALABILITY-AUDIT AV-3): two languages uploaded at once both
-      // stay, and concurrent changes to the video are not overwritten.
-      const metadataKey = `${videoId}/metadata.json`;
-      const metadata = await new R2Repository<SubtitleMetadata>(subtitleBucket).updateObject(metadataKey, (current) => {
-        let next = subtitleService.addTrack(current, track);
-        // Update default if requested
-        if (isDefault) {
-          next = subtitleService.setDefaultTrack(next, language);
-        }
-        Object.assign(current, next);
-      }, { initial: () => subtitleService.createMetadata(videoId, []) });
-
-      const saved = await patchVideo(videoRepo, videoId, {
-        subtitles: metadata.tracks,
-        hasSubtitles: true,
-        subtitleLanguages: metadata.tracks.map((t) => t.language),
-        dateModified: new Date().toISOString(),
-      }, { ownerId: video.userId });
       if (saved.status === 'missing') {
         return c.json({ success: false, error: 'Video not found' }, 404);
       }
       if (saved.status === 'forbidden') {
         return c.json({ success: false, error: 'You do not have permission to modify this video' }, 403);
       }
-      const updatedVideo = saved.video;
+      const { track, video: updatedVideo } = saved as Extract<StoreSubtitleResult, { status: 'ok' }>;
 
       // Send queue message for subtitle upload
       const queue = new Queue(c.env.queue);

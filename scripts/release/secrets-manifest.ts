@@ -63,6 +63,11 @@ const API_VIDEOS_SECRETS: RequiredSecret[] = [
 	{ name: 'image_storage_key', purpose: 'Secrets Store; Bunny Storage key for thumbnails and avatars' },
 	{ name: 'LIVE_INGEST_SECRET', purpose: 'Secrets Store live-ingest-secret[-qa|-stage]; HMAC key of self-hosted live stream keys (lib/live/providers.ts)' },
 	INTERNAL_API_KEY,
+	{
+		name: 'GOOGLE_OAUTH_CLIENT_SECRET',
+		purpose:
+			"Secrets Store google-oauth-client-secret[-qa|-stage]; Move from YouTube's Google OAuth client secret (docs/features/youtube-import.md). Created by ensure-resources.ts as the placeholder `unset` (feature not ready) until the owner pastes Google's value",
+	},
 	{ name: 'MEDIA_SIGN_KEY', purpose: 'Secrets Store media-sign-key[-qa|-stage]; path tokens of private R2 renditions (shared with apps/media)' },
 	TURNSTILE_SECRET,
 	{ name: 'VAPID_PUBLIC_KEY', purpose: 'Secrets Store vapid-public-key[-qa|-stage]; Web Push VAPID public key served by GET /api/devices/webpush-key (the processor holds the pair), #1287' },
