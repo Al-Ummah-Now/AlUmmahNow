@@ -78,6 +78,7 @@ import scholarsInternalRouter from "./routers/scholars-internal.router";
 import postsInternalRouter from "./routers/posts-internal.router";
 import { sitesInternalRouter, sitesRouter } from "./routers/sites.router";
 import { publishDuePosts } from "./lib/scheduled-posts";
+import { sweepStaging } from "./lib/media/prebuilt";
 import { runHealthCheck } from "./lib/media/health";
 import { createUploadsInternalRouter } from "./endpoints/video/uploadsInternal";
 import { createVideoFormatInternalRouter } from "./endpoints/video/videoFormatInternal";
@@ -595,6 +596,15 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 			sweepStaleUploads(withSearchSync(rawEnv, ctx) as never).catch((error) =>
 				logger.error('[UploadReaper] Sweep failed', { error: error instanceof Error ? error.message : String(error) }),
 			),
+		);
+		// Hourly: pre-encoded renditions from desktop Studio that were never finished or used (D11, lib/media/prebuilt.ts)
+		ctx.waitUntil(
+			sweepStaging(rawEnv as never)
+				.then((r) => (r.deleted ? logger.info('[Renditions] Staging sweep', r) : undefined))
+				.catch((error) => {
+					logger.error('[Renditions] Staging sweep failed', { error: error instanceof Error ? error.message : String(error) });
+					reportJobFailure(rawEnv, ctx, 'renditions-staging-sweep', error);
+				}),
 		);
 		// Hourly, QA / stage only: purge the test library's leaked Bunny videos (no record,
 		// or a record soft-deleted 30+ min ago; lib/uploads/testLibraryPurge.ts)

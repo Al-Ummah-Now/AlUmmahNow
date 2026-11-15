@@ -6,6 +6,7 @@
 //   PUT  http://media.internal/<key>       one object into R2
 //   POST http://control.internal/event     progress / ready / failed
 //   PUT  http://review.internal/<key>      review media (frames, audio, manifest) under review/<videoId>/<rev>/
+//   GET  http://staging.internal/<rel>     renditions the creator pre-encoded in desktop Studio (D11; read only)
 //
 // API (from the Worker): POST /jobs { jobId, prefix, attempt }, GET /status, GET /health.
 import { createServer } from 'node:http';
@@ -16,6 +17,7 @@ import { join, relative } from 'node:path';
 import { Readable } from 'node:stream';
 import { bandwidthOf, displaySize, ffmpegArgs, ladderFor, MP4_FILE, mp4Args, mp4Rung, playlistFiles, progressSeconds, stillsArgs } from './ladder.mjs';
 import { RungTracker, uploadByPlan, uploadPlan } from './rungs.mjs';
+import { avcCodec, decodeSamples, masterPlaylist, parseMediaPlaylist, stagedPathAllowed, verifyRenditions } from './prebuilt.mjs';
 import { audioArgs, captionAudioManifestFor, frameInterval, frameTimes, framesArgs, manifestFor, reviewVariant, thinFrames } from './review.mjs';
 
 const PORT = 8080;
@@ -227,6 +229,117 @@ async function fetchRendition(rel, dest) {
 	});
 }
 
+/** GET one pre-encoded file (staging.internal, this job's staging prefix, read only). False when it is not there. */
+async function fetchStaged(rel, dest) {
+	return retrying(`staged ${rel}`, async () => {
+		const res = await fetch(`http://staging.internal/${rel}`);
+		if (res.status === 404) return false;
+		if (!res.ok) throw new Error(`staged ${rel} HTTP ${res.status}`);
+		await writeFile(dest, Buffer.from(await res.arrayBuffer()));
+		return true;
+	});
+}
+
+/** init + one segment as a playable file, for ffprobe and the decode check. */
+async function joined(dir, init, seg) {
+	const file = join(dir, `.check-${seg}.mp4`);
+	await writeFile(file, Buffer.concat([await readFile(join(dir, init)), await readFile(join(dir, seg))]));
+	return file;
+}
+
+async function probeRendition(dir, pl) {
+	const file = await joined(dir, pl.init, pl.segments[0].file);
+	try {
+		const json = JSON.parse(await run('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_streams', file]));
+		const v = (json.streams || []).find((x) => x.codec_type === 'video');
+		const a = (json.streams || []).find((x) => x.codec_type === 'audio');
+		const keys = (await run('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-skip_frame', 'nokey', '-show_entries', 'frame=pts_time', '-of', 'csv=p=0', file]))
+			.split('\n')
+			.map((l) => Number(l.trim().replace(/,$/, '')))
+			.filter((n) => Number.isFinite(n));
+		return {
+			...(v ? { video: { codec: v.codec_name, width: v.width, height: v.height, pixFmt: v.pix_fmt, profile: v.profile, level: v.level, keyframeSeconds: keys } } : {}),
+			...(a ? { audio: { codec: a.codec_name, channels: a.channels } } : {}),
+		};
+	} catch (error) {
+		log('prebuilt probe failed', { error: String(error.message) });
+		return null;
+	} finally {
+		await rm(file, { force: true });
+	}
+}
+
+/**
+ * D11: use the renditions the creator encoded in desktop Studio when they match, exactly, what this
+ * server would have encoded for this source (prebuilt.mjs). On a pass the rungs sit in `out` with
+ * our own master playlist and the encode is skipped; anything else leaves `out` empty and says why,
+ * and the normal encode runs. Never throws.
+ */
+async function usePrebuilt(job, info, rungs, out) {
+	const names = rungs.map((r) => r.name);
+	const cleanup = async () => {
+		for (const n of new Set([...names, ...job.prebuilt.rungs])) await rm(join(out, n), { recursive: true, force: true }).catch(() => undefined);
+		await rm(join(out, 'master.m3u8'), { force: true }).catch(() => undefined);
+	};
+	try {
+		if (!Array.isArray(job.prebuilt.rungs) || job.prebuilt.rungs.some((n) => !names.includes(n))) return { used: false, reason: 'rungs_mismatch' };
+		const checks = [];
+		for (const name of job.prebuilt.rungs) {
+			const dir = join(out, name);
+			await mkdir(dir, { recursive: true });
+			if (!(await fetchStaged(`${name}/index.m3u8`, join(dir, 'index.m3u8')))) {
+				await cleanup();
+				return { used: false, reason: 'file_missing', rung: name };
+			}
+			const playlist = parseMediaPlaylist(await readFile(join(dir, 'index.m3u8'), 'utf8'));
+			const sizes = {};
+			let probed = null;
+			if (playlist.ok) {
+				const files = [playlist.init, ...playlist.segments.map((x) => x.file)].filter((f) => stagedPathAllowed(`${name}/${f}`, names));
+				for (let i = 0; i < files.length; i += UPLOAD_CONCURRENCY) {
+					await Promise.all(
+						files.slice(i, i + UPLOAD_CONCURRENCY).map(async (f) => {
+							if (await fetchStaged(`${name}/${f}`, join(dir, f))) sizes[f] = (await stat(join(dir, f))).size;
+						}),
+					);
+				}
+				if (sizes[playlist.init] && sizes[playlist.segments[0].file]) probed = await probeRendition(dir, playlist);
+			}
+			checks.push({ name, playlist, sizes, probe: probed });
+		}
+		const verdict = verifyRenditions({ ladder: rungs, source: info, rungs: checks });
+		if (!verdict.ok) {
+			await cleanup();
+			return { used: false, reason: verdict.reason, ...(verdict.rung ? { rung: verdict.rung } : {}) };
+		}
+		// Decode first, middle and last segment of every rung end to end: any decoder error fails it
+		for (const c of checks) {
+			for (const seg of decodeSamples(c.playlist.segments)) {
+				const file = await joined(join(out, c.name), c.playlist.init, seg);
+				try {
+					await run('ffmpeg', ['-hide_banner', '-nostdin', '-v', 'error', '-xerror', '-i', file, '-f', 'null', '-']);
+				} catch {
+					await cleanup();
+					return { used: false, reason: 'decode', rung: c.name };
+				} finally {
+					await rm(file, { force: true });
+				}
+			}
+		}
+		const master = checks.map((c) => {
+			const r = rungs.find((x) => x.name === c.name);
+			const peak = Math.max(...c.playlist.segments.map((x) => (c.sizes[x.file] * 8) / x.seconds));
+			const codecs = [avcCodec(c.probe.video.profile, c.probe.video.level), ...(c.probe.audio ? ['mp4a.40.2'] : [])].join(',');
+			return { name: c.name, width: r.width, height: r.height, bandwidth: peak, codecs };
+		});
+		await writeFile(join(out, 'master.m3u8'), masterPlaylist(master));
+		return { used: true };
+	} catch (error) {
+		await cleanup();
+		return { used: false, reason: 'error', detail: String(error?.message || error).slice(0, 120) };
+	}
+}
+
 /**
  * Remux-only job (the public MP4 backfill, #1182): the progressive MP4 of a rendition that is
  * already ready, from its own rung's init and segments in R2. Same rung choice and same stream
@@ -272,21 +385,30 @@ async function runJob(job) {
 	log('probed', { info, rungs: rungs.map((r) => r.name) });
 	await event({ type: 'started', jobId: job.jobId, rungs: rungs.map((r) => r.name), source: info });
 
-	current.status = 'transcoding';
-	setStage('encode', rungs.map((r) => r.name).join(','));
-	for (const r of rungs) await mkdir(join(out, r.name), { recursive: true });
-	// One pass encodes every rung: all 'encoding' with the shared %
 	tracker = new RungTracker(rungs);
 	const progressEvent = () => event({ type: 'progress', jobId: job.jobId, progress: current.progress, rungs: tracker.snapshot() });
-	tracker.setAll('encoding', 0);
-	if (tracker.due(Date.now())) await progressEvent();
-	await run('ffmpeg', ffmpegArgs({ input: src, out, rungs, hasAudio: info.hasAudio, fps: info.fps }), (line) => {
-		const s = progressSeconds(line);
-		if (s === null || !(info.durationSeconds > 0)) return;
-		current.progress = Math.min(0.99, s / info.durationSeconds);
-		tracker.setAll('encoding', current.progress);
-		if (tracker.due(Date.now())) progressEvent();
-	});
+	// D11: the creator's own renditions, used only when they pass every check
+	let prebuilt;
+	if (job.prebuilt) {
+		setStage('verify_prebuilt', job.prebuilt.rungs?.join(','));
+		prebuilt = await usePrebuilt(job, info, rungs, out);
+		log('prebuilt', prebuilt);
+	}
+	if (!prebuilt?.used) {
+		current.status = 'transcoding';
+		setStage('encode', rungs.map((r) => r.name).join(','));
+		for (const r of rungs) await mkdir(join(out, r.name), { recursive: true });
+		// One pass encodes every rung: all 'encoding' with the shared %
+		tracker.setAll('encoding', 0);
+		if (tracker.due(Date.now())) await progressEvent();
+		await run('ffmpeg', ffmpegArgs({ input: src, out, rungs, hasAudio: info.hasAudio, fps: info.fps }), (line) => {
+			const s = progressSeconds(line);
+			if (s === null || !(info.durationSeconds > 0)) return;
+			current.progress = Math.min(0.99, s / info.durationSeconds);
+			tracker.setAll('encoding', current.progress);
+			if (tracker.due(Date.now())) progressEvent();
+		});
+	}
 	setStage('stills');
 	const stills = stillsArgs({ input: src, out, durationSeconds: info.durationSeconds });
 	await run('ffmpeg', stills.thumb);
@@ -351,6 +473,7 @@ async function runJob(job) {
 		...(preview ? { preview } : {}),
 		...(mp4 ? { mp4 } : {}),
 		...(review ? { review } : {}),
+		...(prebuilt ? { prebuilt: { used: prebuilt.used, ...(prebuilt.reason ? { reason: prebuilt.reason } : {}), ...(prebuilt.rung ? { rung: prebuilt.rung } : {}) } } : {}),
 	};
 	result.bytes = bytes;
 	await rm(WORK, { recursive: true, force: true });

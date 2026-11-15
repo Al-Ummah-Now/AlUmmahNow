@@ -8,7 +8,7 @@
  * - fetch  /internal/jobs/:videoId (X-API-Key): the job as the container sees it (admin)
  */
 import type { CaptionAudioJobMessage, LiveReviewJobMessage, Mp4JobMessage, TranscodeJobMessage } from '@al-ummah/shared-types';
-import { isCaptionAudioJobMessage, isLiveReviewJobMessage, isMediaRev, isMediaVideoId, isMp4JobMessage } from '@al-ummah/shared-types';
+import { isCaptionAudioJobMessage, isLiveReviewJobMessage, isMediaRev, isMediaVideoId, isMp4JobMessage, isPrebuiltRef } from '@al-ummah/shared-types';
 import { liveReviewQueueAction, mp4QueueAction, startFailureReason, startRetry } from './jobs';
 import { reportCaptionAudio, reportEvent, reportLiveReviewMedia, reportMp4Event } from './videos-api';
 import { handlePrivate } from './edge';
@@ -29,7 +29,8 @@ function isJob(body: unknown): body is TranscodeJobMessage {
 		typeof b.rev === 'string' &&
 		isMediaRev(b.rev) &&
 		typeof b.jobId === 'string' &&
-		(b.access === 'pub' || b.access === 'priv')
+		(b.access === 'pub' || b.access === 'priv') &&
+		(b.prebuilt === undefined || isPrebuiltRef(b.prebuilt))
 	);
 }
 

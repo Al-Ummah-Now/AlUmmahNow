@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { TranscodeJobMessage } from '@al-ummah/shared-types';
-import { ATTEMPT_LIMIT_MS, containerSeconds, hasWatchdogDue, INFRA_RETRY_LIMIT, isInfraFailure, keyAllowed, SELFTEST_MAX_DAY_RUNS, SELFTEST_MAX_RUNS, SELFTEST_MIN_GAP_MS, selfTestDue, selfTestRuns, START_MAX_DELIVERIES, startFailureReason, startRetry, LAUNCH_LIMIT_MS, launchLost, MAX_ATTEMPTS, newJob, onFailure, onMessage, onProgressEvent, PROGRESS_REPORT_MS, SILENCE_LIMIT_MS, watchdogVerdict } from '../src/jobs';
+import { ATTEMPT_LIMIT_MS, containerSeconds, hasWatchdogDue, INFRA_RETRY_LIMIT, isInfraFailure, keyAllowed, SELFTEST_MAX_DAY_RUNS, SELFTEST_MAX_RUNS, SELFTEST_MIN_GAP_MS, selfTestDue, selfTestRuns, START_MAX_DELIVERIES, startFailureReason, startRetry, LAUNCH_LIMIT_MS, launchLost, MAX_ATTEMPTS, newJob, onFailure, onMessage, onProgressEvent, PROGRESS_REPORT_MS, SILENCE_LIMIT_MS, stagedKey, watchdogVerdict } from '../src/jobs';
 
 const msg = (over: Partial<TranscodeJobMessage> = {}): TranscodeJobMessage => ({
 	kind: 'transcode',
@@ -229,5 +229,19 @@ describe('container self-test (release smoke)', () => {
 		assert.equal(selfTestDue(run(true, 3600_000, 'v1', 1, SELFTEST_MAX_DAY_RUNS), T, 'v2'), false);
 		// the next UTC day starts a fresh count
 		assert.equal(selfTestRuns(run(true, 4 * 3600_000, 'v1', 1, SELFTEST_MAX_DAY_RUNS), 'v2', T).dayRuns, 1);
+	});
+});
+
+describe('pre-encoded renditions (D11)', () => {
+	it('a job with prebuilt renditions knows its staging prefix', () => {
+		const job = newJob(msg({ prebuilt: { stagingId: '0123456789abcdef', rungs: ['360p', '720p'] } }), 0);
+		assert.deepEqual(job.prebuilt, { stagingId: '0123456789abcdef', rungs: ['360p', '720p'], prefix: 'staging/0b3c2a1e-1111-2222-3333-444455556666/0123456789abcdef/' });
+		assert.equal(newJob(msg(), 0).prebuilt, undefined);
+	});
+	it('the container may read only <rung>/<file> of the job’s own rungs', () => {
+		const p = { rungs: ['360p', '720p'], prefix: 'staging/v/0123456789abcdef/' };
+		assert.equal(stagedKey(p, '720p/seg_00001.m4s'), 'staging/v/0123456789abcdef/720p/seg_00001.m4s');
+		assert.equal(stagedKey(p, '720p/index.m3u8'), 'staging/v/0123456789abcdef/720p/index.m3u8');
+		for (const bad of ['1080p/init.mp4', '720p/../x', '720p/a/b', 'master.m3u8', '../720p/init.mp4', '720p/..']) assert.equal(stagedKey(p, bad), null, bad);
 	});
 });

@@ -8,7 +8,7 @@
 import { Container, type OutboundHandlerContext } from '@cloudflare/containers';
 import { failRungs, MEDIA_MP4, mediaPrefix, sanitizeFailure, sanitizeMp4, type CaptionAudioJobMessage, type LiveReviewJobMessage, type Mp4JobMessage, sanitizeRungs, type R2RungProgress, type TranscodeFailure, type TranscodeJobEvent, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
 import { bucketFor, errorText, log, type Env } from './env';
-import { containerSeconds, hasWatchdogDue, isInfraFailure, keyAllowed, selfTestDue, selfTestRuns, startFailureReason, type SelfTestResult, liveReviewPrefix, liveVodSource, liveVodTarget, newJob, onFailure, onMessage, onProgressEvent, watchdogVerdict, WATCHDOG_SECONDS, type JobState } from './jobs';
+import { containerSeconds, hasWatchdogDue, isInfraFailure, keyAllowed, selfTestDue, selfTestRuns, startFailureReason, type SelfTestResult, liveReviewPrefix, liveVodSource, liveVodTarget, newJob, onFailure, onMessage, onProgressEvent, stagedKey, watchdogVerdict, WATCHDOG_SECONDS, type JobState } from './jobs';
 import { reportCaptionAudio, reportEvent, reportLiveReviewMedia, reportMp4Event, sourceCandidates } from './videos-api';
 import { serveOriginal } from './originals';
 import { storeUpload } from './uploads';
@@ -117,6 +117,15 @@ export class Transcoder extends Container<Env> {
 			if (!obj) return new Response('missing', { status: 404 });
 			return new Response(obj.body, { headers: { 'content-length': String(obj.size) } });
 		},
+		/** GET http://staging.internal/<rung>/<file> → the creator's pre-encoded rendition files (D11; read only, this job's staging prefix) */
+		async staging(req: Request, env: Env, ctx: OutboundHandlerContext<{ prefix: string; rungs: string }>): Promise<Response> {
+			if (req.method !== 'GET') return new Response('method', { status: 405 });
+			const key = stagedKey({ prefix: ctx.params.prefix, rungs: ctx.params.rungs.split(',') }, decodeURIComponent(new URL(req.url).pathname.slice(1)));
+			if (!key) return new Response('key outside the job', { status: 403 });
+			const obj = await env.MEDIA_PRIVATE.get(key);
+			if (!obj) return new Response('missing', { status: 404 });
+			return new Response(obj.body, { headers: { 'content-length': String(obj.size) } });
+		},
 		/** PUT http://mp4.internal/<prefix>/video.mp4 → R2: the one object a remux-only job may write */
 		async mp4(req: Request, env: Env, ctx: OutboundHandlerContext<{ prefix: string }>): Promise<Response> {
 			const key = decodeURIComponent(new URL(req.url).pathname.slice(1));
@@ -195,18 +204,25 @@ export class Transcoder extends Container<Env> {
 			'media.internal': { method: 'media', params: { prefix: job.prefix } },
 			'control.internal': { method: 'control', params: { videoId: job.videoId, jobId: job.jobId } },
 			...(job.reviewPrefix ? { 'review.internal': { method: 'review', params: { prefix: job.reviewPrefix } } } : {}),
+			...(job.prebuilt ? { 'staging.internal': { method: 'staging', params: { prefix: job.prebuilt.prefix, rungs: job.prebuilt.rungs.join(',') } } } : {}),
 		});
 		await this.startAndWaitForPorts();
 		const res = await this.containerFetch('http://container/jobs', {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ jobId: job.jobId, prefix: job.prefix, attempt: job.attempt, videoId: job.videoId, rev: job.rev, ...(job.review ? { review: job.review, reviewPrefix: job.reviewPrefix } : {}) }),
+			body: JSON.stringify({ jobId: job.jobId, prefix: job.prefix, attempt: job.attempt, videoId: job.videoId, rev: job.rev, ...(job.review ? { review: job.review, reviewPrefix: job.reviewPrefix } : {}), ...(job.prebuilt ? { prebuilt: { rungs: job.prebuilt.rungs } } : {}) }),
 		});
 		if (res.status !== 202 && res.status !== 200) throw new Error(`container refused the job: HTTP ${res.status} ${await res.text()}`);
 		job.launchedAt = Date.now();
 		await this.save(job);
 		await this.armWatchdog();
 		await this.report(job, { type: 'started' });
+	}
+
+	/** The creator's staged renditions are done with once the job ends (used or not). */
+	private async dropStaging(job: JobState): Promise<void> {
+		if (!job.prebuilt) return;
+		await deletePrefix(this.env.MEDIA_PRIVATE, job.prebuilt.prefix).catch((e) => log.warn('[Transcoder] Staging cleanup failed', { videoId: job.videoId, error: errorText(e) }));
 	}
 
 	/** From the container (control.internal). */
@@ -242,6 +258,7 @@ export class Transcoder extends Container<Env> {
 		job.rungs = result.rungs.map((r) => ({ name: r.name, state: 'done' }));
 		job.finishedAt = now;
 		await this.save(job);
+		await this.dropStaging(job);
 		await this.report(job, { type: 'ready', result });
 		await this.stop().catch(() => undefined);
 	}
@@ -286,6 +303,7 @@ export class Transcoder extends Container<Env> {
 		job.status = 'failed';
 		job.finishedAt = now;
 		await this.save(job);
+		await this.dropStaging(job);
 		log.error('[Transcoder] Job failed', { videoId: job.videoId, jobId: job.jobId, attempt: job.attempt, error });
 		await this.report(job, { type: 'failed', error, final: true, failure, ...(job.rungs ? { rungs: job.rungs } : {}) });
 	}

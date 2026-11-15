@@ -3,7 +3,7 @@
  * Transcoder Durable Object (transcoder.ts) keeps one JobState per video.
  */
 import { reviewMediaPrefix, type ReviewExtractionOptions } from '@al-ummah/shared-types';
-import { mediaPrefix, sanitizeRungs, type MediaAccess, type R2RungProgress, type TranscodeFailure, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
+import { mediaPrefix, prebuiltStagingPrefix, sanitizeRungs, type MediaAccess, type R2RungProgress, type TranscodeFailure, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
 
 export const MAX_ATTEMPTS = 3;
 
@@ -92,6 +92,8 @@ export interface JobState {
 	/** Pre-publication review: also extract frames and audio under `reviewPrefix` (MEDIA_PRIVATE) */
 	review?: ReviewExtractionOptions;
 	reviewPrefix?: string;
+	/** D11: the creator's pre-encoded renditions to verify (and their MEDIA_PRIVATE staging prefix) */
+	prebuilt?: { stagingId: string; rungs: string[]; prefix: string };
 }
 
 export function newJob(msg: TranscodeJobMessage, now: number): JobState {
@@ -110,7 +112,15 @@ export function newJob(msg: TranscodeJobMessage, now: number): JobState {
 		progress: 0,
 		priorSeconds: 0,
 		...(msg.review ? { review: msg.review, reviewPrefix: reviewMediaPrefix(msg.videoId, msg.rev) } : {}),
+		...(msg.prebuilt ? { prebuilt: { ...msg.prebuilt, prefix: prebuiltStagingPrefix(msg.videoId, msg.prebuilt.stagingId) } } : {}),
 	};
+}
+
+/** A staged pre-encoded file the container may read: <rung>/<file> of this job's rungs, nothing else. */
+export function stagedKey(prebuilt: { rungs: string[]; prefix: string }, rel: string): string | null {
+	const m = /^([A-Za-z0-9_-]{1,16})\/([A-Za-z0-9._-]{1,64})$/.exec(rel);
+	if (!m || !prebuilt.rungs.includes(m[1]!) || m[2] === '.' || m[2] === '..') return null;
+	return `${prebuilt.prefix}${rel}`;
 }
 
 /**

@@ -101,7 +101,38 @@ export interface TranscodeResult {
 	mp4?: { file: string; rung: string; width: number; height: number; bytes: number };
 	/** Pre-publication review media (video-review.ts ReviewMediaManifest), when the job asked for it */
 	review?: { manifestKey?: string; failed?: boolean };
+	/**
+	 * D11: the job had renditions the creator encoded in desktop Studio. `used` when they passed every
+	 * check and were published as they are; otherwise the server encoded and `reason` says why.
+	 */
+	prebuilt?: { used: boolean; reason?: PrebuiltRejection; rung?: string };
 }
+
+/** Why the server encoded instead of using the creator's renditions (apps/media/container/prebuilt.mjs). */
+export const PREBUILT_REJECTIONS = [
+	'rungs_mismatch',
+	'file_missing',
+	'playlist_names',
+	'playlist_header',
+	'playlist_not_vod',
+	'playlist_features',
+	'playlist_init',
+	'playlist_extinf',
+	'playlist_empty',
+	'playlist_duplicates',
+	'no_video',
+	'video_codec',
+	'pixel_format',
+	'size',
+	'audio',
+	'segment_length',
+	'duration',
+	'keyframes',
+	'bitrate',
+	'decode',
+	'error',
+] as const;
+export type PrebuiltRejection = (typeof PREBUILT_REJECTIONS)[number];
 
 /** Where a transcode attempt was when it failed. */
 export type TranscodeStage = 'start' | 'fetch_source' | 'probe' | 'encode' | 'stills' | 'upload' | 'container';
@@ -195,6 +226,8 @@ export interface TranscodeJobMessage {
 	reason: 'upload' | 'retry' | 'sweep' | 'backfill';
 	/** Pre-publication review: also extract frames and audio to MEDIA_PRIVATE review/<videoId>/<rev>/ (video-review.ts) */
 	review?: import('./video-review').ReviewExtractionOptions;
+	/** D11: renditions the creator pre-encoded, staged in MEDIA_PRIVATE (prebuiltStagingPrefix); verified before use */
+	prebuilt?: { stagingId: string; rungs: string[] };
 }
 
 /** Event the media worker posts back to api-videos (service binding). */
@@ -308,6 +341,61 @@ export function newMediaRev(): string {
 /** R2 key prefix of one rendition set (no trailing slash). */
 export function mediaPrefix(access: MediaAccess, videoId: string, rev: string): string {
 	return `${access}/${videoId}/${rev}`;
+}
+
+/**
+ * D11: where desktop Studio's pre-encoded renditions wait (MEDIA_PRIVATE) until the transcode job
+ * verifies them; deleted when the job ends. `<prefix><rung>/index.m3u8`, `init.mp4`, `seg_00001.m4s` …
+ */
+export function prebuiltStagingPrefix(videoId: string, stagingId: string): string {
+	return `staging/${videoId}/${stagingId}/`;
+}
+
+/** The ladder's rung names (apps/media/container/ladder.mjs RUNGS); pre-encoded rungs must be among them. */
+export const PREBUILT_RUNG_NAMES = ['360p', '480p', '720p', '1080p'] as const;
+
+/** Limits of one pre-encoded upload (POST /api/videos/:id/renditions). */
+export const PREBUILT_LIMITS = {
+	/** Files across all rungs (a 6-hour 1080p video is about 14,500 segments) */
+	maxFiles: 16_000,
+	/** One file (segments are 6 s; 32 MiB is far above 1080p at its cap) */
+	maxFileBytes: 32 * 1024 * 1024,
+	/** All files together */
+	maxTotalBytes: 40 * 1024 * 1024 * 1024,
+	/** A staged upload not finished and used within this long is deleted */
+	staleAfterMs: 48 * 60 * 60 * 1000,
+} as const;
+
+/** The video record's pre-encoded upload while it is staged (cleared when the transcode takes it). */
+export interface PrebuiltUploadState {
+	stagingId: string;
+	/** uploading: files going up; ready: every file is there; queued: handed to the transcode job */
+	status: 'uploading' | 'ready' | 'queued';
+	rungs: string[];
+	files: number;
+	bytes: number;
+	createdAt: string;
+	/** What encoded it on the creator's computer, e.g. "VideoToolbox", "Media Foundation (NVENC)" */
+	encoder?: string;
+}
+
+/** A staging id: 16 hex chars, like a rev. */
+export function isPrebuiltStagingId(id: string): boolean {
+	return /^[a-f0-9]{16}$/.test(id);
+}
+
+/** Whether a TranscodeJobMessage's `prebuilt` is well formed (rung names, staging id). */
+export function isPrebuiltRef(p: unknown): p is { stagingId: string; rungs: string[] } {
+	const x = p as { stagingId?: unknown; rungs?: unknown } | null;
+	return (
+		!!x &&
+		typeof x.stagingId === 'string' &&
+		isPrebuiltStagingId(x.stagingId) &&
+		Array.isArray(x.rungs) &&
+		x.rungs.length > 0 &&
+		x.rungs.length <= MAX_RUNGS &&
+		x.rungs.every((r) => typeof r === 'string' && /^[A-Za-z0-9_-]{1,16}$/.test(r))
+	);
 }
 
 /** Every key of a video, in both prefixes, starts with one of these. */
