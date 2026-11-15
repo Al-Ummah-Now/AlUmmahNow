@@ -120,7 +120,13 @@ test.describe('caption and title translation', () => {
         // Viewers: the caption menu names the machine translation
         await gotoSettled(page, `${target().web}/${locale}/video/${video.id}`);
         await expect
-          .poll(async () => page.evaluate(() => Array.from(document.querySelectorAll('video')).flatMap((v) => Array.from(v.textTracks).map((t) => t.label))), { timeout: 60000 })
+          .poll(async () => page.evaluate(() =>
+              // Video.js emulates text tracks (nativeTextTracks: false), so read the player's list, not the <video>'s
+              Array.from(document.querySelectorAll('.video-js')).flatMap((el) => {
+                const tracks = (el as unknown as { player?: { textTracks?: () => ArrayLike<{ label: string }> } }).player?.textTracks?.();
+                return tracks ? Array.from(tracks, (t) => t.label) : [];
+              }),
+            ), { timeout: 60000 })
           .toContain(locale === 'ar' ? `الإنجليزية (${MACHINE_LABEL.ar})` : `English (${MACHINE_LABEL.en})`);
         if (locale === 'ar') {
           // The English title, auto-translated for an Arabic viewer (made once by the processor, then cached)
