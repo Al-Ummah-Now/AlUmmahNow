@@ -154,7 +154,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/release/brand-logo.spec.ts': { placement: 'local', reason: 'header logo first-paint layout' },
   'apps/web/e2e/release/bulk-rename-edit.spec.ts': { placement: 'local', reason: 'bulk upload UI + Studio bulk PATCH; encode only gates listing' },
   'apps/web/e2e/release/bulk-rename-order.spec.ts': { placement: 'local', reason: 'Studio bulk rename ordering on initiated (byte-less) records' },
-  'apps/web/e2e/release/caption-translation.spec.ts': { placement: 'local', reason: 'Studio transcript and title translation with the fixture translator and fixture Quran Foundation editions (mocked AI); own creator, grant, video and draft' },
+  'apps/web/e2e/release/caption-translation.player.spec.ts': { placement: 'local', reason: 'branded Chrome (the caption menu needs a playable stream); Studio transcript and title translation with the fixture translator and fixture Quran Foundation editions (mocked AI); own creator, grant, video and draft' },
   'apps/web/e2e/release/callback-errors.spec.ts': { placement: 'local', reason: 'web callback error handling with bogus codes; no real sign-in' },
   'apps/web/e2e/release/category-suggestions.spec.ts': { placement: 'local', reason: 'processor AI test hook (mocked) + upload form + admin accept page' },
   'apps/web/e2e/release/channel-roles.spec.ts': { placement: 'local', reason: 'channel roles: invite, accept, act, change, remove, two users' },

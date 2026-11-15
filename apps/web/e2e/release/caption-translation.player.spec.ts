@@ -119,15 +119,19 @@ test.describe('caption and title translation', () => {
 
         // Viewers: the caption menu names the machine translation
         await gotoSettled(page, `${target().web}/${locale}/video/${video.id}`);
-        await expect
-          .poll(async () => page.evaluate(() =>
-              // Video.js emulates text tracks (nativeTextTracks: false), so read the player's list, not the <video>'s
-              Array.from(document.querySelectorAll('.video-js')).flatMap((el) => {
-                const tracks = (el as unknown as { player?: { textTracks?: () => ArrayLike<{ label: string }> } }).player?.textTracks?.();
-                return tracks ? Array.from(tracks, (t) => t.label) : [];
-              }),
-            ), { timeout: 60000 })
-          .toContain(locale === 'ar' ? `الإنجليزية (${MACHINE_LABEL.ar})` : `English (${MACHINE_LABEL.en})`);
+        // The player's own Settings → Captions menu lists the track with the label
+        const label = locale === 'ar' ? `الإنجليزية (${MACHINE_LABEL.ar})` : `English (${MACHINE_LABEL.en})`;
+        const menu = page.getByTestId('player-settings-menu');
+        await expect(async () => {
+          if (!(await menu.isVisible())) {
+            await page.locator('.video-js').hover();
+            await page.locator('.video-js .vjs-fanous-settings').click({ timeout: 5000 });
+          }
+          const captions = menu.locator('[data-row="captions"]');
+          if (await captions.isVisible()) await captions.click({ timeout: 5000 });
+          await expect(menu.locator('[role="menuitemradio"]').filter({ hasText: label })).toBeVisible({ timeout: 3000 });
+        }).toPass({ timeout: 60000, intervals: [2000] });
+        await page.keyboard.press('Escape');
         if (locale === 'ar') {
           // The English title, auto-translated for an Arabic viewer (made once by the processor, then cached)
           const marker = page.getByTestId('watch-machine-translation');
