@@ -8,6 +8,8 @@ import { ErrorReportingProvider } from '@/lib/errors/ErrorReportingProvider';
 import { appIcons } from '@/lib/favicon';
 import { getSiteTheme } from '@/lib/site-theme';
 import { MODE_SCRIPT } from '@/lib/color-mode';
+import { TYPED_RECORDER_SCRIPT } from '@/lib/forms/keep-typed-before-hydration';
+import { KeepTypedBeforeHydration } from '@/components/forms/KeepTypedBeforeHydration';
 import { FanousStreet } from '@/components/FanousStreet';
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -48,11 +50,14 @@ export default async function RootLayout({
     <html lang={locale} dir={dir} data-theme={siteTheme.id} data-color-mode={theme ?? undefined} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: MODE_SCRIPT }} />
+        {/* Text typed before hydration is kept (#1462, src/lib/forms/keep-typed-before-hydration.ts) */}
+        <script dangerouslySetInnerHTML={{ __html: TYPED_RECORDER_SCRIPT }} />
         {siteTheme.css && <style data-site-theme={siteTheme.id} dangerouslySetInnerHTML={{ __html: siteTheme.css }} />}
       </head>
       <body className="min-h-screen bg-bg text-fg">
         {/* A deploy while this page is open: notice + reload */}
         <VersionSkewProvider />
+        <KeepTypedBeforeHydration />
         {/* Browser errors → Errors page (src/lib/errors/reporter.ts) */}
         <ErrorReportingProvider locale={locale} theme={theme ?? 'device'} />
         <I18nProvider locale={locale} theme={theme}>

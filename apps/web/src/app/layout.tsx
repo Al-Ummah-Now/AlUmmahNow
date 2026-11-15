@@ -26,6 +26,8 @@ import { CookieSizeMonitor } from "@/components/CookieSizeMonitor";
 import { ActiveChannelWrapper } from "@/components/ActiveChannelWrapper";
 import { QueryProvider } from "@/providers/QueryProvider";
 import { NONCE_HEADER } from "@/lib/security/nonce-header";
+import { TYPED_RECORDER_SCRIPT } from "@/lib/forms/keep-typed-before-hydration";
+import { KeepTypedBeforeHydration } from "@/components/forms/KeepTypedBeforeHydration";
 import { serializeForInlineScript } from "@/lib/security/csp";
 import { authOrigin, deriveAuthProfileUrl, deriveShortLinkUrl } from "@/lib/runtime-config";
 import { deriveCmsUrl, deriveWwwUrl } from "@/lib/scholars/sites";
@@ -238,9 +240,12 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
             inline SVG (lucide), fonts are self-hosted (theme/font-faces.css) */}
         <ThemePackageStyle css={themeCss} nonce={nonce} />
         <RuntimeConfigScript nonce={nonce} />
+        {/* Text typed before hydration is kept (#1462, lib/forms/keep-typed-before-hydration.ts) */}
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: TYPED_RECORDER_SCRIPT }} />
       </head>
       <body className="font-inter">
         <SecurityBootstrap />
+        <KeepTypedBeforeHydration />
         {/* Every client-side error reaches the admin Errors page (lib/errors/reporter.ts) */}
         <ErrorReportingProvider userId={user?.id} workerVersion={reporting.workerVersion} environment={reporting.environment} />
         {/* A deploy while this page is open: notice + reload, never mid-upload */}
