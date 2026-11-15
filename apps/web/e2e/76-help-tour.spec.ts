@@ -73,7 +73,7 @@ test.describe('identity tour', () => {
       await expect(layer).toHaveAccessibleName('Acting as');
       await card(page).getByTestId('tour-next').click();
 
-      // Step 3: the channel list, with "Use without a channel"
+      // Step 3: the identity list: you first (tagged Personal), then your channels
       await expect(card(page)).toHaveAttribute('data-step', 'switch');
       await expect(page.getByTestId('nav-menu').getByTestId('nav-channel-option-none')).toBeVisible();
       for (let i = 0; i < 5 && (await card(page).getAttribute('data-step')) !== 'help'; i++) {
@@ -358,7 +358,7 @@ test.describe('Help pages', () => {
       await expect(page.getByRole('heading', { level: 1, name: HELP_EN.title })).toBeVisible();
 
       const search = page.getByTestId('help-search-input');
-      await search.fill('without a channel');
+      await search.fill('Personal');
       await page.getByRole('option').first().click();
       await expect(page).toHaveURL(/\/en\/help\/[a-z]+(#[a-z-]+)?$/);
 

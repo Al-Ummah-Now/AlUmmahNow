@@ -29,7 +29,7 @@ import { useApiTranslations } from '@/hooks/useTranslationsQuery';
  *   return (
  *     <div dir={dir}>
  *       <h1>{t.common.appName}</h1>
- *       <p>{t.header.noChannelSelected}</p>
+ *       <p>{t.header.settings}</p>
  *     </div>
  *   );
  * }

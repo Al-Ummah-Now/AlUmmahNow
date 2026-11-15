@@ -307,6 +307,14 @@ export function UnifiedNavigation() {
     </button>
   );
   const sep = <div className="aun-menu-sep" role="separator" />;
+  // An identity in the Acting as layer (the YouTube/Facebook pattern): picture, name and a small
+  // tag saying whether it is you ("Personal") or a channel ("Channel"); never "no channel"
+  const identityText = (name: string, tag: string) => (
+    <span className="aun-acct-text">
+      <span className="aun-acct-label" dir="auto">{name}</span>
+      <span className="aun-identity-tag" data-testid="nav-identity-tag">{tag}</span>
+    </span>
+  );
   return (
     <div className="relative">
       {/* Avatar + display name (the name hides on phones and stays the accessible name) */}
@@ -361,6 +369,7 @@ export function UnifiedNavigation() {
               {channel ? (
                 <Link
                   data-testid="nav-active-channel"
+                  data-identity="channel"
                   href={`/${lang}/channels/${channel.id}`}
                   onClick={() => setIsOpen(false)}
                   className="aun-menu-item aun-menu-context-current"
@@ -370,13 +379,13 @@ export function UnifiedNavigation() {
                     {avatar(channel.avatarUrl, getChannelName(channel.name, channel.nameLocalized)[0].toUpperCase())}
                     {channel.isMain && <Crown className="absolute -bottom-0.5 -end-0.5 h-2.5 w-2.5 rounded-full text-brand-ink" aria-hidden="true" />}
                   </span>
-                  <span className="aun-menu-text" dir="auto">{getChannelName(channel.name, channel.nameLocalized)}</span>
+                  {identityText(getChannelName(channel.name, channel.nameLocalized), t.navigation.identityChannel)}
                   {activeRole && activeRole !== 'owner' && roleBadge(activeRole)}
                 </Link>
               ) : (
-                <div data-testid="nav-no-active-channel" className="aun-menu-item aun-menu-context-current" aria-disabled="true">
+                <div data-testid="nav-no-active-channel" data-identity="personal" className="aun-menu-item aun-menu-context-current" aria-disabled="true">
                   {avatar(getUserAvatar(), initial)}
-                  <span className="aun-menu-text">{t.navigation.noActiveChannel}</span>
+                  {identityText(displayName, t.navigation.identityPersonal)}
                 </div>
               )}
               <button type="button" onClick={() => setView('channels')} data-testid="nav-switch-channel" className="aun-menu-item" role="menuitem" aria-haspopup="menu">
@@ -510,31 +519,32 @@ export function UnifiedNavigation() {
             )}
             </>}
             {view === 'channels' && (
-              <div role="group" aria-label={t.navigation.switchChannel}>
-                {backRow(t.navigation.switchChannel)}
+              <div role="group" aria-label={t.navigation.channelSection}>
+                {backRow(t.navigation.channelSection)}
+                {/* You first, as yourself (your picture and name, tagged Personal), then your channels */}
+                <button type="button" onClick={() => switchToChannel(null)} data-testid="nav-channel-option-none" data-identity="personal" aria-checked={!channel} className="aun-menu-item" role="menuitemradio">
+                  {avatar(getUserAvatar(), initial)}
+                  {identityText(displayName, t.navigation.identityPersonal)}
+                  {!channel && <Check className="aun-menu-check" aria-hidden="true" />}
+                </button>
                 {channelSections.map((section) => (
                   <div key={section.key} role="group" aria-labelledby={`nav-channels-${section.key}`} data-testid={`nav-channel-group-${section.key}`}>
                     <p id={`nav-channels-${section.key}`} className="aun-menu-label">
                       {section.key === 'owned' ? t.channelRoles.yourChannels : t.channelRoles.channelsYouManage}
                     </p>
                     {section.items.map((ch) => (
-                      <button key={ch.id} type="button" onClick={() => switchToChannel(ch.id)} data-testid="nav-channel-option" data-channel-id={ch.id} data-role={ch.role} aria-checked={channel?.id === ch.id} className="aun-menu-item" role="menuitemradio">
+                      <button key={ch.id} type="button" onClick={() => switchToChannel(ch.id)} data-testid="nav-channel-option" data-identity="channel" data-channel-id={ch.id} data-role={ch.role} aria-checked={channel?.id === ch.id} className="aun-menu-item" role="menuitemradio">
                         <span className="relative flex-none">
                           {avatar(ch.avatarUrl, getChannelName(ch.name, ch.nameLocalized)[0]?.toUpperCase() ?? '?')}
                           {ch.isMain && ch.role === 'owner' && <Crown className="absolute -bottom-0.5 -end-0.5 h-2.5 w-2.5 rounded-full text-brand-ink" aria-hidden="true" />}
                         </span>
-                        <span className="aun-menu-text" dir="auto">{getChannelName(ch.name, ch.nameLocalized)}</span>
+                        {identityText(getChannelName(ch.name, ch.nameLocalized), t.navigation.identityChannel)}
                         {ch.role !== 'owner' && roleBadge(ch.role)}
                         {channel?.id === ch.id && <Check className="aun-menu-check" aria-hidden="true" />}
                       </button>
                     ))}
                   </div>
                 ))}
-                <button type="button" onClick={() => switchToChannel(null)} data-testid="nav-channel-option-none" aria-checked={!channel} className="aun-menu-item" role="menuitemradio">
-                  <Tv className="aun-menu-icon" aria-hidden="true" />
-                  <span className="aun-menu-text">{t.navigation.useWithoutChannel}</span>
-                  {!channel && <Check className="aun-menu-check" aria-hidden="true" />}
-                </button>
                 {/* Create Channel - Only for Active Account, and only with a creator tier that allows another channel */}
                 {channelLimit !== null ? (
                   <p data-testid="nav-channel-limit" className="aun-menu-note" role="note">

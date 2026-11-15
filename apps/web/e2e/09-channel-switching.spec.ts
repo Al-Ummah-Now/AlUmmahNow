@@ -149,11 +149,12 @@ test.describe('Channel Switching - English', () => {
     await expect(menu.getByTestId('nav-active-channel')).toContainText(other.name!);
   });
 
-  test('switches to "No Channel" mode', async ({ page }) => {
+  test('switches to acting as yourself (Personal)', async ({ page }) => {
     const menu = await switchTo(page, null);
 
     await showMenuView(menu, 'main');
-    await expect(menu.getByTestId('nav-no-active-channel')).toHaveText(/Yourself \(no channel\)/);
+    await expect(menu.getByTestId('nav-no-active-channel')).toHaveAttribute('data-identity', 'personal');
+    await expect(menu.getByTestId('nav-no-active-channel').getByTestId('nav-identity-tag')).toHaveText('Personal');
     await showMenuView(menu, 'main');
     await expect(menu.getByTestId('nav-active-channel')).toHaveCount(0);
     for (const ch of [multiChannels().main, multiChannels().other]) {
@@ -175,11 +176,11 @@ test.describe('Channel Switching - Arabic', () => {
     await page.goto('/ar');
   });
 
-  test('switches to "No Channel" mode (RTL)', async ({ page }) => {
+  test('switches to acting as yourself (Personal, RTL)', async ({ page }) => {
     const menu = await switchTo(page, null);
     await expect(menu).toHaveCSS('direction', 'rtl');
     await showMenuView(menu, 'main');
-    await expect(menu.getByTestId('nav-no-active-channel')).toHaveText(/اسمك الشخصي \(بدون قناة\)/);
+    await expect(menu.getByTestId('nav-no-active-channel').getByTestId('nav-identity-tag')).toHaveText('حساب شخصي');
   });
 
   test('switches channel and links to the Arabic channel page', async ({ page }) => {
