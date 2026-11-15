@@ -11,6 +11,12 @@
  * known is created with the value `unset` (the code treats it as missing) and
  * the `workers` scope. Create only: an existing secret, placeholder or real, is
  * never read or changed; the owner pastes the real value over the placeholder.
+ *
+ * Turnstile hostnames: the env's www hostnames are appended to the production widget's
+ * allowed domains when no listed domain already covers them (a domain authorizes all its
+ * subdomains). Append only: a listed domain is never removed or changed. QA and stage
+ * render Cloudflare's test key, but their www hosts are listed too so the real widget
+ * can be tried there (owner, 2026-11-15: www newsletter).
  */
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
@@ -29,6 +35,8 @@ export interface Resources {
 	expireAfterDays?: Record<string, number>;
 	/** Secrets Store secrets created with PLACEHOLDER_SECRET_VALUE when missing (store id → names). */
 	placeholderSecrets?: Record<string, string[]>;
+	/** Hostnames the Turnstile widget (sitekey) must allow; appended when not covered. */
+	turnstileHostnames?: { sitekey: string; hostnames: string[] };
 }
 
 /** The account's Secrets Store (every app's secrets_store_secrets bindings). */
@@ -39,6 +47,24 @@ export const PLACEHOLDER_SECRET_VALUE = 'unset';
 /** Days a source map is kept, by environment; production keeps every release's. */
 const SOURCEMAP_DAYS: Partial<Record<ResourceEnv, number>> = { qa: 14, stage: 30 };
 export const EXPIRY_RULE_ID = 'al-ummah-expire';
+
+/** The production Turnstile widget "al-ummah-now-production" (docs/features/bot-protection.md). */
+export const TURNSTILE_SITEKEY = '0x4AAAAAAF_3KPNkPlEGf_dP';
+/** www's custom domains per env (AlUmmahNowUI apps/www/wrangler.jsonc routes): the newsletter form. */
+export const WWW_HOSTNAMES: Record<ResourceEnv, string[]> = {
+	production: ['alummahnow.net', 'www.alummahnow.net'],
+	stage: ['stage.alummahnow.net', 'www.stage.alummahnow.net'],
+	qa: ['qa.alummahnow.net', 'www.qa.alummahnow.net'],
+};
+/** The token permission the Turnstile step needs. */
+export const TURNSTILE_PERMISSION = 'Account > Turnstile > Edit';
+
+/** True when `host` is `domain` or one of its subdomains. */
+export function coveredBy(host: string, domain: string): boolean {
+	const h = host.toLowerCase();
+	const d = domain.toLowerCase().replace(/^\*\./, '');
+	return h === d || h.endsWith(`.${d}`);
+}
 
 /** Resources by environment. Production names have no suffix. */
 export function resourcesFor(env: ResourceEnv): Resources {
@@ -56,6 +82,8 @@ export function resourcesFor(env: ResourceEnv): Resources {
 		...(SOURCEMAP_DAYS[env] ? { expireAfterDays: { [`al-ummah-now-sourcemaps${s}`]: SOURCEMAP_DAYS[env]! } } : {}),
 		// Move from YouTube: the Google OAuth client secret (api-videos GOOGLE_OAUTH_CLIENT_SECRET, docs/features/youtube-import.md)
 		placeholderSecrets: { [SECRETS_STORE_ID]: [`google-oauth-client-secret${s}`] },
+		// www newsletter sign-up renders the widget (AlUmmahNowUI apps/www NewsletterForm)
+		turnstileHostnames: { sitekey: TURNSTILE_SITEKEY, hostnames: WWW_HOSTNAMES[env] },
 	};
 }
 
@@ -115,7 +143,47 @@ export async function ensureResources(cf: CfClient, wanted: Resources, log: (lin
 			log(`Created Secrets Store placeholder ${name}`);
 		}
 	}
+	if (wanted.turnstileHostnames) {
+		const { sitekey, hostnames } = wanted.turnstileHostnames;
+		try {
+			const added = await ensureTurnstileHostnames(cf, sitekey, hostnames);
+			for (const host of added) {
+				created.push(`turnstile ${host}`);
+				log(`Turnstile widget ${sitekey} now allows ${host}`);
+			}
+		} catch (error) {
+			// Checked last so a token without Turnstile access still ensures everything above
+			if (!(error instanceof CfApiError) || (error.status !== 403 && error.status !== 401)) throw error;
+			log(`::warning::Turnstile hostnames not checked (${error.message}): the token needs ${TURNSTILE_PERMISSION}`);
+		}
+	}
 	return { created };
+}
+
+interface TurnstileWidget {
+	sitekey: string;
+	name: string;
+	mode: string;
+	domains: string[];
+	[key: string]: unknown;
+}
+
+/** Fields the widget PUT takes; everything else in the GET (dates, secret) is left out. */
+const WIDGET_FIELDS = ['name', 'mode', 'bot_fight_mode', 'clearance_level', 'ephemeral_id', 'offlabel', 'region'] as const;
+
+/**
+ * Appends to the widget's allowed domains each hostname no listed domain covers; returns those added.
+ * Never removes or reorders a listed domain.
+ */
+export async function ensureTurnstileHostnames(cf: CfClient, sitekey: string, hostnames: string[]): Promise<string[]> {
+	const widget = await cf.request<TurnstileWidget>('GET', `/challenges/widgets/${encodeURIComponent(sitekey)}`);
+	const domains = widget.domains ?? [];
+	const missing = [...new Set(hostnames.map((h) => h.toLowerCase()))].filter((h) => !domains.some((d) => coveredBy(h, d)));
+	if (missing.length === 0) return [];
+	const body: Record<string, unknown> = { domains: [...domains, ...missing] };
+	for (const field of WIDGET_FIELDS) if (widget[field] !== undefined) body[field] = widget[field];
+	await cf.request('PUT', `/challenges/widgets/${encodeURIComponent(sitekey)}`, body);
+	return missing;
 }
 
 interface LifecycleRule {

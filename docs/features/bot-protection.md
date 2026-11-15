@@ -125,6 +125,12 @@ fallback; CSP3 loads it through `'strict-dynamic'`) and `frame-src`.
 | QA, stage | `enforce` | Cloudflare test key `1x00000000000000000000AA` | `turnstile-secret-test` (the public always-pass test secret) |
 | production | `off`, then `monitor`, then `enforce` | `0x4AAAAAAF_3KPNkPlEGf_dP` (widget "al-ummah-now-production": alummahnow.net/.org/.com/.app) | `turnstile-secret` |
 
+The widget's allowed domains are managed by `scripts/release/ensure-resources.ts`, never by hand:
+each env's run appends that env's www hostnames (the www newsletter form) when no listed domain
+already covers them (a domain allows all its subdomains). It only appends, never removes. The
+release token needs **Account > Turnstile > Edit**; without it the step logs a warning and the
+rest of the run goes on.
+
 Test keys never reach Cloudflare: the server answers the test secrets itself (`lib/bot-guard.ts`)
 and the web loads `/turnstile/stub.js` instead of `challenges.cloudflare.com`. Production refuses
 test keys (the mode reads as `off`, an error is logged). E2E helpers that call the API directly send
