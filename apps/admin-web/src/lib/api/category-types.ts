@@ -7,7 +7,6 @@ export interface VideoCategoryAdminView {
   retired: boolean;
   videoCount: number;
   updatedAt: number | null;
-  updatedBy: string | null;
 }
 
 export interface VideoCategoryAdminList {

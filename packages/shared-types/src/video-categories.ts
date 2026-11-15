@@ -71,7 +71,6 @@ export interface VideoCategoryRow {
   retired: number;
   created_at?: number;
   updated_at?: number;
-  updated_by?: string | null;
 }
 
 const sortEntries = (list: VideoCategoryEntry[]) =>
