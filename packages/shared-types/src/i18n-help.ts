@@ -202,7 +202,7 @@ export const HELP_EN: HelpTranslations = {
           id: 'playlists',
           heading: 'Playlists and autoplay',
           blocks: [
-            { type: 'p', text: 'Select **Save** under a video, or **Save to playlist** in a video card’s ⋮ menu, to add it to a playlist or start a new one. You don’t need a channel: without one, the playlists are your own.' },
+            { type: 'p', text: 'Select **Save** under a video, or **Save to playlist** in a video card’s ⋮ menu, to add it to a playlist or start a new one. When you act as yourself (**Personal**), the playlists are your own.' },
             { type: 'p', text: 'Your playlists are in the **Playlists** section of **You**. **See all** lists them with **New playlist**, and each one opens in an editor for its details, cover and order, where you can also remove videos or delete it.' },
             { type: 'list', items: [
               '**Public:** listed and searchable.',
@@ -256,7 +256,7 @@ export const HELP_EN: HelpTranslations = {
           id: 'see-who',
           heading: 'See who you are acting as',
           blocks: [
-            { type: 'p', text: 'Open the account menu. Your name is at the top. Under **Acting as** you see the channel in use, or **Yourself (no channel)**. When a channel is active, its picture also takes the place of yours on the account button.' },
+            { type: 'p', text: 'Open the account menu. Your name is at the top. Under **Acting as** you see who you are acting as: a channel, tagged **Channel**, or your own picture and name, tagged **Personal**. When a channel is active, its picture also takes the place of yours on the account button.' },
             { type: 'figure', picture: 'identity-menu', alt: 'The account menu: your account at the top, then Acting as with the active channel and Switch channel', markers: ['Your account. Always you.', 'The identity you are acting as now.', 'Switch channel'] },
             { type: 'tour', text: 'Show me in the menu' },
           ],
@@ -267,11 +267,11 @@ export const HELP_EN: HelpTranslations = {
           blocks: [
             { type: 'steps', items: [
               'Open the account menu and select **Switch channel**.',
-              'Pick one of **Your Channels** or **Channels you manage**, or **Use without a channel** to act as yourself. A check mark shows the one in use.',
+              'Pick yourself (your name, tagged **Personal**) at the top, or one of **Your Channels** or **Channels you manage** (tagged **Channel**). A check mark shows the one in use.',
             ] },
             { type: 'p', text: 'Who you act as is chosen only here, in the account menu. Next to the comment box you see the picture of whoever you are acting as: your photo, or the channel’s logo.' },
             { type: 'clip', clip: 'identity-switch', label: 'Clip: switching who you act as', caption: 'Switching from a channel to yourself in the account menu; the picture next to the comment box changes.' },
-            { type: 'figure', picture: 'identity-switch', alt: 'The channel list in the account menu', markers: ['Your Channels', 'Use without a channel'] },
+            { type: 'figure', picture: 'identity-switch', alt: 'The channel list in the account menu', markers: ['You, tagged Personal', 'Your Channels'] },
             { type: 'tip', text: 'Switching never signs you out and never changes your account. Watch later, History, your subscriptions list and your settings stay the same.' },
           ],
         },
@@ -300,7 +300,7 @@ export const HELP_EN: HelpTranslations = {
           heading: 'What other people see',
           blocks: [
             { type: 'table', head: ['You act as', 'They see'], rows: [
-              ['Yourself', 'Your display name and profile picture'],
+              ['Yourself (Personal)', 'Your display name and profile picture'],
               ['A channel', 'The channel’s name and picture, linking to the channel'],
             ] },
           ],
@@ -508,8 +508,8 @@ export const HELP_EN: HelpTranslations = {
     steps: {
       account: { title: 'This is you', body: 'Your account menu. When a channel is active, its picture shows here instead of yours; your name stays.' },
       actingAs: { title: 'Who you are acting as', body: 'Comments, likes and subscriptions you make now carry this name and picture: a channel, or yourself.' },
-      switch: { title: 'Switch any time', body: 'Pick a channel you own or manage, or “Use without a channel” to act as yourself. You stay in the same account.' },
-      upload: { title: 'Uploads go to the active channel', body: 'No channel? You can still watch, comment, like, subscribe and make playlists as yourself.' },
+      switch: { title: 'Switch any time', body: 'Pick yourself (tagged “Personal”) or a channel you own or manage (tagged “Channel”). You stay in the same account.' },
+      upload: { title: 'Uploads go to the active channel', body: 'As yourself (Personal) you can still watch, comment, like, subscribe and make playlists. Channels are by invitation.' },
       help: { title: 'Find this again in Help', body: 'Help is in the side menu, with “Take the tour”. Enjoy watching.' },
     },
   },
@@ -588,7 +588,7 @@ export const HELP_AR: HelpTranslations = {
           id: 'playlists',
           heading: 'قوائم التشغيل والتشغيل التلقائي',
           blocks: [
-            { type: 'p', text: 'اختر **حفظ** تحت المرئي، أو **حفظ في قائمة تشغيل** من قائمة ⋮ في بطاقة المرئي، لتضيفه إلى قائمة تشغيل أو تبدأ قائمة جديدة. ولا تحتاج إلى قناة: فبدونها تكون القوائم لك أنت.' },
+            { type: 'p', text: 'اختر **حفظ** تحت المرئي، أو **حفظ في قائمة تشغيل** من قائمة ⋮ في بطاقة المرئي، لتضيفه إلى قائمة تشغيل أو تبدأ قائمة جديدة. وحين تتصرّف باسمك (**حساب شخصي**) تكون القوائم لك أنت.' },
             { type: 'p', text: 'تجد قوائمك في قسم **قوائم التشغيل** في صفحة **أنت**. ويعرضها **عرض الكل** مع **قائمة تشغيل جديدة**، وتُفتح كل قائمة في محرّر لتفاصيلها وغلافها وترتيبها، ومنه تحذف منها المرئيات أو تحذفها كلها.' },
             { type: 'list', items: [
               '**عامة:** تظهر في القوائم والبحث.',
@@ -642,7 +642,7 @@ export const HELP_AR: HelpTranslations = {
           id: 'see-who',
           heading: 'اعرف باسم من تتصرّف',
           blocks: [
-            { type: 'p', text: 'افتح قائمة الحساب. في أعلاها اسمك، وتحت **تتصرّف باسم** تظهر القناة المستخدمة، أو **اسمك الشخصي (بدون قناة)**. وحين تكون قناة نشطة تحلّ صورتها محلّ صورتك على زر الحساب.' },
+            { type: 'p', text: 'افتح قائمة الحساب. في أعلاها اسمك، وتحت **تتصرّف باسم** يظهر من تتصرّف باسمه: قناة وعليها وسم **قناة**، أو صورتك واسمك وعليهما وسم **حساب شخصي**. وحين تكون قناة نشطة تحلّ صورتها محلّ صورتك على زر الحساب.' },
             { type: 'figure', picture: 'identity-menu', alt: 'قائمة الحساب: حسابك في أعلاها، ثم «تتصرّف باسم» والقناة النشطة و«تبديل القناة»', markers: ['حسابك، وهو أنت دائمًا.', 'الهوية التي تتصرّف بها الآن.', 'تبديل القناة'] },
             { type: 'tour', text: 'أرني في القائمة' },
           ],
@@ -653,11 +653,11 @@ export const HELP_AR: HelpTranslations = {
           blocks: [
             { type: 'steps', items: [
               'افتح قائمة الحساب واختر **تبديل القناة**.',
-              'اختر من **قنواتك** أو **القنوات التي تديرها**، أو **الاستخدام بدون قناة** لتتصرّف باسمك. وتدلّ علامة الصح على المستخدمة الآن.',
+              'اختر نفسك (اسمك وعليه وسم **حساب شخصي**) في أعلى القائمة، أو واحدة من **قنواتك** أو **القنوات التي تديرها** (وعليها وسم **قناة**). وتدلّ علامة الصح على المستخدمة الآن.',
             ] },
             { type: 'p', text: 'تختار من تتصرّف باسمه هنا فقط، في قائمة الحساب. وبجانب صندوق التعليق ترى صورة من تتصرّف باسمه: صورتك أو شعار القناة.' },
             { type: 'clip', clip: 'identity-switch', label: 'مقطع: تبديل الهوية', caption: 'التبديل من قناة إلى حسابك الشخصي في قائمة الحساب، فتتغيّر الصورة بجانب صندوق التعليق.' },
-            { type: 'figure', picture: 'identity-switch', alt: 'قائمة القنوات في قائمة الحساب', markers: ['قنواتك', 'الاستخدام بدون قناة'] },
+            { type: 'figure', picture: 'identity-switch', alt: 'قائمة القنوات في قائمة الحساب', markers: ['أنت، بوسم «حساب شخصي»', 'قنواتك'] },
             { type: 'tip', text: 'التبديل لا يُخرجك من حسابك ولا يغيّره، وتبقى «مشاهدة لاحقاً» و«السجل» وقائمة اشتراكاتك وإعداداتك كما هي.' },
           ],
         },
@@ -686,7 +686,7 @@ export const HELP_AR: HelpTranslations = {
           heading: 'ما يراه الآخرون',
           blocks: [
             { type: 'table', head: ['تتصرّف باسم', 'يرون'], rows: [
-              ['نفسك', 'اسمك المعروض وصورة ملفك'],
+              ['نفسك (حساب شخصي)', 'اسمك المعروض وصورة ملفك'],
               ['قناة', 'اسم القناة وصورتها مع رابط إليها'],
             ] },
           ],
@@ -894,8 +894,8 @@ export const HELP_AR: HelpTranslations = {
     steps: {
       account: { title: 'هذا أنت', body: 'قائمة حسابك. حين تكون قناة نشطة تظهر صورتها هنا بدل صورتك، ويبقى اسمك.' },
       actingAs: { title: 'باسم من تتصرّف', body: 'التعليقات والإعجابات والاشتراكات التي تقوم بها الآن تحمل هذا الاسم وهذه الصورة: قناة، أو اسمك أنت.' },
-      switch: { title: 'بدّل متى شئت', body: 'اختر قناة تملكها أو تديرها، أو «الاستخدام بدون قناة» لتتصرّف باسمك. وتبقى في الحساب نفسه.' },
-      upload: { title: 'الرفع يذهب إلى القناة النشطة', body: 'ليست لديك قناة؟ ما زال بإمكانك المشاهدة والتعليق والإعجاب والاشتراك وإنشاء قوائم التشغيل باسمك.' },
+      switch: { title: 'بدّل متى شئت', body: 'اختر نفسك (بوسم «حساب شخصي») أو قناة تملكها أو تديرها (بوسم «قناة»). وتبقى في الحساب نفسه.' },
+      upload: { title: 'الرفع يذهب إلى القناة النشطة', body: 'باسمك (حساب شخصي) يمكنك المشاهدة والتعليق والإعجاب والاشتراك وإنشاء قوائم التشغيل. وإنشاء القنوات بدعوة.' },
       help: { title: 'تجد الجولة في المساعدة', body: 'المساعدة في القائمة الجانبية، ومنها «ابدأ الجولة». مشاهدة طيبة.' },
     },
   },

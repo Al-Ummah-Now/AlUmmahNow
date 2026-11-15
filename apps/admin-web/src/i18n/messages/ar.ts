@@ -2229,7 +2229,7 @@ const ar: Messages = {
     colOwner: 'المالك',
     colVideos: 'المرئيات',
     unlisted: 'غير مُدرجة',
-    personal: 'شخصية (بلا قناة)',
+    personal: 'حساب شخصي',
     colVisibility: 'الظهور',
     colCreated: 'تاريخ الإنشاء',
     tableCaption: 'قوائم التشغيل',

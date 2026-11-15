@@ -414,7 +414,7 @@ const SCENES: Scene[] = [
     run: async (page, lang) => {
       await settle(page, `/channels/${channelId}`, lang);
       const menu = await openMenu(page, 'channels');
-      return [[menu.getByTestId('nav-channel-group-owned').locator('p').first(), menu.getByTestId('nav-channel-option-none')], [header(page), menu]];
+      return [[menu.getByTestId('nav-channel-option-none'), menu.getByTestId('nav-channel-group-owned').locator('p').first()], [header(page), menu]];
     },
   },
   {

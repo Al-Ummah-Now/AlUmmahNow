@@ -49,7 +49,7 @@ describe('Help home', () => {
   it('searches every section and opens the one picked', () => {
     render(<HelpHome />);
     const input = screen.getByRole('combobox', { name: HELP_EN.searchLabel });
-    fireEvent.change(input, { target: { value: 'without a channel' } });
+    fireEvent.change(input, { target: { value: 'Personal' } });
     const list = screen.getByRole('listbox');
     fireEvent.click(within(list).getAllByRole('option')[0]);
     expect(push).toHaveBeenCalledWith(expect.stringMatching(/^\/en\/help\/[a-z]+(#[a-z-]+)?$/));

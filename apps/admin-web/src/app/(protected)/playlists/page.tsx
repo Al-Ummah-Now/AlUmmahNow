@@ -78,7 +78,8 @@ export default async function PlaylistsPage({ searchParams }: { searchParams: Pr
                       <span className="block font-medium text-fg break-words">{title ? <bdi>{title}</bdi> : <span className="italic text-fg-muted">{t('content.untitled')}</span>}</span>
                       <div className="mt-1 flex flex-wrap gap-1">
                         <Chip tone="neutral">{p.isPublic ? t('videos.public') : p.isUnlisted ? t('playlists.unlisted') : t('videos.private')}</Chip>
-                        {!p.channelId && <Chip tone="neutral">{t('playlists.personal')}</Chip>}
+                        {/* Phones hide the Channel column: a personal playlist says so here */}
+                        {!p.channelId && <span className="md:hidden"><Chip tone="neutral">{t('playlists.personal')}</Chip></span>}
                       </div>
                       {/* Phone: the channel, owner, size and date (their columns are hidden) */}
                       <MetaLine
@@ -93,7 +94,7 @@ export default async function PlaylistsPage({ searchParams }: { searchParams: Pr
                       />
                     </td>
                     <td role="cell" className={`${tdClass} ${wideOnly} text-sm md:min-w-[11rem]`}>
-                      {channelName && p.channelId ? <Link href={`/channels/${encodeURIComponent(p.channelId)}`} className={`${linkClass} [overflow-wrap:anywhere]`} dir="auto" data-testid="playlist-channel-link">{channelName}</Link> : <span className="text-fg-subtle">{t('content.none')}</span>}
+                      {channelName && p.channelId ? <Link href={`/channels/${encodeURIComponent(p.channelId)}`} className={`${linkClass} [overflow-wrap:anywhere]`} dir="auto" data-testid="playlist-channel-link">{channelName}</Link> : <Chip tone="neutral">{t('playlists.personal')}</Chip>}
                     </td>
                     <td role="cell" className={`${tdClass} ${wideOnly} text-sm md:min-w-[11rem]`}>
                       {ownerName && p.ownerId ? <Link href={`/users/${encodeURIComponent(p.ownerId)}`} className={`${linkClass} [overflow-wrap:anywhere]`} dir="auto" data-testid="playlist-owner-link">{ownerName}</Link> : <span className="text-fg-subtle">{t('content.none')}</span>}
