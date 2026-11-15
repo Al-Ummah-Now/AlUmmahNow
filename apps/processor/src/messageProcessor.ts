@@ -26,7 +26,8 @@ import { eraseArchiveSubject } from './erasure/archive-subjects';
 import { recordEraseTombstone } from './erasure/tombstones';
 import { archiveTitlesEraseMessage, eraseArchiveTitlesPage, writeArchiveEntry } from './erasure/archive-titles';
 import { ARCHIVE_PRIVACY_VERSION, ARCHIVE_TITLES_VERSION, archiveSubjectKey } from '@al-ummah/shared-types';
-import type { NotificationCreatePayload, NotificationFanoutPayload, PushDispatchPayload } from '@al-ummah/shared-types';
+import type { NotificationCreatePayload, NotificationFanoutPayload, PushDispatchPayload, PushRetryDevice } from '@al-ummah/shared-types';
+import { PUSH_RETRY_DELAYS_SECONDS } from '@al-ummah/shared-types';
 import { publishAdminLive } from '@al-ummah/shared-types';
 import { dispatchPush, enqueuePush } from './push/dispatch';
 import { resolvePushProviders, type PushProviders } from './push/provider';
@@ -620,8 +621,55 @@ export class MessageProcessor {
       return;
     }
     const providers = this.injectedPushProviders ?? (this.envPushProviders ??= resolvePushProviders(env));
-    const summary = await dispatchPush(env.NOTIFICATIONS_DB, payload, providers);
-    this.logger.debug('Push dispatch finished', { key: payload.notificationKey, recipients: payload.recipients.length, ...summary });
+    const { retry, retryErrors, ...summary } = await dispatchPush(env.NOTIFICATIONS_DB, payload, providers);
+    this.logger.debug('Push dispatch finished', { key: payload.notificationKey, recipients: payload.recipients.length, attempt: payload.attempt ?? 0, retry: retry.length, ...summary });
+    if (retry.length > 0) await this.retryPush(message, payload, retry, retryErrors, env);
+  }
+
+  /**
+   * Devices that failed transiently get the push again later: a delayed PushDispatch for just
+   * those installs. When the retries run out it goes to the DLQ, which stores it and flags it on
+   * the admin Errors page with Replay (dlq/consumer.ts); a Replay starts the retries over.
+   */
+  private async retryPush(
+    message: AlUmmahMessage,
+    payload: PushDispatchPayload,
+    devices: PushRetryDevice[],
+    errors: Partial<Record<string, string>>,
+    env: QueueEnvironment,
+  ): Promise<void> {
+    const attempt = payload.attempt ?? 0;
+    const next: PushDispatchPayload = {
+      recipients: [],
+      notificationKey: payload.notificationKey,
+      ...(payload.params ? { params: payload.params } : {}),
+      ...(payload.actionUrl ? { actionUrl: payload.actionUrl } : {}),
+      devices,
+    };
+    const delaySeconds = PUSH_RETRY_DELAYS_SECONDS[attempt];
+    if (delaySeconds !== undefined && env.MESSAGE_QUEUE) {
+      await env.MESSAGE_QUEUE.send(
+        { id: `${message.id}-r${attempt + 1}`, type: MessageType.PushDispatch, timestamp: Date.now(), payload: { ...next, attempt: attempt + 1 } as unknown as Record<string, unknown> },
+        { delaySeconds },
+      );
+      return;
+    }
+    const reason = `Push not delivered to ${devices.length} device(s) after ${attempt + 1} attempt(s): ${Object.entries(errors).map(([provider, error]) => `${provider} ${error}`).join('; ')}`.slice(0, 500);
+    if (!env.DLQ) {
+      this.logger.error('[Push] Retries exhausted and no DLQ bound; push dropped', { messageId: message.id, devices: devices.length, reason });
+      return;
+    }
+    this.logger.error('[Push] Retries exhausted; sending to DLQ', { messageId: message.id, devices: devices.length, attempt });
+    // attempt 0: a Replay from the Errors page gets the full set of retries again
+    await env.DLQ.send({
+      id: `${message.id}-dlq`,
+      type: MessageType.PushDispatch,
+      timestamp: Date.now(),
+      payload: { ...next, attempt: 0 } as unknown as Record<string, unknown>,
+      retryCount: attempt + 1,
+      failureReason: reason,
+      failedAt: new Date().toISOString(),
+    } as AlUmmahMessage);
   }
 
   private async processLiveStreamMessage(message: AlUmmahMessage, env: QueueEnvironment): Promise<void> {

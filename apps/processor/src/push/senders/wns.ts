@@ -6,13 +6,13 @@
  * device's push_devices.token, already limited to *.notify.windows.com at registration.
  *
  * Review alerts: a toast (scenario urgent, group `review`, tag = hash of the review id: WNS
- * tags are at most 16 characters). A clear is a raw notification the app handles by removing
+ * tags are at most 16 characters) under the localised "Admin · Review queue" header (#1307). A clear is a raw notification the app handles by removing
  * the toast with that tag and group from the notification history.
  *
  * Secrets (Secrets Store): WNS_PACKAGE_SID, WNS_CLIENT_SECRET. Missing → log-only.
  */
 import type { AlertPush, PushMessage, PushProvider, PushResult, PushTarget } from '../provider';
-import { bodyText, readSecret, type FetchLike, type SecretBinding } from './common';
+import { bodyText, readSecret, retryableStatus, type FetchLike, type SecretBinding } from './common';
 
 export interface WnsEnv {
   WNS_PACKAGE_SID?: SecretBinding;
@@ -37,11 +37,17 @@ export async function wnsTag(reviewId: string): Promise<string> {
   return [...digest.slice(0, 8)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+/** The Action Center group of review toasts (#1307): one header for every review alert. */
+export const WNS_REVIEW_HEADER_ID = 'admin-review-queue';
+
 export function reviewToastXml(alert: AlertPush): string {
   const launch = xmlEscape(alert.actionUrl ?? '');
   const id = xmlEscape(alert.reviewId);
+  // Clicking the header opens the app on its queue: the app ignores arguments it does not know
+  const header = `<header id="${WNS_REVIEW_HEADER_ID}" title="${xmlEscape(alert.groupTitle ?? 'Admin · Review queue')}" arguments="review-queue" activationType="foreground"/>`;
   return (
     `<toast launch="${launch}" scenario="urgent">` +
+    header +
     `<visual><binding template="ToastGeneric"><text>${xmlEscape(alert.title ?? '')}</text><text>${xmlEscape(alert.body ?? '')}</text></binding></visual>` +
     `<actions><action content="${xmlEscape(alert.openLabel ?? 'Open')}" arguments="open:${id}" activationType="foreground"/><action content="${xmlEscape(alert.claimLabel ?? 'Claim')}" arguments="claim:${id}" activationType="foreground"/></actions>` +
     `</toast>`
@@ -96,7 +102,7 @@ export class WnsPushProvider implements PushProvider {
     if (res.ok) return { ok: true };
     if (res.status === 401) tokenCache.delete(creds.sid);
     // 404: the channel URI is not valid; 410: the channel expired. Either way the device must re-register
-    return { ok: false, invalidToken: res.status === 404 || res.status === 410, error: `${res.status} ${(res.headers.get('x-wns-error-description') ?? (await bodyText(res))).slice(0, 200)}` };
+    return { ok: false, invalidToken: res.status === 404 || res.status === 410, retryable: retryableStatus(res.status), error: `${res.status} ${(res.headers.get('x-wns-error-description') ?? (await bodyText(res))).slice(0, 200)}` };
   }
 
   async send(target: PushTarget, message: PushMessage): Promise<PushResult> {

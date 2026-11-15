@@ -4,7 +4,7 @@
  * prunes tokens the provider rejected.
  */
 import { createLogger } from '@al-ummah/logger';
-import { MessageType, PUSH_DISPATCH_BATCH, type PushDispatchPayload } from '@al-ummah/shared-types';
+import { MessageType, PUSH_DISPATCH_BATCH, PUSH_RETRY_DELAYS_SECONDS, type PushDispatchPayload } from '@al-ummah/shared-types';
 import { MessageProcessor } from '../messageProcessor';
 import { AlUmmahMessage, QueueEnvironment } from '../types';
 import { deviceWants, dispatchPush, enqueuePush } from '../push/dispatch';
@@ -62,7 +62,7 @@ describe('push fan-out', () => {
     device('i-c1', 'c');
     const p = new RecordingProvider();
     const summary = await dispatchPush(db, payload(['a', 'b']), all(p));
-    expect(summary).toEqual({ devices: 3, sent: 3, skipped: 0, failed: 0, pruned: 0 });
+    expect(summary).toEqual({ devices: 3, sent: 3, skipped: 0, failed: 0, pruned: 0, retry: [], retryErrors: {} });
     expect(p.sent.map((s) => [s.target.installId, s.message.notificationId]).sort()).toEqual([
       ['i-a1', 'n-a'],
       ['i-a2', 'n-a'],
@@ -197,6 +197,67 @@ describe('push fan-out', () => {
       expect(result.success).toBe(true);
       expect(provider.sent.map((s) => s.target.installId).sort()).toEqual(['i-s1', 'i-s2']);
       expect(provider.sent[0].message.category).toBe('live');
+    });
+
+    it('transient failures are retried later for just those devices, then dead-lettered with Replay', async () => {
+      device('i-ok', 'a');
+      device('i-busy', 'a', { provider: 'webpush' });
+      device('i-gone', 'b', { provider: 'webpush' });
+      const provider = new RecordingProvider((t) =>
+        t.installId === 'i-busy' ? { ok: false, invalidToken: false, retryable: true, error: '503 busy' }
+          : t.installId === 'i-gone' ? { ok: false, invalidToken: true, error: '410 gone' }
+            : { ok: true },
+      );
+      const send = jest.fn();
+      const dlq = jest.fn();
+      const e = { ...env(send), DLQ: { send: dlq } };
+      const p = new MessageProcessor(createLogger('push-test', { logLevel: 'error' }), all(provider));
+      const first = message(MessageType.PushDispatch, payload(['a', 'b']));
+      expect((await p.processMessage(first, e)).success).toBe(true);
+      expect(installs()).toEqual(['i-busy', 'i-ok']);
+
+      // Every retry goes to the failed device only, with the next delay; no user ids in it
+      let current = first;
+      for (const [attempt, delay] of PUSH_RETRY_DELAYS_SECONDS.entries()) {
+        expect(send).toHaveBeenCalledTimes(attempt + 1);
+        const [retry, options] = send.mock.calls[attempt] as [AlUmmahMessage, { delaySeconds: number }];
+        expect(options).toEqual({ delaySeconds: delay });
+        expect(retry.payload).toEqual({ recipients: [], notificationKey: 'newVideo', params: { title: 'Lecture' }, actionUrl: '/watch/v1', devices: [{ installId: 'i-busy', notificationId: 'n-a' }], attempt: attempt + 1 });
+        expect(JSON.stringify(retry)).not.toMatch(/"userId"/);
+        provider.sent = [];
+        expect((await p.processMessage(retry, e)).success).toBe(true);
+        expect(provider.sent.map((s) => [s.target.installId, s.message.notificationId])).toEqual([['i-busy', 'n-a']]);
+        current = retry;
+      }
+      expect(send).toHaveBeenCalledTimes(PUSH_RETRY_DELAYS_SECONDS.length);
+      expect(dlq).toHaveBeenCalledTimes(1);
+      const dead = dlq.mock.calls[0][0] as AlUmmahMessage;
+      expect(dead.type).toBe(MessageType.PushDispatch);
+      expect(dead.id).toBe(`${current.id}-dlq`);
+      expect(dead.failureReason).toBe('Push not delivered to 1 device(s) after 4 attempt(s): webpush 503 busy');
+      // A Replay from the Errors page starts the retries over
+      expect((dead.payload as unknown as PushDispatchPayload).attempt).toBe(0);
+    });
+
+    it('a provider that throws (network) is retried too; a hard failure is not', async () => {
+      device('i-net', 'a');
+      device('i-bad', 'b');
+      const provider = new RecordingProvider((t) => {
+        if (t.installId === 'i-net') throw new Error('connection reset');
+        return { ok: false, invalidToken: false, error: '403 forbidden' };
+      });
+      const summary = await dispatchPush(db, payload(['a', 'b']), all(provider));
+      expect(summary.retry).toEqual([{ installId: 'i-net', notificationId: 'n-a' }]);
+      expect(summary.failed).toBe(2);
+      expect(summary.retryErrors.apns).toContain('connection reset');
+    });
+
+    it('a retry skips installs that were removed or now belong to the Admin app', async () => {
+      device('i-admin', 'a', { app: 'admin' });
+      const provider = new RecordingProvider();
+      const summary = await dispatchPush(db, { recipients: [], notificationKey: 'newVideo', devices: [{ installId: 'i-admin', notificationId: 'n' }, { installId: 'i-missing', notificationId: 'n' }], attempt: 1 }, all(provider));
+      expect(summary.devices).toBe(0);
+      expect(provider.sent).toEqual([]);
     });
 
     it('rejects a malformed PushDispatch so it lands in the DLQ', async () => {

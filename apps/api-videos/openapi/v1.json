@@ -14122,6 +14122,20 @@
         }
       }
     },
+    "/api/v1/devices/webpush-key": {
+      "get": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "VAPID public key for Web Push subscriptions",
+        "operationId": "get_WebPushKey",
+        "responses": {
+          "200": {
+            "description": "{ publicKey: string | null }"
+          }
+        }
+      }
+    },
     "/api/v1/devices/{installId}": {
       "put": {
         "tags": [

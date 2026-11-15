@@ -13,7 +13,7 @@
  */
 import { logger } from '../../lib/logger';
 import type { AlertPush, PushMessage, PushProvider, PushResult, PushTarget } from '../provider';
-import { bodyText, nowSeconds, pemToDer, readSecret, signJwt, type FetchLike, type SecretBinding } from './common';
+import { bodyText, nowSeconds, pemToDer, readSecret, retryableStatus, signJwt, type FetchLike, type SecretBinding } from './common';
 
 export interface FcmEnv {
   FCM_SERVICE_ACCOUNT?: SecretBinding;
@@ -108,7 +108,7 @@ export class FcmPushProvider implements PushProvider {
     if (res.status === 401) tokenCache.delete(creds.clientEmail);
     // UNREGISTERED (404) or a token FCM no longer knows: the device row is deleted
     const dead = res.status === 404 || /UNREGISTERED/.test(text) || (res.status === 400 && /registration token/i.test(text));
-    return { ok: false, invalidToken: dead, error: `${res.status} ${text.slice(0, 200)}` };
+    return { ok: false, invalidToken: dead, retryable: !dead && retryableStatus(res.status), error: `${res.status} ${text.slice(0, 200)}` };
   }
 
   async send(target: PushTarget, message: PushMessage): Promise<PushResult> {

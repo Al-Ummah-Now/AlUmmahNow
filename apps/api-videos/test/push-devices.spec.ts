@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { DeviceRegister, DevicesList, DeviceUnregister } from '../src/endpoints/devices/devices';
+import { DeviceRegister, DevicesList, DeviceUnregister, WebPushKey, isVapidPublicKey } from '../src/endpoints/devices/devices';
 import { DeviceRegistrationSchema, MAX_DEVICES_PER_USER, deleteUserDevices, registerDevice } from '../src/lib/push-devices';
 import { buildApp } from './helpers';
 import { createSqliteD1 } from './sqlite-d1';
@@ -215,5 +215,36 @@ describe('which app owns the install (#1264)', () => {
 		await as('u1').put('install-a', { app: 'studio', platform: 'ios', provider: 'apns', token: APNS });
 		await as('u1').put('install-b', { platform: 'ios', provider: 'apns', token: APNS });
 		assert.deepEqual((await as('u1').list()).map((d) => d.installId), ['install-b']);
+	});
+});
+
+describe('GET /api/devices/webpush-key (#1287)', () => {
+	// A real P-256 public point: 0x04 then x and y
+	const KEY = Buffer.concat([Buffer.from([4]), Buffer.alloc(64, 7)]).toString('base64url');
+	const get = async (binding: unknown) => {
+		const app = buildApp((r: any) => r.get('/api/devices/webpush-key', WebPushKey));
+		const res = await app.request('/api/devices/webpush-key', {}, { VAPID_PUBLIC_KEY: binding } as any);
+		return { res, body: (await res.json()) as any };
+	};
+
+	it('serves the VAPID public key to anyone, cacheable', async () => {
+		const { res, body } = await get({ get: async () => KEY });
+		assert.equal(res.status, 200);
+		assert.deepEqual(body, { success: true, result: { publicKey: KEY } });
+		assert.equal(res.headers.get('cache-control'), 'public, max-age=300');
+	});
+
+	it('null while the environment has no key pair (missing, placeholder, wrong shape, unreadable)', async () => {
+		for (const binding of [undefined, 'placeholder', { get: async () => 'placeholder' }, Buffer.alloc(65, 3).toString('base64url'), { get: async () => { throw new Error('no such secret'); } }]) {
+			const { body } = await get(binding);
+			assert.equal(body.result.publicKey, null);
+		}
+	});
+
+	it('isVapidPublicKey checks length and point form', () => {
+		assert.equal(isVapidPublicKey(KEY), true);
+		assert.equal(isVapidPublicKey(KEY.slice(1)), false);
+		assert.equal(isVapidPublicKey(`${KEY}A`), false);
+		assert.equal(isVapidPublicKey('A'.repeat(87)), false);
 	});
 });

@@ -16,7 +16,7 @@
  */
 import { logger } from '../../lib/logger';
 import type { AlertPush, PushMessage, PushProvider, PushResult, PushTarget } from '../provider';
-import { bodyText, nowSeconds, pemToDer, readSecret, signJwt, type FetchLike, type SecretBinding } from './common';
+import { bodyText, nowSeconds, pemToDer, readSecret, retryableStatus, signJwt, type FetchLike, type SecretBinding } from './common';
 
 export interface ApnsEnv {
   APNS_KEY_P8?: SecretBinding;
@@ -122,7 +122,7 @@ export class ApnsPushProvider implements PushProvider {
     }
     // The cached provider token was refused: sign a fresh one next time
     if (res.status === 403 && (reason === 'ExpiredProviderToken' || reason === 'InvalidProviderToken')) tokenCache.delete(creds.keyId);
-    return { ok: false, invalidToken: res.status === 410 || DEAD_TOKEN.has(reason), error: `${res.status} ${reason}`.trim() };
+    return { ok: false, invalidToken: res.status === 410 || DEAD_TOKEN.has(reason), retryable: retryableStatus(res.status), error: `${res.status} ${reason}`.trim() };
   }
 
   async send(target: PushTarget, message: PushMessage): Promise<PushResult> {

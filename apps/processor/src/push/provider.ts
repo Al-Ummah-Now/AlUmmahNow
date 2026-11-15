@@ -6,15 +6,16 @@
  * WNS/Web Push service workers render with the app's bundled strings. The
  * device's `locale` is passed for adapters that must render server-side.
  *
- * Real adapters (push/senders) need owner credentials from Secrets Store (APNs
- * .p8 key, Firebase service account, WNS package secret; issue #414). Until a
- * provider's secrets are set, it falls back to LogOnlyPushProvider.
+ * Real adapters (push/senders) need credentials from Secrets Store (APNs .p8 key,
+ * Firebase service account, WNS package secret: #414; the VAPID key pair: #1287).
+ * Until a provider's secrets are set, it falls back to LogOnlyPushProvider.
  */
 import type { NotificationCategory, NotificationKey, NotificationParams } from '@al-ummah/shared-types';
 import { logger } from '../lib/logger';
 import { ApnsPushProvider, type ApnsEnv } from './senders/apns';
 import { FcmPushProvider, type FcmEnv } from './senders/fcm';
 import { WnsPushProvider, type WnsEnv } from './senders/wns';
+import { WebPushProvider, type WebPushEnv } from './senders/webpush';
 
 export type PushProviderName = 'apns' | 'fcm' | 'wns' | 'webpush';
 /** The app that registered the device (push_devices.app, #1264): picks the APNs topic. */
@@ -44,7 +45,13 @@ export interface PushMessage {
 export type PushResult =
   | { ok: true }
   /** invalidToken: the provider says the token is gone (410 / Unregistered); the device row is deleted. */
-  | { ok: false; invalidToken: boolean; error: string };
+  | {
+      ok: false;
+      invalidToken: boolean;
+      error: string;
+      /** A transient failure (429, 5xx, network): dispatch retries this device later through the queue. */
+      retryable?: boolean;
+    };
 
 /**
  * A review alert for the staff Admin app (src/review-alerts). Rendered text only: "Video held
@@ -62,6 +69,8 @@ export interface AlertPush {
   /** Notification action labels in the device's language (Approve and reject are never offered). */
   openLabel?: string;
   claimLabel?: string;
+  /** The notification group's title in the device's language (WNS toast header: "Admin · Review queue"). */
+  groupTitle?: string;
   /** Opened by the notification's Open action. */
   actionUrl?: string;
   /** How long the push is worth delivering (s): a late alert is noise. */
@@ -102,12 +111,12 @@ export class LogOnlyPushProvider implements PushProvider {
 export type PushProviders = Record<PushProviderName, PushProvider>;
 
 /** Secrets Store bindings of the senders (wrangler configs); a missing one keeps that provider log-only. */
-export type PushSenderEnv = ApnsEnv & FcmEnv & WnsEnv;
+export type PushSenderEnv = ApnsEnv & FcmEnv & WnsEnv & WebPushEnv;
 
 /**
- * The provider per push service. APNs, FCM and WNS send for real once their secrets are set
- * (#414); until then, and always without an env (tests), they are log-only. Web Push stays
- * log-only (VAPID keys and payload encryption are their own issue).
+ * The provider per push service. APNs, FCM, WNS (#414) and Web Push (#1287: VAPID + RFC 8291)
+ * send for real once their secrets are set; until then, and always without an env (tests), they
+ * are log-only.
  */
 export function resolvePushProviders(env?: PushSenderEnv): PushProviders {
   const logOnly = new LogOnlyPushProvider();
@@ -116,6 +125,6 @@ export function resolvePushProviders(env?: PushSenderEnv): PushProviders {
     apns: new ApnsPushProvider(env, logOnly),
     fcm: new FcmPushProvider(env, logOnly),
     wns: new WnsPushProvider(env, logOnly),
-    webpush: logOnly,
+    webpush: new WebPushProvider(env, logOnly),
   };
 }
