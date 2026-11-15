@@ -115,14 +115,18 @@ describe('ensure-resources', () => {
 
 		it('changes nothing when every host is covered', async () => {
 			const { cf, calls } = widgetCf({ ...base, domains: ['alummahnow.net', 'alummahnow.org'] });
-			assert.deepEqual(await ensureTurnstileHostnames(cf, TURNSTILE_SITEKEY, ['qa.alummahnow.net', 'www.qa.alummahnow.net']), []);
+			assert.deepEqual(await ensureTurnstileHostnames(cf, TURNSTILE_SITEKEY, ['qa.alummahnow.net', 'www.qa.alummahnow.net']), {
+				added: [],
+				covered: [{ host: 'qa.alummahnow.net', by: 'alummahnow.net' }, { host: 'www.qa.alummahnow.net', by: 'alummahnow.net' }],
+			});
 			assert.deepEqual(calls.map((c) => c.method), ['GET']);
 		});
 
 		it('appends the missing hosts, keeps every listed domain and setting, never sends the secret', async () => {
 			const { cf, calls } = widgetCf({ ...base, domains: ['alummahnow.org', 'alummahnow.com'] });
-			const added = await ensureTurnstileHostnames(cf, TURNSTILE_SITEKEY, ['stage.alummahnow.net', 'www.stage.alummahnow.net']);
+			const { added, covered } = await ensureTurnstileHostnames(cf, TURNSTILE_SITEKEY, ['stage.alummahnow.net', 'www.stage.alummahnow.net']);
 			assert.deepEqual(added, ['stage.alummahnow.net', 'www.stage.alummahnow.net']);
+			assert.deepEqual(covered, []);
 			assert.equal(calls[1]!.method, 'PUT');
 			assert.equal(calls[1]!.path, `/challenges/widgets/${TURNSTILE_SITEKEY}`);
 			assert.deepEqual(calls[1]!.body, {
@@ -133,8 +137,21 @@ describe('ensure-resources', () => {
 
 		it('is idempotent: a second run after the append is a no-op', async () => {
 			const { cf, calls } = widgetCf({ ...base, domains: ['alummahnow.org', 'stage.alummahnow.net', 'www.stage.alummahnow.net'] });
-			assert.deepEqual(await ensureTurnstileHostnames(cf, TURNSTILE_SITEKEY, ['stage.alummahnow.net', 'www.stage.alummahnow.net']), []);
+			assert.deepEqual((await ensureTurnstileHostnames(cf, TURNSTILE_SITEKEY, ['stage.alummahnow.net', 'www.stage.alummahnow.net'])).added, []);
 			assert.equal(calls.length, 1);
+		});
+
+		it('logs each covered host with the domain that covers it, and the added ones', async () => {
+			const lines: string[] = [];
+			const { cf } = widgetCf({ ...base, domains: ['alummahnow.net', 'qa.alummahnow.org'] });
+			const wanted = { queues: [], buckets: [], turnstileHostnames: { sitekey: TURNSTILE_SITEKEY, hostnames: ['www.qa.alummahnow.net', 'www.qa.alummahnow.org', 'x.example'] } };
+			const { created } = await ensureResources(cf, wanted, (l) => lines.push(l));
+			assert.deepEqual(created, ['turnstile x.example']);
+			assert.deepEqual(lines, [
+				`Turnstile widget ${TURNSTILE_SITEKEY} already allows www.qa.alummahnow.net (covered by alummahnow.net)`,
+				`Turnstile widget ${TURNSTILE_SITEKEY} already allows www.qa.alummahnow.org (covered by qa.alummahnow.org)`,
+				`Turnstile widget ${TURNSTILE_SITEKEY} now allows x.example`,
+			]);
 		});
 
 		it('a token without Turnstile access warns with the permission and ensures the rest', async () => {

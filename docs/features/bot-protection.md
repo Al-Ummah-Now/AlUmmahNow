@@ -127,7 +127,8 @@ fallback; CSP3 loads it through `'strict-dynamic'`) and `frame-src`.
 
 The widget's allowed domains are managed by `scripts/release/ensure-resources.ts`, never by hand:
 each env's run appends that env's www hostnames (the www newsletter form) when no listed domain
-already covers them (a domain allows all its subdomains). It only appends, never removes. The
+already covers them (a domain allows all its subdomains), and logs the covering domain for each
+host it leaves alone. It only appends, never removes. The
 release token needs **Account > Turnstile > Edit**; without it the step logs a warning and the
 rest of the run goes on.
 
