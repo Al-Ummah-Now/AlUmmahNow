@@ -21,7 +21,7 @@ const match = (over: Partial<SearchTranscriptMatch> = {}): SearchTranscriptMatch
   language: 'en',
   startMs: 754_000,
   text: 'Seek help through patience and prayer',
-  video: { id: 'v1', title: 'Friday reminder', titleLocalized: { ar: 'تذكير الجمعة' }, channelId: 'c1', channelName: 'Demo channel' } as SearchTranscriptMatch['video'],
+  video: { id: 'v1', title: 'Friday reminder', titleLocalized: { ar: 'تذكير الجمعة' }, channelId: 'c1', channelName: 'Demo channel' } as unknown as SearchTranscriptMatch['video'],
   ...over,
 });
 
