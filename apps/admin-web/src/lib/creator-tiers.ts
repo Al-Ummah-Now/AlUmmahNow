@@ -58,7 +58,7 @@ export interface TierFormValues {
   captionMinutesMonth: number;
 }
 
-export type TierField = 'id' | 'name' | 'perHour' | 'perDay' | 'maxConcurrent' | 'maxChannels' | 'captionMinutesMonth';
+export type TierField = 'id' | 'name' | 'perHour' | 'perDay' | 'maxConcurrent' | 'maxChannels' | 'captionMinutesMonth' | 'audioTracksPerVideo';
 export type TierFormErrors = Partial<Record<TierField, { key: MessageKey; params?: Record<string, string | number> }>>;
 
 export const TIER_ID_PATTERN = /^[a-z0-9][a-z0-9-]{1,39}$/;
