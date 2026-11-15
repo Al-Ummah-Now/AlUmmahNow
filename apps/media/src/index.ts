@@ -3,15 +3,17 @@
  * docs/media-delivery/R2-DELIVERY-PLAN.md).
  *
  * - queue  al-ummah-now-transcode[-env]: one FFmpeg container per video (Transcoder); also
- *          remux-only jobs (kind 'mp4', the public MP4 backfill #1182)
+ *          remux-only jobs (kind 'mp4', the public MP4 backfill #1182) and the audio-track jobs
+ *          (kinds 'audio_track', 'audio_package', 'audio_probe'; wiki AUN-MULTI-AUDIO)
  * - fetch  media.<env>.alummahnow.net/priv/*: token-checked private renditions (edge.ts)
  * - fetch  /internal/jobs/:videoId[/cancel|/retry-now] (X-API-Key): the job as the container sees it,
  *          and the admin's Cancel / Retry now (handleInternalJob)
  */
-import type { CaptionAudioJobMessage, LiveReviewJobMessage, Mp4JobMessage, TranscodeJobMessage } from '@al-ummah/shared-types';
-import { isCaptionAudioJobMessage, isLiveReviewJobMessage, isMediaRev, isMediaVideoId, isMp4JobMessage, isPrebuiltRef } from '@al-ummah/shared-types';
+import type { AudioPackageJobMessage, AudioProbeJobMessage, AudioTrackJobMessage, CaptionAudioJobMessage, LiveReviewJobMessage, Mp4JobMessage, TranscodeJobMessage } from '@al-ummah/shared-types';
+import { isAudioPackageJobMessage, isAudioProbeJobMessage, isAudioTrackJobMessage, isCaptionAudioJobMessage, isLiveReviewJobMessage, isMediaRev, isMediaVideoId, isMp4JobMessage, isPrebuiltRef } from '@al-ummah/shared-types';
 import { liveReviewQueueAction, mp4QueueAction, startFailureReason, startRetry } from './jobs';
-import { reportCaptionAudio, reportEvent, reportLiveReviewMedia, reportMp4Event } from './videos-api';
+import { reportAudioPackage, reportAudioProbe, reportAudioTrack, reportCaptionAudio, reportEvent, reportLiveReviewMedia, reportMp4Event } from './videos-api';
+import { audioQueueAction } from './audio';
 import { handlePrivate } from './edge';
 import { errorText, log, type Env } from './env';
 import { withNoIndex } from './crawlers';
@@ -201,6 +203,47 @@ export async function handleTranscodeStart(msg: Message<TranscodeJobMessage>, en
 	}
 }
 
+/**
+ * The audio-track jobs (AUN-MULTI-AUDIO): normalise a track or list the source's streams on the DO
+ * `audio:<videoId>`, write the package on the video's own DO. When one gives up, api-videos marks
+ * the track or package failed and flags the admin (Errors page, Retry).
+ */
+async function handleAudioJob(
+	msg: Message<AudioTrackJobMessage | AudioPackageJobMessage | AudioProbeJobMessage>,
+	env: Env,
+): Promise<void> {
+	const job = msg.body;
+	const stub = env.TRANSCODER.get(env.TRANSCODER.idFromName(job.kind === 'audio_package' ? job.videoId : `audio:${job.videoId}`));
+	let result: Mp4Outcome;
+	try {
+		result = job.kind === 'audio_track' ? await stub.prepareAudioTrack(job) : job.kind === 'audio_package' ? await stub.packageAudio(job) : await stub.probeAudio(job);
+	} catch (error) {
+		result = { outcome: 'failed', error: errorText(error).slice(0, 300), fatal: false };
+	}
+	const action = audioQueueAction(result, msg.attempts);
+	if (!action.ack) {
+		if (result.outcome === 'failed') log.warn('[MediaQueue] Audio job failed; retrying', { kind: job.kind, videoId: job.videoId, jobId: job.jobId, attempts: msg.attempts, error: result.error });
+		msg.retry({ delaySeconds: action.delaySeconds });
+		return;
+	}
+	if (action.giveUp) {
+		const error = result.outcome === 'failed' ? result.error : 'the container stayed busy';
+		const retryable = !(result.outcome === 'failed' && result.fatal);
+		log.error('[MediaQueue] Audio job gave up', { kind: job.kind, videoId: job.videoId, jobId: job.jobId, attempts: msg.attempts, error });
+		try {
+			if (job.kind === 'audio_track') await reportAudioTrack(env, job.videoId, job.trackId, { jobId: job.jobId, ok: false, error, retryable });
+			else if (job.kind === 'audio_package') await reportAudioPackage(env, job.videoId, { jobId: job.jobId, rev: job.rev, access: job.access, ok: false, error, retryable });
+			else await reportAudioProbe(env, job.videoId, { jobId: job.jobId, ok: false, error });
+		} catch (reportError) {
+			// api-videos unreachable: keep the message so the track does not hang in "processing"
+			log.warn('[MediaQueue] Could not report the audio failure; retrying', { kind: job.kind, videoId: job.videoId, error: errorText(reportError) });
+			msg.retry({ delaySeconds: 300 });
+			return;
+		}
+	}
+	msg.ack();
+}
+
 export default {
 	// Private media and internal routes are never for search engines (crawlers.ts)
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -209,6 +252,10 @@ export default {
 
 	async queue(batch: MessageBatch<unknown>, env: Env): Promise<void> {
 		for (const msg of batch.messages) {
+			if (isAudioTrackJobMessage(msg.body) || isAudioPackageJobMessage(msg.body) || isAudioProbeJobMessage(msg.body)) {
+				await handleAudioJob(msg as Message<AudioTrackJobMessage | AudioPackageJobMessage | AudioProbeJobMessage>, env);
+				continue;
+			}
 			if (isCaptionAudioJobMessage(msg.body)) {
 				await handleCaptionAudioJob(msg as Message<CaptionAudioJobMessage>, env);
 				continue;

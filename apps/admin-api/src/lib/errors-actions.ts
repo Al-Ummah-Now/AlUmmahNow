@@ -44,8 +44,10 @@ export const SERVICE_RETRIES: Record<string, { binding: keyof AdminBindings; pat
   // lib/youtube-import/jobs.ts); an R2 backfill item or a Bunny removal that failed runs again (api-videos
   // lib/media/backfill/); a stalled R2 transcode is retried now, or a Retry now / Cancel admin job that
   // gave up is queued again (api-videos lib/media/troubleshoot.ts).
+  // An audio track that could not be prepared, or a multi-audio package that could not be written,
+  // runs again (api-videos lib/audio-tracks/service.ts, wiki AUN-MULTI-AUDIO).
   // Never a CSAM path: those retry from the case page, super admins only (docs/specs/CSAM-RESPONSE.md)
-  'api-videos': { binding: 'VIDEOS', paths: ['/internal/playlist-adds/retry', '/internal/captions/jobs/retry', '/internal/media/health/check', '/internal/channel-comments/retry', '/internal/youtube-import/retry', '/internal/media/backfill/items/retry', '/internal/media/backfill/removals/retry', '/internal/social/deliveries/retry', '/internal/media/troubleshoot/retry-now', '/internal/media/troubleshoot/jobs/retry'] },
+  'api-videos': { binding: 'VIDEOS', paths: ['/internal/playlist-adds/retry', '/internal/captions/jobs/retry', '/internal/media/health/check', '/internal/channel-comments/retry', '/internal/youtube-import/retry', '/internal/media/backfill/items/retry', '/internal/media/backfill/removals/retry', '/internal/social/deliveries/retry', '/internal/media/troubleshoot/retry-now', '/internal/media/troubleshoot/jobs/retry', '/internal/audio-tracks/retry'] },
 };
 
 export const BUILTIN_RETRIES: Record<string, (env: AdminBindings, args: Record<string, string>, attempt: string) => Promise<RetryOutcome>> = {

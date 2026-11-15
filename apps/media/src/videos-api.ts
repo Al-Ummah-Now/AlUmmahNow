@@ -6,8 +6,11 @@
  *   POST /internal/media/mp4               Mp4JobEvent (remux-only job) → the video record
  *   POST /internal/review/livestream/:id/media  a live recording's review media (VR9)
  *   POST /internal/captions/jobs/:jobId/audio    a caption job's extracted audio (AUN-CAPTIONS §5.2)
+ *   POST /internal/audio-tracks/:videoId/:trackId/prepared   a normalised audio track (AUN-MULTI-AUDIO)
+ *   POST /internal/audio-tracks/:videoId/package             the demuxed multi-audio package
+ *   POST /internal/audio-tracks/:videoId/detected            the source file's audio streams
  */
-import type { CaptionAudioReport, LiveVodReviewMediaRequest, Mp4JobEvent, TranscodeJobEvent } from '@al-ummah/shared-types';
+import type { AudioPackageReport, AudioProbeReport, AudioTrackReport, CaptionAudioReport, LiveVodReviewMediaRequest, Mp4JobEvent, TranscodeJobEvent } from '@al-ummah/shared-types';
 import { secret, type Env } from './env';
 
 const ORIGIN = 'https://videos.internal';
@@ -77,3 +80,21 @@ export async function reportCaptionAudio(env: Env, jobId: string, body: CaptionA
 	// 409: the job was cancelled or already finished; nothing to do
 	if (!res.ok && res.status !== 409) throw new Error(`api-videos caption audio for ${jobId}: HTTP ${res.status}`);
 }
+
+async function post(env: Env, path: string, body: unknown, what: string): Promise<void> {
+	const res = await call(env, path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+	// Stale or already applied reports are answered 200; anything else is kept and resent
+	if (!res.ok) throw new Error(`api-videos ${what}: HTTP ${res.status}`);
+}
+
+/** An audio track was normalised (or gave up): api-videos queues its review and the package. */
+export const reportAudioTrack = (env: Env, videoId: string, trackId: string, body: AudioTrackReport) =>
+	post(env, `/internal/audio-tracks/${encodeURIComponent(videoId)}/${encodeURIComponent(trackId)}/prepared`, body, `audio track ${videoId}/${trackId}`);
+
+/** The package was written (or gave up): api-videos switches playback to the new master. */
+export const reportAudioPackage = (env: Env, videoId: string, body: AudioPackageReport) =>
+	post(env, `/internal/audio-tracks/${encodeURIComponent(videoId)}/package`, body, `audio package ${videoId}`);
+
+/** The source file's audio streams (Studio offers them as tracks). */
+export const reportAudioProbe = (env: Env, videoId: string, body: AudioProbeReport) =>
+	post(env, `/internal/audio-tracks/${encodeURIComponent(videoId)}/detected`, body, `audio probe ${videoId}`);

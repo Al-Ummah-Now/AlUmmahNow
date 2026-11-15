@@ -72,8 +72,9 @@ async function secret(value: ReviewConsumerEnv['INTERNAL_API_KEY']): Promise<str
 }
 
 /** Where the result goes: a video, or a live stream's recording (VR9: `videoId` holds the stream id). */
-export function outcomePath(p: Pick<VideoReviewScanPayload, 'videoId' | 'subject'>): string {
+export function outcomePath(p: Pick<VideoReviewScanPayload, 'videoId' | 'subject' | 'trackId'>): string {
   const id = encodeURIComponent(p.videoId);
+  if (p.subject === 'audio_track' && p.trackId) return `/internal/review/audio-track/${id}/${encodeURIComponent(p.trackId)}/outcome`;
   return p.subject === 'livestream' ? `/internal/review/livestream/${id}/outcome` : `/internal/review/${id}/outcome`;
 }
 
@@ -149,7 +150,7 @@ export async function handleVideoReviewScan(
     logger.warn('[Review] Scan received where review is not allowed; dropped', { videoId: p.videoId });
     return { status: 'done' };
   }
-  await startReviewRow(db, p, new Date(now).toISOString(), p.subject === 'livestream' ? 'livestream' : 'video');
+  await startReviewRow(db, p, new Date(now).toISOString(), p.subject === 'livestream' || p.subject === 'audio_track' ? p.subject : 'video');
 
   // Redelivery after the result was stored: only the outcome is sent again
   const existing = await getReviewRow(db, p.reviewId);

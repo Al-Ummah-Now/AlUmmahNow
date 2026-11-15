@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Al Ummah Now API",
-    "version": "1.3.0",
+    "version": "1.4.0",
     "description": "Public API v1 for Al Ummah Now apps. Additive changes ship in v1; breaking changes ship as a new version. Deprecated operations answer with Deprecation and Sunset headers. See API_VERSIONING.md."
   },
   "servers": [
@@ -8120,6 +8120,47 @@
                                 "type": "boolean",
                                 "description": "Short (≤ 3 min and vertical or square, or chosen by the uploader); shared rule"
                               },
+                              "audioTracks": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string",
+                                      "description": "Track id ('orig' is the original audio)"
+                                    },
+                                    "language": {
+                                      "type": "string",
+                                      "description": "BCP 47 language code"
+                                    },
+                                    "label": {
+                                      "type": "string",
+                                      "description": "The creator's label (e.g. 'Arabic dub')"
+                                    },
+                                    "kind": {
+                                      "type": "string",
+                                      "enum": [
+                                        "original",
+                                        "dub",
+                                        "commentary",
+                                        "description"
+                                      ]
+                                    },
+                                    "isDefault": {
+                                      "type": "boolean",
+                                      "description": "The track that plays when the viewer has no saved choice and no track in their site language"
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "language",
+                                    "label",
+                                    "kind",
+                                    "isDefault"
+                                  ]
+                                },
+                                "description": "Audio tracks in the HLS master (EXT-X-MEDIA TYPE=AUDIO, NAME = label, LANGUAGE = language); absent when the video has one track"
+                              },
                               "isDeleted": {
                                 "type": "boolean"
                               },
@@ -9172,6 +9213,47 @@
                           "isShort": {
                             "type": "boolean",
                             "description": "Short (≤ 3 min and vertical or square, or chosen by the uploader); shared rule"
+                          },
+                          "audioTracks": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "description": "Track id ('orig' is the original audio)"
+                                },
+                                "language": {
+                                  "type": "string",
+                                  "description": "BCP 47 language code"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "description": "The creator's label (e.g. 'Arabic dub')"
+                                },
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "original",
+                                    "dub",
+                                    "commentary",
+                                    "description"
+                                  ]
+                                },
+                                "isDefault": {
+                                  "type": "boolean",
+                                  "description": "The track that plays when the viewer has no saved choice and no track in their site language"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "language",
+                                "label",
+                                "kind",
+                                "isDefault"
+                              ]
+                            },
+                            "description": "Audio tracks in the HLS master (EXT-X-MEDIA TYPE=AUDIO, NAME = label, LANGUAGE = language); absent when the video has one track"
                           },
                           "isDeleted": {
                             "type": "boolean"
@@ -10741,6 +10823,47 @@
                             "type": "boolean",
                             "description": "Short (≤ 3 min and vertical or square, or chosen by the uploader); shared rule"
                           },
+                          "audioTracks": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "description": "Track id ('orig' is the original audio)"
+                                },
+                                "language": {
+                                  "type": "string",
+                                  "description": "BCP 47 language code"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "description": "The creator's label (e.g. 'Arabic dub')"
+                                },
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "original",
+                                    "dub",
+                                    "commentary",
+                                    "description"
+                                  ]
+                                },
+                                "isDefault": {
+                                  "type": "boolean",
+                                  "description": "The track that plays when the viewer has no saved choice and no track in their site language"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "language",
+                                "label",
+                                "kind",
+                                "isDefault"
+                              ]
+                            },
+                            "description": "Audio tracks in the HLS master (EXT-X-MEDIA TYPE=AUDIO, NAME = label, LANGUAGE = language); absent when the video has one track"
+                          },
                           "isDeleted": {
                             "type": "boolean"
                           },
@@ -12183,6 +12306,47 @@
                           "isShort": {
                             "type": "boolean",
                             "description": "Short (≤ 3 min and vertical or square, or chosen by the uploader); shared rule"
+                          },
+                          "audioTracks": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "description": "Track id ('orig' is the original audio)"
+                                },
+                                "language": {
+                                  "type": "string",
+                                  "description": "BCP 47 language code"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "description": "The creator's label (e.g. 'Arabic dub')"
+                                },
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "original",
+                                    "dub",
+                                    "commentary",
+                                    "description"
+                                  ]
+                                },
+                                "isDefault": {
+                                  "type": "boolean",
+                                  "description": "The track that plays when the viewer has no saved choice and no track in their site language"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "language",
+                                "label",
+                                "kind",
+                                "isDefault"
+                              ]
+                            },
+                            "description": "Audio tracks in the HLS master (EXT-X-MEDIA TYPE=AUDIO, NAME = label, LANGUAGE = language); absent when the video has one track"
                           },
                           "isDeleted": {
                             "type": "boolean"
@@ -31031,6 +31195,47 @@
                             "type": "boolean",
                             "description": "Short (≤ 3 min and vertical or square, or chosen by the uploader); shared rule"
                           },
+                          "audioTracks": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "description": "Track id ('orig' is the original audio)"
+                                },
+                                "language": {
+                                  "type": "string",
+                                  "description": "BCP 47 language code"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "description": "The creator's label (e.g. 'Arabic dub')"
+                                },
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "original",
+                                    "dub",
+                                    "commentary",
+                                    "description"
+                                  ]
+                                },
+                                "isDefault": {
+                                  "type": "boolean",
+                                  "description": "The track that plays when the viewer has no saved choice and no track in their site language"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "language",
+                                "label",
+                                "kind",
+                                "isDefault"
+                              ]
+                            },
+                            "description": "Audio tracks in the HLS master (EXT-X-MEDIA TYPE=AUDIO, NAME = label, LANGUAGE = language); absent when the video has one track"
+                          },
                           "isDeleted": {
                             "type": "boolean"
                           },
@@ -31594,6 +31799,47 @@
                             "isShort": {
                               "type": "boolean",
                               "description": "Short (≤ 3 min and vertical or square, or chosen by the uploader); shared rule"
+                            },
+                            "audioTracks": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "description": "Track id ('orig' is the original audio)"
+                                  },
+                                  "language": {
+                                    "type": "string",
+                                    "description": "BCP 47 language code"
+                                  },
+                                  "label": {
+                                    "type": "string",
+                                    "description": "The creator's label (e.g. 'Arabic dub')"
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "original",
+                                      "dub",
+                                      "commentary",
+                                      "description"
+                                    ]
+                                  },
+                                  "isDefault": {
+                                    "type": "boolean",
+                                    "description": "The track that plays when the viewer has no saved choice and no track in their site language"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "language",
+                                  "label",
+                                  "kind",
+                                  "isDefault"
+                                ]
+                              },
+                              "description": "Audio tracks in the HLS master (EXT-X-MEDIA TYPE=AUDIO, NAME = label, LANGUAGE = language); absent when the video has one track"
                             },
                             "isDeleted": {
                               "type": "boolean"
@@ -34433,6 +34679,47 @@
                           "isShort": {
                             "type": "boolean",
                             "description": "Short (≤ 3 min and vertical or square, or chosen by the uploader); shared rule"
+                          },
+                          "audioTracks": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "description": "Track id ('orig' is the original audio)"
+                                },
+                                "language": {
+                                  "type": "string",
+                                  "description": "BCP 47 language code"
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "description": "The creator's label (e.g. 'Arabic dub')"
+                                },
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "original",
+                                    "dub",
+                                    "commentary",
+                                    "description"
+                                  ]
+                                },
+                                "isDefault": {
+                                  "type": "boolean",
+                                  "description": "The track that plays when the viewer has no saved choice and no track in their site language"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "language",
+                                "label",
+                                "kind",
+                                "isDefault"
+                              ]
+                            },
+                            "description": "Audio tracks in the HLS master (EXT-X-MEDIA TYPE=AUDIO, NAME = label, LANGUAGE = language); absent when the video has one track"
                           },
                           "isDeleted": {
                             "type": "boolean"
@@ -37807,6 +38094,47 @@
                       "type": "boolean",
                       "description": "Short (≤ 3 min and vertical or square, or chosen by the uploader); shared rule"
                     },
+                    "audioTracks": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "description": "Track id ('orig' is the original audio)"
+                          },
+                          "language": {
+                            "type": "string",
+                            "description": "BCP 47 language code"
+                          },
+                          "label": {
+                            "type": "string",
+                            "description": "The creator's label (e.g. 'Arabic dub')"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "original",
+                              "dub",
+                              "commentary",
+                              "description"
+                            ]
+                          },
+                          "isDefault": {
+                            "type": "boolean",
+                            "description": "The track that plays when the viewer has no saved choice and no track in their site language"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "language",
+                          "label",
+                          "kind",
+                          "isDefault"
+                        ]
+                      },
+                      "description": "Audio tracks in the HLS master (EXT-X-MEDIA TYPE=AUDIO, NAME = label, LANGUAGE = language); absent when the video has one track"
+                    },
                     "isDeleted": {
                       "type": "boolean"
                     },
@@ -38434,6 +38762,47 @@
                             "isShort": {
                               "type": "boolean",
                               "description": "Short (≤ 3 min and vertical or square, or chosen by the uploader); shared rule"
+                            },
+                            "audioTracks": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "description": "Track id ('orig' is the original audio)"
+                                  },
+                                  "language": {
+                                    "type": "string",
+                                    "description": "BCP 47 language code"
+                                  },
+                                  "label": {
+                                    "type": "string",
+                                    "description": "The creator's label (e.g. 'Arabic dub')"
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "original",
+                                      "dub",
+                                      "commentary",
+                                      "description"
+                                    ]
+                                  },
+                                  "isDefault": {
+                                    "type": "boolean",
+                                    "description": "The track that plays when the viewer has no saved choice and no track in their site language"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "language",
+                                  "label",
+                                  "kind",
+                                  "isDefault"
+                                ]
+                              },
+                              "description": "Audio tracks in the HLS master (EXT-X-MEDIA TYPE=AUDIO, NAME = label, LANGUAGE = language); absent when the video has one track"
                             },
                             "isDeleted": {
                               "type": "boolean"
@@ -45576,6 +45945,1916 @@
                     }
                   },
                   "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/videos/{videoId}/audio-tracks": {
+      "get": {
+        "tags": [
+          "Audio tracks"
+        ],
+        "summary": "List the audio tracks of a video",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).",
+        "operationId": "get_AudioTracksList",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video ID"
+            },
+            "required": true,
+            "description": "Video ID",
+            "name": "videoId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tracks and limits",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "tracks": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "language": {
+                                "type": "string",
+                                "enum": [
+                                  "ar",
+                                  "en",
+                                  "ur",
+                                  "fr",
+                                  "id",
+                                  "tr",
+                                  "ms",
+                                  "bn",
+                                  "de",
+                                  "es"
+                                ]
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "original",
+                                  "dub",
+                                  "commentary",
+                                  "description"
+                                ]
+                              },
+                              "isDefault": {
+                                "type": "boolean"
+                              },
+                              "state": {
+                                "type": "string",
+                                "enum": [
+                                  "uploading",
+                                  "processing",
+                                  "checking",
+                                  "in_review",
+                                  "rejected",
+                                  "ready",
+                                  "failed"
+                                ],
+                                "description": "uploading, processing, checking (review), in_review (a person decides), rejected, ready, failed"
+                              },
+                              "source": {
+                                "type": "string",
+                                "enum": [
+                                  "original",
+                                  "upload",
+                                  "source_stream"
+                                ]
+                              },
+                              "fileName": {
+                                "type": "string"
+                              },
+                              "bytes": {
+                                "type": "number"
+                              },
+                              "uploadedBytes": {
+                                "type": "number",
+                                "description": "While uploading: bytes stored, where to resume"
+                              },
+                              "durationSeconds": {
+                                "type": "number"
+                              },
+                              "reasonCode": {
+                                "type": "string",
+                                "description": "Rejected: the reviewer’s reason"
+                              },
+                              "error": {
+                                "type": "string",
+                                "description": "Failed: processing_failed or unreadable_file"
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "language",
+                              "label",
+                              "kind",
+                              "isDefault",
+                              "state",
+                              "source",
+                              "createdAt"
+                            ]
+                          }
+                        },
+                        "package": {
+                          "type": "object",
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "none",
+                                "building",
+                                "ready",
+                                "failed"
+                              ]
+                            },
+                            "playing": {
+                              "type": "boolean",
+                              "description": "Viewers hear the tracks now"
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "playing"
+                          ]
+                        },
+                        "limit": {
+                          "type": "object",
+                          "properties": {
+                            "allowed": {
+                              "type": "number",
+                              "description": "Extra tracks the tier allows on one video"
+                            },
+                            "used": {
+                              "type": "number"
+                            },
+                            "unlimited": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "allowed",
+                            "used",
+                            "unlimited"
+                          ]
+                        },
+                        "detected": {
+                          "type": [
+                            "array",
+                            "null"
+                          ],
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "index": {
+                                "type": "number"
+                              },
+                              "language": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "channels": {
+                                "type": "number"
+                              },
+                              "codec": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "index"
+                            ]
+                          },
+                          "description": "Audio streams found in the video file; null when it was never checked"
+                        },
+                        "detecting": {
+                          "type": "boolean"
+                        },
+                        "ready": {
+                          "type": "boolean",
+                          "description": "The video finished processing: tracks can be added"
+                        }
+                      },
+                      "required": [
+                        "tracks",
+                        "package",
+                        "limit",
+                        "detected",
+                        "detecting",
+                        "ready"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Video not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Audio tracks"
+        ],
+        "summary": "Add an audio track",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nAn uploaded file (`source.type = upload`: then PUT its chunks to `/upload?offset=` and POST `/complete`) or an audio stream of the video file (`source.type = source_stream`, from `detected`). The track is checked like an upload before viewers hear it. 402 `upgrade_required` with entitlement `audio.tracksPerVideo` over the tier limit; 409 `duplicate_track` for a second track of the same language and kind.",
+        "operationId": "post_AudioTrackCreate",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video ID"
+            },
+            "required": true,
+            "description": "Video ID",
+            "name": "videoId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "language": {
+                    "type": "string",
+                    "enum": [
+                      "ar",
+                      "en",
+                      "ur",
+                      "fr",
+                      "id",
+                      "tr",
+                      "ms",
+                      "bn",
+                      "de",
+                      "es"
+                    ]
+                  },
+                  "label": {
+                    "type": "string",
+                    "maxLength": 60,
+                    "description": "Defaults to the language’s own name"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "original",
+                      "dub",
+                      "commentary",
+                      "description"
+                    ]
+                  },
+                  "isDefault": {
+                    "type": "boolean"
+                  },
+                  "originalLanguage": {
+                    "type": "string",
+                    "enum": [
+                      "ar",
+                      "en",
+                      "ur",
+                      "fr",
+                      "id",
+                      "tr",
+                      "ms",
+                      "bn",
+                      "de",
+                      "es"
+                    ],
+                    "description": "The language of the video’s own audio, when its row is created"
+                  },
+                  "source": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "upload"
+                            ]
+                          },
+                          "bytes": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0
+                          },
+                          "fileName": {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          "contentType": {
+                            "type": "string",
+                            "maxLength": 100
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "bytes"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "source_stream"
+                            ]
+                          },
+                          "streamIndex": {
+                            "type": "integer",
+                            "minimum": 0
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "streamIndex"
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "language",
+                  "kind",
+                  "source"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Added",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "track": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "language": {
+                              "type": "string",
+                              "enum": [
+                                "ar",
+                                "en",
+                                "ur",
+                                "fr",
+                                "id",
+                                "tr",
+                                "ms",
+                                "bn",
+                                "de",
+                                "es"
+                              ]
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "original",
+                                "dub",
+                                "commentary",
+                                "description"
+                              ]
+                            },
+                            "isDefault": {
+                              "type": "boolean"
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": [
+                                "uploading",
+                                "processing",
+                                "checking",
+                                "in_review",
+                                "rejected",
+                                "ready",
+                                "failed"
+                              ],
+                              "description": "uploading, processing, checking (review), in_review (a person decides), rejected, ready, failed"
+                            },
+                            "source": {
+                              "type": "string",
+                              "enum": [
+                                "original",
+                                "upload",
+                                "source_stream"
+                              ]
+                            },
+                            "fileName": {
+                              "type": "string"
+                            },
+                            "bytes": {
+                              "type": "number"
+                            },
+                            "uploadedBytes": {
+                              "type": "number",
+                              "description": "While uploading: bytes stored, where to resume"
+                            },
+                            "durationSeconds": {
+                              "type": "number"
+                            },
+                            "reasonCode": {
+                              "type": "string",
+                              "description": "Rejected: the reviewer’s reason"
+                            },
+                            "error": {
+                              "type": "string",
+                              "description": "Failed: processing_failed or unreadable_file"
+                            },
+                            "createdAt": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "language",
+                            "label",
+                            "kind",
+                            "isDefault",
+                            "state",
+                            "source",
+                            "createdAt"
+                          ]
+                        },
+                        "uploadUrl": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "track"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid track",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Over the tier limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string",
+                      "enum": [
+                        "upgrade_required"
+                      ]
+                    },
+                    "entitlement": {
+                      "type": "string",
+                      "enum": [
+                        "audio.tracksPerVideo"
+                      ]
+                    },
+                    "limit": {
+                      "type": "number"
+                    },
+                    "used": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error",
+                    "entitlement",
+                    "limit",
+                    "used"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Video not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`video_not_ready` or `duplicate_track`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "File over 2 GB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/videos/{videoId}/audio-tracks/detect": {
+      "post": {
+        "tags": [
+          "Audio tracks"
+        ],
+        "summary": "Look for audio tracks in the video file",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nQueues a check of the video file’s audio streams; `GET` shows them in `detected` when it ends.",
+        "operationId": "post_AudioTracksDetect",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video ID"
+            },
+            "required": true,
+            "description": "Video ID",
+            "name": "videoId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Video not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/videos/{videoId}/audio-tracks/{trackId}": {
+      "delete": {
+        "tags": [
+          "Audio tracks"
+        ],
+        "summary": "Delete an audio track",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).",
+        "operationId": "delete_AudioTrackDelete",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video ID"
+            },
+            "required": true,
+            "description": "Video ID",
+            "name": "videoId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Track ID"
+            },
+            "required": true,
+            "description": "Track ID",
+            "name": "trackId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`cannot_delete_original`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Audio tracks"
+        ],
+        "summary": "Edit an audio track",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nLanguage, label, kind and default. Making a track the default takes effect once viewers can hear it.",
+        "operationId": "patch_AudioTrackUpdate",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video ID"
+            },
+            "required": true,
+            "description": "Video ID",
+            "name": "videoId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Track ID"
+            },
+            "required": true,
+            "description": "Track ID",
+            "name": "trackId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "language": {
+                    "type": "string",
+                    "enum": [
+                      "ar",
+                      "en",
+                      "ur",
+                      "fr",
+                      "id",
+                      "tr",
+                      "ms",
+                      "bn",
+                      "de",
+                      "es"
+                    ]
+                  },
+                  "label": {
+                    "type": "string",
+                    "maxLength": 60,
+                    "description": "Defaults to the language’s own name"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "original",
+                      "dub",
+                      "commentary",
+                      "description"
+                    ]
+                  },
+                  "isDefault": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "track": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "language": {
+                              "type": "string",
+                              "enum": [
+                                "ar",
+                                "en",
+                                "ur",
+                                "fr",
+                                "id",
+                                "tr",
+                                "ms",
+                                "bn",
+                                "de",
+                                "es"
+                              ]
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "original",
+                                "dub",
+                                "commentary",
+                                "description"
+                              ]
+                            },
+                            "isDefault": {
+                              "type": "boolean"
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": [
+                                "uploading",
+                                "processing",
+                                "checking",
+                                "in_review",
+                                "rejected",
+                                "ready",
+                                "failed"
+                              ],
+                              "description": "uploading, processing, checking (review), in_review (a person decides), rejected, ready, failed"
+                            },
+                            "source": {
+                              "type": "string",
+                              "enum": [
+                                "original",
+                                "upload",
+                                "source_stream"
+                              ]
+                            },
+                            "fileName": {
+                              "type": "string"
+                            },
+                            "bytes": {
+                              "type": "number"
+                            },
+                            "uploadedBytes": {
+                              "type": "number",
+                              "description": "While uploading: bytes stored, where to resume"
+                            },
+                            "durationSeconds": {
+                              "type": "number"
+                            },
+                            "reasonCode": {
+                              "type": "string",
+                              "description": "Rejected: the reviewer’s reason"
+                            },
+                            "error": {
+                              "type": "string",
+                              "description": "Failed: processing_failed or unreadable_file"
+                            },
+                            "createdAt": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "language",
+                            "label",
+                            "kind",
+                            "isDefault",
+                            "state",
+                            "source",
+                            "createdAt"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "track"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`duplicate_track`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/videos/{videoId}/audio-tracks/{trackId}/complete": {
+      "post": {
+        "tags": [
+          "Audio tracks"
+        ],
+        "summary": "Finish an audio track upload",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).",
+        "operationId": "post_AudioTrackComplete",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video ID"
+            },
+            "required": true,
+            "description": "Video ID",
+            "name": "videoId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Track ID"
+            },
+            "required": true,
+            "description": "Track ID",
+            "name": "trackId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Processing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "track": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "language": {
+                              "type": "string",
+                              "enum": [
+                                "ar",
+                                "en",
+                                "ur",
+                                "fr",
+                                "id",
+                                "tr",
+                                "ms",
+                                "bn",
+                                "de",
+                                "es"
+                              ]
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "original",
+                                "dub",
+                                "commentary",
+                                "description"
+                              ]
+                            },
+                            "isDefault": {
+                              "type": "boolean"
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": [
+                                "uploading",
+                                "processing",
+                                "checking",
+                                "in_review",
+                                "rejected",
+                                "ready",
+                                "failed"
+                              ],
+                              "description": "uploading, processing, checking (review), in_review (a person decides), rejected, ready, failed"
+                            },
+                            "source": {
+                              "type": "string",
+                              "enum": [
+                                "original",
+                                "upload",
+                                "source_stream"
+                              ]
+                            },
+                            "fileName": {
+                              "type": "string"
+                            },
+                            "bytes": {
+                              "type": "number"
+                            },
+                            "uploadedBytes": {
+                              "type": "number",
+                              "description": "While uploading: bytes stored, where to resume"
+                            },
+                            "durationSeconds": {
+                              "type": "number"
+                            },
+                            "reasonCode": {
+                              "type": "string",
+                              "description": "Rejected: the reviewer’s reason"
+                            },
+                            "error": {
+                              "type": "string",
+                              "description": "Failed: processing_failed or unreadable_file"
+                            },
+                            "createdAt": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "language",
+                            "label",
+                            "kind",
+                            "isDefault",
+                            "state",
+                            "source",
+                            "createdAt"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "track"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`upload_incomplete` (with `offset`) or `not_uploading`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/videos/{videoId}/audio-tracks/{trackId}/retry": {
+      "post": {
+        "tags": [
+          "Audio tracks"
+        ],
+        "summary": "Process a failed audio track again",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).",
+        "operationId": "post_AudioTrackRetry",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Video ID"
+            },
+            "required": true,
+            "description": "Video ID",
+            "name": "videoId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Track ID"
+            },
+            "required": true,
+            "description": "Track ID",
+            "name": "trackId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Processing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "track": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "language": {
+                              "type": "string",
+                              "enum": [
+                                "ar",
+                                "en",
+                                "ur",
+                                "fr",
+                                "id",
+                                "tr",
+                                "ms",
+                                "bn",
+                                "de",
+                                "es"
+                              ]
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "original",
+                                "dub",
+                                "commentary",
+                                "description"
+                              ]
+                            },
+                            "isDefault": {
+                              "type": "boolean"
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": [
+                                "uploading",
+                                "processing",
+                                "checking",
+                                "in_review",
+                                "rejected",
+                                "ready",
+                                "failed"
+                              ],
+                              "description": "uploading, processing, checking (review), in_review (a person decides), rejected, ready, failed"
+                            },
+                            "source": {
+                              "type": "string",
+                              "enum": [
+                                "original",
+                                "upload",
+                                "source_stream"
+                              ]
+                            },
+                            "fileName": {
+                              "type": "string"
+                            },
+                            "bytes": {
+                              "type": "number"
+                            },
+                            "uploadedBytes": {
+                              "type": "number",
+                              "description": "While uploading: bytes stored, where to resume"
+                            },
+                            "durationSeconds": {
+                              "type": "number"
+                            },
+                            "reasonCode": {
+                              "type": "string",
+                              "description": "Rejected: the reviewer’s reason"
+                            },
+                            "error": {
+                              "type": "string",
+                              "description": "Failed: processing_failed or unreadable_file"
+                            },
+                            "createdAt": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "language",
+                            "label",
+                            "kind",
+                            "isDefault",
+                            "state",
+                            "source",
+                            "createdAt"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "track"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid authentication token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "error": {
+                      "type": "string",
+                      "example": "Missing or invalid Authorization header. Expected: Bearer <token>"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`not_failed` or `upload_incomplete`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "success",
                     "error"
                   ]
                 }

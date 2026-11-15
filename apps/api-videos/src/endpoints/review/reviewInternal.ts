@@ -8,6 +8,9 @@
  * - POST /internal/review/livestream/:id/{media,outcome,decision}  a live stream's recording (VR9):
  *   the media worker's extraction result, the processor's result and a person's decision
  *
+ * - GET  /internal/review/audio-track/:videoId/:trackId[/audio]  an audio track for the admin review page (wiki AUN-MULTI-AUDIO)
+ * - POST /internal/review/audio-track/:videoId/:trackId/{outcome,decision}
+ *
  * api-videos is the only writer of a video's `review` field; these are the only ways in.
  */
 import { Hono } from 'hono';
@@ -17,6 +20,8 @@ import { applyImageResult } from '../../lib/review/images';
 import { logger } from '../../lib/logger';
 import { applyReviewDecision, applyReviewOutcome, type ReviewApplyEnv } from '../../lib/review/apply';
 import { queueReviewScan } from '../../lib/review/scan';
+import { applyAudioTrackDecision, applyAudioTrackOutcome, audioTrackReviewSubject } from '../../lib/review/audio-track';
+import { audioTrackFileKey, isAudioTrackId } from '@al-ummah/shared-types';
 
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object';
 
@@ -36,6 +41,55 @@ export function createReviewInternalRouter() {
 			return c.json({ success: true, result: { applied: true } });
 		});
 	}
+
+	// Audio tracks (wiki AUN-MULTI-AUDIO MA8; registered before /:videoId)
+	app.get('/audio-track/:videoId/:trackId', async (c) => {
+		const view = await audioTrackReviewSubject(c.env as never, c.req.param('videoId'), c.req.param('trackId'));
+		if (!view) return c.json({ success: false, error: 'track not found' }, 404);
+		return c.json({ success: true, result: view });
+	});
+
+	// The reviewer's player: the normalised track file (Range passed through)
+	app.get('/audio-track/:videoId/:trackId/audio', async (c) => {
+		const videoId = c.req.param('videoId');
+		const trackId = c.req.param('trackId');
+		const bucket = (c.env as unknown as { MEDIA_ORIGINALS?: R2Bucket }).MEDIA_ORIGINALS;
+		if (!bucket || !isAudioTrackId(trackId) || !/^[A-Za-z0-9_-]{1,80}$/.test(videoId)) return c.json({ success: false, error: 'not found' }, 404);
+		const range = c.req.header('range');
+		const obj = await bucket.get(audioTrackFileKey(videoId, trackId), range ? { range: c.req.raw.headers } : undefined);
+		if (!obj) return c.json({ success: false, error: 'not found' }, 404);
+		const headers = new Headers({ 'content-type': 'audio/mp4', 'accept-ranges': 'bytes', 'cache-control': 'private, no-store' });
+		const r = (obj as R2ObjectBody & { range?: { offset?: number; length?: number } }).range;
+		if (range && r && (r.offset !== undefined || r.length !== undefined)) {
+			const offset = r.offset ?? 0;
+			const length = r.length ?? obj.size - offset;
+			headers.set('content-range', `bytes ${offset}-${offset + length - 1}/${obj.size}`);
+			headers.set('content-length', String(length));
+			return new Response((obj as R2ObjectBody).body, { status: 206, headers });
+		}
+		headers.set('content-length', String(obj.size));
+		return new Response((obj as R2ObjectBody).body, { status: 200, headers });
+	});
+
+	app.post('/audio-track/:videoId/:trackId/outcome', async (c) => {
+		const body = (await c.req.json().catch(() => null)) as ReviewOutcomeRequest | null;
+		if (!isObject(body) || typeof body.reviewId !== 'string' || !isObject(body.routing) || !['approve', 'hold'].includes(String(body.routing.route))) {
+			return c.json({ success: false, error: 'reviewId and routing.route (approve | hold) are required' }, 400);
+		}
+		const result = await applyAudioTrackOutcome(c.env as never, c.req.param('videoId'), c.req.param('trackId'), body);
+		if ('why' in result) return c.json({ success: false, error: result.why }, result.status);
+		return c.json({ success: true, result: { review: result.review } });
+	});
+
+	app.post('/audio-track/:videoId/:trackId/decision', async (c) => {
+		const body = (await c.req.json().catch(() => null)) as ReviewDecisionRequest | null;
+		if (!isObject(body) || typeof body.reviewId !== 'string' || typeof body.reviewerId !== 'string' || !['approve', 'reject', 'undo'].includes(String(body.decision))) {
+			return c.json({ success: false, error: 'reviewId, reviewerId and decision (approve | reject | undo) are required' }, 400);
+		}
+		const result = await applyAudioTrackDecision(c.env as never, c.req.param('videoId'), c.req.param('trackId'), body);
+		if ('why' in result) return c.json({ success: false, error: result.why }, result.status);
+		return c.json({ success: true, result: { review: result.review } });
+	});
 
 	// Live stream recordings (registered before /:videoId so "livestream" is never read as a video id)
 	// The reviewer's view of a recording (admin-api review page): what it says and a playable URL

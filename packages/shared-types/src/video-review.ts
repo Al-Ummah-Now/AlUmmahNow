@@ -395,6 +395,8 @@ export interface VideoReviewScanPayload {
    * review row's subject_type is `livestream`.
    */
   subject?: ReviewScanSubject;
+  /** `audio_track`: the track of `videoId` whose audio is checked (outcome: /internal/review/audio-track/:videoId/:trackId/outcome) */
+  trackId?: string;
   /** A settings snapshot (thresholds, models, budget) so a scan is routed by the rules it was queued with */
   settings: VideoReviewSettings;
   queuedAt: string;
@@ -657,7 +659,12 @@ export function isPostHeldByReview(post: { review?: { status?: string } | null }
 // ---------------------------------------------------------------------------
 
 /** The subjects a VideoReviewScanPayload can carry. */
-export type ReviewScanSubject = 'video' | 'livestream';
+export type ReviewScanSubject = 'video' | 'livestream' | 'audio_track';
+
+/** The review row's subject id: the video id, or `<videoId>:<trackId>` for an audio track (wiki AUN-MULTI-AUDIO MA8). */
+export function reviewSubjectId(p: { videoId: string; subject?: ReviewScanSubject; trackId?: string }): string {
+  return p.subject === 'audio_track' && p.trackId ? `${p.videoId}:${p.trackId}` : p.videoId;
+}
 
 /**
  * A live stream's recording is withheld from everyone but its owner while a person decides it,

@@ -7,6 +7,10 @@
 //   POST http://control.internal/event     progress / ready / failed
 //   PUT  http://review.internal/<key>      review media (frames, audio, manifest) under review/<videoId>/<rev>/
 //   GET  http://staging.internal/<rel>     renditions the creator pre-encoded in desktop Studio (D11; read only)
+//   GET  http://audioin.internal/src       an uploaded audio track's file (audio-track jobs)
+//   PUT  http://audioout.internal/<key>    the normalised track.m4a (audio-track jobs)
+//   GET  http://trackin.internal/<trackId> a normalised track.m4a (package jobs)
+//   GET|PUT http://pkg.internal/<key>      the demuxed package under <prefix>/a/ and its master_a<n>.m3u8
 //
 // API (from the Worker): POST /jobs { jobId, prefix, attempt }, GET /status, GET /health.
 import { createServer } from 'node:http';
@@ -21,6 +25,7 @@ import { Readable } from 'node:stream';
 import { bandwidthOf, displaySize, ffmpegArgs, ladderFor, MP4_FILE, mp4Args, mp4Rung, playlistFiles, progressSeconds, stillsArgs } from './ladder.mjs';
 import { RungTracker, uploadByPlan, uploadPlan } from './rungs.mjs';
 import { ENVELOPE_RATE, MATCH_FRAME_SIZE, avcCodec, contentMatches, envelope, frameDistance, masterPlaylist, matchTimes, mediaPlaylist, parseMediaPlaylist, stagedPathAllowed, verifyRenditions } from './prebuilt.mjs';
+import { audioStreams, folderUploadOrder, masterVariants, normaliseArgs, packageMaster, splitRungArgs, TRACK_FILE, trackHlsArgs } from './audio.mjs';
 import { audioArgs, captionAudioManifestFor, frameInterval, frameTimes, framesArgs, manifestFor, reviewVariant, thinFrames } from './review.mjs';
 
 const PORT = 8080;
@@ -32,7 +37,7 @@ let sourceFile;
 
 /** @type {{ jobId: string, status: string, progress: number, error?: string, startedAt: number } | null} */
 let current = null;
-/** A live recording review is running (POST /review) */
+/** A live recording review, caption audio or audio track job is running (POST /review, /audio, /audio-*) */
 let reviewing = false;
 /** Where the current job is, for failure reports: fetch_source | probe | encode | stills | upload */
 let stage = { name: 'start', detail: undefined };
@@ -71,7 +76,7 @@ async function event(body) {
 }
 
 /** Download the source in 64 MiB ranges (each retried), so one dropped connection costs one chunk. */
-async function download(dest) {
+async function download(dest, url = 'http://source.internal/src') {
 	const out = createWriteStream(dest);
 	let offset = 0;
 	let total = Infinity;
@@ -79,7 +84,7 @@ async function download(dest) {
 		while (offset < total) {
 			const end = offset + CHUNK - 1;
 			const buf = await retrying('source range', async () => {
-				const res = await fetch('http://source.internal/src', { headers: { range: `bytes=${offset}-${end}` } });
+				const res = await fetch(url, { headers: { range: `bytes=${offset}-${end}` } });
 				if (res.status === 404) {
 					const why = (await res.text().catch(() => '')).trim();
 					throw Object.assign(new Error(why || 'source_missing'), { fatal: why !== 'source_unavailable' });
@@ -586,6 +591,150 @@ async function runJob(job) {
 	return result;
 }
 
+const SAFE_JOB = /^[A-Za-z0-9-]{8,64}$/;
+const SAFE_VIDEO = /^[A-Za-z0-9_-]{1,80}$/;
+const SAFE_TRACK = /^(orig|t[a-z0-9]{6,24})$/;
+
+async function readJson(req) {
+	let raw = '';
+	for await (const c of req) raw += c;
+	try {
+		return JSON.parse(raw || '{}');
+	} catch {
+		return {};
+	}
+}
+
+/** One side job at a time, never beside a transcode. */
+function busy() {
+	return reviewing || (current && ['starting', 'downloading', 'transcoding', 'uploading'].includes(current.status));
+}
+
+/**
+ * One audio track (MA5): the uploaded file (audioin.internal) or a stream of the video's own file
+ * (source.internal), padded or cut to the video's length, AAC 128k stereo → track.m4a in the
+ * originals bucket; with review on, 16 kHz chunks and a manifest (no frames) under reviewPrefix.
+ */
+async function runAudioTrack(job) {
+	const t0 = Date.now();
+	const dir = join(WORK, 'audio-track');
+	await rm(dir, { recursive: true, force: true });
+	await mkdir(join(dir, 'review'), { recursive: true });
+	const src = join(dir, 'source');
+	await download(src, job.input);
+	const meta = JSON.parse(await run('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_streams', '-show_format', src]));
+	const streams = audioStreams(meta);
+	const stream = job.input === 'http://audioin.internal/src' ? 0 : job.stream;
+	if (!streams.some((s) => s.index === stream)) throw Object.assign(new Error(streams.length ? 'stream_missing' : 'no_audio'), { fatal: true });
+	const file = join(dir, TRACK_FILE);
+	await run('ffmpeg', normaliseArgs({ input: src, out: file, stream, durationSeconds: job.durationSeconds }));
+	await rm(src, { force: true });
+	await put(job.out, file, 'audioout.internal');
+	let reviewManifestKey;
+	if (job.reviewPrefix) {
+		await run('ffmpeg', audioArgs({ input: file, out: join(dir, 'review') }));
+		const files = (await readdir(join(dir, 'review'))).filter((f) => f.endsWith('.mp3')).sort();
+		for (const name of files) await put(`${job.reviewPrefix}audio/${name}`, join(dir, 'review', name), 'review.internal');
+		const manifest = manifestFor({ videoId: job.videoId, rev: `audio-${job.trackId}`, prefix: job.reviewPrefix, durationSeconds: job.durationSeconds, frames: [], audioCount: files.length, capped: false, now: new Date().toISOString() });
+		await writeFile(join(dir, 'manifest.json'), JSON.stringify(manifest));
+		await put(`${job.reviewPrefix}manifest.json`, join(dir, 'manifest.json'), 'review.internal');
+		reviewManifestKey = `${job.reviewPrefix}manifest.json`;
+	}
+	log('audio track', { jobId: job.jobId, trackId: job.trackId, ms: Date.now() - t0 });
+	return { durationSeconds: job.durationSeconds, ...(reviewManifestKey ? { reviewManifestKey } : {}) };
+}
+
+/** Whether a package folder is complete (its playlist goes up last). */
+async function pkgHas(rel) {
+	const res = await fetch(`http://pkg.internal/${rel}`, { method: 'GET', headers: { range: 'bytes=0-0' } });
+	await res.arrayBuffer().catch(() => undefined);
+	if (res.status === 404) return false;
+	if (!res.ok) throw new Error(`pkg ${rel} HTTP ${res.status}`);
+	return true;
+}
+
+async function putFolder(local, remote) {
+	const order = folderUploadOrder(await readdir(local));
+	const media = order.filter((f) => f !== 'index.m3u8');
+	for (let i = 0; i < media.length; i += UPLOAD_CONCURRENCY) {
+		await Promise.all(media.slice(i, i + UPLOAD_CONCURRENCY).map((f) => put(`${remote}/${f}`, join(local, f), 'pkg.internal')));
+	}
+	if (order.includes('index.m3u8')) await put(`${remote}/index.m3u8`, join(local, 'index.m3u8'), 'pkg.internal');
+}
+
+async function hasAudioStream(file) {
+	const meta = JSON.parse(await run('ffprobe', ['-v', 'error', '-allowed_extensions', 'ALL', '-print_format', 'json', '-show_streams', file]));
+	return (meta.streams || []).some((s) => s.codec_type === 'audio');
+}
+
+/**
+ * The demuxed package (MA2/MA3) of the ready rendition at job.prefix: each rung split into a
+ * video-only copy (once; reused by later builds), the original audio from the top rung, each
+ * extra track from its track.m4a, then master_a<version>.m3u8 last. Stream copy only.
+ * Returns { master, trackIds } (the original is left out when the video has no sound).
+ */
+async function runAudioPackage(job) {
+	const dir = join(WORK, 'audio-package');
+	await rm(dir, { recursive: true, force: true });
+	await mkdir(dir, { recursive: true });
+	await fetchRendition('master.m3u8', join(dir, 'master.m3u8'));
+	const variants = masterVariants(await readFile(join(dir, 'master.m3u8'), 'utf8'));
+	if (!variants.length) throw Object.assign(new Error('bad_master'), { fatal: true });
+	const top = variants.reduce((a, b) => ((Number(b.attrs.BANDWIDTH) || 0) > (Number(a.attrs.BANDWIDTH) || 0) ? b : a));
+	let origReady = await pkgHas('a/orig/index.m3u8');
+	let origSilent = false;
+	// The top rung first: it also gives the original audio
+	for (const v of [top, ...variants.filter((x) => x !== top)]) {
+		const wantAudio = v === top && !origReady;
+		if (!wantAudio && (await pkgHas(`a/v/${v.rung}/index.m3u8`))) continue;
+		const rungDir = join(dir, 'in', v.rung);
+		await mkdir(rungDir, { recursive: true });
+		await fetchRendition(`${v.rung}/index.m3u8`, join(rungDir, 'index.m3u8'));
+		const files = playlistFiles(await readFile(join(rungDir, 'index.m3u8'), 'utf8'));
+		if (!files) throw Object.assign(new Error('bad_playlist'), { fatal: true });
+		for (let i = 0; i < files.length; i += UPLOAD_CONCURRENCY) {
+			await Promise.all(files.slice(i, i + UPLOAD_CONCURRENCY).map((f) => fetchRendition(`${v.rung}/${f}`, join(rungDir, f))));
+		}
+		const input = join(rungDir, 'index.m3u8');
+		const audio = wantAudio && (await hasAudioStream(input));
+		if (wantAudio && !audio) origSilent = true;
+		const videoDir = join(dir, 'out', 'v', v.rung);
+		const audioDir = join(dir, 'out', 'orig');
+		await mkdir(videoDir, { recursive: true });
+		if (audio) await mkdir(audioDir, { recursive: true });
+		await run('ffmpeg', splitRungArgs({ input, videoDir, ...(audio ? { audioDir } : {}) }));
+		await putFolder(videoDir, `${job.prefix}/a/v/${v.rung}`);
+		if (audio) {
+			await putFolder(audioDir, `${job.prefix}/a/orig`);
+			origReady = true;
+		}
+		await rm(join(dir, 'in', v.rung), { recursive: true, force: true });
+		await rm(join(dir, 'out'), { recursive: true, force: true });
+	}
+	for (const t of job.tracks) {
+		if (t.id === 'orig' || (await pkgHas(`a/${t.id}/index.m3u8`))) continue;
+		const src = join(dir, `${t.id}.m4a`);
+		await retrying(`track ${t.id}`, async () => {
+			const res = await fetch(`http://trackin.internal/${t.id}`);
+			if (res.status === 404) throw Object.assign(new Error(`track_missing ${t.id}`), { fatal: true });
+			if (!res.ok) throw new Error(`track ${t.id} HTTP ${res.status}`);
+			await writeFile(src, Buffer.from(await res.arrayBuffer()));
+		});
+		const out = join(dir, 'out', t.id);
+		await mkdir(out, { recursive: true });
+		await run('ffmpeg', trackHlsArgs({ input: src, dir: out }));
+		await putFolder(out, `${job.prefix}/a/${t.id}`);
+		await rm(src, { force: true });
+		await rm(out, { recursive: true, force: true });
+	}
+	const tracks = job.tracks.filter((t) => t.id !== 'orig' || (origReady && !origSilent));
+	if (!tracks.length) throw Object.assign(new Error('no_tracks'), { fatal: true });
+	const master = `master_a${job.version}.m3u8`;
+	await writeFile(join(dir, master), packageMaster({ variants, tracks }));
+	await put(`${job.prefix}/${master}`, join(dir, master), 'pkg.internal');
+	return { master, trackIds: tracks.map((t) => t.id) };
+}
+
 /** What /status and /jobs may answer: no error text. */
 function publicState(c) {
 	return { jobId: c.jobId, status: c.status, progress: c.progress, startedAt: c.startedAt, ...(c.result ? { result: c.result } : {}) };
@@ -718,6 +867,56 @@ const server = createServer(async (req, res) => {
 		} finally {
 			reviewing = false;
 			await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+		}
+	}
+	// Audio tracks (AUN-MULTI-AUDIO): normalise one track, list the source's streams, write the package
+	if (req.url === '/audio-track' && req.method === 'POST') {
+		const job = await readJson(req);
+		const sourceOk = job.input === 'http://audioin.internal/src' || (job.input === 'http://source.internal/src' && Number.isInteger(job.stream) && job.stream >= 0 && job.stream < 64);
+		if (!SAFE_JOB.test(job.jobId || '') || !SAFE_VIDEO.test(job.videoId || '') || !SAFE_TRACK.test(job.trackId || '') || !sourceOk || job.out !== `audio/${job.videoId}/${job.trackId}/${TRACK_FILE}` || !(job.durationSeconds > 0) || (job.reviewPrefix !== undefined && !String(job.reviewPrefix).startsWith(`review/${job.videoId}/audio-${job.trackId}-`))) {
+			return send(400, { error: 'bad job' });
+		}
+		if (busy()) return send(409, { error: 'busy' });
+		reviewing = true;
+		try {
+			return send(200, await runAudioTrack(job));
+		} catch (error) {
+			log('audio track failed', { jobId: job.jobId, error: String(error?.message || error) });
+			return send(500, { error: String(error?.message || error).slice(0, 300), fatal: !!error?.fatal });
+		} finally {
+			reviewing = false;
+			await rm(join(WORK, 'audio-track'), { recursive: true, force: true }).catch(() => undefined);
+		}
+	}
+	if (req.url === '/audio-probe' && req.method === 'POST') {
+		const job = await readJson(req);
+		if (!SAFE_JOB.test(job.jobId || '') || !SAFE_VIDEO.test(job.videoId || '')) return send(400, { error: 'bad job' });
+		try {
+			const meta = JSON.parse(await run('ffprobe', ['-v', 'error', '-print_format', 'json', '-show_streams', 'http://source.internal/src']));
+			return send(200, { streams: audioStreams(meta) });
+		} catch (error) {
+			log('audio probe failed', { jobId: job.jobId, error: String(error?.message || error) });
+			return send(500, { error: String(error?.message || error).slice(0, 300) });
+		}
+	}
+	if (req.url === '/audio-package' && req.method === 'POST') {
+		const job = await readJson(req);
+		if (!SAFE_JOB.test(job.jobId || '') || !/^(pub|priv)\/[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+$/.test(job.prefix || '') || !Number.isInteger(job.version) || job.version < 1 || !Array.isArray(job.tracks) || !job.tracks.length || !job.tracks.every((t) => SAFE_TRACK.test(t?.id || ''))) {
+			return send(400, { error: 'bad job' });
+		}
+		if (busy()) return send(409, { error: 'busy' });
+		reviewing = true;
+		const t0 = Date.now();
+		try {
+			const out = await runAudioPackage(job);
+			log('audio package', { jobId: job.jobId, tracks: out.trackIds.length, ms: Date.now() - t0 });
+			return send(200, out);
+		} catch (error) {
+			log('audio package failed', { jobId: job.jobId, error: String(error?.message || error) });
+			return send(500, { error: String(error?.message || error).slice(0, 300), fatal: !!error?.fatal });
+		} finally {
+			reviewing = false;
+			await rm(join(WORK, 'audio-package'), { recursive: true, force: true }).catch(() => undefined);
 		}
 	}
 	send(404, { error: 'not found' });
