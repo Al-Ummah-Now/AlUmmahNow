@@ -16,7 +16,8 @@ import { useConfirm } from '@/components/content/actions';
 import { Chip, smallButtonClass, tableWrapClass, tdClass, thClass } from '@/components/content/parts';
 import { ErrorAlert, cardClass, fieldClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
-import { REMOVAL_LABEL, REMOVAL_TONE, useFormats, dangerLargeButtonClass } from './labels';
+import { REMOVAL_LABEL, REMOVAL_TONE, dangerLargeButtonClass } from './labels';
+import { useFormats } from './useFormats';
 
 const DEFAULT_GRACE_DAYS = 30;
 

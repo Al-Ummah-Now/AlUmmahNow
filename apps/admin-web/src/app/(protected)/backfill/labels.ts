@@ -1,10 +1,7 @@
 /** Labels and tones of the Backfill page (statuses come from api-videos lib/media/backfill). */
-import { useMemo } from 'react';
-import { chartLocale, type BackfillItemState, type BackfillRun, type BackfillRunStatus, type BackfillSkipReason, type BunnyRemovalStatus } from '@al-ummah/shared-types';
+import { type BackfillItemState, type BackfillRun, type BackfillRunStatus, type BackfillSkipReason, type BunnyRemovalStatus } from '@al-ummah/shared-types';
 import type { ChipTone } from '@/components/content/parts';
 import type { MessageKey, Translator } from '@/i18n/translate';
-import { useLanguage } from '@/i18n/I18nProvider';
-import { deliveryFormats } from '../delivery/format';
 
 export const RUN_STATUS_LABEL: Record<BackfillRunStatus, MessageKey> = {
   estimating: 'mediaBackfill.runEstimating',
@@ -81,16 +78,6 @@ export const REMOVAL_TONE: Record<BunnyRemovalStatus, ChipTone> = { scheduled: '
 
 /** Polled while the run estimates or works through videos. */
 export const isLive = (status: BackfillRunStatus) => status === 'estimating' || status === 'running';
-
-/** The Delivery page's formats, but money always to the cent (a budget cap of $12.69 must not read "$13"). */
-export function useFormats() {
-  const { locale } = useLanguage();
-  return useMemo(() => {
-    const base = deliveryFormats(locale);
-    const cents = new Intl.NumberFormat(chartLocale(locale), { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    return { ...base, usd: (v: number) => cents.format(v) };
-  }, [locale]);
-}
 
 /** A danger action the size of the primary/secondary buttons beside it. */
 export const dangerLargeButtonClass =
