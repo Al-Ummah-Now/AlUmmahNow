@@ -26,12 +26,25 @@ const viewersOf = async (res: Response): Promise<number | null> => {
 
 /** One heartbeat (or a tab leaving); the count now, or null when the object is unreachable. Never throws. */
 /**
+ * The network an address belongs to: an IPv4 address as is, an IPv6 address by its /64 (one
+ * host or home holds a whole /64, so its addresses would otherwise each count as a network).
+ */
+export function networkOf(ip: string): string {
+	if (!ip.includes(':')) return ip;
+	const [head, tail = ''] = ip.toLowerCase().split('::');
+	const left = head ? head.split(':') : [];
+	const right = tail ? tail.split(':') : [];
+	const groups = ip.includes('::') ? [...left, ...Array(Math.max(0, 8 - left.length - right.length)).fill('0'), ...right] : left;
+	return `${groups.slice(0, 4).map((g) => g.replace(/^0+(?=.)/, '')).join(':')}::/64`;
+}
+
+/**
  * The network a heartbeat comes from, for the object's per-network cap: a hash of the client IP
- * and the stream (never the IP itself, and not linkable across streams).
+ * (IPv6 by /64) and the stream: never the IP itself, and not linkable across streams.
  */
 export async function viewerNet(ip: string | null | undefined, streamId: string): Promise<string> {
 	if (!ip) return 'none';
-	const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${streamId}|${ip}`));
+	const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${streamId}|${networkOf(ip)}`));
 	return [...new Uint8Array(digest).slice(0, 8)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
