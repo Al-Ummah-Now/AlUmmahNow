@@ -148,6 +148,7 @@ export function YoutubeImportSetting({ view, canEdit, save: saveSettings }: { vi
               {t(view.secretPresent ? 'youtubeImport.secretPresentHint' : 'youtubeImport.secretMissingHint')}
               <code className="mx-1 inline-block whitespace-nowrap rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-fg" dir="ltr">{secretName}</code>
             </dd>
+            {!view.secretPresent && <dd className="mt-1 text-xs text-fg-muted" data-testid="youtube-import-secret-placeholder">{t('youtubeImport.secretPlaceholder')}</dd>}
           </div>
           <div className="rounded border border-border p-3">
             <dt className={term}>{t('youtubeImport.redirectUri')}</dt>
