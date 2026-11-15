@@ -225,9 +225,10 @@ export function SocialAccounts({ channelId, locale, accounts, networks, onAccoun
 
             <div className="mt-4 grid gap-4 sm:grid-cols-[minmax(0,12rem)_1fr]">
               <div className="space-y-1">
-                <Label id={`lang-${account.id}`}>{a.postsIn}</Label>
+                <Label id={`lang-${account.id}`} className="block">{a.postsIn}</Label>
                 <ThemedSelectField
-                  aria-labelledby={`lang-${account.id}`}
+                  id={`lang-${account.id}-v`}
+                  aria-labelledby={`lang-${account.id} lang-${account.id}-v`}
                   value={account.language}
                   disabled={busy === account.id}
                   onChange={(e) => void save(account, { language: e.target.value as SocialLanguage })}
@@ -259,7 +260,7 @@ export function SocialAccounts({ channelId, locale, accounts, networks, onAccoun
                       {formats.length > 1 && rule?.enabled ? (
                         <div className="flex items-center gap-2 text-sm">
                           <span id={`${id}-f`} className="text-[var(--fanous-color-text-secondary)]">{a.format}</span>
-                          <ThemedSelectField aria-labelledby={`${id}-f`} value={rule.format} onChange={(e) => setRule(account, event, { format: e.target.value as SocialFormat })} data-testid={`social-rule-${event}-format`}>
+                          <ThemedSelectField id={`${id}-fv`} aria-labelledby={`${id}-f ${id}-fv`} value={rule.format} onChange={(e) => setRule(account, event, { format: e.target.value as SocialFormat })} data-testid={`social-rule-${event}-format`}>
                             {formats.map((f) => (
                               <option key={f} value={f}>{a.formats[f]}</option>
                             ))}

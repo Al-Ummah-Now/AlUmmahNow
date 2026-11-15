@@ -6,9 +6,9 @@ import { ExternalLink } from 'lucide-react';
 import type { SocialDeliveryView } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/hooks/useLanguage';
-import { formatRelativeTime } from '@/lib/format/videoMeta';
 import { linkFixes, reasonKey, socialClient } from '@/lib/studio/social-client';
 import { NetworkMark, Notice, Pill, Section } from './shared';
+import { RelativeDate } from '@/components/RelativeDate';
 
 const TONE = { sent: 'ok', queued: 'muted', sending: 'muted', failed: 'error', blocked: 'warn', cancelled: 'muted' } as const;
 
@@ -47,7 +47,7 @@ export function SocialDeliveries({ channelId, locale, deliveries, onDeliveries }
                     <span aria-hidden="true"> · </span>
                     <span>{s.events[item.event]}</span>
                     <span aria-hidden="true"> · </span>
-                    <time dateTime={item.updatedAt}>{formatRelativeTime(item.updatedAt, locale)}</time>
+                    <RelativeDate value={item.updatedAt} lang={locale} />
                   </p>
                   {failed && item.error ? <p className="mt-1 text-xs text-[var(--fanous-color-error-text)]" data-testid="social-delivery-reason">{(d.reasons as Record<string, string>)[reasonKey(item.error)]}</p> : null}
                 </div>
