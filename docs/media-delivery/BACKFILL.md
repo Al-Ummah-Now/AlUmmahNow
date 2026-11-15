@@ -48,6 +48,10 @@ admin: Play R2 first (video / channel / global)      │   admin: Retire library
    - objects: every playlist, init segment and segment the playlists name exists in R2 and is not empty, plus `thumb.jpg`.
    A later re-transcode (new rev) makes the verification stale.
 
+A hold can land at any time, so every stage (start, each copy message, transcode, its poll, verify) checks the record
+first: a held video is left out as **Skipped: under a hold**, a copy in progress loses the parts this run wrote (only
+this run's upload id, never an upload's own kept original), and it is never marked R2-ready.
+
 Every step is idempotent and runs from the queue with retries (backoff, up to 6 deliveries). A step that cannot
 succeed fails its item; after the last delivery the message goes to the DLQ. Failures appear in the item list with
 **Retry**, and on the **Errors** page (needs-action `media-backfill:<videoId>`, run-level `media-backfill-run:<runId>`,
@@ -76,7 +80,8 @@ A separate action on the same page, with a typed confirmation (the library id) a
   the grace period (7–90 days). Cancel puts scheduled rows back to cancelled.
 - **Remove** (sweep cron queues due rows, `op: removal`, 2 s apart) — right before the delete, the video is checked
   again: a video under any suspension hold is cancelled (a CSAM hold's Bunny copy is preserved evidence, never deleted),
-  and it must still be verified at its current rev, else the removal fails and flags the admin. A thumbnail hosted on
+  and it must still be verified at its current rev, else the removal fails and flags the admin. The hold is checked
+  again inside the compare-and-swap that marks the copy removed, and once more right before the Bunny delete. A thumbnail hosted on
   Bunny is copied byte for byte to R2 (`pub/thumbs/<id>/kept-<uuid>.<ext>`) first, never replaced by another frame.
   The video's Bunny provider entry is removed and `bunnyRemoved` is set, then the Bunny video is deleted
   (`deleteBunnyVideo` in that library). Failures: needs-action `media-bunny-removal:<videoId>`, Retry through

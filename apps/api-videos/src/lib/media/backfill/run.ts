@@ -17,6 +17,7 @@ import {
 	reportNeedsAction,
 	resolveNeedsAction,
 	underHold,
+	originalPrefix,
 	withinBudget,
 	type BackfillRun,
 	type BackfillScope,
@@ -26,7 +27,7 @@ import {
 import { logger } from '../../logger';
 import R2Repository from '../../r2Repo';
 import { enqueueTranscode } from '../r2-delivery';
-import { BackfillFatal, copyStep, digestStreamMd5, type Md5Hasher } from './copy';
+import { BackfillFatal, copyStep, digestStreamMd5, uploadIdFor, type Md5Hasher } from './copy';
 import { insertPlanned, measuredBasis, planItem, scopePage } from './estimate';
 import {
 	getItem,
@@ -204,6 +205,29 @@ export async function failItem(env: BackfillEnv, ctx: Ctx, item: Pick<ItemRow, '
 	});
 }
 
+/**
+ * A hold (CSAM containment, a suspension) can land at any time, so every stage checks it before it acts:
+ * the item is left out as skipped/held and nothing more is copied, transcoded or verified. A copy still in
+ * progress loses the parts this run wrote (the Bunny copy, never touched, stays the preserved one).
+ */
+async function skipIfHeld(env: BackfillEnv, item: Pick<ItemRow, 'run_id' | 'video_id' | 'upload_id'>, now: Date, opts: { partialCopy?: boolean } = {}): Promise<boolean> {
+	const current = await new R2Repository<{ suspensionHolds?: unknown }>(env.videos).getObject(item.video_id);
+	if (!underHold(current)) return false;
+	await transition(db(env), item.run_id, item.video_id, ['pending', 'copying', 'transcoding', 'verifying'], 'skipped', { skip_reason: 'held' }, now);
+	if (opts.partialCopy && env.MEDIA_ORIGINALS) {
+		// Only this run's own upload id: an upload's kept original is never touched
+		const prefix = `${originalPrefix(item.video_id)}${item.upload_id ?? uploadIdFor(item.run_id)}/`;
+		let cursor: string | undefined;
+		do {
+			const page = await env.MEDIA_ORIGINALS.list({ prefix, cursor });
+			if (page.objects.length) await env.MEDIA_ORIGINALS.delete(page.objects.map((o) => o.key));
+			cursor = page.truncated ? page.cursor : undefined;
+		} while (cursor);
+	}
+	logger.warn('[Backfill] Video under a hold, left out', { runId: item.run_id, videoId: item.video_id });
+	return true;
+}
+
 interface StageVideo {
 	id: string;
 	isDeleted?: boolean;
@@ -212,6 +236,7 @@ interface StageVideo {
 
 /** After the copy (or with an original already kept): transcode, or verify a rendition that is ready. */
 export async function toTranscode(env: BackfillEnv, ctx: Ctx, item: ItemRow, now = new Date()): Promise<void> {
+	if (await skipIfHeld(env, item, now)) return;
 	const video = await new R2Repository<StageVideo>(env.videos).getObject(item.video_id);
 	if (!video || video.isDeleted) return failItem(env, ctx, item, 'transcode', 'The video was deleted', now);
 	const status = video.r2?.status;
@@ -230,11 +255,7 @@ export async function toTranscode(env: BackfillEnv, ctx: Ctx, item: ItemRow, now
 
 async function startItem(env: BackfillEnv, ctx: Ctx, item: ItemRow, now: Date): Promise<void> {
 	// Held since the estimate (CSAM containment, a suspension): left out, nothing copied or transcoded
-	const current = await new R2Repository<{ suspensionHolds?: unknown }>(env.videos).getObject(item.video_id);
-	if (underHold(current)) {
-		await transition(db(env), item.run_id, item.video_id, ['pending'], 'skipped', { skip_reason: 'held' }, now);
-		return;
-	}
+	if (await skipIfHeld(env, item, now)) return;
 	if (!item.has_original) {
 		if (await transition(db(env), item.run_id, item.video_id, ['pending'], 'copying', { started_at: now.toISOString() }, now)) await send(env, { op: 'copy', runId: item.run_id, videoId: item.video_id, offset: item.copied_bytes || 0 });
 		return;
@@ -245,6 +266,7 @@ async function startItem(env: BackfillEnv, ctx: Ctx, item: ItemRow, now: Date): 
 
 /** A video in transcode: ready → verify; failed for good → the item fails. */
 async function pollTranscode(env: BackfillEnv, ctx: Ctx, item: ItemRow, now: Date): Promise<void> {
+	if (await skipIfHeld(env, item, now)) return;
 	const video = await new R2Repository<StageVideo>(env.videos).getObject(item.video_id);
 	const r2 = video?.r2;
 	if (!video || video.isDeleted) return failItem(env, ctx, item, 'transcode', 'The video was deleted', now);
@@ -267,6 +289,7 @@ async function pollTranscode(env: BackfillEnv, ctx: Ctx, item: ItemRow, now: Dat
 export async function verifyStep(env: BackfillEnv, ctx: Ctx, runId: string, videoId: string, now = new Date()): Promise<void> {
 	const item = await getItem(db(env), runId, videoId);
 	if (!item || item.state !== 'verifying') return;
+	if (await skipIfHeld(env, item, now)) return;
 	const result = await verifyItem(env, item);
 	if (!result.ok) {
 		await updateItem(db(env), runId, videoId, { checks: JSON.stringify(result.checks) }, now);
@@ -303,6 +326,7 @@ export async function copyMessage(
 		await transition(db(env), runId, videoId, ['copying'], 'cancelled', {}, now);
 		return;
 	}
+	if (await skipIfHeld(env, item, now, { partialCopy: true })) return;
 	const step = await copyStep(env, item, offset, fetchImpl, now, md5);
 	if (!step.done) {
 		await send(env, { op: 'copy', runId, videoId, offset: step.next });
