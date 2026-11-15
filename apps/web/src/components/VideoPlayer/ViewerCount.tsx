@@ -56,7 +56,7 @@ export function ViewerCount({
   lang = 'en',
   showWhenDisconnected = false,
   className = ''
-}: ViewerCountProps): JSX.Element | null {
+}: ViewerCountProps): React.JSX.Element | null {
   const [displayCount, setDisplayCount] = useState(count);
   const [isAnimating, setIsAnimating] = useState(false);
 
