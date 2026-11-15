@@ -1,8 +1,11 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createPublicKey, createPrivateKey, sign, verify } from 'node:crypto';
-import { GENERATORS, generateVapid, provision, summary, type Deps } from '../provision-generated-secrets.ts';
+import { GENERATORS, generateKek, generateVapid, provision, summary, type Deps } from '../provision-generated-secrets.ts';
 import { GENERATED_SECRETS } from '../secrets-manifest.ts';
+
+const VAPID = GENERATED_SECRETS.filter((g) => g.generated === 'vapid');
+const KEK = GENERATED_SECRETS.filter((g) => g.generated === 'kek');
 
 function fake(existing: string[], opts: { fail?: boolean } = {}) {
 	const created: { storeId: string; secrets: { name: string; value: string; scopes: string[] }[] }[] = [];
@@ -14,7 +17,7 @@ function fake(existing: string[], opts: { fail?: boolean } = {}) {
 			created.push({ storeId, secrets });
 		},
 		mask: (v) => void masked.push(v),
-		generators: { vapid: () => ({ publicKey: 'PUB', privateKey: 'PRIV' }) },
+		generators: { vapid: () => ({ publicKey: 'PUB', privateKey: 'PRIV' }), kek: () => ({ key: 'KEY' }) },
 	};
 	return { deps, created, masked };
 }
@@ -34,10 +37,20 @@ describe('generateVapid', () => {
 	});
 });
 
+describe('generateKek', () => {
+	it('makes a fresh version-1 key of 32 bytes, in the form the social token crypto reads', () => {
+		const { key } = generateKek();
+		const m = key!.match(/^1:([A-Za-z0-9+/]+=*)$/);
+		assert.ok(m);
+		assert.equal(Buffer.from(m[1]!, 'base64').length, 32);
+		assert.notEqual(generateKek().key, key);
+	});
+});
+
 describe('provision', () => {
 	it('creates each env pair in one request, scope workers, with the env suffix, masking every value', async () => {
 		const f = fake([]);
-		const out = await provision(['qa', 'stage', 'production'], f.deps, { storeId: 's' });
+		const out = await provision(['qa', 'stage', 'production'], f.deps, { storeId: 's', groups: VAPID });
 		assert.deepEqual(out.map((o) => [o.env, o.result]), [['qa', 'created'], ['stage', 'created'], ['production', 'created']]);
 		assert.deepEqual(f.created.map((c) => c.secrets.map((s) => s.name)), [
 			['vapid-public-key-qa', 'vapid-private-key-qa'],
@@ -51,7 +64,7 @@ describe('provision', () => {
 
 	it('never overwrites: an existing pair is skipped and nothing is generated for it', async () => {
 		const f = fake(['vapid-public-key-qa', 'vapid-private-key-qa']);
-		const out = await provision(['qa'], f.deps);
+		const out = await provision(['qa'], f.deps, { groups: VAPID });
 		assert.deepEqual(out, [{ env: 'qa', names: ['vapid-public-key-qa', 'vapid-private-key-qa'], result: 'skipped', detail: 'exists' }]);
 		assert.deepEqual(f.created, []);
 		assert.deepEqual(f.masked, []);
@@ -59,7 +72,7 @@ describe('provision', () => {
 
 	it('half a pair creates nothing and is reported as partial', async () => {
 		const f = fake(['vapid-private-key-stage']);
-		const [o] = await provision(['stage'], f.deps);
+		const [o] = await provision(['stage'], f.deps, { groups: VAPID });
 		assert.equal(o!.result, 'partial');
 		assert.match(o!.detail!, /only vapid-private-key-stage exists/);
 		assert.deepEqual(f.created, []);
@@ -67,14 +80,14 @@ describe('provision', () => {
 
 	it('dry run reports what it would create and creates nothing', async () => {
 		const f = fake([]);
-		const out = await provision(['production'], f.deps, { dryRun: true });
+		const out = await provision(['production'], f.deps, { dryRun: true, groups: VAPID });
 		assert.equal(out[0]!.result, 'would create');
 		assert.deepEqual(f.created, []);
 	});
 
 	it('a failed create is reported per env without values', async () => {
 		const f = fake([], { fail: true });
-		const out = await provision(['qa'], f.deps);
+		const out = await provision(['qa'], f.deps, { groups: VAPID });
 		assert.equal(out[0]!.result, 'failed');
 		const text = summary(out);
 		assert.match(text, /\| qa \| `vapid-public-key-qa`, `vapid-private-key-qa` \| failed \(.*403/);
@@ -83,7 +96,7 @@ describe('provision', () => {
 
 	it('the summary lists names and results only', async () => {
 		const f = fake(['vapid-public-key', 'vapid-private-key']);
-		const text = summary(await provision(['qa', 'production'], f.deps));
+		const text = summary(await provision(['qa', 'production'], f.deps, { groups: VAPID }));
 		assert.match(text, /\| qa \| .* \| created \|/);
 		assert.match(text, /\| production \| .* \| skipped \(exists\) \|/);
 		assert.doesNotMatch(text, /PUB|PRIV/);
@@ -94,5 +107,13 @@ describe('provision', () => {
 			const parts = Object.keys(GENERATORS[g.generated]());
 			assert.deepEqual(parts.sort(), Object.keys(g.names).sort());
 		}
+	});
+
+	it('the social token key is created per env when absent, and an existing one is never replaced', async () => {
+		const f = fake(['social-token-kek']);
+		const out = await provision(['qa', 'production'], f.deps, { groups: KEK });
+		assert.deepEqual(out.map((o) => [o.env, o.names.join(), o.result]), [['qa', 'social-token-kek-qa', 'created'], ['production', 'social-token-kek', 'skipped']]);
+		assert.deepEqual(f.created.map((c) => c.secrets.map((x) => [x.name, x.value])), [[['social-token-kek-qa', 'KEY']]]);
+		assert.deepEqual(f.masked, ['KEY']);
 	});
 });
