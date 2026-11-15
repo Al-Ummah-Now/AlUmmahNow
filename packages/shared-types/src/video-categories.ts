@@ -217,17 +217,26 @@ export function validateCategoryFields(input: { value?: unknown; labelEn?: unkno
 
 /** A slug suggestion from an English name ("Seerah for kids" → "seerah_for_kids"). */
 export function slugFromLabel(label: string): string {
-  const slug = label
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/&/g, ' and ')
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .replace(/^[0-9_]+/, '')
-    .slice(0, 40)
-    .replace(/_+$/, '');
-  return slug;
+  // One linear pass, no backtracking regexes (CodeQL js/polynomial-redos); the input is bounded first
+  const text = label.slice(0, 200).toLowerCase().normalize('NFKD');
+  let slug = '';
+  let gap = false;
+  for (const ch of text) {
+    if (ch >= '\u0300' && ch <= '\u036f') continue; // combining accents
+    const piece = ch === '&' ? 'and' : (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') ? ch : '';
+    if (!piece) {
+      gap = true;
+      continue;
+    }
+    // A slug starts with a letter: leading digits are dropped
+    if (!slug && piece >= '0' && piece <= '9') continue;
+    if (gap && slug) slug += '_';
+    gap = false;
+    slug += piece;
+    if (slug.length >= 40) break;
+  }
+  slug = slug.slice(0, 40);
+  return slug.endsWith('_') ? slug.slice(0, -1) : slug;
 }
 
 /** Payload of MessageType.CategoryRelabel (admin-api → processor). */

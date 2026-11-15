@@ -118,6 +118,16 @@ describe('video categories: retired and new', () => {
 		assert.deepEqual(validateCategoryFields({ labelEn: 'Only English' }, false), {});
 		assert.equal(slugFromLabel('Hajj & Umrah: a guide'), 'hajj_and_umrah_a_guide');
 		assert.equal(slugFromLabel('2024 Ramadan'), 'ramadan');
+		assert.equal(slugFromLabel('  Seerah for   kids '), 'seerah_for_kids');
+		assert.equal(slugFromLabel('Café Fiqh'), 'cafe_fiqh');
+		assert.equal(slugFromLabel('___'), '');
+		assert.equal(slugFromLabel('x '.repeat(30)), 'x_x_x_x_x_x_x_x_x_x_x_x_x_x_x_x_x_x_x_x');
+		assert.ok(!slugFromLabel('ab '.repeat(14)).endsWith('_'));
+		// Linear on long separator runs (CodeQL js/polynomial-redos)
+		const started = Date.now();
+		assert.equal(slugFromLabel(`${'_'.repeat(1_000_000)}a`), '');
+		assert.equal(slugFromLabel(`a${' '.repeat(1_000_000)}`), 'a');
+		assert.ok(Date.now() - started < 500);
 	});
 });
 
