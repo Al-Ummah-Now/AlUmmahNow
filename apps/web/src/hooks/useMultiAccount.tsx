@@ -22,6 +22,7 @@ import {
   getActiveSessionInfo,
 } from '@/lib/actions/multi-account';
 import { clearClientAuthToken } from '@/lib/auth/client-token';
+import { stopWebPushOnSignOut } from '@/lib/push/web-push';
 import type { AccessibleChannel, Channel, ChannelCreateRequest, ChannelRole } from '@al-ummah/shared-types';
 import { ChannelAccessError, fetchChannelAccess } from '@/lib/channels/access';
 import { cacheChannels, toSessionChannel } from '@/lib/channels/session-cache';
@@ -633,6 +634,8 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
       const authOrigin = getAuthUrl();
       const signingOut = user?.id;
       const localUserIds = localAccounts.map((a) => a.userId).filter((id) => id !== signingOut);
+      // While the token still works: this browser stops getting this account's notifications
+      await stopWebPushOnSignOut();
       // Sign this account out of the browser (every app), then here
       if (signingOut) await removeAuthAccount(authOrigin, signingOut);
       const { signOutUrl } = await logoutCurrentAccount(currentLocale());
@@ -674,6 +677,7 @@ export function MultiAccountProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      await stopWebPushOnSignOut();
       const { signOutUrl } = await logoutAllAccounts(currentLocale());
       applySessionUser(null);
       setAccounts([]);

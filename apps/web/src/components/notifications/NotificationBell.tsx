@@ -10,6 +10,7 @@ import { useNotificationBell } from '@/hooks/useNotificationBell';
 import { fillTemplate } from '@/lib/i18n/translations/library-notifications';
 import { NotificationRow } from './NotificationRow';
 import { useFitToViewport } from '@/hooks/useFitToViewport';
+import { syncWebPush } from '@/lib/push/web-push';
 
 interface NotificationBellProps {
   /** Text direction of the surrounding header; the dropdown opens toward the page. */
@@ -33,6 +34,11 @@ export function NotificationBell({ dir = 'ltr' }: NotificationBellProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const panelId = useId();
+
+  // Browser notifications (#1287): keep this browser's registration current (subscription, language)
+  useEffect(() => {
+    if (user?.id) void syncWebPush(user.id, lang);
+  }, [user?.id, lang]);
 
   const close = useCallback((restoreFocus = false) => {
     setOpen(false);

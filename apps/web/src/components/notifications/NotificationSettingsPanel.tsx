@@ -14,17 +14,20 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { NotificationsService } from '@/services/api/notifications';
 import { logger } from '@/lib/logger-client';
 import { Switch } from '@/components/common/Switch';
+import { useAuth } from '@/components/AuthProvider/authContext';
+import { BrowserNotificationsSetting } from './BrowserNotificationsSetting';
 
 type Saving = OptionalNotificationCategory | 'emailAccount' | 'emailLocale' | null;
 
 /**
  * Settings page section (Story 29.10): turn notification categories on/off,
- * and the account email ("Email me about my account" and its language).
+ * browser notifications on this device (Web Push, #1287), and the account email ("Email me about my account" and its language).
  * Account notices (a moderator's warning) always arrive in-app, so they have
  * no switch. Each control saves immediately.
  */
 export function NotificationSettingsPanel() {
   const { t, dir, lang } = useLanguage();
+  const { user } = useAuth();
   const uid = `notif${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   const texts = t.notificationCenter;
   const emailTexts = texts.emailSettings;
@@ -136,6 +139,8 @@ export function NotificationSettingsPanel() {
           })}
         </ul>
       )}
+
+      {state && user?.id && <BrowserNotificationsSetting userId={user.id} idPrefix={uid} />}
 
       {state && (
         <div className="mt-6 border-t border-[var(--fanous-color-divider)] pt-4" data-testid="notification-email-settings">
