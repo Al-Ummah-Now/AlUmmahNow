@@ -19,7 +19,8 @@ import { AUTH_DIR, E2E_ENTITY_PREFIX, LOCAL_STACK, OPENAUTH_URL, RUN_ID, VIDEOS_
 import { getAccessToken } from './oauth';
 import { eraseRowsMentioning, runCron, stackLeftovers, stackR2, stackR2Keys, stackSql, topOfHour } from './local-stack';
 import { adminApi } from './api';
-import { ARCHIVE_BUCKETS, archiveHits } from './archive-hits';
+import { ARCHIVE_BUCKETS, archiveHits, processorBatchTimeoutMs, quietPeriodState, type QuietPeriod } from './archive-hits';
+import { parseJsonc } from '../../../../scripts/release/jsonc';
 
 const LEDGER = path.join(AUTH_DIR, 'run-ledger.jsonl');
 
@@ -165,40 +166,45 @@ async function eraseLocalCopies(users: LedgerUser[]): Promise<void> {
   }
 }
 
-/**
- * The processor's longest queue batch wait (max_batch_timeout 30 s, apps/processor/wrangler.jsonc)
- * plus a second: a message sent as the last spec ended is archived by then.
- */
-const ARCHIVE_SETTLE_MS = 31_000;
+/** apps/processor/wrangler.jsonc: its queue batch timeout sets how long a late message copy can take. */
+const PROCESSOR_CONFIG = path.resolve(__dirname, '../../../processor/wrangler.jsonc');
 
 /** Revocations outlive the tokens on purpose (the job's leftover check allows them too). */
 const KEPT_ON_PURPOSE = (h: { store: string; location: string }) =>
   h.store === 'kv:TOKEN_REVOCATIONS' || (h.store === 'd1:al-ummah-now-d1' && h.location.startsWith('user_revocations'));
 
 /**
- * Waits (up to 90 s) until the stack holds nothing of this run but revocations, so queued erasure
- * steps finish before the leftover check. Message-archive and backup copies the processor wrote
- * after eraseLocalCopies swept (a report dismissed as the last spec ended) are deleted as each scan
- * finds them (archive-hits.ts). Never fails the teardown: the check reports what is left.
+ * Sweeps until the stack holds nothing of this run but revocations, so queued erasure steps finish
+ * before the leftover check. Message-archive and backup copies the processor writes after
+ * eraseLocalCopies swept (a report dismissed as the last spec ended) are deleted as each scan finds
+ * them (archive-hits.ts), until none new has appeared for ARCHIVE_QUIET_MS past the processor's
+ * batch window (quietPeriodState). Throws at the hard limit with what is left.
  */
-async function waitForErasure(users: LedgerUser[], log: (line: string) => void, settledAt: number, timeoutMs = 90_000): Promise<void> {
+async function waitForErasure(users: LedgerUser[], log: (line: string) => void, startedAt: number): Promise<void> {
   if (!LOCAL_STACK || !RUN_ID) return;
   const ids = users.map((u) => u.userId);
-  const deadline = Date.now() + timeoutMs;
-  let left: { store: string; location: string }[] = [];
-  do {
-    left = (await stackLeftovers(RUN_ID, ids)).filter((h) => !KEPT_ON_PURPOSE(h));
-    // Empty is only final once a message the last spec sent has had its batch time to be archived
-    if (!left.length && Date.now() >= settledAt) return;
+  const period: QuietPeriod = { startedAt, batchMs: processorBatchTimeoutMs(parseJsonc(fs.readFileSync(PROCESSOR_CONFIG, 'utf8'))) };
+  const seen = new Set<string>();
+  let lastNewArchiveAt: number | null = null;
+  for (;;) {
+    const left = (await stackLeftovers(RUN_ID, ids)).filter((h) => !KEPT_ON_PURPOSE(h));
     const late = archiveHits(left);
+    const fresh = late.filter(({ bucket, key }) => !seen.has(`${bucket}/${key}`));
+    if (fresh.length) lastNewArchiveAt = Date.now();
     if (late.length) {
       await Promise.all(late.map(({ bucket, key }) => stackR2('DELETE', bucket, key)));
+      for (const { bucket, key } of late) seen.add(`${bucket}/${key}`);
       log(`[teardown] deleted ${late.length} message copies archived after the sweep`);
-      left = left.filter((h) => !archiveHits([h]).length);
     }
-    await new Promise((r) => setTimeout(r, 3000));
-  } while (Date.now() < deadline);
-  log(`[teardown] still on the stack after ${timeoutMs / 1000} s: ${left.slice(0, 10).map((h) => `${h.store} ${h.location}`).join('; ')}`);
+    const other = left.filter((h) => !archiveHits([h]).length);
+    const state = quietPeriodState(period, Date.now(), lastNewArchiveAt, other.length);
+    if (state === 'done') return;
+    if (state === 'timeout') {
+      const names = [...other.map((h) => `${h.store} ${h.location}`), ...(fresh.length ? [`message copies still being archived (${fresh.length} new in the last scan)`] : [])];
+      throw new Error(`still on the stack ${Math.round((Date.now() - startedAt) / 1000)} s into the teardown: ${names.slice(0, 10).join('; ') || 'message copies still being archived'}`);
+    }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
 }
 
 /**
@@ -242,7 +248,7 @@ export async function teardownRun(log: (line: string) => void = () => undefined)
     await eraseLocalCopies(users).catch((error) => problems.push(`local copies: ${(error as Error).message}`));
     // The erasure's processor steps (UserDataErased: invites, error rows, category suggestions) run
     // from the queue: wait until they are done before the job's leftover check looks
-    await waitForErasure(users, log, started + ARCHIVE_SETTLE_MS).catch((error) => log(`[teardown] could not wait for the erasure: ${(error as Error).message}`));
+    await waitForErasure(users, log, started).catch((error) => problems.push(`erasure: ${(error as Error).message}`));
   }
   if (problems.length) throw new Error(`teardown left things behind:\n${problems.join('\n')}`);
 }
