@@ -31,7 +31,7 @@ import type { Context } from 'hono';
 import { channelRoleOf, CREATOR_ERROR_CODES, type CreatorTier } from '@al-ummah/shared-types';
 import { logger } from '../lib/logger';
 import { recordLimitHit, resolveCreator, type ResolvedCreator } from '../lib/creatorTiers';
-import { getTusSessionKey, type TusProxySession } from '../lib/bunny/tus';
+import { getTusSessionKey, parseTusMetadata, type TusProxySession } from '../lib/bunny/tus';
 import { loadChannelRecord, memberMayActAs } from '../lib/channelAccess';
 import {
   checkRateLimit,
@@ -115,19 +115,10 @@ export function countReused(value: unknown, depth = 0): number {
 
 type RolesAuth = { payload?: { roles?: string[] } } | undefined;
 
-/** The `tusSessionId` of a TUS create's Upload-Metadata (`key base64,key base64`), or null. */
-export function tusSessionIdOf(metadata: string | undefined): string | null {
-  for (const pair of (metadata ?? '').split(',')) {
-    const [key, value] = pair.trim().split(' ');
-    if (key !== 'tusSessionId' || !value) continue;
-    try {
-      const id = atob(value);
-      return /^[A-Za-z0-9-]{1,64}$/.test(id) ? id : null;
-    } catch {
-      return null;
-    }
-  }
-  return null;
+/** The `tusSessionId` of a TUS create's Upload-Metadata; null when missing, malformed or the header repeats a key. */
+export function tusSessionIdOf(header: string | undefined): string | null {
+  const id = parseTusMetadata(header)?.tusSessionId;
+  return id && /^[A-Za-z0-9-]{1,64}$/.test(id) ? id : null;
 }
 
 /**
