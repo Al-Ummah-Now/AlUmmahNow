@@ -496,6 +496,8 @@ describe('YouTube import: uploads, captions, thumbnails, playlists and the close
 		const kids = await prepareImportUpload(env as never, caller, CHANNEL, { importId, itemId: byYt.ytUNL.id }, NOW);
 		assert.equal(kids.metadata.visibility, 'unlisted');
 		assert.equal(kids.metadata.importedFrom.madeForKids, true);
+		assert.equal(kids.metadata.commentSettings, 'off');
+		assert.equal(pub.metadata.commentSettings, undefined);
 		assert.equal(kids.metadata.publishedAt, undefined);
 
 		const scheduled = await prepareImportUpload(env as never, caller, CHANNEL, { importId, itemId: byYt.ytPRV.id }, NOW);
