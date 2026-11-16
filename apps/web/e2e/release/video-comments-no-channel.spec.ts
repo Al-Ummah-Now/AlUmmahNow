@@ -22,7 +22,6 @@ import { apiFetch, gotoSettled, type Locale, type WebUser } from './web-session'
 test.use({ trace: 'off' });
 
 const LOCALES: Locale[] = ['en', 'ar'];
-const COMMENTING_AS: Record<Locale, string> = { en: 'Commenting as', ar: 'تعلّق باسم' };
 
 async function answerConsent(context: BrowserContext): Promise<void> {
   await context.addCookies([{ name: 'aun_consent', value: `v1.a0.e0.p0.${Date.now()}`, url: target().web, sameSite: 'Lax' }]);
@@ -68,7 +67,8 @@ test.describe('video comments without a channel', () => {
       const section = page.getByTestId('comments-section');
       await expect(section).toBeVisible({ timeout: 30000 });
       // The composer, not "select a channel", and it says who will post
-      await expect(section.getByTestId('comment-identity')).toHaveText(`${COMMENTING_AS[locale]} ${name}`, { timeout: 30000 });
+      // Only the viewer's avatar beside the box, named after them (no "Commenting as" text, owner 2026-11-15)
+      await expect(section.getByTestId('comment-identity')).toHaveAccessibleName(name, { timeout: 30000 });
       await expect(section.getByTestId('comment-identity')).toHaveAttribute('data-as', 'member');
 
       // Post as themselves

@@ -3,7 +3,7 @@ import { PostComment } from "@al-ummah/shared-types";
 
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
-import Image from 'next/image';
+import { ComposerAvatar } from '@/components/comments-shared/ComposerAvatar';
 import { createPostComment } from '@/lib/api/post-comments';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useHumanCheck } from '@/hooks/useHumanCheck';
@@ -138,21 +138,8 @@ export default function ReplyForm({
         isRTL && 'flex-row-reverse'
       )}
     >
-      {/* User Avatar */}
-      <div className="relative w-8 h-8 flex-shrink-0">
-        {userAvatar ? (
-          <Image
-            src={userAvatar}
-            alt={userDisplayName}
-            fill
-            className="rounded-full object-cover"
-          />
-        ) : (
-          <div className="w-full h-full rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xs">
-            {userDisplayName.charAt(0).toUpperCase()}
-          </div>
-        )}
-      </div>
+      {/* The identity you act as (header Acting as menu): its avatar only, named for screen readers */}
+      <ComposerAvatar src={userAvatar} name={userDisplayName} as={channelId ? 'channel' : 'member'} />
 
       {/* Input Area */}
       <div className="flex-1">

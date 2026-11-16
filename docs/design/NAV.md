@@ -263,6 +263,10 @@ account's own channels and active channel.
 
 `<div class="aun-menu-context" role="group" aria-labelledby="…">`, label **Channel** / **القناة**, then
 in this order:
+This menu is the **only** place to choose an identity (owner decision 2026-11-15). Comments, replies,
+posts, likes, subscriptions and playlists always use the current acting identity; their composers show
+only that identity's avatar (photo or channel logo, accessible name = the identity's name), with no
+"Commenting as" text, no Switch link and no per-action picker.
 
 | Row | What | When |
 |---|---|---|

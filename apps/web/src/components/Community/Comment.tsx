@@ -33,6 +33,9 @@ interface CommentProps {
   onCommentUpdated?: (comment: PostComment) => void;
   onCommentDeleted?: (commentId: string) => void;
   onReplyCreated?: (reply: PostComment) => void;
+  /** The identity the viewer acts as (its avatar and name), shown on the reply form */
+  viewerAvatar?: string;
+  viewerName?: string;
 }
 
 function getTimeAgo(date: Date, isRTL: boolean): string {
@@ -82,6 +85,8 @@ export default function Comment({
   onCommentUpdated,
   onCommentDeleted,
   onReplyCreated,
+  viewerAvatar,
+  viewerName = '',
 }: CommentProps) {
   const { t } = useLanguage();
   const { confirm, dialog: confirmDialog } = useConfirm();
@@ -458,8 +463,8 @@ export default function Comment({
             postId={postId}
             parentCommentId={comment.id}
             replyToUsername={comment.userDisplayName}
-            userAvatar={comment.userAvatarUrl}
-            userDisplayName={comment.userDisplayName}
+            userAvatar={viewerAvatar}
+            userDisplayName={viewerName}
             isRTL={isRTL}
             locale={locale}
             channelId={channelId}
@@ -484,6 +489,8 @@ export default function Comment({
                 userId={userId}
                 isPostOwner={isPostOwner}
                 onCommentDeleted={onCommentDeleted}
+                viewerAvatar={viewerAvatar}
+                viewerName={viewerName}
               />
             ))}
 

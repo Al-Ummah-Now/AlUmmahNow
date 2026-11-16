@@ -83,17 +83,16 @@ test.describe('comments - signed in without a channel', () => {
 
   // #1151: they comment as themselves (the round trip is release/video-comments-no-channel.spec.ts,
   // with its own viewer; this shared account posts nothing here)
-  for (const [locale, commentingAs] of [
-    ['en', 'Commenting as'],
-    ['ar', 'تعلّق باسم'],
-  ] as const) {
+  // The composer shows only their avatar, named after them (no "Commenting as" text, owner 2026-11-15)
+  for (const locale of ['en', 'ar'] as const) {
     test(`CMT-002 accounts without a channel get the composer, as themselves (${locale})`, async ({ page }) => {
       const video = ownLecture(1);
       const section = await openComments(page, video, locale);
 
       await expect(section.getByTestId('comment-input')).toBeVisible();
       const identity = section.getByTestId('comment-identity');
-      await expect(identity).toContainText(commentingAs);
+      await expect(identity).toHaveAccessibleName(/\S/);
+      await expect(section.getByText(locale === 'en' ? 'Commenting as' : 'تعلّق باسم')).toHaveCount(0);
       await expect(identity).toHaveAttribute('data-as', 'member');
       await expect(section.getByRole('link').filter({ hasText: locale === 'en' ? 'Create Channel' : 'إنشاء قناة' })).toHaveCount(0);
     });

@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button';
 import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useHumanCheck } from '@/hooks/useHumanCheck';
+import { useMultiAccount } from '@/hooks/useMultiAccount';
+import { ComposerAvatar } from '@/components/comments-shared/ComposerAvatar';
 import { Card } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
@@ -39,6 +41,10 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
   const router = useRouter();
   const { t, lang } = useLanguage();
   const { ensureHuman } = useHumanCheck();
+  // The channel the post goes under: its logo (named for screen readers), no "Posting as" text
+  const { user: account } = useMultiAccount();
+  const postChannel = account?.channels?.find((c) => c.id === id);
+  const postChannelName = postChannel?.nameLocalized?.[lang]?.trim() || postChannel?.name?.trim() || channelName;
   const isRTL = locale === 'ar';
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
@@ -293,6 +299,7 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
                 <ArrowLeft className="w-5 h-5 rtl:-scale-x-100" aria-hidden="true" />
               </Link>
             </Button>
+            <ComposerAvatar src={postChannel?.avatarUrl} name={postChannelName} as="channel" testId="post-identity" />
             <h1 className="text-lg md:text-2xl font-bold">
               {isRTL ? 'منشور جديد' : 'New Post'}
             </h1>

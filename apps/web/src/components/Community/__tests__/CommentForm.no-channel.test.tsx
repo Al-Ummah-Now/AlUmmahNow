@@ -28,12 +28,13 @@ describe('CommentForm without a channel', () => {
     ensureHuman.mockReset().mockResolvedValue({ ok: true });
   });
 
-  it('posts as the member (no channel header) and says so above the box', async () => {
+  it('posts as the member (no channel header); the avatar beside the box is named after them', async () => {
     account = { id: 'viewer', channel: null, channels: [] };
     const onCreated = jest.fn();
     render(<CommentForm postChannelId="their-ch" postId="p1" userId="viewer" userDisplayName="Amina Yusuf" onCommentCreated={onCreated} />);
 
-    expect(screen.getByTestId('comment-identity')).toHaveTextContent('Commenting as Amina Yusuf');
+    expect(screen.getByTestId('comment-identity')).toHaveAccessibleName('Amina Yusuf');
+    expect(screen.queryByText(/Commenting as/)).toBeNull();
     expect(screen.getByTestId('comment-identity')).toHaveAttribute('data-as', 'member');
     expect(screen.queryByTestId('comment-identity-switch')).toBeNull();
 
@@ -44,11 +45,12 @@ describe('CommentForm without a channel', () => {
     expect(screen.queryByText(/must be logged in/i)).toBeNull();
   });
 
-  it('with a channel active it posts as that channel and offers Switch', async () => {
+  it('with a channel active it posts as that channel; no Switch (identity is chosen only in the header)', async () => {
     account = { id: 'viewer', channel: { id: 'my-ch' }, channels: [{ id: 'my-ch', name: 'My channel' }] };
     render(<CommentForm postChannelId="their-ch" postId="p1" userId="viewer" channelId="my-ch" userDisplayName="My channel" />);
     expect(screen.getByTestId('comment-identity')).toHaveAttribute('data-as', 'channel');
-    expect(screen.getByRole('button', { name: 'Switch channel' })).toBeInTheDocument();
+    expect(screen.getByTestId('comment-identity')).toHaveAccessibleName('My channel');
+    expect(screen.queryByRole('button', { name: /Switch/ })).toBeNull();
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello' } });
     fireEvent.submit(screen.getByRole('textbox').closest('form')!);
     await waitFor(() => expect(createPostComment).toHaveBeenCalledWith('their-ch', 'p1', { content: 'Hello' }, { channelId: 'my-ch' }, undefined));

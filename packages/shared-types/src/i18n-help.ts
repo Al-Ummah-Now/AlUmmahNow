@@ -249,8 +249,8 @@ export const HELP_EN: HelpTranslations = {
               'Open the account menu and select **Switch channel**.',
               'Pick one of **Your Channels** or **Channels you manage**, or **Use without a channel** to act as yourself. A check mark shows the one in use.',
             ] },
-            { type: 'p', text: 'The comment box says who you are commenting as. If you have channels, **Switch** next to it opens the same list.' },
-            { type: 'clip', clip: 'identity-switch', label: 'Clip: switching who you act as', caption: 'Switching from a channel to yourself in the account menu; the comment box changes name.' },
+            { type: 'p', text: 'Who you act as is chosen only here, in the account menu. Next to the comment box you see the picture of whoever you are acting as: your photo, or the channel’s logo.' },
+            { type: 'clip', clip: 'identity-switch', label: 'Clip: switching who you act as', caption: 'Switching from a channel to yourself in the account menu; the picture next to the comment box changes.' },
             { type: 'figure', picture: 'identity-switch', alt: 'The channel list in the account menu', markers: ['Your Channels', 'Use without a channel'] },
             { type: 'tip', text: 'Switching never signs you out and never changes your account. Watch later, History, your subscriptions list and your settings stay the same.' },
           ],
@@ -271,7 +271,7 @@ export const HELP_EN: HelpTranslations = {
             { type: 'p', text: 'A like or a subscription belongs to the identity that made it. If you like a video as yourself and again as your channel, that is two likes. The **Subscribe** button shows whether the identity you are using now is subscribed.' },
             { type: 'p', text: '**Save** shows the playlists of whoever you are acting as: your own playlists, or the channel’s.' },
             { type: 'p', text: 'Your **Subscriptions** feed and list are for your whole account: each channel shows once, however you subscribed to it. **Unsubscribe** on the manage page removes all of your subscriptions to that channel. You can’t subscribe to your own channel.' },
-            { type: 'figure', picture: 'identity-comment', alt: 'The comment box under a video saying who you are commenting as', markers: ['Commenting as …', 'Switch'] },
+            { type: 'figure', picture: 'identity-comment', alt: 'The comment box under a video, with the picture of whoever you are acting as next to it', markers: ['The picture of whoever you act as', 'The comment box'] },
           ],
         },
         {
@@ -363,14 +363,14 @@ export const HELP_EN: HelpTranslations = {
           heading: 'Posts and polls',
           blocks: [
             { type: 'p', text: 'Channels share updates, pictures and polls on their **Community** tab. Only the channel’s owner writes posts there.' },
-            { type: 'figure', picture: 'community-tab', alt: 'A post on a channel’s Community tab, with the comment box saying who you comment as', markers: ['Commenting as …'] },
+            { type: 'figure', picture: 'community-tab', alt: 'A post on a channel’s Community tab, with the picture of whoever you act as next to the comment box', markers: ['The picture of whoever you act as'] },
           ],
         },
         {
           id: 'comments',
           heading: 'Comments and likes',
           blocks: [
-            { type: 'p', text: 'Comment, reply, like and vote as whoever you are acting as. The comment box shows the name you will comment as. You can edit or delete your own comments.' },
+            { type: 'p', text: 'Comment, reply, like and vote as whoever you are acting as. The picture next to the comment box shows who you will comment as. You can edit or delete your own comments.' },
           ],
         },
         {
@@ -586,8 +586,8 @@ export const HELP_AR: HelpTranslations = {
               'افتح قائمة الحساب واختر **تبديل القناة**.',
               'اختر من **قنواتك** أو **القنوات التي تديرها**، أو **الاستخدام بدون قناة** لتتصرّف باسمك. وتدلّ علامة الصح على المستخدمة الآن.',
             ] },
-            { type: 'p', text: 'يُظهر لك صندوق التعليق الاسم الذي ستعلّق به. وإن كانت لديك قنوات فزر **تبديل** بجانبه يفتح القائمة نفسها.' },
-            { type: 'clip', clip: 'identity-switch', label: 'مقطع: تبديل الهوية', caption: 'التبديل من قناة إلى اسمك الشخصي في قائمة الحساب، فيتغيّر الاسم في صندوق التعليق.' },
+            { type: 'p', text: 'تختار من تتصرّف باسمه هنا فقط، في قائمة الحساب. وبجانب صندوق التعليق ترى صورة من تتصرّف باسمه: صورتك أو شعار القناة.' },
+            { type: 'clip', clip: 'identity-switch', label: 'مقطع: تبديل الهوية', caption: 'التبديل من قناة إلى حسابك الشخصي في قائمة الحساب، فتتغيّر الصورة بجانب صندوق التعليق.' },
             { type: 'figure', picture: 'identity-switch', alt: 'قائمة القنوات في قائمة الحساب', markers: ['قنواتك', 'الاستخدام بدون قناة'] },
             { type: 'tip', text: 'التبديل لا يُخرجك من حسابك ولا يغيّره، وتبقى «مشاهدة لاحقاً» و«السجل» وقائمة اشتراكاتك وإعداداتك كما هي.' },
           ],
@@ -608,7 +608,7 @@ export const HELP_AR: HelpTranslations = {
             { type: 'p', text: 'الإعجاب والاشتراك يتبعان الهوية التي قامت بهما؛ فإن أعجبك مرئي باسمك ثم باسم قناتك فهذان إعجابان. ويُظهر زر **اشترك** هل الهوية التي تستخدمها الآن مشتركة أم لا.' },
             { type: 'p', text: 'ويعرض زر **حفظ** قوائم تشغيل الهوية التي تتصرّف بها: قوائمك أنت، أو قوائم القناة.' },
             { type: 'p', text: 'صفحة **الاشتراكات** وقائمتها لحسابك كله: تظهر كل قناة مرة واحدة أيًّا كانت الهوية التي اشتركت بها. و**إلغاء الاشتراك** في صفحة الإدارة يلغي كل اشتراكاتك في تلك القناة. ولا يمكنك الاشتراك في قناتك.' },
-            { type: 'figure', picture: 'identity-comment', alt: 'صندوق التعليق تحت المرئي يُظهر الاسم الذي ستعلّق به', markers: ['تعلّق باسم …', 'تبديل'] },
+            { type: 'figure', picture: 'identity-comment', alt: 'صندوق التعليق تحت المرئي، وبجانبه صورة من تتصرّف باسمه', markers: ['صورة من تتصرّف باسمه', 'صندوق التعليق'] },
           ],
         },
         {
@@ -700,14 +700,14 @@ export const HELP_AR: HelpTranslations = {
           heading: 'المنشورات واستطلاعات الرأي',
           blocks: [
             { type: 'p', text: 'تنشر القنوات أخبارها وصورها واستطلاعاتها في تبويب **المجتمع**، ولا يكتب المنشورات فيه إلا مالك القناة.' },
-            { type: 'figure', picture: 'community-tab', alt: 'منشور في تبويب المجتمع في قناة، وصندوق التعليق يُظهر الاسم الذي ستعلّق به', markers: ['تعلّق باسم …'] },
+            { type: 'figure', picture: 'community-tab', alt: 'منشور في تبويب المجتمع في قناة، وبجانب صندوق التعليق صورة من تتصرّف باسمه', markers: ['صورة من تتصرّف باسمه'] },
           ],
         },
         {
           id: 'comments',
           heading: 'التعليقات والإعجابات',
           blocks: [
-            { type: 'p', text: 'علّق ورُدّ وأعجب وصوّت بالهوية التي تتصرّف بها، ويُظهر لك صندوق التعليق الاسم الذي ستعلّق به. ويمكنك تعديل تعليقاتك أو حذفها.' },
+            { type: 'p', text: 'علّق ورُدّ وأعجب وصوّت بالهوية التي تتصرّف بها، وتدلّك الصورة بجانب صندوق التعليق على من ستعلّق باسمه. ويمكنك تعديل تعليقاتك أو حذفها.' },
           ],
         },
         {

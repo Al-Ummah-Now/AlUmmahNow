@@ -248,6 +248,8 @@ export default function CommentsSection({
                 channelId={channelId}
                 userId={userId}
                 isPostOwner={isPostOwner}
+                viewerAvatar={userAvatar}
+                viewerName={userDisplayName}
                 onCommentUpdated={handleCommentUpdated}
                 onCommentDeleted={handleCommentDeleted}
                 onReplyCreated={handleReplyCreated}
@@ -267,6 +269,8 @@ export default function CommentsSection({
               channelId={channelId}
               userId={userId}
               isPostOwner={isPostOwner}
+              viewerAvatar={userAvatar}
+              viewerName={userDisplayName}
               onCommentUpdated={handleCommentUpdated}
               onCommentDeleted={handleCommentDeleted}
               onReplyCreated={handleReplyCreated}

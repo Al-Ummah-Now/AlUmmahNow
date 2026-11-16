@@ -2,13 +2,11 @@ import { logger } from '@/lib/logger-client';
 
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
-import Image from 'next/image';
+import { ComposerAvatar } from '@/components/comments-shared/ComposerAvatar';
 import { createPostComment } from '@/lib/api/post-comments';
 import { PostComment } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useHumanCheck } from '@/hooks/useHumanCheck';
-import { useMultiAccount } from '@/hooks/useMultiAccount';
-import { requestAccountMenu } from '@/lib/navigation/account-menu-events';
 
 const MAX_COMMENT_LENGTH = 10000;
 const SHOW_COUNTER_THRESHOLD = 500;
@@ -41,8 +39,6 @@ export default function CommentForm({
 }: CommentFormProps) {
   const { t } = useLanguage();
   const { ensureHuman } = useHumanCheck();
-  const { user: account } = useMultiAccount();
-  const hasChannels = (account?.channels?.length ?? 0) > 0;
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -138,43 +134,11 @@ export default function CommentForm({
       onSubmit={handleSubmit}
       className={cn('flex gap-3', isRTL && 'flex-row-reverse')}
     >
-      {/* User Avatar */}
-      <div className="relative w-10 h-10 flex-shrink-0">
-        {userAvatar ? (
-          <Image
-            src={userAvatar}
-            alt={userDisplayName}
-            fill
-            className="rounded-full object-cover"
-          />
-        ) : (
-          <div className="w-full h-full rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm">
-            {userDisplayName.charAt(0).toUpperCase()}
-          </div>
-        )}
-      </div>
+      {/* The identity you act as (header Acting as menu): its avatar only, named for screen readers */}
+      <ComposerAvatar src={userAvatar} name={userDisplayName} as={channelId ? 'channel' : 'member'} className="w-10 h-10" />
 
       {/* Input Area */}
       <div className="flex-1">
-        {userId && userDisplayName && (
-          <p className="mb-1 text-xs opacity-80" data-testid="comment-identity" data-as={channelId ? 'channel' : 'member'}>
-            {t.comments.commentingAs.split('{name}')[0]}<bdi>{userDisplayName}</bdi>{t.comments.commentingAs.split('{name}')[1] ?? ''}
-            {hasChannels && (
-              <>
-                {' · '}
-                <button
-                  type="button"
-                  className="font-medium underline underline-offset-2"
-                  aria-label={t.navigation.switchChannel}
-                  data-testid="comment-identity-switch"
-                  onClick={() => requestAccountMenu({ open: true, view: 'channels', focus: true })}
-                >
-                  {t.comments.switchIdentity}
-                </button>
-              </>
-            )}
-          </p>
-        )}
         <div className="relative">
           <textarea
             ref={textareaRef}

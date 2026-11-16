@@ -181,7 +181,7 @@ export function UnifiedNavigation() {
     if (!canCreateChannel) setIsCreatingChannel(false);
   }, [canCreateChannel]);
 
-  // Other parts of the page open the menu on a view: "Commenting as … · Switch" and the identity
+  // Other parts of the page open the menu on a view: the identity
   // tour (lib/navigation/account-menu-events.ts)
   useEffect(() => {
     const onRequest = (event: Event) => {
