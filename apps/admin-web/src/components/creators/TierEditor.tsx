@@ -9,6 +9,7 @@ import { useLanguage } from '@/i18n/I18nProvider';
 import { formatCount, formatNumber, type MessageKey } from '@/i18n/translate';
 import Link from '@/components/AppLink';
 import { cardClass, fieldClass, linkClass } from '@/components/ui';
+import { LocalizedFieldPair } from '@/components/localized/LocalizedFieldPair';
 import { Chip, dangerButtonClass } from '@/components/content/parts';
 import { logger } from '@/lib/logger-client';
 import { reportError } from '@/lib/errors/reporter';
@@ -94,6 +95,7 @@ function TierCard({ tier, users, invites = 0, canManage, actions, create = false
         {t(shown[field]!.key, shown[field]!.params)}
       </span>
     ) : null;
+  const errorText = (field: TierField) => (shown[field] ? t(shown[field]!.key, shown[field]!.params) : undefined);
   const described = (field: TierField) => [help(field), shown[field] ? `${ids}-${field}-error` : ''].filter(Boolean).join(' ');
 
   const number = (field: NumberField, label: string) => {
@@ -120,26 +122,6 @@ function TierCard({ tier, users, invites = 0, canManage, actions, create = false
       </label>
     );
   };
-
-  const textField = (field: 'nameAr' | 'description' | 'descriptionAr', label: string, helpText: string, max: number, dir: 'rtl' | 'auto') => (
-    <label className="flex flex-col gap-1 text-sm text-fg-muted">
-      <span className="text-fg font-medium">{label}</span>
-      <input
-        maxLength={max}
-        value={form[field]}
-        disabled={!canManage}
-        aria-invalid={shown[field] ? true : undefined}
-        aria-describedby={described(field)}
-        onChange={(e) => set(field, e.target.value)}
-        className={fieldClass}
-        dir={dir}
-        lang={dir === 'rtl' ? 'ar' : undefined}
-        data-testid={`tier-${key}-${field}`}
-      />
-      <span id={help(field)} className="text-xs">{helpText}</span>
-      {errorOf(field)}
-    </label>
-  );
 
   const flag = (field: 'uploads' | 'channels' | 'requestable', label: string, forcedOn: boolean, describedBy?: string) => (
     <label className="flex items-center gap-2 text-sm text-fg">
@@ -176,23 +158,6 @@ function TierCard({ tier, users, invites = 0, canManage, actions, create = false
         <p className="text-sm text-fg-muted" data-testid={`tier-${key}-effect`}>{tierEffect(saved, t, locale)}</p>
       )}
       <div className="grid gap-4 sm:grid-cols-2">
-        <label className="flex flex-col gap-1 text-sm text-fg-muted">
-          <span className="text-fg font-medium">{t('creators.tierName')}</span>
-          <input
-            required
-            maxLength={60}
-            value={form.name}
-            disabled={!canManage}
-            aria-invalid={shown.name ? true : undefined}
-            aria-describedby={described('name')}
-            onChange={(e) => set('name', e.target.value)}
-            className={fieldClass}
-            dir="auto"
-            data-testid={`tier-${key}-name`}
-          />
-          <span id={help('name')} className="text-xs">{t('creators.helpName')}</span>
-          {errorOf('name')}
-        </label>
         <div className="flex flex-col gap-1 text-sm">
           <label className="flex items-center gap-2 text-fg pt-6">
             <input
@@ -210,9 +175,33 @@ function TierCard({ tier, users, invites = 0, canManage, actions, create = false
             {fixedUnlimited ? t('creators.helpUnlimitedFixed') : t('creators.helpUnlimited')}
           </span>
         </div>
-        {textField('nameAr', t('creators.tierNameAr'), t('creators.helpNameAr'), CREATOR_TIER_TEXT.name, 'rtl')}
-        {textField('description', t('creators.tierDescription'), t('creators.helpDescription'), CREATOR_TIER_TEXT.description, 'auto')}
-        {textField('descriptionAr', t('creators.tierDescriptionAr'), t('creators.helpDescriptionAr'), CREATOR_TIER_TEXT.description, 'rtl')}
+        {/* Both languages required (L10N rule); Translate fills one from the other for review */}
+        <div className="sm:col-span-2 flex flex-col gap-4">
+          <LocalizedFieldPair
+            id={`tier-${key}-name-pair`}
+            label={t('creators.tierName')}
+            field="tiers.name"
+            value={{ en: form.name, ar: form.nameAr }}
+            onChange={(v) => setForm((f) => ({ ...f, name: v.en, nameAr: v.ar }))}
+            maxLength={CREATOR_TIER_TEXT.name}
+            disabled={!canManage}
+            errors={{ en: errorText('name'), ar: errorText('nameAr') }}
+            help={t('creators.helpNamePair')}
+            inputTestIds={{ en: `tier-${key}-name`, ar: `tier-${key}-nameAr` }}
+          />
+          <LocalizedFieldPair
+            id={`tier-${key}-description-pair`}
+            label={t('creators.tierDescription')}
+            field="tiers.description"
+            value={{ en: form.description, ar: form.descriptionAr }}
+            onChange={(v) => setForm((f) => ({ ...f, description: v.en, descriptionAr: v.ar }))}
+            maxLength={CREATOR_TIER_TEXT.description}
+            disabled={!canManage}
+            errors={{ en: errorText('description'), ar: errorText('descriptionAr') }}
+            help={t('creators.helpDescriptionPair')}
+            inputTestIds={{ en: `tier-${key}-description`, ar: `tier-${key}-descriptionAr` }}
+          />
+        </div>
       </div>
       <fieldset className="flex flex-col gap-2 rounded border border-border p-4" data-testid={`tier-${key}-access`}>
         <legend className="px-1 text-sm font-medium text-fg">{t('creators.tierAccess')}</legend>
