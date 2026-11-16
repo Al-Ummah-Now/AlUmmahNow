@@ -31,6 +31,7 @@ import type { PlaylistWithVideos } from "@/lib/api/playlists";
 import type { NewPlaylistInput } from "@/lib/api/upload-playlists-client";
 import { applySuggestion, formText, isKnownCategory, newDraftKey, pickCategory, type CategoryFormState } from "@/lib/category-suggestion/form";
 import { useCategorySuggestion } from "@/hooks/useCategorySuggestion";
+import { useFeatures } from "@/hooks/useFeatures";
 import type { ProcessedMetadata } from "@/lib/upload/template-variables";
 import { getApiUrl } from "@/lib/runtime-config";
 
@@ -162,10 +163,12 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
     [metadata.titleEn, metadata.titleAr, metadata.descriptionEn, metadata.descriptionAr, metadata.tags],
   );
   // Never blocks the upload: suggestions are only asked for while the form is being filled in
+  // Hidden when off: no AI category hint unless features.aiCategorySuggest is on
+  const aiCategoryOn = useFeatures(activeChannel?.id ?? null).features.aiCategorySuggest;
   const { suggestion: categorySuggestion, loading: categorySuggesting } = useCategorySuggestion({
     draftKey: categoryDraftKey,
     text: categoryText,
-    enabled: showMetadataForm && !!selectedFile && !uploadProgress && !categoryState.touched,
+    enabled: aiCategoryOn && showMetadataForm && !!selectedFile && !uploadProgress && !categoryState.touched,
     channelId: activeChannel?.id,
   });
   useEffect(() => {

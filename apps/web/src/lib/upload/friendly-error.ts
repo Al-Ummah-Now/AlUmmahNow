@@ -24,7 +24,7 @@ export function formatWait(t: Pick<AppTranslations, 'creator'>, seconds: number,
 export function creatorRefusalMessage(t: Pick<AppTranslations, 'creator'>, call: RefusedCall | null | undefined, lang = 'en'): string | null {
   switch (call?.code) {
     case CREATOR_ERROR_CODES.uploadsByInvitation:
-      return t.creator.invitationShort;
+      return t.creator.uploadsOff;
     case CREATOR_ERROR_CODES.uploadLimit:
       return call.retryAfter && call.retryAfter > 0
         ? t.creator.limitReached.replace('{time}', formatWait(t, call.retryAfter, lang))

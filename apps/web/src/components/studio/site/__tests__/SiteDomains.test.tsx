@@ -11,6 +11,9 @@ import { upstreamPath } from '@/lib/studio/site-domains';
 jest.mock('@/hooks/useLanguage', () => ({
   useLanguage: () => ({ t: jest.requireActual('@/lib/i18n/translations/en').EN_TRANSLATIONS, lang: 'en', locale: 'en', isRTL: false }),
 }));
+const mockRefresh = jest.fn();
+const mockRouter = { refresh: mockRefresh };
+jest.mock('next/navigation', () => ({ useRouter: () => mockRouter }));
 jest.mock('@/lib/logger-client', () => ({ logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn(), debug: jest.fn() } }));
 
 const domain = (host: string, status: string) => ({
@@ -53,10 +56,13 @@ describe('SiteDomains', () => {
     expect(fetchMock).toHaveBeenLastCalledWith('/api/studio/site-domains/ch1', expect.objectContaining({ method: 'POST', body: JSON.stringify({ host: 'blog.example.org' }) }));
   });
 
-  it('says own domains are not available yet while SaaS is off', async () => {
-    fetchMock.mockImplementationOnce(() => no('saas_unavailable', 503));
-    render(<SiteDomains channelId="ch1" locale="en" />);
-    expect(await screen.findByTestId('site-domains-unavailable')).toHaveTextContent("aren't available yet");
+  it.each([['saas_unavailable', 503], ['feature_off', 404]])('renders nothing and re-reads the page when the feature is off (%s)', async (code, status) => {
+    mockRefresh.mockClear();
+    fetchMock.mockImplementationOnce(() => no(code, status));
+    const { container } = render(<SiteDomains channelId="ch1" locale="en" />);
+    await waitFor(() => expect(mockRefresh).toHaveBeenCalledTimes(1));
+    expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByText(/available/i)).toBeNull();
   });
 
   it('explains a taken domain in words', async () => {
@@ -79,10 +85,12 @@ describe('SiteDomains', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('only test domains ending in qa-sites.alummahnow.com');
   });
 
-  it('a plan without own domains says so', async () => {
-    fetchMock.mockImplementationOnce(() => ok(view([], 0)));
+  it('no own domains allowed any more: existing ones stay manageable, no add form and no plan text', async () => {
+    fetchMock.mockImplementationOnce(() => ok(view([domain('www.example.com', 'live')], 0)));
     render(<SiteDomains channelId="ch1" locale="en" />);
-    expect(await screen.findByTestId('site-domains-not-included')).toBeInTheDocument();
+    expect(await screen.findByTestId('site-domain')).toBeInTheDocument();
+    expect(screen.queryByTestId('site-domain-add')).toBeNull();
+    expect(screen.queryByText(/plan/i)).toBeNull();
   });
 
   it('removes through the in-app dialog, never window.confirm', async () => {

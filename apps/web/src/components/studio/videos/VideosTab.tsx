@@ -1,5 +1,6 @@
 'use client';
 
+import { refreshFeatures, useFeatures } from '@/hooks/useFeatures';
 import { useVideoCategories } from '@/hooks/useVideoCategories';
 import { pickerCategories } from '@/lib/api/categories';
 import { copyText } from '@/lib/share/copy';
@@ -78,6 +79,8 @@ export function VideosTab({ locale, channelId, role }: Props) {
   const [pendingDelete, setPendingDelete] = useState<Pending>(null);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [bulkDialog, setBulkDialog] = useState<'playlist' | 'schedule' | null>(null);
+  // Hidden when off: bulk scheduling only while features.bulkSchedule is on for this channel
+  const bulkScheduleOn = useFeatures(channelId).features.bulkSchedule;
   const [currentDate, setCurrentDate] = useState(new Date());
   const [search, setSearch] = useState(query.q);
 
@@ -241,7 +244,10 @@ export function VideosTab({ locale, channelId, role }: Props) {
   const finishBulk = async (summary: BulkSummary | LimitRefusal | null) => {
     setBulkDialog(null);
     if (isLimitRefusal(summary)) {
-      setNotice(limitRefusalMessage(t.studio.limits, summary, locale));
+      const message = limitRefusalMessage(t.studio.limits, summary, locale);
+      // A feature that is off has no words: re-read the features and its button goes
+      if (message) setNotice(message);
+      else void refreshFeatures(channelId);
       return;
     }
     if (!summary) setNotice(text.actionFailed);
@@ -409,7 +415,7 @@ export function VideosTab({ locale, channelId, role }: Props) {
           <span className="text-sm font-medium">{text.bulk.selected.replace('{count}', numberFmt.format(selected.size))}</span>
           {canBulkEdit && <Button variant="outline" onClick={() => setBulkEditOpen(true)} className="min-h-11" data-testid="studio-bulk-edit">{text.bulk.edit}</Button>}
           {can(role, 'playlist.manage') && <Button variant="outline" onClick={() => setBulkDialog('playlist')} disabled={overOtherLimit} className="min-h-11" data-testid="studio-bulk-playlist">{text.bulk.addToPlaylist}</Button>}
-          {can(role, 'video.schedule') && <Button variant="outline" onClick={() => setBulkDialog('schedule')} disabled={overOtherLimit} className="min-h-11">{text.bulk.schedule}</Button>}
+          {can(role, 'video.schedule') && bulkScheduleOn && <Button variant="outline" onClick={() => setBulkDialog('schedule')} disabled={overOtherLimit} className="min-h-11">{text.bulk.schedule}</Button>}
           {canBulkDelete && <Button variant="outline" onClick={() => setPendingDelete({ ids: [...selected] })} disabled={overOtherLimit} className="min-h-11" data-testid="studio-bulk-delete">{text.bulk.delete}</Button>}
           {allSelected && cursor && canBulkEdit && selected.size < MAX_BULK_EDIT_SELECTION && (
             <Button variant="ghost" onClick={() => void selectAllMatching()} disabled={selectingAll} className="min-h-11" data-testid="studio-select-all-matching">
@@ -565,7 +571,7 @@ export function VideosTab({ locale, channelId, role }: Props) {
         channelId={channelId}
         videos={items.filter((video) => selected.has(video.id)).map(toPicked)}
       />
-      <BulkScheduleDialog open={bulkDialog === 'schedule'} videoIds={[...selected]} onOpenChange={(open) => setBulkDialog(open ? 'schedule' : null)} onDone={finishBulk} />
+      <BulkScheduleDialog open={bulkScheduleOn && bulkDialog === 'schedule'} videoIds={[...selected]} onOpenChange={(open) => setBulkDialog(open ? 'schedule' : null)} onDone={finishBulk} />
 
       <AppealDialog open={appealFor !== null} onOpenChange={(open) => { if (!open) setAppealFor(null); }} onSubmit={submitAppeal} />
 

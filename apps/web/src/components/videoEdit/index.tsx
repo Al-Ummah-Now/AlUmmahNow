@@ -19,6 +19,7 @@ import { getInitialEditMetadata, normalizeTag, haveTagsChanged } from './edit-me
 import { applySuggestion, formText, newDraftKey, pickCategory, type CategoryFormState, type CategorySuggestionView } from '@/lib/category-suggestion/form';
 import { getCategorySuggestion } from '@/lib/api/category-suggestion-client';
 import { useCategorySuggestion } from '@/hooks/useCategorySuggestion';
+import { useFeatures } from '@/hooks/useFeatures';
 import VideoPreview from '@/components/videoPreview/index';
 import VideoPreviewRTL from '@/components/videoPreview/rtl/index';
 import ThumbnailSelector from './ThumbnailSelector';
@@ -125,13 +126,16 @@ export default function VideoEdit({
   }));
   const [categoryDraftKey] = useState(() => newDraftKey('edit'));
   const [storedSuggestion, setStoredSuggestion] = useState<CategorySuggestionView | null>(null);
+  // Hidden when off: no AI category hint unless features.aiCategorySuggest is on
+  const aiCategoryOn = useFeatures(video.channelId || channelId || null).features.aiCategorySuggest;
   useEffect(() => {
+    if (!aiCategoryOn) return;
     let cancelled = false;
     getCategorySuggestion({ videoId: video.id })
       .then((s) => { if (!cancelled) setStoredSuggestion(s); })
       .catch((err) => logger.warn('[VideoEdit] Category suggestion not loaded', { videoId: video.id, error: err instanceof Error ? err.message : String(err) }));
     return () => { cancelled = true; };
-  }, [video.id]);
+  }, [video.id, aiCategoryOn]);
   const initialText = useMemo(
     () => JSON.stringify(formText({ titleEn: video.titleLocalized?.en || video.title || '', titleAr: video.titleLocalized?.ar || '', descriptionEn: video.descriptionLocalized?.en || video.description || '', descriptionAr: video.descriptionLocalized?.ar || '', tags: initialMetadata.tags })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -145,10 +149,10 @@ export default function VideoEdit({
   const { suggestion: liveSuggestion, loading: categorySuggesting } = useCategorySuggestion({
     draftKey: categoryDraftKey,
     text: categoryText,
-    enabled: textChanged && !categoryState.touched,
+    enabled: aiCategoryOn && textChanged && !categoryState.touched,
     channelId: video.channelId || channelId,
   });
-  const categorySuggestion = (textChanged ? liveSuggestion : null) ?? storedSuggestion;
+  const categorySuggestion = aiCategoryOn ? ((textChanged ? liveSuggestion : null) ?? storedSuggestion) : null;
   useEffect(() => {
     setCategoryState((prev) => applySuggestion(prev, categorySuggestion));
   }, [categorySuggestion]);

@@ -93,7 +93,6 @@ export function VideoAnalyticsView({ videoId }: { videoId: string }) {
             <Card title={d.comments} value={fmt(state.data.comments)} icon="message" />
             <Card title={d.overallEngagementRate} value={formatPercent(locale, (state.data.engagementRate || 0) / 100, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} icon="trending" />
           </div>
-          <p className="mt-8 text-sm text-gray-500 dark:text-gray-400">{d.retentionComingSoon}</p>
         </>
       )}
     </div>
