@@ -309,6 +309,12 @@ export const STUDIO_EN = {
     totals: { title: 'Channel totals', views: 'Lifetime views', subscribers: 'Subscribers', videos: 'Videos', last28: 'Views, last {days} days' },
     quick: { title: 'Quick links', upload: 'Upload', goLive: 'Go live', newPost: 'New post', customise: 'Customise' },
     welcome: { title: 'Welcome to your Studio', body: 'Upload a video to get started.', upload: 'Upload your first video' },
+    inviteWelcome: {
+      title: 'Welcome to Al Ummah Now',
+      studio: 'Your account and channel are ready: an admin set them up for you. This is your Studio, where you upload videos and manage your channel.',
+      account: 'Your account is ready: an admin set it up for you. Here you can change your profile, privacy and upload defaults.',
+      dismiss: 'Dismiss',
+    },
     moderator: { title: 'Comments', body: 'You can review comments on this channel.' },
   },
   limits: {
@@ -840,6 +846,12 @@ export const STUDIO_AR: StudioTranslations = {
     totals: { title: 'إجماليات القناة', views: 'إجمالي المشاهدات', subscribers: 'المشتركون', videos: 'المرئيات', last28: 'المشاهدات، آخر {days} يومًا' },
     quick: { title: 'روابط سريعة', upload: 'رفع', goLive: 'بث مباشر', newPost: 'منشور جديد', customise: 'تخصيص' },
     welcome: { title: 'مرحبًا بك في الاستوديو', body: 'ارفع مرئيًا للبدء.', upload: 'ارفع أول مرئي لك' },
+    inviteWelcome: {
+      title: 'مرحبًا بك في الأمة الآن',
+      studio: 'حسابك وقناتك جاهزان: أعدّهما لك أحد المشرفين. هذا هو الاستوديو، ومنه ترفع المرئيات وتدير قناتك.',
+      account: 'حسابك جاهز: أعدّه لك أحد المشرفين. من هنا يمكنك تعديل ملفك الشخصي وخصوصيتك وإعدادات الرفع الافتراضية.',
+      dismiss: 'إغلاق',
+    },
     moderator: { title: 'التعليقات', body: 'يمكنك مراجعة التعليقات في هذه القناة.' },
   },
   limits: {

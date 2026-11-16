@@ -630,12 +630,31 @@ export function videosWebOrigin(env: { VIDEOS_WEB_URL?: string; ADMIN_WEB_URL?: 
  * the home page in the invite's language. VIDEOS_WEB_URL if set, else the
  * admin host with admin. → videos. (admin.qa.alummahnow.net → videos.qa…).
  */
-export function signInUrl(env: { VIDEOS_WEB_URL?: string; ADMIN_WEB_URL?: string }, locale: 'en' | 'ar'): string | null {
+/**
+ * Where the invite's first sign-in lands (the "work"): the Studio of the
+ * invited channel for a creator with channels (/studio/go picks their
+ * channel), else the account settings; with the first-run welcome
+ * (web InviteWelcome, `?welcome=invite`).
+ */
+export function inviteLandingPath(locale: 'en' | 'ar', opts: { role: string; hasChannels: boolean }): string {
+  const page = opts.role === 'creator' && opts.hasChannels ? 'studio/go/dashboard' : 'settings';
+  return `/${locale}/${page}?welcome=invite`;
+}
+
+/**
+ * The invite link's continueUrl: the videos web sign-in, back to the landing.
+ * No prompt: Auth signs the invitee in on Continue, and the sign-in finishes by
+ * single sign-on.
+ */
+export function signInUrl(
+  env: { VIDEOS_WEB_URL?: string; ADMIN_WEB_URL?: string },
+  locale: 'en' | 'ar',
+  landing: string = `/${locale}`,
+): string | null {
   const base = videosWebOrigin(env);
   if (!base) return null;
   const url = new URL('/api/auth/login', base);
-  url.searchParams.set('prompt', 'login');
   url.searchParams.set('locale', locale);
-  url.searchParams.set('return', `/${locale}`);
+  url.searchParams.set('return', landing);
   return url.toString();
 }

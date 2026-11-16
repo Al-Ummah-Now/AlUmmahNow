@@ -7,6 +7,11 @@ const list = jest.fn();
 const channel = jest.fn();
 const video = jest.fn();
 
+jest.mock('next/navigation', () => ({
+  usePathname: () => '/en/studio/c1/dashboard',
+  useRouter: () => ({ replace: jest.fn(), push: jest.fn() }),
+  useSearchParams: () => new URLSearchParams(''),
+}));
 jest.mock('next/image', () => ({ __esModule: true, default: () => <span /> }));
 jest.mock('@/hooks/useLanguage', () => ({ useLanguage: () => ({ t: { studio: mockStudio } }) }));
 jest.mock('@/lib/logger-client', () => ({ logger: { error: jest.fn() } }));

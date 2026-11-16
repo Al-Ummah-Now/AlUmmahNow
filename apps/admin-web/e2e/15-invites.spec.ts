@@ -5,10 +5,12 @@
  *    creator" form with a new channel. The user exists at once: their page
  *    opens with the "Invited" badge and owns the channel.
  * 2. "Copy invite link" shows the single-use link in an in-app dialog.
- * 3. In a fresh browser the person opens the link, continues to the videos
- *    sign-in, creates their password (the code comes from auth's E2E sink)
- *    and lands signed in: their token's user id is the invited id, and the
- *    channel made before they ever signed in is theirs.
+ * 3. In a fresh browser the person opens the link and presses Continue: auth
+ *    signs them in directly (no password, no code) and offers a passkey, which
+ *    they skip. They land in the Studio of the invited channel with the
+ *    first-run welcome: their token's user id is the invited id, and the
+ *    channel made before they ever signed in is theirs. (An issuer from before
+ *    the direct sign-in still has them sign up with an emailed code.)
  * 4. Inviting the same email again is refused with the existing account offered.
  *
  * Skips while QA's admin-api has no /api/invites (PR runs hit QA, which
@@ -139,20 +141,37 @@ test.describe('invite creators', () => {
       await expect(page.getByText(EMAIL)).toBeVisible();
       await shot(page, testInfo, '5-invite-link-page');
       await page.locator('button[data-action="accept-invite"]').click();
-      await expect(page).toHaveURL(new RegExp(`^${escapeRe(OPENAUTH_URL)}`), { timeout: 30_000 });
-      await shot(page, testInfo, '6-sign-in-page');
-      await page.click('a[href*="register"]');
-      await page.fill('input[name="email"]', EMAIL);
-      await fillSecret(page.locator('input[name="password"]'), PASSWORD);
-      await fillSecret(page.locator('input[name="repeat"]'), PASSWORD);
-      await page.click('button[data-component="button"]:not([type="button"])');
-      await expect(page.locator('input[name="code"]')).toBeVisible({ timeout: 20_000 });
-      await fillSecret(page.locator('input[name="code"]'), await sinkCode(EMAIL));
-      await page.click('button[data-component="button"]:not([type="button"])');
-      await expect(page).toHaveURL(new RegExp(`^${escapeRe(WEB_APP_URL)}/en`), { timeout: 30_000 });
+      // Continue signs the invited account in directly and offers a passkey (Skip); an issuer that
+      // predates that (AlUmmahNowAuth docs/USER_INVITES.md) still sends the person to sign up
+      const offer = page.locator('[data-page="passkey"]');
+      const signIn = page.locator('a[href*="register"]');
+      await expect(offer.or(signIn).or(page.getByTestId('invite-welcome'))).toBeVisible({ timeout: 30_000 });
+      if (await signIn.isVisible()) {
+        testInfo.annotations.push({ type: 'issuer', description: 'issuer predates the invite direct sign-in: signed up with a password' });
+        await shot(page, testInfo, '6-sign-in-page');
+        await signIn.click();
+        await page.fill('input[name="email"]', EMAIL);
+        await fillSecret(page.locator('input[name="password"]'), PASSWORD);
+        await fillSecret(page.locator('input[name="repeat"]'), PASSWORD);
+        await page.click('button[data-component="button"]:not([type="button"])');
+        await expect(page.locator('input[name="code"]')).toBeVisible({ timeout: 20_000 });
+        await fillSecret(page.locator('input[name="code"]'), await sinkCode(EMAIL));
+        await page.click('button[data-component="button"]:not([type="button"])');
+      } else if (await offer.isVisible()) {
+        // No password anywhere on the way in
+        await expect(page.locator('input[type="password"]')).toHaveCount(0);
+        await shot(page, testInfo, '6-passkey-offer');
+        await page.locator('[data-page="passkey"] button[data-action="skip"]').click();
+      }
+      // Lands where the work is: the Studio of the invited channel, with the first-run welcome
+      await expect(page).toHaveURL(new RegExp(`^${escapeRe(WEB_APP_URL)}/en/studio/${escapeRe(state.channelId!)}/dashboard\\?welcome=invite`), { timeout: 30_000 });
+      await expect(page.getByTestId('invite-welcome')).toBeVisible({ timeout: 30_000 });
       // The home page fills in after the redirect: settle before the screenshot
       await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => undefined);
       await shot(page, testInfo, '7-signed-in');
+      await page.getByTestId('invite-welcome-dismiss').click();
+      await expect(page.getByTestId('invite-welcome')).toHaveCount(0);
+      expect(new URL(page.url()).searchParams.get('welcome')).toBeNull();
 
       const token = await page.evaluate(async () => (await (await fetch('/api/auth/token', { credentials: 'same-origin' })).json()) as { accessToken?: string; userId?: string });
       expect(token.userId, 'signed in to the pre-provisioned account').toBe(state.userId);

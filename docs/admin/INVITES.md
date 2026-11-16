@@ -4,7 +4,8 @@ An admin invites someone by email: **Users → Invite creator**
 (`/users/invites/new`). The person's account exists immediately, so the admin
 can give it a plan and channels straight away. When the person first signs in
 with that email, they land in that account with everything already in place.
-Nothing else is needed: "they log in and that's it".
+Nothing else is needed: the invite link signs them in, with no password and
+no second code.
 
 ```
 admin-web form ──▶ admin-api POST /api/invites
@@ -16,11 +17,21 @@ admin-web form ──▶ admin-api POST /api/invites
                      auth POST /provisioning/invites (client credentials, invites:provision)
                        users row status 'invited' (same id), email unverified, bilingual email with a single-use link
                                      ▼
-person: link → Continue → videos sign-in → "Create account" (emailed code) ─▶ auth onSuccess finds the
-invited row by email → claims it (status active, email verified) → token carries usr_… → channels are theirs
+person: link → Continue → auth claims the account (active, email verified) and signs it in (active account
+of the browser; others untouched) → "add a passkey" or Skip → videos sign-in finishes by single sign-on →
+Studio of the invited channel (else /settings) with a first-run welcome → token carries usr_… → channels are theirs
 ```
 
 The auth side is documented in AlUmmahNowAuth `docs/USER_INVITES.md`.
+
+## Where the invite lands
+
+`continueUrl` (`signInUrl` + `inviteLandingPath` in `apps/admin-api/src/lib/invites.ts`) is the videos
+sign-in without `prompt`, returning to `/{locale}/studio/go/dashboard?welcome=invite` for a creator
+with channels (the Studio picks their channel), else `/{locale}/settings?welcome=invite`. The web
+`InviteWelcome` panel shows once while `?welcome=invite` is in the URL; Dismiss removes it. The plan
+(creator tier) is set at invite time, so it is already in place. Invites created before this change
+keep their old `continueUrl`; Auth drops `prompt` from it, so they still sign in directly.
 
 ## Why the ids are minted here
 
@@ -50,7 +61,7 @@ is the same id.
 | Role | Creator (default) or Viewer. |
 | Plan | A creator tier from the admin-managed tiers (`GET /creator-tiers`), never a hard-coded list. Needs `creators:manage`. |
 | Scholar | Optional. Adds the auth role "Scholar", from auth's allow-list. |
-| Link expiry | 1–90 days, default 14. After expiry the person can still sign in with the email and claim the account. |
+| Link expiry | 1–90 days, default 14. An expired or used link offers "Email me a new link" while the account has no password or passkey, else Sign in. |
 | Channels | New channels (name, optional @handle; needs `channels:manage`). Existing channels are chosen with the channel picker and moved with a transfer job (needs `channels:transfer`, super admins only). |
 
 If a channel cannot be made (for example, the handle is taken), the invite is
@@ -64,7 +75,7 @@ Statuses:
 - **Failed**: shows the error. **Retry** sends it again.
 - **Invited**: the link works until a date.
 - **Signed in**.
-- **Link expired**: signing in still works.
+- **Link expired**: opening the link offers the person a fresh one.
 - **Revoked**: shows days left before it is removed, or "Queued for permanent
   deletion".
 
