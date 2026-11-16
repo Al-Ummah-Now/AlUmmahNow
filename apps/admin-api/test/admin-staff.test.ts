@@ -1,5 +1,5 @@
 /**
- * The videos admin's own staff list (admin_staff, migration 0031): recorded
+ * The videos admin's own staff list (admin_staff, migration 0034): recorded
  * from each admin token's claims, throttled, inactivated when the role is
  * gone or the account is suspended/deleted, and the contact picker's source.
  */

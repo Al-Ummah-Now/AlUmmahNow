@@ -1,5 +1,5 @@
 /**
- * Contact inbox, migration 0030: read/unread, "in progress", the bot verdict,
+ * Contact inbox, migration 0033: read/unread, "in progress", the bot verdict,
  * automatic spam, the assignee roster and bulk changes.
  */
 import { describe, it } from 'node:test';
@@ -54,13 +54,13 @@ James Washington | Founder & Project Head
 
 Note: Web platform expertise across Squarespace, Shopify, Wix, WordPress, GoDaddy etc."`;
 
-describe('migration 0030 on a database with data', () => {
+describe('migration 0033 on a database with data', () => {
   it('copies rows, maps statuses and keeps notes (foreign keys on)', async () => {
     const { DatabaseSync } = await import('node:sqlite');
     const { readFileSync } = await import('node:fs');
     const sql = new DatabaseSync(':memory:');
     sql.exec('PRAGMA foreign_keys = ON');
-    for (const f of ALL.filter((f) => f < '0030')) sql.exec(readFileSync(join(process.cwd(), 'migrations', f), 'utf8'));
+    for (const f of ALL.filter((f) => f < '0033')) sql.exec(readFileSync(join(process.cwd(), 'migrations', f), 'utf8'));
     const ins = sql.prepare(
       `INSERT INTO contact_messages (id, status, topic, name, email, message, locale, ip_hash, created_at, updated_at) VALUES (?, ?, 'general', 'N', 'n@x.org', 'hello there', 'en', 'h', '2026-11-01T00:00:00Z', '2026-11-02T00:00:00Z')`,
     );
@@ -70,7 +70,7 @@ describe('migration 0030 on a database with data', () => {
     sql.prepare(`INSERT INTO contact_notes (id, message_id, kind, body, author_id, created_at) VALUES (?, ?, ?, ?, 'adm', '2026-11-02T00:00:00Z')`).run('n1', 'b', 'reply', 'thanks');
     sql.prepare(`INSERT INTO contact_notes (id, message_id, kind, body, author_id, created_at) VALUES (?, ?, ?, ?, 'adm', '2026-11-02T00:01:00Z')`).run('n2', 'b', 'note', 'internal');
 
-    for (const f of ALL.filter((f) => f >= '0030')) sql.exec(readFileSync(join(process.cwd(), 'migrations', f), 'utf8'));
+    for (const f of ALL.filter((f) => f >= '0033')) sql.exec(readFileSync(join(process.cwd(), 'migrations', f), 'utf8'));
 
     const rows = sql.prepare('SELECT id, status, read_at, spam_reason, bot_verdict FROM contact_messages ORDER BY id').all();
     assert.deepEqual(
