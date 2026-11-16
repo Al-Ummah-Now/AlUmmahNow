@@ -12,15 +12,11 @@ import { contentSpamReason, initialSpamReason } from '../src/lib/contact';
 import {
   contactCounts,
   getContactMessage,
-  getContactStaff,
   insertContactMessage,
   insertContactNote,
   recordDelivery,
   listContactMessages,
   listContactNotes,
-  listContactStaff,
-  pruneContactStaff,
-  touchContactStaff,
   updateContactMessage,
   updateContactMessages,
 } from '../src/lib/contact-store';
@@ -194,7 +190,7 @@ describe('POST /internal/contact: verdict and automatic spam', () => {
   });
 });
 
-describe('contact store: read/unread, in progress, roster, bulk', () => {
+describe('contact store: read/unread, in progress, bulk', () => {
   it('read keeps the first read time, unread clears it; the unread count and filter follow', async () => {
     const db = sqliteD1();
     await insertContactMessage(db, msg('m1'), roomy);
@@ -240,24 +236,6 @@ describe('contact store: read/unread, in progress, roster, bulk', () => {
     assert.equal((await contactCounts(db)).closed, 2);
   });
 
-  it('the roster writes at most once a day per admin and finds by email', async () => {
-    const db = sqliteD1();
-    await touchContactStaff(db, { id: 'usr_a', email: 'amina@alummahnow.net' }, new Date('2026-11-10T09:00:00Z'));
-    await touchContactStaff(db, { id: 'usr_a', email: 'amina@alummahnow.net' }, new Date('2026-11-10T15:00:00Z'));
-    assert.equal((await getContactStaff(db, 'usr_a'))?.last_seen_at, '2026-11-10T09:00:00.000Z', 'not rewritten within a day');
-    await touchContactStaff(db, { id: 'usr_a', email: 'amina@alummahnow.net' }, new Date('2026-11-11T10:00:00Z'));
-    assert.equal((await getContactStaff(db, 'usr_a'))?.last_seen_at, '2026-11-11T10:00:00.000Z');
-    await touchContactStaff(db, { id: 'usr_b', email: 'bilal@alummahnow.net' }, new Date('2026-11-11T11:00:00Z'));
-    const now = new Date('2026-11-12T00:00:00Z');
-    assert.deepEqual((await listContactStaff(db, 'bil', 20, now)).map((r) => r.user_id), ['usr_b']);
-    assert.deepEqual((await listContactStaff(db, '', 20, now)).map((r) => r.user_id), ['usr_b', 'usr_a']);
-    assert.deepEqual(await listContactStaff(db, '', 20, new Date('2027-11-12T00:00:00Z')), [], 'not seen in 180 days');
-    assert.equal(await getContactStaff(db, 'usr_x'), null);
-    // The hourly cleanup drops entries not seen for 180 days
-    assert.equal(await pruneContactStaff(db, new Date('2027-06-01T00:00:00Z')), 2);
-    assert.equal(await getContactStaff(db, 'usr_a'), null);
-  });
-
   it('a delivered reply marks the message replied and read', async () => {
     const db = sqliteD1();
     await insertContactMessage(db, msg('m1'), roomy);
@@ -281,34 +259,50 @@ describe('contact endpoints: assign, bulk, restore, roster', () => {
       await next();
     });
     app.route('/api/contact', contactRouter as never);
-    const env = { REPORTS_DB: db };
+    // api-videos' staff lookup (GET /internal/admin/staff): the admins from the role assignments
+    const staffCalls: string[] = [];
+    const VIDEOS = {
+      fetch: async (url: string) => {
+        staffCalls.push(url);
+        const items = [
+          { id: 'usr_a', email: 'usr_a@alummahnow.net', name: 'Amina', roles: ['role_admin'] },
+          { id: 'usr_b', email: 'usr_b@alummahnow.net', name: null, roles: ['role_super_admin'] },
+        ];
+        return new Response(JSON.stringify({ success: true, result: { items } }), { headers: { 'content-type': 'application/json' } });
+      },
+    };
+    const env = { REPORTS_DB: db, VIDEOS, INTERNAL_API_KEY: 'k' };
     const request = (path: string, init: { method?: string; body?: unknown; user?: string; roles?: string } = {}) =>
       app.request(
         path,
         { method: init.method ?? 'GET', body: init.body === undefined ? undefined : JSON.stringify(init.body), headers: { 'content-type': 'application/json', 'x-test-user': init.user ?? 'usr_a', 'x-test-roles': init.roles ?? 'admin' } },
         env,
       );
-    return { db, request };
+    return { db, request, staffCalls };
   }
 
-  it('assigns only to admins on the roster; "me" and null always work', async () => {
-    const { db, request } = await appFor();
+  it('assigns only to admins who can handle messages; "me" and null always work', async () => {
+    const { db, request, staffCalls } = await appFor();
     await insertContactMessage(db, msg('m1'), roomy);
     const patch = (body: unknown, user = 'usr_a') => request('/api/contact/messages/m1', { method: 'PATCH', body, user });
-    assert.equal((await patch({ assignee: 'usr_b' })).status, 400, 'usr_b never used the inbox');
-    // usr_b opens the inbox: on the roster
-    assert.equal((await request('/api/contact/messages', { user: 'usr_b' })).status, 200);
-    const staff = (await (await request('/api/contact/staff?q=usr_b')).json()) as { result: { items: { id: string; label: string }[] } };
-    assert.deepEqual(staff.result.items.map((i) => [i.id, i.label]), [['usr_b', 'usr_b@alummahnow.net']]);
+    assert.equal((await patch({ assignee: 'usr_x' })).status, 400, 'usr_x holds no admin role');
+    // Every admin is listed, the caller first, whether or not they ever opened the inbox
+    const staff = (await (await request('/api/contact/staff')).json()) as { result: { items: { id: string; label: string; secondary: string | null }[] } };
+    assert.deepEqual(staff.result.items.map((i) => [i.id, i.label, i.secondary]), [
+      ['usr_a', 'Amina', 'me'],
+      ['usr_b', 'usr_b@alummahnow.net', null],
+    ]);
+    assert.match(staffCalls[0], /\/internal\/admin\/staff\?roles=role_super_admin%2Crole_admin/);
+    const found = (await (await request('/api/contact/staff?q=amina')).json()) as { result: { items: { id: string }[] } };
+    assert.deepEqual(found.result.items.map((i) => i.id), ['usr_a'], 'matched by name');
     assert.equal((await patch({ assignee: 'usr_b' })).status, 200);
     assert.equal((await getContactMessage(db, 'm1'))?.assignee_email, 'usr_b@alummahnow.net');
     assert.equal((await patch({ assignee: 'me' })).status, 200);
     assert.equal((await getContactMessage(db, 'm1'))?.assignee_id, 'usr_a');
     assert.equal((await patch({ assignee: null })).status, 200);
     assert.equal((await getContactMessage(db, 'm1'))?.assignee_id, null);
-    // A moderator is never put on the roster and cannot change messages
+    // Moderators cannot change messages
     assert.equal((await request('/api/contact/messages', { user: 'usr_m', roles: 'moderator' })).status, 403);
-    assert.equal(await getContactStaff(db, 'usr_m'), null);
   });
 
   it('read/unread and in progress through PATCH', async () => {

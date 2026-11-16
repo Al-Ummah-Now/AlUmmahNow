@@ -167,6 +167,48 @@ describe('admin live client', () => {
     assert.equal(h.sockets.length, 1, 'same socket');
   });
 
+  it('never sends a token about to expire: no socket, a backed-off retry, then a fresh token', async () => {
+    const h = harness([{ url: 'https://realtime.qa.example', token: 'stale', expiresAt: Math.floor(1_000_000 / 1000) + 2 }]);
+    h.client.subscribe('jobs', () => {}, () => {});
+    await flush();
+    assert.equal(h.sockets.length, 0, 'a stale ticket opens no socket');
+    assert.equal(h.ticketCalls(), 1);
+    await h.advance(999);
+    assert.equal(h.ticketCalls(), 1, 'waits the reconnect backoff');
+    await h.advance(1);
+    assert.equal(h.ticketCalls(), 2);
+    const s = await goLive(h.sockets, ['jobs']);
+    assert.equal(s.sent[0].token, 't2');
+  });
+
+  it('AUTH_EXPIRED right after re-authenticating backs off instead of looping (16-live-updates storm)', async () => {
+    const h = harness();
+    h.client.subscribe('jobs', () => {}, () => {});
+    const s = await goLive(h.sockets, ['jobs']);
+    // The worker keeps refusing the token: first retry at once, then 1 s, 2 s, …
+    s.receive({ type: 'error', code: 'AUTH_EXPIRED' });
+    await flush();
+    assert.equal(h.ticketCalls(), 2);
+    s.receive({ type: 'authenticated' });
+    s.receive({ type: 'error', code: 'AUTH_EXPIRED' });
+    await flush();
+    assert.equal(h.ticketCalls(), 2, 'no immediate second re-authentication');
+    await h.advance(1000);
+    assert.equal(h.ticketCalls(), 3);
+    s.receive({ type: 'authenticated' });
+    s.receive({ type: 'error', code: 'AUTH_EXPIRED' });
+    await h.advance(1999);
+    assert.equal(h.ticketCalls(), 3);
+    await h.advance(1);
+    assert.equal(h.ticketCalls(), 4);
+    // Once a subscription holds, the next expiry re-authenticates at once again
+    s.receive({ type: 'authenticated' });
+    s.receive({ type: 'subscribed', channel: 'admin:jobs' });
+    s.receive({ type: 'error', code: 'AUTH_EXPIRED' });
+    await flush();
+    assert.equal(h.ticketCalls(), 5);
+  });
+
   it('a topic the role may not follow stays not live; the others still subscribe', async () => {
     const h = harness();
     const jobsLive: boolean[] = [];

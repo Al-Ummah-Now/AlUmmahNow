@@ -1027,7 +1027,7 @@ const ar: Messages = {
     assignTo: 'إسناد إلى',
     assignPlaceholder: 'ابحث عن مشرف بالبريد الإلكتروني',
     staffCount: 'المشرفون الذين يعالجون الرسائل: {count}',
-    staffEmpty: 'لا مشرفين بعد. يظهر المشرف هنا بعد أن يفتح صندوق الرسائل.',
+    staffEmpty: 'لا يوجد حساب بدور مشرف أو مشرف عام.',
     staffNoMatch: 'لا مشرف يطابق «{query}»',
     botCheck: 'فحص الروبوتات',
     verdictNone: 'غير مسجَّل (أُرسلت قبل حفظ نتيجة الفحص)',

@@ -4,16 +4,16 @@
  * stack.
  *
  * Data: three messages of this run in the reports DB (two unread, one filed
- * as spam by the content rule with its bot verdict) and a second admin on the
- * inbox's assignee roster, written through the stack's control API; all of it
- * is removed afterwards, pass or fail. The nav badge is a global count, so the
+ * as spam by the content rule with its bot verdict), written through the
+ * stack's control API and removed afterwards, pass or fail. Assignees are the
+ * run's own admin accounts. The nav badge is a global count, so the
  * spec runs in the shared-state project and compares counts before and after.
  */
 import crypto from 'node:crypto';
 import type { Page } from '@playwright/test';
 import { test, expect } from './support/fixtures';
 import { adminApi } from './support/api';
-import { E2E_ENTITY_PREFIX, LOCAL_STACK } from './support/env';
+import { E2E_ENTITY_PREFIX, LOCAL_STACK, accounts } from './support/env';
 import { stackSql } from './support/local-stack';
 import { expectNoAxeViolations, horizontalOverflow, setPreferences } from './support/ui';
 
@@ -21,8 +21,6 @@ const REPORTS = 'al-ummah-now-reports';
 const hex = crypto.randomBytes(6).toString('hex');
 const id = (n: string) => `${E2E_ENTITY_PREFIX}inbox-${n}-${hex}`;
 const [m1, m2, m3] = [id('a'), id('b'), id('spam')];
-const staffId = `${E2E_ENTITY_PREFIX}inbox-staff-${hex}`;
-const staffEmail = `inbox-staff-${hex}@e2e.example`;
 const inbox = `/contact?q=${hex}`;
 
 const row = (page: Page, messageId: string) => page.locator(`[data-testid="contact-row"][data-message-id="${messageId}"]`);
@@ -46,7 +44,6 @@ test.describe('contact inbox', () => {
        ${insert(m2, `Inbox Bilal ${hex}`, `How do I change my channel name ${hex}?`, { minutes: 2 })},
        ${insert(m3, `Inbox Pitch ${hex}`, `We can grow your online visibility and rank higher on Google ${hex}`, { status: 'spam', spam: 'content', verdict: 'off', minutes: 1 })}`,
     );
-    await stackSql(REPORTS, `INSERT INTO contact_staff (user_id, email, last_seen_at) VALUES ('${staffId}', '${staffEmail}', '${new Date().toISOString()}')`);
   });
 
   test.afterAll(async () => {
@@ -54,12 +51,11 @@ test.describe('contact inbox', () => {
     const ids = `'${m1}', '${m2}', '${m3}'`;
     await stackSql(REPORTS, `DELETE FROM contact_notes WHERE message_id IN (${ids})`);
     await stackSql(REPORTS, `DELETE FROM contact_messages WHERE id IN (${ids})`);
-    await stackSql(REPORTS, `DELETE FROM contact_staff WHERE user_id = '${staffId}'`);
     // The delete and restore audit rows (lib/trash-audit.ts) of these messages
     await stackSql(REPORTS, `DELETE FROM site_settings_log WHERE key LIKE '%${hex}%'`);
   });
 
-  test('INBOX-01 the whole row opens the message, which reads it; the badge counts unread only and clears without a reload', async ({ page }) => {
+  test('INBOX-01 the whole row opens the message, which reads it; the badge counts unread only and follows changes live on any page', async ({ page }) => {
     // The admin live socket's subscription replies, to publish only once the page follows contact changes
     const subscriptions: string[] = [];
     page.on('websocket', (ws) =>
@@ -96,8 +92,12 @@ test.describe('contact inbox', () => {
     await expect(page.getByTestId('contact-bot-verdict')).toHaveText('Passed');
     await expect.poll(() => badgeCount(page)).toBe(before - 1);
 
-    // Another admin marks it unread: the badge follows on this page without a reload
-    await expect.poll(() => subscriptions.at(-1), { timeout: 15_000, message: 'the page follows admin:moderation' }).toBe('subscribed');
+    // Another admin marks it unread while this admin is on another page (the dashboard): the
+    // badge follows there too, without a reload
+    const seen = subscriptions.length;
+    await page.goto('/dashboard');
+    await expect.poll(() => badgeCount(page)).toBe(before - 1);
+    await expect.poll(() => subscriptions.slice(seen).at(-1), { timeout: 15_000, message: 'the dashboard follows admin:moderation' }).toBe('subscribed');
     await page.evaluate(() => { (window as unknown as { __sameDocument?: boolean }).__sameDocument = true; });
     const res = await adminApi(`/api/contact/messages/${encodeURIComponent(m1)}`, { method: 'PATCH', body: JSON.stringify({ read: false }) });
     expect(res.status).toBe(200);
@@ -117,11 +117,14 @@ test.describe('contact inbox', () => {
     await page.getByTestId('contact-save-status').click();
     await expect(page.getByTestId('contact-message')).toHaveAttribute('data-status', 'in_progress');
 
-    // The picker lists the roster before anything is typed, and finds by email
-    const picker = page.getByTestId('contact-assignee-picker-input');
-    await picker.fill(`inbox-staff-${hex}`);
-    await page.locator(`[data-testid="contact-assignee-picker-option"][data-id="${staffId}"]`).click();
-    await expect(page.getByTestId('contact-assignee')).toHaveText(staffEmail);
+    // The picker lists every account that can handle messages (the run's admin and super admin,
+    // from their roles; neither opened this message) and finds one by email
+    const superadmin = accounts.superadmin.email.toLowerCase();
+    await page.getByTestId('contact-assignee-picker-input').fill(superadmin.split('@')[0]);
+    const option = page.locator('[data-testid="contact-assignee-picker-option"]').filter({ hasText: superadmin });
+    await expect(option).toHaveCount(1);
+    await option.click();
+    await expect(page.getByTestId('contact-assignee')).toHaveText(superadmin);
 
     await page.goto(`/contact/${encodeURIComponent(m3)}`);
     await expect(page.getByTestId('contact-spam-reason')).toHaveAttribute('data-reason', 'content');

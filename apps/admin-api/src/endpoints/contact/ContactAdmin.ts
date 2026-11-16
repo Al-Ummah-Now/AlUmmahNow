@@ -19,9 +19,6 @@ import {
   updateContactMessage,
   updateContactMessages,
   restoreContactMessage,
-  touchContactStaff,
-  listContactStaff,
-  getContactStaff,
   deliveryStatus,
   recordDelivery,
   type ContactNoteRow,
@@ -34,6 +31,21 @@ import { listContactQueue } from '../../lib/queue/contact-queue';
 import { assigneeParam, queueQuery, toFilters } from '../../lib/queue/schema';
 import { enqueueContactMail, reportContactMailFailure, resolveContactMailItem } from '../../lib/contact-mail-queue';
 import { publishAdminLiveInBackground } from '../../lib/admin-live';
+import { callVideos, type VideosClientEnv } from '../../lib/content/videosClient';
+
+/** Auth RBAC role ids whose holders have contact:manage (lib/roles.ts PERMISSIONS: admins and super admins). */
+const CONTACT_STAFF_ROLES = 'role_super_admin,role_admin';
+
+interface StaffAccount { id: string; email: string; name: string | null }
+
+/**
+ * Everyone who can handle contact messages: every live account holding an admin role, read by
+ * api-videos from the role assignments (GET /internal/admin/staff), not only those who opened the inbox.
+ */
+async function contactStaff(env: VideosClientEnv): Promise<StaffAccount[]> {
+  const { items } = await callVideos<{ items: StaffAccount[] }>(env, '/staff', { query: { roles: CONTACT_STAFF_ROLES } });
+  return items;
+}
 
 /** Every change to a message refreshes the inbox, its badge and open detail pages (admin live events). */
 function announce(c: AppContext): void {
@@ -45,26 +57,17 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const IdParams = z.object({ id: z.string().min(1).max(64) });
 
 abstract class ContactRoute extends AdminRoute {
-  /** An admin who can handle messages goes on the assignee roster (at most one write a day). */
-  protected async seen(c: AppContext): Promise<void> {
-    if (!hasPermission(this.getRoles(c), 'contact:manage')) return;
-    const auth = this.getAuth(c);
-    await touchContactStaff(c.env.REPORTS_DB, { id: auth.userId, email: auth.email || null }, new Date()).catch((error: unknown) =>
-      logger.warn('[Contact] Staff roster not updated', { error: error instanceof Error ? error.message : String(error) }),
-    );
-  }
-
   /**
-   * The assignee a body names: 'me', a user id on the roster, or null. A
-   * string that is not on the roster is refused (null result, ok false).
+   * The assignee a body names: 'me', the id of an admin who can handle
+   * contact messages, or null. Anyone else is refused (ok false).
    */
   protected async assigneeFor(c: AppContext, value: string | null | undefined): Promise<{ ok: true; assignee: { id: string; email: string | null } | null | undefined } | { ok: false }> {
     if (value === undefined) return { ok: true, assignee: undefined };
     if (value === null) return { ok: true, assignee: null };
     const auth = this.getAuth(c);
     if (value === 'me' || value === auth.userId) return { ok: true, assignee: { id: auth.userId, email: auth.email || null } };
-    const staff = await getContactStaff(c.env.REPORTS_DB, value);
-    return staff ? { ok: true, assignee: { id: staff.user_id, email: staff.email } } : { ok: false };
+    const staff = (await contactStaff(c.env as never)).find((s) => s.id === value);
+    return staff ? { ok: true, assignee: { id: staff.id, email: staff.email } } : { ok: false };
   }
 
   /** A 403 response when the caller lacks the permission, otherwise null. */
@@ -100,7 +103,6 @@ export class ContactList extends ContactRoute {
     const denied = this.deny(c, 'contact:read');
     if (denied) return denied;
     const { query } = await this.getValidatedData<typeof this.schema>();
-    await this.seen(c);
     const result = await listContactMessages(c.env.REPORTS_DB, { ...query, q: query.q || undefined, viewerId: this.getUserId(c) });
     return { success: true, result: { ...result, limit: query.limit, offset: query.offset } };
   }
@@ -155,7 +157,6 @@ export class ContactGet extends ContactRoute {
     const denied = this.deny(c, 'contact:read');
     if (denied) return denied;
     const { params } = await this.getValidatedData<typeof this.schema>();
-    await this.seen(c);
     const thread = await getContactThread(c.env.REPORTS_DB, params.id);
     if (!thread) return c.json({ success: false, error: 'Message not found' }, 404);
     return { success: true, result: thread };
@@ -167,7 +168,7 @@ export class ContactUpdate extends ContactRoute {
     tags: TAGS,
     summary: 'Change a contact message: status, read/unread, assignee',
     description:
-      'status: open, in_progress, replied, closed or spam. read: true marks it read (keeps the first read time), false unread. assignee: "me", the id of an admin on the inbox roster (GET /api/contact/staff), or null to unassign. Needs contact:manage.',
+      'status: open, in_progress, replied, closed or spam. read: true marks it read (keeps the first read time), false unread. assignee: "me", the id of an admin who can handle contact messages (GET /api/contact/staff), or null to unassign. Needs contact:manage.',
     request: {
       params: IdParams,
       body: {
@@ -290,19 +291,21 @@ export class ContactStaff extends ContactRoute {
   schema = addAuthToSchema({
     tags: TAGS,
     summary: 'Admins a contact message can be assigned to',
-    description: 'The inbox roster: admins with contact:manage who used the inbox in the last 180 days, matched by email. Shaped as autocomplete suggestions. Needs contact:manage.',
-    request: { query: z.object({ q: z.string().trim().max(200).default(''), limit: z.coerce.number().int().min(1).max(50).default(20) }) },
+    description: 'Every account that can handle contact messages (admins and super admins, from the role assignments), matched by name or email. Shaped as autocomplete suggestions. Needs contact:manage.',
+    request: { query: z.object({ q: z.string().trim().max(200).default(''), limit: z.coerce.number().int().min(1).max(200).default(200) }) },
     responses: { '200': { description: '{ items: { id, label, secondary }[] }' } },
   });
 
   async handle(c: AppContext) {
     const denied = this.deny(c, 'contact:manage');
     if (denied) return denied;
-    await this.seen(c);
     const { query } = await this.getValidatedData<typeof this.schema>();
-    const rows = await listContactStaff(c.env.REPORTS_DB, query.q, query.limit, new Date());
     const me = this.getUserId(c);
-    const items = rows.map((r) => ({ kind: 'user' as const, id: r.user_id, label: r.email ?? r.user_id, secondary: r.user_id === me ? 'me' : null, imageUrl: null }));
+    const q = query.q.toLocaleLowerCase();
+    const staff = (await contactStaff(c.env as never)).filter((s) => !q || s.email.toLocaleLowerCase().includes(q) || (s.name ?? '').toLocaleLowerCase().includes(q) || s.id === query.q);
+    // The caller first, then by name; label = name (else email), email beside it
+    staff.sort((a, b) => Number(b.id === me) - Number(a.id === me));
+    const items = staff.slice(0, query.limit).map((s) => ({ kind: 'user' as const, id: s.id, label: s.name ?? s.email, secondary: s.id === me ? 'me' : s.name ? s.email : null, imageUrl: null }));
     return { success: true, result: { items } };
   }
 }

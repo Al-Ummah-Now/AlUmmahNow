@@ -1,9 +1,9 @@
 'use client';
 
 /**
- * Who handles a contact message: a live autocomplete over the inbox roster
- * (admins who can handle messages, GET /api/contact/staff), opening with the
- * roster before anything is typed. Never a raw id field.
+ * Who handles a contact message: a live autocomplete over everyone who can
+ * handle contact messages (admins and super admins, GET /api/contact/staff),
+ * opening with all of them before anything is typed. Never a raw id field.
  */
 import { useCallback } from 'react';
 import { useLanguage } from '@/i18n/I18nProvider';
@@ -27,8 +27,8 @@ export function AssigneePicker({
     async (q) => {
       try {
         const { items } = await searchContactStaff(q);
-        // "me" marks the caller's own row
-        return { items: items.map((i) => ({ ...i, secondary: i.secondary === 'me' ? t('contact.you') : null })), next: null };
+        // "me" marks the caller's own row; the others show their email under the name
+        return { items: items.map((i) => ({ ...i, secondary: i.secondary === 'me' ? t('contact.you') : i.secondary })), next: null };
       } catch (error) {
         logger.warn('[contact] Staff search failed', { error: error instanceof Error ? error.message : String(error) });
         throw error;

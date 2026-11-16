@@ -92,12 +92,3 @@ CREATE INDEX IF NOT EXISTS idx_contact_messages_handled ON contact_messages (han
 -- The nav badge and the Unread view: unread live messages that are not spam
 CREATE INDEX IF NOT EXISTS idx_contact_messages_unread ON contact_messages (created_at DESC) WHERE read_at IS NULL AND deleted_at IS NULL AND status <> 'spam';
 CREATE INDEX IF NOT EXISTS idx_contact_notes_message ON contact_notes (message_id, created_at);
-
--- Who can be assigned a message: the videos admins with contact:manage, recorded
--- when they use the inbox (the videos admin keeps its own roster; roles are not
--- read from the auth server). last_seen_at is refreshed at most once a day.
-CREATE TABLE IF NOT EXISTS contact_staff (
-    user_id TEXT PRIMARY KEY,
-    email TEXT,
-    last_seen_at TEXT NOT NULL
-);
