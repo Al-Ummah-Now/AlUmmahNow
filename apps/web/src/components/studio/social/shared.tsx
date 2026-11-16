@@ -1,4 +1,5 @@
 'use client';
+import { formatNumber } from '@al-ummah/shared-types';
 
 /** Small pieces the Studio → Social sections share. */
 import { useCallback, useState, type ReactNode } from 'react';
@@ -8,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 /** A number in the page's digits: Eastern Arabic ٠–٩ in Arabic (explicit numbering system, never implicit `ar`). */
-export const formatCount = (value: number, locale: string) => new Intl.NumberFormat(locale === 'ar' ? 'ar-u-nu-arab' : 'en-u-nu-latn').format(value);
+export const formatCount = (value: number, locale: string) => formatNumber(locale, value);
 
 /** `{name}` placeholders; numbers are written in the locale's digits when `locale` is given. */
 export const fill = (text: string, values: Record<string, string | number>, locale?: string) =>

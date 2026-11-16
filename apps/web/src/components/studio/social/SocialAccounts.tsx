@@ -214,15 +214,16 @@ export function SocialAccounts({ channelId, locale, accounts, networks, onAccoun
             <header className="flex flex-wrap items-center gap-3">
               <NetworkMark network={account.network} />
               <div className="min-w-0 flex-1">
-                <h3 id={`acc-${account.id}`} className="truncate font-medium" dir="auto">{account.displayName || account.handle}</h3>
-                <p className="truncate text-sm text-[var(--fanous-color-text-secondary)]" dir="ltr">
+                {/* Name and handle line up at the start of the card in either language; bdi keeps each one's own direction */}
+                <h3 id={`acc-${account.id}`} className="truncate text-start font-medium"><bdi>{account.displayName || account.handle}</bdi></h3>
+                <p className="truncate text-start text-sm text-[var(--fanous-color-text-secondary)]">
                   {account.profileUrl ? (
                     <a href={account.profileUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 underline-offset-4 hover:underline">
-                      {account.handle}
+                      <bdi dir="ltr">{account.handle}</bdi>
                       <ExternalLink className="h-3 w-3" aria-hidden="true" />
                     </a>
                   ) : (
-                    account.handle
+                    <bdi dir="ltr">{account.handle}</bdi>
                   )}
                 </p>
               </div>
