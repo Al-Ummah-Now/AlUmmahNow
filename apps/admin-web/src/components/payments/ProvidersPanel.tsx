@@ -274,7 +274,7 @@ function SettingsForm({ provider, mode, locked, canManage, onSave }: { provider:
                 ))}
               </select>
             ) : (
-              <input id={id} dir="ltr" className={`${fieldClass} w-full`} value={draft[storageKey] ?? ''} maxLength={spec.maxLength} readOnly={!canManage} autoComplete="off" spellCheck={false} onChange={(e) => setDraft((d) => ({ ...d, [storageKey]: e.target.value }))} aria-describedby={`${id}-hint`} data-testid={`payments-setting-${provider.id}-${spec.key}`} />
+              <input id={id} name={storageKey} dir="ltr" className={`${fieldClass} w-full`} value={draft[storageKey] ?? ''} maxLength={spec.maxLength} readOnly={!canManage} autoComplete="off" data-1p-ignore="" data-bwignore="true" data-lpignore="true" spellCheck={false} onChange={(e) => setDraft((d) => ({ ...d, [storageKey]: e.target.value }))} aria-describedby={`${id}-hint`} data-testid={`payments-setting-${provider.id}-${spec.key}`} />
             )}
             <p id={`${id}-hint`} className={hintClass}>
               {t(`payments.provider.settingHints.${spec.key}` as MessageKey)}
@@ -362,14 +362,21 @@ function CredentialRow({ provider, field, mode, writable, locked, confirm, run, 
           }}
         >
           <div className="min-w-0 flex-1">
-            <label htmlFor={id} className="sr-only">
+            <label htmlFor={id} className="block text-xs text-fg-muted mb-1">
               {t('payments.provider.newValue', { field: fieldName })}
             </label>
+            {/* A provider's API key, not the admin's password: password managers must not save or
+                generate one here (autocomplete off + their ignore hints; the value is never shown back) */}
             <input
               id={id}
+              name={`${provider.id}-${field}-${mode}`}
               type="password"
               dir="ltr"
-              autoComplete="new-password"
+              autoComplete="off"
+              data-1p-ignore=""
+              data-bwignore="true"
+              data-lpignore="true"
+              data-form-type="other"
               spellCheck={false}
               maxLength={500}
               className={`${fieldClass} w-full`}

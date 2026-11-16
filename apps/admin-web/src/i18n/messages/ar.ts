@@ -5522,7 +5522,7 @@ const ar: Messages = {
       sellerAddress: 'العنوان المسجّل',
       sellerCountry: 'رمز البلد',
       sellerCountryHint: 'حرفان (ISO 3166)، مثل US.',
-      taxId: 'رقم التسجيل الضريبي',
+      taxId: 'رقم ضريبة القيمة المضافة',
       taxIdHint: 'ضريبة القيمة المضافة أو ما يماثلها.',
       pricesIncludeTax: 'الأسعار المُدخلة هنا تشمل الضريبة',
       taxRatePercent: 'نسبة الضريبة المعروضة للمشترين (%)',

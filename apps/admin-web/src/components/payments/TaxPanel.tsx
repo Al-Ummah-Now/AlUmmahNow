@@ -65,13 +65,13 @@ export function TaxPanel({ tax, canManage, onRefresh }: { tax: BillingTaxSetting
             <label htmlFor={field('sellerName')} className={labelClass}>
               {t('payments.tax.sellerName')}
             </label>
-            <input id={field('sellerName')} dir="auto" className={`${fieldClass} w-full`} maxLength={BILLING_TEXT_LIMITS.sellerName} value={draft.sellerName} onChange={(e) => set({ sellerName: e.target.value })} data-testid="payments-tax-seller-name" />
+            <input id={field('sellerName')} name="organization" autoComplete="section-seller organization" dir="auto" className={`${fieldClass} w-full`} maxLength={BILLING_TEXT_LIMITS.sellerName} value={draft.sellerName} onChange={(e) => set({ sellerName: e.target.value })} data-testid="payments-tax-seller-name" />
           </div>
           <div>
             <label htmlFor={field('taxId')} className={labelClass}>
               {t('payments.tax.taxId')}
             </label>
-            <input id={field('taxId')} dir="ltr" className={`${fieldClass} w-full`} maxLength={BILLING_TEXT_LIMITS.taxId} value={draft.taxId} onChange={(e) => set({ taxId: e.target.value })} aria-describedby={`${field('taxId')}-hint`} />
+            <input id={field('taxId')} name="vat-number" dir="ltr" className={`${fieldClass} w-full`} maxLength={BILLING_TEXT_LIMITS.taxId} value={draft.taxId} onChange={(e) => set({ taxId: e.target.value })} aria-describedby={`${field('taxId')}-hint`} />
             <p id={`${field('taxId')}-hint`} className={hintClass}>
               {t('payments.tax.taxIdHint')}
             </p>
@@ -80,7 +80,7 @@ export function TaxPanel({ tax, canManage, onRefresh }: { tax: BillingTaxSetting
             <label htmlFor={field('sellerAddress')} className={labelClass}>
               {t('payments.tax.sellerAddress')}
             </label>
-            <textarea id={field('sellerAddress')} dir="auto" rows={3} className={`${fieldClass} w-full`} maxLength={BILLING_TEXT_LIMITS.sellerAddress} value={draft.sellerAddress} onChange={(e) => set({ sellerAddress: e.target.value })} />
+            <textarea id={field('sellerAddress')} name="street-address" autoComplete="section-seller street-address" dir="auto" rows={3} className={`${fieldClass} w-full`} maxLength={BILLING_TEXT_LIMITS.sellerAddress} value={draft.sellerAddress} onChange={(e) => set({ sellerAddress: e.target.value })} />
           </div>
           <div>
             <label htmlFor={field('sellerCountry')} className={labelClass}>
@@ -88,10 +88,11 @@ export function TaxPanel({ tax, canManage, onRefresh }: { tax: BillingTaxSetting
             </label>
             <input
               id={field('sellerCountry')}
+              name="country"
               dir="ltr"
               className={`${fieldClass} w-24 uppercase`}
               maxLength={2}
-              autoComplete="country"
+              autoComplete="section-seller country"
               value={draft.sellerCountry}
               onChange={(e) => set({ sellerCountry: e.target.value.toUpperCase() })}
               aria-invalid={invalid === 'sellerCountry' || undefined}
@@ -107,6 +108,7 @@ export function TaxPanel({ tax, canManage, onRefresh }: { tax: BillingTaxSetting
             </label>
             <input
               id={field('taxRatePercent')}
+              name="tax-rate"
               dir="ltr"
               inputMode="decimal"
               className={`${fieldClass} w-28`}

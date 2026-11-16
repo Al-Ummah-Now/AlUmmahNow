@@ -5523,7 +5523,7 @@ const en = {
       sellerAddress: 'Registered address',
       sellerCountry: 'Country code',
       sellerCountryHint: 'Two letters (ISO 3166), such as US.',
-      taxId: 'Tax registration number',
+      taxId: 'VAT number',
       taxIdHint: 'VAT, GST or similar.',
       pricesIncludeTax: 'Prices entered here include tax',
       taxRatePercent: 'Tax rate shown to buyers (%)',
