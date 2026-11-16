@@ -44,6 +44,7 @@
 --   apps/api-videos/migrations/search/0062_transcript_search.sql
 --   apps/api-videos/migrations/search/0063_member_tier_and_tier_requests.sql
 --   apps/api-videos/migrations/search/0064_billing.sql
+--   apps/api-videos/migrations/search/0065_default_tier.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;

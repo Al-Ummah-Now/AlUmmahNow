@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CREATOR_TIER_IDS, creatorTierOrigin, type CreatorTier, type CreatorTierAssignment, type CreatorTierOrigin } from '@al-ummah/shared-types';
-import { isUnexpectedFailure, ORIGIN_LABEL, tierActionMessage, tierChangeMessage, tierLabel } from '@/lib/creator-tiers';
+import { defaultTierName, isUnexpectedFailure, ORIGIN_LABEL, tierActionMessage, tierChangeMessage, tierLabel } from '@/lib/creator-tiers';
 import type { ActionResult } from '@/lib/api/errors';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { formatDate, type MessageKey } from '@/i18n/translate';
@@ -51,15 +51,16 @@ type Status = { kind: 'idle' } | { kind: 'saving' } | { kind: 'saved' } | { kind
 /**
  * A user's creator tier: what they hold, where it came from (who assigned it
  * and when), and a select to change it. Every change opens a confirmation
- * stating its effect; it applies to the user's next request. A super admin's
+ * stating its effect; it takes effect at once (the tier is read on every API
+ * call) and the user is told (in-app notice + email, api-videos lib/tierChanges.ts). A super admin's
  * automatic Unlimited is locked, with the reason shown; "Change anyway"
  * unlocks it for a deliberate change (admin-api also refuses it otherwise).
  */
 export function CreatorTierControl({ userId, userName, current: serverCurrent, tiers, canManage, needsTier = false, testId = 'creator-tier', setTier }: CreatorTierControlProps) {
   const router = useRouter();
   const { t, locale } = useLanguage();
-  // undefined: no change pending; null: remove the tier; string: assign that tier
-  const [pending, setPending] = useState<string | null | undefined>(undefined);
+  // undefined: no change pending; string: assign that tier (every account keeps a tier: no "remove")
+  const [pending, setPending] = useState<string | undefined>(undefined);
   const [unlocked, setUnlocked] = useState(false);
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
   // The tier just saved, shown at once: the page's refresh (router.refresh) re-reads the whole list
@@ -71,12 +72,11 @@ export function CreatorTierControl({ userId, userName, current: serverCurrent, t
   const locked = superAdmin && !unlocked;
   const tierOf = (id: string | null | undefined) => (id ? tiers.find((tier) => tier.id === id) ?? null : null);
   const currentTier = tierOf(current?.tierId);
-  // No assignment means Member (wiki AUN-TIER-REQUESTS): named as such, offered once as the empty choice
-  const named = (tier: CreatorTier | null) => (tier ? tierLabel(tier, locale) : null);
-  const memberName = named(tierOf(CREATOR_TIER_IDS.member)) ?? t('creators.none');
-  const currentName = current ? named(currentTier) ?? current.tierId : memberName;
+  // Every account has a stored tier; one not backfilled yet works as Free, so it is shown as Free
+  const freeTier = tiers.find((tier) => tier.id === CREATOR_TIER_IDS.member);
+  const currentName = current ? (currentTier ? tierLabel(currentTier, locale) : current.tierId) : freeTier ? tierLabel(freeTier, locale) : defaultTierName(CREATOR_TIER_IDS.member, tiers, t);
 
-  async function apply(tierId: string | null) {
+  async function apply(tierId: string) {
     setPending(undefined);
     setStatus({ kind: 'saving' });
     let result: ActionResult<unknown>;
@@ -94,15 +94,13 @@ export function CreatorTierControl({ userId, userName, current: serverCurrent, t
     const assignment = (result.data as { assignment?: CreatorTierAssignment | null } | undefined)?.assignment;
     setSaved({
       basis: serverCurrent?.tierId ?? null,
-      tier: tierId === null
-        ? null
-        : {
-            tierId,
-            origin: (assignment && creatorTierOrigin(assignment)) || 'admin',
-            assignedBy: assignment?.assignedBy ?? '',
-            assignedByName: null,
-            assignedAt: assignment?.assignedAt ?? new Date().toISOString(),
-          },
+      tier: {
+        tierId,
+        origin: (assignment && creatorTierOrigin(assignment)) || 'admin',
+        assignedBy: assignment?.assignedBy ?? '',
+        assignedByName: null,
+        assignedAt: assignment?.assignedAt ?? new Date().toISOString(),
+      },
     });
     setStatus({ kind: 'saved' });
     setUnlocked(false);
@@ -110,8 +108,7 @@ export function CreatorTierControl({ userId, userName, current: serverCurrent, t
   }
 
   const next = pending === undefined ? null : tierOf(pending);
-  const removing = pending === null;
-  const warning = superAdmin ? t('creators.superAdminOverrideWarning') : removing && current ? t('creators.removeWarning') : null;
+  const warning = superAdmin ? t('creators.superAdminOverrideWarning') : null;
 
   return (
     <div className="flex flex-col gap-2 min-w-48" data-testid={testId} data-user-id={userId} data-tier={current?.tierId ?? ''} data-origin={current?.origin ?? ''}>
@@ -146,15 +143,16 @@ export function CreatorTierControl({ userId, userName, current: serverCurrent, t
             value={pending === undefined ? current?.tierId ?? '' : pending ?? ''}
             disabled={status.kind === 'saving'}
             onChange={(e) => {
-              const value = e.target.value || null;
-              if (value === (current?.tierId ?? null)) return;
+              const value = e.target.value;
+              if (!value || value === current?.tierId) return;
               setStatus({ kind: 'idle' });
               setPending(value);
             }}
             className={`${fieldClass} py-1 text-sm`}
           >
-            <option value="">{t('creators.noTier')}</option>
-            {tiers.filter((tier) => tier.id !== CREATOR_TIER_IDS.member).map((tier) => (
+            {/* Not backfilled yet: no stored tier to select (works as Free) */}
+            {!current && <option value="" disabled>{currentName}</option>}
+            {tiers.map((tier) => (
               <option key={tier.id} value={tier.id}>{tierLabel(tier, locale)}</option>
             ))}
           </select>
@@ -179,14 +177,14 @@ export function CreatorTierControl({ userId, userName, current: serverCurrent, t
 
       <TierChangeDialog
         open={pending !== undefined}
-        title={removing ? t('creators.confirmRemoveTitle') : t('creators.confirmAssignTitle')}
-        body={tierChangeMessage(removing ? null : next, t, locale, { userName })}
+        title={t('creators.confirmAssignTitle')}
+        body={tierChangeMessage(next, t, locale, { userName })}
         warning={warning}
-        confirmLabel={removing ? t('creators.removeTier') : t('creators.assignTier', { tier: next?.name ?? '' })}
-        danger={removing || superAdmin}
+        confirmLabel={t('creators.assignTier', { tier: next?.name ?? '' })}
+        danger={superAdmin}
         testId={`${testId}-change`}
         onCancel={() => setPending(undefined)}
-        onConfirm={() => void apply(pending ?? null)}
+        onConfirm={() => pending && void apply(pending)}
       />
     </div>
   );

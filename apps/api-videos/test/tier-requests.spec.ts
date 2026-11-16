@@ -5,8 +5,9 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { TIER_REQUEST_ERRORS, TIER_REQUESTS_PER_30_DAYS, SUPER_ADMIN_TIER_ASSIGNER } from '@al-ummah/shared-types';
-import { assignTier, readAssignment, readTiers, resolveCreator, saveTier } from '../src/lib/creatorTiers';
+import { SIGNUP_TIER_ASSIGNER, TIER_REQUEST_ERRORS, TIER_REQUESTS_PER_30_DAYS, SUPER_ADMIN_TIER_ASSIGNER, creatorTierOrigin } from '@al-ummah/shared-types';
+import { assignTier, countTierUsers, deleteTier, purgeTiers, readAssignment, readDefaultTierId, readTiers, reorderTiers, resolveCreator, saveTier, setDefaultTier, writeSignupTier } from '../src/lib/creatorTiers';
+import { listCreators } from '../src/lib/admin/creators';
 import { creatorAccess } from '../src/endpoints/creator/creatorAccess';
 import {
 	createTierRequest,
@@ -33,30 +34,29 @@ function setup() {
 
 const ask = (d1: D1Database, userId: string, tierId = 'creator', now?: Date) => createTierRequest(d1, { userId }, { tierId, name: 'Yusuf Ali', about: ABOUT }, now);
 
-describe('the Member tier', () => {
-	it('is shipped by the migration with no uploads and no channels, and is requestable', async () => {
+describe('the Free tier (the one minimum tier; id `member`)', () => {
+	it('is Member renamed Free («مجاني») by the migration: no uploads, no channels, not requestable', async () => {
 		const { d1 } = setup();
 		const member = (await readTiers(d1)).find((t) => t.id === 'member');
 		assert.deepEqual(
-			member && [member.uploads, member.channels, member.requestable, member.unlimited, member.nameAr],
-			[false, false, true, false, 'مجاني'],
+			member && [member.name, member.uploads, member.channels, member.requestable, member.unlimited, member.nameAr],
+			['Free', false, false, false, false, 'مجاني'],
 		);
 		const creator = (await readTiers(d1)).find((t) => t.id === 'creator');
 		assert.deepEqual(creator && [creator.uploads, creator.channels, creator.requestable], [true, true, true], 'existing tiers keep what they allowed');
 		const unlimited = (await readTiers(d1)).find((t) => t.id === 'unlimited');
 		assert.deepEqual(unlimited && [unlimited.requestable, 'pages' in unlimited], [false, false]);
-		assert.deepEqual((await readTiers(d1)).map((t) => t.id).slice(0, 3), ['member', 'creator', 'unlimited'], 'listed in sortOrder');
+		assert.deepEqual((await readTiers(d1)).map((t) => t.id), ['member', 'creator', 'unlimited'], 'one minimum tier; listed by rank');
 	});
 
-	it('is what every user without an assignment holds; nothing changes for them (no uploads, no channels)', async () => {
+	it('as an assigned tier allows no uploads and no channels', async () => {
 		const { d1 } = setup();
-		const resolved = await resolveCreator(d1, { userId: 'usr_new' });
-		assert.deepEqual([resolved.tier?.id, resolved.via], ['member', 'none']);
-		const access = await creatorAccess(d1, 'usr_new', []);
-		assert.deepEqual([access.canUpload, access.canCreateChannel, access.tier?.name], [false, false, 'Free']);
+		await assignTier(d1, 'usr_m', 'member', 'admin');
+		const access = await creatorAccess(d1, 'usr_m', []);
+		assert.deepEqual([access.canUpload, access.canCreateChannel, access.tier?.name, access.via], [false, false, 'Free', 'tier']);
 	});
 
-	it('its flags are real: an admin turning uploads and channels on for Member lets every unassigned user do both', async () => {
+	it("its flags are real: an admin turning uploads and channels on for the default (Free) lets every unassigned user do both", async () => {
 		const { d1 } = setup();
 		await saveTier(d1, 'member', { uploads: true, channels: true, maxChannels: 1 }, 'admin-1');
 		const access = await creatorAccess(d1, 'usr_new', []);
@@ -65,19 +65,112 @@ describe('the Member tier', () => {
 		assert.equal('canCreatePages' in access, false);
 	});
 
-	it('assigning Member (or removing a tier) leaves no row: Member has one representation', async () => {
+	it('every account keeps a tier: assigning Member stores it, and there is no "remove"', async () => {
 		const { d1 } = setup();
 		await assignTier(d1, 'usr_a', 'creator', 'admin');
 		await assignTier(d1, 'usr_a', 'member', 'admin');
-		assert.equal(await readAssignment(d1, 'usr_a'), null);
-		assert.equal((await resolveCreator(d1, { userId: 'usr_a' })).tier?.id, 'member');
+		assert.equal((await readAssignment(d1, 'usr_a'))?.tierId, 'member');
+		assert.equal((await resolveCreator(d1, { userId: 'usr_a' })).via, 'tier');
+		await assert.rejects(assignTier(d1, 'usr_a', null, 'admin'), (e: { code: string; status: number }) => e.code === 'tier_required' && e.status === 400);
+		assert.equal((await readAssignment(d1, 'usr_a'))?.tierId, 'member');
 	});
 
-	it('an assignment to a tier that is gone falls back to Member, never to more', async () => {
+	it('an assignment to a tier that is gone falls back to Free, never to more', async () => {
 		const { db, d1 } = setup();
 		db.db.prepare("INSERT INTO creator_tier_assignments (user_id, tier_id, source, assigned_by, assigned_at) VALUES ('usr_b', 'vanished', 'admin', 'x', 'now')").run();
 		const resolved = await resolveCreator(d1, { userId: 'usr_b' });
 		assert.deepEqual([resolved.tier?.id, resolved.tier?.uploads], ['member', false]);
+	});
+});
+
+describe('the default tier (what new sign-ups get)', () => {
+	it('is Free after the migration: shipped with exactly what no tier allowed (nothing changes on deploy), never deletable, fully editable', async () => {
+		const { d1 } = setup();
+		assert.equal(await readDefaultTierId(d1), 'member');
+		const free = (await readTiers(d1)).find((t) => t.id === 'member');
+		assert.deepEqual(
+			free && [free.name, free.nameAr, free.uploads, free.channels, free.pages, free.captionMinutesMonth, free.unlimited, free.requestable],
+			['Free', 'مجاني', false, false, false, 0, false, false],
+		);
+		await assert.rejects(deleteTier(d1, 'member', { actorId: 'admin-1' }), (e: { code: string }) => e.code === 'tier_shipped');
+		const edited = await saveTier(d1, 'member', { unlimited: true }, 'admin-1');
+		assert.equal(edited.tier.unlimited, true, 'even unlimited (Member never is)');
+	});
+
+	it('a new account gets the current default written at sign-up; a later default never changes it', async () => {
+		const { d1 } = setup();
+		assert.equal(await writeSignupTier(d1, 'usr_early', '2026-11-15T10:00:00.000Z'), 'member');
+		const early = await readAssignment(d1, 'usr_early');
+		assert.deepEqual([early?.tierId, early?.assignedBy, early?.source], ['member', SIGNUP_TIER_ASSIGNER, 'admin']);
+		assert.equal(creatorTierOrigin(early), 'signup');
+		const set = await setDefaultTier(d1, 'creator', 'admin-1');
+		assert.deepEqual(set, { previous: 'member', defaultTierId: 'creator' }, 'the previous default, for the audit and Undo');
+		assert.equal((await creatorAccess(d1, 'usr_early', [])).tier?.id, 'member', 'existing users keep their stored tier');
+		assert.equal(await writeSignupTier(d1, 'usr_late'), 'creator');
+		const late = await creatorAccess(d1, 'usr_late', []);
+		assert.deepEqual([late.tier?.id, late.via, late.canUpload, late.canCreateChannel], ['creator', 'tier', true, true]);
+	});
+
+	it('sign-up never overwrites a tier the account already has (an invite\'s, an admin\'s)', async () => {
+		const { d1 } = setup();
+		await assignTier(d1, 'usr_inv', 'creator', 'admin-1');
+		assert.equal(await writeSignupTier(d1, 'usr_inv'), null);
+		assert.equal((await readAssignment(d1, 'usr_inv'))?.tierId, 'creator');
+	});
+
+	it('an account without a row (before the backfill) is treated as Free, never as the current default', async () => {
+		const { d1 } = setup();
+		await setDefaultTier(d1, 'creator', 'admin-1');
+		const access = await creatorAccess(d1, 'usr_old', []);
+		assert.deepEqual([access.tier?.id, access.via, access.canUpload], ['member', 'none', false]);
+	});
+
+	it("None is gone: 'none' cannot be the default, and a stored 'none' reads as Free", async () => {
+		const { db, d1 } = setup();
+		await assert.rejects(setDefaultTier(d1, 'none', 'admin-1'), (e: { code: string; status: number }) => e.code === 'invalid_default' && e.status === 400);
+		db.db.prepare("UPDATE creator_tier_settings SET value = 'none' WHERE key = 'default_tier_id'").run();
+		assert.equal(await readDefaultTierId(d1), 'member');
+		assert.equal(await writeSignupTier(d1, 'usr_new'), 'member');
+	});
+
+	it('a deleted or unknown tier cannot be the default, and the default tier cannot be deleted', async () => {
+		const { d1 } = setup();
+		await saveTier(d1, 'pro', { name: 'Pro', perHour: 10, perDay: 10, maxConcurrent: 1 }, 'admin', { create: true });
+		await setDefaultTier(d1, 'pro', 'admin-1');
+		await assert.rejects(deleteTier(d1, 'pro', { actorId: 'admin-1' }), (e: { code: string; status: number }) => e.code === 'tier_is_default' && e.status === 409);
+		await setDefaultTier(d1, 'member', 'admin-1');
+		await deleteTier(d1, 'pro', { actorId: 'admin-1' });
+		await assert.rejects(setDefaultTier(d1, 'pro', 'admin-1'), (e: { code: string; status: number }) => e.code === 'default_tier_deleted' && e.status === 409);
+		await assert.rejects(setDefaultTier(d1, 'nope', 'admin-1'), (e: { code: string; status: number }) => e.code === 'tier_not_found' && e.status === 404);
+		assert.equal(await readDefaultTierId(d1), 'member', 'a refused change changes nothing');
+	});
+
+	it('a tier with users cannot be deleted: 409 with the count; purge checks again (users, default, pending invites)', async () => {
+		const { db, d1 } = setup();
+		await saveTier(d1, 'pro', { name: 'Pro', perHour: 10, perDay: 10, maxConcurrent: 1 }, 'admin', { create: true });
+		await assignTier(d1, 'usr_1', 'pro', 'admin-1');
+		await assignTier(d1, 'usr_2', 'pro', 'admin-1');
+		await assert.rejects(deleteTier(d1, 'pro', { actorId: 'admin-1' }), (e: { code: string; status: number; details?: { users?: number } }) => e.code === 'tier_in_use' && e.status === 409 && e.details?.users === 2);
+		assert.equal(await countTierUsers(d1, 'pro'), 2);
+		await assignTier(d1, 'usr_1', 'member', 'admin-1');
+		await assignTier(d1, 'usr_2', 'member', 'admin-1');
+		await deleteTier(d1, 'pro', { actorId: 'admin-1' });
+		// Someone is put on it again behind the admin's back (raw row): the purge refuses
+		db.db.prepare("INSERT INTO creator_tier_assignments (user_id, tier_id, source, assigned_by, assigned_at) VALUES ('usr_3', 'pro', 'admin', 'x', 'now')").run();
+		const cutoff = new Date(Date.now() + 86_400_000).toISOString();
+		assert.deepEqual((await purgeTiers(d1, cutoff)).failed, [{ id: 'pro', error: 'held by users or restored' }]);
+		db.db.prepare("DELETE FROM creator_tier_assignments WHERE user_id = 'usr_3'").run();
+		assert.deepEqual((await purgeTiers(d1, cutoff, 100, ['pro'])).failed, [{ id: 'pro', error: 'pending invites carry it' }]);
+		assert.deepEqual((await purgeTiers(d1, cutoff)).purged, ['pro']);
+	});
+
+	it('the Creators list reports the default; rows not yet backfilled count as Free', async () => {
+		const { db, d1 } = setup();
+		db.db.prepare("INSERT INTO content_ownership (kind, id, owner_id, is_deleted) VALUES ('profile', 'usr_c', 'usr_c', 0), ('channel', 'ch_c', 'usr_c', 0)").run();
+		const env = { SEARCH_DB: d1, profiles: profiles() };
+		await setDefaultTier(d1, 'creator', 'admin-1');
+		const list = await listCreators(env, {}, Date.parse('2026-11-15T12:00:00Z'));
+		assert.deepEqual([list.defaultTier?.id, list.needsTier, list.items.find((r) => r.userId === 'usr_c')?.needsTier], ['creator', 1, true], 'a new default does not cover old accounts');
 	});
 });
 
@@ -112,9 +205,13 @@ describe('tier requests', () => {
 		const { d1 } = setup();
 		await assert.rejects(ask(d1, 'usr_2', 'unlimited'), (e: { code: string }) => e.code === TIER_REQUEST_ERRORS.tierNotRequestable);
 		await assert.rejects(ask(d1, 'usr_2', 'nope'), (e: { code: string }) => e.code === TIER_REQUEST_ERRORS.tierNotRequestable);
-		await assert.rejects(ask(d1, 'usr_2', 'member'), (e: { code: string }) => e.code === TIER_REQUEST_ERRORS.alreadyHeld);
+		await assert.rejects(ask(d1, 'usr_2', 'member'), (e: { code: string }) => e.code === TIER_REQUEST_ERRORS.tierNotRequestable, 'nobody requests the bottom tier (Free)');
 		await assignTier(d1, 'usr_3', 'creator', 'admin');
 		await assert.rejects(ask(d1, 'usr_3', 'creator'), (e: { code: string }) => e.code === TIER_REQUEST_ERRORS.alreadyHeld);
+		// Only upgrades: a requestable tier ranked below the current one is refused
+		await saveTier(d1, 'helper', { name: 'Helper', perHour: 5, perDay: 5, maxConcurrent: 1, requestable: true, sortOrder: 5 }, 'admin', { create: true });
+		await assert.rejects(ask(d1, 'usr_3', 'helper'), (e: { code: string }) => e.code === TIER_REQUEST_ERRORS.alreadyHeld);
+		assert.equal((await ask(d1, 'usr_4', 'helper')).tierId, 'helper', 'from Free, Helper is an upgrade');
 	});
 
 	it(`allows at most ${TIER_REQUESTS_PER_30_DAYS} requests in 30 days`, async () => {
@@ -140,18 +237,19 @@ describe('tier requests', () => {
 	it('/upgrade lists requestable tiers plus the viewer\'s own, with their latest request; signed out, no current tier', async () => {
 		const { d1 } = setup();
 		const anon = await upgradeOverview(d1, null, null);
-		assert.deepEqual(anon.tiers.map((t) => t.id), ['member', 'creator']);
+		assert.deepEqual(anon.tiers.map((t) => t.id), ['creator'], 'signed out: the requestable tiers (Free is not one)');
 		assert.equal(anon.currentTierId, null);
 		const creator = anon.tiers.find((t) => t.id === 'creator');
 		assert.deepEqual(creator && [creator.uploads, creator.channels, creator.maxChannels, creator.uploadsPerDay], [true, true, 3, 2000]);
 		assert.equal('perHour' in (creator ?? {}), false, 'no internal limits beyond what the card shows');
 		await assignTier(d1, 'usr_u', 'unlimited', 'admin');
 		const unlimitedHolder = await upgradeOverview(d1, { userId: 'usr_u' }, 'site-key');
-		assert.deepEqual(unlimitedHolder.tiers.map((t) => t.id), ['member', 'creator', 'unlimited'], 'their own tier is shown even when not requestable');
+		assert.deepEqual(unlimitedHolder.tiers.map((t) => t.id), ['unlimited'], 'their own tier is shown even when not requestable; nothing ranks above Unlimited');
 		assert.deepEqual([unlimitedHolder.currentTierId, unlimitedHolder.turnstileSiteKey], ['unlimited', 'site-key']);
 		await ask(d1, 'usr_m');
 		const pending = await upgradeOverview(d1, { userId: 'usr_m' }, null);
 		assert.deepEqual([pending.currentTierId, pending.request?.status], ['member', 'pending']);
+		assert.deepEqual(pending.tiers.map((t) => t.id), ['member', 'creator'], 'their own tier (Free) and the upgrade above it');
 	});
 
 	it('approving assigns the tier at once (the user can upload) in the same batch that marks it approved', async () => {
@@ -198,13 +296,34 @@ describe('tier requests', () => {
 		assert.equal(empty.request.declineReason, null);
 	});
 
-	it('approving a request for Member (a step down) removes the assignment row', async () => {
+	it('ships Free lowest, Creator between, Unlimited on top; a reorder rewrites every rank in one go and returns the old order', async () => {
 		const { d1 } = setup();
-		await assignTier(d1, 'usr_9', 'creator', 'admin');
-		const r = await ask(d1, 'usr_9', 'member');
-		assert.equal(r.fromTierId, 'creator');
-		await decideTierRequest(d1, r.id, { approve: true, actorId: 'usr_admin' });
-		assert.equal(await readAssignment(d1, 'usr_9'), null);
+		assert.deepEqual((await readTiers(d1)).map((t) => t.id), ['member', 'creator', 'unlimited']);
+		await saveTier(d1, 'pro', { name: 'Pro', perHour: 5, perDay: 5, maxConcurrent: 1, requestable: true }, 'admin', { create: true });
+		assert.deepEqual((await readTiers(d1)).map((t) => t.id), ['member', 'creator', 'pro', 'unlimited'], 'a new tier sits between Creator and Unlimited');
+		const moved = await reorderTiers(d1, ['member', 'pro', 'creator', 'unlimited'], 'admin-1');
+		assert.deepEqual(moved, { previous: ['member', 'creator', 'pro', 'unlimited'], order: ['member', 'pro', 'creator', 'unlimited'] });
+		assert.deepEqual((await readTiers(d1)).map((t) => [t.id, t.sortOrder]), [['member', 0], ['pro', 10], ['creator', 20], ['unlimited', 30]]);
+		// Undo: the previous order back
+		await reorderTiers(d1, moved.previous, 'admin-1');
+		assert.deepEqual((await readTiers(d1)).map((t) => t.id), ['member', 'creator', 'pro', 'unlimited']);
+		await assert.rejects(reorderTiers(d1, ['member', 'creator'], 'admin-1'), (e: { code: string }) => e.code === 'invalid_order', 'every tier, exactly once');
+		await assert.rejects(reorderTiers(d1, ['member', 'member', 'pro', 'unlimited'], 'admin-1'), (e: { code: string }) => e.code === 'invalid_order');
+		// The rank decides what an upgrade is: Pro above Creator now offers Pro to a Creator
+		await reorderTiers(d1, ['member', 'creator', 'pro', 'unlimited'], 'admin-1');
+		await assignTier(d1, 'usr_c', 'creator', 'admin');
+		assert.deepEqual((await upgradeOverview(d1, { userId: 'usr_c' }, null)).tiers.map((t) => t.id), ['creator', 'pro']);
+		await reorderTiers(d1, ['member', 'pro', 'creator', 'unlimited'], 'admin-1');
+		assert.deepEqual((await upgradeOverview(d1, { userId: 'usr_c' }, null)).tiers.map((t) => t.id), ['creator'], 'Pro is now below Creator');
+	});
+
+	it('/upgrade shows the current tier and only the tiers ranked above it, in rank order', async () => {
+		const { d1 } = setup();
+		await saveTier(d1, 'helper', { name: 'Helper', perHour: 5, perDay: 5, maxConcurrent: 1, requestable: true, sortOrder: 5 }, 'admin', { create: true });
+		await saveTier(d1, 'pro', { name: 'Pro', perHour: 5, perDay: 5, maxConcurrent: 1, requestable: true, sortOrder: 50 }, 'admin', { create: true });
+		assert.deepEqual((await upgradeOverview(d1, { userId: 'usr_free' }, null)).tiers.map((t) => t.id), ['member', 'helper', 'creator', 'pro']);
+		await assignTier(d1, 'usr_c', 'creator', 'admin');
+		assert.deepEqual((await upgradeOverview(d1, { userId: 'usr_c' }, null)).tiers.map((t) => t.id), ['creator', 'pro'], 'Helper is below Creator: not an upgrade');
 	});
 
 	it('approving after the tier was deleted is refused; the request stays pending', async () => {

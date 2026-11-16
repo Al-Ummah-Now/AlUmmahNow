@@ -382,7 +382,7 @@ describe('cancel and refund', () => {
 
 		await sweepEntitlements(ctx.env, new Date(Date.parse(sub.current_period_end!) + 1000));
 		assert.equal((await userSubscriptions(ctx.env, USER))[0].status, 'ended');
-		assert.equal(await readAssignment(ctx.env.SEARCH_DB as D1Database, USER), null);
+		assert.equal((await readAssignment(ctx.env.SEARCH_DB as D1Database, USER))?.tierId, 'member', 'back on the default: every account keeps a tier');
 	});
 
 	it('an admin ends a subscription now: the tier goes at once', async () => {
@@ -391,7 +391,7 @@ describe('cancel and refund', () => {
 		await queueCancel(ctx.env, sub.id, false, 'admin-1');
 		await ctx.drain();
 		assert.equal((await userSubscriptions(ctx.env, USER))[0].status, 'ended');
-		assert.equal(await readAssignment(ctx.env.SEARCH_DB as D1Database, USER), null);
+		assert.equal((await readAssignment(ctx.env.SEARCH_DB as D1Database, USER))?.tierId, 'member', 'back on the default');
 		await assert.rejects(queueCancel(ctx.env, sub.id, false, 'admin-1'), { code: 'billing_wrong_state' });
 	});
 

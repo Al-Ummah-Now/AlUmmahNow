@@ -51,7 +51,7 @@ describe('creator tier soft delete', () => {
 	it('still refuses shipped tiers and tiers someone holds', async () => {
 		const { d1 } = await setup();
 		await assignTier(d1, 'alice', 'small', 'admin-1');
-		await assert.rejects(deleteTier(d1, 'small', { actorId: 'admin-1' }), /hold this tier/);
+		await assert.rejects(deleteTier(d1, 'small', { actorId: 'admin-1' }), (e: { code: string; details?: { users?: number } }) => e.code === 'tier_in_use' && e.details?.users === 1);
 		await assert.rejects(deleteTier(d1, 'creator', { actorId: 'admin-1' }), /cannot be deleted/);
 	});
 });

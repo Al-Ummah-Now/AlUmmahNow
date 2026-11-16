@@ -12,6 +12,7 @@ import * as React from 'react';
 import { CREATOR_TIER_BOUNDS, DEFAULT_CREATOR_TIER, DEFAULT_MEMBER_TIER, DEFAULT_UNLIMITED_TIER, formatNumber, type AdminUserRow, type CreatorTier, type CreatorTiersList } from '@al-ummah/shared-types';
 import {
   creatorsToUsersHref,
+  defaultTierName,
   isUnexpectedFailure,
   parseUserTierFilter,
   tierActionMessage,
@@ -30,6 +31,7 @@ import { CreatorTierControl } from '../src/components/creators/CreatorTierContro
 import { UsersTable } from '../src/components/users/UsersTable';
 import { LimitHitsNotice } from '../src/components/creators/LimitHitsNotice';
 import { TierEditor } from '../src/components/creators/TierEditor';
+import { TierRankList } from '../src/components/creators/TierRankList';
 import en from '../src/i18n/messages/en';
 import ar from '../src/i18n/messages/ar';
 
@@ -140,14 +142,21 @@ describe('tier form validation (same bounds and rules as api-videos)', () => {
     const fresh = tierToForm();
     assert.deepEqual([fresh.uploads, fresh.channels, fresh.requestable, fresh.sortOrder], [true, true, false, 50]);
     const member = tierToForm(MEMBER);
-    assert.deepEqual([member.uploads, member.channels, member.requestable, member.nameAr], [false, false, true, 'مجاني']);
+    assert.deepEqual([member.uploads, member.channels, member.requestable, member.nameAr], [false, false, false, 'مجاني']);
     const payload = tierFormPayload({ ...base, name: ' Gold ', nameAr: ' ', description: ' For pros ', descriptionAr: '' });
     assert.deepEqual([payload.name, payload.nameAr, payload.description, payload.descriptionAr], ['Gold', null, 'For pros', null]);
   });
 
-  it('counts everyone without a tier as Member on the Tiers page', () => {
-    const list = { items: TIERS, counts: { byTier: { creator: 4 }, none: 9 }, limitHits7d: 0 } as CreatorTiersList;
+  it('counts stored rows per tier; accounts not backfilled yet count on Free (they work as Free), whatever the default', () => {
+    const list: CreatorTiersList = { items: TIERS, defaultTierId: 'creator', counts: { byTier: { creator: 4 }, none: 9 }, limitHits7d: 0 };
     assert.deepEqual(memberCounts(list), { creator: 4, member: 9 });
+  });
+
+  it('names the default tier by its name only (a legacy "none" reads as Free)', () => {
+    const t = ((key: string) => (key === 'creators.none' ? 'None' : key)) as never;
+    assert.equal(defaultTierName('member', TIERS, t), 'Free');
+    assert.equal(defaultTierName('none', TIERS, t), 'Free');
+    assert.equal(defaultTierName('creator', TIERS, t), 'Creator');
   });
 });
 
@@ -174,6 +183,8 @@ describe('friendly errors', () => {
     assert.equal(tierActionMessage({ status: 409, code: 'super_admin_tier' }), 'creators.errorSuperAdmin');
     assert.equal(tierActionMessage({ status: 404, code: 'tier_not_found' }), 'creators.errorTierGone');
     assert.equal(tierActionMessage({ status: 409, code: 'tier_in_use' }), 'creators.tierInUse');
+    assert.equal(tierActionMessage({ status: 409, code: 'tier_is_default' }), 'creators.tierIsDefault');
+    assert.equal(tierActionMessage({ status: 409, code: 'default_tier_deleted' }), 'creators.errorDefaultDeleted');
     assert.equal(tierActionMessage({ status: 403 }), 'creators.errorForbidden');
     assert.equal(tierActionMessage({ status: 401 }), 'errors.notAuthenticated');
     assert.equal(tierActionMessage({ status: 500, code: 'internal_error' }), 'creators.saveFailed');
@@ -286,17 +297,42 @@ describe('rendered components', () => {
     const unlimited = html.slice(html.indexOf('data-testid="tier-card-unlimited"'));
     assert.match(unlimited, /data-testid="tier-unlimited-unlimited"[^>]*disabled|disabled[^>]*data-testid="tier-unlimited-unlimited"/);
     assert.match(unlimited, /always stays unlimited/);
-    // Member: never unlimited, uploads and channels off, requestable, its Arabic name editable
+    // Free (id member), the minimum: every limit editable (unlimited too), uploads and channels off, not requestable
     const member = html.slice(html.indexOf('data-testid="tier-card-member"'), html.indexOf('data-testid="tier-card-creator"'));
-    assert.match(member, /data-testid="tier-member-unlimited"[^>]*disabled|disabled[^>]*data-testid="tier-member-unlimited"/);
-    assert.match(member, /Free is the tier everyone starts on/);
+    assert.doesNotMatch(member, /data-testid="tier-member-unlimited"[^>]*disabled|disabled[^>]*data-testid="tier-member-unlimited"/);
     assert.doesNotMatch(member, /checked=""[^>]*data-testid="tier-member-uploads"/);
-    assert.match(member, /checked=""[^>]*data-testid="tier-member-requestable"|data-testid="tier-member-requestable"[^>]*checked=""/);
+    assert.doesNotMatch(member, /checked=""[^>]*data-testid="tier-member-requestable"|data-testid="tier-member-requestable"[^>]*checked=""/);
     assert.match(member, /value="مجاني"[^>]*data-testid="tier-member-nameAr"|data-testid="tier-member-nameAr"[^>]*value="مجاني"/);
     assert.match(member, /What the tier allows/);
     assert.doesNotMatch(member, /data-testid="tier-member-delete"/, 'shipped tiers cannot be deleted');
     const arabic = render(el(TierEditor, { tiers: TIERS, counts: { creator: 12 }, canManage: true, actions: tierActions }), 'ar');
     assert.match(arabic, new RegExp(`${formatNumber('ar', 12)} مستخدم`));
+  });
+
+  it('the Rank list shows the tiers lowest first with Move up/down (first and last disabled), and is read-only without creators:manage', () => {
+    const reorder = async () => ({ ok: true as const, data: { previous: [], order: [] } });
+    const html = render(el(TierRankList, { tiers: TIERS, defaultTierId: 'member', canManage: true, reorder }));
+    assert.match(html, /data-order="member,creator,unlimited"/);
+    assert.match(html, /aria-label="Move Free up"[^>]*disabled|disabled[^>]*aria-label="Move Free up"/);
+    assert.match(html, /aria-label="Move Unlimited down"[^>]*disabled|disabled[^>]*aria-label="Move Unlimited down"/);
+    assert.match(html, /draggable="true"/);
+    const readOnly = render(el(TierRankList, { tiers: TIERS, canManage: false, reorder }));
+    assert.doesNotMatch(readOnly, /Move Free up|draggable="true"/);
+  });
+
+  it('Delete is off on a tier users, pending invites or new sign-ups depend on, saying why with a link to them', () => {
+    const pro = { ...TIERS[1], id: 'pro', name: 'Pro' };
+    const html = render(el(TierEditor, { tiers: [pro], counts: { pro: 3 }, invites: { pro: 2 }, canManage: true, actions: tierActions }));
+    assert.match(html, /disabled=""[^>]*data-testid="tier-pro-delete"|data-testid="tier-pro-delete"[^>]*disabled=""/);
+    assert.match(html, /3 users are on this tier\. Move them first\./);
+    assert.match(html, /href="\/users\?tier=pro"/);
+    assert.match(html, /2 pending invites carry this tier\. Change or revoke them first\./);
+    const one = render(el(TierEditor, { tiers: [pro], counts: { pro: 1 }, canManage: true, actions: tierActions }));
+    assert.match(one, /1 user is on this tier\. Move them first\./);
+    const free = render(el(TierEditor, { tiers: [pro], counts: {}, defaultTierId: 'pro', canManage: true, actions: tierActions }));
+    assert.match(free, /This tier is the default/);
+    const empty = render(el(TierEditor, { tiers: [pro], counts: {}, defaultTierId: 'member', canManage: true, actions: tierActions }));
+    assert.doesNotMatch(empty, /disabled=""[^>]*data-testid="tier-pro-delete"|data-testid="tier-pro-delete"[^>]*disabled=""/);
   });
 });
 

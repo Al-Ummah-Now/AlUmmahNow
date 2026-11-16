@@ -8,6 +8,8 @@ import { transformProfileToView, createEntityDefaults } from "../../lib/transfor
 import R2Repository from "../../lib/r2Repo";
 import Queue, { MessageType } from "../../lib/queue";
 import { AuthenticatedRoute, AppContext } from "../../base";
+import { writeSignupTier } from "../../lib/creatorTiers";
+import { logger } from "../../lib/logger";
 import { inBackground } from "../../lib/websocket-notify";
 import { bearerOf, syncNamesToAuth } from "../../lib/auth-name-sync";
 
@@ -91,6 +93,15 @@ export class ProfileCreate extends AuthenticatedRoute {
 			Object.assign(fresh, profileInput, { id: userId, dateModified: new Date().toISOString() });
 			return true;
 		}, { initial: () => businessProfile as ProfileType });
+
+		// Every account has a tier (owner, 2026-11-15): a new one gets the current default, written now and
+		// never changed by a later default. An invited account already has its invite's tier (kept).
+		try {
+			await writeSignupTier(c.env.SEARCH_DB as D1Database, userId);
+		} catch (error) {
+			// The account still works as Free (the minimum) until the backfill writes its row
+			logger.error('[Profile] Could not write the sign-up tier', { userId, error: error instanceof Error ? error.message : String(error) });
+		}
 
 		// The names reach Auth too (only the ones set: a new, empty profile never wipes an Auth name)
 		const token = bearerOf(c.req.header("Authorization"));

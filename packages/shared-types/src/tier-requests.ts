@@ -127,10 +127,15 @@ export interface UpgradeOverview {
   mode: UpgradeMode;
   /** Requestable tiers plus the viewer's own tier, in sortOrder */
   tiers: PublicTier[];
-  /** The signed-in user's tier id (Member when unassigned); null when signed out */
+  /**
+   * The signed-in user's effective tier id: the assigned one, else the default
+   * tier (Free as shipped); null when signed out
+   */
   currentTierId: string | null;
   /** When the user's stored tier was set (Settings › Tier's "Since {date}"); null when unknown or signed out */
   currentTierSince?: string | null;
+  /** True when the user holds no assignment, so `currentTierId` is the default tier (or 'none') */
+  currentIsDefault?: boolean;
   /** The user's latest request (any status); null when none or signed out */
   request: TierRequest | null;
   /** Turnstile site key when the env checks Turnstile on requests; null = no widget */
@@ -150,13 +155,15 @@ export interface AdminTierRequestRow extends TierRequest {
   displayName: string | null;
   userName: string | null;
   avatarUrl: string | null;
-  /** The tier the user holds now (Member when unassigned) */
+  /** The tier the user holds now: the assigned one, else the default tier ('none': the default is None) */
   currentTierId: string;
   currentTierName: string;
   /** Arabic names (null: none set; the Arabic admin falls back to the English name) */
   currentTierNameAr: string | null;
   /** The asked tier's Arabic name now (null: none set, or the tier is gone) */
   tierNameAr: string | null;
+  /** True when the user holds no assignment (currentTierId is the default) */
+  currentIsDefault?: boolean;
   /** How the decision email went: queued, sent, sunk, disabled, no_address, failed; null before a decision */
   emailStatus: string | null;
 }

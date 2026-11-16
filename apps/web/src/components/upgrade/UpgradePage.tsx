@@ -273,7 +273,7 @@ interface CardPay {
   onSubscribe: (request: SubscribeRequest) => void;
 }
 
-function TierCard({ tier, state, lang, locale, onRequest, pay }: { tier: PublicTier; state: ReturnType<typeof cardState>; lang: Lang; locale: string; onRequest: () => void; pay: CardPay | null }) {
+function TierCard({ tier, state, lang, locale, onRequest, pay }: { tier: PublicTier; state: ReturnType<typeof cardState>; isDefault?: boolean; lang: Lang; locale: string; onRequest: () => void; pay: CardPay | null }) {
   const { t } = useLanguage();
   const copy = t.upgrade;
   const name = tierName(tier, lang);

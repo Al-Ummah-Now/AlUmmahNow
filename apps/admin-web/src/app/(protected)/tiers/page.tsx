@@ -1,5 +1,5 @@
 import type { AdminAuditEntry, CreatorTiersList } from '@al-ummah/shared-types';
-import { creatorTierAudit, deleteCreatorTier, listCreatorTiers, saveCreatorTier } from '@/lib/api/creators';
+import { creatorTierAudit, deleteCreatorTier, listCreatorTiers, reorderCreatorTiers, saveCreatorTier, setDefaultCreatorTier } from '@/lib/api/creators';
 import { getAdminSession } from '@/lib/auth';
 import { canManageCreators } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
@@ -25,7 +25,7 @@ export default async function CreatorTiersPage() {
   }
   return (
     <>
-      <CreatorTiersView list={list} audit={audit} canManage={canManage} t={t} locale={locale} actions={{ save: saveCreatorTier, remove: deleteCreatorTier }} />
+      <CreatorTiersView list={list} audit={audit} canManage={canManage} t={t} locale={locale} actions={{ save: saveCreatorTier, remove: deleteCreatorTier, setDefault: setDefaultCreatorTier, reorder: reorderCreatorTiers }} />
       {canManage && (
         <p className="mt-6">
           <Link href={trashHref('creator-tier')} className={linkClass} data-testid="tiers-recently-deleted">

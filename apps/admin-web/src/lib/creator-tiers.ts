@@ -10,7 +10,9 @@ import {
   CREATOR_TIER_IDS,
   CREATOR_TIER_TEXT,
   DEFAULT_CREATOR_TIER,
+  DEFAULT_TIER_ID,
   NO_CREATOR_TIER,
+  NO_DEFAULT_TIER,
   type AdminUserTierFilter,
   type CreatorTier,
   type CreatorTierOrigin,
@@ -76,6 +78,7 @@ export const ORIGIN_LABEL: Record<CreatorTierOrigin, MessageKey> = {
   admin: 'creators.originAdmin',
   super_admin: 'creators.originSuperAdmin',
   subscription: 'creators.originSubscription',
+  signup: 'creators.originSignup',
 };
 
 // --- Tier form -------------------------------------------------------------
@@ -229,6 +232,9 @@ export function tierActionMessage(result: { status: number; code?: string }): Me
   if (result.status === 403) return 'creators.errorForbidden';
   if (result.code === 'super_admin_tier') return 'creators.errorSuperAdmin';
   if (result.code === 'tier_not_found') return 'creators.errorTierGone';
+  if (result.code === 'tier_is_default') return 'creators.tierIsDefault';
+  if (result.code === 'tier_has_invites') return 'creators.errorTierHasInvites';
+  if (result.code === 'default_tier_deleted') return 'creators.errorDefaultDeleted';
   if (result.code === 'tier_in_use' || (result.status === 409 && result.code !== 'tier_exists')) return 'creators.tierInUse';
   if (result.code === 'tier_exists') return 'creators.errorIdTaken';
   if (result.code === 'tier_text_missing') return 'creators.errorTextMissing';
@@ -239,3 +245,13 @@ export function tierActionMessage(result: { status: number; code?: string }): Me
 
 /** Failures worth an error report: the network or the server, not a refusal the admin can act on. */
 export const isUnexpectedFailure = (result: { status: number }) => result.status === 0 || result.status >= 500;
+
+/**
+ * The default tier's name (the retired 'none' reads as Free): what a user without an assigned tier
+ * holds, shown as just the tier's name (owner, 2026-11-15: "Default" marks only
+ * the tier on the Tiers list).
+ */
+export function defaultTierName(defaultTierId: string | null | undefined, tiers: readonly Pick<CreatorTier, 'id' | 'name'>[], _t: Translator): string {
+  const id = !defaultTierId || defaultTierId === NO_DEFAULT_TIER ? DEFAULT_TIER_ID : defaultTierId;
+  return tiers.find((tier) => tier.id === id)?.name ?? id;
+}

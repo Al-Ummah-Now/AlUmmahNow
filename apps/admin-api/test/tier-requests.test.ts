@@ -22,6 +22,7 @@ interface Req {
   declineReason: string | null;
   decidedAt: string | null;
   currentTierId: string;
+  currentIsDefault?: boolean;
   emailStatus: string | null;
 }
 
@@ -72,7 +73,7 @@ function fakeVideos(contact: Partial<AccountEmailContact> | null) {
     },
   };
   const add = (r: Partial<Req> & { id: string }) =>
-    requests.set(r.id, { userId: 'usr_1', tierId: 'creator', tierName: 'Creator', status: 'pending', declineReason: null, decidedAt: null, currentTierId: 'member', emailStatus: null, ...r });
+    requests.set(r.id, { userId: 'usr_1', tierId: 'creator', tierName: 'Creator', status: 'pending', declineReason: null, decidedAt: null, currentTierId: 'member', currentIsDefault: true, emailStatus: null, ...r });
   return { fetcher, calls, requests, add };
 }
 
@@ -150,7 +151,7 @@ describe('tier requests: decisions', () => {
     const rows = await s.audit();
     const user = rows.find((r) => r.key === 'content:user:usr_1');
     assert.deepEqual(JSON.parse(user!.new_value), { action: 'creator-tier', details: { tierId: 'creator', source: 'admin', tierRequest: 'r1' } });
-    assert.deepEqual(JSON.parse(user!.old_value), { tierId: null, source: null }, 'Member is "no tier" in the audit, as for a hand change');
+    assert.deepEqual(JSON.parse(user!.old_value), { tierId: null, source: null }, 'on the default tier the user had no assignment: null in the audit, as for a hand change');
     assert.equal(user!.actor_id, 'admin-1');
     assert.ok(rows.some((r) => r.key === 'content:tier-request:r1' && JSON.parse(r.new_value).action === 'approve'));
     assert.deepEqual(s.mail, [tierRequestMailJob('r1', '2026-11-14T10:00:00.000Z')]);

@@ -44,7 +44,7 @@ jest.mock('@/lib/api/tier-requests-client', () => ({
 
 const base = { description: null, descriptionAr: null, unlimited: false, pages: false, maxChannels: 1, captionMinutesMonth: 0, uploadsPerDay: 50, requestable: true };
 const tiers: PublicTier[] = [
-  { ...base, id: 'member', name: 'Member', nameAr: 'عضو', uploads: false, channels: false },
+  { ...base, id: 'member', name: 'Free', nameAr: 'مجاني', uploads: false, channels: false, requestable: false },
   { ...base, id: 'creator', name: 'Creator', nameAr: 'صانع محتوى', uploads: true, channels: true, maxChannels: 3, uploadsPerDay: 2000, captionMinutesMonth: 120 },
 ];
 const request = (over: Partial<TierRequest>): TierRequest =>
@@ -129,6 +129,22 @@ describe('Upgrade page', () => {
     const ar = await screen.findByTestId('tier-creator-request');
     expect(ar).toHaveTextContent(/^اطلب$/);
     expect(ar).toHaveAccessibleName('اطلب فئة: صانع محتوى');
+  });
+
+  it('lights the default tier as the current one, with no "default" marker (owner, 2026-11-15)', async () => {
+    fetchUpgradeOverview.mockResolvedValue(overview({ currentTierId: 'creator', currentIsDefault: true }));
+    render(<UpgradePage locale="en" />);
+    const pill = await screen.findByTestId('tier-creator-current');
+    expect(pill).toHaveTextContent(/^Your current tier$/);
+    expect(screen.getByTestId('tier-card-creator')).toHaveAttribute('data-state', 'current');
+  });
+
+  it('a user on the shipped default sees the Free card lit as their current tier', async () => {
+    fetchUpgradeOverview.mockResolvedValue(overview({ currentTierId: 'member', currentIsDefault: true }));
+    render(<UpgradePage locale="en" />);
+    const card = await screen.findByTestId('tier-card-member');
+    expect(card).toHaveAttribute('data-state', 'current');
+    expect(within(card).getByTestId('tier-member-current')).toHaveTextContent(/^Your current tier$/);
   });
 
   it('asks signed-out visitors to sign in on every card', async () => {

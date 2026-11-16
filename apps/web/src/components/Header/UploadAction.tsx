@@ -32,7 +32,7 @@ export function UploadAction({ variant = 'header' }: { variant?: 'header' | 'tab
   // The accessible name says what it does; the visible label is the short "Upload"
   const label = t.upload.uploadVideo;
   const short = t.navigation.upload;
-  // Uploading is by invitation: a signed-in user whose tier allows no uploads gets a pill to /upgrade
+  // Uploading is by invitation: a signed-in user whose tier allows no uploads (Free) gets a pill to /upgrade
   // in its place, labelled by the page's mode (owner, 2026-11-15): "Request tier" while it takes
   // requests, "Upgrade" while it sells, nothing while upgrades are closed or the mode is unknown
   if (user && !mayUpload(creator)) {

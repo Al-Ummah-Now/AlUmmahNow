@@ -1,0 +1,138 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import type { CreatorTier } from '@al-ummah/shared-types';
+import type { ActionResult } from '@/lib/api/errors';
+import { isUnexpectedFailure, tierActionMessage } from '@/lib/creator-tiers';
+import { useLanguage } from '@/i18n/I18nProvider';
+import { cardClass } from '@/components/ui';
+import { Chip, smallButtonClass } from '@/components/content/parts';
+import { useUndoableAction } from '@/components/undo/UndoToast';
+import { logger } from '@/lib/logger-client';
+import { reportError } from '@/lib/errors/reporter';
+
+type Reorder = (ids: string[], opts?: { undo?: boolean }) => Promise<ActionResult<{ previous: string[]; order: string[] }>>;
+
+class ReorderFailure extends Error {
+  constructor(readonly result: { status: number; code?: string }) {
+    super(`Tier reorder failed: ${result.status} ${result.code ?? ''}`.trim());
+  }
+}
+
+/**
+ * The tiers' rank (owner, 2026-11-15): lowest first, the order of the Upgrade
+ * page and every tier picker. Admins drag a row or use Move up / Move down
+ * (keyboard); each change saves at once, audited, with Undo.
+ */
+export function TierRankList({ tiers, defaultTierId, canManage, reorder }: { tiers: CreatorTier[]; defaultTierId?: string; canManage: boolean; reorder?: Reorder }) {
+  const router = useRouter();
+  const { t } = useLanguage();
+  const { run } = useUndoableAction();
+  const [order, setOrder] = useState<string[]>(tiers.map((tier) => tier.id));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [announce, setAnnounce] = useState('');
+  const serverOrder = tiers.map((tier) => tier.id).join(',');
+  useEffect(() => setOrder(serverOrder.split(',')), [serverOrder]);
+  const byId = new Map(tiers.map((tier) => [tier.id, tier]));
+  const editable = canManage && !!reorder;
+
+  async function call(ids: string[], undo = false) {
+    const result = await reorder!(ids, undo ? { undo: true } : undefined);
+    if (!result.ok) throw new ReorderFailure(result);
+    return result.data;
+  }
+
+  async function save(next: string[], moved: string) {
+    const before = order;
+    setOrder(next);
+    setBusy(true);
+    setError(null);
+    const name = byId.get(moved)?.name ?? moved;
+    try {
+      await run({
+        action: () => call(next),
+        undo: async (res) => {
+          await call(res.previous, true);
+          setOrder(res.previous);
+          router.refresh();
+        },
+        message: t('creators.rankSaved', { tier: name, rank: String(next.indexOf(moved) + 1) }),
+        undoneMessage: t('creators.rankUndone'),
+      });
+      setAnnounce(t('creators.rankSaved', { tier: name, rank: String(next.indexOf(moved) + 1) }));
+      router.refresh();
+    } catch (e) {
+      setOrder(before);
+      const result = e instanceof ReorderFailure ? e.result : { status: 0 };
+      logger.warn('[creators] Tier reorder failed', { status: result.status });
+      if (isUnexpectedFailure(result)) reportError(e instanceof Error ? e : new Error(String(e)), { kind: 'fetch', status: result.status, shown: true });
+      setError(t(tierActionMessage(result)));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const move = (id: string, by: -1 | 1) => {
+    const i = order.indexOf(id);
+    const j = i + by;
+    if (i < 0 || j < 0 || j >= order.length) return;
+    const next = [...order];
+    [next[i], next[j]] = [next[j], next[i]];
+    void save(next, id);
+  };
+  const dropOn = (target: string) => {
+    if (!dragging || dragging === target) return;
+    const next = order.filter((id) => id !== dragging);
+    next.splice(next.indexOf(target) + (order.indexOf(dragging) < order.indexOf(target) ? 1 : 0), 0, dragging);
+    void save(next, dragging);
+  };
+
+  return (
+    <section className={`${cardClass} mb-6`} aria-labelledby="tiers-rank-title" data-testid="tiers-rank">
+      <h2 id="tiers-rank-title" className="text-lg font-semibold text-fg mb-1">{t('creators.rankTitle')}</h2>
+      <p className="text-sm text-fg-muted mb-3 max-w-3xl">{t('creators.rankBody')}</p>
+      <ol className="flex flex-col gap-2" data-testid="tiers-rank-list" data-order={order.join(',')}>
+        {order.map((id, i) => {
+          const tier = byId.get(id);
+          if (!tier) return null;
+          return (
+            <li
+              key={id}
+              draggable={editable && !busy}
+              onDragStart={() => setDragging(id)}
+              onDragEnd={() => setDragging(null)}
+              onDragOver={(e) => editable && e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                dropOn(id);
+                setDragging(null);
+              }}
+              className={`flex flex-wrap items-center gap-2 rounded border border-border bg-surface px-3 py-2 ${dragging === id ? 'opacity-60' : ''} ${editable ? 'cursor-grab' : ''}`}
+              data-testid={`tiers-rank-${id}`}
+            >
+              {editable && <span aria-hidden="true" className="select-none text-fg-muted">⋮⋮</span>}
+              <span className="w-6 text-sm text-fg-muted tabular-nums">{i + 1}</span>
+              <span className="font-medium text-fg">{tier.name}</span>
+              {id === defaultTierId && <Chip tone="info">{t('creators.tierDefaultChip')}</Chip>}
+              {editable && (
+                <span className="ms-auto flex gap-1">
+                  <button type="button" className={smallButtonClass} disabled={busy || i === 0} onClick={() => move(id, -1)} aria-label={t('creators.rankMoveUp', { tier: tier.name })} data-testid={`tiers-rank-${id}-up`}>
+                    ↑
+                  </button>
+                  <button type="button" className={smallButtonClass} disabled={busy || i === order.length - 1} onClick={() => move(id, 1)} aria-label={t('creators.rankMoveDown', { tier: tier.name })} data-testid={`tiers-rank-${id}-down`}>
+                    ↓
+                  </button>
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+      <p role="status" aria-live="polite" className="sr-only">{announce}</p>
+      {error && <p role="alert" className="mt-2 text-sm text-danger-fg" data-testid="tiers-rank-error">{error}</p>}
+    </section>
+  );
+}

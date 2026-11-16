@@ -28,7 +28,7 @@ import { logger } from './logger';
 import { hasAdminRole, hasPermission } from './roles';
 import { ThemeError, ThemeStore } from './themePackages';
 import { CLEANUP_ACTOR, writeTrashAudit } from './trash-audit';
-import { InviteStateError, getInvite, listRevokedInvites, requestInvitePurge, restoreInvite, type InviteQueueEnv } from './invites';
+import { InviteStateError, getInvite, listRevokedInvites, pendingInvitesByTier, requestInvitePurge, restoreInvite, type InviteQueueEnv } from './invites';
 import { dueRevokedInvites, settleRevokedInvites, type InviteEraseDeps } from './invite-erase';
 
 export type TrashEnv = Pick<AdminBindings, 'REPORTS_DB' | 'theme_packages'> & VideosClientEnv & Partial<Pick<AdminBindings, 'ENVIRONMENT' | 'Issuer' | 'AUTH_MODERATION_CLIENT_ID' | 'AUTH_MODERATION_CLIENT_SECRET' | 'AUTH_REQUESTS_QUEUE'>>;
@@ -222,9 +222,12 @@ export async function runTrashCleanup(env: TrashEnv, now = new Date(), limit = C
   }
 
   try {
+    // Checked again at purge time: api-videos refuses tiers users are on and the default; these are the
+    // ones pending invites still carry (owner rule 2026-11-15)
+    const keep = Object.keys(await pendingInvitesByTier(env.REPORTS_DB));
     const { purged, failed } = await callVideos<{ purged: string[]; failed: { id: string; error: string }[] }>(env, '/creator-tiers/purge', {
       method: 'POST',
-      json: { cutoff, limit },
+      json: { cutoff, limit, keep },
       actorId: CLEANUP_ACTOR,
     });
     result['creator-tier'] = { purged: purged.length, failed: failed.length };

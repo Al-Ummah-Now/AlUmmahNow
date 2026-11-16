@@ -80,7 +80,7 @@ test.describe('Release: creator tiers', () => {
 
     // 1. No tier
     const none = await creatorAccess(user);
-    expect(none.tier?.id, 'a new account holds Member').toBe('member');
+    expect(none.tier?.id, 'a new account holds the default tier, Free').toBe('member');
     expect(none.canUpload).toBe(false);
     expect(none.canCreateChannel).toBe(false);
     await expectInvitationOnly(await createChannel(user), 'POST /api/channels without a tier');

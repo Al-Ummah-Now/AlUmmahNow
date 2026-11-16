@@ -13,7 +13,7 @@ export interface VideosClientEnv {
 
 /** An api-videos answer that was not a success, passed on to the admin as is. */
 export class VideosError extends Error {
-  constructor(readonly status: number, readonly code: string, message: string) {
+  constructor(readonly status: number, readonly code: string, message: string, readonly details?: Record<string, unknown>) {
     super(message);
   }
 }
@@ -72,12 +72,15 @@ export async function callVideos<T>(env: VideosClientEnv, path: string, call: Vi
   else if (env.VIDEOS_API_URL) response = await fetch(`${env.VIDEOS_API_URL.replace(/\/$/, '')}${suffix}`, init);
   else throw new VideosError(500, 'not_configured', 'The VIDEOS service binding is not configured');
 
-  const payload = (await response.json().catch(() => null)) as { success?: boolean; result?: T; code?: string; error?: string } | null;
+  const payload = (await response.json().catch(() => null)) as ({ success?: boolean; result?: T; code?: string; error?: string } & Record<string, unknown>) | null;
   if (!response.ok || !payload?.success) {
+    // Counts and the like next to the code (a tier with users: { users }) reach the admin as they are
+    const { success: _s, result: _r, code: _c, error: _e, ...details } = payload ?? {};
     throw new VideosError(
       response.ok ? 502 : response.status,
       payload?.code ?? 'videos_error',
       payload?.error ?? `api-videos answered ${response.status}`,
+      Object.keys(details).length ? details : undefined,
     );
   }
   return payload.result as T;

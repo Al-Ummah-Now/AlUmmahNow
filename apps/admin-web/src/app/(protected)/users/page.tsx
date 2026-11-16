@@ -1,7 +1,7 @@
 import Link from '@/components/AppLink';
-import { ADMIN_USER_SORTS, NO_CREATOR_TIER, type AdminUsersPage, type CreatorTier } from '@al-ummah/shared-types';
+import { ADMIN_USER_SORTS, type AdminUsersPage, type CreatorTier } from '@al-ummah/shared-types';
 import { listUsers } from '@/lib/api/content';
-import { bulkSetCreatorTier, listCreatorTierDefinitions, setUserCreatorTier } from '@/lib/api/creators';
+import { bulkSetCreatorTier, listCreatorTierChoices, setUserCreatorTier } from '@/lib/api/creators';
 import { getAdminSession } from '@/lib/auth';
 import { canManageCreators } from '@/lib/roles';
 import { parseUserTierFilter, tierLabel } from '@/lib/creator-tiers';
@@ -37,13 +37,15 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
   // Definitions only (no per-tier counts: those scan every profile; the Tiers page shows them)
   let tiers: CreatorTier[] | null = null;
   try {
-    [data, tiers] = await Promise.all([
+    let choices: { items: CreatorTier[]; defaultTierId: string } | null;
+    [data, choices] = await Promise.all([
       listUsers({ ...params, page, pageSize: PAGE_SIZE }),
-      listCreatorTierDefinitions().catch((e) => {
+      listCreatorTierChoices().catch((e) => {
         logger.warn('[users] Could not load tier definitions', { error: e instanceof Error ? e.message : String(e) });
         return null;
       }),
     ]);
+    tiers = choices?.items ?? null;
   } catch (e) {
     logger.error('[users] Failed to load', { error: e instanceof Error ? e.message : String(e) });
   }
@@ -78,9 +80,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
             allLabel: t('creators.tierAny'),
             options: [
               { value: 'needs_tier', label: t('creators.filterNeedsTier') },
-              { value: 'has_tier', label: t('creators.filterAssigned') },
               { value: 'hit_limit', label: t('creators.filterLimited') },
-              { value: NO_CREATOR_TIER, label: t('creators.tierNone') },
               ...(tiers ?? []).map((tier) => ({ value: tier.id, label: tierLabel(tier, locale) })),
             ],
           },

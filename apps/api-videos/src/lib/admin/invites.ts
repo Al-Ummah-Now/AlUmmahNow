@@ -9,6 +9,7 @@
  * objects in R2, and the ownership index through the R2 sync (withSearchSync).
  * At first sign-in the same id is in the token, so it is all already theirs.
  */
+import { writeSignupTier } from '../creatorTiers';
 import R2Repository from '../r2Repo';
 import Queue, { MessageType } from '../queue';
 import { logger } from '../logger';
@@ -85,6 +86,8 @@ export async function provisionProfile(env: AdminServiceEnv, input: { userId: st
 		},
 		{ initial: () => initial as Row },
 	);
+	// Every account has a tier: the default as a baseline; admin-api then sets the invite's tier
+	await writeSignupTier(env.SEARCH_DB as D1Database, input.userId);
 	if (created) {
 		try {
 			await new Queue(env.queue as never).send(MessageType.ProfileCreate, { profileId: input.userId, userId: input.userId, timestamp: new Date().toISOString(), source: 'admin' });

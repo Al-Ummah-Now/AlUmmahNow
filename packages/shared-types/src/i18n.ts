@@ -185,6 +185,7 @@ export interface AppTranslations {
     minute: string;
     hours: string;
     hour: string;
+    /** The upload page: the effective tier ("Your tier: Creator"), the default's name when none is assigned */
   };
   /** /upgrade: request a tier (wiki AUN-TIER-REQUESTS). Never prices. */
   upgrade: {

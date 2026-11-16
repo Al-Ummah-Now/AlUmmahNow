@@ -33,19 +33,22 @@ function isEmailAddress(value: string): boolean {
 
 interface Props {
   tiers: Array<{ id: string; name: string; nameAr?: string | null }>;
+  /** The tier a sign-up gets: the picker starts on it (every account has a tier) */
+  defaultTierId: string;
+  /** creators:manage: may pick another tier than the default */
   canPlan: boolean;
   canCreateChannels: boolean;
   canTransfer: boolean;
 }
 
-export function InviteForm({ tiers, canPlan, canCreateChannels, canTransfer }: Props) {
+export function InviteForm({ tiers, defaultTierId, canPlan, canCreateChannels, canTransfer }: Props) {
   const { t, locale: uiLocale } = useLanguage();
   const ids = useId();
   const { run, busy, error, message } = useContentAction();
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [role, setRole] = useState<'creator' | 'viewer'>('creator');
-  const [tierId, setTierId] = useState(tiers[0]?.id ?? '');
+  const [tierId, setTierId] = useState(tiers.some((tier) => tier.id === defaultTierId) ? defaultTierId : tiers[0]?.id ?? '');
   const [scholar, setScholar] = useState(false);
   // The email's one language: picked next to Send, the admin UI's language until changed
   const [locale, setLocale] = useState<EmailLanguage>(uiLocale === 'ar' ? 'ar' : 'en');
@@ -106,7 +109,8 @@ export function InviteForm({ tiers, canPlan, canCreateChannels, canTransfer }: P
               email: email.trim(),
               name: name.trim() || undefined,
               role,
-              tierId: role === 'creator' && canPlan && tierId ? tierId : null,
+              // Every account has a tier: the picked one, else the server's default
+              tierId: tierId || null,
               authRoles: scholar ? ['Scholar'] : [],
               locale,
               note: note.trim() || undefined,
@@ -174,11 +178,11 @@ export function InviteForm({ tiers, canPlan, canCreateChannels, canTransfer }: P
               <option value="viewer">{t('invites.roleViewer')}</option>
             </select>
           </div>
-          {role === 'creator' && canPlan && (
+          {tiers.length > 0 && (
             <div className="flex flex-col gap-1">
               <label htmlFor={`${ids}-plan`} className="text-sm text-fg-muted">{t('invites.plan')}</label>
-              <select id={`${ids}-plan`} value={tierId} onChange={(e) => setTierId(e.target.value)} aria-describedby={`${ids}-plan-hint`} className={fieldClass} data-testid="invite-plan">
-                <option value="">{t('invites.planNone')}</option>
+              {/* Without creators:manage only the default can be given: shown, not changeable */}
+              <select id={`${ids}-plan`} value={tierId} onChange={(e) => setTierId(e.target.value)} disabled={!canPlan} aria-describedby={`${ids}-plan-hint`} className={fieldClass} data-testid="invite-plan">
                 {tiers.map((tier) => (
                   <option key={tier.id} value={tier.id}>{tierLabel(tier, uiLocale)}</option>
                 ))}

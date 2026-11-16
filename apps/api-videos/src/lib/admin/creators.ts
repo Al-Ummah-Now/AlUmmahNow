@@ -19,6 +19,7 @@ import {
 	NO_CREATOR_TIER,
 	SUPER_ADMIN_TIER_ASSIGNER,
 	creatorTierOrigin,
+	tierAllowsUploads,
 	type AdminCreatorFilter,
 	type AdminCreatorRow,
 	type AdminPage,
@@ -30,7 +31,7 @@ import {
 	type CreatorTierBulkResult,
 	type CreatorTierCounts,
 } from '@al-ummah/shared-types';
-import { CreatorTierError, readAssignments, readTier, readTiers } from '../creatorTiers';
+import { CreatorTierError, readAssignments, readDefaultTier, readTier, readTiers } from '../creatorTiers';
 import { windowStart } from '../../middleware/rate-limit';
 import { UPLOAD_SESSION_OPERATION } from '../../middleware/upload-limits';
 import { cachedCount, likeTerm, pageOf, readMany, toUserRow } from './directory';
@@ -89,6 +90,10 @@ export async function listCreators(env: CreatorsEnv, query: CreatorsQuery, nowMs
 	const db = env.SEARCH_DB as D1Database;
 	const now = Math.floor(nowMs / 1000);
 	const weekAgo = now - 7 * 86400;
+	// Users without a row yet (before the Free backfill) are treated as Free: when Free allows uploads, nobody needs a tier
+	const [defaultTier, unassignedTier] = await Promise.all([readDefaultTier(db), readTier(db, DEFAULT_TIER_ID)]);
+	// ('1 = 0', not '0': a bare integer in ORDER BY is a column number)
+	const needsTierSql = tierAllowsUploads(unassignedTier) ? '1 = 0' : NEEDS_TIER;
 	const { page, pageSize, offset } = pageOf(query.page, query.pageSize);
 	const where: string[] = [];
 	const binds: unknown[] = [weekAgo];
@@ -99,7 +104,7 @@ export async function listCreators(env: CreatorsEnv, query: CreatorsQuery, nowMs
 		const exact = `?${binds.length}`;
 		where.push(`(lower(display_name) LIKE ${like} ESCAPE '\\' OR lower(user_name) LIKE ${like} ESCAPE '\\' OR lower(email) LIKE ${like} ESCAPE '\\' OR user_id = ${exact})`);
 	}
-	if (query.filter === 'needs_tier') where.push(NEEDS_TIER);
+	if (query.filter === 'needs_tier') where.push(needsTierSql);
 	if (query.filter === 'assigned') where.push('tier_id IS NOT NULL');
 	if (query.filter === 'limited') where.push('hits7d > 0');
 	if (query.tierId === NO_CREATOR_TIER) where.push('tier_id IS NULL');
@@ -118,7 +123,7 @@ export async function listCreators(env: CreatorsEnv, query: CreatorsQuery, nowMs
 		db
 			.prepare(
 				`SELECT * FROM (${CREATORS_SQL}) ${whereSql}
-				 ORDER BY (${NEEDS_TIER}) DESC, hits7d DESC, (tier_id IS NOT NULL) DESC, videos DESC, channels DESC, lower(COALESCE(display_name, user_name, user_id)), user_id
+				 ORDER BY (${needsTierSql}) DESC, hits7d DESC, (tier_id IS NOT NULL) DESC, videos DESC, channels DESC, lower(COALESCE(display_name, user_name, user_id)), user_id
 				 LIMIT ${pageSize} OFFSET ${offset}`,
 			)
 			.bind(...binds)
@@ -127,7 +132,7 @@ export async function listCreators(env: CreatorsEnv, query: CreatorsQuery, nowMs
 		Promise.all([
 			cachedCount(db as never, 'creators:hits24h', () =>
 				db.prepare('SELECT COUNT(DISTINCT user_id) AS n FROM upload_limit_hits WHERE hit_at >= ?').bind(now - 86400).first<{ n: number }>().then((r) => Number(r?.n) || 0), nowMs),
-			creatorNotices(db, nowMs),
+			creatorNotices(db, nowMs, unassignedTier),
 		]).then(([hits24h, n]) => ({ hits24h, hits7d: n.limitHits7d, needsTier: n.needsTier })),
 	]);
 	const needsTier = notices.needsTier;
@@ -157,7 +162,7 @@ export async function listCreators(env: CreatorsEnv, query: CreatorsQuery, nowMs
 			origin: creatorTierOrigin(assignment),
 			assignedByName: assignment ? assigners.get(assignment.assignedBy) ?? null : null,
 			tierName: assignment ? tierById.get(assignment.tierId)?.name ?? assignment.tierId : null,
-			needsTier: !assignment && (channels > 0 || videos > 0),
+			needsTier: !assignment && !tierAllowsUploads(unassignedTier) && (channels > 0 || videos > 0),
 			channels,
 			videos,
 			usage: usage.get(id) ?? { hour: 0, day: 0 },
@@ -173,15 +178,19 @@ export async function listCreators(env: CreatorsEnv, query: CreatorsQuery, nowMs
 		limitHits24h: Number(notices?.hits24h) || 0,
 		limitHits7d: Number(notices?.hits7d) || 0,
 		needsTier,
+		defaultTier: defaultTier ? { id: defaultTier.id, name: defaultTier.name } : null,
 	};
 }
 
 /** The creator notices: users who need a tier, and who hit an upload limit in 7 days (each cached a minute). */
-async function creatorNotices(db: D1Database, nowMs: number): Promise<{ needsTier: number; limitHits7d: number }> {
+async function creatorNotices(db: D1Database, nowMs: number, unassignedTier: CreatorTier | null): Promise<{ needsTier: number; limitHits7d: number }> {
 	const weekAgo = Math.floor(nowMs / 1000) - 7 * 86400;
 	const [needsTier, limitHits7d] = await Promise.all([
-		cachedCount(db as never, 'creators:needs-tier', () =>
-			db.prepare(`SELECT COUNT(*) AS n FROM (${CREATORS_SQL}) WHERE ${NEEDS_TIER}`).bind(weekAgo).first<{ n: number }>().then((r) => Number(r?.n) || 0), nowMs),
+		// Free allowing uploads covers everyone without a row yet: no scan
+		tierAllowsUploads(unassignedTier)
+			? Promise.resolve(0)
+			: cachedCount(db as never, 'creators:needs-tier', () =>
+					db.prepare(`SELECT COUNT(*) AS n FROM (${CREATORS_SQL}) WHERE ${NEEDS_TIER}`).bind(weekAgo).first<{ n: number }>().then((r) => Number(r?.n) || 0), nowMs),
 		cachedCount(db as never, 'creators:hits7d', () =>
 			db.prepare('SELECT COUNT(DISTINCT user_id) AS n FROM upload_limit_hits WHERE hit_at >= ?').bind(weekAgo).first<{ n: number }>().then((r) => Number(r?.n) || 0), nowMs),
 	]);
@@ -198,6 +207,7 @@ export async function withCreatorInfo(env: CreatorsEnv, page: AdminPage<AdminUse
 	const db = env.SEARCH_DB as D1Database;
 	const ids = page.items.map((u) => u.id);
 	const weekAgo = Math.floor(nowMs / 1000) - 7 * 86400;
+	const [defaultTier, unassignedTier] = await Promise.all([readDefaultTier(db), readTier(db, DEFAULT_TIER_ID)]);
 	const [assignments, owners, hits, notices] = await Promise.all([
 		readAssignments(db, ids),
 		ids.length
@@ -217,7 +227,7 @@ export async function withCreatorInfo(env: CreatorsEnv, page: AdminPage<AdminUse
 					.all<{ user_id: string; n: number }>()
 					.then((r) => new Map((r.results ?? []).map((row) => [row.user_id, Number(row.n) || 0])))
 			: Promise.resolve(new Map<string, number>()),
-		creatorNotices(db, nowMs),
+		creatorNotices(db, nowMs, unassignedTier),
 	]);
 	const assigners = await namesOf(db, [...new Set([...assignments.values()].map((a) => a.assignedBy))]);
 	const items = page.items.map((u) => {
@@ -226,12 +236,12 @@ export async function withCreatorInfo(env: CreatorsEnv, page: AdminPage<AdminUse
 			assignment,
 			origin: creatorTierOrigin(assignment),
 			assignedByName: assignment ? assigners.get(assignment.assignedBy) ?? null : null,
-			needsTier: !assignment && owners.has(u.id),
+			needsTier: !assignment && !tierAllowsUploads(unassignedTier) && owners.has(u.id),
 			limitHits7d: hits.get(u.id) ?? 0,
 		};
 		return { ...u, creator };
 	});
-	return { ...page, items, creators: notices };
+	return { ...page, items, creators: { ...notices, defaultTier: defaultTier ? { id: defaultTier.id, name: defaultTier.name } : null } };
 }
 
 /** Display names (videos profiles) of the admins who assigned tiers. */
@@ -270,7 +280,7 @@ async function usageOf(db: D1Database, ids: string[], now: number): Promise<Map<
 	return usage;
 }
 
-/** Users on each tier, and videos users (profiles) without one. */
+/** Users on each tier, and videos users (profiles) without a row yet (treated as Free until the backfill). */
 export async function tierCounts(db: D1Database): Promise<CreatorTierCounts> {
 	const [byTier, none] = await Promise.all([
 		db.prepare('SELECT tier_id, COUNT(*) AS n FROM creator_tier_assignments GROUP BY tier_id').all<{ tier_id: string; n: number }>(),
@@ -298,7 +308,7 @@ export async function limitHitsSince(db: D1Database, nowMs = Date.now()): Promis
 const USER_ID = /^[A-Za-z0-9_-]{1,128}$/;
 
 /**
- * Assign one tier (or remove it: null) for many users in one D1 batch.
+ * Assign one tier for many users in one D1 batch (every account keeps a tier: null is refused).
  * Super admins' automatic Unlimited is never changed in bulk, and users who
  * already hold the tier from an admin are left alone (idempotent: running the
  * same change twice changes nothing the second time). `dryRun` returns the
@@ -310,8 +320,7 @@ export async function bulkAssignTier(
 	actorId: string,
 	now = new Date().toISOString(),
 ): Promise<CreatorTierBulkResult> {
-	// Member is what no assignment row means (lib/creatorTiers.ts assignTier): assigning it removes the row
-	if (input.tierId === DEFAULT_TIER_ID) input = { ...input, tierId: null };
+	if (input.tierId === null) throw new CreatorTierError(400, 'tier_required', 'Every account has a tier: choose one');
 	const userIds = [...new Set(input.userIds)];
 	if (!userIds.length || userIds.length > MAX_BULK_CREATOR_TIER || !userIds.every((id) => USER_ID.test(id))) {
 		throw new CreatorTierError(400, 'invalid_users', `userIds: 1 to ${MAX_BULK_CREATOR_TIER} user ids`);

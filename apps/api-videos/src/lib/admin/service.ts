@@ -52,7 +52,7 @@ import { purgeVideoMedia, type MediaEnv } from '../media/r2-delivery';
 import { hideNotificationsOf, setNotificationsHidden } from '../notifications';
 import { dropVideoReferences, eraseCaptionJobs, eraseChannelPostImages, erasePostImages, eraseVideoImages } from './purgeCopies';
 import { deleteVideoSideRecords } from '../videoSideRecords';
-import { assignTier, readAssignment } from '../creatorTiers';
+import { readAssignment, removeTierOfErasedAccount } from '../creatorTiers';
 import { bansFor, deleteBan, readBan, writeBan } from './bans';
 import { createJob, type JobHandler, type JobOutcome, type JobQueue } from './jobs';
 import { pendingDeletion, purgeDeletionNow, recordDeletion, removeDeletion, requestPurge, type PurgeOutcome } from './deletions';
@@ -1438,7 +1438,7 @@ export interface RevokedInviteErase {
 export async function eraseRevokedInviteUser(env: AdminServiceEnv, userId: string, actorId: string, now = Date.now()): Promise<RevokedInviteErase> {
 	const db = env.SEARCH_DB!;
 	// An id the tiers table cannot hold has no tier to remove
-	const previous = /^[A-Za-z0-9_-]{1,128}$/.test(userId) ? (await assignTier(db as unknown as D1Database, userId, null, actorId)).previous : null;
+	const previous = await removeTierOfErasedAccount(db as unknown as D1Database, userId);
 	const owns = async (kind: 'channel' | 'video') =>
 		!!(await (db as unknown as D1Database).prepare('SELECT 1 FROM content_ownership WHERE kind = ? AND owner_id = ? LIMIT 1').bind(kind, userId).first());
 	const pending = await pendingDeletion(db, 'user', userId);

@@ -17,6 +17,7 @@
  * overdraft), which the next month's allowance and the admin's grants pay down
  * (owner decisions 2026-11-14).
  */
+import type { CreatorTierVia } from './creator-tiers';
 
 export const CAPTION_GRANT_SCOPES = ['month', 'until_used'] as const;
 export type CaptionGrantScope = (typeof CAPTION_GRANT_SCOPES)[number];
@@ -63,7 +64,7 @@ export interface CaptionMinutesUsage {
   resetsAt: string;
   /** No limit: an Unlimited tier or the super admin */
   unlimited: boolean;
-  via: 'tier' | 'super_admin' | 'none';
+  via: CreatorTierVia;
   /** The tier's monthly minutes (0 without a tier) */
   tierMinutes: number;
   /** Minutes granted for this month */

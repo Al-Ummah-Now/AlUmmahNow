@@ -29,8 +29,9 @@ import {
 	type PaymentMode,
 	type PaymentProviderId,
 	DEFAULT_TIER_ID,
+	tierRank,
 } from '@al-ummah/shared-types';
-import { assignTier, readAssignment, readTiers } from '../creatorTiers';
+import { assignTier, readAssignment, readDefaultTier, readTiers } from '../creatorTiers';
 import { logger } from '../logger';
 import { BillingError, type BillingEnv, linkByRef, readPrice } from './config';
 import type { NormalizedEvent, ParsedWebhook, ProviderSubscription } from './provider';
@@ -568,10 +569,8 @@ export async function createComp(env: BillingEnv, input: { userId: string; tierI
 // Entitlement
 // ---------------------------------------------------------------------------
 
-const rank = (tiers: CreatorTier[], id: string | null | undefined) => {
-	const t = tiers.find((x) => x.id === id);
-	return t ? (t.unlimited ? Number.MAX_SAFE_INTEGER : t.sortOrder) : -1;
-};
+/** The admin rank (shared-types tierRank) of a tier id */
+const rank = (tiers: CreatorTier[], id: string | null | undefined) => tierRank(tiers.find((x) => x.id === id));
 
 export function entitles(row: Pick<SubscriptionRow, 'status' | 'access_until'>, at: string): boolean {
 	return ENTITLING.includes(row.status as BillingSubscriptionStatus) && (row.access_until === null || row.access_until > at);
@@ -608,7 +607,9 @@ export async function syncEntitlement(env: BillingEnv, userId: string, now = new
 		return { from, to: best.tier_id, changed: true };
 	}
 	if (current?.source === 'subscription') {
-		const restore = subs.find((s) => s.restore_tier_id && tiers.some((t) => t.id === s.restore_tier_id))?.restore_tier_id ?? null;
+		// Back to the tier an admin had given, else the current default (every account keeps a tier)
+		const restore =
+			subs.find((s) => s.restore_tier_id && tiers.some((t) => t.id === s.restore_tier_id))?.restore_tier_id ?? (await readDefaultTier(db(env)))?.id ?? DEFAULT_TIER_ID;
 		await assignTier(db(env), userId, restore, BILLING_ACTOR, 'admin', at);
 		await recordTierChange(env as never, { userId, from, to: restore ?? DEFAULT_TIER_ID, reason: 'subscription' }, now);
 		await markSynced();

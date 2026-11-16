@@ -658,3 +658,20 @@ export function signInUrl(
   url.searchParams.set('return', landing);
   return url.toString();
 }
+
+/** Invites still open (not accepted, revoked, expired or deleted): they carry their tier to the account. */
+const PENDING_INVITE = `deleted_at IS NULL AND (status IS NULL OR status = 'invited')`;
+
+/** Pending invites that carry `tierId` (idx_creator_invites_tier, migration 0030). */
+export async function pendingInvitesForTier(db: D1Database, tierId: string): Promise<number> {
+  const row = await db.prepare(`SELECT COUNT(*) AS n FROM creator_invites WHERE tier_id = ? AND ${PENDING_INVITE}`).bind(tierId).first<{ n: number }>();
+  return Number(row?.n) || 0;
+}
+
+/** Pending invites per tier (tier id -> count), grouped on idx_creator_invites_tier. */
+export async function pendingInvitesByTier(db: D1Database): Promise<Record<string, number>> {
+  const { results } = await db
+    .prepare(`SELECT tier_id, COUNT(*) AS n FROM creator_invites WHERE tier_id IS NOT NULL AND ${PENDING_INVITE} GROUP BY tier_id`)
+    .all<{ tier_id: string; n: number }>();
+  return Object.fromEntries((results ?? []).map((r) => [r.tier_id, Number(r.n) || 0]));
+}

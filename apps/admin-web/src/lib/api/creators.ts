@@ -35,7 +35,25 @@ export async function listCreatorTiers(): Promise<CreatorTiersList> {
  * profile and assignment and only the Tiers page shows them.
  */
 export async function listCreatorTierDefinitions(): Promise<CreatorTiersList['items']> {
-  return (await fetchAdmin<{ items: CreatorTiersList['items'] }>('/api/content/creator-tiers?counts=0')).items;
+  return (await listCreatorTierChoices()).items;
+}
+
+/** The tier definitions and the default tier (a tier id or 'none'), without the counts. */
+export async function listCreatorTierChoices(): Promise<Pick<CreatorTiersList, 'items' | 'defaultTierId'>> {
+  return fetchAdmin<Pick<CreatorTiersList, 'items' | 'defaultTierId'>>('/api/content/creator-tiers?counts=0');
+}
+
+/** Reorders the tiers (every tier id, lowest rank first); audited; `undo` marks the change that puts the old order back. */
+export async function reorderCreatorTiers(ids: string[], opts: { undo?: boolean } = {}): Promise<ActionResult<{ previous: string[]; order: string[] }>> {
+  return mutate('/api/content/creator-tiers/order', 'PUT', { ids, ...(opts.undo ? { undo: true } : {}) });
+}
+
+/**
+ * Makes a tier the default: accounts that sign up afterwards get it (existing
+ * accounts keep their stored tier). Audited; `undo` marks the change that puts the previous default back.
+ */
+export async function setDefaultCreatorTier(tierId: string, opts: { undo?: boolean } = {}): Promise<ActionResult<{ previous: string; defaultTierId: string }>> {
+  return mutate('/api/content/creator-tiers/default', 'PUT', { tierId, ...(opts.undo ? { undo: true } : {}) });
 }
 
 export async function creatorTierAudit(): Promise<AdminAuditEntry[]> {

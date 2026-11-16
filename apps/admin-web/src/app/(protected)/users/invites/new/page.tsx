@@ -1,4 +1,4 @@
-import { listCreatorTierDefinitions } from '@/lib/api/creators';
+import { listCreatorTierChoices } from '@/lib/api/creators';
 import { getContentPermissions } from '@/lib/api/content';
 import type { AdminContentPermission } from '@/lib/api/content-types';
 import { getI18n } from '@/i18n/server';
@@ -14,9 +14,13 @@ export default async function NewInvitePage() {
   const { t } = await getI18n();
   let permissions: AdminContentPermission[] | null = null;
   let tiers: Array<{ id: string; name: string }> = [];
+  let defaultTierId = 'member';
   try {
     permissions = await getContentPermissions();
-    if (permissions.includes('creators:manage')) tiers = (await listCreatorTierDefinitions()).map((tier) => ({ id: tier.id, name: tier.name, nameAr: tier.nameAr ?? null }));
+    // Every invite gives a tier: the default, or (creators:manage) another one
+    const choices = await listCreatorTierChoices();
+    tiers = choices.items.map((tier) => ({ id: tier.id, name: tier.name, nameAr: tier.nameAr ?? null }));
+    defaultTierId = choices.defaultTierId;
   } catch (e) {
     logger.error('[invites] Failed to load the form', { error: e instanceof Error ? e.message : String(e) });
   }
@@ -29,6 +33,7 @@ export default async function NewInvitePage() {
       {permissions?.includes('users:manage') && (
         <InviteForm
           tiers={tiers}
+          defaultTierId={defaultTierId}
           canPlan={permissions.includes('creators:manage')}
           canCreateChannels={permissions.includes('channels:manage')}
           canTransfer={permissions.includes('channels:transfer')}

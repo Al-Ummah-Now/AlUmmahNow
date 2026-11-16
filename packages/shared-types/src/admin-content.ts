@@ -452,7 +452,7 @@ export interface AdminUserCreatorInfo {
 
 /** The Users list page: rows plus the creator notices (needs a tier, hit a limit this week). */
 export interface AdminUsersPage<T = AdminUserRow> extends AdminPage<T> {
-  creators?: { needsTier: number; limitHits7d: number };
+  creators?: { needsTier: number; limitHits7d: number; defaultTier?: { id: string; name: string } | null };
 }
 
 /** User search for pickers (channel ownership transfer): 2+ characters, a few best matches. */
