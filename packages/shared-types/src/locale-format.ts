@@ -19,7 +19,6 @@
 export type FormatLocale = string;
 
 const ARABIC = /^ar(?:$|[-_])/i;
-const EXTENSION = /-u-.*$/i;
 
 /** True for "ar", "ar-EG", "ar_SA", ... */
 export function isArabicLocale(locale: FormatLocale | null | undefined): boolean {
@@ -34,7 +33,8 @@ export function isArabicLocale(locale: FormatLocale | null | undefined): boolean
 export function intlLocale(locale: FormatLocale | null | undefined): string {
   const tag = (locale ?? '').trim().replace(/_/g, '-');
   if (isArabicLocale(tag)) return 'ar-u-nu-arab';
-  const base = tag.replace(EXTENSION, '') || 'en';
+  const ext = tag.toLowerCase().indexOf('-u-');
+  const base = (ext >= 0 ? tag.slice(0, ext) : tag) || 'en';
   try {
     return Intl.getCanonicalLocales(`${base}-u-nu-latn`)[0];
   } catch {
