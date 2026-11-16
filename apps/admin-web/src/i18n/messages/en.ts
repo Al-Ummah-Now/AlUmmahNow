@@ -226,8 +226,6 @@ const en = {
     langArabic: 'Arabic',
     translateToAr: 'Translate to Arabic',
     translateToEn: 'Translate to English',
-    translateToArNamed: 'Translate {field} to Arabic',
-    translateToEnNamed: 'Translate {field} to English',
     translating: 'Translating…',
     filled: '{lang} filled by machine translation. Check it before saving.',
     replaced: '{lang} replaced by machine translation. Check it before saving, or undo.',
