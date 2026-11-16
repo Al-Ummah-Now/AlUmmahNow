@@ -146,7 +146,7 @@ function Rail({ locale, role, channel, segments, features, onNavigate }: { local
           </Link>
         </Button>
       )}
-      {can(role, 'live.manage') && (
+      {can(role, 'live.manage') && features?.live && (
         <Button asChild variant="outline">
           <Link href={studioLiveHref(locale, channel.id)} onClick={onNavigate} data-testid="studio-golive-link">
             <Radio aria-hidden="true" className="me-2 h-4 w-4" />

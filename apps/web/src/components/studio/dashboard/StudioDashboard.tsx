@@ -22,6 +22,8 @@ interface Props {
   locale: string;
   channelId: string;
   role: StudioRole;
+  /** Live is on for this channel (GET /api/me/features): otherwise no Go live quick action */
+  liveOn?: boolean;
 }
 
 interface DashboardData {
@@ -46,7 +48,7 @@ function Card({ title, testId, children }: { title: string; testId: string; chil
 }
 
 /** What needs attention on this channel, by what the role can see (spec §4.3). */
-export function StudioDashboard({ locale, channelId, role }: Props) {
+export function StudioDashboard({ locale, channelId, role, liveOn = false }: Props) {
   const { t } = useLanguage();
   const text = t.studio.dashboard;
   const [data, setData] = useState<DashboardData | null>(null);
@@ -90,7 +92,7 @@ export function StudioDashboard({ locale, channelId, role }: Props) {
   const number = numberFormat(locale);
   const quickLinks = [
     can(role, 'video.upload') && { label: text.quick.upload, href: studioUploadHref(locale, channelId) },
-    can(role, 'live.manage') && { label: text.quick.goLive, href: studioLiveHref(locale, channelId) },
+    can(role, 'live.manage') && liveOn && { label: text.quick.goLive, href: studioLiveHref(locale, channelId) },
     can(role, 'post.manage') && { label: text.quick.newPost, href: legacyHref(locale, channelId, 'content/posts/new')! },
     can(role, 'channel.edit') && { label: text.quick.customise, href: legacyHref(locale, channelId, 'customisation/profile')! },
   ].filter((link): link is { label: string; href: string } => Boolean(link));

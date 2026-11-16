@@ -33,7 +33,7 @@ test.describe('Release: Studio Go live', () => {
     owner = user;
     const listUrl = `${target().web}/en/studio/${channelId}/content/live`;
     const res = await page.goto(listUrl);
-    test.skip(res?.status() === 404, 'Studio Live is not deployed to this environment yet');
+    test.skip(res?.status() === 404, 'Live is off here (no live provider may take a stream): Studio hides it');
 
     const title = `Release live ${Date.now().toString(36)}`;
     const titleField = page.getByTestId('studio-live-title');
@@ -47,7 +47,7 @@ test.describe('Release: Studio Go live', () => {
     const outcome = await Promise.race([opened, refused]);
     if (outcome === 'refused') {
       const message = (await page.getByTestId('studio-live-error').textContent()) ?? '';
-      test.skip(/not available|capacity|limit/i.test(message), `No live provider may take a stream here: ${message}`);
+      test.skip(/capacity|limit/i.test(message), `No live provider may take a stream here: ${message}`);
       throw new Error(`Creating a live stream failed: ${message}`);
     }
     streamId = page.url().split('/').pop() ?? null;

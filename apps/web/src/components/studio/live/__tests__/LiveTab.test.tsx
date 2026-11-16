@@ -6,8 +6,9 @@ const list = jest.fn();
 const create = jest.fn();
 const remove = jest.fn();
 const push = jest.fn();
+const refresh = jest.fn();
 
-jest.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push, refresh }) }));
 jest.mock('@/hooks/useLanguage', () => ({
   useLanguage: () => ({ t: { studio: mockStudio, confirmDialog: { typeToConfirm: 'Type {value}' }, common: { cancel: 'Cancel' } }, lang: 'en' }),
 }));
@@ -69,13 +70,24 @@ describe('Studio LiveTab', () => {
     expect(push).toHaveBeenCalledWith('/en/studio/c1/content/live/new1');
   });
 
-  it('shows the friendly message when no provider may take a stream', async () => {
+  it('shows the friendly message when live is at capacity', async () => {
     const { LiveApiError } = jest.requireActual('@/lib/live/api');
-    create.mockRejectedValue(new LiveApiError(503, 'live_budget'));
+    create.mockRejectedValue(new LiveApiError(503, 'live_capacity'));
     render(<LiveTab locale="en" channelId="c1" role="owner" />);
     fireEvent.change(await screen.findByTestId('studio-live-title'), { target: { value: 'Talk' } });
     fireEvent.click(screen.getByTestId('studio-live-create'));
-    expect(await screen.findByTestId('studio-live-error')).toHaveTextContent(text.errors.live_budget);
+    expect(await screen.findByTestId('studio-live-error')).toHaveTextContent(text.errors.live_capacity);
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('live switched off meanwhile (404 feature_off): no message, the page re-renders without Live', async () => {
+    const { LiveApiError } = jest.requireActual('@/lib/live/api');
+    create.mockRejectedValue(new LiveApiError(404, 'feature_off'));
+    render(<LiveTab locale="en" channelId="c1" role="admin" />);
+    fireEvent.change(await screen.findByTestId('studio-live-title'), { target: { value: 'Talk' } });
+    fireEvent.click(screen.getByTestId('studio-live-create'));
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    expect(screen.queryByTestId('studio-live-error')).not.toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();
   });
 
@@ -112,45 +124,45 @@ describe('Studio LiveTab', () => {
     expect(await screen.findByTestId('studio-live-empty')).toHaveTextContent(text.empty);
   });
 
-  describe('creator tier', () => {
+  describe('live quota (plain facts, no upsell)', () => {
     const live = (over: Record<string, unknown>) => ({ status: 'ready', access: { live: { allowed: true, reason: null, unlimited: false, hoursMonth: 20, usedMinutes: 90, maxConcurrent: 1, maxStreamMinutes: 240, ...over } } });
 
     it('shows the month\'s usage to an owner whose tier allows live', async () => {
       mockCreator.mockReturnValue(live({}));
       render(<LiveTab locale="en" channelId="c1" role="owner" />);
-      expect(await screen.findByTestId('studio-live-usage')).toHaveTextContent('1.5');
+      expect(await screen.findByTestId('studio-live-quota')).toHaveTextContent('1.5');
       expect(screen.getByTestId('studio-live-create')).toBeInTheDocument();
     });
 
-    it('explains a tier without live, hides the form and links Request access to /upgrade', async () => {
-      mockCreator.mockReturnValue(live({ allowed: false, reason: 'not_in_tier' }));
-      render(<LiveTab locale="ar" channelId="c1" role="owner" />);
-      const gate = await screen.findByTestId('studio-live-gate');
-      expect(gate).toHaveAttribute('data-reason', 'not_in_tier');
-      expect(gate).toHaveTextContent(text.gate.notInTierTitle);
-      expect(screen.getByTestId('studio-live-request-access')).toHaveAttribute('href', '/ar/upgrade');
+    it('says the month\'s hours are used as a plain fact, hides the form, no link', async () => {
+      mockCreator.mockReturnValue(live({ allowed: false, reason: 'hours_used', usedMinutes: 1200 }));
+      render(<LiveTab locale="en" channelId="c1" role="owner" />);
+      const quota = await screen.findByTestId('studio-live-quota');
+      expect(quota).toHaveAttribute('data-reason', 'hours_used');
+      expect(quota).toHaveTextContent('20');
+      expect(quota.querySelector('a')).toBeNull();
       expect(screen.queryByTestId('studio-live-create')).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: /upgrade|request/i })).not.toBeInTheDocument();
       // The streams already made stay listed
       expect(await screen.findAllByTestId('studio-live-row')).toHaveLength(2);
     });
 
-    it('says the month\'s hours are used, without a request link', async () => {
-      mockCreator.mockReturnValue(live({ allowed: false, reason: 'hours_used', usedMinutes: 1200 }));
+    it('unlimited: nothing to say', async () => {
+      mockCreator.mockReturnValue(live({ unlimited: true, hoursMonth: null }));
       render(<LiveTab locale="en" channelId="c1" role="owner" />);
-      expect(await screen.findByTestId('studio-live-gate')).toHaveTextContent(text.gate.hoursUsedTitle);
-      expect(screen.queryByTestId('studio-live-request-access')).not.toBeInTheDocument();
+      await screen.findAllByTestId('studio-live-row');
+      expect(screen.queryByTestId('studio-live-quota')).not.toBeInTheDocument();
     });
 
-    it('a channel admin sees the server\'s live_not_in_tier refusal with Request access', async () => {
+    it('a channel admin hears the owner\'s used hours from the server, plainly', async () => {
       const { LiveApiError } = jest.requireActual('@/lib/live/api');
-      create.mockRejectedValue(new LiveApiError(403, 'live_not_in_tier'));
+      create.mockRejectedValue(new LiveApiError(402, 'live_hours_used'));
       render(<LiveTab locale="en" channelId="c1" role="admin" />);
       fireEvent.change(await screen.findByTestId('studio-live-title'), { target: { value: 'Talk' } });
       fireEvent.click(screen.getByTestId('studio-live-create'));
       const error = await screen.findByTestId('studio-live-error');
-      expect(error).toHaveTextContent(text.errors.live_not_in_tier);
-      expect(screen.getByTestId('studio-live-request-access')).toHaveAttribute('href', '/en/upgrade');
-      expect(mockCreator.mock.results.length).toBeGreaterThan(0);
+      expect(error).toHaveTextContent(text.errors.live_hours_used);
+      expect(error.querySelector('a')).toBeNull();
     });
   });
 });

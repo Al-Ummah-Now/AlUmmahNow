@@ -178,6 +178,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/release/header-name.spec.ts': { placement: 'local', reason: 'header account menu names a names-only profile by first + last, en/ar' },
   'apps/web/e2e/release/home-hero.spec.ts': { placement: 'local', reason: 'hero layout; off-site images already route-intercepted' },
   'apps/web/e2e/release/live-stream.player.spec.ts': { placement: 'deployed', reason: 'media: real ffmpeg video pushed to the deployed live edge (or Bunny RTMP), played live and as the recording in branded Chrome' },
+  'apps/web/e2e/release/hide-when-off-live.spec.ts': { placement: 'local', reason: 'Studio Live hidden when the owner\'s tier leaves it out (tier removed, then back), en and ar; 404 feature_off' },
   'apps/web/e2e/release/live-go-live.spec.ts': { placement: 'local', reason: 'Studio Live and Go live UI, ingest settings, end via the in-app dialog, watch page; never streams video' },
   'apps/web/e2e/release/load-hot-paths.spec.ts': { placement: 'deployed', reason: 'pipeline: DO view flush + queue/processor into D1 under real load', load: true },
   'apps/web/e2e/release/audio-tracks.player.spec.ts': { placement: 'deployed', reason: 'media: multiple audio tracks, Containers normalise and package a dub next to the R2 rendition, the player defaults to it by language and switches in the Audio menu' },
