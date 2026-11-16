@@ -87,9 +87,9 @@ test.describe('display name falls back to first + last', () => {
       if (!(await comment.isVisible())) await card.getByRole('button', { name: 'Comments' }).click();
       await expect(comment).toBeVisible({ timeout: 3000 });
     }).toPass({ timeout: 30000 });
-    // The comment's author (the composer's "Commenting as" line names the same member, in a <bdi>)
-    await expect(card.getByText(full, { exact: true }).and(card.locator(':not(bdi)'))).toBeVisible();
-    await expect(card.getByTestId('comment-identity')).toContainText(full);
+    // The comment's author, and the composer's avatar named after the same member
+    await expect(card.getByText(full, { exact: true })).toBeVisible();
+    await expect(card.getByTestId('comment-identity')).toHaveAccessibleName(full);
     await expect(card.getByText(user.email)).toHaveCount(0);
 
     // Admin user list: an admin in a browser of its own finds the user by email

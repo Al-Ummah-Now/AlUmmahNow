@@ -1,7 +1,7 @@
 /**
  * The account menu's identity layer (owner decision D5, docs/features/HELP-AND-TOUR.md): the
  * section is labelled "Acting as"; with no channel active it shows the member themselves; other
- * parts of the page (Commenting as … · Switch, the identity tour) open it on a view through
+ * parts of the page (the identity tour) open it on a view through
  * requestAccountMenu.
  */
 import React from 'react';

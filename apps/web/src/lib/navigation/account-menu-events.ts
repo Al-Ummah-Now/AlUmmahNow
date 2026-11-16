@@ -1,7 +1,7 @@
 /**
- * Opening the header's account menu from elsewhere on the page: the "Commenting as … · Switch"
- * line opens it on the channel list, and the identity tour (components/help) opens it on the
- * view its step explains. The menu (components/UnifiedNavigation) listens; nothing else keeps
+ * Opening the header's account menu from elsewhere on the page: the identity tour
+ * (components/help) opens it on the view its step explains. Composers never open it: identity is
+ * chosen only in the header's Acting as menu (owner decision 2026-11-15). The menu (components/UnifiedNavigation) listens; nothing else keeps
  * its open state.
  */
 export const ACCOUNT_MENU_EVENT = 'aun:account-menu';

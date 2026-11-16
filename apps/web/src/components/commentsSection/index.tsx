@@ -18,7 +18,7 @@ import { User } from "@/interfaces";
 import { formatRelativeTime } from '@/lib/format/videoMeta';
 import { loginRoutePath } from '@/lib/auth/silent-sign-in';
 import { userDisplayName } from '@/lib/display-name';
-import { requestAccountMenu } from '@/lib/navigation/account-menu-events';
+import { ComposerAvatar } from '@/components/comments-shared/ComposerAvatar';
 
 export interface CommentsSectionProps {
   videoId: string;
@@ -58,7 +58,6 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
   const activeChannel = account?.channel || null;
   const channelId = activeChannel?.id || '';
   const canInteract = !!user;
-  const hasChannels = (account?.channels?.length ?? 0) > 0;
   const isVideoOwner = !!user && !!videoOwnerId && videoOwnerId === user.id;
 
   const {
@@ -207,12 +206,13 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
     }
   };
 
-  const composerAvatar = activeChannel?.avatarUrl || profile?.avatarUrl || DEFAULT_AVATAR;
+  // No picture: the avatar shows the identity's first letter (ComposerAvatar)
+  // A channel without a logo shows its letter, never the member's photo (that would name the wrong identity)
+  const composerAvatar = activeChannel ? activeChannel.avatarUrl : profile?.avatarUrl;
   // Who the comment will be posted as: the active channel, or the member themselves
-  // (their own email only as the last resort: this line is shown to them alone)
+  // (their own email only as the last resort: only they see it, as the avatar's accessible name)
   // The channel's name in the page's language, as the account menu shows it
   const composerName = activeChannel?.nameLocalized?.[lang]?.trim() || activeChannel?.name?.trim() || userDisplayName(profile, lang, user?.email);
-  const [commentingBefore, commentingAfter = ''] = t.comments.commentingAs.split('{name}');
 
   const renderThread = (comment: Comments) => {
     const thread = replies[comment.id];
@@ -312,34 +312,9 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
             <p className="text-sm text-gray-600 dark:text-gray-400" data-testid="comments-held-info">{t.comments.heldForReviewInfo}</p>
           )}
           <div className="flex items-start gap-3">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={composerAvatar}
-              alt={t.comments.yourAvatar}
-              className="w-8 h-8 rounded-full"
-            />
+            {/* The identity you act as (header Acting as menu): its avatar only, named for screen readers */}
+            <ComposerAvatar src={composerAvatar} name={composerName} as={activeChannel ? 'channel' : 'member'} />
             <div className="flex-1">
-              {composerName && (
-                <p className="mb-1 text-sm font-medium" data-testid="comment-identity" data-as={activeChannel ? 'channel' : 'member'}>
-                  {/* The name in its own direction: an English channel name inside Arabic text stays in order */}
-                  {commentingBefore}<bdi>{composerName}</bdi>{commentingAfter}
-                  {/* With channels to choose from, change who you comment as right here (the account menu's channel list) */}
-                  {hasChannels && (
-                    <>
-                      {' · '}
-                      <button
-                        type="button"
-                        className="font-medium underline underline-offset-2"
-                        aria-label={t.navigation.switchChannel}
-                        data-testid="comment-identity-switch"
-                        onClick={() => requestAccountMenu({ open: true, view: 'channels', focus: true })}
-                      >
-                        {t.comments.switchIdentity}
-                      </button>
-                    </>
-                  )}
-                </p>
-              )}
               <label htmlFor={composerId} className="sr-only">{t.comments.addComment}</label>
               <Textarea
                 id={composerId}

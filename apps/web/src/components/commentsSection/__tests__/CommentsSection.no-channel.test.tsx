@@ -86,7 +86,7 @@ describe('CommentsSection without a channel (#1151)', () => {
     render(<CommentsSection videoId="v1" user={viewer} />);
 
     expect(screen.queryByText(/No active channel selected/i)).toBeNull();
-    expect(screen.getByTestId('comment-identity')).toHaveTextContent('Commenting as Amina Yusuf');
+    expect(screen.getByTestId('comment-identity')).toHaveAccessibleName('Amina Yusuf');
     expect(screen.getByTestId('comment-identity')).toHaveAttribute('data-as', 'member');
 
     fireEvent.change(screen.getByTestId('comment-input'), { target: { value: 'Barak Allahu feek' } });
@@ -100,10 +100,10 @@ describe('CommentsSection without a channel (#1151)', () => {
     expect(screen.getByTestId('comment-reply-button')).toBeInTheDocument();
   });
 
-  it('with a channel active the composer says it posts as the channel', () => {
+  it('with a channel active the composer shows the channel (avatar named after it)', () => {
     account = { user: { id: 'viewer' }, channel: { id: 'my-ch', name: 'My channel' } };
     render(<CommentsSection videoId="v1" user={viewer} />);
-    expect(screen.getByTestId('comment-identity')).toHaveTextContent('Commenting as My channel');
+    expect(screen.getByTestId('comment-identity')).toHaveAccessibleName('My channel');
     expect(screen.getByTestId('comment-identity')).toHaveAttribute('data-as', 'channel');
   });
 

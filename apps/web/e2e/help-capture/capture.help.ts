@@ -425,7 +425,8 @@ const SCENES: Scene[] = [
       const line = page.getByTestId('comment-identity').first();
       await line.scrollIntoViewIfNeeded();
       const box = page.getByTestId('comment-input').first();
-      return [[line, page.getByTestId('comment-identity-switch').first()], [line, box]];
+      // The avatar of whoever you act as (no 'Commenting as' text, no Switch: owner 2026-11-15), then the box
+      return [[line, box], [line, box]];
     },
   },
   {
