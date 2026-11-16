@@ -224,6 +224,10 @@ export async function addTrack(
 ): Promise<{ track: AudioTrack; uploadId?: string }> {
 	const { video, userId, roles, body } = input;
 	const checked = validateAudioTrackInput(body, false);
+	const allowance = await trackAllowance(env, video, userId, roles);
+	// No extra tracks in the owner's tier, or the jobs are not bound here: the feature is hidden (404 feature_off),
+	// whatever state the video or the request is in, so it is checked first
+	if (allowance.limit <= 0 || !env.TRANSCODE_QUEUE || !env.MEDIA_ORIGINALS) throw new AudioTrackError(404, FEATURE_OFF_CODE, 'Audio tracks are off for this video');
 	if (!checked.ok) throw new AudioTrackError(400, 'invalid_track', (checked as { error: string }).error);
 	if (video.uploadStatus !== 'ready' || videoSeconds(video) <= 0) throw new AudioTrackError(409, 'video_not_ready', 'The video must finish processing first');
 	const src = body.source;
@@ -240,9 +244,6 @@ export async function addTrack(
 	}
 	const originalLanguage = body.originalLanguage === undefined ? undefined : isAudioTrackLanguage(body.originalLanguage) ? body.originalLanguage : null;
 	if (originalLanguage === null) throw new AudioTrackError(400, 'invalid_track', 'originalLanguage must be a track language');
-	const allowance = await trackAllowance(env, video, userId, roles);
-	// No extra tracks in the owner's tier, or the jobs are not bound here: the feature is hidden (404 feature_off)
-	if (allowance.limit <= 0 || !env.TRANSCODE_QUEUE || !env.MEDIA_ORIGINALS) throw new AudioTrackError(404, FEATURE_OFF_CODE, 'Audio tracks are off for this video');
 
 	const at = now.toISOString();
 	const trackId = newAudioTrackId();
