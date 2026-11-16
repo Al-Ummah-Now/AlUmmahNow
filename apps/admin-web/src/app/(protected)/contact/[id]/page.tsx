@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import Link from '@/components/AppLink';
-import { getContactMessage, updateContactMessage } from '@/lib/api/admin';
+import { getContactMessage } from '@/lib/api/admin';
 import { AdminApiError } from '@/lib/api/errors';
 import type { ContactMessage, ContactNote } from '@/lib/api/types';
 import { getAdminSession } from '@/lib/auth';
@@ -13,7 +13,7 @@ import { ContactActions } from './ContactActions';
 import { DeliveryRetry, RefreshWhileQueued } from './DeliveryRetry';
 import { UserName } from '@/components/audit/UserName';
 import { LiveRefresh } from '@/components/LiveRefresh';
-import { RefreshOnce } from './RefreshOnce';
+import { MarkReadOnOpen } from './MarkReadOnOpen';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,17 +32,9 @@ export default async function ContactMessagePage({ params }: PageProps) {
   }
 
   let data: { message: ContactMessage; notes: ContactNote[] } | null = null;
-  let justRead = false;
   try {
     data = await getContactMessage(id);
-    // Opening an unread message reads it: it leaves the unread count (and the nav badge)
-    if (!data.message.read_at) {
-      const opened = await updateContactMessage(id, { read: true });
-      if (opened.ok) {
-        data = { ...data, message: opened.data.message };
-        justRead = true;
-      }
-    }
+
   } catch (e) {
     if (e instanceof AdminApiError && e.status === 404) notFound();
     logger.error('[contact] Failed to load message', { id, error: e instanceof Error ? e.message : String(e) });
@@ -82,8 +74,8 @@ export default async function ContactMessagePage({ params }: PageProps) {
       <RefreshWhileQueued signature={queued} />
       {/* Another admin's change shows without a reload */}
       <LiveRefresh topics={['moderation']} queues={['contact']} />
-      {/* Opening it read it: the nav badge (in the layout, which this page's render does not redraw) catches up */}
-      {justRead && <RefreshOnce id={m.id} />}
+      {/* Opening it reads it, once: a later "Mark as unread" (which refreshes this page) stays unread */}
+      <MarkReadOnOpen id={m.id} read={!!m.read_at} />
       {m.send_failed_at && (
         <ErrorAlert testId="contact-send-failed">
           <p className="font-medium">{t('contact.sendFailedBanner')}</p>
