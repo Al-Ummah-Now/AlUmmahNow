@@ -9,6 +9,7 @@
  * with the Analytics Engine SQL API (CF_ANALYTICS_TOKEN, Account Analytics Read), overall and per
  * page kind × device. No D1; answers are cached 5 minutes per env, window and locale. Needs `ops:read`.
  */
+import { resolvePlatformCredential, type CredentialEnv } from '@al-ummah/shared-types';
 import { Hono, type Context } from 'hono';
 import { hasPermission, normalizeRoles } from '../lib/roles';
 import { logger } from '../lib/logger';
@@ -122,14 +123,6 @@ export function summarizeVitals(
 	return { env, days, locale, generatedAt: now.toISOString(), overall, rows };
 }
 
-async function secret(binding: unknown): Promise<string> {
-	if (typeof binding === 'string') return binding;
-	try {
-		return ((await (binding as { get?: () => Promise<string> })?.get?.()) ?? '') || '';
-	} catch {
-		return '';
-	}
-}
 
 class Unavailable extends Error {}
 
@@ -178,7 +171,8 @@ app.get('/summary', async (c) => {
 	const locale: VitalsLocale = (VITALS_LOCALES as readonly string[]).includes(localeParam) ? (localeParam as VitalsLocale) : 'all';
 
 	const bindings = c.env as unknown as { CF_ANALYTICS_TOKEN?: unknown; CLOUDFLARE_ACCOUNT_ID?: string };
-	const token = await secret(bindings.CF_ANALYTICS_TOKEN);
+	// A Super Admin's replacement (Platform settings → Credentials) wins over the Secrets Store binding
+	const token = await resolvePlatformCredential(c.env as unknown as CredentialEnv, 'cloudflare-media', bindings.CF_ANALYTICS_TOKEN);
 	const account = bindings.CLOUDFLARE_ACCOUNT_ID;
 	if (!token || !account) {
 		return c.json({ success: false, code: 'not_configured', error: 'Web vitals are not configured here' }, 503);

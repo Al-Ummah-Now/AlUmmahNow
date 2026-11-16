@@ -66,6 +66,8 @@ export const PERMISSIONS = {
   'ops:read': ADMIN_ROLE_IDS,
   /** Change the Operations alert thresholds. */
   'ops:manage': ['super_admin'],
+  /** Platform settings → Credentials: replace and test platform credentials (the Cloudflare media token, …). Write only; audited. */
+  'credentials:manage': ['super_admin'],
   /** Status page (docs/status-page/README.md): see checks and incidents; post, update, resolve and delete incidents and maintenance. */
   'status:manage': ADMIN_ROLE_IDS,
   /** Review alerts (wiki AUN-ADMIN-NATIVE): change the on-call rota, escalation times and owners. Reading them and the timings needs any admin role. */

@@ -814,3 +814,20 @@ export async function saveYoutubeImportSettings(
 export async function saveYoutubeImportClientSecret(value: string): Promise<ActionResult<import('@al-ummah/shared-types').YoutubeImportSettingsView>> {
   return mutate('/api/youtube-import/client-secret', 'PUT', { value });
 }
+
+// Platform credentials (admin-api /api/platform-credentials, credentials:manage = Super Admin): write
+// only, audited. The value is sent once to be sealed and never comes back.
+
+type CredentialChange = { view: import('@al-ummah/shared-types').PlatformCredentialView; test: import('@al-ummah/shared-types').PlatformCredentialTest };
+
+export async function getPlatformCredentials(): Promise<import('@al-ummah/shared-types').PlatformCredentialView[]> {
+  return fetchAdmin('/api/platform-credentials');
+}
+
+export async function replacePlatformCredential(id: string, value: string): Promise<ActionResult<CredentialChange>> {
+  return mutate(`/api/platform-credentials/${encodeURIComponent(id)}`, 'PUT', { value });
+}
+
+export async function testPlatformCredential(id: string): Promise<ActionResult<CredentialChange>> {
+  return mutate(`/api/platform-credentials/${encodeURIComponent(id)}/test`, 'POST', {});
+}

@@ -57,7 +57,7 @@ import { deleteOriginal } from './originals';
 import { clearMediaSettingsCache, readLegacyDeliverySettings, readMediaSettings, writeLegacyDeliverySettings } from './settings';
 import { bunnyLibraryForVideo, type BunnyLibrariesEnv, type LibraryHints } from '../bunny/libraries';
 import { logger } from '../logger';
-import { transcodeCeilingOf } from '@al-ummah/shared-types';
+import { resolvePlatformCredential, transcodeCeilingOf } from '@al-ummah/shared-types';
 import { effectiveTranscodes } from './transcode-limit';
 import R2Repository from '../r2Repo';
 import { bunnyDirectoryToken, signedBunnyUrl, tokenExpiry } from '../bunny-signing';
@@ -82,8 +82,13 @@ export interface MediaEnv {
 	MEDIA_PUBLIC_HOST?: string;
 	/** media_jobs, playback_qoe_daily, delivery_cost_daily (migrations/search/0020) */
 	SEARCH_DB?: D1Database;
-	/** Zone token with Cache Purge (optional): purges a video's public prefix when it goes private */
+	/**
+	 * Zone token with Cache Purge (optional): purges a video's public prefix when it goes private. A
+	 * Super Admin's replacement (Platform settings → Credentials, sealed in global_settings) wins.
+	 */
 	MEDIA_CDN_API_TOKEN?: SecretLike;
+	/** Seals the admin-set credentials (shared-types platform-credentials.ts) */
+	INTERNAL_API_KEY?: SecretLike;
 	bunny_hostname?: string;
 	BUNNY_SIGN_URLS?: string;
 	BUNNY_TOKEN_KEY?: SecretLike;
@@ -857,12 +862,11 @@ async function purgeCdnPrefix(env: MediaEnv, rest: string): Promise<CdnPurge> {
  * Cloudflare cache purge on the alummahnow.net zone (by URL or by prefix). Never throws:
  * 'not_configured' without a zone token, 'failed' when the API refused.
  */
-export async function purgeCdn(env: Pick<MediaEnv, 'MEDIA_CDN_API_TOKEN'>, body: { files: string[] } | { prefixes: string[] }): Promise<CdnPurge> {
-	if (!env.MEDIA_CDN_API_TOKEN) return 'not_configured';
+export async function purgeCdn(env: Pick<MediaEnv, 'MEDIA_CDN_API_TOKEN' | 'global_settings' | 'INTERNAL_API_KEY'>, body: { files: string[] } | { prefixes: string[] }): Promise<CdnPurge> {
 	const list = 'files' in body ? body.files : body.prefixes;
 	if (!list.length) return 'purged';
 	try {
-		const token = await getSecret(env.MEDIA_CDN_API_TOKEN, 'MEDIA_CDN_API_TOKEN');
+		const token = await resolvePlatformCredential(env, 'cloudflare-media', env.MEDIA_CDN_API_TOKEN);
 		if (!token) return 'not_configured';
 		// The API takes at most 30 URLs or prefixes per call
 		for (let i = 0; i < list.length; i += 30) {
