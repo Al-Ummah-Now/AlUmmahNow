@@ -15,6 +15,7 @@ import { useLanguage } from '@/i18n/I18nProvider';
 import { translateDynamic } from '@/i18n/translate';
 import { fieldClass, linkClass, primaryButtonClass } from '@/components/ui';
 import { Autocomplete } from '@/components/search/Autocomplete';
+import { InviteVideoPickers, type InviteVideoItems, type InviteVideoValue } from './InviteVideoPickers';
 import { ActionFeedback, useContentAction } from '@/components/content/actions';
 import { Notice, SectionCard, smallButtonClass } from '@/components/content/parts';
 import { EmailLanguageChoice, type EmailLanguage } from '@/components/EmailLanguageChoice';
@@ -39,9 +40,15 @@ interface Props {
   canPlan: boolean;
   canCreateChannels: boolean;
   canTransfer: boolean;
+  /**
+   * The default video per language (Admin › Settings › Emails › Creator invite, lib/email-templates.ts),
+   * prefilled and editable per invite (GET /api/email-templates/creator_invite/default-videos; none until set).
+   */
+  defaultVideos?: InviteVideoValue;
+  defaultVideoItems?: InviteVideoItems;
 }
 
-export function InviteForm({ tiers, defaultTierId, canPlan, canCreateChannels, canTransfer }: Props) {
+export function InviteForm({ tiers, defaultTierId, canPlan, canCreateChannels, canTransfer, defaultVideos, defaultVideoItems }: Props) {
   const { t, locale: uiLocale } = useLanguage();
   const ids = useId();
   const { run, busy, error, message } = useContentAction();
@@ -49,6 +56,8 @@ export function InviteForm({ tiers, defaultTierId, canPlan, canCreateChannels, c
   const [name, setName] = useState('');
   const [tierId, setTierId] = useState(tiers.some((tier) => tier.id === defaultTierId) ? defaultTierId : tiers[0]?.id ?? '');
   const [scholar, setScholar] = useState(false);
+  // A video per email language (prefilled with the creator invite email defaults): a picture card in the email
+  const [videos, setVideos] = useState<InviteVideoValue>(defaultVideos ?? { en: null, ar: null });
   // The email's one language: picked next to Send, the admin UI's language until changed
   const [locale, setLocale] = useState<EmailLanguage>(uiLocale === 'ar' ? 'ar' : 'en');
   const [note, setNote] = useState('');
@@ -109,6 +118,7 @@ export function InviteForm({ tiers, defaultTierId, canPlan, canCreateChannels, c
               name: name.trim() || undefined,
               // Every account has a tier: the picked one, else the server's default
               tierId: tierId || null,
+              videos,
               authRoles: scholar ? ['Scholar'] : [],
               locale,
               note: note.trim() || undefined,
@@ -181,6 +191,9 @@ export function InviteForm({ tiers, defaultTierId, canPlan, canCreateChannels, c
               <span id={`${ids}-plan-hint`} className="text-xs text-fg-subtle">{t('invites.planHint')}</span>
             </div>
           )}
+          <div className="md:col-span-2 min-w-0">
+            <InviteVideoPickers value={videos} items={defaultVideoItems} onChange={(lang, id) => setVideos((v) => ({ ...v, [lang]: id }))} testId="invite-video" hint={t('invites.videoHint')} />
+          </div>
           <div className="flex items-center gap-2 md:col-span-2">
             <input id={`${ids}-scholar`} type="checkbox" checked={scholar} onChange={(e) => setScholar(e.target.checked)} className="h-4 w-4" data-testid="invite-scholar" />
             <label htmlFor={`${ids}-scholar`} className="text-sm text-fg">{t('invites.scholar')}</label>

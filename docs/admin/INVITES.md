@@ -59,6 +59,7 @@ is the same id.
 | Email | Required. Normalised the same way as sign-in: trimmed, lower case. Gmail dots and `+tags` count as different addresses. The email is checked as soon as it is entered (`GET /api/invites/lookup`). If it already has an account, the form offers that user's page so the admin can give it a tier or channel there. If it has an open invite, the form links to it. |
 | Display name, invite language (en/ar), note | The email is sent in both languages, with the chosen one first. |
 | Tier | One of the admin-managed tiers (`GET /creator-tiers`), lowest rank first, names in the admin's language; it starts on the current default tier, and giving another needs `creators:manage`. There is no Creator/Viewer role: the tier alone decides what the account can do (uploads, channels, live …), and the account gets it as soon as the invite is made. Accepting the invite changes nothing else. |
+| Video (English), Video (العربية) | Optional, one per email language, side by side. Each is a live search over public, ready, listed videos on the videos site (`GET /api/invites/videos`): the newest first, then by title, with picture, channel and length. Both start on the default video per language from **Admin › Settings › Emails › Creator invite** (when that page lands) and can be changed or cleared per invite. |
 | Scholar | Optional. Adds the auth role "Scholar", from auth's allow-list (the only auth role an invite can add). |
 | Link expiry | 1–90 days, default 14. An expired or used link offers "Email me a new link" while the account has no password or passkey, else Sign in. |
 | Channels | New channels (name, optional @handle; needs `channels:manage`). Existing channels are chosen with the channel picker and moved with a transfer job (needs `channels:transfer`, super admins only). |
@@ -66,10 +67,24 @@ is the same id.
 If a channel cannot be made (for example, the handle is taken), the invite is
 still created and the problem is listed under "Some parts were not done".
 
+## Video in the invite email
+
+Owner decisions, 2026-11-16:
+
+- **One video per email language.** The email is in one language and shows that language's video. It never falls back to the other language's video. A resend in the other language switches to that language's video.
+- **A static card.** Email cannot play video, and there is no animated GIF. The card is the video's 16:9 picture with a play button, the title and the channel.
+  - The picture is the web app's stable `/og/v/<id>.jpg`, never a signed URL.
+  - The card links through the short link `alummahnow.link/v/<id>` (`?lang=ar` for Arabic emails; `qa.` / `stage.` hosts on QA and stage).
+- **Read at every send.** admin-api reads the video again at each send and resend, so a changed title shows. A video that is gone, private, hidden or not ready leaves the card out.
+- Auth renders the card (AlUmmahNowAuth#432, `details.video`; a resend passes `video` or `null`).
+- Storage: `creator_invites.video_en_id` and `video_ar_id` (migration 0035).
+
+The default video per language lives with the creator invite email settings (Admin › Settings › Emails › Creator invite, `lib/email-templates.ts`). Nothing is seeded: an admin sets them. A default only prefills the form, so an invite where the admin cleared a language has no card in that language.
+
 ## Invites list (`/users/invites`)
 
 Each row shows the tier the invite gave (in the admin's language; an invite with no stored tier shows the current default tier), Scholar when added, and the channels.
-Viewer invites from before migration 0031 show the default tier.
+Viewer invites from before migration 0035 show the default tier.
 
 Statuses:
 

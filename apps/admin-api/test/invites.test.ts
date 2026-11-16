@@ -18,7 +18,7 @@ import { listTrash, requestTrashPurge, restoreTrash, runTrashCleanup } from '../
 interface Call { method: string; path: string; body: any }
 
 /** api-videos: an Auth user list and profile store, enough for invites. */
-function fakeVideos(state: { authUsers: Array<{ id: string; email: string; name: string | null; status: string }>; profiles: Map<string, any>; channels: Map<string, any>; failChannel?: string }) {
+function fakeVideos(state: { authUsers: Array<{ id: string; email: string; name: string | null; status: string }>; profiles: Map<string, any>; channels: Map<string, any>; videos?: Map<string, any>; failChannel?: string }) {
   const calls: Call[] = [];
   const reply = (body: unknown, status = 200) => new Response(JSON.stringify(status < 300 ? { success: true, result: body } : body), { status, headers: { 'content-type': 'application/json' } });
   return {
@@ -61,7 +61,16 @@ function fakeVideos(state: { authUsers: Array<{ id: string; email: string; name:
         }
         const userDetail = /^\/users\/(usr_[0-9a-f]+)$/.exec(path);
         if (userDetail && method === 'GET') return reply({ id: userDetail[1], displayName: '', channels: [] });
-        if (method === 'GET' && path === '/videos') return reply({ items: [], total: 0, page: 1, pageSize: 100 });
+        if (method === 'GET' && path === '/videos') {
+          // The picker asks for public, ready, listed videos; the fake also returns one that is not, to check the filter
+          const items = [...(state.videos?.values() ?? [])];
+          return reply({ items, total: items.length, page: 1, pageSize: 100, query: Object.fromEntries(url.searchParams) });
+        }
+        const video = /^\/videos\/([^/]+)$/.exec(path);
+        if (video && method === 'GET') {
+          const row = state.videos?.get(decodeURIComponent(video[1]));
+          return row ? reply(row) : reply({ success: false, code: 'not_found', error: 'Video not found' }, 404);
+        }
         if (method === 'GET' && path === '/jobs') return reply({ items: [] });
         if (method === 'GET' && path === '/users') return reply({ items: [...state.profiles.values()].map((p) => ({ id: p.id })), total: state.profiles.size, page: 1, pageSize: 20 });
         return reply({ ok: true });
@@ -117,7 +126,14 @@ class FakeQueue {
 
 function setup(opts: { authUsers?: Array<{ id: string; email: string; name: string | null; status: string }>; failChannel?: string } = {}) {
   const db = sqliteD1();
-  const state = { authUsers: opts.authUsers ?? [], profiles: new Map<string, any>(), channels: new Map<string, any>([['ch_old', { id: 'ch_old', name: 'Old', handle: 'old', ownerId: 'usr_someone' }]]), failChannel: opts.failChannel };
+  const videoRow = (id: string, over: Record<string, unknown> = {}) => ({ id, title: `Tafsir ${id}`, channelId: 'ch_old', channelName: 'Noor Talks', status: 'ready', isPublic: true, isHidden: false, isDeleted: false, duration: 754, thumbnailUrl: `https://cdn.test/${id}.jpg`, ...over });
+  const state = {
+    authUsers: opts.authUsers ?? [],
+    profiles: new Map<string, any>(),
+    channels: new Map<string, any>([['ch_old', { id: 'ch_old', name: 'Old', handle: 'old', ownerId: 'usr_someone' }]]),
+    videos: new Map<string, any>([['vid_pub', videoRow('vid_pub')], ['vid_pub_ar', videoRow('vid_pub_ar')], ['vid_priv', videoRow('vid_priv', { isPublic: false })], ['vid_proc', videoRow('vid_proc', { status: 'processing' })]]),
+    failChannel: opts.failChannel,
+  };
   const videos = fakeVideos(state);
   const auth = fakeAuth();
   const queue = new FakeQueue();
@@ -351,6 +367,78 @@ describe('the queue to auth', () => {
     await t.drain();
     const users = await t.call('GET', '/api/content/users');
     assert.deepEqual(users.body.result.items.find((u: any) => u.id === inv.userId).invite, { id: inv.id, status: 'invited' });
+  });
+});
+
+describe('a video per language in the invite email', () => {
+  it('stores a video per language and sends the email its own language\'s video, read at send time, linked by the short link', async () => {
+    const t = setup();
+    // invite(): an Arabic email
+    const res = await t.call('POST', '/api/invites', invite({ videos: { en: 'vid_pub', ar: 'vid_pub_ar' } }));
+    assert.equal(res.status, 201, JSON.stringify(res.body));
+    assert.deepEqual(res.body.result.invite.videos, { en: 'vid_pub', ar: 'vid_pub_ar' });
+    // A later title change shows in the email: the video is read at send time
+    t.state.videos.get('vid_pub_ar').title = 'إعلان الأمة الآن';
+    await t.drain();
+    const created = t.auth.calls.find((c) => c.path === '/provisioning/invites')!;
+    assert.deepEqual(created.body.details.video, {
+      id: 'vid_pub_ar',
+      title: 'إعلان الأمة الآن',
+      channel: 'Noor Talks',
+      imageUrl: 'https://videos.qa.alummahnow.net/og/v/vid_pub_ar.jpg',
+      // The short link of this environment (videos.qa → qa.alummahnow.link), ?lang=ar for Arabic emails
+      urls: { en: 'https://qa.alummahnow.link/v/vid_pub_ar', ar: 'https://qa.alummahnow.link/v/vid_pub_ar?lang=ar' },
+    });
+  });
+
+  it('never uses the other language\'s video: an Arabic email with only an English video has no card', async () => {
+    const t = setup();
+    await t.call('POST', '/api/invites', invite({ videos: { en: 'vid_pub', ar: null } }));
+    await t.drain();
+    const created = t.auth.calls.find((c) => c.path === '/provisioning/invites')!;
+    assert.equal('video' in created.body.details, false);
+  });
+
+  it('a resend in the other language switches to that language\'s video; one no longer public leaves the card out', async () => {
+    const t = setup();
+    const inv = (await t.call('POST', '/api/invites', invite({ videos: { en: 'vid_pub', ar: 'vid_pub_ar' } }))).body.result.invite;
+    await t.drain();
+    await t.call('POST', `/api/invites/${inv.id}/resend`, { locale: 'en' });
+    await t.drain();
+    const resends = () => t.auth.calls.filter((c) => c.path === `/provisioning/invites/${inv.id}/resend`);
+    assert.equal(resends()[0].body.video.id, 'vid_pub');
+    // The invite's language followed the resend: the next resend (no language given) is English too
+    t.state.videos.get('vid_pub').isPublic = false;
+    await t.call('POST', `/api/invites/${inv.id}/resend`);
+    await t.drain();
+    assert.equal(resends()[1].body.video, null);
+    // An invite without videos sends no video key at all
+    const plain = (await t.call('POST', '/api/invites', invite({ email: 'plain@example.com' }))).body.result.invite;
+    await t.drain();
+    await t.call('POST', `/api/invites/${plain.id}/resend`);
+    await t.drain();
+    const plainResend = t.auth.calls.find((c) => c.path === `/provisioning/invites/${plain.id}/resend`)!;
+    assert.equal('video' in plainResend.body, false);
+  });
+
+  it('refuses a video that is private, not ready or gone, in either language', async () => {
+    const t = setup();
+    for (const [lang, videoId] of [['en', 'vid_priv'], ['ar', 'vid_proc'], ['en', 'vid_missing']] as const) {
+      const res = await t.call('POST', '/api/invites', invite({ email: `${videoId}@example.com`, videos: { [lang]: videoId } }));
+      assert.equal(res.status, 400, videoId);
+      assert.equal(res.body.code, 'video_not_public');
+    }
+  });
+
+  it('the picker lists only public, ready, listed videos with picture, channel and length', async () => {
+    const t = setup();
+    const res = await t.call('GET', '/api/invites/videos?q=tafsir');
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.deepEqual(res.body.result.items.map((v: any) => v.id), ['vid_pub', 'vid_pub_ar']);
+    assert.deepEqual(res.body.result.items[0], { kind: 'video', id: 'vid_pub', label: 'Tafsir vid_pub', secondary: 'Noor Talks', imageUrl: 'https://cdn.test/vid_pub.jpg', parentId: 'ch_old', duration: 754 });
+    const asked = t.videos.calls.find((c) => c.path === '/videos')!;
+    assert.ok(asked);
+    assert.equal((await t.call('GET', '/api/invites/videos', undefined, '')).status, 403);
   });
 });
 

@@ -19,6 +19,8 @@ export interface InviteView {
   note: string | null;
   /** The tier the invite gave; null = the current default tier (no creator/viewer role: the tier decides) */
   tierId: string | null;
+  /** The video per email language (ids); an email uses its own language's and never the other's */
+  videos: { en: string | null; ar: string | null };
   authRoles: string[];
   channels: InviteChannel[];
   status: InviteListStatus;
@@ -51,9 +53,23 @@ export interface NewInviteInput {
   email: string;
   name?: string;
   tierId?: string | null;
+  /** A public video per email language, shown in the email as a picture card linking to it */
+  videos?: { en: string | null; ar: string | null };
   authRoles?: string[];
   locale: 'en' | 'ar';
   note?: string;
   expiresInDays?: number;
   channels?: { create: Array<{ name: string; handle?: string }>; transfer: string[] };
 }
+
+/** A video the invite form can attach (admin-api GET /api/invites/videos): public, ready and listed. */
+export interface InviteVideoChoice {
+  kind: 'video';
+  id: string;
+  label: string;
+  secondary: string | null;
+  imageUrl: string | null;
+  parentId?: string | null;
+  duration: number | null;
+}
+
