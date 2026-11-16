@@ -165,12 +165,12 @@ export function LocalizedDatePicker({
           <div className="mb-2 flex items-center justify-between gap-2">
             <button type="button" onClick={() => move(addMonths(focus, -1))} disabled={!canPrev} aria-label={prevMonthLabel}
               className="grid h-9 w-9 place-items-center rounded-full hover:bg-[var(--fanous-color-surface)] disabled:opacity-40" data-testid={`${testId}-prev`}>
-              <ChevronLeft className="h-4 w-4 rtl:-scale-x-100" aria-hidden="true" />
+              {locale === 'ar' ? <ChevronRight className="h-4 w-4" aria-hidden="true" /> : <ChevronLeft className="h-4 w-4" aria-hidden="true" />}
             </button>
             <h3 aria-live="polite" className="text-sm font-semibold" id={`${id}-month`}>{monthTitle}</h3>
             <button type="button" onClick={() => move(addMonths(focus, 1))} disabled={!canNext} aria-label={nextMonthLabel}
               className="grid h-9 w-9 place-items-center rounded-full hover:bg-[var(--fanous-color-surface)] disabled:opacity-40" data-testid={`${testId}-next`}>
-              <ChevronRight className="h-4 w-4 rtl:-scale-x-100" aria-hidden="true" />
+              {locale === 'ar' ? <ChevronLeft className="h-4 w-4" aria-hidden="true" /> : <ChevronRight className="h-4 w-4" aria-hidden="true" />}
             </button>
           </div>
           <table ref={grid} role="grid" aria-labelledby={`${id}-month`} className="w-full border-collapse text-center text-sm" onKeyDown={onKey}>

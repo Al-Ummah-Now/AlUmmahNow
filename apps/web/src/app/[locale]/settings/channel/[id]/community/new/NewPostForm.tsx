@@ -315,7 +315,8 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
           <div className="flex gap-2">
             <Button
               onClick={handlePublish}
-              disabled={loading || !selectedType}
+              // Never a pale disabled pill before a type is picked: Publish says what is missing
+              disabled={loading}
               data-testid="new-post-submit"
             >
               {loading && <Loader2 className="w-4 h-4 me-2 animate-spin" aria-hidden="true" />}
@@ -346,9 +347,12 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
               </h2>
               <PostTypeSelector
                 selected={selectedType}
-                onSelect={setSelectedType}
+                onSelect={(type) => { setSelectedType(type); setError(''); }}
                 locale={locale}
               />
+              {!selectedType && error && (
+                <p role="alert" className="mt-3 text-sm text-[var(--fanous-color-error-text)]" data-testid="new-post-type-error">{error}</p>
+              )}
             </section>
 
             {selectedType && (

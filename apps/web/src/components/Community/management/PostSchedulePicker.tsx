@@ -159,7 +159,8 @@ export function PostSchedulePicker({ value, onChange, problem, disabled, timeOnl
     return allZones().map((z) => ({
       id: z,
       label: zoneLabel(z, locale, at),
-      subtitle: z === 'UTC' ? 'UTC' : `${zoneCity(z)} · ${z}`,
+      // The zone id (a code, Latin in both languages); the Latin city name only on the English page
+      subtitle: z === 'UTC' ? 'UTC' : locale === 'ar' ? z : `${zoneCity(z)} · ${z}`,
       keywords: [z, zoneCity(z), zoneName(z, 'en', at), zoneName(z, 'ar', at)],
       selected: z === zone,
     }));

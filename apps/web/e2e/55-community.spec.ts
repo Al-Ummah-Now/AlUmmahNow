@@ -198,7 +198,9 @@ test.describe('Post manager', () => {
     try {
       await openNewPost(page);
       await expect(page.getByRole('heading', { level: 1, name: 'New post' })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Publish' })).toBeDisabled();
+      // Publish is never a dead disabled pill: without a type it says what is missing
+      await page.getByRole('button', { name: 'Publish' }).click();
+      await expect(page.getByTestId('new-post-type-error')).toHaveText('Select a post type');
       await expect(page.getByRole('button', { name: 'Save Draft' })).toHaveCount(0);
 
       await selectType(page, 'text');
