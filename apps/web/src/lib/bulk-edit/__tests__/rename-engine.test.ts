@@ -6,7 +6,7 @@ import {
   applyTextEdit,
   changeCase,
   charCount,
-  formatNumber,
+  formatRenameNumber as formatNumber,
   formatTokenDate,
   previewRename,
   renamedTitles,
