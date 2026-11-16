@@ -338,7 +338,7 @@ async function slowQueries(env: EnvName, since: Date, until: Date): Promise<void
 		if (!id) continue;
 		const gql = await post('/graphql', {
 			query: `query($a: String!, $d: String!, $s: Time!, $u: Time!) { viewer { accounts(filter: {accountTag: $a}) {
-				d1QueriesAdaptiveGroups(limit: 12, filter: {databaseId: $d, datetime_geq: $s, datetime_leq: $u}, orderBy: [max_queryDurationMs_DESC]) {
+				d1QueriesAdaptiveGroups(limit: 12, filter: {databaseId: $d, datetime_geq: $s, datetime_leq: $u}, orderBy: [sum_queryDurationMs_DESC]) {
 					count dimensions { query } max { queryDurationMs } sum { queryDurationMs rowsRead rowsWritten } }
 				d1AnalyticsAdaptiveGroups(limit: 300, filter: {databaseId: $d, datetime_geq: $s, datetime_leq: $u}, orderBy: [datetimeMinute_ASC]) {
 					dimensions { datetimeMinute } sum { readQueries writeQueries } quantiles { queryBatchTimeMsP90 queryBatchTimeMsP99 } }
