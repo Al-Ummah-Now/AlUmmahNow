@@ -20,6 +20,8 @@ jest.mock('@/hooks/useLanguage', () => ({
     isRTL: lang === 'ar',
   }),
 }));
+let mockFeatures: Record<string, boolean> = {};
+jest.mock('@/hooks/useFeatures', () => ({ useFeatures: () => ({ ready: true, features: mockFeatures }) }));
 jest.mock('@/lib/logger-client', () => ({ logger: { error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() } }));
 
 function tourRequests() {
@@ -62,6 +64,19 @@ describe('Help home', () => {
 });
 
 describe('Help topic page', () => {
+  it('leaves out a row about a feature that is off for the reader (go live), shows it when on', () => {
+    lang = 'en';
+    mockFeatures = {};
+    const { unmount } = render(<HelpTopicPage topic="identity" />);
+    expect(screen.queryByRole('cell', { name: 'Go live' })).toBeNull();
+    expect(screen.getByRole('cell', { name: 'Upload, use Studio and schedule' })).toBeInTheDocument();
+    unmount();
+    mockFeatures = { live: true };
+    render(<HelpTopicPage topic="identity" />);
+    expect(screen.getByRole('cell', { name: 'Go live' })).toBeInTheDocument();
+    mockFeatures = {};
+  });
+
   beforeEach(() => { lang = 'en'; });
 
   it('has every section with an anchor, pictures in both modes and Show me', () => {

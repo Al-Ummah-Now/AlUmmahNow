@@ -8,6 +8,7 @@
  */
 import { dateTimeFormat, numberFormat, formatNumber } from '@al-ummah/shared-types';
 import { useCallback, useEffect, useId, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from '@/components/common/AppLink';
 import { ArrowLeft, Eye } from 'lucide-react';
 import type { LiveIngest, LiveStreamState } from '@al-ummah/shared-types';
@@ -17,8 +18,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { LivePlayer } from '@/components/live/LivePlayer';
 import { useLanguage } from '@/hooks/useLanguage';
-import { LIVE_TIER_CODES, LiveApiError, endStream, getIngest, getState, getStream, liveErrorCode, startStream, type LiveStreamRow } from '@/lib/live/api';
-import { LiveRequestAccessLink } from './LiveTierNotice';
+import { LIVE_TIER_CODES, LiveApiError, endStream, getIngest, getState, getStream, isLiveOff, liveErrorCode, startStream, type LiveStreamRow } from '@/lib/live/api';
 import { logger } from '@/lib/logger-client';
 import { studioLiveHref } from './LiveTab';
 
@@ -47,6 +47,7 @@ export function GoLive({ locale, channelId, streamId }: { locale: string; channe
   const text = t.studio.live.goLive;
   const errors = t.studio.live.errors;
   const ids = useId();
+  const router = useRouter();
 
   const [load, setLoad] = useState<Load>('loading');
   const [stream, setStream] = useState<LiveStreamRow | null>(null);
@@ -70,6 +71,11 @@ export function GoLive({ locale, channelId, streamId }: { locale: string; channe
       setLoad('ready');
     } catch (err) {
       if (signal?.aborted) return;
+      // Live was switched off for this channel: the page re-renders without it (not found)
+      if (isLiveOff(err)) {
+        router.refresh();
+        return;
+      }
       const code = liveErrorCode(err);
       if (err instanceof LiveApiError && err.status === 404) setLoad('missing');
       else if (err instanceof LiveApiError && err.status === 403 && !LIVE_TIER_CODES.includes(code)) setLoad('forbidden');
@@ -80,7 +86,7 @@ export function GoLive({ locale, channelId, streamId }: { locale: string; channe
         setLoad('failed');
       }
     }
-  }, [streamId, errors]);
+  }, [streamId, errors, router]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -109,6 +115,11 @@ export function GoLive({ locale, channelId, streamId }: { locale: string; channe
       setState(out.state);
       setStarted(true);
     } catch (err) {
+      // Live was switched off meanwhile: the page re-renders without it (not found)
+      if (isLiveOff(err)) {
+        router.refresh();
+        return;
+      }
       const code = liveErrorCode(err);
       if (code === 'generic') logger.error('[StudioGoLive] Go live failed', { streamId, error: err });
       setError(errors[code]);
@@ -164,7 +175,6 @@ export function GoLive({ locale, channelId, streamId }: { locale: string; channe
         {back}
         <p className="py-8 text-foreground" data-code={errorCode}>
           {message}
-          {load === 'failed' && errorCode === 'live_not_in_tier' && <LiveRequestAccessLink locale={locale} />}
         </p>
         {load === 'failed' && <Button onClick={() => { setLoad('loading'); void fetchAll(); }}>{t.studio.live.retry}</Button>}
       </div>
@@ -201,7 +211,6 @@ export function GoLive({ locale, channelId, streamId }: { locale: string; channe
         {error && (
           <p role="alert" className="mt-2 text-sm text-destructive" data-testid="studio-golive-error" data-code={errorCode}>
             {error}
-            {errorCode === 'live_not_in_tier' && <LiveRequestAccessLink locale={locale} />}
           </p>
         )}
         <div className="mt-3 flex flex-wrap gap-2">
