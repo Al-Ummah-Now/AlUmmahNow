@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { applyTheme, LANGS, MODES, mockApi } from './harness';
 import { consentCookie } from '../test-utils/consent';
-import type { BrowserContext, Page } from '@playwright/test';
+import type { BrowserContext } from '@playwright/test';
 
 /** Owner review shots of the comment composer's identity avatar (local only: SHOTS=1). */
 test.skip(!process.env.SHOTS, 'review shots only');
@@ -44,15 +44,6 @@ async function signInAs(context: BrowserContext, baseURL: string, active: Who, c
   });
 }
 
-async function openMenu(page: Page) {
-  const trigger = page.locator('[data-testid="nav-menu-trigger"]:visible').first();
-  const menu = page.getByTestId('nav-menu');
-  await expect(async () => {
-    if (!(await menu.isVisible())) await trigger.click();
-    await expect(menu).toBeVisible({ timeout: 3000 });
-  }).toPass({ timeout: 30_000 });
-  return menu;
-}
 
 
 test.beforeEach(async ({ request }) => { await request.get(`${MOCK_API}/__fixtures/reset`); });

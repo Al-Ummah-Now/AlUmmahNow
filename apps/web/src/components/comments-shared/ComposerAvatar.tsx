@@ -29,7 +29,7 @@ export function ComposerAvatar({ src, name, as, className = 'w-8 h-8', testId = 
     <span
       role="img"
       aria-label={name}
-      className={`${className} flex-none rounded-full bg-brand-soft text-brand-ink border border-brand-edge flex items-center justify-center font-bold text-sm`}
+      className={`${className} flex-none rounded-full bg-[var(--fanous-color-primary)] text-[var(--fanous-color-on-primary)] flex items-center justify-center font-bold text-sm`}
       {...common}
     >
       <span aria-hidden="true">{Array.from(name.trim())[0]?.toUpperCase() ?? '?'}</span>
