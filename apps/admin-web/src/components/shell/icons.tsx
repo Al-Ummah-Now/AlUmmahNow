@@ -39,6 +39,7 @@ const PATHS = {
   plus: 'M12 5v14M5 12h14',
   login: 'M15 4h4v16h-4M10 8l4 4-4 4M14 12H3',
   check: 'M5 12.5l4.5 4.5L19 7',
+  card: 'M3 6h18v12H3zM3 10h18M7 15h4',
   sliders: 'M4 6h16M4 12h16M4 18h16M14 4v4M8 10v4M16 16v4',
   phone: 'M7 2h10a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zM11 18h2',
 } as const;

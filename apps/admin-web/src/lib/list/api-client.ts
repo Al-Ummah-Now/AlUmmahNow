@@ -8,6 +8,7 @@
  * language. An expired session goes through /api/auth/refresh and comes back.
  */
 import { logger } from '@/lib/logger-client';
+import { passkeyRedirectFor } from '@/lib/passkeys';
 
 export class AdminClientError extends Error {
   readonly status: number;
@@ -24,13 +25,20 @@ type Envelope<T> = { success?: boolean; result?: T; error?: string; code?: strin
 
 export type QueryValues = Record<string, string | number | undefined>;
 
-export function contentUrl(path: string, query: QueryValues = {}): string {
+/** The pass-throughs this client talks to: content (lists) and billing (Payments page). */
+export type ProxyBase = '/api/content' | '/api/billing';
+
+export function proxyUrl(base: ProxyBase, path: string, query: QueryValues = {}): string {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(query)) {
     if (value !== undefined && value !== '') search.set(key, String(value));
   }
   const qs = search.toString();
-  return `/api/content/${path.replace(/^\/+/, '')}${qs ? `?${qs}` : ''}`;
+  return `${base}/${path.replace(/^\/+/, '')}${qs ? `?${qs}` : ''}`;
+}
+
+export function contentUrl(path: string, query: QueryValues = {}): string {
+  return proxyUrl('/api/content', path, query);
 }
 
 let refreshing = false;
@@ -43,8 +51,35 @@ function refreshSession(): void {
   window.location.assign(`/api/auth/refresh?next=${encodeURIComponent(next)}`);
 }
 
-export async function contentRequest<T>(method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE', path: string, opts: { query?: QueryValues; body?: unknown; signal?: AbortSignal } = {}): Promise<T> {
-  const url = contentUrl(path, opts.query);
+/**
+ * Staff passkeys (lib/passkeys.ts): admin-api's `401 step_up_required` (a high-risk action needs
+ * a sign-in under 15 minutes old) and `403 passkey_required` send the browser through the same
+ * fresh sign-in or "Passkey needed" page as the server actions do, coming back to this page.
+ * True when it navigated.
+ */
+function navigateForPasskey(status: number, code: string | undefined): boolean {
+  if (typeof window === 'undefined') return false;
+  const target = passkeyRedirectFor({ status, code }, `${window.location.pathname}${window.location.search}`);
+  if (!target) return false;
+  logger.debug('[list] Passkey answer from admin-api; navigating', { code });
+  window.location.assign(target);
+  return true;
+}
+
+type Method = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
+type RequestOptions = { query?: QueryValues; body?: unknown; signal?: AbortSignal };
+
+export function contentRequest<T>(method: Method, path: string, opts: RequestOptions = {}): Promise<T> {
+  return proxyRequest<T>('/api/content', method, path, opts);
+}
+
+/** The billing pass-through (/api/billing/<path>, app/api/billing/[...path]/route.ts). */
+export function billingRequest<T>(method: Method, path: string, opts: RequestOptions = {}): Promise<T> {
+  return proxyRequest<T>('/api/billing', method, path, opts);
+}
+
+async function proxyRequest<T>(base: ProxyBase, method: Method, path: string, opts: RequestOptions): Promise<T> {
+  const url = proxyUrl(base, path, opts.query);
   let res: Response;
   try {
     res = await fetch(url, {
@@ -63,6 +98,7 @@ export async function contentRequest<T>(method: 'GET' | 'POST' | 'PATCH' | 'PUT'
   if (!res.ok || body.success === false) {
     const code = typeof body.code === 'string' ? body.code : undefined;
     if (res.status === 401 && code === 'session_expired') refreshSession();
+    else navigateForPasskey(res.status, code);
     const message = body.error || body.errors?.[0]?.message || `HTTP ${res.status}`;
     // 4xx is the admin's or the data's problem (shown, not an error); 5xx is ours
     if (res.status >= 500) logger.error('[list] Request failed', { method, path, status: res.status, code });

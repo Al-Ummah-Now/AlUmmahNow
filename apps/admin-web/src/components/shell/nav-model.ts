@@ -30,6 +30,8 @@ export interface NavAccess {
   media: boolean;
   /** ops:read (Operations: platform analytics per environment) */
   ops: boolean;
+  /** billing:read (Payments: providers, prices, tax, subscriptions); admins and super admins */
+  billing?: boolean;
   /** A content or senior reviewer with no admin role (VR7): only the review queue is shown */
   reviewOnly?: boolean;
   /** settings:manage (Remote config for the apps): admins and super admins */
@@ -105,6 +107,8 @@ export const NAV_ITEMS: NavItem[] = [
   // Creator tier limits (a user's tier is set on the Users list and the user page); every admin reads, creators:manage changes
   { href: '/tiers', label: 'nav.tiers', icon: 'crown', group: 'people' },
   { href: '/tier-requests', label: 'nav.tierRequests', icon: 'request', group: 'people', badge: 'tierRequests', badgeTestId: 'tier-requests-nav-badge', badgeLabel: 'tierRequests.navBadge' },
+  // Payments (wiki AUN-SUBS): providers, prices, tax, subscriptions; billing:read, changes per billing permission
+  { href: '/payments', label: 'nav.payments', icon: 'card', group: 'people', requires: (a) => a.billing === true },
   { href: '/auth-requests', label: 'nav.authRequests', icon: 'key', group: 'people' },
   { href: '/legacy-profiles', label: 'nav.legacyProfiles', icon: 'archive', group: 'people', requires: (a) => a.manageUsers },
 

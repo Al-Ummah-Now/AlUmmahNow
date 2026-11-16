@@ -225,3 +225,28 @@ export function canManageLive(role?: string): boolean {
   const r = normalizeRole(role);
   return r === 'admin' || r === 'super_admin';
 }
+
+/**
+ * Payments (wiki AUN-SUBS): mirrors the billing content permissions in
+ * shared-types ROLE_CONTENT_PERMISSIONS. Admins and super admins read the
+ * Payments page and manage prices, tax, cancels and comps (billing:read,
+ * billing:manage); provider settings and credentials (billing:providers) and
+ * refunds (billing:refund) are super admin only. admin-api enforces every
+ * one; these only hide what the user cannot open or do.
+ */
+export function canReadBilling(role?: string): boolean {
+  const r = normalizeRole(role);
+  return r === 'admin' || r === 'super_admin';
+}
+
+export function canManageBilling(role?: string): boolean {
+  return canReadBilling(role);
+}
+
+export function canManageProviders(role?: string): boolean {
+  return isSuperAdmin(role);
+}
+
+export function canRefund(role?: string): boolean {
+  return isSuperAdmin(role);
+}

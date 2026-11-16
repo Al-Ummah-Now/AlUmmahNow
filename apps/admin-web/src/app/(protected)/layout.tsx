@@ -5,7 +5,7 @@ import { NAV_COOKIE } from '@/components/shell/nav-model';
 import { getContactCounts, getErrorCounts } from '@/lib/api/admin';
 import { getUser } from '@/lib/api/content';
 import { pendingTierRequestCount } from '@/lib/api/tier-requests';
-import { canReadErrors, canUseContactInbox, canUseProcessing, canManageVideosUsers, canUseStaleUploads, canReadAudit, canManageMedia, canReadOps, isReviewOnly, isSuperAdmin, canManagePlatformSettings, canManageEmails } from '@/lib/roles';
+import { canReadErrors, canUseContactInbox, canUseProcessing, canManageVideosUsers, canUseStaleUploads, canReadAudit, canManageMedia, canReadOps, canReadBilling, isReviewOnly, isSuperAdmin, canManagePlatformSettings, canManageEmails } from '@/lib/roles';
 import { ErrorReportingIdentity } from '@/lib/errors/ErrorReportingProvider';
 import { errorsBadgeCount } from './errors/filters';
 import { logger } from '@/lib/logger';
@@ -98,6 +98,7 @@ export default async function ProtectedLayout({
           audit: canReadAudit(role),
           media: canManageMedia(role),
           ops: canReadOps(role),
+          billing: canReadBilling(role),
           reviewOnly: isReviewOnly(role),
           superAdmin: isSuperAdmin(role),
           settings: canManagePlatformSettings(role),
