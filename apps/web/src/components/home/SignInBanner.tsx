@@ -2,8 +2,8 @@
 
 /**
  * The invitation at the top of the videos home page for signed-out visitors: sign in to
- * comment, like, subscribe and save, and request creator access to share their own videos
- * (uploading is by request during the beta; never promised as instant).
+ * comment, like, subscribe and save. Upgrades (creator access) are offered only in the header
+ * button and on the Upgrade page after sign-in, never here.
  *
  * - Signed in: nothing, and nothing flashes. The viewer is known on the server
  *   (AuthProvider in the root layout), so the server HTML already has or lacks the banner.
@@ -16,7 +16,7 @@
  */
 
 import React, { useState, useSyncExternalStore } from 'react';
-import { ArrowRight, Bell, Bookmark, Clapperboard, MessageCircle, ThumbsUp, X } from 'lucide-react';
+import { ArrowRight, Bell, Bookmark, MessageCircle, ThumbsUp, X } from 'lucide-react';
 import { login } from '@/lib/actions';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useOptionalAuth } from '@/components/AuthProvider/authContext';
@@ -28,8 +28,6 @@ const PERKS = [
   { key: 'like', Icon: ThumbsUp },
   { key: 'subscribe', Icon: Bell },
   { key: 'save', Icon: Bookmark },
-  // Uploading is by request during the beta (creator tiers): the chip says so
-  { key: 'creatorAccess', Icon: Clapperboard },
 ] as const;
 
 /** Another tab dismissed it: follow along */

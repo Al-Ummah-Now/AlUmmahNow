@@ -41,12 +41,11 @@ describe('SignInBanner', () => {
     render(<SignInBanner />);
     const region = screen.getByRole('region', { name: 'Join Al Ummah Now' });
     expect(region).toHaveAttribute('dir', 'ltr');
-    expect(screen.getByRole('heading', { name: 'Sign in to take part, and request creator access to share your own videos' })).toBeInTheDocument();
-    expect(screen.getByRole('list', { name: 'What you can do with an account' }).querySelectorAll('li')).toHaveLength(5);
-    expect(region).toHaveTextContent('Subscribe');
-    // Uploading is by request during the beta: offered as a request, never as instant access
-    expect(region).toHaveTextContent('Request creator access');
-    expect(region).toHaveTextContent('by request during the beta');
+    expect(screen.getByRole('heading', { name: 'Sign in to take part' })).toBeInTheDocument();
+    const perks = [...screen.getByRole('list', { name: 'What you can do with an account' }).querySelectorAll('li')].map((li) => li.textContent);
+    expect(perks).toEqual(['Comment', 'Like', 'Subscribe', 'Save']);
+    // Upgrades live in the header button and on the Upgrade page after sign-in, never in this banner
+    expect(region).not.toHaveTextContent(/creator|upload|upgrade/i);
     expect(region).not.toHaveTextContent(/follow/i);
     const signIn = screen.getByRole('button', { name: 'Sign in' });
     expect(signIn).toHaveAttribute('type', 'submit');
@@ -76,8 +75,10 @@ describe('SignInBanner', () => {
     render(<SignInBanner />);
     const region = screen.getByRole('region', { name: 'انضم إلى الأمة الآن' });
     expect(region).toHaveAttribute('dir', 'rtl');
-    expect(region).toHaveTextContent('مرئيات');
-    expect(region).toHaveTextContent('اطلب صلاحية صانع المحتوى');
+    expect(screen.getByRole('heading', { name: 'سجل حسابك لتشارك' })).toBeInTheDocument();
+    expect(region).toHaveTextContent('المرئيات');
+    expect(region.querySelectorAll('.sib-perk')).toHaveLength(4);
+    expect(region).not.toHaveTextContent('صانع المحتوى');
     expect(region).not.toHaveTextContent('فيديو');
     expect(screen.getByRole('button', { name: 'تسجيل الدخول' })).toBeInTheDocument();
     expect(mockBind).toHaveBeenCalledWith(null, 'ar', '/ar');

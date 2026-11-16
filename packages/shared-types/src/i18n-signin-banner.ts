@@ -6,8 +6,8 @@
  * Tone (wiki "Copy Tone Guide"): subscribe to channels, never "follow" them;
  * Arabic says «مرئي / مرئيات», never «فيديو».
  *
- * Uploading is by request during the beta (creator tiers, requested on /upgrade): the copy
- * offers creating and sharing videos through a creator-access request, never as instant access.
+ * Only what an account unlocks for a viewer: upgrades (creator access) live in the header button
+ * and on the Upgrade page after sign-in, never here (owner review of #1359).
  */
 
 export interface SignInBannerTranslations {
@@ -23,8 +23,6 @@ export interface SignInBannerTranslations {
     like: string;
     subscribe: string;
     save: string;
-    /** Uploading is requested, not granted on sign-in */
-    creatorAccess: string;
   };
   /** Accessible name of the perks list */
   perksLabel: string;
@@ -36,14 +34,13 @@ export interface SignInBannerTranslations {
 export const SIGN_IN_BANNER_EN: SignInBannerTranslations = {
   regionLabel: 'Join Al Ummah Now',
   eyebrow: 'Join the community',
-  title: 'Sign in to take part, and request creator access to share your own videos',
-  body: 'Comment, like, subscribe to channels and save videos for later. Uploading is by request during the beta: once signed in, request creator access to create and share your own videos.',
+  title: 'Sign in to take part',
+  body: 'Comment, like, subscribe to channels and save videos for later.',
   perks: {
     comment: 'Comment',
     like: 'Like',
     subscribe: 'Subscribe',
     save: 'Save',
-    creatorAccess: 'Request creator access',
   },
   perksLabel: 'What you can do with an account',
   signIn: 'Sign in',
@@ -54,13 +51,12 @@ export const SIGN_IN_BANNER_AR: SignInBannerTranslations = {
   regionLabel: 'انضم إلى الأمة الآن',
   eyebrow: 'انضم إلى المجتمع',
   title: 'سجل حسابك لتشارك',
-  body: 'علّق وأعجب واشترك في القنوات واحفظ المرئيات لوقت لاحق. الرفع بطلب خلال المرحلة التجريبية: بعد تسجيل الدخول اطلب صلاحية صانع المحتوى لتنشئ مرئياتك وتنشرها.',
+  body: 'علّق وأعجب واشترك في القنوات واحفظ المرئيات لوقت لاحق.',
   perks: {
     comment: 'تعليق',
     like: 'إعجاب',
     subscribe: 'اشتراك',
     save: 'حفظ',
-    creatorAccess: 'اطلب صلاحية صانع المحتوى',
   },
   perksLabel: 'ما يمكنك فعله بالحساب',
   signIn: 'تسجيل الدخول',
