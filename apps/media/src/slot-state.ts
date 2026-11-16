@@ -2,7 +2,7 @@
  * Concurrent R2 transcodes as an autoscaling range (shared-types transcode-limit.ts; videos admin →
  * Video providers → Cloudflare R2 settings).
  *
- * The container's max_instances is Cloudflare's own limit (production 3,750 standard-4: the account's
+ * The container's max_instances is Cloudflare's own limit (production 3,746 standard-4: what the account's
  * 15,000 vCPU; stage and QA 2, as the account limit is shared). The admin's
  * min–max range is enforced here: one TranscodeSlots object (named 'global') holds a lease per video
  * that is transcoding. The queue consumer asks for a slot before it starts a job:

@@ -287,11 +287,11 @@ describe('the consumer gate', () => {
 describe('wrangler: ceiling and slots wired in every environment', () => {
 	const read = (f: string) => readFileSync(join(__dirname, '..', f), 'utf8');
 	const videos = (f: string) => readFileSync(join(__dirname, '..', '..', 'api-videos', f), 'utf8');
-	it('production: max_instances 3750 (Cloudflare\'s account limit in standard-4) = MEDIA_TRANSCODE_CEILING = api-videos', () => {
+	it('production: max_instances 3746 (the account\'s 15,000 vCPU less stage and QA, in standard-4) = MEDIA_TRANSCODE_CEILING = api-videos', () => {
 		const prod = read('wrangler.jsonc').split('"env": {')[0]!;
-		assert.ok(/"max_instances": 3750,/.test(prod));
-		assert.ok(/"MEDIA_TRANSCODE_CEILING": "3750"/.test(prod));
-		assert.ok(/"MEDIA_TRANSCODE_CEILING": "3750"/.test(videos('wrangler.jsonc').split('"env": {')[0]!));
+		assert.ok(/"max_instances": 3746,/.test(prod));
+		assert.ok(/"MEDIA_TRANSCODE_CEILING": "3746"/.test(prod));
+		assert.ok(/"MEDIA_TRANSCODE_CEILING": "3746"/.test(videos('wrangler.jsonc').split('"env": {')[0]!));
 	});
 	it('stage and QA: max_instances 2 = the ceiling everywhere', () => {
 		const stage = read('wrangler.jsonc').split('"env": {')[1]!;

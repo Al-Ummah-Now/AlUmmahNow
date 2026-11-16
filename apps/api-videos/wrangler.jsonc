@@ -396,7 +396,7 @@
 		"ORIGINALS_MAX_DAYS": "90",
 		// Hard ceiling of the admin's max concurrent transcodes: max_instances of the transcoder container
 		// (apps/media/wrangler.jsonc). The setting itself is global_settings/ops/media-transcode-limit.json
-		"MEDIA_TRANSCODE_CEILING": "3750",
+		"MEDIA_TRANSCODE_CEILING": "3746",
 		// Logging policy (docs/operations/logging.md): warn on production, stage and QA (only warnings, errors, slow requests); debug locally
 		"LOG_LEVEL": "warn",
 		"ENVIRONMENT": "production",
