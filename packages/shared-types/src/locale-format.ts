@@ -60,9 +60,30 @@ export function numberFormat(locale: FormatLocale, options?: Intl.NumberFormatOp
   return cached('n', locale, options, (tag) => new Intl.NumberFormat(tag, options));
 }
 
-/** A cached Intl.DateTimeFormat with the locale's digits pinned. */
+/**
+ * ICU versions disagree on the space inside a date or time: WebKit writes U+00A0 before «م/ص»
+ * in an Arabic 12-hour time where Node writes U+0020 (and some ICUs write U+202F before "PM").
+ * A time rendered on the server and again in Safari then differs (React #418). Every date and
+ * time from here has those spaces as a plain U+0020, so all runtimes write the same text.
+ */
+const ODD_SPACE = /[\u00a0\u202f\u2009]/g;
+export function normalizeSpaces(text: string): string {
+  return text.replace(ODD_SPACE, ' ');
+}
+
+/** A cached Intl.DateTimeFormat with the locale's digits pinned and its spaces made the same everywhere. */
 export function dateTimeFormat(locale: FormatLocale, options?: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
-  return cached('d', locale, options, (tag) => new Intl.DateTimeFormat(tag, options));
+  return cached('d', locale, options, (tag) => {
+    const real = new Intl.DateTimeFormat(tag, options);
+    const wrapped = {
+      format: (date?: Date | number) => normalizeSpaces(real.format(date)),
+      formatToParts: (date?: Date | number) => real.formatToParts(date).map((part) => ({ ...part, value: normalizeSpaces(part.value) })),
+      resolvedOptions: () => real.resolvedOptions(),
+    };
+    const range = (real as unknown as { formatRange?: (a: Date | number, b: Date | number) => string }).formatRange;
+    if (range) Object.assign(wrapped, { formatRange: (a: Date | number, b: Date | number) => normalizeSpaces(range.call(real, a, b)) });
+    return wrapped as unknown as Intl.DateTimeFormat;
+  });
 }
 
 /** A cached Intl.RelativeTimeFormat with the locale's digits pinned. */
