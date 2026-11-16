@@ -99,6 +99,9 @@ function fixtureAnswer(path, token, method) {
 function answer(path) {
   if (path.startsWith('/thumb/')) return null;
   if (path === '/api/profile' || path === '/api/profiles/me') return PROFILE;
+  // The default account owns channel c1 (Studio and upload pages) and holds a creator tier: /upload is
+  // an uploader's page, and without a tier it is the not-found page (wiki "Product rules → Hidden when off")
+  if (path === '/api/me/creator') return { success: true, result: tier() };
   if (path === '/api/notifications/unread-count') return { success: true, result: { unreadCount: 2, unseenCount: 2, menuOpen: 'seen' } };
   if (path === '/api/notifications') return { success: true, result: { items: NOTIFS, nextCursor: null, unreadCount: 2, unseenCount: 2, menuOpen: 'seen' } };
   if (path === '/api/search/suggestions') return { data: [
