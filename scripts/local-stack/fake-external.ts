@@ -23,7 +23,8 @@
  *   the latter): it lists permission groups, mints tokens (full permissions, value
  *   FAKE_CF_TOKEN_PREFIX + minted-<n>-…), reads and deletes them, and writes the Secrets Store, whose
  *   writes land in the stack's own Secrets Store (the Workers read them). GET /__fake/cloudflare/tokens
- *   lists the minted and deleted tokens (ids and names, never values). PUT /__fake/cloudflare { logVideo } names the video its log lines
+ *   lists the minted and deleted tokens (ids and names, never values); PUT /__fake/cloudflare/secret
+ *   { name, value } sets a stack Secrets Store secret back (specs restore what they rotated). PUT /__fake/cloudflare { logVideo } names the video its log lines
  *   mention, DELETE /__fake/cloudflare forgets it.
  * - Webhook receiver (FAKE_WEBHOOK_HOST): status page webhook deliveries are kept and answered 200
  *   (a path containing /fail-<status>/ answers that status): GET /__fake/webhooks.
@@ -703,6 +704,12 @@ async function control(req: IncomingMessage, url: URL): Promise<Response> {
   const [, , kind, , guid, action] = url.pathname.split('/');
   if (kind === 'resend') return json(emails);
   if (kind === 'google') return googleControl(req.method, url);
+  if (kind === 'cloudflare' && url.pathname.endsWith('/secret') && req.method === 'PUT') {
+    const { name, value } = JSON.parse((await readBody(req)) || '{}') as { name?: unknown; value?: unknown };
+    if (typeof name !== 'string' || typeof value !== 'string' || !hooks.secret) return json({ error: 'name and value are strings' }, 400);
+    await hooks.secret(name, value);
+    return json({ name });
+  }
   if (kind === 'cloudflare' && url.pathname.endsWith('/tokens')) {
     return json({ minted: [...cfTokens.entries()].map(([id, t]) => ({ id, name: t.name, deleted: cfDeleted.has(id) })) });
   }

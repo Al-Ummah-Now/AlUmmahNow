@@ -28,6 +28,14 @@ const FULL = `e2e-fake-cloudflare-token-${tag}-full-CD34`;
 const MANAGER = `e2e-fake-cloudflare-token-${tag}-manager-EF56`;
 const FILES = ['cloudflare-media', 'cloudflare-token-manager'].flatMap((id) => [`credentials/${id}.json`, `credentials/${id}.test.json`, `credentials/${id}.mint.json`]);
 
+/** The stack's Secrets Store values the spec may rotate, put back (stack.ts LOCAL_SECRETS). */
+async function restoreSecrets() {
+  for (const [name, value] of [['media-cdn-api-token', 'local-stack-fake'], ['cloudflare-token-manager', 'unset']]) {
+    const res = await fetch(`${STACK_CONTROL_URL}/__fake/cloudflare/secret`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, value }) });
+    expect(res.ok, `restore ${name}`).toBe(true);
+  }
+}
+
 async function removeFiles() {
   for (const key of FILES) {
     const res = await stackR2('DELETE', 'global-settings', key);
@@ -43,10 +51,13 @@ test.describe('platform credentials', () => {
   test.beforeAll(async () => {
     test.skip(!LOCAL_STACK || !/^https?:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/.test(ADMIN_WEB_URL), 'local stack only: the credential is a global setting and the Cloudflare API is the stack fake');
     await removeFiles();
+    await restoreSecrets();
   });
 
   test.afterAll(async () => {
-    if (LOCAL_STACK) await removeFiles();
+    if (!LOCAL_STACK) return;
+    await removeFiles();
+    await restoreSecrets();
   });
 
   test.describe('an admin', () => {
