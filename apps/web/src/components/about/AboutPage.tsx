@@ -76,7 +76,7 @@ export function AboutPage({ page, locale, source, wwwUrl }: { page: CmsPage; loc
         {blocks ? (
           <div className="ab-blocks" data-testid="about-body" dangerouslySetInnerHTML={{ __html: blocks.html }} />
         ) : (
-          <div className="ab-card">
+          <div className="ab-card pb-glass">
             <div className="ab-prose" data-testid="about-body">
               {parseMarkdown(page.body, { wwwUrl, locale: page.locale }).map(block)}
             </div>

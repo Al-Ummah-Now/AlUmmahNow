@@ -11,8 +11,8 @@
 html[lang=ar] .ab-title{line-height:1.45}
 .ab-lead{margin:6px 0 0;max-width:62ch;color:var(--fanous-color-text-secondary);line-height:1.6}
 
-/* The body: the theme's card material with its gradient hairline border */
-.ab-card{border:1px solid transparent;border-radius:var(--r-xl,20px);background:var(--m-card) padding-box,var(--m-border) border-box;box-shadow:var(--m-card-edge);backdrop-filter:var(--m-blur);-webkit-backdrop-filter:var(--m-blur);padding:clamp(20px,3.4vw,40px)}
+/* The body: the shared frosted-glass card (pb-glass, @al-ummah/shared-types/page-blocks.css); only its shape here */
+.ab-card{border-radius:var(--r-xl,20px);padding:clamp(20px,3.4vw,40px)}
 .ab-prose{display:flex;flex-direction:column;gap:14px;max-width:68ch}
 .ab-prose>:first-child{margin-block-start:0}
 .ab-prose p,.ab-prose li{margin:0;font-size:17px;line-height:1.75;color:var(--fanous-color-text-secondary)}
