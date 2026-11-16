@@ -7,6 +7,7 @@ import type { HelpTranslations } from './i18n-help';
 import type { UploadStatusTranslations } from './i18n-upload-status';
 import type { CaptionsTranslations } from './i18n-captions';
 import type { AudioTracksTranslations } from './i18n-audio-tracks';
+import type { BillingTranslations } from './i18n-billing';
 import type { ChannelRolesTranslations } from './i18n-channel-roles';
 import type { ChannelSectionsTranslations } from './i18n-channel-sections';
 /**
@@ -326,6 +327,8 @@ export interface AppTranslations {
   captions: CaptionsTranslations;
   /** Studio's Audio tracks panel (AUN-MULTI-AUDIO) */
   audioTracks: AudioTracksTranslations;
+  /** Pay flow on /upgrade and Settings › Billing (wiki AUN-SUBS) */
+  billing: BillingTranslations;
   /** Channel Home sections: add/edit flow, manager, rendering (docs/specs/CHANNEL-SECTIONS.md) */
   channelSections: ChannelSectionsTranslations;
   /** Notification center, settings and per-channel bell (Story 29.10) */

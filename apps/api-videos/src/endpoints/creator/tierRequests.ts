@@ -24,6 +24,7 @@ import { logger } from '../../lib/logger';
 import { turnstileMode } from '../../lib/bot-guard';
 import { upgradeMode } from '../../lib/upgradeMode';
 import { featureOff } from '../../lib/features/off';
+import { soldTierIds, type ServiceEnv } from '../../lib/billing/service';
 
 type RolesAuth = { payload?: { roles?: string[] } } | undefined;
 const rolesOf = (c: Context) => (c.get('auth') as RolesAuth)?.payload?.roles;
@@ -38,10 +39,10 @@ export async function handleUpgradeOverview(c: Context) {
 	const userId = c.get('userId') as string | undefined;
 	try {
 		const siteKey = turnstileMode(c.env) === 'off' ? null : (c.env.TURNSTILE_SITE_KEY as string | undefined) || null;
-		const { mode } = await upgradeMode(c.env);
+		const [{ mode }, sold] = await Promise.all([upgradeMode(c.env), soldTierIds(c.env as ServiceEnv)]);
 		// Closed (requests off, no provider): the page vanishes like any off feature (owner 2026-11-19)
 		if (mode === 'closed') return featureOff(c);
-		const result = await upgradeOverview(c.env.SEARCH_DB, userId ? { userId, roles: rolesOf(c) } : null, siteKey, mode);
+		const result = await upgradeOverview(c.env.SEARCH_DB, userId ? { userId, roles: rolesOf(c) } : null, siteKey, mode, sold);
 		// Per viewer when signed in; the tier list alone is the same for everyone
 		return c.json({ success: true, result }, 200, { 'Cache-Control': userId ? 'private, no-store' : 'public, max-age=60' });
 	} catch (error) {

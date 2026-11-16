@@ -233,7 +233,7 @@ export async function withdrawTierRequest(db: D1Database, userId: string, id: st
 }
 
 /**
- * What /upgrade shows: requestable tiers plus the viewer's own tier (always,
+ * What /upgrade shows: requestable tiers, tiers on sale and the viewer's own tier (always,
  * so "Your current tier" has its card even when the admin hid it), in
  * sortOrder; for a signed-in viewer their tier and latest request.
  */
@@ -243,6 +243,8 @@ export async function upgradeOverview(
 	turnstileSiteKey: string | null,
 	/** The page's mode (lib/upgradeMode.ts): a provider enabled, or the admin's "Allow tier requests" */
 	mode: UpgradeMode = 'request',
+	/** Tiers on sale (wiki AUN-SUBS): shown even when they cannot be requested */
+	soldTierIds: ReadonlySet<string> = new Set(),
 ): Promise<UpgradeOverview> {
 	const [tiers, current, request] = await Promise.all([
 		readTiers(db),
@@ -252,7 +254,7 @@ export async function upgradeOverview(
 	const currentTierId = who ? current?.tier?.id ?? DEFAULT_TIER_ID : null;
 	return {
 		mode,
-		tiers: tiers.filter((t) => t.requestable || t.id === currentTierId).map(toPublicTier),
+		tiers: tiers.filter((t) => t.requestable || soldTierIds.has(t.id) || t.id === currentTierId).map(toPublicTier),
 		currentTierId,
 		currentTierSince: current?.since ?? null,
 		request: request ? ownRequest(request) : null,

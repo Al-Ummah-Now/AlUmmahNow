@@ -15,7 +15,7 @@ import type { Context } from 'hono';
 import { BILLING_ERRORS, resolveDisplayName, type NameFields } from '@al-ummah/shared-types';
 import { logger } from '../../lib/logger';
 import { BillingError } from '../../lib/billing/config';
-import { billingPlans, cancelOwnSubscription, completeFakeCheckout, fakeAvailable, myBilling, portalUrl, receiveWebhook, safeReturnPath, startCheckout, type ServiceEnv } from '../../lib/billing/service';
+import { abandonCheckout, billingPlans, paymentReceipt, cancelOwnSubscription, myCheckout, completeFakeCheckout, fakeAvailable, myBilling, portalUrl, receiveWebhook, safeReturnPath, startCheckout, type ServiceEnv } from '../../lib/billing/service';
 import { readCheckout } from '../../lib/billing/store';
 import R2Repository from '../../lib/r2Repo';
 
@@ -79,6 +79,37 @@ export async function handleCheckout(c: Context) {
 	}
 }
 
+export async function handleMyCheckout(c: Context) {
+	const userId = c.get('userId') as string | undefined;
+	if (!userId) return c.json({ success: false, error: 'Authentication required' }, 401);
+	try {
+		return c.json({ success: true, result: await myCheckout(env(c), userId, c.req.param('id') ?? '') }, 200, { 'Cache-Control': 'private, no-store' });
+	} catch (error) {
+		return failure(c, error, 'Checkout status');
+	}
+}
+
+export async function handlePaymentReceipt(c: Context) {
+	const userId = c.get('userId') as string | undefined;
+	if (!userId) return c.json({ success: false, error: 'Authentication required' }, 401);
+	try {
+		return c.json({ success: true, result: { url: await paymentReceipt(env(c), userId, c.req.param('id') ?? '') } }, 200, { 'Cache-Control': 'private, no-store' });
+	} catch (error) {
+		return failure(c, error, 'Receipt');
+	}
+}
+
+export async function handleAbandonCheckout(c: Context) {
+	const userId = c.get('userId') as string | undefined;
+	if (!userId) return c.json({ success: false, error: 'Authentication required' }, 401);
+	try {
+		await abandonCheckout(env(c), userId, c.req.param('id') ?? '');
+		return c.json({ success: true, result: await myCheckout(env(c), userId, c.req.param('id') ?? '') });
+	} catch (error) {
+		return failure(c, error, 'Checkout abandon');
+	}
+}
+
 export async function handleCancelOwn(c: Context) {
 	const userId = c.get('userId') as string | undefined;
 	if (!userId) return c.json({ success: false, error: 'Authentication required' }, 401);
@@ -133,8 +164,25 @@ export async function handleFakeCheckoutPage(c: Context) {
 <body><main><h1>Test checkout</h1><p>No money moves. This page exists only on test environments.</p><p lang="ar" dir="rtl">دفع تجريبي: لا تُحوَّل أي أموال. هذه الصفحة موجودة في بيئات الاختبار فقط.</p>
 <p>Checkout <code>${escapeHtml(checkout.id)}</code>, tier <code>${escapeHtml(checkout.tier_id)}</code>, status ${escapeHtml(checkout.status)}.</p>
 <form method="post" action="/webhooks/billing/fake/checkout/${escapeHtml(checkout.id)}/pay"><input type="hidden" name="return" value="${escapeHtml(back)}">
-<button type="submit" data-testid="fake-pay"${checkout.status === 'open' ? '' : ' disabled'}>Pay (test) · ادفع (تجريبي)</button></form><p><a href="${escapeHtml(back)}">Cancel · إلغاء</a></p></main></body></html>`;
+<button type="submit" data-testid="fake-pay"${checkout.status === 'open' ? '' : ' disabled'}>Pay (test) · ادفع (تجريبي)</button></form><form method="post" action="/webhooks/billing/fake/checkout/${escapeHtml(checkout.id)}/cancel"><input type="hidden" name="return" value="${escapeHtml(back)}"><button type="submit" data-testid="fake-cancel" style="background:transparent;color:#9cf;border:1px solid #9cf">Cancel · إلغاء</button></form></main></body></html>`;
 	return c.html(html, 200, { 'Cache-Control': 'no-store' });
+}
+
+/** The test page's Cancel: the checkout is left unpaid, as a provider's cancel would. */
+export async function handleFakeCancel(c: Context) {
+	if (!fakeAvailable(env(c))) return c.notFound();
+	const form = await c.req.parseBody().catch(() => ({}) as Record<string, unknown>);
+	const web = String(env(c).VIDEOS_WEB_URL ?? '').replace(/\/$/, '');
+	const ret = typeof form.return === 'string' && web && form.return.startsWith(`${web}/`) ? form.return : `${web}/upgrade`;
+	const id = c.req.param('id') ?? '';
+	const checkout = /^bco_[0-9a-f]{32}$/.test(id) ? await readCheckout(env(c), id) : null;
+	if (!checkout || checkout.provider !== 'fake') return c.notFound();
+	try {
+		await abandonCheckout(env(c), null, id);
+		return c.redirect(ret, 303);
+	} catch (error) {
+		return failure(c, error, 'Test checkout cancel');
+	}
 }
 
 export async function handleFakePay(c: Context) {

@@ -8,6 +8,13 @@
  * the env checks it). The user's latest request shows above the cards:
  * pending (with Withdraw), approved, or declined with the team's note.
  * Signed out, the cards are shown with "Sign in to request".
+ *
+ * Pay mode (wiki AUN-SUBS): when GET /api/billing/plans offers a tier, its
+ * card shows the price (period, currency, provider choices) and Subscribe
+ * instead of Request (components/upgrade/PayParts.tsx). Request-only tiers
+ * and tiers without an offer keep the request flow; with payments off the
+ * page is exactly the request page. Checkout returns to ?checkout=bco_…,
+ * where the page confirms the subscription before showing the new tier.
  */
 'use client';
 
@@ -30,6 +37,11 @@ import { login } from '@/lib/actions';
 import { upgradePath } from '@/lib/auth/sign-in-return';
 import { fetchUpgradeOverview, submitTierRequest, withdrawTierRequest } from '@/lib/api/tier-requests-client';
 import NotFoundPage from '@/components/NotFoundPage';
+import { fetchBillingPlans } from '@/lib/api/billing-client';
+import type { BillingTranslations as BillingCopy } from '@al-ummah/shared-types';
+import { offerFor } from '@/lib/billing/pay';
+import type { BillingOffer, BillingPlans } from '@al-ummah/shared-types';
+import { CheckoutBanner, TierPricing, useCheckoutReturn, useSubscribe, type SubscribeRequest } from './PayParts';
 import { cardState, fillCopy, requestErrorMessage, tierDescription, tierFeatures, tierName, validateRequestForm, type FormErrors, type Lang } from '@/lib/upgrade/tiers';
 import { formatAbsoluteDate } from '@/lib/format/videoMeta';
 import { TierRequestHistory } from './TierRequestHistory';
@@ -70,6 +82,8 @@ export function UpgradePage({ locale }: { locale: string }) {
   // Bumped on every overview load, so "Your requests" re-reads after a request is filed or withdrawn
   const [loads, setLoads] = useState(0);
   const { confirm, dialog: confirmDialog } = useConfirm();
+  const bc = t.billing;
+  const [plans, setPlans] = useState<BillingPlans | null>(null);
 
   const reload = useCallback(async () => {
     const res = await fetchUpgradeOverview();
@@ -95,6 +109,34 @@ export function UpgradePage({ locale }: { locale: string }) {
     void reload();
   }, [reload, user?.id]);
 
+  // Payments off, or plans unavailable: the page stays the request page
+  useEffect(() => {
+    let live = true;
+    void fetchBillingPlans().then((res) => {
+      if (!live) return;
+      if (res.ok && res.result) setPlans(res.result);
+      else logger.warn('[upgrade] Billing plans not loaded', { status: res.status, code: res.code });
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const { confirm: checkout, startConfirm } = useCheckoutReturn(
+    () => {
+      void reload();
+      void refreshCreatorAccess();
+    },
+    () => setNotice(bc.pay.canceledReturn),
+  );
+  const pay = useSubscribe({
+    plans,
+    locale,
+    copy: bc,
+    onCompleted: (checkoutId) => startConfirm(checkoutId),
+    onClosed: () => setNotice(bc.pay.canceledReturn),
+  });
+
   const withdraw = async (request: TierRequest) => {
     const ok = await confirm({
       title: copy.status.withdrawTitle,
@@ -114,15 +156,17 @@ export function UpgradePage({ locale }: { locale: string }) {
   };
 
   const overview = load.status === 'ready' ? load.overview : null;
+  // The server's mode decides (UPGRADE_MODES): the pay flow only while a payment provider is enabled
+  const selling = overview?.mode === 'pay' && plans ? plans : null;
   const tierOf = (id: string) => overview?.tiers.find((x) => x.id === id) ?? null;
 
   if (load.status === 'off') return <NotFoundPage />;
 
   return (
-    <main id={MAIN_CONTENT_ID} className="upg" data-testid="upgrade-page" data-mode={overview?.mode}>
+    <main id={MAIN_CONTENT_ID} className="upg" data-testid="upgrade-page" data-mode={overview?.mode} data-payments={overview ? (overview.mode === 'pay' ? 'on' : 'off') : undefined}>
       <header className="upg-head">
         <h1 className="upg-title">{copy.title}</h1>
-        <p className="upg-lead">{overview && overview.mode !== 'request' ? copy.leadTiers : copy.lead}</p>
+        <p className="upg-lead">{selling ? bc.pay.lead : overview && overview.mode !== 'request' ? copy.leadTiers : copy.lead}</p>
       </header>
 
       {/* The mode (UPGRADE_MODES): the beta notice and the request form only in request mode; closed says so plainly */}
@@ -137,7 +181,16 @@ export function UpgradePage({ locale }: { locale: string }) {
       )}
       {/* Closed: no requests and no word about it (owner rule: an off feature leaves no trace); the tiers still show */}
 
-      <p className="upg-notice" role="status" aria-live="polite" data-testid="upgrade-notice">{notice}</p>
+      <p className="upg-notice" role="status" aria-live="polite" data-testid="upgrade-notice" data-tone={notice === bc.pay.canceledReturn ? 'neutral' : undefined}>{notice}</p>
+
+      {checkout && (
+        <CheckoutBanner
+          confirm={checkout}
+          tierLabel={(id, fallback) => { const tier = tierOf(id); return tier ? tierName(tier, l) : fallback; }}
+          locale={locale}
+          copy={bc}
+        />
+      )}
 
       {overview?.request && overview.request.status !== 'withdrawn' && (
         <RequestStatus request={overview.request} tier={tierOf(overview.request.tierId)} lang={l} locale={locale} onWithdraw={withdraw} />
@@ -159,7 +212,15 @@ export function UpgradePage({ locale }: { locale: string }) {
         {overview && (
           <ul className="upg-grid" data-testid="upgrade-tiers">
             {overview.tiers.map((tier) => (
-              <TierCard key={tier.id} tier={tier} state={cardState(tier, overview, signedIn)} lang={l} locale={locale} onRequest={() => { setNotice(null); setAsking(tier); }} />
+              <TierCard
+                key={tier.id}
+                tier={tier}
+                state={cardState(tier, overview, signedIn)}
+                lang={l}
+                locale={locale}
+                onRequest={() => { setNotice(null); setAsking(tier); }}
+                pay={selling ? { plans: selling, offer: offerFor(selling, tier.id), signedIn, copy: bc, busy: pay.busy === tier.id, error: pay.error?.tierId === tier.id ? pay.error.message : null, onSubscribe: (r) => { setNotice(null); void pay.subscribe(r); } } : null}
+              />
             ))}
           </ul>
         )}
@@ -202,14 +263,26 @@ export function UpgradePage({ locale }: { locale: string }) {
   );
 }
 
-function TierCard({ tier, state, lang, locale, onRequest }: { tier: PublicTier; state: ReturnType<typeof cardState>; lang: Lang; locale: string; onRequest: () => void }) {
+interface CardPay {
+  plans: BillingPlans;
+  offer: BillingOffer | null;
+  signedIn: boolean;
+  copy: BillingCopy;
+  busy: boolean;
+  error: string | null;
+  onSubscribe: (request: SubscribeRequest) => void;
+}
+
+function TierCard({ tier, state, lang, locale, onRequest, pay }: { tier: PublicTier; state: ReturnType<typeof cardState>; lang: Lang; locale: string; onRequest: () => void; pay: CardPay | null }) {
   const { t } = useLanguage();
   const copy = t.upgrade;
   const name = tierName(tier, lang);
   const description = tierDescription(tier, lang);
   const headingId = useId();
+  // A tier on sale sells (signed out: sign in first); the viewer's own tier stays "Current"
+  const selling = pay?.offer && state !== 'current' ? pay.offer : null;
   return (
-    <li className="upg-card" data-slot="card" data-state={state} data-testid={`tier-card-${tier.id}`} aria-labelledby={headingId} aria-current={state === 'current' ? 'true' : undefined}>
+    <li className="upg-card" data-slot="card" data-state={state} data-sale={selling ? 'pay' : undefined} data-testid={`tier-card-${tier.id}`} aria-labelledby={headingId} aria-current={state === 'current' ? 'true' : undefined}>
       <h3 id={headingId} className="upg-name">{name}</h3>
       {description && <p className="upg-desc">{description}</p>}
       <h4 className="sr-only">{copy.includes}</h4>
@@ -222,24 +295,39 @@ function TierCard({ tier, state, lang, locale, onRequest }: { tier: PublicTier; 
         ))}
       </ul>
       <div className="upg-foot">
+        {selling && pay && (
+          <TierPricing
+            tierId={tier.id}
+            tierLabel={name}
+            offer={selling}
+            plans={pay.plans}
+            lang={lang}
+            locale={locale}
+            signedIn={pay.signedIn}
+            copy={pay.copy}
+            busy={pay.busy}
+            error={pay.error}
+            onSubscribe={pay.onSubscribe}
+          />
+        )}
         {state === 'current' && (
           <p className="upg-pill upg-pill-current" data-testid={`tier-${tier.id}-current`}>
             <BadgeCheck aria-hidden="true" />
             {copy.current}
           </p>
         )}
-        {state === 'requested' && (
+        {!selling && state === 'requested' && (
           <p className="upg-pill" data-testid={`tier-${tier.id}-requested`}>
             <Clock aria-hidden="true" />
             {copy.requested}
           </p>
         )}
-        {(state === 'request' || state === 'waiting') && (
+        {!selling && (state === 'request' || state === 'waiting') && (
           <button type="button" className={FILLED_WIDE} data-slot="button" onClick={onRequest} disabled={state === 'waiting'} aria-label={fillCopy(copy.requestLabel, { tier: name })} data-testid={`tier-${tier.id}-request`}>
             {copy.request}
           </button>
         )}
-        {state === 'sign-in' && (
+        {!selling && state === 'sign-in' && (
           <form action={login.bind(null, locale, upgradePath(locale))}>
             <button type="submit" className={QUIET_WIDE} data-slot="button" data-testid={`tier-${tier.id}-sign-in`}>{copy.signInToRequest}</button>
           </form>

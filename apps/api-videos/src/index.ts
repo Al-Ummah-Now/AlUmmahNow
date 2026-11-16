@@ -65,7 +65,7 @@ import { UPLOAD_CONTINUE_PATHS, UPLOAD_SESSION_PATHS, uploadContinueLimitMiddlew
 import { pruneLimitHits } from "./lib/creatorTiers";
 import { channelCreateGate, handleCreatorAccess } from "./endpoints/creator/creatorAccess";
 import { handleCreateTierRequest, handleMyTier, handleMyTierRequests, handleUpgradeOverview, handleWithdrawTierRequest } from "./endpoints/creator/tierRequests";
-import { handleBillingPlans, handleCancelOwn, handleCheckout, handleFakeCheckoutPage, handleFakePay, handleMyBilling, handlePortal, handleWebhook } from "./endpoints/billing/billing";
+import { handleAbandonCheckout, handlePaymentReceipt, handleBillingPlans, handleFakeCancel, handleMyCheckout, handleCancelOwn, handleCheckout, handleFakeCheckoutPage, handleFakePay, handleMyBilling, handlePortal, handleWebhook } from "./endpoints/billing/billing";
 import billingInternalRouter from "./routers/billing.router";
 import { onBillingJobFailed, queueReconciles } from "./lib/billing/service";
 import { sweepEntitlements } from "./lib/billing/store";
@@ -304,11 +304,15 @@ app.get('/api/me/tier', authMiddleware, handleMyTier);
 app.get('/api/billing/plans', handleBillingPlans);
 app.get('/api/me/billing', authMiddleware, handleMyBilling);
 app.post('/api/me/billing/checkout', authMiddleware, handleCheckout);
+app.get('/api/me/billing/checkouts/:id', authMiddleware, handleMyCheckout);
+app.post('/api/me/billing/checkouts/:id/abandon', authMiddleware, handleAbandonCheckout);
+app.get('/api/me/billing/payments/:id/receipt', authMiddleware, handlePaymentReceipt);
 app.post('/api/me/billing/subscriptions/:id/cancel', authMiddleware, handleCancelOwn);
 app.post('/api/me/billing/portal', authMiddleware, handlePortal);
 // Provider webhooks live outside /api: no auth, bot or browser middleware runs on them (the signature is the check)
 app.get('/webhooks/billing/fake/checkout/:id', handleFakeCheckoutPage);
 app.post('/webhooks/billing/fake/checkout/:id/pay', handleFakePay);
+app.post('/webhooks/billing/fake/checkout/:id/cancel', handleFakeCancel);
 app.post('/webhooks/billing/:provider', handleWebhook);
 app.get('/api/me/tier-requests', authMiddleware, handleMyTierRequests);
 app.post('/api/me/tier-requests', authMiddleware, handleCreateTierRequest);

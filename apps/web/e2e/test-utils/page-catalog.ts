@@ -69,6 +69,7 @@ export function catalog(d: CatalogData): CatalogPage[] {
     { id: 'profile-anon', path: '/profile', role: 'anon' },
     { id: 'profile-create-anon', path: '/profile/create', role: 'anon' },
     { id: 'settings-anon', path: '/settings', role: 'anon' },
+    { id: 'billing-anon', path: '/settings/billing', role: 'anon' },
     { id: 'feed-anon', path: '/subscriptions', role: 'anon' },
     { id: 'subscriptions-anon', path: '/subscriptions/manage', role: 'anon' },
     { id: 'history-anon', path: '/history', role: 'anon' },
@@ -87,6 +88,8 @@ export function catalog(d: CatalogData): CatalogPage[] {
     { id: 'profile-edit', path: '/profile/edit', role: 'single' },
     { id: 'settings', path: '/settings', role: 'single' },
     { id: 'upload-defaults', path: '/settings/upload-defaults', role: 'single' },
+    // Settings › Billing (wiki AUN-SUBS): no subscriptions, the empty states
+    { id: 'billing', path: '/settings/billing', role: 'single' },
     { id: 'channel-settings', path: ch, role: 'single' },
     { id: 'channel-settings-edit', path: `${ch}/edit`, role: 'single' },
     { id: 'channel-settings-tabs', path: `${ch}/tabs`, role: 'single' },

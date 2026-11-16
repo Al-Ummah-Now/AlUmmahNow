@@ -2,7 +2,7 @@
  * Settings Index Page
  *
  * The signed-in user's own settings (upload defaults, profile, privacy,
- * contact). Channel settings are not part of it: each channel has its own
+ * billing, contact). Channel settings are not part of it: each channel has its own
  * settings, opened from the channel (see ChannelSettingsBreadcrumb).
  */
 
@@ -25,6 +25,7 @@ import {
   Mail,
   Users,
   BadgeCheck,
+  CreditCard,
 } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -72,6 +73,13 @@ export default function SettingsPage() {
       description: t.upgrade.settingsTier.description,
       icon: BadgeCheck,
       href: `/${lang}/settings/tier`,
+      available: true,
+    },
+    {
+      title: t.billing.settings.title,
+      description: t.billing.settings.description,
+      icon: CreditCard,
+      href: `/${lang}/settings/billing`,
       available: true,
     },
     {

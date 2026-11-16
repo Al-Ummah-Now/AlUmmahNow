@@ -45,6 +45,7 @@ export function settingsTrail(pathname: string, lang: string, t: AppTranslations
   if (path === `${settings}/privacy`) return [root, { label: t.privacy.settingsTitle, href: path }];
   if (path === `${settings}/channel-invites`) return [root, { label: t.channelRoles.invitationsTitle, href: path }];
   if (path === `${settings}/tier`) return [root, { label: t.upgrade.settingsTier.title, href: path }];
+  if (path === `${settings}/billing`) return [root, { label: t.billing.settings.title, href: path }];
   return null;
 }
 

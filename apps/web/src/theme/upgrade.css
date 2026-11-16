@@ -18,6 +18,8 @@ html[lang=ar] .upg-title{line-height:1.45;letter-spacing:0}
 
 .upg-notice{min-height:0;margin:14px 0 0;font-size:14px;font-weight:600;color:var(--fanous-color-success-text)}
 .upg-notice:empty{margin:0}
+/* "Checkout was closed": information, not a success */
+.upg-notice[data-tone=neutral]{color:var(--fanous-color-text-secondary)}
 
 /* The user's request */
 .upg-status{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:14px 16px;align-items:center;margin-block-start:20px;padding:18px 20px}
@@ -118,3 +120,30 @@ html[lang=ar] .upg-step::before{content:counter(upg-step,arabic-indic)}
 .upg-note{width:fit-content;max-width:100%;margin-block-start:8px;padding-inline-start:10px;border-inline-start:2px solid var(--fanous-color-divider)}
 .upg-note-label{margin:0;font-size:12px;font-weight:600;color:var(--fanous-color-text-secondary)}
 .upg-note-text{margin:2px 0 0;font-size:14px;line-height:1.6;color:var(--fanous-color-text-primary);unicode-bidi:plaintext;text-align:start}
+/* Pay mode (wiki AUN-SUBS): a sellable tier's price, period/currency/provider choices and Subscribe */
+.upg-pay{display:flex;flex-direction:column;gap:12px}
+.upg-price-row{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.upg-price{margin:0;font-size:clamp(24px,2.4vw,30px);font-weight:700;line-height:1.15;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+.upg-tax{margin:-6px 0 0;font-size:13px;color:var(--fanous-color-text-secondary)}
+.upg-pay-test{display:inline-flex;align-items:center;padding:2px 9px;border-radius:var(--r-pill,999px);font-size:12px;font-weight:700;letter-spacing:.02em;color:var(--fanous-color-text-primary);background:color-mix(in srgb,var(--fanous-color-text-secondary) 18%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--fanous-color-text-secondary) 40%,transparent)}
+.upg-seg,.upg-pay-providers{display:flex;flex-wrap:wrap;gap:4px;margin:0;padding:4px;min-width:0;border:1px solid transparent;border-radius:var(--r-pill,999px);background:linear-gradient(var(--m-control,var(--fanous-color-surface)),var(--m-control,var(--fanous-color-surface))) padding-box,var(--m-border) border-box}
+.upg-pay-providers{border-radius:var(--r-lg,14px);padding:10px}
+.upg-pay-legend{float:inline-start;width:100%;margin:0 0 6px;padding:0 4px;font-size:13px;font-weight:600;color:var(--fanous-color-text-secondary)}
+.upg-seg-opt{position:relative;flex:1 1 0;min-width:0}
+.upg-seg-opt input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer}
+.upg-seg-opt span{display:flex;align-items:center;justify-content:center;min-height:36px;padding:6px 14px;border-radius:var(--r-pill,999px);font-size:14px;font-weight:600;color:var(--fanous-color-text-secondary);transition:background 140ms,color 140ms;white-space:nowrap}
+.upg-seg-opt input:checked+span{color:var(--fanous-color-on-primary);background:var(--m-primary,var(--fanous-color-primary));box-shadow:var(--m-primary-edge,none)}
+@media (hover:hover){.upg-seg-opt input:not(:checked):hover+span{color:var(--fanous-color-text-primary);background:var(--m-hover)}}
+.upg-seg-opt input:focus-visible+span{outline:2px solid var(--fanous-color-focus-ring);outline-offset:2px}
+.upg-pay-field{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.upg-pay-field label{font-size:14px;font-weight:600}
+.upg-select{width:auto;min-width:110px;min-height:40px;padding-block:6px}
+.upg-pay-note{font-size:12.5px}
+.upg-card[data-sale=pay] .upg-foot{border-block-start:1px solid var(--fanous-color-divider);margin-block-start:auto;padding-block-start:20px}
+.upg-card[data-sale=pay]>.upg-feats{margin-block-end:20px}
+.upg-pay-links{display:flex;gap:10px;flex-wrap:wrap}
+.upg-spin{animation:upg-spin 1s linear infinite}
+@keyframes upg-spin{to{transform:rotate(1turn)}}
+@media (prefers-reduced-motion:reduce){.upg-spin{animation:none}}
+.upg-status[data-status=confirming] .upg-status-icon{color:var(--fanous-color-primary)}
+@media (max-width:640px){.upg-pay-links{flex-direction:column}.upg-pay-links .upg-btn{width:100%}}
