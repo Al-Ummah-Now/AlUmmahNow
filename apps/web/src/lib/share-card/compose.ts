@@ -3,7 +3,7 @@
  * blur and overlay only. Text is never drawn: the title and description are the preview's text
  * under the image, in the page's language.
  */
-import { avatarLayout, CARD_HEIGHT, CARD_QUALITY, CARD_TYPE, CARD_WIDTH, cardLayout, channelLayout, CHANNEL_PAGE_COLOUR, CHANNEL_VARIANT, type ChannelVariant } from './layout';
+import { avatarLayout, CARD_HEIGHT, CARD_QUALITY, CARD_TYPE, CARD_WIDTH, cardLayout, channelLayout, CHANNEL_PAGE_COLOUR } from './layout';
 import { circleMask, encodePng, solid } from './png';
 
 /** The part of the Images binding the cards use (workers-types ImagesBinding) */
@@ -50,20 +50,20 @@ const pageCanvas = async (images: ImagesLike) =>
   images.input(streamOf(await encodePng(CARD_WIDTH, CARD_HEIGHT, solid(CARD_WIDTH, CARD_HEIGHT, CHANNEL_PAGE_COLOUR))));
 
 /**
- * A channel (owner, 2026-11-15, reference image): its banner edge to edge, cropped to fill its box
- * (never stretched), with its logo (avatar, cut into a circle like the site's avatars, otherwise as
- * supplied) large at the bottom-start corner, mirrored for Arabic (layout.ts channelLayout). Without a
- * banner the logo sits centred on the page colour; without a logo the banner alone. Nothing else is
- * drawn: the channel's name is the preview's title under the image.
+ * A channel (owner's pick, V3): its banner covering the whole card (a centred crop, never stretched)
+ * with its logo (avatar, cut into a circle like the site's avatars, otherwise as supplied) on top at
+ * the bottom-start corner, mirrored for Arabic (layout.ts channelLayout). Without a banner the logo
+ * sits centred on the page colour; without a logo the banner alone. Nothing else is drawn: the
+ * channel's name is the preview's title under the image.
  */
-export async function composeChannelCard(images: ImagesLike, avatar: ArrayBuffer | null, cover: ArrayBuffer | null, rtl = false, variant: ChannelVariant = CHANNEL_VARIANT): Promise<ArrayBuffer> {
+export async function composeChannelCard(images: ImagesLike, avatar: ArrayBuffer | null, cover: ArrayBuffer | null, rtl = false): Promise<ArrayBuffer> {
   if (!avatar && !cover) throw new Error('A channel card needs an avatar or a banner');
   if (!cover) {
     const layout = avatarLayout();
     return toJpeg((await pageCanvas(images)).draw(await roundLogo(images, avatar as ArrayBuffer, layout.size), { top: layout.top, left: layout.left }));
   }
   const info = await images.info(streamOf(cover));
-  const { banner, logo } = channelLayout(info.width ?? 0, info.height ?? 0, rtl, variant);
+  const { banner, logo } = channelLayout(info.width ?? 0, info.height ?? 0, rtl);
   // cover: the banner's centred crop that fills its box (never stretched)
   const bannerImage = images.input(streamOf(cover)).transform({ width: banner.width, height: banner.height, fit: 'cover', gravity: 'center' });
   let card = (await pageCanvas(images)).draw(bannerImage, { top: banner.top, left: banner.left });
