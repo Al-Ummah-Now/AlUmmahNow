@@ -109,12 +109,13 @@
   --pb-glow-c: var(--aun-glass-c, var(--fanous-color-primary, #e8b477));
   --pb-glass-a: var(--aun-glass-alpha, 62%);
   --pb-glass-blur: var(--aun-glass-blur, blur(16px) saturate(1.2));
-  --pb-glow: 0 0 32px -2px color-mix(in srgb, var(--pb-glow-c) 26%, transparent);
-  --pb-glass-line: color-mix(in srgb, var(--pb-glow-c) 55%, var(--pb-line, var(--fanous-color-divider, #d3c0a0)));
+  --pb-glow: var(--aun-glass-glow, 0 0 32px -2px color-mix(in srgb, var(--pb-glow-c) 26%, transparent));
+  --pb-glass-line: var(--aun-glass-edge, color-mix(in srgb, var(--pb-glow-c) 55%, var(--pb-line, var(--fanous-color-divider, #d3c0a0))));
 }
 .pb-glass,
-.pb-t-raised { --pb-glass: color-mix(in srgb, var(--fanous-color-surface-raised, #fff) var(--pb-glass-a), transparent); }
-.pb-t-soft { --pb-glass: color-mix(in srgb, var(--fanous-color-surface, #fbf5e9) var(--pb-glass-a), transparent); }
+.pb-t-raised { --pb-glass: var(--aun-glass-surface, color-mix(in srgb, var(--fanous-color-surface-raised, #fff) var(--pb-glass-a), transparent)); }
+/* the neutral frost (never the theme's tint over dark: it reads olive) */
+.pb-t-soft { --pb-glass: var(--aun-glass-surface, color-mix(in srgb, var(--fanous-color-surface, #fbf5e9) var(--pb-glass-a), transparent)); }
 .pb-t-accent {
   /* flat (owner, 2026-11-16: no gradients): the theme tint, translucent */
   --pb-glass: color-mix(in srgb, color-mix(in oklab, var(--fanous-color-primary, #e8b477) 16%, var(--fanous-color-surface-raised, #fff)) var(--pb-glass-a), transparent);
@@ -132,11 +133,11 @@
   -webkit-backdrop-filter: var(--pb-glass-blur);
   backdrop-filter: var(--pb-glass-blur);
   border: 1px solid var(--pb-glass-line);
-  box-shadow: var(--pb-glow), var(--pb-shadow, 0 1px 2px rgb(0 0 0 / 0.06), 0 8px 24px -12px rgb(0 0 0 / 0.28));
+  box-shadow: var(--pb-glow);
 }
 .pb-t-raised:not(.pb-w-full) > .pb-in,
 .pb-k-hero.pb-hero-plain:not(.pb-w-full),
-.pb-k-hero.pb-hero-gradient:not(.pb-w-full) { box-shadow: var(--pb-glow), var(--pb-shadow-hi); }
+.pb-k-hero.pb-hero-gradient:not(.pb-w-full) { box-shadow: var(--pb-glow); }
 /* Text pages split into glass sections (AlUmmahNowUI packages/render/src/glass-sections.ts): the boxes'
    shape and the space between them. */
 .pb-glass-stack { display: flex; flex-direction: column; gap: clamp(1rem, 3vw, 1.75rem); }
@@ -391,11 +392,11 @@ a.pb-more:hover { text-decoration: underline; text-underline-offset: 0.2em; }
   display: flex;
   flex-direction: column;
   /* the lite glass (no blur: a grid of cards would be a blur per card), golden edge and glow */
-  background: color-mix(in srgb, var(--fanous-color-surface-raised, #fff) min(calc(var(--pb-glass-a) + 20%), 100%), transparent);
+  background: var(--aun-glass-lite-surface, color-mix(in srgb, var(--fanous-color-surface-raised, #fff) min(calc(var(--pb-glass-a) + 20%), 100%), transparent));
   border: 1px solid var(--pb-glass-line);
   border-radius: var(--pb-radius-sm);
   overflow: hidden;
-  box-shadow: 0 0 18px -6px color-mix(in srgb, var(--pb-glow-c) 22%, transparent);
+  box-shadow: var(--aun-glass-glow-lite, 0 0 18px -6px color-mix(in srgb, var(--pb-glow-c) 22%, transparent));
   text-align: start;
   transition: border-color 160ms linear, background-color 160ms linear;
 }

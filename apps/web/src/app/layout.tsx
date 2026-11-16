@@ -198,7 +198,7 @@ function ThemePackageStyle({ css, nonce }: { css: string | null; nonce?: string 
 
 function EmbedDocument({ locale, nonce, theme, themeCss, children }: { locale: string; nonce?: string; theme: string; themeCss: string | null; children: React.ReactNode }) {
   return (
-    <html lang={locale} dir={getTextDirection(locale)} data-theme={theme} suppressHydrationWarning>
+    <html lang={locale} dir={getTextDirection(locale)} data-theme={theme} data-aun-explicit-mode="" suppressHydrationWarning>
       <head>
         <ThemePackageStyle css={themeCss} nonce={nonce} />
         <RuntimeConfigScript nonce={nonce} />
@@ -233,7 +233,7 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
   const consentPending = parseConsent((await cookies()).get(CONSENT_COOKIE)?.value) === null;
 
   return (
-    <html lang={locale} dir={getTextDirection(locale)} data-theme={theme} suppressHydrationWarning>
+    <html lang={locale} dir={getTextDirection(locale)} data-theme={theme} data-aun-explicit-mode="" suppressHydrationWarning>
       <head>
         {/* Light / Dark: an old saved "system" becomes the device's mode once (src/lib/theme/color-mode.ts) */}
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: MODE_MIGRATE_SCRIPT }} />
