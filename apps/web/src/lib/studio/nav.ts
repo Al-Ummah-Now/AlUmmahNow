@@ -63,7 +63,9 @@ export function legacyHref(locale: string, channelId: string, path: string): str
 }
 
 export const STUDIO_NAV: readonly StudioNavItem[] = [
-  { id: 'dashboard', requires: [] },
+  // Its sections: videos (recent uploads, drafts and scheduled, latest) or comments awaiting review.
+  // A role with neither has no Dashboard, and Studio opens its first section instead (studioHomePath).
+  { id: 'dashboard', requires: ['video.view_private', 'comment.moderate'] },
   {
     id: 'content',
     requires: [],
@@ -168,11 +170,22 @@ export function checkPath(role: StudioRole, segments: readonly string[], feature
   return { status: 'ok' };
 }
 
-/** The same page on another channel, without any nested id. Falls back to Dashboard. */
+/**
+ * Where Studio opens for this role: Dashboard, or when none of its sections is left for the role,
+ * the first section it can open (Content first). Owner review 2026-11-16: no hollow pages.
+ */
+export function studioHomePath(role: StudioRole, features: StudioFeatures = {}): string {
+  const items = visibleNav(role, features);
+  if (items.some((item) => item.id === 'dashboard')) return 'dashboard';
+  const [first] = items;
+  return first ? itemPath(role, first, features) : 'dashboard';
+}
+
+/** The same page on another channel, without any nested id. Falls back to where Studio opens. */
 export function switchedPath(segments: readonly string[], role: StudioRole, features: StudioFeatures = {}): string {
   const top = segments.slice(0, 2);
   const access = checkPath(role, top, features);
   if (access.status === 'ok') return top.join('/');
   if (access.status === 'redirect') return access.path;
-  return 'dashboard';
+  return studioHomePath(role, features);
 }

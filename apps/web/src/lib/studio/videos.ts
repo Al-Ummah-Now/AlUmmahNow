@@ -63,8 +63,11 @@ export function videosQueryString(query: VideosQuery): string {
 
 export type VideoRowAction = 'edit' | 'view' | 'analytics' | 'copyLink' | 'schedule' | 'reschedule' | 'publishNow' | 'cancelSchedule' | 'retryUpload' | 'retryPublish' | 'appeal' | 'resubmit' | 'delete';
 
-/** Row actions in display order. The server still decides, per video. */
-export function rowActions(status: VideosStatus, role: StudioRole, isPublic = false, failure: 'upload' | 'publish' | null = null, appealUsed = false): VideoRowAction[] {
+/**
+ * Row actions in display order. The server still decides, per video. `uploadOn` is features.upload
+ * for the channel: without it a failed upload offers no Upload again (hidden when off).
+ */
+export function rowActions(status: VideosStatus, role: StudioRole, isPublic = false, failure: 'upload' | 'publish' | null = null, appealUsed = false, uploadOn = true): VideoRowAction[] {
   const edit: VideoRowAction[] = can(role, 'video.edit') ? ['edit'] : [];
   const schedule = can(role, 'video.schedule');
   const remove: VideoRowAction[] = can(role, 'video.delete') ? ['delete'] : [];
@@ -76,7 +79,7 @@ export function rowActions(status: VideosStatus, role: StudioRole, isPublic = fa
     case 'drafts':
       return [...edit, ...(schedule ? ['publishNow' as const, 'schedule' as const] : []), ...remove];
     case 'failed': {
-      const retry: VideoRowAction[] = failure === 'publish' ? (schedule ? ['retryPublish'] : []) : can(role, 'video.upload') ? ['retryUpload'] : [];
+      const retry: VideoRowAction[] = failure === 'publish' ? (schedule ? ['retryPublish'] : []) : can(role, 'video.upload') && uploadOn ? ['retryUpload'] : [];
       return [...retry, ...edit, ...remove];
     }
     case 'processing':
