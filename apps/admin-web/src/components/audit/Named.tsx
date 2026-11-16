@@ -6,6 +6,7 @@
 import Link from '@/components/AppLink';
 import { MonoId } from '@/components/content/parts';
 import { CopyId } from './CopyId';
+import { EmailText } from '@/components/EmailText';
 import type { ItemView, PersonView } from './audit-model';
 
 const nameLink = 'inline-block min-h-6 text-link hover:underline underline-offset-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus rounded';
@@ -21,17 +22,17 @@ export function PersonName({ person, showEmail = true, showId = false, testId }:
   return (
     <span className="inline-flex flex-wrap items-baseline gap-x-1.5 min-w-0" data-testid={testId} data-user-id={person.id}>
       {person.href ? (
-        <Link href={person.href} className={`${nameLink} break-words`} title={person.id} dir="auto">
-          {person.label}
+        <Link href={person.href} className={`${nameLink} ${person.labelIsEmail ? '' : 'break-words'}`} title={person.labelIsEmail ? person.label : person.id} dir={person.labelIsEmail ? 'ltr' : 'auto'}>
+          {person.labelIsEmail ? <EmailText email={person.label} /> : person.label}
         </Link>
+      ) : person.labelIsEmail ? (
+        <EmailText email={person.label} />
       ) : (
         <span dir="auto">{person.label}</span>
       )}
       {person.unknown && <CopyId id={person.id} />}
       {showEmail && person.email && (
-        <span className="text-fg-muted text-xs break-all" dir="ltr">
-          {person.email}
-        </span>
+        <EmailText email={person.email} className="text-fg-muted text-xs" />
       )}
       {showId && !person.unknown && <MonoId value={person.id} />}
     </span>

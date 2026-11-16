@@ -23,6 +23,7 @@ import { useUndoableAction } from '@/components/undo/UndoToast';
 import { logger } from '@/lib/logger-client';
 import { AssigneePicker } from './AssigneePicker';
 import { UserName } from '@/components/audit/UserName';
+import { EmailText } from '@/components/EmailText';
 import { CONTACT_STATUSES, CONTACT_VIEWS, activeContactView, contactHref, type ContactInboxFilters, type ContactViewId } from './filters';
 
 const smallButton =
@@ -166,8 +167,8 @@ export function ContactInbox({ messages, filters, viewerId, canManage, counts }:
               {m.name}
             </span>
           </Link>
-          <span className="block text-xs text-fg-subtle break-all rtl:text-right" dir="ltr">
-            {m.email}
+          <span className="block text-xs text-fg-subtle rtl:text-right" dir="ltr">
+            <EmailText email={m.email} />
           </span>
         </div>
       ),
@@ -203,7 +204,7 @@ export function ContactInbox({ messages, filters, viewerId, canManage, counts }:
       id: 'assignee',
       header: t('contact.colAssignee'),
       wide: true,
-      className: 'text-sm text-fg-muted break-all md:max-w-48',
+      className: 'text-sm text-fg-muted min-w-0 md:max-w-48',
       cell: (m) =>
         m.assignee_id ? (
           // Above the row-wide link: the person's own link stays clickable

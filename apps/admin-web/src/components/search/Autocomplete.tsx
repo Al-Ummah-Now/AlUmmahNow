@@ -101,6 +101,8 @@ export interface AutocompleteProps {
   messages?: AutocompleteMessages;
   /** Show the status line under the box (it is always read to screen readers) */
   showStatus?: boolean;
+  /** inline: the list opens in the page flow, pushing what follows down, instead of over it (a picker inside a card) */
+  popup?: 'overlay' | 'inline';
 }
 
 export type AutocompleteSource = (query: string, cursor: string | null, signal: AbortSignal) => Promise<{ items: AutocompleteItem[]; next?: string | null }>;
@@ -160,6 +162,7 @@ export function Autocomplete({
   changeLabel,
   messages,
   showStatus = false,
+  popup = 'overlay',
 }: AutocompleteProps) {
   const initialOn = initialResults ?? mode === 'pick';
   const rules = { allowIds };
@@ -425,7 +428,7 @@ export function Autocomplete({
           <div
             ref={popupRef}
             hidden={!expanded}
-            className="absolute start-0 top-full z-30 mt-1 w-full min-w-72 overflow-y-auto rounded border border-border bg-surface shadow-lg"
+            className={`${popup === 'inline' ? 'relative' : 'absolute start-0 top-full z-30 min-w-72'} mt-1 w-full overflow-y-auto rounded border border-border bg-surface shadow-lg`}
             data-testid={testId ? `${testId}-popup` : undefined}
             // A press on the list (its scrollbar too) must not blur the input and close it
             onMouseDown={(e) => e.preventDefault()}
