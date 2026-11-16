@@ -79,8 +79,12 @@ html.dark .hp-shot[data-mode=dark]{display:block}
 html{--z-tour:9998}
 .tour-spot{position:fixed;z-index:var(--z-tour);border-radius:var(--r-lg,14px);box-shadow:0 0 0 3px var(--fanous-color-focus-ring),0 0 0 200vmax color-mix(in srgb,var(--fanous-color-background) 55%,transparent);pointer-events:none;transition:top .25s ease,left .25s ease,width .25s ease,height .25s ease}
 .tour-spot[data-shape=pill]{border-radius:var(--r-pill,999px)}
-.tour-card{position:fixed;z-index:calc(var(--z-tour) + 1);opacity:1;width:min(340px,calc(100vw - 32px));display:flex;flex-direction:column;gap:10px;padding:16px 18px;border-radius:var(--r-xl,20px);border:1px solid var(--fanous-color-divider);background:var(--fanous-color-surface-raised);color:var(--fanous-color-text-primary);box-shadow:0 16px 40px color-mix(in srgb,var(--fanous-color-background) 30%,transparent),var(--m-card-edge);transition:top .25s ease,left .25s ease}
+/* The tour card is a panel: the site's frosted panel glass (packages/fanous-tokens/surfaces, the menus'
+   surface) where those tokens exist, else the theme's raised surface. Flat: no gradient, no inset sheen */
+.tour-card{position:fixed;z-index:calc(var(--z-tour) + 1);opacity:1;width:min(340px,calc(100vw - 32px));display:flex;flex-direction:column;gap:10px;padding:16px 18px;border-radius:var(--aun-radius-card,var(--r-xl,20px));border:1px solid var(--aun-glass-edge,var(--fanous-color-divider));background:var(--aun-glass-panel-surface,var(--fanous-color-surface-raised));-webkit-backdrop-filter:var(--aun-glass-blur,none);backdrop-filter:var(--aun-glass-blur,none);color:var(--fanous-color-text-primary);box-shadow:var(--aun-glass-glow,0 0 0 transparent),var(--aun-float-shadow,0 16px 40px color-mix(in srgb,var(--fanous-color-background) 30%,transparent));transition:top .25s ease,left .25s ease}
 .tour-card[data-docked]{bottom:max(16px,env(safe-area-inset-bottom,0px));inset-inline-end:16px}
+/* Where the bottom tab bar shows (below 1024px), a docked card sits above it, never over it */
+@media (max-width:1023px){.tour-card[data-docked]{bottom:calc(56px + env(safe-area-inset-bottom,0px) + 12px)}}
 @media (max-width:639px){.tour-card[data-docked]{inset-inline:16px;width:auto}}
 .tour-card-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
 .tour-title{margin:0;font-size:17px;font-weight:700;line-height:1.35}
@@ -90,8 +94,11 @@ html{--z-tour:9998}
 .tour-body{margin:0;font-size:14.5px;line-height:1.6;color:var(--fanous-color-text-secondary)}
 .tour-actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
 .tour-dots{display:flex;gap:5px}
-.tour-dots span{width:7px;height:7px;border-radius:50%;background:var(--fanous-color-divider)}
-.tour-dots span[data-on]{background:var(--fanous-color-primary)}
+.tour-dots{align-items:center}
+/* Inactive dots in the muted text colour (the divider token vanished on the dark card); the current
+   step is a longer gold pill, so it reads by shape as well as colour */
+.tour-dots span{width:7px;height:7px;border-radius:999px;background:color-mix(in srgb,var(--fanous-color-text-muted) 70%,transparent)}
+.tour-dots span[data-on]{width:16px;background:var(--fanous-color-primary)}
 .tour-buttons{display:flex;flex-wrap:wrap;gap:6px;margin-inline-start:auto}
 .tour-buttons .b{min-height:36px;padding-inline:14px;font-size:14px}
 @media (prefers-reduced-motion:reduce){.tour-spot,.tour-card{transition:none}}

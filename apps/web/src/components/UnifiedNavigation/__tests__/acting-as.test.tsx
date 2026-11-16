@@ -72,6 +72,23 @@ describe('account menu: Acting as', () => {
     expect(current.querySelector('img')).toHaveAttribute('src', 'https://img.test/corner.png');
   });
 
+  it('header account button shows the active identity: the channel logo and name, or your own (rule 8)', () => {
+    user = { id: 'u1', email: 'amina@test.local', displayName: 'Amina', avatarUrl: 'https://img.test/amina.png', channel: { ...channel, avatarUrl: 'https://img.test/corner.png' }, channels: [channel] };
+    const { unmount } = render(<UnifiedNavigation />);
+    let trigger = screen.getByTestId('nav-menu-trigger');
+    expect(trigger.querySelector('img')).toHaveAttribute('src', 'https://img.test/corner.png');
+    expect(within(trigger).getByTestId('nav-trigger-name')).toHaveTextContent('Community Corner');
+    expect(within(trigger).getByTestId('nav-trigger-name')).toHaveAttribute('data-identity', 'channel');
+    expect(trigger).not.toHaveTextContent('Amina');
+    unmount();
+    user = { id: 'u1', email: 'amina@test.local', displayName: 'Amina', avatarUrl: 'https://img.test/amina.png', channel: null, channels: [channel] };
+    render(<UnifiedNavigation />);
+    trigger = screen.getByTestId('nav-menu-trigger');
+    expect(trigger.querySelector('img')).toHaveAttribute('src', 'https://img.test/amina.png');
+    expect(within(trigger).getByTestId('nav-trigger-name')).toHaveTextContent('Amina');
+    expect(within(trigger).getByTestId('nav-trigger-name')).toHaveAttribute('data-identity', 'personal');
+  });
+
   it('names you by your email only when there is no name (never an @handle)', async () => {
     user = { id: 'u1', email: 'amina@test.local', displayName: '', userName: 'amina_handle', channel: null, channels: [] };
     render(<UnifiedNavigation />);

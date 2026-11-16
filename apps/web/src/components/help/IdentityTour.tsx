@@ -32,10 +32,13 @@ import { requestAccountMenu, type AccountMenuView } from '@/lib/navigation/accou
 type StepKey = 'account' | 'actingAs' | 'switch' | 'upload' | 'help';
 
 interface StepTarget {
+  /** The first of these on screen is highlighted (else the first rendered one) */
   selector: string;
   /** The account menu view the step needs open (closed when absent) */
   menu?: AccountMenuView;
   shape?: 'pill';
+  /** When the target is in the side rail, the card goes beside it, not under it */
+  beside?: boolean;
 }
 
 const TARGETS: Record<StepKey, StepTarget> = {
@@ -43,10 +46,13 @@ const TARGETS: Record<StepKey, StepTarget> = {
   actingAs: { selector: '[data-testid="nav-channel-layer"]', menu: 'main' },
   switch: { selector: '[data-testid="nav-menu"]', menu: 'channels' },
   upload: { selector: '[data-testid="header-upload"]', shape: 'pill' },
-  // Help lives in the side menu (one place per destination, NAV-060); on phones the drawer is
-  // closed, so this step shows its card without a highlight
-  help: { selector: '[data-testid="side-nav"] a[href$="/help"]' },
+  // Help lives in the side menu (one place per destination, NAV-060). Where the rail is on screen its
+  // Help item is highlighted; on phones the drawer is closed and More in the tab bar opens it, so More
+  // is highlighted (with the phone text); between the two, the header's menu button opens the drawer
+  help: { selector: '[data-testid="side-nav"] a[href$="/help"], [data-testid="nav-more-tab"], [data-testid="nav-drawer-toggle"]', beside: true },
 };
+/** Where the help step's target is: the rail item, or the phone tab bar's More (phone text) */
+const PHONE_HELP = '[data-testid="nav-more-tab"]';
 const ALL_STEPS: StepKey[] = ['account', 'actingAs', 'switch', 'upload', 'help'];
 
 /** Pages the tour never interrupts (playback, creating, signing in) */
@@ -70,12 +76,20 @@ function automated(): boolean {
   return typeof navigator !== 'undefined' && navigator.webdriver === true && storage('local')?.getItem(E2E_OPT_IN) !== 'on';
 }
 
+/**
+ * The first match on screen, trying each comma-separated selector in the order written (not document
+ * order); else the first rendered one (scrolled away: the card docks)
+ */
 function visible(selector: string): HTMLElement | null {
-  for (const el of Array.from(document.querySelectorAll<HTMLElement>(selector))) {
+  let rendered: HTMLElement | null = null;
+  const matches = selector.split(/,(?![^[]*\])/).flatMap((one) => Array.from(document.querySelectorAll<HTMLElement>(one.trim())));
+  for (const el of matches) {
     const r = el.getBoundingClientRect();
-    if (r.width > 0 && r.height > 0) return el;
+    if (r.width <= 0 || r.height <= 0) continue;
+    if (r.bottom > 0 && r.top < window.innerHeight && r.right > 0 && r.left < window.innerWidth) return el;
+    rendered ??= el;
   }
-  return null;
+  return rendered;
 }
 
 function dialogOpen(): boolean {
@@ -94,6 +108,8 @@ export function IdentityTour() {
   const [spot, setSpot] = useState<Box | null>(null);
   const [card, setCard] = useState<{ top: number; left: number; docked: boolean }>({ top: 0, left: 0, docked: true });
   const [announcement, setAnnouncement] = useState('');
+  /** The help step points at the phone tab bar's More: its text says so */
+  const [phoneHelp, setPhoneHelp] = useState(false);
   const [mounted, setMounted] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -186,6 +202,7 @@ export function IdentityTour() {
         return;
       }
       const el = visible(TARGETS[stepKey].selector);
+      setPhoneHelp(!!el?.matches(PHONE_HELP));
       if (describedRef.current !== el) {
         describedRef.current?.removeAttribute('aria-describedby');
         el?.setAttribute('aria-describedby', 'tour-body');
@@ -212,7 +229,12 @@ export function IdentityTour() {
       const menu = TARGETS[stepKey].menu ? visible('[data-testid="nav-menu"]')?.getBoundingClientRect() : null;
       let top = r.bottom + CARD_GAP;
       let left = rtl ? r.left : r.right - cardWidth;
-      if (menu) {
+      if (TARGETS[stepKey].beside && el.closest('[data-testid="side-nav"]')) {
+        // A side rail item: the card beside it, on the page side, centred on it
+        // (owner audit: the card sat in the opposite corner, about 1,000px away)
+        left = rtl ? r.left - CARD_GAP - cardWidth : r.right + CARD_GAP;
+        top = Math.max(16, Math.min(r.top + r.height / 2 - cardHeight / 2, window.innerHeight - cardHeight - 16));
+      } else if (menu) {
         // Beside the open menu, on the side with room (the menu sits at the header's inline end)
         const roomStart = rtl ? window.innerWidth - menu.right : menu.left;
         if (roomStart >= cardWidth + 2 * CARD_GAP) {
@@ -323,7 +345,7 @@ export function IdentityTour() {
                   .replace('{total}', formatNumber(rtl ? 'ar' : 'en', total))}
               </span>
             </div>
-            <p id="tour-body" className="tour-body">{step.body}</p>
+            <p id="tour-body" className="tour-body">{stepKey === 'help' && phoneHelp && step.phoneBody ? step.phoneBody : step.body}</p>
             <div className="tour-actions">
               <div className="tour-dots" aria-hidden="true">
                 {phase.steps.map((key, i) => <span key={key} data-on={i === phase.index || undefined} />)}
