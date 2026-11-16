@@ -10,6 +10,8 @@ import "./globals.css";
 import "@/theme/font-faces.css";
 import "@/theme/fonts.css";
 import "@/theme/materials.css";
+// pb-glass (static info pages' section boxes) and the page-builder panels: one shared stylesheet
+import "@al-ummah/shared-types/page-blocks.css";
 import "@/theme/bridge.css";
 import "@/theme/demo-motion.css";
 import "@/theme/system.css";

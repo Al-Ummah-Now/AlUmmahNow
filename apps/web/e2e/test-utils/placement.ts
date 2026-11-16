@@ -169,6 +169,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/release/chapters.player.spec.ts': { placement: 'local', reason: 'chapter bar navigation on seeded video with chapters' },
   'apps/web/e2e/release/about.spec.ts': { placement: 'deployed', reason: 'cross-app: the About page comes from the deployed CMS (AlUmmahNowCMS migration 0021), canonical to the deployed www' },
   'apps/web/e2e/release/community-guidelines.spec.ts': { placement: 'local', reason: 'static page render en/ar' },
+  'apps/web/e2e/release/static-pages-glass.spec.ts': { placement: 'local', reason: 'static info pages (guidelines, privacy, help, contact) en/ar: frosted-glass section boxes, glow, text AA in every theme' },
   'apps/web/e2e/release/contact.spec.ts': { placement: 'local', reason: 'contact form + admin inbox; mail queue sinks locally' },
   'apps/web/e2e/release/core-web.spec.ts': { placement: 'local', reason: 'i18n, 404, live comments via local websocket; auth-lang test needs issuer locale' },
   'apps/web/e2e/release/creator-tiers.spec.ts': { placement: 'local', reason: 'tier gating server+UI, admin-web tier control' },

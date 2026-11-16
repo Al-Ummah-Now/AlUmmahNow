@@ -12,6 +12,7 @@ html[lang=ar] .ab-title{line-height:1.45}
 .ab-lead{margin:6px 0 0;max-width:62ch;color:var(--fanous-color-text-secondary);line-height:1.6}
 
 /* The body: the shared frosted-glass card (pb-glass, @al-ummah/shared-types/page-blocks.css); only its shape here */
+.ab-sections{display:flex;flex-direction:column;gap:clamp(20px,3vw,32px)}
 .ab-card{border-radius:var(--r-xl,20px);padding:clamp(20px,3.4vw,40px)}
 .ab-prose{display:flex;flex-direction:column;gap:14px;max-width:68ch}
 .ab-prose>:first-child{margin-block-start:0}

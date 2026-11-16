@@ -71,11 +71,14 @@ describe('About page', () => {
     expect(html).toContain('شاهد منشورات البطاقات');
   });
 
-  it('a page that is only text (served as one markdown block) keeps the prose card', async () => {
-    load.mockResolvedValue({ status: 'ok', source: 'cms', page: { ...ABOUT_FALLBACK.en, body: 'Plain **text**', blocks: [{ id: 'body', type: 'markdown', text: 'Plain **text**' }] } });
+  it('a page that is only text (served as one markdown block) keeps the prose cards, one frosted-glass box per section', async () => {
+    const body = 'Plain **text**\n\n## First\n\nOne\n\n## Second\n\nTwo';
+    load.mockResolvedValue({ status: 'ok', source: 'cms', page: { ...ABOUT_FALLBACK.en, body, blocks: [{ id: 'body', type: 'markdown', text: body }] } });
     const html = renderToStaticMarkup(await AboutRoute(params('en')));
     expect(html).toContain('ab-head');
-    expect(html).toContain('<div class="ab-prose" data-testid="about-body"><p>Plain <strong>text</strong></p></div>');
+    expect(html).toContain('<div class="ab-sections" data-testid="about-body"><section class="ab-card pb-glass"><div class="ab-prose"><p>Plain <strong>text</strong></p></div></section>');
+    expect(html.match(/class="ab-card pb-glass"/g)).toHaveLength(3);
+    expect(html).toContain('<section class="ab-card pb-glass"><div class="ab-prose"><h2>Second</h2><p>Two</p></div></section>');
   });
 
   it('Arabic is right to left', async () => {

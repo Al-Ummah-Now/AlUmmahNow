@@ -21,7 +21,8 @@ html[lang=ar] .hp-title{line-height:1.45}
 .hp-search-input:focus-visible{outline:2px solid var(--fanous-color-focus-ring);outline-offset:2px;border-color:var(--fanous-color-primary)}
 
 /* Cards */
-.hp-tour-card{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;padding:18px 20px;border:1px solid transparent;border-radius:var(--r-xl,20px);background:var(--m-card) padding-box,var(--m-border) border-box;box-shadow:var(--m-card-edge)}
+/* text boxes: the shared frosted-glass card (pb-glass); only their shape here */
+.hp-tour-card{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;padding:18px 20px;border-radius:var(--r-xl,20px)}
 .hp-card-title{margin:0;font-size:18px;font-weight:700}
 .hp-card-text{margin:4px 0 0;color:var(--fanous-color-text-secondary)}
 .hp-topics{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:12px}
@@ -46,7 +47,7 @@ html[lang=ar] .hp-title{line-height:1.45}
 .hp-toc a{display:block;padding:6px 10px;border-radius:var(--r-md,10px);border-inline-start:2px solid var(--fanous-color-divider);color:var(--fanous-color-text-secondary);text-decoration:none}
 .hp-toc a:hover{color:var(--fanous-color-text-primary);border-inline-start-color:var(--fanous-color-primary)}
 .hp-body{display:flex;flex-direction:column;gap:clamp(24px,3vw,36px);min-width:0}
-.hp-section{display:flex;flex-direction:column;gap:12px;scroll-margin-top:calc(var(--aun-header-height,3.5rem) + 16px);max-width:72ch}
+.hp-section{display:flex;flex-direction:column;gap:12px;scroll-margin-top:calc(var(--aun-header-height,3.5rem) + 16px);max-width:72ch;padding:clamp(18px,3vw,28px);border-radius:var(--r-xl,20px)}
 .hp-section p,.hp-section li{margin:0;line-height:1.7;color:var(--fanous-color-text-secondary)}
 html[lang=ar] .hp-section p,html[lang=ar] .hp-section li{line-height:1.9}
 .hp-section strong{color:var(--fanous-color-text-primary);font-weight:600}
