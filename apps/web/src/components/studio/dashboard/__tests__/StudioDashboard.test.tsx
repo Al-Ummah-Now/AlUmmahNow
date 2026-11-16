@@ -126,7 +126,9 @@ describe('StudioDashboard', () => {
       await settled();
       expect(screen.queryByTestId('studio-dash-welcome')).toBeNull();
       expect(screen.queryByText(text.welcome.body)).toBeNull();
-      expect(screen.getByTestId('studio-dash-recent')).toHaveTextContent(text.recent.none);
+      // Nothing uploaded and no way to upload: no Recent uploads card at all
+      expect(screen.queryByTestId('studio-dash-recent')).toBeNull();
+      expect(screen.queryByText(text.recent.none)).toBeNull();
       expect(screen.getByTestId('studio-dash-drafts')).toHaveTextContent(text.drafts.none);
       expect(screen.getByTestId('studio-dash-held')).toHaveTextContent(text.held.none);
       expect(screen.queryByRole('link', { name: text.quick.upload })).toBeNull();

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import Image from 'next/image';
+import { Film } from 'lucide-react';
 import Link from '@/components/common/AppLink';
 import { formatWatchTime, watchTimeUnit, type StudioComment, type StudioVideoStatus, dateTimeFormat, numberFormat, fillTemplate, formatPercent, formatCountNoun } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
@@ -14,6 +15,7 @@ import { logger } from '@/lib/logger-client';
 import { changePercent, rangeDates, sumMetrics } from '@/lib/studio/analytics';
 import { can, type StudioRole } from '@/lib/studio/permissions';
 import { legacyHref } from '@/lib/studio/nav';
+import { studioVideoTitle } from '@/lib/studio/videos';
 import { studioLiveHref, studioUploadHref } from '@/lib/studio/links';
 
 /** The dashboard's recent window («آخر ٢٨ يومًا» / "last 28 days"). */
@@ -150,7 +152,7 @@ export function StudioDashboard({ locale, channelId, role, liveOn = false, uploa
     return (
       <div data-testid="studio-dashboard" aria-busy="true">
         {heading}
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid items-start gap-4 md:grid-cols-2">
           {[0, 1, 2].map((card) => <Skeleton key={card} className="h-32 w-full" />)}
         </div>
       </div>
@@ -177,8 +179,9 @@ export function StudioDashboard({ locale, channelId, role, liveOn = false, uploa
             <ul className="space-y-3 text-sm">
               {held.items.map((comment) => (
                 <li key={comment.id} className="min-w-0">
-                  <p dir="auto" className="line-clamp-2 text-foreground">{comment.text}</p>
-                  <p dir="auto" className="mt-0.5 truncate text-xs text-muted-foreground">{comment.author.displayName}</p>
+                  {/* Each line keeps its own text direction (plaintext) but all of them align to the page's start */}
+                  <p className="line-clamp-2 text-foreground [unicode-bidi:plaintext] ltr:text-left rtl:text-right">{comment.text}</p>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground [unicode-bidi:plaintext] ltr:text-left rtl:text-right">{comment.author.displayName}</p>
                   <Link href={`/${locale}${comment.targetUrlPath}`} className="block truncate text-xs text-muted-foreground hover:text-foreground hover:underline">
                     {/* The title isolated in its own direction, so an English title in Arabic text keeps its order */}
                     {text.held.on.split('{title}')[0]}
@@ -199,7 +202,7 @@ export function StudioDashboard({ locale, channelId, role, liveOn = false, uploa
     return (
       <div data-testid="studio-dashboard">
         {heading}
-        <div className="grid gap-4 md:grid-cols-2">{heldCard}</div>
+        <div className="grid items-start gap-4 md:grid-cols-2">{heldCard}</div>
       </div>
     );
   }
@@ -240,7 +243,7 @@ export function StudioDashboard({ locale, channelId, role, liveOn = false, uploa
   return (
     <div data-testid="studio-dashboard">
       {heading}
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid items-start gap-4 md:grid-cols-2">
         <Card title={text.tasks.title} testId="studio-dash-tasks">
           {counts ? (
             counts.processing + counts.failed === 0 ? (
@@ -254,7 +257,8 @@ export function StudioDashboard({ locale, channelId, role, liveOn = false, uploa
           ) : failedCard}
         </Card>
 
-        <Card title={text.recent.title} testId="studio-dash-recent">
+        {/* With uploads off and nothing uploaded there is nothing to list and nothing to invite: no card */}
+        {(uploadOn || recent === null || recent.length > 0) && <Card title={text.recent.title} testId="studio-dash-recent">
           {recent ? (
             recent.length === 0 ? (
               <Empty>{text.recent.none}</Empty>
@@ -263,7 +267,7 @@ export function StudioDashboard({ locale, channelId, role, liveOn = false, uploa
                 {recent.map((video) => (
                   // A grid, not justify-between: the theme lets justify-between rows wrap (theme/system.css)
                   <li key={video.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-                    <Link href={editHref(video)} dir="auto" className="min-w-0 truncate text-foreground hover:underline">{video.title}</Link>
+                    <Link href={editHref(video)} dir="auto" className="min-w-0 truncate text-foreground hover:underline">{studioVideoTitle(video, locale)}</Link>
                     <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground" data-status={video.studioStatus}>
                       {statuses[video.studioStatus] ?? video.studioStatus}
                     </span>
@@ -272,16 +276,17 @@ export function StudioDashboard({ locale, channelId, role, liveOn = false, uploa
               </ul>
             )
           ) : failedCard}
-        </Card>
+        </Card>}
 
         {latest && (
           <Card title={text.latest} testId="studio-dash-latest">
             <div className="flex gap-3">
-              <div className="relative h-16 w-28 shrink-0 overflow-hidden rounded bg-muted">
-                {latest.thumbnailUrl?.trim() ? <Image src={latest.thumbnailUrl} alt="" fill sizes="112px" className="object-cover" unoptimized /> : null}
+              <div className="relative grid h-16 w-28 shrink-0 place-items-center overflow-hidden rounded border border-border bg-muted text-muted-foreground">
+                {/* No thumbnail yet: a visible video placeholder, never a blank box */}
+                {latest.thumbnailUrl?.trim() ? <Image src={latest.thumbnailUrl} alt="" fill sizes="112px" className="object-cover" unoptimized /> : <Film aria-hidden="true" className="h-6 w-6" />}
               </div>
               <div className="min-w-0 text-sm">
-                <Link href={editHref(latest)} dir="auto" className="block truncate font-medium text-foreground hover:underline">{latest.title}</Link>
+                <Link href={editHref(latest)} dir="auto" className="block truncate font-medium text-foreground hover:underline">{studioVideoTitle(latest, locale)}</Link>
                 <p className="mt-1 text-muted-foreground">
                   {fillTemplate(locale, text.counts, { views: formatCountNoun(locale, latest.views, 'view'), likes: formatCountNoun(locale, latest.likesCount, 'like'), comments: formatCountNoun(locale, latest.commentsCount, 'comment') })}
                 </p>
@@ -307,7 +312,7 @@ export function StudioDashboard({ locale, channelId, role, liveOn = false, uploa
                     </Link>
                     <ul className="space-y-1">
                       {drafts.map((video) => (
-                        <li key={video.id}><Link href={editHref(video)} dir="auto" className="block truncate text-muted-foreground hover:text-foreground hover:underline">{video.title}</Link></li>
+                        <li key={video.id}><Link href={editHref(video)} dir="auto" className="block truncate text-muted-foreground hover:text-foreground hover:underline">{studioVideoTitle(video, locale)}</Link></li>
                       ))}
                     </ul>
                   </div>
@@ -318,7 +323,7 @@ export function StudioDashboard({ locale, channelId, role, liveOn = false, uploa
                     <ul className="space-y-1">
                       {scheduled.map((video) => (
                         <li key={video.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-2">
-                          <Link href={editHref(video)} dir="auto" className="min-w-0 truncate text-muted-foreground hover:text-foreground hover:underline">{video.title}</Link>
+                          <Link href={editHref(video)} dir="auto" className="min-w-0 truncate text-muted-foreground hover:text-foreground hover:underline">{studioVideoTitle(video, locale)}</Link>
                           <span className="shrink-0 text-muted-foreground">{video.scheduledPublishDate ? dateTime.format(new Date(video.scheduledPublishDate)) : ''}</span>
                         </li>
                       ))}

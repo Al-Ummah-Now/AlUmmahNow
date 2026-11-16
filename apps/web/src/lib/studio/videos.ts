@@ -94,3 +94,12 @@ export function rowActions(status: VideosStatus, role: StudioRole, isPublic = fa
       return [];
   }
 }
+
+/**
+ * A video's title in the page's language: its version for that language when the creator wrote one,
+ * otherwise the title as entered. An Arabic Studio page lists «تفسير سورة الكهف، الجزء الثالث», not
+ * its English version.
+ */
+export function studioVideoTitle(video: { title: string; titleLocalized?: Partial<Record<string, string>> | null }, locale: string): string {
+  return video.titleLocalized?.[locale]?.trim() || video.title;
+}
