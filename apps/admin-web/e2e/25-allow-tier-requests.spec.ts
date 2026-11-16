@@ -36,7 +36,8 @@ test.describe('Allow tier requests', () => {
     const card = page.getByTestId('tier-requests-allow');
     await expect(card).toHaveAttribute('data-mode', 'request');
     await expect(page.getByTestId('tier-requests-allow-mode')).toContainText('the Upgrade page shows the request form');
-    await page.getByTestId('tier-requests-allow-switch').uncheck();
+    // A controlled switch: it flips once admin-api answered, so click (uncheck() would check the state too early)
+    await page.getByTestId('tier-requests-allow-switch').click();
     await expect(page.getByTestId('undo-toast')).toContainText('Tier requests are off.');
     await expect(card).toHaveAttribute('data-mode', 'closed');
     await expect.poll(async () => (await read()).mode).toBe('closed');
