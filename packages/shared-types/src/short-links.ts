@@ -173,7 +173,7 @@ export interface ShortLinkClickEvent {
   source: string;
 }
 
-const CLICK_SOURCE_PATTERN = /^(direct|site|platform|search:[a-z]{2,20}|social:[a-z]{2,20})$/;
+const CLICK_SOURCE_PATTERN = /^(direct|site|platform|search:[a-z]{1,20}|social:[a-z]{1,20})$/;
 
 export function isShortLinkClickEvent(value: unknown): value is ShortLinkClickEvent {
   if (!value || typeof value !== 'object') return false;

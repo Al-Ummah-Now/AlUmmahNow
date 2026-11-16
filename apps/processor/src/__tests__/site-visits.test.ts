@@ -1,3 +1,4 @@
+import { isShortLinkClickEvent, isSiteVisitEvent, visitSourceOf } from '@al-ummah/shared-types';
 import { CounterBatch, ENTITY_TYPES } from '../lib/analytics-counters';
 import { MessageProcessor } from '../messageProcessor';
 import { MessageType, type AlUmmahMessage, type QueueEnvironment } from '../types';
@@ -88,5 +89,18 @@ describe('site counters reach D1 through the processor', () => {
     for (const entityType of ENTITY_TYPES) batch.add({ entityType, entityId: 'x', day: '2026-11-15', metric: 'm', value: 1 });
     batch.add({ entityType: 'user' as never, entityId: 'x', day: '2026-11-15', metric: 'm', value: 1 });
     expect(batch.size).toBe(ENTITY_TYPES.length);
+  });
+});
+
+describe('every source the classifier names is counted', () => {
+  // social:x failed a two-letter minimum, so every visit and short link click from X was dropped
+  it.each([
+    'www.google.com', 'bing.com', 'duckduckgo.com', 'chatgpt.com', 'x.com', 't.co', 'twitter.com', 'facebook.com', 'l.instagram.com',
+    'wa.me', 't.me', 'youtube.com', 'tiktok.com', 'lnkd.in', 'reddit.com', 'threads.net', 'www.alummahnow.net', 'example.org',
+  ])('%s', (host) => {
+    const source = visitSourceOf(host);
+    expect(isSiteVisitEvent({ landing: 'home', source, referrerHost: host })).toBe(true);
+    expect(isShortLinkClickEvent({ type: 'video', source })).toBe(true);
+    expect(visitIncrements([{ landing: 'home', source, referrerHost: host }], '2026-11-15').filter((r) => r.metric === 'visits')).toHaveLength(1);
   });
 });

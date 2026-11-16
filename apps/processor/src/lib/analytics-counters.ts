@@ -54,22 +54,49 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
  * [entity_type, entity_id, day, metric, dim, value]. A row that repeats an
  * earlier one (in the table or in the same array) is added to it.
  */
-export const BULK_UPSERT = `INSERT INTO ${ANALYTICS_TABLE} (entity_type, entity_id, day, metric, dim, value)
+const bulkUpsert = (where: string) => `INSERT INTO ${ANALYTICS_TABLE} (entity_type, entity_id, day, metric, dim, value)
 SELECT json_extract(j.value, '$[0]'), json_extract(j.value, '$[1]'), json_extract(j.value, '$[2]'),
        json_extract(j.value, '$[3]'), json_extract(j.value, '$[4]'), json_extract(j.value, '$[5]')
 FROM json_each(?1) AS j
-WHERE true
+WHERE ${where}
 ${ADD_ON_CONFLICT}`;
+export const BULK_UPSERT = bulkUpsert('true');
 
 // ?5 dim, ?6 cap, ?7 OTHER_DIM, ?8 value. WHERE true: SQLite needs it before ON CONFLICT after a SELECT.
-const BOUNDED_UPSERT = `INSERT INTO ${ANALYTICS_TABLE} (entity_type, entity_id, day, metric, dim, value)
+const boundedUpsert = (where: string) => `INSERT INTO ${ANALYTICS_TABLE} (entity_type, entity_id, day, metric, dim, value)
 SELECT ?1, ?2, ?3, ?4,
   CASE WHEN EXISTS (SELECT 1 FROM ${ANALYTICS_TABLE} WHERE entity_type = ?1 AND entity_id = ?2 AND day = ?3 AND metric = ?4 AND dim = ?5)
          OR (SELECT COUNT(*) FROM ${ANALYTICS_TABLE} WHERE entity_type = ?1 AND entity_id = ?2 AND day = ?3 AND metric = ?4 AND dim <> ?7) < ?6
        THEN ?5 ELSE ?7 END,
   ?8
-WHERE true
+WHERE ${where}
 ${ADD_ON_CONFLICT}`;
+const BOUNDED_UPSERT = boundedUpsert('true');
+
+/**
+ * A row whose presence means "already applied": statements built with `unless` write nothing when
+ * it exists (a primary key lookup), and the batch inserts it last, in the same transaction. Used by
+ * one-off replays (lib/site-replay.ts) so running one twice never counts twice.
+ */
+export interface CounterMarker {
+	entityType: EntityType;
+	entityId: string;
+	day: string;
+	metric: string;
+	dim: string;
+	/** Stored as the marker's value (e.g. how many events the replay added) */
+	value: number;
+}
+
+const unlessClause = (first: number) =>
+	`NOT EXISTS (SELECT 1 FROM ${ANALYTICS_TABLE} WHERE entity_type = ?${first} AND entity_id = ?${first + 1} AND day = ?${first + 2} AND metric = ?${first + 3} AND dim = ?${first + 4})`;
+const BULK_UPSERT_UNLESS = bulkUpsert(unlessClause(2));
+const BOUNDED_UPSERT_UNLESS = boundedUpsert(unlessClause(9));
+const MARKER_INSERT = `INSERT INTO ${ANALYTICS_TABLE} (entity_type, entity_id, day, metric, dim, value) VALUES (?1, ?2, ?3, ?4, ?5, ?6) ON CONFLICT (entity_type, entity_id, day, metric, dim) DO NOTHING`;
+const markerKey = (m: CounterMarker) => [m.entityType, m.entityId, m.day, m.metric, m.dim] as const;
+
+/** Why CounterBatch.add refused an increment (a caller bug: logged, never silent). */
+export type InvalidIncrementReason = 'unknown_entity_type' | 'invalid_key' | 'invalid_value';
 
 /** Statements adding unbounded rows: one per ROWS_PER_STATEMENT rows. */
 export function bulkUpsertStatements(db: D1Database, rows: CounterIncrement[]): D1PreparedStatement[] {
@@ -88,16 +115,29 @@ function rowKey(inc: CounterIncrement): string {
 export class CounterBatch {
 	private rows = new Map<string, CounterIncrement>();
 
-	/** Queues an increment; invalid or zero increments are ignored. */
-	add(inc: CounterIncrement): void {
-		// Every EntityType is accepted: a hand-written list here dropped all 'site' counters (site visits, short links)
-		if (!(ENTITY_TYPES as readonly string[]).includes(inc.entityType)) return;
-		if (!inc.entityId || !DAY.test(inc.day) || !inc.metric) return;
-		if (!Number.isFinite(inc.value) || inc.value === 0) return;
+	/**
+	 * `onInvalid` hears every refused increment. A hand-written type list here once dropped every
+	 * 'site' counter without a word (site visits, short links; #1476): refusals are bugs, so the
+	 * processor logs them as errors.
+	 */
+	constructor(private readonly onInvalid?: (inc: CounterIncrement, reason: InvalidIncrementReason) => void) {}
+
+	/** Queues an increment; zero increments are ignored, invalid ones refused and reported. */
+	add(inc: CounterIncrement): boolean {
+		if (!(ENTITY_TYPES as readonly string[]).includes(inc.entityType)) return this.refuse(inc, 'unknown_entity_type');
+		if (!inc.entityId || !DAY.test(inc.day) || !inc.metric) return this.refuse(inc, 'invalid_key');
+		if (!Number.isFinite(inc.value)) return this.refuse(inc, 'invalid_value');
+		if (inc.value === 0) return false;
 		const key = rowKey(inc);
 		const existing = this.rows.get(key);
 		if (existing) existing.value += inc.value;
 		else this.rows.set(key, { ...inc, dim: inc.dim ?? '' });
+		return true;
+	}
+
+	private refuse(inc: CounterIncrement, reason: InvalidIncrementReason): false {
+		this.onInvalid?.(inc, reason);
+		return false;
 	}
 
 	get size(): number {
@@ -122,6 +162,28 @@ export class CounterBatch {
 	}
 
 	/**
+	 * The statements of `statements()` that write nothing once `marker` exists, then the marker's
+	 * insert: run as one batch (a transaction), the increments are applied exactly once however
+	 * often the batch runs.
+	 */
+	statementsUnless(db: D1Database, marker: CounterMarker): D1PreparedStatement[] {
+		const rows = [...this.rows.values()];
+		const bounded = rows.filter((r) => r.maxDims && r.dim !== OTHER_DIM);
+		const plain = rows.filter((r) => !(r.maxDims && r.dim !== OTHER_DIM));
+		const key = markerKey(marker);
+		const out: D1PreparedStatement[] = [];
+		for (let i = 0; i < plain.length; i += ROWS_PER_STATEMENT) {
+			const json = JSON.stringify(plain.slice(i, i + ROWS_PER_STATEMENT).map((r) => [r.entityType, r.entityId, r.day, r.metric, r.dim ?? '', r.value]));
+			out.push(db.prepare(BULK_UPSERT_UNLESS).bind(json, ...key));
+		}
+		for (const inc of bounded) {
+			out.push(db.prepare(BOUNDED_UPSERT_UNLESS).bind(inc.entityType, inc.entityId, inc.day, inc.metric, inc.dim, inc.maxDims, OTHER_DIM, inc.value, ...key));
+		}
+		out.push(db.prepare(MARKER_INSERT).bind(...key, marker.value));
+		return out;
+	}
+
+	/**
 	 * Writes everything queued in one D1 batch (one transaction: all or
 	 * nothing), retrying a failed attempt, and empties the batch. Throws when
 	 * every attempt failed; nothing was written then.
@@ -142,8 +204,13 @@ export class CounterBatch {
 }
 
 /** One-shot helper: add these increments atomically per row. */
-export async function addCounters(db: D1Database, increments: CounterIncrement[]): Promise<number> {
-	const batch = new CounterBatch();
+export async function addCounters(
+	db: D1Database,
+	increments: CounterIncrement[],
+	onInvalid: (inc: CounterIncrement, reason: InvalidIncrementReason) => void = (inc, reason) =>
+		console.error('[analytics-counters] increment refused', { reason, entityType: inc.entityType, metric: inc.metric }),
+): Promise<number> {
+	const batch = new CounterBatch(onInvalid);
 	for (const inc of increments) batch.add(inc);
 	return batch.flush(db);
 }
