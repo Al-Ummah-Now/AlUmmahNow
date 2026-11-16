@@ -263,7 +263,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
     }
   };
 
-  const formatSize = (bytes: number): string => formatBytes(lang, bytes, { maximumFractionDigits: 2 });
+  const formatSize = (bytes: number): string => formatBytes(lang, bytes, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const formatTime = (seconds: number): string => {
     if (!isFinite(seconds) || seconds < 0) return '--:--';
