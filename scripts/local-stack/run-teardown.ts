@@ -68,7 +68,7 @@ export const HISTORY: Record<string, { table: string; key: string[] }[] | 'r2'> 
   'd1:al-ummah-now-reports': [
     { table: 'admin_audit_log', key: ['id'] },
     { table: 'site_settings_log', key: ['id'] },
-    // The videos admin's staff list (admin-api migration 0034): a run admin's token recorded it.
+    // The videos admin's staff list (admin-api migration 0039): a run admin's token recorded it.
     // Erased with a videos account, but a run admin with no videos profile is only deleted on the issuer
     { table: 'admin_staff', key: ['user_id'] },
   ],

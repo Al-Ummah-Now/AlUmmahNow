@@ -6,7 +6,7 @@
 export const CONTACT_TOPICS = ['general', 'account', 'problem', 'content', 'partnership'] as const;
 export type ContactTopic = (typeof CONTACT_TOPICS)[number];
 
-/** Read and unread are separate (read_at, migration 0033): a new message is 'open' and unread. */
+/** Read and unread are separate (read_at, migration 0038): a new message is 'open' and unread. */
 export const CONTACT_STATUSES = ['open', 'in_progress', 'replied', 'closed', 'spam'] as const;
 export type ContactStatus = (typeof CONTACT_STATUSES)[number];
 
