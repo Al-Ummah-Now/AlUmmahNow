@@ -63,12 +63,12 @@ test.describe('max concurrent transcodes', () => {
 
     test('follows Delivery to the R2 settings, sets a min–max range, sees it on Delivery, and Undo puts it back', async ({ page }) => {
       const before = await readLimit();
-      expect(before, 'starts at the default 4–4 under Cloudflare\'s limit (production config on the local stack)').toMatchObject({ min: 4, max: 4, isDefault: true, ceiling: 3746 });
+      expect(before, 'starts at the default 4–4 under Cloudflare\'s limit (production config on the local stack)').toMatchObject({ min: 4, max: 4, isDefault: true, ceiling: 3371 });
 
       await setPreferences(page, { locale: 'en', theme: 'dark' });
       await page.goto('/delivery');
       await expect(page.getByTestId('delivery-live-summary')).toHaveText(/^\d+ running · \d+ waiting · range 4–4$/, { timeout: 30_000 });
-      await expect(page.getByTestId('delivery-live-ceiling')).toHaveText('Range 4–4 · Cloudflare limit: 3,746');
+      await expect(page.getByTestId('delivery-live-ceiling')).toHaveText('Range 4–4 · Cloudflare limit: 3,371');
       // Delivery has no field of its own: only the figures and the link to the R2 settings
       await expect(page.getByTestId('delivery-limit')).toHaveCount(0);
       await page.getByTestId('delivery-live-limit-link').click();
@@ -124,8 +124,8 @@ test.describe('max concurrent transcodes', () => {
       const max = section.getByTestId('delivery-limit-max');
       const error = section.getByTestId('delivery-limit-error');
       const cases = [
-        { min: '2', max: '3747', field: max, text: 'الحد الأقصى: أدخل عددًا صحيحًا من ١ إلى ٣٬٧٤٦.' },
-        { min: '0', max: '4', field: min, text: 'الحد الأدنى: أدخل عددًا صحيحًا من ١ إلى ٣٬٧٤٦.' },
+        { min: '2', max: '3372', field: max, text: 'الحد الأقصى: أدخل عددًا صحيحًا من ١ إلى ٣٬٣٧١.' },
+        { min: '0', max: '4', field: min, text: 'الحد الأدنى: أدخل عددًا صحيحًا من ١ إلى ٣٬٣٧١.' },
         { min: '6', max: '3', field: min, text: 'لا يمكن أن يزيد الحد الأدنى على الحد الأقصى.' },
       ];
       for (const c of cases) {

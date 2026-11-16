@@ -10,6 +10,10 @@
  * 15,000 on top of stage's and QA's 16. This reads the quota and every application's reservation
  * (read-only) and checks the media configs this release will deploy (production, stage, QA) fit,
  * with the applications outside them as Cloudflare reports them now. Prints no secrets.
+ *
+ * The account is shared with other projects: every application on it counts (GET
+ * /accounts/{id}/containers/applications lists them all), and MARGIN of the quota stays free so another
+ * project's deploy can't push ours over (or ours theirs).
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -20,6 +24,9 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 /** vCPU per instance type (developers.cloudflare.com/containers/platform-details/limits/#instance-types). */
 export const INSTANCE_VCPU: Record<string, number> = { lite: 1 / 16, dev: 1 / 16, basic: 1 / 4, standard: 1 / 2, 'standard-1': 1 / 2, 'standard-2': 1, 'standard-3': 2, 'standard-4': 4 };
+
+/** Share of the account's vCPU quota left free for other projects on the shared account. */
+export const MARGIN = 0.1;
 
 export interface PlannedApp {
 	/** The Worker that owns the container application (its name prefix in the API) */
@@ -57,6 +64,8 @@ export function appOf(app: AccountApp, planned: PlannedApp[]): PlannedApp | unde
 export interface QuotaVerdict {
 	ok: boolean;
 	totalVcpu: number;
+	/** total_vcpu less MARGIN: what our planned apps plus every other application may reserve */
+	budgetVcpu: number;
 	planned: { worker: string; vcpu: number }[];
 	others: { name: string; vcpu: number }[];
 	needed: number;
@@ -64,15 +73,16 @@ export interface QuotaVerdict {
 	productionMax: number;
 }
 
-/** Planned media apps plus every other application as reserved now must fit in total_vcpu. Pure. */
-export function checkQuota(totalVcpu: number, account: AccountApp[], planned: PlannedApp[]): QuotaVerdict {
+/** Planned media apps plus every other application on the account (as reserved now) must fit in total_vcpu less MARGIN. Pure. */
+export function checkQuota(totalVcpu: number, account: AccountApp[], planned: PlannedApp[], margin = MARGIN): QuotaVerdict {
+	const budgetVcpu = Math.floor(totalVcpu * (1 - margin));
 	const others = account.filter((a) => !appOf(a, planned)).map((a) => ({ name: a.name, vcpu: a.maxInstances * a.vcpu }));
 	const plannedVcpu = planned.map((p) => ({ worker: p.worker, vcpu: p.maxInstances * p.vcpu }));
 	const sum = (xs: { vcpu: number }[]) => xs.reduce((n, x) => n + x.vcpu, 0);
 	const needed = sum(plannedVcpu) + sum(others);
 	const prod = planned[0]!;
 	const rest = sum(plannedVcpu.slice(1)) + sum(others);
-	return { ok: needed <= totalVcpu, totalVcpu, planned: plannedVcpu, others, needed, productionMax: Math.floor((totalVcpu - rest) / prod.vcpu) };
+	return { ok: needed <= budgetVcpu, totalVcpu, budgetVcpu, planned: plannedVcpu, others, needed, productionMax: Math.max(0, Math.floor((budgetVcpu - rest) / prod.vcpu)) };
 }
 
 async function main(): Promise<void> {
@@ -96,14 +106,14 @@ async function main(): Promise<void> {
 	const planned = plannedMediaApps();
 	const v = checkQuota(totalVcpu, apps, planned);
 	const lines = [
-		`Container vCPU quota: ${v.totalVcpu}; this release needs ${v.needed}.`,
+		`Container vCPU quota: ${v.totalVcpu} (${Math.round(MARGIN * 100)}% kept free for the other projects on the account: budget ${v.budgetVcpu}); this release needs ${v.needed}.`,
 		...v.planned.map((p) => `- ${p.worker} (planned): ${p.vcpu} vCPU`),
 		...v.others.map((o) => `- ${o.name} (other application, as reserved now): ${o.vcpu} vCPU`),
 		`Largest production max_instances that fits: ${v.productionMax}.`,
 	];
 	process.stdout.write(lines.join('\n') + '\n');
 	if (!v.ok) {
-		process.stdout.write(`::error::The media containers would reserve ${v.needed} vCPU, over the account's ${v.totalVcpu}: lower max_instances in apps/media/wrangler*.jsonc (production at most ${v.productionMax}).\n`);
+		process.stdout.write(`::error::The media containers with every other application on the account would reserve ${v.needed} vCPU, over the budget of ${v.budgetVcpu} (the quota ${v.totalVcpu} less ${Math.round(MARGIN * 100)}%): lower max_instances in apps/media/wrangler*.jsonc (production at most ${v.productionMax}).\n`);
 		process.exit(1);
 	}
 }
