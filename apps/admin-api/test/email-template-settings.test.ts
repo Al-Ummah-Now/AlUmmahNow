@@ -29,13 +29,13 @@ beforeEach(() => {
   mails = [];
   videos = [];
   globalThis.fetch = (async (url: string | URL, init: RequestInit) => {
-    const u = String(url);
-    if (u.includes('api.resend.com')) {
+    const u = new URL(String(url));
+    if (u.hostname === 'api.resend.com') {
       mails.push(JSON.parse(String(init.body)));
       return new Response(JSON.stringify({ id: 're_1' }), { status: 200 });
     }
-    if (u.includes('/internal/admin/videos')) {
-      const q = new URL(u).searchParams.get('q');
+    if (u.pathname === '/internal/admin/videos') {
+      const q = u.searchParams.get('q');
       return new Response(JSON.stringify({ success: true, result: { items: videos.filter((v) => v.id === q), total: 0 } }), { status: 200 });
     }
     return new Response('not stubbed', { status: 599 });
