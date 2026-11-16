@@ -261,7 +261,7 @@ export function ContactPage() {
       </header>
 
       <div className="ct-grid">
-        <section className="ct-card" aria-labelledby={status.kind === 'sent' ? id('sent') : undefined} aria-label={status.kind === 'sent' ? undefined : c.formLabel}>
+        <section className="ct-card pb-glass" aria-labelledby={status.kind === 'sent' ? id('sent') : undefined} aria-label={status.kind === 'sent' ? undefined : c.formLabel}>
           {status.kind === 'sent' ? (
             <div className="ct-sent" data-testid="contact-success" role="status">
               <span className="ct-sent-icon" aria-hidden="true">
@@ -462,7 +462,7 @@ export function ContactPage() {
           )}
         </section>
 
-        <aside className="ct-aside" aria-labelledby={id('aside')}>
+        <aside className="ct-aside pb-glass" aria-labelledby={id('aside')}>
           <h2 id={id('aside')} className="ct-aside-title">
             {c.aside.title}
           </h2>

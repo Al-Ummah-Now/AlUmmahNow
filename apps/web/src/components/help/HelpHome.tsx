@@ -34,7 +34,7 @@ export function HelpHome() {
         </div>
       </header>
       <HelpSearch />
-      <section className="hp-tour-card" aria-labelledby="hp-tour-title">
+      <section className="hp-tour-card pb-glass" aria-labelledby="hp-tour-title">
         <div>
           <h2 id="hp-tour-title" className="hp-card-title">{h.takeTour}</h2>
           <p className="hp-card-text">{h.takeTourHint}</p>

@@ -46,12 +46,12 @@ export function HelpTopicPage({ topic }: { topic: HelpTopicId }) {
         </nav>
         <div className="hp-body">
           {sections.map((section) => (
-            <section key={section.id} id={section.id} className="hp-section" aria-labelledby={`${section.id}-h`}>
+            <section key={section.id} id={section.id} className="hp-section pb-glass" aria-labelledby={`${section.id}-h`}>
               <h2 id={`${section.id}-h`} className="hp-h2">{section.heading}</h2>
               <HelpBlocks blocks={section.blocks} />
             </section>
           ))}
-          <section className="hp-related" aria-labelledby="hp-related-title">
+          <section className="hp-related hp-section pb-glass" aria-labelledby="hp-related-title">
             <h2 id="hp-related-title" className="hp-h2">{h.related}</h2>
             <ul>
               {related.map((id) => (
