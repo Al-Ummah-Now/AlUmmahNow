@@ -12,7 +12,6 @@ import '@/theme/billing.css';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, CreditCard, ExternalLink, Receipt } from 'lucide-react';
 import { type BillingPayment, type BillingSubscription, type MyBilling, type PublicTier } from '@al-ummah/shared-types';
-import Link from '@/components/common/AppLink';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { MAIN_CONTENT_ID } from '@/components/SkipLinks';
@@ -157,7 +156,6 @@ export function BillingSettings() {
             {subs.length === 0 ? (
               <div className="bil-card bil-empty" data-testid="billing-no-subscriptions">
                 <p>{copy.settings.noSubscriptions}</p>
-                <Link href={`/${l}/upgrade`} className="upg-btn bil-empty-cta">{copy.settings.seePlans}</Link>
               </div>
             ) : (
               <ul className="bil-subs">

@@ -49,7 +49,6 @@ export interface BillingTranslations {
     description: string;
     subscriptionsHeading: string;
     noSubscriptions: string;
-    seePlans: string;
     paymentsHeading: string;
     noPayments: string;
     status: Record<'pending' | 'active' | 'past_due' | 'canceled' | 'ended', string>;
@@ -120,7 +119,6 @@ export const BILLING_EN: BillingTranslations = {
     description: 'Your subscriptions and payment history',
     subscriptionsHeading: 'Subscriptions',
     noSubscriptions: 'You have no subscriptions.',
-    seePlans: 'See tiers',
     paymentsHeading: 'Payment history',
     noPayments: 'No payments yet.',
     status: { pending: 'Starting', active: 'Active', past_due: 'Payment due', canceled: 'Canceled', ended: 'Ended' },
@@ -191,7 +189,6 @@ export const BILLING_AR: BillingTranslations = {
     description: 'اشتراكاتك وسجل المدفوعات',
     subscriptionsHeading: 'الاشتراكات',
     noSubscriptions: 'ليست لديك اشتراكات.',
-    seePlans: 'عرض الفئات',
     paymentsHeading: 'سجل المدفوعات',
     noPayments: 'لا توجد مدفوعات بعد.',
     status: { pending: 'قيد البدء', active: 'فعّال', past_due: 'دفعة مستحقة', canceled: 'ملغى', ended: 'منتهٍ' },
