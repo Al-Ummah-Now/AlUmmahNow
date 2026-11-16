@@ -13,16 +13,6 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import {
   MoreVertical,
   Eye,
   Edit,
@@ -67,7 +57,6 @@ const STATUS_LABELS = {
 export function PostCard({ post, locale, onView, onEdit, onDelete, onPublishNow }: PostCardProps) {
   const isRTL = locale === 'ar';
   const { t } = useLanguage();
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const isScheduled = post.status === PostStatus.SCHEDULED && !!post.scheduledAt;
@@ -81,11 +70,11 @@ export function PostCard({ post, locale, onView, onEdit, onDelete, onPublishNow 
     }
   };
 
+  // No confirm: the delete is a 30-day soft delete with an Undo toast (the page's onDelete)
   const handleDelete = async () => {
     setDeleting(true);
     try {
       await onDelete(post.id);
-      setShowDeleteDialog(false);
     } catch (error) {
       logger.error('Delete failed:', error);
     } finally {
@@ -161,7 +150,8 @@ export function PostCard({ post, locale, onView, onEdit, onDelete, onPublishNow 
                 {t.community.publishNow}
               </Button>
             )}
-            <DropdownMenu>
+            {/* Not modal: the rest of the page is never aria-hidden while it is open */}
+            <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
@@ -185,11 +175,13 @@ export function PostCard({ post, locale, onView, onEdit, onDelete, onPublishNow 
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem
-                  onClick={() => setShowDeleteDialog(true)}
+                  onClick={() => void handleDelete()}
+                  disabled={deleting}
                   className="text-[var(--fanous-color-error-text)] focus:text-[var(--fanous-color-error-text)]"
+                  data-testid="studio-post-delete"
                 >
-                  <Trash2 className="w-4 h-4 mr-2 rtl:ml-2 rtl:mr-0" />
-                  {isRTL ? 'حذف' : 'Delete'}
+                  <Trash2 className="w-4 h-4 me-2" aria-hidden="true" />
+                  {deleting ? t.community.deleting : t.community.deletePost}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -198,33 +190,6 @@ export function PostCard({ post, locale, onView, onEdit, onDelete, onPublishNow 
         </div>
       </Card>
 
-      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {isRTL ? 'تأكيد الحذف' : 'Confirm Delete'}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {isRTL
-                ? 'هل أنت متأكد من حذف هذا المنشور؟ لا يمكن التراجع عن هذا الإجراء.'
-                : 'Are you sure you want to delete this post? This action cannot be undone.'
-              }
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>
-              {isRTL ? 'إلغاء' : 'Cancel'}
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              disabled={deleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {deleting ? (isRTL ? 'جاري الحذف...' : 'Deleting...') : (isRTL ? 'حذف' : 'Delete')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 }

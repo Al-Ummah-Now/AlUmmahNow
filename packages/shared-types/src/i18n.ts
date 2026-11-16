@@ -1613,8 +1613,12 @@ export interface AppTranslations {
     /** The edit page heading */
     editPostTitle: string;
     deletePost: string;
-    deletePostTitle: string;
-    deletePostBody: string;
+    /** Delete is a soft delete with an Undo toast, never a confirm (restorable for 30 days) */
+    postDeleted: string;
+    undo: string;
+    undoing: string;
+    undoFailed: string;
+    dismiss: string;
     deleting: string;
     deleteFailed: string;
     cancel: string;

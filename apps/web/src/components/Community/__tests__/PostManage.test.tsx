@@ -1,14 +1,18 @@
 /**
  * Story 29.4 on the post card: only the owner gets Edit and Delete (no dead menu for anyone else),
- * Delete asks in the in-app dialog and removes the post, a failure says so; a scheduled post shows
+ * Delete removes the post at once (no confirm: a 30-day soft delete) and Undo brings it back, a
+ * failure says so; a scheduled post shows
  * its time. And the composer's schedule window: 5 minutes to a year ahead.
  */
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { CommunityPost } from '@al-ummah/shared-types';
 import PostCard from '../PostCard';
 import { PostSchedulePicker, joinLocal, scheduleProblem, scheduledIso, scheduleStateFrom, toLocalInput } from '../management/PostSchedulePicker';
 import { editPostHref } from '../PostManageMenu';
+import UndoToastHost from '@/components/common/UndoToastHost';
+
+import { dismissUndoToast } from '@/lib/undo-toast';
 
 jest.mock('../PostEngagement', () => ({ __esModule: true, default: () => null }));
 jest.mock('../CommentsSection', () => ({ __esModule: true, default: () => null }));
@@ -18,7 +22,11 @@ jest.mock('@/hooks/useLanguage', () => ({
 }));
 jest.mock('@/lib/errors/reporter', () => ({ reportError: jest.fn(() => 'ref') }));
 const deleteCommunityPost = jest.fn();
-jest.mock('@/lib/api/community-posts', () => ({ deleteCommunityPost: (...args: unknown[]) => deleteCommunityPost(...args) }));
+const restoreCommunityPost = jest.fn();
+jest.mock('@/lib/api/community-posts', () => ({
+  deleteCommunityPost: (...args: unknown[]) => deleteCommunityPost(...args),
+  restoreCommunityPost: (...args: unknown[]) => restoreCommunityPost(...args),
+}));
 
 const post = {
   id: 'p1', channelId: 'c1', userId: 'u1', type: 'text', content: 'Hello', createdAt: new Date(Date.now() - 3600_000).toISOString(),
@@ -32,7 +40,12 @@ async function openMenu() {
 }
 
 describe('post card owner menu', () => {
-  beforeEach(() => deleteCommunityPost.mockReset());
+  beforeEach(() => {
+    deleteCommunityPost.mockReset();
+    restoreCommunityPost.mockReset();
+    act(() => dismissUndoToast());
+  });
+  const withToast = (ui: React.ReactElement) => render(<>{ui}<UndoToastHost /></>);
 
   it('has no actions button for visitors', () => {
     render(<PostCard post={post} />);
@@ -40,29 +53,48 @@ describe('post card owner menu', () => {
     expect(screen.queryByRole('button', { name: 'More options' })).toBeNull();
   });
 
-  it('gives the owner Edit (the editor) and Delete (asks first, then removes)', async () => {
+  it('gives the owner Edit (the editor) and Delete (at once, no confirm), and Undo brings the post back', async () => {
     const onDeleted = jest.fn();
+    const onRestored = jest.fn();
     deleteCommunityPost.mockResolvedValue({ success: true });
-    render(<PostCard post={post} canManage onDeleted={onDeleted} />);
+    restoreCommunityPost.mockResolvedValue({ success: true });
+    withToast(<PostCard post={post} canManage onDeleted={onDeleted} onRestored={onRestored} />);
     await openMenu();
     expect(screen.getByRole('menuitem', { name: 'Edit' })).toHaveAttribute('href', '/en/settings/channel/c1/community/p1/edit');
     fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
-    const dialog = await screen.findByRole('alertdialog');
-    expect(dialog).toHaveTextContent('Delete this post?');
-    expect(deleteCommunityPost).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByTestId('post-delete-confirm'));
     await waitFor(() => expect(onDeleted).toHaveBeenCalledWith('p1'));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
     expect(deleteCommunityPost).toHaveBeenCalledWith('c1', 'p1', { channelId: 'c1' });
+    const toast = await screen.findByTestId('post-delete-toast');
+    expect(toast).toHaveAttribute('role', 'status');
+    expect(toast).toHaveTextContent('Post deleted');
+    fireEvent.click(screen.getByTestId('post-delete-toast-undo'));
+    await waitFor(() => expect(onRestored).toHaveBeenCalledWith('p1'));
+    expect(restoreCommunityPost).toHaveBeenCalledWith('c1', 'p1', { channelId: 'c1' });
+    await waitFor(() => expect(screen.queryByTestId('post-delete-toast')).toBeNull());
   });
 
-  it('a refused delete keeps the post and says so', async () => {
-    const onDeleted = jest.fn();
-    deleteCommunityPost.mockResolvedValue(null);
-    render(<PostCard post={post} canManage onDeleted={onDeleted} />);
+  it('a failed Undo keeps the toast and says so', async () => {
+    const onRestored = jest.fn();
+    deleteCommunityPost.mockResolvedValue({ success: true });
+    restoreCommunityPost.mockResolvedValue(null);
+    withToast(<PostCard post={post} canManage onDeleted={jest.fn()} onRestored={onRestored} />);
     await openMenu();
     fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
-    fireEvent.click(await screen.findByTestId('post-delete-confirm'));
-    expect(await screen.findByTestId('post-delete-error')).toHaveTextContent('The post could not be deleted');
+    fireEvent.click(await screen.findByTestId('post-delete-toast-undo'));
+    await waitFor(() => expect(screen.getByTestId('post-delete-toast')).toHaveTextContent('The post could not be restored'));
+    expect(onRestored).not.toHaveBeenCalled();
+    expect(screen.getByTestId('post-delete-toast-undo')).toBeEnabled();
+  });
+
+  it('a refused delete keeps the post and says so, with no Undo', async () => {
+    const onDeleted = jest.fn();
+    deleteCommunityPost.mockResolvedValue(null);
+    withToast(<PostCard post={post} canManage onDeleted={onDeleted} />);
+    await openMenu();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
+    expect(await screen.findByTestId('post-delete-toast')).toHaveTextContent('The post could not be deleted');
+    expect(screen.queryByTestId('post-delete-toast-undo')).toBeNull();
     expect(onDeleted).not.toHaveBeenCalled();
   });
 

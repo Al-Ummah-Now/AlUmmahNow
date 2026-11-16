@@ -200,12 +200,11 @@ test.describe('Post manager', () => {
       await expect(postCard(community, marker).getByRole('heading', { level: 3 })).toHaveText(channelName);
       await community.close();
 
-      // Delete from the manager (confirmation dialog)
+      // Delete from the manager: at once, no confirm (a soft delete with an Undo toast)
       await managed.getByTestId('post-actions').click();
       await page.getByRole('menuitem', { name: 'Delete' }).click();
-      const confirm = page.getByRole('alertdialog');
-      await expect(confirm.getByRole('heading', { name: 'Confirm Delete' })).toBeVisible();
-      await confirm.getByRole('button', { name: 'Delete' }).click();
+      await expect(page.getByRole('alertdialog')).toHaveCount(0);
+      await expect(page.getByTestId('post-delete-toast')).toContainText('Post deleted');
       await expect(managed).toHaveCount(0);
       await expect.poll(async () => (await listPosts(owner, channelId(), channelId())).some((p) => p.content?.includes(marker))).toBe(false);
     } finally {
@@ -337,21 +336,51 @@ test.describe('Post manager', () => {
     }
   });
 
-  test('COMM-009 the owner deletes a post from its card on the channel page', async ({ page }) => {
+  test('COMM-009 the owner deletes a post from its card, then Undo brings it back', async ({ page }) => {
     const marker = tempName('CardDel');
     const { id } = await createTextPost(`${marker} delete me`);
-    await page.goto(`/en/channels/${channelId()}?tab=community`);
-    const card = postCard(page, marker);
-    const actions = card.getByRole('button', { name: 'Post actions' });
-    await expectHydrated(actions);
-    await clickUntil(actions, async () => expect(page.getByRole('menuitem', { name: 'Delete' })).toBeVisible({ timeout: 3000 }));
-    await expect(page.getByRole('menuitem', { name: 'Edit' })).toHaveAttribute('href', `/en/settings/channel/${channelId()}/community/${id}/edit`);
-    await page.getByRole('menuitem', { name: 'Delete' }).click();
-    const dialog = page.getByRole('alertdialog');
-    await expect(dialog.getByRole('heading', { name: 'Delete this post?' })).toBeVisible();
-    await dialog.getByTestId('post-delete-confirm').click();
-    await expect(card).toHaveCount(0);
-    await expect.poll(async () => (await listPosts(owner, channelId(), channelId())).some((p) => p.id === id)).toBe(false);
+    try {
+      await page.goto(`/en/channels/${channelId()}?tab=community`);
+      const card = postCard(page, marker);
+      const actions = card.getByRole('button', { name: 'Post actions' });
+      await expectHydrated(actions);
+      await clickUntil(actions, async () => expect(page.getByRole('menuitem', { name: 'Delete' })).toBeVisible({ timeout: 3000 }));
+      await expect(page.getByRole('menuitem', { name: 'Edit' })).toHaveAttribute('href', `/en/settings/channel/${channelId()}/community/${id}/edit`);
+      await page.getByRole('menuitem', { name: 'Delete' }).click();
+      // No confirm: the post goes at once and the toast offers Undo
+      await expect(page.getByRole('alertdialog')).toHaveCount(0);
+      const toast = page.getByTestId('post-delete-toast');
+      await expect(toast).toContainText('Post deleted');
+      await expect(card).toHaveCount(0);
+      await expect.poll(async () => (await listPosts(owner, channelId(), channelId())).some((p) => p.id === id)).toBe(false);
+
+      await toast.getByRole('button', { name: 'Undo' }).click();
+      await expect(toast).toHaveCount(0);
+      await expect(card).toBeVisible();
+      await expect.poll(async () => (await listPosts(owner, channelId(), channelId())).some((p) => p.id === id)).toBe(true);
+    } finally {
+      await deletePostsContaining(marker);
+    }
+  });
+
+  test('COMM-014 Arabic delete toast is RTL and translated', async ({ page }) => {
+    const marker = tempName('ArDel');
+    await createTextPost(`${marker} delete me`);
+    try {
+      await page.goto(`/ar/channels/${channelId()}?tab=community`);
+      const card = postCard(page, marker);
+      const actions = card.getByRole('button', { name: 'إجراءات المنشور' });
+      await expectHydrated(actions);
+      await clickUntil(actions, async () => expect(page.getByRole('menuitem', { name: 'حذف' })).toBeVisible({ timeout: 3000 }));
+      await page.getByRole('menuitem', { name: 'حذف' }).click();
+      const toast = page.getByTestId('post-delete-toast');
+      await expect(toast).toContainText('حُذف المنشور');
+      await expect(toast).toHaveAttribute('dir', 'rtl');
+      await expect(toast.getByRole('button', { name: 'تراجع' })).toBeVisible();
+      await expect(toast.getByRole('button', { name: 'إغلاق' })).toBeVisible();
+    } finally {
+      await deletePostsContaining(marker);
+    }
   });
 
   test('COMM-013 Arabic editor and schedule controls are RTL and translated', async ({ page }) => {

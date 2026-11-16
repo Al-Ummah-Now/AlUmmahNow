@@ -12,11 +12,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { PostCard } from '@/components/Community/management/PostCard';
 import {
   listCommunityPosts,
-  deleteCommunityPost,
   updateCommunityPost
 } from '@/lib/api/community-posts';
 import { editPostHref } from '@/components/Community/PostManageMenu';
 import { reportError } from '@/lib/errors/reporter';
+import { deletePostWithUndo } from '@/lib/community/delete-post';
 import { Plus, Search, Filter } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
@@ -98,18 +98,23 @@ export default function CommunityManagementPage({ params }: CommunityManagementP
     router.push(editPostHref(locale, post));
   };
 
+  // No confirm: a 30-day soft delete; the Undo toast puts the post back in its place
   const handleDelete = async (postId: string) => {
     setActionError('');
-    const result = await deleteCommunityPost(id, postId, {
-      channelId: id
+    let removed: { post: CommunityPost; index: number } | null = null;
+    await deletePostWithUndo({ id: postId, channelId: id }, t.community, {
+      onRemoved: () =>
+        setAllPosts((prev) => {
+          const index = prev.findIndex((p) => p.id === postId);
+          if (index >= 0) removed = { post: prev[index], index };
+          return prev.filter((p) => p.id !== postId);
+        }),
+      onRestored: () =>
+        setAllPosts((prev) => {
+          if (!removed || prev.some((p) => p.id === postId)) return prev;
+          return [...prev.slice(0, removed.index), removed.post, ...prev.slice(removed.index)];
+        }),
     });
-
-    if (result?.success) {
-      setAllPosts((prev) => prev.filter(p => p.id !== postId));
-    } else {
-      reportError(new Error('Delete post refused'), { shown: true, extra: { channelId: id, postId, action: 'delete_post' } });
-      setActionError(t.community.deleteFailed);
-    }
   };
 
   // A scheduled post goes live now (subscribers are notified by the processor)

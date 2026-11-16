@@ -38,6 +38,8 @@ interface PostCardProps {
   canManage?: boolean;
   /** After the owner deleted it */
   onDeleted?: (postId: string) => void;
+  /** Undo brought a deleted post back */
+  onRestored?: (postId: string) => void | Promise<void>;
 }
 
 function getTimeAgo(date: Date, isRTL: boolean): string {
@@ -87,6 +89,7 @@ export default function PostCard({
   openPostLabel,
   canManage = false,
   onDeleted,
+  onRestored,
 }: PostCardProps) {
   // Only its channel sees a scheduled post before its time (the API hides it from everyone else)
   const upcoming = post.status === PostStatus.SCHEDULED && !!post.scheduledAt && Date.parse(post.scheduledAt) > Date.now();
@@ -182,7 +185,7 @@ export default function PostCard({
         </div>
 
         {/* The owner's menu (Edit, Delete); nobody else has actions here */}
-        {canManage && <PostManageMenu post={post} onDeleted={onDeleted} />}
+        {canManage && <PostManageMenu post={post} onDeleted={onDeleted} onRestored={onRestored} />}
       </div>
 
       {/* Post Content */}

@@ -9,7 +9,7 @@ import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { useProfile } from '@/hooks/useProfile';
 import { userDisplayName } from '@/lib/display-name';
 import PostCard from '../PostCard';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 
 interface PostPermalinkViewProps {
   post: CommunityPost;
@@ -34,6 +34,8 @@ export default function PostPermalinkView({ post, locale, channelHref, channelNa
   const fill = (text: string) => text.replace('{channel}', channelName);
   const postsHref = `${channelHref}${channelHref.includes('?') ? '&' : '?'}tab=community`;
   const router = useRouter();
+  // This page's own address, for Undo after a delete sent the viewer to the channel
+  const postHref = usePathname();
   const canManage = Boolean(user?.id && activeChannel && activeChannel.channelId === post.channelId && activeChannel.userId === user.id);
 
   return (
@@ -62,8 +64,9 @@ export default function PostPermalinkView({ post, locale, channelHref, channelNa
         initialShowComments
         openPostLabel={t.community.openPost}
         canManage={canManage}
-        // Deleted: back to the channel's posts (this page no longer exists)
+        // Deleted: back to the channel's posts (this page no longer exists); Undo comes back here
         onDeleted={() => router.replace(postsHref)}
+        onRestored={() => router.replace(postHref)}
       />
     </div>
   );

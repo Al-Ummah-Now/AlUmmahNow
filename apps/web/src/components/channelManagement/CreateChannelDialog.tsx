@@ -300,7 +300,7 @@ export const CreateChannelDialog: React.FC<CreateChannelDialogProps> = ({
               {isLoading ? (
                 <>
                   <svg
-                    className={lang === 'ar' ? 'animate-spin ml-2 h-4 w-4 text-white' : 'animate-spin -ml-1 mr-2 h-4 w-4 text-white'}
+                    className="animate-spin -ms-1 me-2 h-4 w-4 text-white"
                     xmlns="http://www.w3.org/2000/svg"
                     fill="none"
                     viewBox="0 0 24 24"

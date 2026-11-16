@@ -187,9 +187,10 @@ const MEMBER_WRITE_ROUTES: ReadonlyArray<{ methods: ReadonlyArray<string>; path:
 	{ methods: ['PUT'], path: /^\/api\/channels\/(?!handles|by-handle|access)[^/]+\/?$/, capability: 'channel.edit' },
 	{ methods: ['PUT'], path: /^\/api\/channels\/[^/]+\/(?:avatar|cover|tabs)\/?$/, capability: 'channel.edit' },
 	{ methods: ['POST', 'PUT', 'PATCH', 'DELETE'], path: /^\/api\/channels\/[^/]+\/sections(?:\/|$)/, capability: 'channel.edit' },
-	// Community posts: write, edit, delete, their images and GIFs
+	// Community posts: write, edit, delete, undo a delete, their images and GIFs
 	{ methods: ['POST'], path: /^\/api\/community\/channels\/[^/]+\/posts\/?$/, capability: 'post.manage' },
 	{ methods: ['PUT', 'DELETE'], path: /^\/api\/community\/channels\/[^/]+\/posts\/[^/]+\/?$/, capability: 'post.manage' },
+	{ methods: ['POST'], path: /^\/api\/community\/channels\/[^/]+\/posts\/[^/]+\/restore\/?$/, capability: 'post.manage' },
 	{ methods: ['POST'], path: /^\/api\/community\/media\/(?:upload\/images|upload\/gif|link-preview)\/?$/, capability: 'post.manage' },
 	// Acting as the channel on posts: likes, votes, comments (removing someone
 	// else's comment is checked for comment.moderate in the endpoint)

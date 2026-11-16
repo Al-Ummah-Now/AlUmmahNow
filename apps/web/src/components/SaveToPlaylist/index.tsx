@@ -223,7 +223,7 @@ export default function SaveToPlaylist({ videoId, channelId: channelIdProp, clas
           role="dialog"
           data-testid="save-to-playlist-menu"
           aria-label={t.playlist.saveToPlaylistTitle}
-          className={`absolute z-50 mt-2 w-72 max-w-[calc(100vw-2rem)] ${isRTL ? 'right-0' : 'left-0'} bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl`}
+          className={`absolute z-50 mt-2 w-72 max-w-[calc(100vw-2rem)] start-0 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl`}
         >
           <div className="flex items-center justify-between px-4 py-3 border-b dark:border-gray-700">
             <h2 className="font-semibold text-gray-900 dark:text-white">{t.playlist.saveToPlaylistTitle}</h2>
