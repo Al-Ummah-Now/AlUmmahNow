@@ -1159,7 +1159,7 @@
   max-width: 100%;
   overflow: hidden;
   font-weight: 500;
-  text-overflow: ellipsis;
+  text-overflow: clip;
 }
 
 .vjs-fanous-layer .vjs-fanous-tip-time {
@@ -1304,7 +1304,7 @@
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
+  text-overflow: clip;
 }
 
 /* Kept apart from the label by the row gap plus this margin: never "QualityAuto" */
@@ -1314,7 +1314,7 @@
   max-width: 45%;
   margin-inline-start: 8px;
   overflow: hidden;
-  text-overflow: ellipsis;
+  text-overflow: clip;
   color: var(--fanous-player-dim);
   font-variant-numeric: tabular-nums;
 }
@@ -1577,7 +1577,7 @@
   color: var(--fanous-player-dim);
   font-size: 13px;
   line-height: 18px;
-  text-overflow: ellipsis;
+  text-overflow: clip;
   white-space: nowrap;
 }
 
@@ -2002,7 +2002,7 @@
   .video-js.vjs-fanous .vjs-fanous-live-label {
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
+    text-overflow: clip;
     white-space: nowrap;
     unicode-bidi: plaintext;
   }

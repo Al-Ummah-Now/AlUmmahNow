@@ -37,6 +37,7 @@ import { ConsentBanner } from "@/components/consent/ConsentBanner";
 import { CONSENT_COOKIE, parseConsent } from "@/lib/consent/consent-cookie";
 import SkipLinks from "@/components/SkipLinks";
 import { FanousStreet } from "@/components/FanousStreet";
+import { TruncationFade } from "@/components/TruncationFade";
 import { EMBED_REQUEST_HEADER } from "@/lib/embed/routes";
 import { getSiteTheme } from "@/lib/theme/site-theme";
 import { MODE_MIGRATE_SCRIPT } from "@/lib/theme/color-mode";
@@ -288,6 +289,7 @@ export default async function RootLayout({ children, }: Readonly<{ children: Rea
                           {/* Cookie / tracking consent (GDPR, Story 1.3) */}
                           <ConsentBanner initialVisible={consentPending} />
                           <FanousStreet />
+                          <TruncationFade />
                         </div>
                       </TranslationSyncProvider>
                     </WebSocketProvider>

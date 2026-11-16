@@ -65,7 +65,7 @@ fieldset[data-invalid] .ct-topic{border-color:color-mix(in srgb,var(--fanous-col
 .ct-page>svg{flex:none;width:18px;height:18px;margin-block-start:2px;color:var(--fanous-color-link)}
 .ct-page-text{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
 .ct-page-label{font-size:13px;font-weight:600}
-.ct-page-url{font-size:13px;color:var(--fanous-color-text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ct-page-url{font-size:13px;color:var(--fanous-color-text-secondary);overflow:hidden;text-overflow: clip;white-space:nowrap}
 .ct-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;unicode-bidi:isolate}
 .ct-icon-btn{flex:none;display:grid;place-items:center;width:36px;height:36px;border-radius:var(--r-pill,999px);border:0;background:transparent;color:var(--fanous-color-text-secondary);cursor:pointer}
 .ct-icon-btn:hover{background:var(--m-hover);color:var(--fanous-color-text-primary)}

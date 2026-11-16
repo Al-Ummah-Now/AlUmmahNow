@@ -52,6 +52,26 @@
   }
 }
 
+/*
+ * No ellipsis anywhere (#1382). WebKit's web process aborts on text-overflow: ellipsis with bidi
+ * isolation, which every page has (<html dir>): the Studio Comments flow crashed up to 21 of 24
+ * WebKit runs; with ellipsis off everywhere, none did. Text is clipped instead, and a box whose
+ * text is actually cut (data-cut, set by components/TruncationFade.tsx for lib/truncation-fade.ts'
+ * CUT_SELECTOR) fades out toward its end edge, right-to-left aware. Unlayered and !important so it
+ * also wins over shared CSS (aun-nav.css) and the player skin.
+ */
+* {
+  text-overflow: clip !important;
+}
+[data-cut] {
+  -webkit-mask-image: linear-gradient(to right, currentColor calc(100% - 2em), transparent);
+  mask-image: linear-gradient(to right, currentColor calc(100% - 2em), transparent);
+}
+[data-cut]:dir(rtl) {
+  -webkit-mask-image: linear-gradient(to left, currentColor calc(100% - 2em), transparent);
+  mask-image: linear-gradient(to left, currentColor calc(100% - 2em), transparent);
+}
+
 @layer utilities {
   html,
   body {
