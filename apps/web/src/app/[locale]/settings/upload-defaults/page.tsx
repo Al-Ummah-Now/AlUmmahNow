@@ -8,7 +8,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { notFound } from 'next/navigation';
+import NotFoundPage from '@/components/NotFoundPage';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useFeatures } from '@/hooks/useFeatures';
 import {
@@ -144,7 +144,8 @@ export default function UploadDefaultsPage() {
   };
 
   // Hidden when off: without uploads this page does not exist
-  if (uploads.ready && !uploads.features.upload) notFound();
+  // Hidden when off: the not-found page, rendered here (a client notFound() after hydration breaks Next's router)
+  if (uploads.ready && !uploads.features.upload) return <NotFoundPage />;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900" dir={isRTL ? 'rtl' : 'ltr'} data-testid="upload-defaults-page">
