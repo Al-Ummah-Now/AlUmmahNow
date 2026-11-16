@@ -11,6 +11,8 @@ import { createTier, deleteTier, newTierId, readTier, saveTier, tierIdBase } fro
 import { SqliteD1 } from './search-sqlite-d1';
 
 const LIMITS = { perHour: 5, perDay: 10, maxConcurrent: 1, maxChannels: 1 };
+/** Both languages of the name and the description (owner rule: the admin routes refuse one alone) */
+const TEXT = { nameAr: 'اسم', description: 'A tier', descriptionAr: 'فئة' };
 const setup = () => new SqliteD1() as unknown as D1Database;
 
 describe('tier ids are made from the name', () => {
@@ -55,11 +57,11 @@ describe('tier ids are made from the name', () => {
 		app.route('/internal/admin', adminRouter as never);
 		const post = (json: unknown) =>
 			app.request('/internal/admin/creator-tiers', { method: 'POST', headers: { 'content-type': 'application/json', 'x-admin-actor': 'admin-1' }, body: JSON.stringify(json) }, { SEARCH_DB: d1 } as never);
-		const res = await post({ id: 'typed-by-hand', name: 'Scholars Plus', ...LIMITS });
+		const res = await post({ id: 'typed-by-hand', name: 'Scholars Plus', ...TEXT, ...LIMITS });
 		assert.equal(res.status, 200);
 		const body = (await res.json()) as { result: { tier: { id: string } } };
 		assert.equal(body.result.tier.id, 'scholars-plus');
 		assert.equal(await readTier(d1, 'typed-by-hand'), null);
-		assert.equal((await post({ name: '  ', ...LIMITS })).status, 400);
+		assert.equal((await post({ name: '  ', ...TEXT, ...LIMITS })).status, 400);
 	});
 });
