@@ -294,6 +294,30 @@ POST /queue/test
 ```
 Sends a test message to the queue for testing purposes.
 
+## Replaying lost site counters (#1477)
+
+From 2026-11-13 (D-SEO-9) until #1476 was deployed, `CounterBatch` dropped every `site` increment, so
+site visits and short link clicks never reached `analytics_daily`. `src/lib/site-replay.ts` rebuilds
+them from the R2 message archive (`MESSAGES_BUCKET`):
+
+```bash
+# from apps/processor; cutoff = deploy time of the first processor version with #1476, less 60 s
+node scripts/site-replay/run.mjs --env qa --cutoff 2026-11-16T03:00:00Z          # dry run: counts per day
+node scripts/site-replay/run.mjs --env qa --cutoff 2026-11-16T03:00:00Z --apply  # write
+```
+
+- Serves `scripts/site-replay/worker.ts` with `wrangler dev --remote` from a generated config that binds
+  only the archive bucket and the notifications D1 of that env: nothing is deployed, no queue consumer.
+- Reads only keys whose listing metadata says `ClientAnalyticsEvent` (prod archives every type; the
+  others are never opened) and keeps only the counter increments of `visit` / `short_link` records.
+  A record carrying a user id (pseudonym or erased marker) is skipped.
+- Idempotent: each site and day is one D1 transaction guarded by a marker row (`metric = 'replay'`,
+  `dim = 'aun-1477'`, value = events added); a second run writes nothing. The reports ignore that metric.
+- Messages received at or after the cutoff were counted live and are left alone.
+
+A refused counter increment (unknown entity type, bad key or value) is now logged as an error
+(`Analytics increment refused`) instead of being dropped silently.
+
 ## Error Handling
 
 The worker implements comprehensive error handling:

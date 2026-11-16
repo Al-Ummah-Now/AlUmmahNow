@@ -91,7 +91,8 @@ export interface SiteVisitEvent {
   referrerHost?: string;
 }
 
-const SOURCE_PATTERN = /^(direct|site|platform|search:[a-z]{2,20}|social:[a-z]{2,20})$/;
+// One letter is a real name: X (social:x)
+const SOURCE_PATTERN = /^(direct|site|platform|search:[a-z]{1,20}|social:[a-z]{1,20})$/;
 
 export function isSiteVisitEvent(value: unknown): value is SiteVisitEvent {
   if (!value || typeof value !== 'object') return false;

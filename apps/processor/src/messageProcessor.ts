@@ -53,7 +53,10 @@ export class MessageProcessor {
    * (`batchCounters`), so a batch costs one D1 write transaction; otherwise
    * each message flushes its own.
    */
-  private readonly counters = new CounterBatch();
+  // A refused increment is a bug (an unknown entity type silently dropped every site counter, #1476)
+  private readonly counters = new CounterBatch((inc, reason) =>
+    this.logger.error('Analytics increment refused', { reason, entityType: inc.entityType, entityId: inc.entityId, metric: inc.metric, day: inc.day })
+  );
   private readonly batchCounters: boolean;
 
   constructor(logger: Logger, pushProviders?: PushProviders, opts: { batchCounters?: boolean } = {}) {
