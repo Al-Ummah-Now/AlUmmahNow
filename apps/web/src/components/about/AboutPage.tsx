@@ -34,6 +34,16 @@ function inline(nodes: Inline[]): ReactNode {
   });
 }
 
+/** One frosted-glass box per section: a new box at every level-2 heading (text before the first is its own box). */
+function sections(blocks: MdBlock[]): MdBlock[][] {
+  const out: MdBlock[][] = [];
+  for (const b of blocks) {
+    if (!out.length || (b.t === 'h' && b.level === 2 && out[out.length - 1]!.length)) out.push([]);
+    out[out.length - 1]!.push(b);
+  }
+  return out;
+}
+
 function block(b: MdBlock, i: number): ReactNode {
   switch (b.t) {
     case 'h': {
@@ -76,10 +86,12 @@ export function AboutPage({ page, locale, source, wwwUrl }: { page: CmsPage; loc
         {blocks ? (
           <div className="ab-blocks" data-testid="about-body" dangerouslySetInnerHTML={{ __html: blocks.html }} />
         ) : (
-          <div className="ab-card pb-glass">
-            <div className="ab-prose" data-testid="about-body">
-              {parseMarkdown(page.body, { wwwUrl, locale: page.locale }).map(block)}
-            </div>
+          <div className="ab-sections" data-testid="about-body">
+            {sections(parseMarkdown(page.body, { wwwUrl, locale: page.locale })).map((part, s) => (
+              <section key={s} className="ab-card pb-glass">
+                <div className="ab-prose">{part.map(block)}</div>
+              </section>
+            ))}
           </div>
         )}
       </article>

@@ -27,9 +27,10 @@ type Status = { kind: 'idle' } | { kind: 'busy' } | { kind: 'done'; message: str
 
 const NONE: ConsentChoices = { analytics: false, experiments: false, performance: false };
 
-const card = 'rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800';
-const heading = 'flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-gray-100';
-const body = 'mt-1 text-sm text-gray-600 dark:text-gray-400';
+// Section boxes: the shared frosted-glass card (pb-glass, @al-ummah/shared-types/page-blocks.css)
+const card = 'pb-glass rounded-[20px] p-6';
+const heading = 'flex items-center gap-2 text-lg font-semibold text-[var(--fanous-color-text-primary)]';
+const body = 'mt-1 text-sm text-[var(--fanous-color-text-secondary)]';
 const primaryButton =
   'inline-flex items-center gap-2 rounded-md bg-[var(--fanous-color-primary)] px-4 py-2 text-sm font-semibold text-[var(--fanous-color-on-primary)] hover:bg-[var(--fanous-color-primary-hover)] disabled:opacity-50';
 const secondaryButton =
@@ -103,15 +104,15 @@ export function PrivacySettingsView({ dir, signedIn }: PrivacySettingsViewProps)
   };
 
   return (
-    <div dir={dir} className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div dir={dir} className="min-h-screen">
       {confirmDialog}
       <div className="mx-auto max-w-3xl space-y-6 px-4 py-8 text-start">
         <header>
-          <h1 className="flex items-center gap-3 text-3xl font-bold text-gray-900 dark:text-gray-100">
+          <h1 className="flex items-center gap-3 text-3xl font-bold text-[var(--fanous-color-text-primary)]">
             <Shield className="h-8 w-8 text-[var(--fanous-color-accent)]" aria-hidden="true" />
             {p.settingsTitle}
           </h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">{p.settingsDescription}</p>
+          <p className="mt-2 text-[var(--fanous-color-text-secondary)]">{p.settingsDescription}</p>
         </header>
 
         <section className={card} aria-labelledby="privacy-consent">
@@ -128,7 +129,7 @@ export function PrivacySettingsView({ dir, signedIn }: PrivacySettingsViewProps)
 
         <section className={card} aria-labelledby="privacy-retention">
           <h2 id="privacy-retention" className={heading}><Clock className="h-5 w-5" aria-hidden="true" />{p.retentionTitle}</h2>
-          <ul className="mt-2 list-disc space-y-1 ps-5 text-sm text-gray-600 dark:text-gray-400">
+          <ul className="mt-2 list-disc space-y-1 ps-5 text-sm text-[var(--fanous-color-text-secondary)]">
             <li>{p.retentionWatchHistory}</li>
             <li>{p.retentionAnalytics}</li>
             <li>{p.retentionDevice}</li>
@@ -145,7 +146,7 @@ export function PrivacySettingsView({ dir, signedIn }: PrivacySettingsViewProps)
           <StatusLine status={deviceStatus} />
         </section>
 
-        {!signedIn && <p className="text-sm text-gray-600 dark:text-gray-400">{p.signInRequired}</p>}
+        {!signedIn && <p className="text-sm text-[var(--fanous-color-text-secondary)]">{p.signInRequired}</p>}
 
         {signedIn && (
           <>
@@ -160,10 +161,10 @@ export function PrivacySettingsView({ dir, signedIn }: PrivacySettingsViewProps)
               <StatusLine status={exportStatus} />
             </section>
 
-            <section className={`${card} border-red-200 dark:border-red-900`} aria-labelledby="privacy-delete">
+            <section className={card} aria-labelledby="privacy-delete">
               <h2 id="privacy-delete" className={heading}><Trash2 className="h-5 w-5 text-red-600" aria-hidden="true" />{p.deleteTitle}</h2>
               <p className={body}>{p.deleteDescription}</p>
-              <label htmlFor="privacy-delete-confirm" className="mt-4 block text-sm font-medium text-gray-900 dark:text-gray-100">
+              <label htmlFor="privacy-delete-confirm" className="mt-4 block text-sm font-medium text-[var(--fanous-color-text-primary)]">
                 {p.deleteConfirmLabel.replace('{word}', confirmWord)}
               </label>
               <input

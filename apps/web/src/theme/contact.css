@@ -12,7 +12,8 @@ html[lang=ar] .ct-title{line-height:1.45}
 @media (max-width:860px){.ct-grid{grid-template-columns:minmax(0,1fr)}}
 
 /* Card: the theme's card material with its gradient hairline border */
-.ct-card{position:relative;border:1px solid transparent;border-radius:var(--r-xl,20px);background:var(--m-card) padding-box,var(--m-border) border-box;box-shadow:var(--m-card-edge);backdrop-filter:var(--m-blur);-webkit-backdrop-filter:var(--m-blur);padding:clamp(18px,3vw,32px)}
+/* the form and the side box: the shared frosted-glass card (pb-glass); only their shape here */
+.ct-card{position:relative;border-radius:var(--r-xl,20px);padding:clamp(18px,3vw,32px)}
 .ct-card form{display:flex;flex-direction:column;gap:22px}
 .ct-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
 @media (max-width:600px){.ct-row{grid-template-columns:minmax(0,1fr)}}
@@ -97,7 +98,7 @@ fieldset[data-invalid] .ct-topic{border-color:color-mix(in srgb,var(--fanous-col
 .ct-sent .ct-actions{justify-content:center}
 
 /* Aside: a raised panel */
-.ct-aside{border-radius:var(--r-xl,20px);background:var(--m-raised);box-shadow:var(--m-raised-edge);padding:22px}
+.ct-aside{border-radius:var(--r-xl,20px);padding:22px}
 .ct-aside-title{margin:0 0 14px;font-size:16px;font-weight:700}
 .ct-tips{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:14px;font-size:14px;line-height:1.55;color:var(--fanous-color-text-secondary)}
 .ct-tips li{display:flex;gap:10px;align-items:flex-start}
