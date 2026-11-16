@@ -3,7 +3,9 @@
  * route that opens or continues an upload.
  *
  * - No tier: 403 `uploads_by_invitation` on every upload-session path, TUS
- *   create and upload complete. Nothing is created or counted.
+ *   create and upload complete. Nothing is created or counted. Live stream
+ *   create answers 404 `feature_off` instead: without a tier, live is hidden
+ *   (wiki "Product rules → Hidden when off").
  * - Unlimited tier or the videos "Super Admin" role: no limits, nothing counted.
  * - Any other tier: its limits, counted against the tier holder (the channel
  *   owner for an upload to a channel) in D1 (middleware/rate-limit.ts).
@@ -35,6 +37,7 @@
 import type { Context } from 'hono';
 import { channelRoleOf, CREATOR_ERROR_CODES, type CreatorTier } from '@al-ummah/shared-types';
 import { logger } from '../lib/logger';
+import { featureOff } from '../lib/features/off';
 import { recordLimitHit, resolveCreator, type ResolvedCreator } from '../lib/creatorTiers';
 import { getTusSessionKey, parseTusMetadata, type TusProxySession } from '../lib/bunny/tus';
 import { loadChannelRecord, memberMayActAs } from '../lib/channelAccess';
@@ -228,6 +231,8 @@ function creatorUploadMiddleware(options: GateOptions) {
     }
     if (!creator.tier) {
       logger.info('[Uploads] Upload refused: no creator tier', { userId, subjectId: creator.subjectId, path: c.req.path });
+      // Live is hidden without a tier, so its create answers like any other feature that is off
+      if (/^\/api\/live-streams\/?$/.test(c.req.path)) return featureOff(c);
       return invitationOnly(c);
     }
     c.set('creatorTier', creator);
