@@ -262,7 +262,7 @@ function ChannelEditPage() {
           testId="channel-cover-upload"
           imageTestId="channel-cover-image"
           busy={photoBusy === 'cover'}
-          className="h-52 bg-gradient-to-r from-blue-500 to-purple-600 dark:from-blue-700 dark:to-purple-800"
+          className="h-52 bg-[var(--fanous-color-hero-start,var(--fanous-color-surface))]"
         />
         {/* Pickers live outside the clickable areas so their click does not bubble back */}
         <input
@@ -313,7 +313,7 @@ function ChannelEditPage() {
             imageTestId="channel-avatar-image"
             busy={photoBusy === 'avatar'}
             placeholder={
-              <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600">
+              <div className="flex h-full w-full items-center justify-center bg-[var(--aun-btn-filled-bg)]">
                 <span className="text-3xl font-bold text-white">{(formData.nameEn || formData.name).charAt(0).toUpperCase()}</span>
               </div>
             }

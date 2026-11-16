@@ -44,7 +44,7 @@ export const ChannelCardRTL: React.FC<ChannelCardProps> = ({
     >
       {/* Channel Avatar/Cover (<img>s: theme rules cannot blank them) */}
       <div
-        className="relative h-32 overflow-hidden bg-gradient-to-br from-blue-500 to-purple-600 dark:from-blue-700 dark:to-purple-800 flex items-center justify-center"
+        className="relative h-32 overflow-hidden bg-[var(--fanous-color-hero-start,var(--fanous-color-surface))] flex items-center justify-center"
         data-testid="channel-card-cover"
       >
         {/* The cover fills the strip; the avatar always sits in its bottom corner (a card with a cover used to drop the avatar) */}

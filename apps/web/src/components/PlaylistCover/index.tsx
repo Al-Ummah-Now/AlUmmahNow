@@ -22,7 +22,7 @@ interface PlaylistCoverProps {
 function PlaylistCoverPlaceholder() {
   return (
     <div
-      className="flex h-full w-full items-center justify-center bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-800 dark:to-gray-900"
+      className="flex h-full w-full items-center justify-center bg-[var(--fanous-color-surface)]"
       data-testid="playlist-cover-placeholder"
     >
       <ListVideo className="h-1/3 w-1/3 max-h-12 max-w-12 text-gray-500 dark:text-gray-400" aria-hidden="true" />

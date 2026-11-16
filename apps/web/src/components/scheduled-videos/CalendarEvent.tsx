@@ -248,7 +248,7 @@ export function CalendarEvent({
           )}
         </div>
       ) : (
-        <div className="w-full h-36 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 flex items-center justify-center">
+        <div className="w-full h-36 bg-[var(--fanous-color-surface)] flex items-center justify-center">
           <Play className="w-12 h-12 text-gray-400 dark:text-gray-500" />
         </div>
       )}

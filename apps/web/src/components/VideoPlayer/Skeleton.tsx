@@ -29,7 +29,7 @@ export const VideoPlayerSkeleton: React.FC<VideoPlayerSkeletonProps> = ({
       aria-label="Loading video player"
     >
       {/* Main video area skeleton */}
-      <div className="absolute inset-0 bg-gradient-to-br from-gray-800 to-gray-900">
+      <div className="absolute inset-0 bg-gray-900">
         <div className="absolute inset-0 bg-[repeating-linear-gradient(90deg,transparent,transparent_2px,rgba(255,255,255,0.03)_2px,rgba(255,255,255,0.03)_4px)] animate-pulse" />
       </div>
 

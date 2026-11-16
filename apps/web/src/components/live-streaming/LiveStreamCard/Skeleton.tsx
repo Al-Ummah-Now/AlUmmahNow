@@ -43,7 +43,7 @@ export const LiveStreamCardSkeleton = React.memo<LiveStreamCardSkeletonProps>(
       >
         {/* Thumbnail Skeleton (16:9 aspect ratio) */}
         <div className="relative aspect-video bg-gray-200 dark:bg-gray-800">
-          <div className="absolute inset-0 bg-gradient-to-br from-gray-300 to-gray-400 dark:from-gray-700 dark:to-gray-800 animate-pulse" />
+          <div className="absolute inset-0 bg-[var(--fanous-c-skeleton-bg,var(--fanous-color-surface))] animate-pulse" />
 
           {/* Status Badge Placeholder (top-left) */}
           <div className="absolute top-2 left-2">

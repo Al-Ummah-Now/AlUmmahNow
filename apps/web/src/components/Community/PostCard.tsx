@@ -127,7 +127,7 @@ export default function PostCard({
               className="rounded-full object-cover"
             />
           ) : (
-            <div className="w-full h-full rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold">
+            <div className="w-full h-full rounded-full bg-[var(--aun-btn-filled-bg)] flex items-center justify-center text-[var(--aun-btn-filled-fg)] font-bold">
               {channelLabel(post, locale).charAt(0).toUpperCase()}
             </div>
           )}
