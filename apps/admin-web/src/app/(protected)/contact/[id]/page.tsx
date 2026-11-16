@@ -89,7 +89,7 @@ export default async function ContactMessagePage({ params }: PageProps) {
                   {m.name}
                 </h1>
                 <p className="text-fg-muted text-sm">
-                  <a href={`mailto:${m.email}`} className={`${linkClass} break-all`} dir="ltr" data-testid="contact-sender-email">
+                  <a href={`mailto:${m.email}`} className={`${linkClass} underline break-all`} dir="ltr" data-testid="contact-sender-email">
                     {m.email}
                   </a>
                   {' · '}
@@ -199,7 +199,7 @@ export default async function ContactMessagePage({ params }: PageProps) {
                   {m.user_id ? (
                     <>
                       {t('contact.signedIn')}{' '}
-                      <Link href={`/users/${encodeURIComponent(m.user_id)}`} className={linkClass} data-testid="contact-user-link">
+                      <Link href={`/users/${encodeURIComponent(m.user_id)}`} className={`${linkClass} underline`} data-testid="contact-user-link">
                         {t('contact.viewUser')}
                       </Link>
                     </>
