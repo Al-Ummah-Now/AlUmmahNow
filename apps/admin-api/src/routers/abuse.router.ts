@@ -9,6 +9,7 @@
  * API (CF_ANALYTICS_TOKEN, Account Analytics Read). No D1 reads or writes; answers
  * are cached for 5 minutes per env and window. Needs `ops:read`.
  */
+import { resolvePlatformCredential, type CredentialEnv } from '@al-ummah/shared-types';
 import { Hono, type Context } from 'hono';
 import { hasPermission, normalizeRoles } from '../lib/roles';
 import { logger } from '../lib/logger';
@@ -59,14 +60,6 @@ export function summarize(env: AbuseEnv, hours: number, data: Array<Record<strin
 	return { env, hours, generatedAt: now.toISOString(), rows, totals };
 }
 
-async function secret(binding: unknown): Promise<string> {
-	if (typeof binding === 'string') return binding;
-	try {
-		return ((await (binding as { get?: () => Promise<string> })?.get?.()) ?? '') || '';
-	} catch {
-		return '';
-	}
-}
 
 const app = new Hono<Env>();
 const roles = (c: C) => normalizeRoles(c.get('auth')?.roles);
@@ -84,7 +77,8 @@ app.get('/summary', async (c) => {
 	const hours = Math.min(168, Math.max(1, Math.floor(Number(c.req.query('hours') ?? 24)) || 24));
 
 	const bindings = c.env as unknown as { CF_ANALYTICS_TOKEN?: unknown; CLOUDFLARE_ACCOUNT_ID?: string };
-	const token = await secret(bindings.CF_ANALYTICS_TOKEN);
+	// A Super Admin's replacement (Platform settings → Credentials) wins over the Secrets Store binding
+	const token = await resolvePlatformCredential(c.env as unknown as CredentialEnv, 'cloudflare-media', bindings.CF_ANALYTICS_TOKEN);
 	const account = bindings.CLOUDFLARE_ACCOUNT_ID;
 	if (!token || !account) {
 		return c.json({ success: false, code: 'not_configured', error: 'Abuse counters are not configured here' }, 503);

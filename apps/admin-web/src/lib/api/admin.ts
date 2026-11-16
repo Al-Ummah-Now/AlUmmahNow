@@ -122,7 +122,7 @@ async function mutate<T>(endpoint: string, method: string, body: unknown): Promi
     return { ok: true, data };
   } catch (error) {
     await navigateForPasskey(error);
-    if (error instanceof AdminApiError) return { ok: false, status: error.status, error: error.message, ...(error.problems ? { problems: error.problems } : {}) };
+    if (error instanceof AdminApiError) return { ok: false, status: error.status, error: error.message, ...(error.code ? { code: error.code } : {}), ...(error.problems ? { problems: error.problems } : {}) };
     return { ok: false, status: 500, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
@@ -795,4 +795,46 @@ export async function getMobileAppsHistory(): Promise<MobileAppsChange[]> {
 
 export async function saveMobileApps(settings: import('@al-ummah/shared-types').MobileAppsSettings): Promise<ActionResult<MobileAppsView>> {
   return mutate('/api/site-settings/mobile-apps', 'PUT', { settings });
+}
+
+// YouTube import (wiki AUN-YT-IMPORT; admin-api /api/youtube-import/settings, media:manage, audited
+// key youtube-import:settings). The client secret is write only (PUT /client-secret, audited key
+// youtube-import:client-secret without the value): it is never returned, only whether it is present.
+
+export async function getYoutubeImportSettings(): Promise<import('@al-ummah/shared-types').YoutubeImportSettingsView> {
+  return fetchAdmin('/api/youtube-import/settings');
+}
+
+export async function saveYoutubeImportSettings(
+  patch: { enabled?: boolean; clientId?: string },
+): Promise<ActionResult<import('@al-ummah/shared-types').YoutubeImportSettingsView>> {
+  return mutate('/api/youtube-import/settings', 'PUT', patch);
+}
+
+export async function saveYoutubeImportClientSecret(value: string): Promise<ActionResult<import('@al-ummah/shared-types').YoutubeImportSettingsView>> {
+  return mutate('/api/youtube-import/client-secret', 'PUT', { value });
+}
+
+// Platform credentials (admin-api /api/platform-credentials, credentials:manage = Super Admin): write
+// only, audited. The value is sent once to be sealed and never comes back.
+
+type CredentialChange = { view: import('@al-ummah/shared-types').PlatformCredentialView; test: import('@al-ummah/shared-types').PlatformCredentialTest };
+
+export async function getPlatformCredentials(): Promise<import('@al-ummah/shared-types').PlatformCredentialView[]> {
+  return fetchAdmin('/api/platform-credentials');
+}
+
+export async function replacePlatformCredential(id: string, value: string): Promise<ActionResult<CredentialChange>> {
+  return mutate(`/api/platform-credentials/${encodeURIComponent(id)}`, 'PUT', { value });
+}
+
+export async function testPlatformCredential(id: string): Promise<ActionResult<CredentialChange>> {
+  return mutate(`/api/platform-credentials/${encodeURIComponent(id)}/test`, 'POST', {});
+}
+
+/** Create / Rotate with the token manager: the error's code says why it could not (never a value). */
+export async function createPlatformCredential(
+  id: string,
+): Promise<ActionResult<CredentialChange & { previousRevoked: boolean; previousKept: 'none' | 'not_minted_here' | 'revoke_failed' | null }>> {
+  return mutate(`/api/platform-credentials/${encodeURIComponent(id)}/create`, 'POST', {});
 }

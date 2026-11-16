@@ -540,6 +540,15 @@ async function main(): Promise<void> {
       if (!p) throw new Error(`no KV namespace bound as ${binding}`);
       await (await mf.getKVNamespace(binding, p.name)).delete(key);
     },
+    secret: async (name, value) => {
+      const p = prepared.find((x) => x.local.secrets.some((s) => s.secretName === name));
+      if (!p) throw new Error(`no Secrets Store secret ${name}`);
+      const binding = p.local.secrets.find((s) => s.secretName === name)!.binding;
+      const api = (await mf.getSecretsStoreSecretAPI(binding, p.name))();
+      const entry = (await api.list()).find((k) => k.name === name || k.name.endsWith(`/${name}`));
+      if (entry) await api.update(value, (entry.metadata as { uuid: string }).uuid);
+      else await api.create(value);
+    },
     scheduled: async (app, cron, time) => {
       const p = prepared.find((x) => x.worker.app === app || x.name === app);
       if (!p) throw new Error(`no worker ${app} (${prepared.map((x) => x.worker.app).join(', ')})`);

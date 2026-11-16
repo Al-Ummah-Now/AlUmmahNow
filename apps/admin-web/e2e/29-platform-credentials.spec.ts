@@ -1,0 +1,158 @@
+/**
+ * Platform settings → Credentials (owner 2026-11-16: the Cloudflare media token should be settable
+ * from admin), on the local stack against its fake Cloudflare API (fake-external.ts):
+ * - an admin who is not a Super Admin sees no Credentials section, and admin-api refuses them;
+ * - a Super Admin replaces the token with one lacking Zone Analytics and Cache Purge: the field is a
+ *   password field, the value never shows on the page, the test names the two missing permissions
+ *   in plain words, and the source line says it was set here, ending in its last four;
+ * - replacing it with a full token turns the section to "Working"; Test runs again and is audited;
+ * - a value that is not a token is refused in the browser before anything is sent;
+ * - with a token manager added, Rotate mints a token (the stack's fake writes it into its own Secrets
+ *   Store, where the Workers read it), keeps the hand-made previous token, and a second Rotate
+ *   revokes the token minted by the first.
+ * axe (WCAG 2.2 AA) on the section in en and ar.
+ *
+ * The credential is one global setting, so the spec runs in the shared-state project and deletes
+ * its files (global-settings credentials/cloudflare-media*.json) afterwards.
+ */
+import AxeBuilder from '@axe-core/playwright';
+import { test, expect } from './support/fixtures';
+import { adminApi, readTokens } from './support/api';
+import { stackR2 } from './support/local-stack';
+import { setPreferences } from './support/ui';
+import { ADMIN_WEB_URL, LOCAL_STACK, RUN_TAG, STACK_CONTROL_URL, storageStatePath } from './support/env';
+
+const tag = RUN_TAG.replace(/[^A-Za-z0-9]/g, '').slice(-12);
+const PARTIAL = `e2e-fake-cloudflare-token-${tag}-nozone-nopurge-AB12`;
+const FULL = `e2e-fake-cloudflare-token-${tag}-full-CD34`;
+const MANAGER = `e2e-fake-cloudflare-token-${tag}-manager-EF56`;
+const FILES = ['cloudflare-media', 'cloudflare-token-manager'].flatMap((id) => [`credentials/${id}.json`, `credentials/${id}.test.json`, `credentials/${id}.mint.json`]);
+
+/** The stack's Secrets Store values the spec may rotate, put back (stack.ts LOCAL_SECRETS). */
+async function restoreSecrets() {
+  for (const [name, value] of [['media-cdn-api-token', 'local-stack-fake'], ['cloudflare-token-manager', 'unset']]) {
+    const res = await fetch(`${STACK_CONTROL_URL}/__fake/cloudflare/secret`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, value }) });
+    expect(res.ok, `restore ${name}`).toBe(true);
+  }
+}
+
+async function removeFiles() {
+  for (const key of FILES) {
+    const res = await stackR2('DELETE', 'global-settings', key);
+    expect([200, 204, 404], `DELETE ${key}`).toContain(res.status);
+  }
+}
+
+test.use({ contextOptions: { reducedMotion: 'reduce' } });
+
+test.describe('platform credentials', () => {
+  test.describe.configure({ mode: 'serial' });
+
+  test.beforeAll(async () => {
+    test.skip(!LOCAL_STACK || !/^https?:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/.test(ADMIN_WEB_URL), 'local stack only: the credential is a global setting and the Cloudflare API is the stack fake');
+    await removeFiles();
+    await restoreSecrets();
+  });
+
+  test.afterAll(async () => {
+    if (!LOCAL_STACK) return;
+    await removeFiles();
+    await restoreSecrets();
+  });
+
+  test.describe('an admin', () => {
+    test.use({ storageState: storageStatePath('admin') });
+
+    test('sees no Credentials section, and admin-api refuses the routes', async ({ page }) => {
+      await page.goto('/platform-settings');
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+      await expect(page.getByTestId('platform-credentials')).toHaveCount(0);
+      const { status } = await adminApi('/api/platform-credentials', { token: readTokens().admin });
+      expect(status).toBe(403);
+    });
+  });
+
+  test.describe('a Super Admin', () => {
+    test.use({ storageState: storageStatePath('superadmin') });
+
+    test('replaces the token write-only and the test names what it lacks, then a full token works', async ({ page }) => {
+      await page.goto('/platform-settings');
+      const item = page.getByTestId('credential-cloudflare-media');
+      await expect(item).toBeVisible();
+
+      // A value that is not a token is refused before anything is sent
+      await item.getByTestId('credential-cloudflare-media-replace').click();
+      const input = item.getByTestId('credential-cloudflare-media-input');
+      await expect(input).toHaveAttribute('type', 'password');
+      await input.fill('not a token');
+      await item.getByTestId('credential-cloudflare-media-save').click();
+      await expect(item.getByTestId('credential-cloudflare-media-error')).toBeVisible();
+
+      await input.fill(PARTIAL);
+      await item.getByTestId('credential-cloudflare-media-save').click();
+      await expect(item.getByTestId('credential-cloudflare-media-notice')).toHaveText('Token replaced.');
+      await expect(item).toHaveAttribute('data-source', 'admin');
+      await expect(item).toHaveAttribute('data-state', 'attention');
+      await expect(item.getByTestId('credential-cloudflare-media-source')).toContainText('Ends in …AB12');
+      await expect(item.getByTestId('credential-check-zone_analytics')).toHaveAttribute('data-ok', 'false');
+      await expect(item.getByTestId('credential-check-cache_purge')).toHaveAttribute('data-ok', 'false');
+      await expect(item.getByTestId('credential-check-account_analytics')).toHaveAttribute('data-ok', 'true');
+      await expect(item).toContainText('Add Zone → Cache Purge → Purge for alummahnow.net.');
+      // Never on the page, in any attribute either
+      expect(await page.content()).not.toContain(PARTIAL.slice(0, 30));
+
+      // After a reload the same state comes from admin-api
+      await page.reload();
+      await expect(page.getByTestId('credential-cloudflare-media')).toHaveAttribute('data-state', 'attention');
+
+      await page.getByTestId('credential-cloudflare-media-replace').click();
+      await page.getByTestId('credential-cloudflare-media-input').fill(FULL);
+      await page.getByTestId('credential-cloudflare-media-input').press('Enter');
+      await expect(page.getByTestId('credential-cloudflare-media')).toHaveAttribute('data-state', 'ok');
+      await expect(page.getByTestId('credential-cloudflare-media-test')).toHaveAttribute('data-code', 'ok');
+
+      await page.getByTestId('credential-cloudflare-media-run-test').click();
+      await expect(page.getByTestId('credential-cloudflare-media-notice')).toHaveText('Test finished.');
+
+      // A token manager makes Create / Rotate available
+      await expect(page.getByTestId('credential-cloudflare-media-create')).toHaveCount(0);
+      await expect(page.getByTestId('credential-cloudflare-media-create-hint')).toContainText('Add the Cloudflare token manager below');
+      const manager = page.getByTestId('credential-cloudflare-token-manager');
+      await manager.getByTestId('credential-cloudflare-token-manager-replace').click();
+      await manager.getByTestId('credential-cloudflare-token-manager-input').fill(MANAGER);
+      await manager.getByTestId('credential-cloudflare-token-manager-save').click();
+      await expect(manager).toHaveAttribute('data-state', 'ok');
+      await page.reload();
+
+      await page.getByTestId('credential-cloudflare-media-create').click();
+      await expect(page.getByTestId('credential-cloudflare-media-notice')).toContainText('made by hand, so it was kept');
+      await expect(page.getByTestId('credential-cloudflare-media')).toHaveAttribute('data-source', 'binding');
+      await expect(page.getByTestId('credential-cloudflare-media')).toHaveAttribute('data-state', 'ok');
+      await expect(page.getByTestId('credential-cloudflare-media-minted')).toBeVisible();
+
+      await page.getByTestId('credential-cloudflare-media-create').click();
+      await expect(page.getByTestId('credential-cloudflare-media-notice')).toHaveText('New token in use; the previous one was revoked.');
+      const minted = (await (await fetch(`${STACK_CONTROL_URL}/__fake/cloudflare/tokens`)).json()) as { minted: { id: string; name: string; deleted: boolean }[] };
+      const ours = minted.minted.filter((t) => t.name.startsWith('al-ummah-now admin-minted cloudflare-media'));
+      expect(ours.length).toBeGreaterThanOrEqual(2);
+      expect(ours.at(-2)!.deleted, 'the first minted token is revoked by the second Rotate').toBe(true);
+      expect(ours.at(-1)!.deleted).toBe(false);
+
+      // Audited (never the value)
+      const { body } = await adminApi<{ entries?: { setting?: string | null }[] }>('/api/audit?area=settings&limit=50', { token: readTokens().superadmin });
+      const rows = JSON.stringify(body);
+      expect(rows).not.toContain(FULL.slice(0, 30));
+      expect(rows).not.toContain(MANAGER.slice(0, 30));
+    });
+
+    for (const locale of ['en', 'ar'] as const) {
+      test(`the section passes axe in ${locale}`, async ({ page }) => {
+        await setPreferences(page, { locale });
+        await page.goto('/platform-settings');
+        await expect(page.getByTestId('credential-cloudflare-media')).toBeVisible();
+        const results = await new AxeBuilder({ page }).include('[data-testid="platform-credentials"]').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze();
+        expect(results.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
+      });
+    }
+  });
+});

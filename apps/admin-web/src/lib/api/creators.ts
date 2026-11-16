@@ -73,6 +73,7 @@ export interface TierForm {
   liveHoursMonth: number;
   liveMaxConcurrent: number;
   liveMaxStreamMinutes: number;
+  importCountsAgainstLimits: boolean;
 }
 
 export async function saveCreatorTier(tier: TierForm, create: boolean): Promise<ActionResult<unknown>> {

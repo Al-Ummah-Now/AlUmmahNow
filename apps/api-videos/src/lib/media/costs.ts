@@ -16,7 +16,7 @@
  * Every part is best effort: a missing input leaves its metric out, never fails the run.
  */
 import { originalsStoredBytes } from './originals';
-import { getSecret } from '../env-helpers';
+import { resolvePlatformCredential } from '@al-ummah/shared-types';
 import { bunnyApi, bunnyLibraries, type BunnyLibrariesEnv } from '../bunny/libraries';
 import { logger } from '../logger';
 
@@ -36,6 +36,9 @@ export interface CostEnv {
 	'bunny-stream-key'?: unknown;
 	bunny_stream_library_id?: unknown;
 	MEDIA_ANALYTICS_TOKEN?: unknown;
+	/** A Super Admin's replacement of the token (Platform settings → Credentials) wins over the binding */
+	global_settings?: R2Bucket;
+	INTERNAL_API_KEY?: unknown;
 	MEDIA_PUBLIC_HOST?: string;
 	/** Bucket names, for the GraphQL filters */
 	MEDIA_BUCKET_NAMES?: string;
@@ -163,7 +166,7 @@ export function classBByKind(groups: { sum?: { requests?: number }; dimensions?:
 }
 
 async function cloudflareDay(env: CostEnv, day: string): Promise<{ r2StoredBytes?: number; r2ClassB?: number; r2ClassBOriginals?: number; extra: Metric[] }> {
-	const token = await getSecret(env.MEDIA_ANALYTICS_TOKEN, 'MEDIA_ANALYTICS_TOKEN');
+	const token = await resolvePlatformCredential(env, 'cloudflare-media', env.MEDIA_ANALYTICS_TOKEN);
 	if (!token) return { extra: [] };
 	const buckets = (env.MEDIA_BUCKET_NAMES ?? '').split(',').filter(Boolean);
 	const next = new Date(Date.parse(`${day}T00:00:00Z`) + 86400_000).toISOString().slice(0, 10);

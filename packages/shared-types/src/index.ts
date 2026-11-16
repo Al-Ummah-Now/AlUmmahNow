@@ -158,3 +158,5 @@ export * from './cost-credentials';
 export * from './transcode-limit';
 export * from './page-blocks';
 export * from './page-blocks.sample';
+// Admin-replaceable platform credentials (Platform settings → Credentials): sealed in global-settings, read before the Secrets Store binding
+export * from './platform-credentials';

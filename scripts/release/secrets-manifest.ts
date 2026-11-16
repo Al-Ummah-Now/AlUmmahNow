@@ -114,6 +114,13 @@ export const SECRETS_MANIFEST: WorkerSecrets[] = [
 			TURNSTILE_SECRET,
 			// Scholar sites own domains (lib/sites/saas.ts, #1212)
 			{ name: 'SITES_SAAS_TOKEN', purpose: 'Secrets Store sites-saas-token (all envs); Zone SSL and Certificates Edit on alummahnow.org: Cloudflare for SaaS custom hostnames' },
+			// Platform settings → Credentials (lib/platform-credentials.ts): mints, stores and revokes the other Cloudflare tokens
+			{
+				name: 'CF_TOKEN_MANAGER',
+				createdOnDeploy: true,
+				purpose:
+					'Secrets Store cloudflare-token-manager (all envs); account-owned token with API Tokens: Edit and Secrets Store: Edit. Created by ensure-resources.ts as the placeholder `unset` until the owner sets it once',
+			},
 		],
 		// Checked when set: the var arrives with the deploy of the code that reads it
 		clientIdVars: [...CLIENT_OPTIONAL, { name: 'AUTH_MODERATION_CLIENT_ID', required: false }],

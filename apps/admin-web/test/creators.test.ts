@@ -38,8 +38,8 @@ const ARABIC = /[؀-ۿ]/;
 const tEn = createTranslator('en');
 const tAr = createTranslator('ar');
 
-const CREATOR: CreatorTier = { id: 'creator', name: 'Creator', unlimited: false, perHour: 300, perDay: 2000, maxConcurrent: 20, maxChannels: 3, captionMinutesMonth: 0, audioTracksPerVideo: 0, live: true, liveHoursMonth: 20, liveMaxConcurrent: 1, liveMaxStreamMinutes: 240, updatedAt: null, updatedBy: null };
-const UNLIMITED: CreatorTier = { id: 'unlimited', name: 'Unlimited', unlimited: true, perHour: 0, perDay: 0, maxConcurrent: 0, maxChannels: null, captionMinutesMonth: 0, audioTracksPerVideo: 0, live: true, liveHoursMonth: 0, liveMaxConcurrent: 0, liveMaxStreamMinutes: 0, updatedAt: null, updatedBy: null };
+const CREATOR: CreatorTier = { id: 'creator', name: 'Creator', unlimited: false, perHour: 300, perDay: 2000, maxConcurrent: 20, maxChannels: 3, captionMinutesMonth: 0, audioTracksPerVideo: 0, live: true, liveHoursMonth: 20, liveMaxConcurrent: 1, liveMaxStreamMinutes: 240, importCountsAgainstLimits: true, updatedAt: null, updatedBy: null };
+const UNLIMITED: CreatorTier = { id: 'unlimited', name: 'Unlimited', unlimited: true, perHour: 0, perDay: 0, maxConcurrent: 0, maxChannels: null, captionMinutesMonth: 0, audioTracksPerVideo: 0, live: true, liveHoursMonth: 0, liveMaxConcurrent: 0, liveMaxStreamMinutes: 0, importCountsAgainstLimits: true, updatedAt: null, updatedBy: null };
 const TIERS = [CREATOR, UNLIMITED];
 
 const setTier = async () => ({ ok: true as const, data: null });
@@ -85,7 +85,7 @@ describe('tier effect (stated in every confirmation)', () => {
 });
 
 describe('tier form validation (same bounds and rules as api-videos)', () => {
-  const base: TierFormValues = { id: 'gold', name: 'Gold', unlimited: false, perHour: 10, perDay: 100, maxConcurrent: 5, maxChannels: 2, captionMinutesMonth: 0, audioTracksPerVideo: 0, live: true, liveHoursMonth: 20, liveMaxConcurrent: 1, liveMaxStreamMinutes: 240 };
+  const base: TierFormValues = { id: 'gold', name: 'Gold', unlimited: false, perHour: 10, perDay: 100, maxConcurrent: 5, maxChannels: 2, captionMinutesMonth: 0, audioTracksPerVideo: 0, live: true, liveHoursMonth: 20, liveMaxConcurrent: 1, liveMaxStreamMinutes: 240, importCountsAgainstLimits: true };
 
   it('accepts a valid tier and an unlimited one without limits', () => {
     assert.deepEqual(validateTierForm(base, { create: true }), {});
@@ -254,6 +254,24 @@ describe('rendered components', () => {
     assert.match(unlimited, /always stays unlimited/);
     const arabic = render(el(TierEditor, { tiers: TIERS, counts: { creator: 12 }, canManage: true, actions: tierActions }), 'ar');
     assert.match(arabic, new RegExp(`${formatNumber('ar', 12)} مستخدم`));
+  });
+
+  it('YouTube imports switch: on by default, saved with the form; an unlimited tier shows only the note (AUN-YT-IMPORT)', () => {
+    const html = render(el(TierEditor, { tiers: [{ ...CREATOR, importCountsAgainstLimits: false }, UNLIMITED], counts: {}, canManage: true, actions: tierActions }));
+    const creator = html.slice(html.indexOf('data-testid="tier-card-creator"'), html.indexOf('data-testid="tier-card-unlimited"'));
+    const creatorSwitch = /<input[^>]*data-testid="tier-creator-importCountsAgainstLimits"[^>]*>/.exec(creator)![0];
+    assert.doesNotMatch(creatorSwitch, /checked/);
+    assert.doesNotMatch(creatorSwitch, /disabled/);
+    assert.match(creator, /YouTube imports count against upload limits/);
+    const unlimited = html.slice(html.indexOf('data-testid="tier-card-unlimited"'));
+    assert.doesNotMatch(unlimited, /data-testid="tier-unlimited-importCountsAgainstLimits"/, 'no unusable switch on an unlimited tier');
+    assert.match(unlimited, /Unlimited tiers have no upload limits, so imports never count\./);
+    const newTier = html.slice(html.indexOf('data-testid="tier-card-new"'));
+    assert.match(/<input[^>]*data-testid="tier-new-importCountsAgainstLimits"[^>]*>/.exec(newTier)![0], /checked/, 'a new tier counts imports');
+    // The effect sentence says so when imports are free
+    assert.equal(tierEffect({ ...CREATOR, importCountsAgainstLimits: false }, tEn, 'en').endsWith('Videos imported from YouTube do not count against these limits.'), true);
+    assert.equal(tierEffect(CREATOR, tEn, 'en').includes('YouTube'), false);
+    assert.match(tierEffect({ ...CREATOR, importCountsAgainstLimits: false }, tAr, 'ar'), /يوتيوب/);
   });
 });
 

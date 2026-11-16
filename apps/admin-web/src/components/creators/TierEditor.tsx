@@ -40,6 +40,7 @@ function toForm(tier?: CreatorTier): TierFormValues {
     liveHoursMonth: tier?.liveHoursMonth || DEFAULT_CREATOR_TIER.liveHoursMonth,
     liveMaxConcurrent: tier?.liveMaxConcurrent || DEFAULT_CREATOR_TIER.liveMaxConcurrent,
     liveMaxStreamMinutes: tier?.liveMaxStreamMinutes || DEFAULT_CREATOR_TIER.liveMaxStreamMinutes,
+    importCountsAgainstLimits: tier?.importCountsAgainstLimits ?? true,
   };
 }
 
@@ -271,6 +272,29 @@ function TierCard({ tier, users, canManage, actions, create = false }: { tier?: 
           </>
         )}
       </fieldset>
+      {form.unlimited ? (
+        // Unlimited tiers have no limits to count against: a sentence, not a switch that can't be used
+        <p className="text-sm text-fg-muted" data-testid={`tier-${key}-imports-help`}>{t('creators.helpImportsUnlimited')}</p>
+      ) : (
+        <div className="flex flex-col gap-1 text-sm">
+          <label className="flex items-center gap-2 text-fg">
+            <input
+              type="checkbox"
+              role="switch"
+              checked={form.importCountsAgainstLimits}
+              disabled={!canManage}
+              aria-describedby={`${ids}-imports-help`}
+              onChange={(e) => set('importCountsAgainstLimits', e.target.checked)}
+              className="h-4 w-4 accent-accent"
+              data-testid={`tier-${key}-importCountsAgainstLimits`}
+            />
+            {t('creators.tierImportsCount')}
+          </label>
+          <span id={`${ids}-imports-help`} className="text-xs text-fg-muted" data-testid={`tier-${key}-imports-help`}>
+            {t('creators.helpImportsCount')}
+          </span>
+        </div>
+      )}
       {canManage && (
         <div className="flex flex-wrap items-center gap-2">
           <button type="submit" className={confirmButtonClass} disabled={busy} data-testid={`tier-${key}-save`}>

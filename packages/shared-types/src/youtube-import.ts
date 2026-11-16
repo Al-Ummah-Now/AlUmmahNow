@@ -38,9 +38,27 @@ export function isGoogleClientId(value: string): boolean {
   return value === '' || /^[0-9]{6,20}-[a-z0-9]{8,64}\.apps\.googleusercontent\.com$/.test(value);
 }
 
+/**
+ * Shape check of a Google OAuth client secret before it is saved: 16-256 printable characters, no
+ * spaces (Google's current secrets start with a fixed prefix; older ones were 24 random characters). The value is never echoed.
+ */
+export function isGoogleClientSecret(value: unknown): value is string {
+  return typeof value === 'string' && /^[\x21-\x7e]{16,256}$/.test(value.trim()) && value.trim() !== 'unset';
+}
+
 /** What the admin page shows (never the secret itself). */
 export interface YoutubeImportSettingsView extends YoutubeImportSettings {
   secretPresent: boolean;
+  /**
+   * Where the secret in use comes from: 'admin' (set on the admin page, sealed in settings storage),
+   * 'binding' (the Secrets Store entry google-oauth-client-secret[-qa|-stage]), or null (none).
+   */
+  secretSource?: 'admin' | 'binding' | null;
+  /** When and by whom the admin-set secret was last replaced (null when never) */
+  secretUpdatedAt?: string | null;
+  secretUpdatedBy?: string | null;
+  /** An admin-set secret is stored but no longer opens (INTERNAL_API_KEY was rotated): set it again */
+  secretUnreadable?: boolean;
   /** Redirect URI to register in Google Cloud for this environment */
   redirectUri: string;
   scopes: string[];
