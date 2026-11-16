@@ -14,7 +14,6 @@
  */
 import { Hono, type Context } from 'hono';
 import {
-  DEFAULT_TIER_ID,
   TIER_REQUEST_ERRORS,
   TIER_REQUEST_LIMITS,
   ADMIN_DELETION_KINDS,
@@ -74,7 +73,7 @@ import { dropAudit, readAudit, setAuditPrevious, writeAudit, type AuditAction, t
 import { banVideosUser } from '../lib/content/userBan';
 import { openReportCounts, recentReports, reportedIds, type ReportEntity } from '../lib/content/reports';
 import { logger } from '../lib/logger';
-import { inviteStatusByUser, syncInvitesOnRead, type InviteQueueEnv } from '../lib/invites';
+import { inviteStatusByUser, pendingInvitesByTier, pendingInvitesForTier, syncInvitesOnRead, type InviteQueueEnv } from '../lib/invites';
 import type { AdminBindings, AuthContext } from '../base/types';
 
 type Env = { Bindings: AdminBindings & VideosClientEnv; Variables: { auth?: AuthContext } };
@@ -101,7 +100,7 @@ app.onError((error, c) => {
     return c.json({ success: false, code: 'forbidden', error: error.message }, 403);
   }
   if (error instanceof VideosError) {
-    return c.json({ success: false, code: error.code, error: error.message }, error.status as 400);
+    return c.json({ success: false, code: error.code, error: error.message, ...(error.details ?? {}) }, error.status as 400);
   }
   logger.error('[Content] Request failed', { path: c.req.path, error: error instanceof Error ? error.message : String(error) });
   return c.json({ success: false, code: 'internal_error', error: 'Internal error' }, 500);
@@ -624,18 +623,29 @@ app.post('/legacy-profiles/restore', async (c) => {
 // ---------------------------------------------------------------------------
 // Creator tiers (videos-side; never Auth RBAC): who may upload and create
 // channels. Reads for every admin; changes need creators:manage (admins and
-// super admins) and are audited. A change applies to the user's next request.
+// super admins) and are audited. A change takes effect at once (read on every API
+// call) and the user is told (api-videos lib/tierChanges.ts).
 // ---------------------------------------------------------------------------
 
 type TierAssignment = Pick<CreatorTierAssignment, 'tierId' | 'source'> & Partial<Pick<CreatorTierAssignment, 'assignedBy' | 'assignedAt'>>;
+/** The audit id of default-tier changes (kind 'creator-tier', action 'set-default') */
+const DEFAULT_TIER_AUDIT_ID = 'default';
+/** The audit id of rank changes (kind 'creator-tier', action 'reorder') */
+const TIER_ORDER_AUDIT_ID = 'order';
 
 app.get('/creators', async (c) => ok(c, await videos(c, '/creators', { query: c.req.query() })));
-// ?counts=0 passes through: the definitions without the (full-table) counts
-app.get('/creator-tiers', async (c) => ok(c, await videos(c, '/creator-tiers', { query: c.req.query() })));
+// ?counts=0 passes through: the definitions without the (full-table) counts. With counts, the
+// pending invites per tier too (indexed), so the Tiers page can say why Delete is off.
+app.get('/creator-tiers', async (c) => {
+  const list = await videos<Record<string, unknown>>(c, '/creator-tiers', { query: c.req.query() });
+  if (c.req.query('counts') === '0') return ok(c, list);
+  return ok(c, { ...list, pendingInvites: await pendingInvitesByTier(c.env.REPORTS_DB) });
+});
 
 app.get('/creator-tiers/audit', async (c) => {
   const tiers = await videos<{ items: Array<{ id: string }> }>(c, '/creator-tiers', { query: { counts: '0' } });
-  const entries = await Promise.all(tiers.items.map((t) => readAudit(c.env.REPORTS_DB, { kind: 'creator-tier', id: t.id, limit: 20 })));
+  // The default-tier changes are rows of their own ('default'), next to each tier's history
+  const entries = await Promise.all([...tiers.items.map((t) => t.id), DEFAULT_TIER_AUDIT_ID, TIER_ORDER_AUDIT_ID].map((id) => readAudit(c.env.REPORTS_DB, { kind: 'creator-tier', id, limit: 20 })));
   return ok(c, { items: entries.flat().sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 50) });
 });
 
@@ -645,6 +655,41 @@ app.post('/creator-tiers', async (c) => {
   const id = typeof input.id === 'string' ? input.id : '';
   return ok(c, await audited(c, { kind: 'creator-tier', id, action: 'create', details: input }, () =>
     videos(c, '/creator-tiers', { method: 'POST', json: input })));
+});
+
+/**
+ * The default tier (every user without an assignment holds it; effective, never
+ * copied): a tier id or 'none'. Audited with the previous default, which the
+ * admin's Undo sets back through this same route.
+ */
+app.put('/creator-tiers/default', async (c) => {
+  need(c, 'creators:manage');
+  const input = await body(c);
+  const tierId = typeof input.tierId === 'string' ? input.tierId.trim() : '';
+  if (!tierId) return c.json({ success: false, code: 'invalid_request', error: "tierId is required (a tier id, or 'none')" }, 400);
+  const current = await videos<{ defaultTierId?: string }>(c, '/creator-tiers', { query: { counts: '0' } });
+  return ok(c, await audited(c, {
+    kind: 'creator-tier', id: DEFAULT_TIER_AUDIT_ID, action: 'set-default',
+    details: { tierId, ...(input.undo === true ? { undo: true } : {}) },
+    previous: { tierId: current.defaultTierId ?? null },
+  }, () => videos(c, '/creator-tiers/default', { method: 'PUT', json: { tierId } })));
+});
+
+/**
+ * Rank: every tier in its new order, lowest first (the Tiers list's drag or
+ * move up/down). Audited with the previous order, which Undo sends back.
+ */
+app.put('/creator-tiers/order', async (c) => {
+  need(c, 'creators:manage');
+  const input = await body(c);
+  const ids = Array.isArray(input.ids) ? input.ids.filter((v): v is string => typeof v === 'string' && v.length > 0) : [];
+  if (!ids.length) return c.json({ success: false, code: 'invalid_request', error: 'ids: every tier id, lowest rank first' }, 400);
+  const current = await videos<{ items: Array<{ id: string }> }>(c, '/creator-tiers', { query: { counts: '0' } });
+  return ok(c, await audited(c, {
+    kind: 'creator-tier', id: TIER_ORDER_AUDIT_ID, action: 'reorder',
+    details: { ids, ...(input.undo === true ? { undo: true } : {}) },
+    previous: { ids: current.items.map((t) => t.id) },
+  }, () => videos(c, '/creator-tiers/order', { method: 'PUT', json: { ids } })));
 });
 
 app.put('/creator-tiers/:id', async (c) => {
@@ -660,6 +705,11 @@ app.put('/creator-tiers/:id', async (c) => {
 app.delete('/creator-tiers/:id', async (c) => {
   need(c, 'creators:manage');
   const id = c.req.param('id');
+  // Pending invites carry the tier to their account: move or revoke them first (api-videos checks the users and the default)
+  const invites = await pendingInvitesForTier(c.env.REPORTS_DB, id);
+  if (invites > 0) {
+    return c.json({ success: false, code: 'tier_has_invites', error: `${invites} pending invites carry this tier; change or revoke them first`, invites }, 409);
+  }
   const reason = cleanTrashReason((await body(c)).reason);
   return ok(c, await audited(c, { kind: 'creator-tier', id, action: 'delete', details: reason ? { reason } : undefined }, () =>
     videos(c, `/creator-tiers/${encodeURIComponent(id)}`, { method: 'DELETE', json: { reason } })));
@@ -682,8 +732,9 @@ app.put('/users/:id/creator-tier', async (c) => {
   need(c, 'creators:manage');
   const id = c.req.param('id');
   const input = await body(c);
-  const tierId = input.tierId === null || input.tierId === '' ? null : String(input.tierId ?? '');
-  if (tierId === '') return c.json({ success: false, code: 'invalid_request', error: 'tierId is required (null removes the tier)' }, 400);
+  const tierId = typeof input.tierId === 'string' ? input.tierId.trim() : '';
+  // Every account has a tier: there is no "remove"
+  if (!tierId) return c.json({ success: false, code: 'tier_required', error: 'tierId is required: every account has a tier' }, 400);
   const source = input.source === 'subscription' ? 'subscription' : 'admin';
   const current = await videos<{ assignment: TierAssignment | null }>(c, `/users/${encodeURIComponent(id)}/creator-tier`);
   const superAdmin = creatorTierOrigin(current.assignment as CreatorTierAssignment | null) === 'super_admin';
@@ -708,8 +759,7 @@ app.put('/users/:id/creator-tier', async (c) => {
  * queued job with retries; if even queueing fails, the Errors page gets an item
  * with Retry.
  */
-type TierRequestRow = { id: string; userId: string; tierId: string; status: string; currentTierId: string; decidedAt: string | null };
-const tierOrNull = (id: string) => (id === DEFAULT_TIER_ID ? null : id);
+type TierRequestRow = { id: string; userId: string; tierId: string; status: string; currentTierId: string; currentIsDefault?: boolean; decidedAt: string | null };
 
 async function deliverDecision(c: C, requestId: string, decidedAt: string | null) {
   if (!decidedAt) return;
@@ -750,8 +800,9 @@ app.post('/tier-requests/:id/approve', async (c) => {
   if (request.status !== 'pending') return c.json({ success: false, code: TIER_REQUEST_ERRORS.notPending, error: 'This request was already decided' }, 409);
   const result = await audited(c, {
     kind: 'user', id: request.userId, action: 'creator-tier',
-    details: { tierId: tierOrNull(request.tierId), source: 'admin', tierRequest: id },
-    previous: { tierId: tierOrNull(request.currentTierId), source: null },
+    details: { tierId: request.tierId, source: 'admin', tierRequest: id },
+    // On the default tier the user had no assignment: null, as the tier control audits it
+    previous: { tierId: request.currentIsDefault ? null : request.currentTierId, source: null },
   }, () => videos<{ request: TierRequestRow }>(c, `/tier-requests/${encodeURIComponent(id)}/decide`, { method: 'POST', json: { decision: 'approve' } }));
   await writeAudit(c.env.REPORTS_DB, { kind: 'tier-request', id, action: 'approve', actorId: actorOf(c), details: { userId: request.userId, tierId: request.tierId } })
     .catch((e) => logger.warn('[Content] Could not write the tier request audit row', { id, error: String(e) }));
@@ -865,9 +916,10 @@ app.post('/creators/tier', async (c) => {
   need(c, 'creators:manage');
   const input = await body(c);
   const userIds = Array.isArray(input.userIds) ? [...new Set(input.userIds.filter((v): v is string => typeof v === 'string' && v.length > 0))] : [];
-  const tierId = input.tierId === null ? null : typeof input.tierId === 'string' && input.tierId ? input.tierId : undefined;
+  // Every account has a tier: no bulk "remove"
+  const tierId = typeof input.tierId === 'string' && input.tierId ? input.tierId : undefined;
   if (!userIds.length || userIds.length > MAX_BULK_CREATOR_TIER || tierId === undefined) {
-    return c.json({ success: false, code: 'invalid_request', error: `userIds (1 to ${MAX_BULK_CREATOR_TIER}) and tierId (null removes the tier) are required` }, 400);
+    return c.json({ success: false, code: 'invalid_request', error: `userIds (1 to ${MAX_BULK_CREATOR_TIER}) and tierId are required` }, 400);
   }
   const plan = await videos<CreatorTierBulkResult>(c, '/creators/tier', { method: 'POST', json: { userIds, tierId, dryRun: true } });
   if (!plan.changed.length) return ok(c, plan);

@@ -143,3 +143,34 @@ describe('tier changes', () => {
 		assert.deepEqual([count('tier_requests'), count('creator_tier_changes')], [0, 0]);
 	});
 });
+
+describe('admin tier changes reach the user', () => {
+	async function call(path: string, method: string, json: unknown) {
+		const { Hono } = await import('hono');
+		const { default: adminRouter } = await import('../src/routers/admin.router');
+		const s = setup();
+		const app = new Hono();
+		app.route('/internal/admin', adminRouter as never);
+		const run = (p: string, m: string, j: unknown) =>
+			app.request(`/internal/admin${p}`, { method: m, headers: { 'content-type': 'application/json', 'x-admin-actor': 'admin-1' }, body: JSON.stringify(j) }, s.env as never);
+		return { s, run, first: await run(path, method, json) };
+	}
+
+	it('one user (PUT users/:id/creator-tier): the change takes effect at once and the user gets the notice and the email', async () => {
+		const { s, first } = await call('/users/usr_a/creator-tier', 'PUT', { tierId: 'creator' });
+		assert.equal(first.status, 200);
+		assert.equal((await resolveCreator(s.d1, { userId: 'usr_a' })).tier?.id, 'creator', 'no sign-out needed: the next call already sees it');
+		assert.deepEqual(s.notices.map((n) => [n.payload.notificationKey, n.payload.params.to_en]), [['tierChanged', 'Creator']]);
+		assert.equal(s.mails.length, 1);
+	});
+
+	it('an invite\'s tier (quiet) is stored without a notice; a selection (bulk) tells each changed user', async () => {
+		const { s, run, first } = await call('/users/usr_i/creator-tier', 'PUT', { tierId: 'creator', quiet: true });
+		assert.equal(first.status, 200);
+		assert.deepEqual([s.notices.length, s.mails.length], [0, 0]);
+		const bulk = await run('/creators/tier', 'POST', { userIds: ['usr_b', 'usr_c'], tierId: 'creator' });
+		assert.equal(bulk.status, 200);
+		assert.deepEqual(s.notices.map((n) => n.payload.notificationKey), ['tierChanged', 'tierChanged']);
+		assert.equal(s.mails.length, 2);
+	});
+});

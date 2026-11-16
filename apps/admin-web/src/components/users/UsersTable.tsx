@@ -17,7 +17,6 @@ import { logger } from '@/lib/logger-client';
 import { reportError } from '@/lib/errors/reporter';
 import { adminUserName } from '@/lib/user-name';
 
-const NONE = '__none__';
 
 /** Banned / active, profile deleted, and the invite's status when not signed in yet. */
 function StatusChips({ user, t }: { user: AdminUserRow; t: Translator }) {
@@ -65,7 +64,7 @@ export function UsersTable({ items, tiers, canManage, setTier, bulkSetTier }: Us
   const chosen = selectable.filter((u) => selected.has(u.id));
   const allSelected = selectable.length > 0 && chosen.length === selectable.length;
   const tierById = new Map((tiers ?? []).map((tier) => [tier.id, tier]));
-  const bulkTarget = bulkTier === NONE ? null : tierById.get(bulkTier) ?? null;
+  const bulkTarget = tierById.get(bulkTier) ?? null;
   const n = (value: number) => formatNumber(value, locale);
 
   function toggle(id: string) {
@@ -84,7 +83,7 @@ export function UsersTable({ items, tiers, canManage, setTier, bulkSetTier }: Us
     setNotice(null);
     let result: ActionResult<CreatorTierBulkResult>;
     try {
-      result = await bulkSetTier(chosen.map((u) => u.id), bulkTier === NONE ? null : bulkTier);
+      result = await bulkSetTier(chosen.map((u) => u.id), bulkTier);
     } catch (e) {
       result = { ok: false, status: 0, error: e instanceof Error ? e.message : String(e) };
     }
@@ -118,7 +117,6 @@ export function UsersTable({ items, tiers, canManage, setTier, bulkSetTier }: Us
               {tiers.map((tier) => (
                 <option key={tier.id} value={tier.id}>{tierLabel(tier, locale)}</option>
               ))}
-              <option value={NONE}>{t('creators.noTier')}</option>
             </select>
           </label>
           <button
@@ -250,11 +248,11 @@ export function UsersTable({ items, tiers, canManage, setTier, bulkSetTier }: Us
       {bulk && (
         <TierChangeDialog
           open={confirming}
-          title={bulkTier === NONE ? t('creators.confirmRemoveTitle') : t('creators.confirmAssignTitle')}
+          title={t('creators.confirmAssignTitle')}
           body={tierChangeMessage(bulkTarget, t, locale, { count: chosen.length })}
-          warning={bulkTier === NONE ? t('creators.removeWarning') : null}
-          confirmLabel={bulkTier === NONE ? t('creators.removeTier') : t('creators.assignTier', { tier: bulkTarget?.name ?? '' })}
-          danger={bulkTier === NONE}
+          warning={null}
+          confirmLabel={t('creators.assignTier', { tier: bulkTarget?.name ?? '' })}
+          danger={false}
           testId="users-bulk-change"
           onCancel={() => setConfirming(false)}
           onConfirm={() => void applyBulk()}

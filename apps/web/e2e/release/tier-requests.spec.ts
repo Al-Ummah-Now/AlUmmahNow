@@ -1,7 +1,7 @@
 /**
  * Release regression: requesting a tier (wiki AUN-TIER-REQUESTS). During the beta, tiers are
  * granted on request instead of paid for.
- * - A new user (Member) opens /upgrade, sees the beta notice and their current tier, and requests
+ * - A new user (on the default tier, Free) opens /upgrade, sees the beta notice and their current tier, and requests
  *   Creator from the dialog (name and "about you", the human check); the page shows it pending
  *   and the user still cannot upload.
  * - An admin approves it in the videos admin's Tier requests queue: the user can upload and create
@@ -56,7 +56,7 @@ async function requestCreator(page: Page, user: WebUser, locale: Locale, about: 
   if ((await page$.getAttribute('data-payments')) === 'off') await expect(page.getByTestId('upgrade-beta-notice')).toContainText(BETA[locale]);
   else await expect(page.getByTestId('upgrade-beta-notice')).toHaveCount(0);
   const member = page.getByTestId('tier-card-member');
-  await expect(member, 'a new user holds Member').toHaveAttribute('data-state', 'current', { timeout: 30000 });
+  await expect(member, 'a new user holds the default tier, Free').toHaveAttribute('data-state', 'current', { timeout: 30000 });
   await expect(member.getByTestId('tier-member-current')).toBeVisible();
   // Tiers without prices show none (billing-pay.spec.ts may sell its own tier on the same stack meanwhile)
   for (const id of ['member', 'creator']) {
@@ -125,13 +125,13 @@ test.describe('Release: tier requests', () => {
     release = null;
   });
 
-  test('a Member requests Creator, an admin approves, the user can upload at once and sees it (en)', async ({ page, context, ownData }) => {
+  test('a user on Free requests Creator, an admin approves, the user can upload at once and sees it (en)', async ({ page, context, ownData }) => {
     test.setTimeout(5 * 60_000);
     await answerConsent(context);
     const user = await ownData.createUser(page, 'rel-tierreq-ok');
     await requestCreator(page, user, 'en', 'I record the Friday khutbah at our masjid every week and want to share it.');
     const before = await creatorAccess(user);
-    expect([before.tier?.id, before.canUpload, before.canCreateChannel], 'still Member while pending').toEqual(['member', false, false]);
+    expect([before.tier?.id, before.canUpload, before.canCreateChannel], 'still on Free while pending').toEqual(['member', false, false]);
 
     const admin = await workerAdminPage();
     const requestId = await decide(admin, user, 'approve');

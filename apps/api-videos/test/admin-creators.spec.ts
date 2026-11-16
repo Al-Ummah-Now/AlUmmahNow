@@ -97,10 +97,12 @@ describe('bulk tier change', () => {
     const again = await bulkAssignTier(d1, { userIds: users, tierId: 'creator' }, 'usr_admin');
     assert.equal(again.changed.length, 0);
 
-    const removed = await bulkAssignTier(d1, { userIds: users, tierId: null }, 'usr_admin');
-    assert.deepEqual(removed.changed.map((c) => [c.userId, c.previous?.tierId]), [['usr_creator', 'creator'], ['usr_viewer', 'creator'], ['usr_migrated', 'creator']]);
-    assert.deepEqual(removed.skippedSuperAdmin, ['usr_owner']);
-    assert.equal(await readAssignment(d1, 'usr_creator'), null);
+    // Every account keeps a tier: no bulk "remove"
+    await assert.rejects(bulkAssignTier(d1, { userIds: users, tierId: null }, 'usr_admin'), /tier_required|Every account has a tier/);
+    const back = await bulkAssignTier(d1, { userIds: users, tierId: 'member' }, 'usr_admin');
+    assert.deepEqual(back.changed.map((c) => [c.userId, c.previous?.tierId]), [['usr_creator', 'creator'], ['usr_viewer', 'creator'], ['usr_migrated', 'creator']]);
+    assert.deepEqual(back.skippedSuperAdmin, ['usr_owner']);
+    assert.equal((await readAssignment(d1, 'usr_creator'))?.tierId, 'member');
   });
 
   it('refuses a missing tier, bad ids and too many users', async () => {
@@ -147,7 +149,7 @@ describe('admin Users list: the creator tier per user (the old Creators page)', 
     assert.equal(byId.get('usr_viewer')?.limitHits7d, 0);
     assert.equal(byId.get('usr_viewer')?.needsTier, false, 'no content, so no tier is needed');
     assert.equal(byId.get('usr_migrated')?.needsTier, true);
-    assert.deepEqual(result.creators, { needsTier: 1, limitHits7d: 1 });
+    assert.deepEqual(result.creators, { needsTier: 1, limitHits7d: 1, defaultTier: { id: 'member', name: 'Free' } });
     assert.equal(result.total, 4, 'the page itself is unchanged');
   });
 });

@@ -95,7 +95,7 @@ export async function creatorAccess(db: D1Database, userId: string, roles: reado
 	const channels = tierAllowsChannels(tier);
 	const maxChannels = !tier || tier.unlimited ? null : tier.maxChannels;
 	return {
-		tier: tier ? { id: tier.id, name: tier.name, unlimited: tier.unlimited, uploads: tierAllowsUploads(tier), channels } : null,
+		tier: tier ? { id: tier.id, name: tier.name, nameAr: tier.nameAr ?? null, unlimited: tier.unlimited, uploads: tierAllowsUploads(tier), channels } : null,
 		via: creator.via,
 		canUpload: tierAllowsUploads(tier) || uploadChannelIds.length > 0,
 		uploadChannelIds,

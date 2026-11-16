@@ -2,8 +2,8 @@
  * Creator tiers on the Users list and the Tiers page: the viewer is found on
  * the Users list, given the Creator tier from its row (the confirmation
  * states the effect), the change is in the audit log and the tier filter
- * finds it, then the tier is removed (the confirmation warns about
- * in-progress uploads) and given again with the bulk change. Tiers is its own
+ * finds it, then the user is moved back to Free (every account keeps a tier:
+ * the picker only lists tiers) and given Creator again with the bulk change. Tiers is its own
  * People nav item; the old /creators URLs redirect. The Tiers page shows
  * users per tier and refuses a daily limit under the hourly one without
  * saving. Arabic renders right to left. The viewer's tier is put back as it
@@ -68,15 +68,15 @@ test.describe('creator tiers on Users and Tiers', () => {
     test.skip(row!.creator === undefined, 'api-videos does not return the tier on the Users list yet');
     state.userId = row!.id;
     state.previous = row!.creator!.assignment;
-    if (state.previous) {
-      // Start from no tier, so the row shows the full assign flow
-      await adminApi(`/api/content/users/${encodeURIComponent(state.userId)}/creator-tier`, { method: 'PUT', body: JSON.stringify({ tierId: null }) });
+    // Start from Free (every account has a tier), so the row shows the full assign flow
+    if (state.previous?.tierId !== 'member') {
+      await adminApi(`/api/content/users/${encodeURIComponent(state.userId)}/creator-tier`, { method: 'PUT', body: JSON.stringify({ tierId: 'member' }) });
     }
   });
 
   test.afterAll(async () => {
     if (!state.userId) return;
-    const tierId = state.previous?.tierId ?? null;
+    const tierId = state.previous?.tierId ?? 'member';
     await adminApi(`/api/content/users/${encodeURIComponent(state.userId)}/creator-tier`, { method: 'PUT', body: JSON.stringify({ tierId }) });
   });
 
@@ -97,34 +97,36 @@ test.describe('creator tiers on Users and Tiers', () => {
     expect(body.result?.assignment?.tierId).toBe('creator');
     expect(body.result?.audit[0]?.details?.tierId).toBe('creator');
 
-    // The tier filter: the one tier and "has a tier" find them; "no tier" does not
-    for (const [tier, found] of [['creator', true], ['has_tier', true], ['none', false]] as const) {
+    // The tier filter: their tier finds them; another does not
+    for (const [tier, found] of [['creator', true], ['member', false]] as const) {
       await page.goto(`/users?q=${encodeURIComponent(searchTerm())}&tier=${tier}`);
       await expect(page.getByTestId('users-filters').locator('select[name="tier"]')).toHaveValue(tier);
       await expect(page.locator(`[data-testid="user-row"][data-user-id="${state.userId}"]`)).toHaveCount(found ? 1 : 0);
     }
   });
 
-  test('CRE-02 removing the tier warns that started uploads finish and new ones are refused; Cancel changes nothing', async ({ page }) => {
+  test('CRE-02 moving the user back to Free asks first (Cancel changes nothing); the picker only lists tiers', async ({ page }) => {
     await page.goto(`/users?q=${encodeURIComponent(searchTerm())}`);
     const row = page.locator(`[data-testid="user-row"][data-user-id="${state.userId}"]`);
     const select = row.getByTestId('creator-tier-select');
-    await select.selectOption('');
+    // Every account has a tier: no "remove" or "default" choice
+    await expect(select.locator('option[value=""]')).toHaveCount(0);
+    await select.selectOption('member');
     const dialog = row.getByTestId('creator-tier-change-dialog');
-    await expect(dialog.getByTestId('creator-tier-change-warning')).toContainText('Uploads they already started continue');
+    await expect(dialog).toBeVisible();
     await dialog.getByTestId('creator-tier-change-cancel').click();
     await expect(select).toHaveValue('creator');
 
-    await select.selectOption('');
+    await select.selectOption('member');
     await dialog.getByTestId('creator-tier-change-confirm').click();
     await expect(row.getByTestId('creator-tier-status')).toHaveAttribute('data-state', 'saved');
-    await expect(row.getByTestId('creator-tier')).toHaveAttribute('data-tier', '');
+    await expect(row.getByTestId('creator-tier')).toHaveAttribute('data-tier', 'member');
   });
 
   test('CRE-06 the bulk tier change on the Users list: select the row, choose a tier, confirm with its effect', async ({ page }) => {
     await page.goto(`/users?q=${encodeURIComponent(searchTerm())}`);
     const row = page.locator(`[data-testid="user-row"][data-user-id="${state.userId}"]`);
-    await expect(row.getByTestId('creator-tier')).toHaveAttribute('data-tier', '');
+    await expect(row.getByTestId('creator-tier')).toHaveAttribute('data-tier', 'member');
     const apply = page.getByTestId('users-bulk-apply');
     await expect(apply).toBeDisabled();
     await row.getByTestId('user-select').check();
@@ -156,7 +158,7 @@ test.describe('creator tiers on Users and Tiers', () => {
 
   test('CRE-03 the Tiers page counts users per tier and refuses a daily limit under the hourly one without saving', async ({ page }) => {
     await page.goto('/tiers');
-    await expect(page.getByTestId('tier-creator-users')).toContainText(/users/);
+    await expect(page.getByTestId('tier-creator-users')).toContainText(/^[\d,]+ users?$/); // "1 user" when only this run's viewer holds it
     await page.getByTestId('tier-creator-perDay').fill('1');
     await page.getByTestId('tier-creator-perHour').fill('5');
     await page.getByTestId('tier-creator-save').click();

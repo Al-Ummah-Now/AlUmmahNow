@@ -1,7 +1,7 @@
 /**
  * Creator tiers for release users. Uploading and creating channels are by
- * invitation: a new account has no tier and is refused (403
- * uploads_by_invitation). Specs that upload or create channels have an admin
+ * invitation: a new account gets the default tier at sign-up (Free as shipped:
+ * no uploads) and is refused (403 uploads_by_invitation). Specs that upload or create channels have an admin
  * give their fresh user a tier the way admins do, on the user's page in the
  * videos admin (pick the tier, confirm the dialog); it applies to the user's
  * next request (no new sign-in).
@@ -12,17 +12,17 @@ import { releaseEnv, target } from './targets';
 import { apiFetch, type WebUser } from './web-session';
 
 /**
- * Sets (or with null removes) the user's creator tier in admin-web and waits until saved and in
- * effect. Without an assignment the user holds Member (wiki AUN-TIER-REQUESTS), which
- * /api/me/creator reports as the tier.
+ * Sets the user's creator tier in admin-web and waits until saved and in effect. Every account
+ * keeps a tier: null means back to Free (the shipped minimum; wiki AUN-TIER-REQUESTS).
  */
-export async function setCreatorTier(user: WebUser, tierId: string | null): Promise<void> {
+export async function setCreatorTier(user: WebUser, wanted: string | null): Promise<void> {
+  const tierId = wanted ?? 'member'; // Free («مجاني»), id `member`
   const page = await workerAdminPage();
   await page.goto(`${target().adminWeb}/auth-requests/users/${encodeURIComponent(user.userId)}`);
   const control = page.locator(`[data-testid="user-creator-tier-control"][data-user-id="${user.userId}"]`);
   await expect(control, 'the creator tier control on the user page').toBeVisible({ timeout: 30000 });
   // Already set (a reused account): nothing to change
-  if ((await control.getAttribute('data-tier')) !== (tierId ?? '')) {
+  if ((await control.getAttribute('data-tier')) !== tierId) {
     const select = control.getByTestId('user-creator-tier-control-select');
     const status = control.getByTestId('user-creator-tier-control-status');
     // One retry when the save answers "failed": a 5xx while QA's database is briefly overloaded
@@ -30,7 +30,7 @@ export async function setCreatorTier(user: WebUser, tierId: string | null): Prom
     // A failure that persists still fails, with the control's message.
     for (let attempt = 1; ; attempt++) {
       await expect(select, 'the creator tier selector').toBeEnabled({ timeout: 30000 });
-      await select.selectOption(tierId ?? '');
+      await select.selectOption(tierId);
       // Every change is confirmed in a dialog that states its effect
       const dialog = control.getByTestId('user-creator-tier-control-change-dialog');
       await expect(dialog).toBeVisible();
@@ -42,7 +42,7 @@ export async function setCreatorTier(user: WebUser, tierId: string | null): Prom
       console.warn(`[creator-tier] saving tier ${tierId} for ${user.userId} failed (${message}); retrying once`);
       await page.waitForTimeout(5000);
       // The control is back on the old value: select the tier again
-      if ((await control.getAttribute('data-tier')) === (tierId ?? '')) break;
+      if ((await control.getAttribute('data-tier')) === tierId) break;
     }
   }
   // In effect for the user's own token at once
@@ -51,8 +51,8 @@ export async function setCreatorTier(user: WebUser, tierId: string | null): Prom
       const res = await apiFetch(user, '/api/me/creator');
       const body = (await res.json().catch(() => ({}))) as { result?: { canUpload?: boolean; tier?: { id?: string } | null } };
       return body.result?.tier?.id ?? null;
-    }, { message: `GET /api/me/creator does not show tier ${tierId ?? 'member'}`, timeout: 20000 })
-    .toBe(tierId ?? 'member');
+    }, { message: `GET /api/me/creator does not show tier ${tierId}`, timeout: 20000 })
+    .toBe(tierId);
 }
 
 /**
@@ -63,7 +63,8 @@ export async function setCreatorTier(user: WebUser, tierId: string | null): Prom
 export async function grantCreatorTier(user: WebUser): Promise<void> {
   if (releaseEnv() !== 'local') return setCreatorTier(user, 'creator');
   const id = user.userId.replace(/[^A-Za-z0-9_:-]/g, '');
-  const sql = `INSERT OR IGNORE INTO creator_tier_assignments (user_id, tier_id, source, assigned_by, assigned_at) VALUES ('${id}', 'creator', 'admin', 'e2e', '${new Date().toISOString()}')`;
+  // REPLACE: sign-up already stored the default tier (every account has one)
+  const sql = `INSERT OR REPLACE INTO creator_tier_assignments (user_id, tier_id, source, assigned_by, assigned_at) VALUES ('${id}', 'creator', 'admin', 'e2e', '${new Date().toISOString()}')`;
   const res = await fetch(`${process.env.LOCAL_STACK_CONTROL_URL || 'http://127.0.0.1:3190'}/__stack/d1/al-ummah-now-search`, { method: 'POST', body: sql });
   expect(res.ok, `local stack tier write: ${await res.text()}`).toBe(true);
   await expect

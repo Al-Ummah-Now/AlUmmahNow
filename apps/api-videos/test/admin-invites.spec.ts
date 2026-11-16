@@ -14,6 +14,7 @@ import { handleAdminJobBatch, type JobMessage } from '../src/lib/admin/jobs';
 import { ADMIN_JOB_HANDLERS } from '../src/lib/admin/service';
 import { MemoryBucket, MemoryQueue } from './helpers';
 import { SqliteD1 } from './search-sqlite-d1';
+import { readAssignment } from '../src/lib/creatorTiers';
 
 const OWNER = 'usr_owner';
 const INVITED = `usr_${'a1'.repeat(16)}`;
@@ -85,6 +86,8 @@ describe('invited users in videos', () => {
 		const again = await call('POST', '/users/provision', { userId: INVITED, email: 'new@example.com', displayName: 'Changed' });
 		assert.equal(again.body.result.created, false);
 		assert.equal((await (await raw.profiles.get(INVITED))!.json<any>()).displayName, 'New Creator');
+		// Every account has a tier: the default until admin-api sets the invite's own
+		assert.equal((await readAssignment(raw.SEARCH_DB as unknown as D1Database, INVITED))?.tierId, 'member');
 
 		const found = await call('GET', '/users?q=new%40example');
 		assert.deepEqual(found.body.result.items.map((u: { id: string }) => u.id), [INVITED]);

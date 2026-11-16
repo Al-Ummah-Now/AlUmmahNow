@@ -94,8 +94,13 @@ export class D1Client {
   ensureCreatorTier(userId: string, tierId: string): 'created' | 'exists' {
     const user = sqlString(userId, SAFE_ID, 'user id');
     const tier = sqlString(tierId, SAFE_ID, 'tier id');
-    const existing = this.execute<{ tier_id: string }>(`SELECT tier_id FROM creator_tier_assignments WHERE user_id = ${user}`);
-    if (existing.length > 0) return 'exists';
+    const existing = this.execute<{ tier_id: string; assigned_by: string }>(`SELECT tier_id, assigned_by FROM creator_tier_assignments WHERE user_id = ${user}`);
+    // Every account has a tier from sign-up (system:signup / system:backfill): the seed's tier replaces that one, never an admin's
+    if (existing.length > 0 && (existing[0].tier_id === tierId || !existing[0].assigned_by.startsWith('system:'))) return 'exists';
+    if (existing.length > 0) {
+      this.execute(`UPDATE creator_tier_assignments SET tier_id = ${tier}, source = 'admin', assigned_by = 'seed', assigned_at = '${new Date().toISOString()}' WHERE user_id = ${user}`);
+      return 'created';
+    }
     this.execute(
       `INSERT INTO creator_tier_assignments (user_id, tier_id, source, assigned_by, assigned_at) VALUES (${user}, ${tier}, 'admin', 'seed', '${new Date().toISOString()}')`,
     );

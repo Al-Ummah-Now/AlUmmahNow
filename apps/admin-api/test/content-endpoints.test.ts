@@ -459,14 +459,18 @@ describe('content endpoints: creator tiers', () => {
     assert.ok(!calls.some((c) => c.method === 'PUT'), 'a moderator change never reaches api-videos');
 
     assert.equal((await call('/api/content/users/usr_1/creator-tier', { method: 'PUT', roles: 'admin', user: 'admin-7', json: { tierId: 'creator' } })).status, 200);
-    assert.equal((await call('/api/content/users/usr_1/creator-tier', { method: 'PUT', roles: 'super_admin', json: { tierId: null } })).status, 200);
+    // Every account has a tier: no "remove"
+    const removed = await call('/api/content/users/usr_1/creator-tier', { method: 'PUT', roles: 'super_admin', json: { tierId: null } });
+    assert.equal(removed.status, 400);
+    assert.equal(((await removed.json()) as { code: string }).code, 'tier_required');
+    assert.equal((await call('/api/content/users/usr_1/creator-tier', { method: 'PUT', roles: 'super_admin', json: { tierId: 'member' } })).status, 200);
     assert.deepEqual(log.map((r) => [r.key, JSON.parse(r.new_value), JSON.parse(r.old_value!)]), [
       ['content:user:usr_1', { action: 'creator-tier', details: { tierId: 'creator', source: 'admin' } }, { tierId: null, source: null }],
-      ['content:user:usr_1', { action: 'creator-tier', details: { tierId: null, source: 'admin' } }, { tierId: 'creator', source: 'admin' }],
+      ['content:user:usr_1', { action: 'creator-tier', details: { tierId: 'member', source: 'admin' } }, { tierId: 'creator', source: 'admin' }],
     ]);
     assert.equal(log[0].actor_id, 'admin-7');
     const page = (await (await call('/api/content/users/usr_1/creator-tier', { roles: 'moderator' })).json()) as { result: { assignment: unknown; audit: { action: string }[] } };
-    assert.equal(page.result.assignment, null);
+    assert.deepEqual(page.result.assignment, { tierId: 'member', source: 'admin' });
     assert.equal(page.result.audit.length, 2);
   });
 
@@ -517,6 +521,88 @@ describe('content endpoints: creator tiers', () => {
     assert.deepEqual(JSON.parse(log[0].old_value!), { perHour: 300 });
   });
 
+  it('deleting a tier: pending invites that carry it refuse it with their count (409); the users count from api-videos comes through', async () => {
+    const { db: base } = fakeDb();
+    // creator_invites on real SQLite (the counts' WHERE clause is what is under test)
+    const { DatabaseSync } = await import('node:sqlite');
+    const sqlite = new DatabaseSync(':memory:');
+    sqlite.exec('CREATE TABLE creator_invites (id TEXT PRIMARY KEY, tier_id TEXT, status TEXT, deleted_at TEXT)');
+    sqlite.exec("INSERT INTO creator_invites VALUES ('i1', 'pro', 'invited', NULL), ('i2', 'pro', NULL, NULL), ('i3', 'pro', 'active', NULL), ('i4', 'pro', 'invited', 'x'), ('i5', 'gold', 'invited', NULL)");
+    const real = (sql: string, args: unknown[] = []) => ({
+      bind: (...next: unknown[]) => real(sql, next),
+      first: async () => sqlite.prepare(sql).get(...(args as never[])) ?? null,
+      all: async () => ({ results: sqlite.prepare(sql).all(...(args as never[])) }),
+    });
+    const db = { ...base, prepare: (sql: string) => (sql.includes('creator_invites') ? real(sql) : base.prepare(sql)) } as typeof base;
+    const { fetcher, calls } = fakeVideos({
+      'GET /creator-tiers': () => ({ body: { success: true, result: { ...tiers, defaultTierId: 'member' } } }),
+      'DELETE /creator-tiers/gold-empty': () => ({ status: 409, body: { success: false, code: 'tier_in_use', error: '3 users are on this tier; move them first', users: 3 } }),
+    });
+    const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
+    const withInvites = await call('/api/content/creator-tiers/pro', { method: 'DELETE', roles: 'admin', json: {} });
+    assert.equal(withInvites.status, 409);
+    assert.deepEqual(await withInvites.json(), { success: false, code: 'tier_has_invites', error: '2 pending invites carry this tier; change or revoke them first', invites: 2 });
+    assert.ok(!calls.some((c) => c.method === 'DELETE'), 'never reaches api-videos');
+    const withUsers = await call('/api/content/creator-tiers/gold-empty', { method: 'DELETE', roles: 'admin', json: {} });
+    assert.equal(withUsers.status, 409);
+    assert.equal(((await withUsers.json()) as { users: number }).users, 3);
+    const list = (await (await call('/api/content/creator-tiers', { roles: 'moderator' })).json()) as { result: { pendingInvites: Record<string, number> } };
+    assert.deepEqual(list.result.pendingInvites, { gold: 1, pro: 2 });
+  });
+
+  it('reordering the tiers needs creators:manage, is audited with the previous order (Undo), and a refusal leaves no row', async () => {
+    const { db, log } = fakeDb();
+    let order = ['member', 'creator', 'unlimited'];
+    const { fetcher } = fakeVideos({
+      'GET /creator-tiers': () => ({ body: { success: true, result: { items: order.map((id) => ({ id })), defaultTierId: 'member' } } }),
+      'PUT /creator-tiers/order': (call) => {
+        const { ids } = call.body as { ids: string[] };
+        if (ids.length !== order.length) return { status: 400, body: { success: false, code: 'invalid_order', error: 'List every tier exactly once' } };
+        const previous = order;
+        order = ids;
+        return { body: { success: true, result: { previous, order } } };
+      },
+    });
+    const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
+    assert.equal((await call('/api/content/creator-tiers/order', { method: 'PUT', roles: 'moderator', json: { ids: ['creator', 'member', 'unlimited'] } })).status, 403);
+    const moved = await call('/api/content/creator-tiers/order', { method: 'PUT', roles: 'admin', json: { ids: ['creator', 'member', 'unlimited'] } });
+    assert.equal(moved.status, 200);
+    assert.equal((await call('/api/content/creator-tiers/order', { method: 'PUT', roles: 'admin', json: { ids: ['member'] } })).status, 400);
+    assert.equal((await call('/api/content/creator-tiers/order', { method: 'PUT', roles: 'admin', json: { ids: ['member', 'creator', 'unlimited'], undo: true } })).status, 200);
+    assert.deepEqual(log.map((r) => r.key), ['content:creator-tier:order', 'content:creator-tier:order']);
+    assert.deepEqual(JSON.parse(log[0].old_value!), { ids: ['member', 'creator', 'unlimited'] });
+    assert.deepEqual(JSON.parse(log[1].new_value!).details, { ids: ['member', 'creator', 'unlimited'], undo: true });
+  });
+
+  it('setting the default tier needs creators:manage, is audited with the previous default (Undo), and a refusal leaves no row', async () => {
+    const { db, log } = fakeDb();
+    let defaultTierId = 'member';
+    const { fetcher } = fakeVideos({
+      'GET /creator-tiers': () => ({ body: { success: true, result: { ...tiers, defaultTierId } } }),
+      'PUT /creator-tiers/default': (call) => {
+        const { tierId } = call.body as { tierId: string };
+        if (tierId === 'gone') return { status: 409, body: { success: false, code: 'default_tier_deleted', error: 'A deleted tier cannot be the default; restore it first' } };
+        const previous = defaultTierId;
+        defaultTierId = tierId;
+        return { body: { success: true, result: { previous, defaultTierId } } };
+      },
+    });
+    const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
+    assert.equal((await call('/api/content/creator-tiers/default', { method: 'PUT', roles: 'moderator', json: { tierId: 'creator' } })).status, 403);
+    assert.equal((await call('/api/content/creator-tiers/default', { method: 'PUT', roles: 'admin', json: {} })).status, 400);
+    const set = await call('/api/content/creator-tiers/default', { method: 'PUT', roles: 'admin', json: { tierId: 'creator' } });
+    assert.equal(set.status, 200);
+    assert.deepEqual(((await set.json()) as { result: unknown }).result, { previous: 'member', defaultTierId: 'creator' });
+    const refused = await call('/api/content/creator-tiers/default', { method: 'PUT', roles: 'admin', json: { tierId: 'gone' } });
+    assert.equal(refused.status, 409);
+    assert.equal(((await refused.json()) as { code: string }).code, 'default_tier_deleted');
+    assert.equal((await call('/api/content/creator-tiers/default', { method: 'PUT', roles: 'admin', json: { tierId: 'member', undo: true } })).status, 200);
+    assert.equal(log.length, 2, 'the refused change left no audit row');
+    assert.deepEqual(log.map((r) => r.key), ['content:creator-tier:default', 'content:creator-tier:default']);
+    assert.deepEqual(JSON.parse(log[0].old_value!), { tierId: 'member' });
+    assert.deepEqual(JSON.parse(log[1].new_value!).details, { tierId: 'member', undo: true });
+  });
+
   it('a super admin\'s automatic Unlimited is not changed without the explicit confirmation, and the override is audited', async () => {
     const { db, log } = fakeDb();
     let assignment: Record<string, unknown> | null = { userId: 'usr_owner', tierId: 'unlimited', source: 'admin', assignedBy: 'system:super-admin', assignedAt: '2026-11-10T00:00:00Z' };
@@ -535,9 +621,9 @@ describe('content endpoints: creator tiers', () => {
     assert.ok(!calls.some((c) => c.method === 'PUT'), 'nothing reaches api-videos');
     assert.equal(log.length, 0, 'no audit row for a refused change');
 
-    const confirmed = await call('/api/content/users/usr_owner/creator-tier', { method: 'PUT', roles: 'admin', json: { tierId: null, confirmSuperAdmin: true } });
+    const confirmed = await call('/api/content/users/usr_owner/creator-tier', { method: 'PUT', roles: 'admin', json: { tierId: 'member', confirmSuperAdmin: true } });
     assert.equal(confirmed.status, 200);
-    assert.deepEqual(JSON.parse(log[0].new_value), { action: 'creator-tier', details: { tierId: null, source: 'admin', overrodeSuperAdmin: true } });
+    assert.deepEqual(JSON.parse(log[0].new_value), { action: 'creator-tier', details: { tierId: 'member', source: 'admin', overrodeSuperAdmin: true } });
     assert.deepEqual(JSON.parse(log[0].old_value!), { tierId: 'unlimited', source: 'admin' });
   });
 
@@ -576,7 +662,8 @@ describe('content endpoints: creator tiers', () => {
     assert.ok(details.bulk, 'rows of one bulk change share its run id');
 
     fail = true;
-    const failed = await call('/api/content/creators/tier', { method: 'POST', roles: 'admin', json: { userIds, tierId: null } });
+    assert.equal((await call('/api/content/creators/tier', { method: 'POST', roles: 'admin', json: { userIds, tierId: null } })).status, 400, 'no bulk "remove"');
+    const failed = await call('/api/content/creators/tier', { method: 'POST', roles: 'admin', json: { userIds, tierId: 'member' } });
     assert.equal(failed.status, 503);
     assert.equal(log.length, 2, 'the failed bulk change left no audit rows');
   });

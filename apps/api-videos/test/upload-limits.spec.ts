@@ -239,12 +239,12 @@ describe('creator tiers: who may upload', () => {
     assert.equal((await h.request('alice', '/api/live-streams', { method: 'POST', body: '{}', headers: { 'content-type': 'application/json' } })).status, 200);
   });
 
-  it('assigning a tier lets the user upload at once; removing it blocks the next request (no re-sign-in)', async () => {
+  it('assigning a tier lets the user upload at once; moving them to Free blocks the next request (no re-sign-in)', async () => {
     const h = await harness();
     assert.equal((await h.initiate('carol')).status, 403);
     await assignTier(h.d1, 'carol', 'creator', 'admin-1');
     assert.equal((await h.initiate('carol')).status, 200);
-    await assignTier(h.d1, 'carol', null, 'admin-1');
+    await assignTier(h.d1, 'carol', 'member', 'admin-1');
     assert.equal((await h.initiate('carol')).status, 403);
     assert.equal((await h.tusCreate('carol')).status, 403, 'an upload in progress cannot start its TUS upload after revocation');
   });
@@ -618,7 +618,7 @@ describe('creator tiers: channels, access and admin', () => {
     role('ch-bob', 'ed', 'admin');
     role('ch-alice-2', 'ed', 'moderator');
     const ed = await creatorAccess(h.d1, 'ed', []);
-    // Alice has a tier, Bob none; a moderator can't upload; ed owns a channel but holds only Member
+    // Alice has a tier, Bob none; a moderator can't upload; ed owns a channel but holds only the default (Free)
     assert.deepEqual([ed.canUpload, ed.tier?.id, ed.tier?.uploads, ed.uploadChannelIds, ed.canCreateChannel], [true, 'member', false, ['ch-alice'], false]);
     // A deleted channel is left out
     h.deleteChannel('ch-alice');
@@ -643,7 +643,7 @@ describe('creator tiers: channels, access and admin', () => {
     const fallback = await readTiers(h.d1);
     assert.equal(fallback.find((t) => t.id === 'creator')?.perHour, DEFAULT_CREATOR_TIER.perHour);
     assert.equal(fallback.find((t) => t.id === 'unlimited')?.unlimited, true);
-    assert.equal(fallback.find((t) => t.id === 'member')?.uploads, false, 'Member falls back to no uploads, never to more');
+    assert.equal(fallback.find((t) => t.id === 'member')?.uploads, false, 'Free falls back to no uploads, never to more');
     // D1 down: still the defaults
     const down = await readTiers({ prepare: () => { throw new Error('down'); } } as unknown as D1Database);
     assert.deepEqual(down.map((t) => t.id).sort(), ['creator', 'member', 'unlimited']);
@@ -654,10 +654,10 @@ describe('creator tiers: channels, access and admin', () => {
     assert.throws(() => validateTier('x1', { name: 'X', perHour: 0, perDay: 1, maxConcurrent: 1 }), /perHour/);
     assert.throws(() => validateTier('x1', { name: 'X', perHour: 10, perDay: 5, maxConcurrent: 1 }), /perDay/);
     assert.equal(validateTier('unlimited', { name: 'U', unlimited: false }).unlimited, true, 'Unlimited stays unlimited');
-    await assert.rejects(deleteTier(h.d1, 'small'), /hold this tier/);
+    await assert.rejects(deleteTier(h.d1, 'small'), /users are on this tier; move them first/);
     await assert.rejects(deleteTier(h.d1, 'creator'), /cannot be deleted/);
     await assert.rejects(deleteTier(h.d1, 'member'), /cannot be deleted/);
-    assert.equal(validateTier('member', { name: 'M', unlimited: true, perHour: 1, perDay: 1, maxConcurrent: 1 }).unlimited, false, 'Member is never unlimited');
+    assert.equal(validateTier('member', { name: 'M', unlimited: true, perHour: 1, perDay: 1, maxConcurrent: 1 }).unlimited, true, 'Free (the minimum) is fully editable');
     await assert.rejects(assignTier(h.d1, 'zed', 'missing', 'admin'), /tier_not_found/);
   });
 

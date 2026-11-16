@@ -2,8 +2,11 @@
  * Creator tiers: who may upload and create channels, and within which limits
  * (packages/shared-types/src/creator-tiers.ts, migrations/search/0009).
  *
- * - No assignment row: the shipped Member tier (DEFAULT_TIER_ID), whose flags
- *   allow no uploads and no channel creation (wiki AUN-TIER-REQUESTS).
+ * - Every account has a stored tier (owner, 2026-11-15): the invite's tier, or
+ *   the default written at sign-up (writeSignupTier; the default, picked on
+ *   Tiers, is only what new sign-ups get). Shipped default: Free, the minimum
+ *   (never deletable), whose flags allow no uploads and no channel creation.
+ *   An account without a row (before the Free backfill) is treated as Free.
  * - A tier: its capability flags (uploads, channels), its upload limits
  *   and channel limit; `unlimited` has none and allows everything.
  * - The videos "Super Admin" role: always Unlimited, no row needed.
@@ -25,7 +28,13 @@ import {
 	DEFAULT_MEMBER_TIER,
 	DEFAULT_TIER_ID,
 	DEFAULT_UNLIMITED_TIER,
+	NO_DEFAULT_TIER,
+	SIGNUP_TIER_ASSIGNER,
+	TIER_RANK_STEP,
+	tierRank,
 	type CreatorTier,
+	type CreatorTierVia,
+	type DefaultTierId,
 	type CreatorTierAssignment,
 	type CreatorTierSource,
 	isSuperAdmin as isSuperAdminRole,
@@ -44,7 +53,7 @@ const SHIPPED_TIERS: CreatorTier[] = [
 export const isSuperAdmin = (roles: readonly string[] | undefined | null) => isSuperAdminRole(roles);
 
 export class CreatorTierError extends Error {
-	constructor(readonly status: number, readonly code: string, message = code) {
+	constructor(readonly status: number, readonly code: string, message = code, readonly details?: Record<string, unknown>) {
 		super(message);
 	}
 }
@@ -134,7 +143,7 @@ export async function readTiers(db: D1Database): Promise<CreatorTier[]> {
 	}
 	const tiers = rows.map(toTier);
 	for (const shipped of SHIPPED_TIERS) if (!tiers.some((t) => t.id === shipped.id)) tiers.push(shipped);
-	return tiers.sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+	return tiers.sort((a, b) => tierRank(a) - tierRank(b) || a.name.localeCompare(b.name));
 }
 
 export async function readTier(db: D1Database, id: string): Promise<CreatorTier | null> {
@@ -177,20 +186,91 @@ export interface ResolvedCreator {
 	/** The user whose tier applies and whose counters move (the channel owner for a channel upload) */
 	subjectId: string;
 	/**
-	 * The tier that applies: the assigned one, Unlimited for a super admin, or
-	 * the default Member tier ('none': no assignment). Null only when the
-	 * Member tier itself was deleted, which deleteTier refuses; callers check
-	 * its flags (tierAllowsUploads / tierAllowsChannels), never just presence.
+	 * The tier that applies: the stored one, Unlimited for a super admin, or
+	 * Free when no row is stored yet ('none'). Callers check its flags
+	 * (tierAllowsUploads / tierAllowsChannels), never just presence.
 	 */
 	tier: CreatorTier | null;
-	via: 'tier' | 'super_admin' | 'none';
+	via: CreatorTierVia;
 	/** When the stored tier was set (via 'tier' only): Settings › Tier's "Since {date}" */
 	since?: string;
 }
 
-/** The default tier every user without an assignment holds (Member). */
+const DEFAULT_TIER_KEY = 'default_tier_id';
+
+/**
+ * The default tier id. Before migration 0065 (no row), without the row, or
+ * with the retired 'none' value it is the shipped default, Free: exactly what
+ * no assignment meant before. Throws when D1 cannot answer otherwise.
+ */
+export async function readDefaultTierId(db: D1Database): Promise<DefaultTierId> {
+	try {
+		const row = await db.prepare('SELECT value FROM creator_tier_settings WHERE key = ?').bind(DEFAULT_TIER_KEY).first<{ value: string }>();
+		return row?.value && row.value !== NO_DEFAULT_TIER ? row.value : DEFAULT_TIER_ID;
+	} catch (error) {
+		if (/no such table/i.test(error instanceof Error ? error.message : String(error))) return DEFAULT_TIER_ID;
+		throw error;
+	}
+}
+
+/**
+ * The tier new sign-ups get. A default whose tier is gone (deleteTier refuses
+ * that) falls back to Free, the minimum, never to more.
+ */
 export async function readDefaultTier(db: D1Database): Promise<CreatorTier | null> {
-	return readTier(db, DEFAULT_TIER_ID);
+	const id = await readDefaultTierId(db);
+	return (await readTier(db, id)) ?? (await readTier(db, DEFAULT_TIER_ID));
+}
+
+/** No stored row (before the Free backfill): Free, the minimum. Never the current default, which is for new sign-ups only. */
+async function resolveUnassigned(db: D1Database, subjectId: string): Promise<ResolvedCreator> {
+	return { subjectId, tier: await readTier(db, DEFAULT_TIER_ID), via: 'none' };
+}
+
+/**
+ * Writes the current default tier to a new account (sign-up), unless it
+ * already has a tier (an invite's, an admin's, a super admin's). Changing the
+ * default later never touches this row. Returns the tier written, or null.
+ */
+export async function writeSignupTier(db: D1Database, userId: string, now = new Date().toISOString()): Promise<string | null> {
+	if (!/^[A-Za-z0-9_-]{1,128}$/.test(userId)) throw new CreatorTierError(400, 'invalid_user');
+	const tierId = (await readDefaultTier(db))?.id ?? DEFAULT_TIER_ID;
+	const result = await db
+		.prepare(
+			`INSERT INTO creator_tier_assignments (user_id, tier_id, source, assigned_by, assigned_at) VALUES (?, ?, 'admin', ?, ?)
+			 ON CONFLICT (user_id) DO NOTHING`,
+		)
+		.bind(userId, tierId, SIGNUP_TIER_ASSIGNER, now)
+		.run();
+	return (result.meta?.changes ?? 0) > 0 ? tierId : null;
+}
+
+/**
+ * Makes `tierId` the default tier. A deleted or unknown tier cannot be the
+ * default, nor can the retired 'none' (Free is the minimum). Returns the
+ * previous default (for the audit and the admin's Undo).
+ */
+export async function setDefaultTier(
+	db: D1Database,
+	tierId: string,
+	actorId: string,
+	now = new Date().toISOString(),
+): Promise<{ previous: DefaultTierId; defaultTierId: DefaultTierId }> {
+	if (tierId === NO_DEFAULT_TIER) throw new CreatorTierError(400, 'invalid_default', 'The default must be a tier; Free is the minimum');
+	if (!(await readTier(db, tierId))) {
+		const deleted = await db.prepare('SELECT 1 AS n FROM creator_tiers WHERE id = ? AND deleted_at IS NOT NULL').bind(tierId).first();
+		if (deleted) throw new CreatorTierError(409, 'default_tier_deleted', 'A deleted tier cannot be the default; restore it first');
+		throw new CreatorTierError(404, 'tier_not_found');
+	}
+	const previous = await readDefaultTierId(db);
+	await db
+		.prepare(
+			`INSERT INTO creator_tier_settings (key, value, updated_by, updated_at) VALUES (?, ?, ?, ?)
+			 ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
+		)
+		.bind(DEFAULT_TIER_KEY, tierId, actorId, now)
+		.run();
+	return { previous, defaultTierId: tierId };
 }
 
 /** Who stored a super admin's automatic Unlimited assignment */
@@ -253,16 +333,19 @@ export async function resolveCreator(
 	if (!assignment) {
 		// A super admin working on someone else's channel still has their own Unlimited
 		if (isSuperAdmin(who.roles)) return { subjectId: who.userId, tier: unlimited, via: 'super_admin' };
-		return { subjectId, tier: await readDefaultTier(db), via: 'none' };
+		return resolveUnassigned(db, subjectId);
 	}
 	const tier = await readTier(db, assignment.tierId);
 	if (!tier && isSuperAdmin(who.roles)) return { subjectId: who.userId, tier: unlimited, via: 'super_admin' };
-	// An assignment to a tier that no longer exists falls back to Member, never to more
-	if (!tier) return { subjectId, tier: await readDefaultTier(db), via: 'none' };
+	// An assignment to a tier that no longer exists falls back to Free, never to more
+	if (!tier) return resolveUnassigned(db, subjectId);
 	return { subjectId, tier, via: 'tier', since: assignment.assignedAt };
 }
 
-/** Assign (tierId) or remove (null) a user's tier. Returns the previous assignment. */
+/**
+ * Assigns a user's tier (every account keeps one: there is no "remove"; null
+ * is refused). Returns the previous assignment.
+ */
 export async function assignTier(
 	db: D1Database,
 	userId: string,
@@ -274,12 +357,8 @@ export async function assignTier(
 	if (!/^[A-Za-z0-9_-]{1,128}$/.test(userId)) {
 		throw new CreatorTierError(400, 'invalid_user');
 	}
+	if (tierId === null) throw new CreatorTierError(400, 'tier_required', 'Every account has a tier: choose one');
 	const previous = await readAssignment(db, userId);
-	// Member is what no row means: assigning it removes the row, so Member has one representation
-	if (tierId === null || tierId === DEFAULT_TIER_ID) {
-		await db.prepare('DELETE FROM creator_tier_assignments WHERE user_id = ?').bind(userId).run();
-		return { previous, assignment: null };
-	}
 	if (!(await readTier(db, tierId))) throw new CreatorTierError(404, 'tier_not_found');
 	const assignment: CreatorTierAssignment = { userId, tierId, source, assignedBy: actorId, assignedAt: now };
 	await db
@@ -291,6 +370,17 @@ export async function assignTier(
 		.bind(userId, tierId, source, actorId, now)
 		.run();
 	return { previous, assignment };
+}
+
+/**
+ * Removes an account's tier row: only for an account being erased (a revoked
+ * invite's purge). A live account always keeps a tier (assignTier refuses null).
+ */
+export async function removeTierOfErasedAccount(db: D1Database, userId: string): Promise<CreatorTierAssignment | null> {
+	if (!/^[A-Za-z0-9_-]{1,128}$/.test(userId)) return null;
+	const previous = await readAssignment(db, userId);
+	if (previous) await db.prepare('DELETE FROM creator_tier_assignments WHERE user_id = ?').bind(userId).run();
+	return previous;
 }
 
 export interface TierInput {
@@ -340,11 +430,11 @@ function bool(value: unknown, current: boolean | undefined, fallback: boolean): 
 	return value === true;
 }
 
-/** Validates a full tier definition (the shipped `unlimited` tier stays unlimited; Member never is). */
+/** Validates a full tier definition (the shipped `unlimited` tier stays unlimited; Free, the minimum, is fully editable). */
 export function validateTier(id: string, input: TierInput, current?: CreatorTier | null): Omit<CreatorTier, 'updatedAt' | 'updatedBy'> {
 	const name = typeof input.name === 'string' ? input.name.trim() : current?.name ?? '';
 	if (!name || name.length > CREATOR_TIER_TEXT.name) throw new CreatorTierError(400, 'invalid_tier', `name must be 1 to ${CREATOR_TIER_TEXT.name} characters`);
-	const unlimited = id === DEFAULT_UNLIMITED_TIER.id ? true : id === DEFAULT_TIER_ID ? false : input.unlimited === undefined ? current?.unlimited ?? false : input.unlimited === true;
+	const unlimited = id === DEFAULT_UNLIMITED_TIER.id ? true : input.unlimited === undefined ? current?.unlimited ?? false : input.unlimited === true;
 	const text = {
 		nameAr: optionalText(input.nameAr, current?.nameAr, 'nameAr', CREATOR_TIER_TEXT.name),
 		description: optionalText(input.description, current?.description, 'description', CREATOR_TIER_TEXT.description),
@@ -431,6 +521,13 @@ export async function saveTier(
 			tier.importCountsAgainstLimits ? 1 : 0, tier.audioTracksPerVideo, tier.live ? 1 : 0, tier.liveHoursMonth, tier.liveMaxConcurrent, tier.liveMaxStreamMinutes, now, actorId,
 		)
 		.run();
+	// A new tier without a rank of its own goes just below the top tier (Unlimited as shipped), never above it
+	if (opts.create && input.sortOrder === undefined) {
+		const others = (await readTiers(db)).map((t) => t.id).filter((x) => x !== id);
+		const order = [...others.slice(0, -1), id, ...others.slice(-1)];
+		await db.batch(order.map((x, i) => db.prepare('UPDATE creator_tiers SET sort_order = ? WHERE id = ? AND deleted_at IS NULL').bind(i * TIER_RANK_STEP, x)));
+		return { previous, tier: { ...tier, sortOrder: order.indexOf(id) * TIER_RANK_STEP } };
+	}
 	return { previous, tier };
 }
 
@@ -445,11 +542,14 @@ export async function deleteTier(
 	by: { actorId: string; reason?: string | null } = { actorId: 'unknown' },
 	now = new Date().toISOString(),
 ): Promise<{ previous: CreatorTier }> {
-	if (SHIPPED_TIERS.some((t) => t.id === id)) throw new CreatorTierError(409, 'tier_shipped', 'The Member, Creator and Unlimited tiers cannot be deleted');
+	if (SHIPPED_TIERS.some((t) => t.id === id)) throw new CreatorTierError(409, 'tier_shipped', 'The Free, Creator and Unlimited tiers cannot be deleted');
 	const previous = await readTier(db, id);
 	if (!previous) throw new CreatorTierError(404, 'tier_not_found');
-	const held = await db.prepare('SELECT COUNT(*) AS n FROM creator_tier_assignments WHERE tier_id = ?').bind(id).first<{ n: number }>();
-	if (Number(held?.n) > 0) throw new CreatorTierError(409, 'tier_in_use', `${held?.n} users hold this tier; assign them another tier first`);
+	// New sign-ups get the default: pick another default first
+	if ((await readDefaultTierId(db)) === id) throw new CreatorTierError(409, 'tier_is_default', 'This tier is the default; set another default first');
+	// Indexed count (idx_creator_tier_assignments_tier), never a scan
+	const users = await countTierUsers(db, id);
+	if (users > 0) throw new CreatorTierError(409, 'tier_in_use', `${users} users are on this tier; move them first`, { users });
 	await db
 		.prepare(
 			`UPDATE creator_tiers SET deleted_at = ?, deleted_by = ?, delete_reason = ?, purge_requested_at = NULL, purge_requested_by = NULL
@@ -536,7 +636,41 @@ export async function requestTierPurge(db: D1Database, id: string, actorId: stri
  * never removed (reported as failed). Each DELETE re-checks its condition, so
  * a restore that lands first wins.
  */
-export async function purgeTiers(db: D1Database, cutoff: string, limit = 100): Promise<{ purged: string[]; failed: { id: string; error: string }[] }> {
+/**
+ * Reorders the tiers (the Tiers list's drag or move up/down): `ids` must be
+ * every live tier, lowest rank first; ranks become 0, 10, 20, … in one batch.
+ * Returns the previous order (for the audit and Undo).
+ */
+export async function reorderTiers(db: D1Database, ids: readonly string[], actorId: string, now = new Date().toISOString()): Promise<{ previous: string[]; order: string[] }> {
+	const tiers = await readTiers(db);
+	const previous = tiers.map((t) => t.id);
+	const unique = new Set(ids);
+	if (unique.size !== ids.length || ids.length !== previous.length || !previous.every((id) => unique.has(id))) {
+		throw new CreatorTierError(400, 'invalid_order', 'List every tier exactly once', { tiers: previous });
+	}
+	// A shipped tier without a row yet (D1 fallback) gets its row first, so its rank can be stored
+	for (const id of ids) {
+		if (!(await db.prepare('SELECT 1 AS n FROM creator_tiers WHERE id = ?').bind(id).first())) await saveTier(db, id, {}, actorId, {}, now);
+	}
+	await db.batch(
+		// Only the rank: who reordered is in the audit (creator-tier:order), not on each tier's edit stamp
+		ids.map((id, i) => db.prepare('UPDATE creator_tiers SET sort_order = ? WHERE id = ? AND deleted_at IS NULL').bind(i * TIER_RANK_STEP, id)),
+	);
+	return { previous, order: [...ids] };
+}
+
+/** Users on a tier: one indexed count (idx_creator_tier_assignments_tier). */
+export async function countTierUsers(db: D1Database, id: string): Promise<number> {
+	const row = await db.prepare('SELECT COUNT(*) AS n FROM creator_tier_assignments WHERE tier_id = ?').bind(id).first<{ n: number }>();
+	return Number(row?.n) || 0;
+}
+
+/**
+ * Permanently deletes soft-deleted tiers past the cutoff (or queued). Checks
+ * again at purge time: never a shipped tier, the default, a tier users are on,
+ * or one in `keep` (admin-api: tiers that pending invites carry).
+ */
+export async function purgeTiers(db: D1Database, cutoff: string, limit = 100, keep: readonly string[] = []): Promise<{ purged: string[]; failed: { id: string; error: string }[] }> {
 	const { results } = await db
 		.prepare(
 			`SELECT id FROM creator_tiers WHERE deleted_at IS NOT NULL AND (deleted_at <= ? OR purge_requested_at IS NOT NULL)
@@ -549,6 +683,14 @@ export async function purgeTiers(db: D1Database, cutoff: string, limit = 100): P
 	for (const { id } of results ?? []) {
 		if (SHIPPED_TIERS.some((t) => t.id === id)) {
 			failed.push({ id, error: 'shipped tier' });
+			continue;
+		}
+		if (keep.includes(id)) {
+			failed.push({ id, error: 'pending invites carry it' });
+			continue;
+		}
+		if ((await readDefaultTierId(db)) === id) {
+			failed.push({ id, error: 'the default tier' });
 			continue;
 		}
 		const result = await db

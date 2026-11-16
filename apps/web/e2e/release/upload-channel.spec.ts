@@ -219,7 +219,7 @@ test.describe('Release: channel editors upload under the owner\'s tier (#759)', 
         ((await (await apiFetch(editor.user, '/api/me/creator')).json().catch(() => ({}))) as { result?: { tier?: { uploads?: boolean } | null; canUpload?: boolean; uploadChannelIds?: string[] } }).result;
       const first = await access();
       test.skip(!Array.isArray(first?.uploadChannelIds), 'the QA build predates per-channel upload eligibility (#759)');
-      // Every account holds Member (no uploads) unless granted more (#1415)
+      // Every account holds the default tier (Free: no uploads) unless granted more
       expect(first?.tier?.uploads ?? false, 'the editor\'s own tier allows uploads').toBe(false);
       await expect.poll(async () => (await access())?.uploadChannelIds ?? [], { message: 'the editor\'s channel is not listed', timeout: 30000 }).toContain(channelId);
 

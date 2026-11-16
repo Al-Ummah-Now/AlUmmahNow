@@ -181,7 +181,7 @@ describe('cleanup (the only hard delete)', () => {
     assert.deepEqual([...bucket.objects.keys()].map((k) => k.split('/')[1]).filter((v, i, a) => a.indexOf(v) === i).sort(), ['kept', 'live']);
     assert.equal(await count("SELECT COUNT(*) AS n FROM theme_package_versions WHERE theme_id IN ('gone', 'soon')"), 0);
     const tierCall = videos.calls.find((c) => c.path === '/creator-tiers/purge');
-    assert.deepEqual(tierCall?.body, { cutoff: purgeCutoff(NOW), limit: 50 });
+    assert.deepEqual(tierCall?.body, { cutoff: purgeCutoff(NOW), limit: 50, keep: [] }, 'no pending invite carries a tier here');
     const purges = await db.prepare("SELECT key FROM site_settings_log WHERE new_value = '{\"action\":\"purge\"}' ORDER BY key").all<{ key: string }>();
     assert.deepEqual(purges.results.map((r) => r.key), ['trash:contact-message:old', 'trash:contact-message:queued', 'trash:creator-tier:old-tier', 'trash:theme:gone', 'trash:theme:soon']);
 

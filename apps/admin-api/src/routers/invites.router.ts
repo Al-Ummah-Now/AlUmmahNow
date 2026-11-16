@@ -154,6 +154,9 @@ function channelPlan(input: unknown): ChannelPlan {
 /**
  * Invite: { email, name?, role: creator|viewer, tierId?, authRoles?: ['Scholar'], locale: en|ar, note?,
  * expiresInDays?, channels?: { create: [{name, handle?}], transfer: [channelId] } }.
+ * Every account has a tier (owner, 2026-11-15): the invite's tierId, else the
+ * current default (what a sign-up would get). Picking another tier than the
+ * default needs creators:manage.
  */
 app.post('/', async (c) => {
   need(c, 'users:manage');
@@ -161,8 +164,7 @@ app.post('/', async (c) => {
   const email = normalizeEmail(String(input.email ?? ''));
   if (!isEmailAddress(email)) throw new HttpError(400, 'invalid_email', 'A valid email is required');
   const role = input.role === 'viewer' ? 'viewer' : 'creator';
-  const tierId = role === 'creator' ? str(input.tierId, 64) : null;
-  if (tierId) need(c, 'creators:manage');
+  const picked = str(input.tierId, 64);
   const locale = input.locale === 'ar' ? 'ar' : 'en';
   const days = input.expiresInDays === undefined || input.expiresInDays === null ? DEFAULT_INVITE_DAYS : Number(input.expiresInDays);
   if (!Number.isInteger(days) || days < 1 || days > MAX_INVITE_DAYS) throw new HttpError(400, 'invalid_request', `expiresInDays must be 1 to ${MAX_INVITE_DAYS}`);
@@ -173,11 +175,11 @@ app.post('/', async (c) => {
   if (plan.transfer.length) need(c, 'channels:transfer');
   await limit(c);
 
-  if (tierId) {
-    const tiers = await videos<{ items?: Array<{ id: string }> } | Array<{ id: string }>>(c, '/creator-tiers', { query: { counts: '0' } });
-    const list = Array.isArray(tiers) ? tiers : tiers.items ?? [];
-    if (!list.some((t) => t.id === tierId)) throw new HttpError(400, 'unknown_plan', 'This plan does not exist');
-  }
+  const tiers = await videos<{ items?: Array<{ id: string }>; defaultTierId?: string }>(c, '/creator-tiers', { query: { counts: '0' } });
+  const list = tiers.items ?? [];
+  const tierId = picked ?? tiers.defaultTierId ?? 'member';
+  if (!list.some((t) => t.id === tierId)) throw new HttpError(400, 'unknown_plan', 'This plan does not exist');
+  if (tierId !== tiers.defaultTierId) need(c, 'creators:manage');
 
   const existing = await lookup(c, email);
   if (existing.authUser) throw new HttpError(409, 'user_exists', 'This email already has an account', { user: existing.authUser });
@@ -211,7 +213,7 @@ app.post('/', async (c) => {
   await record(c, 'created', ref, { email, role, tierId, locale, authRoles });
 
   const warnings: Array<{ step: string; code: string; message: string }> = [];
-  if (tierId) {
+  {
     try {
       await videos(c, `/users/${row.userId}/creator-tier`, { method: 'PUT', json: { tierId, source: 'admin', quiet: true } });
       await writeAudit(c.env.REPORTS_DB, { kind: 'user', id: row.userId, action: 'creator-tier', actorId: actorOf(c), details: { tierId, source: 'admin', inviteId: row.id }, previous: { tierId: null, source: null } });

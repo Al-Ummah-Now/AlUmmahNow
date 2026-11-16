@@ -1,10 +1,15 @@
 /**
  * Creator tiers (videos-side; never Auth RBAC).
  *
- * Every user holds a tier. A user with no assignment row holds the shipped
- * **Member** tier, the default, whose capability flags allow no uploads and no
- * channel creation, so uploading and creating channels stay by invitation
- * (wiki AUN-TIER-REQUESTS). Admins assign a tier in the videos admin (Users,
+ * Nobody is ever tierless: every account has a stored tier (owner,
+ * 2026-11-15). Invited users get the tier set on the invite; everyone else
+ * gets the **default tier** written to their account when their profile is
+ * created (sign-up). The default (picked on Tiers, "Set as default") is only
+ * what new sign-ups get: changing it never changes existing users. The shipped
+ * default is **Free** (the minimum, never deletable), whose flags allow no
+ * uploads and no channel creation, so uploading and creating channels stay by
+ * invitation (wiki AUN-TIER-REQUESTS). An account somehow without a row (before
+ * the Free backfill) is treated as Free. Admins assign a tier in the videos admin (Users,
  * user page) or approve a user's tier request (/upgrade). A tier sets what its
  * holder may do (uploads, channels), the upload limits and how many
  * channels they may own. The videos "Super Admin" role is always Unlimited.
@@ -14,11 +19,33 @@
  * later next to the admin's own assignments.
  */
 
-/** Tier ids shipped by migration; admins can add more. `unlimited` ignores every limit. */
+/**
+ * Tier ids shipped by migration; admins can add more. `unlimited` ignores every
+ * limit. `member` is the **Free** tier («مجاني»): the id is kept from when it
+ * was called Member, so existing assignments carry over (owner, 2026-11-15).
+ */
 export const CREATOR_TIER_IDS = { member: 'member', creator: 'creator', unlimited: 'unlimited' } as const;
 
-/** The tier of every user without an assignment row (wiki AUN-TIER-REQUESTS). */
+/**
+ * The shipped **Free** tier (id `member`; owner, 2026-11-15; migration 0065),
+ * the one minimum tier and the default out of the box: it cannot be deleted,
+ * and it ships with exactly what a user with no tier could do before. An
+ * account without a row is treated as Free. The default for new sign-ups is a
+ * setting (DefaultTierId); never read this as "the default".
+ */
 export const DEFAULT_TIER_ID = CREATOR_TIER_IDS.member;
+
+/**
+ * The old "no tier at all" default value. Free replaced it (owner,
+ * 2026-11-15): it can no longer be chosen, and a stored 'none' reads as Free.
+ */
+export const NO_DEFAULT_TIER = 'none';
+
+/** A tier id: what new sign-ups (and invites without a picked tier) get. */
+export type DefaultTierId = string;
+
+/** `assigned_by` of the default tier written to a new account at sign-up (source 'admin'). */
+export const SIGNUP_TIER_ASSIGNER = 'system:signup';
 
 export const CREATOR_TIER_SOURCES = ['admin', 'subscription'] as const;
 export type CreatorTierSource = (typeof CREATOR_TIER_SOURCES)[number];
@@ -31,13 +58,15 @@ export const SUPER_ADMIN_TIER_ASSIGNER = 'system:super-admin';
 
 /**
  * Where a user's tier comes from, as the admin shows it: an admin, the super
- * admin role (automatic Unlimited) or a subscription.
+ * admin role (automatic Unlimited), a subscription, or the default given at
+ * sign-up.
  */
-export type CreatorTierOrigin = CreatorTierSource | 'super_admin';
+export type CreatorTierOrigin = CreatorTierSource | 'super_admin' | 'signup';
 
 export function creatorTierOrigin(assignment: Pick<CreatorTierAssignment, 'source' | 'assignedBy'> | null | undefined): CreatorTierOrigin | null {
   if (!assignment) return null;
   if (assignment.assignedBy === SUPER_ADMIN_TIER_ASSIGNER) return 'super_admin';
+  if (assignment.assignedBy === SIGNUP_TIER_ASSIGNER) return 'signup';
   return assignment.source;
 }
 
@@ -103,10 +132,12 @@ export interface CreatorTier {
 }
 
 /**
- * The shipped Member tier: every user's tier until an admin assigns another.
- * Watching, saving and commenting are never gated; it allows no uploads and no
- * channels (both are by invitation during the beta), which an admin can change
- * later without code (wiki AUN-TIER-REQUESTS).
+ * The shipped **Free** tier («مجاني», id `member`), the one minimum tier and
+ * the default out of the box (owner, 2026-11-15): never deletable, every limit
+ * editable. It ships with today's no-tier rights: watching, saving and
+ * commenting (never gated), no uploads, no channels, no pages, 0 caption
+ * minutes. Not requestable: nobody requests the bottom tier. Also the
+ * fallback when D1 has no row.
  */
 export const DEFAULT_MEMBER_TIER: Omit<CreatorTier, 'updatedAt' | 'updatedBy'> = {
   id: CREATOR_TIER_IDS.member,
@@ -117,7 +148,7 @@ export const DEFAULT_MEMBER_TIER: Omit<CreatorTier, 'updatedAt' | 'updatedBy'> =
   unlimited: false,
   uploads: false,
   channels: false,
-  requestable: true,
+  requestable: false,
   sortOrder: 0,
   perHour: 10,
   perDay: 50,
@@ -202,6 +233,18 @@ export const CREATOR_TIER_BOUNDS = {
 export const CREATOR_TIER_TEXT = { name: 60, description: 200 } as const;
 
 /** Whether a tier lets its holder upload (unlimited implies it). */
+/**
+ * A tier's rank: its stored `sortOrder` (column sort_order), which admins set
+ * by reordering the Tiers list (drag or move up/down). Lowest first: Free
+ * ships at the bottom, Creator in between, Unlimited on top. It orders the
+ * Upgrade page and every tier picker, and an upgrade is a tier ranked above
+ * the user's current one (owner, 2026-11-15).
+ */
+export const tierRank = (tier: Pick<CreatorTier, 'sortOrder'> | null | undefined): number => (!tier ? -1 : tier.sortOrder);
+
+/** Ranks written by a reorder: 0, 10, 20, … in list order (room for a new tier in between). */
+export const TIER_RANK_STEP = 10;
+
 export const tierAllowsUploads = (tier: Pick<CreatorTier, 'unlimited' | 'uploads'> | null | undefined): boolean => !!tier && (tier.unlimited || tier.uploads);
 /** Whether a tier lets its holder create channels (unlimited implies it). */
 export const tierAllowsChannels = (tier: Pick<CreatorTier, 'unlimited' | 'channels'> | null | undefined): boolean => !!tier && (tier.unlimited || tier.channels);
@@ -244,15 +287,21 @@ export interface CreatorTierAssignment {
 }
 
 /**
+ * Why a tier applies: a stored tier, the super admin role, or 'none' (no row
+ * yet, before the Free backfill: treated as Free). 'default' is no longer
+ * produced (the default is only written at sign-up); kept for old clients.
+ */
+export type CreatorTierVia = 'tier' | 'super_admin' | 'default' | 'none';
+
+/**
  * What the signed-in user may do (GET /api/me/creator), for the web UI to show
- * or hide upload and channel-create controls. `via` says why: an assigned
- * tier, the super admin role, or none ('none': no assignment, so the user holds
- * the default Member tier, which `tier` then describes).
+ * or hide upload and channel-create controls. `via` says why: the stored
+ * tier, the super admin role, or 'none' (no row yet: Free).
  */
 export interface CreatorAccess {
-  /** The user's own tier (Member when none is assigned) with its uploads and channels flags */
-  tier: { id: string; name: string; unlimited: boolean; uploads?: boolean; channels?: boolean } | null;
-  via: 'tier' | 'super_admin' | 'none';
+  /** The user's tier (Free when no row is stored yet) with its uploads and channels flags */
+  tier: { id: string; name: string; nameAr?: string | null; unlimited: boolean; uploads?: boolean; channels?: boolean } | null;
+  via: CreatorTierVia;
   /**
    * True when the user can upload somewhere: with their own tier (to the
    * channels they own), or to a channel they help run whose owner has a tier
@@ -325,6 +374,8 @@ export interface AdminCreatorsPage {
   /** Users who hit an upload limit in the last 7 days (the page's notice) */
   limitHits7d: number;
   needsTier: number;
+  /** The default tier users without an assignment hold (null: the default is None) */
+  defaultTier: { id: string; name: string } | null;
 }
 
 /** Filters of the admin's Creators list. */
@@ -342,9 +393,13 @@ export interface CreatorTierCounts {
 /** GET creator-tiers: the definitions and how many users hold each. */
 export interface CreatorTiersList {
   items: CreatorTier[];
+  /** The tier new sign-ups get (Free as shipped) */
+  defaultTierId: DefaultTierId;
   counts: CreatorTierCounts;
   /** Users who hit an upload limit in the last 7 days (the tiers page notice) */
   limitHits7d: number;
+  /** Pending invites per tier (admin-api adds it; a tier they carry cannot be deleted) */
+  pendingInvites?: Record<string, number>;
 }
 
 /** Most users one bulk tier change takes (one page of the Creators list, with room). */

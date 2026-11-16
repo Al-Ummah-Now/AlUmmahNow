@@ -46,7 +46,7 @@ import { readCaptionSettings, writeCaptionSettings } from '../lib/captions/jobs'
 import { listTranslationEditions } from '../lib/quran/translations';
 import { platformEditions } from '../endpoints/quran/quranTranslations';
 import { addGrant, CaptionMinutesError, listGrants, listLedger, readUsage, revokeGrant, subjectOfUser } from '../lib/captions/minutes';
-import { assignTier, CreatorTierError, deleteTier, purgeTiers, readAssignment, readDeletedTiers, readTier, readTiers, requestTierPurge, restoreTier, saveTier } from '../lib/creatorTiers';
+import { assignTier, CreatorTierError, deleteTier, purgeTiers, readAssignment, readDefaultTierId, readDeletedTiers, readTier, readTiers, reorderTiers, requestTierPurge, restoreTier, saveTier, setDefaultTier } from '../lib/creatorTiers';
 import { shortLinkClicksReport, siteVisitsReport } from '../lib/site-visits';
 import { decideTierRequest, decisionNotificationPayload, listTierRequests, readRequestRow, readTierRequestForAdmin, recordDelivery, TierRequestError, type TierRequestsEnv } from '../lib/tierRequests';
 import { enqueueNotification, type NotificationsEnv } from '../lib/notifications';
@@ -181,7 +181,10 @@ app.onError((error, c) => {
 	if (error instanceof CaptionMinutesError) {
 		return c.json({ success: false, code: error.code, error: error.message }, error.status as 400);
 	}
-	if (error instanceof CreatorTierError || error instanceof TierRequestError) {
+	if (error instanceof CreatorTierError) {
+		return c.json({ success: false, code: error.code, error: error.message, ...(error.details ?? {}) }, error.status as 400);
+	}
+	if (error instanceof TierRequestError) {
 		return c.json({ success: false, code: error.code, error: error.message }, error.status as 400);
 	}
 	if (error instanceof admin.AdminError) {
@@ -372,10 +375,24 @@ app.get('/creator-tiers', async (c) => {
 	// (on QA 2026-11-11: ~38k + 11k rows per call, 1,700 calls in 17 min from the admin user
 	// page's tier control, the top reader of the search database while it was overloaded),
 	// and only the Creators overview and Tiers pages show them.
-	if (c.req.query('counts') === '0') return ok(c, { items: await readTiers(searchDb(c)) });
-	const [items, counts, limitHits7d] = await Promise.all([readTiers(searchDb(c)), tierCounts(searchDb(c)), limitHitsSince(searchDb(c))]);
-	return ok(c, { items, counts, limitHits7d });
+	if (c.req.query('counts') === '0') {
+		const [items, defaultTierId] = await Promise.all([readTiers(searchDb(c)), readDefaultTierId(searchDb(c))]);
+		return ok(c, { items, defaultTierId });
+	}
+	const [items, defaultTierId, counts, limitHits7d] = await Promise.all([
+		readTiers(searchDb(c)),
+		readDefaultTierId(searchDb(c)),
+		tierCounts(searchDb(c)),
+		limitHitsSince(searchDb(c)),
+	]);
+	return ok(c, { items, defaultTierId, counts, limitHits7d });
 });
+// Rank: the whole list in its new order, lowest first (admin-api audits it, with Undo)
+const TierOrder = z.object({ ids: z.array(z.string().min(1).max(40)).min(1).max(200) }).strict();
+app.put('/creator-tiers/order', async (c) => ok(c, await reorderTiers(searchDb(c), parse(TierOrder, await body(c)).ids, actor(c))));
+// The default tier: what new sign-ups get (a tier id). admin-api audits it.
+const TierDefault = z.object({ tierId: z.string().min(1).max(40) }).strict();
+app.put('/creator-tiers/default', async (c) => ok(c, await setDefaultTier(searchDb(c), parse(TierDefault, await body(c)).tierId, actor(c))));
 const TierBulk = z
 	.object({
 		userIds: z.array(z.string().min(1).max(128)).min(1).max(MAX_BULK_CREATOR_TIER),
@@ -408,10 +425,12 @@ app.delete('/creator-tiers/:id', async (c) => {
 app.get('/creator-tiers/deleted', async (c) => ok(c, { items: await readDeletedTiers(searchDb(c)) }));
 app.post('/creator-tiers/:id/restore', async (c) => ok(c, await restoreTier(searchDb(c), c.req.param('id'))));
 app.post('/creator-tiers/:id/purge-request', async (c) => ok(c, await requestTierPurge(searchDb(c), c.req.param('id'), actor(c))));
-const TierPurge = z.object({ cutoff: z.string().datetime(), limit: z.number().int().min(1).max(500).optional() }).strict();
+const TierPurge = z
+	.object({ cutoff: z.string().datetime(), limit: z.number().int().min(1).max(500).optional(), keep: z.array(z.string().min(1).max(40)).max(500).optional() })
+	.strict();
 app.post('/creator-tiers/purge', async (c) => {
 	const input = parse(TierPurge, await body(c));
-	return ok(c, await purgeTiers(searchDb(c), input.cutoff, input.limit));
+	return ok(c, await purgeTiers(searchDb(c), input.cutoff, input.limit, input.keep ?? []));
 });
 app.get('/users/:id/creator-tier', async (c) => ok(c, { assignment: await readAssignment(searchDb(c), c.req.param('id')) }));
 app.put('/users/:id/creator-tier', async (c) => {

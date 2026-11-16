@@ -42,6 +42,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/admin-web/e2e/12-legacy-profiles.spec.ts': { placement: 'local', reason: 'Restore job via admin-api queue; R2 seed helper swappable to local R2' },
   'apps/admin-web/e2e/13-users-tiers.spec.ts': { placement: 'local', reason: 'Creator tiers on the Users list (assign/remove, filter, bulk), Tiers nav + page validation, redirects, audit' },
   'apps/admin-web/e2e/25-allow-tier-requests.spec.ts': { placement: 'local', reason: 'Allow tier requests switch: Upgrade page request ↔ closed at once, Undo, audited; site-wide, so shared-state and restored afterwards' },
+  'apps/admin-web/e2e/24-default-tier.spec.ts': { placement: 'local', reason: 'Default creator tier: Set as default with Undo + audit, None as default, Default (Tier) on the user page, delete/deleted-tier guards' },
   'apps/admin-web/e2e/14-channel-transfer.spec.ts': { placement: 'local', reason: 'Owner picker, confirm dialog, transfer job, permissions' },
   'apps/admin-web/e2e/14-recently-deleted.spec.ts': { placement: 'local', reason: 'Recently deleted list and type-to-confirm dialog' },
   'apps/admin-web/e2e/15-invites.spec.ts': { placement: 'local', reason: 'invite link and sign-up on the real issuer (local), lands signed in on web' },

@@ -50,6 +50,7 @@ import {
 	type VideoObject,
 	type VideoR2State,
 	FEATURE_OFF_CODE,
+	type CreatorTierVia,
 } from '@al-ummah/shared-types';
 import R2Repository from '../r2Repo';
 import { logger } from '../logger';
@@ -122,7 +123,7 @@ export function settleDefault(tracks: AudioTrack[], picked?: string): void {
 }
 
 /** How many extra tracks the video's channel owner may add (MA9). Throws when D1 cannot answer. */
-export async function trackAllowance(env: AudioTracksEnv, video: Pick<Video, 'userId'>, userId: string, roles?: readonly string[] | null): Promise<{ limit: number; unlimited: boolean; via: 'tier' | 'super_admin' | 'none' }> {
+export async function trackAllowance(env: AudioTracksEnv, video: Pick<Video, 'userId'>, userId: string, roles?: readonly string[] | null): Promise<{ limit: number; unlimited: boolean; via: CreatorTierVia }> {
 	if (!env.SEARCH_DB) return isSuperAdmin(roles) ? { limit: AUDIO_TRACKS_HARD_MAX, unlimited: true, via: 'super_admin' } : { limit: 0, unlimited: false, via: 'none' };
 	const resolved = await resolveCreator(env.SEARCH_DB, { userId, roles, channelOwnerId: video.userId });
 	if (resolved.via === 'super_admin' || resolved.tier?.unlimited) return { limit: AUDIO_TRACKS_HARD_MAX, unlimited: true, via: resolved.via };

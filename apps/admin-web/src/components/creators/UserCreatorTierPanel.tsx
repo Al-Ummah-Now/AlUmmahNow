@@ -1,5 +1,5 @@
-import { CREATOR_TIER_IDS, creatorTierOrigin, type AdminAuditEntry, type CreatorTier, type CreatorTierAssignment } from '@al-ummah/shared-types';
-import { getUserCreatorTier, listCreatorTierDefinitions, setUserCreatorTier } from '@/lib/api/creators';
+import { creatorTierOrigin, type AdminAuditEntry, type CreatorTier, type CreatorTierAssignment } from '@al-ummah/shared-types';
+import { getUserCreatorTier, listCreatorTierChoices, setUserCreatorTier } from '@/lib/api/creators';
 import { getI18n } from '@/i18n/server';
 import { formatDate } from '@/i18n/translate';
 import { ErrorAlert, cardClass } from '@/components/ui';
@@ -15,17 +15,17 @@ export async function UserCreatorTierPanel({ userId, userName, canManage }: { us
   let tiers: CreatorTier[] = [];
   let current: { assignment: CreatorTierAssignment | null; audit: (AdminAuditEntry & { previous?: Record<string, unknown> | null })[] } | null = null;
   try {
-    const [list, user] = await Promise.all([listCreatorTierDefinitions(), getUserCreatorTier(userId)]);
-    tiers = list;
+    const [list, user] = await Promise.all([listCreatorTierChoices(), getUserCreatorTier(userId)]);
+    tiers = list.items;
     current = user;
   } catch (e) {
     logger.error('[creators] Failed to load the user tier', { userId, error: e instanceof Error ? e.message : String(e) });
   }
-  // No tier (null) is Member: the history says so by its name
+  // No tier (null): before every account had a stored tier
   const nameOf = (id: unknown) => {
-    const tierId = typeof id === 'string' && id ? id : CREATOR_TIER_IDS.member;
-    const tier = tiers.find((x) => x.id === tierId);
-    return tier ? tierLabel(tier, locale) : (tierId === CREATOR_TIER_IDS.member ? t('creators.none') : tierId);
+    if (typeof id !== 'string' || !id) return t('creators.defaultTierHistory');
+    const tier = tiers.find((x) => x.id === id);
+    return tier ? tierLabel(tier, locale) : id;
   };
   return (
     <section id="creator-tier" className={`${cardClass} mb-6`} aria-labelledby="creator-tier-title" data-testid="user-creator-tier">

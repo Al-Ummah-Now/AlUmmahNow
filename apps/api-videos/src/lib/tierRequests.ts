@@ -12,7 +12,8 @@
  * calls notify (in-app, deduplicated) and records the email outcome here.
  */
 import {
-	DEFAULT_TIER_ID,
+	NO_DEFAULT_TIER,
+	tierRank,
 	TIER_REQUEST_ERRORS,
 	TIER_REQUEST_HISTORY_PAGE,
 	type TierRequestHistoryPage,
@@ -31,7 +32,7 @@ import {
 	type UpgradeMode,
 	type UpgradeOverview,
 } from '@al-ummah/shared-types';
-import { readAssignments, readTier, readTiers, resolveCreator, SUPER_ADMIN_ASSIGNER } from './creatorTiers';
+import { readAssignments, readDefaultTierId, readTier, readTiers, resolveCreator, SUPER_ADMIN_ASSIGNER } from './creatorTiers';
 import { readMany } from './admin/directory';
 
 export class TierRequestError extends Error {
@@ -175,8 +176,10 @@ export async function createTierRequest(
 	const tier = await readTier(db, body.tierId);
 	if (!tier || !tier.requestable) throw new TierRequestError(404, TIER_REQUEST_ERRORS.tierNotRequestable, 'This tier cannot be requested');
 	const current = await resolveCreator(db, who);
-	const fromTierId = current.tier?.id ?? DEFAULT_TIER_ID;
+	const fromTierId = current.tier?.id ?? NO_DEFAULT_TIER;
 	if (fromTierId === tier.id) throw new TierRequestError(409, TIER_REQUEST_ERRORS.alreadyHeld, 'You already hold this tier');
+	// Only upgrades: a tier ranked above the current one (owner, 2026-11-15)
+	if (tierRank(tier) <= tierRank(current.tier)) throw new TierRequestError(409, TIER_REQUEST_ERRORS.alreadyHeld, 'Your tier is already at or above this one');
 	const since = new Date(now.getTime() - 30 * 86_400_000).toISOString();
 	const counts = await db
 		.prepare(
@@ -233,9 +236,10 @@ export async function withdrawTierRequest(db: D1Database, userId: string, id: st
 }
 
 /**
- * What /upgrade shows: requestable tiers, tiers on sale and the viewer's own tier (always,
- * so "Your current tier" has its card even when the admin hid it), in
- * sortOrder; for a signed-in viewer their tier and latest request.
+ * What /upgrade shows, in rank order: the viewer's own tier (always, so "Your
+ * current tier" has its card) and the requestable or on-sale tiers ranked above
+ * it (the upgrades; signed out: every requestable or on-sale tier); for a
+ * signed-in viewer their tier and latest request.
  */
 export async function upgradeOverview(
 	db: D1Database,
@@ -251,12 +255,15 @@ export async function upgradeOverview(
 		who ? resolveCreator(db, who) : Promise.resolve(null),
 		who ? latestRequest(db, who.userId) : Promise.resolve(null),
 	]);
-	const currentTierId = who ? current?.tier?.id ?? DEFAULT_TIER_ID : null;
+	// The stored tier (Free when no row is stored yet)
+	const currentTierId = who ? current?.tier?.id ?? NO_DEFAULT_TIER : null;
+	const floor = who ? tierRank(current?.tier) : -1;
 	return {
 		mode,
-		tiers: tiers.filter((t) => t.requestable || soldTierIds.has(t.id) || t.id === currentTierId).map(toPublicTier),
+		tiers: tiers.filter((t) => t.id === currentTierId || ((t.requestable || soldTierIds.has(t.id)) && tierRank(t) > floor)).map(toPublicTier),
 		currentTierId,
 		currentTierSince: current?.since ?? null,
+		...(who ? { currentIsDefault: current?.via === 'default' || current?.via === 'none' } : {}),
 		request: request ? ownRequest(request) : null,
 		// The human check is only for the request form
 		turnstileSiteKey: mode === 'request' ? turnstileSiteKey : null,
@@ -287,14 +294,20 @@ function decodeCursor(cursor: string | undefined): { createdAt: string; id: stri
 /** Adds who asked and what they hold now (one profile read and one assignment query per page). */
 async function enrich(env: TierRequestsEnv, rows: RequestRow[], tiers: CreatorTier[]): Promise<AdminTierRequestRow[]> {
 	const ids = [...new Set(rows.map((r) => r.user_id))];
-	const [profiles, assignments] = await Promise.all([readMany<Record<string, unknown>>(env.profiles, ids), readAssignments(env.SEARCH_DB, ids)]);
+	const [profiles, assignments, defaultTierId] = await Promise.all([
+		readMany<Record<string, unknown>>(env.profiles, ids),
+		readAssignments(env.SEARCH_DB, ids),
+		readDefaultTierId(env.SEARCH_DB),
+	]);
 	const tierName = (id: string) => tiers.find((t) => t.id === id)?.name ?? id;
 	const tierNameAr = (id: string) => tiers.find((t) => t.id === id)?.nameAr ?? null;
 	return rows.map((row) => {
 		const profile = profiles.get(row.user_id) ?? null;
 		const assignment = assignments.get(row.user_id);
 		// An automatic super admin row is only a record of the role (lib/creatorTiers.ts)
-		const currentTierId = assignment && tiers.some((t) => t.id === assignment.tierId) ? assignment.tierId : DEFAULT_TIER_ID;
+		const assigned = !!assignment && tiers.some((t) => t.id === assignment.tierId);
+		// Without an assignment the user holds the default tier ('none': the default is None)
+		const currentTierId = assigned ? assignment.tierId : tiers.some((t) => t.id === defaultTierId) ? defaultTierId : NO_DEFAULT_TIER;
 		const display = (profile?.displayName as string) || [profile?.firstName, profile?.lastName].filter(Boolean).join(' ') || null;
 		return {
 			...toRequest(row),
@@ -302,7 +315,8 @@ async function enrich(env: TierRequestsEnv, rows: RequestRow[], tiers: CreatorTi
 			userName: (profile?.userName as string) || null,
 			avatarUrl: (profile?.avatarUrl as string) || null,
 			currentTierId,
-			currentTierName: assignment?.assignedBy === SUPER_ADMIN_ASSIGNER ? tierName('unlimited') : tierName(currentTierId),
+			currentTierName: assignment?.assignedBy === SUPER_ADMIN_ASSIGNER ? tierName('unlimited') : currentTierId === NO_DEFAULT_TIER ? 'None' : tierName(currentTierId),
+			currentIsDefault: !assigned,
 			currentTierNameAr: assignment?.assignedBy === SUPER_ADMIN_ASSIGNER ? tierNameAr('unlimited') : tierNameAr(currentTierId),
 			tierNameAr: tierNameAr(row.tier_id),
 			emailStatus: row.email_status ?? null,
@@ -383,17 +397,15 @@ export async function decideTierRequest(
 		if (!tier) throw new TierRequestError(409, 'tier_not_found', 'This tier no longer exists; decline the request instead');
 		const won = `EXISTS (SELECT 1 FROM tier_requests WHERE id = ? AND status = 'approved' AND decided_at = ? AND decided_by = ?)`;
 		statements.push(
-			tier.id === DEFAULT_TIER_ID
-				? // Member is what no row means (assignTier)
-					db.prepare(`DELETE FROM creator_tier_assignments WHERE user_id = ? AND ${won}`).bind(row.user_id, id, at, decision.actorId)
-				: db
-						.prepare(
-							`INSERT INTO creator_tier_assignments (user_id, tier_id, source, assigned_by, assigned_at)
-							 SELECT ?, ?, 'admin', ?, ? WHERE ${won}
-							 ON CONFLICT (user_id) DO UPDATE SET tier_id = excluded.tier_id, source = excluded.source,
-							   assigned_by = excluded.assigned_by, assigned_at = excluded.assigned_at`,
-						)
-						.bind(row.user_id, tier.id, decision.actorId, at, id, at, decision.actorId),
+			// Every tier, Member too, is an explicit assignment: it stays when the default changes
+			db
+				.prepare(
+					`INSERT INTO creator_tier_assignments (user_id, tier_id, source, assigned_by, assigned_at)
+					 SELECT ?, ?, 'admin', ?, ? WHERE ${won}
+					 ON CONFLICT (user_id) DO UPDATE SET tier_id = excluded.tier_id, source = excluded.source,
+					   assigned_by = excluded.assigned_by, assigned_at = excluded.assigned_at`,
+				)
+				.bind(row.user_id, tier.id, decision.actorId, at, id, at, decision.actorId),
 		);
 	}
 	const [moved] = await db.batch(statements);
