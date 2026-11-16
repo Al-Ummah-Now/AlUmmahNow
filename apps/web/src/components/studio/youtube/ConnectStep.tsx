@@ -6,7 +6,7 @@ import type { YtImport } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/common/Switch';
 import { useLanguage } from '@/hooks/useLanguage';
-import { fill, StepHeading } from './parts';
+import { fillIn, useFill, StepHeading } from './parts';
 
 interface Props {
   captionsAvailable: boolean;
@@ -21,6 +21,7 @@ interface Props {
 
 export const ConnectStep = forwardRef<HTMLHeadingElement, Props>(function ConnectStep({ captionsAvailable, captions, onCaptions, connecting, onConnect, listing, error }, headingRef) {
   const { t } = useLanguage();
+  const fill = useFill();
   const text = t.studio.youtube.connect;
   const ids = useId();
 
@@ -114,6 +115,6 @@ export function YoutubeMark({ className = '' }: { className?: string }) {
   );
 }
 
-export function channelCount(template: string, count: number | null | undefined): string {
-  return count === null || count === undefined ? '' : fill(template, { count });
+export function channelCount(template: string, count: number | null | undefined, locale = 'en'): string {
+  return count === null || count === undefined ? '' : fillIn(locale)(template, { count });
 }

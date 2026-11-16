@@ -9,7 +9,7 @@ import { OptionCard } from '@/components/ui/OptionCard';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useLanguage } from '@/hooks/useLanguage';
 import { filterItems, pickable, playlistItemIds } from '@/lib/youtube-import/wizard';
-import { fill, formatDate, StepHeading, Thumb, VisibilityBadge } from './parts';
+import { num, useFill, formatDate, StepHeading, Thumb, VisibilityBadge } from './parts';
 
 const PAGE = 100;
 
@@ -30,7 +30,8 @@ interface Props {
 
 export const PickStep = forwardRef<HTMLHeadingElement, Props>(function PickStep(props, headingRef) {
   const { locale, items, playlists, selected, onSelected, selectedPlaylists, onSelectedPlaylists, visibilityMode, onVisibilityMode, saving, error, onNext } = props;
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
+  const fill = useFill();
   const text = t.studio.youtube.pick;
   const ids = useId();
   const [query, setQuery] = useState('');
@@ -76,8 +77,8 @@ export const PickStep = forwardRef<HTMLHeadingElement, Props>(function PickStep(
 
       <Tabs defaultValue="videos" dir={locale === 'ar' ? 'rtl' : 'ltr'}>
         <TabsList className="mb-4">
-          <TabsTrigger value="videos" className="min-h-9" data-testid="yt-tab-videos">{text.videosTab} <span className="ms-1.5 tabular-nums text-muted-foreground">{items.length}</span></TabsTrigger>
-          <TabsTrigger value="playlists" className="min-h-9" data-testid="yt-tab-playlists">{text.playlistsTab} <span className="ms-1.5 tabular-nums text-muted-foreground">{playlists.length}</span></TabsTrigger>
+          <TabsTrigger value="videos" className="min-h-9" data-testid="yt-tab-videos">{text.videosTab} <span className="ms-1.5 tabular-nums text-muted-foreground">{num(lang, items.length)}</span></TabsTrigger>
+          <TabsTrigger value="playlists" className="min-h-9" data-testid="yt-tab-playlists">{text.playlistsTab} <span className="ms-1.5 tabular-nums text-muted-foreground">{num(lang, playlists.length)}</span></TabsTrigger>
         </TabsList>
 
         <TabsContent value="videos" className="mt-0">

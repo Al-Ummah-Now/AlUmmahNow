@@ -1672,7 +1672,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
       uploadFailedTitle: 'فشل الرفع',
       uploadFailedMessage: 'تعذرت معالجة مرئيك "{videoTitle}"',
       youtubeImportFinishedTitle: 'اكتمل نقل قناتك من يوتيوب',
-      youtubeImportFinishedMessage: 'نُقل {ready}، ويحتاج {failed} إلى محاولة أخرى',
+      youtubeImportFinishedMessage: 'نُقل: {ready}. يحتاج إلى محاولة أخرى: {failed}.',
       newVideoTitle: 'مرئي جديد',
       newVideoMessage: 'نشرت {channelName} المرئي "{videoTitle}"',
       liveStartedTitle: 'مباشر الآن',
