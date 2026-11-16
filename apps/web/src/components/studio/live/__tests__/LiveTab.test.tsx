@@ -143,8 +143,12 @@ describe('Studio LiveTab', () => {
       expect(quota.querySelector('a')).toBeNull();
       expect(screen.queryByTestId('studio-live-create')).not.toBeInTheDocument();
       expect(screen.queryByRole('link', { name: /upgrade|request/i })).not.toBeInTheDocument();
-      // The streams already made stay listed
-      expect(await screen.findAllByTestId('studio-live-row')).toHaveLength(2);
+      // The streams already made stay listed, with no "Go live" offer that can't start
+      const rows = await screen.findAllByTestId('studio-live-row');
+      expect(rows).toHaveLength(2);
+      expect(within(rows[0]).getByTestId('studio-live-manage')).toHaveTextContent(text.details);
+      expect(within(rows[1]).getByTestId('studio-live-manage')).toHaveTextContent(text.manageLive);
+      expect(screen.queryByText(text.manage)).not.toBeInTheDocument();
     });
 
     it('unlimited: nothing to say', async () => {
