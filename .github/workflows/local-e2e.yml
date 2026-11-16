@@ -39,6 +39,45 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Test selection (scripts/ci/select, wiki "CI test selection"). Shadow mode: it works out which
+  # suites this change can reach through the dependency graph and writes "would run / would skip" to
+  # the summary; every suite still runs, and no job waits for it. Push, schedule, release and
+  # dispatch runs always plan "all".
+  select:
+    name: Test selection
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      plan: ${{ steps.plan.outputs.plan }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Plan
+        id: plan
+        env:
+          SELECT_MODE: shadow
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: >-
+          node --experimental-strip-types --no-warnings scripts/ci/select/select.ts
+          --event "$EVENT" --base "$BASE" --head "$HEAD" --labels "$LABELS" --out "$RUNNER_TEMP/test-selection.json"
+
+      - name: Upload plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-selection
+          path: ${{ runner.temp }}/test-selection.json
+          retention-days: 30
+          if-no-files-found: ignore
+
   build:
     name: Build local stack
     runs-on: ubuntu-24.04
@@ -546,4 +585,38 @@ jobs:
             apps/web/e2e/.auth/error-*.png
             ${{ runner.temp }}/stack.log
           retention-days: 7
+          if-no-files-found: ignore
+
+  # One check for the whole run: fails when a job failed or was cancelled, or when a job the plan
+  # selected did not run; a job the plan left out may be skipped. It also records the shadow audit
+  # (job, selected, result): a "miss" is a job the selector would have skipped that failed.
+  # shadow-report.ts reads these back for the rollout decision.
+  gate:
+    name: CI gate
+    needs: [select, build, release, admin, web]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/ci/select
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Gate
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          SELECT_MODE: shadow
+        run: node --experimental-strip-types --no-warnings scripts/ci/select/gate.ts --out "$RUNNER_TEMP/selection-audit.json"
+
+      - name: Upload audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selection-audit
+          path: ${{ runner.temp }}/selection-audit.json
+          retention-days: 30
           if-no-files-found: ignore
