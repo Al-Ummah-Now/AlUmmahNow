@@ -12,7 +12,6 @@ import { Chip, smallButtonClass } from '@/components/content/parts';
 import { logger } from '@/lib/logger-client';
 import { reportError } from '@/lib/errors/reporter';
 import { TierChangeDialog } from './TierChangeDialog';
-import { UserName } from '@/components/audit/UserName';
 
 export interface CurrentTier {
   tierId: string;
