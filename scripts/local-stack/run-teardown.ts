@@ -68,6 +68,10 @@ export const HISTORY: Record<string, { table: string; key: string[] }[] | 'r2'> 
   'd1:al-ummah-now-reports': [
     { table: 'admin_audit_log', key: ['id'] },
     { table: 'site_settings_log', key: ['id'] },
+    // The contact inbox's assignee roster (admin-api migration 0030): a run admin who opened the
+    // inbox. Erased with a videos account, but a run admin with no videos profile is only deleted
+    // on the issuer; on the deployed tiers the hourly cleanup drops it after 180 days
+    { table: 'contact_staff', key: ['user_id'] },
   ],
   'r2:al-ummah-now-messages': 'r2',
 };

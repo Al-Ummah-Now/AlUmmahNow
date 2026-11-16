@@ -485,3 +485,10 @@ export async function listContactStaff(db: D1Database, q: string, limit: number,
 export async function getContactStaff(db: D1Database, userId: string): Promise<ContactStaffRow | null> {
   return db.prepare('SELECT user_id, email, last_seen_at FROM contact_staff WHERE user_id = ?').bind(userId).first<ContactStaffRow>();
 }
+
+/** Roster entries not seen for 180 days are removed (hourly cleanup, lib/trash.ts). Returns how many. */
+export async function pruneContactStaff(db: D1Database, now: Date): Promise<number> {
+  const before = new Date(now.getTime() - 180 * 86400_000).toISOString();
+  const result = await db.prepare('DELETE FROM contact_staff WHERE last_seen_at < ?').bind(before).run();
+  return changes(result.meta);
+}
