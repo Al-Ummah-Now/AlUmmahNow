@@ -63,7 +63,7 @@ describe('SearchTranscriptMatches', () => {
     render(<SearchTranscriptMatches matches={[match()]} query="patience" />);
     const section = screen.getByTestId('search-transcripts');
     expect(within(section).getByRole('heading', { name: 'قيل في المرئيات' })).toBeInTheDocument();
-    expect(within(section).getByRole('link', { name: /تذكير الجمعة.*عند 12:34/ })).toHaveAttribute('href', '/ar/video/v1?t=754');
+    expect(within(section).getByRole('link', { name: /تذكير الجمعة.*عند ١٢:٣٤/ })).toHaveAttribute('href', '/ar/video/v1?t=754');
     expect(within(section).getByText('من الترجمة الإنجليزية')).toBeInTheDocument();
     expect(screen.getByTestId('search-transcript-text')).toHaveAttribute('lang', 'en');
   });
