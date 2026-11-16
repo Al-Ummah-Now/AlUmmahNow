@@ -11,7 +11,7 @@
  *   AUNytPUB001  public, ar + en captions, a maxres thumbnail
  *   AUNytUNL002  unlisted, made for kids
  *   AUNytPRV003  private, scheduled 30 days ahead
- *   PLaunFixture0001 "Fixture playlist": AUNytPUB001, AUNytUNL002
+ *   PLaunFixture0001 "Tafsir and stories": AUNytPUB001, AUNytUNL002
  * The fake's consent mode is stack-wide, so both consents run in this one test.
  *
  * Own data: the user, channel, Takeout zip and everything the import makes are this test's, and
@@ -36,11 +36,11 @@ const TAKEOUT_DIR = 'Takeout/YouTube and YouTube Music';
 
 /** The fake's fixture videos and the Takeout file each one comes in (all 16:9 clips, like YouTube's thumbnail). */
 const VIDEOS = {
-  public: { ytId: 'AUNytPUB001', title: 'Fixture public talk', file: 'Fixture public talk [AUNytPUB001].mp4', clip: 'e2e-sample.mp4', publishedAt: '2024-03-01T09:00:00Z' },
-  kids: { ytId: 'AUNytUNL002', title: 'Fixture unlisted kids video', file: 'Fixture unlisted kids video.mp4', clip: 'e2e-sample-40s.mp4', publishedAt: '2024-06-15T12:00:00Z' },
-  scheduled: { ytId: 'AUNytPRV003', title: 'Fixture scheduled video', file: 'Fixture scheduled video [AUNytPRV003].mp4', clip: 'e2e-sample-90s.mp4', publishedAt: '2026-01-10T08:00:00Z' },
+  public: { ytId: 'AUNytPUB001', title: 'Tafsir Surat Al-Kahf, Part 1', file: 'Tafsir Surat Al-Kahf, Part 1 [AUNytPUB001].mp4', clip: 'e2e-sample.mp4', publishedAt: '2024-03-01T09:00:00Z' },
+  kids: { ytId: 'AUNytUNL002', title: 'Stories of the Prophets for Kids', file: 'Stories of the Prophets for Kids.mp4', clip: 'e2e-sample-40s.mp4', publishedAt: '2024-06-15T12:00:00Z' },
+  scheduled: { ytId: 'AUNytPRV003', title: 'Ramadan Reminders, Day 1', file: 'Ramadan Reminders, Day 1 [AUNytPRV003].mp4', clip: 'e2e-sample-90s.mp4', publishedAt: '2026-01-10T08:00:00Z' },
 } as const;
-const PLAYLIST = { ytId: 'PLaunFixture0001', title: 'Fixture playlist' };
+const PLAYLIST = { ytId: 'PLaunFixture0001', title: 'Tafsir and stories' };
 
 interface ImportItem { id: string; ytVideoId: string; videoId: string | null; state: string; thumbnail: string; captions: string }
 interface ImportPlaylist { ytPlaylistId: string; playlistId: string | null; state: string }
@@ -218,7 +218,7 @@ test.describe('Move from YouTube', () => {
         expect(subtitles.tracks.map((t) => t.language).sort()).toEqual(['ar', 'en']);
       });
 
-      await test.step('"Fixture playlist" holds the two videos in YouTube\'s order', async () => {
+      await test.step('"Tafsir and stories" holds the two videos in YouTube\'s order', async () => {
         const playlistId = (detail as ImportDetail | null)?.playlists.find((p) => p.ytPlaylistId === PLAYLIST.ytId)?.playlistId;
         expect(playlistId, 'the playlist was made').toBeTruthy();
         const playlist = await json<{ title?: string; videos?: string[] }>(await apiFetch(user, `/api/playlists/${playlistId}`, { headers: { channelId } }));

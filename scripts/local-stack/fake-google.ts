@@ -6,13 +6,13 @@
  * real hosts: accounts.google.com, oauth2.googleapis.com, www.googleapis.com /
  * youtube.googleapis.com, i.ytimg.com.
  *
- * The fixture channel "Al Ummah Now Fixture" (UCaunFixtureChannel0001) has:
+ * The fixture channel "Al-Fajr Channel" (UCaunFixtureChannel0001) has (realistic titles: review shots use them):
  *   AUNytPUB001  public, captions ar + en (and an automatic track that is never imported),
  *                a maxres custom thumbnail, tags, en/ar localizations
  *   AUNytUNL002  unlisted, made for kids
  *   AUNytPRV003  private, scheduled 30 days after the request (publishAt)
- *   playlist PLaunFixture0001 "Fixture playlist": AUNytPUB001, AUNytUNL002
- * Takeout file names for E2E: "Fixture public talk [AUNytPUB001].mp4" etc. (FIXTURE_VIDEOS[].takeoutName).
+ *   playlist PLaunFixture0001 "Tafsir and stories": AUNytPUB001, AUNytUNL002
+ * Takeout file names for E2E: "Tafsir Surat Al-Kahf, Part 1 [AUNytPUB001].mp4" etc. (FIXTURE_VIDEOS[].takeoutName).
  *
  * The consent is automatic (Google sends the browser straight back). Control
  * (loopback, PORTS['fake-cdn']):
@@ -30,19 +30,19 @@ const THUMBNAIL = join(ROOT, 'apps/web/e2e/test-fixtures/e2e-thumbnail.jpg');
 const SCOPE_READONLY = 'https://www.googleapis.com/auth/youtube.readonly';
 const SCOPE_CAPTIONS = 'https://www.googleapis.com/auth/youtube.force-ssl';
 
-export const FIXTURE_CHANNEL = { id: 'UCaunFixtureChannel0001', title: 'Al Ummah Now Fixture', uploads: 'UUaunFixtureChannel0001' };
+export const FIXTURE_CHANNEL = { id: 'UCaunFixtureChannel0001', title: 'Al-Fajr Channel', uploads: 'UUaunFixtureChannel0001' };
 
 export const FIXTURE_VIDEOS = [
   {
     id: 'AUNytPUB001',
-    takeoutName: 'Fixture public talk [AUNytPUB001].mp4',
-    title: 'Fixture public talk',
-    description: 'A public talk.\n\n0:00 Opening\n0:10 Main part',
+    takeoutName: 'Tafsir Surat Al-Kahf, Part 1 [AUNytPUB001].mp4',
+    title: 'Tafsir Surat Al-Kahf, Part 1',
+    description: 'The first part of our tafsir of Surat Al-Kahf.\n\n0:00 Opening\n0:10 The cave',
     privacy: 'public',
     publishedAt: '2024-03-01T09:00:00Z',
     madeForKids: false,
-    tags: ['fixture', 'talk'],
-    localizations: { ar: { title: 'محاضرة عامة', description: 'محاضرة عامة.' }, en: { title: 'Fixture public talk', description: 'A public talk.' } },
+    tags: ['tafsir', 'al-kahf'],
+    localizations: { ar: { title: 'تفسير سورة الكهف، الجزء الأول', description: 'الجزء الأول من تفسير سورة الكهف.' }, en: { title: 'Tafsir Surat Al-Kahf, Part 1', description: 'The first part of our tafsir of Surat Al-Kahf.' } },
     captions: [
       { id: 'capPUBar', language: 'ar', trackKind: 'standard' },
       { id: 'capPUBen', language: 'en', trackKind: 'standard' },
@@ -52,9 +52,9 @@ export const FIXTURE_VIDEOS = [
   },
   {
     id: 'AUNytUNL002',
-    takeoutName: 'Fixture unlisted kids video.mp4',
-    title: 'Fixture unlisted kids video',
-    description: 'Unlisted and made for kids.',
+    takeoutName: 'Stories of the Prophets for Kids.mp4',
+    title: 'Stories of the Prophets for Kids',
+    description: 'Stories of the prophets, told for children.',
     privacy: 'unlisted',
     publishedAt: '2024-06-15T12:00:00Z',
     madeForKids: true,
@@ -65,9 +65,9 @@ export const FIXTURE_VIDEOS = [
   },
   {
     id: 'AUNytPRV003',
-    takeoutName: 'Fixture scheduled video [AUNytPRV003].mp4',
-    title: 'Fixture scheduled video',
-    description: 'Private on YouTube, scheduled.',
+    takeoutName: 'Ramadan Reminders, Day 1 [AUNytPRV003].mp4',
+    title: 'Ramadan Reminders, Day 1',
+    description: 'A short reminder for the first day of Ramadan.',
     privacy: 'private',
     publishedAt: '2026-01-10T08:00:00Z',
     /** publishAt = request time + this (a future schedule whenever the test runs) */
@@ -80,7 +80,7 @@ export const FIXTURE_VIDEOS = [
   },
 ] as const;
 
-export const FIXTURE_PLAYLIST = { id: 'PLaunFixture0001', title: 'Fixture playlist', description: 'Two fixture videos', privacy: 'public', videoIds: ['AUNytPUB001', 'AUNytUNL002'] };
+export const FIXTURE_PLAYLIST = { id: 'PLaunFixture0001', title: 'Tafsir and stories', description: 'Tafsir of Surat Al-Kahf and stories of the prophets', privacy: 'public', videoIds: ['AUNytPUB001', 'AUNytUNL002'] };
 
 type ConsentMode = 'allow' | 'deny' | 'no-channel' | 'no-captions';
 
