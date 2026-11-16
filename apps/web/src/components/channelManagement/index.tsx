@@ -105,6 +105,9 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
     router.push(`/${locale}/channels/${channelId}`);
   };
 
+  // Hidden when off: no channels and creating one is off, so there is nothing to show (no empty state)
+  if (!canCreate && channels.length === 0 && creatorAccess.status === 'ready' && !isLoading) return null;
+
   return (
     <section id="channels" className={`section mb-8 ${className}`} dir={dir}>
       {/* Section Header */}
