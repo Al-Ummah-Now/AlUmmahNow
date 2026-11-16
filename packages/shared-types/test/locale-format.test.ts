@@ -72,6 +72,10 @@ test('Arabic money uses the currency name, never US$', () => {
   const text = f.formatMoney('ar', 12.69);
   assert.equal(text, '١٢٫٦٩ دولار أمريكي');
   assert.doesNotMatch(text, /US\$|\$US|\$/);
+  assert.equal(f.moneyFormat('ar', 'USD', { maximumFractionDigits: 0 }).format(13), '١٣ دولار أمريكي');
+  assert.equal(f.moneyFormat('en', 'USD', { maximumFractionDigits: 0 }).format(13), '$13');
+  assert.equal(f.moneyFormat('en', 'USD', { maximumSignificantDigits: 2 }).format(0.0123), '$0.012');
+  assert.doesNotMatch(f.moneyFormat('ar', 'USD', { maximumSignificantDigits: 2 }).format(0.0123), /[0-9$]/);
 });
 
 test('typed numbers accept both digit systems', () => {
