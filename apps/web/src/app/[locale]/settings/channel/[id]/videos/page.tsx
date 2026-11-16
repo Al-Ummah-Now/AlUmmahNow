@@ -2,7 +2,7 @@
 
 import { FilterCombobox, type FilterItem } from '@/components/ui/FilterCombobox';
 import { matchesSearch } from '@/lib/search/match';
-import { getLocalizedValue } from '@al-ummah/shared-types';
+import { getLocalizedValue, formatNumber } from '@al-ummah/shared-types';
 import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
@@ -227,7 +227,7 @@ export default function ChannelVideosPage() {
     if (selectedVideos.size === 0) return;
 
     setActionError(null);
-    const count = selectedVideos.size.toString();
+    const count = formatNumber(lang, selectedVideos.size);
     // Bulk delete is high impact: the user types the delete word first
     const confirmed = await confirm({
       title: t.confirmDialog.deleteVideosTitle.replace('{count}', count),
@@ -261,7 +261,7 @@ export default function ChannelVideosPage() {
 
     if (diffDays === 0) return t.video.today;
     if (diffDays === 1) return t.video.yesterday;
-    if (diffDays < 7) return t.video.daysAgo.replace('{count}', diffDays.toString());
+    if (diffDays < 7) return t.video.daysAgo.replace('{count}', formatNumber(lang, diffDays));
     if (diffDays < 30) return t.video.weeksAgo.replace('{count}', Math.floor(diffDays / 7).toString());
     if (diffDays < 365) return t.video.monthsAgo.replace('{count}', Math.floor(diffDays / 30).toString());
     return t.video.yearsAgo.replace('{count}', Math.floor(diffDays / 365).toString());
@@ -352,7 +352,7 @@ export default function ChannelVideosPage() {
             {selectedVideos.size > 0 && (
               <div className="flex flex-wrap items-center gap-3 rounded-[var(--r-md)] bg-[var(--m-sel)] p-3" data-testid="video-bulk-bar">
                 <span className="text-sm font-medium text-[var(--fanous-color-text-primary)]">
-                  {t.video.videosSelected?.replace('{count}', selectedVideos.size.toString()) || `${selectedVideos.size} videos selected`}
+                  {t.video.videosSelected?.replace('{count}', formatNumber(lang, selectedVideos.size)) || `${selectedVideos.size} videos selected`}
                 </span>
                 <button type="button" onClick={handleSelectAll} className="b b-ghost b-sm">
                   {selectedVideos.size === filteredVideos.length ? t.video.deselectAll : t.video.selectAll}

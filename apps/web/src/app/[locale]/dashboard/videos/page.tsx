@@ -3,7 +3,7 @@
 import { FilterCombobox, type FilterItem } from '@/components/ui/FilterCombobox';
 import { matchesSearch } from '@/lib/search/match';
 import { collectTags } from '@/lib/search/tags';
-import { getLocalizedValue } from '@al-ummah/shared-types';
+import { getLocalizedValue, formatNumber } from '@al-ummah/shared-types';
 import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import { logger } from '@/lib/logger-client';
 import React, { useState, useEffect, useMemo } from 'react';
@@ -353,8 +353,8 @@ export default function VideoDashboardPage() {
         if (result.summary.succeeded > 0) {
           setErrorMessage(
             (t.video.bulkDeletePartial || t.errors?.genericError || '')
-              .replace('{succeeded}', result.summary.succeeded.toString())
-              .replace('{failed}', result.summary.failed.toString())
+              .replace('{succeeded}', formatNumber(lang, result.summary.succeeded))
+              .replace('{failed}', formatNumber(lang, result.summary.failed))
           );
         } else {
           setErrorMessage(t.errors?.genericError || 'Failed to delete videos');
@@ -397,12 +397,12 @@ export default function VideoDashboardPage() {
         setVideos((prev) => prev.map((v) => (updated.has(v.id) ? applyChangesLocally(v, changes) : v)));
       }
       if (failed === 0) {
-        setNoticeMessage(b.done.replace('{count}', updated.size.toString()));
+        setNoticeMessage(b.done.replace('{count}', formatNumber(lang, updated.size)));
         return true;
       }
       setErrorMessage(
         updated.size > 0
-          ? b.partial.replace('{succeeded}', updated.size.toString()).replace('{failed}', failed.toString())
+          ? b.partial.replace('{succeeded}', formatNumber(lang, updated.size)).replace('{failed}', formatNumber(lang, failed))
           : b.failed
       );
       return updated.size > 0;
@@ -500,7 +500,7 @@ export default function VideoDashboardPage() {
             {selectedVideos.size > 0 && (
               <div data-testid="dashboard-bulk-actions" className="flex items-center gap-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                 <span data-testid="dashboard-selected-count" data-count={selectedVideos.size} className="text-sm font-medium dark:text-white">
-                  {t.video.videosSelected?.replace('{count}', selectedVideos.size.toString()) || `${selectedVideos.size} videos selected`}
+                  {t.video.videosSelected?.replace('{count}', formatNumber(lang, selectedVideos.size)) || `${selectedVideos.size} videos selected`}
                 </span>
                 <button
                   onClick={handleSelectAll}
@@ -793,8 +793,8 @@ export default function VideoDashboardPage() {
         <ConfirmDialog
           open={bulkDeleteDialogOpen}
           onResult={(confirmed) => (confirmed ? void confirmBulkDelete() : setBulkDeleteDialogOpen(false))}
-          title={t.confirmDialog.deleteVideosTitle.replace('{count}', selectedVideos.size.toString())}
-          description={t.video?.confirmDeleteMultiple?.replace('{count}', selectedVideos.size.toString())}
+          title={t.confirmDialog.deleteVideosTitle.replace('{count}', formatNumber(lang, selectedVideos.size))}
+          description={t.video?.confirmDeleteMultiple?.replace('{count}', formatNumber(lang, selectedVideos.size))}
           confirmLabel={t.common.delete}
           typeToConfirm={t.confirmDialog.deleteWord}
           testId="dashboard-bulk-delete-dialog"

@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { UploadQueueItem, formatPercent } from '@al-ummah/shared-types';
+import { UploadQueueItem, formatPercent, formatNumber } from '@al-ummah/shared-types';
 import { FileQueueItem } from './FileQueueItem';
 import { Pause, Play, X, RotateCcw, Info, CheckCircle2 } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -105,7 +105,7 @@ export function BatchUploadQueue({
             {t.batch.uploadQueue}
           </h2>
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-1" data-testid="batch-summary">
-            {t.uploadStatus.uploadedCount.replace('{completed}', stats.completed.toString()).replace('{total}', stats.total.toString())}
+            {t.uploadStatus.uploadedCount.replace('{completed}', formatNumber(lang, stats.completed)).replace('{total}', formatNumber(lang, stats.total))}
           </p>
         </div>
 
