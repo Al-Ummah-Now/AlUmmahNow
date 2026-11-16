@@ -401,7 +401,7 @@
 		"LOG_LEVEL": "warn",
 		"ENVIRONMENT": "production",
 		// Bot protection (docs/features/bot-protection.md): off | monitor | enforce
-		"TURNSTILE_MODE": "off",
+		"TURNSTILE_MODE": "monitor",
 		"TURNSTILE_SITE_KEY": "0x4AAAAAAF_3KPNkPlEGf_dP",
 		// Native apps cannot show the widget: Viewer iOS/Android, Viewer TV, Viewer desktop, Studio iOS/Android, Studio desktop (Auth oauth_clients)
 		"NATIVE_CLIENT_IDS": "567a2cbc-dab8-4d5c-9437-a9e61c7120f5,111648c6-24e6-4c35-8bcf-f50ab5c0d96d,f97abe68-ef61-41b6-bf08-d86650cc7cb3,6f8073c6-754b-4d63-bf80-0546214e0d62,950e2b3b-6353-4472-affe-7c1f57f4e6a4",

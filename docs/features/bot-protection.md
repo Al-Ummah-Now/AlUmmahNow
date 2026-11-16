@@ -159,7 +159,7 @@ and caches each answer 5 minutes. No D1 reads or writes.
 ## Rollout
 
 1. Merge with production `off` (Auth, api-videos, admin-api).
-2. Production `monitor` in every Worker; watch the Abuse page for a few days.
+2. Production `monitor` in every Worker; watch the Abuse page for a few days. api-videos and admin-api: `monitor` since 2026-11-16 (Auth still `off`).
 3. Production `enforce`. Undo: set `off` again.
 
 Secrets manifest: `TURNSTILE_SECRET` is a required secret of api-videos and admin-api in
