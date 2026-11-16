@@ -17,6 +17,11 @@ import {
   insertContactNote,
   listContactMessages,
   updateContactMessage,
+  updateContactMessages,
+  restoreContactMessage,
+  touchContactStaff,
+  listContactStaff,
+  getContactStaff,
   deliveryStatus,
   recordDelivery,
   type ContactNoteRow,
@@ -28,12 +33,40 @@ import { CONTACT_QUEUE_OUTCOMES, CONTACT_QUEUE_SORTS } from '@al-ummah/shared-ty
 import { listContactQueue } from '../../lib/queue/contact-queue';
 import { assigneeParam, queueQuery, toFilters } from '../../lib/queue/schema';
 import { enqueueContactMail, reportContactMailFailure, resolveContactMailItem } from '../../lib/contact-mail-queue';
+import { publishAdminLiveInBackground } from '../../lib/admin-live';
+
+/** Every change to a message refreshes the inbox, its badge and open detail pages (admin live events). */
+function announce(c: AppContext): void {
+  publishAdminLiveInBackground(c, 'moderation', { kind: 'changed', key: 'contact', queue: 'contact' });
+}
 
 const TAGS = ['Contact'];
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const IdParams = z.object({ id: z.string().min(1).max(64) });
 
 abstract class ContactRoute extends AdminRoute {
+  /** An admin who can handle messages goes on the assignee roster (at most one write a day). */
+  protected async seen(c: AppContext): Promise<void> {
+    if (!hasPermission(this.getRoles(c), 'contact:manage')) return;
+    const auth = this.getAuth(c);
+    await touchContactStaff(c.env.REPORTS_DB, { id: auth.userId, email: auth.email || null }, new Date()).catch((error: unknown) =>
+      logger.warn('[Contact] Staff roster not updated', { error: error instanceof Error ? error.message : String(error) }),
+    );
+  }
+
+  /**
+   * The assignee a body names: 'me', a user id on the roster, or null. A
+   * string that is not on the roster is refused (null result, ok false).
+   */
+  protected async assigneeFor(c: AppContext, value: string | null | undefined): Promise<{ ok: true; assignee: { id: string; email: string | null } | null | undefined } | { ok: false }> {
+    if (value === undefined) return { ok: true, assignee: undefined };
+    if (value === null) return { ok: true, assignee: null };
+    const auth = this.getAuth(c);
+    if (value === 'me' || value === auth.userId) return { ok: true, assignee: { id: auth.userId, email: auth.email || null } };
+    const staff = await getContactStaff(c.env.REPORTS_DB, value);
+    return staff ? { ok: true, assignee: { id: staff.user_id, email: staff.email } } : { ok: false };
+  }
+
   /** A 403 response when the caller lacks the permission, otherwise null. */
   protected deny(c: AppContext, permission: Permission): Response | null {
     if (hasPermission(this.getRoles(c), permission)) return null;
@@ -54,7 +87,8 @@ export class ContactList extends ContactRoute {
         from: z.string().regex(DAY).optional(),
         to: z.string().regex(DAY).optional(),
         q: z.string().trim().max(200).optional(),
-        assignee: z.enum(['me', 'unassigned']).optional(),
+        assignee: z.string().trim().min(1).max(64).optional(),
+        read: z.enum(['unread', 'read']).optional(),
         limit: z.coerce.number().int().min(1).max(100).default(20),
         offset: z.coerce.number().int().min(0).default(0),
       }),
@@ -66,6 +100,7 @@ export class ContactList extends ContactRoute {
     const denied = this.deny(c, 'contact:read');
     if (denied) return denied;
     const { query } = await this.getValidatedData<typeof this.schema>();
+    await this.seen(c);
     const result = await listContactMessages(c.env.REPORTS_DB, { ...query, q: query.q || undefined, viewerId: this.getUserId(c) });
     return { success: true, result: { ...result, limit: query.limit, offset: query.offset } };
   }
@@ -97,7 +132,7 @@ export class ContactCounts extends ContactRoute {
   schema = addAuthToSchema({
     tags: TAGS,
     summary: 'Contact message counts by status',
-    description: 'For the admin nav badge (new) and the inbox header. Needs contact:read.',
+    description: 'For the admin nav badge (unread: not yet read and not spam) and the inbox views. Needs contact:read.',
     responses: { '200': { description: 'Counts per status' }, '403': { description: 'contact:read required' } },
   });
 
@@ -120,6 +155,7 @@ export class ContactGet extends ContactRoute {
     const denied = this.deny(c, 'contact:read');
     if (denied) return denied;
     const { params } = await this.getValidatedData<typeof this.schema>();
+    await this.seen(c);
     const thread = await getContactThread(c.env.REPORTS_DB, params.id);
     if (!thread) return c.json({ success: false, error: 'Message not found' }, 404);
     return { success: true, result: thread };
@@ -129,21 +165,22 @@ export class ContactGet extends ContactRoute {
 export class ContactUpdate extends ContactRoute {
   schema = addAuthToSchema({
     tags: TAGS,
-    summary: 'Change a contact message status or assignee',
-    description: 'assignee: "me" assigns it to the caller, null unassigns. Needs contact:manage.',
+    summary: 'Change a contact message: status, read/unread, assignee',
+    description:
+      'status: open, in_progress, replied, closed or spam. read: true marks it read (keeps the first read time), false unread. assignee: "me", the id of an admin on the inbox roster (GET /api/contact/staff), or null to unassign. Needs contact:manage.',
     request: {
       params: IdParams,
       body: {
         content: {
           'application/json': {
             schema: z
-              .object({ status: z.enum(CONTACT_STATUSES).optional(), assignee: z.enum(['me']).nullable().optional() })
-              .refine((b) => b.status !== undefined || b.assignee !== undefined, 'Nothing to change'),
+              .object({ status: z.enum(CONTACT_STATUSES).optional(), read: z.boolean().optional(), assignee: z.string().trim().min(1).max(64).nullable().optional() })
+              .refine((b) => b.status !== undefined || b.read !== undefined || b.assignee !== undefined, 'Nothing to change'),
           },
         },
       },
     },
-    responses: { '200': { description: 'The updated message' }, '404': { description: 'Not found' } },
+    responses: { '200': { description: 'The updated message' }, '400': { description: 'The assignee cannot handle contact messages' }, '404': { description: 'Not found' } },
   });
 
   async handle(c: AppContext) {
@@ -151,11 +188,122 @@ export class ContactUpdate extends ContactRoute {
     if (denied) return denied;
     const { params, body } = await this.getValidatedData<typeof this.schema>();
     const auth = this.getAuth(c);
-    const assignee = body.assignee === undefined ? undefined : body.assignee === 'me' ? { id: auth.userId, email: auth.email || null } : null;
-    const found = await updateContactMessage(c.env.REPORTS_DB, params.id, { status: body.status, assignee, actor: { id: auth.userId, email: auth.email || null } }, new Date());
+    const assignee = await this.assigneeFor(c, body.assignee);
+    if (!assignee.ok) return c.json({ success: false, error: 'not_staff' }, 400);
+    const found = await updateContactMessage(
+      c.env.REPORTS_DB,
+      params.id,
+      { status: body.status, read: body.read, assignee: assignee.assignee, actor: { id: auth.userId, email: auth.email || null } },
+      new Date(),
+    );
     if (!found) return c.json({ success: false, error: 'Message not found' }, 404);
-    logger.info('[Contact] Message updated', { id: params.id, status: body.status, assignee: body.assignee, by: auth.userId });
+    logger.info('[Contact] Message updated', { id: params.id, status: body.status, read: body.read, assigned: body.assignee !== undefined, by: auth.userId });
+    announce(c);
     return { success: true, result: { message: await getContactMessage(c.env.REPORTS_DB, params.id) } };
+  }
+}
+
+const BULK_MAX = 100;
+
+export class ContactBulk extends ContactRoute {
+  schema = addAuthToSchema({
+    tags: TAGS,
+    summary: 'Change or delete many contact messages at once',
+    description:
+      'ids (1-100) and exactly one change: status, read, assignee (as for PATCH), or delete: true (soft delete, restorable for 30 days; undo with POST /messages/restore). Idempotent: repeating it changes nothing more. Needs contact:manage.',
+    request: {
+      body: {
+        content: {
+          'application/json': {
+            schema: z
+              .object({
+                ids: z.array(z.string().min(1).max(64)).min(1).max(BULK_MAX),
+                status: z.enum(CONTACT_STATUSES).optional(),
+                read: z.boolean().optional(),
+                assignee: z.string().trim().min(1).max(64).nullable().optional(),
+                delete: z.literal(true).optional(),
+              })
+              .refine((b) => [b.status, b.read, b.assignee, b.delete].filter((v) => v !== undefined).length === 1, 'Exactly one change'),
+          },
+        },
+      },
+    },
+    responses: { '200': { description: '{ ok: ids changed, missing: ids not found }' }, '400': { description: 'The assignee cannot handle contact messages' } },
+  });
+
+  async handle(c: AppContext) {
+    const denied = this.deny(c, 'contact:manage');
+    if (denied) return denied;
+    const { body } = await this.getValidatedData<typeof this.schema>();
+    const auth = this.getAuth(c);
+    const db = c.env.REPORTS_DB;
+    const now = new Date();
+    let result: { ok: string[]; missing: string[] };
+    if (body.delete) {
+      result = { ok: [], missing: [] };
+      for (const id of [...new Set<string>(body.ids as string[])]) {
+        if (await softDeleteContactMessage(db, id, { actorId: auth.userId, reason: null, now })) {
+          await writeTrashAudit(db, { kind: 'contact-message', id, action: 'delete', actorId: auth.userId, reason: null }, now);
+          result.ok.push(id);
+        } else result.missing.push(id);
+      }
+    } else {
+      const assignee = await this.assigneeFor(c, body.assignee);
+      if (!assignee.ok) return c.json({ success: false, error: 'not_staff' }, 400);
+      result = await updateContactMessages(db, body.ids, { status: body.status, read: body.read, assignee: assignee.assignee, actor: { id: auth.userId, email: auth.email || null } }, now);
+    }
+    logger.info('[Contact] Bulk change', { count: body.ids.length, ok: result.ok.length, change: body.delete ? 'delete' : body.status ? 'status' : body.read !== undefined ? 'read' : 'assignee', by: auth.userId });
+    if (result.ok.length) announce(c);
+    return { success: true, result };
+  }
+}
+
+export class ContactRestore extends ContactRoute {
+  schema = addAuthToSchema({
+    tags: TAGS,
+    summary: 'Undo a delete: bring soft-deleted contact messages back',
+    description: 'ids (1-100) deleted in the last 30 days and not purged yet. Idempotent. Needs contact:manage.',
+    request: { body: { content: { 'application/json': { schema: z.object({ ids: z.array(z.string().min(1).max(64)).min(1).max(BULK_MAX) }) } } } },
+    responses: { '200': { description: '{ ok: ids restored, missing: ids not deleted or already purged }' } },
+  });
+
+  async handle(c: AppContext) {
+    const denied = this.deny(c, 'contact:manage');
+    if (denied) return denied;
+    const { body } = await this.getValidatedData<typeof this.schema>();
+    const actorId = this.getUserId(c);
+    const now = new Date();
+    const result = { ok: [] as string[], missing: [] as string[] };
+    for (const id of [...new Set<string>(body.ids as string[])]) {
+      if (await restoreContactMessage(c.env.REPORTS_DB, id)) {
+        await writeTrashAudit(c.env.REPORTS_DB, { kind: 'contact-message', id, action: 'restore', actorId, reason: null }, now);
+        result.ok.push(id);
+      } else result.missing.push(id);
+    }
+    logger.info('[Contact] Messages restored', { ok: result.ok.length, by: actorId });
+    if (result.ok.length) announce(c);
+    return { success: true, result };
+  }
+}
+
+export class ContactStaff extends ContactRoute {
+  schema = addAuthToSchema({
+    tags: TAGS,
+    summary: 'Admins a contact message can be assigned to',
+    description: 'The inbox roster: admins with contact:manage who used the inbox in the last 180 days, matched by email. Shaped as autocomplete suggestions. Needs contact:manage.',
+    request: { query: z.object({ q: z.string().trim().max(200).default(''), limit: z.coerce.number().int().min(1).max(50).default(20) }) },
+    responses: { '200': { description: '{ items: { id, label, secondary }[] }' } },
+  });
+
+  async handle(c: AppContext) {
+    const denied = this.deny(c, 'contact:manage');
+    if (denied) return denied;
+    await this.seen(c);
+    const { query } = await this.getValidatedData<typeof this.schema>();
+    const rows = await listContactStaff(c.env.REPORTS_DB, query.q, query.limit, new Date());
+    const me = this.getUserId(c);
+    const items = rows.map((r) => ({ kind: 'user' as const, id: r.user_id, label: r.email ?? r.user_id, secondary: r.user_id === me ? 'me' : null, imageUrl: null }));
+    return { success: true, result: { items } };
   }
 }
 
@@ -245,6 +393,7 @@ export class ContactReply extends ContactRoute {
       await reportContactMailFailure(c.env, { v: 1, kind: 'reply', messageId: params.id, noteId: id }, 'could not queue the email', 0);
     }
     logger.info('[Contact] Reply queued', { id: params.id, noteId: id, by: auth.userId });
+    announce(c);
     const thread = await getContactThread(db, params.id);
     return { success: true, result: { note: thread?.notes.find((n) => n.id === id) ?? note, message: thread?.message ?? null } };
   }
@@ -314,6 +463,7 @@ export class ContactDelete extends ContactRoute {
     if (!(await softDeleteContactMessage(c.env.REPORTS_DB, params.id, { actorId, reason, now }))) return c.json({ success: false, error: 'Message not found' }, 404);
     await writeTrashAudit(c.env.REPORTS_DB, { kind: 'contact-message', id: params.id, action: 'delete', actorId, reason }, now);
     logger.info('[Contact] Message deleted (restorable for 30 days)', { id: params.id, by: actorId });
+    announce(c);
     return { success: true, result: { deleted: params.id } };
   }
 }

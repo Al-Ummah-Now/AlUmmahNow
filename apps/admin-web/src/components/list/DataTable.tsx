@@ -147,7 +147,8 @@ export function DataTable<T extends { id: string }>({ rows, columns, caption, te
                 {...(rowProps?.(row) ?? {})}
               >
                 {selection && (
-                  <td role="cell" className={`${td} order-first md:table-cell p-0 md:px-4`}>
+                  // Above a row-wide link (a list whose whole row opens the item): the box stays clickable
+                  <td role="cell" className={`${td} order-first md:table-cell p-0 md:px-4 relative z-[1]`}>
                     <input
                       type="checkbox"
                       className="h-4 w-4 mt-1"

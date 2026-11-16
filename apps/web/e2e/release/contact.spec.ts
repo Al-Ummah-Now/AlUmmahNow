@@ -10,7 +10,6 @@
  * state back from the admin inbox, so the support inbox never gets test mail.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { adminConfirm, confirmInApp } from './in-app-confirm';
 import { promoteToAdmin } from './sink';
 import { sinkEmail, target } from './targets';
 import { completeRegistration, createProfile, signUpOnWeb, type Locale, submitPasswordSignIn } from './web-session';
@@ -153,8 +152,8 @@ test.describe('Release: Contact us', () => {
     } finally {
       for (const id of ids) {
         await page.goto(`${target().adminWeb}/contact/${id}`);
+        // Delete happens at once with an Undo toast (owner 2026-11-15); no confirm dialog
         await page.getByTestId('contact-delete').click();
-        await confirmInApp(page, adminConfirm('contact-delete-confirm'));
         await expect(page).toHaveURL(new RegExp(`${target().adminWeb}/contact(\\?|$)`), { timeout: 30000 });
       }
       // A delete keeps the message restorable for 30 days: these are test messages, so delete them
@@ -204,7 +203,6 @@ async function sweepLeftovers(page: Page): Promise<void> {
   for (const id of stale.slice(0, 20)) {
     await page.goto(`${target().adminWeb}/contact/${id}`);
     await page.getByTestId('contact-delete').click();
-    await confirmInApp(page, adminConfirm('contact-delete-confirm'));
     await expect(page).toHaveURL(new RegExp(`${target().adminWeb}/contact(\\?|$)`), { timeout: 30000 });
   }
   if (stale.length) await purgeDeleted(page, stale.slice(0, 20));

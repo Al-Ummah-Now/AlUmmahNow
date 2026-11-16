@@ -32,9 +32,9 @@ export default async function ContactMessagePage({ params }: PageProps) {
   let data: { message: ContactMessage; notes: ContactNote[] } | null = null;
   try {
     data = await getContactMessage(id);
-    // Opening a new message reads it: it leaves the "new" count
-    if (data.message.status === 'new') {
-      const opened = await updateContactMessage(id, { status: 'open' });
+    // Opening an unread message reads it: it leaves the unread count (and the nav badge)
+    if (!data.message.read_at) {
+      const opened = await updateContactMessage(id, { read: true });
       if (opened.ok) data = { ...data, message: opened.data.message };
     }
   } catch (e) {
@@ -82,18 +82,20 @@ export default async function ContactMessagePage({ params }: PageProps) {
       )}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          <article className={cardClass} data-testid="contact-message" data-message-id={m.id} data-status={m.status}>
+          <article className={`${cardClass} min-w-0`} data-testid="contact-message" data-message-id={m.id} data-status={m.status} data-read={m.read_at ? 'true' : 'false'}>
             <div className="flex flex-wrap justify-between items-start gap-3 mb-4">
               <div className="min-w-0">
                 <h1 className="text-2xl font-bold text-fg break-words" dir="auto">
                   {m.name}
                 </h1>
                 <p className="text-fg-muted text-sm">
-                  <a href={`mailto:${m.email}`} className={linkClass} dir="ltr" data-testid="contact-sender-email">
+                  <a href={`mailto:${m.email}`} className={`${linkClass} break-all`} dir="ltr" data-testid="contact-sender-email">
                     {m.email}
                   </a>
                   {' · '}
                   {translateDynamic(t, 'contactTopic', m.topic)}
+                  {' · '}
+                  <time dateTime={m.created_at}>{formatDate(m.created_at, locale, true)}</time>
                 </p>
               </div>
               <span className="flex flex-wrap gap-2">
@@ -160,7 +162,9 @@ export default async function ContactMessagePage({ params }: PageProps) {
         <div className="space-y-6">
           <ContactActions
             id={m.id}
+            name={m.name}
             status={m.status}
+            read={!!m.read_at}
             locale={m.locale}
             assignedToMe={!!session && m.assignee_id === session.user.id}
             hasAssignee={!!m.assignee_id}
@@ -171,6 +175,24 @@ export default async function ContactMessagePage({ params }: PageProps) {
               {t('contact.details')}
             </h2>
             <dl className="space-y-3">
+              <div>
+                <dt className={dt}>{t('contact.topic')}</dt>
+                <dd className="text-fg" data-testid="contact-topic">{translateDynamic(t, 'contactTopic', m.topic)}</dd>
+              </div>
+              <div>
+                <dt className={dt}>{t('contact.botCheck')}</dt>
+                <dd className="text-fg text-sm" data-testid="contact-bot-verdict" data-verdict={m.bot_verdict ?? ''}>
+                  {m.bot_verdict ? translateDynamic(t, 'contact.verdicts', m.bot_verdict) : t('contact.verdictNone')}
+                </dd>
+              </div>
+              {m.status === 'spam' && m.spam_reason && (
+                <div>
+                  <dt className={dt}>{t('contact.spamReason')}</dt>
+                  <dd className="text-fg text-sm" data-testid="contact-spam-reason" data-reason={m.spam_reason}>
+                    {translateDynamic(t, 'contact.spamReasons', m.spam_reason)}
+                  </dd>
+                </div>
+              )}
               <div>
                 <dt className={dt}>{t('contact.sender')}</dt>
                 <dd className="text-fg" data-testid="contact-sender">

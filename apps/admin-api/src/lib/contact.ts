@@ -6,8 +6,17 @@
 export const CONTACT_TOPICS = ['general', 'account', 'problem', 'content', 'partnership'] as const;
 export type ContactTopic = (typeof CONTACT_TOPICS)[number];
 
-export const CONTACT_STATUSES = ['new', 'open', 'replied', 'closed', 'spam'] as const;
+/** Read and unread are separate (read_at, migration 0030): a new message is 'open' and unread. */
+export const CONTACT_STATUSES = ['open', 'in_progress', 'replied', 'closed', 'spam'] as const;
 export type ContactStatus = (typeof CONTACT_STATUSES)[number];
+
+/** The Turnstile outcome when the message was sent (lib/bot-guard.ts checkHuman). */
+export const CONTACT_BOT_VERDICTS = ['pass', 'fail', 'missing', 'error', 'off', 'bypass'] as const;
+export type ContactBotVerdict = (typeof CONTACT_BOT_VERDICTS)[number];
+
+/** Why a message is spam: Turnstile did not pass, its text reads as a sales pitch, or an admin marked it. */
+export const CONTACT_SPAM_REASONS = ['turnstile', 'content', 'admin'] as const;
+export type ContactSpamReason = (typeof CONTACT_SPAM_REASONS)[number];
 
 export const CONTACT_LOCALES = ['en', 'ar'] as const;
 export type ContactLocale = (typeof CONTACT_LOCALES)[number];
@@ -162,4 +171,48 @@ export function safeEqual(a: string, b: string): boolean {
   let diff = x.length ^ y.length;
   for (let i = 0; i < Math.max(x.length, y.length); i++) diff |= (x[i] ?? 0) ^ (y[i] ?? 0);
   return diff === 0;
+}
+
+/**
+ * Marketing-pitch markers: the cold "we can grow your business" messages the
+ * form attracts (SEO, ads, web design offers). Each is a phrase, matched as
+ * whole words, case-insensitive.
+ */
+const PITCH_MARKERS: readonly RegExp[] = [
+  /\bonline (visibility|presence)\b/i,
+  /\brank(ing)? (higher |#?1 |first )?(on|in) google\b/i,
+  /\b(seo|search engine optimi[sz]ation)\b/i,
+  /\bbacklinks?\b/i,
+  /\b(website|web|organic) traffic\b/i,
+  /\bdigital marketing\b/i,
+  /\blead generation\b/i,
+  /\bgrow your (business|brand|online|website|sales)\b/i,
+  /\b(squarespace|shopify|wix|wordpress|godaddy)\b.*\b(squarespace|shopify|wix|wordpress|godaddy)\b/is,
+  /\bai[- ]powered search\b/i,
+  /\b(kindly )?(provide|send|share) (me )?your (name, )?(phone|whats ?app|contact) (number|details)\b/i,
+  /\bguest post(s|ing)?\b/i,
+];
+
+const LINK = /\bhttps?:\/\/|\bwww\.[a-z0-9-]+\./gi;
+
+/**
+ * A conservative spam check for the text of a message: two different pitch
+ * markers, or three links or more. One marker alone (a viewer asking about
+ * "SEO for my channel") is a normal message. Returns the reason or null.
+ */
+export function contentSpamReason(message: string): 'content' | null {
+  const markers = PITCH_MARKERS.filter((re) => re.test(message)).length;
+  const links = message.match(LINK)?.length ?? 0;
+  return markers >= 2 || links >= 3 ? 'content' : null;
+}
+
+/**
+ * Whether a new message goes straight to Spam, and why. Turnstile in monitor
+ * mode lets a failed or missing check through (enforce mode refuses it before
+ * this), so it is recorded and filed as spam; error/off/bypass are not
+ * judgements and fall through to the content check.
+ */
+export function initialSpamReason(verdict: ContactBotVerdict, message: string): ContactSpamReason | null {
+  if (verdict === 'fail' || verdict === 'missing') return 'turnstile';
+  return contentSpamReason(message);
 }

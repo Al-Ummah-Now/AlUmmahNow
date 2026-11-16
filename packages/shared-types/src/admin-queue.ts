@@ -137,7 +137,7 @@ export type ContactQueueSort = AdminQueueBaseSort;
 
 export interface ContactQueueItem {
   id: string;
-  status: 'new' | 'open' | 'replied' | 'closed' | 'spam';
+  status: 'open' | 'in_progress' | 'replied' | 'closed' | 'spam';
   topic: string;
   name: string;
   email: string;

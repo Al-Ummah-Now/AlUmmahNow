@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { addContactNote, deleteContactMessage, replyToContactMessage, updateContactMessage } from '@/lib/api/admin';
+import { addContactNote, bulkContactMessages, replyToContactMessage, restoreContactMessages, updateContactMessage } from '@/lib/api/admin';
 import type { ActionResult } from '@/lib/api/errors';
 import type { ContactStatus } from '@/lib/api/types';
 import { useLanguage } from '@/i18n/I18nProvider';
@@ -10,12 +10,16 @@ import { EmailLanguageChoice, type EmailLanguage } from '@/components/EmailLangu
 import { translateDynamic } from '@/i18n/translate';
 import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
-import { ConfirmButton } from '@/components/content/actions';
+import { useUndoableAction } from '@/components/undo/UndoToast';
 import { CONTACT_STATUSES } from '../filters';
+import { AssigneePicker } from '../AssigneePicker';
 
 interface Props {
   id: string;
+  name: string;
   status: ContactStatus;
+  /** An admin has read it (opening it reads it) */
+  read: boolean;
   locale: 'en' | 'ar';
   assignedToMe: boolean;
   hasAssignee: boolean;
@@ -25,9 +29,11 @@ const smallButton =
   'px-3 py-2 rounded border border-border bg-surface-2 hover:bg-surface-hover text-fg text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-60';
 const textareaClass = `${fieldClass} w-full resize-y`;
 
-/** Status, assignee, spam, delete, internal note and email reply for one contact message. */
-export function ContactActions({ id, status, locale, assignedToMe, hasAssignee }: Props) {
+/** Read/unread, status, assignee, spam, delete (with Undo), internal note and email reply for one contact message. */
+export function ContactActions({ id, name, status, read, locale, assignedToMe, hasAssignee }: Props) {
   const router = useRouter();
+  const undoable = useUndoableAction();
+  const [pickerKey, setPickerKey] = useState(0);
   const { t } = useLanguage();
   const ids = useId();
   const [busy, setBusy] = useState<string | null>(null);
@@ -53,7 +59,7 @@ export function ContactActions({ id, status, locale, assignedToMe, hasAssignee }
     setBusy(null);
     if (!result.ok) {
       logger.warn('[contact] Action failed', { id, name, status: result.status });
-      setError(result.status === 401 ? t('errors.notAuthenticated') : t('contact.failed'));
+      setError(result.status === 401 ? t('errors.notAuthenticated') : result.status === 400 && name === 'assign' ? t('contact.notStaff') : t('contact.failed'));
       return false;
     }
     after?.(result.data);
@@ -101,6 +107,29 @@ export function ContactActions({ id, status, locale, assignedToMe, hasAssignee }
           </button>
         </div>
 
+        <div className="flex flex-wrap gap-2 mb-4">
+          <button
+            type="button"
+            className={smallButton}
+            disabled={!!busy}
+            onClick={() => run('read', () => updateContactMessage(id, { read: !read }))}
+            data-testid={read ? 'contact-mark-unread' : 'contact-mark-read'}
+          >
+            {read ? t('contact.markUnread') : t('contact.markRead')}
+          </button>
+        </div>
+
+        <div className="mb-4 min-w-0">
+          <AssigneePicker
+            key={pickerKey}
+            testId="contact-assignee-picker"
+            disabled={!!busy}
+            onPick={async (assignee) => {
+              if (await run('assign', () => updateContactMessage(id, { assignee }))) setPickerKey((k) => k + 1);
+            }}
+          />
+        </div>
+
         <div className="flex flex-wrap gap-2">
           {assignedToMe ? (
             <button type="button" className={smallButton} disabled={!!busy} onClick={() => run('assign', () => updateContactMessage(id, { assignee: null }))} data-testid="contact-unassign">
@@ -125,26 +154,40 @@ export function ContactActions({ id, status, locale, assignedToMe, hasAssignee }
           >
             {isSpam ? t('contact.notSpam') : t('contact.markSpam')}
           </button>
-          <ConfirmButton
-            label={t('contact.delete')}
-            title={t('confirmDialog.contactDeleteTitle')}
-            body={t('contact.deleteConfirm')}
-            confirmLabel={t('contact.delete')}
-            withReason
-            danger
+          <button
+            type="button"
+            className={`${smallButton} text-danger-fg`}
             disabled={!!busy}
-            busy={busy === 'delete'}
-            testId="contact-delete"
-            // The dialog keeps the ids it had before the soft delete (release spec contact.spec.ts)
-            dialogTestId="contact-delete-confirm"
-            onConfirm={async (reason) => {
+            data-testid="contact-delete"
+            onClick={async () => {
+              // At once, with Undo (owner 2026-11-15); it also stays in Recently deleted for 30 days
               setBusy('delete');
-              const result = await deleteContactMessage(id, reason).catch(() => ({ ok: false as const, status: 0, error: 'request failed' }));
-              setBusy(null);
-              if (result.ok) router.push('/contact');
-              else setError(t('contact.failed'));
+              setError(null);
+              try {
+                await undoable.run({
+                  action: async () => {
+                    const result = await bulkContactMessages([id], { delete: true });
+                    if (!result.ok || !result.data.ok.length) throw new Error('delete failed');
+                    return result.data.ok;
+                  },
+                  undo: async (done) => {
+                    await restoreContactMessages(done);
+                    router.refresh();
+                  },
+                  message: t('contact.deletedNamed', { name }),
+                  undoneMessage: t('contact.restored'),
+                });
+                router.push('/contact');
+              } catch (e) {
+                logger.warn('[contact] Delete failed', { id, error: e instanceof Error ? e.message : String(e) });
+                setError(t('contact.failed'));
+              } finally {
+                setBusy(null);
+              }
             }}
-          />
+          >
+            {busy === 'delete' ? t('contact.working') : t('contact.delete')}
+          </button>
         </div>
       </section>
 

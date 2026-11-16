@@ -3,7 +3,7 @@
  * Uses only prepare/bind/first/all/run/batch, so tests run it on node:sqlite.
  */
 import type { D1Database, D1PreparedStatement } from './types';
-import type { ContactInput, ContactRateLimits, ContactStatus, ContactTopic } from './contact';
+import type { ContactBotVerdict, ContactInput, ContactRateLimits, ContactSpamReason, ContactStatus, ContactTopic } from './contact';
 import { containsPattern } from '@al-ummah/shared-types';
 
 export interface ContactMessageRow {
@@ -28,6 +28,12 @@ export interface ContactMessageRow {
   handled_by_id?: string | null;
   handled_by_email?: string | null;
   handled_at?: string | null;
+  /** When an admin first read it; NULL = unread (migration 0030) */
+  read_at?: string | null;
+  /** The Turnstile outcome at submission; NULL for messages from before it was recorded */
+  bot_verdict?: ContactBotVerdict | null;
+  /** Why it is spam (turnstile, content, admin); NULL unless status is spam */
+  spam_reason?: ContactSpamReason | null;
   created_at: string;
   updated_at: string;
 }
@@ -52,7 +58,7 @@ const changes = (meta: unknown) => Number((meta as { changes?: number } | undefi
 
 /** Every column except ip_hash, which never leaves the database. */
 const MESSAGE_COLUMNS =
-  'id, status, topic, name, email, message, user_id, locale, page_url, user_agent, assignee_id, assignee_email, notify_status, ack_status, send_failed_at, delivery_error, handled_by_id, handled_by_email, handled_at, created_at, updated_at';
+  'id, status, topic, name, email, message, user_id, locale, page_url, user_agent, assignee_id, assignee_email, notify_status, ack_status, send_failed_at, delivery_error, handled_by_id, handled_by_email, handled_at, read_at, bot_verdict, spam_reason, created_at, updated_at';
 
 export interface NewContactMessage extends ContactInput {
   id: string;
@@ -60,6 +66,10 @@ export interface NewContactMessage extends ContactInput {
   userAgent: string | null;
   ipHash: string;
   now: Date;
+  /** Turnstile outcome (default off) */
+  botVerdict?: ContactBotVerdict;
+  /** Set: the message is filed as spam at once and no email goes out for it */
+  spamReason?: ContactSpamReason | null;
 }
 
 /**
@@ -71,17 +81,20 @@ export async function insertContactMessage(db: D1Database, m: NewContactMessage,
   const now = m.now.toISOString();
   const hourAgo = new Date(m.now.getTime() - 3600_000).toISOString();
   const dayAgo = new Date(m.now.getTime() - 86400_000).toISOString();
+  const spam = !!m.spamReason;
   const result = await db
     .prepare(
-      `INSERT INTO contact_messages (id, status, topic, name, email, message, user_id, locale, page_url, user_agent, ip_hash, notify_status, ack_status, created_at, updated_at)
-       SELECT ?, 'new', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', 'queued', ?, ?
+      `INSERT INTO contact_messages (id, status, topic, name, email, message, user_id, locale, page_url, user_agent, ip_hash, notify_status, ack_status, bot_verdict, spam_reason, created_at, updated_at)
+       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
        WHERE (SELECT COUNT(*) FROM contact_messages WHERE ip_hash = ? AND created_at > ?) < ?
          AND (SELECT COUNT(*) FROM contact_messages WHERE ip_hash = ? AND created_at > ?) < ?
          AND (? IS NULL OR (SELECT COUNT(*) FROM contact_messages WHERE user_id = ? AND created_at > ?) < ?)
          AND (? IS NULL OR (SELECT COUNT(*) FROM contact_messages WHERE user_id = ? AND created_at > ?) < ?)`,
     )
     .bind(
-      m.id, m.topic, m.name, m.email, m.message, m.userId, m.locale, m.pageUrl, m.userAgent, m.ipHash, now, now,
+      m.id, spam ? 'spam' : 'open', m.topic, m.name, m.email, m.message, m.userId, m.locale, m.pageUrl, m.userAgent, m.ipHash,
+      // Spam gets no email: no inbox notification, and no acknowledgement to an address that may not be the sender's
+      spam ? 'skipped' : 'queued', spam ? 'skipped' : 'queued', m.botVerdict ?? 'off', m.spamReason ?? null, now, now,
       m.ipHash, hourAgo, limits.perIpHour,
       m.ipHash, dayAgo, limits.perIpDay,
       m.userId, m.userId, hourAgo, limits.perUserHour,
@@ -106,8 +119,10 @@ export interface ContactListFilters {
   to?: string;
   /** Matches name, email or message text */
   q?: string;
-  /** 'me' (needs viewerId) or 'unassigned' */
-  assignee?: 'me' | 'unassigned';
+  /** 'me' (needs viewerId), 'unassigned' or a user id */
+  assignee?: string;
+  /** unread: not yet read (spam never counts as unread); read: read */
+  read?: 'unread' | 'read';
   viewerId?: string;
   limit: number;
   offset: number;
@@ -150,7 +165,12 @@ export async function listContactMessages(db: D1Database, f: ContactListFilters)
     args.push(f.viewerId);
   } else if (f.assignee === 'unassigned') {
     where.push('assignee_id IS NULL');
+  } else if (f.assignee && f.assignee !== 'me') {
+    where.push('assignee_id = ?');
+    args.push(f.assignee);
   }
+  if (f.read === 'unread') where.push("read_at IS NULL AND status <> 'spam'");
+  else if (f.read === 'read') where.push('read_at IS NOT NULL');
   const clause = `WHERE ${where.join(' AND ')}`;
   const [rows, count] = await db.batch([
     db.prepare(`SELECT ${MESSAGE_COLUMNS} FROM contact_messages ${clause} ORDER BY created_at DESC, rowid DESC LIMIT ? OFFSET ?`).bind(...args, f.limit, f.offset),
@@ -162,17 +182,21 @@ export async function listContactMessages(db: D1Database, f: ContactListFilters)
   };
 }
 
-export type ContactCounts = Record<ContactStatus | 'send_failed', number>;
+export type ContactCounts = Record<ContactStatus | 'send_failed' | 'unread', number>;
 
-/** Counts for the admin nav badge and the inbox header; send_failed needs an admin's action. */
+/** Counts for the admin nav badge (unread) and the inbox views; send_failed needs an admin's action. */
 export async function contactCounts(db: D1Database): Promise<ContactCounts> {
-  const [byStatus, failed] = await db.batch([
+  const [byStatus, failed, unread] = await db.batch([
     db.prepare('SELECT status, COUNT(*) AS n FROM contact_messages WHERE deleted_at IS NULL GROUP BY status'),
     db.prepare('SELECT COUNT(*) AS n FROM contact_messages WHERE send_failed_at IS NOT NULL AND deleted_at IS NULL'),
+    // idx_contact_messages_unread
+    db.prepare("SELECT COUNT(*) AS n FROM contact_messages WHERE read_at IS NULL AND deleted_at IS NULL AND status <> 'spam'"),
   ]);
-  const counts: ContactCounts = { new: 0, open: 0, replied: 0, closed: 0, spam: 0, send_failed: 0 };
-  for (const row of (byStatus.results ?? []) as { status: ContactStatus; n: number }[]) counts[row.status] = Number(row.n);
-  counts.send_failed = Number((failed.results?.[0] as { n?: number } | undefined)?.n ?? 0);
+  const counts: ContactCounts = { open: 0, in_progress: 0, replied: 0, closed: 0, spam: 0, send_failed: 0, unread: 0 };
+  for (const row of (byStatus.results ?? []) as { status: ContactStatus; n: number }[]) if (row.status in counts) counts[row.status] = Number(row.n);
+  const n = (r: { results?: unknown[] }) => Number((r.results?.[0] as { n?: number } | undefined)?.n ?? 0);
+  counts.send_failed = n(failed);
+  counts.unread = n(unread);
   return counts;
 }
 
@@ -207,6 +231,8 @@ export async function getContactThread(db: D1Database, id: string): Promise<{ me
 
 export interface ContactPatch {
   status?: ContactStatus;
+  /** true: read (keeps the first read time); false: unread again */
+  read?: boolean;
   /** undefined: unchanged; null: unassign */
   assignee?: { id: string; email: string | null } | null;
   /** Who made the change: recorded as the handler when the status moves to replied, closed or spam (History tab) */
@@ -232,6 +258,15 @@ export async function updateContactMessage(db: D1Database, id: string, patch: Co
       );
       args.push(patch.status, patch.actor?.id ?? null, patch.status, patch.actor?.email ?? null, patch.status, now.toISOString());
     }
+    // An admin's spam keeps an automatic reason; leaving spam clears it
+    if (patch.status === 'spam') sets.push("spam_reason = COALESCE(spam_reason, 'admin')");
+    else sets.push('spam_reason = NULL');
+  }
+  if (patch.read !== undefined) {
+    if (patch.read) {
+      sets.push('read_at = COALESCE(read_at, ?)');
+      args.push(now.toISOString());
+    } else sets.push('read_at = NULL');
   }
   if (patch.assignee !== undefined) {
     sets.push('assignee_id = ?', 'assignee_email = ?');
@@ -241,6 +276,17 @@ export async function updateContactMessage(db: D1Database, id: string, patch: Co
   args.push(now.toISOString());
   const result = await db.prepare(`UPDATE contact_messages SET ${sets.join(', ')} WHERE id = ? AND deleted_at IS NULL`).bind(...args, id).run();
   return changes(result.meta) > 0;
+}
+
+/**
+ * The same patch on many messages (the inbox's bulk bar). Idempotent: running
+ * it again changes nothing more. Returns the ids that exist and were updated.
+ */
+export async function updateContactMessages(db: D1Database, ids: string[], patch: ContactPatch, now: Date): Promise<{ ok: string[]; missing: string[] }> {
+  const ok: string[] = [];
+  const missing: string[] = [];
+  for (const id of [...new Set(ids)]) ((await updateContactMessage(db, id, patch, now)) ? ok : missing).push(id);
+  return { ok, missing };
 }
 
 export type MailKind = 'notify' | 'ack' | 'reply';
@@ -287,11 +333,11 @@ export async function recordDelivery(
       statements.push(
         db
           .prepare(
-            `UPDATE contact_messages SET status = 'replied', updated_at = ?, handled_at = ?,
+            `UPDATE contact_messages SET status = 'replied', updated_at = ?, handled_at = ?, read_at = COALESCE(read_at, ?),
                handled_by_id = (SELECT author_id FROM contact_notes WHERE id = ?), handled_by_email = (SELECT author_email FROM contact_notes WHERE id = ?)
              WHERE id = ? AND status <> 'spam'`,
           )
-          .bind(now, now, d.noteId ?? '', d.noteId ?? '', d.messageId),
+          .bind(now, now, now, d.noteId ?? '', d.noteId ?? '', d.messageId),
       );
     }
   } else {
@@ -393,4 +439,49 @@ export async function purgeContactMessages(db: D1Database, cutoff: string, limit
     if (changes(removed.meta) > 0) purged.push(id);
   }
   return purged;
+}
+
+/** A videos admin who can handle contact messages (contact_staff, migration 0030). */
+export interface ContactStaffRow {
+  user_id: string;
+  email: string | null;
+  last_seen_at: string;
+}
+
+/**
+ * Records an admin with contact:manage on the roster. Writes at most once a
+ * day per admin: the upsert only touches a row last seen over a day ago, or
+ * whose email changed.
+ */
+export async function touchContactStaff(db: D1Database, staff: { id: string; email: string | null }, now: Date): Promise<void> {
+  const at = now.toISOString();
+  const dayAgo = new Date(now.getTime() - 86400_000).toISOString();
+  await db
+    .prepare(
+      `INSERT INTO contact_staff (user_id, email, last_seen_at) VALUES (?, ?, ?)
+       ON CONFLICT(user_id) DO UPDATE SET email = excluded.email, last_seen_at = excluded.last_seen_at
+       WHERE contact_staff.last_seen_at < ? OR COALESCE(contact_staff.email, '') <> COALESCE(excluded.email, '')`,
+    )
+    .bind(staff.id, staff.email, at, dayAgo)
+    .run();
+}
+
+/** The roster, matching q in the email or id; seen in the last 180 days, most recent first. */
+export async function listContactStaff(db: D1Database, q: string, limit: number, now: Date): Promise<ContactStaffRow[]> {
+  const since = new Date(now.getTime() - 180 * 86400_000).toISOString();
+  const term = q.trim();
+  const { results } = await (term
+    ? db
+        .prepare(
+          `SELECT user_id, email, last_seen_at FROM contact_staff WHERE last_seen_at >= ? AND (lower(COALESCE(email, '')) LIKE ? ESCAPE '\\' OR user_id = ?)
+           ORDER BY last_seen_at DESC LIMIT ?`,
+        )
+        .bind(since, likePattern(term.toLowerCase()), term, limit)
+    : db.prepare('SELECT user_id, email, last_seen_at FROM contact_staff WHERE last_seen_at >= ? ORDER BY last_seen_at DESC LIMIT ?').bind(since, limit)
+  ).all<ContactStaffRow>();
+  return results ?? [];
+}
+
+export async function getContactStaff(db: D1Database, userId: string): Promise<ContactStaffRow | null> {
+  return db.prepare('SELECT user_id, email, last_seen_at FROM contact_staff WHERE user_id = ?').bind(userId).first<ContactStaffRow>();
 }
