@@ -74,7 +74,7 @@ export function CreatorTierControl({ userId, userName, current: serverCurrent, t
   const currentTier = tierOf(current?.tierId);
   // Every account has a stored tier; one not backfilled yet works as Free, so it is shown as Free
   const freeTier = tiers.find((tier) => tier.id === CREATOR_TIER_IDS.member);
-  const currentName = current ? (currentTier ? tierLabel(currentTier, locale) : current.tierId) : freeTier ? tierLabel(freeTier, locale) : defaultTierName(CREATOR_TIER_IDS.member, tiers, t);
+  const currentName = current ? (currentTier ? tierLabel(currentTier, locale) : current.tierId) : freeTier ? tierLabel(freeTier, locale) : defaultTierName(CREATOR_TIER_IDS.member, tiers, t, locale);
 
   async function apply(tierId: string) {
     setPending(undefined);
