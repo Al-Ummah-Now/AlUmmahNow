@@ -76,7 +76,7 @@ const iconSizes = {
  * Reusable Upload Button Component
  *
  * Can be used as either a Link or a button element.
- * Features emerald-to-teal gradient styling consistent across the app.
+ * Flat Material filled styling (the theme's primary), consistent across the app.
  *
  * @example
  * // As a link (navigation)
@@ -111,15 +111,14 @@ export function UploadButton({
     'inline-flex items-center gap-2',
     // Sizing
     sizeClasses[size],
-    // Colors - Emerald to Teal gradient
-    'bg-gradient-to-r from-emerald-600 to-teal-600',
-    'hover:from-emerald-700 hover:to-teal-700',
-    'text-white',
+    // Flat Material filled (packages/fanous-tokens/surfaces): the theme's primary, a state layer on hover
+    'bg-[var(--aun-btn-filled-bg)] text-[var(--aun-btn-filled-fg)]',
+    'hover:bg-[color-mix(in_srgb,var(--aun-btn-filled-fg)_8%,var(--aun-btn-filled-bg))]',
     // Effects
-    'rounded-lg font-medium shadow-sm hover:shadow-md',
+    'rounded-[var(--aun-radius-button)] font-medium',
     'transition-all',
     // Focus
-    'focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2',
+    'focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--fanous-color-focus-ring)] focus-visible:ring-offset-2',
     // Disabled state
     disabled && 'opacity-50 cursor-not-allowed',
     // Custom classes

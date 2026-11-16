@@ -171,7 +171,7 @@ export const LiveStreamCardRTL = React.memo<LiveStreamCardProps>(
         <div className="relative aspect-video bg-gray-200 dark:bg-black overflow-hidden">
           {/* Placeholder gradient (shown while loading) */}
           {!imageLoaded && !imageError && (
-            <div className="absolute inset-0 bg-gradient-to-br from-gray-300 to-gray-400 dark:from-gray-700 dark:to-gray-800 animate-pulse" />
+            <div className="absolute inset-0 bg-[var(--fanous-c-skeleton-bg,var(--fanous-color-surface))] animate-pulse" />
           )}
 
           {/* Actual thumbnail image */}

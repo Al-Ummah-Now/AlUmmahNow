@@ -131,7 +131,7 @@ export default function SettingsPage() {
                 className="block bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700 hover:border-[var(--fanous-color-accent)] dark:hover:border-[var(--fanous-color-accent)] transition-all hover:shadow-lg group"
               >
                 <div className="flex items-start gap-4">
-                  <div className="p-3 bg-gradient-to-br from-[var(--fanous-color-accent)] to-[#ff8c00] rounded-lg group-hover:scale-110 transition-transform">
+                  <div className="p-3 bg-[var(--aun-btn-filled-bg)] text-[var(--aun-btn-filled-fg)] rounded-lg">
                     <Icon className="h-6 w-6 text-white" />
                   </div>
                   <div className="flex-1">
