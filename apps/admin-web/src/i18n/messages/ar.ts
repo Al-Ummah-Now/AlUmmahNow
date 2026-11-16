@@ -415,6 +415,9 @@ const ar: Messages = {
     reasonCodes: {
       sexual: 'محتوى جنسي أو غير لائق', child_safety: 'سلامة الأطفال', graphic_violence: 'عنف صادم', self_harm: 'إيذاء النفس', hate: 'خطاب كراهية', violent_extremism: 'تطرف عنيف', harassment: 'مضايقة', spam_scam: 'رسائل مزعجة أو احتيال', impersonation: 'انتحال شخصية', privacy: 'معلومات خاصة', copyright: 'حقوق النشر', misleading_metadata: 'عنوان أو صورة مصغرة مضللة', religious_misattribution: 'نسبة كلام ديني لغير قائله', other: 'أخرى (مخالفة الإرشادات)',
     },
+    /** Automated finding categories that are not reason codes or aiCategory entries */
+    findingCategory: { gore: 'مشاهد دموية', disturbing: 'محتوى مزعج', minor_present: 'يظهر فيه قاصر', sexual_explicit_language: 'ألفاظ جنسية صريحة' },
+    findingSource: { metadata: 'العنوان والوصف', thumbnail: 'الصورة المصغّرة', frame: 'لقطة', transcript: 'النص المفرّغ', image: 'صورة' },
     settings: {
       title: 'إعدادات المراجعة',
       readOnly: 'يغيّر المسؤولون وحدهم هذه الإعدادات، ويمكنك الاطلاع عليها هنا.',
