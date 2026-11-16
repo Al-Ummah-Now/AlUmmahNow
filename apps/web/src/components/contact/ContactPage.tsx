@@ -136,7 +136,7 @@ export function ContactPage() {
       topic: { required: 'topicRequired', tooLong: 'topicRequired', invalid: 'topicRequired', tooShort: 'topicRequired' },
       message: { required: 'messageRequired', tooLong: 'messageTooLong', invalid: 'messageRequired', tooShort: 'messageTooShort' },
     }[field][e] as keyof typeof c.errors;
-    return fill(c.errors[key], { min: CONTACT_LIMITS.messageMin, max });
+    return fill(c.errors[key], { min: CONTACT_LIMITS.messageMin, max }, lang);
   };
 
   const set = <K extends keyof ContactFormValues>(field: K, value: ContactFormValues[K]) => {
@@ -426,7 +426,7 @@ export function ContactPage() {
                   data-testid="contact-message"
                 />
                 <p className="ct-hint" id={id('message-hint')}>
-                  {fill(c.fields.messageHint, { min: CONTACT_LIMITS.messageMin })}
+                  {fill(c.fields.messageHint, { min: CONTACT_LIMITS.messageMin }, lang)}
                 </p>
                 {fieldError('message')}
               </div>

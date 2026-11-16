@@ -10,7 +10,7 @@
  */
 import React, { useId, useState } from 'react';
 import { AlertTriangle, AudioLines, Loader2, X } from 'lucide-react';
-import { captionMinutesCanStart, isCaptionJobActive, type CaptionMinutesUsage, type CaptionsTranslations, dateTimeFormat, formatNumber } from '@al-ummah/shared-types';
+import { captionMinutesCanStart, isCaptionJobActive, type CaptionMinutesUsage, type CaptionsTranslations, dateTimeFormat, formatNumber, fillTemplate, type TemplateParams } from '@al-ummah/shared-types';
 import { reportError } from '@/lib/errors/reporter';
 import { SUPPORTED_LANGUAGES } from '@/lib/api/subtitles-types';
 import { cancelCaptionJob, startCaptionJob, type CaptionJobView } from '@/lib/api/caption-drafts';
@@ -65,9 +65,11 @@ export function jobStepText(t: CaptionsTranslations['jobs'], job: CaptionJobView
   }
 }
 
-const fill = (template: string, values: Record<string, string | number>) => Object.entries(values).reduce((text, [key, value]) => text.split(`{${key}}`).join(String(value)), template);
+/** Fills {name} placeholders; numbers in the page's digits (locale-format). */
+const fillIn = (lang: string, template: string, values: TemplateParams) => fillTemplate(lang === 'ar' ? 'ar' : 'en', template, values);
 
 export default function CaptionTranscribe({ videoId, spokenLanguage, jobs, minutes, draftLanguages, t, lang, cancelLabel, confirm, label, reload }: CaptionTranscribeProps) {
+  const fill = (template: string, values: TemplateParams) => fillIn(lang, template, values);
   const languageId = useId();
   const [language, setLanguage] = useState(spokenLanguage && SUPPORTED_LANGUAGES.some((l) => l.code === spokenLanguage) ? spokenLanguage : 'ar');
   const [busy, setBusy] = useState<string | null>(null);

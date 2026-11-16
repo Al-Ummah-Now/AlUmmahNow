@@ -67,7 +67,7 @@ export function NotificationBell({ dir = 'ltr' }: NotificationBellProps) {
   if (!user) return null;
 
   const badge = unreadBadge(unseenCount, lang);
-  // The name carries the badge exactly as shown ("9+", Arabic-Indic digits) so it
+  // The name carries the badge exactly as shown ("9+", Eastern Arabic (Hindi) numerals in Arabic) so it
   // contains the visible text (WCAG 2.5.3 label-in-name)
   const label = unseenCount > 0 ? fillTemplate(texts.bellLabelNew, { count: badge }) : texts.bellLabel;
 

@@ -6,6 +6,7 @@
  */
 
 import {
+  formatNumber,
   LIBRARY_AR,
   LIBRARY_EN,
   NOTIFICATION_CENTER_AR,
@@ -19,7 +20,11 @@ import {
 export { LIBRARY_AR, LIBRARY_EN, NOTIFICATION_CENTER_AR, NOTIFICATION_CENTER_EN };
 export type { LibraryTranslations, NotificationCenterTranslations };
 
-/** Fill `{name}` placeholders. */
-export function fillTemplate(template: string, params: Record<string, string | number> = {}): string {
-  return template.replace(/\{(\w+)\}/g, (_, name: string) => (params[name] !== undefined ? String(params[name]) : ''));
+/** Fill `{name}` placeholders. With `lang`, numbers are written in that language's digits (locale-format). */
+export function fillTemplate(template: string, params: Record<string, string | number> = {}, lang?: string): string {
+  return template.replace(/\{(\w+)\}/g, (_, name: string) => {
+    const value = params[name];
+    if (value === undefined) return '';
+    return typeof value === 'number' && lang ? formatNumber(lang, value) : String(value);
+  });
 }

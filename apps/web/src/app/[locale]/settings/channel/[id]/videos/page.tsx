@@ -262,9 +262,9 @@ export default function ChannelVideosPage() {
     if (diffDays === 0) return t.video.today;
     if (diffDays === 1) return t.video.yesterday;
     if (diffDays < 7) return t.video.daysAgo.replace('{count}', formatNumber(lang, diffDays));
-    if (diffDays < 30) return t.video.weeksAgo.replace('{count}', Math.floor(diffDays / 7).toString());
-    if (diffDays < 365) return t.video.monthsAgo.replace('{count}', Math.floor(diffDays / 30).toString());
-    return t.video.yearsAgo.replace('{count}', Math.floor(diffDays / 365).toString());
+    if (diffDays < 30) return t.video.weeksAgo.replace('{count}', formatNumber(lang, Math.floor(diffDays / 7)));
+    if (diffDays < 365) return t.video.monthsAgo.replace('{count}', formatNumber(lang, Math.floor(diffDays / 30)));
+    return t.video.yearsAgo.replace('{count}', formatNumber(lang, Math.floor(diffDays / 365)));
   };
 
   if (!user || !isOwner) {

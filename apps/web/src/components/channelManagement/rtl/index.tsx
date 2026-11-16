@@ -3,7 +3,7 @@ import { logger } from '@/lib/logger-client';
 import React, { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { CHANNEL_DELETED_PARAM } from '@/components/channelManagement/DeleteChannelDialog';
-import { Channel } from '@al-ummah/shared-types';
+import { Channel, formatNumber } from '@al-ummah/shared-types';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useChannels } from '@/hooks/useChannels';
 import { ChannelManagementSectionProps, CreateChannelFormData } from '../types';
@@ -28,7 +28,7 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
 }) => {
   const router = useRouter();
   const { user } = useAuth();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   // Creating channels is by invitation (creator tiers) and bounded by the tier's channel limit
   const creatorAccess = useCreatorAccess();
   const canCreate = mayCreateChannel(creatorAccess);
@@ -139,7 +139,7 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
         <div className="mb-6">
           {creatorAccess.access.tier ? (
             <p role="status" data-testid="channel-limit-reached" className="rounded-lg border border-border bg-card px-4 py-3 text-sm text-card-foreground">
-              {t.creator.channelLimit.replace('{max}', String(creatorAccess.access.maxChannels ?? ''))}
+              {t.creator.channelLimit.replace('{max}', creatorAccess.access.maxChannels == null ? '' : formatNumber(lang, creatorAccess.access.maxChannels))}
             </p>
           ) : (
             <UploadsByInvitationNotice />
