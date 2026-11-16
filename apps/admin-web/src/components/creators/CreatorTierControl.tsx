@@ -12,6 +12,7 @@ import { Chip, smallButtonClass } from '@/components/content/parts';
 import { logger } from '@/lib/logger-client';
 import { reportError } from '@/lib/errors/reporter';
 import { TierChangeDialog } from './TierChangeDialog';
+import { UserName } from '@/components/audit/UserName';
 
 export interface CurrentTier {
   tierId: string;
@@ -38,7 +39,7 @@ export interface CreatorTierControlProps {
 }
 
 /** Fills a "{actor}, {date}" template with each value in its own <bdi>. */
-function withIsolated(template: string, values: Record<string, string>): React.ReactNode[] {
+function withIsolated(template: string, values: Record<string, React.ReactNode>): React.ReactNode[] {
   return template.split(/(\{\w+\})/).map((part, i) => {
     const name = /^\{(\w+)\}$/.exec(part)?.[1];
     return name && name in values ? <bdi key={i}>{values[name]}</bdi> : part;
@@ -125,7 +126,7 @@ export function CreatorTierControl({ userId, userName, current: serverCurrent, t
               {' · '}
               {/* Names and dates in their own direction, so an English name in Arabic does not scramble the line */}
               {withIsolated(t('creators.assignedByOn'), {
-                actor: current.assignedByName || current.assignedBy,
+                actor: current.assignedByName || (current.assignedBy ? <UserName id={current.assignedBy} showEmail={false} /> : t('auditLog.unknownUser')),
                 date: formatDate(current.assignedAt, locale),
               })}
             </>

@@ -1,6 +1,7 @@
 /**
  * adminUserName: admin pages call a user by the API's resolved display name
- * (display name, else first + last), then the email, then the id. No @handle: handles belong to channels.
+ * (display name, else first + last), then the email, never the id ("Unknown user" when nothing is known).
+ * No @handle: handles belong to channels.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -15,8 +16,10 @@ describe('adminUserName', () => {
 	it('treats empty and whitespace names as missing', () => {
 		assert.equal(adminUserName({ id: 'u1', displayName: '  ', email: 'a@b.c' }), 'a@b.c');
 		assert.equal(adminUserName({ id: 'u1', displayName: '', userName: 'legacy', email: 'a@b.c' } as never), 'a@b.c');
-		assert.equal(adminUserName({ id: 'u1', displayName: '', email: ' ' }), 'u1');
-		assert.equal(adminUserName({ userId: 'u2', displayName: '' }), 'u2');
+		// Never the raw id: the caller's "Unknown user" (empty by default)
+		assert.equal(adminUserName({ id: 'usr_1', displayName: '', email: ' ' }), '');
+		assert.equal(adminUserName({ userId: 'usr_2', displayName: '' }, 'Unknown user'), 'Unknown user');
+		assert.equal(adminUserName(null, 'Unknown user'), 'Unknown user');
 	});
 
 	it('the user picker uses the same rule', () => {

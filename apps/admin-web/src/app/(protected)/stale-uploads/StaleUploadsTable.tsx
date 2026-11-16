@@ -13,6 +13,8 @@ import { ErrorAlert, cardClass, primaryButtonClass, secondaryButtonClass } from 
 import { logger } from '@/lib/logger-client';
 import { STATE_LABEL, STATE_TONE, TYPE_LABEL, actionsFor, bunnyLabel, createdAt, formatAge } from './labels';
 import { intlLocale } from '@/i18n/intl-locale';
+import { UserName } from '@/components/audit/UserName';
+import { fillNodes } from '@/components/audit/fill';
 
 const thClass = 'text-start px-3 py-3 text-fg-muted font-medium whitespace-nowrap';
 const tdClass = 'px-3 py-3 align-top text-sm';
@@ -167,7 +169,7 @@ export function StaleUploadsTable({ items, locale, now }: { items: StaleUploadIt
                     {item.status === 'checking' && item.nextCheckAt && (
                       <div className="text-fg-subtle text-xs mt-1">{t('staleUploads.nextCheck', { date: formatDate(item.nextCheckAt, locale, true) })}</div>
                     )}
-                    {item.status === 'kept' && item.keptBy && <div className="text-fg-subtle text-xs mt-1" dir="auto">{t('staleUploads.keptBy', { actor: item.keptBy })}</div>}
+                    {item.status === 'kept' && item.keptBy && <div className="text-fg-subtle text-xs mt-1">{fillNodes(t('staleUploads.keptBy'), { actor: <UserName id={item.keptBy} showEmail={false} /> })}</div>}
                     {item.lastError && (
                       <div className="text-danger-fg text-xs mt-1 max-w-xs">{t('staleUploads.attempts', { count: item.attempts ?? 0, error: item.lastError })}</div>
                     )}

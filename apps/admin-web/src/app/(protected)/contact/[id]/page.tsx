@@ -11,6 +11,7 @@ import { ContactStatusChip, ErrorAlert, cardClass, linkClass } from '@/component
 import { logger } from '@/lib/logger';
 import { ContactActions } from './ContactActions';
 import { DeliveryRetry, RefreshWhileQueued } from './DeliveryRetry';
+import { UserName } from '@/components/audit/UserName';
 
 export const dynamic = 'force-dynamic';
 
@@ -134,7 +135,7 @@ export default async function ContactMessagePage({ params }: PageProps) {
                         )}
                       </span>
                       <span className="text-fg-subtle">
-                        <span dir="ltr">{n.author_email ?? n.author_id}</span> · <time dateTime={n.created_at}>{formatDate(n.created_at, locale, true)}</time>
+                        <UserName id={n.author_id} email={n.author_email} showEmail={false} /> · <time dateTime={n.created_at}>{formatDate(n.created_at, locale, true)}</time>
                       </span>
                     </div>
                     <p className="text-fg whitespace-pre-wrap break-words" dir="auto">
@@ -189,7 +190,7 @@ export default async function ContactMessagePage({ params }: PageProps) {
                 <dt className={dt}>{t('contact.assignee')}</dt>
                 <dd className="text-fg" data-testid="contact-assignee">
                   {m.assignee_id ? (
-                    <span dir="ltr">{m.assignee_id === session?.user.id ? t('contact.you') : (m.assignee_email ?? m.assignee_id)}</span>
+                    m.assignee_id === session?.user.id ? t('contact.you') : <UserName id={m.assignee_id} email={m.assignee_email} showEmail={false} />
                   ) : (
                     t('contact.unassigned')
                   )}

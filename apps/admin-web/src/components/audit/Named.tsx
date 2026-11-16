@@ -1,9 +1,11 @@
 /**
  * A person or an item by name (issue #745), with its id one hover away (title) and selectable
- * (MonoId). No hooks: used by server pages and by client components alike.
+ * (MonoId). A user nothing is known about reads "Unknown user", its id in a copyable detail (CopyId,
+ * a client component). No hooks here: used by server pages and by client components alike.
  */
 import Link from '@/components/AppLink';
 import { MonoId } from '@/components/content/parts';
+import { CopyId } from './CopyId';
 import type { ItemView, PersonView } from './audit-model';
 
 const nameLink = 'inline-block min-h-6 text-link hover:underline underline-offset-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus rounded';
@@ -25,12 +27,13 @@ export function PersonName({ person, showEmail = true, showId = false, testId }:
       ) : (
         <span dir="auto">{person.label}</span>
       )}
+      {person.unknown && <CopyId id={person.id} />}
       {showEmail && person.email && (
         <span className="text-fg-muted text-xs break-all" dir="ltr">
           {person.email}
         </span>
       )}
-      {showId && person.label !== person.id && <MonoId value={person.id} />}
+      {showId && !person.unknown && <MonoId value={person.id} />}
     </span>
   );
 }
@@ -50,7 +53,8 @@ export function ItemName({ item, showId = false, testId }: { item: ItemView; sho
       ) : (
         <MonoId value={item.id} />
       )}
-      {showId && named && <MonoId value={item.id} />}
+      {item.unknown && <CopyId id={item.id} />}
+      {showId && named && !item.unknown && <MonoId value={item.id} />}
     </span>
   );
 }

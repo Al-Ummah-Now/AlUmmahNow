@@ -16,6 +16,7 @@ import { useUndoableAction } from '@/components/undo/UndoToast';
 import { createVideoCategory, reorderVideoCategories, updateVideoCategory } from '@/lib/api/categories';
 import type { VideoCategoryAdminList, VideoCategoryAdminView, VideoCategoryHistoryEntry } from '@/lib/api/category-types';
 import { reportError } from '@/lib/errors/reporter';
+import { UserName } from '@/components/audit/UserName';
 
 type Fields = Partial<Record<'value' | 'labelEn' | 'labelAr' | 'hint', string>>;
 type Result = { ok: true } | { ok: false; status: number; error: string; code?: string; fields?: Record<string, string> };
@@ -372,7 +373,7 @@ function History({ entries, categories }: { entries: VideoCategoryHistoryEntry[]
             <li key={e.id} className="flex flex-wrap gap-x-2 text-fg" data-testid="categories-history-row" data-action={e.change.action}>
               <span className="font-medium">{t(`videoCategories.actions.${e.change.action}` as MessageKey)}</span>
               {e.value !== '*order' && <span>{names.get(e.value) ?? e.value}</span>}
-              <span className="text-fg-muted">· {e.actorName ?? e.actorId} · <time dateTime={e.createdAt}>{formatDate(e.createdAt, locale, true)}</time></span>
+              <span className="text-fg-muted">· {e.actorName || <UserName id={e.actorId} showEmail={false} />} · <time dateTime={e.createdAt}>{formatDate(e.createdAt, locale, true)}</time></span>
             </li>
           ))}
         </ul>

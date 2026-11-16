@@ -46,21 +46,30 @@ export function itemHref(kind: string, id: string): string | null {
 
 export interface PersonView {
   id: string;
-  /** What to show: the name, else the email, else "System" / the id */
+  /** What to show: the name, else the email, else "System" / "Unknown user" (never the id) */
   label: string;
   email: string | null;
   href: string | null;
   system: boolean;
   found: boolean;
+  /** Nothing is known about this user: the label is "Unknown user" and the id is only in a copyable detail */
+  unknown: boolean;
 }
 
-/** A person by name: display name, then @handle, then email; the system actors read "System". */
+/**
+ * A person by name (the display-name rule): the resolved display name (display name, else
+ * first + last), then the email; the system actors read "System". Never a raw id and never an
+ * @handle (handles belong to channels): with nothing known the label is "Unknown user" and
+ * PersonName keeps the id in a copyable detail. `fallbackEmail` is the email the row itself
+ * stored (actor_email, author_email…), for users without a videos profile.
+ */
 export function personView(id: string, names: AdminNames | null | undefined, t: Translator, fallbackEmail: string | null = null): PersonView {
-  if (isSystemActor(id)) return { id, label: t('auditLog.system'), email: null, href: null, system: true, found: true };
+  if (isSystemActor(id)) return { id, label: t('auditLog.system'), email: null, href: null, system: true, found: true, unknown: false };
   const named = names?.users[id];
-  const email = named?.email ?? fallbackEmail ?? null;
-  const label = named?.name?.trim() || (named?.userName ? `@${named.userName}` : '') || email || id;
-  return { id, label, email: label === email ? null : email, href: itemHref('user', id), system: false, found: !!named?.found };
+  const email = named?.email?.trim() || fallbackEmail?.trim() || null;
+  const name = named?.name?.trim() || '';
+  const label = name || email || t('auditLog.unknownUser');
+  return { id, label, email: name ? email : null, href: itemHref('user', id), system: false, found: !!named?.found, unknown: !name && !email };
 }
 
 export interface ItemView {
@@ -69,13 +78,15 @@ export interface ItemView {
   label: string;
   href: string | null;
   found: boolean;
+  /** A user nothing is known about ("Unknown user"; the id goes in a copyable detail) */
+  unknown?: boolean;
 }
 
 /** An item by title; the id when it has no name (deleted, or not a kind the lookup knows). */
 export function itemView(kind: string, id: string, names: AdminNames | null | undefined, t: Translator): ItemView {
   if (kind === 'user') {
     const p = personView(id, names, t);
-    return { kind, id, label: p.label, href: p.href, found: p.found };
+    return { kind, id, label: p.label, href: p.href, found: p.found, unknown: p.unknown };
   }
   const named = names?.items[`${kind}:${id}`];
   return { kind, id, label: named?.title?.trim() || id, href: itemHref(kind, id), found: !!named?.found };

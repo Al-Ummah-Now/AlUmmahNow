@@ -8,6 +8,7 @@ import { formatDate, translateDynamic } from '@/i18n/translate';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { SignalActions } from './actions';
+import { UserName } from '@/components/audit/UserName';
 
 export const dynamic = 'force-dynamic';
 
@@ -98,7 +99,7 @@ export default async function AiSignalPage({ params }: PageProps) {
                 <dt className="text-fg-muted">{t('ai.subject')}</dt>
                 <dd className="text-fg font-mono break-all" dir="ltr">{s.subject_type}:{s.subject_id}</dd>
                 <dt className="text-fg-muted">{t('ai.author')}</dt>
-                <dd className="text-fg font-mono break-all" dir="ltr">{s.author_id ?? '—'}</dd>
+                <dd className="text-fg">{s.author_id ? <UserName id={s.author_id} showEmail={false} testId="ai-signal-author" /> : '—'}</dd>
                 <dt className="text-fg-muted">{t('ai.model')}</dt>
                 <dd className="text-fg font-mono break-all" dir="ltr">{s.models ?? '—'}</dd>
                 <dt className="text-fg-muted">{t('ai.promptVersion')}</dt>

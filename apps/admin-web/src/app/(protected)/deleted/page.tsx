@@ -11,6 +11,7 @@ import { hrefWith, PAGE_SIZE, pickParams, type SearchParams } from '@/components
 import { logger } from '@/lib/logger';
 import { DeletionActions } from './DeletionActions';
 import { UserName } from '@/components/audit/UserName';
+import { fillNodes } from '@/components/audit/fill';
 
 export const dynamic = 'force-dynamic';
 
@@ -116,7 +117,7 @@ export default async function DeletedPage({ searchParams }: { searchParams: Prom
                       <span className="block"><MonoId value={d.id} max={32} /></span>
                       {d.reason && <span className="block text-sm text-fg-muted mt-1" dir="auto">{t('deleted.reason', { reason: d.reason })}</span>}
                       <span className="md:hidden block text-xs text-fg-muted mt-1">
-                        {t('deleted.byOn', { who: d.deletedBy, when: formatDate(d.deletedAt, locale, true) })}
+                        {fillNodes(t('deleted.byOn', { when: formatDate(d.deletedAt, locale, true) }), { who: <UserName id={d.deletedBy} showEmail={false} /> })}
                       </span>
                     </td>
                     <td className={`${tdClass} ${wideOnly} text-sm`}>

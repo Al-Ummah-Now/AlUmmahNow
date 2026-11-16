@@ -22,7 +22,9 @@ const videoId = `${E2E_ENTITY_PREFIX}audit-v-${hex}`;
 const channelId = `${E2E_ENTITY_PREFIX}audit-ch-${hex}`;
 const actorName = `Audit Person ${hex}`;
 const videoTitle = `Audit video ${hex}`;
-const rows = [`${hex}-1`, `${hex}-2`];
+// An actor with no videos profile and no stored email: "Unknown user", the id only in a copyable detail
+const ghostId = `usr_${E2E_ENTITY_PREFIX}ghost-${hex}`;
+const rows = [`${hex}-1`, `${hex}-2`, `${hex}-3`];
 // Older than anything a parallel run writes now, so ours are found by filter, not position
 const at = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
 
@@ -53,7 +55,8 @@ test.describe('audit log', () => {
       REPORTS,
       `INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at) VALUES
        ('${rows[0]}', 'content:video:${videoId}', NULL, '{"action":"transfer","details":{"newOwnerId":"${actorId}","reason":"e2e ${hex}"}}', '${actorId}', '${at(3)}'),
-       ('${rows[1]}', 'notifications:menu-open', 'mark_read', 'keep_unread', '${actorId}', '${at(2)}')`,
+       ('${rows[1]}', 'notifications:menu-open', 'mark_read', 'keep_unread', '${actorId}', '${at(2)}'),
+       ('${rows[2]}', 'notifications:menu-open', 'keep_unread', 'mark_read', '${ghostId}', '${at(1)}')`,
     );
   });
 
@@ -110,6 +113,20 @@ test.describe('audit log', () => {
     await expect(entry.getByTestId('audit-action-label')).toHaveText('Ownership transferred');
     await expect(entry.getByTestId('audit-actor')).toContainText(actorName);
     await expect(entry).not.toContainText(`by ${actorId}`);
+  });
+
+  test('AUDIT-05 an actor nothing is known about reads "Unknown user", the id only in a copyable detail', async ({ page }) => {
+    await page.goto(`/audit?actorId=${encodeURIComponent(ghostId)}`);
+    const row = page.getByTestId('audit-row');
+    await expect(row).toHaveCount(1);
+    const actor = row.getByTestId('audit-actor');
+    await expect(actor).toContainText('Unknown user');
+    // No raw id anywhere in the row's visible text (the detail is closed)
+    expect(await row.innerText()).not.toContain('usr_');
+    const detail = actor.getByTestId('unknown-user-id');
+    await detail.locator('summary').click();
+    await expect(detail.getByTestId('unknown-user-id-value')).toHaveText(ghostId);
+    await expect(detail.getByTestId('unknown-user-id-copy')).toHaveAccessibleName('Copy the user id');
   });
 
   test('AUDIT-04 Arabic: right to left, actions in Arabic, no sideways scroll', async ({ page }) => {
