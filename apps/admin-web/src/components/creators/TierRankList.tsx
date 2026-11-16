@@ -113,16 +113,19 @@ export function TierRankList({ tiers, defaultTierId, canManage, reorder }: { tie
                 dropOn(id);
                 setDragging(null);
               }}
-              className={`flex flex-wrap items-center gap-2 rounded border border-border bg-surface px-3 py-2 ${dragging === id ? 'opacity-60' : ''} ${editable ? 'cursor-grab' : ''}`}
+              className={`flex items-center gap-2 rounded border border-border bg-surface px-3 py-2 ${dragging === id ? 'opacity-60' : ''} ${editable ? 'cursor-grab' : ''}`}
               data-testid={`tiers-rank-${id}`}
             >
               {editable && <span aria-hidden="true" className="select-none text-fg-muted">⋮⋮</span>}
-              <span className="w-6 text-sm text-fg-muted tabular-nums">{i + 1}</span>
-              <span className="font-medium text-fg">{tierLabel(tier, locale)}</span>
-              {id === defaultTierId && <Chip tone="info">{t('creators.tierDefaultChip')}</Chip>}
-              {arabicMissing(tier) && <Chip tone="warn" testId={`tiers-rank-${id}-arabic-missing`}>{t('creators.arabicMissing')}</Chip>}
+              <span className="w-6 shrink-0 text-sm text-fg-muted tabular-nums">{formatNumber(i + 1, locale)}</span>
+              {/* Name and chips wrap among themselves; the move buttons keep their place on the row */}
+              <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                <span className="font-medium text-fg">{tierLabel(tier, locale)}</span>
+                {id === defaultTierId && <Chip tone="info">{t('creators.tierDefaultChip')}</Chip>}
+                {arabicMissing(tier) && <Chip tone="warn" testId={`tiers-rank-${id}-arabic-missing`}>{t('creators.arabicMissing')}</Chip>}
+              </span>
               {editable && (
-                <span className="ms-auto flex gap-1">
+                <span className="ms-auto flex shrink-0 gap-1">
                   <button type="button" className={smallButtonClass} disabled={busy || i === 0} onClick={() => move(id, -1)} aria-label={t('creators.rankMoveUp', { tier: tierLabel(tier, locale) })} data-testid={`tiers-rank-${id}-up`}>
                     ↑
                   </button>
