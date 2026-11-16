@@ -558,6 +558,6 @@ html[data-rail=open] .nv-hub .nv-chev,.nv-panel[data-open=true] .nv-hub .nv-chev
 /* Phones (below 640px): Upload and the drawer's menu button are tab bar items (AppShell), so the header keeps the
    logo, search, the bell, language, light/dark and the account on one line (docs/design/NAV.md "Phone") */
 .tabbar .tb-phone{display:none}
-.tabbar button.tb{border:0;background:transparent;font:inherit;cursor:pointer;padding:0;width:100%}
+.tabbar button.tb{border:0;background:transparent;font-family:inherit;font-weight:inherit;line-height:inherit;letter-spacing:inherit;cursor:pointer;padding:0;width:100%}
 .tabbar .tb[aria-disabled=true]{opacity:.6;cursor:not-allowed}
 @media(max-width:639px){.ah .ah-menu,.ah-end .upload-action{display:none}.tabbar .tb-phone{display:flex}}
