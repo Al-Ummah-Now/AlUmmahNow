@@ -2,7 +2,7 @@
  * Contact us form rules on the client. The same limits are enforced by
  * admin-api (apps/admin-api/src/lib/contact.ts); keep the numbers equal.
  */
-import type { ContactTopicKey } from '@al-ummah/shared-types';
+import { formatNumber, type ContactTopicKey } from '@al-ummah/shared-types';
 
 export const CONTACT_TOPICS: ContactTopicKey[] = ['general', 'account', 'problem', 'content', 'partnership'];
 
@@ -70,7 +70,11 @@ export function capturePageUrl(from: string | null | undefined, referrer: string
   return '';
 }
 
-/** "{min}"-style placeholders. */
-export function fill(template: string, values: Record<string, string | number>): string {
-  return template.replace(/\{(\w+)\}/g, (m, key: string) => (key in values ? String(values[key]) : m));
+/** "{min}"-style placeholders. With `lang`, numbers are written in that language's digits (locale-format). */
+export function fill(template: string, values: Record<string, string | number>, lang?: string): string {
+  return template.replace(/\{(\w+)\}/g, (m, key: string) => {
+    if (!(key in values)) return m;
+    const value = values[key];
+    return typeof value === 'number' && lang ? formatNumber(lang, value) : String(value);
+  });
 }

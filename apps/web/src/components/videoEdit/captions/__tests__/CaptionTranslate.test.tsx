@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { CAPTIONS_EN } from '@al-ummah/shared-types';
+import { CAPTIONS_AR, CAPTIONS_EN } from '@al-ummah/shared-types';
 
 jest.mock('@/lib/errors/reporter', () => ({ reportError: jest.fn(() => 'ref') }));
 const startCaptionTranslation = jest.fn();
@@ -43,6 +43,15 @@ describe('CaptionTranslate', () => {
     fireEvent.click(screen.getByTestId('caption-translate-lang-fr'));
     expect(screen.getByTestId('caption-translate-cost')).toHaveTextContent('Uses 24 caption minutes. 86 left this month.');
     expect(screen.getByText(CAPTIONS_EN.translate.quranNote)).toBeInTheDocument();
+  });
+
+  it('writes the Arabic cost and remaining minutes in Eastern Arabic (Hindi) numerals', () => {
+    setup({ t: CAPTIONS_AR, lang: 'ar' });
+    fireEvent.click(screen.getByTestId('caption-translate-lang-fr'));
+    const cost = screen.getByTestId('caption-translate-cost').textContent ?? '';
+    expect(cost).toContain('١٢');
+    expect(cost).toContain('٨٦');
+    expect(cost).not.toMatch(/[0-9]/);
   });
 
   it(`allows at most ${MAX_TRANSLATION_LANGUAGES} languages at a time`, () => {

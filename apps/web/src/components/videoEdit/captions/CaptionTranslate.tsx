@@ -9,7 +9,7 @@
  */
 import React, { useId, useState } from 'react';
 import { BookOpen, Languages, Loader2, X } from 'lucide-react';
-import { captionMinutesCanStart, isCaptionJobActive, type CaptionMinutesUsage, type CaptionsTranslations } from '@al-ummah/shared-types';
+import { captionMinutesCanStart, isCaptionJobActive, type CaptionMinutesUsage, type CaptionsTranslations, fillTemplate, type TemplateParams } from '@al-ummah/shared-types';
 import { reportError } from '@/lib/errors/reporter';
 import { SUPPORTED_LANGUAGES } from '@/lib/api/subtitles-types';
 import { cancelCaptionJob, startCaptionTranslation, type CaptionJobView } from '@/lib/api/caption-drafts';
@@ -34,10 +34,12 @@ export interface CaptionTranslateProps {
   onClose: () => void;
 }
 
-const fill = (template: string, values: Record<string, string | number>) => Object.entries(values).reduce((text, [key, value]) => text.split(`{${key}}`).join(String(value)), template);
+/** Fills {name} placeholders; numbers in the page's digits (locale-format). */
+const fillIn = (lang: string, template: string, values: TemplateParams) => fillTemplate(lang === 'ar' ? 'ar' : 'en', template, values);
 
 /** Running and failed translations, newest per target language. */
 export function TranslationJobs({ videoId, jobs, t, lang = 'en', label, confirm, reload }: Pick<CaptionTranslateProps, 'videoId' | 'jobs' | 't' | 'label' | 'confirm' | 'reload'> & { lang?: string }) {
+  const fill = (template: string, values: TemplateParams) => fillIn(lang, template, values);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const shown = visibleJobs(jobs.filter((j) => j.kind === 'translate'));
@@ -103,6 +105,7 @@ export function TranslationJobs({ videoId, jobs, t, lang = 'en', label, confirm,
 
 /** The Translate form for one source draft (opened from its row). */
 export default function CaptionTranslate({ videoId, sourceLanguage, jobs, minutes, draftLanguages, t, lang, confirm, label, reload, onClose }: CaptionTranslateProps) {
+  const fill = (template: string, values: TemplateParams) => fillIn(lang, template, values);
   const ids = useId();
   const tt = t.translate;
   const [chosen, setChosen] = useState<string[]>([]);
