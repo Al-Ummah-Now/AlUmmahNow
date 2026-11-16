@@ -17,7 +17,7 @@ import {
   type QuranSurahFile,
 } from '@al-ummah/shared-types';
 import { QfClient } from '../quran/qf-client';
-import { splitUthmaniWords } from '../quran/build';
+import { QuranCoreCollector, splitUthmaniWords } from '../quran/build';
 import { streamSnapshotRecords } from '../quran/snapshot-stream';
 import { enforceQuranFreshness, processQuranSyncMessages, quranRetryDelaySeconds, runQuranDaily, runQuranSync, type QuranBucket } from '../quran/sync';
 import { handleQuranSyncRequest } from '../index';
@@ -177,6 +177,34 @@ describe('the Uthmani words', () => {
   it('pause and section marks stay with a word; the words rejoin to the verse text', () => {
     expect(splitUthmaniWords('ذَٰلِكَ ٱلْكِتَٰبُ لَا رَيْبَ ۛ فِيهِ ۛ هُدًى')).toEqual(['ذَٰلِكَ', 'ٱلْكِتَٰبُ', 'لَا', 'رَيْبَ ۛ', 'فِيهِ ۛ', 'هُدًى']);
     expect(splitUthmaniWords('۞ إِنَّ ٱللَّهَ')).toEqual(['۞ إِنَّ', 'ٱللَّهَ']);
+  });
+});
+
+describe('two-part words (QF writes بَعْدَ مَا and إِلْ يَاسِينَ as one word)', () => {
+  const collect = (verse: string, imlaei: string[]) => {
+    const c = new QuranCoreCollector();
+    c.add({ record_type: 'chapter', chapter_number: 37, name_simple: 'As-Saffat', name_arabic: 'الصافات', verses_count: 1 });
+    c.add({ record_type: 'verse', verse_key: '37:1', text_uthmani: verse });
+    imlaei.forEach((w, i) => c.add({ record_type: 'word', char_type_name: 'word', location: `37:1:${i + 1}`, position: i + 1, text_imlaei: w }));
+    return c.build('v1', '2026-11-16T00:00:00Z', { complete: false });
+  };
+
+  it('a word row spans as many Uthmani tokens as its Imla\'i text has words (37:130)', () => {
+    const built = collect('سَلَٰمٌ عَلَىٰٓ إِلْ يَاسِينَ', ['سَلَامٌ', 'عَلَى', 'إِلْ يَاسِينَ']);
+    expect(built.surahs[0]!.ayat[0]!.words).toEqual(['سَلَٰمٌ', 'عَلَىٰٓ', 'إِلْ يَاسِينَ']);
+    // Both parts are in the index at word 3, as a reciter says them
+    const index = new QuranIndex(built.index);
+    expect(index.words).toEqual(['سلام', 'علي', 'ال', 'ياسين']);
+    expect(index.locs.map((l) => l.word)).toEqual([1, 2, 3, 3]);
+  });
+
+  it('a pause mark inside a word row is not a word (13:37: عَرَبِيًّۭا ۚ … بَعْدَ مَا)', () => {
+    const built = collect('حُكْمًا عَرَبِيًّۭا ۚ وَلَئِنِ ٱتَّبَعْتَ بَعْدَ مَا جَآءَكَ', ['حُكْمًا', 'عَرَبِيًّا ۚ', 'وَلَئِنِ', 'اتَّبَعْتَ', 'بَعْدَ مَا', 'جَاءَكَ']);
+    expect(built.surahs[0]!.ayat[0]!.words).toEqual(['حُكْمًا', 'عَرَبِيًّۭا ۚ', 'وَلَئِنِ', 'ٱتَّبَعْتَ', 'بَعْدَ مَا', 'جَآءَكَ']);
+  });
+
+  it('tokens that still do not add up fail the build, never guessed', () => {
+    expect(() => collect('سَلَٰمٌ عَلَىٰٓ إِلْ يَاسِينَ زائد', ['سَلَامٌ', 'عَلَى', 'إِلْ يَاسِينَ'])).toThrow('1 verse(s) failed the check');
   });
 });
 

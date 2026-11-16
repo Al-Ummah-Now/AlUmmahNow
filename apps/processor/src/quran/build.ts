@@ -4,8 +4,10 @@
  * - the matcher's index of normalised Imla'i words (`text_imlaei` of the `word` rows).
  *
  * Words are numbered by their order among the verse's `word` rows (markers are not words), the
- * same numbering on both sides. A verse whose Uthmani text does not split into exactly as many
- * words as it has word rows fails the build: the copy is never patched up or guessed.
+ * same numbering on both sides. A few QF words are written as two (بَعْدَ مَا in 2:181, 8:6, 13:37;
+ * إِلْ يَاسِينَ in 37:130): their own Imla'i text has the same space, so a word row spans as many
+ * Uthmani tokens as its Imla'i text has words. A verse whose tokens do not add up to exactly its
+ * word rows fails the build: the copy is never patched up or guessed.
  */
 import { QuranIndex, type QuranIndexFile, type QuranSurahFile } from '@al-ummah/shared-types';
 
@@ -48,6 +50,11 @@ export function splitUthmaniWords(text: string): string[] {
   }
   if (prefix && words.length) words[words.length - 1] = `${words[words.length - 1]} ${prefix}`;
   return words;
+}
+
+/** The words of a word row's Imla'i text (pause marks, which have no letter, are not words). */
+function imlaeiParts(imlaei: string): string[] {
+  return imlaei.split(/\s+/).filter((t) => ARABIC_LETTER.test(t));
 }
 
 const num = (v: unknown) => (typeof v === 'number' ? v : typeof v === 'string' && /^\d+$/.test(v) ? Number(v) : NaN);
@@ -119,12 +126,23 @@ export class QuranCoreCollector {
           continue;
         }
         const split = splitUthmaniWords(verse.text);
-        if (split.length !== words.length) {
+        const spans = words.map((w) => Math.max(1, imlaeiParts(w.imlaei).length));
+        const total = spans.reduce((a, b) => a + b, 0);
+        if (split.length !== total) {
           bad.push(`${key}: ${split.length} Uthmani words, ${words.length} word rows`);
           continue;
         }
-        file.ayat.push({ text: verse.text, words: split });
-        words.forEach((w, i) => rows.push({ loc: { surah, ayah, word: i + 1 }, imlaei: w.imlaei }));
+        const ayahWords: string[] = [];
+        let at = 0;
+        for (const span of spans) {
+          ayahWords.push(split.slice(at, at + span).join(' '));
+          at += span;
+        }
+        file.ayat.push({ text: verse.text, words: ayahWords });
+        // A two-part word is indexed as both parts at its location, as it is said: بعد ما
+        words.forEach((w, i) => {
+          for (const part of imlaeiParts(w.imlaei)) rows.push({ loc: { surah, ayah, word: i + 1 }, imlaei: part });
+        });
       }
       surahs.push(file);
     }
