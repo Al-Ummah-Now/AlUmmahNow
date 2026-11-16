@@ -34,6 +34,9 @@ export interface Names {
 	media: string;
 	videos: string;
 	admin: string;
+	/** The web app and the Auth issuer: a sign-in's redirect and the pages it lands on */
+	web: string;
+	auth: string;
 	queue: string;
 	dlq: string;
 }
@@ -46,9 +49,9 @@ export const SEARCH_D1: Record<EnvName, string> = {
 };
 
 export function namesFor(env: EnvName): Names {
-	if (env === 'production') return { media: 'al-ummah-now-media', videos: 'videos', admin: 'al-ummah-admin-api', queue: 'al-ummah-now-transcode', dlq: 'al-ummah-now-transcode-dlq' };
-	if (env === 'stage') return { media: 'al-ummah-now-media-stage', videos: 'videos-stage', admin: 'al-ummah-admin-api-stage', queue: 'al-ummah-now-transcode-stage', dlq: 'al-ummah-now-transcode-dlq-stage' };
-	return { media: 'al-ummah-now-media-qa', videos: 'videos-qa', admin: 'al-ummah-admin-api-qa', queue: 'al-ummah-now-transcode-qa', dlq: 'al-ummah-now-transcode-dlq-qa' };
+	if (env === 'production') return { web: 'al-ummah-now-production', auth: 'al-ummah-now-auth', media: 'al-ummah-now-media', videos: 'videos', admin: 'al-ummah-admin-api', queue: 'al-ummah-now-transcode', dlq: 'al-ummah-now-transcode-dlq' };
+	if (env === 'stage') return { web: 'al-ummah-now-stage', auth: 'al-ummah-now-auth-stage', media: 'al-ummah-now-media-stage', videos: 'videos-stage', admin: 'al-ummah-admin-api-stage', queue: 'al-ummah-now-transcode-stage', dlq: 'al-ummah-now-transcode-dlq-stage' };
+	return { web: 'al-ummah-web-qa', auth: 'al-ummah-now-auth-qa', media: 'al-ummah-now-media-qa', videos: 'videos-qa', admin: 'al-ummah-admin-api-qa', queue: 'al-ummah-now-transcode-qa', dlq: 'al-ummah-now-transcode-dlq-qa' };
 }
 
 function arg(name: string, fallback: string): string {
@@ -334,7 +337,7 @@ async function main(): Promise<void> {
 	await containers(names);
 	await startTimes(env);
 	await costInputs(env);
-	for (const s of [names.media, names.videos, names.admin]) await logs(s, since, until, search);
+	for (const s of [names.media, names.videos, names.admin, names.web, names.auth]) await logs(s, since, until, search);
 	// Where the transcoder container's own output (stdout/stderr, exits) is: services and keys that mention it
 	await discover(names, since, until);
 	process.stdout.write(out.join('\n') + '\n');
