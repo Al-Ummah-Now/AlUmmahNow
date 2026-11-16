@@ -92,7 +92,7 @@ describe('BilingualPair', () => {
     expect(screen.getByTestId('field-ar')).toHaveValue('الدرس');
   });
 
-  it("explains today's limit with its reset time, a pause and a spent budget", async () => {
+  it("explains today's limit with its reset time and a spent budget; switched off says nothing", async () => {
     let failure: Error = new TranslateFailure('fair_use_limit', '2026-11-15T00:00:00.000Z');
     render(<Titles />);
     act(() => registerTranslator(async () => {
@@ -102,16 +102,16 @@ describe('BilingualPair', () => {
       fireEvent.click(screen.getByTestId('pair-translate-ar'));
     });
     expect(screen.getByRole('alert')).toHaveTextContent(/You've used today's translations\. More at \S/);
-    failure = new TranslateFailure('translation_paused');
+    failure = new TranslateFailure('feature_off');
     await act(async () => {
       fireEvent.click(screen.getByTestId('pair-translate-ar'));
     });
-    expect(screen.getByRole('alert')).toHaveTextContent('Translation is paused right now.');
+    expect(screen.queryByRole('alert')).toBeNull();
     failure = new TranslateFailure('budget_spent');
     await act(async () => {
       fireEvent.click(screen.getByTestId('pair-translate-ar'));
     });
-    expect(screen.getByRole('alert')).toHaveTextContent("Translation isn't available right now. Try again tomorrow.");
+    expect(screen.getByRole('alert')).toHaveTextContent('Translations are used up for today. Try again tomorrow.');
     failure = new Error('boom');
     await act(async () => {
       fireEvent.click(screen.getByTestId('pair-translate-ar'));

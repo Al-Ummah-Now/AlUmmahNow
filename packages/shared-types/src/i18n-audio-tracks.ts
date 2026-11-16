@@ -13,8 +13,6 @@ export interface AudioTracksTranslations {
   /** {used}: unlimited tiers */
   usedUnlimited: string;
   add: string;
-  /** The tier allows no extra tracks */
-  notIncluded: string;
   /** {allowed}: the tier's limit is reached */
   limitReached: string;
   notReady: string;
@@ -84,8 +82,7 @@ export const AUDIO_TRACKS_EN: AudioTracksTranslations = {
   used: '{used} of {allowedTracks} used',
   usedUnlimited: '{used} audio tracks added',
   add: 'Add audio track',
-  notIncluded: 'Your creator tier does not include extra audio tracks.',
-  limitReached: 'Your creator tier allows {allowed} extra audio tracks on a video.',
+  limitReached: 'Limit reached ({allowed} per video).',
   notReady: 'You can add audio tracks once the video has finished processing.',
   empty: 'Only the video’s own audio so far. Add a dub, commentary or audio description in another track.',
   duplicate: 'This video already has a track of that language and type.',
@@ -155,8 +152,7 @@ export const AUDIO_TRACKS_AR: AudioTracksTranslations = {
   used: 'المسموح: {allowedTracks} · المستخدم: {used}',
   usedUnlimited: 'أُضيف {used} من المسارات الصوتية',
   add: 'إضافة مسار صوتي',
-  notIncluded: 'لا تشمل فئة صانع المحتوى الخاصة بك مسارات صوتية إضافية.',
-  limitReached: 'تسمح فئة صانع المحتوى الخاصة بك بـ {allowed} من المسارات الصوتية الإضافية لكل مرئي.',
+  limitReached: 'بلغت الحد ({allowed} لكل مرئي).',
   notReady: 'يمكنك إضافة مسارات صوتية بعد انتهاء معالجة المرئي.',
   empty: 'لا يوجد حتى الآن سوى صوت المرئي الأصلي. أضف دبلجة أو تعليقًا أو وصفًا صوتيًا في مسار آخر.',
   duplicate: 'لهذا المرئي مسار بهذه اللغة وهذا النوع بالفعل.',

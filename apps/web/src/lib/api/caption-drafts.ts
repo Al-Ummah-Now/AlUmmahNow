@@ -59,7 +59,8 @@ async function call<T>(path: string, init: { method?: string; body?: unknown; au
       return {
         ok: false,
         status: res.status,
-        error: typeof error === 'string' ? error : 'request_failed',
+        // A switched-off feature answers 404 { code: 'feature_off' } with no message
+        error: typeof error === 'string' ? error : typeof details.code === 'string' ? details.code : 'request_failed',
         ...(typeof version === 'number' ? { version } : {}),
         ...(Object.keys(details).length ? { details } : {}),
       };
@@ -133,7 +134,7 @@ export async function cancelCaptionJob(videoId: string, jobId: string): Promise<
  * Translate the `sourceLanguage` draft into `languages` (AUN-CAPTIONS §3.3), each a job that ends
  * with a machine-translation draft to review. Refusals: 402 `upgrade_required` (details:
  * minutesNeeded, usage; nothing starts), 409 `draft_exists` (details: language) unless `replace`,
- * 404 `source_missing`, 503 `translation_paused`.
+ * 404 `source_missing`, 404 `feature_off` (translation switched off).
  */
 export async function startCaptionTranslation(videoId: string, sourceLanguage: string, languages: string[], replace = false): Promise<ActionResult<{ jobs: CaptionJobView[] }>> {
   return call(`/api/videos/${encodeURIComponent(videoId)}/captions/translations`, { method: 'POST', body: { sourceLanguage, languages, ...(replace ? { replace: true } : {}) } });

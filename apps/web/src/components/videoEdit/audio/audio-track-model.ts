@@ -48,8 +48,8 @@ export function trackStatusText(
 /** Why Add is off because of the tier (null when the tier allows another track). */
 export function addLimitMessage(view: Pick<AudioTracksView, 'limit'>, t: AudioTracksTranslations, lang = 'en'): string | null {
   const { allowed, used, unlimited } = view.limit;
-  if (unlimited) return null;
-  if (allowed <= 0) return t.notIncluded;
+  // A plan without extra tracks never shows Add at all (GET /api/me/features `audioTracks`)
+  if (unlimited || allowed <= 0) return null;
   if (used >= allowed) return t.limitReached.replace('{allowed}', formatNumber(lang, allowed));
   return null;
 }
