@@ -126,7 +126,8 @@ describe('LocalizedFieldPair and Translate missing in a DOM', () => {
     assert.equal(arInput.getAttribute('aria-label'), 'Name (Arabic)');
     assert.equal(p.container.querySelector('label[for="name-ar"]')?.textContent?.replace(/\*/g, '').trim(), 'العربية');
     assert.equal((p.q('name-translate-ar') as HTMLButtonElement).disabled, true, 'nothing to translate from an empty field');
-    assert.equal(p.q('name-translate-en')?.getAttribute('aria-label'), 'Translate Name to Arabic');
+    assert.equal(p.q('name-translate-en')?.getAttribute('aria-label'), null, 'the visible words are the name (no aria-label to drift from them)');
+    assert.equal(p.q('name-translate-en')?.textContent?.replace(/\s+/g, ' ').trim(), '→Translate to Arabic (Name)');
     await click(p.q('name-translate-en'));
     assert.deepEqual(p.calls[0], { from: 'en', to: 'ar', texts: ['News'], field: 'categories.label' });
     assert.equal((p.q('name-ar') as HTMLInputElement).value, 'أخبار');

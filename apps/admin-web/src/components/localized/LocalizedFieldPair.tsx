@@ -175,11 +175,12 @@ export function LocalizedFieldPair({ label, field, value, onChange, errors, mult
             className={smallTranslateButton}
             disabled={disabled || status.kind === 'busy' || !value[lang].trim()}
             onClick={() => void run(lang)}
-            aria-label={t(lang === 'en' ? 'localized.translateToArNamed' : 'localized.translateToEnNamed', { field: label })}
             data-testid={`${tid}-translate-${lang}`}
           >
             <span aria-hidden="true">{lang === 'en' ? '→' : '←'}</span>
             {t(lang === 'en' ? 'localized.translateToAr' : 'localized.translateToEn')}
+            {/* The field's name for screen readers; the visible words stay first in the name (WCAG 2.5.3) */}
+            <span className="sr-only"> ({label})</span>
           </button>
         </div>
       </div>

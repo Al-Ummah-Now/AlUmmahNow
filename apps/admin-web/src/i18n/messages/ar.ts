@@ -225,8 +225,6 @@ const ar: Messages = {
     langArabic: 'العربية',
     translateToAr: 'ترجمة إلى العربية',
     translateToEn: 'ترجمة إلى الإنجليزية',
-    translateToArNamed: 'ترجمة {field} إلى العربية',
-    translateToEnNamed: 'ترجمة {field} إلى الإنجليزية',
     translating: 'جارٍ الترجمة…',
     filled: 'مُلئت {lang} بترجمة آلية. راجعها قبل الحفظ.',
     replaced: 'استُبدل نص {lang} بترجمة آلية. راجعه قبل الحفظ، أو تراجع.',
