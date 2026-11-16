@@ -106,18 +106,25 @@ export function formatPercent(locale: FormatLocale, ratio: number, options?: Int
 }
 
 /**
- * Money: "$12.69" in English, «١٢٫٦٩ دولار أمريكي» in Arabic (the currency's Arabic name,
- * never the «US$» symbol). Two decimals unless the options say otherwise.
+ * A cached money formatter: "$12.69" in English, «١٢٫٦٩ دولار أمريكي» in Arabic (the currency's
+ * Arabic name, `currencyDisplay: 'name'`, never the «US$» symbol). Two decimals unless the
+ * options set their own fraction or significant digits.
  */
-export function formatMoney(locale: FormatLocale, amount: number, currency = 'USD', options?: Intl.NumberFormatOptions): string {
-  return formatNumber(locale, amount, {
+export function moneyFormat(locale: FormatLocale, currency = 'USD', options?: Intl.NumberFormatOptions): Intl.NumberFormat {
+  const o = options ?? {};
+  const ownDigits = o.minimumFractionDigits !== undefined || o.maximumFractionDigits !== undefined || o.maximumSignificantDigits !== undefined || o.minimumSignificantDigits !== undefined;
+  return numberFormat(locale, {
     style: 'currency',
     currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-    ...options,
+    ...(ownDigits ? {} : { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    ...o,
     ...(isArabicLocale(locale) ? { currencyDisplay: 'name' } : {}),
   });
+}
+
+/** Money as text; see `moneyFormat`. */
+export function formatMoney(locale: FormatLocale, amount: number, currency = 'USD', options?: Intl.NumberFormatOptions): string {
+  return moneyFormat(locale, currency, options).format(Number.isFinite(amount) ? amount : 0);
 }
 
 /** A value with a unit ("3.5 sec" / «٣٫٥ ث»): any Intl unit, short by default. */

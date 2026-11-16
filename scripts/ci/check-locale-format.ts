@@ -6,7 +6,8 @@
  * Fails on, outside that module:
  *   - `new Intl.NumberFormat|DateTimeFormat|RelativeTimeFormat|PluralRules|ListFormat(`
  *   - `.toLocaleString(`, `.toLocaleDateString(`, `.toLocaleTimeString(`
- *   - the literals `ar-SA`, `ar-EG`, `nu-latn`, and `chartLocale(`
+ *   - the literals `ar-SA`, `ar-EG`, `nu-latn`, `chartLocale(`, and `style: 'currency'` (money goes
+ *     through moneyFormat/formatMoney, which writes the currency's Arabic name)
  *
  * A line that formats for a machine (time-zone maths, sorting) and not for a reader can say so
  * with a `locale-format: machine` comment on it or the line before.
@@ -42,6 +43,7 @@ const RULES: Array<{ name: string; pattern: RegExp }> = [
   { name: 'toLocale*String', pattern: /\.toLocale(Date|Time)?String\s*\(/g },
   { name: 'locale literal', pattern: /['"`]ar-(SA|EG)\b|nu-latn/g },
   { name: 'chartLocale', pattern: /\bchartLocale\s*\(/g },
+  { name: 'currency style (use moneyFormat/formatMoney)', pattern: /style:\s*['"]currency['"]/g },
 ];
 
 const SKIP_DIR = new Set(['node_modules', '.next', 'dist', '.open-next', '.wrangler', '__tests__', 'test', 'tests', 'e2e', '__mocks__']);
