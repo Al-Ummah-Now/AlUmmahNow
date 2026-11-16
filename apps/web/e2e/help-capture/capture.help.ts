@@ -22,6 +22,7 @@ import { useOwnData, type Creator } from '../release/builders';
 import { apiFetch } from '../release/web-session';
 import { playFor } from '../release/videos';
 import { target } from '../release/targets';
+import { HELP_AR, HELP_EN, type HelpTranslations } from '@al-ummah/shared-types';
 
 type Lang = 'en' | 'ar';
 type Mode = 'light' | 'dark';
@@ -223,12 +224,10 @@ async function openMenu(page: Page, view: 'main' | 'channels' = 'main'): Promise
 }
 
 /**
- * Numbered markers beside each control (Arabic digits in Arabic), never over another control: header
- * controls sit 8px apart, so a number on a control's edge would land on its neighbour. Each number
- * takes the first free spot (on screen, clear of every other control and number) from: for a control
- * in the header, centred just under the header's bottom edge; otherwise the scene's preference ('side':
- * outside the inline start; 'above': over the inline-start top corner), then outside the inline end,
- * centred below, centred above. Inline start/end follow the page direction (mirrored in Arabic).
+ * Numbered annotations (Arabic digits in Arabic): one dashed outline per control, in the shape of the
+ * control and offset from it, with its number attached to the outline: on the inline-start edge
+ * ('side') or the inline-start top corner ('above'), else the next free spot on the outline (on
+ * screen, off every other control and number). Never a bare heading. Mirrored in Arabic.
  */
 async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: string) => void, place: 'side' | 'above' = 'side'): Promise<void> {
   await page.evaluate(() => document.querySelectorAll('[data-help-target]').forEach((n) => n.removeAttribute('data-help-target')));
@@ -245,10 +244,22 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
     await t.evaluate((el, n) => el.setAttribute('data-help-target', String(n)), i + 1);
   }
   if (!shownAny) throw new Error('no marker target was shown');
+  // One outline per marker, around one control: a bare heading or label is never a marker's target
+  const bare = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>('[data-help-target]')]
+    .filter((el) => el.matches('h1,h2,h3,h4,h5,h6,[role="heading"],legend,label,.aun-menu-label') || (el.tagName === 'P' && !el.querySelector('a,button,input,select,textarea')))
+    .map((el) => `${el.dataset.helpTarget}: <${el.tagName.toLowerCase()}> "${(el.textContent ?? '').trim().slice(0, 40)}"`));
+  if (bare.length) throw new Error(`a marker targets a heading, not a control (${bare.join('; ')})`);
   const unplaced = await page.evaluate(({ rtl, above }) => {
     document.querySelectorAll('[data-help-marker]').forEach((n) => n.remove());
     type Box = { x: number; y: number; w: number; h: number };
+    // An annotation, never UI (owner review 2026-11-16): a dashed outline in the theme's live red with
+    // a white halo, offset from the control, and its number attached to the outline. Red markup is
+    // what a screenshot annotation looks like; no control on the site is drawn this way.
     const S = 24;
+    const GAP = 6;
+    const INK = 'var(--fanous-color-live)';
+    const ON_INK = 'var(--fanous-color-on-live)';
+    const HALO = 'rgb(255 255 255 / 0.92)';
     const hit = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
     const visible = (el: Element) => {
       const r = el.getBoundingClientRect();
@@ -256,34 +267,48 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       return r.width > 1 && r.height > 1 && cs.visibility !== 'hidden' && cs.opacity !== '0';
     };
     const targets = [...document.querySelectorAll<HTMLElement>('[data-help-target]')];
-    // Every other control on screen: a number must not cover any of them
-    const controls = [...document.querySelectorAll('a[href], button, input, select, textarea, [role="menuitem"], [role="button"], [role="tab"], [role="switch"]')]
+    const controls = [...document.querySelectorAll('a[href], button, input, select, textarea, [role="menuitem"], [role="menuitemradio"], [role="button"], [role="tab"], [role="switch"]')]
       .filter(visible)
       .map((el) => ({ el, r: el.getBoundingClientRect() }));
     const placed: Box[] = [];
     let missed = 0;
     for (const target of targets) {
       const r = target.getBoundingClientRect();
-      const header = target.closest('header');
+      // The outline: the control's own shape (round around an avatar), GAP px outside it
+      const radius = parseFloat(getComputedStyle(target).borderTopLeftRadius) || 0;
+      const round = radius >= Math.min(r.width, r.height) / 2 - 0.5;
+      const o = { x: r.x - GAP, y: r.y - GAP, w: r.width + GAP * 2, h: r.height + GAP * 2 };
+      const ring = document.createElement('span');
+      ring.dataset.helpMarker = '';
+      Object.assign(ring.style, {
+        position: 'fixed', left: `${o.x}px`, top: `${o.y}px`, width: `${o.w}px`, height: `${o.h}px`, boxSizing: 'border-box',
+        border: `2px dashed ${INK}`, borderRadius: round ? '9999px' : `${radius + GAP}px`,
+        boxShadow: `0 0 0 2px ${HALO}, inset 0 0 0 2px ${HALO}`, zIndex: '2147483646', pointerEvents: 'none',
+      });
+      // The number sits on the outline (centred on its edge or corner), so it reads as part of it
+      const startX = rtl ? o.x + o.w - S / 2 : o.x - S / 2;
+      const endX = rtl ? o.x - S / 2 : o.x + o.w - S / 2;
+      const topY = o.y - S / 2;
+      const bottomY = o.y + o.h - S / 2;
+      const midY = o.y + o.h / 2 - S / 2;
+      // A round outline has no corner: the number goes on the circle at 45°
+      const k = round ? (1 - Math.SQRT1_2) * (o.w / 2) : 0;
+      const cornerStartX = rtl ? startX - k : startX + k;
+      const cornerEndX = rtl ? endX + k : endX - k;
+      const candidates: Array<[number, number]> = above
+        ? [[cornerStartX, topY + k], [cornerEndX, topY + k], [cornerStartX, bottomY - k], [cornerEndX, bottomY - k]]
+        : [[startX, midY], [endX, midY], [cornerStartX, topY + k], [cornerStartX, bottomY - k]];
       const others = controls
         .filter((c) => c.el !== target && !c.el.contains(target) && !target.contains(c.el))
-        .map((c) => ({ x: c.r.x - 2, y: c.r.y - 2, w: c.r.width + 4, h: c.r.height + 4 }));
-      const cx = r.x + r.width / 2 - S / 2;
-      const sideY = r.y + r.height / 2 - S / 2;
-      const startOut = rtl ? r.right + 6 : r.x - S - 6;
-      const endOut = rtl ? r.x - S - 6 : r.right + 6;
-      const candidates: Array<[number, number]> = [];
-      if (header) candidates.push([cx, header.getBoundingClientRect().bottom + 4]);
-      candidates.push(above ? [rtl ? r.right - S : r.x, r.y - S - 4] : [startOut, sideY]);
-      candidates.push([endOut, sideY], [cx, r.bottom + 6], [cx, r.y - S - 6]);
+        .map((c) => ({ x: c.r.x + 2, y: c.r.y + 2, w: Math.max(0, c.r.width - 4), h: Math.max(0, c.r.height - 4) }));
       const fits = ([x, y]: [number, number]) => {
         const box = { x, y, w: S, h: S };
         return x >= 2 && y >= 2 && x + S <= window.innerWidth - 2 && y + S <= window.innerHeight - 2
-          && !others.some((o) => hit(box, o)) && !placed.some((p) => hit(box, p));
+          && !others.some((c) => hit(box, c)) && !placed.some((q) => hit(box, q));
       };
       const spot = candidates.find(fits);
       if (!spot) missed++;
-      const [x, y] = spot ?? candidates[0];
+      const [x, y] = spot ?? candidates.find(([cx, cy]) => cx >= 2 && cy >= 2 && cx + S <= window.innerWidth - 2) ?? candidates[0];
       placed.push({ x, y, w: S, h: S });
       const m = document.createElement('span');
       m.dataset.helpMarker = '';
@@ -291,14 +316,8 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       Object.assign(m.style, {
         position: 'fixed', left: `${Math.min(window.innerWidth - S - 2, Math.max(2, x))}px`, top: `${Math.max(2, y)}px`, zIndex: '2147483647',
         width: `${S}px`, height: `${S}px`, borderRadius: '50%', display: 'grid', placeItems: 'center',
-        font: '700 13px/1 system-ui, sans-serif', background: 'var(--fanous-color-primary)', color: 'var(--fanous-color-on-primary)',
-        boxShadow: '0 0 0 2px var(--fanous-color-surface), 0 2px 6px rgba(0,0,0,.35)', pointerEvents: 'none',
-      });
-      const ring = document.createElement('span');
-      ring.dataset.helpMarker = '';
-      Object.assign(ring.style, {
-        position: 'fixed', left: `${r.x - 3}px`, top: `${r.y - 3}px`, width: `${r.width + 6}px`, height: `${r.height + 6}px`,
-        border: '2px solid var(--fanous-color-primary)', borderRadius: '10px', zIndex: '2147483646', pointerEvents: 'none',
+        font: '700 13px/1 system-ui, sans-serif', background: INK, color: ON_INK,
+        boxShadow: `0 0 0 2px ${HALO}, 0 2px 6px rgb(0 0 0 / 0.35)`, pointerEvents: 'none',
       });
       document.body.append(ring, m);
     }
@@ -387,8 +406,9 @@ const SCENES: Scene[] = [
     id: 'watching-library',
     run: async (page, lang) => {
       await settle(page, '/library', lang);
-      const later = page.getByTestId('library-section-watch-later').getByRole('heading').first();
-      const history = page.getByTestId('library-section-history').getByRole('heading').first();
+      // The shelves themselves, never their headings alone (annotations mark controls, owner review)
+      const later = page.getByTestId('library-section-watch-later');
+      const history = page.getByTestId('library-section-history');
       return [[later, history], []];
     },
   },
@@ -410,12 +430,13 @@ const SCENES: Scene[] = [
     },
   },
   {
-    // Markers: you first (tagged Personal), then the Your Channels heading (owner decision 2026-11-15)
+    // Markers: you (tagged Personal), then your channel (tagged Channel). One control per marker,
+    // never a heading row by itself (owner review 2026-11-16)
     id: 'identity-switch',
     run: async (page, lang) => {
       await settle(page, `/channels/${channelId}`, lang);
       const menu = await openMenu(page, 'channels');
-      return [[menu.getByTestId('nav-channel-option-none'), menu.getByTestId('nav-channel-group-owned').locator('p').first()], [header(page), menu]];
+      return [[menu.getByTestId('nav-channel-option-none'), menu.getByTestId('nav-channel-option').first()], [header(page), menu]];
     },
   },
   {
@@ -469,7 +490,8 @@ const SCENES: Scene[] = [
       const exportCard = page.locator('section[aria-labelledby="privacy-export"]');
       const deleteCard = page.locator('section').filter({ has: page.getByRole('heading', { name: /^(Delete your data|حذف بياناتك)$/ }) }).first();
       await exportCard.scrollIntoViewIfNeeded();
-      return [[exportCard.getByRole('heading'), deleteCard.getByRole('heading')], []];
+      // The two cards, never their headings alone
+      return [[exportCard, deleteCard], []];
     },
   },
   {
@@ -486,6 +508,13 @@ const SCENES: Scene[] = [
 ];
 
 
+/** How many numbered items Help lists under this picture (every figure that shows it) */
+function listedMarkers(help: HelpTranslations, picture: string): number[] {
+  return Object.values(help.topics).flatMap((topic) => topic.sections.flatMap((section) => section.blocks))
+    .filter((block): block is Extract<typeof block, { type: 'figure' }> => block.type === 'figure' && block.picture === picture)
+    .map((block) => block.markers?.length ?? 0);
+}
+
 for (const scene of SCENES) {
   test(`picture ${scene.id}`, async ({ browser }) => {
     test.setTimeout(8 * 60_000);
@@ -494,6 +523,9 @@ for (const scene of SCENES) {
       const { context, page } = await open(browser, lang, device, mode, { signedIn: scene.signedIn });
       try {
         const [markers, region] = await scene.run(page, lang, device);
+        // Each picture's numbers match the numbered list Help shows under it
+        const listed = listedMarkers(lang === 'ar' ? HELP_AR : HELP_EN, scene.id);
+        if (listed.some((n) => n !== markers.length)) throw new Error(`${markers.length} markers, but Help lists ${listed.join('/')} under this picture`);
         await mark(page, lang, markers, (msg) => notes.push(`${name}: ${msg}`), scene.markers);
         await shoot(page, name, region);
       } catch (error) {
