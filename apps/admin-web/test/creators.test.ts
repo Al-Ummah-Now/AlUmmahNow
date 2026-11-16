@@ -9,7 +9,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { renderToStaticMarkup } from 'react-dom/server';
 import * as React from 'react';
-import { CREATOR_TIER_BOUNDS, formatNumber, type AdminUserRow, type CreatorTier } from '@al-ummah/shared-types';
+import { CREATOR_TIER_BOUNDS, DEFAULT_CREATOR_TIER, DEFAULT_MEMBER_TIER, DEFAULT_UNLIMITED_TIER, formatNumber, type AdminUserRow, type CreatorTier, type CreatorTiersList } from '@al-ummah/shared-types';
 import {
   creatorsToUsersHref,
   isUnexpectedFailure,
@@ -17,9 +17,11 @@ import {
   tierActionMessage,
   tierChangeMessage,
   tierEffect,
+  tierFormPayload,
+  tierToForm,
   validateTierForm,
-  type TierFormValues,
-} from '../src/lib/creator-tiers';
+  type TierFormValues, tierLabel } from '../src/lib/creator-tiers';
+import { memberCounts } from '../src/components/creators/CreatorTiersView';
 import { createTranslator } from '../src/i18n/translate';
 import { I18nProvider } from '../src/i18n/I18nProvider';
 import { CaptionGrantControls } from '../src/components/creators/CaptionGrantControls';
@@ -38,9 +40,10 @@ const ARABIC = /[؀-ۿ]/;
 const tEn = createTranslator('en');
 const tAr = createTranslator('ar');
 
-const CREATOR: CreatorTier = { id: 'creator', name: 'Creator', unlimited: false, perHour: 300, perDay: 2000, maxConcurrent: 20, maxChannels: 3, captionMinutesMonth: 0, audioTracksPerVideo: 0, live: true, liveHoursMonth: 20, liveMaxConcurrent: 1, liveMaxStreamMinutes: 240, updatedAt: null, updatedBy: null };
-const UNLIMITED: CreatorTier = { id: 'unlimited', name: 'Unlimited', unlimited: true, perHour: 0, perDay: 0, maxConcurrent: 0, maxChannels: null, captionMinutesMonth: 0, audioTracksPerVideo: 0, live: true, liveHoursMonth: 0, liveMaxConcurrent: 0, liveMaxStreamMinutes: 0, updatedAt: null, updatedBy: null };
-const TIERS = [CREATOR, UNLIMITED];
+const CREATOR: CreatorTier = { ...DEFAULT_CREATOR_TIER, perHour: 300, perDay: 2000, maxConcurrent: 20, maxChannels: 3, captionMinutesMonth: 0, updatedAt: null, updatedBy: null };
+const UNLIMITED: CreatorTier = { ...DEFAULT_UNLIMITED_TIER, updatedAt: null, updatedBy: null };
+const MEMBER: CreatorTier = { ...DEFAULT_MEMBER_TIER, updatedAt: null, updatedBy: null };
+const TIERS = [MEMBER, CREATOR, UNLIMITED];
 
 const setTier = async () => ({ ok: true as const, data: null });
 const bulkSetTier = async () => ({ ok: true as const, data: { changed: [], unchanged: [], skippedSuperAdmin: [] } });
@@ -78,6 +81,13 @@ describe('tier effect (stated in every confirmation)', () => {
     assert.equal(arabic.includes(formatNumber('ar', 2000)), true, 'numbers formatted for Arabic');
   });
 
+  it('follows the tier\'s flags: Member only watches; uploads or channels alone', () => {
+    assert.equal(tierEffect(MEMBER, tEn, 'en'), 'They can watch, save, comment and subscribe, but not upload or create channels.');
+    assert.equal(tierEffect({ ...CREATOR, channels: false }, tEn, 'en'), 'They can upload up to 300 videos per hour and 2,000 per day (20 starting at once), but not create channels. Live: 20 hours a month, one stream at a time, up to 240 minutes per stream.');
+    assert.equal(tierEffect({ ...CREATOR, uploads: false, live: false }, tEn, 'en'), 'They can own up to 3 channels, but not upload. No live streaming.');
+    assert.match(tierEffect(MEMBER, tAr, 'ar'), ARABIC);
+  });
+
   it('names who and which tier, for one user or a selection', () => {
     assert.equal(tierChangeMessage(CREATOR, tEn, 'en', { userName: 'Amina' }).startsWith('Give Amina the Creator tier? They can upload up to 300'), true);
     assert.equal(tierChangeMessage(null, tEn, 'en', { count: 4 }), 'Remove the tier from 4 selected users? They will not be able to upload or create channels.');
@@ -85,7 +95,7 @@ describe('tier effect (stated in every confirmation)', () => {
 });
 
 describe('tier form validation (same bounds and rules as api-videos)', () => {
-  const base: TierFormValues = { id: 'gold', name: 'Gold', unlimited: false, perHour: 10, perDay: 100, maxConcurrent: 5, maxChannels: 2, captionMinutesMonth: 0, audioTracksPerVideo: 0, live: true, liveHoursMonth: 20, liveMaxConcurrent: 1, liveMaxStreamMinutes: 240 };
+  const base: TierFormValues = { ...tierToForm(), id: 'gold', name: 'Gold', nameAr: 'ذهبي', description: 'For weekly teachers', descriptionAr: 'لمن يعلّم كل أسبوع', perHour: 10, perDay: 100, maxConcurrent: 5, maxChannels: 2, captionMinutesMonth: 0, audioTracksPerVideo: 0, live: true, liveHoursMonth: 20, liveMaxConcurrent: 1, liveMaxStreamMinutes: 240 };
 
   it('accepts a valid tier and an unlimited one without limits', () => {
     assert.deepEqual(validateTierForm(base, { create: true }), {});
@@ -114,6 +124,30 @@ describe('tier form validation (same bounds and rules as api-videos)', () => {
     assert.equal(validateTierForm({ ...base, id: 'unlimited' }, { create: true }).id?.key, 'creators.errorIdTaken');
     assert.equal(validateTierForm({ ...base, name: '   ' }).name?.key, 'creators.errorName');
     assert.equal(validateTierForm({ ...base, id: '' }).id, undefined, 'the id is checked only when creating');
+    assert.equal(validateTierForm({ ...base, id: 'member' }, { create: true }).id?.key, 'creators.errorIdTaken', 'Member is shipped');
+  });
+
+  it('checks the Upgrade page text and order, even on an unlimited tier', () => {
+    assert.deepEqual(validateTierForm({ ...base, nameAr: 'ذ'.repeat(61), description: 'x'.repeat(201) }), {
+      nameAr: { key: 'creators.errorText', params: { max: 60 } },
+      description: { key: 'creators.errorText', params: { max: 200 } },
+    });
+    assert.equal(validateTierForm({ ...base, unlimited: true, sortOrder: -1 }).sortOrder?.key, 'creators.errorRange');
+    assert.equal(validateTierForm({ ...base, descriptionAr: '  ' }).descriptionAr?.key, 'creators.errorDescriptionAr', 'no fallback to the English one');
+  });
+
+  it('starts a new tier with uploads and channels on (as api-videos does) and sends empty text as null', () => {
+    const fresh = tierToForm();
+    assert.deepEqual([fresh.uploads, fresh.channels, fresh.requestable, fresh.sortOrder], [true, true, false, 50]);
+    const member = tierToForm(MEMBER);
+    assert.deepEqual([member.uploads, member.channels, member.requestable, member.nameAr], [false, false, true, 'مجاني']);
+    const payload = tierFormPayload({ ...base, name: ' Gold ', nameAr: ' ', description: ' For pros ', descriptionAr: '' });
+    assert.deepEqual([payload.name, payload.nameAr, payload.description, payload.descriptionAr], ['Gold', null, 'For pros', null]);
+  });
+
+  it('counts everyone without a tier as Member on the Tiers page', () => {
+    const list = { items: TIERS, counts: { byTier: { creator: 4 }, none: 9 }, limitHits7d: 0 } as CreatorTiersList;
+    assert.deepEqual(memberCounts(list), { creator: 4, member: 9 });
   });
 });
 
@@ -245,13 +279,22 @@ describe('rendered components', () => {
   });
 
   it('the tiers page shows users per tier, field help with the bounds, and keeps the shipped Unlimited unlimited; in Arabic too', () => {
-    const html = render(el(TierEditor, { tiers: TIERS, counts: { creator: 12, unlimited: 1 }, canManage: true, actions: tierActions }));
+    const html = render(el(TierEditor, { tiers: TIERS, counts: { member: 30, creator: 12, unlimited: 1 }, canManage: true, actions: tierActions }));
     assert.match(html, /12 users/);
     assert.match(html, /New videos a creator may start uploading in one hour\. 1 to 100,000\./);
     assert.match(html, /id="tier-creator"/);
     const unlimited = html.slice(html.indexOf('data-testid="tier-card-unlimited"'));
     assert.match(unlimited, /data-testid="tier-unlimited-unlimited"[^>]*disabled|disabled[^>]*data-testid="tier-unlimited-unlimited"/);
     assert.match(unlimited, /always stays unlimited/);
+    // Member: never unlimited, uploads and channels off, requestable, its Arabic name editable
+    const member = html.slice(html.indexOf('data-testid="tier-card-member"'), html.indexOf('data-testid="tier-card-creator"'));
+    assert.match(member, /data-testid="tier-member-unlimited"[^>]*disabled|disabled[^>]*data-testid="tier-member-unlimited"/);
+    assert.match(member, /Free is the tier everyone starts on/);
+    assert.doesNotMatch(member, /checked=""[^>]*data-testid="tier-member-uploads"/);
+    assert.match(member, /checked=""[^>]*data-testid="tier-member-requestable"|data-testid="tier-member-requestable"[^>]*checked=""/);
+    assert.match(member, /value="مجاني"[^>]*data-testid="tier-member-nameAr"|data-testid="tier-member-nameAr"[^>]*value="مجاني"/);
+    assert.match(member, /What the tier allows/);
+    assert.doesNotMatch(member, /data-testid="tier-member-delete"/, 'shipped tiers cannot be deleted');
     const arabic = render(el(TierEditor, { tiers: TIERS, counts: { creator: 12 }, canManage: true, actions: tierActions }), 'ar');
     assert.match(arabic, new RegExp(`${formatNumber('ar', 12)} مستخدم`));
   });
@@ -277,5 +320,35 @@ describe('caption minutes on the user page: overdraft and ledger', () => {
     const ar = render(el(CaptionGrantControls, { userId: 'u1', usage, grants: [], ledger, canManage: false, grant: noop, revoke: noop }), 'ar');
     assert.match(ar, /تجاوز الرصيد بـ ٧ من الدقائق/);
     assert.match(ar, /بدأ التفريغ/);
+  });
+});
+
+describe('tier names in the admin\'s language', () => {
+  it('the Arabic admin shows the Arabic name, falling back to the English one; the English admin the English one', () => {
+    assert.equal(tierLabel({ name: 'Creator', nameAr: 'صانع محتوى' }, 'ar'), 'صانع محتوى');
+    assert.equal(tierLabel({ name: 'Creator', nameAr: 'صانع محتوى' }, 'en'), 'Creator');
+    assert.equal(tierLabel({ name: 'Scholar', nameAr: null }, 'ar'), 'Scholar');
+    assert.equal(tierLabel({ name: 'Scholar', nameAr: '  ' }, 'ar'), 'Scholar');
+  });
+  it('the confirmation names the tier in the admin\'s language', () => {
+    assert.match(tierChangeMessage({ ...CREATOR, nameAr: 'صانع محتوى' }, tAr, 'ar', { userName: 'أمينة' }), /صانع محتوى/);
+  });
+});
+
+describe('localized fields (owner rule 2026-11-16)', () => {
+  it('the name and the description are needed in English and in Arabic; no fallback', () => {
+    const empty: TierFormValues = { ...tierToForm(), name: 'Gold' };
+    const errors = validateTierForm(empty, { create: true });
+    assert.deepEqual([errors.nameAr?.key, errors.description?.key, errors.descriptionAr?.key], ['creators.errorNameAr', 'creators.errorDescription', 'creators.errorDescriptionAr']);
+    assert.equal(validateTierForm({ ...empty, nameAr: ' ', description: 'x', descriptionAr: 'س' }).nameAr?.key, 'creators.errorNameAr', 'spaces are empty');
+  });
+});
+
+describe('the English name is English (owner review 2026-11-16)', () => {
+  it('refuses an Arabic-only English name; mixed or Latin is fine', () => {
+    const form: TierFormValues = { ...tierToForm(), name: 'ذهبي', nameAr: 'ذهبي', description: 'Gold', descriptionAr: 'ذهبي' };
+    assert.equal(validateTierForm(form).name?.key, 'creators.errorNameNotEnglish');
+    assert.equal(validateTierForm({ ...form, name: 'Gold' }).name, undefined);
+    assert.equal(validateTierForm({ ...form, name: 'Gold ذهبي' }).name, undefined);
   });
 });

@@ -1,4 +1,4 @@
-import { creatorTierOrigin, type AdminAuditEntry, type CreatorTier, type CreatorTierAssignment } from '@al-ummah/shared-types';
+import { CREATOR_TIER_IDS, creatorTierOrigin, type AdminAuditEntry, type CreatorTier, type CreatorTierAssignment } from '@al-ummah/shared-types';
 import { getUserCreatorTier, listCreatorTierDefinitions, setUserCreatorTier } from '@/lib/api/creators';
 import { getI18n } from '@/i18n/server';
 import { formatDate } from '@/i18n/translate';
@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger';
 import { CreatorTierControl } from './CreatorTierControl';
 import { UserName } from '@/components/audit/UserName';
 import { fillNodes } from '@/components/audit/fill';
+import { tierLabel } from '@/lib/creator-tiers';
 
 /** The user page's creator tier: the Tier selector, where it came from, and its history (audit log). */
 export async function UserCreatorTierPanel({ userId, userName, canManage }: { userId: string; userName?: string; canManage: boolean }) {
@@ -20,7 +21,12 @@ export async function UserCreatorTierPanel({ userId, userName, canManage }: { us
   } catch (e) {
     logger.error('[creators] Failed to load the user tier', { userId, error: e instanceof Error ? e.message : String(e) });
   }
-  const nameOf = (id: unknown) => (typeof id === 'string' && id ? tiers.find((tier) => tier.id === id)?.name ?? id : t('creators.none'));
+  // No tier (null) is Member: the history says so by its name
+  const nameOf = (id: unknown) => {
+    const tierId = typeof id === 'string' && id ? id : CREATOR_TIER_IDS.member;
+    const tier = tiers.find((x) => x.id === tierId);
+    return tier ? tierLabel(tier, locale) : (tierId === CREATOR_TIER_IDS.member ? t('creators.none') : tierId);
+  };
   return (
     <section id="creator-tier" className={`${cardClass} mb-6`} aria-labelledby="creator-tier-title" data-testid="user-creator-tier">
       <h2 id="creator-tier-title" className="text-lg font-semibold text-fg mb-1">{t('creators.panelTitle')}</h2>

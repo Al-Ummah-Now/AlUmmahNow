@@ -56,6 +56,13 @@ export interface AdminBindings {
   Audience: string;
   ClientId: string;
 
+  /** Cloudflare account of every al-ummah resource (Secrets Store writes, analytics) */
+  CLOUDFLARE_ACCOUNT_ID?: string;
+  /** Payments credentials (lib/billing-secrets.ts): the Secrets Store they are written to */
+  PAYMENTS_SECRETS_STORE_ID?: string;
+  /** Payments credentials: Cloudflare API token with Account Secrets Store Edit (optional binding; without it credentials cannot be saved from the admin) */
+  PAYMENTS_SECRETS_TOKEN?: string | { get(): Promise<string> };
+
   /** api-videos (content data owner): /internal/* over a service binding */
   VIDEOS?: Fetcher;
   /** Local dev without the binding: base URL of a running api-videos */

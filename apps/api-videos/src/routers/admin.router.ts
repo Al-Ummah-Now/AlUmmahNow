@@ -6,6 +6,9 @@
  * passes the acting admin's id in X-Admin-Actor (recorded on suspensions and
  * bans) and writes the audit log itself.
  */
+import { DEFAULT_TIER_ID } from '@al-ummah/shared-types';
+import { readTierChange, recordTierChange, recordTierChangeEmail } from '../lib/tierChanges';
+import { readRequestsAllowed, setRequestsAllowed, upgradeMode } from '../lib/upgradeMode';
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import {
@@ -16,6 +19,7 @@ import {
 	ADMIN_JOB_STATUSES,
 	ADMIN_CREATOR_FILTERS,
 	MAX_BULK_CREATOR_TIER,
+	ADMIN_TIER_REQUEST_FILTERS,
 	type AccountNoticeRequest,
 	LIVE_PROVIDERS,
 } from '@al-ummah/shared-types';
@@ -42,8 +46,10 @@ import { readCaptionSettings, writeCaptionSettings } from '../lib/captions/jobs'
 import { listTranslationEditions } from '../lib/quran/translations';
 import { platformEditions } from '../endpoints/quran/quranTranslations';
 import { addGrant, CaptionMinutesError, listGrants, listLedger, readUsage, revokeGrant, subjectOfUser } from '../lib/captions/minutes';
-import { assignTier, CreatorTierError, deleteTier, purgeTiers, readAssignment, readDeletedTiers, readTiers, requestTierPurge, restoreTier, saveTier } from '../lib/creatorTiers';
+import { assignTier, CreatorTierError, deleteTier, purgeTiers, readAssignment, readDeletedTiers, readTier, readTiers, requestTierPurge, restoreTier, saveTier } from '../lib/creatorTiers';
 import { shortLinkClicksReport, siteVisitsReport } from '../lib/site-visits';
+import { decideTierRequest, decisionNotificationPayload, listTierRequests, readRequestRow, readTierRequestForAdmin, recordDelivery, TierRequestError, type TierRequestsEnv } from '../lib/tierRequests';
+import { enqueueNotification, type NotificationsEnv } from '../lib/notifications';
 
 type Env = { Bindings: admin.AdminServiceEnv & Record<string, unknown> };
 
@@ -175,7 +181,7 @@ app.onError((error, c) => {
 	if (error instanceof CaptionMinutesError) {
 		return c.json({ success: false, code: error.code, error: error.message }, error.status as 400);
 	}
-	if (error instanceof CreatorTierError) {
+	if (error instanceof CreatorTierError || error instanceof TierRequestError) {
 		return c.json({ success: false, code: error.code, error: error.message }, error.status as 400);
 	}
 	if (error instanceof admin.AdminError) {
@@ -328,7 +334,11 @@ const CreatorQuery = z.object({
 	tierId: z.string().max(40).optional(),
 	...page,
 });
-const TierAssign = z.object({ tierId: z.string().min(1).max(40).nullable(), source: z.enum(['admin', 'subscription']).optional() }).strict();
+const TierAssign = z
+	.object({ tierId: z.string().min(1).max(40).nullable(), source: z.enum(['admin', 'subscription']).optional(), quiet: z.boolean().optional() })
+	.strict();
+/** Who held no row held the default (Member): the "from" of a tier change */
+const heldTier = (assignment: { tierId: string } | null | undefined) => assignment?.tierId ?? DEFAULT_TIER_ID;
 const TierBody = z
 	.object({
 		id: z.string().max(40).optional(),
@@ -345,6 +355,14 @@ const TierBody = z
 		liveHoursMonth: z.coerce.number().optional(),
 		liveMaxConcurrent: z.coerce.number().optional(),
 		liveMaxStreamMinutes: z.coerce.number().optional(),
+		uploads: z.boolean().optional(),
+		channels: z.boolean().optional(),
+		pages: z.boolean().optional(),
+		requestable: z.boolean().optional(),
+		sortOrder: z.coerce.number().optional(),
+		nameAr: z.string().max(60).nullable().optional(),
+		description: z.string().max(200).nullable().optional(),
+		descriptionAr: z.string().max(200).nullable().optional(),
 	})
 	.strict();
 const searchDb = (c: Context<Env>) => c.env.SEARCH_DB as D1Database;
@@ -365,13 +383,22 @@ const TierBulk = z
 		dryRun: z.boolean().optional(),
 	})
 	.strict();
-app.post('/creators/tier', async (c) => ok(c, await bulkAssignTier(searchDb(c), parse(TierBulk, await body(c)) as { userIds: string[]; tierId: string | null; dryRun?: boolean }, actor(c))));
+app.post('/creators/tier', async (c) => {
+	const input = parse(TierBulk, await body(c)) as { userIds: string[]; tierId: string | null; dryRun?: boolean };
+	const result = await bulkAssignTier(searchDb(c), input, actor(c));
+	if (!input.dryRun) {
+		for (const { userId, previous } of result.changed) {
+			await recordTierChange(c.env as never, { userId, from: heldTier(previous), to: input.tierId ?? DEFAULT_TIER_ID, reason: 'admin' });
+		}
+	}
+	return ok(c, result);
+});
 app.post('/creator-tiers', async (c) => {
 	const input = parse(TierBody, await body(c));
 	if (!input.id) throw new admin.AdminError(400, 'invalid_request', 'id: Required');
-	return ok(c, await saveTier(searchDb(c), input.id, input, actor(c), { create: true }));
+	return ok(c, await saveTier(searchDb(c), input.id, input, actor(c), { create: true, requireLocalized: true }));
 });
-app.put('/creator-tiers/:id', async (c) => ok(c, await saveTier(searchDb(c), c.req.param('id'), parse(TierBody, await body(c)), actor(c))));
+app.put('/creator-tiers/:id', async (c) => ok(c, await saveTier(searchDb(c), c.req.param('id'), parse(TierBody, await body(c)), actor(c), { requireLocalized: true })));
 // Soft delete (restorable for 30 days); the admin-api cleanup purges through POST /creator-tiers/purge
 const TierDelete = z.object({ reason: z.string().max(500).nullable().optional() }).strict();
 app.delete('/creator-tiers/:id', async (c) => {
@@ -389,7 +416,73 @@ app.post('/creator-tiers/purge', async (c) => {
 app.get('/users/:id/creator-tier', async (c) => ok(c, { assignment: await readAssignment(searchDb(c), c.req.param('id')) }));
 app.put('/users/:id/creator-tier', async (c) => {
 	const input = parse(TierAssign, await body(c));
-	return ok(c, await assignTier(searchDb(c), c.req.param('id'), input.tierId, actor(c), input.source ?? 'admin'));
+	const result = await assignTier(searchDb(c), c.req.param('id'), input.tierId, actor(c), input.source ?? 'admin');
+	// The user is told (in the app and by email), except for an invite's tier (`quiet`: the invite says it)
+	await recordTierChange(c.env as never, { userId: c.req.param('id'), from: heldTier(result.previous), to: result.assignment?.tierId ?? DEFAULT_TIER_ID, reason: 'admin', quiet: input.quiet === true });
+	return ok(c, result);
+});
+
+// Tier requests (lib/tierRequests.ts, wiki AUN-TIER-REQUESTS): the admin's queue and decisions.
+// admin-api checks creators:manage, writes the audit row and queues the delivery job, which calls
+// notify (in-app notice, deduplicated per decision) and records the email outcome through delivery.
+const TierRequestQuery = z.object({
+	filter: z.enum(ADMIN_TIER_REQUEST_FILTERS).optional(),
+	cursor: z.string().max(400).optional(),
+	pageSize: z.coerce.number().int().min(1).max(100).optional(),
+});
+const TierDecision = z.object({ decision: z.enum(['approve', 'decline']), reason: z.string().max(2000).nullable().optional() }).strict();
+const TierDelivery = z
+	.object({ notified: z.boolean().optional(), emailStatus: z.enum(['queued', 'sent', 'sunk', 'disabled', 'no_address', 'failed']).optional(), emailError: z.string().max(500).nullable().optional() })
+	.strict();
+const tierRequestsEnv = (c: Context<Env>) => c.env as unknown as TierRequestsEnv;
+// "Allow tier requests" (owner rule 2026-11-15, shared-types UPGRADE_MODES): with no payment provider
+// enabled it decides between the request form and "Upgrades aren't available"; admin-api audits it
+app.get('/tier-requests/settings', async (c) => ok(c, { ...(await readRequestsAllowed(searchDb(c))), ...(await upgradeMode(c.env as never)) }));
+const RequestsSetting = z.object({ allowed: z.boolean() }).strict();
+app.put('/tier-requests/settings', async (c) => {
+	const result = await setRequestsAllowed(searchDb(c), parse(RequestsSetting, await body(c)).allowed, actor(c));
+	return ok(c, { ...result, ...(await upgradeMode(c.env as never)) });
+});
+app.get('/tier-requests', async (c) => ok(c, await listTierRequests(tierRequestsEnv(c), parse(TierRequestQuery, c.req.query()) as never)));
+app.get('/tier-requests/:id', async (c) => ok(c, { request: await readTierRequestForAdmin(tierRequestsEnv(c), c.req.param('id')) }));
+app.post('/tier-requests/:id/decide', async (c) => {
+	const input = parse(TierDecision, await body(c));
+	const result = await decideTierRequest(searchDb(c), c.req.param('id'), { approve: input.decision === 'approve', reason: input.reason ?? null, actorId: actor(c) });
+	// Stored as a change; the decision's own delivery tells the user (no second notice)
+	if (result.request.status === 'approved') {
+		await recordTierChange(c.env as never, { userId: result.request.userId, from: result.request.fromTierId, to: result.request.tierId, reason: 'request', requestId: result.request.id, quiet: true });
+	}
+	return ok(c, result);
+});
+// Tier changes (lib/tierChanges.ts): the email job reads one and records what it did
+app.get('/tier-changes/:id', async (c) => {
+	const change = await readTierChange(searchDb(c), c.req.param('id'));
+	if (!change) throw new CreatorTierError(404, 'tier_change_not_found');
+	return ok(c, { change });
+});
+const TierChangeDelivery = z.object({ emailStatus: z.string().min(1).max(20), emailError: z.string().max(500).nullable().optional() }).strict();
+app.post('/tier-changes/:id/delivery', async (c) => {
+	const input = parse(TierChangeDelivery, await body(c));
+	await recordTierChangeEmail(searchDb(c), c.req.param('id'), input.emailStatus, input.emailError ?? null);
+	return ok(c, { recorded: true });
+});
+app.post('/tier-requests/:id/notify', async (c) => {
+	const db = searchDb(c);
+	const row = await readRequestRow(db, c.req.param('id'));
+	if (!row) throw new TierRequestError(404, 'tier_request_not_found');
+	if (row.status !== 'approved' && row.status !== 'declined') throw new TierRequestError(409, 'tier_request_not_decided');
+	const payload = decisionNotificationPayload(
+		{ id: row.id, userId: row.user_id, status: row.status, decidedAt: row.decided_at, tierName: row.tier_name },
+		await readTier(db, row.tier_id),
+	);
+	if (!(await enqueueNotification(c.env as unknown as NotificationsEnv, payload))) throw new TierRequestError(503, 'notification_not_queued', 'The notification could not be queued');
+	await recordDelivery(db, row.id, { notified: true });
+	return ok(c, { queued: true, decidedAt: row.decided_at });
+});
+app.post('/tier-requests/:id/delivery', async (c) => {
+	const input = parse(TierDelivery, await body(c));
+	await recordDelivery(searchDb(c), c.req.param('id'), input);
+	return ok(c, { recorded: true });
 });
 
 // Caption minutes (AUN-CAPTIONS §6): the user's month and the admin's grants; admin-api audits each change

@@ -2,9 +2,9 @@
 
 import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CREATOR_TIER_BOUNDS, CREATOR_TIER_IDS, DEFAULT_CREATOR_TIER, parseDigits, type CreatorTier } from '@al-ummah/shared-types';
+import { CREATOR_TIER_BOUNDS, CREATOR_TIER_IDS, CREATOR_TIER_TEXT, DEFAULT_CREATOR_TIER, parseDigits, type CreatorTier } from '@al-ummah/shared-types';
 import type { ActionResult } from '@/lib/api/errors';
-import { isUnexpectedFailure, tierActionMessage, tierEffect, validateTierForm, type TierField, type TierFormValues } from '@/lib/creator-tiers';
+import { isUnexpectedFailure, tierActionMessage, tierEffect, tierFormPayload, tierToForm, validateTierForm, type TierField, type TierFormValues, type TierPayload, tierLabel } from '@/lib/creator-tiers';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { formatNumber, type MessageKey } from '@/i18n/translate';
 import { cardClass, fieldClass } from '@/components/ui';
@@ -17,31 +17,13 @@ type Message = { kind: 'ok' | 'error'; text: string } | null;
 
 /** Server actions (lib/api/creators saveCreatorTier / deleteCreatorTier), passed down from the page. */
 export interface TierActions {
-  save: (tier: TierFormValues, create: boolean) => Promise<ActionResult<unknown>>;
+  save: (tier: TierPayload, create: boolean) => Promise<ActionResult<unknown>>;
   remove: (id: string) => Promise<ActionResult<unknown>>;
 }
 type Pending = 'save' | 'delete' | null;
 
 const SHIPPED = new Set<string>(Object.values(CREATOR_TIER_IDS));
 
-function toForm(tier?: CreatorTier): TierFormValues {
-  return {
-    id: tier?.id ?? '',
-    name: tier?.name ?? '',
-    unlimited: tier?.unlimited ?? false,
-    perHour: tier?.perHour || 300,
-    perDay: tier?.perDay || 2000,
-    maxConcurrent: tier?.maxConcurrent || 20,
-    maxChannels: tier ? tier.maxChannels : 3,
-    captionMinutesMonth: tier?.captionMinutesMonth ?? 0,
-    audioTracksPerVideo: tier?.audioTracksPerVideo ?? 0,
-    // A new tier starts without live; its limits start from the Creator tier's
-    live: tier?.live ?? false,
-    liveHoursMonth: tier?.liveHoursMonth || DEFAULT_CREATOR_TIER.liveHoursMonth,
-    liveMaxConcurrent: tier?.liveMaxConcurrent || DEFAULT_CREATOR_TIER.liveMaxConcurrent,
-    liveMaxStreamMinutes: tier?.liveMaxStreamMinutes || DEFAULT_CREATOR_TIER.liveMaxStreamMinutes,
-  };
-}
 
 type NumberField = 'perHour' | 'perDay' | 'maxConcurrent' | 'captionMinutesMonth' | 'liveHoursMonth' | 'liveMaxConcurrent' | 'liveMaxStreamMinutes' | 'audioTracksPerVideo';
 
@@ -62,13 +44,15 @@ function TierCard({ tier, users, canManage, actions, create = false }: { tier?: 
   const router = useRouter();
   const { t, locale } = useLanguage();
   const ids = useId();
-  const [form, setForm] = useState<TierFormValues>(toForm(tier));
+  const [form, setForm] = useState<TierFormValues>(tierToForm(tier));
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<Pending>(null);
   const [message, setMessage] = useState<Message>(null);
   const key = create ? 'new' : tier?.id ?? '';
   const fixedUnlimited = tier?.id === CREATOR_TIER_IDS.unlimited;
+  // Member is where everyone starts: it always has limits
+  const isMember = (create ? form.id : tier?.id) === CREATOR_TIER_IDS.member;
   const errors = validateTierForm(form, { create });
   const shown = touched ? errors : {};
   const n = (value: number) => formatNumber(value, locale);
@@ -93,7 +77,7 @@ function TierCard({ tier, users, canManage, actions, create = false }: { tier?: 
     }
     setMessage({ kind: 'ok', text: ok });
     if (create) {
-      setForm(toForm());
+      setForm(tierToForm());
       setTouched(false);
     }
     router.refresh();
@@ -135,6 +119,41 @@ function TierCard({ tier, users, canManage, actions, create = false }: { tier?: 
     );
   };
 
+  const textField = (field: 'nameAr' | 'description' | 'descriptionAr', label: string, helpText: string, max: number, dir: 'rtl' | 'auto') => (
+    <label className="flex flex-col gap-1 text-sm text-fg-muted">
+      <span className="text-fg font-medium">{label}</span>
+      <input
+        maxLength={max}
+        value={form[field]}
+        disabled={!canManage}
+        aria-invalid={shown[field] ? true : undefined}
+        aria-describedby={described(field)}
+        onChange={(e) => set(field, e.target.value)}
+        className={fieldClass}
+        dir={dir}
+        lang={dir === 'rtl' ? 'ar' : undefined}
+        data-testid={`tier-${key}-${field}`}
+      />
+      <span id={help(field)} className="text-xs">{helpText}</span>
+      {errorOf(field)}
+    </label>
+  );
+
+  const flag = (field: 'uploads' | 'channels' | 'requestable', label: string, forcedOn: boolean, describedBy?: string) => (
+    <label className="flex items-center gap-2 text-sm text-fg">
+      <input
+        type="checkbox"
+        checked={forcedOn || form[field]}
+        disabled={!canManage || forcedOn}
+        aria-describedby={describedBy}
+        onChange={(e) => set(field, e.target.checked)}
+        className="h-4 w-4 accent-accent"
+        data-testid={`tier-${key}-${field}`}
+      />
+      {label}
+    </label>
+  );
+
   const saved = tier ?? null;
   const valid = Object.keys(errors).length === 0;
 
@@ -147,7 +166,7 @@ function TierCard({ tier, users, canManage, actions, create = false }: { tier?: 
         e.preventDefault();
         setTouched(true);
         if (!valid) return;
-        if (create) void run(() => actions.save(form, true), t('creators.tierSaved'));
+        if (create) void run(() => actions.save(tierFormPayload(form), true), t('creators.tierSaved'));
         else setPending('save');
       }}
     >
@@ -195,7 +214,7 @@ function TierCard({ tier, users, canManage, actions, create = false }: { tier?: 
             <input
               type="checkbox"
               checked={form.unlimited}
-              disabled={!canManage || fixedUnlimited}
+              disabled={!canManage || fixedUnlimited || isMember}
               aria-describedby={`${ids}-unlimited-help`}
               onChange={(e) => set('unlimited', e.target.checked)}
               className="h-4 w-4 accent-accent"
@@ -204,9 +223,54 @@ function TierCard({ tier, users, canManage, actions, create = false }: { tier?: 
             {t('creators.tierUnlimited')}
           </label>
           <span id={`${ids}-unlimited-help`} className="text-xs text-fg-muted">
-            {fixedUnlimited ? t('creators.helpUnlimitedFixed') : t('creators.helpUnlimited')}
+            {fixedUnlimited ? t('creators.helpUnlimitedFixed') : isMember ? t('creators.helpUnlimitedMember', { tier: tier ? tierLabel(tier, locale) : '' }) : t('creators.helpUnlimited')}
           </span>
         </div>
+        {textField('nameAr', t('creators.tierNameAr'), t('creators.helpNameAr'), CREATOR_TIER_TEXT.name, 'rtl')}
+        {textField('description', t('creators.tierDescription'), t('creators.helpDescription'), CREATOR_TIER_TEXT.description, 'auto')}
+        {textField('descriptionAr', t('creators.tierDescriptionAr'), t('creators.helpDescriptionAr'), CREATOR_TIER_TEXT.description, 'rtl')}
+      </div>
+      <fieldset className="flex flex-col gap-2 rounded border border-border p-4" data-testid={`tier-${key}-access`}>
+        <legend className="px-1 text-sm font-medium text-fg">{t('creators.tierAccess')}</legend>
+        {/* Each switch says in one line what it allows and what a user without it sees */}
+        <div className="flex flex-col gap-3">
+          {([
+            ['uploads', 'creators.tierUploadsFlag', 'creators.helpUploadsFlag'],
+            ['channels', 'creators.tierChannelsFlag', 'creators.helpChannelsFlag'],
+          ] as const).map(([field, label, help]) => (
+            <div key={field} className="flex flex-col gap-1">
+              {flag(field, t(label), form.unlimited, `${ids}-${field}-help`)}
+              <span id={`${ids}-${field}-help`} className="ps-6 text-xs text-fg-muted" data-testid={`tier-${key}-${field}-help`}>{t(help)}</span>
+            </div>
+          ))}
+        </div>
+        {form.unlimited && <span className="text-xs text-fg-muted">{t('creators.helpFlagsUnlimited')}</span>}
+      </fieldset>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="flex flex-col gap-1 text-sm">
+          {flag('requestable', t('creators.tierRequestable'), false, `${ids}-requestable-help`)}
+          <span id={`${ids}-requestable-help`} className="ps-6 text-xs text-fg-muted" data-testid={`tier-${key}-requestable-help`}>{t('creators.helpRequestable')}</span>
+        </div>
+        <label className="flex flex-col gap-1 text-sm text-fg-muted">
+          <span className="text-fg font-medium">{t('creators.tierSortOrder')}</span>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={CREATOR_TIER_BOUNDS.sortOrder.min}
+            max={CREATOR_TIER_BOUNDS.sortOrder.max}
+            step={1}
+            value={Number.isFinite(form.sortOrder) ? form.sortOrder : ''}
+            disabled={!canManage}
+            aria-invalid={shown.sortOrder ? true : undefined}
+            aria-describedby={described('sortOrder')}
+            onChange={(e) => set('sortOrder', e.target.value === '' ? NaN : Number(e.target.value))}
+            className={fieldClass}
+            dir="ltr"
+            data-testid={`tier-${key}-sortOrder`}
+          />
+          <span id={help('sortOrder')} className="text-xs">{t('creators.helpSortOrder', { min: n(CREATOR_TIER_BOUNDS.sortOrder.min), max: n(CREATOR_TIER_BOUNDS.sortOrder.max) })}</span>
+          {errorOf('sortOrder')}
+        </label>
       </div>
       {!form.unlimited && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -290,7 +354,7 @@ function TierCard({ tier, users, canManage, actions, create = false }: { tier?: 
       {!create && tier && (
         <TierChangeDialog
           open={pending !== null}
-          title={pending === 'delete' ? t('creators.tierDeleteTitle', { name: tier.name }) : t('creators.tierSaveTitle', { name: form.name.trim() || tier.name })}
+          title={pending === 'delete' ? t('creators.tierDeleteTitle', { name: tierLabel(tier, locale) }) : t('creators.tierSaveTitle', { name: form.name.trim() || tier.name })}
           body={pending === 'delete' ? t('creators.tierDeleteBody') : `${(users === 1 ? t('creators.tierSaveBodyOne') : t('creators.tierSaveBody', { count: n(users) }))} ${tierEffect(form, t, locale)}`}
           confirmLabel={pending === 'delete' ? t('creators.tierDelete') : t('creators.tierSave')}
           danger={pending === 'delete'}
@@ -299,7 +363,7 @@ function TierCard({ tier, users, canManage, actions, create = false }: { tier?: 
           onConfirm={() =>
             void (pending === 'delete'
               ? run(() => actions.remove(tier.id), t('creators.tierDeleted'))
-              : run(() => actions.save(form, false), t('creators.tierSaved')))
+              : run(() => actions.save(tierFormPayload(form), false), t('creators.tierSaved')))
           }
         />
       )}
@@ -314,7 +378,7 @@ export function TierEditor({ tiers, counts, canManage, actions }: { tiers: Creat
       {tiers.map((tier) => (
         <section key={tier.id} id={`tier-${tier.id}`} aria-labelledby={`tier-${tier.id}-title`} className="scroll-mt-6">
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            <h2 id={`tier-${tier.id}-title`} className="text-lg font-semibold text-fg">{tier.name}</h2>
+            <h2 id={`tier-${tier.id}-title`} className="text-lg font-semibold text-fg">{tierLabel(tier, locale)}</h2>
             <Chip tone={tier.unlimited ? 'info' : 'good'} testId={`tier-${tier.id}-users`}>
               {(counts[tier.id] ?? 0) === 1 ? t('creators.tierUsersOne') : t('creators.tierUsers', { count: formatNumber(counts[tier.id] ?? 0, locale) })}
             </Chip>

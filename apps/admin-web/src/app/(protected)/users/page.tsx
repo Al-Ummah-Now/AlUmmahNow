@@ -4,7 +4,7 @@ import { listUsers } from '@/lib/api/content';
 import { bulkSetCreatorTier, listCreatorTierDefinitions, setUserCreatorTier } from '@/lib/api/creators';
 import { getAdminSession } from '@/lib/auth';
 import { canManageCreators } from '@/lib/roles';
-import { parseUserTierFilter } from '@/lib/creator-tiers';
+import { parseUserTierFilter, tierLabel } from '@/lib/creator-tiers';
 import { getI18n } from '@/i18n/server';
 import { formatNumber } from '@/i18n/translate';
 import { ErrorAlert, linkClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
@@ -81,7 +81,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
               { value: 'has_tier', label: t('creators.filterAssigned') },
               { value: 'hit_limit', label: t('creators.filterLimited') },
               { value: NO_CREATOR_TIER, label: t('creators.tierNone') },
-              ...(tiers ?? []).map((tier) => ({ value: tier.id, label: tier.name })),
+              ...(tiers ?? []).map((tier) => ({ value: tier.id, label: tierLabel(tier, locale) })),
             ],
           },
           { kind: 'select', name: 'sort', label: t('content.sort'), allLabel: t('users.sortNewest'), options: [{ value: 'oldest', label: t('users.sortOldest') }, { value: 'name', label: t('users.sortName') }] },

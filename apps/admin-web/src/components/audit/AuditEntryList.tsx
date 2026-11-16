@@ -38,7 +38,7 @@ function Details({ entry, names, t }: { entry: AuditEntryLike; names: AdminNames
               <dd className="text-fg-muted min-w-0 break-words">
                 {d.type === 'ref' ? (
                   d.item.kind === 'user' ? (
-                    <PersonName person={personView(d.item.id, names, t)} showEmail={false} testId="audit-detail-ref" />
+                    <PersonName person={personView(d.item.id, names, t, null, 'user')} showEmail={false} testId="audit-detail-ref" />
                   ) : (
                     <ItemName item={d.item} testId="audit-detail-ref" />
                   )

@@ -4,13 +4,24 @@
  *   GET  /api/me/creator  what the signed-in user may do (the web shows or hides
  *                         Upload and Create channel from it); nothing while an
  *                         admin deletion of their videos data is pending
- *   POST /api/channels    gated by channelCreateGate: no tier -> 403
+ *   POST /api/channels    gated by channelCreateGate: a tier without the
+ *                         channels flag (Member) -> 403
  *                         `uploads_by_invitation`; the tier's channel limit
  *                         reached -> 403 `channel_limit`
  */
 import type { Context, Next } from 'hono';
-import { CHANNEL_ACCESS_TABLE, CREATOR_ERROR_CODES, OWNERSHIP_TABLE, can, isChannelRole, type CreatorAccess } from '@al-ummah/shared-types';
+import {
+	CHANNEL_ACCESS_TABLE,
+	CREATOR_ERROR_CODES,
+	OWNERSHIP_TABLE,
+	can,
+	isChannelRole,
+	tierAllowsChannels,
+	tierAllowsUploads,
+	type CreatorAccess,
+} from '@al-ummah/shared-types';
 import { countChannelSlots, reserveChannelSlot, resolveCreator, settleChannelSlot } from '../../lib/creatorTiers';
+import { upgradeMode } from '../../lib/upgradeMode';
 import { logger } from '../../lib/logger';
 import { cachedPendingUserDeletion } from '../../lib/admin/pendingUserDeletion';
 import { invitationOnly, UPLOAD_SESSION_OPERATION } from '../../middleware/upload-limits';
@@ -67,7 +78,7 @@ export async function memberUploadChannelIds(db: D1Database, userId: string, rol
 		byOwner.set(row.owner_id, [...(byOwner.get(row.owner_id) ?? []), row.channel_id]);
 	}
 	const eligible = await Promise.all(
-		[...byOwner].map(async ([ownerId, channelIds]) => ((await resolveCreator(db, { userId, roles, channelOwnerId: ownerId })).tier ? channelIds : [])),
+		[...byOwner].map(async ([ownerId, channelIds]) => (tierAllowsUploads((await resolveCreator(db, { userId, roles, channelOwnerId: ownerId })).tier) ? channelIds : [])),
 	);
 	return eligible.flat();
 }
@@ -81,15 +92,16 @@ export async function creatorAccess(db: D1Database, userId: string, roles: reado
 		liveAccess(db, userId, roles),
 	]);
 	const tier = creator.tier;
+	const channels = tierAllowsChannels(tier);
 	const maxChannels = !tier || tier.unlimited ? null : tier.maxChannels;
 	return {
-		tier: tier ? { id: tier.id, name: tier.name, unlimited: tier.unlimited } : null,
+		tier: tier ? { id: tier.id, name: tier.name, unlimited: tier.unlimited, uploads: tierAllowsUploads(tier), channels } : null,
 		via: creator.via,
-		canUpload: !!tier || uploadChannelIds.length > 0,
+		canUpload: tierAllowsUploads(tier) || uploadChannelIds.length > 0,
 		uploadChannelIds,
-		canCreateChannel: !!tier && (maxChannels === null || channelsOwned < maxChannels),
+		canCreateChannel: channels && (maxChannels === null || channelsOwned < maxChannels),
 		channelsOwned,
-		maxChannels: tier ? maxChannels : 0,
+		maxChannels: channels ? maxChannels : 0,
 		limits: tier && !tier.unlimited ? { perHour: tier.perHour, perDay: tier.perDay, maxConcurrent: tier.maxConcurrent } : null,
 		usage,
 		live,
@@ -100,11 +112,19 @@ export async function handleCreatorAccess(c: Context) {
 	const userId = c.get('userId') as string | undefined;
 	if (!userId) return c.json({ success: false, error: 'Authentication required' }, 401);
 	try {
-		const [access, deletion] = await Promise.all([creatorAccess(c.env.SEARCH_DB, userId, rolesOf(c)), cachedPendingUserDeletion(c.env.SEARCH_DB, userId)]);
+		const [access, deletion, mode] = await Promise.all([
+			creatorAccess(c.env.SEARCH_DB, userId, rolesOf(c)),
+			cachedPendingUserDeletion(c.env.SEARCH_DB, userId),
+			// The header pill follows the Upgrade page's mode; if it cannot be read there is no mode and no pill
+			upgradeMode(c.env).then((m) => m.mode).catch((error) => {
+				logger.warn('[Creator] Upgrade page mode not read; the header pill is hidden', { userId, error: error instanceof Error ? error.message : String(error) });
+				return undefined;
+			}),
+		]);
 		// A pending admin deletion of their videos data refuses every upload and create (#701)
 		const result: CreatorAccess = deletion
-			? { ...access, canUpload: false, canCreateChannel: false, uploadChannelIds: [], live: { ...access.live, allowed: false, reason: 'pending_deletion' }, pendingDeletion: true }
-			: access;
+			? { ...access, canUpload: false, canCreateChannel: false, uploadChannelIds: [], live: { ...access.live, allowed: false, reason: 'pending_deletion' }, pendingDeletion: true, ...(mode ? { upgradeMode: mode } : {}) }
+			: { ...access, ...(mode ? { upgradeMode: mode } : {}) };
 		return c.json({ success: true, result });
 	} catch (error) {
 		logger.error('[Creator] Access lookup failed', { userId, error: error instanceof Error ? error.message : String(error) });
@@ -120,8 +140,8 @@ export async function channelCreateGate(c: Context, next: Next) {
 	let reservation: string | null = null;
 	try {
 		const creator = await resolveCreator(c.env.SEARCH_DB, { userId, roles: rolesOf(c) });
-		if (!creator.tier) {
-			logger.info('[Creator] Channel create refused: no creator tier', { userId });
+		if (!creator.tier || !tierAllowsChannels(creator.tier)) {
+			logger.info('[Creator] Channel create refused: the tier allows no channels', { userId, tierId: creator.tier?.id ?? null });
 			return invitationOnly(c);
 		}
 		const max = creator.tier.unlimited ? null : creator.tier.maxChannels;

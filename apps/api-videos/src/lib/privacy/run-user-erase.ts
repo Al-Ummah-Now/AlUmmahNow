@@ -25,6 +25,7 @@
  * when the operation budget runs out. When the index is incomplete the step
  * throws, so the job is retried with backoff rather than falling back to a scan.
  */
+import { eraseTierHistory } from '../tierChanges';
 import { postLocationKey } from '../community-posts';
 import { eraseChannelHandleHistory } from './handle-history';
 import { defaultPointerPrefix } from '../uploadDefaultPointer';
@@ -218,6 +219,8 @@ export async function eraseRunUserData(
 			budget.spend(3);
 			await forgetFootprints(db as never, userId);
 			await eraseCaptionMinutes(db, userId);
+			// Tier requests (name, about) and tier changes
+			await eraseTierHistory(db as unknown as D1Database, userId);
 			// Move from YouTube: imports, snapshots, consents, staged captions (Google token revoked)
 			budget.spend(2);
 			await eraseYoutubeImports(db, env as never, userId);

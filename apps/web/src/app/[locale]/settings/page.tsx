@@ -24,6 +24,7 @@ import {
   Shield,
   Mail,
   Users,
+  BadgeCheck,
 } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -65,6 +66,13 @@ export default function SettingsPage() {
       description: t.channelRoles.invitationsDescription,
       icon: Users,
       href: `/${lang}${ACCOUNT_MENU_PATHS.channelInvites}`,
+    },
+    {
+      title: t.upgrade.settingsTier.title,
+      description: t.upgrade.settingsTier.description,
+      icon: BadgeCheck,
+      href: `/${lang}/settings/tier`,
+      available: true,
     },
     {
       title: t.contact.settingsTitle,

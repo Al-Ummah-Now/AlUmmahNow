@@ -10,7 +10,7 @@ import { sessionRoles } from "./auth/session-roles"
 import { verificationFailed } from "./auth/verify-result"
 import { newStateNonce, pkceCookieValue, stateCookieOptions, withState, PKCE_COOKIE, STATE_COOKIE } from "./auth/oauth-state"
 import { RETURN_COOKIE, returnPathFromReferer } from "./auth/silent-sign-in"
-import { safeStudioReturn } from "@/lib/studio/resolve"
+import { safeSignInReturn } from "@/lib/auth/sign-in-return"
 
 export async function getClient() {
   return getOpenAuthClient();
@@ -86,8 +86,8 @@ export async function login(locale: string = 'en', returnTo?: unknown) {
   const requestHeaders = await getHeaders()
   const host = requestHeaders.get("host")
   const protocol = host?.includes("localhost") ? "http" : "https"
-  // A Studio sign-in names its page (only ever a Studio path); others use the referer
-  const returnPath = safeStudioReturn(returnTo) ?? (host ? returnPathFromReferer(requestHeaders.get("referer"), `${protocol}://${host}`) : null)
+  // A Studio page, the locale's home or /upgrade, when the button names it (lib/auth/sign-in-return.ts); others use the referer
+  const returnPath = safeSignInReturn(returnTo, locale) ?? (host ? returnPathFromReferer(requestHeaders.get("referer"), `${protocol}://${host}`) : null)
   const home = returnPath ?? `/${locale}`
 
   // Check if already logged in via SessionManager

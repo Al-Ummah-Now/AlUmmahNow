@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CREATOR_TIER_IDS, creatorTierOrigin, type CreatorTier, type CreatorTierAssignment, type CreatorTierOrigin } from '@al-ummah/shared-types';
-import { isUnexpectedFailure, ORIGIN_LABEL, tierActionMessage, tierChangeMessage } from '@/lib/creator-tiers';
+import { isUnexpectedFailure, ORIGIN_LABEL, tierActionMessage, tierChangeMessage, tierLabel } from '@/lib/creator-tiers';
 import type { ActionResult } from '@/lib/api/errors';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { formatDate, type MessageKey } from '@/i18n/translate';
@@ -71,7 +71,10 @@ export function CreatorTierControl({ userId, userName, current: serverCurrent, t
   const locked = superAdmin && !unlocked;
   const tierOf = (id: string | null | undefined) => (id ? tiers.find((tier) => tier.id === id) ?? null : null);
   const currentTier = tierOf(current?.tierId);
-  const currentName = current ? currentTier?.name ?? current.tierId : t('creators.none');
+  // No assignment means Member (wiki AUN-TIER-REQUESTS): named as such, offered once as the empty choice
+  const named = (tier: CreatorTier | null) => (tier ? tierLabel(tier, locale) : null);
+  const memberName = named(tierOf(CREATOR_TIER_IDS.member)) ?? t('creators.none');
+  const currentName = current ? named(currentTier) ?? current.tierId : memberName;
 
   async function apply(tierId: string | null) {
     setPending(undefined);
@@ -151,8 +154,8 @@ export function CreatorTierControl({ userId, userName, current: serverCurrent, t
             className={`${fieldClass} py-1 text-sm`}
           >
             <option value="">{t('creators.noTier')}</option>
-            {tiers.map((tier) => (
-              <option key={tier.id} value={tier.id}>{tier.name}</option>
+            {tiers.filter((tier) => tier.id !== CREATOR_TIER_IDS.member).map((tier) => (
+              <option key={tier.id} value={tier.id}>{tierLabel(tier, locale)}</option>
             ))}
           </select>
           {needsTier && !current && tiers.some((tier) => tier.id === CREATOR_TIER_IDS.creator) && (

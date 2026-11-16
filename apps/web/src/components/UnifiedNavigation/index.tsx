@@ -35,6 +35,7 @@ import {
   PenLine,
   FileText,
   UserPlus,
+  CircleArrowUp,
 } from 'lucide-react';
 import { ACCOUNT_MENU_PATHS } from '@/lib/navigation/destinations';
 import { ACCOUNT_MENU_EVENT, type AccountMenuRequest } from '@/lib/navigation/account-menu-events';
@@ -251,8 +252,10 @@ export function UnifiedNavigation() {
       { label: t.navigation.writeArticle, icon: PenLine, href: cms.write },
       { label: t.navigation.myArticles, icon: FileText, href: cms.articles },
     ] : []),
+    // Every signed-in user: their tier, the other tiers and a request (wiki AUN-TIER-REQUESTS)
+    { label: t.navigation.upgrade, icon: CircleArrowUp, href: `/${lang}${ACCOUNT_MENU_PATHS.upgrade}`, testId: 'nav-menu-upgrade' },
     { label: t.header.settings, icon: Settings, href: `/${lang}${ACCOUNT_MENU_PATHS.settings}` },
-  ];
+  ] as { label: string; icon: typeof Settings; href: string; testId?: string }[];
   // The other Al Ummah Now apps this account may open (docs/design/NAV.md), same order everywhere
   const otherApps = appLinks({
     current: 'videos',
@@ -455,7 +458,7 @@ export function UnifiedNavigation() {
             {navItems.map((item) => {
               const Icon = item.icon;
               return (
-                <Link key={item.href} href={item.href} onClick={() => setIsOpen(false)} className="aun-menu-item" role="menuitem">
+                <Link key={item.href} href={item.href} onClick={() => setIsOpen(false)} className="aun-menu-item" role="menuitem" data-testid={item.testId}>
                   <Icon className="aun-menu-icon" aria-hidden="true" />
                   <span className="aun-menu-text">{item.label}</span>
                 </Link>

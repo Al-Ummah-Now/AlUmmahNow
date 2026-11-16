@@ -220,7 +220,13 @@ export interface JobMessage {
  * row says what to do. A handler error retries the message with backoff; the
  * last attempt marks the job failed and lets the message dead-letter.
  */
-export async function handleAdminJobBatch(batch: { messages: readonly JobMessage[] }, env: JobEnv, handlers: Partial<Record<AdminJobKind, JobHandler>>): Promise<void> {
+export async function handleAdminJobBatch(
+	batch: { messages: readonly JobMessage[] },
+	env: JobEnv,
+	handlers: Partial<Record<AdminJobKind, JobHandler>>,
+	/** Called once when a job fails for good (its last attempt), e.g. to flag the admin's Errors page */
+	onFailed?: (job: AdminJob, error: string) => Promise<void>,
+): Promise<void> {
 	for (const msg of batch.messages) {
 		const jobId = (msg.body as { payload?: { jobId?: unknown } } | null)?.payload?.jobId;
 		if (typeof jobId !== 'string') {
@@ -281,6 +287,7 @@ export async function handleAdminJobBatch(batch: { messages: readonly JobMessage
 					const { reportActionFailed } = await import('../media/troubleshoot');
 					await reportActionFailed(env as never, job, reason).catch(() => undefined);
 				}
+				if (onFailed) await onFailed(job, reason).catch(() => undefined);
 			} else {
 				logger.warn('[AdminJobs] Job attempt failed; retrying', { jobId: job.id, kind: job.kind, attempts: msg.attempts, error: reason });
 			}

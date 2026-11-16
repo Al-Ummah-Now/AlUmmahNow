@@ -59,6 +59,10 @@ export const smallButtonClass =
 export const dangerButtonClass =
   'inline-flex items-center justify-center px-3 py-2 rounded border border-danger-border bg-danger-bg text-danger-fg text-sm font-medium hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-60 disabled:cursor-not-allowed';
 
+/** The one primary action in a small group (e.g. Approve next to Decline). */
+export const primarySmallButtonClass =
+  'inline-flex items-center justify-center px-3 py-2 rounded border border-transparent bg-accent hover:bg-accent-hover text-on-accent text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-focus disabled:opacity-60 disabled:cursor-not-allowed';
+
 export function PageHeader({ title, subtitle, total, t, children, deletedKind }: { title: string; subtitle: string; total?: number; t: Translator; children?: React.ReactNode; deletedKind?: string }) {
   return (
     <div className="flex flex-wrap justify-between items-end gap-4 mb-6">

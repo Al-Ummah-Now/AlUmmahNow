@@ -44,6 +44,8 @@ export interface NavAccess {
 export interface NavBadges {
   contact?: number | null;
   errors?: number | null;
+  /** Pending tier requests (wiki AUN-TIER-REQUESTS) */
+  tierRequests?: number | null;
 }
 
 export interface NavItem {
@@ -102,6 +104,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/users', label: 'nav.users', icon: 'user', group: 'people' },
   // Creator tier limits (a user's tier is set on the Users list and the user page); every admin reads, creators:manage changes
   { href: '/tiers', label: 'nav.tiers', icon: 'crown', group: 'people' },
+  { href: '/tier-requests', label: 'nav.tierRequests', icon: 'request', group: 'people', badge: 'tierRequests', badgeTestId: 'tier-requests-nav-badge', badgeLabel: 'tierRequests.navBadge' },
   { href: '/auth-requests', label: 'nav.authRequests', icon: 'key', group: 'people' },
   { href: '/legacy-profiles', label: 'nav.legacyProfiles', icon: 'archive', group: 'people', requires: (a) => a.manageUsers },
 

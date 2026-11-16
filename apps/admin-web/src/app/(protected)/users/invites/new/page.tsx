@@ -16,7 +16,7 @@ export default async function NewInvitePage() {
   let tiers: Array<{ id: string; name: string }> = [];
   try {
     permissions = await getContentPermissions();
-    if (permissions.includes('creators:manage')) tiers = (await listCreatorTierDefinitions()).map((tier) => ({ id: tier.id, name: tier.name }));
+    if (permissions.includes('creators:manage')) tiers = (await listCreatorTierDefinitions()).map((tier) => ({ id: tier.id, name: tier.name, nameAr: tier.nameAr ?? null }));
   } catch (e) {
     logger.error('[invites] Failed to load the form', { error: e instanceof Error ? e.message : String(e) });
   }

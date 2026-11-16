@@ -38,6 +38,14 @@ export const ADMIN_CONTENT_PERMISSIONS = [
   'users:warn',
   /** Change live streaming provider routing, channel overrides and stream moves, and end stuck sessions (videos admin "Live streaming"). */
   'live:manage',
+  /** See the Payments page: providers, prices, subscriptions and billing history (wiki AUN-SUBS). */
+  'billing:read',
+  /** Prices, tax details, sale modes, price sync, cancel subscriptions and grant complimentary tiers. */
+  'billing:manage',
+  /** Refund payments (super admin only). */
+  'billing:refund',
+  /** Payment providers: credentials, test/live mode and the enable switch (super admin only). */
+  'billing:providers',
 ] as const;
 
 export type AdminContentPermission = (typeof ADMIN_CONTENT_PERMISSIONS)[number];
@@ -49,7 +57,7 @@ export type AdminContentPermission = (typeof ADMIN_CONTENT_PERMISSIONS)[number];
  */
 export const ROLE_CONTENT_PERMISSIONS: Readonly<Record<string, readonly AdminContentPermission[]>> = {
   super_admin: ADMIN_CONTENT_PERMISSIONS,
-  admin: ['channels:manage', 'videos:manage', 'content:delete', 'content:purge', 'users:manage', 'creators:manage', 'users:warn', 'live:manage'],
+  admin: ['channels:manage', 'videos:manage', 'content:delete', 'content:purge', 'users:manage', 'creators:manage', 'users:warn', 'live:manage', 'billing:read', 'billing:manage'],
   moderator: ['users:warn'],
 };
 
@@ -583,12 +591,21 @@ export const ADMIN_JOB_KINDS = [
   'media.transcode-retry',
   /** "Cancel" one video's R2 transcode: container stopped, partial output deleted, record marked cancelled. Target the video. */
   'media.transcode-cancel',
+  /**
+   * Payments (wiki AUN-SUBS; api-videos lib/billing/service.ts). Target kind 'billing':
+   * a webhook event id, a provider id, a subscription id or a payment id.
+   */
+  'billing.webhook',
+  'billing.sync-prices',
+  'billing.cancel',
+  'billing.refund',
+  'billing.reconcile',
 ] as const;
 
 export type AdminJobKind = (typeof ADMIN_JOB_KINDS)[number];
 export const ADMIN_JOB_STATUSES = ['queued', 'running', 'retrying', 'succeeded', 'failed'] as const;
 export type AdminJobStatus = (typeof ADMIN_JOB_STATUSES)[number];
-export type AdminJobTarget = 'channel' | 'video' | 'user';
+export type AdminJobTarget = 'channel' | 'video' | 'user' | 'billing';
 
 export interface AdminJob {
   id: string;
@@ -626,6 +643,12 @@ export const ADMIN_JOB_PERMISSIONS: Readonly<Record<AdminJobKind, readonly Admin
   // Started with media:manage (admins and super admins), who also hold videos:manage
   'media.transcode-retry': ['videos:manage'],
   'media.transcode-cancel': ['videos:manage'],
+  // Retrying runs the action again, so it needs the action's own permission (wiki AUN-SUBS)
+  'billing.webhook': ['billing:manage'],
+  'billing.sync-prices': ['billing:providers'],
+  'billing.cancel': ['billing:manage'],
+  'billing.refund': ['billing:refund'],
+  'billing.reconcile': ['billing:manage'],
 };
 
 // ---------------------------------------------------------------------------

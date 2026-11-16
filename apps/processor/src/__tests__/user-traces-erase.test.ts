@@ -53,7 +53,32 @@ function seed() {
     search.raw
       .prepare(`INSERT INTO caption_minute_ledger (id, user_id, hold_id, kind, minutes, balance_after, period, created_at) VALUES (?, ?, ?, 'settle', 5, 55, '2026-11', ?)`)
       .run(`led_${userId}`, userId, `hold_${userId}`, now);
+    search.raw
+      .prepare(`INSERT INTO tier_requests (id, user_id, tier_id, tier_name, from_tier_id, name, about, status, created_at) VALUES (?, ?, 'creator', 'Creator', 'member', 'Name', 'About me and my channel', 'pending', '2026-11-14')`)
+      .run(`tr_${userId}`, userId);
   }
+  // A request the erased user decided as staff: the decision stays, the decider becomes the placeholder
+  search.raw
+    .prepare(`INSERT INTO tier_requests (id, user_id, tier_id, tier_name, from_tier_id, name, about, status, created_at, decided_at, decided_by) VALUES ('tr_decided', 'usr_third', 'creator', 'Creator', 'member', 'N', 'About me and my channel', 'approved', '2026-11-14', '2026-11-14', ?)`)
+    .run(USER);
+  // Billing (wiki AUN-SUBS): bookkeeping stays under the marker; links, checkouts and payloads go
+  for (const userId of [USER, OTHER]) {
+    search.raw
+      .prepare(`INSERT INTO billing_subscriptions (id, user_id, tier_id, tier_name, provider, mode, provider_ref, status, comp_reason, created_at, updated_at) VALUES (?, ?, 'creator', 'Creator', 'paddle', 'test', ?, 'active', 'thanks', ?, ?)`)
+      .run(`bsub_${userId}`, userId, `sub_${userId}`, now, now);
+    search.raw
+      .prepare(`INSERT INTO billing_payments (id, user_id, subscription_id, provider, mode, provider_ref, status, amount, currency, occurred_at) VALUES (?, ?, ?, 'paddle', 'test', ?, 'succeeded', 500, 'USD', ?)`)
+      .run(`bpay_${userId}`, userId, `bsub_${userId}`, `txn_${userId}`, now);
+    search.raw
+      .prepare(`INSERT INTO billing_events (id, provider, mode, event_id, type, user_id, payload, status, received_at) VALUES (?, 'paddle', 'test', ?, 'subscription.created', ?, '{"email":"x@example.com"}', 'processed', ?)`)
+      .run(`bev_${userId}`, `evt_${userId}`, userId, now);
+    search.raw.prepare(`INSERT INTO billing_customers (provider, mode, user_id, provider_ref, created_at) VALUES ('paddle', 'test', ?, ?, ?)`).run(userId, `ctm_${userId}`, now);
+    search.raw
+      .prepare(`INSERT INTO billing_checkouts (id, user_id, tier_id, price_id, provider, mode, created_at) VALUES (?, ?, 'creator', 'bpr_1', 'paddle', 'test', ?)`)
+      .run(`bco_${userId}`, userId, now);
+  }
+  // A comp the erased user granted as staff: the grant stays, the granter becomes the placeholder
+  search.raw.prepare(`UPDATE billing_subscriptions SET comp_by = ? WHERE user_id = ?`).run(USER, OTHER);
   return { reports, search };
 }
 
@@ -61,7 +86,7 @@ describe('eraseUserTraces (#1059)', () => {
   it('deletes invites, error-group membership and category suggestions; anonymises error events, keeping the errors', async () => {
     const { reports, search } = seed();
     const result = await eraseUserTraces(reports, search, USER, ERASED);
-    expect(result).toEqual({ invites: 1, errorUsers: 1, errorEvents: 2, categorySuggestions: 1, rateLimits: 2, creatorTier: 1, captionMinutes: 5, adminDeletions: 0, adminJobs: 0 });
+    expect(result).toEqual({ invites: 1, errorUsers: 1, errorEvents: 2, categorySuggestions: 1, rateLimits: 2, creatorTier: 1, captionMinutes: 5, tierRequests: 2, billing: 6, adminDeletions: 0, adminJobs: 0 });
 
     expect(reports.raw.prepare('SELECT id FROM creator_invites ORDER BY id').all()).toEqual([{ id: 'inv_2' }]);
     expect(reports.raw.prepare('SELECT user_key FROM error_group_users').all()).toEqual([{ user_key: OTHER }]);
@@ -81,12 +106,25 @@ describe('eraseUserTraces (#1059)', () => {
     for (const table of ['caption_minute_usage', 'caption_minute_overdraft', 'caption_minute_holds', 'caption_minute_ledger', 'caption_minute_grants']) {
       expect(search.raw.prepare(`SELECT user_id FROM ${table}`).all()).toEqual([{ user_id: OTHER }]);
     }
+    expect(search.raw.prepare("SELECT user_id FROM tier_requests WHERE id != 'tr_decided'").all()).toEqual([{ user_id: OTHER }]);
+    expect(search.raw.prepare("SELECT status, decided_by FROM tier_requests WHERE id = 'tr_decided'").get()).toEqual({ status: 'approved', decided_by: ERASED });
+    expect(search.raw.prepare('SELECT user_id, comp_reason, comp_by FROM billing_subscriptions ORDER BY id').all()).toEqual([
+      { user_id: ERASED, comp_reason: null, comp_by: null },
+      { user_id: OTHER, comp_reason: 'thanks', comp_by: ERASED },
+    ]);
+    expect(search.raw.prepare('SELECT user_id, amount FROM billing_payments ORDER BY id').all()).toEqual([
+      { user_id: ERASED, amount: 500 },
+      { user_id: OTHER, amount: 500 },
+    ]);
+    expect(search.raw.prepare("SELECT payload FROM billing_events WHERE user_id = ?").get(ERASED)).toEqual({ payload: '{}' });
+    expect(search.raw.prepare('SELECT user_id FROM billing_customers').all()).toEqual([{ user_id: OTHER }]);
+    expect(search.raw.prepare('SELECT user_id FROM billing_checkouts').all()).toEqual([{ user_id: OTHER }]);
   });
 
   it('is idempotent and works without the search database', async () => {
     const { reports, search } = seed();
     await eraseUserTraces(reports, search, USER, ERASED);
-    expect(await eraseUserTraces(reports, search, USER, ERASED)).toEqual({ invites: 0, errorUsers: 0, errorEvents: 0, categorySuggestions: 0, rateLimits: 0, creatorTier: 0, captionMinutes: 0, adminDeletions: 0, adminJobs: 0 });
+    expect(await eraseUserTraces(reports, search, USER, ERASED)).toEqual({ invites: 0, errorUsers: 0, errorEvents: 0, categorySuggestions: 0, rateLimits: 0, creatorTier: 0, captionMinutes: 0, tierRequests: 0, billing: 0, adminDeletions: 0, adminJobs: 0 });
     expect((await eraseUserTraces(reports, undefined, OTHER, ERASED)).categorySuggestions).toBe(0);
   });
 });

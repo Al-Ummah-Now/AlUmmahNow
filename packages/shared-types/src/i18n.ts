@@ -167,6 +167,11 @@ export interface AppTranslations {
     invitationMessage: string;
     /** A refused upload on an account that can no longer upload: a plain fact, no upsell (hidden when off) */
     uploadsOff: string;
+    invitationShort: string;
+    /** Link to /upgrade wherever uploading is by invitation */
+    requestAccess: string;
+    /** The header pill to /upgrade while the page sells (UPGRADE_MODES 'pay') */
+    upgrade: string;
     /** A write refused with `videos_account_pending_deletion` */
     accountPendingDeletion: string;
     limitReached: string;
@@ -179,6 +184,111 @@ export interface AppTranslations {
     minute: string;
     hours: string;
     hour: string;
+  };
+  /** /upgrade: request a tier (wiki AUN-TIER-REQUESTS). Never prices. */
+  upgrade: {
+    metaTitle: string;
+    title: string;
+    lead: string;
+    betaTitle: string;
+    betaBody: string;
+    tiersHeading: string;
+    /** The lead when the page takes no requests (closed; pay has its own) */
+    leadTiers: string;
+    /** /upgrade with no payment provider and requests off (UPGRADE_MODES 'closed') */
+    unavailable: string;
+    current: string;
+    /** The card's button: "Request" (the card names the tier); `requestLabel` is its accessible name */
+    request: string;
+    requestLabel: string;
+    requested: string;
+    signInToRequest: string;
+    includes: string;
+    watch: string;
+    uploads: string;
+    uploadsPerDay: string;
+    uploadsUnlimited: string;
+    noUploads: string;
+    channelsOne: string;
+    channelsUpTo: string;
+    channelsUnlimited: string;
+    noChannels: string;
+    captionMinutes: string;
+    captionsUnlimited: string;
+    noCaptionMinutes: string;
+    howTitle: string;
+    step1Title: string;
+    step1Body: string;
+    step2Title: string;
+    step2Body: string;
+    step3Title: string;
+    step3Body: string;
+    status: {
+      pendingTitle: string;
+      pendingBody: string;
+      withdraw: string;
+      withdrawTitle: string;
+      withdrawBody: string;
+      withdrawConfirm: string;
+      keep: string;
+      withdrawn: string;
+      approvedTitle: string;
+      approvedBody: string;
+      approvedUpload: string;
+      declinedTitle: string;
+      /** Label above the team's note (the note is shown as written, in its own block) */
+      declinedReason: string;
+      declinedBody: string;
+    };
+    form: {
+      /** "Request tier": the dialog's heading; `tierLine` names the tier under it */
+      title: string;
+      tierLine: string;
+      description: string;
+      name: string;
+      nameHelp: string;
+      about: string;
+      aboutHelp: string;
+      count: string;
+      nameInvalid: string;
+      aboutTooShort: string;
+      aboutTooLong: string;
+      submit: string;
+      sending: string;
+      cancel: string;
+      sent: string;
+      checking: string;
+    };
+    /** "Your requests": the user's request history (/upgrade and Settings › Tier) */
+    history: {
+      title: string;
+      empty: string;
+      sent: string;
+      decided: string;
+      /** Label above the team's note (the note is shown as written, in its own block) */
+      teamNote: string;
+      more: string;
+      loadFailed: string;
+      status: { pending: string; approved: string; declined: string; withdrawn: string };
+    };
+    /** Settings › Tier */
+    settingsTier: {
+      title: string;
+      description: string;
+      current: string;
+      since: string;
+      seeTiers: string;
+    };
+    errors: {
+      pending: string;
+      held: string;
+      notRequestable: string;
+      tooMany: string;
+      humanCheck: string;
+      failed: string;
+      loadFailed: string;
+      retry: string;
+    };
   };
   imageCrop: {
     avatarTitle: string;
@@ -288,6 +398,8 @@ export interface AppTranslations {
   navigation: {
     /** Scholars (AlUmmahNowCMS docs/SCHOLARS.md): articles are written in the CMS. */
     writeArticle: string;
+    /** Account menu: the /upgrade page (request a tier; wiki AUN-TIER-REQUESTS) */
+    upgrade: string;
     myArticles: string;
     scholarPage: string;
     navigationMenu: string;
@@ -1655,6 +1767,14 @@ export interface AppTranslations {
       channelMemberRemovedMessage: string;
       channelMemberLeftTitle: string;
       channelMemberLeftMessage: string;
+      tierRequestApprovedTitle: string;
+      tierRequestApprovedMessage: string;
+      tierRequestDeclinedTitle: string;
+      tierRequestDeclinedMessage: string;
+      tierRequestReceivedTitle: string;
+      tierRequestReceivedMessage: string;
+      tierChangedTitle: string;
+      tierChangedMessage: string;
       uploadReadyMessage: string;
       uploadFailedTitle: string;
       uploadFailedMessage: string;

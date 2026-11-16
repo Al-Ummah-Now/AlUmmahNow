@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from '@/components/common/AppLink';
-import { Bell, MessageCircle, Radio, Trash2, UserPlus, Video, AlertCircle, Check, Mail, ShieldAlert, Users } from 'lucide-react';
+import { BadgeCheck, Bell, MessageCircle, Radio, Trash2, UserPlus, Video, AlertCircle, Check, Mail, ShieldAlert, Users } from 'lucide-react';
 import type { NotificationItem } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { localizeActionUrl, relativeTime, renderNotification } from '@/lib/notifications/render';
@@ -44,6 +44,11 @@ function Icon({ item }: { item: NotificationItem }) {
       return <Users className={cls} aria-hidden="true" />;
     case 'reviewApproved':
       return <Video className={cls} aria-hidden="true" />;
+    case 'tierRequestApproved':
+    case 'tierRequestDeclined':
+    case 'tierRequestReceived':
+    case 'tierChanged':
+      return <BadgeCheck className={cls} aria-hidden="true" />;
     default:
       return <Bell className={cls} aria-hidden="true" />;
   }

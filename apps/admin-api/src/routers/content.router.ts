@@ -14,6 +14,9 @@
  */
 import { Hono, type Context } from 'hono';
 import {
+  DEFAULT_TIER_ID,
+  TIER_REQUEST_ERRORS,
+  TIER_REQUEST_LIMITS,
   ADMIN_DELETION_KINDS,
   ADMIN_JOB_PERMISSIONS,
   isSuperAdmin,
@@ -65,6 +68,7 @@ import {
   WarningInputError,
 } from '../lib/content/warnings';
 import { enqueueWarningMail, flagWarningMailFailure } from '../lib/warning-mail';
+import { enqueueTierRequestMail, flagTierRequestFailure, tierRequestMailJob } from '../lib/tier-request-mail';
 import { callVideos, VideosError, type VideosCall, type VideosClientEnv } from '../lib/content/videosClient';
 import { dropAudit, readAudit, setAuditPrevious, writeAudit, type AuditAction, type ContentKind } from '../lib/content/audit';
 import { banVideosUser } from '../lib/content/userBan';
@@ -692,6 +696,81 @@ app.put('/users/:id/creator-tier', async (c) => {
     details: { tierId, source, ...(superAdmin ? { overrodeSuperAdmin: true } : {}) },
     previous: { tierId: current.assignment?.tierId ?? null, source: current.assignment?.source ?? null },
   }, () => videos(c, `/users/${encodeURIComponent(id)}/creator-tier`, { method: 'PUT', json: { tierId, source } })));
+});
+
+/**
+ * Tier requests (wiki AUN-TIER-REQUESTS): the queue reads for every admin;
+ * approving or declining needs creators:manage. Approving assigns the tier
+ * (api-videos, one D1 batch with the decision) and is audited like any tier
+ * change (kind 'user', action 'creator-tier', so the user page's tier history
+ * shows it) plus a 'tier-request' row; declining writes the 'tier-request'
+ * row. Either way the decision is delivered (in-app notice + email) by a
+ * queued job with retries; if even queueing fails, the Errors page gets an item
+ * with Retry.
+ */
+type TierRequestRow = { id: string; userId: string; tierId: string; status: string; currentTierId: string; decidedAt: string | null };
+const tierOrNull = (id: string) => (id === DEFAULT_TIER_ID ? null : id);
+
+async function deliverDecision(c: C, requestId: string, decidedAt: string | null) {
+  if (!decidedAt) return;
+  const job = tierRequestMailJob(requestId, decidedAt);
+  if (!(await enqueueTierRequestMail(c.env, job))) await flagTierRequestFailure(c.env, job, 'could not queue the delivery');
+}
+
+/**
+ * "Allow tier requests" (owner rule 2026-11-15, shared-types UPGRADE_MODES):
+ * read by every admin; changed with creators:manage, audited with the previous
+ * value (Undo sends it back). The answer carries the resulting page mode.
+ */
+app.get('/tier-requests/settings', async (c) => ok(c, await videos(c, '/tier-requests/settings')));
+app.put('/tier-requests/settings', async (c) => {
+  need(c, 'creators:manage');
+  const input = await body(c);
+  if (typeof input.allowed !== 'boolean') return c.json({ success: false, code: 'invalid_request', error: 'allowed (true or false) is required' }, 400);
+  const current = await videos<{ allowed: boolean }>(c, '/tier-requests/settings');
+  return ok(c, await audited(c, {
+    kind: 'tier-request', id: 'settings', action: 'allow-requests',
+    details: { allowed: input.allowed, ...(input.undo === true ? { undo: true } : {}) },
+    previous: { allowed: current.allowed },
+  }, () => videos(c, '/tier-requests/settings', { method: 'PUT', json: { allowed: input.allowed } })));
+});
+app.get('/tier-requests', async (c) => ok(c, await videos(c, '/tier-requests', { query: c.req.query() })));
+app.get('/tier-requests/:id', async (c) => {
+  const id = c.req.param('id');
+  const [current, audit] = await Promise.all([
+    videos<{ request: TierRequestRow }>(c, `/tier-requests/${encodeURIComponent(id)}`),
+    readAudit(c.env.REPORTS_DB, { kind: 'tier-request', id, limit: 20 }),
+  ]);
+  return ok(c, { ...current, audit });
+});
+app.post('/tier-requests/:id/approve', async (c) => {
+  need(c, 'creators:manage');
+  const id = c.req.param('id');
+  const { request } = await videos<{ request: TierRequestRow }>(c, `/tier-requests/${encodeURIComponent(id)}`);
+  if (request.status !== 'pending') return c.json({ success: false, code: TIER_REQUEST_ERRORS.notPending, error: 'This request was already decided' }, 409);
+  const result = await audited(c, {
+    kind: 'user', id: request.userId, action: 'creator-tier',
+    details: { tierId: tierOrNull(request.tierId), source: 'admin', tierRequest: id },
+    previous: { tierId: tierOrNull(request.currentTierId), source: null },
+  }, () => videos<{ request: TierRequestRow }>(c, `/tier-requests/${encodeURIComponent(id)}/decide`, { method: 'POST', json: { decision: 'approve' } }));
+  await writeAudit(c.env.REPORTS_DB, { kind: 'tier-request', id, action: 'approve', actorId: actorOf(c), details: { userId: request.userId, tierId: request.tierId } })
+    .catch((e) => logger.warn('[Content] Could not write the tier request audit row', { id, error: String(e) }));
+  await deliverDecision(c, id, result.request.decidedAt);
+  return ok(c, result);
+});
+app.post('/tier-requests/:id/decline', async (c) => {
+  need(c, 'creators:manage');
+  const id = c.req.param('id');
+  const raw = (await body(c)).reason;
+  const reason = typeof raw === 'string' && raw.trim() ? raw.trim().slice(0, TIER_REQUEST_LIMITS.declineReason.max) : null;
+  const { request } = await videos<{ request: TierRequestRow }>(c, `/tier-requests/${encodeURIComponent(id)}`);
+  if (request.status !== 'pending') return c.json({ success: false, code: TIER_REQUEST_ERRORS.notPending, error: 'This request was already decided' }, 409);
+  const result = await audited(c, {
+    kind: 'tier-request', id, action: 'decline',
+    details: { userId: request.userId, tierId: request.tierId, ...(reason ? { reason } : {}) },
+  }, () => videos<{ request: TierRequestRow }>(c, `/tier-requests/${encodeURIComponent(id)}/decide`, { method: 'POST', json: { decision: 'decline', reason } }));
+  await deliverDecision(c, id, result.request.decidedAt);
+  return ok(c, result);
 });
 
 /**

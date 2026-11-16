@@ -14,6 +14,7 @@
  * per user, so the page stays cheap with every profile in it.
  */
 import {
+	DEFAULT_TIER_ID,
 	MAX_BULK_CREATOR_TIER,
 	NO_CREATOR_TIER,
 	SUPER_ADMIN_TIER_ASSIGNER,
@@ -309,6 +310,8 @@ export async function bulkAssignTier(
 	actorId: string,
 	now = new Date().toISOString(),
 ): Promise<CreatorTierBulkResult> {
+	// Member is what no assignment row means (lib/creatorTiers.ts assignTier): assigning it removes the row
+	if (input.tierId === DEFAULT_TIER_ID) input = { ...input, tierId: null };
 	const userIds = [...new Set(input.userIds)];
 	if (!userIds.length || userIds.length > MAX_BULK_CREATOR_TIER || !userIds.every((id) => USER_ID.test(id))) {
 		throw new CreatorTierError(400, 'invalid_users', `userIds: 1 to ${MAX_BULK_CREATOR_TIER} user ids`);

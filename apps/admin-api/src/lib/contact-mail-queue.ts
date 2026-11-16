@@ -24,6 +24,8 @@ import { isWarningMailJob, processWarningMailJob, type WarningMailJob } from './
 import { isRejectionMailJob, processRejectionMailJob, type RejectionMailJob } from './review/rejection-mail';
 import { isNewsletterMailJob, processNewsletterMailJob, type NewsletterMailJob } from './newsletter-mail';
 import { isCostAlertMailJob, processCostAlertMailJob, type CostAlertMailJob } from './cost-alert-mail';
+import { isTierRequestMailJob, processTierRequestMailJob, type TierRequestMailJob } from './tier-request-mail';
+import { isTierChangeMailJob, processTierChangeMailJob, type TierChangeMailJob } from './tier-change-mail';
 
 export const CONTACT_MAIL_VERSION = 1;
 /** Keep equal to max_retries + 1 of the contact-mail consumer in wrangler*.jsonc. */
@@ -210,12 +212,14 @@ export async function processContactMailJob(env: AdminBindings, msg: QueueMessag
 
 /**
  * Queue consumer for CONTACT_MAIL_QUEUE: Contact us mail, account warning
- * emails (`kind: 'warning'`, lib/warning-mail.ts) and "video not approved"
- * emails (`kind: 'review_rejected'`, lib/review/rejection-mail.ts) and the newsletter
- * (`kind: 'newsletter_*'`, lib/newsletter-mail.ts), which share the sender.
+ * emails (`kind: 'warning'`, lib/warning-mail.ts), "video not approved"
+ * emails (`kind: 'review_rejected'`, lib/review/rejection-mail.ts), the newsletter
+ * (`kind: 'newsletter_*'`, lib/newsletter-mail.ts) and tier request decisions
+ * (`kind: 'tier_request'`, lib/tier-request-mail.ts) and tier changes (`kind: 'tier_changed'`,
+ * lib/tier-change-mail.ts), which share the sender.
  */
 export async function contactMailConsumer(
-  batch: { messages: readonly QueueMessageLike<ContactMailJob | WarningMailJob | RejectionMailJob | NewsletterMailJob>[] },
+  batch: { messages: readonly QueueMessageLike<ContactMailJob | WarningMailJob | RejectionMailJob | NewsletterMailJob | TierRequestMailJob | TierChangeMailJob>[] },
   env: AdminBindings,
 ): Promise<void> {
   const startedAt = Date.now();
@@ -229,7 +233,11 @@ export async function contactMailConsumer(
           ? await processNewsletterMailJob(env, msg as QueueMessageLike<NewsletterMailJob>)
         : isCostAlertMailJob(msg.body)
           ? await processCostAlertMailJob(env, msg as unknown as QueueMessageLike<CostAlertMailJob>)
-          : await processContactMailJob(env, msg as QueueMessageLike<ContactMailJob>);
+          : isTierRequestMailJob(msg.body)
+            ? await processTierRequestMailJob(env as never, msg as QueueMessageLike<TierRequestMailJob>)
+            : isTierChangeMailJob(msg.body)
+              ? await processTierChangeMailJob(env as never, msg as QueueMessageLike<TierChangeMailJob>)
+              : await processContactMailJob(env, msg as QueueMessageLike<ContactMailJob>);
     const kind = (msg.body as { kind?: string } | undefined)?.kind ?? 'unknown';
     outcomes[`${kind}:${outcome}`] = (outcomes[`${kind}:${outcome}`] ?? 0) + 1;
     if (outcome === 'retry') msg.retry({ delaySeconds: backoffSeconds(msg.attempts) });

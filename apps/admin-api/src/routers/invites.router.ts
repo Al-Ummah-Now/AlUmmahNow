@@ -213,7 +213,7 @@ app.post('/', async (c) => {
   const warnings: Array<{ step: string; code: string; message: string }> = [];
   if (tierId) {
     try {
-      await videos(c, `/users/${row.userId}/creator-tier`, { method: 'PUT', json: { tierId, source: 'admin' } });
+      await videos(c, `/users/${row.userId}/creator-tier`, { method: 'PUT', json: { tierId, source: 'admin', quiet: true } });
       await writeAudit(c.env.REPORTS_DB, { kind: 'user', id: row.userId, action: 'creator-tier', actorId: actorOf(c), details: { tierId, source: 'admin', inviteId: row.id }, previous: { tierId: null, source: null } });
     } catch (error) {
       warnings.push({ step: 'plan', code: error instanceof VideosError ? error.code : 'error', message: error instanceof Error ? error.message : String(error) });

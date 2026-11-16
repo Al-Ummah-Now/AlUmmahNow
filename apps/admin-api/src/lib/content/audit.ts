@@ -18,6 +18,8 @@ export type ContentKind =
   | 'post'
   | 'user'
   | 'creator-tier'
+  /** A tier request's decision (id = request id; wiki AUN-TIER-REQUESTS). */
+  | 'tier-request'
   /** Live streaming routing settings (id 'routing'). */
   | 'live-settings'
   /** A channel forced to one live provider (id = channel id). */
@@ -31,7 +33,19 @@ export type ContentKind =
   /** A video category (id = its value; '*order' for a reorder). */
   | 'category'
   /** Captions & translation settings (id 'settings') and the platform Quran editions (id = language; AUN-CAPTIONS). */
-  | 'captions-settings';
+  | 'captions-settings'
+  /** Payments (wiki AUN-SUBS): a provider's settings or credentials (id = provider; never the value). */
+  | 'billing-provider'
+  /** Payments: tax and seller details (id 'tax'). */
+  | 'billing-settings'
+  /** Payments: a tier price (id = tier:period:currency). */
+  | 'billing-price'
+  /** Payments: a subscription canceled by an admin (id = subscription id). */
+  | 'billing-subscription'
+  /** Payments: a refund (id = payment id). */
+  | 'billing-payment'
+  /** Payments: a billing job retried from the Jobs page (id = the job's target). */
+  | 'billing';
 
 /** Every live streaming audit key starts with this ('content:live-'); the range ends before 'content:live.'. */
 export const LIVE_AUDIT_PREFIX = `content:live-`;

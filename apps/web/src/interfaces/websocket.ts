@@ -87,7 +87,11 @@ export type RealtimeNotificationKey =
   | 'channelInviteAccepted'
   | 'channelRoleChanged'
   | 'channelMemberRemoved'
-  | 'channelMemberLeft';
+  | 'channelMemberLeft'
+  | 'tierRequestApproved'
+  | 'tierRequestDeclined'
+  | 'tierRequestReceived'
+  | 'tierChanged';
 
 export interface NotificationEvent {
   type: 'notification';

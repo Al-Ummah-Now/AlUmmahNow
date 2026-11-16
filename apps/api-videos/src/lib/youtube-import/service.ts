@@ -20,6 +20,7 @@
 import {
 	CREATOR_ERROR_CODES,
 	YT_IMPORT_ERRORS,
+	tierAllowsUploads,
 	can,
 	channelRoleOf,
 	importVisibility,
@@ -124,7 +125,8 @@ export async function requireImporter(env: YtEnv, who: YtCaller, channelId: stri
 	if (!can(channelRoleOf(channel, who.userId), 'video.upload')) throw new YtHttpError(403, 'forbidden', 'You cannot upload to this channel');
 	const ownerId = channel.userId as string;
 	const creator = await resolveCreator(ytDb(env), { userId: who.userId, roles: who.roles, channelOwnerId: ownerId });
-	if (!creator.tier) throw new YtHttpError(403, CREATOR_ERROR_CODES.uploadsByInvitation, 'Uploading is by invitation for now');
+	// Everyone holds a tier now (Member by default), so the tier must allow uploads, as on /upload
+	if (!tierAllowsUploads(creator.tier)) throw new YtHttpError(403, CREATOR_ERROR_CODES.uploadsByInvitation, 'Uploading is by invitation for now');
 	return { ownerId };
 }
 
