@@ -1352,7 +1352,7 @@ const en = {
     decline: 'Decline',
     declineTitle: 'Decline {name}\'s request for {tier}?',
     declineBody: 'They are told in the app and by email, and may ask again later.',
-    declineReasonHint: 'Optional. Shown to the user, so write it for them (up to 500 characters).',
+    declineReasonHint: 'Optional. Shown to the user, so write it for them (up to {#500} characters).',
     approved: 'Approved. {name} now holds {tier}.',
     declinedDone: 'Declined.',
     alreadyDecided: 'Another admin decided this request first. The list is up to date now.',
