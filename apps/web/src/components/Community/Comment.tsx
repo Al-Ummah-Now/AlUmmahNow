@@ -23,6 +23,8 @@ import Link from '@/components/common/AppLink';
 import { userProfilePath } from '@/lib/user-url';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { channelLabel } from '@/lib/channel-name';
+import { MenuButton } from '@/components/common/MenuButton';
+import { MoreVertical, Pencil, Pin, Trash2 } from 'lucide-react';
 
 interface CommentProps {
   comment: PostComment;
@@ -108,7 +110,6 @@ export default function Comment({
   const [hasMoreReplies, setHasMoreReplies] = useState(comment.repliesCount > 0);
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(comment.content);
-  const [showMenu, setShowMenu] = useState(false);
   const [hearted, setHearted] = useState(comment.isHeartedByCreator);
   const [pinned, setPinned] = useState(comment.isPinned);
 
@@ -183,7 +184,6 @@ export default function Comment({
 
   const handleEdit = () => {
     setIsEditing(true);
-    setShowMenu(false);
   };
 
   const handleSaveEdit = async () => {
@@ -263,7 +263,6 @@ export default function Comment({
 
       if (result?.success) {
         setPinned(result.pinned);
-        setShowMenu(false);
         if (onCommentUpdated) {
           onCommentUpdated({ ...comment, isPinned: result.pinned });
         }
@@ -341,50 +340,22 @@ export default function Comment({
             </div>
           </div>
 
-          {/* Menu */}
+          {/* Menu: the shared menu (keyboard, on-screen placement below the button, frosted panel) */}
           {!comment.deletedAt && (isOwner || isPostOwner) && (
-            <div className="relative">
-              <button
-                onClick={() => setShowMenu(!showMenu)}
-                className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
-              >
-                <svg className="w-5 h-5 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
-                </svg>
-              </button>
-
-              {showMenu && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
-                  <div className={cn('absolute top-full mt-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50 min-w-[150px]', isRTL ? 'left-0' : 'right-0')}>
-                    {isOwner && (
-                      <button
-                        onClick={handleEdit}
-                        className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-900 dark:text-gray-100"
-                      >
-                        {isRTL ? 'تعديل' : 'Edit'}
-                      </button>
-                    )}
-                    {(isOwner || isPostOwner) && (
-                      <button
-                        onClick={handleDelete}
-                        className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-red-600 dark:text-red-400"
-                      >
-                        {isRTL ? 'حذف' : 'Delete'}
-                      </button>
-                    )}
-                    {isPostOwner && !comment.parentCommentId && (
-                      <button
-                        onClick={handlePin}
-                        className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-900 dark:text-gray-100"
-                      >
-                        {pinned ? t.community.unpinComment : t.community.pinComment}
-                      </button>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
+            <MenuButton
+              label={isRTL ? 'إجراءات التعليق' : 'Comment actions'}
+              testId="comment-actions"
+              buttonClassName="p-1 rounded-full hover:bg-[color-mix(in_srgb,currentColor_8%,transparent)]"
+              items={[
+                ...(isOwner ? [{ id: 'edit', label: isRTL ? 'تعديل' : 'Edit', icon: <Pencil className="w-4 h-4" />, testId: 'comment-edit', onSelect: handleEdit }] : []),
+                ...(isPostOwner && !comment.parentCommentId
+                  ? [{ id: 'pin', label: pinned ? t.community.unpinComment : t.community.pinComment, icon: <Pin className="w-4 h-4" />, testId: 'comment-pin', onSelect: handlePin }]
+                  : []),
+                { id: 'delete', label: isRTL ? 'حذف' : 'Delete', icon: <Trash2 className="w-4 h-4" />, danger: true, testId: 'comment-delete', onSelect: handleDelete },
+              ]}
+            >
+              <MoreVertical className="w-5 h-5 text-[var(--fanous-color-text-secondary)]" aria-hidden="true" />
+            </MenuButton>
           )}
         </div>
 

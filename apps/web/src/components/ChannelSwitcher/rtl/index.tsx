@@ -132,6 +132,7 @@ const ChannelSwitcherRtl: React.FC<ChannelSwitcherProps> = ({ channels }) => {
       {/* Dropdown Menu - opens to left in RTL */}
       {isOpen && (
         <div
+          data-popover=""
           className="absolute top-full left-0 mt-2 w-72 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50 max-h-96 overflow-y-auto"
           role="menu"
           aria-orientation="vertical"

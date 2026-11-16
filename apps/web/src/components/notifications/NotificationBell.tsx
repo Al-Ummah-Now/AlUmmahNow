@@ -105,7 +105,7 @@ export function NotificationBell({ dir = 'ltr' }: NotificationBellProps) {
           aria-label={texts.latest}
           data-testid="notification-dropdown"
           // Popover surface and text from the theme's dialog tokens. data-popover keeps the header's
-          // nav colours (system.css .ah-end) out of it; an opaque surface, never the card glass.
+          // nav colours (system.css .ah-end) out of it; the panel glass (system.css [data-popover]), more opaque than a card.
           data-popover=""
           className="absolute end-0 z-50 mt-2 w-[min(24rem,calc(100vw-2rem))] overflow-y-auto overscroll-contain rounded-lg border border-[var(--fanous-c-dialog-border)] bg-[var(--fanous-c-dialog-bg)] text-[var(--fanous-c-dialog-text)] shadow-lg [--nr-muted:var(--fanous-c-dialog-muted)] [--nr-secondary:var(--fanous-c-dialog-text)] [--nr-text:var(--fanous-c-dialog-text)]"
         >

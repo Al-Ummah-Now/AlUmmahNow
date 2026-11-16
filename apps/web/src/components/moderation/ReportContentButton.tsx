@@ -180,7 +180,7 @@ const ReportContentButton: React.FC<ReportContentButtonProps> = ({
           aria-labelledby="report-content-title"
           dir={isRTL ? 'rtl' : 'ltr'}
         >
-          <div className={`bg-white dark:bg-gray-800 rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto ${isRTL ? 'text-right' : 'text-left'}`}>
+          <div data-slot="dialog-content" className={`bg-white dark:bg-gray-800 rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto ${isRTL ? 'text-right' : 'text-left'}`}>
             <div className="p-6">
               <div className="flex justify-between items-center mb-4">
                 <h2 id="report-content-title" className="text-xl font-semibold">{t.reportContent.title}</h2>

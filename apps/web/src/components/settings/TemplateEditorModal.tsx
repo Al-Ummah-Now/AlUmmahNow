@@ -213,6 +213,7 @@ export function TemplateEditorModal({
         aria-modal="true"
         aria-labelledby="template-editor-title"
         data-testid="template-editor"
+        data-slot="dialog-content"
         className="
           relative
           w-full

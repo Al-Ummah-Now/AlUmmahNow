@@ -429,7 +429,7 @@ export function Autocomplete({
           <div
             ref={popupRef}
             hidden={!expanded}
-            className={`${popup === 'inline' ? 'relative' : 'absolute start-0 top-full z-30 min-w-72'} mt-1 w-full overflow-y-auto rounded border border-border bg-surface shadow-lg`}
+            className={`aun-glass-panel ${popup === 'inline' ? 'relative' : 'absolute start-0 top-full z-30 min-w-72'} mt-1 w-full overflow-y-auto !rounded-[var(--aun-radius-menu)]`}
             data-testid={testId ? `${testId}-popup` : undefined}
             // A press on the list (its scrollbar too) must not blur the input and close it
             onMouseDown={(e) => e.preventDefault()}

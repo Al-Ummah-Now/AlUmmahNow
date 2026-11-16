@@ -10,7 +10,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuTrigger
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
   AlertDialog,
@@ -98,7 +99,7 @@ export function PostCard({ post, locale, onView, onEdit, onDelete }: PostCardPro
 
   return (
     <>
-      <Card className="p-4 md:p-6 hover:shadow-md transition-shadow" data-testid="managed-post" data-post-id={post.id}>
+      <Card glass="lite" className="p-4 md:p-6" data-testid="managed-post" data-post-id={post.id}>
         <div className="space-y-3 md:space-y-4">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
@@ -153,22 +154,21 @@ export function PostCard({ post, locale, onView, onEdit, onDelete }: PostCardPro
                   <MoreVertical className="w-4 h-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align={isRTL ? 'start' : 'end'}>
+              {/* Below the button (never over the author line), its end edge on the button's: inside the screen in both directions */}
+              <DropdownMenuContent side="bottom" align="end">
                 <DropdownMenuItem onClick={() => onView(post)}>
-                  <Eye className="w-4 h-4 mr-2 rtl:ml-2 rtl:mr-0" />
+                  <Eye className="w-4 h-4" aria-hidden="true" />
                   {isRTL ? 'عرض' : 'View'}
                 </DropdownMenuItem>
                 {onEdit && (
                   <DropdownMenuItem onClick={() => onEdit(post)}>
-                    <Edit className="w-4 h-4 mr-2 rtl:ml-2 rtl:mr-0" />
+                    <Edit className="w-4 h-4" aria-hidden="true" />
                     {isRTL ? 'تعديل' : 'Edit'}
                   </DropdownMenuItem>
                 )}
-                <DropdownMenuItem
-                  onClick={() => setShowDeleteDialog(true)}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <Trash2 className="w-4 h-4 mr-2 rtl:ml-2 rtl:mr-0" />
+                <DropdownMenuSeparator />
+                <DropdownMenuItem variant="destructive" onClick={() => setShowDeleteDialog(true)}>
+                  <Trash2 className="w-4 h-4" aria-hidden="true" />
                   {isRTL ? 'حذف' : 'Delete'}
                 </DropdownMenuItem>
               </DropdownMenuContent>

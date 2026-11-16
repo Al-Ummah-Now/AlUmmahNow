@@ -141,7 +141,7 @@ export default function PostEngagement({
                 className="fixed inset-0 z-40"
                 onClick={() => setShowShareMenu(false)}
               />
-              <div className={cn(
+              <div data-popover="" className={cn(
                 'absolute bottom-full mb-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2 z-50 min-w-[200px]',
                 isRTL ? 'left-0' : 'right-0'
               )}>

@@ -278,6 +278,7 @@ export function TemplateSelector({
             aria-modal="true"
             aria-labelledby="template-variables-title"
             data-testid="template-variables-dialog"
+            data-slot="dialog-content"
             className="
               relative
               w-full

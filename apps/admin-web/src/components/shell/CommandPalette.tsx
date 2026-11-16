@@ -150,7 +150,7 @@ export function CommandPalette({ open, onClose, items, access }: { open: boolean
         aria-modal="true"
         aria-label={t('palette.label')}
         data-testid="command-palette"
-        className="w-full max-w-xl overflow-hidden rounded-xl border border-menu-border bg-menu-bg text-menu-text shadow-2xl"
+        className="aun-glass-panel w-full max-w-xl overflow-hidden text-menu-text"
         onKeyDown={onKeyDown}
       >
         <div className="flex items-center gap-3 border-b border-menu-border px-4">
