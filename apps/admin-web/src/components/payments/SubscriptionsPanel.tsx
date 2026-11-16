@@ -12,6 +12,7 @@ import Link from '@/components/AppLink';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { formatDate } from '@/i18n/translate';
 import { secondaryButtonClass, linkClass, cardClass } from '@/components/ui';
+import { primarySmallButtonClass, smallButtonClass } from '@/components/content/parts';
 import { billingRequest } from '@/lib/list/api-client';
 import { SUBSCRIPTION_TONE } from '@/lib/payments';
 import { ToneChip, providerName, useBillingAction } from './shared';
@@ -63,7 +64,7 @@ export function SubscriptionsPanel({ initial, initialFilter, tiers, canManage }:
             type="button"
             aria-pressed={filter === f}
             onClick={() => choose(f)}
-            className={`rounded-full border px-3 py-1.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-focus ${filter === f ? 'border-accent bg-accent text-on-accent' : 'border-border bg-surface-2 text-fg hover:bg-surface-hover'}`}
+            className={filter === f ? primarySmallButtonClass : smallButtonClass}
             data-testid={`payments-subs-filter-${f}`}
           >
             {t(`payments.subs.filters.${f}`)}
