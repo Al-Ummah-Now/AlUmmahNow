@@ -5,7 +5,9 @@
  *   POST /fields   { from: 'en'|'ar', to: 'ar'|'en', texts: string[], field? }
  *                  → { items: [{ text, refused?, quran?, cached }], provider, machineTranslation, usage }
  *
- * Staff only (content:translate). The suggestion fills the other language in the form; the admin
+ * Staff only (content:translate). Callers: admin-web, and Auth's admin site from its server with the
+ * staff member's own token (token-audience ROUTE_AUDIENCES lets the authAdmin client in here only).
+ * The suggestion fills the other language in the form; the admin
  * reviews it and saves (nothing is written here). api-videos runs it (`/internal/translate/admin-fields`):
  * the translation kill switch, the inline budget ledger, the edge cache, a per-staff daily cap and the
  * translation_audit row live there; the processor runs Workers AI with the site's wording rules
