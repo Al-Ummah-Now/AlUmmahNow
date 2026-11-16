@@ -15,6 +15,7 @@ export const ADMIN_AUDIT_AREAS = [
   'uploads',
   'media',
   'live',
+  'payments',
   'sites',
   'themes',
   'settings',

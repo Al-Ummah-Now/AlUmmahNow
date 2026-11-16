@@ -10,7 +10,7 @@ import { Hono } from 'hono';
 import { hasContentPermission, paymentSecretName, type NeedsActionRetry } from '@al-ummah/shared-types';
 import billingRouter from '../src/routers/billing.router';
 import { retryPermissions } from '../src/lib/errors-actions';
-import { UNSET_VALUE, writeCredential } from '../src/lib/billing-secrets';
+import { UNSET_VALUE, credentialStorageReady, writeCredential } from '../src/lib/billing-secrets';
 import { STEP_UP_ROUTES } from '../src/middleware/step-up-routes';
 import { sqliteD1 } from './d1-sqlite';
 
@@ -154,7 +154,8 @@ describe('credentials', () => {
     assert.match(cf[1].url, /\/accounts\/acct_1\/secrets_store\/stores\/store_1\/secrets$/);
     assert.deepEqual(JSON.parse(cf[1].body!), [{ name: 'pay-paddle-api-key-test-qa', value: SECRET_VALUE, scopes: ['workers'], comment: 'Payments credential, written from the videos admin (wiki AUN-SUBS)' }]);
     assert.equal(cf[1].auth, 'Bearer cf-token');
-    assert.deepEqual(calls.map((c) => c.body), [{ field: 'apiKey', mode: 'test', cleared: false }]);
+    // The last 4 tell keys apart on the page (the value is long enough to keep them)
+    assert.deepEqual(calls.map((c) => c.body), [{ field: 'apiKey', mode: 'test', cleared: false, last4: SECRET_VALUE.slice(-4) }]);
     const rows = await auditRows(db);
     assert.equal(rows.length, 1);
     assert.equal(JSON.stringify(rows).includes(SECRET_VALUE), false, 'the value is never audited');
@@ -221,5 +222,42 @@ describe('Errors page Retry of a payments job', () => {
     assert.deepEqual(retryPermissions(spec('user.erase')), ['billing:read', 'billing:manage', 'billing:refund', 'billing:providers']);
     assert.deepEqual(retryPermissions({ kind: 'service', service: 'api-videos', path: '/internal/captions/jobs/retry', body: {} }), []);
     assert.deepEqual(retryPermissions(null), []);
+  });
+});
+
+describe('payments: local stack shim, short keys, Undo, the Payments audit area', () => {
+  it('the local stack (PAYMENTS_SECRETS_LOCAL_SHIM=1) can save keys without a Secrets Store; the value goes nowhere', async () => {
+    assert.equal(await credentialStorageReady({}), false);
+    assert.equal(await credentialStorageReady({ PAYMENTS_SECRETS_LOCAL_SHIM: '1' }), true);
+    assert.equal(await credentialStorageReady({ PAYMENTS_SECRETS_LOCAL_SHIM: 'true' }), false, 'only the exact flag');
+    let fetched = 0;
+    const out = await writeCredential({ PAYMENTS_SECRETS_LOCAL_SHIM: '1', ENVIRONMENT: 'qa' }, { provider: 'paddle', field: 'apiKey', mode: 'test', value: SECRET_VALUE }, (async () => {
+      fetched++;
+      return new Response('{}');
+    }) as unknown as typeof fetch);
+    assert.equal(fetched, 0, 'no Cloudflare call');
+    assert.equal(out.name, 'pay-paddle-api-key-test-qa');
+  });
+
+  it('a short value keeps no last 4', async () => {
+    const { fetcher, calls } = fakeVideos({ 'POST /providers/paddle/credentials': () => ({ result: { provider: { id: 'paddle' } } }) });
+    fakeCloudflare();
+    const res = await appFor({ REPORTS_DB: sqliteD1(), VIDEOS: fetcher, ...STORAGE })('/api/billing/providers/paddle/credentials', { method: 'PUT', roles: 'super_admin', json: { field: 'apiKey', mode: 'test', value: 'short_key_12' } });
+    assert.equal(res.status, 200);
+    assert.deepEqual(calls.map((c) => c.body), [{ field: 'apiKey', mode: 'test', cleared: false, last4: null }]);
+  });
+
+  it("Undo is marked in the audit row and never sent on to api-videos", async () => {
+    const db = sqliteD1();
+    const { fetcher, calls } = fakeVideos({
+      'PUT /tax': () => ({ result: { previous: { sellerName: 'Old' }, tax: {} } }),
+      'PUT /prices': () => ({ result: { previous: null, price: { id: 'bpr_1' } } }),
+    });
+    const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
+    assert.equal((await call('/api/billing/tax', { method: 'PUT', roles: 'super_admin', json: { sellerName: 'Old', undo: true } })).status, 200);
+    assert.equal((await call('/api/billing/prices', { method: 'PUT', roles: 'super_admin', json: { tierId: 'creator', period: 'month', currency: 'USD', amount: 500, undo: true } })).status, 200);
+    assert.deepEqual(calls.map((c) => c.body), [{ sellerName: 'Old' }, { tierId: 'creator', period: 'month', currency: 'USD', amount: 500 }]);
+    const rows = await auditRows(db);
+    assert.deepEqual(rows.map((r) => JSON.parse(r.new_value).details.undo), [true, true]);
   });
 });

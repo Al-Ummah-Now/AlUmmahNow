@@ -62,6 +62,8 @@ export function describeKey(key: string): { area: AdminAuditArea; target: { kind
   };
   if (key.startsWith('content:live-')) return { area: 'live', target: split('content:'), setting: null };
   if (key.startsWith('content:site:')) return { area: 'sites', target: { kind: 'channel', id: rest('content:site:') }, setting: null };
+  // Payments (admin-api billing.router.ts): providers, keys, tax, prices, subscriptions, refunds
+  if (key.startsWith('content:billing-')) return { area: 'payments', target: split('content:'), setting: null };
   if (key.startsWith('content:')) return { area: 'content', target: split('content:'), setting: null };
   if (key.startsWith('trash:')) return { area: 'trash', target: split('trash:'), setting: null };
   if (key.startsWith('processing:video:')) return { area: 'processing', target: { kind: 'video', id: rest('processing:video:') }, setting: null };
@@ -104,10 +106,12 @@ export function toFeedEntry(row: FeedRow): AdminAuditFeedEntry {
   const hasAction = typeof value?.action === 'string';
   // Content rows: { action, details? }; trash rows: { action, reason? }; settings rows: the new value
   const details = hasAction ? ((value!.details as Record<string, unknown> | undefined) ?? (value!.reason ? { reason: value!.reason } : null)) : settingValue(row.new_value);
+  // A comp is audited on its user (content:user:<id>, action billing-comp): it is a Payments change
+  const billingAction = hasAction && String(value!.action).startsWith('billing-');
   return {
     id: `content:${row.id}`,
     source: 'content',
-    area,
+    area: billingAction ? 'payments' : area,
     action: hasAction ? (value!.action as string) : 'changed',
     target,
     details,
@@ -125,7 +129,9 @@ function areaClauses(area: AdminAuditArea): { content: string | null; admin: str
   const settingKeys = ['content:%', 'trash:%', 'processing:%', 'media:%', 'uploads:%', 'ops:threshold:%', 'theme%', `${SITE_THEME_SETTING_KEY}`, 'review-alerts:%'];
   switch (area) {
     case 'content':
-      return { content: like(['content:%'], ['content:live-%', 'content:site:%']), admin: null };
+      return { content: `${like(['content:%'], ['content:live-%', 'content:site:%', 'content:billing-%'])} AND new_value NOT LIKE '{"action":"billing-%'`, admin: null };
+    case 'payments':
+      return { content: `(key LIKE 'content:billing-%' OR (key LIKE 'content:%' AND new_value LIKE '{"action":"billing-%'))`, admin: null };
     case 'live':
       return { content: like(['content:live-%']), admin: null };
     case 'sites':

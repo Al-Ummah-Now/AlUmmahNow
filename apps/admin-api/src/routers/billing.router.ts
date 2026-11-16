@@ -26,8 +26,7 @@ import {
   type AdminContentPermission,
   type PaymentCredentialField,
   type PaymentMode,
-  type PaymentProviderId,
-} from '@al-ummah/shared-types';
+  type PaymentProviderId, CREDENTIAL_LAST4_MIN_LENGTH } from '@al-ummah/shared-types';
 import type { AdminBindings, AuthContext } from '../base/types';
 import { callVideos, VideosError, type VideosCall, type VideosClientEnv } from '../lib/content/videosClient';
 import { dropAudit, setAuditPrevious, writeAudit, type AuditAction } from '../lib/content/audit';
@@ -114,7 +113,8 @@ app.put('/providers/:id', async (c) => {
     c,
     await audited(
       c,
-      { kind: 'billing-provider', id, action: 'update', details: change },
+      // `undo`: the admin's Undo puts the previous values back (marked in the audit log)
+      { kind: 'billing-provider', id, action: 'update', details: { ...change, ...(input.undo === true ? { undo: true } : {}) } },
       () => videos<{ previous: { enabled: boolean; mode: string; settings: Record<string, string> }; provider: unknown }>(c, `/providers/${enc(id)}`, { method: 'PUT', json: change }),
       (r) => ({ enabled: r.previous.enabled, mode: r.previous.mode, settings: r.previous.settings }),
     ),
@@ -143,7 +143,9 @@ app.put('/providers/:id/credentials', async (c) => {
     c,
     await audited(c, { kind: 'billing-provider', id: provider, action: cleared ? 'credential-clear' : 'credential-set', details: { field, mode } }, async () => {
       const written = await writeCredential(c.env, { provider, field, mode, value });
-      const result = await videos(c, `/providers/${enc(provider)}/credentials`, { method: 'POST', json: { field, mode, cleared } });
+      // The last 4 tell two keys apart on the page; only for values long enough not to give them away
+      const last4 = value !== null && value.length >= CREDENTIAL_LAST4_MIN_LENGTH ? value.slice(-4) : null;
+      const result = await videos(c, `/providers/${enc(provider)}/credentials`, { method: 'POST', json: { field, mode, cleared, last4 } });
       return { secretName: written.name, provider: result };
     }),
   );
@@ -161,17 +163,17 @@ app.post('/providers/:id/sync-prices', async (c) => {
 
 app.put('/tax', async (c) => {
   need(c, 'billing:manage');
-  const input = await body(c);
-  return ok(c, await audited(c, { kind: 'billing-settings', id: 'tax', action: 'update', details: input }, () => videos<{ previous: Record<string, unknown> }>(c, '/tax', { method: 'PUT', json: input }), (r) => r.previous));
+  const { undo, ...input } = await body(c);
+  return ok(c, await audited(c, { kind: 'billing-settings', id: 'tax', action: 'update', details: { ...input, ...(undo === true ? { undo: true } : {}) } }, () => videos<{ previous: Record<string, unknown> }>(c, '/tax', { method: 'PUT', json: input }), (r) => r.previous));
 });
 
 app.put('/prices', async (c) => {
   need(c, 'billing:manage');
-  const input = await body(c);
+  const { undo, ...input } = await body(c);
   const key = `${String(input.tierId)}:${String(input.period)}:${String(input.currency).toUpperCase()}`;
   return ok(
     c,
-    await audited(c, { kind: 'billing-price', id: key, action: 'save', details: input }, () => videos<{ previous: Record<string, unknown> | null }>(c, '/prices', { method: 'PUT', json: input }), (r) => r.previous ?? undefined),
+    await audited(c, { kind: 'billing-price', id: key, action: 'save', details: { ...input, ...(undo === true ? { undo: true } : {}) } }, () => videos<{ previous: Record<string, unknown> | null }>(c, '/prices', { method: 'PUT', json: input }), (r) => r.previous ?? undefined),
   );
 });
 
@@ -199,12 +201,14 @@ app.get('/subscriptions/:id', async (c) => {
 app.post('/subscriptions/:id/cancel', async (c) => {
   need(c, 'billing:manage');
   const id = c.req.param('id');
-  const atPeriodEnd = (await body(c)).atPeriodEnd !== false;
+  const input = await body(c);
+  const atPeriodEnd = input.atPeriodEnd !== false;
   return ok(
     c,
     await audited(
       c,
-      { kind: 'billing-subscription', id, action: atPeriodEnd ? 'cancel-at-period-end' : 'cancel-now', details: { atPeriodEnd } },
+      // `undo`: the comp form's Undo ends the comp it just gave
+      { kind: 'billing-subscription', id, action: atPeriodEnd ? 'cancel-at-period-end' : 'cancel-now', details: { atPeriodEnd, ...(input.undo === true ? { undo: true } : {}) } },
       () => videos<{ previous: { status: string; accessUntil: string | null } | null }>(c, `/subscriptions/${enc(id)}/cancel`, { method: 'POST', json: { atPeriodEnd } }),
       (r) => (r.previous ? { status: r.previous.status, accessUntil: r.previous.accessUntil } : undefined),
     ),

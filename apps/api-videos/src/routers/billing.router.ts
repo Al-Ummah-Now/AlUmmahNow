@@ -97,10 +97,10 @@ const ProviderBody = z
 app.put('/providers/:id', async (c) => ok(c, await updateProvider(c.env, assertProvider(c.env, c.req.param('id')), parse(ProviderBody, await body(c)), actor(c))));
 
 // admin-api wrote (or deleted) the value in Secrets Store; this records only that, never the value
-const CredentialBody = z.object({ field: z.enum(PAYMENT_CREDENTIAL_FIELDS), mode: z.enum(PAYMENT_MODES), cleared: z.boolean().optional() }).strict();
+const CredentialBody = z.object({ field: z.enum(PAYMENT_CREDENTIAL_FIELDS), mode: z.enum(PAYMENT_MODES), cleared: z.boolean().optional(), last4: z.string().regex(/^[\x21-\x7e]{4}$/).nullable().optional() }).strict();
 app.post('/providers/:id/credentials', async (c) => {
 	const input = parse(CredentialBody, await body(c));
-	return ok(c, await markCredential(c.env, assertProvider(c.env, c.req.param('id')), input.field, input.mode, actor(c), input.cleared === true));
+	return ok(c, await markCredential(c.env, assertProvider(c.env, c.req.param('id')), input.field, input.mode, actor(c), input.cleared === true, undefined, input.last4 ?? null));
 });
 app.get('/providers/:id', async (c) => ok(c, await readProvider(c.env, assertProvider(c.env, c.req.param('id')))));
 app.post('/providers/:id/sync-prices', async (c) => ok(c, { job: await queuePriceSync(c.env, assertProvider(c.env, c.req.param('id')), actor(c)) }));

@@ -7,6 +7,8 @@ import { formatDate, type MessageKey } from '@/i18n/translate';
 import { ErrorAlert } from '@/components/ui';
 import { CursorPager, EmptyState, tableWrapClass, tdClass, thClass } from '@/components/content/parts';
 import { AuditWhat } from '@/components/audit/AuditEntryList';
+import type { AuditTierNames } from '@/components/audit/audit-model';
+import { listCreatorTierDefinitions } from '@/lib/api/creators';
 import { PersonName } from '@/components/audit/Named';
 import { auditHref, itemView, personView } from '@/components/audit/audit-model';
 import { logger } from '@/lib/logger';
@@ -49,7 +51,9 @@ export default async function AuditPage({ searchParams }: PageProps) {
 
   let page: AdminAuditFeedPage | null = null;
   let actions: { action: string; area: AdminAuditArea }[] = [];
-  const [feed, actionList] = await Promise.allSettled([getAuditFeed({ ...values, cursor }), getAuditActions()]);
+  const [feed, actionList, tierList] = await Promise.allSettled([getAuditFeed({ ...values, cursor }), getAuditActions(), listCreatorTierDefinitions()]);
+  // Tier names for the Payments lines (prices and comps name their tier); a failed read shows the ids
+  const tiers: AuditTierNames = tierList.status === 'fulfilled' ? Object.fromEntries(tierList.value.map((tier) => [tier.id, { name: tier.name, nameAr: tier.nameAr ?? null }])) : {};
   if (feed.status === 'fulfilled') page = feed.value;
   else logger.error('[audit] Failed to load the feed', { error: feed.reason instanceof Error ? feed.reason.message : String(feed.reason) });
   if (actionList.status === 'fulfilled') actions = actionList.value;
@@ -111,7 +115,7 @@ export default async function AuditPage({ searchParams }: PageProps) {
                     </td>
                     <td className={`${tdClass} whitespace-nowrap text-fg-muted max-md:order-3 max-md:p-0 max-md:text-xs`}>{t(`auditLog.areas.${e.area}` as MessageKey)}</td>
                     <td className={`${tdClass} md:min-w-[16rem] max-md:order-1 max-md:p-0`}>
-                      <AuditWhat entry={e} names={names} t={t} showTarget />
+                      <AuditWhat entry={e} names={names} t={t} showTarget locale={locale} tiers={tiers} />
                     </td>
                   </tr>
                 ))}

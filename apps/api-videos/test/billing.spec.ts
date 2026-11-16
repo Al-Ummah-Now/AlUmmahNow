@@ -13,7 +13,7 @@ import { formatBillingAmount, parseBillingAmount, SUPER_ADMIN_TIER_ASSIGNER } fr
 import { assignTier, readAssignment } from '../src/lib/creatorTiers';
 import { handleAdminJobBatch, type JobMessage } from '../src/lib/admin/jobs';
 import { ADMIN_JOB_HANDLERS } from '../src/lib/admin/service';
-import { readPrices, savePrice, updateProvider } from '../src/lib/billing/config';
+import { markCredential, readPrices, readProvider, savePrice, updateProvider } from '../src/lib/billing/config';
 import { Hono } from 'hono';
 import { handleCreateTierRequest, handleUpgradeOverview } from '../src/endpoints/creator/tierRequests';
 import { handleCreatorAccess } from '../src/endpoints/creator/creatorAccess';
@@ -567,5 +567,16 @@ describe('the return page, tiers on sale and receipts', () => {
 		const url = await paddleAdapter.receiptUrl!({ mode: 'test', apiKey: 'k', settings: {}, tax: { pricesIncludeTax: true }, fetch: fetchImpl }, 'txn_01');
 		assert.equal(calls[0], 'https://sandbox-api.paddle.com/transactions/txn_01/invoice');
 		assert.equal(url, 'https://paddle-invoices.example/txn_01.pdf');
+	});
+});
+
+describe('credential status', () => {
+	it('records that a key is present and its last 4 (never the value); clearing removes both', async () => {
+		const ctx = setup();
+		await markCredential(ctx.env, 'paddle', 'apiKey', 'test', 'admin-1', false, '2026-11-16T10:00:00.000Z', 'Ab12');
+		const status = (await readProvider(ctx.env, 'paddle')).credentials.apiKey.test;
+		assert.deepEqual(status, { setAt: '2026-11-16T10:00:00.000Z', setBy: 'admin-1', last4: 'Ab12' });
+		await markCredential(ctx.env, 'paddle', 'apiKey', 'test', 'admin-1', true);
+		assert.equal((await readProvider(ctx.env, 'paddle')).credentials.apiKey.test, undefined);
 	});
 });

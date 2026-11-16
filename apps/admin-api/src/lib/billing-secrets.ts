@@ -14,6 +14,13 @@
  * Clearing writes the value "unset" instead of deleting the secret: a Worker
  * whose binding names a deleted secret fails to deploy, and api-videos reads
  * "unset" as no credential.
+ *
+ * Local stack only (PAYMENTS_SECRETS_LOCAL_SHIM=1, set by scripts/local-stack/
+ * stack.ts and refused by `pnpm check:config` in every deployed config): there is
+ * no Secrets Store to write to, so a save is accepted and the value dropped on
+ * the floor — the page records that a key is present (and its last 4) exactly
+ * as it would after a real write. Nothing on the stack can charge with it: the
+ * stack takes payments with the test provider only.
  */
 import { paymentSecretName, type PaymentCredentialField, type PaymentMode, type PaymentProviderId } from '@al-ummah/shared-types';
 import { logger } from './logger';
@@ -22,6 +29,8 @@ type SecretBinding = string | { get(): Promise<string> } | undefined;
 
 export interface BillingSecretsEnv {
   ENVIRONMENT?: string;
+  /** '1' on the local stack only: saves are accepted without a Secrets Store (see the header) */
+  PAYMENTS_SECRETS_LOCAL_SHIM?: string;
   CLOUDFLARE_ACCOUNT_ID?: string;
   PAYMENTS_SECRETS_STORE_ID?: string;
   PAYMENTS_SECRETS_TOKEN?: SecretBinding;
@@ -46,7 +55,10 @@ async function token(env: BillingSecretsEnv): Promise<string> {
 }
 
 /** Credentials can be saved from the Payments page (the token and store are configured). */
+const localShim = (env: BillingSecretsEnv) => env.PAYMENTS_SECRETS_LOCAL_SHIM === '1';
+
 export async function credentialStorageReady(env: BillingSecretsEnv): Promise<boolean> {
+  if (localShim(env)) return true;
   return !!(env.CLOUDFLARE_ACCOUNT_ID && env.PAYMENTS_SECRETS_STORE_ID && (await token(env)));
 }
 
@@ -84,6 +96,10 @@ export async function writeCredential(
   fetchImpl: typeof fetch = fetch,
 ): Promise<{ name: string; created: boolean }> {
   const name = paymentSecretName(input.provider, input.field, input.mode, env.ENVIRONMENT);
+  if (localShim(env)) {
+    logger.debug('[Billing] Local stack: credential accepted without a Secrets Store (value not kept)', { name, cleared: input.value === null });
+    return { name, created: false };
+  }
   const value = input.value === null ? UNSET_VALUE : input.value;
   const found = await cf<{ id: string; name: string }[]>(env, `/secrets?search=${encodeURIComponent(name)}&per_page=50`, { method: 'GET' }, fetchImpl);
   const existing = (found ?? []).find((s) => s.name === name);

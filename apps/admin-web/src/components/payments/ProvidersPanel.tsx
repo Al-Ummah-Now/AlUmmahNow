@@ -9,6 +9,7 @@
  * keys (step-up), which the client turns into a fresh sign-in.
  */
 import { useId, useState } from 'react';
+import { useUndoableAction } from '@/components/undo/UndoToast';
 import { PAYMENT_CREDENTIAL_FIELDS, PAYMENT_MODES, PAYMENT_PROVIDERS, type PaymentCredentialField, type PaymentMode, type PaymentProviderConfig } from '@al-ummah/shared-types';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { formatDate, type MessageKey } from '@/i18n/translate';
@@ -54,18 +55,30 @@ function ProviderCard({ provider, credentialStorage, canManage, onRefresh }: { p
   const [viewMode, setViewMode] = useState<PaymentMode>(provider.mode);
   const locked = !canManage || busy !== null;
 
-  const put = (key: string, body: Record<string, unknown>, message: string) =>
+  const { run: withUndo } = useUndoableAction();
+  type Previous = { previous: { enabled: boolean; mode: PaymentMode; settings: Record<string, string> } };
+  // Every change acts at once with Undo (admin UX rule); Undo puts back exactly the values it changed
+  const put = (key: string, body: { enabled?: boolean; mode?: PaymentMode; settings?: Record<string, string | null> }, message: string) =>
     run(key, async () => {
-      await billingRequest('PUT', `providers/${provider.id}`, { body });
+      await withUndo({
+        action: () => billingRequest<Previous>('PUT', `providers/${provider.id}`, { body }),
+        undo: async (r) => {
+          const back: Record<string, unknown> = { undo: true };
+          if (body.enabled !== undefined) back.enabled = r.previous.enabled;
+          if (body.mode !== undefined) back.mode = r.previous.mode;
+          if (body.settings) back.settings = Object.fromEntries(Object.keys(body.settings).map((k) => [k, r.previous.settings[k] ?? null]));
+          await billingRequest('PUT', `providers/${provider.id}`, { body: back });
+          await onRefresh();
+        },
+        message,
+        undoneMessage: t('payments.undone'),
+      });
       await onRefresh();
-      return message;
+      return null;
     });
 
   const toggle = async (enabled: boolean) => {
-    if (!enabled) {
-      const ok = await confirm({ title: t('payments.provider.disableTitle', { provider: name }), body: t('payments.provider.disableBody', { provider: name }), confirmLabel: t('payments.provider.disableConfirm'), danger: true, testId: `payments-disable-${provider.id}` });
-      if (!ok) return;
-    }
+    // Turning off acts at once with Undo (no confirm); going live still asks (real money)
     await put('enabled', { enabled }, t(enabled ? 'payments.provider.enabledNotice' : 'payments.provider.disabledNotice', { provider: name }));
   };
 
@@ -327,8 +340,12 @@ function CredentialRow({ provider, field, mode, writable, locked, confirm, run, 
     <div className="rounded border border-border p-3" data-testid={`payments-credential-${provider.id}-${field}`} data-set={status ? 'true' : 'false'}>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
         <span className="text-sm font-medium text-fg">{fieldName}</span>
-        <ToneChip tone={status ? 'good' : 'neutral'}>{status ? t('payments.provider.setOn', { date: formatDate(status.setAt, locale, true) }) : t('payments.provider.notSet')}</ToneChip>
+        {/* Present (with the last 4 to tell keys apart) or Missing: never the value */}
+        <ToneChip tone={status ? 'good' : 'neutral'} testId={`payments-credential-state-${provider.id}-${field}`}>
+          {status ? (status.last4 ? <>{t('payments.provider.present')} · <bdi dir="ltr">•••• {status.last4}</bdi></> : t('payments.provider.present')) : t('payments.provider.credentialMissing')}
+        </ToneChip>
       </div>
+      {status && <p className="text-xs text-fg-muted mb-2">{t('payments.provider.savedOn', { date: formatDate(status.setAt, locale, true) })}</p>}
       {writable && (
         <form
           className="flex flex-wrap items-end gap-2"

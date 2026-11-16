@@ -203,6 +203,9 @@ export const WORKERS: StackWorker[] = [
       VIDEOS_API_URL: url('api-videos'),
       // Links in status page mail (lib/status-notify.ts): the stack's status Worker
       STATUS_PAGE_URL: url('status'),
+      // Payments keys can be saved on the Payments page without a Secrets Store (lib/billing-secrets.ts):
+      // the value is dropped, only "present" and its last 4 are recorded. Never in a deployed config
+      PAYMENTS_SECRETS_LOCAL_SHIM: '1',
       // Step-up window (middleware/passkeys.ts): the admin E2E run signs in once in its global setup and
       // purges in its teardown, well past 15 minutes; the 900 s rule is unit tested (test/passkeys.test.ts)
       STEP_UP_MAX_AGE_S: '86400',

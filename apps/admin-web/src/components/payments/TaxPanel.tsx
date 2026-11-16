@@ -14,6 +14,7 @@ import { ActionFeedback } from '@/components/content/actions';
 import { primarySmallButtonClass } from '@/components/content/parts';
 import { cardClass, fieldClass } from '@/components/ui';
 import { billingRequest } from '@/lib/list/api-client';
+import { useUndoableAction } from '@/components/undo/UndoToast';
 import { taxBody, taxDraft, type TaxDraft } from '@/lib/payments';
 import { hintClass, labelClass, useBillingAction } from './shared';
 
@@ -21,6 +22,7 @@ export function TaxPanel({ tax, canManage, onRefresh }: { tax: BillingTaxSetting
   const { t, locale } = useLanguage();
   const ids = useId();
   const { busy, error, notice, run } = useBillingAction('payments-tax');
+  const { run: withUndo } = useUndoableAction();
   const [draft, setDraft] = useState<TaxDraft>(() => taxDraft(tax));
   const [invalid, setInvalid] = useState<'sellerCountry' | 'taxRatePercent' | null>(null);
   const set = (patch: Partial<TaxDraft>) => setDraft((d) => ({ ...d, ...patch }));
@@ -43,9 +45,18 @@ export function TaxPanel({ tax, canManage, onRefresh }: { tax: BillingTaxSetting
           }
           setInvalid(null);
           void run('tax', async () => {
-            await billingRequest('PUT', 'tax', { body: out.body });
+            await withUndo({
+              action: () => billingRequest<{ previous: Record<string, unknown> }>('PUT', 'tax', { body: out.body }),
+              // Undo sends back the fields this save changed, as they were
+              undo: async (r) => {
+                await billingRequest('PUT', 'tax', { body: { ...Object.fromEntries(Object.keys(out.body).map((k) => [k, r.previous[k] ?? null])), undo: true } });
+                await onRefresh();
+              },
+              message: t('payments.saved'),
+              undoneMessage: t('payments.undone'),
+            });
             await onRefresh();
-            return t('payments.saved');
+            return null;
           });
         }}
       >

@@ -113,7 +113,7 @@ export function SubscriptionsPanel({ initial, initialFilter, tiers, canManage }:
                   <div>
                     <dt className="sr-only">{t('payments.subs.tier')}</dt>
                     <dd className="font-medium text-fg">
-                      <bdi>{s.tierName}</bdi>
+                      <bdi>{tiers.find((x) => x.id === s.tierId)?.name ?? s.tierName}</bdi>
                     </dd>
                   </div>
                   <div>

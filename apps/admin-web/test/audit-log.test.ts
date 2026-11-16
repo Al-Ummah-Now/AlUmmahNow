@@ -7,7 +7,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AdminNames } from '@al-ummah/shared-types';
 import { canReadAudit } from '../src/lib/roles';
-import { actionKey, actionLabel, auditHref, splitTemplate, detailViews, itemHref, itemView, namesRequestOf, personView } from '../src/components/audit/audit-model';
+import { actionKey, actionLabel, auditHref, splitTemplate, detailViews, itemHref, itemView, namesRequestOf, paymentsLine, personView } from '../src/components/audit/audit-model';
 import { createTranslator } from '../src/i18n/translate';
 import en from '../src/i18n/messages/en';
 import ar from '../src/i18n/messages/ar';
@@ -139,5 +139,26 @@ describe('an unknown user in a history line', () => {
     const named = render(React.createElement(Person, { person: plain(personView('usr_1', names, t)) }));
     assert.doesNotMatch(named, /unknown-user-id/);
     assert.match(named, /Aisha Rahman/);
+  });
+});
+
+describe('Payments rows in words (never raw codes)', () => {
+  const en_ = createTranslator('en');
+  const ar_ = createTranslator('ar');
+  const tiers = { creator: { name: 'Creator', nameAr: 'صانع محتوى' } };
+  it('names the provider, key, price and the user given free months', () => {
+    assert.equal(paymentsLine({ action: 'update', target: { kind: 'billing-provider', id: 'paddle' }, details: { enabled: true } }, en_, 'en')!.template, 'Payment provider turned on: Paddle');
+    assert.equal(paymentsLine({ action: 'update', target: { kind: 'billing-provider', id: 'fake' }, details: { mode: 'live' } }, en_, 'en')!.template, 'Payment provider switched to Live: Test provider');
+    assert.equal(paymentsLine({ action: 'credential-set', target: { kind: 'billing-provider', id: 'paddle' }, details: { field: 'apiKey', mode: 'test' } }, en_, 'en')!.template, 'API key saved for Paddle (Test)');
+    assert.equal(paymentsLine({ action: 'save', target: { kind: 'billing-price', id: 'creator:month:USD' }, details: { tierId: 'creator', period: 'month', currency: 'USD', amount: 500 } }, en_, 'en', tiers)!.template, 'Price saved: Creator, Monthly, $5.00');
+    const comp = paymentsLine({ action: 'billing-comp', target: { kind: 'user', id: 'usr_1' }, details: { tierId: 'creator' } }, en_, 'en', tiers)!;
+    assert.deepEqual([comp.template, comp.user], ['Free Creator given to {user}', 'usr_1']);
+    assert.equal(paymentsLine({ action: 'update', target: { kind: 'billing-settings', id: 'tax' }, details: { undo: true } }, en_, 'en')!.undone, true);
+    assert.equal(paymentsLine({ action: 'hide', target: { kind: 'video', id: 'v' }, details: {} }, en_, 'en'), null, 'other rows keep their own words');
+  });
+  it('Arabic: Arabic words and the tier\'s Arabic name', () => {
+    const line = paymentsLine({ action: 'billing-comp', target: { kind: 'user', id: 'usr_1' }, details: { tierId: 'creator' } }, ar_, 'ar', tiers)!;
+    assert.match(line.template, /صانع محتوى/);
+    assert.doesNotMatch(line.template, /billing|creator/);
   });
 });

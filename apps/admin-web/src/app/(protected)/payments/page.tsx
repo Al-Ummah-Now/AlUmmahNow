@@ -9,6 +9,7 @@ import { listCreatorTierDefinitions } from '@/lib/api/creators';
 import { PaymentsView, type PaymentsTab } from '@/components/payments/PaymentsView';
 import { PAYMENTS_TABS, PaymentsHeader } from '@/components/payments/PaymentsHeader';
 import { logger } from '@/lib/logger';
+import { tierLabel } from '@/lib/creator-tiers';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,7 +54,7 @@ export default async function PaymentsPage({ searchParams }: PageProps) {
           key={`${tab}-${filter}`}
           tab={tab}
           overview={overview}
-          tiers={(tiers ?? []).map((x) => ({ id: x.id, name: locale === 'ar' && x.nameAr ? x.nameAr : x.name }))}
+          tiers={(tiers ?? []).map((x) => ({ id: x.id, name: tierLabel(x, locale) }))}
           subscriptions={subscriptions}
           filter={filter}
           can={{ manage: canManageBilling(role), providers: canManageProviders(role) }}
