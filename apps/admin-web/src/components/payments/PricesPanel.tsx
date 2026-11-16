@@ -163,7 +163,7 @@ export function PricesPanel({ prices, tiers, providers, canManage, canSync, onRe
           </h2>
           <form
             ref={formRef}
-            className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_auto_8rem_10rem_auto] lg:items-start"
+            className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_auto_8rem_10rem_auto] lg:items-start [&>*]:min-w-0"
             onSubmit={(e) => {
               e.preventDefault();
               void submit();

@@ -92,7 +92,8 @@ export function CompForm({ tiers, userId: fixedUser, onDone }: { tiers: TierOpti
             {t('payments.comp.title')}
           </h3>
           <p className={hintClass}>{t('payments.comp.hint')}</p>
-          <div className="grid gap-3 sm:grid-cols-2">
+          {/* grid-cols-1 = minmax(0, 1fr): the picked user's long email never widens the form past the screen (phones) */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
             {!fixedUser && (
               <div className="sm:col-span-2">
                 {/* Admins never type ids: find the user by name, email or @handle */}
