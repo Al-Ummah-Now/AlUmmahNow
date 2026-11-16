@@ -203,10 +203,10 @@ function Rail({ locale, role, channel, segments, features, onNavigate, onClose, 
   const { t } = useLanguage();
   const articles = useScholarLinks(locale);
   return (
-    <div className={cn('flex h-full flex-col gap-3 p-3', className)}>
+    <div className={cn('flex h-full min-w-0 flex-col gap-3 p-3', className)}>
       {/* One header row: in the drawer the close button has its own space at the start edge,
           then the channel (avatar, name, handle) and its switcher button. Flex mirrors it in RTL. */}
-      <div className="flex min-w-0 items-center gap-1" data-testid="studio-rail-header">
+      <div className="flex w-full min-w-0 items-center gap-1" data-testid="studio-rail-header">
         {onClose && (
           <Button variant="ghost" size="icon" className="h-11 w-11 shrink-0" onClick={onClose} aria-label={t.studio.closeMenu} data-testid="studio-close-menu">
             <X aria-hidden="true" className="h-5 w-5" />
@@ -273,7 +273,7 @@ export function StudioFrame({ locale, role, channel, features, children }: Props
         <span className="truncate text-sm font-medium">{title}</span>
       </div>
       <Dialog open={drawerOpen} onOpenChange={setDrawerOpen}>
-        <DialogContent showClose={false} data-slot="sheet-content" className="top-0 h-full max-w-xs translate-x-0 translate-y-0 rounded-none border-e p-0 ltr:left-0 rtl:left-auto rtl:right-0">
+        <DialogContent showClose={false} data-slot="sheet-content" className="top-0 grid-cols-1 h-full max-w-xs translate-x-0 translate-y-0 rounded-none border-e p-0 ltr:left-0 rtl:left-auto rtl:right-0">
           <DialogTitle className="sr-only">{t.studio.title}</DialogTitle>
           <Rail locale={locale} role={role} channel={channel} segments={segments} features={features} onNavigate={() => setDrawerOpen(false)} onClose={() => setDrawerOpen(false)} />
         </DialogContent>

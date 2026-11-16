@@ -73,6 +73,8 @@ describe('StudioFrame', () => {
     expect(order.indexOf('studio-close-menu')).toBeLessThan(order.indexOf('studio-channel-name'));
     expect(order.indexOf('studio-channel-name')).toBeLessThan(order.indexOf('studio-switcher'));
     expect(header.querySelector('[data-testid="studio-channel-name"]')).toHaveAttribute('dir', 'auto');
+    // The drawer's grid never grows past the drawer for a long name or handle
+    expect(close.closest('[data-slot="sheet-content"]')?.className).toMatch(/\bgrid-cols-1\b/);
   });
 
   it('uploads to this channel', () => {
