@@ -6,7 +6,7 @@ import { getI18n } from '@/i18n/server';
 import { formatDate } from '@/i18n/translate';
 import { ErrorAlert, linkClass, primaryButtonClass } from '@/components/ui';
 import { FilterForm } from '@/components/content/FilterForm';
-import { BackLink, EmptyState, MonoId, PageHeader, tableWrapClass, tdClass, thClass, wideOnly } from '@/components/content/parts';
+import { BackLink, EmptyState, PageHeader, tableWrapClass, tdClass, thClass, wideOnly } from '@/components/content/parts';
 import { pickParams, type SearchParams } from '@/components/content/query';
 import { InviteActions } from '@/components/invites/InviteActions';
 import { InviteStatusChip } from '@/components/invites/InviteStatusChip';
@@ -72,11 +72,10 @@ export default async function InvitesPage({ searchParams }: { searchParams: Prom
                 return (
                   <tr key={inv.id} className="border-b border-border last:border-0" data-testid="invite-row" data-invite-id={inv.id} data-user-id={inv.userId} data-status={inv.status}>
                     <td className={tdClass}>
-                      <Link href={`/users/${encodeURIComponent(inv.userId)}`} className={`${linkClass} font-medium break-all`} dir="ltr" data-testid="invite-user-link">
+                      <Link href={`/users/${encodeURIComponent(inv.userId)}`} className={`${linkClass} font-medium break-words`} dir="ltr" data-testid="invite-user-link">
                         {inv.email}
                       </Link>
                       {inv.name && <span className="block text-sm text-fg-muted" dir="auto">{inv.name}</span>}
-                      <span className="block"><MonoId value={inv.userId} max={24} /></span>
                     </td>
                     <td className={tdClass}>
                       <div className="flex flex-col items-start gap-1">

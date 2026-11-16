@@ -256,7 +256,10 @@ export type AdminVideoR2 = Pick<
 
 export interface AdminVideoRow {
   id: string;
+  /** The stored title; empty when the video has none (never the id: the admin shows "Untitled video"). */
   title: string;
+  /** Creator-written titles per language (en, ar); the admin shows the one in its own language first. */
+  titleLocalized?: Record<string, string>;
   channelId: string | null;
   channelName: string | null;
   ownerId: string | null;

@@ -18,7 +18,8 @@ import { formatNumber, type MessageKey } from '@/i18n/translate';
 import { formatClock } from '@al-ummah/shared-types';
 import { linkClass } from '@/components/ui';
 import { ActionFeedback, ConfirmButton } from '@/components/content/actions';
-import { Chip, MonoId, Notice, PageHeader, smallButtonClass, statusTone } from '@/components/content/parts';
+import { Chip, Notice, PageHeader, smallButtonClass, statusTone } from '@/components/content/parts';
+import { adminVideoTitle } from '@/lib/video-title';
 import { BulkBar } from '@/components/list/BulkBar';
 import { DataTable, type DataColumn } from '@/components/list/DataTable';
 import { FiltersBar, type FilterField } from '@/components/list/FiltersBar';
@@ -210,10 +211,14 @@ export function VideosList() {
     },
   ];
 
+  // The title in the admin's language, never the id ("Untitled video" when there is none)
+  const titleOf = (v: AdminVideoRow) => adminVideoTitle(v, locale) ?? t('videos.untitled');
+
   const columns: DataColumn<AdminVideoRow>[] = [
     {
       id: 'video',
       primary: true,
+      minWidth: 'md:min-w-[18rem]',
       header: t('videos.colVideo'),
       cell: (v) => {
         const time = duration(v.duration, locale);
@@ -228,13 +233,20 @@ export function VideosList() {
               )}
               {time && <span className="absolute bottom-1 end-1 rounded bg-fg/80 px-1 text-[10px] text-surface tabular-nums" dir="ltr">{time}</span>}
             </div>
-            <div className="min-w-0">
-              <Link href={detailHref(v.id)} className={`${linkClass} font-medium break-words`} dir="auto" data-testid="video-link" data-row-primary>
-                {v.title || v.id}
+            <div className="min-w-0 flex-1">
+              <Link href={detailHref(v.id)} className={`${linkClass} block font-medium`} data-testid="video-link" data-row-primary title={titleOf(v)}>
+                <span className={`clamp-fade-2 ${adminVideoTitle(v, locale) ? '' : 'italic text-fg-muted'}`} dir="auto" data-testid="video-title">
+                  {titleOf(v)}
+                </span>
               </Link>
-              <span className="block"><MonoId value={v.id} /></span>
-              <span className="block md:hidden text-xs text-fg-muted mt-1" dir="auto">
-                {v.channelName ?? (v.channelId ? v.channelId : t('content.noChannel'))} · {t('videos.viewsCount', { count: v.views })}
+              {/* The channel and views, while their columns are hidden (phone, or a narrow table beside the sidebar) */}
+              <span className="block @6xl:hidden text-xs text-fg-muted mt-1">
+                {/* Each part isolated: an Arabic channel name next to "12,840 views" must not reorder them */}
+                <span className="@3xl:hidden">
+                  <bdi>{v.channelName || (v.channelId ? t('content.unnamedChannel') : t('content.noChannel'))}</bdi>
+                  {' · '}
+                </span>
+                <bdi>{t('videos.viewsCount', { count: v.views })}</bdi>
               </span>
             </div>
           </div>
@@ -243,13 +255,13 @@ export function VideosList() {
     },
     {
       id: 'channel',
-      wide: true,
+      from: '3xl',
       header: t('videos.colChannel'),
       className: 'text-sm',
       cell: (v) =>
         v.channelId ? (
           <Link href={`/channels/${enc(v.channelId)}`} className={`${linkClass} break-words`} dir="auto" data-testid="video-channel-link">
-            {v.channelName || v.channelId}
+            {v.channelName || t('content.unnamedChannel')}
           </Link>
         ) : (
           <span className="text-fg-subtle">{t('content.noChannel')}</span>
@@ -257,13 +269,13 @@ export function VideosList() {
     },
     {
       id: 'uploader',
-      wide: true,
+      from: '5xl',
       header: t('videos.colUploader'),
       className: 'text-sm',
       cell: (v) =>
         v.ownerId ? (
           <Link href={`/users/${enc(v.ownerId)}`} className={`${linkClass} break-words`} dir="auto" data-testid="video-owner-link">
-            {v.ownerName || <MonoId value={v.ownerId} />}
+            {v.ownerName || t('content.unnamedAccount')}
           </Link>
         ) : (
           <span className="text-fg-subtle">{t('content.none')}</span>
@@ -279,7 +291,7 @@ export function VideosList() {
           {v.isHidden && <Chip tone="bad" testId="chip-hidden">{t('videos.hiddenYes')}</Chip>}
           {!!v.openReports && <Chip tone="warn" testId="chip-reports">{t('content.openReports', { count: v.openReports })}</Chip>}
           {v.createdAt && (
-            <span className="md:hidden text-xs text-fg-muted">
+            <span className="@4xl:hidden text-xs text-fg-muted">
               <RelativeTime value={v.createdAt} />
             </span>
           )}
@@ -288,16 +300,17 @@ export function VideosList() {
     },
     {
       id: 'r2',
-      wide: true,
+      from: '4xl',
+      nowrap: true,
       header: t('mediaDelivery.colR2'),
       cardLabel: t('mediaDelivery.colR2'),
       // Absent from an older api-videos: nothing rather than a wrong "Not transcoded"
       cell: (v) => <span data-testid="video-r2-cell">{v.r2 !== undefined && <R2Badge r2={v.r2} t={t} prefix={false} testId="chip-r2" />}</span>,
     },
-    { id: 'views', wide: true, align: 'end', header: t('videos.colViews'), cell: (v) => formatNumber(v.views, locale) },
+    { id: 'views', from: '6xl', nowrap: true, align: 'end', header: t('videos.colViews'), cell: (v) => formatNumber(v.views, locale) },
     {
       id: 'created',
-      wide: true,
+      from: '4xl',
       header: t('videos.colCreated'),
       className: 'text-sm text-fg-muted whitespace-nowrap',
       cell: (v) => (v.createdAt ? <RelativeTime value={v.createdAt} /> : t('content.none')),
@@ -310,11 +323,11 @@ export function VideosList() {
       align: 'end',
       cell: (v) =>
         v.isHidden ? (
-          <button type="button" className={smallButtonClass} disabled={!!busy} onClick={() => changePublished([v.id], true, `republish:${v.id}`)} aria-label={t('videos.republishTitle', { title: v.title || v.id })} data-testid="video-row-republish">
+          <button type="button" className={smallButtonClass} disabled={!!busy} onClick={() => changePublished([v.id], true, `republish:${v.id}`)} aria-label={t('videos.republishTitle', { title: titleOf(v) })} data-testid="video-row-republish">
             {t('videos.republish')}
           </button>
         ) : (
-          <button type="button" className={smallButtonClass} disabled={!!busy} onClick={() => changePublished([v.id], false, `unpublish:${v.id}`)} aria-label={t('videos.unpublishTitle', { title: v.title || v.id })} data-testid="video-row-unpublish">
+          <button type="button" className={smallButtonClass} disabled={!!busy} onClick={() => changePublished([v.id], false, `unpublish:${v.id}`)} aria-label={t('videos.unpublishTitle', { title: titleOf(v) })} data-testid="video-row-unpublish">
             {t('videos.unpublish')}
           </button>
         ),
@@ -381,7 +394,7 @@ export function VideosList() {
                       selected,
                       onToggle: toggle,
                       onToggleAll: () => setSelected(chosen.length === rows.length ? new Set() : new Set(rowIds)),
-                      rowLabel: (v) => t('videos.selectVideo', { title: v.title }),
+                      rowLabel: (v) => t('videos.selectVideo', { title: titleOf(v) }),
                       allLabel: t('videos.selectAll'),
                       rowTestId: 'video-select',
                       allTestId: 'video-select-all',

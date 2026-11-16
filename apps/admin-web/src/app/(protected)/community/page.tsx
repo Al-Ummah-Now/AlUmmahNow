@@ -6,9 +6,10 @@ import { formatDate, formatNumber } from '@/i18n/translate';
 import { ErrorAlert, linkClass } from '@/components/ui';
 import { FilterForm } from '@/components/content/FilterForm';
 import { DeleteRowButton } from '@/components/content/actions';
-import { Chip, CursorPager, EmptyState, MonoId, PageHeader, tableWrapClass, tdClass, thClass, wideOnly } from '@/components/content/parts';
+import { Chip, CursorPager, EmptyState, PageHeader, tableWrapClass, tdClass, thClass, wideOnly } from '@/components/content/parts';
 import { PAGE_SIZE, hrefWith, pickParams, type SearchParams } from '@/components/content/query';
 import { logger } from '@/lib/logger';
+import { getNames } from '@/lib/api/audit';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,6 +26,8 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
     logger.error('[community] Failed to load', { error: e instanceof Error ? e.message : String(e) });
   }
   const canDelete = permissions.includes('content:delete');
+  // Channels by name, never by id (one lookup for the page)
+  const names = data ? await getNames({ users: [], items: data.items.map((p) => ({ kind: 'channel' as const, id: p.channelId })) }) : { users: {}, items: {} };
 
   return (
     <div>
@@ -58,17 +61,16 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
               {data.items.map((p) => (
                 <tr key={`${p.channelId}:${p.id}`} className="border-b border-border last:border-0" data-testid="post-row" data-post-id={p.id}>
                   <td className={tdClass}>
-                    <p className="text-fg text-sm whitespace-pre-wrap break-words max-w-prose line-clamp-4" dir="auto">{p.text || p.id}</p>
+                    <p className="text-fg text-sm whitespace-pre-wrap break-words max-w-prose line-clamp-4" dir="auto">{p.text || <span className="italic text-fg-muted">{t('content.noText')}</span>}</p>
                     <div className="mt-1 flex flex-wrap items-center gap-1">
                       {p.type && <Chip tone="neutral">{p.type}</Chip>}
-                      <MonoId value={p.id} />
                     </div>
                     <span className="block md:hidden text-xs text-fg-muted mt-1">
                       {formatNumber(p.likes, locale)} · {formatNumber(p.comments, locale)} · {p.createdAt ? formatDate(p.createdAt, locale) : ''}
                     </span>
                   </td>
                   <td className={`${tdClass} ${wideOnly} text-sm`}>
-                    <Link href={`/channels/${encodeURIComponent(p.channelId)}`} className={linkClass}><MonoId value={p.channelId} max={24} /></Link>
+                    <Link href={`/channels/${encodeURIComponent(p.channelId)}`} className={`${linkClass} break-words`} dir="auto" data-testid="post-channel-link">{names.items[`channel:${p.channelId}`]?.title || t('content.unnamedChannel')}</Link>
                   </td>
                   <td className={`${tdClass} ${wideOnly} text-end tabular-nums text-sm`}>{formatNumber(p.likes, locale)} · {formatNumber(p.comments, locale)}</td>
                   <td className={`${tdClass} ${wideOnly} text-sm text-fg-muted whitespace-nowrap`}>{p.createdAt ? <time dateTime={p.createdAt}>{formatDate(p.createdAt, locale, true)}</time> : t('content.none')}</td>

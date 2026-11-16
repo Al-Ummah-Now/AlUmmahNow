@@ -25,6 +25,46 @@ export interface DataColumn<T> {
   cardLabel?: string;
   align?: 'start' | 'end';
   className?: string;
+  /**
+   * The column's minimum width from md up (Tailwind classes). An auto-layout table squeezes a
+   * column to its min-content, so a title cell with a long unbreakable word (or an id) collapsed
+   * to one letter per line. The primary column defaults to md:min-w-[16rem].
+   */
+  minWidth?: string;
+  /** Short values (counts, dates, badges): never wrap from md up, so they take only their width. */
+  nowrap?: boolean;
+  /**
+   * Shown only when the table itself is at least this wide (a container query: the space beside
+   * the sidebar, not the viewport). Lower-priority columns step out before the table overflows;
+   * fold what matters into the primary cell for the widths where they are hidden.
+   */
+  from?: ColumnFrom;
+}
+
+/** Container widths a column can wait for (Tailwind's @container sizes: 2xl 42rem … 6xl 72rem). */
+export type ColumnFrom = '2xl' | '3xl' | '4xl' | '5xl' | '6xl';
+// Whole class names, so Tailwind finds them
+const FROM_CLASS: Record<ColumnFrom, string> = {
+  '2xl': 'hidden @2xl:table-cell',
+  '3xl': 'hidden @3xl:table-cell',
+  '4xl': 'hidden @4xl:table-cell',
+  '5xl': 'hidden @5xl:table-cell',
+  '6xl': 'hidden @6xl:table-cell',
+};
+
+/** Display classes of a column's cells: always, from md (wide), or from a table width (from). */
+export function columnDisplayClass(c: { wide?: boolean; from?: ColumnFrom }, cell: boolean): string {
+  if (c.from) return FROM_CLASS[c.from];
+  if (c.wide) return 'hidden md:table-cell';
+  return cell ? 'block md:table-cell' : '';
+}
+
+/** The primary (title) column's minimum width when it sets none. */
+export const PRIMARY_MIN_WIDTH = 'md:min-w-[16rem]';
+
+/** The width classes of a column's cells (exported for the unit tests). */
+export function columnWidthClass(c: { primary?: boolean; minWidth?: string; nowrap?: boolean }): string {
+  return [c.minWidth ?? (c.primary ? PRIMARY_MIN_WIDTH : ''), c.nowrap ? 'md:whitespace-nowrap' : ''].filter(Boolean).join(' ');
 }
 
 export interface DataTableProps<T extends { id: string }> {
@@ -60,7 +100,7 @@ export function DataTable<T extends { id: string }>({ rows, columns, caption, te
   const someSelected = !!selection && !allSelected && rows.some((r) => selection.selected.has(r.id));
 
   return (
-    <div className={`bg-transparent md:bg-surface md:border md:border-border md:rounded-lg transition-opacity ${stale ? 'opacity-60' : ''}`} aria-busy={stale || undefined}>
+    <div className={`@container bg-transparent md:bg-surface md:border md:border-border md:rounded-lg transition-opacity ${stale ? 'opacity-60' : ''}`} aria-busy={stale || undefined}>
       <table ref={tableRef} role="table" className="block md:table w-full" data-testid={testId}>
         <caption className="sr-only">
           {caption}
@@ -84,7 +124,7 @@ export function DataTable<T extends { id: string }>({ rows, columns, caption, te
               </th>
             )}
             {columns.map((c) => (
-              <th key={c.id} role="columnheader" scope="col" className={`${th} ${c.wide ? 'hidden md:table-cell' : ''} ${c.align === 'end' ? 'text-end' : ''} sticky top-[var(--app-header-height,0px)] z-10 bg-surface`}>
+              <th key={c.id} role="columnheader" scope="col" className={`${th} ${columnWidthClass(c)} ${columnDisplayClass(c, false)} ${c.align === 'end' ? 'text-end' : ''} sticky top-[var(--app-header-height,0px)] z-10 bg-surface`}>
                 {c.header}
               </th>
             ))}
@@ -119,7 +159,7 @@ export function DataTable<T extends { id: string }>({ rows, columns, caption, te
                   <td
                     key={c.id}
                     role="cell"
-                    className={`${td} p-0 ${c.primary ? 'basis-[calc(100%-2.5rem)] md:basis-auto min-w-0' : 'basis-full md:basis-auto'} ${c.wide ? 'hidden md:table-cell' : 'block md:table-cell'} ${c.align === 'end' ? 'md:text-end tabular-nums' : ''} ${c.className ?? ''}`}
+                    className={`${td} p-0 ${columnWidthClass(c)} ${c.primary ? 'basis-[calc(100%-2.5rem)] md:basis-auto min-w-0' : 'basis-full md:basis-auto'} ${columnDisplayClass(c, true)} ${c.align === 'end' ? 'md:text-end tabular-nums' : ''} ${c.className ?? ''}`}
                   >
                     {c.cardLabel && <span className="md:hidden me-2 text-xs text-fg-muted">{c.cardLabel}</span>}
                     {c.cell(row)}

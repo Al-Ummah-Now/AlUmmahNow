@@ -7,9 +7,10 @@ import { formatDate, formatNumber } from '@/i18n/translate';
 import { ErrorAlert, linkClass } from '@/components/ui';
 import { FilterForm } from '@/components/content/FilterForm';
 import { DeleteRowButton } from '@/components/content/actions';
-import { Chip, CursorPager, EmptyState, MonoId, PageHeader, tableWrapClass, tdClass, thClass, wideOnly } from '@/components/content/parts';
+import { Chip, CursorPager, EmptyState, PageHeader, tableWrapClass, tdClass, thClass, wideOnly } from '@/components/content/parts';
 import { PAGE_SIZE, hrefWith, pickParams, type SearchParams } from '@/components/content/query';
 import { logger } from '@/lib/logger';
+import { getNames } from '@/lib/api/audit';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,6 +27,13 @@ export default async function PlaylistsPage({ searchParams }: { searchParams: Pr
     logger.error('[playlists] Failed to load', { error: e instanceof Error ? e.message : String(e) });
   }
   const canDelete = permissions.includes('content:delete');
+  // Channels and owners by name, never by id (one lookup for the page)
+  const names = data
+    ? await getNames({
+        users: data.items.flatMap((p) => (p.ownerId ? [p.ownerId] : [])),
+        items: data.items.flatMap((p) => (p.channelId ? [{ kind: 'channel' as const, id: p.channelId }] : [])),
+      })
+    : { users: {}, items: {} };
 
   return (
     <div>
@@ -61,8 +69,7 @@ export default async function PlaylistsPage({ searchParams }: { searchParams: Pr
               {data.items.map((p) => (
                 <tr key={p.id} className="border-b border-border last:border-0" data-testid="playlist-row" data-playlist-id={p.id}>
                   <td className={tdClass}>
-                    <span className="block font-medium text-fg break-words" dir="auto">{localizedPlaylistText(p.title, p.titleLocalized, locale) || p.id}</span>
-                    <span className="block"><MonoId value={p.id} /></span>
+                    <span className="block font-medium text-fg break-words" dir="auto">{localizedPlaylistText(p.title, p.titleLocalized, locale) || Object.values(p.titleLocalized ?? {}).find((x) => x?.trim()) || <span className="italic text-fg-muted">{t('content.untitled')}</span>}</span>
                     <div className="mt-1 flex flex-wrap gap-1">
                       <Chip tone="neutral">{p.isPublic ? t('videos.public') : p.isUnlisted ? t('playlists.unlisted') : t('videos.private')}</Chip>
                       {!p.channelId && <Chip tone="neutral">{t('playlists.personal')}</Chip>}
@@ -70,10 +77,10 @@ export default async function PlaylistsPage({ searchParams }: { searchParams: Pr
                     </div>
                   </td>
                   <td className={`${tdClass} ${wideOnly} text-sm`}>
-                    {p.channelId ? <Link href={`/channels/${encodeURIComponent(p.channelId)}`} className={linkClass}><MonoId value={p.channelId} max={24} /></Link> : <span className="text-fg-subtle">{t('content.none')}</span>}
+                    {p.channelId ? <Link href={`/channels/${encodeURIComponent(p.channelId)}`} className={`${linkClass} break-words`} dir="auto" data-testid="playlist-channel-link">{names.items[`channel:${p.channelId}`]?.title || t('content.unnamedChannel')}</Link> : <span className="text-fg-subtle">{t('content.none')}</span>}
                   </td>
                   <td className={`${tdClass} ${wideOnly} text-sm`}>
-                    {p.ownerId ? <Link href={`/users/${encodeURIComponent(p.ownerId)}`} className={linkClass}><MonoId value={p.ownerId} max={24} /></Link> : <span className="text-fg-subtle">{t('content.none')}</span>}
+                    {p.ownerId ? <Link href={`/users/${encodeURIComponent(p.ownerId)}`} className={`${linkClass} break-words`} dir="auto" data-testid="playlist-owner-link">{names.users[p.ownerId]?.name || names.users[p.ownerId]?.userName || t('content.unnamedAccount')}</Link> : <span className="text-fg-subtle">{t('content.none')}</span>}
                   </td>
                   <td className={`${tdClass} ${wideOnly} text-end tabular-nums`}>{formatNumber(p.videoCount, locale)}</td>
                   <td className={`${tdClass} ${wideOnly} text-sm text-fg-muted whitespace-nowrap`}>{p.createdAt ? <time dateTime={p.createdAt}>{formatDate(p.createdAt, locale)}</time> : t('content.none')}</td>

@@ -373,13 +373,23 @@ export async function listVideos(env: AdminEnv, query: AdminVideoQuery, waitUnti
 	return { items: await hydrateVideos(env, results ?? []), total: totalOf(total), page, pageSize, indexComplete };
 }
 
+/** The creator's per-language titles of a video object (string values only), for the admin's own language. */
+export function titleLocalizedOf(value: unknown): { titleLocalized?: Record<string, string> } {
+	if (!value || typeof value !== 'object') return {};
+	const out: Record<string, string> = {};
+	for (const [lang, text] of Object.entries(value as Record<string, unknown>)) if (typeof text === 'string' && text.trim()) out[lang] = text.trim();
+	return Object.keys(out).length ? { titleLocalized: out } : {};
+}
+
 export async function hydrateVideos(env: AdminEnv, rows: Row[]): Promise<AdminVideoRow[]> {
 	const objects = await readMany(env.videos, rows.map((r) => r.id));
 	return rows.map((r) => {
 		const v = objects.get(r.id) ?? {};
 		return {
 			id: r.id,
-			title: (v.title as string) || r.admin_title || r.id,
+			// Never the id: a video without a title is shown as "Untitled video" by the admin
+			title: (v.title as string) || r.admin_title || '',
+			...titleLocalizedOf(v.titleLocalized),
 			channelId: r.channel_id ?? null,
 			channelName: r.channel_name ?? null,
 			ownerId: r.owner_id ?? null,

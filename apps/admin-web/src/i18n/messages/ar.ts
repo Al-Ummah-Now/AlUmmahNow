@@ -1645,6 +1645,10 @@ const ar: Messages = {
     },
   },
   content: {
+    untitled: 'بلا عنوان',
+    noText: 'بلا نص',
+    unnamedChannel: 'قناة بلا اسم',
+    unnamedAccount: 'حساب بلا اسم',
     search: 'بحث',
     apply: 'تطبيق',
     clear: 'مسح عوامل التصفية',
@@ -1877,6 +1881,7 @@ const ar: Messages = {
     failedRef: 'تعذّر التراجع. أجرِ التغيير مرة أخرى من صفحة العنصر (المرجع {ref}).',
   },
   videos: {
+    untitled: 'مرئي بلا عنوان',
     title: 'المرئيات',
     subtitle: 'جميع المرئيات في كل القنوات',
     searchLabel: 'العنوان أو المعرّف',
