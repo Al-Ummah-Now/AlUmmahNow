@@ -100,7 +100,11 @@ export function AppShell() {
   );
 
   return (
-    <div dir={rtl ? 'rtl' : 'ltr'}>
+    // display: contents: this wrapper only carries the direction. As a box it was exactly the header's
+    // height, and a sticky header can't outlast its parent: it scrolled away with the page, leaving the
+    // rail's top band empty (owner, 2026-11-16: "why is nav floating"). The header, rail (.nv-panel) and
+    // tab bar (.tabbar) must never sit inside a box that clips, transforms or filters them.
+    <div dir={rtl ? 'rtl' : 'ltr'} className="contents">
       {/* The shared header (docs/design/NAV.md "Header"; pieces in Header/HeaderParts.tsx, checked against
           packages/fanous-tokens/nav/header.js): drawer toggle, brand, env badge, search, then Upload, the
           bell, language, light/dark and the account (or Sign in); mirrored in RTL */}

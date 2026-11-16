@@ -186,6 +186,58 @@ test.describe('Release: page frame', () => {
     });
   }
 
+  // Owner, 2026-11-16 ("why is nav floating"): the frame is attached to the screen however far a page
+  // scrolls. A sticky header inside a header-sized box scrolled away, and any transform/filter/
+  // backdrop-filter/containment on an ancestor turns a fixed rail or tab bar into a box mid-page.
+  for (const locale of ['en', 'ar'] as const) {
+    for (const [device, size] of [['desktop', DESKTOP], ['phone', PHONE]] as const) {
+      test(`the frame stays attached while a long page scrolls (${locale}, ${device})`, async ({ page, context }) => {
+        await answerConsent(context);
+        await page.setViewportSize(size);
+        await page.goto(`${target().web}/${locale}/settings/privacy`);
+        await expect(page.locator('header.ah')).toBeVisible({ timeout: 30000 });
+        for (const at of ['middle', 'end'] as const) {
+          const frame = await page.evaluate((where) => {
+            const max = document.documentElement.scrollHeight - innerHeight;
+            scrollTo(0, where === 'end' ? max : Math.round(max / 2));
+            const rect = (sel: string) => {
+              const el = document.querySelector<HTMLElement>(sel);
+              if (!el || getComputedStyle(el).display === 'none') return null;
+              const r = el.getBoundingClientRect();
+              return { top: r.top, bottom: r.bottom, left: r.left, right: r.right };
+            };
+            const traps: string[] = [];
+            for (const el of Array.from(document.querySelectorAll<HTMLElement>('header.ah, .nv-panel, .tabbar'))) {
+              for (let a = el.parentElement; a; a = a.parentElement) {
+                const cs = getComputedStyle(a);
+                const bf = cs.backdropFilter || (cs as unknown as Record<string, string>).webkitBackdropFilter;
+                if (cs.transform !== 'none' || cs.filter !== 'none' || (bf && bf !== 'none') || /paint|layout|strict|content/.test(cs.contain) || (cs.containerType && cs.containerType !== 'normal'))
+                  traps.push(`${el.className} inside ${a.tagName}.${a.className}`);
+              }
+            }
+            return { scrolled: scrollY, vh: innerHeight, vw: innerWidth, header: rect('header.ah'), rail: rect('.nv-panel'), tabbar: rect('.tabbar'), traps };
+          }, at);
+          expect(frame.scrolled, `${at}: the page scrolls`).toBeGreaterThan(0);
+          expect(frame.traps, `${at}: no fixed or sticky frame part inside a containing box`).toEqual([]);
+          // The header stays at the top edge
+          expect(Math.round(frame.header!.top), `${at}: header`).toBe(0);
+          if (device === 'desktop') {
+            // The rail: a full-height column on the inline-start edge, top to bottom of the screen
+            expect(frame.rail, 'rail').not.toBeNull();
+            expect(Math.round(frame.rail!.top), `${at}: rail top`).toBe(0);
+            expect(Math.round(frame.rail!.bottom), `${at}: rail bottom`).toBe(frame.vh);
+            if (locale === 'ar') expect(Math.round(frame.rail!.right), 'rail on the right in Arabic').toBe(frame.vw);
+            else expect(Math.round(frame.rail!.left), 'rail on the left').toBe(0);
+          } else {
+            // The tab bar: attached to the bottom edge
+            expect(frame.tabbar, 'tab bar').not.toBeNull();
+            expect(Math.round(frame.tabbar!.bottom), `${at}: tab bar bottom`).toBe(frame.vh);
+          }
+        }
+      });
+    }
+  }
+
   test('Upload is disabled without a channel and opens the upload form with one', async ({ page, context }) => {
     await answerConsent(context);
     await page.setViewportSize(DESKTOP);
