@@ -16,6 +16,8 @@ import { useLanguage } from '@/i18n/I18nProvider';
 import { formatDate, type MessageKey } from '@/i18n/translate';
 import { ErrorAlert, cardClass, fieldClass, linkClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
+import { UserName } from '@/components/audit/UserName';
+import { fillNodes } from '@/components/audit/fill';
 
 const ROLE_LABEL: Record<MobileAppRole, MessageKey> = {
   viewer: 'mobileApps.roleViewer',
@@ -385,7 +387,9 @@ export function MobileAppsForm({ state, history, canEdit, siteUrl }: { state: Mo
 
       <div className="space-y-3">
         <p className="text-sm text-fg-muted" data-testid="mobile-apps-last-changed">
-          {state.updatedAt ? t('mobileApps.lastChanged', { date: formatDate(state.updatedAt, locale, true), actor: state.updatedBy ?? '—' }) : t('mobileApps.neverChanged')}
+          {state.updatedAt
+            ? fillNodes(t('mobileApps.lastChanged', { date: formatDate(state.updatedAt, locale, true) }), { actor: state.updatedBy ? <UserName id={state.updatedBy} showEmail={false} /> : '—' })
+            : t('mobileApps.neverChanged')}
         </p>
         {canEdit ? (
           <div className="flex flex-wrap gap-3">
@@ -419,7 +423,7 @@ export function MobileAppsForm({ state, history, canEdit, siteUrl }: { state: Mo
         ) : (
           <ul className="space-y-1 text-sm text-fg-muted" data-testid="mobile-apps-history">
             {history.map((h) => (
-              <li key={h.id}>{t('mobileApps.historyEntry', { date: formatDate(h.createdAt, locale, true), actor: h.actorId, summary: changeSummary(h, t) })}</li>
+              <li key={h.id}>{fillNodes(t('mobileApps.historyEntry', { date: formatDate(h.createdAt, locale, true), summary: changeSummary(h, t) }), { actor: <UserName id={h.actorId} showEmail={false} /> })}</li>
             ))}
           </ul>
         )}

@@ -25,16 +25,15 @@ export function userMeta(user: AdminUserSearchItem, t: Translator): string {
   return parts.join(' · ');
 }
 
-/** A transfer search result as the Autocomplete shows it: name, email (and @handle), facts, banned users not choosable. */
+/** A transfer search result as the Autocomplete shows it: name, email, facts, banned users not choosable. No @handle: handles belong to channels, never users. */
 export function transferItem(user: AdminUserSearchItem, t: Translator): AutocompleteItem {
   const name = userName(user);
-  const handle = user.userName && user.displayName ? `@${user.userName}` : null;
   const email = user.email || t('channels.pickerNoEmail');
   return {
     kind: 'user',
     id: user.id,
     label: name,
-    secondary: handle ? `${handle} · ${email}` : email,
+    secondary: email,
     imageUrl: user.avatarUrl ?? null,
     badge: user.invite && user.invite.status !== 'active' && user.invite.status !== 'revoked' ? 'invited' : null,
     meta: userMeta(user, t),

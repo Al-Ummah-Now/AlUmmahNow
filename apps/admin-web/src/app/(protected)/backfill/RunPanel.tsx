@@ -22,8 +22,9 @@ import { Chip, smallButtonClass, tableWrapClass, tdClass, thClass, wideOnly } fr
 import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
 import { deliveryFormats } from '../delivery/format';
-import { ITEM_STATES, ITEM_STATE_LABEL, ITEM_TONE, RUN_STATUS_LABEL, RUN_TONE, SKIP_LABEL, STEP_LABEL, isLive, scopeText, dangerLargeButtonClass } from './labels';
+import { ITEM_STATES, ITEM_STATE_LABEL, ITEM_TONE, RUN_STATUS_LABEL, RUN_TONE, SKIP_LABEL, STEP_LABEL, isLive, scopeChannelRefs, scopeText, dangerLargeButtonClass } from './labels';
 import { useFormats } from './useFormats';
+import { useNames } from '@/components/audit/useNames';
 
 const POLL_MS = 5000;
 
@@ -32,6 +33,7 @@ export function RunPanel({ initial }: { initial: BackfillRun }) {
   const f = useFormats();
   const { confirm, dialog } = useConfirm();
   const [run, setRun] = useState(initial);
+  const names = useNames(scopeChannelRefs([run]));
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -174,7 +176,7 @@ export function RunPanel({ initial }: { initial: BackfillRun }) {
               {t('mediaBackfill.runTitle')} <span className="font-mono text-base text-fg-muted" dir="ltr">{run.id}</span>
             </h2>
             <p className="text-sm text-fg-muted mt-1">
-              {t('mediaBackfill.scopeLine', { scope: scopeText(run, t) })} · {formatDate(run.createdAt, locale, true)}
+              {t('mediaBackfill.scopeLine', { scope: scopeText(run, t, names) })} · {formatDate(run.createdAt, locale, true)}
             </p>
           </div>
           <Chip tone={RUN_TONE[run.status]} large testId="backfill-run-status">{t(RUN_STATUS_LABEL[run.status])}</Chip>
@@ -324,8 +326,8 @@ function ItemRow({ item, f, selected, onSelect, onRetry }: { item: BackfillItem;
         )}
       </td>
       <td className={tdClass}>
-        <div className="font-medium text-fg break-words">{label}</div>
-        <div className="font-mono text-xs text-fg-muted truncate max-w-[8rem] md:max-w-none" dir="ltr" title={item.videoId}>{item.videoId}</div>
+        <div className="font-medium text-fg break-words" title={item.videoId}>{label}</div>
+        {!item.title && <div className="font-mono text-xs text-fg-muted truncate max-w-[8rem] md:max-w-none" dir="ltr" title={item.videoId}>{item.videoId}</div>}
         <div className="md:hidden text-xs text-fg-muted mt-1">{item.sourceBytes ? f.gb(item.sourceBytes / 1e9) : ''} {item.spentUsd > 0 ? `· ${f.usd(item.spentUsd)}` : ''}</div>
       </td>
       <td className={`${tdClass} min-w-[9rem]`}>

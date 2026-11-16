@@ -46,6 +46,7 @@ export function AuditFilters({ values, actions, actorItem, targetItem }: { value
             hint={t('auditLog.actorHint')}
             defaultValue={values.actorId ?? ''}
             defaultItem={actorItem}
+            showIds={false}
             testId="audit-actor-filter"
           />
         </div>
@@ -73,6 +74,7 @@ export function AuditFilters({ values, actions, actorItem, targetItem }: { value
               placeholder={t('auditLog.itemPlaceholder')}
               defaultValue={kind === values.itemKind ? (values.itemId ?? '') : ''}
               defaultItem={kind === values.itemKind ? targetItem : null}
+              showIds={false}
               testId="audit-item-filter"
             />
           ) : (

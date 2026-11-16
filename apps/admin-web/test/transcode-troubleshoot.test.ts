@@ -89,3 +89,15 @@ describe('strings', () => {
     assert.match(en.transcodeTroubleshoot.noToken, /super admin/);
   });
 });
+
+describe('container states and log levels in words (approved-design check 2026-11-15)', () => {
+  it('every container state and log level has en and ar words, the Arabic ones in Arabic', () => {
+    for (const group of ['instanceStates', 'logLevels'] as const) {
+      const keys = Object.keys(lookup(en, `transcodeTroubleshoot.${group}`));
+      assert.deepEqual(Object.keys(lookup(ar, `transcodeTroubleshoot.${group}`)), keys, group);
+      for (const k of keys) assert.match(lookup(ar, `transcodeTroubleshoot.${group}.${k}`), /[؀-ۿ]/, `${group}.${k}`);
+    }
+    for (const state of ['running', 'stopped']) assert.ok(lookup(en, `transcodeTroubleshoot.instanceStates.${state}`), state);
+    assert.ok(lookup(en, 'transcodeTroubleshoot.logLevels.warn'));
+  });
+});
