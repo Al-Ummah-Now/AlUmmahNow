@@ -1,6 +1,7 @@
 import { test, expect } from './fixtures';
 import type { Page } from '@playwright/test';
 import { ANONYMOUS_STATE } from './test-utils/auth-state';
+import { localizedNumber } from './test-utils/digits';
 
 /**
  * Live streams list (/en/live, /ar/live).
@@ -18,13 +19,13 @@ const TEXT = {
     title: 'Live Streams',
     empty: 'No Live Streams',
     failed: 'Failed to Load Streams',
-    count: /Showing \d+ live streams?/,
+    count: localizedNumber('en', 'Showing {n} live streams?'),
   },
   ar: {
     title: 'البث المباشر',
     empty: 'لا توجد بثوث مباشرة',
     failed: /فشل/,
-    count: /\d+/,
+    count: localizedNumber('ar'),
   },
 } as const;
 

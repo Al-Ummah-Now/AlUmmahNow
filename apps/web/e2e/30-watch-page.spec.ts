@@ -5,6 +5,7 @@ import { createDisposableVideo, deleteVideoQuietly, waitForReady, type E2EVideo 
 import { apiCall, fetchVideo, tempName, watchUrl, type QaVideo, type WatchRoute } from './test-utils/watch-page';
 import { clickAndWaitForURL } from './test-utils/qa-content';
 import { ownPublicVideos, type OwnVideo } from './test-utils/own-public-video';
+import { parseShownNumber } from './test-utils/digits';
 
 /**
  * Watch page (/[locale]/video/[id] and the legacy /[locale]/video?vid=):
@@ -183,7 +184,7 @@ test.describe('watch page - reactions (signed in)', () => {
     const like = page.getByTestId('video-like-button');
     await expect(like).toBeEnabled();
     await expect(like).toHaveAttribute('aria-pressed', 'false');
-    const before = Number(await like.locator('span').innerText());
+    const before = parseShownNumber(await like.locator('span').innerText());
 
     await like.click();
     await expect(like).toHaveAttribute('aria-pressed', 'true');
