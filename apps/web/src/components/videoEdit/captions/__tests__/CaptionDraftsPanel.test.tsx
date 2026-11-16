@@ -4,7 +4,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 jest.mock('@/hooks/useLanguage', () => ({
   useLanguage: () => ({ t: jest.requireActual('@/lib/i18n/translations/en').EN_TRANSLATIONS, lang: 'en', isRTL: false }),
 }));
-let mockFeatures: Record<string, boolean> = { captionsTranscribe: true, captionsTranslate: true };
+const mockFeatures: Record<string, boolean> = { captionsTranscribe: true, captionsTranslate: true };
 const mockRefreshFeatures = jest.fn(async () => undefined);
 jest.mock('@/hooks/useFeatures', () => ({ useFeatures: () => ({ ready: true, features: mockFeatures }), refreshFeatures: (...a: unknown[]) => mockRefreshFeatures(...(a as [])) }));
 jest.mock('@/lib/errors/reporter', () => ({ reportError: jest.fn(() => 'ref') }));
