@@ -197,6 +197,12 @@ builds and prints the placement table. Every suite job boots its own stack throu
 runs its specs with `E2E_ENV=local`. It runs on every pull request, every push to `main`, nightly, and
 in every release (`release.yml` job `local-e2e`). Production waits for it.
 
+The release suite's **WebKit** job runs from a standalone, newer Playwright (`PLAYWRIGHT_WEBKIT_VERSION`
+in `local-e2e.yml`, 1.65.1); every other project stays on `apps/web`'s pinned version. Playwright
+1.56.1's WebKit build (webkit-2215) aborts its web process on the Studio Comments flow (a libstdc++
+assertion on an empty `std::optional<size_t>` while rendering): 8 of 36 runs against 0 of 36 on
+1.65.1's (webkit-2388), same batch (#1382). Drop the split once `apps/web` moves past it.
+
 Locally, against a running stack (one stack and one Playwright run at a time):
 
 ```bash

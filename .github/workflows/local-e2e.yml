@@ -132,6 +132,26 @@ jobs:
           export E2E_RUN_USERS_FILE="$RUNNER_TEMP/run-users.txt" E2E_RUN_USER_IDS_FILE="$RUNNER_TEMP/run-user-ids.txt"
           # The PR's own code runs here: none of the "not deployed on QA yet" pull-request skips apply
           export GITHUB_EVENT_NAME=local-stack
+          if [ "${{ matrix.project }}" = "webkit" ]; then
+            # WebKit runs from a standalone, newer Playwright (only its browser build changes; every
+            # other project stays on apps/web's pinned version): Playwright 1.56.1's WebKit
+            # (webkit-2215) aborts its web process on the Studio Comments flow (libstdc++ assertion
+            # on an empty std::optional<size_t> while rendering), 8 of 36 runs; 1.65.1's
+            # (webkit-2388) 0 of 36, same batch (#1382, run 43804810243). Same layout as
+            # release-e2e.yml's suite; results are copied back for the steps below.
+            SUITE="$RUNNER_TEMP/webkit-suite"
+            mkdir -p "$SUITE/e2e/test-utils"
+            cp -R e2e/release e2e/test-fixtures "$SUITE/e2e/"
+            cp e2e/test-utils/code-sink.ts e2e/test-utils/run-users.ts e2e/test-utils/placement.ts "$SUITE/e2e/test-utils/"
+            cp playwright.release.config.ts "$SUITE/"
+            (cd "$SUITE" && npm init -y > /dev/null && npm install --no-audit --no-fund "@playwright/test@$PLAYWRIGHT_WEBKIT_VERSION" && npx playwright install --with-deps webkit)
+            code=0
+            (cd "$SUITE" && npx playwright test -c playwright.release.config.ts --project=webkit --shard="${{ matrix.shard }}") || code=$?
+            rm -rf test-results release-report
+            cp -R "$SUITE/test-results" test-results 2>/dev/null || true
+            cp -R "$SUITE/release-report" release-report 2>/dev/null || true
+            exit $code
+          fi
           pnpm exec playwright test -c playwright.release.config.ts --project="${{ matrix.project }}" --shard="${{ matrix.shard }}"
         env:
           CI: 'true'
@@ -140,6 +160,8 @@ jobs:
           NODE_OPTIONS: --dns-result-order=ipv4first
           E2E_CODE_SINK_SECRET: local-stack-sink-secret
           TEST_PROMOTE_SECRET: local-stack-promote-secret
+          # The WebKit release project's Playwright (see Run); Firefox and the rest stay on apps/web's
+          PLAYWRIGHT_WEBKIT_VERSION: 1.65.1
 
       # What ran, pass or fail (as the web suite, #1089): skipped tests and their reasons in the job
       # summary, and every test's status as an artifact
