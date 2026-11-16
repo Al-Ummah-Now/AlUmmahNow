@@ -159,6 +159,13 @@ describe('tier limit (MA9)', () => {
 		const ok = await addTrack(t.asEnv, undefined, { video: { ...t.read(), userId: 'bob' }, userId: 'root', roles: ['super_admin'], body: upload() }, NOW);
 		assert.ok(ok.track.id.startsWith('t'));
 	});
+
+	it('off is checked first: no tier answers feature_off even for a video still processing or a bad request', async () => {
+		const u = await setup({ video: { uploadStatus: 'processing' } as never });
+		const bob = { ...u.read(), userId: 'bob' };
+		await assert.rejects(addTrack(u.asEnv, undefined, { video: bob, userId: 'bob', body: upload() }, NOW), (e: AudioTrackError) => e.status === 404 && e.code === 'feature_off');
+		await assert.rejects(addTrack(u.asEnv, undefined, { video: bob, userId: 'bob', body: { language: 'xx' } as never }, NOW), (e: AudioTrackError) => e.status === 404 && e.code === 'feature_off');
+	});
 });
 
 describe('adding a track', () => {
