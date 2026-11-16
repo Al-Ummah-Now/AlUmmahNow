@@ -11,8 +11,8 @@ const TOLERANCE = 1;
 /** Optical nudge of play triangles: 7% of the icon width, rounded to whole pixels (player-skin.css) */
 const playNudge = (iconWidth: number) => Math.round(iconWidth * 0.07);
 
-const near = (actual: number, expected: number, what: string) =>
-  expect(Math.abs(actual - expected), `${what}: ${actual.toFixed(2)} vs ${expected.toFixed(2)}`).toBeLessThanOrEqual(TOLERANCE);
+const near = (actual: number, expected: number, what: string, tolerance = TOLERANCE) =>
+  expect(Math.abs(actual - expected), `${what}: ${actual.toFixed(2)} vs ${expected.toFixed(2)}`).toBeLessThanOrEqual(tolerance);
 
 /** The height of one line of a row's label in its own font, plus rounding */
 /**
@@ -135,9 +135,12 @@ for (const dpr of [1, 2]) {
         const current = await inkBox(page, player.locator('.vjs-current-time-display'));
         const duration = await inkBox(page, player.locator('.vjs-duration-display'));
         const divider = await inkBox(page, player.locator('.vjs-time-divider > div, .vjs-time-divider span').first());
-        // Digits have no descenders: their ink centre is the text's optical centre
-        near(current.cy, playIcon.cy, 'current time vs play icon');
-        near(duration.cy, playIcon.cy, 'duration vs play icon');
+        // Digits have no descenders: their ink centre is the text's optical centre. Arabic shows
+        // Eastern Arabic (Hindi) numerals (#1541), whose ink differs per digit («٠» is a dot at
+        // mid-height, «١» a full stroke), so their ink centre may sit half a pixel further off
+        const digitSlack = lang === 'ar' ? 1.5 : TOLERANCE;
+        near(current.cy, playIcon.cy, 'current time vs play icon', digitSlack);
+        near(duration.cy, playIcon.cy, 'duration vs play icon', digitSlack);
         near(divider.cy, playIcon.cy, 'divider vs play icon');
         // The two are drawn in different colours (icon and dim), and the dimmer one's faint
         // antialiased edge falls under the ink threshold; compare baselines in one probe colour
@@ -145,7 +148,13 @@ for (const dpr of [1, 2]) {
         const currentInk = await inkBox(page, player.locator('.vjs-current-time-display'));
         const durationInk = await inkBox(page, player.locator('.vjs-duration-display'));
         near(currentInk.bottom, durationInk.bottom, 'current time and duration baseline');
-        near(currentInk.y, durationInk.y, 'current time and duration cap line');
+        // Eastern Arabic (Hindi) numerals have no shared cap line («٠» and «٥» stop below «١»), so on
+        // Arabic the two boxes are compared instead of the ink tops
+        if (lang === 'ar') {
+          near((await layoutBox(player.locator('.vjs-current-time-display'))).y, (await layoutBox(player.locator('.vjs-duration-display'))).y, 'current time and duration top');
+        } else {
+          near(currentInk.y, durationInk.y, 'current time and duration cap line');
+        }
       });
 
       test('progress handle: centred on the track and on the playhead, fully visible at 0 and at the end', async ({ page }) => {
