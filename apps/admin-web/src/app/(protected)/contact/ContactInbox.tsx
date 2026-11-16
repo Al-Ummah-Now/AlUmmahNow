@@ -148,7 +148,7 @@ export function ContactInbox({ messages, filters, viewerId, canManage, counts }:
               {m.name}
             </span>
           </Link>
-          <span className="block text-xs text-fg-subtle break-all" dir="ltr">
+          <span className="block text-xs text-fg-subtle break-all rtl:text-right" dir="ltr">
             {m.email}
           </span>
         </div>
@@ -159,9 +159,10 @@ export function ContactInbox({ messages, filters, viewerId, canManage, counts }:
       header: t('contact.colMessage'),
       className: 'min-w-0',
       cell: (m) => (
-        <p className={`line-clamp-2 break-words text-sm ${isUnread(m) ? 'text-fg font-semibold' : 'text-fg-muted'}`} dir="auto">
+        <p className={`line-clamp-2 break-words text-sm ${isUnread(m) ? 'text-fg font-semibold' : 'text-fg-muted'}`}>
           <span className="text-fg-subtle font-normal">{translateDynamic(t, 'contactTopic', m.topic)} · </span>
-          {m.message}
+          {/* Isolated: the sender's language never reorders the page's own label around it */}
+          <bdi dir="auto">{m.message}</bdi>
         </p>
       ),
     },
