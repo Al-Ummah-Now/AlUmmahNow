@@ -49,6 +49,11 @@ export interface PageOptions {
   search?: string;
   assetVersion: string;
   environment: string;
+  /**
+   * Email updates are offered (the notify queue is bound). Off, no footer link, no call to
+   * action and no /subscribe page (wiki "Product rules → Hidden when off").
+   */
+  subscribe?: boolean;
 }
 
 const prefix = (locale: Locale) => (locale === 'ar' ? '/ar' : '');
@@ -148,7 +153,7 @@ ${main}
 <footer class="wrap foot">
   ${footApps(locale, apps)}
   <p>${esc(t(locale, 'footerNote'))}</p>
-  <p class="feeds"><span>${esc(t(locale, 'feeds'))}:</span> <a href="${prefix(locale)}/subscribe" data-testid="footer-subscribe">${esc(t(locale, 'emailUpdates'))}</a> <a href="${prefix(locale)}/feed.atom">${esc(t(locale, 'atom'))}</a> <a href="${prefix(locale)}/feed.rss">${esc(t(locale, 'rss'))}</a> <a href="/api/status.json">${esc(t(locale, 'json'))}</a></p>
+  <p class="feeds"><span>${esc(t(locale, 'feeds'))}:</span> ${o.subscribe ? `<a href="${prefix(locale)}/subscribe" data-testid="footer-subscribe">${esc(t(locale, 'emailUpdates'))}</a> ` : ''}<a href="${prefix(locale)}/feed.atom">${esc(t(locale, 'atom'))}</a> <a href="${prefix(locale)}/feed.rss">${esc(t(locale, 'rss'))}</a> <a href="/api/status.json">${esc(t(locale, 'json'))}</a></p>
 </footer>
 </body>
 </html>`;
@@ -230,7 +235,7 @@ export function renderStatusPage(s: StatusSummary, o: PageOptions): string {
     section('upcoming-title', t(locale, 'upcoming'), s.upcoming),
     components,
     history,
-    subscribeCta(locale),
+    o.subscribe ? subscribeCta(locale) : '',
   ].join('\n');
   return shell(o, t(locale, 'pageTitle'), main);
 }
