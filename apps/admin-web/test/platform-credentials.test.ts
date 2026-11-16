@@ -86,7 +86,7 @@ describe('credentials: editor rules', () => {
     assert.deepEqual(Object.keys(ar.platformCredentials).sort(), enKeys);
     for (const key of enKeys) assert.match((ar.platformCredentials as Record<string, string>)[key]!, /[؀-ۿ]/, key);
     // Product names (R2) keep their digit; every number in the copy is in Arabic digits
-    assert.doesNotMatch(JSON.stringify(ar.platformCredentials).replace(/R2|\{\w+\}/g, ''), /فيديو|[0-9]/);
+    assert.doesNotMatch(JSON.stringify(ar.platformCredentials).replace(/R2|\{#?[\w.]+\}/g, ''), /فيديو|[0-9]/);
   });
 });
 

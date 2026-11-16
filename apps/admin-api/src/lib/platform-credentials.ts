@@ -24,6 +24,7 @@ import {
   PLATFORM_CREDENTIALS,
   PLATFORM_CREDENTIAL_IDS,
   credentialMaster,
+  isCloudflareApiToken,
   forgetPlatformCredential,
   platformCredentialKey,
   platformCredentialMintKey,
@@ -72,8 +73,11 @@ export class CredentialError extends Error {
 const CF_API = 'https://api.cloudflare.com/client/v4';
 const ACCOUNT_ID = '0e4b6e7f9faf280c3c9bf95995edc64f';
 const SECRETS_STORE_ID = 'f8eddc9944d041919ed8dc7d08d32308';
-/** Value of a Secrets Store entry created before its real value is known: counts as none. */
-const UNSET = 'unset';
+/**
+ * A value that is not shaped like a Cloudflare API token counts as none: the release's placeholder
+ * `unset` for an entry whose real value is not known yet, and the local stack's dummies.
+ */
+const isToken = (value: string) => isCloudflareApiToken(value);
 export const CREDENTIAL_AUDIT_PREFIX = 'platform-credential:';
 
 /** The Secrets Store binding admin-api reads for each credential. */
@@ -97,7 +101,7 @@ const timeout = () => AbortSignal.timeout(10_000);
 /** The value in use ('' for none or the placeholder). */
 async function current(env: CredentialsEnv, id: PlatformCredentialId) {
   const now = await readPlatformCredential(credentialEnv(env), id, BINDING_OF[id](env));
-  if (now.value === UNSET) return { ...now, value: '', source: null as null };
+  if (now.value && !isToken(now.value)) return { ...now, value: '', source: null as null };
   return now;
 }
 

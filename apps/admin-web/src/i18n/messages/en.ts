@@ -4780,7 +4780,7 @@ const en = {
     saved: 'Token replaced.',
     tested: 'Test finished.',
     errorEmpty: 'Paste the token.',
-    errorToken: 'That is not a Cloudflare API token (30 to 200 letters, digits, - or _).',
+    errorToken: 'That is not a Cloudflare API token ({#30} to {#200} letters, digits, - or _).',
     errorForbidden: 'Only Super Admins can change credentials.',
     errorUnavailable: 'The token could not be stored here (the internal key is missing). Nothing was changed.',
     errorFailed: 'The token was not saved. Try again.',
