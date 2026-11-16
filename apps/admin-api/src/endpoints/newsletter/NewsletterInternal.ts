@@ -8,6 +8,9 @@
  *                      when Turnstile is enforced and the token is missing or failed; 429 rate_limited.
  *   POST /confirm      { token } → { status: 'confirmed' | 'expired' | 'invalid' }
  *   POST /unsubscribe  { token } → { status: 'unsubscribed' | 'invalid' }
+ *
+ * Subscribe and confirm answer 404 { success: false, code: 'feature_off' } while the newsletter can't
+ * send (lib/public-features.ts); unsubscribe always works, so people can still leave.
  */
 import { Hono, type Context } from 'hono';
 import type { AdminBindings } from '../../base/types';
@@ -16,6 +19,7 @@ import { hashIp, safeEqual } from '../../lib/contact';
 import { logger } from '../../lib/logger';
 import { isNewsletterBot, newsletterRateLimit, parseSignup, TOKEN } from '../../lib/newsletter';
 import { confirmSubscriber, requestSignup, setConfirmDelivery, unsubscribeByToken } from '../../lib/newsletter-store';
+import { FEATURE_OFF, newsletterAvailable } from '../../lib/public-features';
 import { confirmJob, enqueueNewsletterMail, reportNewsletterFailure } from '../../lib/newsletter-mail';
 
 type Env = { Bindings: AdminBindings };
@@ -56,6 +60,7 @@ const CHECK_EMAIL = { success: true, result: { status: 'check_email' } } as cons
 
 app.post('/subscribe', async (c) => {
   const env = c.env;
+  if (!(await newsletterAvailable(env))) return c.json(FEATURE_OFF, 404);
   const raw = await body(c);
   if (!raw) return c.json({ success: false, error: 'Invalid JSON' }, 400);
   // Bots get the same answer as people, and nothing is stored or sent
@@ -86,6 +91,7 @@ app.post('/subscribe', async (c) => {
 });
 
 app.post('/confirm', async (c) => {
+  if (!(await newsletterAvailable(c.env))) return c.json(FEATURE_OFF, 404);
   const raw = await body(c);
   const token = typeof raw?.token === 'string' ? raw.token : '';
   if (!TOKEN.test(token)) return c.json({ success: true, result: { status: 'invalid' } });

@@ -43,6 +43,7 @@ import vitalsRouter from './routers/vitals.router';
 import statusRouter from './routers/status.router';
 import newsletterRouter from './routers/newsletter.router';
 import newsletterInternal from './endpoints/newsletter/NewsletterInternal';
+import { publicFeaturesRoute } from './lib/public-features';
 import reviewAlertsRouter from './routers/reviewAlerts.router';
 import staleUploadsRouter from './routers/staleUploads.router';
 import trashRouter from './routers/trash.router';
@@ -152,6 +153,9 @@ app.get('/public/site-theme', async (c) => {
   const answer = await publicSiteTheme((c.env as AdminBindings).REPORTS_DB, new URL(c.req.url).origin);
   return c.json(answer, 200, { 'Cache-Control': 'public, max-age=30' });
 });
+
+// Which optional public-site features can work (booleans only): www leaves out what can't (lib/public-features.ts)
+app.get('/public/features', (c) => publicFeaturesRoute(c as never));
 
 // Mobile apps settings, all public by nature (they are published in the domain association files):
 // the videos site serves AASA / assetlinks.json from them and api-videos reads the attestation switches
