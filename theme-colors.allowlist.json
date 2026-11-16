@@ -49,7 +49,7 @@
   "apps/web/src/components/Community/CommunityPosts.tsx": 34,
   "apps/web/src/components/Community/LikeButton.tsx": 2,
   "apps/web/src/components/Community/PostCard.tsx": 16,
-  "apps/web/src/components/Community/PostEngagement.tsx": 22,
+  "apps/web/src/components/Community/PostEngagement.tsx": 12,
   "apps/web/src/components/Community/ReplyForm.tsx": 19,
   "apps/web/src/components/Community/management/PostAnalytics.tsx": 4,
   "apps/web/src/components/Community/management/PostCard.tsx": 10,

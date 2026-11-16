@@ -65,7 +65,7 @@ export default function CommentButton({
         aria-hidden="true"
         className={cn(
           'w-5 h-5 transition-colors',
-          showComments ? 'text-[var(--fanous-color-primary)]' : 'text-[var(--fanous-color-text-secondary)] group-hover:text-[var(--fanous-color-text-primary)]'
+          showComments ? 'text-[var(--fanous-color-link)]' : 'text-[var(--fanous-color-text-secondary)] group-hover:text-[var(--fanous-color-text-primary)]'
         )}
         fill="none"
         stroke="currentColor"
@@ -81,7 +81,7 @@ export default function CommentButton({
       <span
         className={cn(
           'text-sm font-medium transition-colors',
-          showComments ? 'text-[var(--fanous-color-primary)]' : 'text-[var(--fanous-color-text-secondary)] group-hover:text-[var(--fanous-color-text-primary)]'
+          showComments ? 'text-[var(--fanous-color-link)]' : 'text-[var(--fanous-color-text-secondary)] group-hover:text-[var(--fanous-color-text-primary)]'
         )}
       >
         {/* Accessible name = label + visible count (label-in-name) */}

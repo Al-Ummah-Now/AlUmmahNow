@@ -71,13 +71,12 @@ export default function PostEngagement({
 
   return (
     <div className={cn(
-      'border-t border-gray-100 dark:border-gray-700 px-4 py-2',
+      'border-t border-[var(--fanous-color-divider)] px-4 py-2',
       'flex-row'
     )}>
-      <div className={cn(
-        'flex items-center gap-1',
-        'flex-row'
-      )}>
+      {/* The action row: flat; every count and icon is textSecondary (idle) or link (active), the two
+          text roles check:tokens holds to AA on every surface of every theme (COMM-015 measures it) */}
+      <div className="flex items-center gap-1" data-testid="post-actions-row">
         {/* Like Button */}
         <LikeButton
           postChannelId={post.channelId}
@@ -129,7 +128,7 @@ export default function PostEngagement({
               />
             </svg>
             {post.shares > 0 && (
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-gray-200">
+              <span className="text-sm font-medium text-[var(--fanous-color-text-secondary)] group-hover:text-[var(--fanous-color-text-primary)]">
                 {formatCount(post.shares)}
               </span>
             )}
@@ -168,12 +167,10 @@ export default function PostEngagement({
 
         {/* Views (if available) */}
         {post.views > 0 && (
-          <div className={cn(
-            'flex items-center gap-2 px-4 py-2 ms-auto',
-            'flex-row'
-          )}>
+          <div className="ms-auto flex items-center gap-2 px-4 py-2" data-testid="post-views">
             <svg
-              className="w-5 h-5 text-gray-500 dark:text-gray-400"
+              className="w-5 h-5 text-[var(--fanous-color-text-secondary)]"
+              aria-hidden="true"
               fill="none"
               stroke="currentColor"
               strokeWidth={2}
@@ -190,7 +187,7 @@ export default function PostEngagement({
                 d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
               />
             </svg>
-            <span className="text-sm text-gray-500 dark:text-gray-400">
+            <span className="text-sm text-[var(--fanous-color-text-secondary)]">
               {formatCount(post.views)}
             </span>
           </div>

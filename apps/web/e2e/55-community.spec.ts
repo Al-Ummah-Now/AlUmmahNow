@@ -4,6 +4,9 @@ import { ANONYMOUS_STATE } from './test-utils/auth-state';
 import { centerX, clickUntil, expectRtl, fillStable, tempName } from './test-utils/channel-content';
 import { useOwnData, type Creator } from './release/builders';
 import { apiFetch, expectHydrated } from './release/web-session';
+import { AxeBuilder } from '@axe-core/playwright';
+import { SITE_THEMES } from '@al-ummah/shared-types';
+import { actionRowContrast } from './test-utils/action-row-contrast';
 
 /** A time `ms` from now as a datetime-local value in the browser's zone (the runner's) */
 const localIn = (ms: number) => {
@@ -438,6 +441,46 @@ test.describe('Community tab - engagement', () => {
     await expect(card.getByRole('button', { name: 'Like' })).toHaveAttribute('aria-pressed', 'false');
     await expect(card.getByRole('button', { name: 'Like' }).getByTestId('post-like-count')).toHaveText('0');
     await expect.poll(async () => (await listPosts(viewer, channelId(), acting)).find((p) => p.id === post.id)?.viewerHasLiked).toBe(false);
+  });
+
+  test('COMM-015 every count and icon in the action row meets AA in every theme, light and dark, idle and active', async ({ page }) => {
+    test.setTimeout(240_000);
+    const marker = tempName('Contrast');
+    await createTextPost(`${marker} contrast check`);
+    const failures: string[] = [];
+    for (const mode of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme: mode });
+      await page.goto(`/en/channels/${channelId()}?tab=community`);
+      await page.evaluate((m) => localStorage.setItem('theme', m), mode);
+      await page.reload();
+      const card = postCard(page, marker);
+      const row = card.getByTestId('post-actions-row');
+      await expectHydrated(card.getByRole('button', { name: 'Like' }));
+      for (const state of ['idle', 'active'] as const) {
+        if (state === 'active') {
+          // Liked and comments open: the active colour on Like and Comment
+          await card.getByRole('button', { name: 'Like' }).click();
+          await expect(card.getByRole('button', { name: 'Unlike' })).toHaveAttribute('aria-pressed', 'true');
+          const comments = card.getByRole('button', { name: /Comments/ });
+          if ((await comments.getAttribute('aria-pressed')) !== 'true') await comments.click();
+          await expect(comments).toHaveAttribute('aria-pressed', 'true');
+        }
+        for (const theme of SITE_THEMES) {
+          await page.evaluate((t) => document.documentElement.setAttribute('data-theme', t), theme);
+          await page.waitForTimeout(150);
+          // Against the real pixels behind each count and icon (the card is glass over the page)
+          for (const r of await actionRowContrast(page, row)) {
+            if (r.ratio < r.required) failures.push(`${theme} ${mode} ${state} ${r.name}: ${r.ratio}:1 < ${r.required}:1 (${r.color})`);
+          }
+          const axe = await new AxeBuilder({ page }).include('[data-testid="post-actions-row"]').withRules(['color-contrast']).analyze();
+          for (const v of axe.violations) failures.push(`${theme} ${mode} ${state} axe ${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`);
+        }
+      }
+      // Back to idle for the next mode
+      await card.getByRole('button', { name: 'Unlike' }).click();
+      await expect(card.getByRole('button', { name: 'Like' })).toHaveAttribute('aria-pressed', 'false');
+    }
+    expect(failures, failures.join('\n')).toEqual([]);
   });
 
   test('COMM-012 a subscriber is notified of a new post and the notification opens it', async ({ page }) => {

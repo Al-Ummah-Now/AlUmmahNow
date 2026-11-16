@@ -88,7 +88,7 @@ export default function LikeButton({
         className={cn(
           'w-5 h-5 transition-all',
           // Idle like its neighbours, active in the primary colour (flat: no pill, no glow)
-          liked ? 'text-[var(--fanous-color-primary)] fill-current' : 'text-[var(--fanous-color-text-secondary)] group-hover:text-[var(--fanous-color-text-primary)]'
+          liked ? 'text-[var(--fanous-color-link)] fill-current' : 'text-[var(--fanous-color-text-secondary)] group-hover:text-[var(--fanous-color-text-primary)]'
         )}
         fill={liked ? 'currentColor' : 'none'}
         stroke="currentColor"
@@ -103,7 +103,7 @@ export default function LikeButton({
       </svg>
       <span className={cn(
         'text-sm font-medium',
-        liked ? 'text-[var(--fanous-color-primary)]' : 'text-[var(--fanous-color-text-secondary)] group-hover:text-[var(--fanous-color-text-primary)]'
+        liked ? 'text-[var(--fanous-color-link)]' : 'text-[var(--fanous-color-text-secondary)] group-hover:text-[var(--fanous-color-text-primary)]'
       )}>
         {/* Accessible name = action + visible count (label-in-name) */}
         <span className="sr-only">{liked ? t.community.unlike : t.community.like}</span>{' '}
