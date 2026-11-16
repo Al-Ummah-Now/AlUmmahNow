@@ -9,7 +9,7 @@
  */
 import React, { useId, useState } from 'react';
 import { BookOpen, Languages, Loader2, X } from 'lucide-react';
-import { captionMinutesCanStart, isCaptionJobActive, type CaptionMinutesUsage, type CaptionsTranslations, fillTemplate, type TemplateParams } from '@al-ummah/shared-types';
+import { FEATURE_OFF_CODE, captionMinutesCanStart, isCaptionJobActive, type CaptionMinutesUsage, type CaptionsTranslations, fillTemplate, type TemplateParams } from '@al-ummah/shared-types';
 import { reportError } from '@/lib/errors/reporter';
 import { SUPPORTED_LANGUAGES } from '@/lib/api/subtitles-types';
 import { cancelCaptionJob, startCaptionTranslation, type CaptionJobView } from '@/lib/api/caption-drafts';
@@ -32,6 +32,8 @@ export interface CaptionTranslateProps {
   label: (code: string) => string;
   reload: () => Promise<void>;
   onClose: () => void;
+  /** The server answered 404 feature_off (translation switched off meanwhile): the features are read again */
+  onFeatureOff?: () => void;
 }
 
 /** Fills {name} placeholders; numbers in the page's digits (locale-format). */
@@ -104,7 +106,7 @@ export function TranslationJobs({ videoId, jobs, t, lang = 'en', label, confirm,
 }
 
 /** The Translate form for one source draft (opened from its row). */
-export default function CaptionTranslate({ videoId, sourceLanguage, jobs, minutes, draftLanguages, t, lang, confirm, label, reload, onClose }: CaptionTranslateProps) {
+export default function CaptionTranslate({ videoId, sourceLanguage, jobs, minutes, draftLanguages, t, lang, confirm, label, reload, onClose, onFeatureOff }: CaptionTranslateProps) {
   const fill = (template: string, values: TemplateParams) => fillIn(lang, template, values);
   const ids = useId();
   const tt = t.translate;
@@ -143,7 +145,10 @@ export default function CaptionTranslate({ videoId, sourceLanguage, jobs, minute
     const res = await startCaptionTranslation(videoId, sourceLanguage, chosen, replace);
     setBusy(false);
     if (!res.ok) {
-      if (res.status === 402 && res.details?.usage) {
+      if (res.status === 404 && res.error === FEATURE_OFF_CODE) {
+        onFeatureOff?.();
+        onClose();
+      } else if (res.status === 402 && res.details?.usage) {
         setRefusal({ usage: res.details.usage as CaptionMinutesUsage, minutesNeeded });
         setNotice(tt.noMinutes);
       } else if (res.error === 'draft_exists' && !replace) {
@@ -151,7 +156,7 @@ export default function CaptionTranslate({ videoId, sourceLanguage, jobs, minute
         const yes = await confirm({ title: fill(tt.replaceTitle, { language }), description: fill(tt.replaceBody, { language }), confirmLabel: tt.replace, cancelLabel: tt.cancel, danger: true });
         if (yes) await start(true);
       } else {
-        setNotice(res.error === 'video_not_ready' ? tt.notReady : res.error === 'translation_paused' ? tt.paused : tt.requestFailed);
+        setNotice(res.error === 'video_not_ready' ? tt.notReady : tt.requestFailed);
         if (res.status >= 500 || res.status === 0) reportError(new Error(`caption translation failed: ${res.error}`), { shown: true, status: res.status, extra: { videoId, sourceLanguage } });
       }
       return;

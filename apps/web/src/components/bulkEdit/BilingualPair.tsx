@@ -59,7 +59,6 @@ export function BilingualPair({ legend, labels, children, ticked, onTick, tickLa
   const failureText = (error: unknown) => {
     if (!(error instanceof TranslateFailure)) return ti.failed;
     if (error.code === 'fair_use_limit') return ti.fairUse.replace('{time}', resetTime(error.resetsAt, lang));
-    if (error.code === 'translation_paused') return ti.paused;
     if (error.code === 'budget_spent') return ti.budget;
     return ti.failed;
   };
@@ -75,6 +74,8 @@ export function BilingualPair({ legend, labels, children, ticked, onTick, tickLa
     try {
       result = await translator(text, from, to, { field: field ?? 'title', ...(videoId ? { videoId } : {}) });
     } catch (error) {
+      // Switched off meanwhile: the button goes away (the features are read again), nothing to say
+      if (error instanceof TranslateFailure && error.code === 'feature_off') return;
       setNotes((n) => ({ ...n, [to]: { text: failureText(error), error: true } }));
       return;
     } finally {

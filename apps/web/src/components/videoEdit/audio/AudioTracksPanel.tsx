@@ -3,12 +3,15 @@
 /**
  * Studio's Audio tracks panel (wiki AUN-MULTI-AUDIO §Studio), below Subtitles in the video editor:
  * one row per track (language, name, type, default, status, edit, delete), Add audio track (upload
- * a file or pick a track found in the video's file) and the tier's limit.
+ * a file or pick a track found in the video's file) and how many the plan allows, as a plain fact.
+ * While extra audio tracks are off for the channel (GET /api/me/features `audioTracks`: not in the
+ * owner's plan, or not set up) there is no Add and no count; with no tracks, no panel at all.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AUDIO_TRACK_LANGUAGES, type AudioTracksTranslations, formatNumber, formatCountNoun } from '@al-ummah/shared-types';
 import { AlertTriangle, AudioLines, Loader2, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useFeatures } from '@/hooks/useFeatures';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { reportError } from '@/lib/errors/reporter';
 import {
@@ -29,6 +32,8 @@ export interface AudioTracksPanelProps {
   videoId: string;
   /** The video's language when it is one language: the original audio's first choice */
   spokenLanguage?: string;
+  /** The video's channel: extra tracks follow its owner's plan */
+  channelId?: string;
 }
 
 /** Uploads running in this tab: bytes stored, file size */
@@ -41,8 +46,10 @@ const TONE_CLASS: Record<ReturnType<typeof stateTone>, string> = {
   bad: 'border border-current text-[var(--fanous-color-error-text)]',
 };
 
-export default function AudioTracksPanel({ videoId, spokenLanguage }: AudioTracksPanelProps) {
+export default function AudioTracksPanel({ videoId, spokenLanguage, channelId }: AudioTracksPanelProps) {
   const { t, lang } = useLanguage();
+  const { features } = useFeatures(channelId);
+  const on = features.audioTracks;
   const ta = t.audioTracks as AudioTracksTranslations;
   const reasons = (t.studio?.videos?.review?.reasons ?? {}) as Record<string, string>;
   const { confirm, dialog } = useConfirm();
@@ -181,6 +188,8 @@ export default function AudioTracksPanel({ videoId, spokenLanguage }: AudioTrack
     );
   }
   if (!view) return <>{dialog}</>;
+  // Off for this channel: nothing to add, so no panel unless tracks are already there to manage
+  if (!on && view.tracks.length === 0) return <>{dialog}</>;
 
   const canAdd = view.ready && !limitText;
   const usage = view.limit.unlimited
@@ -196,13 +205,13 @@ export default function AudioTracksPanel({ videoId, spokenLanguage }: AudioTrack
             {ta.title}
           </h3>
           <p className="text-xs text-muted-foreground md:text-sm">{ta.hint}</p>
-          {/* Not shown when the tier gives none: the notice below says so */}
-          {(view.limit.unlimited || view.limit.allowed > 0) && (
+          {on && (view.limit.unlimited || view.limit.allowed > 0) && (
             <p data-testid="audio-tracks-usage" className="text-xs font-medium text-foreground">
               {usage}
             </p>
           )}
         </div>
+        {on && (
         <button
           type="button"
           data-testid="audio-track-add"
@@ -214,9 +223,10 @@ export default function AudioTracksPanel({ videoId, spokenLanguage }: AudioTrack
           <Plus className="h-4 w-4" aria-hidden />
           {ta.add}
         </button>
+        )}
       </div>
 
-      {(!view.ready || limitText) && (
+      {on && (!view.ready || limitText) && (
         <p id={`audio-tracks-why-${videoId}`} data-testid="audio-tracks-limit" className="rounded-lg border border-dashed border-border bg-muted px-3 py-2 text-sm text-foreground">
           {!view.ready ? ta.notReady : limitText}
         </p>
@@ -236,7 +246,7 @@ export default function AudioTracksPanel({ videoId, spokenLanguage }: AudioTrack
       )}
 
       {/* Only an invitation when a track can be added; otherwise the notice above explains why not */}
-      {view.tracks.length === 0 && canAdd && (
+      {view.tracks.length === 0 && on && canAdd && (
         <p data-testid="audio-tracks-empty" className="rounded-xl border border-dashed border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
           {ta.empty}
         </p>
