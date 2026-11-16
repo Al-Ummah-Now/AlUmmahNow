@@ -74,7 +74,7 @@ describe('local configs', () => {
     assert.equal(limits.get('WATCH_TIME_LIMITER'), 6);
     // The deployed production config is untouched
     const prod = raw(api.dir, api.config);
-    assert.equal((prod.vars as Json).TURNSTILE_MODE, 'off');
+    assert.equal((prod.vars as Json).TURNSTILE_MODE, 'monitor');
     assert.equal(((prod.ratelimits as Json[]).find((r) => r.name === 'REPORT_LIMITER')!.simple as Json).limit, 10);
   });
 
