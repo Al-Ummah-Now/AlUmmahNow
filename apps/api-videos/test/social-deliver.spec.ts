@@ -11,6 +11,7 @@ import {
 	normalizeSocialSettings,
 	verifyWebhookSignature,
 	spendMonth,
+	socialFailureReason,
 } from '@al-ummah/shared-types';
 import { SqliteD1 } from './search-sqlite-d1';
 import { MemoryBucket, MemoryQueue, videoFixture } from './helpers';
@@ -20,6 +21,7 @@ import { attemptPost, attemptWebhook, composePost, giveUpPost, planEvent, requeu
 import { tokenBound } from '../src/lib/social/connect';
 import { writeCredentials, type SocialEnv } from '../src/lib/social/platform';
 import type { SocialContent } from '../src/lib/social/content';
+import { socialInternalRouter } from '../src/routers/social.router';
 
 const KEK = `1:${Buffer.alloc(32, 7).toString('base64')}`;
 const WEB = 'https://videos.example.test';
@@ -218,6 +220,31 @@ describe('posting', () => {
 		const d = (await giveUpPost(t.env, deliveryId, 'Mastodon post: HTTP 503 down'))!;
 		assert.equal(d.status, 'failed');
 		assert.match(d.last_error!, /HTTP 503/);
+	});
+
+	it('the admin overview names the channel and gives the reason, keeping the raw text', async () => {
+		const { deliveryId } = await planned('mastodon');
+		await giveUpPost(t.env, deliveryId, 'media is 112 MB; mastodon takes up to 40 MB');
+		const res = await socialInternalRouter.request('/admin', {}, t.env as never);
+		assert.equal(res.status, 200);
+		const body = (await res.json()) as { recentFailures: Array<Record<string, unknown>> };
+		const f = body.recentFailures.find((r) => r.id === deliveryId)!;
+		assert.equal(f.channel_name, 'Noor Channel');
+		assert.deepEqual(f.channel_name_localized, { ar: 'قناة نور' });
+		assert.equal(f.reason, 'video_too_large');
+		assert.match(String(f.last_error), /112 MB/);
+	});
+});
+
+describe('failures explained (Studio and the admin page)', () => {
+	it('maps stored errors to a reason, never shows raw codes', () => {
+		assert.equal(socialFailureReason('reconnect_needed: token revoked'), 'reconnect_needed');
+		assert.equal(socialFailureReason('x publish: HTTP 401 Unauthorized'), 'reconnect_needed');
+		assert.equal(socialFailureReason('auth: token expired'), 'reconnect_needed');
+		assert.equal(socialFailureReason('media is 112 MB; bluesky takes up to 50 MB'), 'video_too_large');
+		assert.equal(socialFailureReason('x_budget_reached'), 'x_budget_reached');
+		assert.equal(socialFailureReason('Mastodon post: HTTP 503 down'), 'generic');
+		assert.equal(socialFailureReason(null), 'generic');
 	});
 });
 

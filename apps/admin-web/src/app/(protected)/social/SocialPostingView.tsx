@@ -8,14 +8,15 @@ import { clearSocialCredentials, saveSocialCredentials, saveSocialSettings, type
 import { useConfirm } from '@/components/content/actions';
 import { ErrorAlert, cardClass, fieldClass, linkClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatDate, formatNumber, type MessageKey } from '@/i18n/translate';
+import { formatDate, formatNumber, translateDynamic, type MessageKey } from '@/i18n/translate';
+import { intlLocale } from '@/i18n/intl-locale';
 import { logger } from '@/lib/logger-client';
 
 const STATUSES = ['sent', 'queued', 'sending', 'failed', 'blocked', 'cancelled'] as const;
 const ACCOUNT_STATUSES = ['active', 'needs_reconnect', 'revoked', 'suspended'] as const;
 
 function usd(value: number, locale: string): string {
-  return new Intl.NumberFormat(locale, { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 3 }).format(value);
+  return new Intl.NumberFormat(intlLocale(locale), { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 3 }).format(value);
 }
 
 /** Admin → Social posting: kill switches, the X cap, network setup, activity, failures and the change history. */
@@ -268,9 +269,9 @@ export function SocialPostingView({ view, history, canEdit }: { view: SocialAdmi
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section className={cardClass} aria-labelledby={`${ids}-activity`}>
-          <h2 id={`${ids}-activity`} className="text-lg font-semibold text-fg mb-4">{t('socialPosting.activityTitle')}</h2>
+          <h2 id={`${ids}-activity`} className="text-lg font-semibold text-fg mb-4">{t('socialPosting.activityTitle', { days: 7 })}</h2>
           {view.deliveries7d.length === 0 ? (
-            <p className="text-sm text-fg-muted">{t('socialPosting.activityNone')}</p>
+            <p className="text-sm text-fg-muted">{t('socialPosting.activityNone', { days: 7 })}</p>
           ) : (
             <div className="overflow-x-auto rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-focus" tabIndex={0} role="region" aria-labelledby={`${ids}-activity`}>
               <table className="w-full text-sm" data-testid="social-activity">
@@ -330,8 +331,24 @@ export function SocialPostingView({ view, history, canEdit }: { view: SocialAdmi
                   <tr key={f.id} className="border-t border-border align-top">
                     <td className={td}>{net(f.network)}</td>
                     <td className={td} dir="auto">{f.entity_title || f.entity_id}</td>
-                    <td className={`${td} font-mono text-xs`} dir="ltr">{f.channel_id}</td>
-                    <td className={`${td} break-words text-xs`} dir="ltr">{f.last_error}</td>
+                    <td className={td}>
+                      {f.channel_name ? (
+                        <Link href={`/channels/${encodeURIComponent(f.channel_id)}`} className={`${linkClass} break-words`} dir="auto" data-testid="social-failure-channel">
+                          {f.channel_name_localized?.[locale] || f.channel_name}
+                        </Link>
+                      ) : (
+                        <span className="text-fg-muted">{t('socialPosting.channelGone')}</span>
+                      )}
+                    </td>
+                    <td className={`${td} break-words`}>
+                      <p data-testid="social-failure-reason">{translateDynamic(t, 'socialPosting.reasons', f.reason)}</p>
+                      {f.last_error ? (
+                        <details className="mt-1 text-xs text-fg-muted">
+                          <summary className="cursor-pointer select-none rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-focus">{t('socialPosting.showDetails')}</summary>
+                          <code className="mt-1 block break-words font-mono" dir="ltr">{f.last_error}</code>
+                        </details>
+                      ) : null}
+                    </td>
                     <td className={`${td} whitespace-nowrap`}>{formatDate(f.updated_at, locale, true)}</td>
                   </tr>
                 ))}

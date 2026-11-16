@@ -772,7 +772,21 @@ export interface SocialAdminView {
   spend: { month: string; x: { costUsd: number; posts: number; capUsd: number } };
   deliveries7d: { network: string; status: string; n: number }[];
   accounts: { network: string; status: string; n: number }[];
-  recentFailures: { id: string; channel_id: string; network: string; event: string; entity_id: string; entity_title: string | null; last_error: string | null; updated_at: string }[];
+  recentFailures: {
+    id: string;
+    channel_id: string;
+    /** The channel's name (null when the channel is gone); shown instead of the id */
+    channel_name: string | null;
+    channel_name_localized?: Record<string, string>;
+    network: string;
+    event: string;
+    entity_id: string;
+    entity_title: string | null;
+    /** shared-types socialFailureReason(last_error): explained in en/ar; the raw text sits behind a toggle */
+    reason: import('@al-ummah/shared-types').SocialFailureReason;
+    last_error: string | null;
+    updated_at: string;
+  }[];
 }
 
 export interface SocialHistoryEntry {

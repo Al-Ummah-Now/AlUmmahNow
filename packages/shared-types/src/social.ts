@@ -450,3 +450,30 @@ export interface SocialAttemptResult {
   /** Systemic failure the admin should hear about (a platform credential, the cap), not the creator's own setup */
   flagAdmin?: boolean;
 }
+
+/** Why a post failed, in words a person can act on: Studio and the admin page explain a stored error with these. */
+export const SOCIAL_FAILURE_REASONS = [
+	'paused_by_admin',
+	'x_budget_reached',
+	'no_longer_public',
+	'reconnect_needed',
+	'video_too_long',
+	'video_too_large',
+	'video_not_available',
+	'network_not_configured',
+	'generic',
+] as const;
+export type SocialFailureReason = (typeof SOCIAL_FAILURE_REASONS)[number];
+
+/**
+ * A delivery's stored error (`<code>: <detail>` from our own checks, or the adapter's `<network> <step>: HTTP <status> <reason>`
+ * and `media is <n> MB; ...`) → the reason it is explained with. The raw text stays available for admins.
+ */
+export function socialFailureReason(error: string | null | undefined): SocialFailureReason {
+	if (!error) return 'generic';
+	const head = error.split(':')[0]!.trim();
+	if ((SOCIAL_FAILURE_REASONS as readonly string[]).includes(head)) return head as SocialFailureReason;
+	if (head === 'auth' || /\bHTTP 401\b/.test(error)) return 'reconnect_needed';
+	if (/^media is \d+ MB\b/.test(error)) return 'video_too_large';
+	return 'generic';
+}

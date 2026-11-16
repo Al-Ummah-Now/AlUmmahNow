@@ -2,6 +2,7 @@
 
 /** Studio → Social, from the browser (api-videos /api/social/channel/:channelId/*, signed in). */
 import type { SocialAccountView, SocialEvent, SocialFormat, SocialLanguage, SocialNetwork, SocialTemplate, SocialWebhookEvent, SocialWebhookView } from '@al-ummah/shared-types';
+import { socialFailureReason, type SocialFailureReason } from '@al-ummah/shared-types';
 import { fetchClientAuthInfo } from '@/lib/auth/client-token';
 import { getApiUrl } from '@/lib/runtime-config';
 import type { ShareKit, SocialOverview } from './social';
@@ -55,10 +56,8 @@ export const socialClient = {
 };
 
 /** A delivery's stored error → the reason key Studio explains it with. */
-export function reasonKey(error: string | undefined): string {
-  if (!error) return 'generic';
-  const head = error.split(':')[0]!.trim();
-  return ['paused_by_admin', 'x_budget_reached', 'no_longer_public', 'reconnect_needed', 'video_too_long', 'video_too_large', 'video_not_available', 'network_not_configured'].includes(head) ? head : 'generic';
+export function reasonKey(error: string | undefined): SocialFailureReason {
+  return socialFailureReason(error);
 }
 
 /** Whether a failure is fixed by posting a link instead of the video. */

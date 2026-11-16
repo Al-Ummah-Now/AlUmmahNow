@@ -44,6 +44,7 @@ import {
 	SOCIAL_LANGUAGES,
 	SOCIAL_WEBHOOK_EVENTS,
 	can,
+	channelNameFields,
 	formatsFor,
 	isShort,
 	isSocialNetwork,
@@ -51,6 +52,7 @@ import {
 	renderTemplate,
 	socialFeedPath,
 	isSocialFeedKind,
+	socialFailureReason,
 	spendMonth,
 	templateProblems,
 	webhookUrlProblem,
@@ -59,6 +61,7 @@ import {
 	type SocialTemplate,
 	type SocialWebhookEvent,
 	type VideoObject,
+	type NamedChannel,
 } from '@al-ummah/shared-types';
 import { buildRss, feedItems, FEED_CACHE_SECONDS } from '../lib/social/feed';
 import { logger } from '../lib/logger';
@@ -619,6 +622,17 @@ socialInternalRouter.get('/admin', async (c) => {
 			db.prepare('SELECT network, status, COUNT(*) AS n FROM social_accounts GROUP BY network, status').all<{ network: string; status: string; n: number }>(),
 		]);
 		const tg = await readCredentials(c.env, 'telegram');
+		// Admins see channel names, never ids (at most 20 rows, so at most 20 small reads of the channel records)
+		const failureRows = failures.results ?? [];
+		const channelIds = [...new Set(failureRows.map((f) => String(f.channel_id ?? '')).filter(Boolean))];
+		const names = new Map(
+			await Promise.all(
+				channelIds.map(async (id) => {
+					const channel = await new R2Repository<NamedChannel>(c.env.channels).getObject(id).catch(() => null);
+					return [id, channel ? channelNameFields(channel) : null] as const;
+				}),
+			),
+		);
 		return c.json({
 			settings,
 			readiness,
@@ -627,7 +641,16 @@ socialInternalRouter.get('/admin', async (c) => {
 			spend: { month: spendMonth(), x: { costUsd: spend.costMicros / 1_000_000, posts: spend.posts, capUsd: settings.xMonthlyCapUsd } },
 			deliveries7d: counts.results ?? [],
 			accounts: accounts.results ?? [],
-			recentFailures: (failures.results ?? []).map((f) => ({ ...f, updated_at: new Date(Number(f.updated_at)).toISOString() })),
+			recentFailures: failureRows.map((f) => {
+				const name = names.get(String(f.channel_id ?? ''));
+				return {
+					...f,
+					channel_name: name?.channelName || null,
+					...(name?.channelNameLocalized ? { channel_name_localized: name.channelNameLocalized } : {}),
+					reason: socialFailureReason(typeof f.last_error === 'string' ? f.last_error : null),
+					updated_at: new Date(Number(f.updated_at)).toISOString(),
+				};
+			}),
 		});
 	} catch (error) {
 		return fail(c, error);

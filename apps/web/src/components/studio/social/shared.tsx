@@ -7,7 +7,16 @@ import type { SocialNetwork } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-export const fill = (text: string, values: Record<string, string | number>) => text.replace(/\{(\w+)\}/g, (m, k: string) => (k in values ? String(values[k]) : m));
+/** A number in the page's digits: Eastern Arabic ٠–٩ in Arabic (explicit numbering system, never implicit `ar`). */
+export const formatCount = (value: number, locale: string) => new Intl.NumberFormat(locale === 'ar' ? 'ar-u-nu-arab' : 'en-u-nu-latn').format(value);
+
+/** `{name}` placeholders; numbers are written in the locale's digits when `locale` is given. */
+export const fill = (text: string, values: Record<string, string | number>, locale?: string) =>
+  text.replace(/\{(\w+)\}/g, (m, k: string) => {
+    if (!(k in values)) return m;
+    const v = values[k]!;
+    return typeof v === 'number' && locale ? formatCount(v, locale) : String(v);
+  });
 
 /** A section card: heading, intro, body. */
 export function Section({ id, title, intro, children, testId, action }: { id: string; title: string; intro?: string; children: ReactNode; testId?: string; action?: ReactNode }) {
