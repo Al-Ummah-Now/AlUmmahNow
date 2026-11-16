@@ -90,6 +90,18 @@
     white-space: nowrap;
   }
 }
+/*
+ * The QA / STAGE badge stays beside the logo on a phone. The shared header tucks it onto the
+ * logo's corner below 400px to make room for the videos site's account button; the admin header
+ * has room at 320px, and on the logo the badge read as an overlap (design audit, #1522).
+ */
+@media (max-width: 24.99rem) {
+  .aun-header .aun-env {
+    align-self: center;
+    margin: 0;
+    box-shadow: none;
+  }
+}
 
 /* The Light / Dark toggle (PreferencesControls): the Moon in light mode, the Sun in dark */
 html.dark .mode-moon,

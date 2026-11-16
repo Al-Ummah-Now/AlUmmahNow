@@ -20,6 +20,7 @@ import { linkClass } from '@/components/ui';
 import { ActionFeedback, ConfirmButton } from '@/components/content/actions';
 import { Chip, Notice, PageHeader, smallButtonClass, statusTone } from '@/components/content/parts';
 import { adminVideoTitle } from '@/lib/video-title';
+import { formatClock } from '@al-ummah/shared-types';
 import { BulkBar } from '@/components/list/BulkBar';
 import { DataTable, type DataColumn } from '@/components/list/DataTable';
 import { FiltersBar, type FilterField } from '@/components/list/FiltersBar';
@@ -321,6 +322,7 @@ export function VideosList() {
       id: 'actions',
       header: <span className="sr-only">{t('list.actions')}</span>,
       align: 'end',
+      footer: true,
       cell: (v) =>
         v.isHidden ? (
           <button type="button" className={smallButtonClass} disabled={!!busy} onClick={() => changePublished([v.id], true, `republish:${v.id}`)} aria-label={t('videos.republishTitle', { title: titleOf(v) })} data-testid="video-row-republish">

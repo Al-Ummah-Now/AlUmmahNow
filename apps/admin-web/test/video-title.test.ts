@@ -5,6 +5,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import * as React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { formatClock } from '@al-ummah/shared-types';
+import { MetaLine, cardTable } from '../src/components/content/parts';
 import { adminVideoTitle } from '../src/lib/video-title';
 import { PRIMARY_MIN_WIDTH, columnDisplayClass, columnWidthClass } from '../src/components/list/DataTable';
 
@@ -38,6 +42,8 @@ describe('DataTable column widths', () => {
     assert.equal(columnDisplayClass({ wide: true }, true), 'hidden md:table-cell');
     assert.equal(columnDisplayClass({}, true), 'block md:table-cell');
     assert.equal(columnDisplayClass({}, false), '');
+    assert.equal(columnDisplayClass({ footer: true }, true), 'flex justify-end md:table-cell');
+    assert.equal(columnDisplayClass({ footer: true }, false), '');
   });
   it('the Videos list sets a wider title column and keeps short columns on one line, and shows no ids', () => {
     const src = readFileSync(new URL('../src/app/(protected)/videos/VideosList.tsx', import.meta.url), 'utf8');
@@ -51,5 +57,29 @@ describe('DataTable column widths', () => {
     const util = css.slice(css.indexOf('@utility clamp-fade-2'), css.indexOf('@layer base'));
     assert.ok(util.includes('mask-image'));
     assert.doesNotMatch(util, /line-clamp|text-overflow/);
+  });
+});
+
+// tsx compiles the components' JSX in classic mode: they read the global React
+(globalThis as unknown as { React: unknown }).React = React;
+
+describe('phone card meta lines and numbers', () => {
+  it('isolates every part so an Arabic name never reorders a number or a date, and skips empty parts', () => {
+    const html = renderToStaticMarkup(React.createElement(MetaLine as never, { parts: ['قناة الدروس', null, '١٢٬٨٤٠ مشاهدة', '', false] } as never));
+    assert.equal(html, '<span class=""><span><bdi>قناة الدروس</bdi></span><span> · <bdi>١٢٬٨٤٠ مشاهدة</bdi></span></span>');
+  });
+  it('durations are ٠–٩ in Arabic through the shared formatter', () => {
+    assert.equal(formatClock('ar', 3725), '١:٠٢:٠٥');
+    assert.equal(formatClock('en', 3725), '1:02:05');
+    assert.doesNotMatch(readFileSync(new URL('../src/app/(protected)/videos/VideosList.tsx', import.meta.url), 'utf8'), /padStart\(2/);
+  });
+  it('raw list tables become cards on a phone with the actions cell as an end-aligned footer', () => {
+    assert.match(cardTable.actions, /flex justify-end/);
+    assert.match(cardTable.actions, /md:table-cell/);
+    for (const page of ['comments', 'community', 'playlists']) {
+      const src = readFileSync(new URL(`../src/app/(protected)/${page}/page.tsx`, import.meta.url), 'utf8');
+      assert.match(src, /className=\{cardTable\.actions\}/, page);
+      assert.match(src, /<MetaLine/, page);
+    }
   });
 });

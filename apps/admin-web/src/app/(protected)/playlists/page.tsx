@@ -7,9 +7,10 @@ import { formatDate, formatNumber } from '@/i18n/translate';
 import { ErrorAlert, linkClass } from '@/components/ui';
 import { FilterForm } from '@/components/content/FilterForm';
 import { DeleteRowButton } from '@/components/content/actions';
-import { Chip, CursorPager, EmptyState, PageHeader, tableWrapClass, tdClass, thClass, wideOnly } from '@/components/content/parts';
+import { Chip, CursorPager, EmptyState, MetaLine, PageHeader, cardTable, tdClass, thClass, wideOnly } from '@/components/content/parts';
 import { PAGE_SIZE, hrefWith, pickParams, type SearchParams } from '@/components/content/query';
 import { logger } from '@/lib/logger';
+import { adminUserName } from '@/lib/user-name';
 import { getNames } from '@/lib/api/audit';
 
 export const dynamic = 'force-dynamic';
@@ -52,45 +53,61 @@ export default async function PlaylistsPage({ searchParams }: { searchParams: Pr
       {!data && <ErrorAlert testId="playlists-error">{t('content.loadFailed')}</ErrorAlert>}
       {data && data.items.length === 0 && <EmptyState>{t('content.empty')}</EmptyState>}
       {data && data.items.length > 0 && (
-        <div className={tableWrapClass}>
-          <table className="w-full" data-testid="playlists-table">
+        <div className={cardTable.wrap}>
+          <table role="table" className={cardTable.table} data-testid="playlists-table">
             <caption className="sr-only">{t('playlists.tableCaption')}</caption>
-            <thead className="border-b border-border">
-              <tr>
-                <th className={thClass} scope="col">{t('playlists.colPlaylist')}</th>
-                <th className={`${thClass} ${wideOnly}`} scope="col">{t('playlists.colChannel')}</th>
-                <th className={`${thClass} ${wideOnly}`} scope="col">{t('playlists.colOwner')}</th>
-                <th className={`${thClass} ${wideOnly} text-end`} scope="col">{t('playlists.colVideos')}</th>
-                <th className={`${thClass} ${wideOnly}`} scope="col">{t('playlists.colCreated')}</th>
-                {canDelete && <th className={thClass} scope="col"><span className="sr-only">{t('content.actions')}</span></th>}
+            <thead role="rowgroup" className={`${cardTable.head} border-b border-border`}>
+              <tr role="row">
+                <th role="columnheader" className={thClass} scope="col">{t('playlists.colPlaylist')}</th>
+                <th role="columnheader" className={`${thClass} ${wideOnly}`} scope="col">{t('playlists.colChannel')}</th>
+                <th role="columnheader" className={`${thClass} ${wideOnly}`} scope="col">{t('playlists.colOwner')}</th>
+                <th role="columnheader" className={`${thClass} ${wideOnly} text-end`} scope="col">{t('playlists.colVideos')}</th>
+                <th role="columnheader" className={`${thClass} ${wideOnly}`} scope="col">{t('playlists.colCreated')}</th>
+                {canDelete && <th role="columnheader" className={thClass} scope="col"><span className="sr-only">{t('content.actions')}</span></th>}
               </tr>
             </thead>
-            <tbody>
-              {data.items.map((p) => (
-                <tr key={p.id} className="border-b border-border last:border-0" data-testid="playlist-row" data-playlist-id={p.id}>
-                  <td className={tdClass}>
-                    <span className="block font-medium text-fg break-words" dir="auto">{localizedPlaylistText(p.title, p.titleLocalized, locale) || Object.values(p.titleLocalized ?? {}).find((x) => x?.trim()) || <span className="italic text-fg-muted">{t('content.untitled')}</span>}</span>
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      <Chip tone="neutral">{p.isPublic ? t('videos.public') : p.isUnlisted ? t('playlists.unlisted') : t('videos.private')}</Chip>
-                      {!p.channelId && <Chip tone="neutral">{t('playlists.personal')}</Chip>}
-                      <span className="md:hidden text-xs text-fg-muted">{formatNumber(p.videoCount, locale)} · {p.createdAt ? formatDate(p.createdAt, locale) : ''}</span>
-                    </div>
-                  </td>
-                  <td className={`${tdClass} ${wideOnly} text-sm`}>
-                    {p.channelId ? <Link href={`/channels/${encodeURIComponent(p.channelId)}`} className={`${linkClass} break-words`} dir="auto" data-testid="playlist-channel-link">{names.items[`channel:${p.channelId}`]?.title || t('content.unnamedChannel')}</Link> : <span className="text-fg-subtle">{t('content.none')}</span>}
-                  </td>
-                  <td className={`${tdClass} ${wideOnly} text-sm`}>
-                    {p.ownerId ? <Link href={`/users/${encodeURIComponent(p.ownerId)}`} className={`${linkClass} break-words`} dir="auto" data-testid="playlist-owner-link">{names.users[p.ownerId]?.name || names.users[p.ownerId]?.userName || t('content.unnamedAccount')}</Link> : <span className="text-fg-subtle">{t('content.none')}</span>}
-                  </td>
-                  <td className={`${tdClass} ${wideOnly} text-end tabular-nums`}>{formatNumber(p.videoCount, locale)}</td>
-                  <td className={`${tdClass} ${wideOnly} text-sm text-fg-muted whitespace-nowrap`}>{p.createdAt ? <time dateTime={p.createdAt}>{formatDate(p.createdAt, locale)}</time> : t('content.none')}</td>
-                  {canDelete && (
-                    <td className={tdClass}>
-                      <DeleteRowButton title={t('playlists.deleteTitle')} body={t('playlists.deleteBody')} testId="playlist-delete" onDelete={deletePlaylist.bind(null, p.id)} />
+            <tbody role="rowgroup" className={cardTable.body}>
+              {data.items.map((p) => {
+                const channelName = p.channelId ? names.items[`channel:${p.channelId}`]?.title || t('content.unnamedChannel') : null;
+                // Display name, else email, else "Unnamed account" (never the id or an @handle)
+                const ownerName = p.ownerId ? adminUserName({ displayName: names.users[p.ownerId]?.name, email: names.users[p.ownerId]?.email }, t('content.unnamedAccount')) : null;
+                const title = localizedPlaylistText(p.title, p.titleLocalized, locale) || Object.values(p.titleLocalized ?? {}).find((x) => x?.trim());
+                return (
+                  <tr role="row" key={p.id} className={cardTable.row} data-testid="playlist-row" data-playlist-id={p.id}>
+                    <td role="cell" className={cardTable.cell}>
+                      <span className="block font-medium text-fg break-words" dir="auto">{title || <span className="italic text-fg-muted">{t('content.untitled')}</span>}</span>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        <Chip tone="neutral">{p.isPublic ? t('videos.public') : p.isUnlisted ? t('playlists.unlisted') : t('videos.private')}</Chip>
+                        {!p.channelId && <Chip tone="neutral">{t('playlists.personal')}</Chip>}
+                      </div>
+                      {/* Phone: the channel, owner, size and date (their columns are hidden) */}
+                      <MetaLine
+                        className="block md:hidden text-xs text-fg-muted mt-2"
+                        testId="playlist-meta"
+                        parts={[
+                          channelName && p.channelId ? <Link key="c" href={`/channels/${encodeURIComponent(p.channelId)}`} className={linkClass}>{channelName}</Link> : null,
+                          ownerName && p.ownerId ? <Link key="o" href={`/users/${encodeURIComponent(p.ownerId)}`} className={linkClass}>{ownerName}</Link> : null,
+                          t('playlists.videoCount', { count: p.videoCount }),
+                          p.createdAt ? <time key="d" dateTime={p.createdAt}>{formatDate(p.createdAt, locale)}</time> : null,
+                        ]}
+                      />
                     </td>
-                  )}
-                </tr>
-              ))}
+                    <td role="cell" className={`${tdClass} ${wideOnly} text-sm`}>
+                      {channelName && p.channelId ? <Link href={`/channels/${encodeURIComponent(p.channelId)}`} className={`${linkClass} break-words`} dir="auto" data-testid="playlist-channel-link">{channelName}</Link> : <span className="text-fg-subtle">{t('content.none')}</span>}
+                    </td>
+                    <td role="cell" className={`${tdClass} ${wideOnly} text-sm`}>
+                      {ownerName && p.ownerId ? <Link href={`/users/${encodeURIComponent(p.ownerId)}`} className={`${linkClass} break-words`} dir="auto" data-testid="playlist-owner-link">{ownerName}</Link> : <span className="text-fg-subtle">{t('content.none')}</span>}
+                    </td>
+                    <td role="cell" className={`${tdClass} ${wideOnly} text-end tabular-nums`}>{formatNumber(p.videoCount, locale)}</td>
+                    <td role="cell" className={`${tdClass} ${wideOnly} text-sm text-fg-muted whitespace-nowrap`}>{p.createdAt ? <time dateTime={p.createdAt}>{formatDate(p.createdAt, locale)}</time> : t('content.none')}</td>
+                    {canDelete && (
+                      <td role="cell" className={cardTable.actions}>
+                        <DeleteRowButton title={t('playlists.deleteTitle')} body={t('playlists.deleteBody')} testId="playlist-delete" onDelete={deletePlaylist.bind(null, p.id)} />
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

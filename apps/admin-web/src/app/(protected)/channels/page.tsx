@@ -6,9 +6,11 @@ import { getI18n } from '@/i18n/server';
 import { formatDate, formatNumber } from '@/i18n/translate';
 import { ErrorAlert, linkClass } from '@/components/ui';
 import { FilterForm } from '@/components/content/FilterForm';
-import { Chip, EmptyState, Notice, PageHeader, Pager, tableWrapClass, tdClass, thClass, wideOnly } from '@/components/content/parts';
+import { Chip, EmptyState, MetaLine, Notice, PageHeader, Pager, cardTable, tdClass, thClass, wideOnly } from '@/components/content/parts';
 import { PAGE_SIZE, hrefWith, pickParams, type SearchParams } from '@/components/content/query';
 import { logger } from '@/lib/logger';
+import { getNames } from '@/lib/api/audit';
+import { adminUserName } from '@/lib/user-name';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,6 +42,11 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
     { value: 'yes', label: yes },
     { value: 'no', label: no },
   ];
+
+  // Owners by name (display name, else email, else "Unnamed account"): the same person reads the
+  // same on every list, never an id or an @handle
+  const names = data ? await getNames({ users: data.items.flatMap((ch) => (ch.ownerId ? [ch.ownerId] : [])), items: [] }) : { users: {}, items: {} };
+  const ownerName = (ch: AdminChannelRow) => adminUserName({ displayName: ch.ownerId ? names.users[ch.ownerId]?.name : null, email: (ch.ownerId ? names.users[ch.ownerId]?.email : null) ?? ch.ownerEmail }, t('content.unnamedAccount'));
 
   return (
     <div>
@@ -75,58 +82,65 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
       {data && data.items.length === 0 && <EmptyState>{t('content.empty')}</EmptyState>}
       {data && data.items.length > 0 && (
         <>
-          <div className={tableWrapClass}>
-            <table className="w-full" data-testid="channels-table">
+          <div className={cardTable.wrap}>
+            <table role="table" className={cardTable.table} data-testid="channels-table">
               <caption className="sr-only">{t('channels.tableCaption')}</caption>
-              <thead className="bg-surface-2">
-                <tr>
-                  <th scope="col" className={thClass}>{t('channels.colChannel')}</th>
-                  <th scope="col" className={`${thClass} ${wideOnly}`}>{t('channels.colOwner')}</th>
-                  <th scope="col" className={thClass}>{t('channels.colStatus')}</th>
-                  <th scope="col" className={`${thClass} ${wideOnly} text-end`}>{t('channels.colSubscribers')}</th>
-                  <th scope="col" className={`${thClass} ${wideOnly} text-end`}>{t('channels.colViews')}</th>
-                  <th scope="col" className={`${thClass} ${wideOnly}`}>{t('channels.colCreated')}</th>
+              <thead role="rowgroup" className={`${cardTable.head} bg-surface-2`}>
+                <tr role="row">
+                  <th role="columnheader" scope="col" className={thClass}>{t('channels.colChannel')}</th>
+                  <th role="columnheader" scope="col" className={`${thClass} ${wideOnly}`}>{t('channels.colOwner')}</th>
+                  <th role="columnheader" scope="col" className={thClass}>{t('channels.colStatus')}</th>
+                  <th role="columnheader" scope="col" className={`${thClass} ${wideOnly} text-end`}>{t('channels.colSubscribers')}</th>
+                  <th role="columnheader" scope="col" className={`${thClass} ${wideOnly} text-end`}>{t('channels.colViews')}</th>
+                  <th role="columnheader" scope="col" className={`${thClass} ${wideOnly}`}>{t('channels.colCreated')}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody role="rowgroup" className={`${cardTable.body} md:divide-y md:divide-border`}>
                 {data.items.map((ch) => (
-                  <tr key={ch.id} className="hover:bg-surface-hover" data-testid="channel-row" data-channel-id={ch.id}>
-                    <td className={tdClass}>
+                  <tr role="row" key={ch.id} className={`${cardTable.row} md:hover:bg-surface-hover`} data-testid="channel-row" data-channel-id={ch.id}>
+                    <td role="cell" className={cardTable.cell}>
                       <div className="flex items-start gap-3 min-w-0">
                         {ch.avatarUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element -- remote avatars from the images CDN
                           <img src={ch.avatarUrl} alt="" className="h-10 w-10 rounded-full object-cover shrink-0 bg-surface-2" loading="lazy" />
                         ) : (
-                          <span aria-hidden="true" className="h-10 w-10 rounded-full bg-surface-2 shrink-0" />
+                          // No picture: the channel's initial, like the site's avatars
+                          <span aria-hidden="true" className="h-10 w-10 rounded-full bg-surface-2 shrink-0 grid place-items-center text-fg-muted font-semibold" dir="auto">
+                            {Array.from((ch.name || '?').trim())[0]}
+                          </span>
                         )}
                         <div className="min-w-0">
                           <Link href={`/channels/${encodeURIComponent(ch.id)}`} className={`${linkClass} font-medium break-words`} dir="auto">
-                            {ch.name || ch.id}
+                            {ch.name || t('content.unnamedChannel')}
                           </Link>
                           {ch.handle && (
                             <span className="block text-sm text-fg-muted" dir="ltr">
                               @{ch.handle}
                             </span>
                           )}
-                          <span className="block md:hidden text-xs text-fg-muted mt-1" dir="ltr">
-                            {ch.ownerEmail ?? ''}
-                          </span>
-                          <span className="block md:hidden text-xs text-fg-subtle">
-                            {formatNumber(ch.subscribers, locale)} · {formatNumber(ch.views, locale)}
-                          </span>
+                          {/* Phone: the owner, subscribers and views (their columns are hidden) */}
+                          <MetaLine
+                            className="block md:hidden text-xs text-fg-muted mt-1"
+                            testId="channel-meta"
+                            parts={[
+                              ch.ownerId ? <Link key="o" href={`/users/${encodeURIComponent(ch.ownerId)}`} className={linkClass}>{ownerName(ch)}</Link> : null,
+                              t('channels.subscribersCount', { count: ch.subscribers }),
+                              t('videos.viewsCount', { count: ch.views }),
+                            ]}
+                          />
                         </div>
                       </div>
                     </td>
-                    <td className={`${tdClass} ${wideOnly}`}>
+                    <td role="cell" className={`${tdClass} ${wideOnly}`}>
                       {ch.ownerId ? (
-                        <Link href={`/users/${encodeURIComponent(ch.ownerId)}`} className={`${linkClass} text-sm break-words`} dir="ltr">
-                          {ch.ownerEmail ?? t('content.unnamedAccount')}
+                        <Link href={`/users/${encodeURIComponent(ch.ownerId)}`} className={`${linkClass} text-sm break-words`} dir="auto" data-testid="channel-owner-link">
+                          {ownerName(ch)}
                         </Link>
                       ) : (
                         <span className="text-fg-subtle">{t('content.none')}</span>
                       )}
                     </td>
-                    <td className={tdClass}>
+                    <td role="cell" className={cardTable.cell}>
                       <div className="flex flex-wrap gap-1">
                         {ch.isSuspended && <Chip tone="bad" testId="chip-suspended">{t('channels.suspended')}</Chip>}
                         {ch.isVerified && <Chip tone="good" testId="chip-verified">{t('channels.verified')}</Chip>}
@@ -142,9 +156,9 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
                         )}
                       </div>
                     </td>
-                    <td className={`${tdClass} ${wideOnly} text-end tabular-nums`}>{formatNumber(ch.subscribers, locale)}</td>
-                    <td className={`${tdClass} ${wideOnly} text-end tabular-nums`}>{formatNumber(ch.views, locale)}</td>
-                    <td className={`${tdClass} ${wideOnly} text-sm text-fg-muted whitespace-nowrap`}>
+                    <td role="cell" className={`${tdClass} ${wideOnly} text-end tabular-nums`}>{formatNumber(ch.subscribers, locale)}</td>
+                    <td role="cell" className={`${tdClass} ${wideOnly} text-end tabular-nums`}>{formatNumber(ch.views, locale)}</td>
+                    <td role="cell" className={`${tdClass} ${wideOnly} text-sm text-fg-muted whitespace-nowrap`}>
                       {ch.createdAt ? <time dateTime={ch.createdAt}>{formatDate(ch.createdAt, locale)}</time> : t('content.none')}
                     </td>
                   </tr>

@@ -1758,6 +1758,7 @@ const ar: Messages = {
     },
   },
   channels: {
+    subscribersCount: '{count} مشترك',
     title: 'القنوات',
     subtitle: 'جميع القنوات على مرئيات الأمة الآن',
     ownerFilter: 'المالك',
@@ -2013,6 +2014,7 @@ const ar: Messages = {
     deleteBody: 'يُحذف التعليق وردوده.',
   },
   playlists: {
+    videoCount: '{count} مرئي',
     title: 'قوائم التشغيل',
     subtitle: 'قوائم التشغيل في كل القنوات',
     searchLabel: 'العنوان أو المعرّف',
@@ -2033,6 +2035,9 @@ const ar: Messages = {
     morePages: 'الصفحة التالية',
   },
   community: {
+    likesCount: '{count} إعجاب',
+    commentsCount: '{count} تعليق',
+    postTypes: { text: 'نص', image: 'صورة', poll: 'استطلاع', quiz: 'اختبار', video: 'مرئي', gif: 'صورة متحركة', link: 'رابط', article: 'مقالة', cards: 'بطاقات' },
     title: 'المجتمع',
     subtitle: 'منشورات المجتمع في كل القنوات',
     searchLabel: 'نص المنشور أو معرّفه',
