@@ -6,15 +6,15 @@
  * account is being deleted. No upsell and no link: a tier without live never reaches this page
  * (GET /api/me/features hides Live).
  */
-import type { LiveAccess } from '@al-ummah/shared-types';
+import { formatNumber, type LiveAccess } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 
 const hours = (minutes: number, locale: string) =>
-  new Intl.NumberFormat(locale === 'ar' ? 'ar' : 'en', { maximumFractionDigits: 1 }).format(Math.round((minutes / 60) * 10) / 10);
+  formatNumber(locale, Math.round((minutes / 60) * 10) / 10, { maximumFractionDigits: 1 });
 
 /** Null when there is nothing to say (unlimited, or a reason Live is hidden for anyway). */
 export function liveQuotaText(live: LiveAccess, locale: string, text: { usage: string; hoursUsedBody: string; pendingDeletionBody: string }): string | null {
-  const num = (n: number) => new Intl.NumberFormat(locale === 'ar' ? 'ar' : 'en').format(n);
+  const num = (n: number) => formatNumber(locale, n);
   if (live.allowed) {
     if (live.unlimited || live.hoursMonth === null) return null;
     return text.usage

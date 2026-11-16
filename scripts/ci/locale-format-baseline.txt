@@ -91,7 +91,6 @@ apps/web/src/components/studio/analytics/VideoAnalytics.tsx 6
 apps/web/src/components/studio/dashboard/StudioDashboard.tsx 2
 apps/web/src/components/studio/live/GoLive.tsx 2
 apps/web/src/components/studio/live/LiveTab.tsx 1
-apps/web/src/components/studio/live/LiveTierNotice.tsx 2
 apps/web/src/components/studio/site/SiteDomains.tsx 1
 apps/web/src/components/studio/site/SitePageEditor.tsx 1
 apps/web/src/components/studio/videos/DeletedVideos.tsx 2
