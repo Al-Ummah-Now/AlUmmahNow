@@ -1688,6 +1688,8 @@ const en = {
     tierSortOrder: 'Rank',
     helpSortOrder: 'Orders the Upgrade page and every tier picker, lowest first. An upgrade is a tier ranked above the user\'s current one. {min} to {max}.',
     errorNameNotEnglish: 'Write the English name with English letters; the Arabic name goes in its own field.',
+    arabicMissing: 'Arabic missing',
+    arabicMissingHelp: 'Add its Arabic name and Arabic description: a tier needs both languages.',
     errorNameAr: 'Enter the Arabic name.',
     errorDescription: 'Enter the description.',
     errorDescriptionAr: 'Enter the Arabic description.',

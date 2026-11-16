@@ -4,7 +4,7 @@ import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CREATOR_TIER_BOUNDS, CREATOR_TIER_IDS, CREATOR_TIER_TEXT, parseDigits, type CreatorTier } from '@al-ummah/shared-types';
 import type { ActionResult } from '@/lib/api/errors';
-import { isUnexpectedFailure, tierActionMessage, tierEffect, tierFormPayload, tierToForm, validateTierForm, type TierField, type TierFormValues, type TierPayload, tierLabel } from '@/lib/creator-tiers';
+import { isUnexpectedFailure, tierActionMessage, tierEffect, tierFormPayload, tierToForm, validateTierForm, type TierField, type TierFormValues, type TierPayload, tierLabel, arabicMissing } from '@/lib/creator-tiers';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { formatNumber, type MessageKey } from '@/i18n/translate';
 import Link from '@/components/AppLink';
@@ -374,6 +374,11 @@ export function TierEditor({ tiers, counts, invites = {}, defaultTierId, canMana
         <section key={tier.id} id={`tier-${tier.id}`} aria-labelledby={`tier-${tier.id}-title`} className="scroll-mt-6">
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <h2 id={`tier-${tier.id}-title`} className="text-lg font-semibold text-fg">{tierLabel(tier, locale)}</h2>
+            {arabicMissing(tier) && (
+              <Chip tone="warn" testId={`tier-${tier.id}-arabic-missing`}>
+                <span title={t('creators.arabicMissingHelp')}>{t('creators.arabicMissing')}</span>
+              </Chip>
+            )}
             <Chip tone={tier.unlimited ? 'info' : 'good'} testId={`tier-${tier.id}-users`}>
               {(counts[tier.id] ?? 0) === 1 ? t('creators.tierUsersOne') : t('creators.tierUsers', { count: formatNumber(counts[tier.id] ?? 0, locale) })}
             </Chip>
