@@ -145,7 +145,7 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
             <div className="flex flex-wrap gap-2 text-sm text-gray-600 dark:text-gray-400 mb-3">
               {subscriberCount !== undefined && (
                 <span data-testid="channel-subscriber-count">
-                  {formatSubscriberCount(subscriberCount)} {(subscriberCount === 1 ? t.channel.subscriberSingular : t.channel.subscribers).toLowerCase()}
+                  {formatSubscriberCount(subscriberCount, locale)} {(subscriberCount === 1 ? t.channel.subscriberSingular : t.channel.subscribers).toLowerCase()}
                 </span>
               )}
               {channel.videosCount !== undefined && channel.videosCount > 0 && (
@@ -197,6 +197,7 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
   );
 }
 
-function formatSubscriberCount(count: number): string {
-  return formatCompact('en', count);
+/** The page's digits: ٠–٩ on Arabic pages (owner 2026-11-15), never 0–9 beside «٤ مرئيات» */
+function formatSubscriberCount(count: number, locale: string): string {
+  return formatCompact(locale === 'ar' ? 'ar' : 'en', count);
 }
