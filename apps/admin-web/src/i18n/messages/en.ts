@@ -999,6 +999,7 @@ const en = {
     backups: 'Backups: {count}',
   },
   contact: {
+    youLabel: 'You',
     topic: 'Topic',
     colAssignee: 'Assigned to',
     openUnreadMessage: 'Open unread message from {name}',

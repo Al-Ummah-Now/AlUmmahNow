@@ -12,6 +12,7 @@ import { logger } from '@/lib/logger';
 import { ContactActions } from './ContactActions';
 import { DeliveryRetry, RefreshWhileQueued } from './DeliveryRetry';
 import { UserName } from '@/components/audit/UserName';
+import { EmailText } from '@/components/EmailText';
 import { LiveRefresh } from '@/components/LiveRefresh';
 import { MarkReadOnOpen } from './MarkReadOnOpen';
 
@@ -91,8 +92,8 @@ export default async function ContactMessagePage({ params }: PageProps) {
                   {m.name}
                 </h1>
                 <p className="text-fg-muted text-sm">
-                  <a href={`mailto:${m.email}`} className={`${linkClass} underline break-all`} dir="ltr" data-testid="contact-sender-email">
-                    {m.email}
+                  <a href={`mailto:${m.email}`} className={`${linkClass} underline`} dir="ltr" data-testid="contact-sender-email">
+                    <EmailText email={m.email} />
                   </a>
                   {' · '}
                   {translateDynamic(t, 'contactTopic', m.topic)}

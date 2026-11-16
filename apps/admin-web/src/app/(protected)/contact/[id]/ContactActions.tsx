@@ -227,7 +227,7 @@ export function ContactActions({ id, name, status, read, locale, assignedToMe, h
           />
           <div className="mt-3 flex flex-col gap-2">
             <EmailLanguageChoice value={replyLocale} onChange={setReplyLocale} disabled={isSpam || !!busy} testId="contact-reply-locale" />
-            <button type="submit" className={`${primaryButtonClass} w-full disabled:opacity-60`} disabled={isSpam || !!busy || !reply.trim()} data-testid="contact-reply-send">
+            <button type="submit" className={`${primaryButtonClass} w-full disabled:bg-surface-2 disabled:text-fg-muted disabled:border disabled:border-border disabled:cursor-not-allowed`} disabled={isSpam || !!busy || !reply.trim()} data-testid="contact-reply-send">
               {busy === 'reply' ? t('contact.working') : t('contact.replySend')}
             </button>
           </div>
@@ -259,7 +259,7 @@ export function ContactActions({ id, name, status, read, locale, assignedToMe, h
             className={textareaClass}
             data-testid="contact-note-body"
           />
-          <button type="submit" className={`${secondaryButtonClass} w-full mt-3 disabled:opacity-60`} disabled={!!busy || !note.trim()} data-testid="contact-note-add">
+          <button type="submit" className={`${secondaryButtonClass} w-full mt-3 disabled:text-fg-muted disabled:cursor-not-allowed`} disabled={!!busy || !note.trim()} data-testid="contact-note-add">
             {busy === 'note' ? t('contact.working') : t('contact.noteAdd')}
           </button>
         </form>

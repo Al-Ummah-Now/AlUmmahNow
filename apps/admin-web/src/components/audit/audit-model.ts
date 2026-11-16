@@ -54,6 +54,8 @@ export interface PersonView {
   found: boolean;
   /** Nothing is known about this user: the label is "Unknown user" and the id is only in a copyable detail */
   unknown: boolean;
+  /** No name: the label is the email (shown left to right, broken only at "@" and ".") */
+  labelIsEmail?: boolean;
 }
 
 /**
@@ -69,7 +71,7 @@ export function personView(id: string, names: AdminNames | null | undefined, t: 
   const email = named?.email?.trim() || fallbackEmail?.trim() || null;
   const name = named?.name?.trim() || '';
   const label = name || email || t('auditLog.unknownUser');
-  return { id, label, email: name ? email : null, href: itemHref('user', id), system: false, found: !!named?.found, unknown: !name && !email };
+  return { id, label, email: name ? email : null, href: itemHref('user', id), system: false, found: !!named?.found, unknown: !name && !email, ...(!name && email ? { labelIsEmail: true } : {}) };
 }
 
 export interface ItemView {

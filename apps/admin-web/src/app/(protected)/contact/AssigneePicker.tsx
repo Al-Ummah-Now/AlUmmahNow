@@ -29,7 +29,7 @@ export function AssigneePicker({
       try {
         const { items } = await searchContactStaff(q);
         // "me" marks the caller's own row; the others show their email under the name
-        return { items: items.map((i) => ({ ...i, secondary: i.secondary === 'me' ? t('contact.you') : i.secondary })), next: null };
+        return { items: items.map((i) => ({ ...i, secondary: i.secondary === 'me' ? t('contact.youLabel') : i.secondary })), next: null };
       } catch (error) {
         logger.warn('[contact] Staff search failed', { error: error instanceof Error ? error.message : String(error) });
         throw error;
@@ -48,6 +48,7 @@ export function AssigneePicker({
       allowIds={false}
       showIds={false}
       initialResults
+      popup="inline"
       disabled={disabled}
       testId={testId}
       className="w-full min-w-0"

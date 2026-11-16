@@ -998,6 +998,7 @@ const ar: Messages = {
     backups: 'النسخ الاحتياطية: {count}',
   },
   contact: {
+    youLabel: 'أنت',
     topic: 'الموضوع',
     colAssignee: 'مسندة إلى',
     openUnreadMessage: 'فتح رسالة غير مقروءة من {name}',
