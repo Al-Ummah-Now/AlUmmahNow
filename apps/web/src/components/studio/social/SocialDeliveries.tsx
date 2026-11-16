@@ -43,7 +43,7 @@ export function SocialDeliveries({ channelId, locale, deliveries, onDeliveries }
                 <div className="flex min-w-0 flex-1 items-start gap-3">
                   <NetworkMark network={item.network} className="h-8 w-8 shrink-0 text-xs" />
                   <div className="min-w-0 flex-1">
-                    <p className="line-clamp-2 break-words text-sm font-medium" dir="auto">{item.entityTitle || item.entityId}</p>
+                    <p className="line-clamp-2 break-words text-start text-sm font-medium"><bdi>{item.entityTitle || item.entityId}</bdi></p>
                     <p className="text-xs text-[var(--fanous-color-text-secondary)]">
                       <span>{s.networks[item.network]}</span>
                       <span aria-hidden="true"> · </span>
