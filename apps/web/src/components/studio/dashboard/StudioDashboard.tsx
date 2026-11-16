@@ -14,6 +14,7 @@ import { changePercent, rangeDates, sumMetrics } from '@/lib/studio/analytics';
 import { can, type StudioRole } from '@/lib/studio/permissions';
 import { legacyHref } from '@/lib/studio/nav';
 import { studioLiveHref, studioUploadHref } from '@/lib/studio/links';
+import { InviteWelcome } from '@/components/onboarding/InviteWelcome';
 
 /** The dashboard's recent window («آخر ٢٨ يومًا» / "last 28 days"). */
 const RECENT_DAYS = 28;
@@ -95,7 +96,12 @@ export function StudioDashboard({ locale, channelId, role }: Props) {
     can(role, 'channel.edit') && { label: text.quick.customise, href: legacyHref(locale, channelId, 'customisation/profile')! },
   ].filter((link): link is { label: string; href: string } => Boolean(link));
 
-  const heading = <h1 className="mb-4 text-xl font-bold text-foreground">{t.studio.nav.dashboard}</h1>;
+  const heading = (
+    <>
+      <h1 className="mb-4 text-xl font-bold text-foreground">{t.studio.nav.dashboard}</h1>
+      <InviteWelcome variant="studio" />
+    </>
+  );
 
   if (!data) {
     return (

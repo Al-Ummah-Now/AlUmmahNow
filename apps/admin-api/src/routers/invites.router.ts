@@ -41,6 +41,7 @@ import {
   setPendingOp,
   sha256Hex,
   signInUrl,
+  inviteLandingPath,
   toView,
   type InviteChannel,
   type InviteListStatus,
@@ -194,7 +195,7 @@ app.post('/', async (c) => {
     tierId,
     authRoles: authRoles as string[],
     expiresInDays: days,
-    continueUrl: signInUrl(c.env, locale),
+    continueUrl: signInUrl(c.env, locale, inviteLandingPath(locale as 'en' | 'ar', { role, hasChannels: plan.create.length + plan.transfer.length > 0 })),
     createdBy: actorOf(c),
     createdByEmail: auth(c)?.email ?? null,
   };

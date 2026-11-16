@@ -13,6 +13,7 @@ import { useAuth } from '@/components/AuthProvider/authContext';
 import { SignInPrompt } from '@/components/common/SignInPrompt';
 import Link from '@/components/common/AppLink';
 import { ACCOUNT_MENU_PATHS } from '@/lib/navigation/destinations';
+import { InviteWelcome } from '@/components/onboarding/InviteWelcome';
 import { NotificationSettingsPanel } from '@/components/notifications/NotificationSettingsPanel';
 import {
   Settings,
@@ -78,6 +79,7 @@ export default function SettingsPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="max-w-4xl mx-auto px-4 py-8">
+        <InviteWelcome variant="account" />
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">

@@ -11,7 +11,7 @@ import { Hono } from 'hono';
 import invitesRouter from '../src/routers/invites.router';
 import contentRouter from '../src/routers/content.router';
 import { handleAuthRequestBatch } from '../src/lib/authModerationQueue';
-import { AuthInviteClient, INVITE_ACTIONS_PER_HOUR, scheduleInviteSyncs, sha256Hex, signInUrl, type InviteMessage } from '../src/lib/invites';
+import { AuthInviteClient, INVITE_ACTIONS_PER_HOUR, scheduleInviteSyncs, sha256Hex, signInUrl, inviteLandingPath, type InviteMessage } from '../src/lib/invites';
 import { sqliteD1 } from './d1-sqlite';
 import { listTrash, requestTrashPurge, restoreTrash, runTrashCleanup } from '../src/lib/trash';
 
@@ -186,7 +186,7 @@ describe('POST /api/invites', () => {
     assert.equal(created.body.inviteId, inv.id);
     assert.equal(created.body.locale, 'ar');
     assert.deepEqual(created.body.roles, ['Scholar']);
-    assert.equal(created.body.continueUrl, 'https://videos.qa.alummahnow.net/api/auth/login?prompt=login&locale=ar&return=%2Far');
+    assert.equal(created.body.continueUrl, 'https://videos.qa.alummahnow.net/api/auth/login?locale=ar&return=%2Far%2Fstudio%2Fgo%2Fdashboard%3Fwelcome%3Dinvite');
     const after = await t.call('GET', `/api/invites/${inv.id}`);
     assert.equal(after.body.result.status, 'invited');
     assert.equal(after.body.result.emailSent, true);
@@ -448,8 +448,16 @@ describe('Recently deleted (admin soft-delete framework)', () => {
 
 describe('signInUrl', () => {
   it('derives the videos web sign-in from the admin host, or takes VIDEOS_WEB_URL', () => {
-    assert.equal(signInUrl({ ADMIN_WEB_URL: 'https://admin.alummahnow.net' }, 'en'), 'https://videos.alummahnow.net/api/auth/login?prompt=login&locale=en&return=%2Fen');
-    assert.equal(signInUrl({ VIDEOS_WEB_URL: 'http://localhost:3001' }, 'en'), 'http://localhost:3001/api/auth/login?prompt=login&locale=en&return=%2Fen');
+    assert.equal(signInUrl({ ADMIN_WEB_URL: 'https://admin.alummahnow.net' }, 'en'), 'https://videos.alummahnow.net/api/auth/login?locale=en&return=%2Fen');
+    assert.equal(signInUrl({ VIDEOS_WEB_URL: 'http://localhost:3001' }, 'en'), 'http://localhost:3001/api/auth/login?locale=en&return=%2Fen');
     assert.equal(signInUrl({}, 'en'), null);
+  });
+});
+
+describe('inviteLandingPath', () => {
+  it('lands a creator with channels in the Studio, everyone else on the account settings, with the welcome', () => {
+    assert.equal(inviteLandingPath('ar', { role: 'creator', hasChannels: true }), '/ar/studio/go/dashboard?welcome=invite');
+    assert.equal(inviteLandingPath('en', { role: 'creator', hasChannels: false }), '/en/settings?welcome=invite');
+    assert.equal(inviteLandingPath('en', { role: 'viewer', hasChannels: true }), '/en/settings?welcome=invite');
   });
 });
