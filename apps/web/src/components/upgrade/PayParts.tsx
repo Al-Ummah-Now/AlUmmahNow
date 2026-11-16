@@ -256,6 +256,9 @@ export function TierPricing({
   if (!price) return null;
   const periods = offerPeriods(offer);
   const currencies = offerCurrencies(offer, selection.period);
+  // The currency row stays put when a period has only one currency (it shows that one), so switching
+  // Monthly/Yearly never makes the card jump
+  const anyChoice = periods.some((period) => offerCurrencies(offer, period).length > 1);
   const able = providersFor(plans, price);
   const provider = chooseProvider(plans, price, picked);
   const testMode = (provider ? able.filter((p) => p.id === provider) : able).every((p) => p.mode === 'test');
@@ -293,6 +296,13 @@ export function TierPricing({
             </label>
           ))}
         </fieldset>
+      )}
+
+      {anyChoice && currencies.length === 1 && (
+        <div className="upg-pay-field" data-testid={`tier-${tierId}-currency-only`}>
+          <span className="upg-pay-field-label">{copy.pay.currencyLabel}</span>
+          <span className="upg-pay-field-value" dir="ltr">{currencies[0]}</span>
+        </div>
       )}
 
       {currencies.length > 1 && (
