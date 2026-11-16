@@ -297,7 +297,7 @@ const ar: Messages = {
     moved: 'نُقل {name} إلى الموضع {position} من {total}.',
     listTitle: 'الترتيب والحالة',
     listHint: 'يُستخدم هذا الترتيب في القوائم والمرشّحات والاستكشاف. ينقل Alt+↑ وAlt+↓ الصف المحدَّد. يُخفى التصنيف الموقوف من القوائم والاستكشاف والمرشّحات واقتراحات الذكاء الاصطناعي، وتحتفظ المرئيات المصنّفة به بتصنيفها واسمه.',
-    videoCount: '{count} من المرئيات',
+    videoCount: '{count}\u00a0من المرئيات',
     historyTitle: 'آخر التغييرات',
     historyEmpty: 'لا توجد تغييرات بعد.',
     actions: {
@@ -1758,7 +1758,7 @@ const ar: Messages = {
     },
   },
   channels: {
-    subscribersCount: '{count} مشترك',
+    subscribersCount: '{count}\u00a0مشترك',
     title: 'القنوات',
     subtitle: 'جميع القنوات على مرئيات الأمة الآن',
     ownerFilter: 'المالك',
@@ -1911,7 +1911,7 @@ const ar: Messages = {
     processingCount: '{count} قيد المعالجة',
     failedCount: '{count} فشلت',
     colUploader: 'الرافع',
-    viewsCount: '{count} مشاهدة',
+    viewsCount: '{count}\u00a0مشاهدة',
     unpublishedOne: 'أُلغي نشر المرئي',
     republishedOne: 'أُعيد نشر المرئي',
     unpublishedMany: 'أُلغي نشر {count} من المرئيات',
@@ -2014,7 +2014,7 @@ const ar: Messages = {
     deleteBody: 'يُحذف التعليق وردوده.',
   },
   playlists: {
-    videoCount: '{count} مرئي',
+    videoCount: '{count}\u00a0مرئي',
     title: 'قوائم التشغيل',
     subtitle: 'قوائم التشغيل في كل القنوات',
     searchLabel: 'العنوان أو المعرّف',
@@ -2035,8 +2035,8 @@ const ar: Messages = {
     morePages: 'الصفحة التالية',
   },
   community: {
-    likesCount: '{count} إعجاب',
-    commentsCount: '{count} تعليق',
+    likesCount: '{count}\u00a0إعجاب',
+    commentsCount: '{count}\u00a0تعليق',
     postTypes: { text: 'نص', image: 'صورة', poll: 'استطلاع', quiz: 'اختبار', video: 'مرئي', gif: 'صورة متحركة', link: 'رابط', article: 'مقالة', cards: 'بطاقات' },
     title: 'المجتمع',
     subtitle: 'منشورات المجتمع في كل القنوات',

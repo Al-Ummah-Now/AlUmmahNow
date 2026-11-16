@@ -93,6 +93,20 @@ test.describe('videos list titles', () => {
         expect(box!.height, `row height (${v.id})`).toBeLessThanOrEqual(phone ? 320 : 160);
       }
       expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1);
+      // Every saved-view tab is whole and on screen (they wrap; none cut at the edge), also in RTL
+      const tabs = await page.locator('[data-testid^="saved-view-"]').evaluateAll((els) =>
+        els.map((el) => {
+          const r = el.getBoundingClientRect();
+          return { id: el.getAttribute('data-view'), left: r.left, right: r.right, clipped: el.scrollWidth > el.clientWidth + 1 };
+        }),
+      );
+      expect(tabs.length).toBeGreaterThan(0);
+      const vw = page.viewportSize()!.width;
+      for (const tab of tabs) {
+        expect(tab.left, `tab ${tab.id} starts on screen`).toBeGreaterThanOrEqual(0);
+        expect(tab.right, `tab ${tab.id} ends on screen`).toBeLessThanOrEqual(vw);
+        expect(tab.clipped, `tab ${tab.id} label not clipped`).toBe(false);
+      }
     });
   }
 });

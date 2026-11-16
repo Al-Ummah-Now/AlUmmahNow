@@ -241,14 +241,12 @@ export function VideosList() {
                 </span>
               </Link>
               {/* The channel and views, while their columns are hidden (phone, or a narrow table beside the sidebar) */}
-              <span className="block @6xl:hidden text-xs text-fg-muted mt-1">
-                {/* Each part isolated: an Arabic channel name next to "12,840 views" must not reorder them */}
-                <span className="@3xl:hidden">
-                  <bdi>{v.channelName || (v.channelId ? t('content.unnamedChannel') : t('content.noChannel'))}</bdi>
-                  {' · '}
-                </span>
-                <bdi>{t('videos.viewsCount', { count: v.views })}</bdi>
+              {/* The channel and the views on their own lines while their columns are hidden: no separator
+                  left dangling when a long channel name wraps, and each isolated from the other's direction */}
+              <span className="block @3xl:hidden text-xs text-fg-muted mt-1 break-words" dir="auto">
+                {v.channelName || (v.channelId ? t('content.unnamedChannel') : t('content.noChannel'))}
               </span>
+              <span className="block @6xl:hidden text-xs text-fg-muted">{t('videos.viewsCount', { count: v.views })}</span>
             </div>
           </div>
         );
@@ -257,6 +255,7 @@ export function VideosList() {
     {
       id: 'channel',
       from: '3xl',
+      minWidth: 'md:min-w-[8rem]',
       header: t('videos.colChannel'),
       className: 'text-sm',
       cell: (v) =>
@@ -271,6 +270,7 @@ export function VideosList() {
     {
       id: 'uploader',
       from: '5xl',
+      minWidth: 'md:min-w-[8rem]',
       header: t('videos.colUploader'),
       className: 'text-sm',
       cell: (v) =>
@@ -323,6 +323,7 @@ export function VideosList() {
       header: <span className="sr-only">{t('list.actions')}</span>,
       align: 'end',
       footer: true,
+      nowrap: true,
       cell: (v) =>
         v.isHidden ? (
           <button type="button" className={smallButtonClass} disabled={!!busy} onClick={() => changePublished([v.id], true, `republish:${v.id}`)} aria-label={t('videos.republishTitle', { title: titleOf(v) })} data-testid="video-row-republish">

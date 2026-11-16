@@ -83,3 +83,12 @@ describe('phone card meta lines and numbers', () => {
     }
   });
 });
+
+describe('saved views tab strip', () => {
+  it('wraps its tabs and never scrolls sideways, so no label is cut at the edge', () => {
+    const src = readFileSync(new URL('../src/components/list/SavedViews.tsx', import.meta.url), 'utf8');
+    assert.match(src, /flex flex-wrap/);
+    assert.match(src, /whitespace-nowrap/);
+    assert.doesNotMatch(src, /overflow-x-auto|min-w-max/);
+  });
+});

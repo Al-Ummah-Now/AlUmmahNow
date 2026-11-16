@@ -298,7 +298,7 @@ const en = {
     moved: 'Moved {name} to position {position} of {total}.',
     listTitle: 'Order and status',
     listHint: 'This order is used in pickers, filters and Explore. Alt+↑ and Alt+↓ move the focused row. A retired category is hidden from pickers, Explore, filters and AI suggestions; videos that have it keep it and its name.',
-    videoCount: '{count} videos',
+    videoCount: '{count}\u00a0videos',
     historyTitle: 'Latest changes',
     historyEmpty: 'No changes yet.',
     actions: {
@@ -1759,7 +1759,7 @@ const en = {
     },
   },
   channels: {
-    subscribersCount: '{count} subscribers',
+    subscribersCount: '{count}\u00a0subscribers',
     title: 'Channels',
     subtitle: 'Every channel on Al Ummah Now videos',
     ownerFilter: 'Owner',
@@ -1912,7 +1912,7 @@ const en = {
     processingCount: '{count} processing',
     failedCount: '{count} failed',
     colUploader: 'Uploader',
-    viewsCount: '{count} views',
+    viewsCount: '{count}\u00a0views',
     unpublishedOne: 'Video unpublished',
     republishedOne: 'Video republished',
     unpublishedMany: '{count} videos unpublished',
@@ -2015,7 +2015,7 @@ const en = {
     deleteBody: 'The comment and its replies are removed.',
   },
   playlists: {
-    videoCount: '{count} videos',
+    videoCount: '{count}\u00a0videos',
     title: 'Playlists',
     subtitle: 'Playlists across all channels',
     searchLabel: 'Title or ID',
@@ -2036,8 +2036,8 @@ const en = {
     morePages: 'Next page',
   },
   community: {
-    likesCount: '{count} likes',
-    commentsCount: '{count} comments',
+    likesCount: '{count}\u00a0likes',
+    commentsCount: '{count}\u00a0comments',
     postTypes: { text: 'Text', image: 'Image', poll: 'Poll', quiz: 'Quiz', video: 'Video', gif: 'GIF', link: 'Link', article: 'Article', cards: 'Cards' },
     title: 'Community',
     subtitle: 'Community posts across all channels',
