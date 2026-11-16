@@ -79,8 +79,9 @@ test.describe('videos list titles', () => {
       for (const v of videos) {
         const row = page.locator(`[data-testid="video-row"][data-video-id="${v.id}"]`);
         await expect(row.getByTestId('video-title')).toHaveText(expected(v, locale));
-        // Never the id, whole or cut
-        await expect(row).not.toContainText(v.id.slice(-12));
+        // Never the id, whole or cut: its "titles-<kind>-" segment is in no title or name (the run marker is)
+        await expect(row).not.toContainText(v.id);
+        await expect(row).not.toContainText('titles-');
         const cell = await row.getByTestId('video-title').boundingBox();
         const box = await row.boundingBox();
         expect(cell, 'title cell is laid out').not.toBeNull();
