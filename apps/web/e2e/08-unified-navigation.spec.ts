@@ -134,7 +134,7 @@ test.describe('Unified Navigation - English (LTR)', () => {
     await menu.getByTestId('nav-create-channel').click();
 
     const input = menu.getByPlaceholder('Enter channel name');
-    await expect(menu.getByText('Channel Name', { exact: true })).toBeVisible();
+    await expect(menu.getByText('Channel name', { exact: true })).toBeVisible();
     await expect(input).toBeFocused();
     await expect(menu.getByRole('button', { name: 'Create', exact: true })).toBeDisabled();
 
