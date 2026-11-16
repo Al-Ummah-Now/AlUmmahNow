@@ -6,7 +6,7 @@
  * live preview and "Send test to me" in the same layout (./layout.ts, itself a twin of Auth's).
  * Keep the two builders identical: same blocks, same order, same placeholder values.
  */
-import { fillPlaceholders, type EmailCopy } from '@al-ummah/shared-types';
+import { fillPlaceholders, formatList, type EmailCopy } from '@al-ummah/shared-types';
 import { formatEmailDate, renderEmail, type EmailBlock, type EmailDoc, type EmailLocale, type RenderedEmailParts } from './layout';
 
 export interface InviteChannelInfo {
@@ -35,7 +35,7 @@ export interface InviteEmailData {
   video?: InviteVideoInfo | null;
 }
 
-const joinNames = (names: string[], locale: EmailLocale) => new Intl.ListFormat(locale === 'ar' ? 'ar' : 'en', { style: 'long', type: 'conjunction' }).format(names);
+const joinNames = (names: string[], locale: EmailLocale) => formatList(locale, names);
 
 /** The email from one language's copy. `before` blocks go first (the test banner). */
 export function inviteEmailDocFromCopy(copy: EmailCopy, data: InviteEmailData, before: EmailBlock[] = []): EmailDoc {
