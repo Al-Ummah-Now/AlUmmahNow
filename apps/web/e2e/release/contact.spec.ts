@@ -12,7 +12,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { promoteToAdmin } from './sink';
 import { sinkEmail, target } from './targets';
-import { completeRegistration, createProfile, signUpOnWeb, type Locale, submitPasswordSignIn } from './web-session';
+import { completeRegistration, createProfile, expectHydrated, signUpOnWeb, type Locale, submitPasswordSignIn } from './web-session';
 import { fetchRetry } from './net';
 import { runId } from '../test-utils/run-users';
 
@@ -151,10 +151,7 @@ test.describe('Release: Contact us', () => {
       await expect(rows).toHaveCount(1);
     } finally {
       for (const id of ids) {
-        await page.goto(`${target().adminWeb}/contact/${id}`);
-        // Delete happens at once with an Undo toast (owner 2026-11-15); no confirm dialog
-        await page.getByTestId('contact-delete').click();
-        await expect(page).toHaveURL(new RegExp(`${target().adminWeb}/contact(\\?|$)`), { timeout: 30000 });
+        await deleteMessage(page, id);
       }
       // A delete keeps the message restorable for 30 days: these are test messages, so delete them
       // permanently (Recently deleted), which queues them for the next hourly cleanup
@@ -164,6 +161,19 @@ test.describe('Release: Contact us', () => {
     await expect(page.getByTestId('contact-empty')).toBeVisible();
   });
 });
+
+/**
+ * Deletes one message from its page: at once, with an Undo toast (owner 2026-11-15), no confirm
+ * dialog. The button only works once React has hydrated it; a click before that did nothing and
+ * left the message behind (flaky run 43836619972).
+ */
+async function deleteMessage(page: Page, id: string): Promise<void> {
+  await page.goto(`${target().adminWeb}/contact/${id}`);
+  const button = page.getByTestId('contact-delete');
+  await expectHydrated(button);
+  await button.click();
+  await expect(page).toHaveURL(new RegExp(`${target().adminWeb}/contact(\\?|$)`), { timeout: 30000 });
+}
 
 /** "Delete permanently now" on each deleted message (Recently deleted → Contact messages). */
 async function purgeDeleted(page: Page, ids: string[]): Promise<void> {
@@ -201,9 +211,7 @@ async function sweepLeftovers(page: Page): Promise<void> {
     { before: Date.now() - 3600_000, ownRun: id ? `e2e+${id}-` : '', current: RUN },
   );
   for (const id of stale.slice(0, 20)) {
-    await page.goto(`${target().adminWeb}/contact/${id}`);
-    await page.getByTestId('contact-delete').click();
-    await expect(page).toHaveURL(new RegExp(`${target().adminWeb}/contact(\\?|$)`), { timeout: 30000 });
+    await deleteMessage(page, id);
   }
   if (stale.length) await purgeDeleted(page, stale.slice(0, 20));
 }
