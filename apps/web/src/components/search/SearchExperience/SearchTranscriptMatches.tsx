@@ -9,7 +9,7 @@
 import React from 'react';
 import Link from '@/components/common/AppLink';
 import { Captions, Play } from 'lucide-react';
-import { getLocalizedValue, normalizeSearchText, tokenizeSearchText, type SearchTranscriptMatch } from '@al-ummah/shared-types';
+import { getLocalizedValue, normalizeSearchText, tokenizeSearchText, type SearchTranscriptMatch, formatClock } from '@al-ummah/shared-types';
 import VideoThumbnail from '@/components/VideoThumbnail';
 import { useLanguage } from '@/hooks/useLanguage';
 import { removeUnwantedChars } from '@/lib/utility';
@@ -17,12 +17,8 @@ import { channelLabel } from '@/lib/channel-name';
 import { SUPPORTED_LANGUAGES } from '@/lib/api/subtitles-types';
 
 /** `M:SS` or `H:MM:SS` from milliseconds (0:00 at the start). */
-export function passageTime(ms: number): string {
-  const total = Math.max(0, Math.floor(ms / 1000));
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = String(total % 60).padStart(2, '0');
-  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`;
+export function passageTime(ms: number, lang = 'en'): string {
+  return formatClock(lang, Math.max(0, Math.floor(ms / 1000)));
 }
 
 /** The passage split into words, with the ones that match a searched word flagged. */
@@ -57,7 +53,7 @@ export function SearchTranscriptMatches({ matches, query }: { matches: SearchTra
       <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         {matches.map((m) => {
           const title = removeUnwantedChars(getLocalizedValue(m.video.titleLocalized, m.video.title, lang));
-          const time = passageTime(m.startMs);
+          const time = passageTime(m.startMs, lang);
           const otherLanguage = m.language.split('-')[0] !== lang;
           return (
             <li key={m.videoId} data-testid="search-transcript" data-video-id={m.videoId} data-start-ms={m.startMs}>

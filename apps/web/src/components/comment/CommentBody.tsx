@@ -7,6 +7,7 @@
  * approve, and a slot for replies.
  */
 
+import { formatNumber } from '@al-ummah/shared-types';
 import React, { useId, useState } from "react";
 import { ThumbsUp, Trash2, Pencil, MessageSquare, Check } from "lucide-react";
 import { useLanguage } from "@/hooks/useLanguage";
@@ -99,7 +100,7 @@ export function CommentBody({
   isReply,
   testId,
 }: CommentBodyProps) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(text);
   const [saving, setSaving] = useState(false);
@@ -187,7 +188,7 @@ export function CommentBody({
                 className={`flex items-center gap-1 disabled:opacity-50 ${isLiked ? 'text-brand-ink' : 'hover:text-gray-900 dark:hover:text-white'}`}
               >
                 <ThumbsUp className="w-4 h-4" aria-hidden="true" />
-                <span>{likesCount ?? 0}</span>
+                <span>{formatNumber(lang, likesCount ?? 0)}</span>
               </button>
             )}
             {onReply && (

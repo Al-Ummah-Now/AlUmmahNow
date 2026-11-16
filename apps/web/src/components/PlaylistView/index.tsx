@@ -281,7 +281,7 @@ export default function PlaylistView({ playlistId, initialPlaylist, initialParti
             <ol className="space-y-3">
               {videos.map((video, index) => {
                 const videoTitle = removeUnwantedChars(getLocalizedValue(video.titleLocalized, video.title, lang));
-                const duration = formatDuration(video.duration);
+                const duration = formatDuration(video.duration, lang);
                 return (
                   <li key={video.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/60">
                     <span className="w-6 text-center text-sm text-gray-500 flex-shrink-0">{index + 1}</span>

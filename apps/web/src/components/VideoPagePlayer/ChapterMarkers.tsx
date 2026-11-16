@@ -13,6 +13,7 @@
 
 'use client';
 
+import { formatClock } from '@al-ummah/shared-types';
 import { useCallback } from 'react';
 import type { VideoChapter } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -29,15 +30,8 @@ interface ChapterMarkersProps {
 /**
  * Format seconds to MM:SS or HH:MM:SS
  */
-function formatTime(seconds: number): string {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = Math.floor(seconds % 60);
-
-  if (hours > 0) {
-    return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  }
-  return `${minutes}:${secs.toString().padStart(2, '0')}`;
+function formatTime(seconds: number, lang: string): string {
+  return formatClock(lang, Math.floor(seconds));
 }
 
 export function ChapterMarkers({
@@ -77,7 +71,7 @@ export function ChapterMarkers({
             onClick={(e) => handleMarkerClick(e, chapter)}
             className="vjs-fanous-chapter-mark"
             data-current={isCurrent || undefined}
-            data-chapter={`${formatTime(chapter.startTime)} ${title}`}
+            data-chapter={`${formatTime(chapter.startTime, lang)} ${title}`}
             style={{ left: `${position}%` }}
           />
         );
