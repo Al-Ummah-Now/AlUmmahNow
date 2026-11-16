@@ -15,7 +15,8 @@
     "build": "tsc --build",
     "dev": "tsc --build --watch",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "node --experimental-strip-types --no-warnings --test test/*.test.ts"
   },
   "dependencies": {
     "zod": "^3.25.76"
