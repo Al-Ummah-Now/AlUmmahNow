@@ -13,13 +13,14 @@ export const dynamic = 'force-dynamic';
 export default async function NewInvitePage() {
   const { t } = await getI18n();
   let permissions: AdminContentPermission[] | null = null;
-  let tiers: Array<{ id: string; name: string }> = [];
+  let tiers: Array<{ id: string; name: string; nameAr: string | null }> = [];
   let defaultTierId = 'member';
   try {
     permissions = await getContentPermissions();
     // Every invite gives a tier: the default, or (creators:manage) another one
     const choices = await listCreatorTierChoices();
-    tiers = choices.items.map((tier) => ({ id: tier.id, name: tier.name, nameAr: tier.nameAr ?? null }));
+    // Lowest rank first, like everywhere tiers are listed
+    tiers = [...choices.items].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)).map((tier) => ({ id: tier.id, name: tier.name, nameAr: tier.nameAr ?? null }));
     defaultTierId = choices.defaultTierId;
   } catch (e) {
     logger.error('[invites] Failed to load the form', { error: e instanceof Error ? e.message : String(e) });

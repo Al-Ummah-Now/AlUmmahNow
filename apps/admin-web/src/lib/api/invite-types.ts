@@ -17,7 +17,7 @@ export interface InviteView {
   name: string | null;
   locale: 'en' | 'ar';
   note: string | null;
-  role: 'creator' | 'viewer';
+  /** The tier the invite gave; null = the current default tier (no creator/viewer role: the tier decides) */
   tierId: string | null;
   authRoles: string[];
   channels: InviteChannel[];
@@ -50,7 +50,6 @@ export interface InviteLookup {
 export interface NewInviteInput {
   email: string;
   name?: string;
-  role: 'creator' | 'viewer';
   tierId?: string | null;
   authRoles?: string[];
   locale: 'en' | 'ar';

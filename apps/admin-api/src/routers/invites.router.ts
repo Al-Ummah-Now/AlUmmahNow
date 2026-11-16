@@ -152,18 +152,18 @@ function channelPlan(input: unknown): ChannelPlan {
 }
 
 /**
- * Invite: { email, name?, role: creator|viewer, tierId?, authRoles?: ['Scholar'], locale: en|ar, note?,
+ * Invite: { email, name?, tierId?, authRoles?: ['Scholar'], locale: en|ar, note?,
  * expiresInDays?, channels?: { create: [{name, handle?}], transfer: [channelId] } }.
  * Every account has a tier (owner, 2026-11-15): the invite's tierId, else the
  * current default (what a sign-up would get). Picking another tier than the
- * default needs creators:manage.
+ * default needs creators:manage. There is no creator/viewer role: the tier
+ * decides what the account may do; auth roles only ever add Scholar.
  */
 app.post('/', async (c) => {
   need(c, 'users:manage');
   const input = await body(c);
   const email = normalizeEmail(String(input.email ?? ''));
   if (!isEmailAddress(email)) throw new HttpError(400, 'invalid_email', 'A valid email is required');
-  const role = input.role === 'viewer' ? 'viewer' : 'creator';
   const picked = str(input.tierId, 64);
   const locale = input.locale === 'ar' ? 'ar' : 'en';
   const days = input.expiresInDays === undefined || input.expiresInDays === null ? DEFAULT_INVITE_DAYS : Number(input.expiresInDays);
@@ -193,11 +193,10 @@ app.post('/', async (c) => {
     name: str(input.name, 100),
     locale: locale as 'en' | 'ar',
     note: str(input.note, 1000),
-    role: role as 'creator' | 'viewer',
     tierId,
     authRoles: authRoles as string[],
     expiresInDays: days,
-    continueUrl: signInUrl(c.env, locale, inviteLandingPath(locale as 'en' | 'ar', { role, hasChannels: plan.create.length + plan.transfer.length > 0 })),
+    continueUrl: signInUrl(c.env, locale, inviteLandingPath(locale as 'en' | 'ar', { hasChannels: plan.create.length + plan.transfer.length > 0 })),
     createdBy: actorOf(c),
     createdByEmail: auth(c)?.email ?? null,
   };
@@ -210,7 +209,7 @@ app.post('/', async (c) => {
     await c.env.REPORTS_DB.prepare('DELETE FROM creator_invites WHERE id = ?').bind(row.id).run();
     throw error;
   }
-  await record(c, 'created', ref, { email, role, tierId, locale, authRoles });
+  await record(c, 'created', ref, { email, tierId, locale, authRoles });
 
   const warnings: Array<{ step: string; code: string; message: string }> = [];
   {
