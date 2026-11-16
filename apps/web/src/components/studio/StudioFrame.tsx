@@ -73,8 +73,9 @@ function ChannelSwitcher({ locale, channel, segments }: { locale: string; channe
         <span className="sr-only">{t.studio.switcher.label}: </span>
         <Avatar url={channel.avatarUrl} name={channel.name} />
         <span className="min-w-0 flex-1">
-          <span dir="auto" className="block truncate text-sm font-medium text-foreground">{channel.name}</span>
-          {channel.handle && <span dir="ltr" className="block truncate text-xs text-muted-foreground">{formatHandle(channel.handle)}</span>}
+          {/* Both lines keep their own direction but sit on the page's start side (a Latin @handle under an Arabic name) */}
+          <span className="block truncate text-sm font-medium text-foreground [unicode-bidi:plaintext] ltr:text-left rtl:text-right">{channel.name}</span>
+          {channel.handle && <span className="block truncate text-xs text-muted-foreground [unicode-bidi:plaintext] ltr:text-left rtl:text-right">{formatHandle(channel.handle)}</span>}
         </span>
         <ChevronsUpDown aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground" />
       </DropdownMenuTrigger>
@@ -133,10 +134,10 @@ function NavLinks({ locale, role, channelId, active, features, onNavigate }: { l
   );
 }
 
-function Rail({ locale, role, channel, segments, features, onNavigate }: { locale: string; role: StudioRole; channel: StudioChannel; segments: string[]; features?: StudioFeatures; onNavigate?: () => void }) {
+function Rail({ locale, role, channel, segments, features, onNavigate, className }: { locale: string; role: StudioRole; channel: StudioChannel; segments: string[]; features?: StudioFeatures; onNavigate?: () => void; className?: string }) {
   const { t } = useLanguage();
   return (
-    <div className="flex h-full flex-col gap-3 p-3">
+    <div className={cn('flex h-full flex-col gap-3 p-3', className)}>
       <ChannelSwitcher locale={locale} channel={channel} segments={segments} />
       {can(role, 'video.upload') && (
         <Button asChild>
@@ -190,7 +191,8 @@ export function StudioFrame({ locale, role, channel, features, children }: Props
       <Dialog open={drawerOpen} onOpenChange={setDrawerOpen}>
         <DialogContent data-slot="sheet-content" className="top-0 h-full max-w-xs translate-x-0 translate-y-0 rounded-none border-e p-0 ltr:left-0 rtl:left-auto rtl:right-0">
           <DialogTitle className="sr-only">{t.studio.title}</DialogTitle>
-          <Rail locale={locale} role={role} channel={channel} segments={segments} features={features} onNavigate={() => setDrawerOpen(false)} />
+          {/* The drawer's close button sits in the top inline-end corner (44px at 8px): the rail starts below it */}
+          <Rail locale={locale} role={role} channel={channel} segments={segments} features={features} onNavigate={() => setDrawerOpen(false)} className="pt-14" />
         </DialogContent>
       </Dialog>
 
