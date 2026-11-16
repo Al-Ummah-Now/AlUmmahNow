@@ -60,14 +60,19 @@ export interface LocalizedFieldPairProps {
   help?: string;
   /** Base id (defaults to a generated one); inputs get `${id}-en` / `${id}-ar` */
   id?: string;
+  /** Base of the data-testid attributes (defaults to the id): `${testId}-en`, `${testId}-translate-en`, … */
+  testId?: string;
+  /** The inputs' own data-testid when a form already has them (e.g. `tier-free-name` / `tier-free-nameAr`) */
+  inputTestIds?: Partial<Record<FieldLang, string>>;
   /** Injected in tests; the admin-api call otherwise */
   translate?: TranslateFn;
 }
 
-export function LocalizedFieldPair({ label, field, value, onChange, errors, multiline = false, rows = 3, maxLength, required = true, disabled = false, help, id, translate = translateFields }: LocalizedFieldPairProps) {
+export function LocalizedFieldPair({ label, field, value, onChange, errors, multiline = false, rows = 3, maxLength, required = true, disabled = false, help, id, testId, inputTestIds, translate = translateFields }: LocalizedFieldPairProps) {
   const { t, locale } = useLanguage();
   const generated = useId();
   const base = id ?? `lf-${generated.replace(/:/g, '')}`;
+  const tid = testId ?? base;
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
   const [undo, setUndo] = useState<{ lang: FieldLang; previous: string } | null>(null);
   const langName = (l: FieldLang) => t(l === 'en' ? 'localized.langEnglish' : 'localized.langArabic');
@@ -146,7 +151,7 @@ export function LocalizedFieldPair({ label, field, value, onChange, errors, mult
       'aria-describedby': describedBy,
       'aria-label': t('localized.fieldIn', { field: label, lang: langName(lang) }),
       className: `${fieldClass} w-full ${lang === 'ar' ? 'text-right' : 'text-left'} ${error ? 'border-danger-border' : ''}`,
-      'data-testid': `${base}-${lang}`,
+      'data-testid': inputTestIds?.[lang] ?? `${tid}-${lang}`,
     } as const;
     const onInput = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       if (undo?.lang === lang) setUndo(null);
@@ -171,7 +176,7 @@ export function LocalizedFieldPair({ label, field, value, onChange, errors, mult
             disabled={disabled || status.kind === 'busy' || !value[lang].trim()}
             onClick={() => void run(lang)}
             aria-label={t(lang === 'en' ? 'localized.translateToArNamed' : 'localized.translateToEnNamed', { field: label })}
-            data-testid={`${base}-translate-${lang}`}
+            data-testid={`${tid}-translate-${lang}`}
           >
             <span aria-hidden="true">{lang === 'en' ? '→' : '←'}</span>
             {t(lang === 'en' ? 'localized.translateToAr' : 'localized.translateToEn')}
@@ -182,7 +187,7 @@ export function LocalizedFieldPair({ label, field, value, onChange, errors, mult
   };
 
   return (
-    <fieldset className="flex flex-col gap-2 min-w-0" data-testid={`${base}-pair`}>
+    <fieldset className="flex flex-col gap-2 min-w-0" data-testid={`${tid}-pair`}>
       <legend className="text-sm font-semibold text-fg mb-1">{label}</legend>
       <div className="grid gap-3 sm:grid-cols-2">
         {column('en')}
@@ -194,11 +199,11 @@ export function LocalizedFieldPair({ label, field, value, onChange, errors, mult
         </p>
       ) : null}
       <div className="flex flex-wrap items-center gap-2 min-h-6">
-        <p id={statusId} role="status" aria-live="polite" className={`text-sm ${status.kind === 'error' ? 'text-danger-fg' : 'text-fg-muted'}`} data-testid={`${base}-status`}>
+        <p id={statusId} role="status" aria-live="polite" className={`text-sm ${status.kind === 'error' ? 'text-danger-fg' : 'text-fg-muted'}`} data-testid={`${tid}-status`}>
           {message}
         </p>
         {undo ? (
-          <button type="button" className={smallTranslateButton} onClick={undoLast} aria-label={t('localized.undoNamed', { lang: langName(undo.lang) })} data-testid={`${base}-undo`}>
+          <button type="button" className={smallTranslateButton} onClick={undoLast} aria-label={t('localized.undoNamed', { lang: langName(undo.lang) })} data-testid={`${tid}-undo`}>
             {t('localized.undo')}
           </button>
         ) : null}
