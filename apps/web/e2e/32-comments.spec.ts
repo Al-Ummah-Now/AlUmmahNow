@@ -3,6 +3,7 @@ import type { APIRequestContext, Locator, Page } from '@playwright/test';
 import { ANONYMOUS_STATE, AUTH_STATE, readAccount } from './test-utils/auth-state';
 import { apiCall, tempName, watchUrl, type QaVideo } from './test-utils/watch-page';
 import { ownPublicVideos } from './test-utils/own-public-video';
+import { localizedNumber } from './test-utils/digits';
 import { watchSignInRedirect } from './test-utils/sign-in-redirect';
 
 /**
@@ -51,7 +52,7 @@ async function typeDraft(box: Locator, submit: Locator, text: string) {
 async function openComments(page: Page, video: QaVideo, locale: 'en' | 'ar' = 'en') {
   await page.goto(watchUrl(video.id, locale));
   const section = page.locator('#comments');
-  await expect(section.getByRole('heading', { level: 2 })).toHaveText(locale === 'en' ? /^Comments \(\d+\)$/ : /^التعليقات \(\d+\)$/);
+  await expect(section.getByRole('heading', { level: 2 })).toHaveText(localizedNumber(locale, locale === 'en' ? '^Comments \\({n}\\)$' : '^التعليقات \\({n}\\)$'));
   return section;
 }
 

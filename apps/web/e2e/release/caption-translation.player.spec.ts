@@ -18,6 +18,7 @@ import { test, ns } from './builders';
 import { target } from './targets';
 import { apiFetch, gotoSettled, type Locale } from './web-session';
 import { confirmInApp, webConfirm } from './in-app-confirm';
+import { shownDigits } from '../test-utils/digits';
 
 // Signs users up through the auth server: traces would hold the password and code
 test.use({ trace: 'off' });
@@ -80,7 +81,7 @@ test.describe('caption and title translation', () => {
         await source.getByTestId('caption-draft-translate').click();
         const form = page.getByTestId('caption-translate');
         await form.getByTestId('caption-translate-lang-en').check({ force: true });
-        await expect(form.getByTestId('caption-translate-cost')).toContainText('2');
+        await expect(form.getByTestId('caption-translate-cost')).toContainText(shownDigits(locale, 2));
         await form.getByTestId('caption-translate-action').click();
         await confirmInApp(page, webConfirm('confirm-dialog'));
 

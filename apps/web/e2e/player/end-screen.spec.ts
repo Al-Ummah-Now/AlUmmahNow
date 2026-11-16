@@ -11,6 +11,7 @@
  */
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { inkBox, layoutBox, luminance, openHarness, pixels, startPlayback, type Box } from './harness';
+import { parseShownNumber } from '../test-utils/digits';
 
 const TOLERANCE = 1;
 const near = (actual: number, expected: number, what: string) =>
@@ -23,7 +24,7 @@ const inside = (inner: Box, outer: Box, what: string) => {
 };
 const startEdge = (b: Box, dir: 'ltr' | 'rtl') => (dir === 'ltr' ? b.x : b.right);
 const count = (end: Locator) => end.locator('.vjs-fanous-next-count');
-const seconds = async (end: Locator) => Number(await count(end).textContent());
+const seconds = async (end: Locator) => parseShownNumber(await count(end).textContent());
 
 /**
  * Seeks to the end and waits for the end screen. The countdown is 3 s (docs/specs/PLAYLIST-PLAYBACK.md

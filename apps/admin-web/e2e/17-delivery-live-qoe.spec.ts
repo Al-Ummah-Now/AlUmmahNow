@@ -8,6 +8,7 @@
  */
 import { test, expect } from './support/fixtures';
 import { ADMIN_WEB_URL, VIDEOS_API_URL, storageStatePath } from './support/env';
+import { parseShownNumber } from './support/digits';
 
 const VIDEO_ID = 'e2e-live-qoe-video';
 /**
@@ -36,7 +37,7 @@ test('a play heartbeat shows on the Delivery page live, and its final report end
   await expect(panel).toBeVisible();
   const nowR2 = page.getByTestId('delivery-qoe-now-r2');
   const hourR2 = page.getByTestId('delivery-qoe-hour-r2');
-  const read = async (l: typeof nowR2) => Number((await l.innerText()).replace(/[^\d]/g, '') || '0');
+  const read = async (l: typeof nowR2) => parseShownNumber(await l.innerText()) || 0;
   // The page's socket is subscribed before the beat is sent
   await page.waitForEvent('websocket', { predicate: (ws) => ws.url().endsWith('/ws'), timeout: 15_000 }).catch(() => undefined);
   const nowBefore = await read(nowR2);
