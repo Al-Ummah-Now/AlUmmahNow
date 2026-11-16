@@ -28,7 +28,7 @@ export interface ContactMessageRow {
   handled_by_id?: string | null;
   handled_by_email?: string | null;
   handled_at?: string | null;
-  /** When an admin first read it; NULL = unread (migration 0030) */
+  /** When an admin first read it; NULL = unread (migration 0033) */
   read_at?: string | null;
   /** The Turnstile outcome at submission; NULL for messages from before it was recorded */
   bot_verdict?: ContactBotVerdict | null;
