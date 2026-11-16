@@ -127,22 +127,22 @@ export function SocialAccounts({ channelId, locale, accounts, networks, onAccoun
   return (
     <Section id="social-accounts" title={a.heading} testId="social-accounts">
       {dialog}
+      {SOCIAL_NETWORKS.some((network) => networks[network]?.available) ? (
       <ul className="grid gap-3 sm:grid-cols-2" aria-label={a.connect}>
-        {SOCIAL_NETWORKS.map((network) => {
-          const n = networks[network];
-          const available = n?.available;
+        {/* A network the site hasn't set up or has switched off is not shown at all (owner rule: off = invisible;
+            readiness is for admins). Accounts already linked to it stay below, so they can still be disconnected. */}
+        {SOCIAL_NETWORKS.filter((network) => networks[network]?.available).map((network) => {
           return (
             <li key={network} className="flex items-center gap-3 rounded-lg border border-border bg-[var(--fanous-color-surface)] p-3" data-testid={`social-network-${network}`}>
               <NetworkMark network={network} />
               <div className="min-w-0 flex-1">
                 <p className="font-medium">{s.networks[network]}</p>
-                {!available ? <p className="text-xs text-[var(--fanous-color-text-secondary)]">{n?.configured ? a.paused : a.unavailable}</p> : null}
               </div>
               <Button
                 type="button"
                 variant="secondary"
                 className="min-h-11"
-                disabled={!available || busy === `connect-${network}`}
+                disabled={busy === `connect-${network}`}
                 onClick={() => onConnect(network)}
                 aria-label={fill(a.connectNetwork, { network: s.networks[network] })}
                 data-testid={`social-connect-${network}`}
@@ -153,6 +153,7 @@ export function SocialAccounts({ channelId, locale, accounts, networks, onAccoun
           );
         })}
       </ul>
+      ) : null}
 
       {pending && pending.network !== 'telegram' ? (
         <form
@@ -199,7 +200,7 @@ export function SocialAccounts({ channelId, locale, accounts, networks, onAccoun
               </div>
             </li>
           </ol>
-          <p className="text-sm text-[var(--fanous-color-text-secondary)]" role="status">{a.telegram.waiting} {a.telegram.expires}</p>
+          <p className="text-sm text-[var(--fanous-color-text-secondary)]" role="status">{a.telegram.waiting} {fill(a.telegram.expires, { minutes: 30 }, locale)}</p>
           <Button type="button" variant="ghost" className="min-h-11" onClick={() => setPending(null)}>{a.cancel}</Button>
         </div>
       ) : null}

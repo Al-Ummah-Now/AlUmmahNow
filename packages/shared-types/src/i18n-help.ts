@@ -767,7 +767,7 @@ export const HELP_AR: HelpTranslations = {
           heading: 'Buffer وZapier وMake وIFTTT',
           blocks: [
             { type: 'p', text: 'يضيف Buffer عناصر RSS إلى قائمة الانتظار عبر Zapier أو IFTTT: ابدأ بمُشغِّل RSS لديهما، والصق رابط الخلاصة، واختر Buffer إجراءً. ويعمل Make بالطريقة نفسها.' },
-            { type: 'p', text: 'ليصلك كل عنصر جديد فور نشره، أضف Webhook من **الاستوديو ← التواصل الاجتماعي ← Webhooks** واستخدم مُشغِّل الـ Webhook في Zapier أو Make. كل طلب موقَّع بسرّ الـ Webhook الخاص بك.' },
+            { type: 'p', text: 'ليصلك كل عنصر جديد فور نشره، أضف ويب هوك من **الاستوديو ← التواصل الاجتماعي ← الويب هوكس** واستخدم مُشغِّل الويب هوك (Webhook) في Zapier أو Make. كل طلب موقَّع بسرّ الويب هوك الخاص بك.' },
           ],
         },
         {

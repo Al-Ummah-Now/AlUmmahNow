@@ -190,7 +190,7 @@ export function SocialWebhooks({ channelId, locale, webhooks, limit, onWebhooks 
           </li>
         ))}
       </ul>
-      {webhooks.length >= limit ? <p className="mt-3 text-xs text-[var(--fanous-color-text-secondary)]">{fill(w.limit, { count: limit })}</p> : null}
+      {webhooks.length >= limit ? <p className="mt-3 text-xs text-[var(--fanous-color-text-secondary)]">{fill(w.limit, { count: limit }, locale)}</p> : null}
     </Section>
   );
 }
