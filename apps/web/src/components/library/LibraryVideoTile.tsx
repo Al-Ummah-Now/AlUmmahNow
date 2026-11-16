@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from '@/components/common/AppLink';
 import VideoThumbnail, { THUMBNAIL_16_9 } from '@/components/VideoThumbnail';
-import { getLocalizedValue, formatNumber } from '@al-ummah/shared-types';
+import { getLocalizedValue, formatClock, formatNumber } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { removeUnwantedChars } from '@/lib/utility';
 import { channelLabel } from '@/lib/channel-name';
@@ -23,11 +23,7 @@ export interface LibraryTileVideo {
 
 function formatDuration(seconds: number | undefined, locale: string): string | null {
   if (!seconds || seconds <= 0) return null;
-  const s = Math.floor(seconds % 60);
-  const m = Math.floor((seconds / 60) % 60);
-  const h = Math.floor(seconds / 3600);
-  const pad = (n: number) => formatNumber(locale, n, { minimumIntegerDigits: 2 });
-  return h > 0 ? `${formatNumber(locale, h)}:${pad(m)}:${pad(s)}` : `${formatNumber(locale, m)}:${pad(s)}`;
+  return formatClock(locale, Math.floor(seconds));
 }
 
 /** Compact video tile used by the Library hub and lists. */

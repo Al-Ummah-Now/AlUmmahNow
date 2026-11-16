@@ -735,6 +735,7 @@ export default function CustomVideoPlayer({
             enableDoubleTap: true,
             enableSwipeVolume: true,
             enableLongPress: true,
+            lang,
           });
           showGestureHintOnce(player.el() as HTMLElement, lang);
         }
@@ -1375,7 +1376,7 @@ export default function CustomVideoPlayer({
       {playerReady && playerRef.current && (
         <SettingsMenu player={playerRef.current} lang={lang} audioTracks={audioTracks} onShowShortcuts={() => setIsKeyboardHelpOpen(true)} />
       )}
-      {playerReady && playerRef.current && <ProgressTooltip player={playerRef.current} dir={dir === 'rtl' ? 'rtl' : 'ltr'} />}
+      {playerReady && playerRef.current && <ProgressTooltip player={playerRef.current} dir={dir === 'rtl' ? 'rtl' : 'ltr'} lang={lang} />}
 
       <KeyboardHelpModal
         isOpen={isKeyboardHelpOpen}

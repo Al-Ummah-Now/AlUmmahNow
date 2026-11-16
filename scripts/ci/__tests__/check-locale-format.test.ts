@@ -29,3 +29,12 @@ test('the baseline can only shrink and must be kept current', () => {
   assert.match(compare(new Map(), parseBaseline('a.ts 2'), [])[0], /update the baseline/);
   assert.match(compare(counts, new Map(), findings)[0], /baseline allows 0/);
 });
+
+test('flags a clock built by hand, not a hex byte or a date key (#1541)', () => {
+  const clock = scanText('apps/web/src/x.ts', "return `${m}:${String(s).padStart(2, '0')}`;").map((f) => f.rule);
+  assert.deepEqual(clock, ['hand-built clock (use formatClock)']);
+  assert.ok(scanText('a.ts', "return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;").length > 0);
+  assert.deepEqual(scanText('a.ts', "bytes.map((b) => b.toString(16).padStart(2, '0')).join('')"), []);
+  assert.deepEqual(scanText('a.ts', "const day = String(d.getUTCDate()).padStart(2, '0');"), []);
+  assert.deepEqual(scanText('a.ts', "// locale-format: machine (a WebVTT cue time)\nreturn `${hh}:${String(m).padStart(2, '0')}`;"), []);
+});

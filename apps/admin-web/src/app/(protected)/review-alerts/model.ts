@@ -2,7 +2,7 @@
  * Pure editing helpers for the Review alerts screen (rota, owners, escalation minutes).
  * The server validates again (shared-types validateReviewAlertSettings).
  */
-import type { ReviewAlertSettings, ReviewRotaEntry, ReviewRotaShift } from '@al-ummah/shared-types';
+import { formatClock, type ReviewAlertSettings, type ReviewRotaEntry, type ReviewRotaShift } from '@al-ummah/shared-types';
 
 export const DEFAULT_SHIFT: ReviewRotaShift = { days: [0, 1, 2, 3, 4], start: '09:00', end: '17:00' };
 
@@ -69,10 +69,8 @@ export function canSave(settings: ReviewAlertSettings): boolean {
 }
 
 /** Seconds under a minute ("45 s"), minutes and seconds from there ("1:50"), for the timings table. */
-export function formatSeconds(value: number | null, units: { s: (n: number) => string }): string {
+export function formatSeconds(value: number | null, units: { s: (n: number) => string }, locale = 'en'): string {
   if (value === null) return '—';
   if (value < 60) return units.s(value);
-  const m = Math.floor(value / 60);
-  const s = value % 60;
-  return s ? `${m}:${String(s).padStart(2, '0')}` : `${m}:00`;
+  return formatClock(locale, value);
 }

@@ -115,7 +115,7 @@ test.describe('Release: player controls', () => {
       await expect.poll(async () => (await media(page)).rate).toBe(1.5);
       // A choice goes back to the first panel, which shows the new value
       await expect(menu).toHaveAttribute('data-panel', 'root');
-      await expect(menu.locator('[data-row="speed"] .vjs-fanous-mi-value')).toHaveText('1.5×');
+      await expect(menu.locator('[data-row="speed"] .vjs-fanous-mi-value')).toHaveText(locale === 'ar' ? '١٫٥×' : '1.5×');
       await page.keyboard.press('Escape');
       await expect(menu).toHaveCount(0);
       await expect(settings).toHaveAttribute('aria-expanded', 'false');

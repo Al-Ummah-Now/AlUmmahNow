@@ -6,7 +6,7 @@
  * (with retry); the API answers null for a missing or someone else's video.
  */
 
-import { formatDate, formatNumber, formatPercent } from '@al-ummah/shared-types';
+import { formatClock, formatDate, formatNumber, formatPercent } from '@al-ummah/shared-types';
 import React, { useCallback, useEffect, useState } from 'react';
 import Link from '@/components/common/AppLink';
 import { getVideoAnalytics } from '@/lib/api/analytics';
@@ -16,14 +16,9 @@ import { logger } from '@/lib/logger-client';
 import AnalyticsCard from '../AnalyticsCard';
 import AnalyticsCardRTL from '../AnalyticsCard/rtl';
 
-/** 75 → "1:15", 3725 → "1:02:05" */
-export function formatDuration(seconds: number): string {
-  const total = Math.max(0, Math.round(Number.isFinite(seconds) ? seconds : 0));
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = total % 60;
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+/** 75 → "1:15", 3725 → "1:02:05"; Arabic «١:٠٢:٠٥» */
+export function formatDuration(seconds: number, locale: string = 'en'): string {
+  return formatClock(locale, seconds);
 }
 
 type State = { status: 'loading' } | { status: 'error' } | { status: 'ready'; data: VideoAnalyticsData };
@@ -88,7 +83,7 @@ export function VideoAnalyticsView({ videoId }: { videoId: string }) {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <Card title={t.analytics.views} value={fmt(state.data.views)} icon="eye" />
             <Card title={d.watchTimeTotal} value={d.hoursValue.replace('{hours}', formatNumber(locale, Math.round((state.data.watchTime / 3600) * 10) / 10))} icon="clock" />
-            <Card title={d.avgViewDuration} value={formatDuration(state.data.avgViewDuration)} icon="clock" />
+            <Card title={d.avgViewDuration} value={formatDuration(state.data.avgViewDuration, locale)} icon="clock" />
             <Card title={d.likes} value={fmt(state.data.likes)} icon="heart" />
             <Card title={d.comments} value={fmt(state.data.comments)} icon="message" />
             <Card title={d.overallEngagementRate} value={formatPercent(locale, (state.data.engagementRate || 0) / 100, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} icon="trending" />

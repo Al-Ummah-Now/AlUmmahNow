@@ -292,7 +292,7 @@ export function SettingsMenu({ player, lang, onShowShortcuts, audioTracks }: Set
   const rows = rootRows({
     labels: { quality: t.controls.quality, speed: t.controls.speed, captions: t.controls.captions, audio: t.chrome.audioTrack, shortcuts: t.chrome.shortcuts },
     quality: qualities.length ? qualityValue(qualityId, playing, t.quality.auto) : undefined,
-    speed: live ? undefined : speedLabel(p.playbackRate(), t.speed.normal),
+    speed: live ? undefined : speedLabel(p.playbackRate(), t.speed.normal, lang),
     captions: captions.length ? captions.find((o) => o.id === captionId)?.label : undefined,
     audio: audio.length ? audio.find((o) => o.id === audioId)?.label : undefined,
   });
@@ -412,7 +412,7 @@ export function SettingsMenu({ player, lang, onShowShortcuts, audioTracks }: Set
           </button>
         )}
         {panel === 'quality' && sub(t.controls.quality, qualities, qualityId, (id) => selectQuality(levels, id))}
-        {panel === 'speed' && sub(t.controls.speed, speedOptions(rates, t.speed.normal), String(p.playbackRate()), (id) => p.playbackRate(Number(id)))}
+        {panel === 'speed' && sub(t.controls.speed, speedOptions(rates, t.speed.normal, lang), String(p.playbackRate()), (id) => p.playbackRate(Number(id)))}
         {panel === 'captions' && sub(t.controls.captions, captions, captionId, (id) => selectCaption(text, id), captionStyle?.open ? { label: t.chrome.captionStyle, run: () => captionStyle.open?.() } : undefined)}
         {panel === 'audio' && sub(t.chrome.audioTrack, audio, audioId, chooseAudio)}
       </div>

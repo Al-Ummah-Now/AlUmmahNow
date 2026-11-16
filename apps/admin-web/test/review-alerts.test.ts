@@ -54,6 +54,7 @@ describe('review alerts model', () => {
     assert.equal(formatSeconds(45, { s: (n) => `${n} s` }), '45 s');
     assert.equal(formatSeconds(110, { s: (n) => `${n} s` }), '1:50');
     assert.equal(formatSeconds(150, { s: (n) => `${n} s` }), '2:30');
+    assert.equal(formatSeconds(110, { s: (n) => `${n} s` }, 'ar'), '١:٥٠');
     assert.ok(timeZones().includes('UTC'));
     assert.equal(timeZones('Mars/Base')[0], 'Mars/Base');
   });

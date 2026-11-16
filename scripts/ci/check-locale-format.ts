@@ -8,6 +8,8 @@
  *   - `.toLocaleString(`, `.toLocaleDateString(`, `.toLocaleTimeString(`
  *   - the literals `ar-SA`, `ar-EG`, `nu-latn`, `chartLocale(`, and `style: 'currency'` (money goes
  *     through moneyFormat/formatMoney, which writes the currency's Arabic name)
+ *   - a clock built by hand in a template (`${m}:${String(s).padStart(2, '0')}`): times people read
+ *     go through formatClock (the video player's through apps/web/src/lib/video/player-time.ts)
  *
  * A line that formats for a machine (time-zone maths, sorting) and not for a reader can say so
  * with a `locale-format: machine` comment on it or the line before.
@@ -44,6 +46,8 @@ const RULES: Array<{ name: string; pattern: RegExp }> = [
   { name: 'locale literal', pattern: /['"`]ar-(SA|EG)\b|nu-latn/g },
   { name: 'chartLocale', pattern: /\bchartLocale\s*\(/g },
   { name: 'currency style (use moneyFormat/formatMoney)', pattern: /style:\s*['"]currency['"]/g },
+  // A clock built by hand ("1:05" from padStart) shows 0–9 on Arabic pages: use formatClock (#1541)
+  { name: 'hand-built clock (use formatClock)', pattern: /:\$\{[^`]*?\.padStart\(\s*2\s*,\s*['"]0['"]\s*\)/g },
 ];
 
 const SKIP_DIR = new Set(['node_modules', '.next', 'dist', '.open-next', '.wrangler', '__tests__', 'test', 'tests', 'e2e', '__mocks__']);

@@ -4,6 +4,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { Play, Pause, Volume2, VolumeX, Maximize, Minimize } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { previewOwnsKey } from '../shortcut-scope';
+import { formatPlayerTime } from '@/lib/video/player-time';
 
 interface VideoPreviewProps {
   videoUrl: string;
@@ -12,7 +13,7 @@ interface VideoPreviewProps {
 }
 
 export default function VideoPreviewRTL({ videoUrl, posterUrl, className = '' }: VideoPreviewProps) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -22,11 +23,8 @@ export default function VideoPreviewRTL({ videoUrl, posterUrl, className = '' }:
   const [showControls, setShowControls] = useState(true);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
+  // The page's digits (#1541); a clock reads left to right in Arabic too
+  const formatTime = (seconds: number): string => formatPlayerTime(lang, seconds);
 
   const togglePlay = useCallback(() => {
     if (videoRef.current) {
@@ -181,7 +179,7 @@ export default function VideoPreviewRTL({ videoUrl, posterUrl, className = '' }:
                 {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
               </button>
 
-              <span className="text-sm">
+              <span className="text-sm" dir="ltr">
                 {formatTime(currentTime)} / {formatTime(duration)}
               </span>
             </div>

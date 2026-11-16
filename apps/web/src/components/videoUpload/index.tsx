@@ -33,6 +33,7 @@ import { applySuggestion, formText, isKnownCategory, newDraftKey, pickCategory, 
 import { useCategorySuggestion } from "@/hooks/useCategorySuggestion";
 import type { ProcessedMetadata } from "@/lib/upload/template-variables";
 import { getApiUrl } from "@/lib/runtime-config";
+import { formatPlayerTime } from '@/lib/video/player-time';
 
 interface VideoUploadProps {
   onUploadComplete: (video: VideoObject) => void;
@@ -267,9 +268,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
 
   const formatTime = (seconds: number): string => {
     if (!isFinite(seconds) || seconds < 0) return '--:--';
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    return formatPlayerTime(lang, seconds);
   };
 
   // Moves the form into the error state (keeping the last progress) and

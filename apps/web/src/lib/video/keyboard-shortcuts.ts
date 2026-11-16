@@ -35,6 +35,7 @@
 
 import type { ExtendedPlayer } from './videojs';
 import { getTranslations, type SupportedLanguage } from './i18n';
+import { formatLevel, formatPlaybackRate, formatPlayerTime, formatSeekStep } from './player-time';
 import { getPlayerUi, setTheatre } from './player-ui';
 import { captionTracks } from './settings-model';
 import { shouldHandleGlobalPlayerShortcut } from '@/lib/security/listener-scope';
@@ -239,19 +240,6 @@ function showFeedback(message: string, player: ExtendedPlayer): void {
   }, FEEDBACK_DURATION_MS);
 }
 
-/**
- * Format time in MM:SS or HH:MM:SS
- */
-function formatTime(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
-
-  if (h > 0) {
-    return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  }
-  return `${m}:${s.toString().padStart(2, '0')}`;
-}
 
 /**
  * Result of handling Picture-in-Picture toggle
@@ -416,7 +404,7 @@ export function setupKeyboardShortcuts(
       const currentTime = player.currentTime() || 0;
       const newTime = Math.max(0, currentTime - rewindAmount);
       player.currentTime(newTime);
-      feedbackMessage = `-${rewindAmount}s (${formatTime(newTime)})`;
+      feedbackMessage = `${formatSeekStep(lang, -rewindAmount)} (${formatPlayerTime(lang, newTime)})`;
       handled = true;
     }
 
@@ -428,7 +416,7 @@ export function setupKeyboardShortcuts(
       const duration = player.duration() || 0;
       const newTime = Math.min(duration, currentTime + forwardAmount);
       player.currentTime(newTime);
-      feedbackMessage = `+${forwardAmount}s (${formatTime(newTime)})`;
+      feedbackMessage = `${formatSeekStep(lang, forwardAmount)} (${formatPlayerTime(lang, newTime)})`;
       handled = true;
     }
 
@@ -438,7 +426,7 @@ export function setupKeyboardShortcuts(
       const currentVolume = player.volume();
       const newVolume = Math.min(1, currentVolume + VOLUME_STEP);
       player.volume(newVolume);
-      feedbackMessage = `${translations.controls.volume}: ${Math.round(newVolume * PERCENT_MULTIPLIER)}%`;
+      feedbackMessage = `${translations.controls.volume}: ${formatLevel(lang, newVolume)}`;
       handled = true;
     }
 
@@ -448,7 +436,7 @@ export function setupKeyboardShortcuts(
       const currentVolume = player.volume();
       const newVolume = Math.max(0, currentVolume - VOLUME_STEP);
       player.volume(newVolume);
-      feedbackMessage = `${translations.controls.volume}: ${Math.round(newVolume * PERCENT_MULTIPLIER)}%`;
+      feedbackMessage = `${translations.controls.volume}: ${formatLevel(lang, newVolume)}`;
       handled = true;
     }
 
@@ -495,7 +483,7 @@ export function setupKeyboardShortcuts(
       const currentRate = player.playbackRate();
       const newRate = Math.max(MIN_PLAYBACK_RATE, currentRate - PLAYBACK_RATE_STEP);
       player.playbackRate(newRate);
-      feedbackMessage = `${translations.controls.speed}: ${newRate}x`;
+      feedbackMessage = `${translations.controls.speed}: ${formatPlaybackRate(lang, newRate)}`;
       handled = true;
     }
 
@@ -505,7 +493,7 @@ export function setupKeyboardShortcuts(
       const currentRate = player.playbackRate();
       const newRate = Math.min(MAX_PLAYBACK_RATE, currentRate + PLAYBACK_RATE_STEP);
       player.playbackRate(newRate);
-      feedbackMessage = `${translations.controls.speed}: ${newRate}x`;
+      feedbackMessage = `${translations.controls.speed}: ${formatPlaybackRate(lang, newRate)}`;
       handled = true;
     }
 
@@ -559,7 +547,7 @@ export function setupKeyboardShortcuts(
       const duration = player.duration() || 0;
       const newTime = (duration * percentage) / PERCENT_MULTIPLIER;
       player.currentTime(newTime);
-      feedbackMessage = `${percentage}% (${formatTime(newTime)})`;
+      feedbackMessage = `${formatLevel(lang, percentage / PERCENT_MULTIPLIER)} (${formatPlayerTime(lang, newTime)})`;
       handled = true;
     }
 

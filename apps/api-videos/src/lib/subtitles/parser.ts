@@ -65,6 +65,7 @@ export function formatTimestamp(seconds: number): string {
   const secs = Math.floor(seconds % 60);
   const milliseconds = Math.round((seconds % 1) * 1000);
 
+  // locale-format: machine (a WebVTT cue time)
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}.${String(milliseconds).padStart(3, '0')}`;
 }
 

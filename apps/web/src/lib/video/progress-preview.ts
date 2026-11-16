@@ -11,6 +11,8 @@
  * - Performance optimized
  */
 
+import type { FormatLocale } from '@al-ummah/shared-types';
+import { formatPlayerTime } from './player-time';
 import type { ExtendedPlayer } from './videojs';
 import { logger } from '@/lib/logger-client';
 
@@ -352,23 +354,8 @@ export function setupWatchedSegments(
 }
 
 /**
- * Format time in seconds to HH:MM:SS or MM:SS format
- *
- * @param seconds - Time in seconds
- * @returns Formatted time string
- *
- * @example
- * formatTime(65);  // Returns: "1:05"
- * formatTime(3665);  // Returns: "1:01:05"
+ * A player time in the page's digits: 65 -> "1:05" / «١:٠٥», 3665 -> "1:01:05" (#1541).
  */
-export function formatTime(seconds: number): string {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = Math.floor(seconds % 60);
-
-  if (hours > 0) {
-    return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  }
-
-  return `${minutes}:${secs.toString().padStart(2, '0')}`;
+export function formatTime(seconds: number, locale: FormatLocale = 'en'): string {
+  return formatPlayerTime(locale, seconds);
 }

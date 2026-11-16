@@ -343,7 +343,7 @@ function Timings({ timings }: { timings: ReviewTimingDayView[] | null }) {
   // Median / 90th percentile, each kept whole in a right-to-left row
   const fmt = (v: { p50: number | null; p90: number | null }) => (
     <>
-      <bdi>{formatSeconds(v.p50, units)}</bdi> / <bdi>{formatSeconds(v.p90, units)}</bdi>
+      <bdi>{formatSeconds(v.p50, units, locale)}</bdi> / <bdi>{formatSeconds(v.p90, units, locale)}</bdi>
     </>
   );
   const cols: { key: 'toAlert' | 'toOpen' | 'toClaim' | 'toDecision'; label: MessageKey }[] = [

@@ -15,6 +15,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { AdminContentPermission, AdminVideoRow } from '@/lib/api/content-types';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { formatNumber, type MessageKey } from '@/i18n/translate';
+import { formatClock } from '@al-ummah/shared-types';
 import { linkClass } from '@/components/ui';
 import { ActionFeedback, ConfirmButton } from '@/components/content/actions';
 import { Chip, MonoId, Notice, PageHeader, smallButtonClass, statusTone } from '@/components/content/parts';
@@ -40,13 +41,10 @@ import { VideoBulkActionsSlot } from './extensions';
 const enc = encodeURIComponent;
 const PROCESSING_REFRESH_MS = 15_000;
 
-function duration(seconds: number | null): string | null {
+/** A video's length in the admin's digits: "1:02:05" / «١:٠٢:٠٥». */
+function duration(seconds: number | null, locale: string): string | null {
   if (!seconds || seconds <= 0) return null;
-  const s = Math.round(seconds);
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = String(s % 60).padStart(2, '0');
-  return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
+  return formatClock(locale, seconds);
 }
 
 /** Unpublish or republish videos, one request each; fails only when none went through. */
@@ -218,7 +216,7 @@ export function VideosList() {
       primary: true,
       header: t('videos.colVideo'),
       cell: (v) => {
-        const time = duration(v.duration);
+        const time = duration(v.duration, locale);
         return (
           <div className="flex items-start gap-3 min-w-0">
             <div className="relative shrink-0">

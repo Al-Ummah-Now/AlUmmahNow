@@ -5,6 +5,7 @@ import { Plus, X, MoveUp, MoveDown, Save, AlertCircle } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { v4 as uuidv4 } from 'uuid';
 import type { Chapter } from '@/lib/api/chapters';
+import { formatClock } from '@al-ummah/shared-types';
 
 interface ChapterEditorProps {
   videoId: string;
@@ -16,17 +17,11 @@ interface ChapterEditorProps {
 }
 
 /**
- * Format seconds to timestamp string (HH:MM:SS or MM:SS)
+ * Seconds as H:MM:SS or M:SS. Typed fields keep Arabic numerals 0–9 (the default); text people
+ * read passes the page's locale (Arabic: Eastern Arabic (Hindi) numerals, #1541).
  */
-function formatTimestamp(seconds: number): string {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = Math.floor(seconds % 60);
-
-  if (hours > 0) {
-    return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  }
-  return `${minutes}:${secs.toString().padStart(2, '0')}`;
+function formatTimestamp(seconds: number, locale: string = 'en'): string {
+  return formatClock(locale, Math.floor(Math.max(0, seconds)));
 }
 
 /**
@@ -61,7 +56,7 @@ export default function ChapterEditor({
   onCancel,
   className = '',
 }: ChapterEditorProps) {
-  const { t, isRTL } = useLanguage();
+  const { t, isRTL, lang } = useLanguage();
 
   const [chapters, setChapters] = useState<Chapter[]>(
     initialChapters.length > 0
@@ -422,9 +417,9 @@ export default function ChapterEditor({
 
               {/* Duration Preview */}
               <div className="text-xs text-gray-600 dark:text-gray-400">
-                {t.video.videoDuration}: {formatTimestamp(chapter.endTime - chapter.startTime)}
+                {t.video.videoDuration}: {formatTimestamp(chapter.endTime - chapter.startTime, lang)}
                 {' • '}
-                {formatTimestamp(chapter.startTime)} - {formatTimestamp(chapter.endTime)}
+                {formatTimestamp(chapter.startTime, lang)} - {formatTimestamp(chapter.endTime, lang)}
               </div>
             </div>
           ))}

@@ -24,6 +24,7 @@
 'use client';
 
 import React from 'react';
+import { formatPercent } from '@al-ummah/shared-types';
 
 export interface BufferingIndicatorProps {
   /**
@@ -94,7 +95,7 @@ export function BufferingIndicator({
       {/* Progress text */}
       {progress !== undefined && progress > 0 && (
         <div className="vjs-buffering-text" aria-live="polite">
-          {Math.round(progress)}%
+          {formatPercent(lang, progress / 100)}
         </div>
       )}
 
@@ -106,7 +107,7 @@ export function BufferingIndicator({
       {/* Screen reader text */}
       <span className="sr-only">
         {message || bufferingText}
-        {progress !== undefined && progress > 0 && ` ${Math.round(progress)}%`}
+        {progress !== undefined && progress > 0 && ` ${formatPercent(lang, progress / 100)}`}
       </span>
     </div>
   );

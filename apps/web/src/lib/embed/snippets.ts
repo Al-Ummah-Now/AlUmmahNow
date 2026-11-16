@@ -3,6 +3,7 @@
  */
 
 import type { EmbedLang } from './params';
+import { formatClock, type FormatLocale } from '@al-ummah/shared-types';
 
 export type EmbedKind = 'video' | 'playlist';
 
@@ -98,14 +99,9 @@ export function responsiveSnippet(src: string, title: string): string {
   );
 }
 
-/** "754" → "12:34", "3723" → "1:02:03" */
-export function formatTimestamp(totalSeconds: number): string {
-  const s = Math.max(0, Math.floor(totalSeconds));
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = s % 60;
-  const mm = h > 0 ? String(m).padStart(2, '0') : String(m);
-  return `${h > 0 ? `${h}:` : ''}${mm}:${String(sec).padStart(2, '0')}`;
+/** "754" → "12:34", "3723" → "1:02:03"; Arabic «١٢:٣٤» (#1541). */
+export function formatTimestamp(totalSeconds: number, locale: FormatLocale = 'en'): string {
+  return formatClock(locale, Math.max(0, Math.floor(Number.isFinite(totalSeconds) ? totalSeconds : 0)));
 }
 
 export interface ShareTarget {
