@@ -8,7 +8,7 @@ import type { NotificationItem } from '@al-ummah/shared-types';
 import type { AppTranslations } from '@/lib/i18n/types';
 import type { NotificationEvent, RealtimeNotificationKey } from '@/interfaces/websocket';
 import { resolveNotificationText } from '@/lib/websocket/notification-text';
-import { fillTemplate } from '@/lib/i18n/translations/library-notifications';
+import { pluralText } from './toast-queue';
 
 export const NOTIFICATION_CENTER_KEYS: readonly RealtimeNotificationKey[] = [
   'newVideo',
@@ -52,11 +52,11 @@ export function relativeTime(iso: string, t: AppTranslations, locale: string, no
   const minutes = Math.floor((now - time) / 60000);
   const texts = t.notificationCenter;
   if (minutes < 1) return texts.justNow;
-  if (minutes < 60) return fillTemplate(texts.minutesAgo, { count: minutes.toLocaleString(locale) });
+  if (minutes < 60) return pluralText(texts.minutesAgo, minutes, locale);
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return fillTemplate(texts.hoursAgo, { count: hours.toLocaleString(locale) });
+  if (hours < 24) return pluralText(texts.hoursAgo, hours, locale);
   const days = Math.floor(hours / 24);
-  if (days < 30) return fillTemplate(texts.daysAgo, { count: days.toLocaleString(locale) });
+  if (days < 30) return pluralText(texts.daysAgo, days, locale);
   return new Date(time).toLocaleDateString(locale);
 }
 

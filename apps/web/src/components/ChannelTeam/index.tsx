@@ -26,6 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import TeamActivity from './TeamActivity';
 import { Autocomplete, type AutocompleteOption } from '@/components/ui/Autocomplete';
 import { fetchSuggestions } from '@/lib/search/suggest-client';
+import { pluralText } from '@/lib/notifications/toast-queue';
 
 interface ChannelTeamProps {
   channelId: string;
@@ -284,7 +285,7 @@ export default function ChannelTeam({ channelId, role, locale }: ChannelTeamProp
                     {team.invites.map((invite) => {
                       const who = invite.inviteeName || invite.inviteeEmail || tr.someone;
                       const days = daysUntil(invite.expiresAt);
-                      const meta = (days > 0 ? tr.pendingMeta.replace('{days}', days.toLocaleString(locale)) : tr.pendingMetaToday).replace('{role}', tr.roles[invite.role]);
+                      const meta = (days > 0 ? pluralText(tr.pendingMeta, days, locale) : tr.pendingMetaToday).replace('{role}', tr.roles[invite.role]);
                       return (
                         <li key={invite.id} className="flex flex-wrap items-center gap-3 py-3" data-testid="team-invite" data-role={invite.role}>
                           <span className="min-w-0 flex-1">

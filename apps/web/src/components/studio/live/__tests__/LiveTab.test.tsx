@@ -44,6 +44,16 @@ describe('Studio LiveTab', () => {
     expect(within(rows[0]).getByRole('link', { name: text.watch })).toHaveAttribute('href', '/ar/live/a');
   });
 
+  it('names the row link by status: Go live before it starts, Manage stream while live, Details after', async () => {
+    list.mockResolvedValue({ items: [row('a'), row('b', 'live'), row('c', 'ended'), row('d', 'cancelled')], cursor: null });
+    render(<LiveTab locale="en" channelId="c1" role="owner" />);
+    const rows = await screen.findAllByTestId('studio-live-row');
+    expect(within(rows[0]).getByTestId('studio-live-manage')).toHaveTextContent(text.manage);
+    expect(within(rows[1]).getByTestId('studio-live-manage')).toHaveTextContent(text.manageLive);
+    expect(within(rows[2]).getByTestId('studio-live-manage')).toHaveTextContent(text.details);
+    expect(within(rows[3]).getByTestId('studio-live-manage')).toHaveTextContent(text.details);
+  });
+
   it('creates a stream and opens its Go live page', async () => {
     create.mockResolvedValue({ id: 'new1', title: 'Talk', status: 'scheduled' });
     render(<LiveTab locale="en" channelId="c1" role="admin" />);

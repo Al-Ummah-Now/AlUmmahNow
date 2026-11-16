@@ -4,6 +4,7 @@
  * seed, like i18n-contact.ts. Channel roles are not site roles, so the shared
  * words "admin" and "moderator" always read "Channel admin" / "Channel moderator".
  */
+import type { PluralTexts } from './i18n-library';
 
 export interface ChannelRolesTranslations {
   roles: { owner: string; admin: string; editor: string; moderator: string };
@@ -27,7 +28,8 @@ export interface ChannelRolesTranslations {
   invited: string;
   pendingTitle: string;
   /** "Editor · expires in {days} days" */
-  pendingMeta: string;
+  /** CLDR plural table on the days left: `{count}` days, `{role}` the role */
+  pendingMeta: PluralTexts;
   pendingMetaToday: string;
   cancelInvite: string;
   cancelInviteLabel: string;
@@ -64,7 +66,8 @@ export interface ChannelRolesTranslations {
   noInvitations: string;
   /** "{inviter} invited you as {role}" */
   invitedBy: string;
-  expiresIn: string;
+  /** CLDR plural table on the days left (`{count}`) */
+  expiresIn: PluralTexts;
   expiresToday: string;
   accept: string;
   decline: string;
@@ -124,7 +127,7 @@ export const CHANNEL_ROLES_EN: ChannelRolesTranslations = {
   inviting: 'Sending…',
   invited: 'Invitation sent. They get the role when they accept.',
   pendingTitle: 'Pending invitations',
-  pendingMeta: '{role} · expires in {days} days',
+  pendingMeta: { one: '{role} · expires in 1 day', other: '{role} · expires in {count} days' },
   pendingMetaToday: '{role} · expires today',
   cancelInvite: 'Cancel',
   cancelInviteLabel: 'Cancel the invitation for {name}',
@@ -159,7 +162,7 @@ export const CHANNEL_ROLES_EN: ChannelRolesTranslations = {
   invitationsLoading: 'Loading invitations…',
   noInvitations: 'You have no channel invitations.',
   invitedBy: '{inviter} invited you as {role}',
-  expiresIn: 'Expires in {days} days',
+  expiresIn: { one: 'Expires in 1 day', other: 'Expires in {count} days' },
   expiresToday: 'Expires today',
   accept: 'Accept',
   decline: 'Decline',
@@ -219,7 +222,7 @@ export const CHANNEL_ROLES_AR: ChannelRolesTranslations = {
   inviting: 'جارٍ الإرسال…',
   invited: 'أُرسلت الدعوة. يحصل على الدور عندما يقبلها.',
   pendingTitle: 'دعوات معلّقة',
-  pendingMeta: '{role} · تنتهي بعد {days} من الأيام',
+  pendingMeta: { one: '{role} · تنتهي بعد يوم', two: '{role} · تنتهي بعد يومين', few: '{role} · تنتهي بعد {count} أيام', many: '{role} · تنتهي بعد {count} يومًا', other: '{role} · تنتهي بعد {count} يوم' },
   pendingMetaToday: '{role} · تنتهي اليوم',
   cancelInvite: 'إلغاء',
   cancelInviteLabel: 'إلغاء دعوة {name}',
@@ -254,7 +257,7 @@ export const CHANNEL_ROLES_AR: ChannelRolesTranslations = {
   invitationsLoading: 'جارٍ تحميل الدعوات…',
   noInvitations: 'ليست لديك دعوات من قنوات.',
   invitedBy: 'دعاك {inviter} بدور {role}',
-  expiresIn: 'تنتهي بعد {days} من الأيام',
+  expiresIn: { one: 'تنتهي بعد يوم', two: 'تنتهي بعد يومين', few: 'تنتهي بعد {count} أيام', many: 'تنتهي بعد {count} يومًا', other: 'تنتهي بعد {count} يوم' },
   expiresToday: 'تنتهي اليوم',
   accept: 'قبول',
   decline: 'رفض',

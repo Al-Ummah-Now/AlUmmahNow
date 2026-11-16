@@ -46,6 +46,14 @@ describe('ChannelInvites', () => {
     expect(second).toHaveTextContent('Expires today');
   });
 
+  it('says the days left with the Arabic plural forms (never «3 من الأيام»)', async () => {
+    lang = 'ar';
+    render(<ChannelInvites />);
+    const [first] = await screen.findAllByTestId('channel-invite');
+    expect(first.textContent).toMatch(/تنتهي بعد (3|٣) أيام/);
+    expect(first.textContent).not.toMatch(/من الأيام/);
+  });
+
   it('Accept joins, reloads the channel menu, and offers the channel', async () => {
     const changed = jest.fn();
     window.addEventListener('aun:channel-invites-changed', changed);

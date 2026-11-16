@@ -169,9 +169,10 @@ export interface NotificationCenterTranslations {
     disableError: string;
   };
   justNow: string;
-  minutesAgo: string;
-  hoursAgo: string;
-  daysAgo: string;
+  /** Relative times are CLDR plural tables (Arabic needs all six forms); `{count}` is the localized number. */
+  minutesAgo: PluralTexts;
+  hoursAgo: PluralTexts;
+  daysAgo: PluralTexts;
   /** Real-time toasts (bottom corner). Grouped texts are CLDR plural tables; `{count}` is the localized number. */
   toasts: NotificationToastTranslations;
 }
@@ -347,9 +348,9 @@ export const NOTIFICATION_CENTER_EN: NotificationCenterTranslations = {
     disableError: 'Couldn’t turn off browser notifications. Try again.',
   },
   justNow: 'Just now',
-  minutesAgo: '{count} min ago',
-  hoursAgo: '{count} h ago',
-  daysAgo: '{count} d ago',
+  minutesAgo: { other: '{count} min ago' },
+  hoursAgo: { other: '{count} h ago' },
+  daysAgo: { other: '{count} d ago' },
   toasts: {
     region: 'Notifications',
     dismiss: 'Dismiss notification',
@@ -454,9 +455,9 @@ export const NOTIFICATION_CENTER_AR: NotificationCenterTranslations = {
     disableError: 'تعذّر إيقاف إشعارات المتصفح. حاول مرة أخرى.',
   },
   justNow: 'الآن',
-  minutesAgo: 'منذ {count} دقيقة',
-  hoursAgo: 'منذ {count} ساعة',
-  daysAgo: 'منذ {count} يوم',
+  minutesAgo: { one: 'منذ دقيقة', two: 'منذ دقيقتين', few: 'منذ {count} دقائق', many: 'منذ {count} دقيقة', other: 'منذ {count} دقيقة' },
+  hoursAgo: { one: 'منذ ساعة', two: 'منذ ساعتين', few: 'منذ {count} ساعات', many: 'منذ {count} ساعة', other: 'منذ {count} ساعة' },
+  daysAgo: { one: 'منذ يوم', two: 'منذ يومين', few: 'منذ {count} أيام', many: 'منذ {count} يومًا', other: 'منذ {count} يوم' },
   toasts: {
     region: 'الإشعارات',
     dismiss: 'إغلاق الإشعار',
