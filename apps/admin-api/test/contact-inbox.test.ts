@@ -259,40 +259,36 @@ describe('contact endpoints: assign, bulk, restore, roster', () => {
       await next();
     });
     app.route('/api/contact', contactRouter as never);
-    // api-videos' staff lookup (GET /internal/admin/staff): the admins from the role assignments
-    const staffCalls: string[] = [];
-    const VIDEOS = {
-      fetch: async (url: string) => {
-        staffCalls.push(url);
-        const items = [
-          { id: 'usr_a', email: 'usr_a@alummahnow.net', name: 'Amina', roles: ['role_admin'] },
-          { id: 'usr_b', email: 'usr_b@alummahnow.net', name: null, roles: ['role_super_admin'] },
-        ];
-        return new Response(JSON.stringify({ success: true, result: { items } }), { headers: { 'content-type': 'application/json' } });
-      },
-    };
-    const env = { REPORTS_DB: db, VIDEOS, INTERNAL_API_KEY: 'k' };
+    // The staff list, as admin tokens record it (lib/admin-staff.ts): two admins, a moderator, a former admin
+    const at = '2026-11-10T09:00:00.000Z';
+    const staff = db.prepare(`INSERT INTO admin_staff (user_id, role, name, email, active, last_seen_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
+    await staff.bind('usr_a', 'admin', 'Amina', 'usr_a@alummahnow.net', 1, at, at, at).run();
+    await staff.bind('usr_b', 'super_admin', null, 'usr_b@alummahnow.net', 1, at, at, at).run();
+    await staff.bind('usr_m', 'moderator', 'Musa', 'usr_m@alummahnow.net', 1, at, at, at).run();
+    await staff.bind('usr_old', 'admin', 'Former', 'old@alummahnow.net', 0, at, at, at).run();
+    const env = { REPORTS_DB: db };
     const request = (path: string, init: { method?: string; body?: unknown; user?: string; roles?: string } = {}) =>
       app.request(
         path,
         { method: init.method ?? 'GET', body: init.body === undefined ? undefined : JSON.stringify(init.body), headers: { 'content-type': 'application/json', 'x-test-user': init.user ?? 'usr_a', 'x-test-roles': init.roles ?? 'admin' } },
         env,
       );
-    return { db, request, staffCalls };
+    return { db, request };
   }
 
   it('assigns only to admins who can handle messages; "me" and null always work', async () => {
-    const { db, request, staffCalls } = await appFor();
+    const { db, request } = await appFor();
     await insertContactMessage(db, msg('m1'), roomy);
     const patch = (body: unknown, user = 'usr_a') => request('/api/contact/messages/m1', { method: 'PATCH', body, user });
-    assert.equal((await patch({ assignee: 'usr_x' })).status, 400, 'usr_x holds no admin role');
-    // Every admin is listed, the caller first, whether or not they ever opened the inbox
+    assert.equal((await patch({ assignee: 'usr_x' })).status, 400, 'usr_x is not on the staff list');
+    assert.equal((await patch({ assignee: 'usr_m' })).status, 400, 'a moderator cannot handle contact messages');
+    assert.equal((await patch({ assignee: 'usr_old' })).status, 400, 'an inactive admin is not offered');
+    // Every active admin with contact access is listed, the caller first; not the moderator, not the former admin
     const staff = (await (await request('/api/contact/staff')).json()) as { result: { items: { id: string; label: string; secondary: string | null }[] } };
     assert.deepEqual(staff.result.items.map((i) => [i.id, i.label, i.secondary]), [
       ['usr_a', 'Amina', 'me'],
       ['usr_b', 'usr_b@alummahnow.net', null],
     ]);
-    assert.match(staffCalls[0], /\/internal\/admin\/staff\?roles=role_super_admin%2Crole_admin/);
     const found = (await (await request('/api/contact/staff?q=amina')).json()) as { result: { items: { id: string }[] } };
     assert.deepEqual(found.result.items.map((i) => i.id), ['usr_a'], 'matched by name');
     assert.equal((await patch({ assignee: 'usr_b' })).status, 200);

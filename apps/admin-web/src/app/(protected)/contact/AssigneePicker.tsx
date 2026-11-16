@@ -2,8 +2,9 @@
 
 /**
  * Who handles a contact message: a live autocomplete over everyone who can
- * handle contact messages (admins and super admins, GET /api/contact/staff),
- * opening with all of them before anything is typed. Never a raw id field.
+ * handle contact messages (active Admins and Super Admins on the videos
+ * admin's own staff list, GET /api/contact/staff), opening with all of them
+ * before anything is typed. Never a raw id field.
  */
 import { useCallback } from 'react';
 import { useLanguage } from '@/i18n/I18nProvider';

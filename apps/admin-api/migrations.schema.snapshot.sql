@@ -29,10 +29,12 @@
 --   apps/admin-api/migrations/0028_newsletter.sql
 --   apps/admin-api/migrations/0029_audit_feed_indexes.sql
 --   apps/admin-api/migrations/0030_contact_inbox_read_spam.sql
+--   apps/admin-api/migrations/0031_admin_staff.sql
 --   apps/admin-api/migrations/0036_email_templates.sql
 --   apps/admin-api/migrations/0037_error_event_context.sql
 
 CREATE TABLE admin_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, actor_email TEXT, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, metadata TEXT, created_at TEXT NOT NULL);
+CREATE TABLE admin_staff (user_id TEXT PRIMARY KEY, role TEXT NOT NULL CHECK (role IN ('super_admin', 'admin', 'moderator')), name TEXT, email TEXT, active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)), inactive_reason TEXT, last_seen_at TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE ai_budget_daily (day TEXT NOT NULL, feature TEXT NOT NULL, reserved REAL NOT NULL DEFAULT 0, PRIMARY KEY (day, feature));
 CREATE TABLE ai_usage_daily (day TEXT NOT NULL, model TEXT NOT NULL, feature TEXT NOT NULL DEFAULT 'moderation', calls INTEGER NOT NULL DEFAULT 0, input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, neurons REAL NOT NULL DEFAULT 0, usd REAL NOT NULL DEFAULT 0, PRIMARY KEY (day, model, feature));
 CREATE TABLE auth_moderation_requests (id TEXT PRIMARY KEY, auth_request_id TEXT UNIQUE, subject_user_id TEXT NOT NULL, action TEXT NOT NULL, reason_category TEXT NOT NULL, reason TEXT NOT NULL, evidence TEXT NOT NULL DEFAULT '[]', requested_by_id TEXT NOT NULL, requested_by_name TEXT NOT NULL, idempotency_key TEXT NOT NULL UNIQUE, delivery_status TEXT NOT NULL, delivery_attempts INTEGER NOT NULL DEFAULT 0, delivery_error TEXT, status TEXT, decision_note TEXT, history TEXT NOT NULL DEFAULT '[]', pending_info TEXT, sync_error TEXT, sync_requested_at TEXT, synced_at TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
@@ -82,6 +84,8 @@ CREATE TABLE user_warnings (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, reason_c
 CREATE INDEX idx_admin_audit_actor ON admin_audit_log (actor_id, created_at);
 CREATE INDEX idx_admin_audit_created ON admin_audit_log(created_at);
 CREATE INDEX idx_admin_audit_target ON admin_audit_log(target_type, target_id, created_at);
+CREATE INDEX idx_admin_staff_active_email ON admin_staff (active, email);
+CREATE INDEX idx_admin_staff_active_role_name ON admin_staff (active, role, name);
 CREATE INDEX idx_auth_modreq_delivery ON auth_moderation_requests(delivery_status, created_at);
 CREATE INDEX idx_auth_modreq_status ON auth_moderation_requests(status, created_at);
 CREATE INDEX idx_auth_modreq_subject ON auth_moderation_requests(subject_user_id, created_at);

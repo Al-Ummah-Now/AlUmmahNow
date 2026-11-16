@@ -126,6 +126,8 @@ async function eraseLocalRows(users: LedgerUser[]): Promise<void> {
   await stackSql('al-ummah-now-reports', `DELETE FROM admin_audit_log WHERE actor_email LIKE '${marker}' OR target_id LIKE '${marker}' OR metadata LIKE '${marker}'${ids.length ? ` OR actor_id IN (${quoteList(ids)}) OR target_id IN (${quoteList(ids)})` : ''}`);
   if (!ids.length) return;
   await stackSql('al-ummah-now-reports', `DELETE FROM site_settings_log WHERE actor_id IN (${quoteList(ids)})`);
+  // The videos admin's staff list: each run admin's token recorded it (admin-api lib/admin-staff.ts)
+  await stackSql('al-ummah-now-reports', `DELETE FROM admin_staff WHERE user_id IN (${quoteList(ids)})`);
   await stackSql('al-ummah-now-reports', `DELETE FROM auth_moderation_requests WHERE subject_user_id IN (${quoteList(ids)}) OR requested_by_id IN (${quoteList(ids)})`);
   await stackSql('al-ummah-now-search', `DELETE FROM creator_tier_assignments WHERE user_id IN (${quoteList(ids)})`);
   await stackSql('al-ummah-now-d1', `DELETE FROM rbac_user_roles WHERE user_id IN (${quoteList(ids)})`);

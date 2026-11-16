@@ -1028,7 +1028,7 @@ const en = {
     assignTo: 'Assign to',
     assignPlaceholder: 'Search admins by email',
     staffCount: '{count} admins who handle messages',
-    staffEmpty: 'No account has the Admin or Super Admin role.',
+    staffEmpty: 'No admins on the staff list yet. An admin is listed once they open this admin.',
     staffNoMatch: 'No admin matches “{query}”',
     botCheck: 'Bot check',
     verdictNone: 'Not recorded (sent before the check was saved)',
