@@ -26,7 +26,8 @@ export const ANALYTICS_TABLE = 'analytics_daily';
 export const OTHER_DIM = 'other';
 
 /** 'site': whole-site counters (visits, landing pages, sources; entity id = the site, e.g. 'videos') */
-export type EntityType = 'video' | 'channel' | 'post' | 'site';
+export const ENTITY_TYPES = ['video', 'channel', 'post', 'site'] as const;
+export type EntityType = (typeof ENTITY_TYPES)[number];
 
 /** Conflict clause of every counter write: the database adds, never the caller. */
 export const ADD_ON_CONFLICT = 'ON CONFLICT (entity_type, entity_id, day, metric, dim) DO UPDATE SET value = value + excluded.value';
@@ -89,7 +90,8 @@ export class CounterBatch {
 
 	/** Queues an increment; invalid or zero increments are ignored. */
 	add(inc: CounterIncrement): void {
-		if (inc.entityType !== 'video' && inc.entityType !== 'channel' && inc.entityType !== 'post') return;
+		// Every EntityType is accepted: a hand-written list here dropped all 'site' counters (site visits, short links)
+		if (!(ENTITY_TYPES as readonly string[]).includes(inc.entityType)) return;
 		if (!inc.entityId || !DAY.test(inc.day) || !inc.metric) return;
 		if (!Number.isFinite(inc.value) || inc.value === 0) return;
 		const key = rowKey(inc);
