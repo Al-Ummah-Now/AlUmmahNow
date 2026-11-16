@@ -19,4 +19,21 @@ describe('userDisplayName (owner rule: first + last when there is no display nam
     expect(userDisplayName({ displayName: ' ', resolvedDisplayName: ' ' }, 'en', 'a@b.c')).toBe('a@b.c');
     expect(userDisplayName(null, 'en')).toBe('');
   });
+
+  it('follows display name → first + last → resolvedDisplayName → email, and never shows an @handle (owner review 2026-11-16)', () => {
+    const handles = { userName: 'fixture', handle: '@fixture', channelHandle: '@fixture-channel' };
+    const account = { ...handles, displayName: 'Fixture Creator', firstName: 'Amina', lastName: 'Yusuf', resolvedDisplayName: 'Resolved Name' };
+    expect(userDisplayName(account as never, 'en', 'a@b.c')).toBe('Fixture Creator');
+    expect(userDisplayName({ ...account, displayName: '' } as never, 'en', 'a@b.c')).toBe('Amina Yusuf');
+    expect(userDisplayName({ ...account, displayName: '', firstName: '', lastName: '' } as never, 'en', 'a@b.c')).toBe('Resolved Name');
+    expect(userDisplayName({ ...handles, displayName: '', resolvedDisplayName: '' } as never, 'en', 'a@b.c')).toBe('a@b.c');
+    for (const shown of [
+      userDisplayName(account as never, 'en', 'a@b.c'),
+      userDisplayName({ ...handles } as never, 'en', 'a@b.c'),
+      userDisplayName({ ...handles } as never, 'en', null),
+    ]) {
+      expect(shown).not.toMatch(/^@|fixture(-channel)?$/);
+    }
+    expect(userDisplayName({ ...handles } as never, 'en', null)).toBe('');
+  });
 });

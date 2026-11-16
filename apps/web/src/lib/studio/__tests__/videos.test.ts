@@ -57,6 +57,7 @@ describe('rowActions', () => {
 
   it('offers a new upload for a failed upload', () => {
     expect(rowActions('failed', 'owner', false, 'upload')).toEqual(['retryUpload', 'edit', 'delete']);
+    expect(rowActions('failed', 'owner', false, 'upload', false, false)).toEqual(['edit', 'delete']);
   });
 
   it('offers to publish again for a failed scheduled publish', () => {

@@ -1,4 +1,4 @@
-import { checkPath, itemPath, legacyHref, STUDIO_NAV, switchedPath, visibleNav, visibleTabs } from '../nav';
+import { checkPath, itemPath, legacyHref, STUDIO_NAV, studioHomePath, switchedPath, visibleNav, visibleTabs } from '../nav';
 import { can, roleForChannel, type StudioRole } from '../permissions';
 
 const LIVE = { live: true };
@@ -94,6 +94,16 @@ describe('Live off for the channel (GET /api/me/features)', () => {
   it('switching channel from Live lands on Dashboard', () => {
     expect(switchedPath(['content', 'live'], 'owner')).toBe('dashboard');
     expect(switchedPath(['content', 'live'], 'owner', LIVE)).toBe('content/live');
+  });
+});
+
+describe('where Studio opens (owner review 2026-11-16: no hollow pages)', () => {
+  const OFF = { live: false, upload: false, bulkSchedule: false, siteDomains: false, site: false };
+  const ON = { live: true, upload: true, bulkSchedule: true, siteDomains: true, site: true };
+  it.each<StudioRole>(['owner', 'admin', 'editor', 'moderator'])('%s keeps a Dashboard with every feature on or off', (role) => {
+    expect(studioHomePath(role, ON)).toBe('dashboard');
+    expect(studioHomePath(role, OFF)).toBe('dashboard');
+    expect(studioHomePath(role, {})).toBe('dashboard');
   });
 });
 

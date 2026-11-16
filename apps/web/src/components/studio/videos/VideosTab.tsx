@@ -80,7 +80,10 @@ export function VideosTab({ locale, channelId, role }: Props) {
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [bulkDialog, setBulkDialog] = useState<'playlist' | 'schedule' | null>(null);
   // Hidden when off: bulk scheduling only while features.bulkSchedule is on for this channel
-  const bulkScheduleOn = useFeatures(channelId).features.bulkSchedule;
+  const { features } = useFeatures(channelId);
+  const bulkScheduleOn = features.bulkSchedule;
+  // Hidden when off: no upload invitation or Retry upload while features.upload is off
+  const uploadOn = features.upload === true;
   const [currentDate, setCurrentDate] = useState(new Date());
   const [search, setSearch] = useState(query.q);
 
@@ -439,10 +442,12 @@ export function VideosTab({ locale, channelId, role }: Props) {
         </div>
       ) : items.length === 0 ? (
         <div className="py-12 text-center" data-testid="studio-videos-empty">
-          <p className="mb-3 text-muted-foreground">{filtered ? text.empty.filtered : text.empty[query.status as StudioVideoStatus]}</p>
+          <p className="mb-3 text-muted-foreground">
+            {filtered ? text.empty.filtered : query.status === 'scheduled' && !uploadOn ? text.empty.scheduledNoUpload : text.empty[query.status as StudioVideoStatus]}
+          </p>
           {filtered ? (
             <Button variant="outline" onClick={clearFilters}>{text.filters.clear}</Button>
-          ) : query.status === 'published' && can(role, 'video.upload') ? (
+          ) : query.status === 'published' && uploadOn && can(role, 'video.upload') ? (
             <Button asChild>
               <Link href={studioUploadHref(locale, channelId)}>
                 <UploadCloud aria-hidden="true" className="me-2 h-4 w-4" />
@@ -477,7 +482,7 @@ export function VideosTab({ locale, channelId, role }: Props) {
             </thead>
             <tbody className="block md:table-row-group">
               {items.map((video) => {
-                const actions = rowActions(query.status, role, video.isPublic !== false, video.failureKind ?? null, (video as StudioVideo & { review?: CreatorReviewView }).review?.appealUsed === true);
+                const actions = rowActions(query.status, role, video.isPublic !== false, video.failureKind ?? null, (video as StudioVideo & { review?: CreatorReviewView }).review?.appealUsed === true, uploadOn);
                 const edit = actionHref('edit', video);
                 const shown = video.scheduledPublishDate && query.status === 'scheduled' ? video.scheduledPublishDate : video.dateCreated;
                 return (

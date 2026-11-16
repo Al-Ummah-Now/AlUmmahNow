@@ -308,6 +308,9 @@ export const STUDIO_EN = {
     quick: { title: 'Quick links', upload: 'Upload', goLive: 'Go live', newPost: 'New post', customise: 'Customise' },
     welcome: { title: 'Welcome to your Studio', body: 'Upload a video to get started.', upload: 'Upload your first video' },
     moderator: { title: 'Comments', body: 'You can review comments on this channel.' },
+    recent: { title: 'Recent uploads', none: 'No uploads yet.' },
+    drafts: { title: 'Drafts and scheduled', drafts: 'Drafts', none: 'No drafts or scheduled videos.' },
+    held: { title: 'Comments awaiting review', none: 'No comments are waiting for review.', on: 'On {title}', all: 'Waiting in all: {count}' },
   },
   limits: {
     draftsMax: 'This channel can keep {limit} drafts. Publish or delete one to save another.',
@@ -397,6 +400,7 @@ export const STUDIO_EN = {
     empty: {
       published: 'No published videos yet.',
       scheduled: 'No scheduled videos. Schedule one when you upload or edit.',
+      scheduledNoUpload: 'No scheduled videos. Schedule one when you edit a video.',
       drafts: 'No drafts. Videos you save without publishing appear here.',
       processing: 'Nothing is processing right now.',
       in_review: 'Nothing is in review.',
@@ -836,6 +840,9 @@ export const STUDIO_AR: StudioTranslations = {
     quick: { title: 'روابط سريعة', upload: 'رفع', goLive: 'بث مباشر', newPost: 'منشور جديد', customise: 'تخصيص' },
     welcome: { title: 'مرحبًا بك في الاستوديو', body: 'ارفع مرئيًا للبدء.', upload: 'ارفع أول مرئي لك' },
     moderator: { title: 'التعليقات', body: 'يمكنك مراجعة التعليقات في هذه القناة.' },
+    recent: { title: 'آخر المرفوعات', none: 'لا مرفوعات بعد.' },
+    drafts: { title: 'المسودات والمجدولة', drafts: 'المسودات', none: 'لا مسودات ولا مرئيات مجدولة.' },
+    held: { title: 'تعليقات بانتظار المراجعة', none: 'لا تعليقات بانتظار المراجعة.', on: 'على {title}', all: 'بانتظار المراجعة إجمالًا: {count}' },
   },
   limits: {
     draftsMax: 'يمكن لهذه القناة الاحتفاظ بـ{limit} مسودة. انشر مسودة أو احذفها لحفظ أخرى.',
@@ -925,6 +932,7 @@ export const STUDIO_AR: StudioTranslations = {
     empty: {
       published: 'لا توجد مرئيات منشورة بعد.',
       scheduled: 'لا توجد مرئيات مجدولة. يمكنك الجدولة عند الرفع أو التعديل.',
+      scheduledNoUpload: 'لا توجد مرئيات مجدولة. يمكنك الجدولة عند تعديل مرئي.',
       drafts: 'لا توجد مسودات. تظهر هنا المرئيات التي تحفظها دون نشر.',
       processing: 'لا يوجد شيء قيد المعالجة الآن.',
       in_review: 'لا يوجد شيء قيد المراجعة.',
