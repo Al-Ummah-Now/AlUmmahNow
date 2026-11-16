@@ -60,6 +60,13 @@ export const HIDDEN_CLOSE_MS = 5 * 60_000;
 /** Re-authenticate this long before the token expires. */
 export const REAUTH_LEAD_MS = 60_000;
 
+/**
+ * A ticket whose token expires within this is not used: the realtime worker
+ * would answer AUTH_EXPIRED at once, and an immediate re-authentication with
+ * the same token looped (hundreds of ticket requests a second, 16-live-updates).
+ */
+export const TOKEN_MIN_LIFE_MS = 5_000;
+
 /** Delay before reconnect attempt `n` (0-based): doubling from 1 s, capped at 30 s, 50–100% jitter. */
 export function backoffMs(attempt: number, random: () => number): number {
   const base = Math.min(BACKOFF_MAX_MS, BACKOFF_BASE_MS * 2 ** Math.max(0, attempt));
@@ -93,6 +100,8 @@ export class AdminLiveClient {
   /** The channel whose subscribe reply is awaited (subscriptions go one at a time). */
   private pendingSubscribe: AdminLiveTopic | null = null;
   private connecting = false;
+  /** Re-authentications since one last held (a topic subscribed after it): backs AUTH_EXPIRED retries off. */
+  private reauthAttempt = 0;
 
   constructor(private deps: ClientDeps) {}
 
@@ -177,6 +186,10 @@ export class AdminLiveClient {
     }
     this.connecting = false;
     if (this.paused || this.topics.size === 0) return;
+    if (ticket && this.isStale(ticket)) {
+      this.deps.log?.('debug', '[admin-live] Ticket expires too soon; retrying later');
+      ticket = null;
+    }
     if (!ticket) {
       this.scheduleReconnect();
       return;
@@ -225,6 +238,8 @@ export class AdminLiveClient {
         const topic = msg.channel ? adminLiveTopicOf(msg.channel) : null;
         if (topic && topic === this.pendingSubscribe) this.pendingSubscribe = null;
         if (topic) this.setLive(topic, true);
+        // The token held long enough to subscribe: re-authentication is healthy again
+        this.reauthAttempt = 0;
         this.subscribeNext();
         return;
       }
@@ -253,7 +268,16 @@ export class AdminLiveClient {
       this.authenticated = false;
       this.pendingSubscribe = null;
       for (const topic of this.topics.keys()) this.setLive(topic, false);
-      void this.reauthenticate();
+      // The first time at once; again before a subscription held, with the reconnect backoff
+      const attempt = this.reauthAttempt++;
+      if (attempt === 0) void this.reauthenticate();
+      else {
+        this.clearTimer('reauthTimer');
+        this.reauthTimer = this.deps.setTimeout(() => {
+          this.reauthTimer = null;
+          void this.reauthenticate();
+        }, backoffMs(attempt - 1, this.deps.random));
+      }
       return;
     }
     if ((code === 'FORBIDDEN' || code === 'SUBSCRIBE_FAILED') && this.pendingSubscribe) {
@@ -275,8 +299,10 @@ export class AdminLiveClient {
   }
 
   private async reauthenticate(): Promise<void> {
-    const ticket = await this.deps.fetchTicket().catch(() => null);
+    let ticket = await this.deps.fetchTicket().catch(() => null);
     if (!this.socket || this.socket.readyState !== OPEN) return;
+    // A token about to expire would be refused at once: start over with a new socket, backing off
+    if (ticket && this.isStale(ticket)) ticket = null;
     if (!ticket) {
       const socket = this.socket;
       this.teardown();
@@ -335,6 +361,10 @@ export class AdminLiveClient {
       this.reconnectTimer = null;
       this.ensureConnected();
     }, delay);
+  }
+
+  private isStale(ticket: RealtimeTicket): boolean {
+    return typeof ticket.expiresAt === 'number' && ticket.expiresAt * 1000 <= this.deps.now() + TOKEN_MIN_LIFE_MS;
   }
 
   /** Forgets the socket and marks every topic down (not the listeners). */

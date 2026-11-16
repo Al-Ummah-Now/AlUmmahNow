@@ -8,6 +8,7 @@ import { PreferencesControls } from '@/components/PreferencesControls';
 import { AccountMenu } from '@/components/AccountMenu';
 import { Icon } from './icons';
 import { CommandPalette } from './CommandPalette';
+import { useLiveContactBadge } from './useLiveContactBadge';
 import {
   activeItem,
   badgeText,
@@ -54,6 +55,10 @@ export function AdminShell({ userEmail, userName, userRoles, authIssuer, environ
   const [paletteOpen, setPaletteOpen] = useState(false);
   const drawerRef = useRef<HTMLElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+
+  // The unread contact count follows contact events on every page, without refreshing the page
+  const contactCount = useLiveContactBadge(badges.contact);
+  const liveBadges: NavBadges = { ...badges, contact: contactCount };
 
   const items = useMemo(() => visibleItems(access), [access]);
   const groups = useMemo(() => groupedItems(access), [access]);
@@ -105,7 +110,7 @@ export function AdminShell({ userEmail, userName, userRoles, authIssuer, environ
 
   const navLink = (item: NavItem) => {
     const active = item === current;
-    const count = item.badge ? badges[item.badge] : null;
+    const count = item.badge ? liveBadges[item.badge] : null;
     const text = badgeText(count, locale);
     return (
       <li key={item.href}>

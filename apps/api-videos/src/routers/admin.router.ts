@@ -6,6 +6,7 @@
  * passes the acting admin's id in X-Admin-Actor (recorded on suspensions and
  * bans) and writes the audit log itself.
  */
+import { cleanStaffRoles, listStaff } from '../lib/admin/staff';
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import {
@@ -265,6 +266,12 @@ app.get('/users', async (c) => {
 	return ok(c, query.noTotal ? page : await withCreatorInfo(c.env as never, page));
 });
 app.get('/users/search', async (c) => ok(c, await searchUsers(c.env, parse(UserSearchQuery, c.req.query()) as never)));
+// Staff for admin pickers (contact inbox "Assign to"): accounts holding the given admin roles, read-only from AUTH_DB
+app.get('/staff', async (c) => {
+	const authDb = (c.env as { AUTH_DB?: unknown }).AUTH_DB;
+	if (!authDb) throw new admin.AdminError(422, 'auth_db_unbound', 'AUTH_DB is not bound: staff cannot be read');
+	return ok(c, { items: await listStaff(authDb as never, cleanStaffRoles(c.req.query('roles'))) });
+});
 // Invited creators (docs/admin/INVITES.md): who has an email, the invited user's
 // profile (create-only) and channels made for them
 app.get('/accounts', async (c) => ok(c, await lookupAccount(c.env, c.req.query('email') ?? '')));

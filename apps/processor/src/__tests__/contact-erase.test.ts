@@ -38,9 +38,7 @@ const ids = (db: ReturnType<typeof reportsDb>, table: string) =>
 describe('eraseUserContactData', () => {
   it("deletes the account's messages and their notes, nobody else's, and is idempotent", async () => {
     const db = reportsDb();
-    db.raw.prepare("INSERT INTO contact_staff (user_id, email, last_seen_at) VALUES ('user-1', 'one@example.org', '2026-11-10T08:00:00.000Z'), ('user-2', 'two@example.org', '2026-11-10T08:00:00.000Z')").run();
     expect(await eraseUserContactData(db, 'user-1')).toEqual({ messages: 2, notes: 2 });
-    expect(db.raw.prepare('SELECT user_id FROM contact_staff').all().map((r) => r.user_id)).toEqual(['user-2']);
     expect(ids(db, 'contact_messages')).toEqual(['m3', 'm4']);
     expect(ids(db, 'contact_notes')).toEqual(['n3']);
     expect(await eraseUserContactData(db, 'user-1')).toEqual({ messages: 0, notes: 0 });

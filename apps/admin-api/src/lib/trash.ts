@@ -21,7 +21,6 @@ import { callVideos, type VideosClientEnv } from './content/videosClient';
 import {
   listDeletedContactMessages,
   purgeContactMessages,
-  pruneContactStaff,
   requestContactPurge,
   restoreContactMessage,
 } from './contact-store';
@@ -211,12 +210,6 @@ export async function runTrashCleanup(env: TrashEnv, now = new Date(), limit = C
     result['contact-message'].failed += 1;
     logger.error('[Trash] Contact message purge failed', { error: error instanceof Error ? error.message : String(error) });
   }
-
-  // The inbox's assignee roster keeps an admin's email: entries not seen for 180 days go (an
-  // admin who left, or whose account was deleted on the auth server only, never lingers)
-  await pruneContactStaff(env.REPORTS_DB, now).catch((error: unknown) =>
-    logger.error('[Trash] Contact roster prune failed', { error: error instanceof Error ? error.message : String(error) }),
-  );
 
   try {
     const { purged, failed } = await themes(env).purge(cutoff, CLEANUP_ACTOR, now.toISOString(), limit);
