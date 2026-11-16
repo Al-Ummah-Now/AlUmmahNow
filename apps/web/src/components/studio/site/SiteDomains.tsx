@@ -4,8 +4,9 @@
  * Studio → Site → Domains (wiki AUN-SCHOLAR-SITES §4.2, #1212): add an own domain, copy the DNS
  * records it needs, watch its status (checked again every 30 s while one is pending and this page
  * is open; admin-api's cron checks too), pick the main address, remove a domain (in-app dialog).
- * While Cloudflare for SaaS is not enabled on the zone, the section says own domains aren't
- * available yet.
+ * Shown only while features.siteDomains is on (the Site page checks it). A refusal saying
+ * the feature is off (404 feature_off, or saas_unavailable) re-reads the page, which then
+ * leaves the section out (wiki "Hidden when off"); there is no "not available" text.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SITE_TEST_DOMAIN_SUFFIX, type SiteDnsRecord, type SiteDomain, type SiteHost, type StudioTranslations, formatDateTime, formatNumber } from '@al-ummah/shared-types';
@@ -15,6 +16,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useConfirm } from '@/components/ui/confirm-dialog';
+import { useRouter } from 'next/navigation';
+import { FEATURE_OFF_CODE } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { logger } from '@/lib/logger-client';
 
@@ -52,7 +55,8 @@ export function SiteDomains({ channelId, locale }: { channelId: string; locale: 
   const { t } = useLanguage();
   const d = t.studio.site.domains;
   const [view, setView] = useState<DomainsView | null>(null);
-  const [unavailable, setUnavailable] = useState(false);
+  const router = useRouter();
+  const [off, setOff] = useState(false);
   const [host, setHost] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
@@ -61,13 +65,19 @@ export function SiteDomains({ channelId, locale }: { channelId: string; locale: 
   const pending = view?.domains.some((x) => x.status === 'waiting_dns' || x.status === 'issuing') ?? false;
   const mounted = useRef(true);
 
+  const isOff = (code: string) => code === FEATURE_OFF_CODE || code === 'saas_unavailable';
+  const turnOff = () => {
+    setOff(true);
+    router.refresh();
+  };
+
   const errorText = (code: string) => ((d.errors as Record<string, string>)[code] ?? d.errors.generic).replace('{suffix}', testSuffixHere());
 
   const load = useCallback(async () => {
     const r = await call<DomainsView>(channelId, '');
     if (!mounted.current) return;
     if (r.ok) setView(r.data);
-    else if (r.code === 'saas_unavailable') setUnavailable(true);
+    else if (isOff(r.code)) turnOff();
     else setMessage({ tone: 'error', text: errorText(r.code) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channelId]);
@@ -101,7 +111,7 @@ export function SiteDomains({ channelId, locale }: { channelId: string; locale: 
     const r = await call<{ domain: SiteDomain }>(channelId, '', { method: 'POST', body: JSON.stringify({ host }) });
     setBusy(null);
     if (!r.ok) {
-      if (r.code === 'saas_unavailable') setUnavailable(true);
+      if (isOff(r.code)) turnOff();
       else setMessage({ tone: 'error', text: errorText(r.code) });
       return;
     }
@@ -149,13 +159,13 @@ export function SiteDomains({ channelId, locale }: { channelId: string; locale: 
 
   const time = (iso: string | null) => (iso ? formatDateTime(locale === 'ar' ? 'ar' : 'en-GB', new Date(iso), { dateStyle: 'medium', timeStyle: 'short' }) : '');
 
+  if (off) return null;
+
   return (
     <section aria-labelledby="site-domains-h" className="space-y-3" data-testid="site-domains">
       <h2 id="site-domains-h" className="text-lg font-medium">{d.title}</h2>
       <p className="text-sm text-[var(--fanous-color-text-secondary)]">{d.intro}</p>
-      {unavailable ? (
-        <p role="status" className="text-sm" data-testid="site-domains-unavailable">{d.unavailable}</p>
-      ) : !view ? null : (
+      {!view ? null : (
         <>
           {view.hosts.length > 0 && (
             <div className="space-y-2">
@@ -178,9 +188,8 @@ export function SiteDomains({ channelId, locale }: { channelId: string; locale: 
             </div>
           )}
 
-          {view.limit < 1 ? (
-            <p className="text-sm" data-testid="site-domains-not-included">{d.notIncluded}</p>
-          ) : (
+          {/* No own domains allowed any more: existing ones stay manageable, nothing to add, no words */}
+          {view.limit < 1 ? null : (
             <form onSubmit={add} className="space-y-2" aria-describedby="site-domain-limit">
               <Label htmlFor="site-domain-host">{d.addLabel}</Label>
               <div className="flex flex-wrap gap-2">

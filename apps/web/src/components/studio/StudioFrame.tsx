@@ -139,7 +139,7 @@ function Rail({ locale, role, channel, segments, features, onNavigate, className
   return (
     <div className={cn('flex h-full flex-col gap-3 p-3', className)}>
       <ChannelSwitcher locale={locale} channel={channel} segments={segments} />
-      {can(role, 'video.upload') && (
+      {can(role, 'video.upload') && features?.upload && (
         <Button asChild>
           <Link href={studioUploadHref(locale, channel.id)} onClick={onNavigate} data-testid="studio-upload">
             <UploadCloud aria-hidden="true" className="me-2 h-4 w-4" />

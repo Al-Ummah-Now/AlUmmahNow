@@ -13,6 +13,9 @@ type Requires = readonly StudioCapability[];
 export interface StudioFeatures {
   site?: boolean;
   live?: boolean;
+  upload?: boolean;
+  bulkSchedule?: boolean;
+  siteDomains?: boolean;
 }
 export type StudioFeature = keyof StudioFeatures;
 

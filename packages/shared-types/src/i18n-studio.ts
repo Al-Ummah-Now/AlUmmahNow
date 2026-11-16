@@ -104,8 +104,6 @@ export const STUDIO_EN = {
     domains: {
       title: 'Domains',
       intro: 'Use your own domain for your site. Your site also keeps its address on alummahnow.org.',
-      unavailable: 'Own domains aren\'t available yet. Your site works on its alummahnow.org address meanwhile.',
-      notIncluded: 'Your plan doesn\'t include own domains.',
       add: 'Add your own domain',
       addLabel: 'Domain',
       addHint: 'For example www.example.com',
@@ -312,9 +310,8 @@ export const STUDIO_EN = {
     moderator: { title: 'Comments', body: 'You can review comments on this channel.' },
   },
   limits: {
-    draftsMax: 'Your plan allows {limit} drafts per channel. Publish or delete one to save another.',
-    bulkSchedule: 'Your plan doesn\'t include scheduling several videos at once. Schedule them one at a time.',
-    other: 'Your plan doesn\'t include this.',
+    draftsMax: 'This channel can keep {limit} drafts. Publish or delete one to save another.',
+    other: 'That can\'t be done on this channel.',
   },
   editor: { back: 'Back to videos', details: 'Details', analytics: 'Analytics' },
   videos: {
@@ -635,8 +632,6 @@ export const STUDIO_AR: StudioTranslations = {
     domains: {
       title: 'النطاقات',
       intro: 'استخدم نطاقك الخاص لموقعك. يبقى لموقعك عنوانه على alummahnow.org أيضًا.',
-      unavailable: 'النطاقات الخاصة غير متاحة بعد. يعمل موقعك على عنوانه في alummahnow.org إلى ذلك الحين.',
-      notIncluded: 'لا تشمل خطتك النطاقات الخاصة.',
       add: 'أضف نطاقك الخاص',
       addLabel: 'النطاق',
       addHint: 'مثل www.example.com',
@@ -843,9 +838,8 @@ export const STUDIO_AR: StudioTranslations = {
     moderator: { title: 'التعليقات', body: 'يمكنك مراجعة التعليقات في هذه القناة.' },
   },
   limits: {
-    draftsMax: 'تتيح خطتك {limit} مسودة لكل قناة. انشر مسودة أو احذفها لحفظ أخرى.',
-    bulkSchedule: 'لا تشمل خطتك جدولة عدة مرئيات دفعة واحدة. يمكنك جدولتها واحدًا تلو الآخر.',
-    other: 'لا تشمل خطتك هذا.',
+    draftsMax: 'يمكن لهذه القناة الاحتفاظ بـ{limit} مسودة. انشر مسودة أو احذفها لحفظ أخرى.',
+    other: 'لا يمكن تنفيذ ذلك في هذه القناة.',
   },
   editor: { back: 'العودة إلى المرئيات', details: 'التفاصيل', analytics: 'التحليلات' },
   videos: {
