@@ -75,9 +75,9 @@ describe('credentials: editor rules', () => {
 
   it('names each permission in Cloudflare\'s own words and says what stops working', () => {
     const t = createTranslator('en');
-    assert.match(t(CHECK_COPY.cache_purge.permission), /Zone → Cache Purge → Purge for alummahnow\.net/);
+    assert.match(t(CHECK_COPY.cache_purge.permission), /Zone → Cache\sPurge → Purge for alummahnow\.net/);
     assert.match(t(CHECK_COPY.zone_analytics.permission), /Zone → Analytics → Read/);
-    assert.match(t(CHECK_COPY.account_analytics.permission), /Account → Account Analytics → Read/);
+    assert.match(t(CHECK_COPY.account_analytics.permission), /Account → Account\sAnalytics → Read/);
     assert.match(t(CHECK_COPY.cache_purge.impact), /private can stay cached/);
   });
 
@@ -94,7 +94,7 @@ describe('credentials: the section', () => {
   it('shows the Secrets Store source with Replace and Test, and no value anywhere', () => {
     const html = render([view()]);
     assert.match(html, /data-testid="credential-cloudflare-media"[^>]*data-state="untested"/);
-    assert.match(html, /From the Cloudflare Secrets Store entry/);
+    assert.match(html, /From the Cloudflare Secrets\sStore entry/);
     assert.match(html, /media-cdn-api-token/);
     assert.match(html, /data-testid="credential-cloudflare-media-replace"/);
     assert.match(html, /data-testid="credential-cloudflare-media-run-test"/);
@@ -108,9 +108,9 @@ describe('credentials: the section', () => {
     assert.match(html, /data-state="attention"/);
     assert.match(html, /The token works, but some permissions are missing/);
     assert.match(html, /data-testid="credential-check-cache_purge" data-ok="false"/);
-    assert.match(html, /Add Zone → Cache Purge → Purge for alummahnow\.net\./);
+    assert.match(html, /Add Zone → Cache\sPurge → Purge for alummahnow\.net\./);
     assert.match(html, /data-testid="credential-check-account_analytics" data-ok="true"/);
-    assert.doesNotMatch(html, /Add Account → Account Analytics/, 'a passed check gives no advice');
+    assert.doesNotMatch(html, /Add Account → Account\sAnalytics/, 'a passed check gives no advice');
   });
 
   it('a missing token offers Add and cannot be tested; an unreadable one asks to set it again', () => {
@@ -125,7 +125,7 @@ describe('credentials: the section', () => {
     assert.doesNotMatch(without, /data-testid="credential-cloudflare-media-create"/);
     assert.match(without, /Add the Cloudflare token manager below to create and rotate this token here\./);
     assert.match(without, /data-testid="credential-cloudflare-token-manager"/);
-    assert.match(without, /API Tokens: Edit and Secrets Store: Edit/);
+    assert.match(without, /API\sTokens: Edit and Secrets\sStore: Edit/);
     assert.doesNotMatch(without, /data-testid="credential-cloudflare-token-manager-create"/, 'the manager itself is never minted here');
     const withManager = render([view({ canMint: true }), managerView({ present: true, source: 'binding' })]);
     assert.match(withManager, /data-testid="credential-cloudflare-media-create"[^>]*>Rotate</);
@@ -137,12 +137,12 @@ describe('credentials: the section', () => {
 
   it('says why Create failed and what happened to the previous token, in plain words', () => {
     const t = createTranslator('en');
-    assert.match(t(createErrorKey(409, 'manager_cannot_mint')), /give it API Tokens: Edit/);
+    assert.match(t(createErrorKey(409, 'manager_cannot_mint')), /give it API\sTokens: Edit/);
     assert.match(t(createErrorKey(502, 'minted_token_failed')), /deleted and nothing was changed/);
-    assert.match(t(createErrorKey(502, 'store_refused')), /Secrets Store: Edit/);
+    assert.match(t(createErrorKey(502, 'store_refused')), /Secrets\sStore: Edit/);
     assert.match(t(previousTokenNotice(false, 'not_minted_here')), /made by hand, so it was kept/);
     assert.match(t(previousTokenNotice(true, null)), /previous one was revoked/);
-    assert.match(t(CHECK_COPY.mint_tokens.permission), /API Tokens → Edit/);
+    assert.match(t(CHECK_COPY.mint_tokens.permission), /API\sTokens → Edit/);
   });
 
   it('renders right to left in Arabic', () => {

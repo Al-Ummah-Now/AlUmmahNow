@@ -140,6 +140,8 @@ export interface MintRecord {
   previousTokenId: string | null;
   /** The previous token was revoked (only tokens minted here are; a hand-made one is kept) */
   previousRevoked: boolean;
+  /** Last four characters of the minted token (the page shows "ends in …") */
+  last4?: string;
 }
 
 export const platformCredentialKey = (id: PlatformCredentialId) => `credentials/${id}.json`;

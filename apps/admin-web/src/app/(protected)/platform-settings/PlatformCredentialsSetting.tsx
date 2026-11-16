@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { PlatformCredentialTest, PlatformCredentialView } from '@al-ummah/shared-types';
 import type { ActionResult } from '@/lib/api/errors';
@@ -27,6 +27,12 @@ const STATE: Record<CredentialState, { tone: ChipTone; label: MessageKey }> = {
 const TITLE: Record<string, { title: MessageKey; purpose: MessageKey }> = {
   'cloudflare-media': { title: 'platformCredentials.cloudflareMediaTitle', purpose: 'platformCredentials.cloudflareMediaPurpose' },
   'cloudflare-token-manager': { title: 'platformCredentials.tokenManagerTitle', purpose: 'platformCredentials.tokenManagerPurpose' },
+};
+
+/** What "not set" means for each credential (its own consequence, never another's). */
+const NONE: Record<string, MessageKey> = {
+  'cloudflare-media': 'platformCredentials.sourceNone',
+  'cloudflare-token-manager': 'platformCredentials.sourceNoneManager',
 };
 
 /**
@@ -56,6 +62,8 @@ function CredentialItem({ initial, replace, test: runTest, create }: { initial: 
   const router = useRouter();
   const ids = useId();
   const [view, setView] = useState(initial);
+  // A change to another card (the token manager added) refreshes the page: this card follows
+  useEffect(() => setView(initial), [initial]);
   const [editing, setEditing] = useState(false);
   // The typed value lives only here until it is sent, and is dropped right after
   const [value, setValue] = useState('');
@@ -63,6 +71,12 @@ function CredentialItem({ initial, replace, test: runTest, create }: { initial: 
   const [busy, setBusy] = useState<'save' | 'test' | 'create' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // A status line speaks for the last action only
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), 8000);
+    return () => clearTimeout(timer);
+  }, [notice]);
   const fieldError = touched ? tokenError(value) : null;
   const state = credentialState(view);
   const copy = TITLE[view.id] ?? { title: 'platformCredentials.title', purpose: 'platformCredentials.intro' };
@@ -157,9 +171,11 @@ function CredentialItem({ initial, replace, test: runTest, create }: { initial: 
 
   return (
     <article className="rounded border border-border p-4" aria-labelledby={`${ids}-name`} data-testid={`credential-${view.id}`} data-state={state} data-source={view.source ?? 'none'}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 id={`${ids}-name`} className="text-base font-semibold text-fg">{t(copy.title)}</h3>
-        <Chip tone={STATE[state].tone} large testId={`credential-${view.id}-state`}>{t(STATE[state].label)}</Chip>
+      <div className="flex items-start justify-between gap-3">
+        <h3 id={`${ids}-name`} className="min-w-0 text-base font-semibold text-fg">{t(copy.title)}</h3>
+        <span className="shrink-0">
+          <Chip tone={STATE[state].tone} large testId={`credential-${view.id}-state`}>{t(STATE[state].label)}</Chip>
+        </span>
       </div>
       <p className="mt-1 text-sm text-fg-muted max-w-3xl">{t(copy.purpose)}</p>
 
@@ -176,12 +192,12 @@ function CredentialItem({ initial, replace, test: runTest, create }: { initial: 
             <code className="mx-1 inline-block whitespace-nowrap rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-fg" dir="ltr">{view.secretsStoreName}</code>
           </>
         ) : (
-          t('platformCredentials.sourceNone')
+          t(NONE[view.id] ?? 'platformCredentials.sourceNone')
         )}
       </p>
       {view.minted && (
         <p className="mt-1 text-sm text-fg-muted" data-testid={`credential-${view.id}-minted`}>
-          {t('platformCredentials.mintedHere', { date: formatDate(view.minted.at, locale, true), actor: view.minted.byName || view.minted.by })}
+          {t('platformCredentials.mintedHere', { date: formatDate(view.minted.at, locale, true), actor: view.minted.byName || view.minted.by, last4: `…${view.minted.last4 ?? ''}` })}
         </p>
       )}
       {view.unreadable && (
@@ -192,7 +208,7 @@ function CredentialItem({ initial, replace, test: runTest, create }: { initial: 
         {t('platformCredentials.usedBy')}{' '}
         {view.usedBy.map((u, i) => (
           <span key={`${u.worker}-${u.binding}`}>
-            {i > 0 && ', '}
+            {i > 0 && (locale === 'ar' ? '، ' : ', ')}
             <code className="font-mono" dir="ltr">{`${u.worker} ${u.binding}`}</code>
           </span>
         ))}
@@ -230,7 +246,8 @@ function CredentialItem({ initial, replace, test: runTest, create }: { initial: 
         </p>
       )}
       {!editing && (
-        <div className="mt-3 flex flex-wrap gap-2">
+        // Card actions: a footer, end-aligned (owner rule)
+        <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-border pt-4" data-testid={`credential-${view.id}-actions`}>
           {view.mintable && view.canMint && (
             <button type="button" onClick={() => void mint()} className={`${primaryButtonClass} !py-1 !px-3 text-sm`} disabled={!!busy} data-testid={`credential-${view.id}-create`}>
               {busy === 'create' ? t('platformCredentials.creating') : view.present ? t('platformCredentials.rotate') : t('platformCredentials.create')}
@@ -287,7 +304,7 @@ function CredentialItem({ initial, replace, test: runTest, create }: { initial: 
               <span id={`${ids}-error`} className="text-xs text-danger-fg" data-testid={`credential-${view.id}-error`}>{t(fieldError)}</span>
             )}
           </label>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
             <button type="button" onClick={() => void save()} className={`${primaryButtonClass} !py-1 !px-3 text-sm`} disabled={!!busy} data-testid={`credential-${view.id}-save`}>
               {busy === 'save' ? t('platformCredentials.saving') : t('platformCredentials.save')}
             </button>

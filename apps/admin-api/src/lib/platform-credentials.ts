@@ -134,7 +134,7 @@ export async function credentialView(env: CredentialsEnv, id: PlatformCredential
   const valueLast4 = now.value ? now.value.slice(-4) : null;
   // A test or a mint record speaks only for the value in use (same last four of the value tested)
   const test = stored && stored.source === now.source && stored.valueLast4 === valueLast4 ? stripTest(stored) : null;
-  const minted = mint && mint.last4 && mint.last4 === valueLast4 ? { tokenId: mint.tokenId, at: mint.at, by: mint.by, byName: mint.byName, previousTokenId: mint.previousTokenId, previousRevoked: mint.previousRevoked } : null;
+  const minted = mint && mint.last4 && mint.last4 === valueLast4 ? { tokenId: mint.tokenId, at: mint.at, by: mint.by, byName: mint.byName, previousTokenId: mint.previousTokenId, previousRevoked: mint.previousRevoked, last4: mint.last4 } : null;
   return {
     id,
     secretsStoreName: spec.secretsStoreName,
