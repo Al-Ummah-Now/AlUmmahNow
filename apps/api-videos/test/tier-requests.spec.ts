@@ -89,8 +89,8 @@ describe('the default tier (what new sign-ups get)', () => {
 		assert.equal(await readDefaultTierId(d1), 'member');
 		const free = (await readTiers(d1)).find((t) => t.id === 'member');
 		assert.deepEqual(
-			free && [free.name, free.nameAr, free.uploads, free.channels, free.pages, free.captionMinutesMonth, free.unlimited, free.requestable],
-			['Free', 'مجاني', false, false, false, 0, false, false],
+			free && [free.name, free.nameAr, free.uploads, free.channels, free.captionMinutesMonth, free.unlimited, free.requestable],
+			['Free', 'مجاني', false, false, 0, false, false],
 		);
 		await assert.rejects(deleteTier(d1, 'member', { actorId: 'admin-1' }), (e: { code: string }) => e.code === 'tier_shipped');
 		const edited = await saveTier(d1, 'member', { unlimited: true }, 'admin-1');
