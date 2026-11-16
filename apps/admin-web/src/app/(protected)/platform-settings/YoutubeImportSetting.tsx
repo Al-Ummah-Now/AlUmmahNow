@@ -24,6 +24,8 @@ import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonC
 import { Chip, type ChipTone } from '@/components/content/parts';
 import { logger } from '@/lib/logger-client';
 import { reportError } from '@/lib/errors/reporter';
+import { UserName } from '@/components/audit/UserName';
+import { fillNodes } from '@/components/audit/fill';
 
 const BADGE: Record<YoutubeImportReadiness, { tone: ChipTone; label: MessageKey }> = {
   ready: { tone: 'good', label: 'youtubeImport.badgeReady' },
@@ -220,7 +222,10 @@ export function YoutubeImportSetting({
             <dd className={`${detail} mt-1`} data-testid="youtube-import-secret-detail">
               {view.secretSource === 'admin' ? (
                 view.secretUpdatedAt ? (
-                  t('youtubeImport.secretSetHere', { date: formatDate(view.secretUpdatedAt, locale, true), actor: view.secretUpdatedBy ?? '—' })
+                  // People by name, never their id (owner rule)
+                  fillNodes(t('youtubeImport.secretSetHere', { date: formatDate(view.secretUpdatedAt, locale, true) }), {
+                    actor: view.secretUpdatedBy ? <UserName id={view.secretUpdatedBy} showEmail={false} /> : '—',
+                  })
                 ) : (
                   t('youtubeImport.secretSetHereUndated')
                 )
@@ -324,7 +329,11 @@ export function YoutubeImportSetting({
         </div>
 
         <p className="text-sm text-fg-muted" data-testid="youtube-import-last-changed">
-          {view.updatedAt ? t('platformSettings.lastChanged', { date: formatDate(view.updatedAt, locale, true), actor: view.updatedBy ?? '—' }) : t('youtubeImport.neverChanged')}
+          {view.updatedAt
+            ? fillNodes(t('platformSettings.lastChanged', { date: formatDate(view.updatedAt, locale, true) }), {
+                actor: view.updatedBy ? <UserName id={view.updatedBy} showEmail={false} /> : '—',
+              })
+            : t('youtubeImport.neverChanged')}
         </p>
 
         {canEdit ? (
@@ -340,7 +349,7 @@ export function YoutubeImportSetting({
 
       <details className="mt-6 rounded border border-border p-3" data-testid="youtube-import-setup">
         <summary className="cursor-pointer text-sm font-medium text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-focus rounded">{t('youtubeImport.setupTitle')}</summary>
-        <ol className="mt-3 list-decimal space-y-2 ps-5 text-sm text-fg-muted [overflow-wrap:anywhere]">
+        <ol className={`mt-3 ${locale === 'ar' ? '[list-style-type:arabic-indic]' : 'list-decimal'} space-y-2 ps-5 text-sm text-fg-muted [overflow-wrap:anywhere]`}>
           {STEPS.map((step) => (
             <li key={step}>{t(step, { redirectUri: view.redirectUri, secretName })}</li>
           ))}

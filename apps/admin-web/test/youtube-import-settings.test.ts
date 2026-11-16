@@ -128,7 +128,8 @@ describe('YouTube import settings: the section', () => {
     assert.match(html, /data-state="ready"/);
     assert.match(html, /Creators can connect/);
     assert.match(html, /data-testid="youtube-import-read-only"/);
-    assert.match(html, /usr_admin/);
+    // The name comes from UserName (resolved in the browser), not the id in the sentence
+    assert.doesNotMatch(html, /by usr_admin/);
     assert.doesNotMatch(html, /youtube-import-secret-replace/, 'no Replace without the media permission');
     const arabic = render(el(YoutubeImportSetting, { view: ready, canEdit: true, save, saveSecret }), 'ar');
     assert.match(arabic, /النقل من يوتيوب/);
@@ -140,7 +141,9 @@ describe('YouTube import settings: the section', () => {
     const html = render(el(YoutubeImportSetting, { view: setHere, canEdit: true, save, saveSecret }));
     assert.match(html, /data-source="admin"/);
     assert.match(html, /data-testid="youtube-import-secret-state"[^>]*>Present</);
-    assert.match(html, /Set here on .* by usr_admin/);
+    // A person by name (resolved by UserName), never their raw id in the sentence
+    assert.match(html, /Set here on .* by /);
+    assert.doesNotMatch(html, /by usr_admin/);
     assert.match(html, /data-testid="youtube-import-secret-replace"[^>]*>Replace</);
     assert.doesNotMatch(html, /type="password"/);
     assert.doesNotMatch(html, /google-oauth-client-secret/, 'no Secrets Store name while the admin-set one is used');
