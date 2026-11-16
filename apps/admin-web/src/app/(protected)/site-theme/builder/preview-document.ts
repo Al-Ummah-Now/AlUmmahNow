@@ -32,7 +32,6 @@ const ICON = {
   check: I('<path d="m5 12 5 5L20 7"/>'),
   info: I('<circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v5h1"/>'),
   comment: I('<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/>'),
-  clapper: I('<path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3zM6.2 5.3l3.1 3.9M12.4 3.4l3.1 4M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'),
   arrow: I('<path d="M5 12h14M12 5l7 7-7 7"/>'),
   close: I('<path d="M18 6 6 18M6 6l12 12"/>'),
 };
@@ -69,7 +68,7 @@ const card = (t: (typeof T)['en'], n: number) => `<div class="vc video-card"><di
  * (--fanous-header-graphic), so the preview shows the art of the theme being edited, per mode. */
 function signInBanner(lang: 'en' | 'ar') {
   const c = lang === 'ar' ? SIGN_IN_BANNER_AR : SIGN_IN_BANNER_EN;
-  const perks: [keyof typeof c.perks, string][] = [['comment', ICON.comment], ['like', ICON.like], ['subscribe', ICON.bell], ['save', ICON.bookmark], ['creatorAccess', ICON.clapper]];
+  const perks: [keyof typeof c.perks, string][] = [['comment', ICON.comment], ['like', ICON.like], ['subscribe', ICON.bell], ['save', ICON.bookmark]];
   return `<section class="sib" aria-label="${esc(c.regionLabel)}" dir="${lang === 'ar' ? 'rtl' : 'ltr'}" data-testid="signin-banner"><div class="sib-art" aria-hidden="true" data-testid="signin-banner-art"></div>
 <div class="sib-body"><p class="sib-eyebrow">${esc(c.eyebrow)}</p><h2 class="sib-title">${esc(c.title)}</h2><p class="sib-text">${esc(c.body)}</p>
 <ul class="sib-perks" aria-label="${esc(c.perksLabel)}">${perks.map(([k, icon]) => `<li class="sib-perk">${icon}<span>${esc(c.perks[k])}</span></li>`).join('')}</ul></div>

@@ -41,11 +41,11 @@ test.describe('Home sign-in banner - signed out', () => {
     const region = page.getByRole('region', { name: 'Join Al Ummah Now' });
     await expect(region).toBeVisible();
     await expect(region).toHaveAttribute('dir', 'ltr');
-    await expect(region.getByRole('heading', { name: 'Sign in to take part, and request creator access to share your own videos' })).toBeVisible();
-    // Uploading is by request during the beta: a request chip, no instant "Create" or "Upload"
+    await expect(region.getByRole('heading', { name: 'Sign in to take part' })).toBeVisible();
+    // Comment, like, subscribe, save only: upgrades live in the header button / Upgrade page after sign-in
     const perks = region.getByRole('list', { name: 'What you can do with an account' }).getByRole('listitem');
-    await expect(perks).toHaveCount(5);
-    await expect(perks.last()).toHaveText('Request creator access');
+    await expect(perks).toHaveText(['Comment', 'Like', 'Subscribe', 'Save']);
+    await expect(region).not.toContainText(/creator|upgrade/i);
     await expect(region.getByRole('button', { name: 'Sign in' })).toBeVisible();
     // Above the featured video and the grid
     const top = await page.evaluate(() => {
@@ -81,6 +81,8 @@ test.describe('Home sign-in banner - signed out', () => {
     const region = page.getByRole('region', { name: 'انضم إلى الأمة الآن' });
     await expect(region).toBeVisible();
     await expect(region).toHaveAttribute('dir', 'rtl');
+    await expect(region.getByRole('heading', { name: 'سجل حسابك لتشارك' })).toBeVisible();
+    await expect(region.getByRole('listitem')).toHaveCount(4);
     // The close button sits in the end corner: the left in RTL
     const geo = await region.evaluate((el) => {
       const r = el.getBoundingClientRect();

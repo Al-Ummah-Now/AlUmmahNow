@@ -46,9 +46,12 @@ describe('theme builder preview', () => {
     const en = previewDocument({ themeId: 'x', css: '', page: 'home', mode: 'dark', lang: 'en' });
     assert.ok(en.includes('<section class="sib" aria-label="Join Al Ummah Now" dir="ltr"'));
     assert.ok(en.includes('class="sib-art" aria-hidden="true"'));
-    assert.ok(en.includes('Request creator access'));
+    assert.ok(en.includes('Sign in to take part'));
+    // Comment, like, subscribe, save: upgrades live only in the header button / Upgrade page
+    assert.equal(en.match(/class="sib-perk"/g)?.length, 4);
+    assert.ok(!/creator access/i.test(en));
     const ar = previewDocument({ themeId: 'x', css: '', page: 'home', mode: 'light', lang: 'ar' });
-    assert.ok(ar.includes('dir="rtl"') && ar.includes('مرئيات'));
+    assert.ok(ar.includes('dir="rtl"') && ar.includes('مرئيات') && ar.includes('سجل حسابك لتشارك'));
     // The banner's stylesheet ships in the kit the preview loads
     const kit = readFileSync(new URL('../../../packages/theme-packages/scripts/admin-kit.ts', import.meta.url), 'utf8');
     assert.ok(kit.includes("'src/theme/signin-banner.css'"));
