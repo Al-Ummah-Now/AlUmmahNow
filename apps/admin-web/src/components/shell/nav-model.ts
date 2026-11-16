@@ -5,6 +5,7 @@
  */
 import type { MessageKey } from '@/i18n/translate';
 import type { IconName } from './icons';
+import { formatNumber } from '@al-ummah/shared-types';
 
 /** Sidebar width preference: the full sidebar or the icon rail (tablet and wider). */
 export const NAV_COOKIE = 'admin_nav';
@@ -182,7 +183,7 @@ export function breadcrumbs(pathname: string, items: NavItem[]): Crumb[] {
 }
 
 /** Badge text: 99+ above 99, nothing for zero or unknown. */
-export function badgeText(count: number | null | undefined): string | null {
+export function badgeText(count: number | null | undefined, locale = 'en'): string | null {
   if (!count || count < 1) return null;
-  return count > 99 ? '99+' : String(count);
+  return count > 99 ? `${formatNumber(locale, 99)}+` : formatNumber(locale, count);
 }

@@ -75,6 +75,8 @@ describe('nav model', () => {
     assert.equal(badgeText(null), null);
     assert.equal(badgeText(7), '7');
     assert.equal(badgeText(100), '99+');
+    assert.equal(badgeText(7, 'ar'), '٧');
+    assert.equal(badgeText(100, 'ar'), '٩٩+');
   });
 
   it('has every nav, group and palette string in English and Arabic', () => {

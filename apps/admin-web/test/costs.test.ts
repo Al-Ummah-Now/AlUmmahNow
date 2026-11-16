@@ -196,7 +196,7 @@ describe('costs model: alert settings form', () => {
   it('names the field and the range', () => {
     const { errors } = validateSettingsForm({ ...settingsToForm(COST_ALERT_DEFAULTS), budgetUsd: 'abc', budgetLevels: '50, 300' });
     assert.equal(errors.budgetUsd?.key, 'costs.thresholds.errors.range');
-    assert.deepEqual(errors.budgetUsd?.params, { min: '50', max: '5000' });
+    assert.deepEqual(errors.budgetUsd?.params, { min: 50, max: 5000 });
     assert.equal(errors.budgetLevels?.key, 'costs.thresholds.errors.levelsRange');
   });
 

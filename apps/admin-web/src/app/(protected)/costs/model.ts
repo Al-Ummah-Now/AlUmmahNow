@@ -212,7 +212,7 @@ export function validateSettingsForm(form: SettingsForm): { errors: Partial<Reco
   const num = (field: Exclude<SettingsField, 'budgetLevels'>): number => {
     const { min, max } = SETTINGS_LIMITS[field];
     const n = readNumber(form[field]);
-    if (n === null || n < min || n > max) errors[field] = { key: 'costs.thresholds.errors.range', params: { min: String(min), max: String(max) } };
+    if (n === null || n < min || n > max) errors[field] = { key: 'costs.thresholds.errors.range', params: { min, max } };
     return n ?? 0;
   };
   const budgetUsd = num('budgetUsd');
@@ -222,7 +222,7 @@ export function validateSettingsForm(form: SettingsForm): { errors: Partial<Reco
   const levels = readLevels(form.budgetLevels);
   const { levelPercent, levelCount } = SETTINGS_LIMITS;
   if (levels === null) errors.budgetLevels = { key: 'costs.thresholds.errors.levelsNumbers' };
-  else if (levels.length < levelCount.min || levels.length > levelCount.max) errors.budgetLevels = { key: 'costs.thresholds.errors.levelsCount', params: { max: String(levelCount.max) } };
+  else if (levels.length < levelCount.min || levels.length > levelCount.max) errors.budgetLevels = { key: 'costs.thresholds.errors.levelsCount', params: { max: levelCount.max } };
   else if (levels.some((l) => l < levelPercent.min || l > levelPercent.max)) errors.budgetLevels = { key: 'costs.thresholds.errors.levelsRange', params: { min: String(levelPercent.min), max: String(levelPercent.max) } };
   if (Object.keys(errors).length) return { errors, value: null };
   const shares = [...new Set(levels!.map((l) => Math.round(l) / 100))].sort((a, b) => a - b);
