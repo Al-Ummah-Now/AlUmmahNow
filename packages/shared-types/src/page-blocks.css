@@ -280,8 +280,17 @@ a.pb-more:hover { text-decoration: underline; text-underline-offset: 0.2em; }
 .pb-h-s { min-block-size: clamp(14rem, 34cqi, 19rem); }
 .pb-h-m { min-block-size: clamp(18rem, 48cqi, 28rem); }
 .pb-h-l { min-block-size: clamp(22rem, 62cqi, 38rem); }
-.pb-hero-plain { --pb-bg: var(--fanous-c-nav-bg, #093041); }
-.pb-hero-gradient { --pb-bg: linear-gradient(165deg, var(--fanous-c-nav-hover, #0e3a4e) 0%, var(--fanous-c-nav-bg, #093041) 70%); }
+/* Night glass at every width (owner, 2026-11-16: every box is frosted glass): the street shows blurred
+   through the dark tint, and the light hero text keeps its contrast (page-blocks-glass.spec.ts). */
+.pb-hero-plain { --pb-bg: var(--pb-glass); }
+.pb-hero-gradient { --pb-bg: linear-gradient(165deg, color-mix(in srgb, var(--fanous-c-nav-hover, #0e3a4e) min(calc(var(--pb-glass-a) + 10%), 100%), transparent) 0%, var(--pb-glass) 70%); }
+.pb-k-hero.pb-w-full.pb-hero-plain,
+.pb-k-hero.pb-w-full.pb-hero-gradient {
+  -webkit-backdrop-filter: var(--pb-glass-blur);
+  backdrop-filter: var(--pb-glass-blur);
+  border-block: 1px solid var(--pb-glass-line);
+  box-shadow: var(--pb-glow);
+}
 .pb-hero-glow {
   position: absolute;
   inset: 0;

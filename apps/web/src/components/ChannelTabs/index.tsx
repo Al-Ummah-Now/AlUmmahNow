@@ -236,6 +236,8 @@ export function ChannelTabBar({
     <div className="relative bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
       <div className="max-w-6xl mx-auto px-5">
         <div className="relative flex items-center">
+          {/* The strip and its scroll arrows end before the search button, so an arrow never sits under it */}
+          <div className="relative flex min-w-0 flex-1">
           {/* Left scroll button */}
           {showLeftScroll && (
             <button
@@ -309,7 +311,9 @@ export function ChannelTabBar({
             </button>
           )}
 
-          <div className="ms-auto flex shrink-0 justify-end">
+          </div>
+
+          <div className="flex shrink-0 justify-end">
             <ChannelSearch channelId={channelId} />
           </div>
         </div>

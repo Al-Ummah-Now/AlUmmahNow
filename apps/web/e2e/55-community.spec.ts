@@ -346,7 +346,7 @@ test.describe('Community tab - visitor', () => {
     await expect(page.getByTestId('tabpanel-community')).toHaveAttribute('dir', 'rtl');
     const card = postCard(page, marker);
     await expect(card).toBeVisible();
-    await expect(card.getByText(/^(الآن|منذ .+)$/)).toBeVisible();
+    await expect(card.getByText(/^(الآن|منذ .+|قبل .+)$/)).toBeVisible();
     const name = card.getByRole('heading', { level: 3 });
     const avatar = card.locator('.rounded-full').first();
     expect(await centerX(avatar)).toBeGreaterThan(await centerX(name));

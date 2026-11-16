@@ -57,7 +57,7 @@ describe('settingsTrail', () => {
   it('starts at Settings on the settings sub-pages', () => {
     expect(settingsTrail('/en/settings/upload-defaults', 'en', t)).toEqual([
       { label: 'Settings', href: '/en/settings' },
-      { label: 'Upload Defaults', href: '/en/settings/upload-defaults' },
+      { label: 'Upload defaults', href: '/en/settings/upload-defaults' },
     ]);
     expect(settingsTrail('/ar/settings/privacy', 'ar', AR_TRANSLATIONS)?.[0].href).toBe('/ar/settings');
     expect(settingsTrail('/en/settings/tier', 'en', t)).toEqual([

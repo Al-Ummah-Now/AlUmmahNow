@@ -34,7 +34,7 @@ export function ChannelTabContent({
   const seed = initial?.tab === activeTab ? initial : undefined;
 
   return (
-    <div className="p-5 bg-white dark:bg-gray-800">
+    <div className="p-5">
       {/* Manage link for people who run the channel (nothing for visitors) */}
       <TabManageLink channelId={channelId} tab={activeTab} />
 

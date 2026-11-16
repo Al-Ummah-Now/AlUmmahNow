@@ -42,8 +42,8 @@ test.describe('Settings - channel owner', () => {
     await expect(sections.filter({ hasText: 'Channel invitations' })).toHaveAttribute('href', '/en/settings/channel-invites');
     await expect(sections.filter({ hasText: 'Your tier and your tier requests' })).toHaveAttribute('href', '/en/settings/tier');
     await expect(sections.filter({ hasText: 'Public profile' })).toHaveAttribute('href', '/en/settings/public-profile');
-    await expect(sections.filter({ hasText: 'Upload Defaults' })).toHaveAttribute('href', '/en/settings/upload-defaults');
-    await expect(sections.filter({ hasText: 'Profile Settings' })).toHaveAttribute('href', '/en/profile?from=settings');
+    await expect(sections.filter({ hasText: 'Upload defaults' })).toHaveAttribute('href', '/en/settings/upload-defaults');
+    await expect(sections.filter({ hasText: 'Profile settings' })).toHaveAttribute('href', '/en/profile?from=settings');
     await expect(sections.filter({ hasText: 'Privacy & data' })).toHaveAttribute('href', '/en/settings/privacy');
     await expect(sections.filter({ hasText: 'Billing' })).toHaveCount(0);
     // Channel settings belong to the channel (opened from it), not to the user's Settings

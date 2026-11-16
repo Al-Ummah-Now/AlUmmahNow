@@ -33,7 +33,7 @@ export function CommunityGuidelinesPage() {
   return (
     <main id={MAIN_CONTENT_ID} dir={dir} data-testid="community-guidelines" className="w-full flex-1 py-6 md:py-10">
       <div className="pb" lang={isRTL ? 'ar' : 'en'} dir={dir}>
-        <header className="pb-b pb-w-content pb-t-none pb-a-start pb-s-m">
+        <header className="pb-b pb-w-content pb-t-raised pb-a-start pb-s-m">
           <div className="pb-in">
             <h1 className="pb-heading">{g.title}</h1>
             <p className="pb-intro">{g.lead}</p>

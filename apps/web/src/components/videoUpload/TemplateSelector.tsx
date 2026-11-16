@@ -264,7 +264,7 @@ export function TemplateSelector({
       {/* Variable Input Modal */}
       {showVariablePrompt && pendingTemplate && (
         <BodyPortal><div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--aun-scrim)]"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
               setShowVariablePrompt(false);
