@@ -365,7 +365,8 @@ test.describe('Post manager', () => {
       const actions = card.getByRole('button', { name: 'Post actions' });
       await expectHydrated(actions);
       await clickUntil(actions, async () => expect(page.getByRole('menuitem', { name: 'Delete' })).toBeVisible({ timeout: 3000 }));
-      await expect(page.getByRole('menuitem', { name: 'Edit' })).toHaveAttribute('href', `/en/settings/channel/${channelId()}/community/${id}/edit`);
+      // Everyone's Copy link, then the channel's Edit and Delete (#1515)
+      await expect(page.getByRole('menuitem')).toHaveText(['Copy link', 'Edit', 'Delete']);
       await page.getByRole('menuitem', { name: 'Delete' }).click();
       // No confirm: the post goes at once and the toast offers Undo
       await expect(page.getByRole('alertdialog')).toHaveCount(0);
@@ -392,6 +393,13 @@ test.describe('Post manager', () => {
       const actions = card.getByRole('button', { name: 'إجراءات المنشور' });
       await expectHydrated(actions);
       await clickUntil(actions, async () => expect(page.getByRole('menuitem', { name: 'حذف' })).toBeVisible({ timeout: 3000 }));
+      // The shared menu, right to left: Arabic rows, each icon at the start (right) edge of its label
+      await expect(page.getByRole('menu')).toHaveAttribute('dir', 'rtl');
+      await expect(page.getByRole('menuitem')).toHaveText(['نسخ الرابط', 'تعديل', 'حذف']);
+      const row = page.getByRole('menuitem', { name: 'تعديل' });
+      const icon = await row.locator('svg').boundingBox();
+      const label = await row.getByText('تعديل').boundingBox();
+      expect(icon!.x).toBeGreaterThan(label!.x + label!.width - 1);
       await page.getByRole('menuitem', { name: 'حذف' }).click();
       const toast = page.getByTestId('post-delete-toast');
       await expect(toast).toContainText('حُذف المنشور');
@@ -530,8 +538,14 @@ test.describe('Community tab - engagement', () => {
       await row.click();
       await expect(page).toHaveURL(new RegExp(`/en/post/${id}$`));
       await expect(postCard(page, marker)).toBeVisible();
-      // A viewer has no owner menu on someone else's post
-      await expect(postCard(page, marker).getByRole('button', { name: 'Post actions' })).toHaveCount(0);
+      // A signed-in viewer's menu on someone else's post: Copy link and Report, no Edit or Delete (#1515)
+      const actions = postCard(page, marker).getByRole('button', { name: 'Post actions' });
+      await expectHydrated(actions);
+      await clickUntil(actions, async () => expect(page.getByRole('menuitem', { name: 'Report' })).toBeVisible({ timeout: 3000 }));
+      await expect(page.getByRole('menuitem')).toHaveText(['Copy link', 'Report']);
+      await page.getByRole('menuitem', { name: 'Report' }).click();
+      await expect(page.getByRole('dialog')).toBeVisible();
+      await page.keyboard.press('Escape');
     } finally {
       await apiFetch(viewer.user, `/api/channels/${channelId()}/subscriptions`, { method: 'DELETE', headers: { channelId: acting } });
     }
@@ -565,8 +579,13 @@ test.describe('Community tab - visitor', () => {
     await expect(card).toBeVisible();
     await expect(card.getByText(/^(just now|\d+ minutes? ago)$/)).toBeVisible();
     await expect(card.getByRole('button', { name: 'Like' })).toBeDisabled();
-    // No owner menu (and no dead "more" button) for visitors
-    await expect(card.getByRole('button', { name: /Post actions|More options/ })).toHaveCount(0);
+    // Visitors' ⋮ has only Copy link (#1515: no dead "More options" button)
+    await expect(card.getByRole('button', { name: 'More options' })).toHaveCount(0);
+    const actions = card.getByRole('button', { name: 'Post actions' });
+    await expectHydrated(actions);
+    await clickUntil(actions, async () => expect(page.getByRole('menuitem', { name: 'Copy link' })).toBeVisible({ timeout: 3000 }));
+    await expect(page.getByRole('menuitem')).toHaveText(['Copy link']);
+    await page.keyboard.press('Escape');
     await clickUntil(card.getByRole('button', { name: 'Comments' }), async () =>
       expect(card.getByText('Be the first to comment!')).toBeVisible({ timeout: 3000 })
     );

@@ -1344,6 +1344,7 @@ export interface AppTranslations {
       comment: string;
       channel: string;
       playlist: string;
+      post: string;
       allTypes: string;
     };
     reportReasonEnum: {
@@ -1651,6 +1652,11 @@ export interface AppTranslations {
     searchTimezone: string;
     timezoneLabel: string;
     allowComments: string;
+    /** The post card's menu (#1515) */
+    copyLink: string;
+    linkCopied: string;
+    copyLinkFailed: string;
+    reportPost: string;
     scheduleRequired: string;
     scheduleTooSoon: string;
     scheduleTooFar: string;

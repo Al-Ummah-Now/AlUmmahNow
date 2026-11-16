@@ -1283,6 +1283,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
       comment: 'Comment',
       channel: 'Channel',
       playlist: 'Playlist',
+      post: 'Post',
       allTypes: 'All Types',
     },
     reportReasonEnum: {
@@ -1552,6 +1553,10 @@ export const EN_TRANSLATIONS: AppTranslations = {
     searchTimezone: 'Search time zones',
     timezoneLabel: 'Time zone',
     allowComments: 'Allow comments',
+    copyLink: 'Copy link',
+    linkCopied: 'Link copied',
+    copyLinkFailed: 'The link could not be copied',
+    reportPost: 'Report',
     scheduleRequired: 'Pick a date and time',
     scheduleTooSoon: 'Pick a time at least 5 minutes from now',
     scheduleTooFar: 'Posts can be scheduled up to a year ahead',

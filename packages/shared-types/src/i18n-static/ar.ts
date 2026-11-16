@@ -1281,6 +1281,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
       comment: 'تعليق',
       channel: 'قناة',
       playlist: 'قائمة تشغيل',
+      post: 'منشور',
       allTypes: 'جميع الأنواع',
     },
     reportReasonEnum: {
@@ -1550,6 +1551,10 @@ export const AR_TRANSLATIONS: AppTranslations = {
     searchTimezone: 'ابحث عن منطقة زمنية',
     timezoneLabel: 'المنطقة الزمنية',
     allowComments: 'السماح بالتعليقات',
+    copyLink: 'نسخ الرابط',
+    linkCopied: 'نُسخ الرابط',
+    copyLinkFailed: 'تعذّر نسخ الرابط',
+    reportPost: 'إبلاغ',
     scheduleRequired: 'اختر التاريخ والوقت',
     scheduleTooSoon: 'اختر وقتًا بعد 5 دقائق على الأقل من الآن',
     scheduleTooFar: 'يمكن جدولة المنشورات حتى سنة مقدمًا',
