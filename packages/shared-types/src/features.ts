@@ -36,6 +36,8 @@ export const USER_FEATURE_KEYS = [
   'viewerTranslatedTitles',
   /** Quran Foundation translation editions can be loaded (credentials bound) */
   'quranEditions',
+  /** Our Quran Foundation copy of the official text is synced and fresh (quran/current.json) */
+  'quranText',
   /** The (channel owner's) tier allows extra audio tracks */
   'audioTracks',
   /** Own domains: Cloudflare for SaaS is set up, and the channel's site allows at least one */

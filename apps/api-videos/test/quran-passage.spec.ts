@@ -71,15 +71,17 @@ describe('the Quran passage', () => {
 		assert.equal((await get(env(), '112:5')).status, 404);
 		assert.equal((await get(env(), '112:4-2')).status, 404);
 		clearQuranCopyCache();
-		assert.equal((await get(env(null), '112:2')).status, 503);
+		assert.deepEqual(await (await get(env(null), '112:2')).json(), { success: false, code: 'feature_off' });
 	});
 
-	it('no copy, or a copy not synced for 7 days, is never served (503)', async () => {
-		assert.equal((await get(env(null), '112:1:1-112:1:4')).status, 503);
+	it('no copy, or a copy not synced for 7 days, is never served: 404 feature_off, not a server error', async () => {
+		const none = await get(env(null), '112:1:1-112:1:4');
+		assert.equal(none.status, 404);
+		assert.deepEqual(await none.json(), { success: false, code: 'feature_off' });
 		clearQuranCopyCache();
 		const stale = new Date(Date.now() - 8 * 24 * 3600_000).toISOString();
 		const res = await get(env(stale), '112:1:1-112:1:4');
-		assert.equal(res.status, 503);
-		assert.equal(res.headers.get('retry-after'), '3600');
+		assert.equal(res.status, 404);
+		assert.equal(res.headers.get('cache-control'), 'private, no-store');
 	});
 });

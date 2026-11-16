@@ -28118,7 +28118,7 @@
           "Quran"
         ],
         "summary": "Official text of a Quran range",
-        "description": "🌐 Public. The Uthmani text of `range` (surah:ayah:word-surah:ayah:word, one surah; or whole ayat `3:166-167`) from the Quran Foundation copy. `range` in the response is always the full word range. 503 while no fresh copy is available.",
+        "description": "🌐 Public. The Uthmani text of `range` (surah:ayah:word-surah:ayah:word, one surah; or whole ayat `3:166-167`) from the Quran Foundation copy. `range` in the response is always the full word range. 404 `feature_off` while no fresh copy is available (GET /api/me/features `quranText` is false then).",
         "operationId": "get_QuranPassageGet",
         "parameters": [
           {
@@ -28229,10 +28229,7 @@
             "description": "Malformed range"
           },
           "404": {
-            "description": "The range is not in the Quran"
-          },
-          "503": {
-            "description": "No fresh copy of the Quran text yet"
+            "description": "The range is not in the Quran (`range_not_found`), or no fresh copy of the Quran text yet (`feature_off`)"
           }
         }
       }
