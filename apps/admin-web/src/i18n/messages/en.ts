@@ -1128,8 +1128,6 @@ const en = {
     confirmDelete: 'Delete the theme {name}? It moves to Recently deleted, where it can be restored for 30 days; then its draft and every published version are removed.',
     deleteActive: 'The site theme cannot be deleted. Choose another site theme first.',
     duplicateTitle: 'Duplicate {name}',
-    newId: 'Theme id',
-    newIdHelp: '2–40 lowercase letters, digits or dashes, starting with a letter. It cannot change later.',
     nameEn: 'Name (English)',
     nameAr: 'Name (Arabic)',
     descriptionEn: 'Description (English)',

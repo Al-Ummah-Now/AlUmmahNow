@@ -30,6 +30,27 @@ import type { AdminBindings } from '../base/types';
 type Db = AdminBindings['REPORTS_DB'];
 
 export const THEME_LOG_KEY = 'theme.package';
+/** importZip's rename value that asks for an id made from the name (never a valid id itself). */
+export const NEW_THEME_ID = '*new';
+
+/**
+ * A new theme's id base from its English name (admins never type ids, #1479; the rule Add tier
+ * follows, #1443): lowercase ASCII words joined by dashes, at most 40 characters, starting with a
+ * letter. Null when the name has no usable Latin letters (an Arabic-only name): a random id then.
+ */
+export function themeIdBase(name: string): string | null {
+  const slug = name
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^[^a-z]+|-+$/g, '')
+    .slice(0, 36)
+    .replace(/-+$/, '');
+  return ID_PATTERN.test(slug) ? slug : null;
+}
+
+const randomThemeId = () => `theme-${crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`;
 export const ASSET_PATH = /^assets\/(?!.*\.\.)[A-Za-z0-9_-][A-Za-z0-9._/-]*\.(svg|png|jpg|jpeg|webp|ico|woff2)$/;
 const CONTENT_TYPES: Record<string, string> = {
   svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', ico: 'image/x-icon', woff2: 'font/woff2',
@@ -160,6 +181,32 @@ export class ThemeStore {
       .bind(crypto.randomUUID(), THEME_LOG_KEY, id, entry, actor, now);
   }
 
+  /** True when the id was ever used: built in, a theme (also in Recently deleted), or one purged since (its create log). */
+  private async idTaken(id: string): Promise<boolean> {
+    if (BUILT_IN_IDS.includes(id)) return true;
+    if (await this.row(id)) return true;
+    // idx_site_settings_log_key: only this key's rows are read
+    return !!(await this.db
+      .prepare("SELECT 1 AS n FROM site_settings_log WHERE key = ? AND old_value = ? AND new_value LIKE 'create %' LIMIT 1")
+      .bind(THEME_LOG_KEY, id)
+      .first());
+  }
+
+  /** A new theme's id, made from its name and never reused (the slug, then slug-2…, else a random id). */
+  async newId(name: string): Promise<string> {
+    const base = themeIdBase(name);
+    if (base) {
+      for (let n = 1; n <= 20; n++) {
+        const id = n === 1 ? base : `${base}-${n}`;
+        if (!(await this.idTaken(id))) return id;
+      }
+    }
+    for (;;) {
+      const id = randomThemeId();
+      if (!(await this.idTaken(id))) return id;
+    }
+  }
+
   /** A new custom theme from a whole package (duplicate or import). Its draft is the package. */
   async create(files: PackageFiles, actor: string, now: string): Promise<Validation> {
     const { theme } = files;
@@ -249,9 +296,18 @@ export class ThemeStore {
     return files ? packageToZip(files) : null;
   }
 
+  /**
+   * A new custom theme from a .zip. rename: the id to use instead of the package's; 'new' makes one
+   * from the package's English name (Duplicate: the admin never types an id, #1479).
+   */
   async importZip(zip: Uint8Array, rename: string | undefined, actor: string, now: string): Promise<{ id: string; validation: Validation }> {
     let files: PackageFiles;
     try { files = await zipToPackage(zip); } catch (e) { throw new ThemeError(400, (e as Error).message); }
+    if (rename === NEW_THEME_ID) {
+      const name = files.theme?.name;
+      if (!name?.en?.trim() || !name?.ar?.trim()) throw new ThemeError(422, 'The package needs name.en and name.ar');
+      rename = await this.newId(name.en);
+    }
     if (rename) files = { ...files, theme: { ...files.theme, id: rename } };
     const validation = await this.create(files, actor, now);
     return { id: files.theme.id, validation };

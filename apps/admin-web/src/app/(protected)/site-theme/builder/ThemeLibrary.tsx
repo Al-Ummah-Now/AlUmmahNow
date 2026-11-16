@@ -3,7 +3,6 @@
 import { useRef, useState, useTransition } from 'react';
 import Link from '@/components/AppLink';
 import { useRouter } from 'next/navigation';
-import { ID_PATTERN } from '@al-ummah/theme-packages';
 import { useLanguage } from '@/i18n/I18nProvider';
 import type { ThemeListItem } from '@/lib/api/admin';
 import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
@@ -18,20 +17,20 @@ export function ThemeLibrary({ themes, canEdit, author }: { themes: ThemeListIte
   const router = useRouter();
   const [failure, setFailure] = useState<string | null>(null);
   const [source, setSource] = useState<ThemeListItem | null>(null);
-  const [form, setForm] = useState({ id: '', en: '', ar: '' });
+  const [form, setForm] = useState({ en: '', ar: '' });
   const [pending, start] = useTransition();
   const fileInput = useRef<HTMLInputElement>(null);
 
   const fail = (e: unknown) => setFailure(t('themeBuilder.failed', { error: e instanceof ThemeApiError ? e.message : String(e) }));
   const openDuplicate = (theme: ThemeListItem) => {
     setSource(theme);
-    setForm({ id: `${theme.id}-copy`.slice(0, 40), en: `${theme.name.en} copy`, ar: `نسخة ${theme.name.ar}` });
+    setForm({ en: `${theme.name.en} copy`, ar: `نسخة ${theme.name.ar}` });
   };
   const createCopy = () => start(async () => {
     if (!source) return;
     setFailure(null);
     try {
-      const { id } = await duplicate(source, form.id, { en: form.en, ar: form.ar }, author);
+      const { id } = await duplicate(source, { en: form.en.trim(), ar: form.ar.trim() }, author);
       router.push(`/site-theme/themes/${id}`);
     } catch (e) { fail(e); }
   });
@@ -93,10 +92,6 @@ export function ThemeLibrary({ themes, canEdit, author }: { themes: ThemeListIte
         <div role="dialog" aria-modal="true" aria-labelledby="dup-title" className="fixed inset-0 z-50 grid place-items-center bg-fg/40 p-4" data-testid="theme-duplicate-dialog">
           <form className={`${cardClass} w-full max-w-md space-y-3`} onSubmit={(e) => { e.preventDefault(); createCopy(); }}>
             <h3 id="dup-title" className="text-lg font-semibold text-fg">{t('themeBuilder.duplicateTitle', { name: source.name[locale] })}</h3>
-            <label className="block text-sm text-fg">{t('themeBuilder.newId')}
-              <input dir="ltr" required pattern={ID_PATTERN.source.slice(1, -1)} className={`${fieldClass} w-full mt-1 font-mono`} value={form.id} onChange={(e) => setForm({ ...form, id: e.target.value.toLowerCase() })} data-testid="theme-duplicate-id" />
-              <span className="block text-xs text-fg-muted mt-1">{t('themeBuilder.newIdHelp')}</span>
-            </label>
             <label className="block text-sm text-fg">{t('themeBuilder.nameEn')}
               <input dir="ltr" required maxLength={80} className={`${fieldClass} w-full mt-1`} value={form.en} onChange={(e) => setForm({ ...form, en: e.target.value })} data-testid="theme-duplicate-name-en" />
             </label>
@@ -105,7 +100,7 @@ export function ThemeLibrary({ themes, canEdit, author }: { themes: ThemeListIte
             </label>
             <div className="flex justify-end gap-2">
               <button type="button" className={secondaryButtonClass} onClick={() => setSource(null)}>{t('themeBuilder.cancel')}</button>
-              <button type="submit" className={primaryButtonClass} disabled={pending || !ID_PATTERN.test(form.id)} data-testid="theme-duplicate-create">{pending ? t('themeBuilder.working') : t('themeBuilder.create')}</button>
+              <button type="submit" className={primaryButtonClass} disabled={pending || !form.en.trim() || !form.ar.trim()} data-testid="theme-duplicate-create">{pending ? t('themeBuilder.working') : t('themeBuilder.create')}</button>
             </div>
           </form>
         </div>

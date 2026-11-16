@@ -126,7 +126,9 @@ test.describe('Release: theme builder', () => {
       'pull-request runs share QA: switching the one site theme would race other runs (runs on stage and in manual QA runs)',
     );
     test.setTimeout(8 * 60000);
-    const id = `rel-theme-${Date.now().toString(36)}`;
+    // The id is made from the English name on the server (#1479): "Rel theme <stamp>" becomes rel-theme-<stamp>
+    const stamp = Date.now().toString(36);
+    const id = `rel-theme-${stamp}`;
 
     await signInAsAdmin(page, 'rel-theme');
     await page.goto(`${target().adminWeb}/site-theme`);
@@ -151,8 +153,8 @@ test.describe('Release: theme builder', () => {
     try {
       // Duplicate the default theme as the starting point
       await page.getByTestId('theme-duplicate-fawanees').click();
-      await page.getByTestId('theme-duplicate-id').fill(id);
-      await page.getByTestId('theme-duplicate-name-en').fill('Release check');
+      await expect(page.getByTestId('theme-duplicate-id')).toHaveCount(0);
+      await page.getByTestId('theme-duplicate-name-en').fill(`Rel theme ${stamp}`);
       await page.getByTestId('theme-duplicate-name-ar').fill('فحص الإصدار');
       await page.getByTestId('theme-duplicate-create').click();
       await expect(page).toHaveURL(`${target().adminWeb}/site-theme/themes/${id}`, { timeout: 60000 });
