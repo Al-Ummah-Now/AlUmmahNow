@@ -22,7 +22,7 @@ admin: Play R2 first (video / channel / global)      │   admin: Retire library
 0. **This environment** (top of the page, `GET /internal/media/backfill/overview`, read-only): live counts of the
    videos with no ready R2 rendition (not live, not deleted) and their length, what Bunny stores for this environment
    (cached 10 min per isolate), and what moving all of them would cost, **likely** (this environment's measured ratios,
-   copies = the missing videos' share of Bunny's bytes) and at the **ceiling** (`BACKFILL_CEILING`: 4 container-s per
+   copies = the missing videos' share of Bunny's bytes) and in the **worst case** (the page says "Worst case"; in code `ceiling`, `BACKFILL_CEILING`: 4 container-s per
    video-s, 1.25 MB of renditions per video-s, 2 writes per video-s, never below the measured ratios; copies = all of
    Bunny's bytes). Admins run the backfill in batches (a channel or a date range), each with its own estimate and cap.
    Backfills run only from this page: never from CI, scripts or by an agent; CI and E2E use mocks and tiny seed data.
@@ -37,7 +37,7 @@ admin: Play R2 first (video / channel / global)      │   admin: Retire library
    (`lib/media/costs.ts`) with ratios measured from this environment's finished transcodes (`media_jobs`): container
    seconds, rendition bytes and objects per second of video. With no finished transcode yet the ratios are assumed and
    the page says so. The estimate also carries a `ceiling` (the same videos at the ceiling ratios). The cap starts at
-   the likely estimate (rounded up to the cent); the admin may raise it toward the ceiling.
+   the likely estimate (rounded up to the cent); the admin may raise it toward the worst case.
 3. **Start** needs a cap above 0. A tick (`op: tick`, every 20 s while running) starts videos up to the concurrency
    (capped by the max of the admin's concurrent transcodes range in Video providers → Cloudflare R2 settings, RUNBOOK.md Capacity) and the spacing between starts, and only when spent + what the videos in
    progress may still cost + the next video's estimate stays within the cap. Otherwise the run stops as **Stopped at

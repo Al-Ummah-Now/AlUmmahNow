@@ -55,6 +55,9 @@ test.describe('R2 backfill page', () => {
     await setPreferences(page, { locale: 'en', theme: 'dark' });
     await page.goto('/backfill');
     await expect(page.getByTestId('backfill-overview')).toContainText('This environment');
+    // "Worst case", never "Ceiling": not to be confused with the Cloudflare transcode limit
+    await expect(page.getByTestId('backfill-overview-ceiling').getByRole('rowheader')).toHaveText('Worst case');
+    await expect(page.getByTestId('backfill-overview')).not.toContainText('Ceiling');
     await page.getByTestId('backfill-scope-channel').check();
     await expect(page.getByRole('combobox', { name: 'Channel' })).toBeVisible();
     await expect(page.getByTestId('backfill-start')).toHaveCount(0);
