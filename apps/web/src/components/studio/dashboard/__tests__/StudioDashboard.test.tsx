@@ -95,6 +95,15 @@ describe('StudioDashboard', () => {
     expect(await screen.findByRole('link', { name: text.quick.goLive })).toHaveAttribute('href', '/en/studio/c1/content/live');
   });
 
+  it('offers Upload only while uploads are on for the channel', async () => {
+    const { unmount } = show();
+    await screen.findByTestId('studio-dash-latest');
+    expect(screen.queryByRole('link', { name: text.quick.upload })).toBeNull();
+    unmount();
+    render(<StudioDashboard locale="en" channelId="c1" role="owner" uploadOn />);
+    expect(await screen.findByRole('link', { name: text.quick.upload })).toHaveAttribute('href', '/en/upload?channel=c1');
+  });
+
   it('keeps the other cards when one fails, and offers Retry', async () => {
     channel.mockResolvedValue(null);
     show();

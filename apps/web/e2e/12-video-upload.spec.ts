@@ -376,20 +376,19 @@ test.describe('Video Upload - Error Handling', () => {
   test.describe('without a creator tier', () => {
     test.use({ storageState: AUTH_STATE.none });
 
-    test('should explain that uploading is by invitation', async ({ page }) => {
+    test('the upload page is not found without a tier (hidden when off)', async ({ page }) => {
       await page.goto('/en/upload');
       const ui = uploadUi(page);
-      await expect(ui.byInvitation).toBeVisible();
-      await expect(ui.byInvitation.getByRole('heading')).toHaveText('Uploading is by invitation for now');
+      await expect(ui.notFound).toBeVisible();
+      await expect(page.getByText(/by invitation/i)).toHaveCount(0);
       await expect(ui.dropzone).toHaveCount(0);
       await expect(page.getByTestId('header-upload')).toHaveCount(0);
     });
 
-    test('should explain that uploading is by invitation in Arabic', async ({ page }) => {
+    test('the upload page is not found without a tier in Arabic', async ({ page }) => {
       await page.goto('/ar/upload');
-      const ui = uploadUi(page);
-      await expect(ui.byInvitation).toBeVisible();
-      await expect(ui.byInvitation.getByRole('heading')).toHaveText(ARABIC);
+      await expect(uploadUi(page).notFound).toBeVisible();
+      await expect(page.getByText(/بدعوة/)).toHaveCount(0);
     });
   });
 });

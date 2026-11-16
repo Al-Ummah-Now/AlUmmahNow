@@ -66,6 +66,8 @@ export type HelpBlock = { feature?: UserFeatureKey } & (
 export interface HelpSection {
   /** Anchor on the page (#id), stable across languages */
   id: string;
+  /** Shown (page, "On this page", search) only while this feature is on for the reader (wiki "Hidden when off") */
+  feature?: UserFeatureKey;
   heading: string;
   blocks: HelpBlock[];
   /** Left out while no social network can be connected on the site */
@@ -283,7 +285,7 @@ export const HELP_EN: HelpTranslations = {
               ['Like videos and comments, vote in polls', 'Like and vote as the channel'],
               ['Subscribe to channels', 'Subscribe as the channel'],
               ['Make your own playlists and save videos to them', 'Save to and manage the channel’s playlists'],
-              ['—', 'Upload, use Studio and schedule'],
+              ['—', 'Upload, use Studio and schedule', 'upload'],
               ['—', 'Go live', 'live'],
               ['—', 'Write posts on the channel’s Community tab (the owner)'],
             ] },
@@ -305,10 +307,10 @@ export const HELP_EN: HelpTranslations = {
         },
         {
           id: 'create-a-channel',
+          feature: 'createChannel',
           heading: 'Create a channel',
           blocks: [
-            { type: 'p', text: 'Channels are by invitation. If you have been invited, open the account menu and select **Create Channel**, give it a name, and it becomes the channel you are acting as.' },
-            { type: 'p', text: 'If you don’t see Create Channel, your account can’t create one yet. You can still watch, comment, like, subscribe and make playlists as yourself.' },
+            { type: 'p', text: 'Open the account menu and select **Create Channel**, give it a name, and it becomes the channel you are acting as.' },
           ],
         },
         {
@@ -337,6 +339,7 @@ export const HELP_EN: HelpTranslations = {
       sections: [
         {
           id: 'upload',
+          feature: 'upload',
           heading: 'Upload',
           blocks: [
             { type: 'p', text: 'Uploading needs a channel. What you upload goes to the **channel you are acting as**, so check the account menu first.' },
@@ -351,6 +354,7 @@ export const HELP_EN: HelpTranslations = {
         },
         {
           id: 'already-uploaded',
+          feature: 'upload',
           heading: 'Already uploaded',
           blocks: [
             { type: 'p', text: 'If you pick a file you uploaded before, we say so: **Already uploaded**. Watch the existing video, or upload it again as a separate video.' },
@@ -505,7 +509,7 @@ export const HELP_EN: HelpTranslations = {
       account: { title: 'This is you', body: 'Your account menu. When a channel is active, its picture shows here instead of yours; your name stays.' },
       actingAs: { title: 'Who you are acting as', body: 'Comments, likes and subscriptions you make now carry this name and picture: a channel, or yourself.' },
       switch: { title: 'Switch any time', body: 'Pick a channel you own or manage, or “Use without a channel” to act as yourself. You stay in the same account.' },
-      upload: { title: 'Uploads go to the active channel', body: 'No channel? You can still watch, comment, like, subscribe and make playlists as yourself. Channels are by invitation.' },
+      upload: { title: 'Uploads go to the active channel', body: 'No channel? You can still watch, comment, like, subscribe and make playlists as yourself.' },
       help: { title: 'Find this again in Help', body: 'Help is in the side menu, with “Take the tour”. Enjoy watching.' },
     },
   },
@@ -667,7 +671,7 @@ export const HELP_AR: HelpTranslations = {
               ['الإعجاب بالمرئيات والتعليقات، والتصويت', 'الإعجاب والتصويت باسم القناة'],
               ['الاشتراك في القنوات', 'الاشتراك باسم القناة'],
               ['إنشاء قوائم تشغيلك وحفظ المرئيات فيها', 'الحفظ في قوائم تشغيل القناة وإدارتها'],
-              ['—', 'رفع المرئيات والاستوديو والجدولة'],
+              ['—', 'رفع المرئيات والاستوديو والجدولة', 'upload'],
               ['—', 'البث المباشر', 'live'],
               ['—', 'كتابة المنشورات في تبويب المجتمع (لمالك القناة)'],
             ] },
@@ -689,10 +693,10 @@ export const HELP_AR: HelpTranslations = {
         },
         {
           id: 'create-a-channel',
+          feature: 'createChannel',
           heading: 'إنشاء قناة',
           blocks: [
-            { type: 'p', text: 'إنشاء القنوات بدعوة. فإن دُعيت فافتح قائمة الحساب واختر **إنشاء قناة** وسمِّها، فتصبح القناة التي تتصرّف باسمها.' },
-            { type: 'p', text: 'وإن لم يظهر لك «إنشاء قناة» فحسابك لا يستطيع إنشاء قناة بعد، وما زال بإمكانك المشاهدة والتعليق والإعجاب والاشتراك وإنشاء قوائم التشغيل باسمك.' },
+            { type: 'p', text: 'افتح قائمة الحساب واختر **إنشاء قناة** وسمِّها، فتصبح القناة التي تتصرّف باسمها.' },
           ],
         },
         {
@@ -721,6 +725,7 @@ export const HELP_AR: HelpTranslations = {
       sections: [
         {
           id: 'upload',
+          feature: 'upload',
           heading: 'رفع مرئي',
           blocks: [
             { type: 'p', text: 'الرفع يحتاج قناة. ما ترفعه يذهب إلى **القناة التي تتصرّف باسمها**، فتحقّق منها في قائمة الحساب أولًا.' },
@@ -735,6 +740,7 @@ export const HELP_AR: HelpTranslations = {
         },
         {
           id: 'already-uploaded',
+          feature: 'upload',
           heading: 'تم رفعه من قبل',
           blocks: [
             { type: 'p', text: 'إذا اخترت ملفًا رفعته سابقًا نخبرك بأنه **تم رفعه من قبل**، فشاهد المرئي الموجود، أو ارفعه مرة أخرى مرئيًا منفصلًا.' },
@@ -889,7 +895,7 @@ export const HELP_AR: HelpTranslations = {
       account: { title: 'هذا أنت', body: 'قائمة حسابك. حين تكون قناة نشطة تظهر صورتها هنا بدل صورتك، ويبقى اسمك.' },
       actingAs: { title: 'باسم من تتصرّف', body: 'التعليقات والإعجابات والاشتراكات التي تقوم بها الآن تحمل هذا الاسم وهذه الصورة: قناة، أو اسمك أنت.' },
       switch: { title: 'بدّل متى شئت', body: 'اختر قناة تملكها أو تديرها، أو «الاستخدام بدون قناة» لتتصرّف باسمك. وتبقى في الحساب نفسه.' },
-      upload: { title: 'الرفع يذهب إلى القناة النشطة', body: 'ليست لديك قناة؟ ما زال بإمكانك المشاهدة والتعليق والإعجاب والاشتراك وإنشاء قوائم التشغيل باسمك. وإنشاء القنوات بدعوة.' },
+      upload: { title: 'الرفع يذهب إلى القناة النشطة', body: 'ليست لديك قناة؟ ما زال بإمكانك المشاهدة والتعليق والإعجاب والاشتراك وإنشاء قوائم التشغيل باسمك.' },
       help: { title: 'تجد الجولة في المساعدة', body: 'المساعدة في القائمة الجانبية، ومنها «ابدأ الجولة». مشاهدة طيبة.' },
     },
   },

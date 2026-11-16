@@ -15,6 +15,9 @@ export interface StudioFeatures {
   live?: boolean;
   /** Social auto-post: on and at least one network set up (socialAutopost) */
   social?: boolean;
+  upload?: boolean;
+  bulkSchedule?: boolean;
+  siteDomains?: boolean;
 }
 export type StudioFeature = keyof StudioFeatures;
 
