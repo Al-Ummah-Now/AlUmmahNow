@@ -8,7 +8,7 @@ import Link from '@/components/common/AppLink';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
-import { mayUpload, useCreatorAccess } from '@/hooks/useCreatorAccess';
+import { mayCreateChannel, mayUpload, useCreatorAccess } from '@/hooks/useCreatorAccess';
 import { studioUploadHref } from '@/lib/studio/links';
 
 const Icon = () => (
@@ -54,9 +54,11 @@ export function UploadAction({ variant = 'header' }: { variant?: 'header' | 'tab
       </Link>
     );
   }
-  // Signed in without a channel: nowhere to upload to yet
+  // Signed in without a channel and unable to make one: nowhere to upload to. One who may create a
+  // channel gets the normal Upload (the upload page offers "Create a channel"), never a greyed control
+  // right after their tier allows uploads (owner review 2026-11-16)
   const tab = variant === 'tab';
-  if (user && !account?.channel) {
+  if (user && !account?.channel && !mayCreateChannel(creator)) {
     const why = t.upload.createChannelToUpload;
     if (tab) {
       return (

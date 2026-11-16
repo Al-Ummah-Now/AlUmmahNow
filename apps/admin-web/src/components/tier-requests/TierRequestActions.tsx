@@ -51,8 +51,9 @@ export function TierRequestActions({ id, name, tier, actions }: Props) {
   }
 
   return (
-    <div className="flex flex-col gap-2 sm:items-end">
-      <div className="flex flex-wrap gap-2">
+    // The card's actions sit at its end edge on every width (owner rule: card buttons end-aligned)
+    <div className="flex flex-col items-end gap-2 ms-auto">
+      <div className="flex flex-wrap justify-end gap-2">
         <ConfirmButton
           label={t('tierRequests.approve')}
           busy={busy === 'approve'}

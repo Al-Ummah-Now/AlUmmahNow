@@ -22,6 +22,7 @@ jest.mock('@/hooks/useMultiAccount', () => ({ useMultiAccount: () => ({ user: { 
 jest.mock('@/hooks/useCreatorAccess', () => ({
   useCreatorAccess: () => ({ status: 'ready', access: { canUpload: false, canCreateChannel: false, tier: null, via: 'tier', uploadChannelIds: [], channelsOwned: 0, maxChannels: 0, limits: null, usage: { hour: 0, day: 0 }, upgradeMode: mockMode } }),
   mayUpload: () => false,
+  mayCreateChannel: () => false,
 }));
 
 describe('header pill for users who cannot upload', () => {

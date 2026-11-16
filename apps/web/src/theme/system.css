@@ -562,5 +562,8 @@ html[data-rail=open] .nv-hub .nv-chev,.nv-panel[data-open=true] .nv-hub .nv-chev
    logo, search, the bell, language, light/dark and the account on one line (docs/design/NAV.md "Phone") */
 .tabbar .tb-phone{display:none}
 .tabbar button.tb{border:0;background:transparent;font-family:inherit;font-weight:inherit;line-height:inherit;letter-spacing:inherit;cursor:pointer;padding:0;width:100%}
+/* Every tab label the same size; a two-word label ("Request tier") wraps between its words and stays in its column.
+   Columns stay 1fr (never narrower than their longest word), so no word is split ("Subscriptio-ns") or runs into the next */
+.tabbar .tb{padding-inline:2px}.tabbar .tb>span{text-align:center;line-height:1.2;overflow-wrap:normal;word-break:keep-all;hyphens:none}
 .tabbar .tb[aria-disabled=true]{opacity:.6;cursor:not-allowed}
 @media(max-width:639px){.ah .ah-menu,.ah-end .upload-action{display:none}.tabbar .tb-phone{display:flex}}
