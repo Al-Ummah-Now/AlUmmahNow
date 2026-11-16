@@ -126,9 +126,7 @@ export function UpgradePage({ locale }: { locale: string }) {
           </div>
         </aside>
       )}
-      {overview?.mode === 'closed' && (
-        <p className="upg-unavailable" data-slot="card" role="note" data-testid="upgrade-unavailable">{copy.unavailable}</p>
-      )}
+      {/* Closed: no requests and no word about it (owner rule: an off feature leaves no trace); the tiers still show */}
 
       <p className="upg-notice" role="status" aria-live="polite" data-testid="upgrade-notice">{notice}</p>
 

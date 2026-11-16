@@ -70,10 +70,12 @@ describe('Upgrade page', () => {
     expect(screen.getByTestId('upgrade-tiers').textContent).not.toMatch(/\$|€|£|\/mo/);
   });
 
-  it("requests off and no provider ('closed'): the tiers with the current one lit, no request or sign-in, and a plain note; in en and ar", async () => {
+  it("requests off and no provider ('closed'): the tiers with the current one lit, no request or sign-in, and no word about it (an off feature leaves no trace); in en and ar", async () => {
     fetchUpgradeOverview.mockResolvedValue(overview({ mode: 'closed' }));
     const { unmount } = render(<UpgradePage locale="en" />);
-    expect(await screen.findByTestId('upgrade-unavailable')).toHaveTextContent("Upgrades aren't available right now.");
+    await screen.findByTestId('tier-card-member');
+    expect(screen.queryByTestId('upgrade-unavailable')).toBeNull();
+    expect(screen.getByTestId('upgrade-page')).not.toHaveTextContent(/not available|aren't available/i);
     expect(screen.getByTestId('upgrade-page')).toHaveAttribute('data-mode', 'closed');
     expect(screen.getByTestId('tier-card-member')).toHaveAttribute('data-state', 'current');
     expect(screen.getByTestId('tier-card-creator')).toHaveAttribute('data-state', 'none');
@@ -83,7 +85,8 @@ describe('Upgrade page', () => {
     mockLang = 'ar';
     mockUser = null;
     render(<UpgradePage locale="ar" />);
-    expect(await screen.findByTestId('upgrade-unavailable')).toHaveTextContent('الترقية غير متاحة حاليًا.');
+    await screen.findByTestId('tier-card-member');
+    expect(screen.getByTestId('upgrade-page')).not.toHaveTextContent('غير متاحة');
     expect(screen.queryByTestId('tier-creator-sign-in')).toBeNull();
   });
 

@@ -195,8 +195,6 @@ export interface AppTranslations {
     tiersHeading: string;
     /** The lead when the page takes no requests (closed; pay has its own) */
     leadTiers: string;
-    /** /upgrade with no payment provider and requests off (UPGRADE_MODES 'closed') */
-    unavailable: string;
     current: string;
     /** The card's button: "Request" (the card names the tier); `requestLabel` is its accessible name */
     request: string;
