@@ -21,13 +21,15 @@
 			"instance_type": "standard-4",
 			// Cloudflare's own limit, not one of ours: Containers have no per-application cap, only account-wide
 			// concurrency (15,000 vCPU, 60 TiB memory, 300 TB disk; https://developers.cloudflare.com/containers/platform-details/limits/#account-limits),
-			// and vCPU binds first. The quota is shared: every application reserves max_instances x its vCPU, and
-			// a deploy is refused past it (v2026.11.15.3 at 3,750: 15,000 + stage's and QA's 16). So production
-			// gets what is left: (15,000 - 16) / 4 vCPU per standard-4 = 3,746 (GET /accounts/{id}/containers/me
-			// → limits.total_vcpu 15000). scripts/release/container-quota.ts checks it before every release.
+			// and vCPU binds first. The quota (GET /accounts/{id}/containers/me → limits.total_vcpu 15000) is
+			// shared by every application on the account, other projects included: each reserves max_instances
+			// x its vCPU and a deploy is refused past it (v2026.11.15.3 at 3,750). 10% stays free for the other
+			// projects; stage and QA hold 16; on 2026-11-16 no other project had a container. So production is
+			// (15,000 x 0.9 - 16) / 4 vCPU per standard-4 = 3,371. scripts/release/container-quota.ts checks the
+			// whole account before every release.
 			// The admin's min–max range (Video providers → Cloudflare R2 settings, enforced by TranscodeSlots)
 			// decides how many run. Instances that are not running cost nothing.
-			"max_instances": 3746,
+			"max_instances": 3371,
 			// A deploy lets running transcodes finish (up to 1 h) before their instance is replaced;
 			// one cut off after that retries at once without using up an attempt (jobs.ts isInfraFailure)
 			"rollout_active_grace_period": 3600
@@ -76,7 +78,7 @@
 	// The deployed version: the release self-test runs a few real starts per version, not per call
 	"version_metadata": { "binding": "CF_VERSION_METADATA" },
 	// MEDIA_TRANSCODE_CEILING: max_instances above (the admin's setting can't go higher)
-	"vars": { "TRANSCODER_INSTANCE": "standard-4", "LOG_LEVEL": "warn", "MEDIA_TRANSCODE_CEILING": "3746" },
+	"vars": { "TRANSCODER_INSTANCE": "standard-4", "LOG_LEVEL": "warn", "MEDIA_TRANSCODE_CEILING": "3371" },
 
 	"env": {
 		"stage": {

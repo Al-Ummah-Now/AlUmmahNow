@@ -158,10 +158,14 @@ from R2 on every request, at Class B cost and with no edge cache.
   `max_instances` has no documented maximum, Wrangler configuration → containers). vCPU binds first:
   every application reserves `max_instances` × its instance type's vCPU against the account's
   `total_vcpu` (15,000; `GET /accounts/{id}/containers/me` → `limits`), and Cloudflare refuses a deploy
-  past it. Stage and QA keep 2 each (16 vCPU), so production gets (15,000 − 16) / 4 =
-  **3,746 instances**. v2026.11.15.3 tried 3,750 and its media deploy was refused after the promote;
-  the release now runs `scripts/release/container-quota.ts` in the Stage job, before anything deploys,
-  and fails there if the planned media configs plus the account's other applications don't fit. Cloudflare
+  past it. The account is **shared with other projects**, so every application on it counts
+  (`GET /accounts/{id}/containers/applications`) and 10% of the quota stays free so another project's
+  deploy can't push ours over. Stage and QA keep 2 each (16 vCPU); on 2026-11-16 no other project had
+  a container. Production: (15,000 × 0.9 − 16) / 4 = **3,371 instances**. v2026.11.15.3 tried 3,750
+  and its media deploy was refused after the promote; the release now runs
+  `scripts/release/container-quota.ts` in the Stage job, before anything deploys, and fails there
+  (naming the largest production value that fits) if the planned media configs plus every other
+  application on the account exceed the quota less 10%. Cloudflare
   raises account limits on request (account team or Support). The value reaches apps/media and
   api-videos as `MEDIA_TRANSCODE_CEILING`. The value lives in
   `global_settings/ops/media-transcode-limit.json` (written by api-videos; the first version's

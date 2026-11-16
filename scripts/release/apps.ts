@@ -261,7 +261,7 @@ export const APPS: AppRule[] = [
 			name: 'al-ummah-now-media',
 			requireRoutes: true,
 			// The container's max_instances: the ceiling of the admin's max concurrent transcodes
-			vars: { MEDIA_TRANSCODE_CEILING: '3746' },
+			vars: { MEDIA_TRANSCODE_CEILING: '3371' },
 			requiredBindings: [
 				INTERNAL_API_KEY,
 				{ kind: 'secrets_store_secrets', name: 'MEDIA_SIGN_KEY' },
