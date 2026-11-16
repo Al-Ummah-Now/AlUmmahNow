@@ -120,17 +120,13 @@ export function CreatorTierControl({ userId, userName, current: serverCurrent, t
       </div>
       {current && (
         <p className="text-xs text-fg-muted" data-testid={`${testId}-origin`}>
-          {t(ORIGIN_LABEL[current.origin])}
-          {current.origin !== 'super_admin' && (
-            <>
-              {' · '}
-              {/* Names and dates in their own direction, so an English name in Arabic does not scramble the line */}
-              {withIsolated(t('creators.assignedByOn'), {
-                actor: current.assignedByName || (current.assignedBy ? <UserName id={current.assignedBy} showEmail={false} /> : t('auditLog.unknownUser')),
-                date: formatDate(current.assignedAt, locale),
-              })}
-            </>
-          )}
+          {/* Who and when once: "Assigned by Amina Hassan, 16 November 2026" (an admin without a name: "Assigned by an
+              admin, …"); names and dates isolated, so an English name in Arabic does not scramble the line */}
+          {current.origin === 'admin'
+            ? withIsolated(t(current.assignedByName ? 'creators.assignedByActor' : 'creators.assignedByAdmin'), { actor: current.assignedByName ?? '', date: formatDate(current.assignedAt, locale) })
+            : current.origin === 'super_admin'
+              ? t(ORIGIN_LABEL[current.origin])
+              : withIsolated(t('creators.originOn'), { origin: t(ORIGIN_LABEL[current.origin]), date: formatDate(current.assignedAt, locale) })}
         </p>
       )}
       {superAdmin && <p className="text-xs text-fg-muted max-w-xs" data-testid={`${testId}-super-admin`}>{t('creators.superAdminLocked')}</p>}

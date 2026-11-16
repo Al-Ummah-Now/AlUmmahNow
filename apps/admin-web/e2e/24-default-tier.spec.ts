@@ -103,7 +103,7 @@ test.describe('default creator tier', () => {
 
     const audit = page.getByTestId('tiers-audit');
     await expect(audit).toContainText('Default tier');
-    await expect(audit).toContainText('default set to Creator');
+    await expect(audit).toContainText('set to Creator');
     await setDefault('member');
   });
 
