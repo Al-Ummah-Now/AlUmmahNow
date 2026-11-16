@@ -265,6 +265,7 @@ const en = {
     },
   },
   videoCategories: {
+    namePair: 'Name',
     title: 'Categories',
     subtitle: 'The video categories creators pick on upload and in Studio, and viewers browse in Explore and search. AI suggestions choose from the available ones.',
     loadError: 'The categories could not be loaded. Refresh to try again.',
@@ -1110,6 +1111,8 @@ const en = {
     pending: 'Sending…',
   },
   themeBuilder: {
+    namePair: 'Name',
+    descriptionPair: 'Description',
     title: 'Theme builder',
     subtitle: 'Each theme is a package: theme.json with its images and fonts. Duplicate a theme to start, edit every component, preview it, then publish and use it.',
     builtIn: 'Built-in',
@@ -2825,7 +2828,7 @@ const en = {
     newTitle: 'New issue',
     editTitle: 'Edit draft',
     bodyHint: 'Plain text. Leave an empty line between paragraphs; a line with only an https:// address becomes a link.',
-    fields: { subject_en: 'Subject (English)', subject_ar: 'Subject (Arabic)', body_en: 'Text (English)', body_ar: 'Text (Arabic)' },
+    fields: { subjectPair: 'Subject', bodyPair: 'Text', subject_en: 'Subject (English)', subject_ar: 'Subject (Arabic)', body_en: 'Text (English)', body_ar: 'Text (Arabic)' },
     saveDraft: 'Save draft',
     saved: 'Draft saved.',
     send: 'Send',
@@ -2880,6 +2883,8 @@ const en = {
     impacts: { none: 'No impact', degraded: 'Degraded performance', partial: 'Partial outage', major: 'Major outage', maintenance: 'Maintenance' },
     states: { operational: 'Operational', degraded: 'Degraded performance', partial: 'Partial outage', major: 'Major outage' },
     new: {
+      titlePair: 'Title',
+      bodyPair: 'Message',
       title: 'Post to the status page',
       kind: 'Type',
       titleEn: 'Title (English)',

@@ -186,6 +186,22 @@ describe('theme builder API', () => {
     assert.deepEqual(trash, [JSON.stringify({ action: 'delete', reason: 'Eid is over' })]);
   });
 
+  it('a draft needs its name in English and Arabic and its description in both or neither (never kept silently)', async () => {
+    const { call, sqlite } = setup();
+    await importCopy(call);
+    const theme = ((await (await call('/api/themes/eid-lights')).json()) as { result: { theme: ThemePackage } }).result.theme;
+    const put = (body: unknown) => call('/api/themes/eid-lights/draft', { method: 'PUT', body: JSON.stringify(body), headers: { 'content-type': 'application/json' } });
+    const before = sqlite.prepare('SELECT name_en, name_ar FROM theme_packages WHERE id = ?').get('eid-lights') as { name_en: string; name_ar: string };
+    const noAr = await put({ ...theme, name: { en: 'Eid lights', ar: ' ' } });
+    assert.equal(noAr.status, 422);
+    assert.ok(((await noAr.json()) as { issues: Array<{ path: string }> }).issues.some((i) => i.path === 'name.ar'));
+    const halfDescription = await put({ ...theme, description: { en: 'Lanterns', ar: '' } });
+    assert.equal(halfDescription.status, 422);
+    assert.deepEqual(sqlite.prepare('SELECT name_en, name_ar FROM theme_packages WHERE id = ?').get('eid-lights'), before);
+    assert.equal((await put({ ...theme, name: { en: 'Eid lanterns', ar: 'فوانيس العيد' }, description: { en: '', ar: '' } })).status, 200);
+    assert.deepEqual({ ...(sqlite.prepare('SELECT name_en, name_ar FROM theme_packages WHERE id = ?').get('eid-lights') as object) }, { name_en: 'Eid lanterns', name_ar: 'فوانيس العيد' });
+  });
+
   it('built-in themes cannot be deleted; a missing published version falls back to the default', async () => {
     const { call, db, sqlite } = setup();
     assert.equal((await call('/api/themes/fawanees', { method: 'DELETE' })).status, 403);

@@ -264,6 +264,7 @@ const ar: Messages = {
     },
   },
   videoCategories: {
+    namePair: 'الاسم',
     title: 'التصنيفات',
     subtitle: 'تصنيفات المرئيات التي يختارها صنّاع المحتوى عند الرفع وفي الاستوديو، ويتصفحها المشاهدون في الاستكشاف والبحث. تختار اقتراحات الذكاء الاصطناعي من التصنيفات المتاحة.',
     loadError: 'تعذّر تحميل التصنيفات. حدّث الصفحة للمحاولة مرة أخرى.',
@@ -1109,6 +1110,8 @@ const ar: Messages = {
     pending: 'جارٍ الإرسال…',
   },
   themeBuilder: {
+    namePair: 'الاسم',
+    descriptionPair: 'الوصف',
     title: 'منشئ المظاهر',
     subtitle: 'كل مظهر حزمة: ملف theme.json مع صوره وخطوطه. انسخ مظهرًا للبدء، وعدّل كل مكوّن، وعاينه، ثم انشره واستخدمه.',
     builtIn: 'مدمج',
@@ -2824,7 +2827,7 @@ const ar: Messages = {
     newTitle: 'عدد جديد',
     editTitle: 'تعديل المسودة',
     bodyHint: 'نص عادي. اترك سطرًا فارغًا بين الفقرات، والسطر الذي فيه عنوان https:// فقط يصبح رابطًا.',
-    fields: { subject_en: 'الموضوع (بالإنجليزية)', subject_ar: 'الموضوع (بالعربية)', body_en: 'النص (بالإنجليزية)', body_ar: 'النص (بالعربية)' },
+    fields: { subjectPair: 'الموضوع', bodyPair: 'النص', subject_en: 'الموضوع (بالإنجليزية)', subject_ar: 'الموضوع (بالعربية)', body_en: 'النص (بالإنجليزية)', body_ar: 'النص (بالعربية)' },
     saveDraft: 'حفظ المسودة',
     saved: 'حُفظت المسودة.',
     send: 'إرسال',
@@ -2879,6 +2882,8 @@ const ar: Messages = {
     impacts: { none: 'بلا تأثير', degraded: 'أداء منخفض', partial: 'انقطاع جزئي', major: 'انقطاع كبير', maintenance: 'صيانة' },
     states: { operational: 'يعمل', degraded: 'أداء منخفض', partial: 'انقطاع جزئي', major: 'انقطاع كبير' },
     new: {
+      titlePair: 'العنوان',
+      bodyPair: 'الرسالة',
       title: 'النشر في صفحة الحالة',
       kind: 'النوع',
       titleEn: 'العنوان (بالإنجليزية)',
