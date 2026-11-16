@@ -1631,7 +1631,7 @@ const en = {
     loadFailed: 'Creators could not be loaded. Try again shortly.',
     hitsWeek: '{count} limit hits this week',
     panelTitle: 'Creator tier',
-    panelHint: 'Without an assigned tier, this user holds the default tier (chosen on Tiers). Managers and editors of their channels upload under their tier.',
+    panelHint: 'Every account has a stored tier: its invite\'s, or the default tier when it signed up. Managers and editors of their channels upload under their tier.',
     historyTitle: 'Tier history',
     historyEmpty: 'No tier changes yet.',
     historyEntry: '{from} → {to}',
