@@ -277,7 +277,7 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
       {/* Header: count, sort, connection status */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-bold" data-testid="comments-count">
-          {t.comments.commentsCount.replace('{count}', commentsCount.toString())}
+          {t.comments.commentsCount.replace('{count}', formatNumber(lang, commentsCount))}
         </h2>
         <div className="flex items-center gap-3">
           {!commentsOff && (

@@ -1,5 +1,5 @@
 'use client';
-import { formatTime } from '@al-ummah/shared-types';
+import { formatTime, formatNumber } from '@al-ummah/shared-types';
 import { HelpLink } from '@/components/help/HelpLink';
 import { logger } from '@/lib/logger-client';
 import React, { useState, useEffect, useCallback } from 'react';
@@ -172,7 +172,7 @@ export const SubscriptionFeed: React.FC<SubscriptionFeedProps> = ({
       {videos.length > 0 && (
         <div className="mt-8 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg text-center">
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            {t.subscriptions.showingVideosFrom.replace('{count}', videos.length.toString())}{' '}
+            {t.subscriptions.showingVideosFrom.replace('{count}', formatNumber(lang, videos.length))}{' '}
             <span className="font-medium">
               {t.subscriptions.wantMore}
             </span>

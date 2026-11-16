@@ -397,7 +397,7 @@ const UploadPage: React.FC = () => {
     if (selectedFiles.length > MAX_FILES) {
       setUploadError(
         t.batch.errors.tooManyFiles
-          .replace('{count}', selectedFiles.length.toString())
+          .replace('{count}', formatNumber(lang, selectedFiles.length))
       );
       return;
     }

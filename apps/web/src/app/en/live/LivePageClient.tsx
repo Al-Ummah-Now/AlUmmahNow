@@ -12,6 +12,7 @@
 
 'use client';
 
+import { formatNumber } from '@al-ummah/shared-types';
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLiveStreams } from '@/hooks/useLiveStreams';
@@ -127,7 +128,7 @@ function PageHeader({ t }: { t: ReturnType<typeof useLanguage>['t'] }) {
  */
 function formatStreamCount(count: number, t: ReturnType<typeof useLanguage>['t']): string {
   const baseText = t.live?.showingStreamsCount || 'Showing {count} live stream';
-  const text = baseText.replace('{count}', count.toString());
+  const text = baseText.replace('{count}', formatNumber('en', count));
   // Add 's' for plural in English
   return count !== 1 ? text + 's' : text;
 }
