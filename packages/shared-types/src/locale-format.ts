@@ -104,7 +104,9 @@ export function pluralCategory(locale: FormatLocale, count: number): Intl.LDMLPl
 /** 1234.5 -> "1,234.5" / «١٬٢٣٤٫٥». Non-finite values become 0. */
 /** "A, B and C" / «A وB وC»: names joined in the locale's words (twin of AlUmmahNowAuth packages/ui formatList). */
 export function formatList(locale: FormatLocale, items: string[]): string {
-  return new Intl.ListFormat(isArabicLocale(locale) ? 'ar' : 'en', { style: 'long', type: 'conjunction' }).format(items);
+  // Intl.ListFormat is ES2021; this package's lib is older, so it is typed here
+  const ListFormat = (Intl as unknown as { ListFormat: new (locale: string, options: { style: 'long'; type: 'conjunction' }) => { format(items: string[]): string } }).ListFormat;
+  return new ListFormat(isArabicLocale(locale) ? 'ar' : 'en', { style: 'long', type: 'conjunction' }).format(items);
 }
 
 export function formatNumber(locale: FormatLocale, value: number, options?: Intl.NumberFormatOptions): string {
