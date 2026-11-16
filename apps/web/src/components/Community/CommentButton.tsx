@@ -52,10 +52,10 @@ export default function CommentButton({
       onClick={handleClick}
       disabled={!commentsEnabled}
       className={cn(
+        // Flat like its neighbours (Like, Save, Share): open is shown by colour, never a filled pill
+        // (a tinted background here was themed into a glowing primary button)
         'flex items-center gap-2 px-4 py-2 rounded-full transition-all group',
-        showComments
-          ? 'bg-blue-50 dark:bg-blue-900/20'
-          : 'hover:bg-gray-100 dark:hover:bg-gray-700',
+        'hover:bg-gray-100 dark:hover:bg-gray-700',
         'disabled:opacity-50 disabled:cursor-not-allowed',
         'flex-row'
       )}
@@ -65,9 +65,7 @@ export default function CommentButton({
         aria-hidden="true"
         className={cn(
           'w-5 h-5 transition-colors',
-          showComments
-            ? 'text-blue-600 dark:text-blue-400'
-            : 'text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-gray-200'
+          showComments ? 'text-[var(--fanous-color-primary)]' : 'text-[var(--fanous-color-text-secondary)] group-hover:text-[var(--fanous-color-text-primary)]'
         )}
         fill="none"
         stroke="currentColor"
@@ -83,9 +81,7 @@ export default function CommentButton({
       <span
         className={cn(
           'text-sm font-medium transition-colors',
-          showComments
-            ? 'text-blue-600 dark:text-blue-400'
-            : 'text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-gray-200'
+          showComments ? 'text-[var(--fanous-color-primary)]' : 'text-[var(--fanous-color-text-secondary)] group-hover:text-[var(--fanous-color-text-primary)]'
         )}
       >
         {/* Accessible name = label + visible count (label-in-name) */}

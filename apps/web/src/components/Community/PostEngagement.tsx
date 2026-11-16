@@ -115,7 +115,8 @@ export default function PostEngagement({
             aria-label={isRTL ? 'مشاركة' : 'Share'}
           >
             <svg
-              className="w-5 h-5 text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-gray-200"
+              className="w-5 h-5 text-[var(--fanous-color-text-secondary)] group-hover:text-[var(--fanous-color-text-primary)]"
+              aria-hidden="true"
               fill="none"
               stroke="currentColor"
               strokeWidth={2}
