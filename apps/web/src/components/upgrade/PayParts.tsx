@@ -266,7 +266,15 @@ export function TierPricing({
         {testMode && <span className="upg-pay-test">{copy.settings.testMode}</span>}
       </div>
       <p className="upg-tax" data-testid={`tier-${tierId}-tax`}>{taxNote(plans, lang, copy)}</p>
-
+      {/* A real form (autofill and keyboard submit); the card itself is entered on the provider's hosted checkout */}
+      <form
+        className="upg-pay-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (signedIn && provider && !busy) onSubscribe({ tierId, selection, provider });
+        }}
+        data-testid={`tier-${tierId}-pay-form`}
+      >
       {periods.length > 1 && (
         <fieldset className="upg-seg" data-testid={`tier-${tierId}-period`}>
           <legend className="sr-only">{copy.pay.periodLabel}</legend>
@@ -291,6 +299,8 @@ export function TierPricing({
           <label htmlFor={`${ids}-currency`}>{copy.pay.currencyLabel}</label>
           <select
             id={`${ids}-currency`}
+            name="currency"
+            autoComplete="transaction-currency"
             className="upg-input upg-select"
             value={selection.currency}
             onChange={(e) => setWanted((w) => ({ ...w, currency: e.target.value }))}
@@ -320,18 +330,19 @@ export function TierPricing({
         </fieldset>
       )}
 
-      {signedIn ? (
+      {signedIn && (
         <button
-          type="button"
+          type="submit"
           className="upg-btn"
           disabled={busy || !provider}
           aria-describedby={`${ids}-note`}
-          onClick={() => provider && onSubscribe({ tierId, selection, provider })}
           data-testid={`tier-${tierId}-subscribe`}
         >
           {busy ? copy.pay.subscribing : fillBillingCopy(copy.pay.subscribe, { tier: tierLabel })}
         </button>
-      ) : (
+      )}
+      </form>
+      {!signedIn && (
         <form action={login.bind(null, locale, upgradePath(locale))}>
           <button type="submit" className="upg-btn upg-btn-quiet" data-testid={`tier-${tierId}-sign-in`}>{copy.pay.signInToSubscribe}</button>
         </form>
