@@ -92,8 +92,8 @@ export function uploadUi(page: Page) {
     processingStatus: page.getByTestId('upload-processing-status'),
     uploadAnother: page.getByTestId('upload-another'),
     channelRequired: page.getByTestId('upload-channel-required'),
-    /** A signed-in user without a creator tier: uploading is by invitation */
-    byInvitation: page.getByTestId('upload-by-invitation'),
+    /** A signed-in user without a creator tier: the upload page is not found (hidden when off) */
+    notFound: page.getByTestId('not-found-page'),
     signIn: page.getByTestId('upload-sign-in'),
   };
 }

@@ -165,7 +165,8 @@ export interface AppTranslations {
   creator: {
     invitationTitle: string;
     invitationMessage: string;
-    invitationShort: string;
+    /** A refused upload on an account that can no longer upload: a plain fact, no upsell (hidden when off) */
+    uploadsOff: string;
     /** A write refused with `videos_account_pending_deletion` */
     accountPendingDeletion: string;
     limitReached: string;
@@ -1110,6 +1111,8 @@ export interface AppTranslations {
     batchSettings: string;
     categoryForAll: string;
     categoryForAllHint: string;
+    /** Added after categoryForAllHint only while AI category suggestions are on */
+    categoryForAllAiHint: string;
     videoCategory: string;
     categorySaving: string;
     categorySaved: string;
@@ -1192,7 +1195,6 @@ export interface AppTranslations {
       published: string;
       videoLoadError: string;
       retry: string;
-      retentionComingSoon: string;
       exportCsv: string;
       exportCsvHint: string;
       csvDate: string;
@@ -2431,7 +2433,6 @@ export interface AppTranslations {
     profileSettings?: string;
     profileSettingsDesc?: string;
     settingsDescription?: string;
-    notAvailable?: string;
     signInTitle?: string;
     signInMessage?: string;
     /** Accessible name of the settings breadcrumb trail. */

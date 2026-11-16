@@ -12,7 +12,7 @@
  *    changing channel with a file queued asks first in the in-app dialog.
  * 3. #759: an editor with no creator tier of their own uploads to a channel
  *    whose owner has one (uploads there run under the owner's tier); once the
- *    owner's tier is removed, /upload says uploads are by invitation.
+ *    owner's tier is removed, /upload is not found (hidden when off).
  * Every video is deleted afterwards.
  */
 import * as fs from 'fs';
@@ -224,7 +224,7 @@ test.describe('Release: channel editors upload under the owner\'s tier (#759)', 
 
       // /upload shows the uploader on the owner's channel, and the upload lands there
       await editor.page.goto(`${target().web}/en/upload`);
-      await expect(editor.page.getByTestId('upload-by-invitation')).toHaveCount(0);
+      await expect(editor.page.getByTestId('not-found-page')).toHaveCount(0);
       const picker = editor.page.getByTestId('upload-channel-picker');
       await expect(picker).toHaveAttribute('data-channel-id', channelId, { timeout: 30000 });
       const upload = await uploadOnPage(editor.page, `Release E2E 759 editor ${Date.now().toString(36)}`);
@@ -232,11 +232,12 @@ test.describe('Release: channel editors upload under the owner\'s tier (#759)', 
       expect(upload.headerChannelId).toBe(channelId);
       expect(await storedChannel(editor.user, videoId, channelId), 'the editor\'s upload is not on the owner\'s channel').toBe(channelId);
 
-      // The owner loses the tier: the editor is told uploads are by invitation
+      // The owner loses the tier: /upload no longer exists for the editor, and nothing says why
       await setCreatorTier(owner.user, null);
       await expect.poll(async () => (await access())?.canUpload, { message: 'the editor can still upload', timeout: 30000 }).toBe(false);
       await editor.page.goto(`${target().web}/en/upload`);
-      await expect(editor.page.getByTestId('upload-by-invitation')).toBeVisible({ timeout: 30000 });
+      await expect(editor.page.getByTestId('not-found-page')).toBeVisible({ timeout: 30000 });
+      await expect(editor.page.getByTestId('upload-by-invitation')).toHaveCount(0);
     } finally {
       if (videoId) await apiFetch(owner.user, `/api/videos/${videoId}/permanent`, { method: 'DELETE', headers: { channelId } });
       await owner.close();

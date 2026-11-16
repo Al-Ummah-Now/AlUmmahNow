@@ -19,9 +19,12 @@ export default async function StudioSitePage({ params }: { params: Promise<{ loc
       <div className="mx-auto mt-10 max-w-3xl">
         <SitePages channelId={channelId} locale={locale} />
       </div>
-      <div className="mx-auto mt-10 max-w-3xl">
-        <SiteDomains channelId={channelId} locale={locale} />
-      </div>
+      {/* Own domains only while Cloudflare for SaaS is set up and the site allows one (hidden when off) */}
+      {access.features.siteDomains === true && (
+        <div className="mx-auto mt-10 max-w-3xl">
+          <SiteDomains channelId={channelId} locale={locale} />
+        </div>
+      )}
     </>
   );
 }

@@ -64,22 +64,38 @@ describe('Help home', () => {
 });
 
 describe('Help topic page', () => {
-  it('leaves out a row about a feature that is off for the reader (go live), shows it when on', () => {
+  it('leaves out rows about features that are off for the reader (go live, upload), shows them when on', () => {
     lang = 'en';
     mockFeatures = {};
     const { unmount } = render(<HelpTopicPage topic="identity" />);
     expect(screen.queryByRole('cell', { name: 'Go live' })).toBeNull();
-    expect(screen.getByRole('cell', { name: 'Upload, use Studio and schedule' })).toBeInTheDocument();
+    expect(screen.queryByRole('cell', { name: 'Upload, use Studio and schedule' })).toBeNull();
     unmount();
-    mockFeatures = { live: true };
+    mockFeatures = { live: true, upload: true };
     render(<HelpTopicPage topic="identity" />);
     expect(screen.getByRole('cell', { name: 'Go live' })).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: 'Upload, use Studio and schedule' })).toBeInTheDocument();
+    mockFeatures = {};
+  });
+
+  it('leaves out a whole section, its "On this page" link and its search entry while its feature is off', () => {
+    mockFeatures = {};
+    const { unmount } = render(<HelpTopicPage topic="identity" />);
+    expect(screen.queryByRole('heading', { level: 2, name: 'Create a channel' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Create a channel' })).toBeNull();
+    expect(screen.queryByText(/by invitation/i)).toBeNull();
+    unmount();
+    mockFeatures = { createChannel: true };
+    render(<HelpTopicPage topic="identity" />);
+    expect(screen.getByRole('heading', { level: 2, name: 'Create a channel' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Create a channel' })).toHaveAttribute('href', '#create-a-channel');
     mockFeatures = {};
   });
 
   beforeEach(() => { lang = 'en'; });
 
   it('has every section with an anchor, pictures in both modes and Show me', () => {
+    mockFeatures = { upload: true, createChannel: true, live: true };
     render(<HelpTopicPage topic="identity" />);
     for (const section of HELP_EN.topics.identity.sections) {
       expect(screen.getByRole('heading', { level: 2, name: section.heading })).toBeInTheDocument();

@@ -37,6 +37,9 @@ jest.mock('@/components/bulkEdit/BulkEditPanel', () => ({
     return props.open ? <div data-testid="bulk-edit-panel">{props.videos.map((v) => v.id).join(',')}</div> : null;
   },
 }));
+let mockFeatures = { bulkSchedule: true };
+const mockRefreshFeatures = jest.fn();
+jest.mock('@/hooks/useFeatures', () => ({ useFeatures: () => ({ ready: true, features: mockFeatures }), refreshFeatures: (...args: unknown[]) => mockRefreshFeatures(...args) }));
 jest.mock('@/hooks/useMultiAccount', () => ({ useMultiAccount: () => ({ user: { channels: [{ id: 'c1', name: 'Noor', nameLocalized: { ar: 'نور' } }] } }) }));
 jest.mock('@/hooks/useChannelPlaylists', () => ({ useChannelPlaylists: () => ({ playlists: [{ id: 'p1' }], loading: false, failed: false, create: jest.fn() }) }));
 jest.mock('@/components/playlists/AddToPlaylistDialog', () => ({
@@ -66,6 +69,7 @@ function renderTab(role: 'owner' | 'editor' = 'owner') {
 describe('VideosTab', () => {
   beforeEach(() => {
     search = '';
+    mockFeatures = { bulkSchedule: true };
     jest.clearAllMocks();
     counts.mockResolvedValue(ZERO);
     list.mockResolvedValue({ items: [video('a'), video('b', { isPublic: false })], cursor: null });
@@ -156,14 +160,22 @@ describe('VideosTab', () => {
     expect(await screen.findByText('1 deleted, 1 could not be deleted.')).toBeInTheDocument();
   });
 
-  it('says which plan limit refused a bulk action', async () => {
+  it('bulk scheduling refused as off: no words, the features are read again', async () => {
     renderTab();
     const rows = await screen.findAllByTestId('studio-video-row');
     fireEvent.click(within(rows[0]).getByRole('checkbox'));
     fireEvent.click(within(screen.getByTestId('studio-bulk-bar')).getByRole('button', { name: STUDIO_EN.videos.bulk.schedule }));
     fireEvent.click(await screen.findByText('refused'));
-    expect(await screen.findByRole('status')).toHaveTextContent(STUDIO_EN.limits.bulkSchedule);
-    expect(screen.getByRole('status')).not.toHaveTextContent(STUDIO_EN.videos.actionFailed);
+    await waitFor(() => expect(mockRefreshFeatures).toHaveBeenCalledWith('c1'));
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+  });
+
+  it('bulk scheduling off for the channel: no Schedule in the bulk bar', async () => {
+    mockFeatures = { bulkSchedule: false };
+    renderTab();
+    const rows = await screen.findAllByTestId('studio-video-row');
+    fireEvent.click(within(rows[0]).getByRole('checkbox'));
+    expect(within(screen.getByTestId('studio-bulk-bar')).queryByRole('button', { name: STUDIO_EN.videos.bulk.schedule })).toBeNull();
   });
 
   it('marks private videos', async () => {

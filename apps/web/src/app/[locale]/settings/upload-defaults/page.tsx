@@ -8,7 +8,9 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import { notFound } from 'next/navigation';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useFeatures } from '@/hooks/useFeatures';
 import {
   Plus,
   Star,
@@ -29,6 +31,7 @@ import { logger } from '@/lib/logger-client';
 
 export default function UploadDefaultsPage() {
   const { t, isRTL } = useLanguage();
+  const uploads = useFeatures();
   const categories = useVideoCategories();
 
   // State
@@ -139,6 +142,9 @@ export default function UploadDefaultsPage() {
   const handleModalSuccess = () => {
     loadTemplates();
   };
+
+  // Hidden when off: without uploads this page does not exist
+  if (uploads.ready && !uploads.features.upload) notFound();
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900" dir={isRTL ? 'rtl' : 'ltr'} data-testid="upload-defaults-page">

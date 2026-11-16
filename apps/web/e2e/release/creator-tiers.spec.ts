@@ -2,8 +2,9 @@
  * Release regression: uploading and creating channels are by invitation
  * (creator tiers, assigned by admins in the videos admin).
  * - A new account (no tier) is refused by the server (403
- *   uploads_by_invitation, a friendly message, never a raw error) and gets no
- *   upload or create-channel UI, in English and Arabic.
+ *   uploads_by_invitation, never a raw error) and gets no upload or
+ *   create-channel UI, in English and Arabic: /upload is the not-found page,
+ *   with no "by invitation" notice (wiki "Hidden when off").
  * - Once an admin gives it the Creator tier on its user page, it creates a
  *   channel and starts an upload, without signing in again.
  * - When the admin removes the tier, the next upload is refused at once.
@@ -16,8 +17,6 @@ import { setCreatorTier } from './creator-tier';
 // Signs users in through the auth server: the trace would hold the password and code
 test.use({ trace: 'off' });
 
-const INVITATION_EN = 'Uploading is by invitation for now';
-const INVITATION_AR = 'الرفع بدعوة فقط حاليًا';
 
 async function answerConsent(context: BrowserContext): Promise<void> {
   await context.addCookies([{ name: 'aun_consent', value: `v1.a0.e0.p0.${Date.now()}`, url: target().web, sameSite: 'Lax' }]);
@@ -39,7 +38,7 @@ function initiate(user: WebUser, channelId?: string): Promise<Response> {
   });
 }
 
-/** A refusal for a user without a tier: 403, the code the web app turns into its themed notice, no raw text. */
+/** A refusal for a user without a tier: 403 with its code, no raw text. */
 async function expectInvitationOnly(res: Response, what: string): Promise<void> {
   const text = await res.text();
   expect(res.status, `${what}: ${text}`).toBe(403);
@@ -57,9 +56,10 @@ async function creatorAccess(user: WebUser): Promise<{ canUpload: boolean; canCr
 /** The header and the account menu as this user sees them. */
 async function expectNoCreatorUi(page: Page, locale: 'en' | 'ar'): Promise<void> {
   await page.goto(`${target().web}/${locale}/upload`);
-  const notice = page.getByTestId('upload-by-invitation');
-  await expect(notice).toBeVisible({ timeout: 30000 });
-  await expect(notice).toContainText(locale === 'ar' ? INVITATION_AR : INVITATION_EN);
+  // Hidden when off: the upload page does not exist for this account, and nothing says why
+  await expect(page.getByTestId('not-found-page')).toBeVisible({ timeout: 30000 });
+  await expect(page.getByTestId('upload-by-invitation')).toHaveCount(0);
+  await expect(page.getByText(/by invitation|بدعوة/)).toHaveCount(0);
   await expect(page.getByTestId('upload-dropzone')).toHaveCount(0);
   await expect(page.getByTestId('header-upload')).toHaveCount(0);
 
@@ -115,7 +115,8 @@ test.describe('Release: creator tiers', () => {
       await expectInvitationOnly(await initiate(user, channelId), 'POST /api/videos/upload/initiate after the tier was removed');
       await expectInvitationOnly(await createChannel(user), 'POST /api/channels after the tier was removed');
       await page.goto(`${target().web}/en/upload`);
-      await expect(page.getByTestId('upload-by-invitation')).toBeVisible({ timeout: 30000 });
+      await expect(page.getByTestId('not-found-page')).toBeVisible({ timeout: 30000 });
+      await expect(page.getByTestId('upload-dropzone')).toHaveCount(0);
     } finally {
       if (videoId) await apiFetch(user, `/api/videos/${videoId}/permanent`, { method: 'DELETE', headers: { channelId } });
     }

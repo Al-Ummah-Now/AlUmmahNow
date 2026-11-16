@@ -2,6 +2,7 @@
 import { expect, test } from '@playwright/test';
 import { settleSession, skipUntilStudioDeployed, studioOwner } from './studio';
 import { createProfile, signUpOnWeb } from './web-session';
+import { grantCreatorTier } from './creator-tier';
 import { target } from './targets';
 
 
@@ -21,11 +22,17 @@ test.describe('Release: Studio frame', () => {
     expect(back?.value && decodeURIComponent(back.value), 'sign-in does not return to Studio').toBe('/en/studio');
   });
 
-  test('offers to create a channel when there is none', async ({ page }) => {
+  test('offers to create a channel when there is none, only to an account that may create one', async ({ page }) => {
     const user = await signUpOnWeb(page, 'rel-studio-none');
     // A profile, then let the post-sign-up hop finish before opening Studio
     await createProfile(user);
     await settleSession(page);
+    // No creator tier: creating channels is off, so Studio without a channel does not exist (hidden when off)
+    const off = await page.goto(`${target().web}/en/studio`);
+    expect(off?.status(), 'Studio without a channel or tier').toBe(404);
+    await expect(page.getByTestId('studio-create-channel')).toHaveCount(0);
+    // With the Creator tier the first channel can be created from Studio
+    await grantCreatorTier(user);
     await page.goto(`${target().web}/en/studio`);
     await expect(page.getByTestId('studio-create-channel')).toBeVisible();
   });

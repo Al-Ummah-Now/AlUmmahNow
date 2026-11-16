@@ -18,17 +18,17 @@ describe('parseLimitRefusal', () => {
 });
 
 describe('limitRefusalMessage', () => {
-  it('names the drafts limit and what the plan allows', () => {
+  it('states the drafts limit as a plain fact', () => {
     const message = limitRefusalMessage(STUDIO_EN.limits, { entitlement: 'studio.drafts.max', limit: 5, current: 5 });
-    expect(message).toBe('Your plan allows 5 drafts per channel. Publish or delete one to save another.');
+    expect(message).toBe('This channel can keep 5 drafts. Publish or delete one to save another.');
+    expect(message).not.toMatch(/plan/i);
   });
 
-  it('names the bulk schedule limit', () => {
-    expect(limitRefusalMessage(STUDIO_EN.limits, { entitlement: 'studio.bulkSchedule', limit: null, current: null }))
-      .toBe('Your plan doesn\'t include scheduling several videos at once. Schedule them one at a time.');
+  it('has no words for bulk scheduling being off (the button is hidden instead)', () => {
+    expect(limitRefusalMessage(STUDIO_EN.limits, { entitlement: 'studio.bulkSchedule', limit: null, current: null })).toBeNull();
   });
 
-  it('still says it is the plan for a limit it has no text for', () => {
+  it('says it plainly for a limit it has no text for', () => {
     expect(limitRefusalMessage(STUDIO_EN.limits, { entitlement: 'other.key', limit: 3, current: 3 })).toBe(STUDIO_EN.limits.other);
   });
 });

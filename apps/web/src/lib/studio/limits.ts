@@ -1,4 +1,8 @@
-/** Explains a plan limit the API refused an action for (HTTP 402 upgrade_required). */
+/**
+ * Explains a limit the API refused an action for (HTTP 402 upgrade_required) as a plain fact,
+ * never "your plan doesn't include" (wiki "Hidden when off"). A refused feature (bulk
+ * scheduling) has no words: null, and the caller re-reads the features so its entry point goes.
+ */
 
 import type { StudioTranslations } from '@al-ummah/shared-types';
 
@@ -27,12 +31,12 @@ export function isLimitRefusal(value: unknown): value is LimitRefusal {
   return typeof value === 'object' && value !== null && 'entitlement' in value;
 }
 
-export function limitRefusalMessage(text: StudioTranslations['limits'], refusal: LimitRefusal): string {
+export function limitRefusalMessage(text: StudioTranslations['limits'], refusal: LimitRefusal): string | null {
   switch (refusal.entitlement) {
     case 'studio.drafts.max':
       return text.draftsMax.replace('{limit}', String(refusal.limit));
     case 'studio.bulkSchedule':
-      return text.bulkSchedule;
+      return null;
     default:
       return text.other;
   }

@@ -67,10 +67,13 @@ test.describe('Settings - channel owner', () => {
 test.describe('Settings - no channel', () => {
   test.use({ storageState: AUTH_STATE.none });
 
-  test('SET-020 a user without a channel sees the same sections, none of them channel settings', async ({ page }) => {
+  test('SET-020 a user without a channel or creator tier sees no Upload Defaults and no channel settings', async ({ page }) => {
     await page.goto('/en/settings');
     // Channel invitations is for anyone: a user without a channel can be invited to a team
-    await expect(page.getByTestId('settings-section')).toHaveCount(5);
+    await expect(page.getByTestId('settings-section').filter({ hasText: 'Profile Settings' })).toBeVisible();
+    // Hidden when off: no creator tier, so no Upload Defaults (wiki "Hidden when off")
+    await expect(page.getByTestId('settings-section')).toHaveCount(4);
+    await expect(page.getByTestId('settings-section').filter({ hasText: 'Upload Defaults' })).toHaveCount(0);
     await expect(page.getByTestId('settings-section').filter({ hasText: 'Channel Settings' })).toHaveCount(0);
     await expect(page.getByText('Not available - requires an active channel')).toHaveCount(0);
   });

@@ -1,3 +1,4 @@
+import type { StudioFeatures } from '@/lib/studio/nav';
 import { render, screen, within } from '@testing-library/react';
 import { StudioFrame } from '../StudioFrame';
 import { STUDIO_EN } from '@al-ummah/shared-types';
@@ -15,7 +16,7 @@ jest.mock('@/hooks/useMultiAccount', () => ({ useMultiAccount: () => ({ user: { 
 const mockT = { studio: STUDIO_EN };
 const channel = { id: 'c1', name: 'My channel', handle: 'mine' };
 
-function frame(role: 'owner' | 'editor' | 'moderator', extra: Partial<typeof channel & { isHidden: boolean }> = {}, features = { live: true }) {
+function frame(role: 'owner' | 'editor' | 'moderator', extra: Partial<typeof channel & { isHidden: boolean }> = {}, features: StudioFeatures = { live: true, upload: true }) {
   return render(<StudioFrame locale="en" role={role} channel={{ ...channel, ...extra }} features={features}><p>page body</p></StudioFrame>);
 }
 
@@ -50,6 +51,11 @@ describe('StudioFrame', () => {
     frame('editor');
     expect(rail().getAllByRole('link').map((a) => a.textContent)).toEqual(['Dashboard', 'Content', 'Playlists']);
     expect(screen.queryByTestId('studio-tab-live')).toBeNull();
+  });
+
+  it('uploads off for the channel (no creator tier): no Upload in the rail', () => {
+    frame('owner', {}, { live: true, upload: false });
+    expect(screen.queryByTestId('studio-upload')).toBeNull();
   });
 
   it('offers no Upload to a moderator', () => {

@@ -7,6 +7,7 @@ import {
   type HelpBlock,
   type HelpClipId,
   type HelpPictureId,
+  type HelpSection,
   type HelpTopicId,
   type HelpTranslations,
   type UserFeatureKey,
@@ -81,6 +82,11 @@ export function visibleHelpBlocks(blocks: readonly HelpBlock[], features?: UserF
   );
 }
 
+/** The sections this reader sees: a section tagged with a feature that is off is left out (fail closed). */
+export function visibleHelpSections(sections: readonly HelpSection[], features?: UserFeatures): HelpSection[] {
+  return sections.filter((section) => !section.feature || features?.[section.feature] === true);
+}
+
 export interface HelpSearchEntry {
   id: string;
   topic: HelpTopicId;
@@ -96,7 +102,7 @@ export function helpSearchEntries(help: HelpTranslations, other?: HelpTranslatio
   for (const topic of HELP_TOPIC_IDS) {
     const page = help.topics[topic];
     entries.push({ id: topic, topic, label: page.title, subtitle: page.summary, keywords: [page.summary, other?.topics[topic].title ?? ''] });
-    for (const section of page.sections) {
+    for (const section of visibleHelpSections(page.sections, features)) {
       const otherHeading = other?.topics[topic].sections.find((s) => s.id === section.id)?.heading ?? '';
       entries.push({
         id: `${topic}#${section.id}`,
