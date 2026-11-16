@@ -230,6 +230,15 @@ describe('creator tiers: who may upload', () => {
     assert.equal((await dev.initiate('alice')).status, 200);
   });
 
+  it('a user with no tier creating a live stream gets 404 feature_off (live is hidden), nothing counted', async () => {
+    const h = await harness();
+    const res = await h.request('nobody', '/api/live-streams', { method: 'POST', body: '{}', headers: { 'content-type': 'application/json' } });
+    assert.equal(res.status, 404);
+    assert.deepEqual(await res.json(), { success: false, code: 'feature_off' });
+    assert.equal(h.db.count('upload_rate_windows'), 0);
+    assert.equal((await h.request('alice', '/api/live-streams', { method: 'POST', body: '{}', headers: { 'content-type': 'application/json' } })).status, 200);
+  });
+
   it('assigning a tier lets the user upload at once; removing it blocks the next request (no re-sign-in)', async () => {
     const h = await harness();
     assert.equal((await h.initiate('carol')).status, 403);
@@ -542,8 +551,10 @@ describe('creator tiers: channels, access and admin', () => {
     const h = await harness();
     for (const path of ['/api/videos', '/api/live-streams']) {
       const res = await h.request('nobody', path, { method: 'POST', body: '{}', headers: { 'content-type': 'application/json' } });
-      assert.equal(res.status, 403, path);
-      assert.equal(((await res.json()) as { code: string }).code, CREATOR_ERROR_CODES.uploadsByInvitation);
+      // Live is hidden without a tier (404 feature_off); a direct video create says uploads are off
+      const live = path === '/api/live-streams';
+      assert.equal(res.status, live ? 404 : 403, path);
+      assert.equal(((await res.json()) as { code: string }).code, live ? 'feature_off' : CREATOR_ERROR_CODES.uploadsByInvitation);
       assert.equal((await h.request('alice', path, { method: 'POST', body: '{}', headers: { 'content-type': 'application/json' } })).status, 200, path);
     }
     assert.equal(h.hour('alice'), 2);
