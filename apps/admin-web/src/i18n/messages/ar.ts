@@ -4682,7 +4682,7 @@ const ar: Messages = {
     loadFailed: 'تعذّر تحميل إعدادات النشر على مواقع التواصل.',
     switchesTitle: 'النشر',
     enabled: 'النشر على مواقع التواصل',
-    enabledHint: 'إيقافه يوقف كل النشر على كل المواقع. تبقى خلاصات القنوات والـWebhooks تعمل.',
+    enabledHint: 'إيقافه يوقف كل النشر على كل المواقع. تبقى خلاصات القنوات والويب هوكس تعمل.',
     networkEnabled: 'النشر على {network}',
     networks: { x: 'X', telegram: 'تيليجرام', bluesky: 'Bluesky', mastodon: 'ماستودون' },
     xCapTitle: 'الإنفاق على X',
