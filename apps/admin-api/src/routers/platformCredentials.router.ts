@@ -5,12 +5,16 @@
  *   GET  /            { success, result: PlatformCredentialView[] }
  *   PUT  /:id         { value } → { success, result: { view, test } }  sealed, tested, audited; never echoed
  *   POST /:id/test    → { success, result: { view, test } }          tests the value in use, audited
+ *   POST /:id/create  → { success, result: { view, test, previousRevoked, previousKept } }
+ *                     Create / Rotate with the token manager: mint, test, store, revoke the old one if
+ *                     minted here; audited. 409 no_manager / manager_invalid / manager_cannot_mint,
+ *                     502 minted_token_failed (with the failed test) / store_refused
  */
 import { Hono, type Context } from 'hono';
 import { isCloudflareApiToken, isPlatformCredentialId } from '@al-ummah/shared-types';
 import { hasPermission, normalizeRoles } from '../lib/roles';
 import { logger } from '../lib/logger';
-import { CredentialError, listCredentialViews, replaceCredential, testCredential, type Actor, type CredentialsEnv } from '../lib/platform-credentials';
+import { CredentialError, listCredentialViews, mintCredential, replaceCredential, testCredential, type Actor, type CredentialsEnv } from '../lib/platform-credentials';
 import type { AdminBindings, AuthContext } from '../base/types';
 
 type Env = { Bindings: AdminBindings; Variables: { auth?: AuthContext } };
@@ -33,7 +37,7 @@ app.use('*', async (c, next) => {
 });
 
 app.onError((error, c) => {
-  if (error instanceof CredentialError) return c.json({ success: false, code: error.code, error: error.message }, error.status);
+  if (error instanceof CredentialError) return c.json({ success: false, code: error.code, error: error.message, ...(error.test ? { test: error.test } : {}) }, error.status);
   logger.error('[Credentials] Request failed', { path: c.req.path, error: error instanceof Error ? error.message : String(error) });
   return c.json({ success: false, code: 'failed', error: 'The change could not be made' }, 500);
 });
@@ -55,6 +59,12 @@ app.post('/:id/test', async (c) => {
   const id = c.req.param('id');
   if (!isPlatformCredentialId(id)) return c.json({ success: false, code: 'not_found', error: 'No such credential' }, 404);
   return c.json({ success: true, result: await testCredential(envOf(c), id, actorOf(c.get('auth'))) });
+});
+
+app.post('/:id/create', async (c) => {
+  const id = c.req.param('id');
+  if (!isPlatformCredentialId(id)) return c.json({ success: false, code: 'not_found', error: 'No such credential' }, 404);
+  return c.json({ success: true, result: await mintCredential(envOf(c), id, actorOf(c.get('auth'))) });
 });
 
 export default app;

@@ -18,7 +18,12 @@
  *   (admin-api lib/media-troubleshoot/cloudflare.ts) and the checks of Platform settings → Credentials
  *   (admin-api lib/platform-credentials.ts: token verify, account and zone analytics, cache purge),
  *   and only with a FAKE_CF_TOKEN_PREFIX token; any other token or call is refused. A credentials
- *   token says what it lacks in its name: -noacct, -nozone, -nopurge, or -expired. PUT /__fake/cloudflare { logVideo } names the video its log lines
+ *   token says what it lacks in its name: -noacct, -nozone, -nopurge, or -expired. A token with
+ *   -manager in its name is a token manager (API Tokens Edit and Secrets Store Edit; -nostore drops
+ *   the latter): it lists permission groups, mints tokens (full permissions, value
+ *   FAKE_CF_TOKEN_PREFIX + minted-<n>-…), reads and deletes them, and writes the Secrets Store, whose
+ *   writes land in the stack's own Secrets Store (the Workers read them). GET /__fake/cloudflare/tokens
+ *   lists the minted and deleted tokens (ids and names, never values). PUT /__fake/cloudflare { logVideo } names the video its log lines
  *   mention, DELETE /__fake/cloudflare forgets it.
  * - Webhook receiver (FAKE_WEBHOOK_HOST): status page webhook deliveries are kept and answered 200
  *   (a path containing /fail-<status>/ answers that status): GET /__fake/webhooks.
@@ -418,6 +423,22 @@ export const FAKE_CF_TOKEN_PREFIX = 'e2e-fake-cloudflare-token-';
 const CF_APPLICATION_ID = 'fake-transcoder-app';
 export const fakeCloudflare = { logVideo: null as string | null };
 
+/** Minted tokens (by id) and the deleted ones; values never leave the fake except to their caller. */
+const cfTokens = new Map<string, { name: string; value: string }>();
+const cfDeleted = new Set<string>();
+let cfMinted = 0;
+const PERMISSION_GROUPS = [
+  { id: 'pg-account-analytics', name: 'Account Analytics Read', scopes: ['com.cloudflare.api.account'] },
+  { id: 'pg-zone-analytics', name: 'Analytics Read', scopes: ['com.cloudflare.api.account.zone'] },
+  { id: 'pg-cache-purge', name: 'Cache Purge', scopes: ['com.cloudflare.api.account.zone'] },
+  { id: 'pg-tokens-write', name: 'API Tokens Write', scopes: ['com.cloudflare.api.account'] },
+];
+/** A fake token's id: the minted one's, else derived from its value (same token, same id). */
+function cfTokenId(token: string): string | null {
+  for (const [id, t] of cfTokens) if (t.value === token) return cfDeleted.has(id) ? null : id;
+  return `hand-${token.slice(FAKE_CF_TOKEN_PREFIX.length).replace(/[^A-Za-z0-9]/g, '').slice(0, 24)}`;
+}
+
 /**
  * The QA names the stack's admin-api reads (ENVIRONMENT qa): one transcoder application with
  * 2 instances at most and one running, the transcode queue with 2 waiting and an empty DLQ, a media
@@ -429,14 +450,56 @@ async function cloudflareApi(request: Request, url: URL): Promise<Response> {
     return json({ success: false, errors: [{ code: 10000, message: 'Authentication error' }] }, 403);
   }
   const path = url.pathname.replace(/^\/client\/v4/, '');
+  type CfBody = { query?: string; variables?: { q?: string }; parameters?: { filters?: { key?: string; value?: string }[] }; name?: unknown; value?: string };
+  const body: CfBody = request.method === 'POST' || request.method === 'PATCH' ? ((await request.json().catch(() => ({}))) as CfBody) : {};
   const token = (request.headers.get('authorization') ?? '').slice('Bearer '.length);
   const lacks = (what: string) => token.includes(`-${what}`);
-  if (/^(\/user|\/accounts\/[^/]+)\/tokens\/verify$/.test(path)) return ok({ id: 'fake-token', status: lacks('expired') ? 'expired' : 'active' });
+  const tokenId = cfTokenId(token);
+  if (!tokenId) return json({ success: false, errors: [{ code: 1000, message: 'Invalid API Token' }] }, 401);
+  const manager = token.includes('-manager');
+  const refused = () => json({ success: false, errors: [{ code: 9109, message: 'Unauthorized to access requested resource' }] }, 403);
+  if (/^(\/user|\/accounts\/[^/]+)\/tokens\/verify$/.test(path)) return ok({ id: tokenId, status: lacks('expired') ? 'expired' : 'active' });
+  const tokensPath = /^(?:\/user|\/accounts\/[^/]+)\/tokens(?:\/([^/]+))?$/.exec(path);
+  if (tokensPath) {
+    const [, sub] = tokensPath;
+    if (!manager) return refused();
+    if (sub === 'permission_groups') return ok(PERMISSION_GROUPS);
+    if (!sub && request.method === 'POST') {
+      const id = `minted-${++cfMinted}`;
+      const value = `${FAKE_CF_TOKEN_PREFIX}minted-${cfMinted}-full-${crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`;
+      cfTokens.set(id, { name: String(body.name ?? ''), value });
+      return ok({ id, value, name: cfTokens.get(id)!.name });
+    }
+    if (sub && request.method === 'DELETE') {
+      cfDeleted.add(sub);
+      return ok({ id: sub });
+    }
+    if (sub && request.method === 'GET') {
+      if (sub === tokenId) {
+        const groups = [{ name: 'API Tokens Write' }, ...(lacks('nostore') ? [] : [{ name: 'Account Secrets Store Write' }])];
+        return ok({ id: sub, name: 'hand-made token manager', policies: [{ effect: 'allow', permission_groups: groups, resources: {} }] });
+      }
+      const minted = cfTokens.get(sub);
+      return ok({ id: sub, name: minted ? minted.name : 'hand-made token', policies: [] });
+    }
+  }
+  const store = /^\/accounts\/[^/]+\/secrets_store\/stores\/[^/]+\/secrets(?:\/([^/?]+))?$/.exec(path);
+  if (store) {
+    if (!manager || lacks('nostore')) return refused();
+    const [, secretId] = store;
+    if (request.method === 'GET') {
+      const name = url.searchParams.get('search') ?? '';
+      return ok(name ? [{ id: `sec-${name}`, name }] : []);
+    }
+    const value = request.method === 'POST' ? (body as unknown as { name: string; value: string }[])[0] : (body as { value?: string });
+    const name = request.method === 'POST' ? (value as { name: string }).name : decodeURIComponent((secretId ?? '').replace(/^sec-/, ''));
+    if (!hooks.secret) return json({ success: false, errors: [{ message: 'no stack secrets hook' }] }, 500);
+    await hooks.secret(name, String(value?.value ?? ''));
+    return ok({ id: `sec-${name}`, name });
+  }
   if (/^\/zones\/[^/]+\/purge_cache$/.test(path)) {
     return lacks('nopurge') ? json({ success: false, errors: [{ code: 10000, message: 'Authentication error' }] }, 403) : ok({ id: 'fake-purge' });
   }
-  type CfBody = { query?: string; variables?: { q?: string }; parameters?: { filters?: { key?: string; value?: string }[] } };
-  const body: CfBody = request.method === 'POST' ? ((await request.json().catch(() => ({}))) as CfBody) : {};
   if (/^\/accounts\/[^/]+\/containers\/applications$/.test(path)) {
     return ok([{ id: CF_APPLICATION_ID, name: 'al-ummah-now-media-qa-transcoder', max_instances: 2, health: { instances: { active: 1, healthy: 1, failed: 0 } } }]);
   }
@@ -513,6 +576,8 @@ export interface StackHooks {
   scheduled?: (app: string, cron: string, time: Date) => Promise<unknown>;
   /** Deletes one key of a stack KV namespace by its binding (teardowns remove a run's sign-up residue). */
   kvDelete?: (binding: string, key: string) => Promise<void>;
+  /** Sets a stack Secrets Store secret by its name (the fake Cloudflare API's Secrets Store writes). */
+  secret?: (name: string, value: string) => Promise<void>;
 }
 const hooks: StackHooks = {};
 export function setStackHooks(next: StackHooks): void {
@@ -638,6 +703,9 @@ async function control(req: IncomingMessage, url: URL): Promise<Response> {
   const [, , kind, , guid, action] = url.pathname.split('/');
   if (kind === 'resend') return json(emails);
   if (kind === 'google') return googleControl(req.method, url);
+  if (kind === 'cloudflare' && url.pathname.endsWith('/tokens')) {
+    return json({ minted: [...cfTokens.entries()].map(([id, t]) => ({ id, name: t.name, deleted: cfDeleted.has(id) })) });
+  }
   if (kind === 'cloudflare') {
     if (req.method === 'DELETE') fakeCloudflare.logVideo = null;
     else if (req.method === 'PUT') {

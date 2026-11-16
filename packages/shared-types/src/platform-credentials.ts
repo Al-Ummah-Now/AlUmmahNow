@@ -18,7 +18,7 @@
  * so a replaced value reaches every Worker within a minute.
  */
 
-export const PLATFORM_CREDENTIAL_IDS = ['cloudflare-media'] as const;
+export const PLATFORM_CREDENTIAL_IDS = ['cloudflare-media', 'cloudflare-token-manager'] as const;
 export type PlatformCredentialId = (typeof PLATFORM_CREDENTIAL_IDS)[number];
 
 export const isPlatformCredentialId = (v: unknown): v is PlatformCredentialId =>
@@ -35,6 +35,10 @@ export interface PlatformCredentialSpec {
   secretsStoreName: string;
   /** Worker bindings that read it */
   usedBy: { worker: string; binding: string }[];
+  /** The checks its Test runs */
+  checks: readonly CredentialCheckName[];
+  /** The admin can mint a fresh token for it with the token manager (Create / Rotate) */
+  mintable: boolean;
 }
 
 export const PLATFORM_CREDENTIALS: Record<PlatformCredentialId, PlatformCredentialSpec> = {
@@ -46,19 +50,39 @@ export const PLATFORM_CREDENTIALS: Record<PlatformCredentialId, PlatformCredenti
       { worker: 'api-videos', binding: 'MEDIA_ANALYTICS_TOKEN' },
       { worker: 'admin-api', binding: 'CF_ANALYTICS_TOKEN' },
     ],
+    checks: ['token', 'account_analytics', 'zone_analytics', 'cache_purge'],
+    mintable: true,
+  },
+  /**
+   * The one token a person creates by hand (once): account-owned, with API Tokens: Edit and Secrets
+   * Store: Edit. admin-api mints the other Cloudflare tokens with it, stores them in the Secrets Store
+   * and revokes the ones it minted before.
+   */
+  'cloudflare-token-manager': {
+    id: 'cloudflare-token-manager',
+    secretsStoreName: 'cloudflare-token-manager',
+    usedBy: [{ worker: 'admin-api', binding: 'CF_TOKEN_MANAGER' }],
+    checks: ['token', 'mint_tokens', 'secrets_store'],
+    mintable: false,
   },
 };
 
-/** What a test of the Cloudflare token checks; each name has plain-words copy on the admin page. */
-export const CLOUDFLARE_MEDIA_CHECKS = ['token', 'account_analytics', 'zone_analytics', 'cache_purge'] as const;
+/** Name prefix of every token admin-api mints; only tokens with it are ever revoked by a Rotate. */
+export const MINTED_TOKEN_PREFIX = 'al-ummah-now admin-minted';
+
+/** What a test checks; each name has plain-words copy on the admin page. */
+export const CREDENTIAL_CHECKS = ['token', 'account_analytics', 'zone_analytics', 'cache_purge', 'mint_tokens', 'secrets_store'] as const;
+export type CredentialCheckName = (typeof CREDENTIAL_CHECKS)[number];
+export const CLOUDFLARE_MEDIA_CHECKS = ['token', 'account_analytics', 'zone_analytics', 'cache_purge'] as const satisfies readonly CredentialCheckName[];
 export type CloudflareMediaCheck = (typeof CLOUDFLARE_MEDIA_CHECKS)[number];
+export const TOKEN_MANAGER_CHECKS = ['token', 'mint_tokens', 'secrets_store'] as const satisfies readonly CredentialCheckName[];
 
 export interface PlatformCredentialTest {
   /** Every check passed */
   ok: boolean;
   /** 'ok' | 'invalid' | 'inactive' | 'missing_permissions' | 'unreachable' | 'unreadable' | 'none' */
   code: string;
-  checks: { name: CloudflareMediaCheck; ok: boolean }[];
+  checks: { name: CredentialCheckName; ok: boolean }[];
   at: string;
   by: string | null;
 }
@@ -80,6 +104,8 @@ export interface StoredCredentialTest extends PlatformCredentialTest {
   source: 'admin' | 'binding' | null;
   /** last4 of the admin-set value tested (null for the binding) */
   last4: string | null;
+  /** Last four characters of the value tested (kept only to tell whether the test is about the value in use) */
+  valueLast4: string | null;
 }
 
 /** What the admin page sees (never the value). */
@@ -98,10 +124,27 @@ export interface PlatformCredentialView {
   /** An admin-set value is stored but no longer opens (INTERNAL_API_KEY was rotated): set it again */
   unreadable: boolean;
   test: PlatformCredentialTest | null;
+  /** Create / Rotate is offered (a mintable credential and a token manager is set) */
+  mintable: boolean;
+  canMint: boolean;
+  /** The last token minted here for it, if the value in use is that one */
+  minted: MintRecord | null;
+}
+
+/** global-settings credentials/<id>.mint.json: the last Create / Rotate (never the value). */
+export interface MintRecord {
+  tokenId: string;
+  at: string;
+  by: string;
+  byName: string | null;
+  previousTokenId: string | null;
+  /** The previous token was revoked (only tokens minted here are; a hand-made one is kept) */
+  previousRevoked: boolean;
 }
 
 export const platformCredentialKey = (id: PlatformCredentialId) => `credentials/${id}.json`;
 export const platformCredentialTestKey = (id: PlatformCredentialId) => `credentials/${id}.test.json`;
+export const platformCredentialMintKey = (id: PlatformCredentialId) => `credentials/${id}.mint.json`;
 
 /**
  * Shape check of a Cloudflare API token before it is saved: 30-200 characters of letters, digits,

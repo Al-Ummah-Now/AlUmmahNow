@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { CfApiError, type CfClient } from '../cf-api.ts';
 import { coveredBy, ensureResources, ensureTurnstileHostnames, resourcesFor, SECRETS_STORE_ID, TURNSTILE_SITEKEY } from '../ensure-resources.ts';
 
-function fakeCf(queues: string[], buckets: string[], lifecycle: Record<string, unknown[]> = {}, secrets: string[] = ['google-oauth-client-secret', 'google-oauth-client-secret-qa', 'google-oauth-client-secret-stage']) {
+function fakeCf(queues: string[], buckets: string[], lifecycle: Record<string, unknown[]> = {}, secrets: string[] = ['google-oauth-client-secret', 'google-oauth-client-secret-qa', 'google-oauth-client-secret-stage', 'cloudflare-token-manager']) {
 	const calls: string[] = [];
 	const cf: CfClient = {
 		accountId: 'a',
@@ -28,7 +28,7 @@ describe('ensure-resources', () => {
 		assert.deepEqual(resourcesFor('production'), {
 			queues: ['al-ummah-now-errors', 'al-ummah-now-errors-dlq', 'al-ummah-now-transcode', 'al-ummah-now-transcode-dlq', 'al-ummah-now-yt-import', 'al-ummah-now-status-notify', 'al-ummah-cost-jobs', 'al-ummah-cost-jobs-dlq'],
 			buckets: ['al-ummah-now-sourcemaps', 'al-ummah-now-media', 'al-ummah-now-media-private', 'al-ummah-now-media-originals', 'al-ummah-now-csam-evidence'],
-			placeholderSecrets: { [SECRETS_STORE_ID]: ['google-oauth-client-secret'] },
+			placeholderSecrets: { [SECRETS_STORE_ID]: ['google-oauth-client-secret', 'cloudflare-token-manager'] },
 			turnstileHostnames: { sitekey: TURNSTILE_SITEKEY, hostnames: ['alummahnow.net', 'www.alummahnow.net'] },
 		});
 		assert.deepEqual(resourcesFor('qa').turnstileHostnames?.hostnames, ['qa.alummahnow.net', 'www.qa.alummahnow.net']);
@@ -46,14 +46,14 @@ describe('ensure-resources', () => {
 	});
 
 	it('creates a missing Secrets Store placeholder, never touches an existing secret', async () => {
-		const { cf, calls } = fakeCf(resourcesFor('stage').queues, resourcesFor('stage').buckets, {}, ['google-oauth-client-secret']);
+		const { cf, calls } = fakeCf(resourcesFor('stage').queues, resourcesFor('stage').buckets, {}, ['google-oauth-client-secret', 'cloudflare-token-manager']);
 		const { created } = await ensureResources(cf, { ...resourcesFor('stage'), expireAfterDays: undefined }, () => undefined);
 		assert.deepEqual(created, ['secret google-oauth-client-secret-stage (placeholder)']);
 		const post = calls.find((c) => c.startsWith('POST /secrets_store/'))!;
 		assert.ok(post.startsWith(`POST /secrets_store/stores/${SECRETS_STORE_ID}/secrets `));
 		assert.deepEqual(JSON.parse(post.slice(post.indexOf('['))), [{ name: 'google-oauth-client-secret-stage', value: 'unset', scopes: ['workers'], comment: 'Placeholder: paste the real value over it' }]);
 		assert.equal(calls.filter((c) => c.startsWith('PUT /secrets_store') || c.startsWith('PATCH')).length, 0);
-		assert.deepEqual(resourcesFor('production').placeholderSecrets, { [SECRETS_STORE_ID]: ['google-oauth-client-secret'] });
+		assert.deepEqual(resourcesFor('production').placeholderSecrets, { [SECRETS_STORE_ID]: ['google-oauth-client-secret', 'cloudflare-token-manager'] });
 	});
 
 	it('changes nothing when everything exists', async () => {

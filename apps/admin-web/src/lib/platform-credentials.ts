@@ -4,7 +4,7 @@
  * there and never shown again: the view says where the value in use comes from, its last four
  * characters when it was set here, and what the last test found.
  */
-import { isCloudflareApiToken, type CloudflareMediaCheck, type PlatformCredentialView } from '@al-ummah/shared-types';
+import { isCloudflareApiToken, type CredentialCheckName, type PlatformCredentialView } from '@al-ummah/shared-types';
 import type { MessageKey } from '@/i18n/translate';
 
 export type CredentialState = 'ok' | 'attention' | 'untested' | 'missing';
@@ -24,12 +24,40 @@ export function tokenError(value: string): MessageKey | null {
 }
 
 /** Each check in plain words: what it is, the Cloudflare permission to add, what stops working without it. */
-export const CHECK_COPY: Record<CloudflareMediaCheck, { label: MessageKey; permission: MessageKey; impact: MessageKey }> = {
+export const CHECK_COPY: Record<CredentialCheckName, { label: MessageKey; permission: MessageKey; impact: MessageKey }> = {
   token: { label: 'platformCredentials.checkToken', permission: 'platformCredentials.permToken', impact: 'platformCredentials.impactToken' },
   account_analytics: { label: 'platformCredentials.checkAccount', permission: 'platformCredentials.permAccount', impact: 'platformCredentials.impactAccount' },
   zone_analytics: { label: 'platformCredentials.checkZone', permission: 'platformCredentials.permZone', impact: 'platformCredentials.impactZone' },
   cache_purge: { label: 'platformCredentials.checkPurge', permission: 'platformCredentials.permPurge', impact: 'platformCredentials.impactPurge' },
+  mint_tokens: { label: 'platformCredentials.checkMint', permission: 'platformCredentials.permMint', impact: 'platformCredentials.impactMint' },
+  secrets_store: { label: 'platformCredentials.checkStore', permission: 'platformCredentials.permStore', impact: 'platformCredentials.impactStore' },
 };
+
+/** Why Create / Rotate failed, in plain words (by the server's code). */
+export function createErrorKey(status: number, code?: string): MessageKey {
+  switch (code) {
+    case 'no_manager':
+      return 'platformCredentials.errorNoManager';
+    case 'manager_invalid':
+      return 'platformCredentials.errorManagerInvalid';
+    case 'manager_cannot_mint':
+      return 'platformCredentials.errorManagerCannotMint';
+    case 'minted_token_failed':
+      return 'platformCredentials.errorMintedFailed';
+    case 'store_refused':
+      return 'platformCredentials.errorStoreRefused';
+    default:
+      return status === 403 ? 'platformCredentials.errorForbidden' : 'platformCredentials.errorCreateFailed';
+  }
+}
+
+/** What happened to the previous token after Create / Rotate. */
+export function previousTokenNotice(previousRevoked: boolean, previousKept: string | null): MessageKey {
+  if (previousRevoked) return 'platformCredentials.rotatedRevoked';
+  if (previousKept === 'not_minted_here') return 'platformCredentials.rotatedKeptHandMade';
+  if (previousKept === 'revoke_failed') return 'platformCredentials.rotatedRevokeFailed';
+  return 'platformCredentials.created';
+}
 
 /** The test's headline. */
 export function testSummary(code: string): MessageKey {

@@ -67,6 +67,8 @@ export const LOCAL_SECRETS: Record<string, string> = {
   MEDIA_SIGN_KEY: 'local-stack-media-sign-key',
   MEDIA_CDN_API_TOKEN: 'local-stack-fake',
   MEDIA_ANALYTICS_TOKEN: 'local-stack-fake',
+  // Platform settings → Credentials: the placeholder the release creates until the owner sets it
+  CF_TOKEN_MANAGER: 'unset',
   RESEND_API_KEY: 'local-stack-fake-resend',
   AUTH_MODERATION_CLIENT_SECRET: 'local-stack-moderation-secret',
   AUTH_ADMIN_CLIENT_SECRET: 'local-stack-auth-admin-secret',

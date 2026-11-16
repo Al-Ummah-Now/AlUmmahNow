@@ -83,7 +83,8 @@ export function resourcesFor(env: ResourceEnv): Resources {
 		buckets: [`al-ummah-now-sourcemaps${s}`, `al-ummah-now-media${s}`, `al-ummah-now-media-private${s}`, `al-ummah-now-media-originals${s}`, `al-ummah-now-csam-evidence${s}`],
 		...(SOURCEMAP_DAYS[env] ? { expireAfterDays: { [`al-ummah-now-sourcemaps${s}`]: SOURCEMAP_DAYS[env]! } } : {}),
 		// Move from YouTube: the Google OAuth client secret (api-videos GOOGLE_OAUTH_CLIENT_SECRET, docs/features/youtube-import.md)
-		placeholderSecrets: { [SECRETS_STORE_ID]: [`google-oauth-client-secret${s}`] },
+		// Platform settings → Credentials: the Cloudflare token manager (admin-api CF_TOKEN_MANAGER), one for every env
+		placeholderSecrets: { [SECRETS_STORE_ID]: [`google-oauth-client-secret${s}`, 'cloudflare-token-manager'] },
 		// www newsletter sign-up renders the widget (AlUmmahNowUI apps/www NewsletterForm)
 		turnstileHostnames: { sitekey: TURNSTILE_SITEKEY, hostnames: WWW_HOSTNAMES[env] },
 	};

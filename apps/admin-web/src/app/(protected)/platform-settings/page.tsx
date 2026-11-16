@@ -7,6 +7,7 @@ import {
   saveYoutubeImportClientSecret,
   saveYoutubeImportSettings,
   testPlatformCredential,
+  createPlatformCredential,
 } from '@/lib/api/admin';
 import { getAdminSession } from '@/lib/auth';
 import { canManageMedia, canManagePlatformSettings, isSuperAdmin } from '@/lib/roles';
@@ -69,7 +70,7 @@ export default async function PlatformSettingsPage() {
         ))}
       {showCredentials &&
         (credentials ? (
-          <PlatformCredentialsSetting views={credentials} replace={replacePlatformCredential} test={testPlatformCredential} />
+          <PlatformCredentialsSetting views={credentials} replace={replacePlatformCredential} test={testPlatformCredential} create={createPlatformCredential} />
         ) : (
           <ErrorAlert testId="platform-credentials-load-error">{t('platformCredentials.loadFailed')}</ErrorAlert>
         ))}

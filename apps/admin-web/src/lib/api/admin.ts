@@ -122,7 +122,7 @@ async function mutate<T>(endpoint: string, method: string, body: unknown): Promi
     return { ok: true, data };
   } catch (error) {
     await navigateForPasskey(error);
-    if (error instanceof AdminApiError) return { ok: false, status: error.status, error: error.message, ...(error.problems ? { problems: error.problems } : {}) };
+    if (error instanceof AdminApiError) return { ok: false, status: error.status, error: error.message, ...(error.code ? { code: error.code } : {}), ...(error.problems ? { problems: error.problems } : {}) };
     return { ok: false, status: 500, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
@@ -830,4 +830,11 @@ export async function replacePlatformCredential(id: string, value: string): Prom
 
 export async function testPlatformCredential(id: string): Promise<ActionResult<CredentialChange>> {
   return mutate(`/api/platform-credentials/${encodeURIComponent(id)}/test`, 'POST', {});
+}
+
+/** Create / Rotate with the token manager: the error's code says why it could not (never a value). */
+export async function createPlatformCredential(
+  id: string,
+): Promise<ActionResult<CredentialChange & { previousRevoked: boolean; previousKept: 'none' | 'not_minted_here' | 'revoke_failed' | null }>> {
+  return mutate(`/api/platform-credentials/${encodeURIComponent(id)}/create`, 'POST', {});
 }

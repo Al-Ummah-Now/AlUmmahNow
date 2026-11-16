@@ -6,7 +6,10 @@
  *   password field, the value never shows on the page, the test names the two missing permissions
  *   in plain words, and the source line says it was set here, ending in its last four;
  * - replacing it with a full token turns the section to "Working"; Test runs again and is audited;
- * - a value that is not a token is refused in the browser before anything is sent.
+ * - a value that is not a token is refused in the browser before anything is sent;
+ * - with a token manager added, Rotate mints a token (the stack's fake writes it into its own Secrets
+ *   Store, where the Workers read it), keeps the hand-made previous token, and a second Rotate
+ *   revokes the token minted by the first.
  * axe (WCAG 2.2 AA) on the section in en and ar.
  *
  * The credential is one global setting, so the spec runs in the shared-state project and deletes
@@ -17,12 +20,13 @@ import { test, expect } from './support/fixtures';
 import { adminApi, readTokens } from './support/api';
 import { stackR2 } from './support/local-stack';
 import { setPreferences } from './support/ui';
-import { ADMIN_WEB_URL, LOCAL_STACK, RUN_TAG, storageStatePath } from './support/env';
+import { ADMIN_WEB_URL, LOCAL_STACK, RUN_TAG, STACK_CONTROL_URL, storageStatePath } from './support/env';
 
 const tag = RUN_TAG.replace(/[^A-Za-z0-9]/g, '').slice(-12);
 const PARTIAL = `e2e-fake-cloudflare-token-${tag}-nozone-nopurge-AB12`;
 const FULL = `e2e-fake-cloudflare-token-${tag}-full-CD34`;
-const FILES = ['credentials/cloudflare-media.json', 'credentials/cloudflare-media.test.json'];
+const MANAGER = `e2e-fake-cloudflare-token-${tag}-manager-EF56`;
+const FILES = ['cloudflare-media', 'cloudflare-token-manager'].flatMap((id) => [`credentials/${id}.json`, `credentials/${id}.test.json`, `credentials/${id}.mint.json`]);
 
 async function removeFiles() {
   for (const key of FILES) {
@@ -99,10 +103,35 @@ test.describe('platform credentials', () => {
       await page.getByTestId('credential-cloudflare-media-run-test').click();
       await expect(page.getByTestId('credential-cloudflare-media-notice')).toHaveText('Test finished.');
 
-      // Audited (never the value): two replaces and a test
+      // A token manager makes Create / Rotate available
+      await expect(page.getByTestId('credential-cloudflare-media-create')).toHaveCount(0);
+      await expect(page.getByTestId('credential-cloudflare-media-create-hint')).toContainText('Add the Cloudflare token manager below');
+      const manager = page.getByTestId('credential-cloudflare-token-manager');
+      await manager.getByTestId('credential-cloudflare-token-manager-replace').click();
+      await manager.getByTestId('credential-cloudflare-token-manager-input').fill(MANAGER);
+      await manager.getByTestId('credential-cloudflare-token-manager-save').click();
+      await expect(manager).toHaveAttribute('data-state', 'ok');
+      await page.reload();
+
+      await page.getByTestId('credential-cloudflare-media-create').click();
+      await expect(page.getByTestId('credential-cloudflare-media-notice')).toContainText('made by hand, so it was kept');
+      await expect(page.getByTestId('credential-cloudflare-media')).toHaveAttribute('data-source', 'binding');
+      await expect(page.getByTestId('credential-cloudflare-media')).toHaveAttribute('data-state', 'ok');
+      await expect(page.getByTestId('credential-cloudflare-media-minted')).toBeVisible();
+
+      await page.getByTestId('credential-cloudflare-media-create').click();
+      await expect(page.getByTestId('credential-cloudflare-media-notice')).toHaveText('New token in use; the previous one was revoked.');
+      const minted = (await (await fetch(`${STACK_CONTROL_URL}/__fake/cloudflare/tokens`)).json()) as { minted: { id: string; name: string; deleted: boolean }[] };
+      const ours = minted.minted.filter((t) => t.name.startsWith('al-ummah-now admin-minted cloudflare-media'));
+      expect(ours.length).toBeGreaterThanOrEqual(2);
+      expect(ours.at(-2)!.deleted, 'the first minted token is revoked by the second Rotate').toBe(true);
+      expect(ours.at(-1)!.deleted).toBe(false);
+
+      // Audited (never the value)
       const { body } = await adminApi<{ entries?: { setting?: string | null }[] }>('/api/audit?area=settings&limit=50', { token: readTokens().superadmin });
       const rows = JSON.stringify(body);
       expect(rows).not.toContain(FULL.slice(0, 30));
+      expect(rows).not.toContain(MANAGER.slice(0, 30));
     });
 
     for (const locale of ['en', 'ar'] as const) {

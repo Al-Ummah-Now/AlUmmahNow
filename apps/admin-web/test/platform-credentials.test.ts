@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { renderToStaticMarkup } from 'react-dom/server';
 import * as React from 'react';
 import { CLOUDFLARE_MEDIA_CHECKS, type PlatformCredentialView } from '@al-ummah/shared-types';
-import { CHECK_COPY, credentialState, saveErrorKey, testSummary, tokenError } from '../src/lib/platform-credentials';
+import { CHECK_COPY, createErrorKey, credentialState, previousTokenNotice, saveErrorKey, testSummary, tokenError } from '../src/lib/platform-credentials';
 import { I18nProvider } from '../src/i18n/I18nProvider';
 import { PlatformCredentialsSetting } from '../src/app/(protected)/platform-settings/PlatformCredentialsSetting';
 import { createTranslator } from '../src/i18n/translate';
@@ -36,16 +36,21 @@ const view = (over: Partial<PlatformCredentialView> = {}): PlatformCredentialVie
   updatedByName: null,
   unreadable: false,
   test: null,
+  mintable: true,
+  canMint: false,
+  minted: null,
   ...over,
 });
+const managerView = (over: Partial<PlatformCredentialView> = {}): PlatformCredentialView =>
+  view({ id: 'cloudflare-token-manager', secretsStoreName: 'cloudflare-token-manager', usedBy: [{ worker: 'admin-api', binding: 'CF_TOKEN_MANAGER' }], mintable: false, source: null, present: false, ...over });
 const allOk = { ok: true, code: 'ok', checks: CLOUDFLARE_MEDIA_CHECKS.map((name) => ({ name, ok: true })), at: AT, by: 'super-1' };
 const missing = { ok: false, code: 'missing_permissions', checks: CLOUDFLARE_MEDIA_CHECKS.map((name) => ({ name, ok: name === 'token' || name === 'account_analytics' })), at: AT, by: 'super-1' };
 
-const stub = async () => ({ ok: true as const, data: { view: view(), test: allOk } });
+const stub = async () => ({ ok: true as const, data: { view: view(), test: allOk, previousRevoked: false, previousKept: null } });
 
 function render(views: PlatformCredentialView[], locale: 'en' | 'ar' = 'en'): string {
   const Provider = I18nProvider as unknown as React.FC<{ locale: string; theme: string; children?: React.ReactNode }>;
-  return renderToStaticMarkup(React.createElement(Provider, { locale, theme: 'light' }, React.createElement(PlatformCredentialsSetting as unknown as React.FC<{ views: PlatformCredentialView[]; replace: typeof stub; test: typeof stub }>, { views, replace: stub, test: stub })) as never);
+  return renderToStaticMarkup(React.createElement(Provider, { locale, theme: 'light' }, React.createElement(PlatformCredentialsSetting as unknown as React.FC<{ views: PlatformCredentialView[]; replace: typeof stub; test: typeof stub; create: typeof stub }>, { views, replace: stub, test: stub, create: stub })) as never);
 }
 
 describe('credentials: editor rules', () => {
@@ -113,6 +118,31 @@ describe('credentials: the section', () => {
     assert.match(missingHtml, />Add token</);
     assert.match(missingHtml, /data-testid="credential-cloudflare-media-run-test"[^>]*disabled|disabled[^>]*data-testid="credential-cloudflare-media-run-test"/);
     assert.match(render([view({ unreadable: true })]), /can no longer be read/);
+  });
+
+  it('offers Rotate only with a token manager, and says where to add one otherwise', () => {
+    const without = render([view(), managerView()]);
+    assert.doesNotMatch(without, /data-testid="credential-cloudflare-media-create"/);
+    assert.match(without, /Add the Cloudflare token manager below to create and rotate this token here\./);
+    assert.match(without, /data-testid="credential-cloudflare-token-manager"/);
+    assert.match(without, /API Tokens: Edit and Secrets Store: Edit/);
+    assert.doesNotMatch(without, /data-testid="credential-cloudflare-token-manager-create"/, 'the manager itself is never minted here');
+    const withManager = render([view({ canMint: true }), managerView({ present: true, source: 'binding' })]);
+    assert.match(withManager, /data-testid="credential-cloudflare-media-create"[^>]*>Rotate</);
+    assert.match(withManager, /shared by QA, stage and production/);
+    assert.match(render([view({ canMint: true, present: false, source: null })]), />Create token</);
+    const minted = render([view({ canMint: true, minted: { tokenId: 't1', at: AT, by: 'super-1', byName: 'Mahmoud', previousTokenId: null, previousRevoked: false } })]);
+    assert.match(minted, /Created here on .* by Mahmoud\./);
+  });
+
+  it('says why Create failed and what happened to the previous token, in plain words', () => {
+    const t = createTranslator('en');
+    assert.match(t(createErrorKey(409, 'manager_cannot_mint')), /give it API Tokens: Edit/);
+    assert.match(t(createErrorKey(502, 'minted_token_failed')), /deleted and nothing was changed/);
+    assert.match(t(createErrorKey(502, 'store_refused')), /Secrets Store: Edit/);
+    assert.match(t(previousTokenNotice(false, 'not_minted_here')), /made by hand, so it was kept/);
+    assert.match(t(previousTokenNotice(true, null)), /previous one was revoked/);
+    assert.match(t(CHECK_COPY.mint_tokens.permission), /API Tokens → Edit/);
   });
 
   it('renders right to left in Arabic', () => {

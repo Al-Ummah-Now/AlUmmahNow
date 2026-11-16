@@ -4,7 +4,7 @@ import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { PlatformCredentialTest, PlatformCredentialView } from '@al-ummah/shared-types';
 import type { ActionResult } from '@/lib/api/errors';
-import { CHECK_COPY, credentialState, saveErrorKey, testSummary, tokenError, type CredentialState } from '@/lib/platform-credentials';
+import { CHECK_COPY, createErrorKey, credentialState, previousTokenNotice, saveErrorKey, testSummary, tokenError, type CredentialState } from '@/lib/platform-credentials';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { formatDate, type MessageKey } from '@/i18n/translate';
 import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
@@ -15,6 +15,7 @@ import { reportError } from '@/lib/errors/reporter';
 type Change = { view: PlatformCredentialView; test: PlatformCredentialTest };
 type ReplaceAction = (id: string, value: string) => Promise<ActionResult<Change>>;
 type TestAction = (id: string) => Promise<ActionResult<Change>>;
+type CreateAction = (id: string) => Promise<ActionResult<Change & { previousRevoked: boolean; previousKept: 'none' | 'not_minted_here' | 'revoke_failed' | null }>>;
 
 const STATE: Record<CredentialState, { tone: ChipTone; label: MessageKey }> = {
   ok: { tone: 'good', label: 'platformCredentials.stateOk' },
@@ -25,14 +26,16 @@ const STATE: Record<CredentialState, { tone: ChipTone; label: MessageKey }> = {
 
 const TITLE: Record<string, { title: MessageKey; purpose: MessageKey }> = {
   'cloudflare-media': { title: 'platformCredentials.cloudflareMediaTitle', purpose: 'platformCredentials.cloudflareMediaPurpose' },
+  'cloudflare-token-manager': { title: 'platformCredentials.tokenManagerTitle', purpose: 'platformCredentials.tokenManagerPurpose' },
 };
 
 /**
  * Platform settings → Credentials (Super Admin): each platform credential's source and last test,
- * with Replace (write only: typed once, sealed by admin-api, never shown again) and Test (what the
- * value in use can do, each missing Cloudflare permission named in plain words). Both are audited.
+ * with Create / Rotate (the token manager mints a token with only the permissions it needs, tests it,
+ * stores it and revokes the previous one if it was minted here), Replace (write only: typed once,
+ * never shown again) and Test (each missing Cloudflare permission named in plain words). All audited.
  */
-export function PlatformCredentialsSetting({ views, replace, test }: { views: PlatformCredentialView[]; replace: ReplaceAction; test: TestAction }) {
+export function PlatformCredentialsSetting({ views, replace, test, create }: { views: PlatformCredentialView[]; replace: ReplaceAction; test: TestAction; create: CreateAction }) {
   const { t } = useLanguage();
   const ids = useId();
   return (
@@ -41,14 +44,14 @@ export function PlatformCredentialsSetting({ views, replace, test }: { views: Pl
       <p className="text-sm text-fg-muted mb-5 max-w-3xl">{t('platformCredentials.intro')}</p>
       <div className="space-y-4">
         {views.map((view) => (
-          <CredentialItem key={view.id} initial={view} replace={replace} test={test} />
+          <CredentialItem key={view.id} initial={view} replace={replace} test={test} create={create} />
         ))}
       </div>
     </section>
   );
 }
 
-function CredentialItem({ initial, replace, test: runTest }: { initial: PlatformCredentialView; replace: ReplaceAction; test: TestAction }) {
+function CredentialItem({ initial, replace, test: runTest, create }: { initial: PlatformCredentialView; replace: ReplaceAction; test: TestAction; create: CreateAction }) {
   const { t, locale } = useLanguage();
   const router = useRouter();
   const ids = useId();
@@ -57,7 +60,7 @@ function CredentialItem({ initial, replace, test: runTest }: { initial: Platform
   // The typed value lives only here until it is sent, and is dropped right after
   const [value, setValue] = useState('');
   const [touched, setTouched] = useState(false);
-  const [busy, setBusy] = useState<'save' | 'test' | null>(null);
+  const [busy, setBusy] = useState<'save' | 'test' | 'create' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const fieldError = touched ? tokenError(value) : null;
@@ -72,7 +75,7 @@ function CredentialItem({ initial, replace, test: runTest }: { initial: Platform
     setError(null);
   }
 
-  function failed(kind: 'save' | 'test', result: { status: number; error?: string }) {
+  function failed(kind: 'save' | 'test' | 'create', result: { status: number; error?: string }) {
     logger.warn(`[platform-settings] Credential ${kind} failed`, { id: view.id, status: result.status });
     if (result.status === 0 || result.status >= 500) reportError(new Error(`Platform credential ${kind} failed: ${result.status}`), { kind: 'fetch', status: result.status, shown: true });
   }
@@ -126,6 +129,30 @@ function CredentialItem({ initial, replace, test: runTest }: { initial: Platform
     }
   }
 
+  async function mint() {
+    if (busy) return;
+    setBusy('create');
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await create(view.id);
+      if (!result.ok) {
+        failed('create', result);
+        setError(t(createErrorKey(result.status, result.code)));
+        return;
+      }
+      setView(result.data.view);
+      setNotice(t(previousTokenNotice(result.data.previousRevoked, result.data.previousKept)));
+      router.refresh();
+    } catch (e) {
+      logger.error('[platform-settings] Credential create request failed', { id: view.id, error: e instanceof Error ? e.message : String(e) });
+      reportError(e, { shown: true });
+      setError(t('platformCredentials.errorCreateFailed'));
+    } finally {
+      setBusy(null);
+    }
+  }
+
   const failedChecks = view.test?.checks.filter((c) => !c.ok) ?? [];
 
   return (
@@ -152,9 +179,15 @@ function CredentialItem({ initial, replace, test: runTest }: { initial: Platform
           t('platformCredentials.sourceNone')
         )}
       </p>
+      {view.minted && (
+        <p className="mt-1 text-sm text-fg-muted" data-testid={`credential-${view.id}-minted`}>
+          {t('platformCredentials.mintedHere', { date: formatDate(view.minted.at, locale, true), actor: view.minted.byName || view.minted.by })}
+        </p>
+      )}
       {view.unreadable && (
         <p className="mt-2 text-sm text-warning-fg" data-testid={`credential-${view.id}-unreadable`}>{t('platformCredentials.unreadable')}</p>
       )}
+      <p className="mt-1 text-xs text-fg-muted">{t('platformCredentials.sharedEntry')}</p>
       <p className="mt-1 text-xs text-fg-muted">
         {t('platformCredentials.usedBy')}{' '}
         {view.usedBy.map((u, i) => (
@@ -191,8 +224,18 @@ function CredentialItem({ initial, replace, test: runTest }: { initial: Platform
         )}
       </div>
 
+      {!editing && view.mintable && (
+        <p className="mt-4 text-sm text-fg-muted" data-testid={`credential-${view.id}-create-hint`}>
+          {t(view.canMint ? 'platformCredentials.createHint' : 'platformCredentials.needsManager')}
+        </p>
+      )}
       {!editing && (
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-3 flex flex-wrap gap-2">
+          {view.mintable && view.canMint && (
+            <button type="button" onClick={() => void mint()} className={`${primaryButtonClass} !py-1 !px-3 text-sm`} disabled={!!busy} data-testid={`credential-${view.id}-create`}>
+              {busy === 'create' ? t('platformCredentials.creating') : view.present ? t('platformCredentials.rotate') : t('platformCredentials.create')}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => {
