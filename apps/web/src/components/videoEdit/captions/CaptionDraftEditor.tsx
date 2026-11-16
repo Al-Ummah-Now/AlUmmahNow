@@ -13,7 +13,7 @@ import { useFeatures } from '@/hooks/useFeatures';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { reportError } from '@/lib/errors/reporter';
-import { getCaptionDraft, publishCaptionDraft, saveCaptionDraft, type CaptionDraftSummary } from '@/lib/api/caption-drafts';
+import { getCaptionDraft, publishCaptionDraft, saveCaptionDraft, type CaptionDraftSummary } from '@/lib/api/caption-drafts-client';
 import QuranSpanCard from './QuranSpanCard';
 import {
   NUDGE_MS,

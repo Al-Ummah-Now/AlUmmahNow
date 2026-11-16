@@ -28,7 +28,7 @@ import {
   type CaptionClaim,
   type CaptionDraftSummary,
   type CaptionJobView,
-} from '@/lib/api/caption-drafts';
+} from '@/lib/api/caption-drafts-client';
 import CaptionDraftEditor from './CaptionDraftEditor';
 import CaptionTranscribe, { visibleJobs, type CaptionMinutes } from './CaptionTranscribe';
 import CaptionTranslate, { TranslationJobs } from './CaptionTranslate';
@@ -121,6 +121,12 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
     setBusy(`claim-${language}`);
     const res = await claimReviewTranscript(videoId, language, replace);
     setBusy(null);
+    if (!res.ok && res.error === 'feature_off') {
+      // Switched off meanwhile: the features are read again and the offer goes with them
+      setTranscript(false);
+      featureOff();
+      return;
+    }
     if (!res.ok && res.error !== 'claim_pending') {
       if (res.error === 'transcript_not_found') setTranscript(false);
       setNotice(res.error === 'transcript_not_found' ? tc.claim.failed.transcript_gone : tc.claim.requestFailed);
