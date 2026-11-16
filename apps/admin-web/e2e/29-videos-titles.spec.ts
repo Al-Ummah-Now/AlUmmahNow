@@ -85,8 +85,9 @@ test.describe('videos list titles', () => {
         const cell = await row.getByTestId('video-title').boundingBox();
         const box = await row.boundingBox();
         expect(cell, 'title cell is laid out').not.toBeNull();
-        // The column keeps its minimum width (18rem less the thumbnail on a desktop); was ~1 letter
-        expect(cell!.width, `title width (${v.id})`).toBeGreaterThanOrEqual(phone ? 150 : 170);
+        // The column keeps its minimum width: 18rem less padding and the 96 px thumbnail is ~148 px
+        // of title on a desktop (the bug left ~10 px, one letter per line)
+        expect(cell!.width, `title width (${v.id})`).toBeGreaterThanOrEqual(140);
         // Two lines at most for the title; the row stays compact (was ~900 px)
         expect(cell!.height, `title height (${v.id})`).toBeLessThanOrEqual(50);
         expect(box!.height, `row height (${v.id})`).toBeLessThanOrEqual(phone ? 320 : 160);
