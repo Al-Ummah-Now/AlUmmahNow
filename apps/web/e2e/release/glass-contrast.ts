@@ -108,12 +108,16 @@ export async function glassContrast(page: Page, box: Locator, label: string): Pr
     const hide = (on: boolean) =>
       page.evaluate((v) => {
         for (const el of document.querySelectorAll<HTMLElement>('main, main *')) {
-          // transition off first: a colour transition (Fawanees) outranks even an inline !important
-          if (v) el.style.setProperty('transition', 'none', 'important');
-          else el.style.removeProperty('transition');
+          // transitions off while the colours change, both ways: a colour transition (Fawanees) outranks even
+          // an inline !important, and one left running would be read back as the text's colour
+          el.style.setProperty('transition', 'none', 'important');
           for (const prop of ['color', '-webkit-text-fill-color', 'text-decoration-color', 'text-shadow']) {
             if (v) el.style.setProperty(prop, prop === 'text-shadow' ? 'none' : 'transparent', 'important');
             else el.style.removeProperty(prop);
+          }
+          if (!v) {
+            void getComputedStyle(el).color;
+            el.style.removeProperty('transition');
           }
         }
       }, on);
