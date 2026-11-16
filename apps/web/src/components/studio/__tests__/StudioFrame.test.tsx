@@ -16,7 +16,7 @@ jest.mock('@/hooks/useMultiAccount', () => ({ useMultiAccount: () => ({ user: { 
 const mockT = { studio: STUDIO_EN };
 const channel = { id: 'c1', name: 'My channel', handle: 'mine' };
 
-function frame(role: 'owner' | 'editor' | 'moderator', extra: Partial<typeof channel & { isHidden: boolean }> = {}, features: StudioFeatures = {}) {
+function frame(role: 'owner' | 'editor' | 'moderator', extra: Partial<typeof channel & { isHidden: boolean }> = {}, features: StudioFeatures = { live: true }) {
   return render(<StudioFrame locale="en" role={role} channel={{ ...channel, ...extra }} features={features}><p>page body</p></StudioFrame>);
 }
 
@@ -59,6 +59,18 @@ describe('StudioFrame', () => {
     expect(screen.queryByText('Upload')).toBeNull();
     // Content opens on Live, the only tab a moderator has
     expect(screen.getByTestId('studio-nav-content')).toHaveAttribute('href', '/en/studio/c1/content/live');
+  });
+
+  it('live off for the channel: no Go live in the rail and no Live tab', () => {
+    pathname = '/en/studio/c1/content/videos';
+    frame('owner', {}, { live: false });
+    expect(screen.queryByTestId('studio-golive-link')).toBeNull();
+    expect(screen.queryByTestId('studio-tab-live')).toBeNull();
+  });
+
+  it('live on: Go live in the rail', () => {
+    frame('owner');
+    expect(screen.getAllByTestId('studio-golive-link')[0]).toHaveAttribute('href', '/en/studio/c1/content/live');
   });
 
   it('marks the current page and tab', () => {

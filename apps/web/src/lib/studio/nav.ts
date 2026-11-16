@@ -67,7 +67,7 @@ export const STUDIO_NAV: readonly StudioNavItem[] = [
     tabs: [
       { id: 'videos', requires: ['video.view_private'] },
       // Live streams (either provider, D3); a stream's Go live page needs live.manage
-      { id: 'live', requires: ['live.manage', 'live.moderate'] },
+      { id: 'live', requires: ['live.manage', 'live.moderate'], feature: 'live' },
       { id: 'posts', requires: ['post.manage'] },
     ],
   },

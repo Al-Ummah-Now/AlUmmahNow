@@ -69,3 +69,23 @@ export async function grantCreatorTier(user: WebUser): Promise<void> {
     })
     .toBe('creator');
 }
+
+/**
+ * Takes the Creator tier away again (the "off" half of a hidden-when-off toggle). On the local
+ * stack it is deleted straight from the stack's database, elsewhere through the admin UI.
+ */
+export async function removeCreatorTier(user: WebUser): Promise<void> {
+  if (releaseEnv() !== 'local') return setCreatorTier(user, null);
+  const id = user.userId.replace(/[^A-Za-z0-9_:-]/g, '');
+  const res = await fetch(`${process.env.LOCAL_STACK_CONTROL_URL || 'http://127.0.0.1:3190'}/__stack/d1/al-ummah-now-search`, {
+    method: 'POST',
+    body: `DELETE FROM creator_tier_assignments WHERE user_id = '${id}'`,
+  });
+  expect(res.ok, `local stack tier delete: ${await res.text()}`).toBe(true);
+  await expect
+    .poll(async () => ((await (await apiFetch(user, '/api/me/creator')).json().catch(() => ({}))) as { result?: { tier?: { id?: string } | null } }).result?.tier?.id ?? null, {
+      message: 'GET /api/me/creator still shows a tier',
+      timeout: 20000,
+    })
+    .toBeNull();
+}

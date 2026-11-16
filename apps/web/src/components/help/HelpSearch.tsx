@@ -7,6 +7,7 @@ import { Search } from 'lucide-react';
 import { HELP_AR, HELP_EN } from '@al-ummah/shared-types';
 import { Autocomplete, type AutocompleteOption } from '@/components/ui/Autocomplete';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useFeatures } from '@/hooks/useFeatures';
 import { helpHref, helpSearchEntries } from '@/lib/help/content';
 import { useHelp } from './HelpNetworks';
 
@@ -15,15 +16,16 @@ export function HelpSearch() {
   const router = useRouter();
   const [value, setValue] = useState('');
   const { help, other } = useHelp(lang === 'ar' ? HELP_EN : HELP_AR);
+  const { features } = useFeatures();
   const options = useMemo<AutocompleteOption[]>(() => {
-    return helpSearchEntries(help, other).map((entry) => ({
+    return helpSearchEntries(help, other, features).map((entry) => ({
       id: entry.id,
       label: entry.label,
       subtitle: entry.subtitle,
       keywords: entry.keywords,
       value: entry,
     }));
-  }, [help, other]);
+  }, [help, other, features]);
   const topics = useMemo(() => options.filter((o) => !o.id.includes('#')), [options]);
 
   return (
