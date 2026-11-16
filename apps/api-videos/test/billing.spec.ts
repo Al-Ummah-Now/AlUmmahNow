@@ -487,6 +487,9 @@ describe('checkout contact', () => {
 		assert.deepEqual(await checkoutContact(ctx({ firstName: 'Amina', lastName: 'Hassan' }, { email: 'login@example.org' }), 'usr_c'), { email: 'login@example.org', name: 'Amina Hassan' });
 		await bucket.delete('usr_c');
 		assert.deepEqual(await checkoutContact(ctx(null, { payload: { email: 'p@example.org', name: 'Login Name' } }), 'usr_c'), { email: 'p@example.org', name: 'Login Name' });
+	});
+});
+
 describe('the return page, tiers on sale and receipts', () => {
 	it('the checkout poll goes open → completed + active; another user gets 404', async () => {
 		const ctx = setup();
