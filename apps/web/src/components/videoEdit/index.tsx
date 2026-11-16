@@ -527,7 +527,7 @@ export default function VideoEdit({
         />
 
         {/* Audio tracks: dubs, commentary, audio description (AUN-MULTI-AUDIO) */}
-        <AudioTracksPanel videoId={video.id} spokenLanguage={formData.language === 'both' ? undefined : formData.language} />
+        <AudioTracksPanel videoId={video.id} channelId={video.channelId || channelId} spokenLanguage={formData.language === 'both' ? undefined : formData.language} />
 
         {/* Video Chapters Section */}
         <div>

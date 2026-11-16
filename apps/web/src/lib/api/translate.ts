@@ -22,10 +22,10 @@ async function call<T>(path: string, init: { method?: string; body?: unknown; au
       ...(init.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
       cache: 'no-store',
     });
-    const json = (await res.json().catch(() => ({}))) as { success?: boolean; data?: T; error?: string; resetsAt?: string };
+    const json = (await res.json().catch(() => ({}))) as { success?: boolean; data?: T; error?: string; code?: string; resetsAt?: string };
     if (!res.ok || json.success === false) {
       if (res.status >= 500 && res.status !== 503) logger.error('[Translate] Request failed', { path, status: res.status, error: json.error });
-      return { ok: false, status: res.status, error: typeof json.error === 'string' ? json.error : 'request_failed', ...(typeof json.resetsAt === 'string' ? { resetsAt: json.resetsAt } : {}) };
+      return { ok: false, status: res.status, error: typeof json.error === 'string' ? json.error : typeof json.code === 'string' ? json.code : 'request_failed', ...(typeof json.resetsAt === 'string' ? { resetsAt: json.resetsAt } : {}) };
     }
     return { ok: true, data: json.data as T };
   } catch (error) {

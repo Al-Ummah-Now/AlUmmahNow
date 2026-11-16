@@ -9,6 +9,9 @@ import { AUDIO_TRACKS_AR, AUDIO_TRACKS_EN } from '@al-ummah/shared-types';
 jest.mock('@/hooks/useLanguage', () => ({
   useLanguage: () => ({ t: jest.requireActual('@/lib/i18n/translations/en').EN_TRANSLATIONS, lang: 'en', isRTL: false }),
 }));
+let mockFeatures: Record<string, boolean> = {};
+const mockRefreshFeatures = jest.fn(async () => undefined);
+jest.mock('@/hooks/useFeatures', () => ({ useFeatures: () => ({ ready: true, features: mockFeatures }), refreshFeatures: (...a: unknown[]) => mockRefreshFeatures(...(a as [])) }));
 jest.mock('@/lib/errors/reporter', () => ({ reportError: jest.fn(() => 'ref') }));
 jest.mock('@/lib/auth/client-token', () => ({ fetchClientAuthToken: jest.fn(async () => 'tok') }));
 jest.mock('@/lib/runtime-config', () => ({ getApiUrl: () => 'https://api.test' }));
@@ -51,7 +54,10 @@ const view = (over: Partial<AudioTracksView> = {}): AudioTracksView => ({
 });
 const ok = <T,>(data: T) => ({ ok: true as const, data });
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockFeatures = { audioTracks: true };
+});
 
 describe('audio track model', () => {
   it('words each state, with the reason for failed and rejected tracks', () => {
@@ -73,8 +79,9 @@ describe('audio track model', () => {
     expect(uploadPercent({ state: 'ready', bytes: 200 })).toBeNull();
   });
 
-  it('explains the tier limit, in both languages', () => {
-    expect(addLimitMessage({ limit: { allowed: 0, used: 0, unlimited: false } }, AUDIO_TRACKS_EN)).toBe('Your creator tier does not include extra audio tracks.');
+  it('states the limit plainly, in both languages (a plan with none never shows Add)', () => {
+    expect(addLimitMessage({ limit: { allowed: 0, used: 0, unlimited: false } }, AUDIO_TRACKS_EN)).toBeNull();
+    expect(addLimitMessage({ limit: { allowed: 2, used: 2, unlimited: false } }, AUDIO_TRACKS_EN)).toBe('Limit reached (2 per video).');
     expect(addLimitMessage({ limit: { allowed: 2, used: 2, unlimited: false } }, AUDIO_TRACKS_AR)).toContain('2');
     expect(addLimitMessage({ limit: { allowed: 2, used: 1, unlimited: false } }, AUDIO_TRACKS_EN)).toBeNull();
     expect(addLimitMessage({ limit: { allowed: 0, used: 9, unlimited: true } }, AUDIO_TRACKS_EN)).toBeNull();
@@ -148,7 +155,7 @@ describe('AudioTracksPanel', () => {
   it('turns Add off and says why at the tier limit or before processing', async () => {
     listAudioTracks.mockResolvedValue(ok(view({ limit: { allowed: 1, used: 1, unlimited: false } })));
     const { unmount } = render(<AudioTracksPanel videoId="v1" />);
-    expect(await screen.findByTestId('audio-tracks-limit')).toHaveTextContent('allows 1 extra audio tracks');
+    expect(await screen.findByTestId('audio-tracks-limit')).toHaveTextContent('Limit reached (1 per video).');
     expect(screen.getByTestId('audio-track-add')).toBeDisabled();
     unmount();
     listAudioTracks.mockResolvedValue(ok(view({ tracks: [], ready: false, limit: { allowed: 3, used: 0, unlimited: false } })));
@@ -158,13 +165,22 @@ describe('AudioTracksPanel', () => {
     expect(screen.queryByTestId('audio-tracks-empty')).not.toBeInTheDocument();
   });
 
-  it('a tier with no tracks says so once, without a count or an invitation', async () => {
+  it('off for the channel with no tracks: no panel at all', async () => {
+    mockFeatures = {};
     listAudioTracks.mockResolvedValue(ok(view({ tracks: [], limit: { allowed: 0, used: 0, unlimited: false } })));
-    render(<AudioTracksPanel videoId="v1" />);
-    expect(await screen.findByTestId('audio-tracks-limit')).toHaveTextContent('does not include extra audio tracks');
-    expect(screen.queryByTestId('audio-tracks-usage')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('audio-tracks-empty')).not.toBeInTheDocument();
-    expect(screen.getByTestId('audio-track-add')).toBeDisabled();
+    const { container } = render(<AudioTracksPanel videoId="v1" channelId="c1" />);
+    await waitFor(() => expect(listAudioTracks).toHaveBeenCalled());
+    expect(container.querySelector('[data-testid="audio-tracks"]')).toBeNull();
+  });
+
+  it('off with tracks already there: they can be managed, but no Add, count or limit text', async () => {
+    mockFeatures = {};
+    listAudioTracks.mockResolvedValue(ok(view({ limit: { allowed: 0, used: 1, unlimited: false } })));
+    render(<AudioTracksPanel videoId="v1" channelId="c1" />);
+    expect(await screen.findAllByTestId('audio-track')).toHaveLength(2);
+    expect(screen.queryByTestId('audio-track-add')).toBeNull();
+    expect(screen.queryByTestId('audio-tracks-usage')).toBeNull();
+    expect(screen.queryByTestId('audio-tracks-limit')).toBeNull();
   });
 
   it('invites a first track when one can be added', async () => {
@@ -200,7 +216,7 @@ describe('AudioTracksPanel', () => {
     const dialog = await screen.findByTestId('audio-track-dialog');
     fireEvent.change(within(dialog).getByTestId('audio-track-file'), { target: { files: [new File([new Uint8Array(5)], 'urdu.wav')] } });
     fireEvent.click(within(dialog).getByTestId('audio-track-submit'));
-    expect(await within(dialog).findByTestId('audio-track-error')).toHaveTextContent('allows 1 extra audio tracks');
+    expect(await within(dialog).findByTestId('audio-track-error')).toHaveTextContent('Limit reached (1 per video).');
   });
 
   it('asks before deleting a track', async () => {

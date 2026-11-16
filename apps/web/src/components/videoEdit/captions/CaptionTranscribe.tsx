@@ -5,12 +5,14 @@
  * (from the video's language), the cost line before confirming, each language's running job with
  * its step and Cancel, and why a job failed with the minutes given back. A job that costs more
  * than is left still starts (the balance goes below 0, said plainly before confirming); at a
- * balance of 0 or below the plan's minutes and the contact path show instead of the button.
- * CaptionDraftsPanel loads the jobs and minutes and polls while a job runs.
+ * balance of 0 or below a plain line says when the minutes reset, instead of the button (no
+ * upsell, no link). Shown only while transcription is on for the channel (GET /api/me/features
+ * `captionsTranscribe`: configured, and the plan has caption minutes). CaptionDraftsPanel loads
+ * the jobs and minutes and polls while a job runs.
  */
 import React, { useId, useState } from 'react';
 import { AlertTriangle, AudioLines, Loader2, X } from 'lucide-react';
-import { captionMinutesCanStart, isCaptionJobActive, type CaptionMinutesUsage, type CaptionsTranslations } from '@al-ummah/shared-types';
+import { captionMinutesCanStart, FEATURE_OFF_CODE, isCaptionJobActive, type CaptionMinutesUsage, type CaptionsTranslations } from '@al-ummah/shared-types';
 import { reportError } from '@/lib/errors/reporter';
 import { SUPPORTED_LANGUAGES } from '@/lib/api/subtitles-types';
 import { cancelCaptionJob, startCaptionJob, type CaptionJobView } from '@/lib/api/caption-drafts';
@@ -35,6 +37,8 @@ export interface CaptionTranscribeProps {
   label: (code: string) => string;
   /** Something changed: jobs, minutes and drafts reload */
   reload: () => Promise<void>;
+  /** The server answered 404 feature_off (switched off meanwhile): the features are read again */
+  onFeatureOff?: () => void;
 }
 
 /** The newest job of each language, when it is running or failed (a ready job is its draft; a cancelled one is gone). */
@@ -67,7 +71,7 @@ export function jobStepText(t: CaptionsTranslations['jobs'], job: CaptionJobView
 
 const fill = (template: string, values: Record<string, string | number>) => Object.entries(values).reduce((text, [key, value]) => text.split(`{${key}}`).join(String(value)), template);
 
-export default function CaptionTranscribe({ videoId, spokenLanguage, jobs, minutes, draftLanguages, t, lang, cancelLabel, confirm, label, reload }: CaptionTranscribeProps) {
+export default function CaptionTranscribe({ videoId, spokenLanguage, jobs, minutes, draftLanguages, t, lang, cancelLabel, confirm, label, reload, onFeatureOff }: CaptionTranscribeProps) {
   const languageId = useId();
   const [language, setLanguage] = useState(spokenLanguage && SUPPORTED_LANGUAGES.some((l) => l.code === spokenLanguage) ? spokenLanguage : 'ar');
   const [busy, setBusy] = useState<string | null>(null);
@@ -84,7 +88,6 @@ export default function CaptionTranscribe({ videoId, spokenLanguage, jobs, minut
   const retry = shown.some((j) => j.language === language && j.status === 'failed');
   /** A start needs a balance above 0; a job that costs more starts and goes over */
   const out = !captionMinutesCanStart(usage);
-  const noPlan = out && usage.overdraft === 0 && (usage.monthLimit ?? 0) === 0 && usage.packsRemaining === 0;
   const over = usage.overdraft;
   const costText = (needed: number) => {
     if (usage.unlimited) return fill(t.costUnlimited, { minutes: needed });
@@ -111,7 +114,9 @@ export default function CaptionTranscribe({ videoId, spokenLanguage, jobs, minut
     const res = await startCaptionJob(videoId, code, replace);
     setBusy(null);
     if (!res.ok) {
-      if (res.status === 402 && res.details?.usage) {
+      if (res.status === 404 && res.error === FEATURE_OFF_CODE) {
+        onFeatureOff?.();
+      } else if (res.status === 402 && res.details?.usage) {
         setRefusal({ usage: res.details.usage as CaptionMinutesUsage, minutesNeeded: typeof res.details.minutesNeeded === 'number' ? res.details.minutesNeeded : minutesNeeded });
       } else if (res.error === 'draft_exists' && !replace) {
         // A draft appeared since the list loaded
@@ -235,10 +240,7 @@ export default function CaptionTranscribe({ videoId, spokenLanguage, jobs, minut
 
       {out ? (
         <div data-testid="caption-minutes-short" className="space-y-1 rounded-lg border border-border bg-muted p-3 text-sm text-foreground">
-          <p>{noPlan ? t.noPlan : over > 0 ? fill(t.outOver, { over, date: resets }) : fill(t.outUsed, { date: resets })}</p>
-          <a href={`/${lang === 'ar' ? 'ar' : 'en'}/contact`} className="font-medium text-brand-ink underline underline-offset-2 hover:no-underline">
-            {t.contact}
-          </a>
+          <p>{over > 0 ? fill(t.outOver, { over, date: resets }) : fill(t.outUsed, { date: resets })}</p>
         </div>
       ) : running ? null : (
         <div className="space-y-2">

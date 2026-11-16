@@ -4,6 +4,9 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 jest.mock('@/hooks/useLanguage', () => ({
   useLanguage: () => ({ t: jest.requireActual('@/lib/i18n/translations/en').EN_TRANSLATIONS, lang: 'en', isRTL: false }),
 }));
+let mockFeatures: Record<string, boolean> = {};
+const mockRefreshFeatures = jest.fn(async () => undefined);
+jest.mock('@/hooks/useFeatures', () => ({ useFeatures: () => ({ ready: true, features: mockFeatures }), refreshFeatures: (...a: unknown[]) => mockRefreshFeatures(...(a as [])) }));
 jest.mock('@/lib/errors/reporter', () => ({ reportError: jest.fn(() => 'ref') }));
 jest.mock('../CaptionDraftEditor', () => ({ __esModule: true, default: () => null }));
 
@@ -95,6 +98,29 @@ describe('CaptionTranscribe helpers', () => {
 });
 
 describe('CaptionDraftsPanel: Transcribe', () => {
+  beforeEach(() => {
+    mockFeatures = { captionsTranscribe: true, captionsTranslate: true };
+  });
+
+  it('is not there at all while transcription is off for the channel, even with minutes', async () => {
+    mockFeatures = { captionsTranscribe: false, captionsTranslate: true };
+    setup();
+    const { container } = render(<CaptionDraftsPanel videoId="v1" channelId="c1" />);
+    await waitFor(() => expect(getCaptionMinutes).toHaveBeenCalled());
+    expect(container.querySelector('[data-testid="caption-transcribe"]')).toBeNull();
+    expect(container.querySelector('[data-testid="caption-drafts"]')).toBeNull();
+  });
+
+  it('switched off meanwhile (404 feature_off): no message, the features are read again', async () => {
+    setup();
+    startCaptionJob.mockResolvedValue({ ok: false, status: 404, error: 'feature_off', details: { code: 'feature_off' } });
+    render(<CaptionDraftsPanel videoId="v1" channelId="c1" />);
+    fireEvent.click(await screen.findByTestId('caption-transcribe-action'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Transcribe' }));
+    await waitFor(() => expect(mockRefreshFeatures).toHaveBeenCalledWith('c1'));
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
   it('stays hidden when the minutes cannot be read and there is nothing else', async () => {
     setup({ minutes: null });
     const { container } = render(<CaptionDraftsPanel videoId="v1" />);
@@ -125,7 +151,7 @@ describe('CaptionDraftsPanel: Transcribe', () => {
     await waitFor(() => expect(startCaptionJob).toHaveBeenCalledWith('v1', 'ar', true));
   });
 
-  it('a 402 (balance 0 or below) shows the minutes and the contact path instead of the button', async () => {
+  it('a 402 (balance 0 or below) says when the minutes reset instead of the button, with no link', async () => {
     setup();
     startCaptionJob.mockResolvedValue({
       ok: false,
@@ -137,7 +163,7 @@ describe('CaptionDraftsPanel: Transcribe', () => {
     fireEvent.click(await screen.findByTestId('caption-transcribe-action'));
     fireEvent.click(await screen.findByRole('button', { name: 'Transcribe' }));
     expect(await screen.findByTestId('caption-minutes-short')).toHaveTextContent("You've used all of this month's caption minutes. They reset on Dec 1.");
-    expect(screen.getByRole('link', { name: 'Ask our team for more minutes' })).toHaveAttribute('href', '/en/contact');
+    expect(screen.getByTestId('caption-minutes-short').querySelector('a')).toBeNull();
     expect(screen.queryByTestId('caption-transcribe-action')).toBeNull();
     expect(screen.queryByTestId('caption-minutes-warning')).toBeNull();
   });
@@ -154,7 +180,7 @@ describe('CaptionDraftsPanel: Transcribe', () => {
     await waitFor(() => expect(startCaptionJob).toHaveBeenCalledWith('v1', 'ar', false));
   });
 
-  it('a negative balance shows the overdraft in red and stops new starts; no plan says so', async () => {
+  it('a negative balance shows the overdraft in red and stops new starts', async () => {
     setup({ minutes: { usage: usage({ monthUsed: 120, overdraft: 7, remaining: -7, warning: true }), minutesNeeded: 17 } });
     const { unmount } = render(<CaptionDraftsPanel videoId="v1" />);
     expect(await screen.findByTestId('caption-minutes')).toHaveTextContent('Caption minutes: 127 / 120 this month · 7 over');
@@ -162,9 +188,6 @@ describe('CaptionDraftsPanel: Transcribe', () => {
     expect(screen.getByTestId('caption-minutes-short')).toHaveTextContent("You're 7 minutes over this month's caption minutes.");
     expect(screen.queryByTestId('caption-transcribe-action')).toBeNull();
     unmount();
-    setup({ minutes: { usage: usage({ via: 'none', tierMinutes: 0, monthLimit: 0, monthUsed: 0, remaining: 0 }), minutesNeeded: 17 } });
-    render(<CaptionDraftsPanel videoId="v1" />);
-    expect(await screen.findByTestId('caption-minutes-short')).toHaveTextContent("Your plan doesn't include caption minutes.");
   });
 
   it('while a job runs, the meter says its minutes are already counted', async () => {

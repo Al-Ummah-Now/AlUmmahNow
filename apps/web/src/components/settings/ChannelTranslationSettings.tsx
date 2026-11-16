@@ -7,10 +7,13 @@
  *   channel picks one). Quran is never machine-translated.
  * - whether viewers of other languages may see a labelled machine translation of titles and
  *   descriptions (O6: on unless the channel opts out; an admin can pause it for the site).
+ * Each part shows only while it is on (GET /api/me/features `quranEditions`: Quran Foundation
+ * credentials bound; `viewerTranslatedTitles`: switched on for the site); with neither, no card.
  */
 import React, { useEffect, useId, useState } from 'react';
 import { BookOpen, Languages, Loader2 } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useFeatures } from '@/hooks/useFeatures';
 import { SUPPORTED_LANGUAGES } from '@/lib/api/subtitles-types';
 import { reportError } from '@/lib/errors/reporter';
 import {
@@ -133,19 +136,26 @@ export function ChannelTranslationSettings({ channelId }: { channelId: string })
   const [failed, setFailed] = useState(false);
   const [titleNote, setTitleNote] = useState<{ text: string; error: boolean } | null>(null);
   const [savingTitles, setSavingTitles] = useState(false);
+  const { features } = useFeatures(channelId);
+  const titlesOn = features.viewerTranslatedTitles;
+  const quranOn = features.quranEditions;
 
   useEffect(() => {
     let live = true;
-    void Promise.all([getChannelTranslationSettings(channelId), getChannelQuranEditions(channelId)]).then(([s, q]) => {
+    setFailed(false);
+    if (!titlesOn) setSettings(null);
+    if (!quranOn) setRows(null);
+    if (!titlesOn && !quranOn) return;
+    void Promise.all([titlesOn ? getChannelTranslationSettings(channelId) : null, quranOn ? getChannelQuranEditions(channelId) : null]).then(([s, q]) => {
       if (!live) return;
-      if (s.ok) setSettings(s.data);
-      if (q.ok) setRows(q.data.editions.filter((e) => e.language !== 'ar'));
-      if (!s.ok || !q.ok) setFailed(true);
+      if (s?.ok) setSettings(s.data);
+      if (q?.ok) setRows(q.data.editions.filter((e) => e.language !== 'ar'));
+      if ((s && !s.ok) || (q && !q.ok)) setFailed(true);
     });
     return () => {
       live = false;
     };
-  }, [channelId]);
+  }, [channelId, titlesOn, quranOn]);
 
   const toggleTitles = async (on: boolean) => {
     if (!settings) return;
@@ -166,6 +176,9 @@ export function ChannelTranslationSettings({ channelId }: { channelId: string })
   const addable = SUPPORTED_LANGUAGES.filter((l) => l.code !== 'ar' && !listed.has(l.code));
   const shown: ChannelQuranEdition[] = [...(rows ?? []), ...added.filter((code) => !(rows ?? []).some((r) => r.language === code)).map((code) => ({ language: code, id: 0, name: '', source: 'default' as const }))];
 
+  // Neither part is on for this channel: no card at all
+  if (!titlesOn && !quranOn) return null;
+
   return (
     <section className={CARD} aria-labelledby={`${ids}-title`} data-testid="channel-translation-settings">
       <div className="flex items-start gap-2">
@@ -183,14 +196,14 @@ export function ChannelTranslationSettings({ channelId }: { channelId: string })
         </p>
       )}
 
-      {settings && (
+      {titlesOn && settings && (
         <div className="space-y-1">
           <label className="flex min-h-11 items-start gap-3 text-sm font-medium text-[var(--fanous-color-text-primary)]">
             <input type="checkbox" className="mt-0.5 h-5 w-5 accent-[var(--fanous-color-primary)]" checked={settings.viewerTitles} disabled={savingTitles} onChange={(e) => void toggleTitles(e.target.checked)} aria-describedby={`${ids}-titles-hint`} data-testid="channel-viewer-titles" />
             <span>{cs.viewerTitles}</span>
           </label>
           <p id={`${ids}-titles-hint`} className={`${MUTED} ps-8`}>
-            {cs.viewerTitlesHint} {!settings.platformEnabled && cs.viewerTitlesOff}
+            {cs.viewerTitlesHint}
           </p>
           {titleNote && (
             <p role={titleNote.error ? 'alert' : 'status'} className={`ps-8 text-xs ${titleNote.error ? 'text-[var(--fanous-color-error-text)]' : 'text-[var(--fanous-color-text-secondary)]'}`}>
@@ -200,8 +213,8 @@ export function ChannelTranslationSettings({ channelId }: { channelId: string })
         </div>
       )}
 
-      {rows && (
-        <div className="space-y-3 border-t border-[var(--fanous-color-divider)] pt-4">
+      {quranOn && rows && (
+        <div className={`space-y-3 ${titlesOn ? 'border-t border-[var(--fanous-color-divider)] pt-4' : ''}`}>
           <div className="flex items-start gap-2">
             <BookOpen className="mt-0.5 h-4 w-4 shrink-0 text-[var(--fanous-color-text-secondary)]" aria-hidden="true" />
             <div>

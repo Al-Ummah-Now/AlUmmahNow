@@ -74,8 +74,6 @@ export interface CaptionsTranslations {
     outOver: string;
     /** Balance exactly 0: {date} */
     outUsed: string;
-    noPlan: string;
-    contact: string;
     replaceTitle: string;
     /** {language} */
     replaceBody: string;
@@ -206,7 +204,6 @@ export interface CaptionsTranslations {
     replaceBody: string;
     replace: string;
     started: string;
-    paused: string;
     requestFailed: string;
     notReady: string;
     noMinutes: string;
@@ -231,7 +228,6 @@ export interface CaptionsTranslations {
     keep: string;
     /** {time} */
     fairUse: string;
-    paused: string;
     budget: string;
     failed: string;
     quranKept: string;
@@ -263,7 +259,6 @@ export interface CaptionsTranslations {
     addLanguage: string;
     viewerTitles: string;
     viewerTitlesHint: string;
-    viewerTitlesOff: string;
   };
 }
 
@@ -327,8 +322,6 @@ export const CAPTIONS_EN: CaptionsTranslations = {
     meterWarning: "You've used most of this month's caption minutes.",
     outOver: "You're {over} minutes over this month's caption minutes. You can transcribe again when your minutes reset on {date}, and the overdraft comes off them first.",
     outUsed: "You've used all of this month's caption minutes. They reset on {date}.",
-    noPlan: "Your plan doesn't include caption minutes.",
-    contact: 'Ask our team for more minutes',
     replaceTitle: 'Replace your draft?',
     replaceBody: 'You already have a {language} draft. The new transcript replaces it and your edits.',
     step: {
@@ -437,7 +430,6 @@ export const CAPTIONS_EN: CaptionsTranslations = {
     replaceBody: 'You already have a {language} draft. The translation replaces it and your edits.',
     replace: 'Replace',
     started: 'Translation started. The drafts appear here when they are ready.',
-    paused: 'Translation is paused right now. Try again later.',
     requestFailed: "The translation couldn't start. Try again.",
     notReady: "This video's length isn't known yet. Try again once it has finished processing.",
     noMinutes: "You don't have enough caption minutes to translate.",
@@ -457,8 +449,7 @@ export const CAPTIONS_EN: CaptionsTranslations = {
     replace: 'Replace',
     keep: 'Keep mine',
     fairUse: "You've used today's translations. More at {time}.",
-    paused: 'Translation is paused right now.',
-    budget: "Translation isn't available right now. Try again tomorrow.",
+    budget: 'Translations are used up for today. Try again tomorrow.',
     failed: "Couldn't translate. Try again.",
     quranKept: 'Quran in {…} was kept as written.',
   },
@@ -486,7 +477,6 @@ export const CAPTIONS_EN: CaptionsTranslations = {
     addLanguage: 'Add a language',
     viewerTitles: 'Let viewers see machine-translated titles',
     viewerTitlesHint: "When a video has no title in a viewer's language, they may see a labelled machine translation with “Show original”.",
-    viewerTitlesOff: 'Paused for the whole site right now; your choice applies again when it is back on.',
   },
 };
 
@@ -550,8 +540,6 @@ export const CAPTIONS_AR: CaptionsTranslations = {
     meterWarning: 'استهلكت معظم دقائق الترجمة لهذا الشهر.',
     outOver: 'تجاوزت دقائق الترجمة لهذا الشهر بـ {over} من الدقائق. يمكنك التفريغ مجددًا حين تتجدد دقائقك في {date}، ويُخصم التجاوز منها أولًا.',
     outUsed: 'استهلكت كل دقائق الترجمة لهذا الشهر. تتجدد في {date}.',
-    noPlan: 'لا تشمل خطتك دقائق للترجمة.',
-    contact: 'اطلب دقائق إضافية من فريقنا',
     replaceTitle: 'استبدال مسودتك؟',
     replaceBody: 'لديك مسودة {language} بالفعل. التفريغ الجديد يستبدلها مع تعديلاتك.',
     step: {
@@ -660,7 +648,6 @@ export const CAPTIONS_AR: CaptionsTranslations = {
     replaceBody: 'لديك مسودة {language} بالفعل. الترجمة تستبدلها مع تعديلاتك.',
     replace: 'استبدال',
     started: 'بدأت الترجمة. تظهر المسودات هنا عند جهوزيتها.',
-    paused: 'الترجمة متوقفة حاليًا. حاول لاحقًا.',
     requestFailed: 'تعذّر بدء الترجمة. حاول مرة أخرى.',
     notReady: 'مدة هذا المرئي غير معروفة بعد. حاول مجددًا بعد انتهاء معالجته.',
     noMinutes: 'ليست لديك دقائق ترجمة كافية للترجمة.',
@@ -680,8 +667,7 @@ export const CAPTIONS_AR: CaptionsTranslations = {
     replace: 'استبدال',
     keep: 'الإبقاء على نصي',
     fairUse: 'استنفدت ترجمات اليوم. تتجدد في {time}.',
-    paused: 'الترجمة متوقفة حاليًا.',
-    budget: 'الترجمة غير متاحة الآن. حاول غدًا.',
+    budget: 'نفدت الترجمات لهذا اليوم. حاول غدًا.',
     failed: 'تعذّرت الترجمة. حاول مرة أخرى.',
     quranKept: 'بقي القرآن بين {…} كما كُتب.',
   },
@@ -709,6 +695,5 @@ export const CAPTIONS_AR: CaptionsTranslations = {
     addLanguage: 'إضافة لغة',
     viewerTitles: 'السماح للمشاهدين برؤية عناوين مترجمة آليًا',
     viewerTitlesHint: 'إن لم يكن للمرئي عنوان بلغة المشاهد، فقد يرى ترجمة آلية موسومة مع «عرض الأصل».',
-    viewerTitlesOff: 'متوقفة الآن في الموقع كله، ويسري اختيارك عند إعادة تشغيلها.',
   },
 };
