@@ -12,7 +12,7 @@ import { VideoDate, ViewCount } from '@/components/VideoDate';
 const RelatedVideo: React.FC<VideoInfo> = (info) => {
   const { lang } = useLanguage();
 
-  const duration = formatDuration(info.duration);
+  const duration = formatDuration(info.duration, lang);
   return (
     <Link href={`/${lang}/video/${encodeURIComponent(info.id)}`} data-testid="related-video" className="rv">
       <div className="rv-t">

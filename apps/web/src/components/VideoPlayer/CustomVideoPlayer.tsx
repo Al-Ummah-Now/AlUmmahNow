@@ -302,7 +302,7 @@ export default function CustomVideoPlayer({
       }
       setResumeAt(position);
       setShowStartOver(true);
-      setResumeAnnouncement(t.resume.resumingAt.replace('{time}', formatResumeTime(position)));
+      setResumeAnnouncement(t.resume.resumingAt.replace('{time}', formatResumeTime(position, lang)));
     };
     // Through MSE (VHS), once the first frame is buffered: WebKitGTK's MSE (GStreamer) fails a
     // seek made while nothing is buffered yet ("Failed to push buffer", a code 4 media error), and
@@ -1328,7 +1328,7 @@ export default function CustomVideoPlayer({
             <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="16" height="16" className="vjs-start-over-icon">
               <path fill="currentColor" d="M8 5v14l11-7z" />
             </svg>
-            <span>{t.resume.resumeAtButton.replace('{time}', formatResumeTime(resumeOffer))}</span>
+            <span>{t.resume.resumeAtButton.replace('{time}', formatResumeTime(resumeOffer, lang))}</span>
           </button>
         )}
 

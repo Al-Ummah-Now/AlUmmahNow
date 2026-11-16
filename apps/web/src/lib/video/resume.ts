@@ -7,6 +7,7 @@
  * a `t=` link, a muted preview that never plays, or scrubbing the bar without
  * playing records nothing.
  */
+import { formatClock } from '@al-ummah/shared-types';
 import type { WatchProgress } from '@/services/api/watch-history';
 
 /** Seconds of real playback in this page before any progress is saved. */
@@ -70,10 +71,6 @@ export function startOverStillRelevant(resumeAt: number, currentTime: number): b
 }
 
 /** m:ss or h:mm:ss for announcements. */
-export function formatResumeTime(seconds: number): string {
-  const total = Math.max(0, Math.floor(Number.isFinite(seconds) ? seconds : 0));
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = String(total % 60).padStart(2, '0');
-  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`;
+export function formatResumeTime(seconds: number, lang = 'en'): string {
+  return formatClock(lang, Math.max(0, Math.floor(Number.isFinite(seconds) ? seconds : 0)));
 }

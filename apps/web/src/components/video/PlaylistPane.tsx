@@ -193,7 +193,7 @@ export function PlaylistPane(props: PlaylistPaneProps) {
               {queue.items.map((item) => {
                 const current = item.position === queue.position;
                 const itemTitle = removeUnwantedChars(getLocalizedValue(item.titleLocalized, item.title, lang));
-                const duration = formatDuration(item.duration ?? undefined);
+                const duration = formatDuration(item.duration ?? undefined, lang);
                 return (
                   <li key={`${item.position}:${item.id}`} className="[content-visibility:auto] [contain-intrinsic-size:auto_72px]">
                     <a
