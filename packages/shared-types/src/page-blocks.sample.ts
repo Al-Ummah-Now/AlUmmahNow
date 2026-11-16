@@ -64,7 +64,7 @@ const C = {
          ['globe', 'Share', 'Send a short link to anyone.'],
       ],
       contactH: 'Get in touch',
-      contactT: 'Questions, suggestions or a creator request: we read every message.',
+      contactT: 'Questions or suggestions: we read every message.',
       contactL: 'Contact us',
    },
    ar: {
@@ -119,7 +119,7 @@ const C = {
          ['globe', 'شارك', 'أرسل رابطًا قصيرًا لأي أحد.'],
       ],
       contactH: 'تواصل معنا',
-      contactT: 'أسئلة أو اقتراحات أو طلب صانع محتوى: نقرأ كل رسالة.',
+      contactT: 'أسئلة أو اقتراحات: نقرأ كل رسالة.',
       contactL: 'تواصل معنا',
    },
 } as const;
