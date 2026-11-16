@@ -245,7 +245,8 @@ export const isUnexpectedFailure = (result: { status: number }) => result.status
  * holds, shown as just the tier's name (owner, 2026-11-15: "Default" marks only
  * the tier on the Tiers list).
  */
-export function defaultTierName(defaultTierId: string | null | undefined, tiers: readonly Pick<CreatorTier, 'id' | 'name'>[], _t: Translator): string {
+export function defaultTierName(defaultTierId: string | null | undefined, tiers: readonly Pick<CreatorTier, 'id' | 'name' | 'nameAr'>[], _t: Translator, locale: Locale = 'en'): string {
   const id = !defaultTierId || defaultTierId === NO_DEFAULT_TIER ? DEFAULT_TIER_ID : defaultTierId;
-  return tiers.find((tier) => tier.id === id)?.name ?? id;
+  const tier = tiers.find((x) => x.id === id);
+  return tier ? tierLabel(tier, locale) : id;
 }

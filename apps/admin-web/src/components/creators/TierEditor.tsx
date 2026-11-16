@@ -381,7 +381,7 @@ export function TierEditor({ tiers, counts, invites = {}, defaultTierId, canMana
               <Chip tone="info" testId={`tier-${tier.id}-default`}>{t('creators.tierDefaultChip')}</Chip>
             ) : (
               canManage && actions.setDefault && (
-                <DefaultTierButton tierId={tier.id} tierName={tier.name} label={t('creators.tierSetDefault')} setDefault={actions.setDefault} testId={`tier-${tier.id}-set-default`} />
+                <DefaultTierButton tierId={tier.id} tierName={tierLabel(tier, locale)} label={t('creators.tierSetDefault')} setDefault={actions.setDefault} testId={`tier-${tier.id}-set-default`} />
               )
             )}
           </div>

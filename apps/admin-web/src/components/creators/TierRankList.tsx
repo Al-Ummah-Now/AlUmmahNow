@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { CreatorTier } from '@al-ummah/shared-types';
 import type { ActionResult } from '@/lib/api/errors';
-import { isUnexpectedFailure, tierActionMessage } from '@/lib/creator-tiers';
+import { isUnexpectedFailure, tierActionMessage, tierLabel } from '@/lib/creator-tiers';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { cardClass } from '@/components/ui';
 import { Chip, smallButtonClass } from '@/components/content/parts';
@@ -27,7 +27,7 @@ class ReorderFailure extends Error {
  */
 export function TierRankList({ tiers, defaultTierId, canManage, reorder }: { tiers: CreatorTier[]; defaultTierId?: string; canManage: boolean; reorder?: Reorder }) {
   const router = useRouter();
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const { run } = useUndoableAction();
   const [order, setOrder] = useState<string[]>(tiers.map((tier) => tier.id));
   const [busy, setBusy] = useState(false);
@@ -115,14 +115,14 @@ export function TierRankList({ tiers, defaultTierId, canManage, reorder }: { tie
             >
               {editable && <span aria-hidden="true" className="select-none text-fg-muted">⋮⋮</span>}
               <span className="w-6 text-sm text-fg-muted tabular-nums">{i + 1}</span>
-              <span className="font-medium text-fg">{tier.name}</span>
+              <span className="font-medium text-fg">{tierLabel(tier, locale)}</span>
               {id === defaultTierId && <Chip tone="info">{t('creators.tierDefaultChip')}</Chip>}
               {editable && (
                 <span className="ms-auto flex gap-1">
-                  <button type="button" className={smallButtonClass} disabled={busy || i === 0} onClick={() => move(id, -1)} aria-label={t('creators.rankMoveUp', { tier: tier.name })} data-testid={`tiers-rank-${id}-up`}>
+                  <button type="button" className={smallButtonClass} disabled={busy || i === 0} onClick={() => move(id, -1)} aria-label={t('creators.rankMoveUp', { tier: tierLabel(tier, locale) })} data-testid={`tiers-rank-${id}-up`}>
                     ↑
                   </button>
-                  <button type="button" className={smallButtonClass} disabled={busy || i === order.length - 1} onClick={() => move(id, 1)} aria-label={t('creators.rankMoveDown', { tier: tier.name })} data-testid={`tiers-rank-${id}-down`}>
+                  <button type="button" className={smallButtonClass} disabled={busy || i === order.length - 1} onClick={() => move(id, 1)} aria-label={t('creators.rankMoveDown', { tier: tierLabel(tier, locale) })} data-testid={`tiers-rank-${id}-down`}>
                     ↓
                   </button>
                 </span>

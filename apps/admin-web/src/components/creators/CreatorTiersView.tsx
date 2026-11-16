@@ -29,9 +29,9 @@ const FIELD_LABEL: Record<string, MessageKey> = {
 };
 
 /** What a tier audit row changed, in words (never raw JSON). */
-function auditSummary(entry: AdminAuditEntry, t: Translator, list: CreatorTiersList | null): string {
+function auditSummary(entry: AdminAuditEntry, t: Translator, list: CreatorTiersList | null, locale: Locale): string {
   if (entry.action === 'reorder') return t('creators.auditReorder');
-  if (entry.action === 'set-default') return t('creators.auditSetDefault', { tier: defaultTierName(String(entry.details?.tierId ?? ''), list?.items ?? [], t) });
+  if (entry.action === 'set-default') return t('creators.auditSetDefault', { tier: defaultTierName(String(entry.details?.tierId ?? ''), list?.items ?? [], t, locale) });
   const previous = (entry as AdminAuditEntry & { previous?: Record<string, unknown> | null }).previous ?? null;
   // An edit sends the whole form: name only the fields whose value changed
   const fields = Object.keys(entry.details ?? {}).filter((k) => k !== 'id' && (!previous || previous[k] !== entry.details?.[k]));
@@ -68,7 +68,7 @@ export function CreatorTiersView({ list, audit, canManage, t, locale, actions }:
       {list && (
         <section className={`${cardClass} mb-6`} aria-labelledby="tiers-default-title" data-testid="tiers-default" data-default-tier={list.defaultTierId}>
           <h2 id="tiers-default-title" className="text-lg font-semibold text-fg mb-1">{t('creators.tiersDefaultTitle')}</h2>
-          <p className="text-sm text-fg" data-testid="tiers-default-current">{t('creators.tiersDefaultCurrent', { tier: defaultTierName(list.defaultTierId, list.items, t) })}</p>
+          <p className="text-sm text-fg" data-testid="tiers-default-current">{t('creators.tiersDefaultCurrent', { tier: defaultTierName(list.defaultTierId, list.items, t, locale) })}</p>
           <p className="mt-1 text-sm text-fg-muted max-w-3xl">{t('creators.tiersDefaultBody')}</p>
           {list.counts.none > 0 && (
             <p className="mt-2 text-sm text-fg-muted" data-testid="tiers-none-count">
@@ -96,7 +96,7 @@ export function CreatorTiersView({ list, audit, canManage, t, locale, actions }:
                     ? t('creators.rankTitle')
                     : (() => { const tier = list?.items.find((x) => `content:creator-tier:${x.id}` === entry.key); return tier ? tierLabel(tier, locale) : null; })() ?? entry.key.replace('content:creator-tier:', '')}
                 </span>{' '}
-                <span className="text-fg">{auditSummary(entry, t, list)}</span>{' '}
+                <span className="text-fg">{auditSummary(entry, t, list, locale)}</span>{' '}
                 <span className="text-fg-muted">{fillNodes(t('creators.historyBy', { date: formatDate(entry.createdAt, locale, true) }), { actor: <UserName id={entry.actorId} showEmail={false} /> })}</span>
               </li>
             ))}
