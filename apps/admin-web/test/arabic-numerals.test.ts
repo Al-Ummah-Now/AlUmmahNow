@@ -12,7 +12,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { renderToStaticMarkup } from 'react-dom/server';
 import * as React from 'react';
-import { captionUsageFrom, fillTemplate, type CreatorTier } from '@al-ummah/shared-types';
+import { DEFAULT_CREATOR_TIER, captionUsageFrom, fillTemplate, type CreatorTier } from '@al-ummah/shared-types';
 import { createTranslator, formatDate, formatHour, formatNumber } from '../src/i18n/translate';
 import { I18nProvider } from '../src/i18n/I18nProvider';
 import en from '../src/i18n/messages/en';
@@ -136,7 +136,7 @@ describe('rendered Arabic components', () => {
   });
 
   it('the tiers page (users per tier, bounds) has no 0–9', () => {
-    const tier: CreatorTier = { id: 'creator', name: 'Creator', unlimited: false, perHour: 300, perDay: 2000, maxConcurrent: 20, maxChannels: 3, captionMinutesMonth: 120, audioTracksPerVideo: 2, live: true, liveHoursMonth: 20, liveMaxConcurrent: 1, liveMaxStreamMinutes: 240, updatedAt: null, updatedBy: null };
+    const tier: CreatorTier = { ...DEFAULT_CREATOR_TIER, id: 'creator', name: 'Creator', unlimited: false, perHour: 300, perDay: 2000, maxConcurrent: 20, maxChannels: 3, captionMinutesMonth: 120, audioTracksPerVideo: 2, live: true, liveHoursMonth: 20, liveMaxConcurrent: 1, liveMaxStreamMinutes: 240, updatedAt: null, updatedBy: null };
     const save = async () => ({ ok: true as const, data: null });
     const html = render(React.createElement(TierEditor as never, { tiers: [tier], counts: { creator: 12 }, canManage: true, actions: { save, remove: save } } as never), 'ar');
     assert.match(visibleText(html), /١٢ مستخدم/);

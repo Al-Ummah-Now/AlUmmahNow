@@ -2,7 +2,7 @@
 
 import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CREATOR_TIER_BOUNDS, CREATOR_TIER_IDS, CREATOR_TIER_TEXT, DEFAULT_CREATOR_TIER, parseDigits, type CreatorTier } from '@al-ummah/shared-types';
+import { CREATOR_TIER_BOUNDS, CREATOR_TIER_IDS, CREATOR_TIER_TEXT, parseDigits, type CreatorTier } from '@al-ummah/shared-types';
 import type { ActionResult } from '@/lib/api/errors';
 import { isUnexpectedFailure, tierActionMessage, tierEffect, tierFormPayload, tierToForm, validateTierForm, type TierField, type TierFormValues, type TierPayload, tierLabel } from '@/lib/creator-tiers';
 import { useLanguage } from '@/i18n/I18nProvider';
