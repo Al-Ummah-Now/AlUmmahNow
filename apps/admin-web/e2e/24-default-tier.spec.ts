@@ -42,7 +42,7 @@ test.describe('default creator tier', () => {
     state.previous = current!.defaultTierId;
     const created = await adminApi<{ tier: { id: string } }>('/api/content/creator-tiers', {
       method: 'POST',
-      body: JSON.stringify({ name: `E2E default ${RUN_TAG} ${Date.now().toString(36)}`, perHour: 1, perDay: 2, maxConcurrent: 1, maxChannels: 1 }),
+      body: JSON.stringify({ name: `E2E default ${RUN_TAG} ${Date.now().toString(36)}`, nameAr: 'افتراضية اختبار', description: 'E2E default tier', descriptionAr: 'فئة افتراضية للاختبار', perHour: 1, perDay: 2, maxConcurrent: 1, maxChannels: 1 }),
     });
     expect(created.status).toBeLessThan(300);
     tierId = created.body.result?.tier.id ?? '';
