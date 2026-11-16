@@ -35,6 +35,8 @@ export function CompForm({ tiers, userId: fixedUser, onDone }: { tiers: TierOpti
   const [tierId, setTierId] = useState('');
   const [until, setUntil] = useState('');
   const [reason, setReason] = useState('');
+  // A new picker after each grant, so the form is empty again (no second grant by accident)
+  const [round, setRound] = useState(0);
   const [problem, setProblem] = useState<Problem | null>(null);
 
   const submit = async () => {
@@ -66,6 +68,7 @@ export function CompForm({ tiers, userId: fixedUser, onDone }: { tiers: TierOpti
       if (!fixedUser) {
         setUserId('');
         setUserLabel('');
+        setRound((r) => r + 1);
       }
       await onDone?.();
     }
@@ -96,8 +99,9 @@ export function CompForm({ tiers, userId: fixedUser, onDone }: { tiers: TierOpti
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
             {!fixedUser && (
               <div className="sm:col-span-2">
-                {/* Admins never type ids: find the user by name, email or @handle */}
+                {/* Admins never type ids: find the user by name or email */}
                 <Autocomplete
+                  key={round}
                   kind="user"
                   mode="pick"
                   label={t('payments.comp.user')}
@@ -108,6 +112,7 @@ export function CompForm({ tiers, userId: fixedUser, onDone }: { tiers: TierOpti
                     setUserLabel(item?.label ?? '');
                   }}
                   testId="payments-comp-user"
+                  showIds={false}
                 />
               </div>
             )}

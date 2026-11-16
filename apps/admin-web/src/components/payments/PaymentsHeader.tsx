@@ -42,7 +42,8 @@ export async function PaymentsHeader({ overview, tab }: { overview: BillingOverv
         </dl>
       )}
 
-      <nav aria-label={t('payments.tabsLabel')} className="mb-6 flex flex-wrap gap-1 border-b border-border">
+      {/* One row on every width: on a phone it scrolls sideways rather than wrapping under itself */}
+      <nav aria-label={t('payments.tabsLabel')} className="mb-6 flex gap-1 overflow-x-auto whitespace-nowrap border-b border-border [scrollbar-width:none]">
         {PAYMENTS_TABS.map((x) => {
           const active = x === tab;
           return (
@@ -50,7 +51,7 @@ export async function PaymentsHeader({ overview, tab }: { overview: BillingOverv
               key={x}
               href={x === 'providers' ? '/payments' : `/payments?tab=${x}`}
               aria-current={active ? 'page' : undefined}
-              className={`px-3 py-2 -mb-px border-b-2 ${active ? 'border-accent text-fg font-medium' : 'border-transparent text-fg-muted hover:text-fg'}`}
+              className={`shrink-0 px-3 py-2 -mb-px border-b-2 ${active ? 'border-accent text-fg font-medium' : 'border-transparent text-fg-muted hover:text-fg'}`}
               data-testid={`payments-tab-${x}`}
             >
               {t(`payments.tabs.${x}`)}

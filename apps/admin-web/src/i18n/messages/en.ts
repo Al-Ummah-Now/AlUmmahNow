@@ -5141,7 +5141,7 @@ const en = {
       subscriptionEndedNow: 'Subscription ended now',
       subscriptionEndsAtPeriodEnd: 'Subscription set to end when its period ends',
       refund: 'Payment refunded',
-      comp: 'Free {tier} given to {user}',
+      comp: 'Complimentary {tier} given to {user}',
       compHere: 'Free {tier} given',
       undone: 'Undone',
       fields: { apiKey: 'API key', webhookSecret: 'Webhook signing secret' },

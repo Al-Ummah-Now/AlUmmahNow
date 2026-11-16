@@ -152,7 +152,7 @@ describe('Payments rows in words (never raw codes)', () => {
     assert.equal(paymentsLine({ action: 'credential-set', target: { kind: 'billing-provider', id: 'paddle' }, details: { field: 'apiKey', mode: 'test' } }, en_, 'en')!.template, 'API key saved for Paddle (Test)');
     assert.equal(paymentsLine({ action: 'save', target: { kind: 'billing-price', id: 'creator:month:USD' }, details: { tierId: 'creator', period: 'month', currency: 'USD', amount: 500 } }, en_, 'en', tiers)!.template, 'Price saved: Creator, Monthly, $5.00');
     const comp = paymentsLine({ action: 'billing-comp', target: { kind: 'user', id: 'usr_1' }, details: { tierId: 'creator' } }, en_, 'en', tiers)!;
-    assert.deepEqual([comp.template, comp.user], ['Free Creator given to {user}', 'usr_1']);
+    assert.deepEqual([comp.template, comp.user], ['Complimentary Creator given to {user}', 'usr_1']);
     assert.equal(paymentsLine({ action: 'update', target: { kind: 'billing-settings', id: 'tax' }, details: { undo: true } }, en_, 'en')!.undone, true);
     assert.equal(paymentsLine({ action: 'hide', target: { kind: 'video', id: 'v' }, details: {} }, en_, 'en'), null, 'other rows keep their own words');
   });

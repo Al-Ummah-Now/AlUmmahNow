@@ -82,7 +82,7 @@ describe('suggest endpoints', () => {
       '/comments': [{ id: 'c_1', videoId: 'v_1', videoTitle: 'Tafsir', text: 'Great', userId: 'usr_1' }],
     });
     const call = appFor({ VIDEOS: fetcher });
-    assert.deepEqual((await call('/api/suggest/user?q=om')).body.result.items?.[0], { kind: 'user', id: 'usr_1', label: 'Omar', secondary: '@omar · omar@example.com', imageUrl: null });
+    assert.deepEqual((await call('/api/suggest/user?q=om')).body.result.items?.[0], { kind: 'user', id: 'usr_1', label: 'Omar', secondary: 'omar@example.com', imageUrl: null }); // people: email, never an @handle
     assert.deepEqual((await call('/api/suggest/video?q=taf')).body.result.items?.[0], { kind: 'video', id: 'v_1', label: 'Tafsir', secondary: 'Mostafa', imageUrl: 'https://t/v_1.jpg', parentId: 'ch_1' });
     assert.deepEqual((await call('/api/suggest/comment?q=gre')).body.result.items?.[0], { kind: 'comment', id: 'c_1', label: 'Great', secondary: 'Tafsir', imageUrl: null, parentId: 'v_1' });
   });
