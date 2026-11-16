@@ -79,8 +79,7 @@ export default function QuizPost({ post, isRTL = false }: QuizPostProps) {
               )}
             >
               <div className={cn(
-                'p-4 flex items-center gap-3',
-                isRTL && 'flex-row-reverse'
+                'p-4 flex items-center gap-3'
               )}>
                 {/* Icon */}
                 <div className={cn(
@@ -162,8 +161,7 @@ export default function QuizPost({ post, isRTL = false }: QuizPostProps) {
             : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
         )}>
           <div className={cn(
-            'flex items-center gap-2 mb-2',
-            isRTL && 'flex-row-reverse'
+            'flex items-center gap-2 mb-2'
           )}>
             {isCorrect ? (
               <>
