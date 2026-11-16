@@ -8,6 +8,7 @@
  *
  * No Workers-only imports: unit tested with node:test.
  */
+import { deactivateStaff } from './admin-staff';
 import { z } from 'zod';
 import type { D1Database } from './types';
 
@@ -387,6 +388,10 @@ export async function syncMirror(db: D1Database, row: MirrorRow, request: AuthRe
     .prepare('UPDATE auth_moderation_requests SET status = ?, decision_note = ?, history = ?, evidence = ?, sync_error = NULL, synced_at = ?, updated_at = ? WHERE id = ?')
     .bind(request.status, request.decision_note, history, evidence, now, now, row.id)
     .run();
+  // A staff member suspended or deleted through the videos admin leaves the staff list (pickers)
+  if (request.status === 'actioned' && row.status !== 'actioned' && (row.action === 'suspend_account' || row.action === 'delete_account')) {
+    await deactivateStaff(db, row.subject_user_id, row.action === 'suspend_account' ? 'suspended' : 'deleted', new Date(now));
+  }
   return row.status !== request.status;
 }
 

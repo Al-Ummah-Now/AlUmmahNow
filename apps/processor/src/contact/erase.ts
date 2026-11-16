@@ -1,7 +1,8 @@
 /**
  * Account erasure, Contact us step (#616). Deletes the erased account's
  * Contact us messages and their staff notes and replies from REPORTS_DB
- * (admin-api migrations 0008/0010). Messages sent while signed out carry no
+ * (admin-api migrations 0008/0010), and the account's row on the videos admin's
+ * staff list (admin_staff, 0031). Messages sent while signed out carry no
  * user id and are not linked to the account, so they are not touched.
  *
  * Idempotent: running it again deletes nothing more. It runs as its own
@@ -16,6 +17,8 @@ export async function eraseUserContactData(db: D1Database, userId: string): Prom
   const [notes, messages] = await db.batch([
     db.prepare('DELETE FROM contact_notes WHERE message_id IN (SELECT id FROM contact_messages WHERE user_id = ?) RETURNING id').bind(userId),
     db.prepare('DELETE FROM contact_messages WHERE user_id = ? RETURNING id').bind(userId),
+    // The videos admin's staff list (admin-api migration 0031): an erased staff member's name and email
+    db.prepare('DELETE FROM admin_staff WHERE user_id = ?').bind(userId),
   ]);
   // RETURNING rows count what was deleted (one transaction: both or neither)
   const count = (r: unknown) => ((r as { results?: unknown[] } | undefined)?.results ?? []).length;

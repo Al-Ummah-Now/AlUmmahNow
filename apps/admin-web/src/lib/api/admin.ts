@@ -267,7 +267,7 @@ export async function restoreContactMessages(ids: string[]): Promise<ActionResul
   return mutate('/api/contact/messages/restore', 'POST', { ids });
 }
 
-/** Everyone a message can be assigned to (admins and super admins), for the assignee picker. */
+/** Everyone a message can be assigned to (active Admins and Super Admins on the staff list), for the assignee picker. */
 export async function searchContactStaff(q: string): Promise<{ items: ContactStaffItem[] }> {
   return fetchAdmin<{ items: ContactStaffItem[] }>(`/api/contact/staff?q=${encodeURIComponent(q)}&limit=200`);
 }

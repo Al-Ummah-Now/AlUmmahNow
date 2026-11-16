@@ -1,3 +1,6 @@
+import { recordStaffToken } from '../lib/admin-staff';
+import { resolveNames } from '../lib/queue/names';
+import type { D1Database } from '../lib/types';
 import { Context, Next } from 'hono';
 import { AUTH_CONFIG, getAuthConfig } from './auth-config';
 import { getClient } from '../lib/openauth-client';
@@ -152,6 +155,10 @@ export async function adminMiddleware(c: Context, next: Next) {
       isModerator
     });
 
+    // The videos admin's own staff list (lib/admin-staff.ts): recorded from this token's claims,
+    // after the response, at most once per user per few minutes; no staff role makes the row inactive
+    noteStaffToken(c, auth);
+
     // Pre-publication review (VR7): content and senior reviewers reach the review queue only
     const reviewQueueOnly = !isAdmin && !isModerator && (c.req.path === '/api/review' || c.req.path.startsWith('/api/review/')) && isReviewer(roles);
     if (!isAdmin && !isModerator && !reviewQueueOnly) {
@@ -175,6 +182,20 @@ export async function adminMiddleware(c: Context, next: Next) {
       success: false,
       error: 'Failed to verify admin permissions'
     }, 500);
+  }
+}
+
+function noteStaffToken(c: Context, auth: AuthContext): void {
+  const env = c.env as { REPORTS_DB?: D1Database; SEARCH_DB?: D1Database } | undefined;
+  if (!env?.REPORTS_DB || !auth.userId) return;
+  const db = env.REPORTS_DB;
+  const task = recordStaffToken(db, { userId: auth.userId, roles: auth.roles, email: auth.email }, new Date(), async (userId) =>
+    (await resolveNames(env.SEARCH_DB, { profiles: [userId] })).profiles.get(userId) ?? null,
+  ).catch((error: unknown) => logger.warn('[Staff] Staff list not updated', { userId: auth.userId, error: error instanceof Error ? error.message : String(error) }));
+  try {
+    c.executionCtx.waitUntil(task);
+  } catch {
+    // No execution context (tests): the task runs on its own
   }
 }
 

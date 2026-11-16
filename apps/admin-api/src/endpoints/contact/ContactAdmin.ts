@@ -31,21 +31,10 @@ import { listContactQueue } from '../../lib/queue/contact-queue';
 import { assigneeParam, queueQuery, toFilters } from '../../lib/queue/schema';
 import { enqueueContactMail, reportContactMailFailure, resolveContactMailItem } from '../../lib/contact-mail-queue';
 import { publishAdminLiveInBackground } from '../../lib/admin-live';
-import { callVideos, type VideosClientEnv } from '../../lib/content/videosClient';
+import { getActiveStaff, listActiveStaff, type StaffRole } from '../../lib/admin-staff';
 
-/** Auth RBAC role ids whose holders have contact:manage (lib/roles.ts PERMISSIONS: admins and super admins). */
-const CONTACT_STAFF_ROLES = 'role_super_admin,role_admin';
-
-interface StaffAccount { id: string; email: string; name: string | null }
-
-/**
- * Everyone who can handle contact messages: every live account holding an admin role, read by
- * api-videos from the role assignments (GET /internal/admin/staff), not only those who opened the inbox.
- */
-async function contactStaff(env: VideosClientEnv): Promise<StaffAccount[]> {
-  const { items } = await callVideos<{ items: StaffAccount[] }>(env, '/staff', { query: { roles: CONTACT_STAFF_ROLES } });
-  return items;
-}
+/** Roles with contact:manage (lib/roles.ts PERMISSIONS: admins and super admins). */
+const CONTACT_STAFF_ROLES: readonly StaffRole[] = ['super_admin', 'admin'];
 
 /** Every change to a message refreshes the inbox, its badge and open detail pages (admin live events). */
 function announce(c: AppContext): void {
@@ -66,8 +55,8 @@ abstract class ContactRoute extends AdminRoute {
     if (value === null) return { ok: true, assignee: null };
     const auth = this.getAuth(c);
     if (value === 'me' || value === auth.userId) return { ok: true, assignee: { id: auth.userId, email: auth.email || null } };
-    const staff = (await contactStaff(c.env as never)).find((s) => s.id === value);
-    return staff ? { ok: true, assignee: { id: staff.id, email: staff.email } } : { ok: false };
+    const staff = await getActiveStaff(c.env.REPORTS_DB, value, CONTACT_STAFF_ROLES);
+    return staff ? { ok: true, assignee: { id: staff.user_id, email: staff.email } } : { ok: false };
   }
 
   /** A 403 response when the caller lacks the permission, otherwise null. */
@@ -291,7 +280,7 @@ export class ContactStaff extends ContactRoute {
   schema = addAuthToSchema({
     tags: TAGS,
     summary: 'Admins a contact message can be assigned to',
-    description: 'Every account that can handle contact messages (admins and super admins, from the role assignments), matched by name or email. Shaped as autocomplete suggestions. Needs contact:manage.',
+    description: "Every account that can handle contact messages: active Admins and Super Admins on the videos admin's staff list (admin_staff, recorded from their own tokens), matched by name or email. Shaped as autocomplete suggestions. Needs contact:manage.",
     request: { query: z.object({ q: z.string().trim().max(200).default(''), limit: z.coerce.number().int().min(1).max(200).default(200) }) },
     responses: { '200': { description: '{ items: { id, label, secondary }[] }' } },
   });
@@ -301,11 +290,11 @@ export class ContactStaff extends ContactRoute {
     if (denied) return denied;
     const { query } = await this.getValidatedData<typeof this.schema>();
     const me = this.getUserId(c);
-    const q = query.q.toLocaleLowerCase();
-    const staff = (await contactStaff(c.env as never)).filter((s) => !q || s.email.toLocaleLowerCase().includes(q) || (s.name ?? '').toLocaleLowerCase().includes(q) || s.id === query.q);
+    const staff = await listActiveStaff(c.env.REPORTS_DB, CONTACT_STAFF_ROLES, query.q, query.limit);
     // The caller first, then by name; label = name (else email), email beside it
-    staff.sort((a, b) => Number(b.id === me) - Number(a.id === me));
-    const items = staff.slice(0, query.limit).map((s) => ({ kind: 'user' as const, id: s.id, label: s.name ?? s.email, secondary: s.id === me ? 'me' : s.name ? s.email : null, imageUrl: null }));
+    staff.sort((a, b) => Number(b.user_id === me) - Number(a.user_id === me));
+    // Never an id as a label: a row with neither a name nor an email is left out
+    const items = staff.filter((s) => s.name || s.email).map((s) => ({ kind: 'user' as const, id: s.user_id, label: (s.name ?? s.email) as string, secondary: s.user_id === me ? 'me' : s.name ? s.email : null, imageUrl: null }));
     return { success: true, result: { items } };
   }
 }
