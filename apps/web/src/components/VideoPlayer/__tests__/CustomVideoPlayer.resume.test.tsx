@@ -219,7 +219,7 @@ describe('CustomVideoPlayer resume (#242)', () => {
   it('announces in Arabic for the Arabic player', async () => {
     renderWith(progress(222), { lang: 'ar' });
     expect(await screen.findByTestId('player-start-over')).toHaveAccessibleName('البدء من البداية');
-    expect(screen.getByTestId('player-resume-announcement')).toHaveTextContent('الاستئناف من 3:42');
+    expect(screen.getByTestId('player-resume-announcement')).toHaveTextContent('الاستئناف من ٣:٤٢');
   });
 
   it('natively, waits for metadata before seeking', async () => {

@@ -40,7 +40,7 @@ describe('CommentBody has no dislike control', () => {
       expect(buttons).toHaveLength(1);
       const like = buttons[0];
       expect(like).toHaveAttribute('aria-pressed', 'false');
-      expect(like).toHaveTextContent('3');
+      expect(like).toHaveTextContent(locale === 'ar' ? '٣' : '3');
       expect(like.querySelector('svg')).toHaveClass('lucide-thumbs-up');
       expect(container.querySelector('.lucide-thumbs-down')).toBeNull();
       expect(screen.queryByRole('button', { name: /dislike|عدم إعجاب|عدم الإعجاب/i })).toBeNull();
