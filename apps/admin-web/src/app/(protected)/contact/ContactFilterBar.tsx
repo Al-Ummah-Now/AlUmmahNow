@@ -16,6 +16,8 @@ export function ContactFilterBar({ filters, active }: { filters: ContactInboxFil
 
   return (
     <Form action="/contact" role="search" aria-label={t('contact.filtersLabel')} className="flex flex-wrap items-end gap-3" data-testid="contact-filters" key={key}>
+      {/* The Unread view keeps its filter when the form is applied */}
+      {filters.read && <input type="hidden" name="read" value={filters.read} />}
       <Autocomplete
         kind="contact"
         mode="search"

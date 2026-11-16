@@ -41,7 +41,10 @@ describe('POST /internal/contact', () => {
     assert.equal(res.status, 201);
     const { result } = (await res.json()) as { result: { id: string } };
     const row = await getContactMessage(db, result.id);
-    assert.equal(row?.status, 'new');
+    assert.equal(row?.status, 'open');
+    assert.equal(row?.read_at, null);
+    assert.equal(row?.bot_verdict, 'off');
+    assert.equal(row?.spam_reason, null);
     assert.equal(row?.email, 'contact-test@e2e.alummahnow.net');
     assert.equal(row?.user_id, null);
     assert.equal(row?.notify_status, 'queued');

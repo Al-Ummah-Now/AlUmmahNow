@@ -252,7 +252,7 @@ describe('contact queue', () => {
     const s = contactSearchCondition(' Amina ');
     assert.deepEqual(s.args, ['%amina%', '%amina%', '%amina%', 'amina', 'Amina']);
     const { action, history } = contactQueueWhere(filters({ outcome: 'spam', actor: 'u', from: '2026-11-01' }));
-    assert.ok(action.sql.includes("(m.status IN ('new', 'open') OR m.send_failed_at IS NOT NULL)"));
+    assert.ok(action.sql.includes("(m.status IN ('open', 'in_progress') OR m.send_failed_at IS NOT NULL)"));
     assert.ok(action.sql.includes('m.created_at >= ?'));
     assert.ok(!action.sql.some((x) => x.includes('handled_by_id')));
     assert.ok(history.sql.includes('m.handled_at >= ?') && history.sql.includes('m.status = ?') && history.sql.includes('m.handled_by_id = ?'));

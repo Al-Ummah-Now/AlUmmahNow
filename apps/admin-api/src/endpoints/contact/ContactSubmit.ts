@@ -11,7 +11,7 @@ import type { Context } from 'hono';
 import type { AdminBindings } from '../../base/types';
 import { logger } from '../../lib/logger';
 import { verifyAccessToken } from '../../middleware/auth';
-import { type ContactInput, CONTACT_LIMITS, hashIp, isLikelyBot, rateLimitsFor, safeEqual, validateContactInput } from '../../lib/contact';
+import { type ContactBotVerdict, type ContactInput, CONTACT_LIMITS, hashIp, initialSpamReason, isLikelyBot, rateLimitsFor, safeEqual, validateContactInput } from '../../lib/contact';
 import { publishAdminLiveInBackground } from '../../lib/admin-live';
 import { insertContactMessage, recordDelivery } from '../../lib/contact-store';
 import { enqueueContactMail, reportContactMailFailure } from '../../lib/contact-mail-queue';
@@ -67,9 +67,13 @@ export async function contactSubmit(c: Context<{ Bindings: AdminBindings }>): Pr
   const id = crypto.randomUUID();
   const userAgent = (c.req.header('X-Client-User-Agent') || '').slice(0, CONTACT_LIMITS.userAgentMax) || null;
   const ipHash = await hashIp(c.req.header('X-Client-IP') || 'unknown', expected);
+  const value = (validation as { value: ContactInput }).value;
+  // The verdict is kept on the message (the inbox shows it); a failed check in monitor mode, or a sales pitch, is filed as spam
+  const botVerdict = human.outcome as ContactBotVerdict;
+  const spamReason = initialSpamReason(botVerdict, value.message);
   const stored = await insertContactMessage(
     env.REPORTS_DB,
-    { ...(validation as { value: ContactInput }).value, id, userId: user?.id ?? null, userAgent, ipHash, now: new Date() },
+    { ...value, id, userId: user?.id ?? null, userAgent, ipHash, now: new Date(), botVerdict, spamReason },
     rateLimitsFor(env.ENVIRONMENT),
   );
   if (!stored) {
@@ -78,7 +82,12 @@ export async function contactSubmit(c: Context<{ Bindings: AdminBindings }>): Pr
     return c.json({ success: false, error: 'rate_limited' }, 429, { 'Retry-After': '3600' });
   }
 
-  logger.debug('[Contact] Message received', { id, signedIn: !!user });
+  logger.debug('[Contact] Message received', { id, signedIn: !!user, botVerdict, spam: spamReason });
+  if (spamReason) {
+    // Filed as spam: no inbox notification and no acknowledgement (never mail a spammer's list)
+    publishAdminLiveInBackground(c, 'moderation', { kind: 'changed', key: 'contact', queue: 'contact' });
+    return c.json({ success: true, result: { id } }, 201);
+  }
   // Mail is sent by the queue consumer (lib/contact-mail-queue.ts), never on this request
   const jobs = (['notify', 'ack'] as const).map((kind) => ({ v: 1 as const, kind, messageId: id }));
   if (!(await enqueueContactMail(env, jobs))) {

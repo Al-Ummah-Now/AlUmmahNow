@@ -27,7 +27,7 @@ function fakeVideos(items: Record<string, unknown[]>, status = 200) {
 
 /** Just enough D1 for the contact and error-group reads. */
 function fakeDb() {
-  const contact = { id: 'msg_1', status: 'new', topic: 'other', name: 'Aisha', email: 'a@example.com', message: 'Hello   there', created_at: '2026-11-01T00:00:00Z' };
+  const contact = { id: 'msg_1', status: 'open', topic: 'other', name: 'Aisha', email: 'a@example.com', message: 'Hello   there', created_at: '2026-11-01T00:00:00Z' };
   const group = { id: 'grp_1', app: 'web', name: 'TypeError', message: 'x is undefined', route: '/watch', status: 'open' };
   const statement = (sql: string) => ({
     bind: () => statement(sql),

@@ -1,7 +1,7 @@
 /**
  * Contact messages as a queue (docs/admin/QUEUES.md).
  *
- * Action needed: messages still awaiting a reply (new, open) and any message
+ * Action needed: messages still awaiting a reply (open, in progress) and any message
  * with a delivery that finally failed (send_failed), whatever its status.
  * History: replied, closed and spam messages with nothing failed, with who
  * handled them and when (handled_* columns, migration 0019).
@@ -34,7 +34,7 @@ export function contactQueueWhere(f: QueueFilters): { action: Where; history: Wh
     }
     return w;
   };
-  const action = add(base(where()), "(m.status IN ('new', 'open') OR m.send_failed_at IS NOT NULL)");
+  const action = add(base(where()), "(m.status IN ('open', 'in_progress') OR m.send_failed_at IS NOT NULL)");
   addDateRange(action, 'm.created_at', f.from, f.to);
   const history = add(base(where()), "m.status IN ('replied', 'closed', 'spam') AND m.send_failed_at IS NULL");
   addDateRange(history, 'm.handled_at', f.from, f.to);

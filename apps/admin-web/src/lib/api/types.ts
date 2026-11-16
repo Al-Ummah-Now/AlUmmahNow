@@ -113,7 +113,11 @@ export interface AiUsageView {
 
 // ---------- Contact us inbox (admin-api /api/contact) ----------
 
-export type ContactStatus = 'new' | 'open' | 'replied' | 'closed' | 'spam';
+/** Read/unread is separate (read_at): a new message is open and unread. */
+export type ContactStatus = 'open' | 'in_progress' | 'replied' | 'closed' | 'spam';
+/** The Turnstile outcome when it was sent; null for older messages. */
+export type ContactBotVerdict = 'pass' | 'fail' | 'missing' | 'error' | 'off' | 'bypass';
+export type ContactSpamReason = 'turnstile' | 'content' | 'admin';
 export type ContactTopic = 'general' | 'account' | 'problem' | 'content' | 'partnership';
 
 export interface ContactMessage {
@@ -134,6 +138,10 @@ export interface ContactMessage {
   /** Set while an email of this message has finally failed to send */
   send_failed_at: string | null;
   delivery_error: string | null;
+  /** When it was first read; null = unread */
+  read_at?: string | null;
+  bot_verdict?: ContactBotVerdict | null;
+  spam_reason?: ContactSpamReason | null;
   created_at: string;
   updated_at: string;
 }
@@ -160,7 +168,12 @@ export interface ContactListResponse {
   offset: number;
 }
 
-export type ContactCounts = Record<ContactStatus | 'send_failed', number>;
+export type ContactCounts = Record<ContactStatus | 'send_failed' | 'unread', number>;
+/** One change for many messages (POST /api/contact/messages/bulk); exactly one field. */
+export type ContactBulkChange = { status: ContactStatus } | { read: boolean } | { assignee: string | null } | { delete: true };
+export interface ContactBulkResult { ok: string[]; missing: string[] }
+/** An admin a message can be assigned to (GET /api/contact/staff), shaped as a suggestion. */
+export interface ContactStaffItem { kind: 'user'; id: string; label: string; secondary: string | null; imageUrl: null }
 export type ContactMailKind = 'notify' | 'ack' | 'reply';
 
 // Upload processing health (admin-api /api/processing; incident 2026-11-10)

@@ -218,7 +218,8 @@ describe('contact store (D1)', () => {
     const later = new Date('2026-11-09T11:30:00.000Z');
     assert.equal(await insertContactMessage(db, newMessage('d', { now: later }), limits), true, 'a new hour');
     assert.equal(await insertContactMessage(db, newMessage('e', { now: new Date('2026-11-09T13:00:00.000Z') }), limits), false, 'day limit');
-    assert.equal((await getContactMessage(db, 'c'))?.status, 'new');
+    assert.equal((await getContactMessage(db, 'c'))?.status, 'open');
+    assert.equal((await getContactMessage(db, 'c'))?.read_at, null, 'a new message is unread');
     assert.equal(await getContactMessage(db, 'e'), null);
   });
 
@@ -251,7 +252,7 @@ describe('contact store (D1)', () => {
     assert.equal(await updateContactMessage(db, 'missing', { status: 'open' }, new Date()), false);
     assert.deepEqual((await listContactMessages(db, { assignee: 'me', viewerId: 'adm', limit: 20, offset: 0 })).messages.map((m) => m.id), ['m2']);
     assert.equal((await listContactMessages(db, { assignee: 'unassigned', limit: 20, offset: 0 })).total, 2);
-    assert.deepEqual(await contactCounts(db), { new: 2, open: 1, replied: 0, closed: 0, spam: 0, send_failed: 0 });
+    assert.deepEqual(await contactCounts(db), { open: 3, in_progress: 0, replied: 0, closed: 0, spam: 0, send_failed: 0, unread: 3 });
     await updateContactMessage(db, 'm2', { assignee: null }, new Date());
     assert.equal((await getContactMessage(db, 'm2'))?.assignee_id, null);
 
@@ -271,7 +272,7 @@ describe('contact store (D1)', () => {
     assert.equal(await getContactMessage(db, 'm2'), null);
     assert.equal((await listContactMessages(db, { limit: 20, offset: 0 })).total, 2);
     assert.equal((await listContactMessages(db, { q: 'bilal', limit: 20, offset: 0 })).total, 0);
-    assert.deepEqual(await contactCounts(db), { new: 2, open: 0, replied: 0, closed: 0, spam: 0, send_failed: 0 });
+    assert.deepEqual(await contactCounts(db), { open: 2, in_progress: 0, replied: 0, closed: 0, spam: 0, send_failed: 0, unread: 2 });
     assert.equal(await updateContactMessage(db, 'm2', { status: 'closed' }, new Date()), false, 'a deleted message cannot be changed');
     assert.deepEqual((await listDeletedContactMessages(db)).map((r) => [r.id, r.deleted_by, r.delete_reason, r.purge_requested_at]), [['m2', 'adm', 'spam', null]]);
     assert.equal((await listContactNotes(db, 'm2')).length, 2);

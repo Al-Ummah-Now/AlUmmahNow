@@ -9,6 +9,7 @@ import { ErrorReportingIdentity } from '@/lib/errors/ErrorReportingProvider';
 import { errorsBadgeCount } from './errors/filters';
 import { logger } from '@/lib/logger';
 import { UndoToastProvider } from '@/components/undo/UndoToast';
+import { LiveRefresh } from '@/components/LiveRefresh';
 import { PasskeyGraceBanner } from '@/components/PasskeyGraceBanner';
 import { adminSetupUrl } from '@/lib/passkeys';
 import { PATH_HEADER } from '@/lib/login-flow';
@@ -23,14 +24,14 @@ export default async function ProtectedLayout({
   // Verify authentication and admin role (redirects if not authorized)
   const session = await requireAdminRole();
 
-  // Contact messages nav item and its "new" badge (admins and super admins only)
+  // Contact messages nav item and its unread badge (admins and super admins only)
   let contactNew: number | null = null;
   if (canUseContactInbox(session.user.role)) {
     contactNew = 0;
     try {
       const counts = await getContactCounts();
-      // New messages and messages whose email failed: both need an admin
-      contactNew = counts.new + counts.send_failed;
+      // Unread messages (spam never counts); reading one clears it from the badge
+      contactNew = counts.unread;
     } catch (e) {
       logger.warn('[layout] Contact counts unavailable', { error: e instanceof Error ? e.message : String(e) });
     }
@@ -95,6 +96,8 @@ export default async function ProtectedLayout({
         }}
         badges={{ contact: contactNew, errors: errorsBadge }}
       >
+        {/* The unread badge follows new and read messages without a reload (admin live events) */}
+        {contactNew !== null && <LiveRefresh topics={['moderation']} queues={['contact']} />}
         {graceBanner}
         {children}
       </AdminShell>

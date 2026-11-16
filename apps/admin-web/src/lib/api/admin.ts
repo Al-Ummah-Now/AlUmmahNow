@@ -20,6 +20,9 @@ import type {
   ContactMessage,
   ContactNote,
   ContactStatus,
+  ContactBulkChange,
+  ContactBulkResult,
+  ContactStaffItem,
   ProcessingErrorsResponse,
   ProcessingVideosResponse,
   ThumbnailRun,
@@ -224,6 +227,7 @@ export interface ContactFilters {
   to?: string;
   q?: string;
   assignee?: string;
+  read?: 'unread' | 'read';
   limit?: number;
   offset?: number;
 }
@@ -245,12 +249,27 @@ export async function getContactMessage(id: string): Promise<{ message: ContactM
   return fetchAdmin<{ message: ContactMessage; notes: ContactNote[] }>(`/api/contact/messages/${encodeURIComponent(id)}`);
 }
 
-/** Status and/or assignee ("me" assigns to the caller, null unassigns). */
+/** Status, read/unread and/or assignee ("me", an admin's id from the roster, or null to unassign). */
 export async function updateContactMessage(
   id: string,
-  patch: { status?: ContactStatus; assignee?: 'me' | null },
+  patch: { status?: ContactStatus; read?: boolean; assignee?: string | null },
 ): Promise<ActionResult<{ message: ContactMessage }>> {
   return mutate(`/api/contact/messages/${encodeURIComponent(id)}`, 'PATCH', patch);
+}
+
+/** One change on many messages (the bulk bar); delete is soft (30 days, undo with restoreContactMessages). */
+export async function bulkContactMessages(ids: string[], change: ContactBulkChange): Promise<ActionResult<ContactBulkResult>> {
+  return mutate('/api/contact/messages/bulk', 'POST', { ids, ...change });
+}
+
+/** Undo of a delete: brings soft-deleted messages back. */
+export async function restoreContactMessages(ids: string[]): Promise<ActionResult<ContactBulkResult>> {
+  return mutate('/api/contact/messages/restore', 'POST', { ids });
+}
+
+/** Admins a message can be assigned to (the inbox roster), for the assignee picker. */
+export async function searchContactStaff(q: string): Promise<{ items: ContactStaffItem[] }> {
+  return fetchAdmin<{ items: ContactStaffItem[] }>(`/api/contact/staff?q=${encodeURIComponent(q)}&limit=20`);
 }
 
 export async function addContactNote(id: string, body: string): Promise<ActionResult<{ note: ContactNote }>> {
