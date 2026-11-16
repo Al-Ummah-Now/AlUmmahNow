@@ -12,6 +12,7 @@ import { formatDate, type MessageKey } from '@/i18n/translate';
 import { ErrorAlert, cardClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
 import { STATE_LABEL, STATE_TONE, TYPE_LABEL, actionsFor, bunnyLabel, createdAt, formatAge } from './labels';
+import { intlLocale } from '@/i18n/intl-locale';
 
 const thClass = 'text-start px-3 py-3 text-fg-muted font-medium whitespace-nowrap';
 const tdClass = 'px-3 py-3 align-top text-sm';
@@ -152,7 +153,7 @@ export function StaleUploadsTable({ items, locale, now }: { items: StaleUploadIt
                   <td className={tdClass}>{t(TYPE_LABEL[item.target])}</td>
                   <td className={tdClass}>
                     <div>{bunnyLabel(t, item.bunny)}</div>
-                    {typeof item.offset?.value === 'number' && <div className="text-fg-subtle text-xs tabular-nums" dir="ltr">{item.offset.value.toLocaleString(locale)} B</div>}
+                    {typeof item.offset?.value === 'number' && <div className="text-fg-subtle text-xs tabular-nums" dir="ltr">{item.offset.value.toLocaleString(intlLocale(locale))} B</div>}
                   </td>
                   <td className={`${tdClass} tabular-nums`} title={createdAt(item) ? formatDate(createdAt(item)!, locale, true) : undefined}>
                     {formatAge(t, createdAt(item), now)}

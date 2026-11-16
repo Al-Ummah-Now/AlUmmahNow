@@ -29,6 +29,7 @@ import { fieldClass, primaryButtonClass } from '@/components/ui';
 import { checkSiteSlug, getSite, grantSite, restoreSite, revokeSite, updateSite, type SiteDetail, type SiteListItem } from '@/lib/api/sites';
 import { UserName } from '@/components/audit/UserName';
 import { actionLabel } from '@/components/audit/audit-model';
+import { intlLocale } from '@/i18n/intl-locale';
 
 const STATUS_KEY: Record<SiteStatus, MessageKey> = {
   setup: 'scholarSites.statusSetup',
@@ -314,7 +315,7 @@ function SitePanel({ channelId, canManage, onChanged }: { channelId: string; can
         <ul className="text-sm space-y-1" data-testid="site-history">
           {detail?.history.map((h) => (
             <li key={h.id} className="text-fg-muted">
-              <span title={h.action}>{actionLabel(h.action, t)}</span> · {new Date(h.createdAt).toLocaleString(locale)} · <UserName id={h.actorId} showEmail={false} />
+              <span title={h.action}>{actionLabel(h.action, t)}</span> · {new Date(h.createdAt).toLocaleString(intlLocale(locale))} · <UserName id={h.actorId} showEmail={false} />
             </li>
           ))}
         </ul>

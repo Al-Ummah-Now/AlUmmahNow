@@ -12,6 +12,7 @@ const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ['minute', 60],
   ['second', 1],
 ];
+import { intlLocale } from '@/i18n/intl-locale';
 
 /** The largest whole unit for the gap (negative = in the past). Under 45 s is "now" (0 seconds). */
 export function relativeParts(date: Date, now: Date): { value: number; unit: Intl.RelativeTimeFormatUnit } {
@@ -28,12 +29,12 @@ export function formatRelative(value: string | number | Date, locale: string, no
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
   const { value: amount, unit } = relativeParts(date, now);
-  return new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }).format(amount, unit);
+  return new Intl.RelativeTimeFormat(intlLocale(locale), { numeric: 'auto' }).format(amount, unit);
 }
 
 /** The exact time for the title: date and time in the admin's language, with the time zone. */
 export function formatExact(value: string | number | Date, locale: string): string {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
-  return new Intl.DateTimeFormat(locale, { dateStyle: 'full', timeStyle: 'long' }).format(date);
+  return new Intl.DateTimeFormat(intlLocale(locale), { dateStyle: 'full', timeStyle: 'long' }).format(date);
 }

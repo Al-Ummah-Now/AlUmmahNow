@@ -4,6 +4,7 @@
 import en, { type Messages } from './messages/en';
 import ar from './messages/ar';
 import type { Locale } from './config';
+import { intlLocale } from './intl-locale';
 
 export type { Messages };
 
@@ -37,7 +38,7 @@ function lookup(messages: Messages, key: string): string | undefined {
 
 export function createTranslator(locale: Locale): Translator {
   const messages = getMessages(locale);
-  const numberFormat = new Intl.NumberFormat(locale);
+  const numberFormat = new Intl.NumberFormat(intlLocale(locale));
   return (key, params) => {
     const template = lookup(messages, key) ?? lookup(en, key) ?? key;
     if (!params) return template;
@@ -59,7 +60,7 @@ export function translateDynamic(t: Translator, prefix: string, value: string): 
 export function formatDate(value: string | number | Date, locale: Locale, withTime = false): string {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
-  return new Intl.DateTimeFormat(locale, {
+  return new Intl.DateTimeFormat(intlLocale(locale), {
     dateStyle: 'medium',
     ...(withTime ? { timeStyle: 'short' } : {}),
     timeZone: 'UTC',
@@ -75,9 +76,9 @@ export function hourDate(hour: string): Date {
 export function formatHour(hour: string, locale: Locale): string {
   const date = hourDate(hour);
   if (Number.isNaN(date.getTime())) return hour;
-  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', hour: 'numeric', timeZone: 'UTC' }).format(date);
+  return new Intl.DateTimeFormat(intlLocale(locale), { day: 'numeric', month: 'short', hour: 'numeric', timeZone: 'UTC' }).format(date);
 }
 
 export function formatNumber(value: number, locale: Locale): string {
-  return new Intl.NumberFormat(locale).format(value);
+  return new Intl.NumberFormat(intlLocale(locale)).format(value);
 }

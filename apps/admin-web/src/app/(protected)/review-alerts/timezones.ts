@@ -5,6 +5,7 @@
  * for the zones staff most often use: Intl names countries and zones but not cities).
  * Pure apart from Intl; the list is built once per language and kept.
  */
+import { intlLocale } from '@/i18n/intl-locale';
 
 export interface ZoneOption {
   id: string;
@@ -101,7 +102,7 @@ export function cityFromId(id: string): string {
 
 function zonePart(locale: string, timeZone: string, timeZoneName: Intl.DateTimeFormatOptions['timeZoneName'], at: Date): string {
   try {
-    return new Intl.DateTimeFormat(locale, { timeZone, timeZoneName }).formatToParts(at).find((p) => p.type === 'timeZoneName')?.value ?? '';
+    return new Intl.DateTimeFormat(intlLocale(locale), { timeZone, timeZoneName }).formatToParts(at).find((p) => p.type === 'timeZoneName')?.value ?? '';
   } catch {
     return '';
   }

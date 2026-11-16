@@ -8,6 +8,7 @@ import type { MessageKey, Translator } from '@/i18n/translate';
 import { deliveryFormats } from '@/app/(protected)/delivery/format';
 import { Chip, type ChipTone } from './parts';
 import { R2Extras } from './processing';
+import { intlLocale } from '@/i18n/intl-locale';
 
 export type R2BadgeState = AdminVideoR2Badge['status'] | 'none';
 
@@ -51,7 +52,7 @@ export function R2Badge({ r2, t, large = false, prefix = true, testId = 'r2-badg
 function bytesText(n: number, locale: string): string {
   const f = deliveryFormats(locale);
   if (n >= 1024 ** 3) return f.gb(n / 1024 ** 3);
-  const mb = new Intl.NumberFormat(locale, { style: 'unit', unit: 'megabyte', unitDisplay: 'short', maximumFractionDigits: 1 });
+  const mb = new Intl.NumberFormat(intlLocale(locale), { style: 'unit', unit: 'megabyte', unitDisplay: 'short', maximumFractionDigits: 1 });
   return mb.format(n / 1024 ** 2);
 }
 
@@ -85,7 +86,7 @@ export function R2FailureDetails({ failure, t, locale, last = false }: { failure
   ];
   const at = new Date(failure.at);
   if (!Number.isNaN(at.getTime())) {
-    rows.push({ key: 'at', label: t('mediaDelivery.failureAt'), value: new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'medium' }).format(at) });
+    rows.push({ key: 'at', label: t('mediaDelivery.failureAt'), value: new Intl.DateTimeFormat(intlLocale(locale), { dateStyle: 'medium', timeStyle: 'medium' }).format(at) });
   }
   if (failure.source?.file || typeof failure.source?.bytes === 'number') {
     const file = failure.source.file ?? '';
@@ -137,7 +138,7 @@ export function R2Status({ r2, t, locale }: { r2: AdminVideoR2 | null | undefine
     );
   }
   const f = deliveryFormats(locale);
-  const when = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' });
+  const when = new Intl.DateTimeFormat(intlLocale(locale), { dateStyle: 'medium', timeStyle: 'short' });
   const date = (v: string | undefined) => {
     if (!v) return null;
     const d = new Date(v);
