@@ -227,6 +227,7 @@ export function VideoKeyboardHelp({ isOpen, onClose, language }: VideoKeyboardHe
     >
       <div
         ref={modalRef}
+        data-slot="dialog-content"
         className="bg-card border border-border rounded-lg shadow-lg max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >

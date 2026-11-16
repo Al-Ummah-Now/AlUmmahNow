@@ -98,7 +98,7 @@ export function TimeZoneField({ value, zones, onChange, testId }: { value: strin
         </span>
         <div
           hidden={!open}
-          className="absolute start-0 top-full z-30 mt-1 w-full min-w-72 overflow-hidden rounded border border-border bg-surface shadow-lg"
+          className="aun-glass-panel absolute start-0 top-full z-30 mt-1 w-full min-w-72 overflow-hidden !rounded-[var(--aun-radius-menu)]"
           onMouseDown={(e) => e.preventDefault()}
         >
           <ul ref={listRef} id={`${ids}-tz-list`} role="listbox" aria-label={t('reviewAlerts.timeZone')} className="max-h-80 overflow-auto py-1" data-testid={testId ? `${testId}-list` : undefined}>

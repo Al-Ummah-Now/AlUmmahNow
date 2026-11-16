@@ -79,7 +79,7 @@ export const SearchFilters: React.FC<SearchFiltersProps> = ({
 
       {/* Filter Panel */}
       {isOpen && (
-        <div className="absolute top-full left-0 mt-2 w-80 bg-white border border-gray-300 rounded-lg shadow-lg p-4 z-50">
+        <div data-popover="" className="absolute top-full left-0 mt-2 w-80 bg-white border border-gray-300 rounded-lg shadow-lg p-4 z-50">
           <div className="space-y-4">
             {/* Category Filter */}
             <div>

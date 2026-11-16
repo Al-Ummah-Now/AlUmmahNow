@@ -7,10 +7,17 @@ import { CheckIcon, ChevronRightIcon, CircleIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { bandCollisionPadding } from "@/lib/ui/visible-band"
 
+/** The page's direction (html[dir]): Radix otherwise stamps dir="ltr" on the menu, so Arabic menus put icons on the wrong side. */
+export function documentDir(): 'ltr' | 'rtl' | undefined {
+  if (typeof document === 'undefined') return undefined
+  return document.documentElement.dir === 'rtl' ? 'rtl' : 'ltr'
+}
+
 function DropdownMenu({
+  dir,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
-  return <DropdownMenuPrimitive.Root data-slot="dropdown-menu" {...props} />
+  return <DropdownMenuPrimitive.Root data-slot="dropdown-menu" dir={dir ?? documentDir()} {...props} />
 }
 
 function DropdownMenuPortal({

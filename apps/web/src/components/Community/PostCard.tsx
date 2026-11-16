@@ -111,10 +111,10 @@ export default function PostCard({
   };
 
   return (
-    <article id={`post-${post.id}`} data-post-id={post.id} className="scroll-mt-24 bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+    <article id={`post-${post.id}`} data-post-id={post.id} className="aun-row-glass scroll-mt-24">
       {/* Post Header */}
       <div className={cn(
-        'flex items-start gap-3 p-4 border-b border-gray-100 dark:border-gray-700',
+        'flex items-start gap-3 p-4 border-b border-[var(--fanous-color-divider)]',
         // Direction comes from the RTL container (dir=rtl); no manual reversal
       )}>
         {/* Channel Avatar */}

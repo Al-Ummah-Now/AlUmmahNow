@@ -73,7 +73,8 @@ export function ConfirmDialog({
         />
         <AlertDialogPrimitive.Content
           data-testid={testId}
-          className="fixed inset-0 z-50 m-auto grid h-fit w-[calc(100%-2rem)] max-w-md gap-4 rounded-lg border border-[var(--fanous-c-dialog-border)] bg-[var(--fanous-c-dialog-bg)] p-6 text-start shadow-lg"
+          data-slot="alert-dialog-content"
+          className="fixed inset-0 z-50 m-auto grid h-fit w-[calc(100%-2rem)] max-w-md gap-4 p-6 text-start"
         >
           <AlertDialogPrimitive.Title className="text-lg font-semibold text-[var(--fanous-c-dialog-text)]">
             {title}

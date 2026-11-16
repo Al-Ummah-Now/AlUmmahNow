@@ -211,6 +211,7 @@ export function CalendarEvent({
   const tooltipContent = useMemo(() => (
     <div
       aria-hidden="true"
+      data-popover=""
       className="fixed z-[9999] bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden pointer-events-none"
       style={{
         width: '280px',

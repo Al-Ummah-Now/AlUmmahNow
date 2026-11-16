@@ -2,16 +2,20 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * The shared card: frosted glass with the golden edge and glow (packages/fanous-tokens/surfaces,
+ * styled by theme/system.css [data-slot=card]). `glass="lite"` for rows of long lists: the same look
+ * without the blur (one compositor layer per row is too costly).
+ */
 const Card = React.forwardRef<
   HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
+  React.HTMLAttributes<HTMLDivElement> & { glass?: "lite" }
+>(({ className, glass, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn(
-      "rounded-xl border bg-card text-card-foreground shadow",
-      className
-    )}
+    data-slot="card"
+    data-glass={glass}
+    className={cn("text-card-foreground", className)}
     {...props}
   />
 ))
@@ -61,7 +65,7 @@ const CardFooter = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn("flex items-center p-6 pt-0", className)} {...props} />
+  <div ref={ref} className={cn("aun-actions px-6 pb-6", className)} {...props} />
 ))
 CardFooter.displayName = "CardFooter"
 

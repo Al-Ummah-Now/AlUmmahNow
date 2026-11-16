@@ -7,7 +7,12 @@ import { Check, ChevronDown, ChevronUp } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { bandCollisionPadding } from "@/lib/ui/visible-band"
 
-const Select = SelectPrimitive.Root
+import { documentDir } from "./dropdown-menu"
+
+/** Takes the page's direction (Radix would stamp dir="ltr" on the list otherwise). */
+const Select = ({ dir, ...props }: React.ComponentProps<typeof SelectPrimitive.Root>) => (
+  <SelectPrimitive.Root dir={dir ?? documentDir()} {...props} />
+)
 
 const SelectGroup = SelectPrimitive.Group
 

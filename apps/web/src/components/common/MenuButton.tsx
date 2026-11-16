@@ -12,6 +12,8 @@ export interface MenuButtonItem {
   /** Renders as menuitemradio with aria-checked when defined. */
   checked?: boolean;
   testId?: string;
+  /** A destructive action (delete, remove): the theme's danger colour, icon included. */
+  danger?: boolean;
   onSelect: () => void | Promise<void>;
 }
 
@@ -220,6 +222,7 @@ export function MenuButton({ label, children, items, buttonClassName = '', menuC
               aria-checked={item.checked === undefined ? undefined : item.checked}
               tabIndex={-1}
               data-testid={item.testId}
+              data-danger={item.danger ? '' : undefined}
               onClick={async (e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -229,7 +232,7 @@ export function MenuButton({ label, children, items, buttonClassName = '', menuC
               // Theme menu row (.mi): token hover/focus; no bg-gray-* class (the theme turns those buttons primary)
               className="mi w-full py-2 text-start focus:outline-none"
             >
-              {item.icon && <span className="flex-shrink-0" aria-hidden="true">{item.icon}</span>}
+              {item.icon && <span className="mi-ic flex-shrink-0" aria-hidden="true">{item.icon}</span>}
               <span className="min-w-0">
                 <span className={`block ${item.checked ? 'font-semibold' : ''}`}>{item.label}</span>
                 {item.description && <span className="block text-xs" style={{ color: 'var(--fanous-c-menu-muted)' }}>{item.description}</span>}

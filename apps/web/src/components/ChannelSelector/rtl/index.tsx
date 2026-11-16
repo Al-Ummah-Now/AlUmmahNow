@@ -118,6 +118,7 @@ export default function ChannelSelectorRTL() {
 
           {/* Menu */}
           <div
+            data-popover=""
             className="absolute right-0 mt-2 w-72 rounded-lg bg-white dark:bg-gray-900 shadow-lg border border-gray-200 dark:border-gray-700 z-50"
             role="menu"
             aria-orientation="vertical"
