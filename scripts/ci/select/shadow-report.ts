@@ -144,7 +144,7 @@ export function markdown(r: Report): string {
     lines.push('None.');
   }
   lines.push('', '### Runs', '', '| PR | Commit | Plan | Suites | Skip jobs | Skip min | Reason |', '|---|---|---|---|---|---|---|');
-  for (const row of r.rows) lines.push(`| #${row.pr} | ${row.oid} | ${row.mode} | ${row.suites} | ${row.skipJobs} | ${row.skipMinutes} | ${row.reason.replace(/\|/g, '\\|')} |`);
+  for (const row of r.rows) lines.push(`| #${row.pr} | ${row.oid} | ${row.mode} | ${row.suites} | ${row.skipJobs} | ${row.skipMinutes} | ${row.reason.replace(/[\\|]/g, (c) => `\\${c}`)} |`);
   return `${lines.join('\n')}\n`;
 }
 
