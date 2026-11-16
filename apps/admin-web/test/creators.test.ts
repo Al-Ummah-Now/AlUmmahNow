@@ -21,7 +21,7 @@ import {
   tierFormPayload,
   tierToForm,
   validateTierForm,
-  type TierFormValues, tierLabel } from '../src/lib/creator-tiers';
+  type TierFormValues, tierLabel, arabicMissing } from '../src/lib/creator-tiers';
 import { memberCounts } from '../src/components/creators/CreatorTiersView';
 import { createTranslator } from '../src/i18n/translate';
 import { I18nProvider } from '../src/i18n/I18nProvider';
@@ -384,5 +384,14 @@ describe('the English name is English (owner review 2026-11-16)', () => {
     assert.equal(validateTierForm(form).name?.key, 'creators.errorNameNotEnglish');
     assert.equal(validateTierForm({ ...form, name: 'Gold' }).name, undefined);
     assert.equal(validateTierForm({ ...form, name: 'Gold ذهبي' }).name, undefined);
+  });
+});
+
+describe('legacy tiers without Arabic', () => {
+  it('are marked "Arabic missing" (no silent fallback) until both Arabic fields are set', () => {
+    assert.equal(arabicMissing({ nameAr: null, descriptionAr: 'وصف' }), true);
+    assert.equal(arabicMissing({ nameAr: 'ذهبي', descriptionAr: ' ' }), true);
+    assert.equal(arabicMissing({ nameAr: 'ذهبي', descriptionAr: 'وصف' }), false);
+    assert.equal(createTranslator('ar')('creators.arabicMissing'), 'العربية ناقصة');
   });
 });

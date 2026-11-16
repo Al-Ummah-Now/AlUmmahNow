@@ -72,6 +72,13 @@ export function tierLabel(tier: { name: string; nameAr?: string | null }, locale
 
 /** Text with Arabic letters and no Latin letter or digit (the English name may not be that). */
 export const isArabicOnly = (text: string) => /[\u0600-\u06FF]/.test(text) && !/[A-Za-z0-9]/.test(text);
+/**
+ * A tier saved before both languages were required (owner rule 2026-11-16) with its Arabic name or
+ * Arabic description missing: the Tiers page marks it ("Arabic missing") instead of falling back silently.
+ */
+export function arabicMissing(tier: { nameAr?: string | null; descriptionAr?: string | null }): boolean {
+  return !tier.nameAr?.trim() || !tier.descriptionAr?.trim();
+}
 
 export const ORIGIN_LABEL: Record<CreatorTierOrigin, MessageKey> = {
   admin: 'creators.originAdmin',

@@ -1687,6 +1687,8 @@ const ar: Messages = {
     tierSortOrder: 'الرتبة',
     helpSortOrder: 'ترتّب صفحة الترقية وكل قوائم اختيار الفئات، الأدنى أولًا. الترقية هي فئة رتبتها أعلى من فئة المستخدم الحالية. من {min} إلى {max}.',
     errorNameNotEnglish: 'اكتب الاسم بالإنجليزية بحروف إنجليزية؛ للاسم العربي حقله الخاص.',
+    arabicMissing: 'العربية ناقصة',
+    arabicMissingHelp: 'أضف الاسم والوصف بالعربية: تحتاج الفئة اللغتين.',
     errorNameAr: 'أدخل الاسم بالعربية.',
     errorDescription: 'أدخل الوصف.',
     errorDescriptionAr: 'أدخل الوصف بالعربية.',

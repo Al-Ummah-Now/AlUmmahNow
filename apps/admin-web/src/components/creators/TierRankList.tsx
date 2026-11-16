@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { CreatorTier } from '@al-ummah/shared-types';
 import type { ActionResult } from '@/lib/api/errors';
-import { isUnexpectedFailure, tierActionMessage, tierLabel } from '@/lib/creator-tiers';
+import { arabicMissing, isUnexpectedFailure, tierActionMessage, tierLabel } from '@/lib/creator-tiers';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { cardClass } from '@/components/ui';
 import { Chip, smallButtonClass } from '@/components/content/parts';
@@ -117,6 +117,7 @@ export function TierRankList({ tiers, defaultTierId, canManage, reorder }: { tie
               <span className="w-6 text-sm text-fg-muted tabular-nums">{i + 1}</span>
               <span className="font-medium text-fg">{tierLabel(tier, locale)}</span>
               {id === defaultTierId && <Chip tone="info">{t('creators.tierDefaultChip')}</Chip>}
+              {arabicMissing(tier) && <Chip tone="warn" testId={`tiers-rank-${id}-arabic-missing`}>{t('creators.arabicMissing')}</Chip>}
               {editable && (
                 <span className="ms-auto flex gap-1">
                   <button type="button" className={smallButtonClass} disabled={busy || i === 0} onClick={() => move(id, -1)} aria-label={t('creators.rankMoveUp', { tier: tierLabel(tier, locale) })} data-testid={`tiers-rank-${id}-up`}>
