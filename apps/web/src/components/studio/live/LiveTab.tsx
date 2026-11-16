@@ -177,25 +177,31 @@ export function LiveTab({ locale, channelId, role }: Props) {
       {status === 'ready' && items.length > 0 && (
         <ul className="divide-y divide-border rounded-lg border border-border" data-testid="studio-live-list">
           {items.map((row) => (
-            <li key={row.id} className="flex flex-wrap items-center gap-3 p-3" data-testid="studio-live-row" data-stream-id={row.id}>
-              <div className="min-w-0 flex-1">
+            <li key={row.id} className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:gap-3" data-testid="studio-live-row" data-stream-id={row.id}>
+              {/* Phones: the title and date take the full row, the status and actions go under them */}
+              <div className="min-w-0 sm:flex-1">
                 <p className="truncate font-medium text-foreground" dir="auto">{row.title}</p>
-                <p className="text-xs text-muted-foreground">
-                  {row.dateCreated ? text.created.replace('{date}', dateFormat.format(new Date(row.dateCreated))) : ''}
-                </p>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <Badge variant={row.status === 'live' ? 'destructive' : 'secondary'} data-testid="studio-live-status">{text.status[row.status] ?? row.status}</Badge>
+                  <p className="text-xs text-muted-foreground">
+                    {row.dateCreated ? text.created.replace('{date}', dateFormat.format(new Date(row.dateCreated))) : ''}
+                  </p>
+                </div>
               </div>
-              <Badge variant={row.status === 'live' ? 'destructive' : 'secondary'} data-testid="studio-live-status">{text.status[row.status] ?? row.status}</Badge>
-              {canManage && (
-                <Button asChild variant="outline" className="min-h-11">
-                  <Link href={studioLiveHref(locale, channelId, row.id)} data-testid="studio-live-manage">{row.status === 'live' ? text.manageLive : row.status === 'ended' || row.status === 'cancelled' ? text.details : text.manage}</Link>
+              <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
+                {canManage && (
+                  <Button asChild variant="outline" className="min-h-11">
+                    {/* With the month's hours used up a stream that isn't live can't start: no "Go live" offer, its details instead */}
+                    <Link href={studioLiveHref(locale, channelId, row.id)} data-testid="studio-live-manage">{row.status === 'live' ? text.manageLive : row.status === 'ended' || row.status === 'cancelled' || blocked ? text.details : text.manage}</Link>
+                  </Button>
+                )}
+                <Button asChild variant="ghost" className="min-h-11">
+                  <Link href={`/${locale}/live/${encodeURIComponent(row.id)}`}>{text.watch}</Link>
                 </Button>
-              )}
-              <Button asChild variant="ghost" className="min-h-11">
-                <Link href={`/${locale}/live/${encodeURIComponent(row.id)}`}>{text.watch}</Link>
-              </Button>
-              {canManage && (
-                <Button variant="ghost" className="min-h-11" onClick={() => setPendingDelete(row)} data-testid="studio-live-delete">{text.delete}</Button>
-              )}
+                {canManage && (
+                  <Button variant="ghost" className="min-h-11" onClick={() => setPendingDelete(row)} data-testid="studio-live-delete">{text.delete}</Button>
+                )}
+              </div>
             </li>
           ))}
         </ul>
