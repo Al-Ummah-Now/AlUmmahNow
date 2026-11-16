@@ -1572,7 +1572,7 @@ export const AR_TRANSLATIONS: AppTranslations = {
 
   subtitle: {
     title: 'الترجمات',
-    subtitles: 'الترجمات / التعليقات',
+    subtitles: 'الترجمات والتسميات التوضيحية',
     subtitlesDescription: 'رفع ملفات ترجمة بلغات متعددة',
     upload: 'رفع',
     language: 'اللغة',
