@@ -5,7 +5,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { INCIDENT_IMPACTS, INCIDENT_STATUSES, MAINTENANCE_STATUSES } from '@al-ummah/shared-types';
-import { publicStatusUrl } from '../src/app/(protected)/status/model';
+import { deliveryErrorKey, publicStatusUrl } from '../src/app/(protected)/status/model';
 import { visibleItems, type NavAccess } from '../src/components/shell/nav-model';
 import en from '../src/i18n/messages/en';
 import ar from '../src/i18n/messages/ar';
@@ -39,5 +39,14 @@ describe('status admin page', () => {
       assert.ok(en.statusPage.checks[k] && ar.statusPage.checks[k], k);
     }
     assert.ok(en.statusPage.adminOnly && ar.statusPage.adminOnly);
+  });
+  it('shows a failed webhook delivery in the admin language, never the raw English reason', () => {
+    assert.deepEqual(deliveryErrorKey('webhook answered 503'), { key: 'statusPage.subs.deliveryHttp', status: '503' });
+    assert.deepEqual(deliveryErrorKey('The operation was aborted due to timeout'), { key: 'statusPage.subs.deliveryUnreachable' });
+    for (const m of [en, ar]) {
+      assert.match(m.statusPage.subs.deliveryHttp, /\{status\}/);
+      assert.ok(m.statusPage.subs.deliveryUnreachable.length > 0);
+    }
+    assert.doesNotMatch(ar.statusPage.subs.deliveryHttp, /answered|webhook/);
   });
 });

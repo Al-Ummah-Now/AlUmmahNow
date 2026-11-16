@@ -2916,6 +2916,8 @@ const en = {
       lastDelivery: 'Last delivery',
       never: 'No deliveries yet',
       deliveryStates: { queued: 'Queued', sent: 'Delivered', sunk: 'Delivered (test address)', skipped: 'Skipped', failed: 'Failed' },
+      deliveryHttp: 'the webhook answered HTTP {status}',
+      deliveryUnreachable: 'the webhook could not be reached',
       deleteWebhook: 'Delete',
       deleteTitle: 'Delete the webhook “{name}”?',
       deleteBody: 'It stops getting status updates at once. This cannot be undone.',

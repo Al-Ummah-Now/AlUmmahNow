@@ -15,6 +15,7 @@ import { smallButtonClass } from '@/components/content/parts';
 import { addStatusWebhook, deleteStatusWebhook, removeStatusSubscriber, retryStatusNotification } from '@/lib/api/status';
 import type { StatusSubscriptions as Subs } from '@/lib/api/status-types';
 import { intlLocale } from '@/i18n/intl-locale';
+import { deliveryErrorKey } from './model';
 
 const labelClass = 'block text-sm font-medium text-fg mb-1';
 const STATE_CLASS: Record<string, string> = { sent: 'text-success-fg', sunk: 'text-success-fg', failed: 'text-danger-fg', queued: 'text-fg-muted', skipped: 'text-fg-muted' };
@@ -56,6 +57,10 @@ function Webhooks({ items }: { items: Subs['webhooks'] }) {
   const { t, locale } = useLanguage();
   const { run, busy, error, message } = useContentAction();
   const [secret, setSecret] = useState<string | null>(null);
+  const deliveryErrorText = (error: string) => {
+    const e = deliveryErrorKey(error);
+    return e.key === 'statusPage.subs.deliveryHttp' ? t(e.key, { status: e.status }) : t(e.key);
+  };
 
   async function add(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -87,7 +92,7 @@ function Webhooks({ items }: { items: Subs['webhooks'] }) {
                   {w.last ? (
                     <>
                       <span className={`font-medium ${STATE_CLASS[w.last.status] ?? ''}`} data-testid="status-webhook-last">{t(`statusPage.subs.deliveryStates.${w.last.status}` as MessageKey)}</span> · {formatDate(w.last.at, locale, true)}
-                      {w.last.error && w.last.status === 'failed' && <> · <bdi dir="ltr">{w.last.error}</bdi></>}
+                      {w.last.error && w.last.status === 'failed' && <> · <span data-testid="status-webhook-error">{deliveryErrorText(w.last.error)}</span></>}
                     </>
                   ) : (
                     t('statusPage.subs.never')

@@ -2915,6 +2915,8 @@ const ar: Messages = {
       lastDelivery: 'آخر تسليم',
       never: 'لا تسليمات بعد',
       deliveryStates: { queued: 'في الانتظار', sent: 'سُلّم', sunk: 'سُلّم (عنوان اختبار)', skipped: 'تُخطّي', failed: 'تعذّر' },
+      deliveryHttp: 'ردّ خطاف الويب بالرمز \u2068HTTP {status}\u2069',
+      deliveryUnreachable: 'تعذّر الوصول إلى خطاف الويب',
       deleteWebhook: 'حذف',
       deleteTitle: 'حذف خطاف الويب «{name}»؟',
       deleteBody: 'تتوقف عنه تحديثات الحالة فورًا. لا يمكن التراجع عن ذلك.',
