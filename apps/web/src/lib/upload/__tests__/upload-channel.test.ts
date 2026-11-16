@@ -36,7 +36,12 @@ describe('tierAllowedChannels (#759)', () => {
   });
 
   it('keeps owned channels with their own tier, and member channels only where the owner has one', () => {
-    expect(ids(tierAllowedChannels(all, ME, { tier: { id: 'creator' }, uploadChannelIds: ['c-adm'] }))).toEqual(['c-own', 'c-own2', 'c-adm']);
+    expect(ids(tierAllowedChannels(all, ME, { tier: { unlimited: false, uploads: true }, uploadChannelIds: ['c-adm'] }))).toEqual(['c-own', 'c-own2', 'c-adm']);
+  });
+
+  it('drops owned channels when the own tier allows no uploads (Member), and trusts an older API without the flag', () => {
+    expect(ids(tierAllowedChannels(all, ME, { tier: { unlimited: false, uploads: false }, uploadChannelIds: ['c-adm'] }))).toEqual(['c-adm']);
+    expect(ids(tierAllowedChannels(all, ME, { tier: { unlimited: false }, uploadChannelIds: [] }))).toEqual(['c-own', 'c-own2']);
   });
 
   it('drops nothing without an answer, and keeps member channels when the API sends no list', () => {

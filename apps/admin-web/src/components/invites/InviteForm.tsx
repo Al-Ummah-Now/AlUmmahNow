@@ -19,6 +19,7 @@ import { ActionFeedback, useContentAction } from '@/components/content/actions';
 import { Notice, SectionCard, smallButtonClass } from '@/components/content/parts';
 import { EmailLanguageChoice, type EmailLanguage } from '@/components/EmailLanguageChoice';
 import { parseDigits } from '@al-ummah/shared-types';
+import { tierLabel } from '@/lib/creator-tiers';
 
 /** One @, something before it, a dotted domain after it, no spaces; linear time (no backtracking regex). */
 function isEmailAddress(value: string): boolean {
@@ -31,7 +32,7 @@ function isEmailAddress(value: string): boolean {
 }
 
 interface Props {
-  tiers: Array<{ id: string; name: string }>;
+  tiers: Array<{ id: string; name: string; nameAr?: string | null }>;
   canPlan: boolean;
   canCreateChannels: boolean;
   canTransfer: boolean;
@@ -179,7 +180,7 @@ export function InviteForm({ tiers, canPlan, canCreateChannels, canTransfer }: P
               <select id={`${ids}-plan`} value={tierId} onChange={(e) => setTierId(e.target.value)} aria-describedby={`${ids}-plan-hint`} className={fieldClass} data-testid="invite-plan">
                 <option value="">{t('invites.planNone')}</option>
                 {tiers.map((tier) => (
-                  <option key={tier.id} value={tier.id}>{tier.name}</option>
+                  <option key={tier.id} value={tier.id}>{tierLabel(tier, uiLocale)}</option>
                 ))}
               </select>
               <span id={`${ids}-plan-hint`} className="text-xs text-fg-subtle">{t('invites.planHint')}</span>

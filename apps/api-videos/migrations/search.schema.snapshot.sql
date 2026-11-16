@@ -42,12 +42,23 @@
 --   apps/api-videos/migrations/search/0060_live_tiers.sql
 --   apps/api-videos/migrations/search/0061_caption_translation.sql
 --   apps/api-videos/migrations/search/0062_transcript_search.sql
+--   apps/api-videos/migrations/search/0063_member_tier_and_tier_requests.sql
+--   apps/api-videos/migrations/search/0064_billing.sql
 
 CREATE TABLE admin_comment_sigs (video_id TEXT PRIMARY KEY, sig TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE admin_comments (video_id TEXT NOT NULL, comment_id TEXT NOT NULL, parent_id TEXT, user_id TEXT, channel_id TEXT, text TEXT NOT NULL DEFAULT '', is_hidden INTEGER NOT NULL DEFAULT 0, status TEXT, created_at TEXT, PRIMARY KEY (video_id, comment_id)) WITHOUT ROWID;
 CREATE TABLE admin_deletions (kind TEXT NOT NULL, target_id TEXT NOT NULL, parent_id TEXT, title TEXT NOT NULL DEFAULT '', owner_id TEXT, channel_id TEXT, deleted_at TEXT NOT NULL, deleted_by TEXT NOT NULL, reason TEXT, purge_requested_at TEXT, purge_requested_by TEXT, purge_started_at TEXT, purge_job_id TEXT, purged_at TEXT, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, PRIMARY KEY (kind, target_id)) WITHOUT ROWID;
 CREATE TABLE admin_job_users (user_id TEXT NOT NULL, job_id TEXT NOT NULL, PRIMARY KEY (user_id, job_id)) WITHOUT ROWID;
 CREATE TABLE admin_jobs (id TEXT PRIMARY KEY, kind TEXT NOT NULL, target_kind TEXT NOT NULL, target_id TEXT NOT NULL, params TEXT NOT NULL DEFAULT '{}', status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT, result TEXT, actor_id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, finished_at TEXT);
+CREATE TABLE billing_checkouts (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, tier_id TEXT NOT NULL, price_id TEXT NOT NULL, provider TEXT NOT NULL, mode TEXT NOT NULL, provider_ref TEXT, status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'completed', 'expired')), created_at TEXT NOT NULL, completed_at TEXT) WITHOUT ROWID;
+CREATE TABLE billing_customers (provider TEXT NOT NULL, mode TEXT NOT NULL, provider_ref TEXT NOT NULL, user_id TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY (provider, mode, provider_ref)) WITHOUT ROWID;
+CREATE TABLE billing_events (id TEXT PRIMARY KEY, provider TEXT NOT NULL, mode TEXT NOT NULL, event_id TEXT NOT NULL, type TEXT NOT NULL, payload TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'processed', 'ignored', 'failed')), error TEXT, user_id TEXT, subscription_id TEXT, job_id TEXT, received_at TEXT NOT NULL, processed_at TEXT) WITHOUT ROWID;
+CREATE TABLE billing_payments (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, subscription_id TEXT, provider TEXT NOT NULL, mode TEXT NOT NULL, provider_ref TEXT NOT NULL, status TEXT NOT NULL CHECK (status IN ('succeeded', 'failed', 'refunded', 'partially_refunded')), currency TEXT NOT NULL, amount INTEGER NOT NULL, refunded_amount INTEGER NOT NULL DEFAULT 0, receipt_url TEXT, occurred_at TEXT NOT NULL) WITHOUT ROWID;
+CREATE TABLE billing_price_links (price_id TEXT NOT NULL, provider TEXT NOT NULL, mode TEXT NOT NULL, provider_ref TEXT, provider_product_ref TEXT, checkout_url TEXT, synced_amount INTEGER, synced_at TEXT, error TEXT, PRIMARY KEY (price_id, provider, mode)) WITHOUT ROWID;
+CREATE TABLE billing_prices (id TEXT PRIMARY KEY, tier_id TEXT NOT NULL, period TEXT NOT NULL CHECK (period IN ('month', 'year')), currency TEXT NOT NULL, amount INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1, updated_at TEXT NOT NULL, updated_by TEXT NOT NULL) WITHOUT ROWID;
+CREATE TABLE billing_providers (id TEXT PRIMARY KEY, enabled INTEGER NOT NULL DEFAULT 0, mode TEXT NOT NULL DEFAULT 'test' CHECK (mode IN ('test', 'live')), settings TEXT NOT NULL DEFAULT '{}', credentials TEXT NOT NULL DEFAULT '{}', updated_at TEXT, updated_by TEXT) WITHOUT ROWID;
+CREATE TABLE billing_settings (id TEXT PRIMARY KEY, tax TEXT NOT NULL DEFAULT '{}', updated_at TEXT, updated_by TEXT) WITHOUT ROWID;
+CREATE TABLE billing_subscriptions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, tier_id TEXT NOT NULL, tier_name TEXT NOT NULL, provider TEXT NOT NULL, mode TEXT NOT NULL, provider_ref TEXT, customer_ref TEXT, price_id TEXT, status TEXT NOT NULL CHECK (status IN ('pending', 'active', 'past_due', 'canceled', 'ended')), period TEXT, currency TEXT, amount INTEGER, current_period_end TEXT, cancel_at_period_end INTEGER NOT NULL DEFAULT 0, access_until TEXT, restore_tier_id TEXT, comp_by TEXT, comp_reason TEXT, last_event_at TEXT, entitlement_synced INTEGER NOT NULL DEFAULT 0, reconcile_requested_at TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, ended_at TEXT) WITHOUT ROWID;
 CREATE TABLE "caption_jobs" (id TEXT PRIMARY KEY, idempotency_key TEXT NOT NULL, video_id TEXT NOT NULL, channel_id TEXT, subject_id TEXT NOT NULL, requested_by TEXT NOT NULL, kind TEXT NOT NULL CHECK (kind IN ('transcribe', 'translate')), language TEXT NOT NULL, replace_draft INTEGER NOT NULL DEFAULT 0, provider TEXT NOT NULL, model TEXT NOT NULL, status TEXT NOT NULL CHECK (status IN ('queued', 'waiting_budget', 'extracting', 'transcribing', 'translating', 'postprocessing', 'ready', 'failed', 'cancelled')), progress_done INTEGER, progress_total INTEGER, minutes_reserved INTEGER NOT NULL DEFAULT 0, minutes_charged INTEGER, waived INTEGER NOT NULL DEFAULT 0, error TEXT, audio_manifest_key TEXT, attempts INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, finished_at TEXT, source_language TEXT, source_version INTEGER) WITHOUT ROWID;
 CREATE TABLE caption_minute_grants (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, minutes INTEGER NOT NULL CHECK (minutes > 0), scope TEXT NOT NULL CHECK (scope IN ('month', 'until_used')), period TEXT, used INTEGER NOT NULL DEFAULT 0 CHECK (used >= 0), reason TEXT NOT NULL, created_by TEXT NOT NULL, created_at TEXT NOT NULL, revoked_at TEXT, revoked_by TEXT, revoke_reason TEXT) WITHOUT ROWID;
 CREATE TABLE caption_minute_holds (hold_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, period TEXT NOT NULL, minutes INTEGER NOT NULL, month_minutes INTEGER NOT NULL, packs_json TEXT NOT NULL DEFAULT '[]', state TEXT NOT NULL CHECK (state IN ('reserved', 'committed', 'released')), charged INTEGER, created_at TEXT NOT NULL, updated_at TEXT NOT NULL) WITHOUT ROWID;
@@ -66,7 +77,9 @@ CREATE TABLE channel_quran_translations (channel_id TEXT NOT NULL, lang TEXT NOT
 CREATE TABLE channel_translation_settings (channel_id TEXT PRIMARY KEY, viewer_titles INTEGER NOT NULL DEFAULT 1, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE content_ownership (kind TEXT NOT NULL, id TEXT NOT NULL, owner_id TEXT, channel_id TEXT, is_public INTEGER NOT NULL DEFAULT 1, is_hidden INTEGER NOT NULL DEFAULT 0, is_deleted INTEGER NOT NULL DEFAULT 0, is_live INTEGER NOT NULL DEFAULT 0, duration REAL, schedule_status TEXT, upload_status TEXT, views INTEGER NOT NULL DEFAULT 0, created_at INTEGER, updated_at INTEGER, indexed_at INTEGER NOT NULL DEFAULT 0, studio_status TEXT, title TEXT, category TEXT, language TEXT, source_version INTEGER NOT NULL DEFAULT 0, admin_title TEXT, handle TEXT, email TEXT, is_verified INTEGER NOT NULL DEFAULT 0, is_suspended INTEGER NOT NULL DEFAULT 0, subscribers INTEGER NOT NULL DEFAULT 0, admin_cols INTEGER NOT NULL DEFAULT 0, is_short INTEGER NOT NULL DEFAULT 0, needs_format INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (kind, id));
 CREATE TABLE creator_tier_assignments (user_id TEXT PRIMARY KEY, tier_id TEXT NOT NULL, source TEXT NOT NULL DEFAULT 'admin' CHECK (source IN ('admin', 'subscription')), assigned_by TEXT NOT NULL, assigned_at TEXT NOT NULL) WITHOUT ROWID;
-CREATE TABLE creator_tiers (id TEXT PRIMARY KEY, name TEXT NOT NULL, unlimited INTEGER NOT NULL DEFAULT 0, per_hour INTEGER NOT NULL, per_day INTEGER NOT NULL, max_concurrent INTEGER NOT NULL, max_channels INTEGER, updated_at TEXT, updated_by TEXT, deleted_at TEXT, deleted_by TEXT, delete_reason TEXT, purge_requested_at TEXT, purge_requested_by TEXT, caption_minutes_month INTEGER NOT NULL DEFAULT 0, import_counts_limits INTEGER NOT NULL DEFAULT 1, audio_tracks_per_video INTEGER NOT NULL DEFAULT 0, live INTEGER NOT NULL DEFAULT 0, live_hours_month INTEGER NOT NULL DEFAULT 20, live_max_concurrent INTEGER NOT NULL DEFAULT 1, live_max_stream_minutes INTEGER NOT NULL DEFAULT 240) WITHOUT ROWID;
+CREATE TABLE creator_tier_changes (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, reason TEXT NOT NULL CHECK (reason IN ('request', 'admin', 'subscription')), from_tier_id TEXT, to_tier_id TEXT NOT NULL, request_id TEXT, created_at TEXT NOT NULL, notified_at TEXT, email_status TEXT, email_error TEXT) WITHOUT ROWID;
+CREATE TABLE creator_tier_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_by TEXT, updated_at TEXT) WITHOUT ROWID;
+CREATE TABLE creator_tiers (id TEXT PRIMARY KEY, name TEXT NOT NULL, unlimited INTEGER NOT NULL DEFAULT 0, per_hour INTEGER NOT NULL, per_day INTEGER NOT NULL, max_concurrent INTEGER NOT NULL, max_channels INTEGER, updated_at TEXT, updated_by TEXT, deleted_at TEXT, deleted_by TEXT, delete_reason TEXT, purge_requested_at TEXT, purge_requested_by TEXT, caption_minutes_month INTEGER NOT NULL DEFAULT 0, import_counts_limits INTEGER NOT NULL DEFAULT 1, audio_tracks_per_video INTEGER NOT NULL DEFAULT 0, live INTEGER NOT NULL DEFAULT 0, live_hours_month INTEGER NOT NULL DEFAULT 20, live_max_concurrent INTEGER NOT NULL DEFAULT 1, live_max_stream_minutes INTEGER NOT NULL DEFAULT 240, uploads INTEGER NOT NULL DEFAULT 1, channels INTEGER NOT NULL DEFAULT 1, requestable INTEGER NOT NULL DEFAULT 0, sort_order INTEGER NOT NULL DEFAULT 50, name_ar TEXT, description TEXT, description_ar TEXT) WITHOUT ROWID;
 CREATE TABLE delivery_cost_daily (day TEXT NOT NULL, provider TEXT NOT NULL, metric TEXT NOT NULL, value REAL NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (day, provider, metric));
 CREATE TABLE image_owners (path TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK (kind IN ('profile_avatar', 'profile_cover', 'channel_avatar', 'channel_cover', 'post_image', 'video_thumbnail')), owner_id TEXT, channel_id TEXT, created_at TEXT NOT NULL) WITHOUT ROWID;
 CREATE TABLE indexnow_pending (video_id TEXT PRIMARY KEY, is_short INTEGER NOT NULL DEFAULT 0, queued_at REAL NOT NULL) WITHOUT ROWID;
@@ -140,6 +153,7 @@ CREATE TABLE social_spend (month TEXT NOT NULL, network TEXT NOT NULL, cost_micr
 CREATE TABLE social_templates (channel_id TEXT NOT NULL, event TEXT NOT NULL, lang TEXT NOT NULL, body TEXT NOT NULL, updated_by TEXT, updated_at INTEGER NOT NULL, PRIMARY KEY (channel_id, event, lang));
 CREATE TABLE social_webhook_deliveries (id TEXT PRIMARY KEY, webhook_id TEXT NOT NULL, channel_id TEXT NOT NULL, event TEXT NOT NULL, entity_id TEXT NOT NULL, status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, response_status INTEGER, last_error TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, UNIQUE (webhook_id, event, entity_id));
 CREATE TABLE social_webhooks (id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, url TEXT NOT NULL, secret_ciphertext TEXT NOT NULL, events TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, failure_count INTEGER NOT NULL DEFAULT 0, last_status TEXT, last_delivery_at INTEGER, created_by TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+CREATE TABLE tier_requests (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, tier_id TEXT NOT NULL, tier_name TEXT NOT NULL, from_tier_id TEXT NOT NULL, name TEXT NOT NULL, about TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'declined', 'withdrawn')), decline_reason TEXT, created_at TEXT NOT NULL, decided_at TEXT, decided_by TEXT, notified_at TEXT, email_status TEXT, email_error TEXT) WITHOUT ROWID;
 CREATE TABLE translation_audit (id TEXT PRIMARY KEY, at TEXT NOT NULL, user_id TEXT NOT NULL, kind TEXT NOT NULL CHECK (kind IN ('inline', 'caption', 'viewer')), video_id TEXT, field TEXT, from_lang TEXT NOT NULL, to_lang TEXT NOT NULL, items INTEGER NOT NULL, chars INTEGER NOT NULL, provider TEXT NOT NULL, model TEXT NOT NULL, cached INTEGER NOT NULL DEFAULT 0) WITHOUT ROWID;
 CREATE TABLE upload_limit_hits (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, period TEXT NOT NULL, tier_id TEXT, hit_at INTEGER NOT NULL) WITHOUT ROWID;
 CREATE TABLE upload_rate_leases (user_id TEXT NOT NULL, operation TEXT NOT NULL, lease_id TEXT NOT NULL, expires_at INTEGER NOT NULL, PRIMARY KEY (user_id, operation, lease_id)) WITHOUT ROWID;
@@ -163,6 +177,24 @@ CREATE INDEX idx_admin_job_users_job ON admin_job_users (job_id);
 CREATE INDEX idx_admin_jobs_finished ON admin_jobs (finished_at);
 CREATE INDEX idx_admin_jobs_status ON admin_jobs (status, updated_at);
 CREATE INDEX idx_admin_jobs_target ON admin_jobs (target_kind, target_id, created_at);
+CREATE INDEX idx_billing_checkouts_ref ON billing_checkouts (provider, provider_ref);
+CREATE INDEX idx_billing_checkouts_user ON billing_checkouts (user_id, created_at);
+CREATE INDEX idx_billing_customers_user ON billing_customers (user_id, provider, mode);
+CREATE UNIQUE INDEX idx_billing_events_key ON billing_events (provider, mode, event_id);
+CREATE INDEX idx_billing_events_status ON billing_events (status, received_at);
+CREATE INDEX idx_billing_events_sub ON billing_events (subscription_id, received_at);
+CREATE INDEX idx_billing_events_user ON billing_events (user_id);
+CREATE UNIQUE INDEX idx_billing_payments_ref ON billing_payments (provider, mode, provider_ref);
+CREATE INDEX idx_billing_payments_sub ON billing_payments (subscription_id, occurred_at);
+CREATE INDEX idx_billing_payments_user ON billing_payments (user_id, occurred_at);
+CREATE INDEX idx_billing_price_links_ref ON billing_price_links (provider, mode, provider_ref);
+CREATE UNIQUE INDEX idx_billing_prices_key ON billing_prices (tier_id, period, currency);
+CREATE INDEX idx_billing_subscriptions_access ON billing_subscriptions (access_until) WHERE access_until IS NOT NULL;
+CREATE INDEX idx_billing_subscriptions_comp_by ON billing_subscriptions (comp_by) WHERE comp_by IS NOT NULL;
+CREATE UNIQUE INDEX idx_billing_subscriptions_ref ON billing_subscriptions (provider, mode, provider_ref) WHERE provider_ref IS NOT NULL;
+CREATE INDEX idx_billing_subscriptions_status ON billing_subscriptions (status, updated_at, id);
+CREATE INDEX idx_billing_subscriptions_sync ON billing_subscriptions (entitlement_synced, access_until);
+CREATE INDEX idx_billing_subscriptions_user ON billing_subscriptions (user_id, created_at);
 CREATE UNIQUE INDEX idx_caption_jobs_active ON caption_jobs (idempotency_key) WHERE status NOT IN ('ready', 'failed', 'cancelled');
 CREATE INDEX idx_caption_jobs_video ON caption_jobs (video_id, created_at);
 CREATE INDEX idx_caption_minute_grants_user ON caption_minute_grants (user_id, created_at);
@@ -201,6 +233,7 @@ CREATE INDEX idx_content_ownership_indexed ON content_ownership (kind, indexed_a
 CREATE INDEX idx_content_ownership_needs_format ON content_ownership (kind, needs_format, created_at);
 CREATE INDEX idx_content_ownership_owner ON content_ownership (kind, owner_id);
 CREATE INDEX idx_creator_tier_assignments_tier ON creator_tier_assignments (tier_id);
+CREATE INDEX idx_creator_tier_changes_user ON creator_tier_changes (user_id, created_at);
 CREATE INDEX idx_creator_tiers_deleted ON creator_tiers (deleted_at) WHERE deleted_at IS NOT NULL;
 CREATE INDEX idx_image_owners_owner ON image_owners (owner_id);
 CREATE INDEX idx_indexnow_pending_queued ON indexnow_pending (queued_at);
@@ -247,6 +280,9 @@ CREATE INDEX idx_social_deliveries_status ON social_deliveries (status, updated_
 CREATE INDEX idx_social_pending_expires ON social_pending (expires_at);
 CREATE INDEX idx_social_webhook_deliveries_hook ON social_webhook_deliveries (webhook_id, created_at DESC);
 CREATE INDEX idx_social_webhooks_channel ON social_webhooks (channel_id);
+CREATE UNIQUE INDEX idx_tier_requests_one_pending ON tier_requests (user_id) WHERE status = 'pending';
+CREATE INDEX idx_tier_requests_status ON tier_requests (status, created_at, id);
+CREATE INDEX idx_tier_requests_user ON tier_requests (user_id, created_at);
 CREATE INDEX idx_translation_audit_at ON translation_audit (at);
 CREATE INDEX idx_translation_audit_user ON translation_audit (user_id, at);
 CREATE INDEX idx_upload_limit_hits_at ON upload_limit_hits (hit_at);

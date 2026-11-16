@@ -37,8 +37,9 @@ test.describe('Settings - channel owner', () => {
     await page.goto('/en/settings');
     await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible();
     const sections = page.getByTestId('settings-section');
-    await expect(sections).toHaveCount(5);
+    await expect(sections).toHaveCount(6);
     await expect(sections.filter({ hasText: 'Channel invitations' })).toHaveAttribute('href', '/en/settings/channel-invites');
+    await expect(sections.filter({ hasText: 'Your tier and your tier requests' })).toHaveAttribute('href', '/en/settings/tier');
     await expect(sections.filter({ hasText: 'Upload Defaults' })).toHaveAttribute('href', '/en/settings/upload-defaults');
     await expect(sections.filter({ hasText: 'Profile Settings' })).toHaveAttribute('href', '/en/profile?from=settings');
     await expect(sections.filter({ hasText: 'Privacy & data' })).toHaveAttribute('href', '/en/settings/privacy');
@@ -71,8 +72,8 @@ test.describe('Settings - no channel', () => {
     await page.goto('/en/settings');
     // Channel invitations is for anyone: a user without a channel can be invited to a team
     await expect(page.getByTestId('settings-section').filter({ hasText: 'Profile Settings' })).toBeVisible();
-    // Hidden when off: no creator tier, so no Upload Defaults (wiki "Hidden when off")
-    await expect(page.getByTestId('settings-section')).toHaveCount(4);
+    // Hidden when off: a Free account uploads nothing, so no Upload Defaults; Tier is listed (wiki "Hidden when off")
+    await expect(page.getByTestId('settings-section')).toHaveCount(5);
     await expect(page.getByTestId('settings-section').filter({ hasText: 'Upload Defaults' })).toHaveCount(0);
     await expect(page.getByTestId('settings-section').filter({ hasText: 'Channel Settings' })).toHaveCount(0);
     await expect(page.getByText('Not available - requires an active channel')).toHaveCount(0);

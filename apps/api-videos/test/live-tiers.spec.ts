@@ -68,7 +68,8 @@ describe('live in creator tiers', () => {
 			assert.equal(r.status, 403);
 			assert.equal(r.code, LIVE_TIER_ERROR_CODES.notInTier);
 		}
-		assert.equal((await liveAccess(d1, 'nobody', [], NOW)).reason, 'no_tier');
+		// Everyone holds a tier (Member when none is assigned, wiki AUN-TIER-REQUESTS): Member leaves live out
+		assert.equal((await liveAccess(d1, 'nobody', [], NOW)).reason, 'not_in_tier');
 		assert.equal((await liveAccess(d1, 'bob', [], NOW)).reason, 'not_in_tier');
 	});
 

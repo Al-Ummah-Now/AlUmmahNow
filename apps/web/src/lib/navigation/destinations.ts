@@ -24,6 +24,8 @@ export const ACCOUNT_MENU_PATHS = {
   settings: '/settings',
   /** Channel invitations waiting for this account (shown with their count) */
   channelInvites: '/settings/channel-invites',
+  /** The tiers and the user's tier request (wiki AUN-TIER-REQUESTS) */
+  upgrade: '/upgrade',
 } as const;
 
 export const HEADER_PATHS = {

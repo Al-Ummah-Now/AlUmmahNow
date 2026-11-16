@@ -14,7 +14,7 @@
  *   ownership index mirrors every R2 write; a video row left means its Bunny video is left too),
  *   except those already deleted with their purge queued (admin_deletions: the purge job removes
  *   media and Bunny video; reported, not failed);
- * - search D1 creator_tier_assignments of run users;
+ * - search D1 creator_tier_assignments and tier_requests of run users;
  * - QA only, through a read-only probe worker (scripts/e2e/leftovers-probe, Bunny key from the
  *   Secrets Store, never on the runner): the QA library's videos and collections whose title holds
  *   the run id, and R2 objects under the run's video ids (recorded by builders.ts in
@@ -99,7 +99,7 @@ export function report(marker: string, l: Leftovers): string[] {
     `Leftovers of run ${marker}: ${failing(l)}${l.pendingPurge.length ? ` (+${l.pendingPurge.length} deleted, purge queued)` : ''}${l.erasePending.length ? ` (+${l.erasePending.length} of deleted run accounts, erase pending)` : ''}`,
     ...l.accounts.map((a) => `  - auth account ${a}`),
     ...l.content.map((c) => `  - ${c.kind} ${c.id} of ${c.owner} (${c.state})`),
-    ...l.tiers.map((t) => `  - creator tier of ${t}`),
+    ...l.tiers.map((t) => `  - creator tier or tier request of ${t}`),
     ...l.bunnyVideos.map((v) => `  - Bunny video ${v.guid} (status ${v.status}): ${v.title}`),
     ...l.bunnyCollections.map((c) => `  - Bunny collection ${c.guid}: ${c.name}`),
     ...l.r2Objects.slice(0, 40).map((o) => `  - R2 ${o.bucket}/${o.key}`),
@@ -144,7 +144,9 @@ async function main(): Promise<void> {
       if (purging.has(`${row.kind}:${row.id}`)) leftovers.pendingPurge.push({ kind: row.kind, id: row.id });
       else leftovers.content.push({ kind: row.kind, id: row.id, owner: row.owner_id, state: row.is_deleted ? 'in the trash, no purge' : row.upload_status ?? 'live' });
     }
-    leftovers.tiers = (await d1Query<{ user_id: string }>(cf, db.search, `SELECT user_id FROM creator_tier_assignments WHERE user_id IN (${list})`, ids)).map((r) => r.user_id);
+    leftovers.tiers = (
+      await d1Query<{ user_id: string }>(cf, db.search, `SELECT user_id FROM creator_tier_assignments WHERE user_id IN (${list}) UNION SELECT user_id FROM tier_requests WHERE user_id IN (${list})`, [...ids, ...ids])
+    ).map((r) => r.user_id);
     // The accounts still alive (the auth lookup above: deleted_at IS NULL)
     splitByAccount(leftovers, new Set(accounts.map((a) => a.id)));
   }

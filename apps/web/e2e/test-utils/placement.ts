@@ -173,6 +173,8 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/release/contact.spec.ts': { placement: 'local', reason: 'contact form + admin inbox; mail queue sinks locally' },
   'apps/web/e2e/release/core-web.spec.ts': { placement: 'local', reason: 'i18n, 404, live comments via local websocket; auth-lang test needs issuer locale' },
   'apps/web/e2e/release/creator-tiers.spec.ts': { placement: 'local', reason: 'tier gating server+UI, admin-web tier control' },
+  'apps/web/e2e/release/autofill-forms.spec.ts': { placement: 'local', reason: 'Request tier dialog autofill attributes (name, autocomplete, label, form) and no card fields, in Chrome, Firefox and WebKit; own user, no shared state' },
+  'apps/web/e2e/release/tier-requests.spec.ts': { placement: 'local', reason: '/upgrade request + admin queue approve/decline; delivery queue sinks mail locally' },
   'apps/web/e2e/release/deploy-skew.spec.ts': { placement: 'local', reason: 'skew simulated by route interception against build under test' },
   'apps/web/e2e/release/seo.spec.ts': { placement: 'local', reason: 'crawler view of this PR\'s build: canonical/hreflang/description/JSON-LD/og:image on watch, @handle, playlist and post pages (en/ar), 404/410/301/308 statuses, robots.txt and sitemaps; own creator/video/playlist/post' },
   'apps/web/e2e/release/short-links.spec.ts': { placement: 'local', reason: 'share buttons copy short links; the stack short-links Worker redirects them (en/ar), 404 for unknown/private; own creator/video/playlist/post' },

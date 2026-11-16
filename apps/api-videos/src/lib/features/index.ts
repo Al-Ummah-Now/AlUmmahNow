@@ -25,7 +25,9 @@ import {
 	can,
 	channelRoleOf,
 	liveIneligibility,
+	tierAllowsChannels,
 	tierAllowsLive,
+	tierAllowsUploads,
 	type ChannelCapability,
 	type ChannelRole,
 	type CreatorTier,
@@ -310,12 +312,13 @@ export async function computeFeatures(env: FeaturesEnv, who: FeaturesWho, channe
 		aiCategoryConfigured(env),
 		checkBulkScheduleAllowed(env, userId).then((refusal) => refusal === null),
 		// Without a channel: channels whose owner's tier lets this member upload
-		!scope && !tier ? memberUploadChannelIds(db, userId, roles).then((ids) => ids.length > 0) : Promise.resolve(false),
+		!scope && !tierAllowsUploads(tier) ? memberUploadChannelIds(db, userId, roles).then((ids) => ids.length > 0) : Promise.resolve(false),
 		scope && can(scope.role, 'channel.edit') ? siteDomainsFor(env, scope.channelId) : Promise.resolve(false),
 	]);
 
-	features.upload = !pending && (scope ? !!tier && can(scope.role, 'video.upload') : !!tier || uploadElsewhere);
-	features.createChannel = !pending && !scope && !!tier;
+	// The tier's own flags: Free (where accounts without a stored tier land) has neither uploads nor channels
+	features.upload = !pending && (scope ? tierAllowsUploads(tier) && can(scope.role, 'video.upload') : tierAllowsUploads(tier) || uploadElsewhere);
+	features.createChannel = !pending && !scope && tierAllowsChannels(tier);
 	features.live = !pending && live;
 	features.captionsTranscribe = transcribeConfigured(env, settings) && minutes;
 	features.captionsTranslate = translate && minutes;

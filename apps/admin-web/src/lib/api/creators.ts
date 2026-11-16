@@ -7,6 +7,7 @@
 import type { AdminAuditEntry, CaptionGrantScope, CaptionLedgerEntry, CaptionMinuteGrant, CaptionMinutesUsage, CreatorTierAssignment, CreatorTierBulkResult, CreatorTiersList } from '@al-ummah/shared-types';
 import { AdminApiError, type ActionResult } from './errors';
 import { requestAdmin, navigateForPasskey } from './request';
+import type { TierPayload } from '@/lib/creator-tiers';
 
 async function fetchAdmin<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const body = await requestAdmin(endpoint, options);
@@ -59,23 +60,8 @@ export async function bulkSetCreatorTier(userIds: string[], tierId: string | nul
   return mutate<CreatorTierBulkResult>('/api/content/creators/tier', 'POST', { userIds, tierId });
 }
 
-export interface TierForm {
-  id?: string;
-  name: string;
-  unlimited: boolean;
-  perHour: number;
-  perDay: number;
-  maxConcurrent: number;
-  maxChannels: number | null;
-  captionMinutesMonth: number;
-  audioTracksPerVideo: number;
-  live: boolean;
-  liveHoursMonth: number;
-  liveMaxConcurrent: number;
-  liveMaxStreamMinutes: number;
-}
-
-export async function saveCreatorTier(tier: TierForm, create: boolean): Promise<ActionResult<unknown>> {
+/** Creates or edits a tier; the body is lib/creator-tiers tierFormPayload. */
+export async function saveCreatorTier(tier: TierPayload, create: boolean): Promise<ActionResult<unknown>> {
   return create
     ? mutate('/api/content/creator-tiers', 'POST', tier)
     : mutate(`/api/content/creator-tiers/${encodeURIComponent(tier.id ?? '')}`, 'PUT', { ...tier, id: undefined });

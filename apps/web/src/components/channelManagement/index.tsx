@@ -139,8 +139,8 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
       </div>
 
       {/* A pending deletion of their videos data has its own notice (ProfileGuard) */}
-      {/* Channel limit reached is a plain fact; without a creator tier there is nothing to show (hidden when off) */}
-      {!canCreate && creatorAccess.status === 'ready' && !creatorAccess.access.pendingDeletion && !!creatorAccess.access.tier && (
+      {/* Channel limit reached is a plain fact; a tier without channels (Free) shows nothing (hidden when off) */}
+      {!canCreate && creatorAccess.status === 'ready' && !creatorAccess.access.pendingDeletion && !!creatorAccess.access.tier && (creatorAccess.access.tier.unlimited || creatorAccess.access.tier.channels) && (
         <div className="mb-6">
           <p role="status" data-testid="channel-limit-reached" className="rounded-lg border border-border bg-card px-4 py-3 text-sm text-card-foreground">
             {t.creator.channelLimit.replace('{max}', creatorAccess.access.maxChannels == null ? '' : formatNumber(lang, creatorAccess.access.maxChannels))}

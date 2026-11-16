@@ -19,6 +19,11 @@ export const JOB_KIND_LABEL: Record<AdminJobKind, MessageKey> = {
   'images.index-owners': 'adminJobs.kinds.imagesIndexOwners',
   'media.transcode-retry': 'adminJobs.kinds.mediaTranscodeRetry',
   'media.transcode-cancel': 'adminJobs.kinds.mediaTranscodeCancel',
+  'billing.webhook': 'adminJobs.kinds.billingWebhook',
+  'billing.sync-prices': 'adminJobs.kinds.billingSyncPrices',
+  'billing.cancel': 'adminJobs.kinds.billingCancel',
+  'billing.refund': 'adminJobs.kinds.billingRefund',
+  'billing.reconcile': 'adminJobs.kinds.billingReconcile',
 };
 
 export const JOB_STATUS_LABEL: Record<AdminJobStatus, MessageKey> = {

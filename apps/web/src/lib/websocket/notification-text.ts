@@ -21,6 +21,10 @@ const KEY_TO_TEXT: Record<Exclude<RealtimeNotificationKey, 'accountWarning'>, { 
   channelRoleChanged: { title: 'channelRoleChangedTitle', message: 'channelRoleChangedMessage' },
   channelMemberRemoved: { title: 'channelMemberRemovedTitle', message: 'channelMemberRemovedMessage' },
   channelMemberLeft: { title: 'channelMemberLeftTitle', message: 'channelMemberLeftMessage' },
+  tierRequestApproved: { title: 'tierRequestApprovedTitle', message: 'tierRequestApprovedMessage' },
+  tierRequestDeclined: { title: 'tierRequestDeclinedTitle', message: 'tierRequestDeclinedMessage' },
+  tierRequestReceived: { title: 'tierRequestReceivedTitle', message: 'tierRequestReceivedMessage' },
+  tierChanged: { title: 'tierChangedTitle', message: 'tierChangedMessage' },
 };
 
 const CHANNEL_TEAM_KEYS = new Set<string>(['channelInviteReceived', 'channelInviteAccepted', 'channelRoleChanged', 'channelMemberRemoved', 'channelMemberLeft']);

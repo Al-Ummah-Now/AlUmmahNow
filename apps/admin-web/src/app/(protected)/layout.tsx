@@ -4,6 +4,7 @@ import { AdminShell } from '@/components/shell/AdminShell';
 import { NAV_COOKIE } from '@/components/shell/nav-model';
 import { getContactCounts, getErrorCounts } from '@/lib/api/admin';
 import { getUser } from '@/lib/api/content';
+import { pendingTierRequestCount } from '@/lib/api/tier-requests';
 import { canReadErrors, canUseContactInbox, canUseProcessing, canManageVideosUsers, canUseStaleUploads, canReadAudit, canManageMedia, canReadOps, isReviewOnly, isSuperAdmin, canManagePlatformSettings, canManageEmails } from '@/lib/roles';
 import { ErrorReportingIdentity } from '@/lib/errors/ErrorReportingProvider';
 import { errorsBadgeCount } from './errors/filters';
@@ -22,6 +23,15 @@ export default async function ProtectedLayout({
 }) {
   // Verify authentication and admin role (redirects if not authorized)
   const session = await requireAdminRole();
+
+  // Tier requests nav badge: pending requests (every admin role sees the queue). Started first so it
+  // runs alongside the reads below; a failure only hides the badge.
+  const tierRequestsPending = isReviewOnly(session.user.role)
+    ? Promise.resolve(null)
+    : pendingTierRequestCount().catch((e: unknown) => {
+        logger.warn('[layout] Tier request count unavailable', { error: e instanceof Error ? e.message : String(e) });
+        return null;
+      });
 
   // Contact messages nav item and its unread badge (admins and super admins only)
   let contactNew: number | null = null;
@@ -93,7 +103,7 @@ export default async function ProtectedLayout({
           settings: canManagePlatformSettings(role),
           emails: canManageEmails(role),
         }}
-        badges={{ contact: contactNew, errors: errorsBadge }}
+        badges={{ contact: contactNew, errors: errorsBadge, tierRequests: await tierRequestsPending }}
       >
         {graceBanner}
         {children}

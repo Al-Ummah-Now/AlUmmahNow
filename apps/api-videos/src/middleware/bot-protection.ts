@@ -227,7 +227,8 @@ export async function humanCheckStatus(c: Context): Promise<Response> {
 	const kind = c.req.query('kind');
 	const mode = turnstileMode(env);
 	let required = mode !== 'off' && !isNativeClient(c, env);
-	if (required && kind !== 'report') {
+	// Reports and tier requests check every time; comments and posts only an account's first
+	if (required && kind !== 'report' && kind !== 'tier_request') {
 		const user = signedInUser(c);
 		if (user && env.HUMAN_VERIFIED && (await env.HUMAN_VERIFIED.get(humanVerifiedKey(user)).catch(() => null))) required = false;
 	}

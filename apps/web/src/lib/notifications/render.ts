@@ -28,6 +28,10 @@ export const NOTIFICATION_CENTER_KEYS: readonly RealtimeNotificationKey[] = [
   'channelRoleChanged',
   'channelMemberRemoved',
   'channelMemberLeft',
+  'tierRequestApproved',
+  'tierRequestDeclined',
+  'tierRequestReceived',
+  'tierChanged',
 ];
 
 export function isCenterKey(key: unknown): key is RealtimeNotificationKey {

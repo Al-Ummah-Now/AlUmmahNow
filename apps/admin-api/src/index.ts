@@ -52,6 +52,7 @@ import reviewAlertsRouter from './routers/reviewAlerts.router';
 import staleUploadsRouter from './routers/staleUploads.router';
 import trashRouter from './routers/trash.router';
 import csamRouter from './routers/csam.router';
+import billingRouter from './routers/billing.router';
 import { handleCloudflareWebhook, isCsamRetentionTick, runCsamRetention } from './lib/csam';
 import { isHourlyTick, runTrashCleanup } from './lib/trash';
 import type { AdminBindings } from './base/types';
@@ -300,6 +301,9 @@ app.route('/api/trash', trashRouter as never);
 
 // CSAM cases (docs/specs/CSAM-RESPONSE.md): super admins only, audited
 app.route('/api/csam', csamRouter as never);
+
+// Payments (wiki AUN-SUBS): providers, prices, subscriptions; billing:* permissions, audited, credentials to Secrets Store
+app.route('/api/billing', billingRouter as never);
 
 // ==========================================
 // HEALTH CHECK

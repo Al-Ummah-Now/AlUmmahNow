@@ -11,7 +11,7 @@
  * service in wrangler (all environments), and report items with that retry
  * spec (docs/features/error-reporting.md).
  */
-import type { NeedsActionRetry, NeedsActionStatus } from '@al-ummah/shared-types';
+import { ADMIN_JOB_PERMISSIONS, type AdminContentPermission, type NeedsActionRetry, type NeedsActionStatus } from '@al-ummah/shared-types';
 import type { AdminBindings } from '../base/types';
 import { deliveryStatus, recordDelivery, type MailKind } from './contact-store';
 import { CONTACT_MAIL_VERSION, enqueueContactMail, type ContactMailJob } from './contact-mail-queue';
@@ -19,6 +19,9 @@ import { getWarning, recordWarningEmail } from './content/warnings';
 import { enqueueWarningMail } from './warning-mail';
 import { enqueueRejectionMail, rejectionMailJob } from './review/rejection-mail';
 import { retryConfirm, retryNotification } from './status-notify';
+import { enqueueTierChangeMail } from './tier-change-mail';
+import { enqueueTierRequestMail, tierRequestMailJob, type DecidedRequest } from './tier-request-mail';
+import { callVideos, VideosError } from './content/videosClient';
 import { logger } from './logger';
 import { enqueueDeviceRevocation } from './deviceTokenRevocation';
 import { getIssue, getSubscriber, renewConfirmToken, requeueFailed, setDelivery } from './newsletter-store';
@@ -47,10 +50,26 @@ export const SERVICE_RETRIES: Record<string, { binding: keyof AdminBindings; pat
   // lib/media/backfill/); a stalled R2 transcode is retried now, or a Retry now / Cancel admin job that
   // gave up is queued again (api-videos lib/media/troubleshoot.ts).
   // An audio track that could not be prepared, or a multi-audio package that could not be written,
-  // runs again (api-videos lib/audio-tracks/service.ts, wiki AUN-MULTI-AUDIO).
+  // runs again (api-videos lib/audio-tracks/service.ts, wiki AUN-MULTI-AUDIO). A payments job that
+  // gave up runs again (api-videos lib/billing/service.ts; Retry also needs the job's own billing
+  // permission, endpoints/errors/ErrorsAdmin.ts).
   // Never a CSAM path: those retry from the case page, super admins only (docs/specs/CSAM-RESPONSE.md)
-  'api-videos': { binding: 'VIDEOS', paths: ['/internal/playlist-adds/retry', '/internal/captions/jobs/retry', '/internal/media/health/check', '/internal/channel-comments/retry', '/internal/youtube-import/retry', '/internal/media/backfill/items/retry', '/internal/media/backfill/removals/retry', '/internal/social/deliveries/retry', '/internal/media/troubleshoot/retry-now', '/internal/media/troubleshoot/jobs/retry', '/internal/audio-tracks/retry'] },
+  'api-videos': { binding: 'VIDEOS', paths: ['/internal/playlist-adds/retry', '/internal/captions/jobs/retry', '/internal/media/health/check', '/internal/channel-comments/retry', '/internal/youtube-import/retry', '/internal/media/backfill/items/retry', '/internal/media/backfill/removals/retry', '/internal/social/deliveries/retry', '/internal/media/troubleshoot/retry-now', '/internal/media/troubleshoot/jobs/retry', '/internal/audio-tracks/retry', '/internal/billing/jobs/retry'] },
 };
+
+/**
+ * Content permissions a Retry needs on top of errors:manage: a payments job runs its action
+ * again, so it needs that action's own permission (a refund: billing:refund). A missing or
+ * unknown kind needs every billing permission (deny by default); api-videos also refuses a
+ * retry whose kind is not the job's own.
+ */
+const ALL_BILLING: AdminContentPermission[] = ['billing:read', 'billing:manage', 'billing:refund', 'billing:providers'];
+export function retryPermissions(spec: NeedsActionRetry | null): AdminContentPermission[] {
+  if (!spec || spec.kind !== 'service' || spec.service !== 'api-videos' || spec.path !== '/internal/billing/jobs/retry') return [];
+  const kind = (spec.body as { kind?: unknown } | undefined)?.kind;
+  const known = typeof kind === 'string' && kind.startsWith('billing.') ? (ADMIN_JOB_PERMISSIONS as Readonly<Record<string, readonly AdminContentPermission[]>>)[kind] : undefined;
+  return known ? [...known] : ALL_BILLING;
+}
 
 export const BUILTIN_RETRIES: Record<string, (env: AdminBindings, args: Record<string, string>, attempt: string) => Promise<RetryOutcome>> = {
   /** Queues a Contact us email that failed for good again (as the inbox's Retry does); a new failure reopens the item. */
@@ -151,6 +170,27 @@ export const BUILTIN_RETRIES: Record<string, (env: AdminBindings, args: Record<s
     const out = await retryConfirm(env, args.id);
     if (out === 'gone') return { ok: true, status: 'resolved', result: 'Nothing to send: confirmed or removed since' };
     if (!out) return { ok: false, status: 'open', result: 'Could not queue the email' };
+    return { ok: true, status: 'resolved', result: 'Queued again' };
+  },
+  /** Sends a tier-change email again (lib/tier-change-mail.ts; a sent one is never sent twice). */
+  'tier-change-delivery': async (env, args) => {
+    if (!args.id) return { ok: false, status: 'open', result: 'Not a tier change' };
+    if (!(await enqueueTierChangeMail(env, args.id))) return { ok: false, status: 'open', result: 'Could not queue the email' };
+    return { ok: true, status: 'resolved', result: 'Queued again' };
+  },
+  /** Delivers a tier request decision again (notice + email), if the request still has that decision. */
+  'tier-request-delivery': async (env, args) => {
+    const { id, decidedAt } = args;
+    if (!id || !decidedAt) return { ok: false, status: 'open', result: 'Not a tier request' };
+    let request: DecidedRequest;
+    try {
+      request = (await callVideos<{ request: DecidedRequest }>(env as never, `/tier-requests/${encodeURIComponent(id)}`)).request;
+    } catch (error) {
+      if (error instanceof VideosError && error.status === 404) return { ok: false, status: 'dismissed', result: 'Request no longer exists' };
+      throw error;
+    }
+    if (request.decidedAt !== decidedAt) return { ok: true, status: 'resolved', result: 'Nothing to deliver: the request was decided again' };
+    if (!(await enqueueTierRequestMail(env, tierRequestMailJob(id, decidedAt)))) return { ok: false, status: 'open', result: 'Could not queue the delivery' };
     return { ok: true, status: 'resolved', result: 'Queued again' };
   },
   'warning-email': async (env, args) => {

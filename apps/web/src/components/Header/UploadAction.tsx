@@ -17,6 +17,13 @@ const Icon = () => (
   </svg>
 );
 
+/** A lantern-like arrow up into a frame: the Request tier pill (same stroke set as Upload) */
+const UpgradeIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M12 3l7 7h-4v6H9v-6H5z" /><path d="M5 21h14" />
+  </svg>
+);
+
 export function UploadAction({ variant = 'header' }: { variant?: 'header' | 'tab' }) {
   const { t, lang } = useLanguage();
   const { user } = useAuth();
@@ -25,8 +32,28 @@ export function UploadAction({ variant = 'header' }: { variant?: 'header' | 'tab
   // The accessible name says what it does; the visible label is the short "Upload"
   const label = t.upload.uploadVideo;
   const short = t.navigation.upload;
-  // Uploading is by invitation: no Upload for a signed-in user without a creator tier
-  if (user && !mayUpload(creator)) return null;
+  // Uploading is by invitation: a signed-in user whose tier allows no uploads gets a pill to /upgrade
+  // in its place, labelled by the page's mode (owner, 2026-11-15): "Request tier" while it takes
+  // requests, "Upgrade" while it sells, nothing while upgrades are closed or the mode is unknown
+  if (user && !mayUpload(creator)) {
+    if (creator.status !== 'ready' || creator.access.pendingDeletion) return null;
+    // No mode (it could not be read): no pill, rather than advertise requests that may be off
+    const mode = creator.access.upgradeMode;
+    if (!mode || mode === 'closed') return null;
+    const request = mode === 'pay' ? t.creator.upgrade : t.creator.requestAccess;
+    if (variant === 'tab') {
+      return (
+        <Link href={`/${lang}/upgrade`} className="tb tb-phone" aria-label={request} data-testid="tab-request-access" data-mode={mode}>
+          <UpgradeIcon /><span>{request}</span>
+        </Link>
+      );
+    }
+    return (
+      <Link href={`/${lang}/upgrade`} className="upload-action" aria-label={request} title={request} data-testid="header-request-access" data-mode={mode}>
+        <UpgradeIcon /><span className="upload-action-label">{request}</span>
+      </Link>
+    );
+  }
   // Signed in without a channel: nowhere to upload to yet
   const tab = variant === 'tab';
   if (user && !account?.channel) {

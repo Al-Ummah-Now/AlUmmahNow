@@ -64,6 +64,11 @@ import { pruneRateLimits, rateLimitMiddleware } from "./middleware/rate-limit";
 import { UPLOAD_CONTINUE_PATHS, UPLOAD_SESSION_PATHS, uploadContinueLimitMiddleware, uploadSessionLimitMiddleware } from "./middleware/upload-limits";
 import { pruneLimitHits } from "./lib/creatorTiers";
 import { channelCreateGate, handleCreatorAccess } from "./endpoints/creator/creatorAccess";
+import { handleCreateTierRequest, handleMyTierRequests, handleUpgradeOverview, handleWithdrawTierRequest } from "./endpoints/creator/tierRequests";
+import { handleBillingPlans, handleCancelOwn, handleCheckout, handleFakeCheckoutPage, handleFakePay, handleMyBilling, handlePortal, handleWebhook } from "./endpoints/billing/billing";
+import billingInternalRouter from "./routers/billing.router";
+import { onBillingJobFailed, queueReconciles } from "./lib/billing/service";
+import { sweepEntitlements } from "./lib/billing/store";
 import { logger } from './lib/logger';
 import { registerAllRouters } from './routers';
 import type { AppBindings } from './base';
@@ -268,6 +273,8 @@ app.use('/api/moderation/reports', edgeRateLimit('REPORT_LIMITER', 'videos.repor
 // Live watching heartbeats (AlUmmahNow#30), per IP: bounds made-up viewers with the per-network cap in the object
 app.use('/api/live-streams/:id/viewers', edgeRateLimit('LIVE_VIEWER_LIMITER', 'videos.live_viewers'));
 app.use('/api/moderation/reports', requireHuman('videos.report', 'always'));
+// Tier requests on /upgrade: Turnstile on every request (wiki AUN-TIER-REQUESTS)
+app.use('/api/me/tier-requests', requireHuman('videos.tier_request', 'always'));
 for (const path of ['/api/videos/upload/initiate', '/api/videos/upload/batch/initiate']) {
 	app.use(path, edgeRateLimit('UPLOAD_INITIATE_LIMITER', 'videos.upload_initiate'));
 }
@@ -289,6 +296,21 @@ app.get('/api/me/creator', authMiddleware, handleCreatorAccess);
 app.get('/api/me/features', handleUserFeatures);
 // Native app attestation: App Attest / Play Integrity → X-AUN-Native-Proof (lib/attestation, #1274)
 app.route('/api/apps/attestation', attestationRouter as never);
+// Tier requests (/upgrade): the tiers, the user's request, filing and withdrawing one
+app.get('/api/tiers/upgrade', handleUpgradeOverview);
+// Payments for creator tiers (wiki AUN-SUBS, lib/billing/*): off until an admin enables a provider
+app.get('/api/billing/plans', handleBillingPlans);
+app.get('/api/me/billing', authMiddleware, handleMyBilling);
+app.post('/api/me/billing/checkout', authMiddleware, handleCheckout);
+app.post('/api/me/billing/subscriptions/:id/cancel', authMiddleware, handleCancelOwn);
+app.post('/api/me/billing/portal', authMiddleware, handlePortal);
+// Provider webhooks live outside /api: no auth, bot or browser middleware runs on them (the signature is the check)
+app.get('/webhooks/billing/fake/checkout/:id', handleFakeCheckoutPage);
+app.post('/webhooks/billing/fake/checkout/:id/pay', handleFakePay);
+app.post('/webhooks/billing/:provider', handleWebhook);
+app.get('/api/me/tier-requests', authMiddleware, handleMyTierRequests);
+app.post('/api/me/tier-requests', authMiddleware, handleCreateTierRequest);
+app.post('/api/me/tier-requests/:id/withdraw', authMiddleware, handleWithdrawTierRequest);
 // Whether the next comment/post/report needs a Turnstile token (middleware/bot-protection.ts)
 app.get('/api/me/human-check', authMiddleware, humanCheckStatus);
 
@@ -367,6 +389,8 @@ app.get('/api/youtube-import/oauth/callback', async (c) => {
 	c.header('Referrer-Policy', 'no-referrer');
 	return c.redirect(target, 302);
 });
+// Payments admin (lib/billing/*): providers, prices, tax, subscriptions; admin-api audits and stores credentials
+app.route('/internal/billing', billingInternalRouter as never);
 
 // ==========================================
 // PROFILE/CHANNEL IMAGE UPLOADS
@@ -604,6 +628,16 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 		return;
 	}
 	if (controller?.cron === PROCESSING_SWEEP_CRON) {
+		// Payments: tiers of canceled subscriptions whose paid period ended, and ended comps (lib/billing/store.ts)
+		ctx.waitUntil(
+			sweepEntitlements(rawEnv as never).then(
+				(r) => (r.synced || r.ended ? logger.info('[Billing] Entitlement sweep', r) : undefined),
+				(error) => {
+					logger.error('[Billing] Entitlement sweep failed', { error: error instanceof Error ? error.message : String(error) });
+					reportJobFailure(rawEnv, ctx, 'billing-entitlements', error);
+				},
+			),
+		);
 		// Safety net for the per-video processing-check loop (lib/processing/loop.ts)
 		ctx.waitUntil(
 			sweepProcessingVideos(withSearchSync(rawEnv, ctx) as never).catch((error) =>
@@ -670,6 +704,15 @@ async function scheduled(controller: ScheduledController, rawEnv: AppBindings, c
 				}),
 		);
 		// Hourly: move legacy channel subscriptions into D1 (SCALABILITY-AUDIT AV-4)
+		ctx.waitUntil(
+			// Hourly: subscriptions whose renewal never arrived are checked with their provider (lib/billing/service.ts)
+			queueReconciles(rawEnv as never)
+				.then((n) => (n ? logger.info('[Billing] Reconciles queued', { n }) : undefined))
+				.catch((error) => {
+					logger.error('[Billing] Reconcile queueing failed', { error: error instanceof Error ? error.message : String(error) });
+					reportJobFailure(rawEnv, ctx, 'billing-reconcile', error);
+				}),
+		);
 		ctx.waitUntil(
 			importPendingSubscriptions(rawEnv as never)
 				.then((result) => logger.info('[SubscriptionImport] Run finished', { ...result }))
@@ -864,7 +907,10 @@ async function handleQueueBatch(batch: MessageBatch<unknown>, env: AppBindings, 
 	try {
 		// Run-account erasures (#887) are admin jobs on their own capped queue
 		if (batch.queue.startsWith('al-ummah-now-admin-jobs') || batch.queue.startsWith('al-ummah-now-run-erase')) {
-			await handleAdminJobBatch(batch as unknown as { messages: readonly JobMessage[] }, withSearchSync(env, ctx) as never, ADMIN_JOB_HANDLERS);
+			const jobEnv = withSearchSync(env, ctx) as never;
+			await handleAdminJobBatch(batch as unknown as { messages: readonly JobMessage[] }, jobEnv, ADMIN_JOB_HANDLERS, (job, error) =>
+				job.kind.startsWith('billing.') ? onBillingJobFailed(jobEnv, job, error) : Promise.resolve(),
+			);
 			return;
 		}
 		// Move from YouTube jobs (lib/youtube-import/jobs.ts), one per invocation

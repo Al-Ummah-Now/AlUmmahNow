@@ -1,0 +1,119 @@
+/* Upgrade page (components/upgrade/UpgradePage.tsx, wiki AUN-TIER-REQUESTS).
+   Theme tokens and the theme's materials (materials.css) only, so every Fanous
+   theme and mode restyles it. Cards are the shared card ([data-slot=card] in
+   theme/system.css: frosted glass, golden edge), lists the lite card, buttons the
+   shared flat buttons; the current tier's card only gets a primary outline. */
+.upg{width:100%;max-width:1120px;margin-inline:auto;padding:clamp(20px,4vw,48px) 16px 56px;color:var(--fanous-color-text-primary)}
+.upg-head{max-width:68ch;margin-block-end:clamp(18px,2.6vw,28px)}
+.upg-title{margin:0;font-size:clamp(28px,3.6vw,42px);font-weight:700;line-height:1.15;letter-spacing:-.01em}
+html[lang=ar] .upg-title{line-height:1.45;letter-spacing:0}
+.upg-lead{margin:10px 0 0;font-size:clamp(15px,1.3vw,17px);line-height:1.65;color:var(--fanous-color-text-secondary)}
+
+/* Beta notice: a quiet card with the lantern mark and the primary rule on the start side */
+.upg-beta{display:grid;grid-template-columns:auto minmax(0,1fr);gap:14px;align-items:start;padding:16px 18px;max-width:820px}
+.upg-unavailable{padding:14px 18px;max-width:820px;margin:0}
+.upg-beta-mark{display:grid;place-items:center;width:40px;height:40px;border-radius:var(--r-md,10px);color:var(--fanous-color-primary);background:color-mix(in srgb,var(--fanous-color-primary) 12%,transparent)}
+.upg-beta-mark svg{width:24px;height:24px}
+.upg-beta-title{margin:0;font-size:15px;font-weight:700}
+.upg-beta-body{margin:4px 0 0;font-size:14px;line-height:1.65;color:var(--fanous-color-text-secondary)}
+
+.upg-notice{min-height:0;margin:14px 0 0;font-size:14px;font-weight:600;color:var(--fanous-color-success-text)}
+.upg-notice:empty{margin:0}
+
+/* The user's request */
+.upg-status{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:14px 16px;align-items:center;margin-block-start:20px;padding:18px 20px}
+.upg-status-icon{display:grid;place-items:center;width:40px;height:40px;border-radius:999px;color:var(--fanous-color-primary);background:color-mix(in srgb,var(--fanous-color-primary) 14%,transparent)}
+.upg-status-icon svg{width:22px;height:22px}
+.upg-status[data-status=approved] .upg-status-icon{color:var(--fanous-color-success-text);background:color-mix(in srgb,var(--fanous-color-success-text) 14%,transparent)}
+.upg-status[data-status=declined] .upg-status-icon{color:var(--fanous-color-text-secondary);background:color-mix(in srgb,var(--fanous-color-text-secondary) 12%,transparent)}
+.upg-status-title{margin:0;font-size:16px;font-weight:700;line-height:1.4}
+.upg-status-text p{margin:4px 0 0;font-size:14px;line-height:1.6;color:var(--fanous-color-text-secondary)}
+@media (max-width:640px){.upg-status{grid-template-columns:auto minmax(0,1fr)}.upg-status-action{grid-column:1/-1}.upg-status-action .upg-btn{width:100%}}
+
+/* Tier cards */
+.upg-tiers{margin-block-start:clamp(24px,3.4vw,36px)}
+.upg-grid{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,272px),1fr));gap:clamp(14px,2vw,22px);align-items:stretch}
+.upg-card{position:relative;display:flex;flex-direction:column;min-width:0;padding:clamp(20px,2.4vw,28px)}
+.upg-card[data-state=current]{outline:2px solid var(--fanous-color-primary);outline-offset:-2px}
+.upg-card-skel{min-height:340px;animation:upg-pulse 1.4s ease-in-out infinite}
+@keyframes upg-pulse{50%{opacity:.55}}
+@media (prefers-reduced-motion:reduce){.upg-card-skel{animation:none}}
+/* Buttons are the shared flat buttons (components/upgrade/buttons.ts); these only size them in place */
+.upg-name{margin:0;font-size:clamp(20px,1.9vw,24px);font-weight:700;line-height:1.25}
+html[lang=ar] .upg-name{line-height:1.5}
+.upg-desc{margin:6px 0 0;font-size:14px;line-height:1.6;color:var(--fanous-color-text-secondary)}
+.upg-feats{list-style:none;margin:18px 0 0;padding:0;display:flex;flex-direction:column;gap:11px}
+.upg-feat{display:grid;grid-template-columns:20px minmax(0,1fr);gap:10px;align-items:start;font-size:14.5px;line-height:1.5}
+.upg-feat-icon{width:18px;height:18px;margin-block-start:2px;color:var(--fanous-color-primary)}
+.upg-feat[data-included=false]{color:var(--fanous-color-text-secondary)}
+.upg-feat[data-included=false] .upg-feat-icon{color:var(--fanous-color-text-muted,var(--fanous-color-text-secondary))}
+.upg-foot{margin-block-start:auto;padding-block-start:22px}
+.upg-feats+.upg-foot{margin-block-start:auto}
+.upg-card>.upg-feats{margin-block-end:22px}
+
+.upg-status-action .upg-btn{width:auto}
+.upg-pill{display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;margin:0;padding:10px 16px;border-radius:var(--r-md,10px);font-weight:600;font-size:15px;color:var(--fanous-color-text-secondary);background:color-mix(in srgb,var(--fanous-color-text-secondary) 10%,transparent)}
+.upg-pill svg{width:18px;height:18px}
+.upg-pill-current{color:var(--fanous-color-link);background:color-mix(in srgb,var(--fanous-color-primary) 15%,transparent)}
+
+.upg-error{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:18px}
+.upg-error p{margin:0;flex:1 1 220px}
+.upg-error .upg-btn{width:auto}
+
+/* How requests work: a real sequence, so numbered */
+.upg-how{margin-block-start:clamp(36px,5vw,56px)}
+.upg-how-title{margin:0 0 16px;font-size:20px;font-weight:700}
+.upg-steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(12px,2vw,24px);counter-reset:upg-step}
+.upg-step{position:relative;counter-increment:upg-step;padding-block-start:44px}
+.upg-step::before{content:counter(upg-step,decimal);position:absolute;inset-block-start:0;inset-inline-start:0;display:grid;place-items:center;width:32px;height:32px;border-radius:999px;font-weight:700;font-size:15px;color:var(--fanous-color-primary);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--fanous-color-primary) 60%,transparent)}
+html[lang=ar] .upg-step::before{content:counter(upg-step,arabic-indic)}
+.upg-step-title{margin:0;font-size:16px;font-weight:700}
+.upg-step-body{margin:4px 0 0;font-size:14px;line-height:1.6;color:var(--fanous-color-text-secondary)}
+@media (max-width:720px){.upg-steps{grid-template-columns:minmax(0,1fr)}.upg-step{padding-block-start:0;padding-inline-start:46px;min-height:32px}}
+
+/* Request dialog */
+.upg-dialog{max-width:min(560px,calc(100vw - 32px))}
+.upg-dialog-title{font-size:20px;font-weight:700}
+.upg-dialog-desc{color:var(--fanous-color-text-secondary)}
+.upg-dialog-tier{margin:2px 0 6px;font-weight:600;color:var(--fanous-color-text-primary)}
+.upg-form{display:flex;flex-direction:column;gap:18px;margin-block-start:6px}
+.upg-field{display:flex;flex-direction:column;gap:6px}
+.upg-field label{font-weight:600;font-size:14px}
+.upg-input{width:100%;min-height:44px;padding:10px 12px;border-radius:var(--r-md,10px);border:1px solid var(--fanous-color-outline,var(--fanous-color-divider));background:var(--fanous-color-surface);color:var(--fanous-color-text-primary);font:inherit;font-size:15px;line-height:1.55}
+.upg-textarea{min-height:140px;resize:vertical}
+.upg-input:focus-visible{outline:2px solid var(--fanous-color-focus-ring);outline-offset:1px;box-shadow:none}
+.upg-input[aria-invalid=true]{border-color:var(--fanous-color-error-fill)}
+.upg-help{margin:0;font-size:13px;line-height:1.5;color:var(--fanous-color-text-secondary)}
+.upg-help-row{display:flex;gap:12px;justify-content:space-between;align-items:flex-start}
+.upg-count{margin:0;flex:none;font-size:13px;color:var(--fanous-color-text-secondary);font-variant-numeric:tabular-nums}
+.upg-err{margin:0;font-size:13px;font-weight:600;color:var(--fanous-color-error-text,var(--fanous-color-error-fill))}
+.upg-form-err{padding:10px 12px;border-radius:var(--r-md,10px);background:color-mix(in srgb,var(--fanous-color-error-fill) 10%,transparent)}
+.upg-form-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+.upg-form-actions .upg-btn{width:auto;min-width:120px}
+@media (max-width:480px){.upg-form-actions{flex-direction:column-reverse}.upg-form-actions .upg-btn{width:100%}}
+/* "Your requests" (TierRequestHistory): /upgrade below the cards, and Settings › Tier */
+.upg-history{margin-block-start:clamp(28px,4vw,44px)}
+.upg-history-title{margin:0 0 12px;font-size:18px;font-weight:700}
+.upg-history-empty{margin:0;font-size:14px;color:var(--fanous-color-text-secondary)}
+.upg-history-list{list-style:none;margin:0;padding:0;overflow:hidden}
+.upg-history-row{padding:14px 16px;border-block-start:1px solid var(--fanous-color-divider)}
+.upg-history-row:first-child{border-block-start:0}
+.upg-history-main{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+.upg-history-tier{font-weight:700;font-size:15px}
+.upg-history-chip{display:inline-flex;align-items:center;padding:2px 10px;border-radius:var(--r-sm,6px);font-size:12px;font-weight:600;color:var(--fanous-color-text-secondary);background:color-mix(in srgb,var(--fanous-color-text-secondary) 12%,transparent)}
+.upg-history-chip[data-status=pending]{color:var(--fanous-color-primary);background:color-mix(in srgb,var(--fanous-color-primary) 14%,transparent)}
+.upg-history-chip[data-status=approved]{color:var(--fanous-color-success-text);background:color-mix(in srgb,var(--fanous-color-success-text) 14%,transparent)}
+.upg-history-dates{display:flex;flex-wrap:wrap;gap:4px 16px;margin:6px 0 0;font-size:13px;color:var(--fanous-color-text-secondary)}
+.upg-history-more{margin-block-start:12px}
+
+/* Settings › Tier: one compact card (name and since on one line, features in columns, the action at the end edge) */
+.upg-current{margin-block-start:20px;padding:18px 20px 14px}
+.upg-current-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:2px 16px}
+.upg-current-title{margin:0;font-size:17px;font-weight:700;line-height:1.4}
+.upg-current-since{margin:0;font-size:13px;color:var(--fanous-color-text-secondary)}
+.upg-current .upg-current-feats{margin:12px 0 0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr));gap:8px 24px}
+.upg-current-foot{display:flex;justify-content:flex-end;margin-block-start:14px;padding-block-start:12px;border-block-start:1px solid var(--fanous-color-divider)}
+/* The team's note: a label, then the note as written in its own direction */
+.upg-note{width:fit-content;max-width:100%;margin-block-start:8px;padding-inline-start:10px;border-inline-start:2px solid var(--fanous-color-divider)}
+.upg-note-label{margin:0;font-size:12px;font-weight:600;color:var(--fanous-color-text-secondary)}
+.upg-note-text{margin:2px 0 0;font-size:14px;line-height:1.6;color:var(--fanous-color-text-primary);unicode-bidi:plaintext;text-align:start}

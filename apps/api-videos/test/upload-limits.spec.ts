@@ -579,7 +579,8 @@ describe('creator tiers: channels, access and admin', () => {
   it('GET /api/me/creator says what the user may do', async () => {
     const h = await harness();
     const none = await creatorAccess(h.d1, 'nobody', []);
-    assert.deepEqual([none.canUpload, none.canCreateChannel, none.tier, none.via], [false, false, null, 'none']);
+    // No assignment: the default Member tier, which allows neither (wiki AUN-TIER-REQUESTS)
+    assert.deepEqual([none.canUpload, none.canCreateChannel, none.tier?.id, none.via, none.maxChannels], [false, false, 'member', 'none', 0]);
     await h.initiate('alice');
     const alice = await creatorAccess(h.d1, 'alice', []);
     assert.deepEqual([alice.canUpload, alice.canCreateChannel, alice.tier?.id, alice.maxChannels], [true, true, 'small', SMALL.maxChannels]);
@@ -597,7 +598,7 @@ describe('creator tiers: channels, access and admin', () => {
     assert.equal(stored()?.assigned_by, 'system:super-admin');
     // Role revoked: nothing left, and the automatic row is gone
     const revoked = await creatorAccess(h.d1, 'boss', []);
-    assert.deepEqual([revoked.canUpload, revoked.tier, revoked.via], [false, null, 'none']);
+    assert.deepEqual([revoked.canUpload, revoked.tier?.id, revoked.via], [false, 'member', 'none']);
     assert.equal(stored(), undefined);
     // An admin-set tier is never overwritten or removed by the role logic
     await assignTier(h.d1, 'boss2', 'creator', 'admin-1');
@@ -617,8 +618,8 @@ describe('creator tiers: channels, access and admin', () => {
     role('ch-bob', 'ed', 'admin');
     role('ch-alice-2', 'ed', 'moderator');
     const ed = await creatorAccess(h.d1, 'ed', []);
-    // Alice has a tier, Bob none; a moderator can't upload; ed owns a channel but has no tier of their own
-    assert.deepEqual([ed.canUpload, ed.tier, ed.uploadChannelIds, ed.canCreateChannel], [true, null, ['ch-alice'], false]);
+    // Alice has a tier, Bob none; a moderator can't upload; ed owns a channel but holds only Member
+    assert.deepEqual([ed.canUpload, ed.tier?.id, ed.tier?.uploads, ed.uploadChannelIds, ed.canCreateChannel], [true, 'member', false, ['ch-alice'], false]);
     // A deleted channel is left out
     h.deleteChannel('ch-alice');
     const later = await creatorAccess(h.d1, 'ed', []);
@@ -631,20 +632,21 @@ describe('creator tiers: channels, access and admin', () => {
     const h = await harness();
     await creatorAccess(h.d1, 'boss', ['Super Admin']);
     const manager = await resolveCreator(h.d1, { userId: 'helper', roles: [], channelOwnerId: 'boss' });
-    assert.deepEqual([manager.tier, manager.via], [null, 'none']);
+    assert.deepEqual([manager.tier?.id, manager.tier?.uploads, manager.via], ['member', false, 'none']);
     // and a manager acting there doesn't remove the owner's row
     assert.ok(h.db.db.prepare("SELECT 1 FROM creator_tier_assignments WHERE user_id = 'boss'").get());
   });
 
   it('tier definitions fall back to the shipped defaults, validate, and cannot be deleted while held', async () => {
     const h = await harness();
-    h.db.db.exec("DELETE FROM creator_tiers WHERE id IN ('creator', 'unlimited')");
+    h.db.db.exec("DELETE FROM creator_tiers WHERE id IN ('member', 'creator', 'unlimited')");
     const fallback = await readTiers(h.d1);
     assert.equal(fallback.find((t) => t.id === 'creator')?.perHour, DEFAULT_CREATOR_TIER.perHour);
     assert.equal(fallback.find((t) => t.id === 'unlimited')?.unlimited, true);
+    assert.equal(fallback.find((t) => t.id === 'member')?.uploads, false, 'Member falls back to no uploads, never to more');
     // D1 down: still the defaults
     const down = await readTiers({ prepare: () => { throw new Error('down'); } } as unknown as D1Database);
-    assert.deepEqual(down.map((t) => t.id).sort(), ['creator', 'unlimited']);
+    assert.deepEqual(down.map((t) => t.id).sort(), ['creator', 'member', 'unlimited']);
 
     await saveTier(h.d1, 'creator', { perHour: 500 }, 'admin-1');
     assert.equal((await readTier(h.d1, 'creator'))?.perHour, 500);
@@ -654,6 +656,8 @@ describe('creator tiers: channels, access and admin', () => {
     assert.equal(validateTier('unlimited', { name: 'U', unlimited: false }).unlimited, true, 'Unlimited stays unlimited');
     await assert.rejects(deleteTier(h.d1, 'small'), /hold this tier/);
     await assert.rejects(deleteTier(h.d1, 'creator'), /cannot be deleted/);
+    await assert.rejects(deleteTier(h.d1, 'member'), /cannot be deleted/);
+    assert.equal(validateTier('member', { name: 'M', unlimited: true, perHour: 1, perDay: 1, maxConcurrent: 1 }).unlimited, false, 'Member is never unlimited');
     await assert.rejects(assignTier(h.d1, 'zed', 'missing', 'admin'), /tier_not_found/);
   });
 

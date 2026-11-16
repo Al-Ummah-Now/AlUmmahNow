@@ -154,6 +154,8 @@
     "TURNSTILE_SITE_KEY": "1x00000000000000000000AA",
     // Abuse panel (/api/abuse): Analytics Engine SQL API account
     "CLOUDFLARE_ACCOUNT_ID": "0e4b6e7f9faf280c3c9bf95995edc64f",
+    // Payments credentials are written here from the admin (lib/billing-secrets.ts)
+    "PAYMENTS_SECRETS_STORE_ID": "f8eddc9944d041919ed8dc7d08d32308",
     // Logging policy (docs/operations/logging.md): warn on production, stage and QA (only warnings, errors, slow requests); debug locally
     "LOG_LEVEL": "warn",
     "WEBSOCKET_URL": "https://realtime.qa.alummahnow.net",

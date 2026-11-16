@@ -163,6 +163,9 @@ export const WORKERS: StackWorker[] = [
       // White-label scholar sites: <slug>.sites.localhost hosts, revoked sites redirect to the local web app
       SITES_ENV: 'local',
       VIDEOS_WEB_URL: url('web'),
+      // Payments (wiki AUN-SUBS): the test provider's checkout page and webhooks live on this worker;
+      // E2E pays with it, no money moves (lib/billing/fake.ts); its URLs use VIDEOS_API_URL below
+      PAYMENTS_FAKE_PROVIDER: '1',
       // Mobile apps settings (attestation switches, NAT-REL) come from the stack's admin-api
       ADMIN_API_URL: url('admin-api'),
       // Social OAuth callbacks and the Telegram webhook point here

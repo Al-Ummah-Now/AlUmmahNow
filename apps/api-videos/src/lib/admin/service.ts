@@ -9,6 +9,7 @@
  */
 import { disconnectChannel, eraseChannelSocial } from '../social/connect';
 import { runTranscodeAction } from '../media/troubleshoot';
+import { runCancelJob, runReconcileJob, runRefundJob, runSyncPricesJob, runWebhookJob } from '../billing/service';
 import { bunnyRef } from '../media/providers';
 import { adminVideoMedia } from '../media/video-override';
 import { eraseUploadTraces } from '../privacy/upload-traces';
@@ -1708,5 +1709,11 @@ export const ADMIN_JOB_HANDLERS: Record<AdminJobKind, JobHandler> = {
 	// R2 transcode troubleshooting (lib/media/troubleshoot.ts), videos admin → Delivery
 	'media.transcode-retry': (env, job) => runTranscodeAction(env as never, job),
 	'media.transcode-cancel': (env, job) => runTranscodeAction(env as never, job),
+	// Payments (lib/billing/service.ts): webhooks, price sync, cancels, refunds, reconciles
+	'billing.webhook': (env, job) => runWebhookJob(env as never, job),
+	'billing.sync-prices': (env, job) => runSyncPricesJob(env as never, job),
+	'billing.cancel': (env, job) => runCancelJob(env as never, job),
+	'billing.refund': (env, job) => runRefundJob(env as never, job),
+	'billing.reconcile': (env, job) => runReconcileJob(env as never, job),
 };
 

@@ -11,7 +11,11 @@ import { workerAdminPage } from './admin-session';
 import { releaseEnv, target } from './targets';
 import { apiFetch, type WebUser } from './web-session';
 
-/** Sets (or with null removes) the user's creator tier in admin-web and waits until saved and in effect. */
+/**
+ * Sets (or with null removes) the user's creator tier in admin-web and waits until saved and in
+ * effect. Without an assignment the user holds Member (wiki AUN-TIER-REQUESTS), which
+ * /api/me/creator reports as the tier.
+ */
 export async function setCreatorTier(user: WebUser, tierId: string | null): Promise<void> {
   const page = await workerAdminPage();
   await page.goto(`${target().adminWeb}/auth-requests/users/${encodeURIComponent(user.userId)}`);
@@ -47,8 +51,8 @@ export async function setCreatorTier(user: WebUser, tierId: string | null): Prom
       const res = await apiFetch(user, '/api/me/creator');
       const body = (await res.json().catch(() => ({}))) as { result?: { canUpload?: boolean; tier?: { id?: string } | null } };
       return body.result?.tier?.id ?? null;
-    }, { message: `GET /api/me/creator does not show tier ${tierId}`, timeout: 20000 })
-    .toBe(tierId);
+    }, { message: `GET /api/me/creator does not show tier ${tierId ?? 'member'}`, timeout: 20000 })
+    .toBe(tierId ?? 'member');
 }
 
 /**

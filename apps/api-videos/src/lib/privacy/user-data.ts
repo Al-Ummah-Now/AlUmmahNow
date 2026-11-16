@@ -32,6 +32,7 @@
  *   reports/report:{entityId}:{reportId}:{reporterId}  reports filed by the user
  */
 
+import { eraseTierHistory } from '../tierChanges';
 import { eraseUserSubscriptions, exportUserSubscriptions, subscriberChannelOf } from '../subscription-store';
 import { getEmailSettings, getSeenAt, getSettings } from '../notifications';
 import { defaultPointerPrefix } from '../uploadDefaultPointer';
@@ -1146,6 +1147,8 @@ export async function eraseUserData(
 				await eraseChannelComments(db, userId, ctx.checkpoint.o);
 				// The search binding is the D1 database; the minutes need its batch and all()
 				await eraseCaptionMinutes(db as unknown as D1Database, userId);
+				// Tier requests (name, about) and tier changes
+				await eraseTierHistory(db as unknown as D1Database, userId);
 				// Move from YouTube: imports, snapshots, consents, staged captions (Google token revoked)
 				ctx.budget.spend(2);
 				await eraseYoutubeImports(db as unknown as D1Database, env as never, userId);

@@ -5,7 +5,7 @@ import Link from '@/components/AppLink';
 import { useRouter } from 'next/navigation';
 import type { AdminUserRow, CreatorTier, CreatorTierBulkResult } from '@al-ummah/shared-types';
 import type { ActionResult } from '@/lib/api/errors';
-import { isUnexpectedFailure, tierActionMessage, tierChangeMessage, tiersHref } from '@/lib/creator-tiers';
+import { isUnexpectedFailure, tierActionMessage, tierChangeMessage, tiersHref, tierLabel } from '@/lib/creator-tiers';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { formatDate, formatNumber, type Translator } from '@/i18n/translate';
 import { ErrorAlert, fieldClass, linkClass } from '@/components/ui';
@@ -116,7 +116,7 @@ export function UsersTable({ items, tiers, canManage, setTier, bulkSetTier }: Us
             <select value={bulkTier} onChange={(e) => setBulkTier(e.target.value)} className={`${fieldClass} py-1 text-sm`} data-testid="users-bulk-tier">
               <option value="">{t('creators.bulkChoose')}</option>
               {tiers.map((tier) => (
-                <option key={tier.id} value={tier.id}>{tier.name}</option>
+                <option key={tier.id} value={tier.id}>{tierLabel(tier, locale)}</option>
               ))}
               <option value={NONE}>{t('creators.noTier')}</option>
             </select>

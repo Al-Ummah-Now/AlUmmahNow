@@ -60,6 +60,11 @@ describe('settingsTrail', () => {
       { label: 'Upload Defaults', href: '/en/settings/upload-defaults' },
     ]);
     expect(settingsTrail('/ar/settings/privacy', 'ar', AR_TRANSLATIONS)?.[0].href).toBe('/ar/settings');
+    expect(settingsTrail('/en/settings/tier', 'en', t)).toEqual([
+      { label: 'Settings', href: '/en/settings' },
+      { label: 'Tier', href: '/en/settings/tier' },
+    ]);
+    expect(settingsTrail('/ar/settings/tier', 'ar', AR_TRANSLATIONS)?.[1].label).toBe('الفئة');
   });
 
   it('shows on the profile page only when opened from Settings', () => {

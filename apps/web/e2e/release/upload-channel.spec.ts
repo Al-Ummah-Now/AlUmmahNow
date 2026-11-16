@@ -214,12 +214,13 @@ test.describe('Release: channel editors upload under the owner\'s tier (#759)', 
       const accepted = await apiFetch(editor.user, `/api/channel-invites/${invitation!.id}/accept`, { method: 'POST' });
       expect(accepted.status, `accept: ${await accepted.clone().text()}`).toBe(200);
 
-      // The API names the channel for the editor, who has no tier of their own
+      // The API names the channel for the editor, whose own tier allows no uploads
       const access = async () =>
-        ((await (await apiFetch(editor.user, '/api/me/creator')).json().catch(() => ({}))) as { result?: { tier?: unknown; canUpload?: boolean; uploadChannelIds?: string[] } }).result;
+        ((await (await apiFetch(editor.user, '/api/me/creator')).json().catch(() => ({}))) as { result?: { tier?: { uploads?: boolean } | null; canUpload?: boolean; uploadChannelIds?: string[] } }).result;
       const first = await access();
       test.skip(!Array.isArray(first?.uploadChannelIds), 'the QA build predates per-channel upload eligibility (#759)');
-      expect(first?.tier ?? null).toBeNull();
+      // Every account holds Member (no uploads) unless granted more (#1415)
+      expect(first?.tier?.uploads ?? false, 'the editor\'s own tier allows uploads').toBe(false);
       await expect.poll(async () => (await access())?.uploadChannelIds ?? [], { message: 'the editor\'s channel is not listed', timeout: 30000 }).toContain(channelId);
 
       // /upload shows the uploader on the owner's channel, and the upload lands there

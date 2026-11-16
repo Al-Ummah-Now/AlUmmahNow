@@ -12,7 +12,7 @@ import { useLanguage } from '@/i18n/I18nProvider';
 import type { MessageKey } from '@/i18n/translate';
 import { fieldClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
-import { dangerButtonClass, smallButtonClass } from './parts';
+import { dangerButtonClass, primarySmallButtonClass, smallButtonClass } from './parts';
 import { confirmMatches } from './transfer-model';
 
 export function useContentAction() {
@@ -95,6 +95,8 @@ interface ConfirmDialogContent {
   withReason?: boolean;
   /** Help under the reason field (default: shown to the owner). */
   reasonHint?: string;
+  /** The reason's length limit (default 1000) */
+  reasonMaxLength?: number;
   /** The exact text the admin must type to enable the confirm button. */
   /** The text the admin must type to enable the confirm button; with several, any one of them (emails ignore case). */
   typeToConfirm?: string | readonly string[];
@@ -134,7 +136,7 @@ function confirmValuesOf(required: string | readonly string[] | undefined): stri
  * change by accident); the reason and type-to-confirm fields are one Tab away.
  * Never use window.confirm/alert/prompt instead.
  */
-export function ConfirmDialog({ open, onCancel, onConfirm, title, body, confirmLabel, withReason, reasonHint, typeToConfirm, typeToConfirmLabel, danger, testId }: ConfirmDialogProps) {
+export function ConfirmDialog({ open, onCancel, onConfirm, title, body, confirmLabel, withReason, reasonHint, reasonMaxLength, typeToConfirm, typeToConfirmLabel, danger, testId }: ConfirmDialogProps) {
   const { t } = useLanguage();
   const ref = useRef<HTMLDialogElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
@@ -205,7 +207,7 @@ export function ConfirmDialog({ open, onCancel, onConfirm, title, body, confirmL
             <label htmlFor={`${ids}-reason`} className="text-sm text-fg-muted">
               {t('content.reason')}
             </label>
-            <textarea id={`${ids}-reason`} value={reason} onChange={(e) => setReason(e.target.value)} rows={3} maxLength={1000} dir="auto" className={`${fieldClass} w-full`} data-testid={`${testId}-reason`} />
+            <textarea id={`${ids}-reason`} value={reason} onChange={(e) => setReason(e.target.value)} rows={3} maxLength={reasonMaxLength ?? 1000} dir="auto" className={`${fieldClass} w-full`} data-testid={`${testId}-reason`} />
             <span className="text-xs text-fg-subtle">{reasonHint ?? t('content.reasonHint')}</span>
           </div>
         )}
@@ -238,16 +240,18 @@ interface ConfirmProps extends ConfirmDialogContent {
   onConfirm: (reason: string) => Promise<unknown> | unknown;
   /** Extra classes for the opening button (e.g. a full-width, 44 px tap target on a phone card). */
   buttonClassName?: string;
+  /** The group's main action: the opening button is filled with the accent */
+  primary?: boolean;
 }
 
 /** A button that opens a modal <dialog> to confirm (and optionally explain) a change. */
-export function ConfirmButton({ label, disabled, busy, onConfirm, dialogTestId, buttonClassName, ...dialog }: ConfirmProps & ConfirmDialogTestIds) {
+export function ConfirmButton({ label, disabled, busy, onConfirm, dialogTestId, buttonClassName, primary, ...dialog }: ConfirmProps & ConfirmDialogTestIds) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
 
   return (
     <>
-      <button type="button" className={`${dialog.danger ? dangerButtonClass : smallButtonClass}${buttonClassName ? ` ${buttonClassName}` : ''}`} disabled={disabled || busy} onClick={() => setOpen(true)} data-testid={dialog.testId}>
+      <button type="button" className={`${dialog.danger ? dangerButtonClass : primary ? primarySmallButtonClass : smallButtonClass}${buttonClassName ? ` ${buttonClassName}` : ''}`} disabled={disabled || busy} onClick={() => setOpen(true)} data-testid={dialog.testId}>
         {busy ? t('content.working') : label}
       </button>
       <ConfirmDialog

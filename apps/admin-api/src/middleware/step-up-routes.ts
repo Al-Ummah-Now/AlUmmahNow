@@ -49,6 +49,13 @@ export const STEP_UP_ROUTES: readonly { method: Method; path: string; what: stri
   { method: 'POST', path: '/api/csam/:id/hold', what: 'CSAM legal hold' },
   { method: 'PUT', path: '/api/csam/settings', what: 'CSAM evidence retention' },
   { method: 'POST', path: '/api/csam/settings/webhook-secret', what: 'CSAM webhook secret' },
+  // Payments (wiki AUN-SUBS): provider credentials, turning a provider on or off and live/test,
+  // money back, ending a paid subscription and granting a tier for free
+  { method: 'PUT', path: '/api/billing/providers/:id/credentials', what: 'Payment provider credentials' },
+  { method: 'PUT', path: '/api/billing/providers/:id', what: 'Payment provider settings (enable, live/test mode)' },
+  { method: 'POST', path: '/api/billing/payments/:id/refund', what: 'Refund a payment' },
+  { method: 'POST', path: '/api/billing/subscriptions/:id/cancel', what: 'Cancel a subscription' },
+  { method: 'POST', path: '/api/billing/comps', what: 'Grant a complimentary tier' },
 ];
 
 export function registerStepUpRoutes(app: Hono): void {

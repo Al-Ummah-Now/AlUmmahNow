@@ -21,7 +21,7 @@ import {
 	type CaptionMinuteGrant,
 	type CaptionMinutesUsage,
 } from '@al-ummah/shared-types';
-import { readAssignment, readTier, resolveCreator } from '../creatorTiers';
+import { readAssignment, readDefaultTier, readTier, resolveCreator } from '../creatorTiers';
 import { logger } from '../logger';
 
 export class CaptionMinutesError extends Error {
@@ -51,11 +51,13 @@ export async function captionSubject(db: D1Database, who: { userId: string; role
 /** The admin's view: a user's own tier (no roles in the admin context; a super admin holds the stored Unlimited row). */
 export async function subjectOfUser(db: D1Database, userId: string): Promise<MinutesSubject> {
 	const assignment = await readAssignment(db, userId);
-	const tier = assignment ? await readTier(db, assignment.tierId) : null;
+	const assigned = assignment ? await readTier(db, assignment.tierId) : null;
+	// No assignment (or a deleted tier): the default Member tier's minutes
+	const tier = assigned ?? (await readDefaultTier(db));
 	return {
 		subjectId: userId,
 		unlimited: !!tier?.unlimited,
-		via: assignment?.assignedBy === 'system:super-admin' ? 'super_admin' : tier ? 'tier' : 'none',
+		via: assignment?.assignedBy === 'system:super-admin' ? 'super_admin' : assigned ? 'tier' : 'none',
 		tierMinutes: tier && !tier.unlimited ? tier.captionMinutesMonth : 0,
 	};
 }

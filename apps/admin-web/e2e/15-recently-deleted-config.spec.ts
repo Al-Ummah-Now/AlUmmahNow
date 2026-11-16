@@ -14,7 +14,7 @@ import { RUN_TAG, storageStatePath } from './support/env';
 
 const tierId = `e2e-trash-${RUN_TAG}-${Date.now().toString(36)}`;
 const create = () =>
-  adminApi('/api/content/creator-tiers', { method: 'POST', body: JSON.stringify({ id: tierId, name: `E2E trash ${tierId}`, perHour: 1, perDay: 2, maxConcurrent: 1, maxChannels: 1 }) });
+  adminApi('/api/content/creator-tiers', { method: 'POST', body: JSON.stringify({ id: tierId, name: `E2E trash ${tierId}`, nameAr: 'فئة اختبار', description: 'E2E tier', descriptionAr: 'فئة للاختبار', perHour: 1, perDay: 2, maxConcurrent: 1, maxChannels: 1 }) });
 const remove = (reason: string) => adminApi(`/api/content/creator-tiers/${tierId}`, { method: 'DELETE', body: JSON.stringify({ reason }) });
 
 test.describe.configure({ mode: 'serial' });
