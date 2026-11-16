@@ -158,7 +158,6 @@ export function FileQueueItem({
                 text-sm font-medium
                 text-gray-900 dark:text-white
               ">
-                {/* Truncated isolates fade instead of an ellipsis (globals.css, WebKit crash #1382) */}
                 <bdi className="block truncate">{displayTitle || file.metadata.title || file.file.name}</bdi>
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">

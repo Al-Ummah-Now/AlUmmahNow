@@ -122,7 +122,6 @@ export function UploadChannelPicker({ channels, value, onChange, userId, disable
               </p>
               {selected.handle && (
                 <p className="text-sm text-[var(--fanous-color-text-secondary)]" data-testid="upload-channel-handle">
-                  {/* Truncated isolates fade instead of an ellipsis (globals.css, WebKit crash #1382) */}
                   <bdi dir="ltr" className="block truncate">@{selected.handle}</bdi>
                 </p>
               )}

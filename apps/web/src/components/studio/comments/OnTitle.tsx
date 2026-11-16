@@ -2,8 +2,7 @@ import type { ReactNode } from 'react';
 
 /**
  * "On {title}" on one line: the words around the title stay whole and the title (isolated, so a
- * title in the other script keeps its order) is cut to fit. Isolated text that truncates fades at
- * its end edge instead of an ellipsis (globals.css, WebKit crash #1382).
+ * title in the other script keeps its order) is the part that gets cut to fit.
  */
 export function OnTitle({ template, title }: { template: string; title: ReactNode }) {
   const [before, after = ''] = template.split('{title}');
