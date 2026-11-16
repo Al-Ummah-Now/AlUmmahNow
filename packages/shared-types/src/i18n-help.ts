@@ -10,6 +10,8 @@
  * «المقاطع القصيرة» for Shorts (CLAUDE.md, wiki glossary).
  */
 
+import type { UserFeatureKey } from './features';
+
 export const HELP_TOPIC_IDS = ['start', 'watching', 'identity', 'creating', 'community', 'privacy', 'appearance'] as const;
 export type HelpTopicId = (typeof HELP_TOPIC_IDS)[number];
 
@@ -35,7 +37,14 @@ export type HelpPictureId = (typeof HELP_PICTURE_IDS)[number];
 export const HELP_CLIP_IDS = ['identity-switch', 'creating-upload', 'watching-mini-player'] as const;
 export type HelpClipId = (typeof HELP_CLIP_IDS)[number];
 
-export type HelpBlock =
+/**
+ * A table row; the third item names the feature it is about, and the row is left out
+ * while that feature is off for the reader (features.ts, "Hidden when off").
+ */
+export type HelpRow = [string, string] | [string, string, UserFeatureKey];
+
+/** `feature`: the block is left out while that feature is off for the reader. */
+export type HelpBlock = { feature?: UserFeatureKey } & (
   | { type: 'p'; text: string }
   | { type: 'steps'; items: string[] }
   | { type: 'list'; items: string[] }
@@ -43,9 +52,10 @@ export type HelpBlock =
   /** `markers` explains the numbered markers drawn on the picture, in order */
   | { type: 'figure'; picture: HelpPictureId; alt: string; markers?: string[] }
   | { type: 'clip'; clip: HelpClipId; label: string; caption: string }
-  | { type: 'table'; head: [string, string]; rows: Array<[string, string]> }
+  | { type: 'table'; head: [string, string]; rows: HelpRow[] }
   /** The "Show me" button: starts the identity tour on this page */
-  | { type: 'tour'; text: string };
+  | { type: 'tour'; text: string }
+);
 
 export interface HelpSection {
   /** Anchor on the page (#id), stable across languages */
@@ -265,7 +275,8 @@ export const HELP_EN: HelpTranslations = {
               ['Like videos and comments, vote in polls', 'Like and vote as the channel'],
               ['Subscribe to channels', 'Subscribe as the channel'],
               ['Make your own playlists and save videos to them', 'Save to and manage the channel’s playlists'],
-              ['—', 'Upload, use Studio, schedule and go live'],
+              ['—', 'Upload, use Studio and schedule'],
+              ['—', 'Go live', 'live'],
               ['—', 'Write posts on the channel’s Community tab (the owner)'],
             ] },
             { type: 'p', text: 'A like or a subscription belongs to the identity that made it. If you like a video as yourself and again as your channel, that is two likes. The **Subscribe** button shows whether the identity you are using now is subscribed.' },
@@ -341,7 +352,7 @@ export const HELP_EN: HelpTranslations = {
           id: 'studio',
           heading: 'Studio',
           blocks: [
-            { type: 'p', text: 'Open the account menu and select **Studio**. It opens the channel you are acting as: its videos, drafts, edits, analytics and live streams. Switch channel in the menu to manage another.' },
+            { type: 'p', text: 'Open the account menu and select **Studio**. It opens the channel you are acting as: its videos, drafts, edits and analytics. Switch channel in the menu to manage another.' },
             { type: 'figure', picture: 'creating-studio', alt: 'Studio with the channel’s videos', markers: ['Your videos', 'Edit'] },
           ],
         },
@@ -602,7 +613,8 @@ export const HELP_AR: HelpTranslations = {
               ['الإعجاب بالمرئيات والتعليقات، والتصويت', 'الإعجاب والتصويت باسم القناة'],
               ['الاشتراك في القنوات', 'الاشتراك باسم القناة'],
               ['إنشاء قوائم تشغيلك وحفظ المرئيات فيها', 'الحفظ في قوائم تشغيل القناة وإدارتها'],
-              ['—', 'رفع المرئيات والاستوديو والجدولة والبث المباشر'],
+              ['—', 'رفع المرئيات والاستوديو والجدولة'],
+              ['—', 'البث المباشر', 'live'],
               ['—', 'كتابة المنشورات في تبويب المجتمع (لمالك القناة)'],
             ] },
             { type: 'p', text: 'الإعجاب والاشتراك يتبعان الهوية التي قامت بهما؛ فإن أعجبك مرئي باسمك ثم باسم قناتك فهذان إعجابان. ويُظهر زر **اشترك** هل الهوية التي تستخدمها الآن مشتركة أم لا.' },
@@ -678,7 +690,7 @@ export const HELP_AR: HelpTranslations = {
           id: 'studio',
           heading: 'الاستوديو',
           blocks: [
-            { type: 'p', text: 'افتح قائمة الحساب واختر **الاستوديو**. يفتح على القناة التي تتصرّف باسمها: مرئياتها والمسودات والتعديل والإحصاءات والبث المباشر. ولإدارة قناة أخرى بدّل القناة من القائمة.' },
+            { type: 'p', text: 'افتح قائمة الحساب واختر **الاستوديو**. يفتح على القناة التي تتصرّف باسمها: مرئياتها والمسودات والتعديل والإحصاءات. ولإدارة قناة أخرى بدّل القناة من القائمة.' },
             { type: 'figure', picture: 'creating-studio', alt: 'الاستوديو ومرئيات القناة', markers: ['مرئياتك', 'تعديل'] },
           ],
         },

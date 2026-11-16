@@ -1,8 +1,9 @@
 import { checkPath, itemPath, legacyHref, STUDIO_NAV, switchedPath, visibleNav, visibleTabs } from '../nav';
 import { can, roleForChannel, type StudioRole } from '../permissions';
 
-const ids = (role: StudioRole) => visibleNav(role).map((item) => item.id);
-const tabs = (role: StudioRole, id: string) => visibleTabs(role, STUDIO_NAV.find((item) => item.id === id)!).map((tab) => tab.id);
+const LIVE = { live: true };
+const ids = (role: StudioRole) => visibleNav(role, LIVE).map((item) => item.id);
+const tabs = (role: StudioRole, id: string) => visibleTabs(role, STUDIO_NAV.find((item) => item.id === id)!, LIVE).map((tab) => tab.id);
 
 describe('navigation per role', () => {
   it.each<[StudioRole, string[]]>([
@@ -72,7 +73,27 @@ describe('checkPath', () => {
     ['owner', ['content', 'nope'], 'unknown'],
     ['owner', ['content', 'videos', 'v1', 'nope'], 'unknown'],
   ])('%s %j is %s', (role, segments, status) => {
-    expect(checkPath(role, segments).status).toBe(status);
+    expect(checkPath(role, segments, LIVE).status).toBe(status);
+  });
+});
+
+describe('Live off for the channel (GET /api/me/features)', () => {
+  const content = STUDIO_NAV.find((item) => item.id === 'content')!;
+
+  it('has no Live tab, and a moderator (Live was its only Content tab) has no Content', () => {
+    expect(visibleTabs('owner', content).map((tab) => tab.id)).toEqual(['videos', 'posts']);
+    expect(visibleNav('moderator').map((item) => item.id)).toEqual(['dashboard']);
+  });
+
+  it('answers not found for Live and a Go live page; a role without access is still "no access"', () => {
+    expect(checkPath('owner', ['content', 'live']).status).toBe('unknown');
+    expect(checkPath('admin', ['content', 'live', 's1']).status).toBe('unknown');
+    expect(checkPath('editor', ['content', 'live']).status).toBe('forbidden');
+  });
+
+  it('switching channel from Live lands on Dashboard', () => {
+    expect(switchedPath(['content', 'live'], 'owner')).toBe('dashboard');
+    expect(switchedPath(['content', 'live'], 'owner', LIVE)).toBe('content/live');
   });
 });
 

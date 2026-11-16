@@ -81,6 +81,15 @@ describe('StudioDashboard', () => {
     expect(screen.queryByRole('link', { name: text.quick.upload })).toBeNull();
   });
 
+  it('offers Go live only while live is on for the channel', async () => {
+    const { unmount } = show();
+    await screen.findByTestId('studio-dash-latest');
+    expect(screen.queryByRole('link', { name: text.quick.goLive })).toBeNull();
+    unmount();
+    render(<StudioDashboard locale="en" channelId="c1" role="owner" liveOn />);
+    expect(await screen.findByRole('link', { name: text.quick.goLive })).toHaveAttribute('href', '/en/studio/c1/content/live');
+  });
+
   it('keeps the other cards when one fails, and offers Retry', async () => {
     channel.mockResolvedValue(null);
     show();

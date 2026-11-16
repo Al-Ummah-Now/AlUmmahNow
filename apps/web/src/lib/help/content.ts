@@ -9,6 +9,8 @@ import {
   type HelpPictureId,
   type HelpTopicId,
   type HelpTranslations,
+  type UserFeatureKey,
+  type UserFeatures,
 } from '@al-ummah/shared-types';
 
 /** The identity tour's version: raise it when the tour changes enough to show it once more */
@@ -63,8 +65,20 @@ function blockText(block: HelpBlock): string[] {
     case 'clip':
       return [block.caption];
     case 'table':
-      return [...block.head, ...block.rows.flat()];
+      return [...block.head, ...block.rows.flatMap((row) => [row[0], row[1]])];
   }
+}
+
+/**
+ * The blocks this reader sees: a block or table row about a feature that is off for them
+ * is left out (features.ts, "Hidden when off"). Without `features`, nothing tied to a
+ * feature is shown (fail closed).
+ */
+export function visibleHelpBlocks(blocks: readonly HelpBlock[], features?: UserFeatures): HelpBlock[] {
+  const on = (key?: UserFeatureKey) => !key || features?.[key] === true;
+  return blocks.filter((block) => on(block.feature)).map((block) =>
+    block.type === 'table' ? { ...block, rows: block.rows.filter((row) => on(row[2])) } : block,
+  );
 }
 
 export interface HelpSearchEntry {
@@ -77,7 +91,7 @@ export interface HelpSearchEntry {
 }
 
 /** One entry per topic and per section, matched on headings, text and the other language's headings */
-export function helpSearchEntries(help: HelpTranslations, other?: HelpTranslations): HelpSearchEntry[] {
+export function helpSearchEntries(help: HelpTranslations, other?: HelpTranslations, features?: UserFeatures): HelpSearchEntry[] {
   const entries: HelpSearchEntry[] = [];
   for (const topic of HELP_TOPIC_IDS) {
     const page = help.topics[topic];
@@ -90,7 +104,7 @@ export function helpSearchEntries(help: HelpTranslations, other?: HelpTranslatio
         section: section.id,
         label: section.heading,
         subtitle: page.title,
-        keywords: [...section.blocks.flatMap(blockText), otherHeading],
+        keywords: [...visibleHelpBlocks(section.blocks, features).flatMap(blockText), otherHeading],
       });
     }
   }

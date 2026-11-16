@@ -7,7 +7,8 @@
  */
 import type { HelpBlock } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
-import { helpClipSrc, helpPictureSrc, type HelpMode } from '@/lib/help/content';
+import { helpClipSrc, helpPictureSrc, visibleHelpBlocks, type HelpMode } from '@/lib/help/content';
+import { useFeatures } from '@/hooks/useFeatures';
 import { requestIdentityTour } from '@/lib/help/tour-events';
 import { HelpText } from './HelpText';
 
@@ -55,10 +56,12 @@ function Clip({ block, lang }: { block: Extract<HelpBlock, { type: 'clip' }>; la
 
 export function HelpBlocks({ blocks }: { blocks: HelpBlock[] }) {
   const { t, lang } = useLanguage();
+  // A block or row about a feature that is off for this reader is left out
+  const { features } = useFeatures();
   const digits = (n: number) => n.toLocaleString(lang === 'ar' ? 'ar-EG' : 'en');
   return (
     <>
-      {blocks.map((block, i) => {
+      {visibleHelpBlocks(blocks, features).map((block, i) => {
         switch (block.type) {
           case 'p':
             return <p key={i}><HelpText text={block.text} lang={lang} /></p>;
@@ -73,7 +76,7 @@ export function HelpBlocks({ blocks }: { blocks: HelpBlock[] }) {
               <div key={i} className="hp-table-wrap">
                 <table className="hp-table">
                   <thead><tr>{block.head.map((h) => <th key={h} scope="col">{h}</th>)}</tr></thead>
-                  <tbody>{block.rows.map((row, r) => <tr key={r}>{row.map((cell, c) => <td key={c}><HelpText text={cell} lang={lang} /></td>)}</tr>)}</tbody>
+                  <tbody>{block.rows.map((row, r) => <tr key={r}>{[row[0], row[1]].map((cell, c) => <td key={c}><HelpText text={cell} lang={lang} /></td>)}</tr>)}</tbody>
                 </table>
               </div>
             );

@@ -6,7 +6,7 @@
  * (Bunny Stream Live and self-hosted): Studio and the watch page never branch
  * on the provider except to read the ingest protocol's help text.
  */
-import type { LiveIngest, LiveProviderId, LiveStreamState } from '@al-ummah/shared-types';
+import { FEATURE_OFF_CODE, type LiveIngest, type LiveProviderId, type LiveStreamState } from '@al-ummah/shared-types';
 import { fetchClientAuthInfo } from '@/lib/auth/client-token';
 import { getApiUrl } from '@/lib/runtime-config';
 
@@ -51,7 +51,7 @@ export interface IngestView {
   state: LiveStreamState;
 }
 
-/** A refused or failed call; `code` is the API's code (live_capacity, live_budget, …) when it sent one. */
+/** A refused or failed call; `code` is the API's code (live_capacity, feature_off, …) when it sent one. */
 export class LiveApiError extends Error {
   constructor(readonly status: number, readonly code: string | null) {
     super(`Live request failed (${status}${code ? ` ${code}` : ''})`);
@@ -137,10 +137,18 @@ export async function deleteStream(id: string): Promise<void> {
 }
 
 /** The refusal codes Studio explains in its own words; anything else is the generic message. */
-export const LIVE_ERROR_CODES = ['live_capacity', 'live_budget', 'live_unavailable', 'live_provider_error', 'live_not_in_tier', 'live_hours_used', 'live_concurrent_limit'] as const;
-/** Refusals by the channel owner's creator tier (402/403), not failures: never reported as errors. */
-export const LIVE_TIER_CODES: readonly string[] = ['live_not_in_tier', 'live_hours_used', 'live_concurrent_limit'];
+export const LIVE_ERROR_CODES = ['live_capacity', 'live_provider_error', 'live_hours_used', 'live_concurrent_limit'] as const;
+/** Quota refusals by the channel owner's creator tier (402/403), not failures: never reported as errors. */
+export const LIVE_TIER_CODES: readonly string[] = ['live_hours_used', 'live_concurrent_limit'];
 export type LiveErrorCode = (typeof LIVE_ERROR_CODES)[number] | 'generic';
+
+/**
+ * Live is off for this channel (404 feature_off: not in the owner's tier, or no provider can take
+ * a stream). Studio hides Live then, so the page re-renders and the server answers not found.
+ */
+export function isLiveOff(error: unknown): boolean {
+  return error instanceof LiveApiError && error.status === 404 && error.code === FEATURE_OFF_CODE;
+}
 
 export function liveErrorCode(error: unknown): LiveErrorCode {
   const code = error instanceof LiveApiError ? error.code : null;
