@@ -124,7 +124,12 @@ test.describe('contact inbox', () => {
     const option = page.locator('[data-testid="contact-assignee-picker-option"]').filter({ hasText: superadmin });
     await expect(option).toHaveCount(1);
     await option.click();
-    await expect(page.getByTestId('contact-assignee')).toHaveText(superadmin);
+    // Stored on the message, and shown by name (the display-name rule: name, else email; never an id)
+    await expect
+      .poll(async () => (await adminApi<{ message: { assignee_email: string | null } }>(`/api/contact/messages/${encodeURIComponent(m2)}`)).body.result?.message.assignee_email)
+      .toBe(superadmin);
+    await expect(page.getByTestId('contact-assignee')).not.toHaveText(/^\s*$/);
+    await expect(page.getByTestId('contact-assignee')).not.toContainText('usr_');
 
     await page.goto(`/contact/${encodeURIComponent(m3)}`);
     await expect(page.getByTestId('contact-spam-reason')).toHaveAttribute('data-reason', 'content');

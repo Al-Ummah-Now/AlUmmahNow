@@ -22,6 +22,7 @@ import { useListKeyboard } from '@/components/list/useListKeyboard';
 import { useUndoableAction } from '@/components/undo/UndoToast';
 import { logger } from '@/lib/logger-client';
 import { AssigneePicker } from './AssigneePicker';
+import { UserName } from '@/components/audit/UserName';
 import { CONTACT_STATUSES, CONTACT_VIEWS, activeContactView, contactHref, type ContactInboxFilters, type ContactViewId } from './filters';
 
 const smallButton =
@@ -205,8 +206,9 @@ export function ContactInbox({ messages, filters, viewerId, canManage, counts }:
       className: 'text-sm text-fg-muted break-all md:max-w-48',
       cell: (m) =>
         m.assignee_id ? (
-          <span dir="auto" data-testid="contact-row-assignee">
-            {m.assignee_id === viewerId ? t('contact.you') : (m.assignee_email ?? m.assignee_id)}
+          // Above the row-wide link: the person's own link stays clickable
+          <span dir="auto" className="relative z-[1]" data-testid="contact-row-assignee">
+            {m.assignee_id === viewerId ? t('contact.you') : <UserName id={m.assignee_id} email={m.assignee_email} showEmail={false} />}
           </span>
         ) : (
           <span className="text-fg-subtle">{t('contact.unassigned')}</span>
