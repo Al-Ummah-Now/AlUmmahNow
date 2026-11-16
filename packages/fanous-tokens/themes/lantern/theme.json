@@ -200,7 +200,15 @@
       "nav.searchBorder": "#7f9aa7",
       "nav.searchText": "#f7f1e8",
       "nav.searchPlaceholder": "#c9d6dc",
-      "upload.focus": "#f5cf92"
+      "upload.focus": "#f5cf92",
+      "upload.bg": "#093041",
+      "upload.text": "#f7f1e8",
+      "upload.icon": "#f5cf92",
+      "upload.border": "#f5cf92",
+      "upload.hover": "#0e3a4e",
+      "upload.pressed": "#07425a",
+      "upload.disabledBg": "#093041",
+      "upload.disabledText": "#c9d6dc"
     }
   }
 }
