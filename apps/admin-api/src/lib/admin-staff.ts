@@ -1,5 +1,5 @@
 /**
- * The videos admin's own staff list (admin_staff, migration 0034).
+ * The videos admin's own staff list (admin_staff, migration 0039).
  *
  * Every Super Admin, Admin or Moderator token that reaches admin-api records
  * (or refreshes) its user here, with the role from that token's own claims.
