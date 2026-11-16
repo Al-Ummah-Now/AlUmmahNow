@@ -34,6 +34,8 @@ export interface NavAccess {
   reviewOnly?: boolean;
   /** settings:manage (Remote config for the apps): admins and super admins */
   settings?: boolean;
+  /** emails:manage (Settings › Emails: the system emails' wording): admins and super admins */
+  emails?: boolean;
   /** Super admin: CSAM cases (docs/specs/CSAM-RESPONSE.md), which no other role may open */
   superAdmin?: boolean;
 }
@@ -134,6 +136,8 @@ export const NAV_ITEMS: NavItem[] = [
 
   { href: '/site-theme', label: 'nav.siteTheme', icon: 'palette', group: 'site' },
   { href: '/platform-settings', label: 'nav.platformSettings', icon: 'sliders', group: 'site' },
+  // Settings › Emails: the system emails' wording in en + ar, versions, preview, test send (emails:manage)
+  { href: '/settings/emails', label: 'nav.emails', icon: 'inbox', group: 'site', requires: (a) => a.emails === true },
   // Universal links / App Links files and app attestation (NAT-REL): every admin reads, admins change
   { href: '/mobile-apps', label: 'nav.mobileApps', icon: 'phone', group: 'site' },
   { href: '/app-config', label: 'nav.appConfig', icon: 'sliders', group: 'site', requires: (a) => a.settings === true },
