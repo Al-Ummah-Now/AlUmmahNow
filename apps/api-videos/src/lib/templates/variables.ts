@@ -2,11 +2,17 @@
  * Template Variable Processor
  * Processes template variables like {{date}}, {{episode}}, etc.
  */
+import { formatDate } from '@al-ummah/shared-types';
 
 /**
  * Variable processor function type
  */
 type VariableProcessor = (value?: string) => string;
+
+// Dates go through locale-format: English with Arabic numerals 0–9, Arabic (the *_ar variables)
+// on the Gregorian calendar with Eastern Arabic (Hindi) numerals ٠–٩.
+const NUMERIC_DATE = { year: 'numeric', month: 'numeric', day: 'numeric' } as const;
+const CLOCK = { hour: 'numeric', minute: '2-digit', second: '2-digit' } as const;
 
 /**
  * Hijri date helper (simplified - can be enhanced with proper library)
@@ -24,17 +30,17 @@ function getHijriDate(): string {
  */
 export const TEMPLATE_VARIABLES: Record<string, VariableProcessor> = {
   // Date/Time variables
-  'date': () => new Date().toLocaleDateString('en-US'),
+  'date': () => formatDate('en-US', new Date(), NUMERIC_DATE),
   'date_iso': () => new Date().toISOString().split('T')[0],
-  'date_ar': () => new Date().toLocaleDateString('ar-SA'),
-  'time': () => new Date().toLocaleTimeString('en-US'),
-  'time_24': () => new Date().toLocaleTimeString('en-US', { hour12: false }),
-  'day': () => new Date().toLocaleDateString('en-US', { weekday: 'long' }),
-  'day_ar': () => new Date().toLocaleDateString('ar-SA', { weekday: 'long' }),
-  'day_short': () => new Date().toLocaleDateString('en-US', { weekday: 'short' }),
-  'month': () => new Date().toLocaleDateString('en-US', { month: 'long' }),
-  'month_ar': () => new Date().toLocaleDateString('ar-SA', { month: 'long' }),
-  'month_short': () => new Date().toLocaleDateString('en-US', { month: 'short' }),
+  'date_ar': () => formatDate('ar', new Date(), NUMERIC_DATE),
+  'time': () => formatDate('en-US', new Date(), CLOCK),
+  'time_24': () => formatDate('en-US', new Date(), { ...CLOCK, hour12: false }),
+  'day': () => formatDate('en-US', new Date(), { weekday: 'long' }),
+  'day_ar': () => formatDate('ar', new Date(), { weekday: 'long' }),
+  'day_short': () => formatDate('en-US', new Date(), { weekday: 'short' }),
+  'month': () => formatDate('en-US', new Date(), { month: 'long' }),
+  'month_ar': () => formatDate('ar', new Date(), { month: 'long' }),
+  'month_short': () => formatDate('en-US', new Date(), { month: 'short' }),
   'month_number': () => String(new Date().getMonth() + 1).padStart(2, '0'),
   'year': () => String(new Date().getFullYear()),
   'year_short': () => String(new Date().getFullYear()).slice(-2),
@@ -56,8 +62,8 @@ export const TEMPLATE_VARIABLES: Record<string, VariableProcessor> = {
   // Variables the web template editor offers (apps/web/src/lib/upload/template-variables.ts).
   // The web app fills these in on the upload form; they must validate here or saving a
   // template that uses them fails.
-  'datetime': () => new Date().toLocaleString('en-US'),
-  'weekday': () => new Date().toLocaleDateString('en-US', { weekday: 'long' }),
+  'datetime': () => formatDate('en-US', new Date(), { ...NUMERIC_DATE, ...CLOCK }),
+  'weekday': () => formatDate('en-US', new Date(), { weekday: 'long' }),
   'hijri_month': () => getHijriDate(),
   'islamic_month': () => getHijriDate(),
   'series_name': (value?: string) => value || '[Series]',
@@ -67,7 +73,7 @@ export const TEMPLATE_VARIABLES: Record<string, VariableProcessor> = {
   'uploader_name': (value?: string) => value || '[Uploader]',
   'video_title': (value?: string) => value || '[Title]',
   'video_duration': (value?: string) => value || '[Duration]',
-  'upload_date': () => new Date().toLocaleDateString('en-US'),
+  'upload_date': () => formatDate('en-US', new Date(), NUMERIC_DATE),
 };
 
 /**

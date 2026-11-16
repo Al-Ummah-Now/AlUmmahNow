@@ -10,6 +10,7 @@
  * Nothing is normalized behind the user's back: no Unicode normalization,
  * no trimming, no diacritic stripping, no digit conversion unless asked.
  */
+import { formatDate, parseDigits } from './locale-format';
 
 export type TitleLanguage = 'en' | 'ar';
 export const TITLE_LANGUAGES: readonly TitleLanguage[] = ['en', 'ar'];
@@ -147,9 +148,10 @@ export function formatTokenDate(date: string | Date | null | undefined, language
   if (!date) return '';
   const value = date instanceof Date ? date : new Date(date);
   if (Number.isNaN(value.getTime())) return '';
-  const locale = language === 'ar' ? (digits === 'arabic-indic' ? 'ar-u-nu-arab' : 'ar-u-nu-latn') : 'en-GB-u-nu-latn';
   try {
-    return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(value);
+    const text = formatDate(language === 'ar' ? 'ar' : 'en-GB', value, { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+    // The creator picks the digits for their titles: Arabic with 0–9 when they chose so.
+    return language === 'ar' && digits !== 'arabic-indic' ? parseDigits(text) : text;
   } catch {
     return value.toISOString().slice(0, 10);
   }

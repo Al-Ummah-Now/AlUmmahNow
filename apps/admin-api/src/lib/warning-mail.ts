@@ -18,6 +18,7 @@ import {
   NOTIFICATION_CENTER_AR,
   NOTIFICATION_CENTER_EN,
   accountEmailDecision,
+  formatInteger,
   newErrorRef,
   scrubEvent,
   type AccountEmailContact,
@@ -121,7 +122,7 @@ export interface WarningEmailInput {
 export function renderWarningEmail(input: WarningEmailInput): RenderedEmail {
   const s = COPY[input.locale];
   const reason = REASONS[input.locale][input.reasonCode] ?? REASONS[input.locale].other;
-  const count = input.count.toLocaleString(input.locale === 'ar' ? 'ar' : 'en');
+  const count = formatInteger(input.locale, input.count);
   const guidelinesUrl = input.origin ? `${input.origin}/${input.locale}/community-guidelines` : null;
   const settingsUrl = input.origin ? `${input.origin}/${input.locale}/settings#notifications` : null;
   const doc: EmailDoc = {

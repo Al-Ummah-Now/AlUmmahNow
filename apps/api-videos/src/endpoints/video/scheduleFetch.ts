@@ -166,6 +166,7 @@ export class VideoScheduleFetch extends OptionalAuthRoute {
 
 function formatLocalDate(date: Date, timezone: string): string {
   try {
+    // locale-format: machine (API field localScheduledDate, en-US in the video's zone; pages format scheduledAt themselves)
     return date.toLocaleString('en-US', { timeZone: timezone });
   } catch {
     return date.toISOString();

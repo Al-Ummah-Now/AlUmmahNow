@@ -20,7 +20,9 @@
  */
 import {
   STATUS_COMPONENTS,
+  STATUS_CONFIRM_DAYS,
   STATUS_LABELS,
+  formatNumber,
   STATUS_NOTIFY_VERSION,
   STATUS_PAGE_URLS,
   STATUS_WEBHOOK_HEADERS,
@@ -256,7 +258,7 @@ const COPY = {
     confirmPreheader: 'Confirm to get an email when an incident or maintenance is posted.',
     confirmBody: 'You asked to get Al Ummah Now status updates at this address: an email when an incident or scheduled maintenance is posted, and with each update until it is resolved.',
     confirmCta: 'Confirm subscription',
-    confirmIgnore: 'If you did not ask for this, ignore this email. We will not send anything else, and the address is deleted after 7 days.',
+    confirmIgnore: (days: string) => `If you did not ask for this, ignore this email. We will not send anything else, and the address is deleted after ${days} days.`,
     confirmReason: 'You received this email because this address was entered on the Al Ummah Now status page.',
   },
   ar: {
@@ -276,7 +278,7 @@ const COPY = {
     confirmPreheader: 'أكّد لتصلك رسالة حين تُنشر حادثة أو صيانة.',
     confirmBody: 'طلبتَ أن تصلك تحديثات حالة خدمات الأمة الآن على هذا البريد: رسالة حين تُنشر حادثة أو صيانة مجدولة، ومع كل تحديث لها حتى تُحلّ.',
     confirmCta: 'تأكيد الاشتراك',
-    confirmIgnore: 'إن لم تطلب ذلك فتجاهل هذه الرسالة. لن نرسل إليك شيئًا آخر، وسيُحذف البريد بعد ٧ أيام.',
+    confirmIgnore: (days: string) => `إن لم تطلب ذلك فتجاهل هذه الرسالة. لن نرسل إليك شيئًا آخر، وسيُحذف البريد بعد ${days} أيام.`,
     confirmReason: 'وصلتك هذه الرسالة لأن هذا البريد أُدخل في صفحة حالة خدمات الأمة الآن.',
   },
 } as const;
@@ -328,7 +330,7 @@ export function renderConfirmEmail(input: { to: string; locale: Locale; token: s
     heading: s.confirmHeading,
     blocks: [{ kind: 'p', text: s.confirmBody }],
     cta: { label: s.confirmCta, url: `${input.base}${lp(input.locale)}/subscribe/confirm?t=${encodeURIComponent(input.token)}` },
-    after: [{ kind: 'small', text: s.confirmIgnore }],
+    after: [{ kind: 'small', text: s.confirmIgnore(formatNumber(input.locale, STATUS_CONFIRM_DAYS)) }],
     signoff: s.sign,
     reason: s.confirmReason,
   };

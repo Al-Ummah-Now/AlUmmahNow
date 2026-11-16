@@ -8,6 +8,7 @@
  * /{l}/newsletter/unsubscribe?token= show a button that POSTs (mail scanners open links, so a GET
  * never changes anything); the one-click POST goes to the same unsubscribe URL.
  */
+import { formatNumber } from '@al-ummah/shared-types';
 import { renderEmail, SITE_URL, type EmailBlock, type EmailDoc, type EmailLocale } from './email/layout';
 import { envTag, type RenderedEmail } from './contact-email';
 import { isValidEmail } from './contact';
@@ -123,7 +124,7 @@ const COPY = {
     confirmHeading: 'Confirm your subscription',
     confirmPreheader: 'One click and you will start getting the newsletter.',
     confirmIntro: 'Someone, hopefully you, asked to get the Al Ummah Now newsletter at this address.',
-    confirmNext: (days: number) => `Confirm to start getting it. The link works for ${days} days.`,
+    confirmNext: (days: string) => `Confirm to start getting it. The link works for ${days} days.`,
     confirmCta: 'Confirm subscription',
     confirmIgnore: "If you didn't ask for this, ignore this email and you won't be subscribed.",
     confirmReason: 'You received this email because this address was entered in the newsletter form on alummahnow.net.',
@@ -137,7 +138,7 @@ const COPY = {
     confirmHeading: 'أكّد اشتراكك',
     confirmPreheader: 'بنقرة واحدة تبدأ باستلام النشرة البريدية.',
     confirmIntro: 'طلب أحدهم، ونرجو أن تكون أنت، استلام النشرة البريدية للأمة الآن على هذا العنوان.',
-    confirmNext: (days: number) => `أكّد لتبدأ باستلامها. يعمل الرابط لمدة ${days.toLocaleString('ar-EG')} أيام.`,
+    confirmNext: (days: string) => `أكّد لتبدأ باستلامها. يعمل الرابط لمدة ${days} أيام.`,
     confirmCta: 'تأكيد الاشتراك',
     confirmIgnore: 'إن لم تطلب ذلك فتجاهل هذه الرسالة ولن يتم اشتراكك.',
     confirmReason: 'وصلتك هذه الرسالة لأن هذا العنوان أُدخل في نموذج النشرة البريدية على alummahnow.net.',
@@ -157,7 +158,7 @@ export function renderConfirmEmail(input: { to: string; locale: NewsletterLocale
     heading: s.confirmHeading,
     blocks: [
       { kind: 'p', text: s.confirmIntro },
-      { kind: 'p', text: s.confirmNext(NEWSLETTER_LIMITS.confirmDays) },
+      { kind: 'p', text: s.confirmNext(formatNumber(input.locale, NEWSLETTER_LIMITS.confirmDays)) },
     ],
     cta: { label: s.confirmCta, url: confirmUrl(input.site, input.locale, input.token) },
     after: [{ kind: 'small', text: s.confirmIgnore }],
