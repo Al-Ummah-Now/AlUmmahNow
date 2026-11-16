@@ -25,6 +25,8 @@ interface Props {
   role: StudioRole;
   /** Live is on for this channel (GET /api/me/features): otherwise no Go live quick action */
   liveOn?: boolean;
+  /** features.upload for this channel: no upload links without it */
+  uploadOn?: boolean;
 }
 
 interface DashboardData {
@@ -49,7 +51,7 @@ function Card({ title, testId, children }: { title: string; testId: string; chil
 }
 
 /** What needs attention on this channel, by what the role can see (spec §4.3). */
-export function StudioDashboard({ locale, channelId, role, liveOn = false }: Props) {
+export function StudioDashboard({ locale, channelId, role, liveOn = false, uploadOn = false }: Props) {
   const { t } = useLanguage();
   const text = t.studio.dashboard;
   const [data, setData] = useState<DashboardData | null>(null);
@@ -92,7 +94,7 @@ export function StudioDashboard({ locale, channelId, role, liveOn = false }: Pro
   const base = `/${locale}/studio/${encodeURIComponent(channelId)}`;
   const number = numberFormat(locale);
   const quickLinks = [
-    can(role, 'video.upload') && { label: text.quick.upload, href: studioUploadHref(locale, channelId) },
+    can(role, 'video.upload') && uploadOn && { label: text.quick.upload, href: studioUploadHref(locale, channelId) },
     can(role, 'live.manage') && liveOn && { label: text.quick.goLive, href: studioLiveHref(locale, channelId) },
     can(role, 'post.manage') && { label: text.quick.newPost, href: legacyHref(locale, channelId, 'content/posts/new')! },
     can(role, 'channel.edit') && { label: text.quick.customise, href: legacyHref(locale, channelId, 'customisation/profile')! },
@@ -142,7 +144,7 @@ export function StudioDashboard({ locale, channelId, role, liveOn = false }: Pro
         <div className="rounded-md border border-border bg-card p-6 text-center" data-testid="studio-dash-welcome">
           <h2 className="mb-2 text-lg font-semibold text-foreground">{text.welcome.title}</h2>
           <p className="mb-4 text-sm text-muted-foreground">{text.welcome.body}</p>
-          {can(role, 'video.upload') && <Button asChild className="min-h-11"><Link href={studioUploadHref(locale, channelId)}>{text.welcome.upload}</Link></Button>}
+          {can(role, 'video.upload') && uploadOn && <Button asChild className="min-h-11"><Link href={studioUploadHref(locale, channelId)}>{text.welcome.upload}</Link></Button>}
         </div>
       </div>
     );

@@ -10,6 +10,7 @@
 
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/components/AuthProvider/authContext';
+import { useFeatures } from '@/hooks/useFeatures';
 import { SignInPrompt } from '@/components/common/SignInPrompt';
 import Link from '@/components/common/AppLink';
 import { ACCOUNT_MENU_PATHS } from '@/lib/navigation/destinations';
@@ -28,6 +29,7 @@ import {
 export default function SettingsPage() {
   const { t, lang } = useLanguage();
   const { user } = useAuth();
+  const { features } = useFeatures();
 
   if (!user) {
     return (
@@ -38,43 +40,39 @@ export default function SettingsPage() {
     );
   }
 
+  // Hidden when off: Upload Defaults only for accounts that can upload
   const settingsSections = [
-    {
+    features.upload && {
       title: t.settings?.uploadDefaults || 'Upload Defaults',
       description: t.settings?.uploadDefaultsDesc || 'Manage video upload templates and default settings',
       icon: Video,
       href: `/${lang}/settings/upload-defaults`,
-      available: true,
     },
     {
       title: t.settings?.profileSettings || 'Profile Settings',
       description: t.settings?.profileSettingsDesc || 'Update your profile information and preferences',
       icon: User,
       href: `/${lang}/profile?from=settings`,
-      available: true,
     },
     {
       title: t.privacy.settingsTitle,
       description: t.privacy.settingsDescription,
       icon: Shield,
       href: `/${lang}/settings/privacy`,
-      available: true,
     },
     {
       title: t.channelRoles.invitationsTitle,
       description: t.channelRoles.invitationsDescription,
       icon: Users,
       href: `/${lang}${ACCOUNT_MENU_PATHS.channelInvites}`,
-      available: true,
     },
     {
       title: t.contact.settingsTitle,
       description: t.contact.settingsDescription,
       icon: Mail,
       href: `/${lang}/contact?from=${encodeURIComponent(`/${lang}/settings`)}`,
-      available: true,
     },
-  ];
+  ].filter((section) => !!section);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -98,38 +96,10 @@ export default function SettingsPage() {
           {settingsSections.map((section) => {
             const Icon = section.icon;
 
-            if (!section.available) {
-              return (
-                <div
-                  key={section.title}
-                  data-testid="settings-section"
-                  data-available="false"
-                  className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700 opacity-50"
-                >
-                  <div className="flex items-start gap-4">
-                    <div className="p-3 bg-gray-100 dark:bg-gray-700 rounded-lg">
-                      <Icon className="h-6 w-6 text-gray-400" />
-                    </div>
-                    <div className="flex-1">
-                      <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">
-                        {section.title}
-                      </h2>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
-                        {section.description}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                        {t.settings?.notAvailable || 'Not available - requires an active channel'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              );
-            }
-
             return (
               <Link
                 key={section.title}
-                href={section.href!}
+                href={section.href}
                 data-testid="settings-section"
                 data-available="true"
                 className="block bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700 hover:border-[var(--fanous-color-accent)] dark:hover:border-[var(--fanous-color-accent)] transition-all hover:shadow-lg group"

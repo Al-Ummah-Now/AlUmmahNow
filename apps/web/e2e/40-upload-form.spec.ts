@@ -440,11 +440,10 @@ test.describe('Upload page - access states', () => {
   test.describe('without a creator tier', () => {
     test.use({ storageState: AUTH_STATE.none });
 
-    test('UPL-010 tells users without a tier that uploading is by invitation (ar)', async ({ page }) => {
+    test('UPL-010 the upload page is not found for users without a tier, with no "by invitation" text (ar)', async ({ page }) => {
       await page.goto('/ar/upload');
-      const notice = uploadUi(page).byInvitation;
-      await expect(notice).toBeVisible();
-      await expect(notice.getByRole('heading')).toHaveText(ARABIC);
+      await expect(uploadUi(page).notFound).toBeVisible();
+      await expect(page.getByText(/بدعوة/)).toHaveCount(0);
       await expect(page.getByTestId('upload-create-channel')).toHaveCount(0);
     });
   });

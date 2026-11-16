@@ -7,7 +7,7 @@ import React, { useState, useCallback, useRef, useMemo, useEffect } from "react"
 import { VideoObject } from "@/interfaces";
 import VideoUpload from "@/components/videoUpload";
 import { BatchUploadQueue } from "@/components/videoUpload/BatchUploadQueue";
-import { useParams, useSearchParams } from "next/navigation";
+import { notFound, useParams, useSearchParams } from "next/navigation";
 import { AlertCircle, Upload, FileStack, ShieldAlert } from "lucide-react";
 import { UploadModeTabs, UPLOAD_MODE_PANEL_ID, UPLOAD_MODE_TAB_ID, type UploadMode } from "@/components/videoUpload/UploadModeTabs";
 import { VIDEO_UPLOAD_CONFIG } from "@/lib/constants/uploadConfig";
@@ -27,7 +27,8 @@ import { useActiveChannel } from "@/contexts/ActiveChannelContext";
 import { useAuth } from "@/components/AuthProvider/authContext";
 import { useMultiAccount } from "@/hooks/useMultiAccount";
 import { useCreatorAccess } from "@/hooks/useCreatorAccess";
-import { UploadsByInvitationNotice, VideosPendingDeletionNotice } from "@/components/VideosNotices";
+import { useFeatures } from "@/hooks/useFeatures";
+import { VideosPendingDeletionNotice } from "@/components/VideosNotices";
 import { login } from "@/lib/actions";
 import Link from '@/components/common/AppLink';
 import { can } from "@al-ummah/shared-types";
@@ -283,7 +284,9 @@ const UploadPage: React.FC = () => {
   const pendingChannel = pendingChannelId ? uploadChannels.find((c) => c.id === pendingChannelId) : undefined;
   const pendingChannelName = pendingChannel ? channelDisplayName(pendingChannel, lang) : '';
 
-  const { rows: categoryRows, pick: pickRowCategory, setFor: setRowCategories } = useBatchCategories(files, batchCategory, uploadChannelId);
+  // Hidden when off: AI category suggestions only while features.aiCategorySuggest is on
+  const aiCategoryOn = useFeatures(uploadChannelId || null).features.aiCategorySuggest;
+  const { rows: categoryRows, pick: pickRowCategory, setFor: setRowCategories } = useBatchCategories(files, batchCategory, uploadChannelId, aiCategoryOn);
   // {channel} in a title pattern: the upload's channel, per title language
   const uploadChannelName = useMemo(() => (uploadChannel ? {
     en: channelDisplayName(uploadChannel, 'en'),
@@ -317,7 +320,7 @@ const UploadPage: React.FC = () => {
           onChange={(category) => pickRowCategory(videoId, category)}
           suggestion={row.suggestion}
           aiSelected={row.aiApplied}
-          suggesting={waitsForSuggestion(row) && !row.category}
+          suggesting={aiCategoryOn && waitsForSuggestion(row) && !row.category}
           onConfirm={() => pickRowCategory(videoId, row.category)}
         />
         {saveText && (
@@ -449,14 +452,8 @@ const UploadPage: React.FC = () => {
     );
   }
 
-  // Uploading is by invitation: a signed-in user without a creator tier gets the message, not the uploader
-  if (creator.status === 'ready' && !creator.access.canUpload) {
-    return (
-      <main className="flex flex-col p-4 md:p-6 lg:p-8 w-full min-h-screen bg-background">
-        <UploadsByInvitationNotice page />
-      </main>
-    );
-  }
+  // Without uploads (no creator tier here) the page does not exist (hidden when off)
+  if (creator.status === 'ready' && !creator.access.canUpload) notFound();
 
   // Wait for the session's channels before deciding the user has none
   if (!uploadChannelId && (sessionLoading || (uploadChannels.length > 0 && !rememberedReady))) {
@@ -705,7 +702,7 @@ const UploadPage: React.FC = () => {
                   id="batch-category-default"
                   testId="batch-category-default"
                   label={t.batch.categoryForAll}
-                  hint={t.batch.categoryForAllHint}
+                  hint={aiCategoryOn ? `${t.batch.categoryForAllHint} ${t.batch.categoryForAllAiHint}` : t.batch.categoryForAllHint}
                   value={batchCategory}
                   onChange={setBatchCategory}
                   disabled={isInitiating}

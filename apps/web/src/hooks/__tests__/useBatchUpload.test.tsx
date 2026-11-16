@@ -294,7 +294,7 @@ describe('useBatchUpload', () => {
     await act(async () => {
       await hook.result.current.addFiles([mp4('y.mp4')]);
     });
-    expect(onError).toHaveBeenLastCalledWith('Uploading is by invitation for now');
+    expect(onError).toHaveBeenLastCalledWith("This account can't upload videos.");
     expect(onError.mock.calls.flat().join(' ')).not.toMatch(/Rate limit exceeded/);
   });
 });

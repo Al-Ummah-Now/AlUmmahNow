@@ -6,7 +6,8 @@ import { ArrowLeft } from 'lucide-react';
 import { HELP_TOPIC_IDS, type HelpTopicId } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { MAIN_CONTENT_ID } from '@/components/SkipLinks';
-import { helpHref } from '@/lib/help/content';
+import { helpHref, visibleHelpSections } from '@/lib/help/content';
+import { useFeatures } from '@/hooks/useFeatures';
 import { requestIdentityTour } from '@/lib/help/tour-events';
 import { HelpBlocks } from './HelpBlocks';
 import { useHelp } from './HelpNetworks';
@@ -17,6 +18,9 @@ export function HelpTopicPage({ topic }: { topic: HelpTopicId }) {
   // The Social topic names only the networks that are on (owner rule: off or not set up leaves no trace)
   const { help: h } = useHelp();
   const page = h.topics[topic];
+  // Sections of a feature that is off for this reader are not shown (wiki "Hidden when off")
+  const { features } = useFeatures();
+  const sections = visibleHelpSections(page.sections, features);
   const Icon = HELP_TOPIC_ICONS[topic];
   const related = HELP_TOPIC_IDS.filter((id) => id !== topic);
   return (
@@ -35,13 +39,13 @@ export function HelpTopicPage({ topic }: { topic: HelpTopicId }) {
         <nav className="hp-toc" aria-labelledby="hp-toc-title">
           <h2 id="hp-toc-title" className="hp-toc-title">{h.onThisPage}</h2>
           <ul>
-            {page.sections.map((section) => (
+            {sections.map((section) => (
               <li key={section.id}><a href={`#${section.id}`}>{section.heading}</a></li>
             ))}
           </ul>
         </nav>
         <div className="hp-body">
-          {page.sections.map((section) => (
+          {sections.map((section) => (
             <section key={section.id} id={section.id} className="hp-section" aria-labelledby={`${section.id}-h`}>
               <h2 id={`${section.id}-h`} className="hp-h2">{section.heading}</h2>
               <HelpBlocks blocks={section.blocks} />

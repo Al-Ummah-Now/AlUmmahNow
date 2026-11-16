@@ -7,7 +7,6 @@ import { Channel, formatNumber } from '@al-ummah/shared-types';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { useChannels } from '@/hooks/useChannels';
 import { mayCreateChannel, useCreatorAccess } from '@/hooks/useCreatorAccess';
-import { UploadsByInvitationNotice } from '../VideosNotices';
 import { useLanguage } from '@/hooks/useLanguage';
 import { ChannelManagementSectionProps, CreateChannelFormData } from './types';
 import { ChannelGrid } from './ChannelGrid';
@@ -137,15 +136,12 @@ export const ChannelManagementSection: React.FC<ChannelManagementSectionProps> =
       </div>
 
       {/* A pending deletion of their videos data has its own notice (ProfileGuard) */}
-      {!canCreate && creatorAccess.status === 'ready' && !creatorAccess.access.pendingDeletion && (
+      {/* Channel limit reached is a plain fact; without a creator tier there is nothing to show (hidden when off) */}
+      {!canCreate && creatorAccess.status === 'ready' && !creatorAccess.access.pendingDeletion && !!creatorAccess.access.tier && (
         <div className="mb-6">
-          {creatorAccess.access.tier ? (
-            <p role="status" data-testid="channel-limit-reached" className="rounded-lg border border-border bg-card px-4 py-3 text-sm text-card-foreground">
-              {t.creator.channelLimit.replace('{max}', creatorAccess.access.maxChannels == null ? '' : formatNumber(lang, creatorAccess.access.maxChannels))}
-            </p>
-          ) : (
-            <UploadsByInvitationNotice />
-          )}
+          <p role="status" data-testid="channel-limit-reached" className="rounded-lg border border-border bg-card px-4 py-3 text-sm text-card-foreground">
+            {t.creator.channelLimit.replace('{max}', creatorAccess.access.maxChannels == null ? '' : formatNumber(lang, creatorAccess.access.maxChannels))}
+          </p>
         </div>
       )}
 

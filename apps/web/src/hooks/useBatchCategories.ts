@@ -14,7 +14,8 @@ import { logger } from '@/lib/logger-client';
 
 export const ROW_POLL_MS = 4000;
 
-export function useBatchCategories(files: UploadQueueItem[], batchDefault: VideoCategory | undefined, channelId: string) {
+/** `ai`: features.aiCategorySuggest; off, rows never wait for or read an AI answer (hidden when off). */
+export function useBatchCategories(files: UploadQueueItem[], batchDefault: VideoCategory | undefined, channelId: string, ai = true) {
   const [rows, setRows] = useState<Record<string, BatchRowCategory>>({});
   const rowsRef = useRef(rows);
   useEffect(() => {
@@ -61,7 +62,7 @@ export function useBatchCategories(files: UploadQueueItem[], batchDefault: Video
   }, [batchDefault, save]);
 
   // Read the AI's answers, one GET per waiting row per tick (never a new AI request)
-  const waiting = Object.entries(rows).filter(([, row]) => waitsForSuggestion(row)).map(([videoId]) => videoId);
+  const waiting = ai ? Object.entries(rows).filter(([, row]) => waitsForSuggestion(row)).map(([videoId]) => videoId) : [];
   const waitingKey = waiting.join(',');
   useEffect(() => {
     if (!waitingKey) return;
