@@ -7,7 +7,7 @@
  * work as on the other admin lists. Nothing scrolls sideways: under md every
  * row is a card, and the message text wraps.
  */
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from '@/components/AppLink';
 import type { ContactBulkChange, ContactMessage, ContactStatus } from '@/lib/api/types';
@@ -74,6 +74,23 @@ export function ContactInbox({ messages, filters, viewerId, canManage, counts }:
     onOpen: (id) => router.push(messageHref(id)),
     focusSearch: () => document.querySelector<HTMLInputElement>('[data-testid="contact-search-input"]')?.focus(),
   });
+
+  // A click anywhere on a row opens its message (the name's link is what keyboards and screen
+  // readers use). Clicks on controls, and a drag that selects text, are left alone.
+  useEffect(() => {
+    const table = tableRef.current;
+    if (!table) return;
+    const onClick = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      if (!target || target.closest('a, button, input, select, textarea, label, summary')) return;
+      if (window.getSelection()?.toString()) return;
+      const rowId = target.closest<HTMLElement>('tr[data-row-id]')?.dataset.rowId;
+      if (rowId) router.push(messageHref(rowId));
+    };
+    table.addEventListener('click', onClick);
+    return () => table.removeEventListener('click', onClick);
+  }, [router]);
 
   /** One change on the selected messages; refreshes the list (and the nav badge). */
   async function apply(name: string, change: ContactBulkChange, ids = chosen): Promise<string[] | null> {
@@ -214,7 +231,8 @@ export function ContactInbox({ messages, filters, viewerId, canManage, counts }:
   const active = activeContactView(filters);
 
   return (
-    <div>
+    // Rows open on click: they show the pointer
+    <div className="[&_tbody_tr]:cursor-pointer">
       <SavedViews
         views={views}
         active={active}
