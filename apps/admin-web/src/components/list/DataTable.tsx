@@ -115,7 +115,7 @@ export function DataTable<T extends { id: string }>({ rows, columns, caption, te
               <th role="columnheader" scope="col" className={`${th} w-10 sticky top-[var(--app-header-height,0px)] z-10 bg-surface rounded-ss-lg`}>
                 <input
                   type="checkbox"
-                  className="h-4 w-4"
+                  className="h-6 w-6 md:h-4 md:w-4"
                   checked={allSelected}
                   ref={(el) => {
                     if (el) el.indeterminate = someSelected;
@@ -151,7 +151,7 @@ export function DataTable<T extends { id: string }>({ rows, columns, caption, te
                   <td role="cell" className={`${td} order-first md:table-cell p-0 md:px-4 relative z-[1]`}>
                     <input
                       type="checkbox"
-                      className="h-4 w-4 mt-1"
+                      className="h-6 w-6 md:h-4 md:w-4 mt-1"
                       checked={selected}
                       onChange={() => selection.onToggle(row.id)}
                       aria-label={selection.rowLabel(row)}
