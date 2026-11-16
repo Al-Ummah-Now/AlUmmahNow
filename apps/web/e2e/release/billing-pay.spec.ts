@@ -72,9 +72,9 @@ async function seedPaidTier(onCleanup: (what: string, run: () => Promise<unknown
     await sql(`DELETE FROM creator_tiers WHERE id = ${q(tierId)}`);
   });
   await sql(
-    `INSERT INTO creator_tiers (id, name, name_ar, description, description_ar, unlimited, uploads, channels, pages, requestable, sort_order,
+    `INSERT INTO creator_tiers (id, name, name_ar, description, description_ar, unlimited, uploads, channels, requestable, sort_order,
        per_hour, per_day, max_concurrent, max_channels, caption_minutes_month, updated_at, updated_by)
-     VALUES (${q(tierId)}, ${q(tierName)}, ${q(`مدفوع تجريبي ${tierId.slice(-6)}`)}, NULL, NULL, 0, 1, 1, 0, 1, 95, 10, 50, 2, 2, 0, ${q(at)}, ${q(marker)})`,
+     VALUES (${q(tierId)}, ${q(tierName)}, ${q(`مدفوع تجريبي ${tierId.slice(-6)}`)}, NULL, NULL, 0, 1, 1, 1, 95, 10, 50, 2, 2, 0, ${q(at)}, ${q(marker)})`,
   );
 
   onCleanup('test payment provider', () => sql(`DELETE FROM billing_providers WHERE id = 'fake' AND updated_by = ${q(marker)}`));
