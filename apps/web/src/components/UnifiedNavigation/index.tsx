@@ -287,6 +287,7 @@ export function UnifiedNavigation() {
   const displayName = getDisplayName();
   const otherAccounts = accounts.filter((a) => !a.isActive);
   const initial = (displayName[0] || user.email[0] || '?').toUpperCase();
+  const channelInitial = channel ? (getChannelName(channel.name, channel.nameLocalized)[0]?.toUpperCase() ?? '?') : initial;
   const avatar = (src: string | undefined | null, letter: string, size = '') =>
     src ? (
       // eslint-disable-next-line @next/next/no-img-element
@@ -320,7 +321,9 @@ export function UnifiedNavigation() {
         aria-haspopup="menu"
         data-testid="nav-menu-trigger"
       >
-        {avatar(channel?.avatarUrl || getUserAvatar(), initial)}
+        {/* The identity you act as (owner review): the active channel's logo or its own letter, never
+            your picture under a channel; yourself when no channel is active */}
+        {channel ? avatar(channel.avatarUrl, channelInitial) : avatar(getUserAvatar(), initial)}
         <span className="aun-acct-name nav-trigger-name" dir="auto">{displayName}</span>
         <span className="sr-only">{t.navigation.navigationMenu}</span>
         <ChevronDown className="aun-caret" aria-hidden="true" />
@@ -530,7 +533,13 @@ export function UnifiedNavigation() {
                       <button key={ch.id} type="button" onClick={() => switchToChannel(ch.id)} data-testid="nav-channel-option" data-identity="channel" data-channel-id={ch.id} data-role={ch.role} aria-checked={channel?.id === ch.id} className="aun-menu-item" role="menuitemradio">
                         <span className="relative flex-none">
                           {avatar(ch.avatarUrl, getChannelName(ch.name, ch.nameLocalized)[0]?.toUpperCase() ?? '?')}
-                          {ch.isMain && ch.role === 'owner' && <Crown className="absolute -bottom-0.5 -end-0.5 h-2.5 w-2.5 rounded-full text-brand-ink" aria-hidden="true" />}
+                          {ch.isMain && ch.role === 'owner' && (
+                            <>
+                              <Crown className="absolute -bottom-0.5 -end-0.5 h-2.5 w-2.5 rounded-full text-brand-ink" aria-hidden="true" />
+                              {/* The crown stays on the avatar (owner); screen readers hear what it means */}
+                              <span className="sr-only" data-testid="nav-main-channel">{t.channel.mainChannel}</span>
+                            </>
+                          )}
                         </span>
                         {identityText(getChannelName(ch.name, ch.nameLocalized), t.navigation.identityChannel)}
                         {ch.role !== 'owner' && roleBadge(ch.role)}
