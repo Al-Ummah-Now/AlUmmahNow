@@ -159,6 +159,15 @@ describe('LocalizedFieldPair and Translate missing in a DOM', () => {
     await limited.unmount();
   });
 
+  it('a form can keep its own input test ids', async () => {
+    const p = await pair({ en: 'Free', ar: '' }, () => ok('مجاني'), { inputTestIds: { en: 'tier-free-name', ar: 'tier-free-nameAr' } });
+    assert.equal((p.q('tier-free-name') as HTMLInputElement).value, 'Free');
+    assert.ok(p.q('tier-free-nameAr'));
+    assert.equal(p.q('name-en'), null);
+    assert.ok(p.q('name-translate-en'), 'the buttons keep the pair’s ids');
+    await p.unmount();
+  });
+
   it('a field error is tied to its input', async () => {
     const p = await pair({ en: 'News', ar: '' }, () => ok('x'), { errors: { ar: 'Enter the Arabic text, or use Translate.' } });
     const arInput = p.q('name-ar') as HTMLInputElement;
