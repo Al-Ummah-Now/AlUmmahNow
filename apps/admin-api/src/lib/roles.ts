@@ -52,6 +52,8 @@ export const PERMISSIONS = {
   'videos:uploads': ADMIN_ROLE_IDS,
   /** Short/video formats: run the backfill, list unclassifiable videos, set a video's format. */
   'videos:format': ADMIN_ROLE_IDS,
+  /** Translate button and "Translate missing" on staff-set en/ar fields (POST /api/translate/fields; audited, capped per day). */
+  'content:translate': ADMIN_ROLE_IDS,
   /** Video categories (Videos admin › Categories): add, rename, reorder, retire and restore. Reading them needs any admin role. */
   'videos:categories': ADMIN_ROLE_IDS,
   /** Delivery comparison (epic #687): the Bunny/R2 switch, transcode jobs and retry, QoE and cost. */

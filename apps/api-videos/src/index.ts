@@ -27,6 +27,7 @@ import { createPlaylistAddsInternalRouter } from './endpoints/playlist/playlistA
 import { createAudioUploadRouter } from './endpoints/audio/upload';
 import { createAudioTracksInternalRouter } from './endpoints/audio/audioTracksInternal';
 import { createCaptionJobsInternalRouter } from './endpoints/captions/captionJobsInternal';
+import { createTranslateInternalRouter } from './endpoints/translate/translateInternal';
 
 /** Every 10 minutes: start a processing-check loop for any video stuck without one */
 const PROCESSING_SWEEP_CRON = '*/10 * * * *';
@@ -333,6 +334,8 @@ app.route('/internal/playlist-adds', createPlaylistAddsInternalRouter() as never
 app.route('/internal/channel-comments', createChannelCommentsInternalRouter() as never);
 // Caption jobs: media audio reports, processor progress/finish, admin retry (AUN-CAPTIONS §5.1)
 app.route('/internal/captions', createCaptionJobsInternalRouter() as never);
+// Staff-set field translation from admin-api (L10N rule; lib/translate/admin-fields.ts)
+app.route('/internal/translate', createTranslateInternalRouter() as never);
 // Scholars (the CMS): their channels and their articles on the Community tab
 app.route('/internal/scholars', scholarsInternalRouter as never);
 // Community posts for the CMS (www scholar post pages; wiki AUN-SCHOLAR-SITES §6.3)

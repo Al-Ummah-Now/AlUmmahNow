@@ -53,10 +53,15 @@ export interface InternalTranslateRequest {
   /** Budget/usage feature: inline or viewer-side */
   feature: 'inline_translate';
   context?: { title?: string; channel?: string };
+  /**
+   * 'admin_field': a staff-set site field (L10N rule): Workers AI only, the site's wording rules
+   * («مرئي/مرئيات»), the CMS glossary, and Quran text refused instead of masked.
+   */
+  mode?: 'admin_field';
 }
 
 export interface InternalTranslateResponse {
-  items: Array<{ id: string; text: string; quran?: Array<{ range: string; label: string }> }>;
+  items: Array<{ id: string; text: string; quran?: Array<{ range: string; label: string }>; refused?: AdminFieldRefusal }>;
   provider: string;
   model: string;
   usd: number;
@@ -88,4 +93,61 @@ export function guessTitleLanguage(text: string): 'ar' | 'en' {
   const letters = (text.match(/\p{L}/gu) ?? []).length;
   const arabic = (text.match(/[؀-ۿ]/g) ?? []).length;
   return letters && arabic / letters >= 0.5 ? 'ar' : 'en';
+}
+
+// ---------------------------------------------------------------------------
+// Staff-set site fields (L10N rule, 2026-11-16): every non-user-content field has en AND ar; the
+// admin types one and the Translate button suggests the other. Staff-only, audited, capped per day.
+// ---------------------------------------------------------------------------
+
+/** The two languages every staff-set field has. */
+export const ADMIN_FIELD_LANGUAGES = ['en', 'ar'] as const;
+export type AdminFieldLanguage = (typeof ADMIN_FIELD_LANGUAGES)[number];
+
+export const ADMIN_FIELD_TRANSLATE_LIMITS = {
+  /** Texts per request (a list page's "Translate missing" sends pages of 50) */
+  texts: 50,
+  chars: 20_000,
+  textChars: 5_000,
+} as const;
+
+/** Texts per staff member per UTC day (cache hits are not counted). */
+export const ADMIN_FIELD_TRANSLATE_DAILY_ITEMS = 500;
+
+/** The field being translated, for the audit and the prompt: `<feature>.<field>`, e.g. `categories.label`. */
+export const ADMIN_FIELD_NAME = /^[a-z][a-z0-9_-]{0,39}(?:\.[a-z][a-z0-9_-]{0,39}){0,2}$/;
+
+/** Why a text was not translated: it is (or quotes) Quran text, which is never machine-translated. */
+export type AdminFieldRefusal = 'quran';
+
+export interface AdminFieldTranslateRequest {
+  from: AdminFieldLanguage;
+  to: AdminFieldLanguage;
+  texts: string[];
+  field?: string;
+}
+
+export interface AdminFieldTranslateItem {
+  /** The suggestion ('' when the source was empty or the text was refused) */
+  text: string;
+  refused?: AdminFieldRefusal;
+  /** The Quran references found, so the admin can paste the official text */
+  quran?: Array<{ range: string; label: string }>;
+  cached: boolean;
+}
+
+export interface AdminFieldTranslateResponse {
+  items: AdminFieldTranslateItem[];
+  provider: string;
+  machineTranslation: true;
+  usage: { used: number; limit: number; resetsAt: string };
+}
+
+/**
+ * Text that is visibly Quran as printed: the ornate parentheses ﴿ ﴾, the ayah-end sign ۝, or the
+ * mushaf's small high annotation marks (U+06D6–U+06ED). The processor also runs the Quran matcher;
+ * this catches pasted mushaf text before any model sees it.
+ */
+export function looksLikeMushafText(text: string): boolean {
+  return /[\uFD3E\uFD3F\u06DD\u06DE]/.test(text) || (text.match(/[\u06D6-\u06ED]/g) ?? []).length >= 2;
 }

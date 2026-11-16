@@ -136,7 +136,23 @@ export interface TranslationPromptContext {
   channel?: string;
   /** "Use these renderings" pairs (the glossary, §8) */
   glossary?: Array<{ source: string; target: string }>;
+  /**
+   * The text is the site's own interface or editorial copy (a staff-set field), not a creator's
+   * words: the site's fixed wording applies (CLAUDE.md "Arabic word for video", wiki "Arabic glossary").
+   */
+  siteCopy?: boolean;
 }
+
+/** A staff-field item the model says is a Quran verse or a translation of one (refused, never translated). */
+export const SITE_COPY_QURAN_MARKER = '⟦QURAN⟧';
+
+/** The site's fixed Arabic wording, for staff-set fields (wiki "Arabic glossary", CLAUDE.md). */
+export const SITE_COPY_RULES = [
+  'This is the site\'s own interface or editorial text (short labels, names, descriptions): keep it as short as the source, same tone, no quotes around it.',
+  'Arabic word for "video": always «مرئي» (plural «مرئيات», definite «المرئي / المرئيات», dual «مرئيان / مرئيين»), never «فيديو», «فيديوهات» or «مقاطع الفيديو». "Short"/"Shorts" (the short-video format) is «مقطع قصير / المقاطع القصيرة».',
+  'Placeholders like {count}, {name} or %s and any HTML or Markdown stay exactly as written.',
+  `If an item is itself a Quran verse, or a translation or paraphrase of one, do not translate it: answer its "text" as exactly ${SITE_COPY_QURAN_MARKER}.`,
+] as const;
 
 /** The system rules shared by transcript and inline translation (§5.7, §8). */
 export function translationSystemPrompt(from: string, to: string, ctx: TranslationPromptContext = {}): string {
@@ -147,6 +163,7 @@ export function translationSystemPrompt(from: string, to: string, ctx: Translati
     'Honorifics: keep them. ﷺ or «صلى الله عليه وسلم» ↔ "peace be upon him (ﷺ)"; (رضي الله عنه) ↔ "(may Allah be pleased with him)".',
     'Names of prophets, companions, scholars and books in standard transliteration (Musa, not Moses). Keep digits as in the source.',
   ];
+  if (ctx.siteCopy) lines.push(...SITE_COPY_RULES);
   if (ctx.glossary?.length) lines.push(`Use these renderings: ${ctx.glossary.slice(0, 60).map((g) => `${g.source} → ${g.target}`).join('; ')}.`);
   if (ctx.channel || ctx.title) lines.push(`Context (read only, do not translate): ${[ctx.channel && `channel "${ctx.channel.slice(0, 120)}"`, ctx.title && `video "${ctx.title.slice(0, 200)}"`].filter(Boolean).join(', ')}.`);
   return lines.join('\n');

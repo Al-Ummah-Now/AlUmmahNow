@@ -40,12 +40,15 @@ import { recordUsage } from '../moderation/usage';
 import { loadQuranIndex } from '../quran/review-matcher';
 import { ProviderError, type Usage } from '../review/provider';
 import { translatorFor, type Translator, type TranslatorEnv } from './translator';
+import { translateAdminFieldsWithBudget } from './admin-fields';
 
 export const INLINE_FEATURE = 'inline_translate';
 const LANGUAGE = /^[a-z]{2,3}(?:-[A-Za-z]{2,4})?$/;
 
 export interface InlineTranslateEnv extends ErrorReporterEnv, TranslatorEnv {
   REPORTS_DB: D1Database;
+  /** The CMS (its translation glossary, for staff-set fields: admin-fields.ts) */
+  CMS_INTERNAL_URL?: string;
   REVIEW_MEDIA?: { get(key: string): Promise<{ text(): Promise<string> } | null> };
   VIDEOS?: { fetch(input: RequestInfo, init?: RequestInit): Promise<Response> };
 }
@@ -184,7 +187,20 @@ export function parseInternalTranslate(body: unknown): InternalTranslateRequest 
   if (chars > INLINE_TRANSLATE_LIMITS.chars) return null;
   if (b.provider !== 'workers-ai' && b.provider !== 'deepl') return null;
   if (typeof b.dailyBudgetUsd !== 'number' || b.dailyBudgetUsd < 0) return null;
-  return { items: b.items, from: b.from, to: b.to, field: (b.field ?? 'title') as InternalTranslateRequest['field'], provider: b.provider, dailyBudgetUsd: b.dailyBudgetUsd, feature: 'inline_translate', ...(b.context ? { context: b.context } : {}) };
+  if (b.mode !== undefined && b.mode !== 'admin_field') return null;
+  // Staff-set fields: English ↔ Arabic on Workers AI only
+  if (b.mode === 'admin_field' && (!['en', 'ar'].includes(b.from) || !['en', 'ar'].includes(b.to))) return null;
+  return {
+    items: b.items,
+    from: b.from,
+    to: b.to,
+    field: (b.field ?? 'title') as InternalTranslateRequest['field'],
+    provider: b.mode === 'admin_field' ? 'workers-ai' : b.provider,
+    dailyBudgetUsd: b.dailyBudgetUsd,
+    feature: 'inline_translate',
+    ...(b.context && b.mode !== 'admin_field' ? { context: b.context } : {}),
+    ...(b.mode ? { mode: b.mode } : {}),
+  };
 }
 
 /** POST /internal/translate (the caller is checked by index.ts). */
@@ -195,8 +211,8 @@ export async function handleInternalTranslate(request: Request, env: InlineTrans
   if (!req) return json({ error: 'invalid_request' }, 400);
   const startedAt = Date.now();
   try {
-    const result = await translateWithBudget(env, req, logger, ctx);
-    logger.request({ method: 'POST', route: '/internal/translate', status: 200, durationMs: Date.now() - startedAt, items: req.items.length, provider: result.provider, model: result.model });
+    const result = req.mode === 'admin_field' ? await translateAdminFieldsWithBudget(env, req, logger, ctx) : await translateWithBudget(env, req, logger, ctx);
+    logger.request({ method: 'POST', route: '/internal/translate', status: 200, durationMs: Date.now() - startedAt, items: req.items.length, provider: result.provider, model: result.model, mode: req.mode ?? 'inline' });
     return json(result);
   } catch (error) {
     if (error instanceof BudgetSpent) return json({ error: 'budget_spent' }, 503);
