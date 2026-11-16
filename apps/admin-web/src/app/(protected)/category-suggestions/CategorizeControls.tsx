@@ -9,6 +9,7 @@ import { useLanguage } from '@/i18n/I18nProvider';
 import { formatNumber } from '@/i18n/translate';
 import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
+import { parseDigits } from '@al-ummah/shared-types';
 
 export function CategorizeSettings({ initial }: { initial: CategorizeConfigView }) {
   const router = useRouter();
@@ -25,8 +26,8 @@ export function CategorizeSettings({ initial }: { initial: CategorizeConfigView 
     setError(null);
     setSaved(false);
     try {
-      const capNumber = Number(cap);
-      const thresholdNumber = Number(threshold);
+      const capNumber = Number(parseDigits(cap));
+      const thresholdNumber = Number(parseDigits(threshold));
       const result = await updateCategorizeConfig({
         enabled,
         ...(cap !== '' && Number.isFinite(capNumber) ? { dailyNeuronCap: Math.round(capNumber) } : {}),

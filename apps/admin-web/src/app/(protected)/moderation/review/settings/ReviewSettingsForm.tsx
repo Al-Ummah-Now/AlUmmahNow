@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { VIDEO_REVIEW_MODES, type VideoReviewSettings, type VideoReviewThresholds } from '@al-ummah/shared-types';
+import { parseDigits, VIDEO_REVIEW_MODES, type VideoReviewSettings, type VideoReviewThresholds } from '@al-ummah/shared-types';
 import { updateReviewSettings } from '@/lib/api/review';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { translateDynamic } from '@/i18n/translate';
@@ -17,7 +17,7 @@ export function ReviewSettingsForm({ initial, canEdit }: { initial: VideoReviewS
   const [s, setS] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
-  const num = (v: string) => (v === '' ? NaN : Number(v));
+  const num = (v: string) => (v === '' ? NaN : Number(parseDigits(v)));
 
   const save = async () => {
     if (!canEdit) return;

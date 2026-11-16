@@ -1,4 +1,4 @@
-import { STATUS_COMPONENTS } from '@al-ummah/shared-types';
+import { numberFormat, STATUS_COMPONENTS } from '@al-ummah/shared-types';
 import { getStatusOverview, getStatusSubscriptions } from '@/lib/api/status';
 import type { StatusOverview, StatusSubscriptions as Subs } from '@/lib/api/status-types';
 import { AdminApiError } from '@/lib/api/errors';
@@ -11,7 +11,6 @@ import { logger } from '@/lib/logger';
 import { DeletedIncidents, IncidentCard, NewIncidentForm } from './StatusAdmin';
 import { publicStatusUrl } from './model';
 import { StatusSubscriptions } from './StatusSubscriptions';
-import { intlLocale } from '@/i18n/intl-locale';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,7 +47,7 @@ export default async function StatusAdminPage() {
     logger.error('[status] Failed to load the overview', { error: error instanceof Error ? error.message : String(error) });
     loadError = error instanceof AdminApiError && error.status === 503 ? t('statusPage.notConfigured') : t('statusPage.loadFailed');
   }
-  const percent = (v: number) => new Intl.NumberFormat(intlLocale(locale), { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
+  const percent = (v: number) => numberFormat(locale, { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
   const name = (id: string) => STATUS_COMPONENTS.find((c) => c.id === id)?.[locale === 'ar' ? 'ar' : 'en'] ?? id;
 
   return (

@@ -5,6 +5,7 @@ import { getI18n } from '@/i18n/server';
 import { formatDate, formatNumber, translateDynamic } from '@/i18n/translate';
 import { ErrorAlert, cardClass, fieldClass, linkClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
+import { formatFixed, formatMoney } from '@al-ummah/shared-types';
 
 export const dynamic = 'force-dynamic';
 
@@ -105,7 +106,7 @@ export default async function AiModerationPage({ searchParams }: PageProps) {
             {t('ai.usageToday', {
               neurons: formatNumber(Math.round(usage.today.neurons), locale),
               cap: formatNumber(usage.dailyNeuronCap ?? 0, locale),
-              usd: usage.today.usd.toFixed(4),
+              usd: formatMoney(locale, usage.today.usd, 'USD', { maximumFractionDigits: 4 }),
             })}
           </p>
           {usage.dailyNeuronCap ? (
@@ -153,7 +154,7 @@ export default async function AiModerationPage({ searchParams }: PageProps) {
               {data.signals.map((s) => (
                 <tr key={s.id} className="hover:bg-surface-hover" data-testid="ai-row" data-signal-id={s.id} data-decision={s.decision}>
                   <td className="px-4 py-3 text-fg">{s.top_category ? translateDynamic(t, 'aiCategory', s.top_category) : '—'}</td>
-                  <td className="px-4 py-3 text-fg-muted" dir="ltr">{s.top_score === null ? '—' : s.top_score.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-fg-muted" dir="ltr">{s.top_score === null ? '—' : formatFixed(locale, s.top_score, 2)}</td>
                   <td className="px-4 py-3 text-fg-muted">
                     {translateDynamic(t, 'aiDecision', s.decision)}
                     {s.skip_reason && <span className="block text-xs text-fg-subtle">{translateDynamic(t, 'aiSkip', s.skip_reason)}</span>}

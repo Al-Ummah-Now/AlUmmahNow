@@ -1,7 +1,7 @@
 /**
  * Daily values per live provider as two lines on a 0-based value axis, built
  * on the shared chart scale (shared-types chart-scale: niceScale,
- * labelIndices, chartLocale) like the Errors hourly chart. Bunny is the solid
+ * labelIndices, locale-format) like the Errors hourly chart. Bunny is the solid
  * accent line, self-hosted the dashed one, so the two differ without colour.
  * Time runs from the axis side (left to right in English, right to left in
  * Arabic). A day without data is a gap, never a zero. Each point has a title

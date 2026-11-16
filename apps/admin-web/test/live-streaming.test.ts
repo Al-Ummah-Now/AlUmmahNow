@@ -6,6 +6,7 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { fillTemplate } from '@al-ummah/shared-types';
 import { DEFAULT_LIVE_ROUTING, cleanLiveRoutingPatch, type LiveComparison, type LiveProviderStats, type LiveRoutingSettings } from '@al-ummah/shared-types';
 import {
   COMPARISON_ROWS,
@@ -224,13 +225,13 @@ describe('live streaming: page render', () => {
       return renderToStaticMarkup(React.createElement(I18nProvider as never, { locale, theme: 'light' } as never, child) as never);
     };
     const html = render('en', true);
-    assert.ok(html.includes(en.live.appliesNote));
+    assert.ok(html.includes(fillTemplate('en', en.live.appliesNote)));
     assert.ok(html.includes(en.live.provider.unavailableBunny));
     assert.ok(!html.includes('role="alert"'), 'nothing shows as an error');
     assert.ok(html.includes('data-testid="live-override-add"'));
     assert.ok(html.includes('Test channel'));
     const moderator = render('ar', false);
-    assert.ok(moderator.includes(ar.live.appliesNote));
+    assert.ok(moderator.includes(fillTemplate('ar', ar.live.appliesNote)));
     assert.ok(moderator.includes(ar.live.readOnly));
     assert.ok(!moderator.includes('data-testid="live-override-add"'), 'no change controls for a moderator');
   });

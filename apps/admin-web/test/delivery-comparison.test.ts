@@ -261,7 +261,7 @@ describe('DailyChart', () => {
     assert.equal(firstX?.[1], 'end', 'the first day sits at the right edge');
     const yTick = html.match(/<text x="([\d.]+)"[^>]*text-anchor="start"[^>]*data-testid="c-y-tick"/);
     assert.ok(yTick && Number(yTick[1]) > 500, 'value labels are on the right');
-    assert.match(html, /[٠-٩]/, 'Arabic-Indic digits');
+    assert.match(html, /[٠-٩]/, 'Eastern Arabic (Hindi) numerals');
   });
 
   it('shows the empty state without lines', () => {

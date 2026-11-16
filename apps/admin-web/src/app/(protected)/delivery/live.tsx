@@ -7,9 +7,9 @@ import type { MediaLive } from '@/lib/api/types';
 import type { Translator } from '@/i18n/translate';
 import Link from '@/components/AppLink';
 import { cardClass, linkClass } from '@/components/ui';
-import { chartLocale } from '@al-ummah/shared-types';
+
 import { deliveryFormats } from './format';
-import { intlLocale } from '@/i18n/intl-locale';
+import { dateTimeFormat, numberFormat } from '@al-ummah/shared-types';
 
 export interface LiveFiguresProps {
   live: MediaLive | null;
@@ -38,7 +38,7 @@ function Figure({ label, value, testId, note, link }: { label: string; value: st
 
 /** Seconds with one decimal ("6.2 s"), in the page's digits. */
 function seconds(ms: number, locale: string): string {
-  return new Intl.NumberFormat(chartLocale(locale), { style: 'unit', unit: 'second', unitDisplay: 'short', minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(ms / 1000);
+  return numberFormat(locale, { style: 'unit', unit: 'second', unitDisplay: 'short', minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(ms / 1000);
 }
 
 /** How long transcodes took to start (the attempt began → FFmpeg running), recent p50/p95, cold vs warm. */
@@ -48,7 +48,7 @@ function StartTimes({ live, t, locale }: { live: MediaLive; t: Translator; local
   if (!s || !s.samples || s.p50Ms === null || s.p95Ms === null) {
     return <p className="mt-3 text-sm text-fg-muted" data-testid="delivery-live-start">{t('mediaDelivery.liveStartNone')}</p>;
   }
-  const parts = [t('mediaDelivery.liveStart', { days: new Intl.NumberFormat(chartLocale(locale)).format(s.days), p50: seconds(s.p50Ms, locale), p95: seconds(s.p95Ms, locale), n: new Intl.NumberFormat(chartLocale(locale)).format(s.samples) })];
+  const parts = [t('mediaDelivery.liveStart', { days: numberFormat(locale).format(s.days), p50: seconds(s.p50Ms, locale), p95: seconds(s.p95Ms, locale), n: numberFormat(locale).format(s.samples) })];
   if (s.cold.p50Ms !== null) parts.push(t('mediaDelivery.liveStartCold', { p50: seconds(s.cold.p50Ms, locale) }));
   if (s.warm.p50Ms !== null) parts.push(t('mediaDelivery.liveStartWarm', { p50: seconds(s.warm.p50Ms, locale) }));
   return <p className="mt-3 text-sm text-fg" data-testid="delivery-live-start">{parts.join(' · ')}</p>;
@@ -95,7 +95,7 @@ export function LiveFigures({ live, t, locale, stale = false, settingsHref }: Li
           <StartTimes live={live} t={t} locale={locale} />
           <p className="mt-3 text-xs text-fg-muted" data-testid="delivery-live-updated">
             {updated && !Number.isNaN(updated.getTime())
-              ? t('mediaDelivery.liveUpdated', { time: new Intl.DateTimeFormat(intlLocale(locale), { timeStyle: 'medium' }).format(updated) })
+              ? t('mediaDelivery.liveUpdated', { time: dateTimeFormat(locale, { timeStyle: 'medium' }).format(updated) })
               : null}
             {stale && <span className="ms-2 text-danger-fg" data-testid="delivery-live-stale">{t('mediaDelivery.liveStale')}</span>}
           </p>

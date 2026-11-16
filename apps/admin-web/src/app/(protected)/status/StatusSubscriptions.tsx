@@ -8,13 +8,12 @@
  */
 import { useState } from 'react';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatDate, type MessageKey } from '@/i18n/translate';
+import { formatDate, formatNumber, type MessageKey } from '@/i18n/translate';
 import { ActionFeedback, ConfirmButton, useContentAction } from '@/components/content/actions';
 import { cardClass, fieldClass, primaryButtonClass } from '@/components/ui';
 import { smallButtonClass } from '@/components/content/parts';
 import { addStatusWebhook, deleteStatusWebhook, removeStatusSubscriber, retryStatusNotification } from '@/lib/api/status';
 import type { StatusSubscriptions as Subs } from '@/lib/api/status-types';
-import { intlLocale } from '@/i18n/intl-locale';
 import { deliveryErrorKey } from './model';
 
 const labelClass = 'block text-sm font-medium text-fg mb-1';
@@ -24,7 +23,7 @@ function Stat({ label, value, testId }: { label: string; value: number; testId: 
   const { locale } = useLanguage();
   return (
     <div className="flex-1 rounded-lg border border-border bg-surface-2 px-4 py-3 min-w-32" data-testid={testId} data-value={value}>
-      <p className="text-2xl font-bold tabular-nums text-fg">{value.toLocaleString(intlLocale(locale))}</p>
+      <p className="text-2xl font-bold tabular-nums text-fg">{formatNumber(value, locale)}</p>
       <p className="text-sm text-fg-muted">{label}</p>
     </div>
   );
@@ -188,11 +187,11 @@ function History({ items }: { items: Subs['notifications'] }) {
             <p className="font-medium text-fg" dir="auto">{titleOf(n)}</p>
             <p className="text-fg-muted">{t(`statusPage.subs.events.${n.event}` as MessageKey)} · {formatDate(n.createdAt, locale, true)}</p>
             <dl className="mt-2 grid grid-cols-3 gap-2">
-              <div><dt className="text-fg-muted">{t('statusPage.subs.recipients')}</dt><dd className="tabular-nums text-fg">{n.fannedOutAt ? (n.recipients ?? 0).toLocaleString(intlLocale(locale)) : t('statusPage.subs.sending')}</dd></div>
-              <div><dt className="text-fg-muted">{t('statusPage.subs.delivered')}</dt><dd className="tabular-nums text-fg">{n.sent.toLocaleString(intlLocale(locale))}</dd></div>
-              <div><dt className="text-fg-muted">{t('statusPage.subs.failed')}</dt><dd className={`tabular-nums ${n.failed ? 'font-semibold text-danger-fg' : 'text-fg'}`}>{n.failed.toLocaleString(intlLocale(locale))}</dd></div>
+              <div><dt className="text-fg-muted">{t('statusPage.subs.recipients')}</dt><dd className="tabular-nums text-fg">{n.fannedOutAt ? formatNumber(n.recipients ?? 0, locale) : t('statusPage.subs.sending')}</dd></div>
+              <div><dt className="text-fg-muted">{t('statusPage.subs.delivered')}</dt><dd className="tabular-nums text-fg">{formatNumber(n.sent, locale)}</dd></div>
+              <div><dt className="text-fg-muted">{t('statusPage.subs.failed')}</dt><dd className={`tabular-nums ${n.failed ? 'font-semibold text-danger-fg' : 'text-fg'}`}>{formatNumber(n.failed, locale)}</dd></div>
             </dl>
-            {n.queued > 0 && <p className="mt-1 text-xs text-fg-muted">{t('statusPage.subs.waiting')}: {n.queued.toLocaleString(intlLocale(locale))}</p>}
+            {n.queued > 0 && <p className="mt-1 text-xs text-fg-muted">{t('statusPage.subs.waiting')}: {formatNumber(n.queued, locale)}</p>}
             {(n.failed > 0 || !n.fannedOutAt) && <div className="mt-2">{retryButton(n, false)}</div>}
           </li>
         ))}
@@ -220,12 +219,12 @@ function History({ items }: { items: Subs['notifications'] }) {
                   <span className="text-fg-muted">{t(`statusPage.subs.events.${n.event}` as MessageKey)}</span>
                 </th>
                 <td className="p-2 whitespace-nowrap text-fg-muted">{formatDate(n.createdAt, locale, true)}</td>
-                <td className="p-2 text-end tabular-nums text-fg-muted">{n.fannedOutAt ? (n.recipients ?? 0).toLocaleString(intlLocale(locale)) : t('statusPage.subs.sending')}</td>
+                <td className="p-2 text-end tabular-nums text-fg-muted">{n.fannedOutAt ? formatNumber(n.recipients ?? 0, locale) : t('statusPage.subs.sending')}</td>
                 <td className="p-2 text-end tabular-nums text-fg">
-                  {n.sent.toLocaleString(intlLocale(locale))}
-                  {n.queued > 0 && <span className="block text-xs text-fg-muted">{t('statusPage.subs.waiting')}: {n.queued.toLocaleString(intlLocale(locale))}</span>}
+                  {formatNumber(n.sent, locale)}
+                  {n.queued > 0 && <span className="block text-xs text-fg-muted">{t('statusPage.subs.waiting')}: {formatNumber(n.queued, locale)}</span>}
                 </td>
-                <td className={`p-2 text-end tabular-nums ${n.failed ? 'font-semibold text-danger-fg' : 'text-fg-muted'}`}>{n.failed.toLocaleString(intlLocale(locale))}</td>
+                <td className={`p-2 text-end tabular-nums ${n.failed ? 'font-semibold text-danger-fg' : 'text-fg-muted'}`}>{formatNumber(n.failed, locale)}</td>
                 <td className="p-2 text-end">{retryButton(n)}</td>
               </tr>
             );

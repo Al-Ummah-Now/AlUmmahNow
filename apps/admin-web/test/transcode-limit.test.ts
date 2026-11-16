@@ -1,6 +1,6 @@
 /**
- * Concurrent transcodes range (Video providers → Cloudflare R2 settings): the fields' rules (1 ≤ min ≤ max ≤ ceiling, whole numbers, Arabic-Indic
- * digits, no-op saves), en/ar copy for every key it and Delivery's live figure use, and the roles
+ * Concurrent transcodes range (Video providers → Cloudflare R2 settings): the fields' rules (1 ≤ min ≤ max ≤ ceiling, whole numbers, Eastern Arabic (Hindi)
+ * numerals, no-op saves), en/ar copy for every key it and Delivery's live figure use, and the roles
  * (moderators see Delivery's live figures, admins change the setting).
  */
 import { describe, it } from 'node:test';
@@ -25,7 +25,7 @@ describe('the concurrent transcodes range fields', () => {
   it('refuses a minimum above the maximum', () => {
     assert.deepEqual(checkRangeInput('6', '3', 10, cur), { ok: false, error: 'min_above_max', field: 'min' });
   });
-  it('reads Arabic-Indic and Persian digits', () => {
+  it('reads Eastern Arabic (Hindi) and Persian digits', () => {
     assert.deepEqual(checkRangeInput('٢', '۸', 10, cur), { ok: true, value: { min: 2, max: 8 } });
   });
   it('says so when the range is already the setting', () => {

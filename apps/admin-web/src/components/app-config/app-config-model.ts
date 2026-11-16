@@ -5,17 +5,7 @@
  * before saving), the order of rules (the first match decides a key), and api-videos' own
  * problems placed on the rule and field they name.
  */
-import {
-  APP_CONFIG_APPS,
-  APP_CONFIG_MAX_RULES,
-  APP_CONFIG_PLATFORMS,
-  APP_CONFIG_RULE_KEY,
-  APP_CONFIG_SEMVER,
-  compareAppVersions,
-  type AppConfigRule,
-  type AppConfigVersionPolicy,
-  type AppConfigVersionsDocument,
-} from '@al-ummah/shared-types';
+import { APP_CONFIG_APPS, APP_CONFIG_MAX_RULES, APP_CONFIG_PLATFORMS, APP_CONFIG_RULE_KEY, APP_CONFIG_SEMVER, compareAppVersions, parseDigits, type AppConfigRule, type AppConfigVersionPolicy, type AppConfigVersionsDocument } from '@al-ummah/shared-types';
 
 export type RulesKind = 'flags' | 'config';
 
@@ -124,7 +114,7 @@ export function draftToRule(d: RuleDraft, kind: RulesKind): { rule: AppConfigRul
   const locales = splitLocales(d.locales);
   if (locales.some((l) => !LOCALE.test(l) || l.length > 16)) add('locales', 'localeFormat');
   const rolloutText = d.rollout.trim();
-  const rollout = rolloutText === '' ? undefined : Number(rolloutText);
+  const rollout = rolloutText === '' ? undefined : Number(parseDigits(rolloutText));
   if (rollout !== undefined && (!Number.isFinite(rollout) || rollout < 0 || rollout > 100)) add('rollout', 'rolloutRange');
   let value: unknown;
   const valueText = d.value.trim();

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { MAX_ZOOM, aspectLabel, cropOutputSize, cropRect, panDelta, type ThumbnailCropSize } from '@al-ummah/shared-types';
+import { aspectLabel, cropOutputSize, cropRect, localizeDigits, MAX_ZOOM, panDelta, type ThumbnailCropSize } from '@al-ummah/shared-types';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { primaryButtonClass } from '@/components/ui';
 import { smallButtonClass } from './parts';
@@ -56,7 +56,7 @@ interface Props {
  * what is saved.
  */
 export function ThumbnailCropDialog({ src, image, video, filename, onCancel, onConfirm }: Props) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const ref = useRef<HTMLDialogElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
@@ -100,7 +100,7 @@ export function ThumbnailCropDialog({ src, image, video, filename, onCancel, onC
       <div className="p-6 space-y-4">
         <h2 id="thumb-crop-title" className="text-lg font-semibold">{t('videos.cropTitle')}</h2>
         <p id="thumb-crop-help" className="text-fg-muted text-sm">
-          {t('videos.cropHelp', { image: `${image.width}×${image.height}`, video: aspectLabel(video) })}
+          {t('videos.cropHelp', { image: localizeDigits(locale, `${image.width}×${image.height}`), video: localizeDigits(locale, aspectLabel(video)) })}
         </p>
         <div className="flex justify-center">
           <div

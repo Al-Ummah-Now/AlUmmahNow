@@ -71,7 +71,7 @@ export function bunnyLabel(t: Translator, bunny: StaleUploadItem['bunny']): stri
     case 6:
       return t('staleUploads.bunnyUploadFailed');
     default:
-      return typeof status === 'number' && status >= 7 ? t('staleUploads.bunnyPlayable', { status }) : t('staleUploads.bunnyUnknown', { status: String(status ?? '?') });
+      return typeof status === 'number' && status >= 7 ? t('staleUploads.bunnyPlayable', { status: String(status) }) : t('staleUploads.bunnyUnknown', { status: String(status ?? '?') });
   }
 }
 

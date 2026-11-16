@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from '@/components/AppLink';
-import { TROUBLESHOOT_LOG_HOURS, TROUBLESHOOT_TOKEN_CHECKS, type TroubleshootJob, type TroubleshootLogs, type TroubleshootStatus, type TroubleshootTokenView } from '@al-ummah/shared-types';
+import { dateTimeFormat, TROUBLESHOOT_LOG_HOURS, TROUBLESHOOT_TOKEN_CHECKS, type TroubleshootJob, type TroubleshootLogs, type TroubleshootStatus, type TroubleshootTokenView } from '@al-ummah/shared-types';
 import {
   getTranscodeLogs,
   getTranscodeTroubleshoot,
@@ -22,7 +22,6 @@ import { smallButtonClass } from '@/components/content/parts';
 import { logger } from '@/lib/logger-client';
 import { deliveryFormats } from './format';
 import { API_ERROR_LABEL, REASON_LABEL, STATE_CHIP, STATE_LABEL, TROUBLESHOOT_REFRESH_MS, filterProblem, jobActions, orderJobs, statusNote } from './troubleshoot-view';
-import { intlLocale } from '@/i18n/intl-locale';
 
 const subTitle = 'text-base font-semibold text-fg';
 
@@ -91,7 +90,7 @@ export function TranscodeTroubleshooting({ initial, canSetToken, focusVideo }: T
             {refreshing ? t('transcodeTroubleshoot.refreshing') : t('transcodeTroubleshoot.refresh')}
           </button>
           <p className="text-xs text-fg-muted" data-testid="troubleshoot-updated">
-            {updated && !Number.isNaN(updated.getTime()) ? t('transcodeTroubleshoot.updated', { time: new Intl.DateTimeFormat(intlLocale(locale), { timeStyle: 'medium' }).format(updated) }) : null}
+            {updated && !Number.isNaN(updated.getTime()) ? t('transcodeTroubleshoot.updated', { time: dateTimeFormat(locale, { timeStyle: 'medium' }).format(updated) }) : null}
           </p>
         </div>
       </div>
@@ -177,7 +176,7 @@ function StatusStrip({ status, t, locale }: { status: TroubleshootStatus; t: Tra
 function when(iso: string | null, locale: string): string | null {
   if (!iso) return null;
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? null : new Intl.DateTimeFormat(intlLocale(locale), { dateStyle: 'medium', timeStyle: 'short' }).format(d);
+  return Number.isNaN(d.getTime()) ? null : dateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(d);
 }
 
 function JobsList({ data, focusVideo, t, locale, onChanged, onShowLogs }: { data: TranscodeTroubleshoot; focusVideo: string | null; t: Translator; locale: string; onChanged: () => Promise<void>; onShowLogs: (videoId: string) => void }) {
@@ -336,7 +335,7 @@ function LogsViewer({ formRef, filter, setFilter, tokenState, t, locale }: { for
   const [error, setError] = useState<string | null>(null);
   const invalid = filterProblem(filter);
   const noToken = tokenState !== 'ok';
-  const time = new Intl.DateTimeFormat(intlLocale(locale), { dateStyle: 'short', timeStyle: 'medium' });
+  const time = dateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'medium' });
 
   async function load(e: React.FormEvent) {
     e.preventDefault();

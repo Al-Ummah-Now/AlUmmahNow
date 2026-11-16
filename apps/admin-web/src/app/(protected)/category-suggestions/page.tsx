@@ -1,5 +1,5 @@
 import Link from '@/components/AppLink';
-import { VIDEO_CATEGORIES } from '@al-ummah/shared-types';
+import { formatMoney, VIDEO_CATEGORIES } from '@al-ummah/shared-types';
 import { listVideoCategoriesAdmin } from '@/lib/api/categories';
 import { getCategorySuggestionStats, listCategorySuggestions } from '@/lib/api/admin';
 import type { CategorySuggestionList, CategorySuggestionQueue, CategorySuggestionStats } from '@/lib/api/types';
@@ -101,7 +101,7 @@ export default async function CategorySuggestionsPage({ searchParams }: PageProp
                 neurons: n(Math.round(stats.usage.neurons)),
                 cap: n(stats.config.dailyNeuronCap),
                 calls: n(stats.usage.calls),
-                usd: stats.usage.usd.toFixed(4),
+                usd: formatMoney(locale, stats.usage.usd, 'USD', { maximumFractionDigits: 4 }),
               })}
             </p>
             {stats.config.dailyNeuronCap > 0 && (

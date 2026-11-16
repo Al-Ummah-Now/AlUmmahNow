@@ -7,9 +7,8 @@
  * siteVisitsReport): cookieless daily counters, aggregates only. Pure: server
  * and client safe.
  */
-import { chartLocale, compactNumber } from '@al-ummah/shared-types';
+import { compactNumber, dateTimeFormat, numberFormat } from '@al-ummah/shared-types';
 import type { Translator } from '@/i18n/translate';
-import { intlLocale } from '@/i18n/intl-locale';
 
 /** admin-api /api/content/analytics/visits (api-videos lib/site-visits.ts). */
 export interface SiteVisitsReport {
@@ -144,11 +143,11 @@ export interface VisitFormats {
 }
 
 export function visitFormats(locale: string): VisitFormats {
-  const loc = chartLocale(locale);
-  const count = new Intl.NumberFormat(intlLocale(loc), { maximumFractionDigits: 0 });
-  const percent = new Intl.NumberFormat(intlLocale(loc), { style: 'percent', maximumFractionDigits: 1 });
-  const day = new Intl.DateTimeFormat(intlLocale(loc), { day: 'numeric', month: 'short', timeZone: 'UTC' });
-  const date = new Intl.DateTimeFormat(intlLocale(loc), { dateStyle: 'medium', timeZone: 'UTC' });
+  const loc = locale;
+  const count = numberFormat(loc, { maximumFractionDigits: 0 });
+  const percent = numberFormat(loc, { style: 'percent', maximumFractionDigits: 1 });
+  const day = dateTimeFormat(loc, { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  const date = dateTimeFormat(loc, { dateStyle: 'medium', timeZone: 'UTC' });
   const asDate = (d: string) => new Date(`${d}T00:00:00Z`);
   return {
     count: (v) => count.format(v),

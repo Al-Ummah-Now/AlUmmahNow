@@ -6,7 +6,7 @@ import { getI18n } from '@/i18n/server';
 import { formatDate, type MessageKey } from '@/i18n/translate';
 import { ErrorAlert, cardClass, fieldClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
-import { intlLocale } from '@/i18n/intl-locale';
+import { numberFormat } from '@al-ummah/shared-types';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,7 +39,7 @@ export default async function AbusePage({ searchParams }: PageProps) {
     logger.error('[abuse] Failed to load the counters', { error: error instanceof Error ? error.message : String(error) });
     loadError = error instanceof AdminApiError && error.status === 503 ? t('abusePage.notConfigured') : t('abusePage.loadFailed');
   }
-  const number = (n: number) => new Intl.NumberFormat(intlLocale(locale)).format(n);
+  const number = (n: number) => numberFormat(locale).format(n);
   const kindLabel = (kind: string) =>
     (ABUSE_KINDS as readonly string[]).includes(kind) ? t(`abusePage.kinds.${kind}` as MessageKey) : kind;
 

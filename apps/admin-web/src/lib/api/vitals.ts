@@ -3,7 +3,7 @@
  * of the videos site from Analytics Engine (docs/operations/rum.md). Server components only.
  */
 import { fetchAdmin } from './request';
-import { intlLocale } from '@/i18n/intl-locale';
+import { numberFormat } from '@al-ummah/shared-types';
 
 export type VitalsEnv = 'production' | 'stage' | 'qa';
 export const VITALS_ENVS: VitalsEnv[] = ['production', 'stage', 'qa'];
@@ -39,7 +39,7 @@ export async function getVitalsSummary(env: VitalsEnv, days: number, locale: Vit
 
 /** LCP and INP in seconds / milliseconds, CLS unitless with 2 decimals, in the reader's digits */
 export function formatVital(metric: VitalsMetric, p75: number, locale: string): string {
-  if (metric === 'CLS') return new Intl.NumberFormat(intlLocale(locale), { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(p75);
-  if (metric === 'LCP') return new Intl.NumberFormat(intlLocale(locale), { style: 'unit', unit: 'second', minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(p75 / 1000);
-  return new Intl.NumberFormat(intlLocale(locale), { style: 'unit', unit: 'millisecond', maximumFractionDigits: 0 }).format(p75);
+  if (metric === 'CLS') return numberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(p75);
+  if (metric === 'LCP') return numberFormat(locale, { style: 'unit', unit: 'second', minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(p75 / 1000);
+  return numberFormat(locale, { style: 'unit', unit: 'millisecond', maximumFractionDigits: 0 }).format(p75);
 }

@@ -5,13 +5,14 @@
  * operations/SpendSection.tsx.
  */
 import Link from '@/components/AppLink';
-import { chartLocale } from '@al-ummah/shared-types';
+
 import type { Translator } from '@/i18n/translate';
 import { linkClass } from '@/components/ui';
 import { StackedBarChart } from '@/components/charts/StackedBarChart';
 import type { CostEnvKey, CostMover, CostsDashboard } from '@/lib/api/costs-types';
 import { budgetMeter, dailyBudget, type MeterTone, type OpsFormats } from '../operations/model';
 import { dataAge, parseAlertKey, shareOf, tokenNotice, weekDelta, type Direction } from './model';
+import { moneyFormat } from '@al-ummah/shared-types';
 
 export const ENV_KEYS: CostEnvKey[] = ['production', 'stage', 'qa', 'account'];
 export const ENV_COLOR: Record<CostEnvKey, string> = {
@@ -38,7 +39,7 @@ const envLabel = (t: Translator, env: string) => (ENV_KEYS as string[]).includes
 
 /** "+$1.20" / "−$0.80" in the locale's digits. */
 export function signedUsd(locale: string): (v: number) => string {
-  const nf = new Intl.NumberFormat(chartLocale(locale), { style: 'currency', currency: 'USD', signDisplay: 'exceptZero', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const nf = moneyFormat(locale, 'USD', { signDisplay: 'exceptZero', minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return (v) => nf.format(v);
 }
 

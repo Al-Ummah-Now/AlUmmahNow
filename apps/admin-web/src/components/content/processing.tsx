@@ -9,7 +9,7 @@
  * failed is red with the reason in a tooltip reachable by keyboard and screen
  * reader (aria-describedby on a focusable chip, plus title for the mouse).
  */
-import { chartLocale, sanitizeRungs, sortByResolution, type AdminLiveEvent, type R2RungState } from '@al-ummah/shared-types';
+import { numberFormat, sanitizeRungs, sortByResolution, type AdminLiveEvent, type R2RungState } from '@al-ummah/shared-types';
 import { fitToViewport } from '../../../../../packages/fanous-tokens/nav/menu-fit.js';
 import type { AdminVideoR2 } from '@/lib/api/content-types';
 import type { Translator } from '@/i18n/translate';
@@ -179,14 +179,14 @@ export function r2FromLiveEvent(r2: AdminVideoR2 | null | undefined, event: Admi
 function bitrateText(bps: number, locale: string): string {
   const f = deliveryFormats(locale);
   if (bps >= 1_000_000) {
-    return new Intl.NumberFormat(chartLocale(locale), { style: 'unit', unit: 'megabit-per-second', unitDisplay: 'short', maximumFractionDigits: 1 }).format(bps / 1_000_000);
+    return numberFormat(locale, { style: 'unit', unit: 'megabit-per-second', unitDisplay: 'short', maximumFractionDigits: 1 }).format(bps / 1_000_000);
   }
   return f.kbps(bps / 1000);
 }
 
 function sizeText(n: number, locale: string): string {
   if (n >= 1024 ** 3) return deliveryFormats(locale).gb(n / 1024 ** 3);
-  return new Intl.NumberFormat(chartLocale(locale), { style: 'unit', unit: 'megabyte', unitDisplay: 'short', maximumFractionDigits: 1 }).format(n / 1024 ** 2);
+  return numberFormat(locale, { style: 'unit', unit: 'megabyte', unitDisplay: 'short', maximumFractionDigits: 1 }).format(n / 1024 ** 2);
 }
 
 const pct = (p: number | undefined) => Math.round(Math.min(1, Math.max(0, p ?? 0)) * 100);

@@ -6,7 +6,7 @@
  * point is a gap, hover shows each point, and a <details> table is the text
  * alternative. No hooks: usable from server and client components.
  */
-import { chartLocale, labelIndices, niceScale } from '@al-ummah/shared-types';
+import { labelIndices, niceScale, numberFormat } from '@al-ummah/shared-types';
 
 export interface TimeSeriesPoint {
   /** Hour ('2026-11-12T14:00:00Z') or day ('2026-11-12') */
@@ -40,7 +40,7 @@ export function TimeSeriesChart({ title, points, locale, format, timeLabel, inte
   const rtl = /^ar\b/.test(locale);
   const present = points.map((p) => p.value).filter((v): v is number => v !== null && Number.isFinite(v));
   const scale = niceScale(present, { target: 4, integer });
-  const tickNumber = new Intl.NumberFormat(chartLocale(locale), { maximumFractionDigits: 2 });
+  const tickNumber = numberFormat(locale, { maximumFractionDigits: 2 });
 
   const plotStart = rtl ? PAD : AXIS;
   const plotEnd = rtl ? W - AXIS : W - PAD;

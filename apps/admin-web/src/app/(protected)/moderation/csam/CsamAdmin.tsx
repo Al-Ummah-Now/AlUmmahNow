@@ -8,7 +8,7 @@
  */
 import { useId, useState } from 'react';
 import Link from '@/components/AppLink';
-import { CSAM_RETENTION_MAX_DAYS, CSAM_RETENTION_MIN_DAYS, type CsamSettings } from '@al-ummah/shared-types';
+import { CSAM_RETENTION_MAX_DAYS, CSAM_RETENTION_MIN_DAYS, parseDigits, type CsamSettings } from '@al-ummah/shared-types';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { ActionFeedback, ConfirmButton, useContentAction } from '@/components/content/actions';
 import { smallButtonClass } from '@/components/content/parts';
@@ -109,7 +109,7 @@ export function SettingsCard({ settings }: { settings: CsamSettings }) {
 
   async function saveRetention(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const days = Number(new FormData(e.currentTarget).get('retentionDays'));
+    const days = Number(parseDigits(String(new FormData(e.currentTarget).get('retentionDays') ?? '')));
     await retention.run('retention', () => setCsamRetentionDays(days), { success: t('csamPage.settings.saved') });
   }
 

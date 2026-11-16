@@ -9,7 +9,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { renderToStaticMarkup } from 'react-dom/server';
 import * as React from 'react';
-import { CREATOR_TIER_BOUNDS, type AdminUserRow, type CreatorTier } from '@al-ummah/shared-types';
+import { CREATOR_TIER_BOUNDS, formatNumber, type AdminUserRow, type CreatorTier } from '@al-ummah/shared-types';
 import {
   creatorsToUsersHref,
   isUnexpectedFailure,
@@ -75,7 +75,7 @@ describe('tier effect (stated in every confirmation)', () => {
     assert.equal(tierEffect(null, tEn, 'en'), 'They will not be able to upload or create channels.');
     const arabic = tierEffect(CREATOR, tAr, 'ar');
     assert.match(arabic, ARABIC);
-    assert.equal(arabic.includes(new Intl.NumberFormat('ar').format(2000)), true, 'numbers formatted for Arabic');
+    assert.equal(arabic.includes(formatNumber('ar', 2000)), true, 'numbers formatted for Arabic');
   });
 
   it('names who and which tier, for one user or a selection', () => {
@@ -253,7 +253,7 @@ describe('rendered components', () => {
     assert.match(unlimited, /data-testid="tier-unlimited-unlimited"[^>]*disabled|disabled[^>]*data-testid="tier-unlimited-unlimited"/);
     assert.match(unlimited, /always stays unlimited/);
     const arabic = render(el(TierEditor, { tiers: TIERS, counts: { creator: 12 }, canManage: true, actions: tierActions }), 'ar');
-    assert.match(arabic, new RegExp(`${new Intl.NumberFormat('ar').format(12)} مستخدم`));
+    assert.match(arabic, new RegExp(`${formatNumber('ar', 12)} مستخدم`));
   });
 });
 
@@ -275,7 +275,7 @@ describe('caption minutes on the user page: overdraft and ledger', () => {
     assert.match(html, /text-danger-fg">balance <bdi dir="ltr">\u22127<\/bdi>/);
     assert.match(html, /Job started · <bdi dir="ltr">\+17<\/bdi>/);
     const ar = render(el(CaptionGrantControls, { userId: 'u1', usage, grants: [], ledger, canManage: false, grant: noop, revoke: noop }), 'ar');
-    assert.match(ar, /تجاوز الرصيد بـ 7 من الدقائق/);
+    assert.match(ar, /تجاوز الرصيد بـ ٧ من الدقائق/);
     assert.match(ar, /بدأ التفريغ/);
   });
 });

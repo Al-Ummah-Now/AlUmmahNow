@@ -3,7 +3,7 @@
  * list edits, problem labels, and which changes need a confirmation. media-providers/ProviderSettings.tsx and VideoProvidersPanel.tsx render
  * them; test/media-providers-form.test.ts covers them.
  */
-import { MEDIA_PROVIDER_IDS, type MediaOverride, type MediaProviderId, type MediaSettings, type SettingsProblem } from '@al-ummah/shared-types';
+import { MEDIA_PROVIDER_IDS, parseDigits, type MediaOverride, type MediaProviderId, type MediaSettings, type SettingsProblem } from '@al-ummah/shared-types';
 import type { MessageKey } from '@/i18n/translate';
 
 export const PROVIDER_LABEL: Record<MediaProviderId, MessageKey> = {
@@ -53,7 +53,8 @@ export function withUnlisted(order: readonly MediaProviderId[]): MediaProviderId
 }
 
 /** A whole number in [min, max], or null. */
-export function parseWhole(value: string, min: number, max: number): number | null {
+export function parseWhole(typed: string, min: number, max: number): number | null {
+  const value = parseDigits(typed);
   if (!/^\s*\d{1,6}\s*$/.test(value)) return null;
   const n = Number(value);
   return n >= min && n <= max ? n : null;

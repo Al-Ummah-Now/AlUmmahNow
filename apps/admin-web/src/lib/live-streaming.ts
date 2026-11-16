@@ -4,18 +4,7 @@
  * the comparison table's rows and the charts' series. Changes apply to new
  * streams within 15 s (api-videos cache) and never cut a live session.
  */
-import {
-  LIVE_PROVIDERS,
-  livePatchPrevious,
-  otherLiveProvider,
-  type LiveComparison,
-  type LiveProviderId,
-  type LiveProviderStats,
-  type LiveRoutingMode,
-  type LiveRoutingPatch,
-  type LiveRoutingSettings,
-} from '@al-ummah/shared-types';
-import { intlLocale } from '@/i18n/intl-locale';
+import { LIVE_PROVIDERS, livePatchPrevious, moneyFormat, numberFormat, otherLiveProvider, parseDigits, type LiveComparison, type LiveProviderId, type LiveProviderStats, type LiveRoutingMode, type LiveRoutingPatch, type LiveRoutingSettings } from '@al-ummah/shared-types';
 
 export { LIVE_PROVIDERS, otherLiveProvider };
 
@@ -82,7 +71,7 @@ export function needsConfirm(settings: LiveRoutingSettings, patch: LiveRoutingPa
  * not a non-negative number is refused (undefined).
  */
 export function parseLimit(raw: string): number | null | undefined {
-  const text = raw.trim();
+  const text = parseDigits(raw).trim();
   if (text === '') return null;
   const n = Number(text);
   return Number.isFinite(n) && n >= 0 ? n : undefined;
@@ -90,7 +79,7 @@ export function parseLimit(raw: string): number | null | undefined {
 
 /** Reads a required non-negative number (rates, timeouts); undefined when invalid. */
 export function parseAmount(raw: string, max = Number.MAX_SAFE_INTEGER): number | undefined {
-  const text = raw.trim();
+  const text = parseDigits(raw).trim();
   if (text === '') return undefined;
   const n = Number(text);
   return Number.isFinite(n) && n >= 0 && n <= max ? n : undefined;
@@ -265,8 +254,8 @@ export const isDay = (v: unknown): v is string => typeof v === 'string' && /^\d{
 
 /** A comparison value in the admin's locale ('—' when there is no data). */
 export function metricFormatter(locale: string, format: MetricFormat): (value: number | null) => string {
-  const loc = /^ar\b/.test(locale) ? 'ar-u-nu-arab' : locale;
-  const nf = (o: Intl.NumberFormatOptions) => new Intl.NumberFormat(intlLocale(loc), o);
+  const loc = locale;
+  const nf = (o: Intl.NumberFormatOptions) => numberFormat(loc, o);
   const formatters: Record<MetricFormat, (v: number) => string> = {
     count: (v) => nf({ maximumFractionDigits: 0 }).format(v),
     hours: (v) => nf({ style: 'unit', unit: 'hour', unitDisplay: 'short', maximumFractionDigits: 1 }).format(v),
@@ -274,8 +263,8 @@ export function metricFormatter(locale: string, format: MetricFormat): (value: n
     ratio: (v) => nf({ style: 'percent', maximumFractionDigits: 2 }).format(v),
     kbps: (v) => nf({ style: 'unit', unit: 'kilobit-per-second', unitDisplay: 'short', maximumFractionDigits: 0 }).format(v),
     perHour: (v) => nf({ maximumFractionDigits: 2 }).format(v),
-    usd: (v) => nf({ style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(v),
-    usdSmall: (v) => nf({ style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(v),
+    usd: (v) => moneyFormat(loc, 'USD', { maximumFractionDigits: 2 }).format(v),
+    usdSmall: (v) => moneyFormat(loc, 'USD', { minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(v),
   };
   return (value) => (value === null || !Number.isFinite(value) ? '—' : formatters[format](value));
 }

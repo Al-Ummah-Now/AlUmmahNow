@@ -2,7 +2,7 @@
 
 import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { TRANSCODE_LIMIT_FLOOR, type TranscodeLimitView, type TranscodeRange } from '@al-ummah/shared-types';
+import { dateTimeFormat, TRANSCODE_LIMIT_FLOOR, type TranscodeLimitView, type TranscodeRange } from '@al-ummah/shared-types';
 import { setTranscodeLimit } from '@/lib/api/admin';
 import { useLanguage } from '@/i18n/I18nProvider';
 import type { MessageKey } from '@/i18n/translate';
@@ -11,7 +11,6 @@ import { useUndoableAction } from '@/components/undo/UndoToast';
 import { reportError } from '@/lib/errors/reporter';
 import { deliveryFormats } from '../delivery/format';
 import { checkRangeInput, R2_SETTINGS_ID, type RangeInputError } from './limit-form';
-import { intlLocale } from '@/i18n/intl-locale';
 
 const ERROR_KEY: Record<Exclude<RangeInputError, 'unchanged'>, MessageKey> = {
   min_range: 'mediaDelivery.limitErrorMin',
@@ -150,7 +149,7 @@ export function R2Settings({ initial }: { initial: TranscodeLimitView | null }) 
           <span data-testid="delivery-limit-updated">
             {view.isDefault || !updated || Number.isNaN(updated.getTime())
               ? t('mediaDelivery.limitDefault')
-              : t('mediaDelivery.limitUpdated', { time: new Intl.DateTimeFormat(intlLocale(locale), { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }).format(updated) + ' UTC' })}
+              : t('mediaDelivery.limitUpdated', { time: dateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }).format(updated) + ' UTC' })}
           </span>
         </p>
         <p id={ids.cost} className="mt-1 text-sm text-fg-muted" data-testid="delivery-limit-cost">{cost}</p>
