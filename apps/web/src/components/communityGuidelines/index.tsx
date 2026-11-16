@@ -1,11 +1,16 @@
 /**
  * Community guidelines (Epic 6.3): what is and isn't allowed, how moderation
- * works and how to report. Text from t.communityGuidelines (en/ar); layout uses
- * logical properties, so one component serves LTR and RTL.
+ * works and how to report. Text from t.communityGuidelines (en/ar).
+ *
+ * Laid out with the page builder's shared classes (@al-ummah/shared-types/page-blocks.css), not CSS of
+ * its own: the `.pb` root, a plain section for the title, and one frosted-glass panel per section
+ * (`pb-t-raised`, the same box as the About page's, golden glow in the theme's primary). Logical
+ * properties and container queries in that stylesheet make one component serve LTR and RTL.
  */
 'use client';
 
 import React from 'react';
+import '@al-ummah/shared-types/page-blocks.css';
 import { useLanguage } from '@/hooks/useLanguage';
 import { MAIN_CONTENT_ID } from '@/components/SkipLinks';
 import type { CommunityGuidelinesTranslations } from '@al-ummah/shared-types';
@@ -23,36 +28,49 @@ const SECTION_ORDER: Array<keyof CommunityGuidelinesTranslations['sections']> = 
 export function CommunityGuidelinesPage() {
   const { t, isRTL } = useLanguage();
   const g = t.communityGuidelines;
+  const dir = isRTL ? 'rtl' : 'ltr';
 
   return (
-    <main
-      id={MAIN_CONTENT_ID}
-      dir={isRTL ? 'rtl' : 'ltr'}
-      data-testid="community-guidelines"
-      className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 text-gray-900 dark:text-gray-100"
-    >
-      <h1 className="mb-3 text-2xl font-bold md:text-3xl">{g.title}</h1>
-      <p className="mb-2 text-base leading-7 text-gray-700 dark:text-gray-300">{g.lead}</p>
-      <p className="mb-8 text-sm text-gray-500 dark:text-gray-400">{g.lastUpdated}</p>
+    <main id={MAIN_CONTENT_ID} dir={dir} data-testid="community-guidelines" className="w-full flex-1 py-6 md:py-10">
+      <div className="pb" lang={isRTL ? 'ar' : 'en'} dir={dir}>
+        <header className="pb-b pb-w-content pb-t-none pb-a-start pb-s-m">
+          <div className="pb-in">
+            <h1 className="pb-heading">{g.title}</h1>
+            <p className="pb-intro">{g.lead}</p>
+            <p className="pb-intro">
+              <small>{g.lastUpdated}</small>
+            </p>
+          </div>
+        </header>
 
-      {SECTION_ORDER.map((key) => {
-        const section = g.sections[key];
-        return (
-          <section key={key} aria-labelledby={`guidelines-${key}`} className="mb-8" data-testid={`guidelines-${key}`}>
-            <h2 id={`guidelines-${key}`} className="mb-2 text-xl font-semibold">
-              {section.heading}
-            </h2>
-            <p className="mb-3 leading-7 text-gray-700 dark:text-gray-300">{section.intro}</p>
-            {section.points.length > 0 && (
-              <ul className="list-disc space-y-2 ps-6 leading-7 text-gray-700 dark:text-gray-300">
-                {section.points.map((point) => (
-                  <li key={point}>{point}</li>
-                ))}
-              </ul>
-            )}
-          </section>
-        );
-      })}
+        {SECTION_ORDER.map((key) => {
+          const section = g.sections[key];
+          return (
+            <section
+              key={key}
+              aria-labelledby={`guidelines-${key}`}
+              className="pb-b pb-w-content pb-t-raised pb-a-start pb-s-m"
+              data-testid={`guidelines-${key}`}
+            >
+              <div className="pb-in">
+                <h2 id={`guidelines-${key}`} className="pb-heading">
+                  {section.heading}
+                </h2>
+                <div className="pb-prose">
+                  <p>{section.intro}</p>
+                  {section.points.length > 0 && (
+                    <ul>
+                      {section.points.map((point) => (
+                        <li key={point}>{point}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            </section>
+          );
+        })}
+      </div>
     </main>
   );
 }
