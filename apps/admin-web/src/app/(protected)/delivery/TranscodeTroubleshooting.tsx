@@ -13,7 +13,9 @@ import {
 } from '@/lib/api/admin';
 import type { TranscodeTroubleshoot } from '@/lib/api/types';
 import { useLanguage } from '@/i18n/I18nProvider';
-import type { Translator } from '@/i18n/translate';
+import { translateDynamic, type Translator } from '@/i18n/translate';
+import { UserName } from '@/components/audit/UserName';
+import { fillNodes } from '@/components/audit/fill';
 import { ErrorAlert, cardClass, fieldClass, linkClass } from '@/components/ui';
 import { ConfirmButton } from '@/components/content/actions';
 import { smallButtonClass } from '@/components/content/parts';
@@ -248,7 +250,7 @@ function JobsList({ data, focusVideo, t, locale, onChanged, onShowLogs }: { data
                     <h4 className="mt-2 text-base font-medium">
                       <Link href={`/videos/${encodeURIComponent(job.videoId)}`} className={linkClass}>{name}</Link>
                     </h4>
-                    <div className="font-mono text-xs text-fg-muted break-all" dir="ltr">{job.videoId}</div>
+                    {!job.title && <div className="font-mono text-xs text-fg-muted break-all" dir="ltr">{job.videoId}</div>}
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <button type="button" className={smallButtonClass} onClick={() => onShowLogs(job.videoId)} data-testid="troubleshoot-job-logs">
@@ -308,7 +310,7 @@ function JobsList({ data, focusVideo, t, locale, onChanged, onShowLogs }: { data
                         <>
                           <div className="font-mono break-all text-fg-muted" dir="ltr">{job.instance.name}</div>
                           <div className="mt-1 text-fg" data-testid="troubleshoot-job-instance-state">
-                            {job.instance.state ? t('transcodeTroubleshoot.instanceState', { state: job.instance.state }) : t('transcodeTroubleshoot.instanceNoState')}
+                            {job.instance.state ? t('transcodeTroubleshoot.instanceState', { state: translateDynamic(t, 'transcodeTroubleshoot.instanceStates', job.instance.state) }) : t('transcodeTroubleshoot.instanceNoState')}
                           </div>
                         </>
                       ) : '—'}
@@ -428,7 +430,7 @@ function LogsViewer({ formRef, filter, setFilter, tokenState, t, locale }: { for
                   <div className="flex flex-wrap items-center gap-2 text-fg-muted">
                     <time dateTime={line.at} className="tabular-nums">{time.format(new Date(line.at))}</time>
                     <span className="rounded border border-border px-1.5 py-0.5 text-fg">{t(line.source === 'worker' ? 'transcodeTroubleshoot.sourceWorker' : 'transcodeTroubleshoot.sourceContainer')}</span>
-                    {line.level && <span className={`rounded px-1.5 py-0.5 font-medium ${/error/i.test(line.level) ? 'bg-danger-bg text-danger-fg' : 'bg-chip-pending-bg text-chip-pending-fg'}`} dir="ltr">{line.level}</span>}
+                    {line.level && <span className={`rounded px-1.5 py-0.5 font-medium ${/error/i.test(line.level) ? 'bg-danger-bg text-danger-fg' : 'bg-chip-pending-bg text-chip-pending-fg'}`} data-level-raw={line.level}>{translateDynamic(t, 'transcodeTroubleshoot.logLevels', line.level.toLowerCase())}</span>}
                   </div>
                   <code className="mt-1 block whitespace-pre-wrap break-all text-fg" dir="ltr">{line.message}</code>
                   {line.detail && <code className="mt-1 block whitespace-pre-wrap break-all text-fg-muted" dir="ltr">{line.detail}</code>}
@@ -503,7 +505,7 @@ function TokenCard({ token, canSetToken, t, locale, onChanged }: { token: Troubl
       <p className="text-sm text-fg-muted max-w-3xl">{t('transcodeTroubleshoot.tokenNeeds')}</p>
       <p className="text-sm text-fg font-medium" data-testid="troubleshoot-token-state">{stateText}</p>
       {token.set && token.updatedBy && token.updatedAt && (
-        <p className="text-xs text-fg-muted">{t('transcodeTroubleshoot.tokenUpdated', { who: token.updatedBy, time: when(token.updatedAt, locale) ?? '' })}</p>
+        <p className="text-xs text-fg-muted">{fillNodes(t('transcodeTroubleshoot.tokenUpdated', { time: when(token.updatedAt, locale) ?? '' }), { who: <UserName id={token.updatedBy} showEmail={false} /> })}</p>
       )}
       {token.set && (
         token.test ? (

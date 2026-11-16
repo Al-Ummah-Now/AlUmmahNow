@@ -1,5 +1,6 @@
 /** Labels and tones of the Backfill page (statuses come from api-videos lib/media/backfill). */
-import { type BackfillItemState, type BackfillRun, type BackfillRunStatus, type BackfillSkipReason, type BunnyRemovalStatus } from '@al-ummah/shared-types';
+import { type AdminNames, type BackfillItemState, type BackfillRun, type BackfillRunStatus, type BackfillSkipReason, type BunnyRemovalStatus } from '@al-ummah/shared-types';
+import { itemView } from '@/components/audit/audit-model';
 import type { ChipTone } from '@/components/content/parts';
 import type { MessageKey, Translator } from '@/i18n/translate';
 
@@ -83,13 +84,20 @@ export const isLive = (status: BackfillRunStatus) => status === 'estimating' || 
 export const dangerLargeButtonClass =
   'inline-block bg-danger-bg text-danger-fg border border-danger-border font-medium py-3 px-6 rounded transition-opacity hover:opacity-90 text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-focus disabled:opacity-60 disabled:cursor-not-allowed';
 
-/** A run's scope in one line (runs list and run header). */
-export function scopeText(run: BackfillRun, t: Translator): string {
+/** A run's scope in one line (runs list and run header); a channel by its name when `names` has it. */
+export function scopeText(run: BackfillRun, t: Translator, names?: AdminNames | null): string {
   const s = run.scope;
   const base =
     s.kind === 'all' ? t('mediaBackfill.scopeAll')
-    : s.kind === 'channel' ? t('mediaBackfill.scopeChannelOf', { id: s.channelId ?? '' })
+    : s.kind === 'channel' ? t('mediaBackfill.scopeChannelOf', { name: s.channelId ? itemView('channel', s.channelId, names, t).label : '' })
     : s.kind === 'dates' ? t('mediaBackfill.scopeDatesOf', { from: s.from ?? '…', to: s.to ?? '…' })
     : t('mediaBackfill.scopeVideosOf', { count: s.videoIds?.length ?? 0 });
   return s.onlyMissing ? `${base} · ${t('mediaBackfill.onlyMissing')}` : base;
+}
+
+/** The channels runs are scoped to, for one names request. */
+export function scopeChannelRefs(runs: readonly BackfillRun[]): { kind: 'channel'; id: string }[] {
+  const ids = new Set<string>();
+  for (const r of runs) if (r.scope.kind === 'channel' && r.scope.channelId) ids.add(r.scope.channelId);
+  return [...ids].map((id) => ({ kind: 'channel' as const, id }));
 }

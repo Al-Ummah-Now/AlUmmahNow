@@ -13,7 +13,8 @@ import { Overview } from './Overview';
 import { RunPanel } from './RunPanel';
 import { FlipSection } from './FlipSection';
 import { RetireSection } from './RetireSection';
-import { RUN_STATUS_LABEL, RUN_TONE, scopeText } from './labels';
+import { RUN_STATUS_LABEL, RUN_TONE, scopeChannelRefs, scopeText } from './labels';
+import { getNames } from '@/lib/api/audit';
 
 export const dynamic = 'force-dynamic';
 
@@ -68,6 +69,8 @@ export default async function BackfillPage({ searchParams }: PageProps) {
     const res = await getBackfillRun(wanted);
     if (res.ok) current = res.data.run;
   }
+  // Channel-scoped runs say which channel by name, never its id
+  const names = await getNames({ users: [], items: scopeChannelRefs([...(runs ?? []), ...(current ? [current] : [])]) });
 
   return (
     <div className="space-y-6">
@@ -94,7 +97,7 @@ export default async function BackfillPage({ searchParams }: PageProps) {
                     className={`block rounded border px-3 py-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus ${r.id === current?.id ? 'border-accent bg-surface-2' : 'border-border hover:bg-surface-hover'}`}
                   >
                     <span className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-sm text-fg">{scopeText(r, t)}</span>
+                      <span className="text-sm text-fg">{scopeText(r, t, names)}</span>
                       <Chip tone={RUN_TONE[r.status]}>{t(RUN_STATUS_LABEL[r.status])}</Chip>
                     </span>
                     <span className="block text-xs text-fg-muted mt-1">{formatDate(r.createdAt, locale, true)}</span>

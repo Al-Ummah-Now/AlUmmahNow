@@ -47,11 +47,11 @@ function render(element: React.ReactElement, locale: 'en' | 'ar' = 'en') {
 }
 
 describe('transfer search results as Autocomplete items', () => {
-  it('name, @handle and email, facts, and banned users listed but not choosable', () => {
+  it('name and email (never a user @handle), facts, and banned users listed but not choosable', () => {
     const item = transferItem(user('usr_1', { displayName: 'Amina', userName: 'amina', channelCount: 2, channelRole: 'editor' }), tEn);
     assert.deepEqual(
       { kind: item.kind, id: item.id, label: item.label, secondary: item.secondary, meta: item.meta, disabled: item.disabled },
-      { kind: 'user', id: 'usr_1', label: 'Amina', secondary: '@amina · usr_1@example.com', meta: 'Owns 2 channels · Channel editor here', disabled: false },
+      { kind: 'user', id: 'usr_1', label: 'Amina', secondary: 'usr_1@example.com', meta: 'Owns 2 channels · Channel editor here', disabled: false },
     );
     assert.equal(transferItem(user('usr_2', { isBanned: true }), tEn).disabled, true);
     assert.equal(transferItem(user('usr_3', { email: null }), tAr).secondary?.includes(tAr('channels.pickerNoEmail')), true);

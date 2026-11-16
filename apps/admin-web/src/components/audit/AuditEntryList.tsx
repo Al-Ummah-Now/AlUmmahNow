@@ -71,7 +71,7 @@ export function AuditWhat({ entry, names, t, showTarget }: { entry: AuditEntryLi
         {showTarget && entry.target && (
           <>
             <span className="text-fg-muted"> · {kindLabel(entry.target.kind, t)} </span>
-            <ItemName item={itemView(entry.target.kind, entry.target.id, names, t)} showId testId="audit-target" />
+            <ItemName item={itemView(entry.target.kind, entry.target.id, names, t)} testId="audit-target" />
           </>
         )}
       </p>
