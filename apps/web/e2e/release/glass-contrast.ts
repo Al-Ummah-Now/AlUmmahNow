@@ -20,16 +20,20 @@ const ratio = (a: number, b: number) => (Math.max(a, b) + 0.05) / (Math.min(a, b
 
 async function textBoxes(box: Locator): Promise<TextBox[]> {
   return box.evaluate((panel) => {
-    const canvas = document.createElement('canvas');
-    canvas.width = canvas.height = 1;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+    // Computed colours come as rgb()/rgba() or color(srgb r g b / a) (WebKit's canvas can't parse the latter)
+
     const rgbOf = (c: string): [number, number, number] => {
-      ctx.clearRect(0, 0, 1, 1);
-      ctx.fillStyle = '#000';
-      ctx.fillStyle = c;
-      ctx.fillRect(0, 0, 1, 1);
-      const d = ctx.getImageData(0, 0, 1, 1).data;
-      return [d[0], d[1], d[2]];
+
+      let m = /^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/.exec(c);
+
+      if (m) return [Number(m[1]), Number(m[2]), Number(m[3])];
+
+      m = /^color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/.exec(c);
+
+      if (m) return [Number(m[1]) * 255, Number(m[2]) * 255, Number(m[3]) * 255];
+
+      throw new Error(`text colour not understood: ${c}`);
+
     };
     const out: TextBox[] = [];
     const walker = document.createTreeWalker(panel, NodeFilter.SHOW_TEXT);
@@ -104,14 +108,23 @@ export async function glassContrast(page: Page, box: Locator, label: string): Pr
     const hide = (on: boolean) =>
       page.evaluate((v) => {
         for (const el of document.querySelectorAll<HTMLElement>('main, main *')) {
-          for (const prop of ['color', '-webkit-text-fill-color', 'text-decoration-color']) {
-            if (v) el.style.setProperty(prop, 'transparent', 'important');
+          // transition off first: a colour transition (Fawanees) outranks even an inline !important
+          if (v) el.style.setProperty('transition', 'none', 'important');
+          else el.style.removeProperty('transition');
+          for (const prop of ['color', '-webkit-text-fill-color', 'text-decoration-color', 'text-shadow']) {
+            if (v) el.style.setProperty(prop, prop === 'text-shadow' ? 'none' : 'transparent', 'important');
             else el.style.removeProperty(prop);
           }
         }
       }, on);
     await hide(true);
-    const png = await page.screenshot({ scale: 'css' });
+    // until the text is really gone: the same frame twice (a stale composited frame can still show it)
+    let png = await page.screenshot({ scale: 'css' });
+    for (let tries = 0; tries < 10; tries++) {
+      const again = await page.screenshot({ scale: 'css' });
+      if (again.equals(png)) break;
+      png = again;
+    }
     await hide(false);
     const ext = await extremes(page, png, boxes);
     measured += boxes.length;
