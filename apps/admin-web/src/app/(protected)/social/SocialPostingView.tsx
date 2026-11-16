@@ -135,7 +135,7 @@ export function SocialPostingView({ view, history, canEdit }: { view: SocialAdmi
       {f.last_error ? (
         <details className="mt-1 text-xs text-fg-muted">
           <summary className="cursor-pointer select-none rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-focus">{t('socialPosting.showDetails')}</summary>
-          <code className="mt-1 block break-all font-mono" dir="ltr">{f.last_error}</code>
+          <code className="mt-1 block break-words text-start font-mono" dir="ltr">{f.last_error}</code>
         </details>
       ) : null}
     </>
@@ -351,7 +351,7 @@ export function SocialPostingView({ view, history, canEdit }: { view: SocialAdmi
                     <span>{net(f.network)}</span>
                     <span>{formatDate(f.updated_at, locale, true)}</span>
                   </p>
-                  <p className="mt-1 break-words font-medium text-fg" dir="auto">{f.entity_title || f.entity_id}</p>
+                  <p className="mt-1 break-words text-start font-medium text-fg"><bdi>{f.entity_title || f.entity_id}</bdi></p>
                   <p className="mt-1">{failureChannel(f)}</p>
                   <div className="mt-2">{failureError(f)}</div>
                 </li>
