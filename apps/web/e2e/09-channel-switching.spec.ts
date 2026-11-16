@@ -95,9 +95,10 @@ test.describe('Channel Switching - English', () => {
     const { main } = multiChannels();
     const trigger = menuTrigger(page);
     await expect(trigger).toBeVisible();
-    // The trigger is the avatar and chevron only (the name block stays hidden
-    // at every width); the active channel shows in the opened menu
-    await expect(trigger.getByText(main.name!)).toBeHidden();
+    // The trigger shows the identity you act as (owner rule 8): the active channel's name (visually
+    // hidden below 768px, still its accessible text), never your own name under a channel
+    await expect(trigger.getByTestId('nav-trigger-name')).toHaveText(main.name!);
+    await expect(trigger.getByTestId('nav-trigger-name')).toHaveAttribute('data-identity', 'channel');
     const menu = await openAccountMenu(page);
     await expect(menu.getByTestId('nav-active-channel')).toContainText(main.name!);
     await expect(menu.getByTestId('nav-active-channel')).toHaveAttribute('href', `/en/channels/${main.id}`);

@@ -60,7 +60,8 @@ const ART = join(__dirname, '../../../../packages/app-icons/assets/crops');
 /** The local stack's fake Bunny CDN (scripts/local-stack/fake-external.ts FAKE_CDN_HOST): exactly this host */
 const FAKE_CDN_HOST = 'vz-local-stack.b-cdn.net';
 const DEMOS = [
-  { key: 'tour', art: 'videos.webp', title: NAMES.video },
+  // A crop with no drawn play button (videos.webp has one: it doubled the player's own)
+  { key: 'tour', art: 'videos-admin.webp', title: NAMES.video },
   // Full-bleed crops only (www.webp is round, with black corners)
   { key: 'street', art: 'tools.webp', title: { en: 'Lantern street', ar: 'فوانيس رمضان' } },
   { key: 'evening', art: 'auth.webp', title: { en: 'Evening lights', ar: 'أضواء المساء' } },
@@ -71,6 +72,8 @@ const MEDIA = mkdtempSync(join(tmpdir(), 'help-media-'));
 const demoByGuid = new Map<string, (typeof DEMOS)[number]['key']>();
 /** Our demo videos' ids: listings show only these (the stack's seed videos have test titles) */
 const demoIds: string[] = [];
+/** Video id → its demo: cards load /thumb/<id>.jpg, which the web worker fetches from the fake CDN */
+const demoById = new Map<string, (typeof DEMOS)[number]['key']>();
 
 /** A 20 s 640x360 HLS clip (one rendition, no audio) and a 960x540 thumbnail of one lantern crop */
 function makeDemoMedia(key: string, art: string): void {
@@ -106,6 +109,19 @@ async function serveDemo(route: Route): Promise<void> {
   else if (/^\d+_\d+\.ts$/.test(file)) [path, type] = [join(dir, file.replace(/^\d+_/, '0_')), 'video/mp2t'];
   if (!path || !existsSync(path)) return route.continue();
   return route.fulfill({ status: 200, headers: { ...headers, 'content-type': type }, body: readFileSync(path) });
+}
+
+/**
+ * /thumb/<id>.jpg (server-rendered cards and the channel grid: lib/embed/share-image.ts) is fetched
+ * by the web worker from the fake CDN, out of the browser's reach: answered here with the demo's
+ * thumbnail, never the test pattern (owner audit 2026-11-16: colour bars in identity-menu)
+ */
+async function serveThumb(route: Route): Promise<void> {
+  const id = decodeURIComponent(new URL(route.request().url()).pathname.split('/').pop() ?? '').replace(/\.jpg$/, '');
+  const key = demoById.get(id) ?? DEMOS[(id.charCodeAt(0) || 0) % DEMOS.length].key;
+  const path = join(MEDIA, key, 'thumbnail.jpg');
+  if (!existsSync(path)) return route.continue();
+  return route.fulfill({ status: 200, headers: { 'content-type': 'image/jpeg', 'cache-control': 'no-store' }, body: readFileSync(path) });
 }
 
 /** The CDN guid of one of our videos, from its playback or thumbnail URL */
@@ -156,6 +172,7 @@ test.beforeAll(async ({ browser }) => {
     if (guid) demoByGuid.set(guid, demo.key);
     else problems.push(`no CDN guid for demo video ${demo.key}: it shows the test pattern`);
     demoIds.push(video.id);
+    demoById.set(video.id, demo.key);
     if (demo.key === 'tour') videoId = video.id;
   }
   await data.createComment(user, videoId, channelId, NAMES.comment.en);
@@ -189,6 +206,7 @@ async function open(browser: Browser, lang: Lang, device: Device, mode: Mode, op
   // itself in an automated browser
   await context.addCookies([{ name: 'aun_consent', value: `v1.a0.e0.p0.${Date.now()}`, url: target().web, sameSite: 'Lax' }]);
   await context.route((url) => url.hostname === FAKE_CDN_HOST, serveDemo);
+  await context.route((url) => url.pathname.startsWith('/thumb/'), serveThumb);
   // Video cards and Up next show only the demo videos: the stack's seed videos carry test titles
   await context.addInitScript((ids: string[]) => {
     const idOf = (el: Element) => el.getAttribute('data-video-id') || decodeURIComponent((el.getAttribute('href') ?? el.querySelector('a[href*="/video/"]')?.getAttribute('href') ?? '').split('/video/')[1]?.split(/[?#/]/)[0] ?? '');

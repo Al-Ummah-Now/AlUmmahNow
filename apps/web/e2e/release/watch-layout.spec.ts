@@ -8,12 +8,14 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { NO_PLAYABLE_VIDEO, watchUrl } from './videos';
-import { createProfile, signUpOnWeb, type Locale } from './web-session';
+import { createProfile, signInAgain, signUpOnWeb, type Locale } from './web-session';
 import { grantCreatorTier } from './creator-tier';
 import { useOwnVideos } from './own-videos';
+import { useOwnData } from './builders';
 
 // This spec's own videos (created in beforeAll, deleted in afterAll): never the seed's or the newest public one
 const own = useOwnVideos(test);
+const data = useOwnData(test);
 
 // Signs in through the auth server: a retained trace would hold the password and code
 test.use({ trace: 'off' });
@@ -196,8 +198,12 @@ test.describe('Release: watch page and header layout, tablet to desktop', () => 
       // measurements: create the profile the way the other signed-in specs do.
       const user = await signUpOnWeb(page, 'watch-layout', locale);
       await createProfile(user);
-      // The header's Upload button shows only with a creator tier (uploads are by invitation)
+      // The header's Upload button shows only with a creator tier (uploads are by invitation) and
+      // while acting as a channel (acting as yourself there is no Upload: owner rule 6)
       await grantCreatorTier(user);
+      await data.createChannel(user, { isMain: true });
+      // A fresh sign-in picks the new channel up as the active one (as builders' createCreator does)
+      await signInAgain(page, user.email, locale);
       await checkAllWidths(page, id!, locale, true);
     });
   }
