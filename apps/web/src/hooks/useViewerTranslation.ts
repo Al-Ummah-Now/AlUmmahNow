@@ -9,7 +9,7 @@
  */
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import { guessTitleLanguage } from '@al-ummah/shared-types';
-import { getTranslatedMetadata, type ViewerTranslation } from '@/lib/api/translate';
+import { getTranslatedMetadata, type ViewerTranslation } from '@/lib/api/translate-client';
 
 type Entry = { translation: ViewerTranslation['translation']; showOriginal: boolean; asked: boolean };
 
