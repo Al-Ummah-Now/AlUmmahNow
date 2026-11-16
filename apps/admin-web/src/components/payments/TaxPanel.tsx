@@ -35,7 +35,7 @@ export function TaxPanel({ tax, canManage, onRefresh }: { tax: BillingTaxSetting
       {tax.updatedAt && <p className="text-xs text-fg-muted mb-4">{t('payments.tax.changed', { date: formatDate(tax.updatedAt, locale, true) })}</p>}
       <ActionFeedback error={error} message={notice} testId="payments-tax-feedback" />
       <form
-        className="grid gap-4 md:grid-cols-2"
+        className="grid grid-cols-1 gap-4 md:grid-cols-2 [&>*]:min-w-0"
         onSubmit={(e) => {
           e.preventDefault();
           const out = taxBody(draft);

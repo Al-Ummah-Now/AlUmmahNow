@@ -113,7 +113,7 @@ function ProviderCard({ provider, credentialStorage, canManage, onRefresh }: { p
 
       <ActionFeedback error={error} message={notice} testId={`payments-provider-feedback-${provider.id}`} />
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 [&>*]:min-w-0">
         <div className="space-y-4">
           <label className="flex items-center gap-3 cursor-pointer">
             <input
