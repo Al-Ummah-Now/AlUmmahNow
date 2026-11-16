@@ -17,7 +17,8 @@
  * Usage: node --experimental-strip-types scripts/ci/check-locale-format.ts [--write]
  */
 import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { join, relative, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export const ROOTS = [
   'apps/web/src',
@@ -159,4 +160,4 @@ function main(): void {
   console.log(`locale-format: ok (${findings.length} call(s) left in ${counts.size} baseline file(s)).`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) main();
+if (fileURLToPath(import.meta.url) === resolve(process.argv[1])) main();

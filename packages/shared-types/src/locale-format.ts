@@ -193,11 +193,12 @@ export function formatTimeAgo(locale: FormatLocale, value: DateInput, options: {
   const diff = (date.getTime() - (options.now ?? Date.now())) / 1000;
   const abs = Math.abs(diff);
   const rtf = relativeTimeFormat(locale, { numeric: options.numeric ?? 'auto', ...(options.style ? { style: options.style } : {}) });
-  if (abs < 60 && !options.seconds) return rtf.format(0, 'second');
+  // "now" / «الآن» needs numeric 'auto' ('always' would say "in 0 seconds")
+  if (abs < 60 && !options.seconds) return relativeTimeFormat(locale, { numeric: 'auto' }).format(0, 'second');
   for (const [unit, size] of AGO_UNITS) {
     if (abs >= size || unit === 'second') return rtf.format(Math.trunc(diff / size), unit);
   }
-  return rtf.format(0, 'second');
+  return relativeTimeFormat(locale, { numeric: 'auto' }).format(0, 'second');
 }
 
 /** A clock-style length: 75 -> "1:15", 3725 -> "1:02:05" / «١:٠٢:٠٥». */

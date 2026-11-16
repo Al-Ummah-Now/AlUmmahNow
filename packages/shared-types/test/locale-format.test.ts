@@ -53,6 +53,12 @@ test('every Arabic formatter writes ٠–٩ and no 0–9', () => {
   assert.equal(f.fillTemplate('ar', 'آخر {days} أيام', { days: 7 }), 'آخر ٧ أيام');
 });
 
+test('under a minute is "now", also with numeric always', () => {
+  assert.equal(f.formatTimeAgo('en', when - 5000, { now: when, numeric: 'always' }), 'now');
+  assert.equal(f.formatTimeAgo('ar', when - 5000, { now: when, numeric: 'always' }), 'الآن');
+  assert.equal(f.formatTimeAgo('en', when - 86400_000, { now: when, numeric: 'always' }), '1 day ago');
+});
+
 test('English keeps 0–9', () => {
   assert.equal(f.formatNumber('en', 1234.5), '1,234.5');
   assert.equal(f.formatMoney('en', 12.69), '$12.69');
