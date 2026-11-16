@@ -70,8 +70,11 @@ test.describe('contact inbox', () => {
     const before = await badgeCount(page);
     expect(before).toBeGreaterThanOrEqual(2);
 
-    // A click on the message text (not the sender's name) opens it
-    await row(page, m1).getByText(`The player stops on my phone after a minute ${hex}`).click();
+    // A click on the message text (not the sender's name) opens it: a real mouse click at that
+    // spot, which the row-wide link takes (Playwright's locator click refuses a covered element)
+    const text = await row(page, m1).getByText(`The player stops on my phone after a minute ${hex}`).boundingBox();
+    expect(text, 'message text on screen').not.toBeNull();
+    await page.mouse.click(text!.x + text!.width / 2, text!.y + text!.height / 2);
     await expect(page).toHaveURL(new RegExp(`/contact/${encodeURIComponent(m1)}$`));
     await expect(page.getByTestId('contact-message')).toHaveAttribute('data-read', 'true');
     await expect(page.getByTestId('contact-message-body')).toContainText('reloading does not help at all');

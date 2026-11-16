@@ -19,6 +19,7 @@ import {
   listContactMessages,
   listContactNotes,
   listContactStaff,
+  pruneContactStaff,
   touchContactStaff,
   updateContactMessage,
   updateContactMessages,
@@ -252,6 +253,9 @@ describe('contact store: read/unread, in progress, roster, bulk', () => {
     assert.deepEqual((await listContactStaff(db, '', 20, now)).map((r) => r.user_id), ['usr_b', 'usr_a']);
     assert.deepEqual(await listContactStaff(db, '', 20, new Date('2027-11-12T00:00:00Z')), [], 'not seen in 180 days');
     assert.equal(await getContactStaff(db, 'usr_x'), null);
+    // The hourly cleanup drops entries not seen for 180 days
+    assert.equal(await pruneContactStaff(db, new Date('2027-06-01T00:00:00Z')), 2);
+    assert.equal(await getContactStaff(db, 'usr_a'), null);
   });
 
   it('a delivered reply marks the message replied and read', async () => {

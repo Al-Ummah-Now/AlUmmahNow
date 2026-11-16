@@ -9,7 +9,6 @@ import { ErrorReportingIdentity } from '@/lib/errors/ErrorReportingProvider';
 import { errorsBadgeCount } from './errors/filters';
 import { logger } from '@/lib/logger';
 import { UndoToastProvider } from '@/components/undo/UndoToast';
-import { LiveRefresh } from '@/components/LiveRefresh';
 import { PasskeyGraceBanner } from '@/components/PasskeyGraceBanner';
 import { adminSetupUrl } from '@/lib/passkeys';
 import { PATH_HEADER } from '@/lib/login-flow';
@@ -96,8 +95,6 @@ export default async function ProtectedLayout({
         }}
         badges={{ contact: contactNew, errors: errorsBadge }}
       >
-        {/* The unread badge follows new and read messages without a reload (admin live events) */}
-        {contactNew !== null && <LiveRefresh topics={['moderation']} queues={['contact']} />}
         {graceBanner}
         {children}
       </AdminShell>
