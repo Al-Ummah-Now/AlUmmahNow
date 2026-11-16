@@ -269,17 +269,35 @@ export function parseLocaleNumber(text: string): number {
 
 export type TemplateParams = Record<string, string | number | null | undefined>;
 
+const decimals = (literal: string) => (literal.includes('.') ? literal.length - literal.indexOf('.') - 1 : 0);
+
+/**
+ * A number written in a message itself, as a placeholder the formatter fills, so a message
+ * never carries digits of one system: `{#30}` → «٣٠» / "30" (decimals kept: `{#0.30}` → «٠٫٣٠»),
+ * `{#50%}` → «٥٠٪» / "50%", `{$0.011}` → money with the decimals written.
+ */
+function inlineNumber(locale: FormatLocale, kind: string, literal: string, percent: string): string {
+  const value = Number(literal);
+  const digits = decimals(literal);
+  if (kind === '$') return formatMoney(locale, value, 'USD', { minimumFractionDigits: Math.max(2, digits), maximumFractionDigits: Math.max(2, digits) });
+  if (percent) return formatPercent(locale, value / 100, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  return formatNumber(locale, value, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+
 /**
  * Fills `{name}` placeholders. Numbers go through `formatNumber`, so «آخر {days} أيام» with
  * days 7 reads «آخر ٧ أيام» in Arabic and "Last 7 days" in English. Strings are inserted as
- * they are. An unknown placeholder stays as written unless `missing` is given.
+ * they are. An unknown placeholder stays as written unless `missing` is given. Numbers written
+ * in the message are placeholders too (`{#7}`, `{#50%}`, `{$0.011}`, see inlineNumber).
  */
 export function fillTemplate(locale: FormatLocale, template: string, params: TemplateParams = {}, missing?: string): string {
-  return template.replace(/\{(\w+)\}/g, (match, name: string) => {
-    const value = params[name];
-    if (value === undefined || value === null) return missing ?? match;
-    return typeof value === 'number' ? formatNumber(locale, value) : value;
-  });
+  return template
+    .replace(/\{([#$])(-?\d+(?:\.\d+)?)(%?)\}/g, (_, kind: string, literal: string, percent: string) => inlineNumber(locale, kind, literal, percent))
+    .replace(/\{(\w+)\}/g, (match, name: string) => {
+      const value = params[name];
+      if (value === undefined || value === null) return missing ?? match;
+      return typeof value === 'number' ? formatNumber(locale, value) : value;
+    });
 }
 
 /** True when the text has any 0–9 (for guard tests on Arabic output). */
