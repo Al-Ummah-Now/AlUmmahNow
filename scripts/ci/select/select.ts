@@ -72,7 +72,7 @@ export function summary(p: Plan, mode: string): string {
   for (const [id, suite] of Object.entries(SUITES)) {
     const run = p.suites[id];
     const why = p.mode === 'all' ? p.reason : run ? (p.why[id] ?? '') : 'no changed file reaches it';
-    lines.push(`| ${suite.name} | ${run ? 'run' : '**skip**'} | ${why.replace(/\|/g, '\\|')} |`);
+    lines.push(`| ${suite.name} | ${run ? 'run' : '**skip**'} | ${why.replace(/[\\|]/g, (c) => `\\${c}`)} |`);
   }
   return `${lines.join('\n')}\n`;
 }
