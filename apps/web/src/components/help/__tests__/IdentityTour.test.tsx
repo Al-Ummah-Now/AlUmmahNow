@@ -147,6 +147,20 @@ describe('IdentityTour', () => {
     expect(screen.getByTestId('nav-menu-trigger')).not.toHaveAttribute('aria-describedby');
   });
 
+  it('on phones the last step points at More in the tab bar and says so', async () => {
+    // A phone page: no Help item in a rail, More in the tab bar (opens the drawer, where Help is)
+    render(<><button type="button" data-testid="nav-menu-trigger">Amina</button><button type="button" data-testid="nav-more-tab">More</button><IdentityTour /></>);
+    act(() => requestIdentityTour());
+    const s = HELP_EN.tour.steps;
+    expect(await screen.findByRole('dialog', { name: s.account.title })).toBeInTheDocument();
+    for (let i = 0; i < 3; i++) fireEvent.click(screen.getByRole('button', { name: HELP_EN.tour.next }));
+    expect(screen.getByRole('dialog', { name: s.help.title })).toBeInTheDocument();
+    await act(async () => { jest.advanceTimersByTime(250); });
+    expect(screen.getByTestId('nav-more-tab')).toHaveAttribute('aria-describedby', 'tour-body');
+    expect(screen.getByTestId('tour-spot')).toBeInTheDocument();
+    expect(document.getElementById('tour-body')).toHaveTextContent(s.help.phoneBody!);
+  });
+
   it('Escape skips; with no Upload the upload step is left out', async () => {
     render(<><button type="button" data-testid="nav-menu-trigger">Amina</button><IdentityTour /></>);
     act(() => requestIdentityTour());

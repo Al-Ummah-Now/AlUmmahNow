@@ -136,7 +136,7 @@ width from 320px (the language, light/dark and account controls never move):
 - *Videos web.* Below 1024px the brand is the logo alone, the search is an icon that opens a sheet,
   and Upload is a 40px icon (its label stays its name). Below 640px the drawer toggle and Upload
   leave the bar for the bottom tab bar (Home, Explore, Upload, Subscriptions, You, More; More opens
-  the drawer).
+  the drawer; Upload only while a channel is active, so acting as yourself the bar has five tabs).
 - *Videos admin.* Full width over the sidebar: the ⌘K search is an icon below 1280px and the
   breadcrumbs show from 1024px; below 640px, beside the drawer button, the brand is the logo alone. Public pages (sign-in, access denied) have the same bar, with Sign in when signed out. Signed in to Al Ummah Now without the admin role (access denied), the bar shows the account menu, read from Auth (that person has no admin session), so they see who they are and can switch accounts; never Sign in.
 - *Status.* No drawer and no account: the page footer links Website and Videos.
@@ -148,7 +148,10 @@ There is one sign-out entry, inside the account menu. The header has no separate
 `<button class="aun-acct-btn" aria-haspopup="menu" aria-expanded aria-controls>`:
 
 - `.aun-avatar`: the profile photo, else the first letter of the name on `--fanous-color-primary`.
-- `.aun-acct-name`: the **display name**, chosen by the platform rule
+  In the videos app the button shows the **identity you act as** (owner rule 8): with a channel
+  active, the channel's logo (else its first letter) and the channel's name; acting as yourself
+  (Personal), your own photo and display name. Other apps always show the account.
+- `.aun-acct-name`: the **display name** (the active channel's name in the videos app, above), chosen by the platform rule
   (`packages/shared-types/src/display-name.ts`, mirrored in Auth `packages/ui/src/display-name.ts`):
   1. the display name in the page language;
   2. the plain display name;
@@ -291,8 +294,9 @@ only that identity's avatar (photo or channel logo, accessible name = the identi
 
 Upload is **not** in the menu (owner review, revision 5, the YouTube pattern): the channel layer
 leads to Studio, and uploading starts from the header's Upload action (see [Header](#header)),
-which targets the active channel and is disabled with "Create a channel to upload" when no channel
-is active.
+which targets the active channel. Acting as yourself (Personal, no channel active) there is no
+Upload at all, in the header or the phone tab bar (owner rule 6: no greyed-out control); it comes
+back as soon as a channel is chosen here.
 
 Coverage: `apps/web/e2e/themes/channel-layer.spec.ts` (two accounts with several channels each, the
 limit, a refused create, a viewer, the switcher's contrast in every theme), local, mocked API

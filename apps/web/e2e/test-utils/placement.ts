@@ -261,7 +261,6 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/release/watch-layout.spec.ts': { placement: 'local', reason: 'watch page/header layout tablet to desktop' },
   'apps/web/e2e/themes/builder-preview.spec.ts': { placement: 'local', reason: 'already local: the builder preview document in page.setContent, no server' },
   'apps/web/e2e/themes/composer-shots.spec.ts': { placement: 'local', reason: 'owner review screenshots of the comment composer avatar (SHOTS=1 only): next dev + mock-server.mjs' },
-  'apps/web/e2e/themes/acting-as-shots.spec.ts': { placement: 'local', reason: 'owner review screenshots of the Acting as picker (SHOTS=1 only): next dev + mock-server.mjs' },
   'apps/web/e2e/themes/channel-layer.spec.ts': { placement: 'local', reason: 'already local: next dev + mock-server.mjs per-token channel fixtures (docs/design/NAV.md context slot)' },
   'apps/web/e2e/themes/account-menu.spec.ts': { placement: 'local', reason: 'already local: next dev + mock-server.mjs + cookie signIn (shared nav, docs/design/NAV.md)' },
   'apps/web/e2e/themes/notifications.spec.ts': { placement: 'local', reason: 'already local: next dev + mock-server.mjs + cookie signIn' },

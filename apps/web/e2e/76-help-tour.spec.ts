@@ -81,7 +81,15 @@ test.describe('identity tour', () => {
       }
       await expect(card(page)).toHaveAttribute('data-step', 'help');
       // Help is in the side menu (one place per destination, NAV-060); the menu is closed again
-      await expect(page.getByTestId('side-nav').locator('a[href$="/help"]')).toBeVisible();
+      const helpItem = page.getByTestId('side-nav').locator('a[href$="/help"]');
+      await expect(helpItem).toBeVisible();
+      // The card sits beside the Help item it points at (owner audit: it was in the opposite corner)
+      await expect.poll(async () => {
+        const item = (await helpItem.boundingBox())!;
+        const box = (await card(page).boundingBox())!;
+        return box.x - (item.x + item.width) >= 0 && box.x - (item.x + item.width) <= 24 && box.y <= item.y + item.height && box.y + box.height >= item.y;
+      }).toBe(true);
+      await expect(card(page).locator('#tour-body')).toHaveText(HELP_EN.tour.steps.help.body);
       await expect(page.getByTestId('nav-menu')).toHaveCount(0);
       await expect(card(page).getByTestId('tour-skip')).toHaveCount(0);
       await card(page).getByTestId('tour-next').click();
@@ -227,7 +235,8 @@ const STEP_TARGETS: Record<string, string> = {
   actingAs: '[data-testid="nav-channel-layer"]',
   switch: '[data-testid="nav-menu"]',
   upload: '[data-testid="header-upload"]',
-  help: '[data-testid="side-nav"] a[href$="/help"]',
+  // The rail's Help item; on phones More in the tab bar; between the two the header's menu button
+  help: '[data-testid="side-nav"] a[href$="/help"], [data-testid="nav-more-tab"], [data-testid="nav-drawer-toggle"]',
 };
 const SITE_THEMES = ['fawanees', 'lantern', 'zujaj', 'nahas'] as const;
 
@@ -239,13 +248,20 @@ const SITE_THEMES = ['fawanees', 'lantern', 'zujaj', 'nahas'] as const;
 async function expectNotDimmed(page: Page, label: string): Promise<void> {
   const step = await card(page).getAttribute('data-step');
   const result = await page.evaluate((selector) => {
-    const visibleTarget = Array.from(document.querySelectorAll<HTMLElement>(selector)).find((el) => {
+    // Each comma-separated selector in the order written, as the tour picks its target
+    const all = selector.split(/,(?![^[]*\])/).flatMap((one) => Array.from(document.querySelectorAll<HTMLElement>(one.trim())));
+    const visibleTarget = all.find((el) => {
       const r = el.getBoundingClientRect();
       return r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < window.innerHeight && r.right > 0 && r.left < window.innerWidth;
     });
     const spot = document.querySelector<HTMLElement>('[data-testid="tour-spot"]');
     const cardEl = document.querySelector<HTMLElement>('[data-testid="tour-card"]')!;
-    const out: { target?: string; hole?: boolean; opacity: string[]; layered: string } = { opacity: [], layered: 'ok' };
+    const out: { target?: string; hole?: boolean; opacity: string[]; layered: string; overTabs?: string } = { opacity: [], layered: 'ok' };
+    // The card never covers the phone tab bar (owner audit 2026-11-16: labels stuck out under it)
+    const tabbar = document.querySelector<HTMLElement>('nav.tabbar');
+    const tr = tabbar?.getBoundingClientRect();
+    const cr = cardEl.getBoundingClientRect();
+    if (tr && tr.height > 0 && getComputedStyle(tabbar!).display !== 'none' && cr.bottom > tr.top + 0.5) out.overTabs = `card bottom ${Math.round(cr.bottom)} > tab bar top ${Math.round(tr.top)}`;
     // A target off screen (a closed drawer on phones) gets no spotlight; one on screen always does
     if (!visibleTarget && spot) out.target = 'spotlight drawn around an off-screen target';
     else if (spot && visibleTarget) {
@@ -275,6 +291,7 @@ async function expectNotDimmed(page: Page, label: string): Promise<void> {
     expect(result.target, `${where}: target under the scrim`).toBe('ok');
     expect(result.hole, `${where}: spotlight hole covers the target`).toBe(true);
   }
+  expect(result.overTabs, `${where}: card over the tab bar`).toBeUndefined();
   expect(result.opacity, `${where}: card opacity`).toEqual([]);
   expect(result.layered, `${where}: card above the scrim`).toBe('ok');
   // And what is painted: inside its rounded corners, the card looks the same with and without the
