@@ -7,12 +7,13 @@
  * stays inside the frame's width, and sits 10px above the progress bar.
  *
  * The bar runs left to right in both languages, so the time is the pointer's share of the bar from
- * the left. On live streams the time reads as the distance behind the live edge.
+ * the left. On live streams the time reads as the distance behind the live edge. The time is in the
+ * page's digits (Arabic: Eastern Arabic (Hindi) numerals) and reads left to right in both languages.
  */
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import type { Player } from 'video.js';
-import { formatTime } from '@/lib/video/progress-preview';
+import { formatBehindLive, formatPlayerTime } from '@/lib/video/player-time';
 import { getPlayerUi, subscribePlayerUi, type ChapterTip } from '@/lib/video/player-ui';
 import { PLAYER_LAYER_ATTR } from '@/lib/video/player-layer';
 import { isLivePlayback } from '@/lib/video/live-state';
@@ -47,7 +48,7 @@ interface PlayerLike {
   scrubbing(): boolean;
 }
 
-export function ProgressTooltip({ player, dir }: { player: Player; dir: 'ltr' | 'rtl' }) {
+export function ProgressTooltip({ player, dir, lang = 'en' }: { player: Player; dir: 'ltr' | 'rtl'; lang?: 'en' | 'ar' }) {
   const p = player as unknown as PlayerLike;
   const host = usePlayerLayerHost(p.el?.());
   const [tip, setTip] = useState<TipState | null>(null);
@@ -136,7 +137,7 @@ export function ProgressTooltip({ player, dir }: { player: Player; dir: 'ltr' | 
       {...{ [PLAYER_LAYER_ATTR]: '' }}
     >
       {chapter && <span className="vjs-fanous-tip-chapter">{chapter.title}</span>}
-      <span className="vjs-fanous-tip-time" dir="ltr">{tip.live ? `-${formatTime(tip.behind)}` : formatTime(tip.time)}</span>
+      <span className="vjs-fanous-tip-time" dir="ltr">{tip.live ? formatBehindLive(lang, tip.behind) : formatPlayerTime(lang, tip.time)}</span>
     </div>,
     host,
   );

@@ -126,7 +126,7 @@ export default function ShareDialog({ videoId, title, lang, getCurrentTime, list
                   onChange={(e) => setAtTime(e.currentTarget.checked)}
                   data-testid="share-at-time"
                 />
-                <span>{fill(s.startAt, { time: formatTimestamp(time) })}</span>
+                <span>{fill(s.startAt, { time: formatTimestamp(time, lang) })}</span>
               </label>
             )}
           </section>

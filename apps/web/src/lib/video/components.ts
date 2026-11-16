@@ -9,11 +9,13 @@ import { setControlIcons, type IconName } from './icons';
 import { isLivePlayback, isTrackingLive } from './live-state';
 import { captionTracks } from './settings-model';
 import { getPlayerUi, setAutoplayNext, setTheatre, subscribePlayerUi } from './player-ui';
-import { formatTime as formatPlayerTime } from './progress-preview';
+import { formatPlayerTime } from './player-time';
 import { FULLSCREEN_EVENTS, layerHostFor, PLAYER_LAYER_ATTR } from './player-layer';
 
 /** Copy the controls need, from the player's translations. */
 export interface ChromeCopy {
+  /** The player's language: times use its digits */
+  lang: 'en' | 'ar';
   next: string;
   theatre: string;
   exitTheatre: string;
@@ -301,8 +303,10 @@ export function registerFanousComponents(): void {
         const behind = tracking && lt!.behindLiveEdge() && behindBy > 10;
         this.toggleClass('vjs-fanous-behind', behind);
         const c = copy(this);
-        const text = behind ? `${c.live} · ${c.behind.replace('{time}', formatPlayerTime(behindBy))}` : c.live;
+        const text = behind ? `${c.live} · ${c.behind.replace('{time}', formatPlayerTime(c.lang, behindBy))}` : c.live;
         label.textContent = text;
+        // The label reads in the page's direction («مباشر · متأخر ١:٠٥»); the bar itself is LTR
+        label.dir = c.lang === 'ar' ? 'rtl' : 'ltr';
         this.controlText(behind ? `${text}. ${c.goToLive}` : c.live);
       };
       update();

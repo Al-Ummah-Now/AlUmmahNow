@@ -14,6 +14,7 @@ import { guardNativePipToggle } from '@/lib/video/native-pip-toggle';
 import { syncDurationWithPlaylist } from '@/lib/video/live-state';
 import { keepSeekBarOnPlayhead } from '@/lib/video/seek-bar-sync';
 import { setupTouchSeekGate } from '@/lib/video/touch-seek-gate';
+import { videojsTimeFormatter } from '@/lib/video/player-time';
 
 
 
@@ -124,7 +125,11 @@ export function createVideoPlayer(
     logger.debug('[createVideoPlayer] Poster URL:', options.poster);
 
     registerFanousComponents();
-    const copy = chromeCopy(options.language === 'ar' ? 'ar' : 'en');
+    const lang = options.language === 'ar' ? 'ar' : 'en';
+    const copy = chromeCopy(lang);
+    // Video.js's own times (current time, duration, seek-bar value text) in the page's digits
+    // (#1541). Video.js has one formatter for the page; every player on a page shares its language.
+    setPlayerTimeLanguage(lang);
     const base = VIDEO_JS_OPTIONS.controlBar as Record<string, unknown>;
     player = videojs(element, {
       ...VIDEO_JS_OPTIONS,
@@ -197,10 +202,18 @@ export function vhsTrackOptions(element: { canPlayType(type: string): string }):
   return native ? {} : { nativeAudioTracks: false, nativeVideoTracks: false };
 }
 
+/** Video.js formats every time on the page (current time, duration, seek-bar value text) in `lang`'s digits. */
+export function setPlayerTimeLanguage(lang: 'en' | 'ar'): void {
+  // `time` is Video.js 8's time module (its typings leave it off the default export); optional,
+  // as tests replace Video.js with a bare mock
+  (videojs as unknown as { time?: { setFormatTime?(format: (seconds: number, guide: number) => string): void } }).time?.setFormatTime?.(videojsTimeFormatter(lang));
+}
+
 /** Control labels for the player's own components, in the player's language. */
 export function chromeCopy(lang: 'en' | 'ar'): ChromeCopy {
   const t = lang === 'ar' ? AR_TRANSLATIONS : EN_TRANSLATIONS;
   return {
+    lang,
     next: t.chrome.next,
     theatre: t.chrome.theatre,
     exitTheatre: t.chrome.exitTheatre,

@@ -12,6 +12,7 @@
  */
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { animationsDone, layoutBox, openHarness, pauseAt, startPlayback } from './harness';
+import { digit, shownDigits } from '../test-utils/digits';
 
 const TOLERANCE = 1;
 
@@ -140,7 +141,15 @@ for (const lang of ['en', 'ar'] as const) {
       await expect(tip).toBeVisible();
       // 0:45 of 1:30 is in the second chapter
       await expect(tip).toContainText('The middle');
-      await expect(tip).toContainText(/0:4[45]/);
+      // In the page's digits: «٠:٤٥» in Arabic (#1541)
+      await expect(tip).toContainText(new RegExp(shownDigits(lang, '0:4[45]')));
+      if (lang === 'ar') expect(await tip.textContent()).not.toMatch(/[0-9]/);
+      // The bar's clock in the same digits, current time before duration and left to right in both
+      const current = player.locator('.vjs-current-time-display');
+      const duration = player.locator('.vjs-duration-display');
+      await expect(duration).toHaveText(shownDigits(lang, '1:30'));
+      await expect(current).toHaveText(new RegExp(`^${digit(lang)}+:${digit(lang)}{2}$`));
+      expect((await layoutBox(current)).x, 'current time left of the duration').toBeLessThan((await layoutBox(duration)).x);
       expect(await tip.evaluate((el) => el.closest('.video-js') === null)).toBe(true);
       const box = await layoutBox(tip);
       expect(box.bottom).toBeLessThanOrEqual(holder.y + TOLERANCE);

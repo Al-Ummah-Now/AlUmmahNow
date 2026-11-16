@@ -8,7 +8,9 @@
  * Arabic pages with counts and dates (home, watch, channel, search with a channel card, Studio
  * dashboard) and fails on any hydration error (#418, #423, #425) in the console. It runs in
  * Chrome, Firefox and WebKit (ALL_BROWSERS in playwright.release.config.ts); WebKit is the one
- * that broke. It also checks the watch page's count line reads ٠–٩.
+ * that broke. It also checks the watch page's count line reads ٠–٩, and that the watch page's player
+ * (mounted after hydration) adds no hydration error and shows its times in ٠–٩, current time
+ * before duration, left to right (#1541).
  */
 import { test, expect, type ConsoleMessage, type Page } from '@playwright/test';
 import { target } from './targets';
@@ -23,8 +25,11 @@ test.use({ trace: 'off', video: 'off' });
 /** React's hydration failures: minified (#418 text, #423 root, #425 text content) and dev wording. */
 const HYDRATION = /Minified React error #(418|423|425)\b|Hydration failed|hydrating|did not match|Text content does not match|server rendered (HTML|text) didn't match/i;
 
-/** Hydration errors the page logs while it loads and settles. */
-async function hydrationErrors(page: Page, url: string, ready?: string): Promise<string[]> {
+/** The player's control bar times, once Video.js has mounted the player. */
+const PLAYER_TIME = '.video-js.vjs-fanous .vjs-current-time-display';
+
+/** Hydration errors the page logs while it loads and settles (`player`: also while the player mounts). */
+async function hydrationErrors(page: Page, url: string, ready?: string, player = false): Promise<string[]> {
   const errors: string[] = [];
   const onConsole = (msg: ConsoleMessage) => {
     if ((msg.type() === 'error' || msg.type() === 'warning') && HYDRATION.test(msg.text())) errors.push(msg.text().slice(0, 300));
@@ -37,6 +42,7 @@ async function hydrationErrors(page: Page, url: string, ready?: string): Promise
   try {
     await page.goto(url, { waitUntil: 'load' });
     if (ready) await expect(page.getByTestId(ready).first()).toBeAttached({ timeout: 30000 });
+    if (player) await expect(page.locator(PLAYER_TIME).first()).toBeAttached({ timeout: 30000 });
     await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
     await page.waitForTimeout(1500);
   } finally {
@@ -59,11 +65,27 @@ test.describe('Release: Arabic pages hydrate with the same numbers as the server
     ];
     for (const [name, url, ready] of pages) {
       await test.step(`${name}: ${url}`, async () => {
-        expect.soft(await hydrationErrors(page, url, ready), `${name}: React hydration errors in Arabic`).toEqual([]);
+        expect.soft(await hydrationErrors(page, url, ready, name === 'watch'), `${name}: React hydration errors in Arabic`).toEqual([]);
         if (name === 'watch') {
           const line = (await page.getByTestId('watch-published').first().textContent()) ?? '';
           expect.soft(line, 'the watch count line uses ٠–٩').toMatch(/[٠-٩]/);
           expect.soft(line, 'the watch count line has no 0–9').not.toMatch(/[0-9]/);
+          // The player's time: «٠:٠٠» before playing; the duration «١:٣٠» (or «-:-» before metadata)
+          const current = page.locator(PLAYER_TIME).first();
+          const duration = page.locator('.video-js.vjs-fanous .vjs-duration-display').first();
+          await expect.soft(current, 'the player current time is in ٠–٩').toHaveText(/^[٠-٩]+:[٠-٩]{2}(:[٠-٩]{2})?$/, { timeout: 15000 });
+          await expect.soft(duration, 'the player duration is in ٠–٩').toHaveText(/^(?:[٠-٩]+:)?[٠-٩]+:[٠-٩]{2}$|^-:-$/, { timeout: 15000 });
+          const order = await page.evaluate(() => {
+            const bar = document.querySelector('.video-js.vjs-fanous .vjs-control-bar');
+            const cur = bar?.querySelector('.vjs-current-time');
+            const dur = bar?.querySelector('.vjs-duration');
+            return {
+              dir: bar ? getComputedStyle(bar).direction : '',
+              currentFirst: !!cur && !!dur && !!(cur.compareDocumentPosition(dur) & Node.DOCUMENT_POSITION_FOLLOWING),
+              display: cur ? getComputedStyle(cur.querySelector('.vjs-current-time-display') as Element).direction : '',
+            };
+          });
+          expect.soft(order, 'current time before duration, left to right').toEqual({ dir: 'ltr', currentFirst: true, display: 'ltr' });
         }
       });
     }

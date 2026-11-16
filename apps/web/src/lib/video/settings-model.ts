@@ -5,6 +5,8 @@
  * "Auto" plus one entry per distinct rendition height, highest first. Choosing a height enables
  * only the renditions of that height; Auto enables them all and lets VHS adapt.
  */
+import type { FormatLocale } from '@al-ummah/shared-types';
+import { formatPlaybackRate } from './player-time';
 
 export type PanelId = 'root' | 'quality' | 'speed' | 'captions' | 'audio';
 
@@ -73,12 +75,13 @@ export function qualityValue(currentId: string, playingHeight: number | undefine
   return playingHeight ? `${autoLabel} (${playingHeight}p)` : autoLabel;
 }
 
-export function speedLabel(rate: number, normalLabel: string): string {
-  return rate === 1 ? normalLabel : `${rate}×`;
+/** "1.5×" / «١٫٥×»; normal speed is the word. */
+export function speedLabel(rate: number, normalLabel: string, locale: FormatLocale = 'en'): string {
+  return rate === 1 ? normalLabel : formatPlaybackRate(locale, rate, '×');
 }
 
-export function speedOptions(rates: number[], normalLabel: string): MenuOption[] {
-  return rates.map((r) => ({ id: String(r), label: speedLabel(r, normalLabel) }));
+export function speedOptions(rates: number[], normalLabel: string, locale: FormatLocale = 'en'): MenuOption[] {
+  return rates.map((r) => ({ id: String(r), label: speedLabel(r, normalLabel, locale) }));
 }
 
 export function captionTracks<T extends TextTrackLike>(tracks: ArrayLike<T> | null | undefined): T[] {

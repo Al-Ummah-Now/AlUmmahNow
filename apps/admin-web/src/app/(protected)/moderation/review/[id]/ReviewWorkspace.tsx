@@ -7,7 +7,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { formatFixed, REVIEW_REASON_CODES } from '@al-ummah/shared-types';
+import { formatClock, formatFixed, REVIEW_REASON_CODES } from '@al-ummah/shared-types';
 import { audioTrackLanguageName } from '@/lib/audio-track-line';
 import { VideoPlayer } from '../../../videos/[id]/VideoPlayer';
 import { claimReview, decideReview, revealReviewItem, type ReviewDetailView, type ReviewFindingView } from '@/lib/api/review';
@@ -20,13 +20,10 @@ import { logger } from '@/lib/logger-client';
 const SPEEDS = [1, 1.5, 2, 3];
 const NSFW = new Set(['sexual', 'gore', 'disturbing', 'sexual_explicit_language', 'S12', 'minor_present']);
 
-function clock(ms: number | null): string {
+/** A finding's time in the admin's digits: "1:05" / «١:٠٥». */
+function clock(ms: number | null, locale: string): string {
   if (ms === null || !Number.isFinite(ms)) return '';
-  const s = Math.floor(ms / 1000);
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = String(s % 60).padStart(2, '0');
-  return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
+  return formatClock(locale, Math.floor(ms / 1000));
 }
 
 interface Props {
@@ -104,8 +101,8 @@ export function ReviewWorkspace({ detail, media }: Props) {
   const canUndo = !!review.decided_at && !!review.undo_until && new Date(review.undo_until).getTime() > Date.now();
 
   const flagButton = (f: ReviewFindingView) => (
-    <button type="button" onClick={() => seek(f.at_ms)} className="text-link underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-focus rounded" aria-label={t('review.jumpTo', { time: clock(f.at_ms) })}>
-      {clock(f.at_ms)}
+    <button type="button" onClick={() => seek(f.at_ms)} className="text-link underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-focus rounded" aria-label={t('review.jumpTo', { time: clock(f.at_ms, locale) })}>
+      {clock(f.at_ms, locale)}
     </button>
   );
 
@@ -177,7 +174,7 @@ export function ReviewWorkspace({ detail, media }: Props) {
                   <li key={f.id} className="space-y-1">
                     <div className="relative overflow-hidden rounded border-2 border-danger-border">
                       {/* eslint-disable-next-line @next/next/no-img-element -- streamed, never cached, not optimizable */}
-                      <img src={key.startsWith('https://') ? key : `/api/review-media/${encodeURIComponent(review.id)}?key=${encodeURIComponent(key)}`} referrerPolicy="no-referrer" alt={`${findingCategoryLabel(t, f.category)} ${clock(f.at_ms)}`} className={`aspect-video w-full object-cover ${shown ? '' : 'blur-xl'}`} />
+                      <img src={key.startsWith('https://') ? key : `/api/review-media/${encodeURIComponent(review.id)}?key=${encodeURIComponent(key)}`} referrerPolicy="no-referrer" alt={`${findingCategoryLabel(t, f.category)} ${clock(f.at_ms, locale)}`} className={`aspect-video w-full object-cover ${shown ? '' : 'blur-xl'}`} />
                       {!shown && (
                         <button type="button" onClick={() => void reveal(key, `frame@${f.at_ms ?? 'thumb'}`)} className="absolute inset-0 m-auto h-fit w-fit rounded bg-surface px-3 py-1 text-sm text-fg" data-testid="review-reveal">
                           {t('review.reveal')}

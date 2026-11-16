@@ -204,7 +204,9 @@ export function formatChapterTime(seconds: number): string {
   const secs = Math.floor(seconds % 60);
 
   if (hours > 0) {
+    // locale-format: machine (chapter text in a description, as YouTube writes it)
     return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   }
+  // locale-format: machine
   return `${minutes}:${secs.toString().padStart(2, '0')}`;
 }

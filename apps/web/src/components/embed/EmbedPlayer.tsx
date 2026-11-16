@@ -330,8 +330,8 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
                 </span>
               </span>
               {params.start > 0 && (
-                <span className="absolute bottom-3 end-3 rounded bg-black/70 px-2 py-0.5 text-xs" aria-hidden="true">
-                  {formatTimestamp(params.start)}
+                <span className="absolute bottom-3 end-3 rounded bg-black/70 px-2 py-0.5 text-xs" dir="ltr" aria-hidden="true">
+                  {formatTimestamp(params.start, lang)}
                 </span>
               )}
             </button>

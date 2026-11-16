@@ -30,6 +30,7 @@
  * ```
  */
 
+import { formatLevel, formatPlaybackRate, formatSeekStep } from './player-time';
 import type { ExtendedPlayer } from './videojs';
 import { logger } from '@/lib/logger-client';
 
@@ -67,6 +68,11 @@ export interface MobileTouchOptions {
    * Swipe sensitivity (pixels per volume unit)
    */
   swipeSensitivity?: number;
+
+  /**
+   * The player's language: feedback numbers use its digits (#1541)
+   */
+  lang?: 'en' | 'ar';
 }
 
 /**
@@ -79,6 +85,7 @@ const DEFAULT_OPTIONS: Required<MobileTouchOptions> = {
   doubleTapThreshold: 300,
   longPressDuration: 500,
   swipeSensitivity: 200,
+  lang: 'en',
 };
 
 /** How far (px) a finger may shake and still be tapping */
@@ -194,14 +201,14 @@ export function setupMobileTouchControls(
       const currentTime = player.currentTime() || 0;
       const newTime = Math.max(0, currentTime - 10);
       player.currentTime(newTime);
-      showFeedback('⏪ -10s', 'left');
+      showFeedback(`⏪ ${formatSeekStep(config.lang, -10)}`, 'left');
     } else if (relativeX > (width * 2) / 3) {
       // Right zone: forward 10s
       const currentTime = player.currentTime() || 0;
       const duration = player.duration() || 0;
       const newTime = Math.min(duration, currentTime + 10);
       player.currentTime(newTime);
-      showFeedback('⏩ +10s', 'right');
+      showFeedback(`⏩ ${formatSeekStep(config.lang, 10)}`, 'right');
     } else {
       // Center zone: play/pause
       if (player.paused()) {
@@ -223,8 +230,7 @@ export function setupMobileTouchControls(
     player.volume(newVolume);
 
     // Show volume percentage
-    const volumePercent = Math.round(newVolume * 100);
-    showFeedback(`🔊 ${volumePercent}%`, 'center');
+    showFeedback(`🔊 ${formatLevel(config.lang, newVolume)}`, 'center');
   }
 
   /**
@@ -240,7 +246,7 @@ export function setupMobileTouchControls(
     const nextSpeed = speeds[nextIndex];
 
     player.playbackRate(nextSpeed);
-    showFeedback(`⚡ ${nextSpeed}x`, 'center');
+    showFeedback(`⚡ ${formatPlaybackRate(config.lang, nextSpeed)}`, 'center');
   }
 
   /**

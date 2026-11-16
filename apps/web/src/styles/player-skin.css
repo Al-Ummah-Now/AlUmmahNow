@@ -629,6 +629,14 @@
   }
 }
 
+/* A clock reads left to right in Arabic too («١:٠٢:٠٥ / ٢٢:٠٥»): the bar is LTR already, and each
+   time is isolated so its digits and colons never reorder with the label beside it (#1541) */
+.video-js.vjs-fanous .vjs-current-time-display,
+.video-js.vjs-fanous .vjs-duration-display {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
 .video-js.vjs-fanous .vjs-time-control.vjs-current-time {
   padding-inline-start: 8px;
 }
@@ -1163,6 +1171,7 @@
 }
 
 .vjs-fanous-layer .vjs-fanous-tip-time {
+  unicode-bidi: isolate;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
