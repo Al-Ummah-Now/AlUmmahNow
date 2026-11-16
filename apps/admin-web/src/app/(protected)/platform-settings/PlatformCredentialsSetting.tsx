@@ -11,6 +11,8 @@ import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonC
 import { Chip, type ChipTone } from '@/components/content/parts';
 import { logger } from '@/lib/logger-client';
 import { reportError } from '@/lib/errors/reporter';
+import { UserName } from '@/components/audit/UserName';
+import { fillNodes } from '@/components/audit/fill';
 
 type Change = { view: PlatformCredentialView; test: PlatformCredentialTest };
 type ReplaceAction = (id: string, value: string) => Promise<ActionResult<Change>>;
@@ -181,10 +183,9 @@ function CredentialItem({ initial, replace, test: runTest, create }: { initial: 
 
       <p className="mt-3 text-sm text-fg" data-testid={`credential-${view.id}-source`}>
         {view.source === 'admin' ? (
-          t('platformCredentials.sourceAdmin', {
-            date: view.updatedAt ? formatDate(view.updatedAt, locale, true) : '—',
-            actor: view.updatedByName || view.updatedBy || '—',
-            last4: `…${view.last4 ?? ''}`,
+          // People by name (UserName resolves the id), never their id or email
+          fillNodes(t('platformCredentials.sourceAdmin', { date: view.updatedAt ? formatDate(view.updatedAt, locale, true) : '—', last4: `…${view.last4 ?? ''}` }), {
+            actor: view.updatedBy ? <UserName id={view.updatedBy} showEmail={false} /> : '—',
           })
         ) : view.source === 'binding' ? (
           <>
@@ -197,7 +198,9 @@ function CredentialItem({ initial, replace, test: runTest, create }: { initial: 
       </p>
       {view.minted && (
         <p className="mt-1 text-sm text-fg-muted" data-testid={`credential-${view.id}-minted`}>
-          {t('platformCredentials.mintedHere', { date: formatDate(view.minted.at, locale, true), actor: view.minted.byName || view.minted.by, last4: `…${view.minted.last4 ?? ''}` })}
+          {fillNodes(t('platformCredentials.mintedHere', { date: formatDate(view.minted.at, locale, true), last4: `…${view.minted.last4 ?? ''}` }), {
+            actor: <UserName id={view.minted.by} showEmail={false} />,
+          })}
         </p>
       )}
       {view.unreadable && (

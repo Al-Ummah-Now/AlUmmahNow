@@ -104,7 +104,8 @@ describe('credentials: the section', () => {
 
   it('shows a token set here with its last four, and each missing permission in plain words', () => {
     const html = render([view({ source: 'admin', last4: 'Q_ZZ', updatedAt: AT, updatedBy: 'super-1', updatedByName: 'Mahmoud', test: missing })]);
-    assert.match(html, /Set here on .* by Mahmoud\. Ends in …Q_ZZ\./);
+    assert.match(html, /Set here on .* by .*Ends in …Q_ZZ\./);
+    assert.doesNotMatch(html, /by super-1/, 'never the id as the name');
     assert.match(html, /data-state="attention"/);
     assert.match(html, /The token works, but some permissions are missing/);
     assert.match(html, /data-testid="credential-check-cache_purge" data-ok="false"/);
@@ -132,7 +133,7 @@ describe('credentials: the section', () => {
     assert.match(withManager, /shared by QA, stage and production/);
     assert.match(render([view({ canMint: true, present: false, source: null })]), />Create token</);
     const minted = render([view({ canMint: true, minted: { tokenId: 't1', at: AT, by: 'super-1', byName: 'Mahmoud', previousTokenId: null, previousRevoked: false } })]);
-    assert.match(minted, /Created here on .* by Mahmoud\./);
+    assert.match(minted, /Created here on .* by /);
   });
 
   it('says why Create failed and what happened to the previous token, in plain words', () => {
