@@ -37,7 +37,7 @@ jest.mock('@/components/bulkEdit/BulkEditPanel', () => ({
     return props.open ? <div data-testid="bulk-edit-panel">{props.videos.map((v) => v.id).join(',')}</div> : null;
   },
 }));
-let mockFeatures = { bulkSchedule: true };
+let mockFeatures: Record<string, boolean> = { bulkSchedule: true, upload: true };
 const mockRefreshFeatures = jest.fn();
 jest.mock('@/hooks/useFeatures', () => ({ useFeatures: () => ({ ready: true, features: mockFeatures }), refreshFeatures: (...args: unknown[]) => mockRefreshFeatures(...args) }));
 jest.mock('@/hooks/useMultiAccount', () => ({ useMultiAccount: () => ({ user: { channels: [{ id: 'c1', name: 'Noor', nameLocalized: { ar: 'نور' } }] } }) }));
@@ -69,7 +69,7 @@ function renderTab(role: 'owner' | 'editor' = 'owner') {
 describe('VideosTab', () => {
   beforeEach(() => {
     search = '';
-    mockFeatures = { bulkSchedule: true };
+    mockFeatures = { bulkSchedule: true, upload: true };
     jest.clearAllMocks();
     counts.mockResolvedValue(ZERO);
     list.mockResolvedValue({ items: [video('a'), video('b', { isPublic: false })], cursor: null });
@@ -176,6 +176,33 @@ describe('VideosTab', () => {
     const rows = await screen.findAllByTestId('studio-video-row');
     fireEvent.click(within(rows[0]).getByRole('checkbox'));
     expect(within(screen.getByTestId('studio-bulk-bar')).queryByRole('button', { name: STUDIO_EN.videos.bulk.schedule })).toBeNull();
+  });
+
+  describe('uploads off for the channel (hidden when off)', () => {
+    beforeEach(() => {
+      mockFeatures = { bulkSchedule: true, upload: false };
+    });
+
+    it('an empty Published list has no Upload invitation', async () => {
+      list.mockResolvedValue({ items: [], cursor: null });
+      renderTab();
+      expect(await screen.findByTestId('studio-videos-empty')).toHaveTextContent(STUDIO_EN.videos.empty.published);
+      expect(screen.queryByRole('link', { name: STUDIO_EN.upload })).toBeNull();
+    });
+
+    it('an empty Scheduled list does not mention uploading', async () => {
+      search = 'status=scheduled';
+      list.mockResolvedValue({ items: [], cursor: null });
+      renderTab();
+      expect(await screen.findByTestId('studio-videos-empty')).toHaveTextContent(STUDIO_EN.videos.empty.scheduledNoUpload);
+    });
+
+    it('with uploads on, both come back', async () => {
+      mockFeatures = { bulkSchedule: true, upload: true };
+      list.mockResolvedValue({ items: [], cursor: null });
+      renderTab();
+      expect(await screen.findByRole('link', { name: STUDIO_EN.upload })).toHaveAttribute('href', '/en/upload?channel=c1');
+    });
   });
 
   it('marks private videos', async () => {
