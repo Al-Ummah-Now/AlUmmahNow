@@ -14,6 +14,7 @@ import { AlertTriangle, CreditCard, ExternalLink, Receipt } from 'lucide-react';
 import { type BillingPayment, type BillingSubscription, type MyBilling, type PublicTier } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useConfirm } from '@/components/ui/confirm-dialog';
+import { QUIET } from '@/components/upgrade/buttons';
 import { MAIN_CONTENT_ID } from '@/components/SkipLinks';
 import { refreshCreatorAccess } from '@/hooks/useCreatorAccess';
 import { cancelBillingSubscription, fetchMyBilling, fetchPaymentReceipt, openBillingPortal } from '@/lib/api/billing-client';
@@ -130,14 +131,14 @@ export function BillingSettings() {
 
       {load.status === 'loading' && (
         <div className="bil-skel-wrap" aria-busy="true" data-testid="billing-loading">
-          <div className="bil-card bil-skel" aria-hidden="true" />
-          <div className="bil-card bil-skel bil-skel-short" aria-hidden="true" />
+          <div data-slot="card" className="bil-card bil-skel" aria-hidden="true" />
+          <div data-slot="card" className="bil-card bil-skel bil-skel-short" aria-hidden="true" />
         </div>
       )}
       {load.status === 'error' && (
-        <div className="upg-error" role="alert" data-testid="billing-load-error">
+        <div className="upg-error" data-slot="card" role="alert" data-testid="billing-load-error">
           <p>{copy.errors.loadFailed}</p>
-          <button type="button" className="upg-btn upg-btn-quiet" onClick={() => { setLoad({ status: 'loading' }); void reload(); }}>{copy.errors.retry}</button>
+          <button type="button" className={QUIET} data-slot="button" onClick={() => { setLoad({ status: 'loading' }); void reload(); }}>{copy.errors.retry}</button>
         </div>
       )}
 
@@ -147,14 +148,14 @@ export function BillingSettings() {
             <div className="bil-section-head">
               <h2 id="bil-subs-h" className="bil-h2">{copy.settings.subscriptionsHeading}</h2>
               {billing.portal && (
-                <button type="button" className="upg-btn upg-btn-quiet bil-manage" onClick={() => void manage()} disabled={portalBusy} data-testid="billing-portal">
+                <button type="button" className={`${QUIET} bil-manage`} data-slot="button" onClick={() => void manage()} disabled={portalBusy} data-testid="billing-portal">
                   <ExternalLink aria-hidden="true" />
                   {portalBusy ? copy.settings.opening : copy.settings.manage}
                 </button>
               )}
             </div>
             {subs.length === 0 ? (
-              <div className="bil-card bil-empty" data-testid="billing-no-subscriptions">
+              <div data-slot="card" className="bil-card bil-empty" data-testid="billing-no-subscriptions">
                 <p>{copy.settings.noSubscriptions}</p>
               </div>
             ) : (
@@ -169,7 +170,7 @@ export function BillingSettings() {
           <section className="bil-section" aria-labelledby="bil-pay-h">
             <h2 id="bil-pay-h" className="bil-h2">{copy.settings.paymentsHeading}</h2>
             {billing.payments.length === 0 ? (
-              <div className="bil-card bil-empty" data-testid="billing-no-payments"><p>{copy.settings.noPayments}</p></div>
+              <div data-slot="card" className="bil-card bil-empty" data-testid="billing-no-payments"><p>{copy.settings.noPayments}</p></div>
             ) : (
               <PaymentsTable payments={billing.payments} lang={l} copy={copy} date={date} />
             )}
@@ -187,7 +188,7 @@ function SubscriptionRow({ sub, name, lang, copy, date, onCancel }: { sub: Billi
   const amount = sub.amount !== null && sub.currency && sub.period ? priceLabel({ amount: sub.amount, currency: sub.currency, period: sub.period }, lang, copy) : null;
   const status = sub.cancelAtPeriodEnd && sub.status === 'active' ? 'canceled' : sub.status;
   return (
-    <li className="bil-card bil-sub" data-status={sub.status} data-testid={`billing-subscription-${sub.tierId}`}>
+    <li data-slot="card" className="bil-card bil-sub" data-status={sub.status} data-testid={`billing-subscription-${sub.tierId}`}>
       <div className="bil-sub-main">
         <div className="bil-sub-title">
           <h3 className="bil-h3">{name}</h3>
@@ -206,7 +207,7 @@ function SubscriptionRow({ sub, name, lang, copy, date, onCancel }: { sub: Billi
       </div>
       {canCancel(sub) && (
         <div className="bil-sub-actions">
-          <button type="button" className="upg-btn upg-btn-quiet" onClick={onCancel} data-testid={`billing-cancel-${sub.tierId}`}>{copy.settings.cancel}</button>
+          <button type="button" className={QUIET} data-slot="button" onClick={onCancel} data-testid={`billing-cancel-${sub.tierId}`}>{copy.settings.cancel}</button>
         </div>
       )}
     </li>
@@ -252,7 +253,7 @@ function PaymentsTable({ payments, lang, copy, date }: { payments: BillingPaymen
   const p = copy.settings.payment;
   const money = (amount: number, currency: string) => formatBillingAmount(amount, currency, billingLocale(lang));
   return (
-    <div className="bil-card bil-table-wrap">
+    <div data-slot="card" data-glass="lite" className="bil-card bil-table-wrap">
       <table className="bil-table" data-testid="billing-payments">
         <thead>
           <tr>

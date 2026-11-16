@@ -11,6 +11,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { BadgeCheck, Clock, Loader2 } from 'lucide-react';
 import type { BillingOffer, BillingPlans, PaymentProviderId } from '@al-ummah/shared-types';
 import Link from '@/components/common/AppLink';
+import { FILLED, QUIET } from '@/components/upgrade/buttons';
 import { login } from '@/lib/actions';
 import { upgradePath } from '@/lib/auth/sign-in-return';
 import { abandonBillingCheckout, fetchMyBilling, fetchMyCheckout, startBillingCheckout } from '@/lib/api/billing-client';
@@ -116,7 +117,7 @@ export function CheckoutBanner({ confirm, tierLabel, locale, copy }: { confirm: 
   const titleId = useId();
   if (confirm.state === 'confirming') {
     return (
-      <section className="upg-status upg-pay-status" data-status="confirming" data-testid="checkout-confirming" aria-labelledby={titleId} aria-busy="true">
+      <section className="upg-status upg-pay-status" data-slot="card" data-status="confirming" data-testid="checkout-confirming" aria-labelledby={titleId} aria-busy="true">
         <span className="upg-status-icon"><Loader2 className="upg-spin" aria-hidden="true" /></span>
         <div className="upg-status-text" role="status">
           <h2 id={titleId} className="upg-status-title">{copy.pay.confirmingTitle}</h2>
@@ -128,28 +129,28 @@ export function CheckoutBanner({ confirm, tierLabel, locale, copy }: { confirm: 
   if (confirm.state === 'done') {
     const name = tierLabel(confirm.tierId, confirm.tierName);
     return (
-      <section className="upg-status upg-pay-status" data-status="approved" data-testid="checkout-success" aria-labelledby={titleId}>
+      <section className="upg-status upg-pay-status" data-slot="card" data-status="approved" data-testid="checkout-success" aria-labelledby={titleId}>
         <span className="upg-status-icon"><BadgeCheck aria-hidden="true" /></span>
         <div className="upg-status-text" role="status">
           <h2 id={titleId} className="upg-status-title">{fillBillingCopy(copy.pay.successTitle, { tier: name })}</h2>
           <p>{copy.pay.successBody}</p>
         </div>
         <div className="upg-status-action upg-pay-links">
-          <Link href={`/${locale}/studio`} className="upg-btn" data-testid="checkout-success-studio">{copy.pay.goToStudio}</Link>
-          <Link href={`/${locale}/settings/billing`} className="upg-btn upg-btn-quiet" data-testid="checkout-success-billing">{copy.pay.viewBilling}</Link>
+          <Link href={`/${locale}/studio`} className={FILLED} data-slot="button" data-testid="checkout-success-studio">{copy.pay.goToStudio}</Link>
+          <Link href={`/${locale}/settings/billing`} className={QUIET} data-slot="button" data-testid="checkout-success-billing">{copy.pay.viewBilling}</Link>
         </div>
       </section>
     );
   }
   return (
-    <section className="upg-status upg-pay-status" data-status="pending" data-testid="checkout-slow" aria-labelledby={titleId}>
+    <section className="upg-status upg-pay-status" data-slot="card" data-status="pending" data-testid="checkout-slow" aria-labelledby={titleId}>
       <span className="upg-status-icon"><Clock aria-hidden="true" /></span>
       <div className="upg-status-text" role="status">
         <h2 id={titleId} className="upg-status-title">{copy.pay.slowTitle}</h2>
         <p>{copy.pay.slowBody}</p>
       </div>
       <div className="upg-status-action">
-        <Link href={`/${locale}/settings/billing`} className="upg-btn upg-btn-quiet" data-testid="checkout-slow-billing">{copy.pay.viewBilling}</Link>
+        <Link href={`/${locale}/settings/billing`} className={QUIET} data-slot="button" data-testid="checkout-slow-billing">{copy.pay.viewBilling}</Link>
       </div>
     </section>
   );
@@ -333,7 +334,8 @@ export function TierPricing({
       {signedIn && (
         <button
           type="submit"
-          className="upg-btn"
+          className={`${FILLED} w-full`}
+          data-slot="button"
           disabled={busy || !provider}
           aria-describedby={`${ids}-note`}
           data-testid={`tier-${tierId}-subscribe`}
@@ -344,7 +346,7 @@ export function TierPricing({
       </form>
       {!signedIn && (
         <form action={login.bind(null, locale, upgradePath(locale))}>
-          <button type="submit" className="upg-btn upg-btn-quiet" data-testid={`tier-${tierId}-sign-in`}>{copy.pay.signInToSubscribe}</button>
+          <button type="submit" className={`${QUIET} w-full`} data-slot="button" data-testid={`tier-${tierId}-sign-in`}>{copy.pay.signInToSubscribe}</button>
         </form>
       )}
       {error && <p className="upg-err" role="alert" data-testid={`tier-${tierId}-pay-error`}>{error}</p>}
