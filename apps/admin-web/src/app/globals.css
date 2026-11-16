@@ -203,6 +203,7 @@ html.dark .aun-menu {
  * Arabic/English titles. The full title goes in the element's title attribute.
  */
 @utility clamp-fade-2 {
+  /* Mask colours set alpha only (black = shown), they never paint */
   --clamp-line: 1.375em;
   display: block;
   line-height: var(--clamp-line);
@@ -210,8 +211,8 @@ html.dark .aun-menu {
   overflow: hidden;
   overflow-wrap: break-word;
   word-break: normal;
-  -webkit-mask-image: linear-gradient(#000 0 0), linear-gradient(to right, #000 calc(100% - 4em), transparent);
-  mask-image: linear-gradient(#000 0 0), linear-gradient(to right, #000 calc(100% - 4em), transparent);
+  -webkit-mask-image: linear-gradient(black 0 0), linear-gradient(to right, black calc(100% - 4em), transparent);
+  mask-image: linear-gradient(black 0 0), linear-gradient(to right, black calc(100% - 4em), transparent);
   -webkit-mask-size: 100% var(--clamp-line), 100% var(--clamp-line);
   mask-size: 100% var(--clamp-line), 100% var(--clamp-line);
   -webkit-mask-position: 0 0, 0 var(--clamp-line);
@@ -219,8 +220,8 @@ html.dark .aun-menu {
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
   &:dir(rtl) {
-    -webkit-mask-image: linear-gradient(#000 0 0), linear-gradient(to left, #000 calc(100% - 4em), transparent);
-    mask-image: linear-gradient(#000 0 0), linear-gradient(to left, #000 calc(100% - 4em), transparent);
+    -webkit-mask-image: linear-gradient(black 0 0), linear-gradient(to left, black calc(100% - 4em), transparent);
+    mask-image: linear-gradient(black 0 0), linear-gradient(to left, black calc(100% - 4em), transparent);
   }
 }
 
