@@ -3,20 +3,19 @@
 import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from '@/components/AppLink';
-import { SOCIAL_NETWORKS, X_LINK_POST_COST_MICROS, X_MONTHLY_CAP_MAX_USD, X_POST_COST_MICROS, type SocialNetwork, type SocialPlatformSettings } from '@al-ummah/shared-types';
+import { formatDate as formatSharedDate, formatMoney, formatPercent, SOCIAL_NETWORKS, X_LINK_POST_COST_MICROS, X_MONTHLY_CAP_MAX_USD, X_POST_COST_MICROS, type SocialNetwork, type SocialPlatformSettings } from '@al-ummah/shared-types';
 import { clearSocialCredentials, saveSocialCredentials, saveSocialSettings, type SocialAdminView, type SocialHistoryEntry } from '@/lib/api/admin';
 import { useConfirm } from '@/components/content/actions';
 import { ErrorAlert, cardClass, fieldClass, linkClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { formatDate, formatNumber, translateDynamic, type MessageKey } from '@/i18n/translate';
-import { intlLocale } from '@/i18n/intl-locale';
 import { logger } from '@/lib/logger-client';
 
 const STATUSES = ['sent', 'queued', 'sending', 'failed', 'blocked', 'cancelled'] as const;
 const ACCOUNT_STATUSES = ['active', 'needs_reconnect', 'revoked', 'suspended'] as const;
 
 function usd(value: number, locale: string): string {
-  return new Intl.NumberFormat(intlLocale(locale), { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 3 }).format(value);
+  return formatMoney(locale, value, 'USD', { minimumFractionDigits: 2, maximumFractionDigits: 3 });
 }
 
 /** Admin → Social posting: kill switches, the X cap, network setup, activity, failures and the change history. */
@@ -121,12 +120,34 @@ export function SocialPostingView({ view, history, canEdit }: { view: SocialAdmi
   const th = 'px-3 py-2 text-start font-medium text-fg-muted';
   const td = 'px-3 py-2 text-fg';
 
+  type Failure = SocialAdminView['recentFailures'][number];
+  const failureChannel = (f: Failure) =>
+    f.channel_name ? (
+      <Link href={`/channels/${encodeURIComponent(f.channel_id)}`} className={`${linkClass} break-words`} dir="auto" data-testid="social-failure-channel">
+        {f.channel_name_localized?.[locale] || f.channel_name}
+      </Link>
+    ) : (
+      <span className="text-fg-muted">{t('socialPosting.channelGone')}</span>
+    );
+  const failureError = (f: Failure) => (
+    <>
+      <p className="break-words" data-testid="social-failure-reason">{translateDynamic(t, 'socialPosting.reasons', f.reason)}</p>
+      {f.last_error ? (
+        <details className="mt-1 text-xs text-fg-muted">
+          <summary className="cursor-pointer select-none rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-focus">{t('socialPosting.showDetails')}</summary>
+          <code className="mt-1 block break-all font-mono" dir="ltr">{f.last_error}</code>
+        </details>
+      ) : null}
+    </>
+  );
+
   const historyText = (h: SocialHistoryEntry) => {
     const date = formatDate(h.createdAt, locale, true);
-    if (h.key === 'social:settings') return t('socialPosting.historySettings', { date, actor: h.actorId });
+    const actor = h.actorName || t('socialPosting.someAdmin');
+    if (h.key === 'social:settings') return t('socialPosting.historySettings', { date, actor });
     const network = net(h.key.split(':')[2] ?? '');
     const action = h.newValue.includes('cleared') ? t('socialPosting.actionCleared') : t('socialPosting.actionSet');
-    return t('socialPosting.historyCredentials', { date, network, action, actor: h.actorId });
+    return t('socialPosting.historyCredentials', { date, network, action, actor });
   };
 
   return (
@@ -183,11 +204,11 @@ export function SocialPostingView({ view, history, canEdit }: { view: SocialAdmi
                 data-testid="social-x-cap"
               />
               <p id={`${ids}-cap-hint`} className="text-sm text-fg-muted">
-                {t('socialPosting.xCapHint', { post: usd(X_POST_COST_MICROS / 1_000_000, locale), link: usd(X_LINK_POST_COST_MICROS / 1_000_000, locale) })}
+                {t('socialPosting.xCapHint', { post: usd(X_POST_COST_MICROS / 1_000_000, locale), link: usd(X_LINK_POST_COST_MICROS / 1_000_000, locale), zero: 0, pause: formatPercent(locale, 0.9) })}
               </p>
               <p className="text-sm text-fg" data-testid="social-x-spend">
                 {t('socialPosting.xSpend', {
-                  month: view.spend.month,
+                  month: formatSharedDate(locale, `${view.spend.month}-01T12:00:00Z`, { year: 'numeric', month: 'long', timeZone: 'UTC' }),
                   cost: usd(view.spend.x.costUsd, locale),
                   posts: formatNumber(view.spend.x.posts, locale),
                   cap: usd(view.spend.x.capUsd, locale),
@@ -213,7 +234,7 @@ export function SocialPostingView({ view, history, canEdit }: { view: SocialAdmi
               <h3 className="font-semibold text-fg">{t('socialPosting.xApp')}</h3>
               {statusPill(view.readiness.x.configured)}
             </div>
-            <p className="text-sm text-fg-muted">{t('socialPosting.xAppHint')}</p>
+            <p className="text-sm text-fg-muted">{t('socialPosting.xAppHint', { oauth: 'OAuth 2.0' })}</p>
             <div>
               <p className="text-sm font-medium text-fg">{t('socialPosting.callback')}</p>
               <code dir="ltr" className="block break-all rounded border border-border bg-surface-2 px-3 py-2 text-xs text-fg" data-testid="social-x-callback">{view.callbacks.x}</code>
@@ -321,40 +342,40 @@ export function SocialPostingView({ view, history, canEdit }: { view: SocialAdmi
         {view.recentFailures.length === 0 ? (
           <p className="text-sm text-fg-muted">{t('socialPosting.failuresNone')}</p>
         ) : (
-          <div className="overflow-x-auto rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-focus" tabIndex={0} role="region" aria-labelledby={`${ids}-failures`}>
-            <table className="w-full text-sm" data-testid="social-failures">
-              <thead>
-                <tr><th className={th}>{t('socialPosting.colNetwork')}</th><th className={th}>{t('socialPosting.colItem')}</th><th className={th}>{t('socialPosting.colChannel')}</th><th className={th}>{t('socialPosting.colError')}</th><th className={th}>{t('socialPosting.colWhen')}</th></tr>
-              </thead>
-              <tbody>
-                {view.recentFailures.map((f) => (
-                  <tr key={f.id} className="border-t border-border align-top">
-                    <td className={td}>{net(f.network)}</td>
-                    <td className={td} dir="auto">{f.entity_title || f.entity_id}</td>
-                    <td className={td}>
-                      {f.channel_name ? (
-                        <Link href={`/channels/${encodeURIComponent(f.channel_id)}`} className={`${linkClass} break-words`} dir="auto" data-testid="social-failure-channel">
-                          {f.channel_name_localized?.[locale] || f.channel_name}
-                        </Link>
-                      ) : (
-                        <span className="text-fg-muted">{t('socialPosting.channelGone')}</span>
-                      )}
-                    </td>
-                    <td className={`${td} break-words`}>
-                      <p data-testid="social-failure-reason">{translateDynamic(t, 'socialPosting.reasons', f.reason)}</p>
-                      {f.last_error ? (
-                        <details className="mt-1 text-xs text-fg-muted">
-                          <summary className="cursor-pointer select-none rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-focus">{t('socialPosting.showDetails')}</summary>
-                          <code className="mt-1 block break-words font-mono" dir="ltr">{f.last_error}</code>
-                        </details>
-                      ) : null}
-                    </td>
-                    <td className={`${td} whitespace-nowrap`}>{formatDate(f.updated_at, locale, true)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <>
+            {/* Phone: one card per failure (a five-column table can't fit); wider screens: the table */}
+            <ul className="space-y-3 md:hidden" data-testid="social-failures-cards">
+              {view.recentFailures.map((f) => (
+                <li key={f.id} className="rounded border border-border p-3 text-sm">
+                  <p className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-xs text-fg-muted">
+                    <span>{net(f.network)}</span>
+                    <span>{formatDate(f.updated_at, locale, true)}</span>
+                  </p>
+                  <p className="mt-1 break-words font-medium text-fg" dir="auto">{f.entity_title || f.entity_id}</p>
+                  <p className="mt-1">{failureChannel(f)}</p>
+                  <div className="mt-2">{failureError(f)}</div>
+                </li>
+              ))}
+            </ul>
+            <div className="hidden overflow-x-auto rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-focus md:block" tabIndex={0} role="region" aria-labelledby={`${ids}-failures`}>
+              <table className="w-full text-sm" data-testid="social-failures">
+                <thead>
+                  <tr><th className={th}>{t('socialPosting.colNetwork')}</th><th className={th}>{t('socialPosting.colItem')}</th><th className={th}>{t('socialPosting.colChannel')}</th><th className={th}>{t('socialPosting.colError')}</th><th className={th}>{t('socialPosting.colWhen')}</th></tr>
+                </thead>
+                <tbody>
+                  {view.recentFailures.map((f) => (
+                    <tr key={f.id} className="border-t border-border align-top">
+                      <td className={td}>{net(f.network)}</td>
+                      <td className={td} dir="auto">{f.entity_title || f.entity_id}</td>
+                      <td className={td}>{failureChannel(f)}</td>
+                      <td className={`${td} break-words`}>{failureError(f)}</td>
+                      <td className={`${td} whitespace-nowrap`}>{formatDate(f.updated_at, locale, true)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </section>
 

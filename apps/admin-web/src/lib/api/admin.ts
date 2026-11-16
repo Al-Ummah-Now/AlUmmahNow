@@ -795,6 +795,8 @@ export interface SocialHistoryEntry {
   oldValue: string | null;
   newValue: string;
   actorId: string;
+  /** The admin's name (display name, else email); null when it could not be looked up */
+  actorName: string | null;
   createdAt: string;
 }
 

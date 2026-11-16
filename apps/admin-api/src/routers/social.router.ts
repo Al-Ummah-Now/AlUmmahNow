@@ -17,6 +17,7 @@ import { Hono, type Context } from 'hono';
 import { hasPermission } from '../lib/roles';
 import { logger } from '../lib/logger';
 import type { ProcessingClientEnv } from '../lib/processing/videosProcessing';
+import { lookupMany } from '../lib/moderation/reportMeta';
 import type { AdminBindings, AuthContext } from '../base/types';
 
 type Env = { Bindings: AdminBindings & ProcessingClientEnv; Variables: { auth?: AuthContext } };
@@ -94,7 +95,14 @@ app.get('/history', async (c) => {
     .prepare("SELECT id, key, old_value, new_value, actor_id, created_at FROM site_settings_log WHERE key >= 'social:' AND key < 'social;' ORDER BY created_at DESC, rowid DESC LIMIT ?")
     .bind(limit)
     .all<{ id: string; key: string; old_value: string | null; new_value: string; actor_id: string; created_at: string }>();
-  const entries = (results ?? []).map((r) => ({ id: r.id, key: r.key, oldValue: r.old_value, newValue: r.new_value, actorId: r.actor_id, createdAt: r.created_at }));
+  const rows = results ?? [];
+  // People by name, never by id (display name, else email; no @handle). Without the lookup the page says "an admin".
+  const names = await lookupMany(c.env as never, [], rows.map((r) => r.actor_id)).catch(() => null);
+  const entries = rows.map((r) => {
+    const user = names?.users.get(r.actor_id);
+    const actorName = (user?.found && (user.displayName?.trim() || user.email?.trim())) || null;
+    return { id: r.id, key: r.key, oldValue: r.old_value, newValue: r.new_value, actorId: r.actor_id, actorName, createdAt: r.created_at };
+  });
   return c.json({ success: true, result: { entries } });
 });
 
