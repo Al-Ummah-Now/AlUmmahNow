@@ -15,6 +15,7 @@ import {
   type LiveRoutingPatch,
   type LiveRoutingSettings,
 } from '@al-ummah/shared-types';
+import { intlLocale } from '@/i18n/intl-locale';
 
 export { LIVE_PROVIDERS, otherLiveProvider };
 
@@ -265,7 +266,7 @@ export const isDay = (v: unknown): v is string => typeof v === 'string' && /^\d{
 /** A comparison value in the admin's locale ('—' when there is no data). */
 export function metricFormatter(locale: string, format: MetricFormat): (value: number | null) => string {
   const loc = /^ar\b/.test(locale) ? 'ar-u-nu-arab' : locale;
-  const nf = (o: Intl.NumberFormatOptions) => new Intl.NumberFormat(loc, o);
+  const nf = (o: Intl.NumberFormatOptions) => new Intl.NumberFormat(intlLocale(loc), o);
   const formatters: Record<MetricFormat, (v: number) => string> = {
     count: (v) => nf({ maximumFractionDigits: 0 }).format(v),
     hours: (v) => nf({ style: 'unit', unit: 'hour', unitDisplay: 'short', maximumFractionDigits: 1 }).format(v),

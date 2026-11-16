@@ -9,6 +9,7 @@ import Link from '@/components/AppLink';
 import { cardClass, linkClass } from '@/components/ui';
 import { chartLocale } from '@al-ummah/shared-types';
 import { deliveryFormats } from './format';
+import { intlLocale } from '@/i18n/intl-locale';
 
 export interface LiveFiguresProps {
   live: MediaLive | null;
@@ -94,7 +95,7 @@ export function LiveFigures({ live, t, locale, stale = false, settingsHref }: Li
           <StartTimes live={live} t={t} locale={locale} />
           <p className="mt-3 text-xs text-fg-muted" data-testid="delivery-live-updated">
             {updated && !Number.isNaN(updated.getTime())
-              ? t('mediaDelivery.liveUpdated', { time: new Intl.DateTimeFormat(locale, { timeStyle: 'medium' }).format(updated) })
+              ? t('mediaDelivery.liveUpdated', { time: new Intl.DateTimeFormat(intlLocale(locale), { timeStyle: 'medium' }).format(updated) })
               : null}
             {stale && <span className="ms-2 text-danger-fg" data-testid="delivery-live-stale">{t('mediaDelivery.liveStale')}</span>}
           </p>

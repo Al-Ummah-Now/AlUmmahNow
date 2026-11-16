@@ -9,6 +9,7 @@ import { AdminApiError } from '@/lib/api/errors';
 import { getNewsletterIssue, listNewsletterIssues, listNewsletterSubscribers } from '@/lib/api/newsletter';
 import type { IssueList, NewsletterIssue, SubscriberCounts, SubscriberList, SubscriberStatus } from '@/lib/api/newsletter-types';
 import { EraseSubscriberButton, IssueEditor } from './NewsletterAdmin';
+import { intlLocale } from '@/i18n/intl-locale';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,7 +54,7 @@ export default async function NewsletterPage({ searchParams }: PageProps) {
     loadError = error instanceof AdminApiError && error.status === 404 ? t('newsletter.notFound') : t('newsletter.loadFailed');
   }
   const counts = issues?.subscribers ?? issue?.subscribers ?? subscribers?.counts ?? null;
-  const number = (n: number) => new Intl.NumberFormat(locale).format(n);
+  const number = (n: number) => new Intl.NumberFormat(intlLocale(locale)).format(n);
   const subjectOf = (i: NewsletterIssue) => (locale === 'ar' ? i.subject_ar || i.subject_en : i.subject_en || i.subject_ar) || t('newsletter.untitled');
   const tabLink = (id: 'issues' | 'subscribers') => (
     <Link

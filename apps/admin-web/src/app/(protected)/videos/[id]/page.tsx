@@ -17,6 +17,7 @@ import { VideoPlayer } from './VideoPlayer';
 import { ProcessingCard } from './ProcessingCard';
 import { VideoProvidersPanel } from './VideoProvidersPanel';
 import { LIST_RETURN_PARAM, videosBackHref } from '../list-spec';
+import { intlLocale } from '@/i18n/intl-locale';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,7 +32,7 @@ function bytes(n: number | null, locale: string): string | null {
     v /= 1024;
     i++;
   }
-  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(v)} ${units[i]}`;
+  return `${new Intl.NumberFormat(intlLocale(locale), { maximumFractionDigits: 1 }).format(v)} ${units[i]}`;
 }
 
 /**

@@ -5,6 +5,7 @@
  */
 import { chartLocale, compactNumber } from '@al-ummah/shared-types';
 import { OPS_ENVS, OPS_KINDS, OPS_RANGES, type OpsBudgetLevel, type OpsCosts, type OpsEnv, type OpsKind, type OpsMetric, type OpsRange, type OpsSeries } from '@/lib/api/ops-types';
+import { intlLocale } from '@/i18n/intl-locale';
 
 type Param = string | string[] | undefined;
 const one = (v: Param) => (Array.isArray(v) ? v[0] : v);
@@ -108,13 +109,13 @@ const BYTE_UNITS = ['byte', 'kilobyte', 'megabyte', 'gigabyte', 'terabyte'] as c
 export function opsFormats(locale: string): OpsFormats {
   const loc = chartLocale(locale);
   const compact = compactNumber(locale);
-  const ms = new Intl.NumberFormat(loc, { style: 'unit', unit: 'millisecond', unitDisplay: 'short', maximumFractionDigits: 1 });
-  const percent = new Intl.NumberFormat(loc, { style: 'percent', maximumFractionDigits: 2 });
-  const usd = new Intl.NumberFormat(loc, { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const hour = new Intl.DateTimeFormat(loc, { day: 'numeric', month: 'short', hour: 'numeric', timeZone: 'UTC' });
-  const day = new Intl.DateTimeFormat(loc, { day: 'numeric', month: 'short', timeZone: 'UTC' });
-  const time = new Intl.DateTimeFormat(loc, { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' });
-  const month = new Intl.DateTimeFormat(loc, { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const ms = new Intl.NumberFormat(intlLocale(loc), { style: 'unit', unit: 'millisecond', unitDisplay: 'short', maximumFractionDigits: 1 });
+  const percent = new Intl.NumberFormat(intlLocale(loc), { style: 'percent', maximumFractionDigits: 2 });
+  const usd = new Intl.NumberFormat(intlLocale(loc), { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const hour = new Intl.DateTimeFormat(intlLocale(loc), { day: 'numeric', month: 'short', hour: 'numeric', timeZone: 'UTC' });
+  const day = new Intl.DateTimeFormat(intlLocale(loc), { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  const time = new Intl.DateTimeFormat(intlLocale(loc), { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' });
+  const month = new Intl.DateTimeFormat(intlLocale(loc), { month: 'long', year: 'numeric', timeZone: 'UTC' });
   const date = (s: string) => new Date(s.length === 10 ? `${s}T00:00:00Z` : s);
   return {
     count: (v) => compact(v),
@@ -125,7 +126,7 @@ export function opsFormats(locale: string): OpsFormats {
         n /= 1000;
         i++;
       }
-      return new Intl.NumberFormat(loc, { style: 'unit', unit: BYTE_UNITS[i], unitDisplay: 'short', maximumFractionDigits: n < 10 ? 1 : 0 }).format(n);
+      return new Intl.NumberFormat(intlLocale(loc), { style: 'unit', unit: BYTE_UNITS[i], unitDisplay: 'short', maximumFractionDigits: n < 10 ? 1 : 0 }).format(n);
     },
     ms: (v) => ms.format(v),
     // CPU comes in microseconds: shown in ms from 1,000 µs
