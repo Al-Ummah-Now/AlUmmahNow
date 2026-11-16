@@ -104,3 +104,15 @@ test('numbers written in a message are formatter placeholders', () => {
   assert.doesNotMatch(f.fillTemplate('ar', 'نحو {$0.011} لكل {#1000}'), /[0-9$]/);
   assert.equal(f.fillTemplate('en', 'R2 {name}', { name: 'x' }), 'R2 x');
 });
+
+test('dates and times use a plain space on every runtime (WebKit writes U+00A0 before «م»)', () => {
+  const at = Date.UTC(2026, 10, 15, 14, 5);
+  const text = f.formatTime('ar', at, { timeStyle: 'short', timeZone: 'UTC' });
+  assert.equal(text, '٢:٠٥ م');
+  assert.doesNotMatch(f.formatDateTime('ar', at, { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }), /[\u00a0\u202f\u2009]/);
+  assert.doesNotMatch(f.formatTime('en', at, { timeStyle: 'short', timeZone: 'UTC' }), /[\u00a0\u202f\u2009]/);
+  assert.ok(f.formatDateToParts('ar', at, { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' }).every((p) => !/[\u00a0\u202f\u2009]/.test(p.value)));
+  assert.equal(f.normalizeSpaces('٢:٠٥\u00a0م'), '٢:٠٥ م');
+  assert.equal(f.dateTimeFormat('ar', { timeZone: 'UTC' }).resolvedOptions().numberingSystem, 'arab');
+});
+
