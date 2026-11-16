@@ -6,5 +6,5 @@ export default async function StudioDashboardPage({ params }: { params: Promise<
   const { locale, channelId } = await params;
   const access = await requireStudioPage(channelId, ['dashboard']);
   if (!access) return <StudioNoAccess locale={locale} channelId={channelId} />;
-  return <StudioDashboard locale={locale} channelId={channelId} role={access.role} />;
+  return <StudioDashboard locale={locale} channelId={channelId} role={access.role} liveOn={access.features.live === true} />;
 }

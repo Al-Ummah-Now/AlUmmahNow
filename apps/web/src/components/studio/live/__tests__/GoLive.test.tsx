@@ -8,6 +8,10 @@ const getState = jest.fn();
 const startStream = jest.fn();
 const endStream = jest.fn();
 
+const mockRefresh = jest.fn();
+// Next's router is the same object on every render
+const mockRouter = { push: jest.fn(), refresh: mockRefresh };
+jest.mock('next/navigation', () => ({ useRouter: () => mockRouter }));
 jest.mock('@/hooks/useCreatorAccess', () => ({ useCreatorAccess: () => ({ status: 'loading' }) }));
 jest.mock('@/hooks/useLanguage', () => ({
   useLanguage: () => ({ t: { studio: mockStudio, confirmDialog: { typeToConfirm: 'Type {value}' }, common: { cancel: 'Cancel' } }, lang: 'en', isRTL: false }),
@@ -157,13 +161,23 @@ describe('GoLive', () => {
     expect(await screen.findByTestId('studio-golive-forbidden')).toHaveTextContent(text.notOwner);
   });
 
-  it('shows a tier refusal of the ingest settings with Request access, not "not yours"', async () => {
+  it('live off for the channel (404 feature_off): no message, the page re-renders without Live', async () => {
     const { LiveApiError } = jest.requireActual('@/lib/live/api');
     getStream.mockResolvedValue({ id: 's1', title: 'x', status: 'scheduled' });
-    getIngest.mockRejectedValue(new LiveApiError(403, 'live_not_in_tier'));
+    getIngest.mockRejectedValue(new LiveApiError(404, 'feature_off'));
     render(<GoLive locale="ar" channelId="c1" streamId="s1" />);
-    expect(await screen.findByTestId('studio-golive-failed')).toHaveTextContent(STUDIO_EN.live.errors.live_not_in_tier);
-    expect(screen.getByTestId('studio-live-request-access')).toHaveAttribute('href', '/ar/upgrade');
+    await waitFor(() => expect(mockRefresh).toHaveBeenCalled());
+    expect(screen.queryByTestId('studio-golive-failed')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('studio-golive-missing')).not.toBeInTheDocument();
+  });
+
+  it('Go live refused because live was switched off meanwhile: re-render, no error text', async () => {
+    setup();
+    const { LiveApiError } = jest.requireActual('@/lib/live/api');
+    startStream.mockRejectedValue(new LiveApiError(404, 'feature_off'));
+    fireEvent.click(await screen.findByTestId('studio-golive-start'));
+    await waitFor(() => expect(mockRefresh).toHaveBeenCalled());
+    expect(screen.queryByTestId('studio-golive-error')).not.toBeInTheDocument();
   });
 
   it('explains the month\'s hours being used when going live (402)', async () => {
@@ -171,7 +185,8 @@ describe('GoLive', () => {
     const { LiveApiError } = jest.requireActual('@/lib/live/api');
     startStream.mockRejectedValue(new LiveApiError(402, 'live_hours_used'));
     fireEvent.click(await screen.findByTestId('studio-golive-start'));
-    expect(await screen.findByTestId('studio-golive-error')).toHaveTextContent(STUDIO_EN.live.errors.live_hours_used);
-    expect(screen.queryByTestId('studio-live-request-access')).not.toBeInTheDocument();
+    const error = await screen.findByTestId('studio-golive-error');
+    expect(error).toHaveTextContent(STUDIO_EN.live.errors.live_hours_used);
+    expect(error.querySelector('a')).toBeNull();
   });
 });

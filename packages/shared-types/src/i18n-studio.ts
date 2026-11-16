@@ -477,22 +477,14 @@ export const STUDIO_EN = {
     readOnly: 'Only the channel\'s owner and admins can create live streams.',
     errors: {
       live_capacity: 'Live streaming is at capacity right now. Try again in a few minutes.',
-      live_budget: 'Live streaming has reached its limit for this month. Try again later.',
-      live_unavailable: 'Live streaming is not available right now.',
       live_provider_error: 'The live service could not be reached. Try again.',
-      live_not_in_tier: 'Live streaming isn\'t part of this channel\'s creator tier.',
       live_hours_used: 'This month\'s live streaming hours are used. They renew on the 1st.',
-      live_concurrent_limit: 'You already have the most streams live at once that your tier allows. End one to go live.',
+      live_concurrent_limit: 'You already have the most streams live at once. End one to go live.',
       generic: 'That didn\'t work. Please try again.',
     },
-    gate: {
-      notInTierTitle: 'Live streaming isn\'t part of your tier yet',
-      notInTierBody: 'Going live is open to creators whose tier includes it. Ask for access and the team will review your channel.',
-      noTierBody: 'Going live is open to invited creators. Ask for access and the team will review your channel.',
-      hoursUsedTitle: 'This month\'s live hours are used',
+    quota: {
       hoursUsedBody: 'You\'ve streamed {used} of your {hours} hours this month. They renew on the 1st.',
       pendingDeletionBody: 'Your account is being deleted, so you can\'t go live.',
-      requestAccess: 'Request access',
       usage: '{used} of {hours} live hours used this month · up to {minutes} minutes per stream',
     },
     goLive: {
@@ -1016,22 +1008,14 @@ export const STUDIO_AR: StudioTranslations = {
     readOnly: 'لا يُنشئ البثوث المباشرة إلا مالك القناة ومشرفوها.',
     errors: {
       live_capacity: 'البث المباشر بلغ طاقته القصوى الآن. حاول بعد دقائق.',
-      live_budget: 'بلغ البث المباشر حدّه لهذا الشهر. حاول لاحقًا.',
-      live_unavailable: 'البث المباشر غير متاح الآن.',
       live_provider_error: 'تعذّر الوصول إلى خدمة البث. حاول مرة أخرى.',
-      live_not_in_tier: 'البث المباشر ليس ضمن فئة صانع المحتوى لهذه القناة.',
       live_hours_used: 'انتهت ساعات البث المباشر لهذا الشهر، وتتجدد في اليوم الأول من الشهر.',
-      live_concurrent_limit: 'لديك أقصى عدد من البثوث المباشرة المتزامنة التي تسمح بها فئتك. أنهِ أحدها لتبدأ البث.',
+      live_concurrent_limit: 'لديك أقصى عدد من البثوث المباشرة المتزامنة. أنهِ أحدها لتبدأ البث.',
       generic: 'لم تنجح العملية. حاول مرة أخرى.',
     },
-    gate: {
-      notInTierTitle: 'البث المباشر ليس ضمن فئتك بعد',
-      notInTierBody: 'البث المباشر متاح لصنّاع المحتوى الذين تشمله فئتهم. اطلب الوصول وسيراجع الفريق قناتك.',
-      noTierBody: 'البث المباشر متاح لصنّاع المحتوى المدعوّين. اطلب الوصول وسيراجع الفريق قناتك.',
-      hoursUsedTitle: 'انتهت ساعات البث لهذا الشهر',
+    quota: {
       hoursUsedBody: 'بثثت {used} من أصل {hours} ساعة هذا الشهر، وتتجدد في اليوم الأول من الشهر.',
       pendingDeletionBody: 'حسابك قيد الحذف، لذا لا يمكنك البث المباشر.',
-      requestAccess: 'اطلب الوصول',
       usage: 'استُخدمت {used} من {hours} ساعة بث هذا الشهر · حتى {minutes} دقيقة لكل بث',
     },
     goLive: {

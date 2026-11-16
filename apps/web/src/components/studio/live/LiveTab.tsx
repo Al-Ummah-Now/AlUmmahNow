@@ -17,11 +17,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/common/Switch';
 import { useLanguage } from '@/hooks/useLanguage';
-import { createStream, deleteStream, listChannelStreams, liveErrorCode, type LiveStreamRow } from '@/lib/live/api';
+import { createStream, deleteStream, isLiveOff, listChannelStreams, liveErrorCode, type LiveStreamRow } from '@/lib/live/api';
 import { logger } from '@/lib/logger-client';
 import { can, type StudioRole } from '@/lib/studio/permissions';
 import { useCreatorAccess } from '@/hooks/useCreatorAccess';
-import { LiveRequestAccessLink, LiveTierNotice } from './LiveTierNotice';
+import { LiveQuota } from './LiveQuota';
 
 interface Props {
   locale: string;
@@ -38,8 +38,9 @@ export function LiveTab({ locale, channelId, role }: Props) {
   const router = useRouter();
   const ids = useId();
   const canManage = can(role, 'live.manage');
-  // The owner's own tier decides (GET /api/me/creator); a channel admin works under the owner's,
-  // which only the server knows: it answers live_not_in_tier and the form shows that
+  // Live is only reachable when the owner's tier includes it (GET /api/me/features); what is left
+  // to say is the quota, for the owner (GET /api/me/creator). A channel admin works under the
+  // owner's quota, which only the server knows: it answers live_hours_used and the form says so.
   const creator = useCreatorAccess();
   const tierLive = role === 'owner' && creator.status === 'ready' ? creator.access.live : null;
   const blocked = !!tierLive && !tierLive.allowed;
@@ -90,6 +91,11 @@ export function LiveTab({ locale, channelId, role }: Props) {
       const stream = await createStream(channelId, { title: title.trim(), description: description.trim(), isPrivate });
       router.push(studioLiveHref(locale, channelId, stream.id));
     } catch (error) {
+      // Live was switched off meanwhile: the page re-renders without it (not found)
+      if (isLiveOff(error)) {
+        router.refresh();
+        return;
+      }
       const code = liveErrorCode(error);
       if (code === 'generic') logger.error('[StudioLive] Could not create a live stream', { channelId, error });
       setFormError(text.errors[code]);
@@ -118,7 +124,7 @@ export function LiveTab({ locale, channelId, role }: Props) {
     <div data-testid="studio-live">
       <h1 className="sr-only">{t.studio.tabs.live}</h1>
 
-      {canManage && tierLive && <LiveTierNotice locale={locale} live={tierLive} />}
+      {canManage && tierLive && <LiveQuota locale={locale} live={tierLive} />}
       {canManage && blocked ? null : canManage ? (
         <form onSubmit={(e) => void submit(e)} className="mb-6 grid gap-3 rounded-lg border border-border bg-card p-4" data-testid="studio-live-form" noValidate>
           <h2 className="text-base font-semibold text-foreground">{text.newStream}</h2>
@@ -140,7 +146,6 @@ export function LiveTab({ locale, channelId, role }: Props) {
           {formError && (
             <p role="alert" className="text-sm text-destructive" data-testid="studio-live-error" data-code={formErrorCode}>
               {formError}
-              {formErrorCode === 'live_not_in_tier' && <LiveRequestAccessLink locale={locale} />}
             </p>
           )}
           <div>
