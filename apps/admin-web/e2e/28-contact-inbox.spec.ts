@@ -72,7 +72,9 @@ test.describe('contact inbox', () => {
 
     // A click on the message text (not the sender's name) opens it: a real mouse click at that
     // spot, which the row-wide link takes (Playwright's locator click refuses a covered element)
-    const text = await row(page, m1).getByText(`The player stops on my phone after a minute ${hex}`).boundingBox();
+    const messageText = row(page, m1).getByText(`The player stops on my phone after a minute ${hex}`);
+    await messageText.scrollIntoViewIfNeeded();
+    const text = await messageText.boundingBox();
     expect(text, 'message text on screen').not.toBeNull();
     await page.mouse.click(text!.x + text!.width / 2, text!.y + text!.height / 2);
     await expect(page).toHaveURL(new RegExp(`/contact/${encodeURIComponent(m1)}$`));
