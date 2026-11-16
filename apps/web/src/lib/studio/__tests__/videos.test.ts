@@ -1,4 +1,4 @@
-import { MAX_BULK_SELECTION, parseVideosQuery, rowActions, videosQueryString } from '../videos';
+import { MAX_BULK_SELECTION, parseVideosQuery, rowActions, studioVideoTitle, videosQueryString } from '../videos';
 
 describe('parseVideosQuery', () => {
   it('defaults to Published, newest', () => {
@@ -75,5 +75,17 @@ describe('rowActions', () => {
 
   it('caps the selection at the API limit', () => {
     expect(MAX_BULK_SELECTION).toBe(50);
+  });
+});
+
+describe('studioVideoTitle', () => {
+  const video = { title: 'Tafsir of Surat Al-Kahf, part 3', titleLocalized: { en: 'Tafsir of Surat Al-Kahf, part 3', ar: 'تفسير سورة الكهف، الجزء الثالث' } };
+  it('uses the page language\'s version when there is one', () => {
+    expect(studioVideoTitle(video, 'ar')).toBe('تفسير سورة الكهف، الجزء الثالث');
+    expect(studioVideoTitle(video, 'en')).toBe('Tafsir of Surat Al-Kahf, part 3');
+  });
+  it('falls back to the title as entered', () => {
+    expect(studioVideoTitle({ title: 'درس', titleLocalized: { ar: '  ' } }, 'ar')).toBe('درس');
+    expect(studioVideoTitle({ title: 'Lesson' }, 'ar')).toBe('Lesson');
   });
 });

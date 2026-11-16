@@ -42,7 +42,7 @@ import { logger } from '@/lib/logger-client';
 import { isLimitRefusal, limitRefusalMessage, type LimitRefusal } from '@/lib/studio/limits';
 import { can, type StudioRole } from '@/lib/studio/permissions';
 import { studioReuploadHref, studioUploadHref } from '@/lib/studio/links';
-import { MAX_BULK_EDIT_SELECTION, MAX_BULK_SELECTION, parseVideosQuery, rowActions, videosQueryString, type VideoRowAction, type VideosQuery } from '@/lib/studio/videos';
+import { MAX_BULK_EDIT_SELECTION, MAX_BULK_SELECTION, parseVideosQuery, rowActions, studioVideoTitle, videosQueryString, type VideoRowAction, type VideosQuery } from '@/lib/studio/videos';
 import { isShortOrFlag } from '@al-ummah/shared-types';
 
 const ScheduledVideoCalendar = dynamic(
@@ -490,7 +490,7 @@ export function VideosTab({ locale, channelId, role }: Props) {
                     <td className="block md:table-cell md:p-2">
                       <input
                         type="checkbox"
-                        aria-label={text.selectVideo.replace('{title}', video.title)}
+                        aria-label={text.selectVideo.replace('{title}', studioVideoTitle(video, locale))}
                         checked={selected.has(video.id)}
                         onChange={() => toggle(video.id)}
                         className="h-5 w-5"
@@ -505,9 +505,9 @@ export function VideosTab({ locale, channelId, role }: Props) {
                         </div>
                         <div className="min-w-0">
                           {edit && actions.includes('edit') ? (
-                            <Link href={edit} onClick={() => rememberListUrl(channelId, edit)} onMouseEnter={() => router.prefetch(edit)} onFocus={() => router.prefetch(edit)} dir="auto" className="block truncate font-medium text-foreground hover:underline" data-testid="studio-video-title">{video.title}</Link>
+                            <Link href={edit} onClick={() => rememberListUrl(channelId, edit)} onMouseEnter={() => router.prefetch(edit)} onFocus={() => router.prefetch(edit)} dir="auto" className="block truncate font-medium text-foreground hover:underline" data-testid="studio-video-title">{studioVideoTitle(video, locale)}</Link>
                           ) : (
-                            <span dir="auto" className="block truncate font-medium text-foreground" data-testid="studio-video-title">{video.title}</span>
+                            <span dir="auto" className="block truncate font-medium text-foreground" data-testid="studio-video-title">{studioVideoTitle(video, locale)}</span>
                           )}
                           <span className="mt-1 flex gap-1 text-xs text-muted-foreground">
                             {video.isPublic === false && <span className="rounded bg-muted px-1" data-testid="studio-video-visibility">{video.isUnlisted ? text.badges.unlisted : text.badges.private}</span>}
@@ -526,7 +526,7 @@ export function VideosTab({ locale, channelId, role }: Props) {
                       {actions.length > 0 && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-11 w-11" aria-label={text.rowActions.replace('{title}', video.title)} data-testid="studio-video-actions">
+                            <Button variant="ghost" size="icon" className="h-11 w-11" aria-label={text.rowActions.replace('{title}', studioVideoTitle(video, locale))} data-testid="studio-video-actions">
                               <MoreVertical aria-hidden="true" className="h-5 w-5" />
                             </Button>
                           </DropdownMenuTrigger>
