@@ -1,5 +1,5 @@
 import Link from '@/components/AppLink';
-import { DEFAULT_TIER_ID, type AdminAuditEntry, type CreatorTiersList } from '@al-ummah/shared-types';
+import { CREATOR_TIER_IDS, DEFAULT_TIER_ID, type AdminAuditEntry, type CreatorTiersList  } from '@al-ummah/shared-types';
 import type { Locale } from '@/i18n/config';
 import { formatDate, formatNumber, type MessageKey, type Translator } from '@/i18n/translate';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';

@@ -65,7 +65,7 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl sm:text-3xl font-bold text-fg break-words" dir="auto" data-testid="user-name">{adminUserName(u, t('auditLog.unknownUser'))}</h1>
           <p className="text-sm text-fg-muted flex flex-wrap gap-x-3">
-            {u.userName && <span dir="ltr">@{u.userName}</span>}
+            {/* No @handle under a person: handles belong to channels (owner rule) */}
             {u.email && <span dir="ltr">{u.email}</span>}
           </p>
         </div>

@@ -198,7 +198,6 @@ export function UsersTable({ items, tiers, canManage, setTier, bulkSetTier }: Us
                         <Link href={`/users/${encodeURIComponent(u.id)}`} className={`${linkClass} font-medium break-words`} dir="auto" data-testid="user-link">
                           {name}
                         </Link>
-                        {u.userName && <span className="block text-sm text-fg-muted" dir="ltr">@{u.userName}</span>}
                         {u.email && <span className="block md:hidden text-xs text-fg-muted break-words" dir="ltr">{u.email}</span>}
                         {/* Phones: the status column is hidden, so its chips sit under the name */}
                         <div className="md:hidden mt-1"><StatusChips user={u} t={t} /></div>
