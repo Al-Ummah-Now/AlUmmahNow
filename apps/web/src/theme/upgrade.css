@@ -137,7 +137,8 @@ html[lang=ar] .upg-step::before{content:counter(upg-step,arabic-indic)}
 @media (hover:hover){.upg-seg-opt input:not(:checked):hover+span{color:var(--fanous-color-text-primary);background:color-mix(in srgb,currentColor 8%,transparent)}}
 .upg-seg-opt input:focus-visible+span{outline:2px solid var(--fanous-color-focus-ring);outline-offset:2px}
 .upg-pay-field{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.upg-pay-field label{font-size:14px;font-weight:600}
+.upg-pay-field label,.upg-pay-field-label{font-size:14px;font-weight:600}
+.upg-pay-field-value{min-height:40px;display:inline-flex;align-items:center;padding-inline:12px;font-weight:600}
 .upg-select{width:auto;min-width:110px;min-height:40px;padding-block:6px}
 .upg-pay-note{font-size:12.5px}
 .upg-card[data-sale=pay] .upg-foot{border-block-start:1px solid var(--fanous-color-divider);margin-block-start:auto;padding-block-start:20px}

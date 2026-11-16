@@ -7,6 +7,7 @@
 import {
   BILLING_ERRORS,
   formatBillingAmount,
+  formatNumber,
   type BillingOffer,
   type BillingPeriod,
   type BillingPlans,
@@ -88,7 +89,7 @@ export function taxNote(plans: Pick<BillingPlans, 'pricesIncludeTax' | 'taxRateP
   if (plans.pricesIncludeTax) return copy.pay.taxIncluded;
   const rate = plans.taxRatePercent;
   if (rate === null || !Number.isFinite(rate) || rate <= 0) return copy.pay.plusTax;
-  const formatted = new Intl.NumberFormat(billingLocale(lang), { maximumFractionDigits: 2 }).format(rate);
+  const formatted = formatNumber(billingLocale(lang), rate, { maximumFractionDigits: 2 });
   return fill(copy.pay.plusTaxRate, { rate: formatted });
 }
 
