@@ -416,6 +416,9 @@ const en = {
     reasonCodes: {
       sexual: 'Sexual or indecent content', child_safety: 'Child safety', graphic_violence: 'Graphic violence', self_harm: 'Self-harm', hate: 'Hate speech', violent_extremism: 'Violent extremism', harassment: 'Harassment', spam_scam: 'Spam or scam', impersonation: 'Impersonation', privacy: 'Private information', copyright: 'Copyright', misleading_metadata: 'Misleading title or thumbnail', religious_misattribution: 'Misattributed religious words', other: 'Other (breaks the guidelines)',
     },
+    /** Automated finding categories that are not reason codes or aiCategory entries */
+    findingCategory: { gore: 'Gore', disturbing: 'Disturbing content', minor_present: 'A minor is shown', sexual_explicit_language: 'Sexually explicit language' },
+    findingSource: { metadata: 'Title and description', thumbnail: 'Thumbnail', frame: 'Frame', transcript: 'Transcript', image: 'Image' },
     settings: {
       title: 'Review settings',
       readOnly: 'Only admins change these settings. You can see them here.',

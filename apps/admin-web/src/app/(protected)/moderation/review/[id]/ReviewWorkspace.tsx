@@ -13,6 +13,7 @@ import { VideoPlayer } from '../../../videos/[id]/VideoPlayer';
 import { claimReview, decideReview, revealReviewItem, type ReviewDetailView, type ReviewFindingView } from '@/lib/api/review';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { translateDynamic } from '@/i18n/translate';
+import { findingCategoryLabel, findingSourceLabel } from '@/lib/review-labels';
 import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
 
@@ -176,7 +177,7 @@ export function ReviewWorkspace({ detail, media }: Props) {
                   <li key={f.id} className="space-y-1">
                     <div className="relative overflow-hidden rounded border-2 border-danger-border">
                       {/* eslint-disable-next-line @next/next/no-img-element -- streamed, never cached, not optimizable */}
-                      <img src={key.startsWith('https://') ? key : `/api/review-media/${encodeURIComponent(review.id)}?key=${encodeURIComponent(key)}`} referrerPolicy="no-referrer" alt={`${f.category} ${clock(f.at_ms)}`} className={`aspect-video w-full object-cover ${shown ? '' : 'blur-xl'}`} />
+                      <img src={key.startsWith('https://') ? key : `/api/review-media/${encodeURIComponent(review.id)}?key=${encodeURIComponent(key)}`} referrerPolicy="no-referrer" alt={`${findingCategoryLabel(t, f.category)} ${clock(f.at_ms)}`} className={`aspect-video w-full object-cover ${shown ? '' : 'blur-xl'}`} />
                       {!shown && (
                         <button type="button" onClick={() => void reveal(key, `frame@${f.at_ms ?? 'thumb'}`)} className="absolute inset-0 m-auto h-fit w-fit rounded bg-surface px-3 py-1 text-sm text-fg" data-testid="review-reveal">
                           {t('review.reveal')}
@@ -184,7 +185,7 @@ export function ReviewWorkspace({ detail, media }: Props) {
                       )}
                     </div>
                     <p className="text-xs text-fg-muted">
-                      {f.category} · {f.score.toFixed(2)} {f.at_ms !== null ? <>· {flagButton(f)}</> : null}
+                      {findingCategoryLabel(t, f.category)} · {f.score.toFixed(2)} {f.at_ms !== null ? <>· {flagButton(f)}</> : null}
                     </p>
                   </li>
                 );
@@ -200,7 +201,7 @@ export function ReviewWorkspace({ detail, media }: Props) {
               {transcript.map((f) => (
                 <li key={f.id} className="rounded bg-surface-2 p-3">
                   <p className="mb-1 text-xs text-fg-muted">
-                    {flagButton(f)} · {f.category} · {f.score.toFixed(2)} {f.quran_ref ? `· ${t('review.quranRef', { ref: f.quran_ref })}` : ''}
+                    {flagButton(f)} · {findingCategoryLabel(t, f.category)} · {f.score.toFixed(2)} {f.quran_ref ? `· ${t('review.quranRef', { ref: f.quran_ref })}` : ''}
                   </p>
                   {f.quran_ref ? null : <p dir="auto" className="whitespace-pre-wrap text-fg">{f.text}</p>}
                 </li>
@@ -214,7 +215,7 @@ export function ReviewWorkspace({ detail, media }: Props) {
           <p dir="auto" className="whitespace-pre-wrap text-fg">{subject?.description}</p>
           {metadata.length > 0 && (
             <ul className="mt-3 space-y-1 text-sm text-fg-muted">
-              {metadata.map((f) => <li key={f.id}>{f.category} · {f.score.toFixed(2)} {f.rationale ? `· ${f.rationale}` : ''}</li>)}
+              {metadata.map((f) => <li key={f.id}>{findingCategoryLabel(t, f.category)} · {f.score.toFixed(2)} {f.rationale ? `· ${f.rationale}` : ''}</li>)}
             </ul>
           )}
         </section>
@@ -228,7 +229,7 @@ export function ReviewWorkspace({ detail, media }: Props) {
           ) : (
             <ul className="space-y-1 text-sm text-fg">
               {findings.slice(0, 12).map((f) => (
-                <li key={f.id}>{f.source} · {f.category} · {f.score.toFixed(2)} {f.at_ms !== null ? <>· {flagButton(f)}</> : null}</li>
+                <li key={f.id}>{findingSourceLabel(t, f.source)} · {findingCategoryLabel(t, f.category)} · {f.score.toFixed(2)} {f.at_ms !== null ? <>· {flagButton(f)}</> : null}</li>
               ))}
             </ul>
           )}
