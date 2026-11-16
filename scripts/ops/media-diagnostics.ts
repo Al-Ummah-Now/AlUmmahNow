@@ -160,6 +160,30 @@ async function containers(names: Names): Promise<void> {
 	}
 	if (!apps.length) p(`(no application named ${names.media}*)`);
 	p();
+	await containerQuota(r.body.result ?? []);
+}
+
+/**
+ * The account's container quota, as Cloudflare reports it (read-only): the account limits endpoints and
+ * every container application's reserved vCPU (max_instances x the instance type's vCPU). A deploy is
+ * refused when the account's applications together would reserve more vCPU than the quota.
+ */
+async function containerQuota(all: any[]): Promise<void> {
+	p('## Container quota (account)');
+	for (const path of [`/accounts/${account}/cloudchamber/me`, `/accounts/${account}/containers/me`]) {
+		const x = await get(path);
+		p(`- GET ${path.replace(account, '…')}: ${x.ok ? JSON.stringify(x.body.result ?? null).slice(0, 3000) : errs(x)}`);
+	}
+	let reserved = 0;
+	for (const a of all) {
+		const vcpu = Number(a.configuration?.vcpu ?? a.configuration?.instance_type?.vcpu ?? NaN);
+		const type = a.instance_type ?? a.configuration?.instance_type ?? '';
+		const v = Number.isFinite(vcpu) ? vcpu : null;
+		if (v !== null) reserved += v * Number(a.max_instances ?? 0);
+		p(`- app ${a.name}: max_instances ${a.max_instances}, instance_type ${JSON.stringify(type)}, vcpu ${v ?? '?'}, memory ${a.configuration?.memory ?? a.configuration?.memory_mib ?? '?'}, disk ${JSON.stringify(a.configuration?.disk ?? null)}`);
+	}
+	p(`- reserved vCPU across the ${all.length} applications (where the vcpu is reported): ${reserved}`);
+	p();
 }
 
 async function logs(script: string, since: Date, until: Date, search: string, key = '$workers.scriptName', allLevels = false): Promise<void> {
