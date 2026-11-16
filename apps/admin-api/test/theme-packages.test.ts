@@ -12,6 +12,7 @@ import { Hono } from 'hono';
 import { fromHono } from 'chanfana';
 import { duplicatePackage, packageToZip, zipToPackage, type ThemePackage } from '@al-ummah/theme-packages';
 import themesRouter, { publicThemes } from '../src/routers/themes.router';
+import { themeIdBase } from '../src/lib/themePackages';
 import siteSettingsRouter from '../src/routers/siteSettings.router';
 import { publicSiteTheme } from '../src/lib/siteSettings';
 import { loadPackageDir } from '../../../packages/theme-packages/scripts/load.ts';
@@ -204,5 +205,71 @@ describe('theme builder API', () => {
     assert.deepEqual(Object.keys(pkg.assets).sort(), Object.keys(fawanees().assets).sort());
     const again = await call('/api/themes/import?id=eid-copy', { method: 'POST', body: new Uint8Array(await (await call('/api/themes/eid-lights/export')).arrayBuffer()) });
     assert.equal(again.status, 201);
+  });
+});
+
+describe('Duplicate makes the theme id from the name (#1479)', () => {
+  /** A copy of Fawanees named `en` / `ar`, imported with ?newId=1 (the dialog sends no id). */
+  async function duplicateNamed(call: ReturnType<typeof setup>['call'], en: string, ar = 'نسخة') {
+    const src = fawanees();
+    // The source's id stands in, as the admin page sends it
+    const theme = duplicatePackage(src.theme, 'fawanees', { en, ar }, 'admin-1');
+    const res = await call('/api/themes/import?newId=1', { method: 'POST', body: packageToZip({ theme, assets: src.assets }), headers: { 'content-type': 'application/zip' } });
+    return { res, body: (await res.json()) as { result?: { id: string }; error?: string } };
+  }
+
+  it('slugs the English name; Arabic-only and unusable names get a random id', () => {
+    assert.equal(themeIdBase('Eid Lights'), 'eid-lights');
+    assert.equal(themeIdBase('  Café — Night!! '), 'cafe-night');
+    assert.equal(themeIdBase('2026 Ramadan'), 'ramadan', 'starts with a letter');
+    assert.equal(themeIdBase('أنوار العيد'), null);
+    assert.equal(themeIdBase('أنوار Eid'), 'eid', 'mixed: the Latin words');
+    assert.equal(themeIdBase('A'), null, 'too short');
+    assert.ok((themeIdBase('x'.repeat(80)) ?? '').length <= 40);
+  });
+
+  it('creates the copy under the made id; the stored theme.json carries it', async () => {
+    const { call, bucket } = setup();
+    const { res, body } = await duplicateNamed(call, 'Eid Lights');
+    assert.equal(res.status, 201);
+    assert.equal(body.result?.id, 'eid-lights');
+    const stored = JSON.parse(new TextDecoder().decode(bucket.objects.get('themes/eid-lights/draft/theme.json')!.bytes)) as ThemePackage;
+    assert.equal(stored.id, 'eid-lights');
+    assert.equal(stored.basedOn?.startsWith('fawanees@'), true);
+  });
+
+  it('an Arabic-only name gets a random theme-… id', async () => {
+    const { call } = setup();
+    const { res, body } = await duplicateNamed(call, 'أنوار العيد', 'أنوار العيد');
+    assert.equal(res.status, 201);
+    assert.match(body.result!.id, /^theme-[0-9a-f]{8}$/);
+  });
+
+  it('never reuses an id: taken, in Recently deleted, purged, or built in', async () => {
+    const { call, sqlite } = setup();
+    assert.equal((await duplicateNamed(call, 'Eid Lights')).body.result?.id, 'eid-lights');
+    assert.equal((await duplicateNamed(call, 'Eid Lights')).body.result?.id, 'eid-lights-2');
+    // Soft-deleted: still taken
+    assert.equal((await call('/api/themes/eid-lights-2', { method: 'DELETE', body: JSON.stringify({ reason: 'test' }), headers: { 'content-type': 'application/json' } })).status < 300, true);
+    assert.equal((await duplicateNamed(call, 'Eid Lights')).body.result?.id, 'eid-lights-3');
+    // Purged (row gone, its create log kept): still never reused
+    sqlite.exec("DELETE FROM theme_packages WHERE id = 'eid-lights-3'");
+    assert.equal((await duplicateNamed(call, 'Eid Lights')).body.result?.id, 'eid-lights-4');
+    // A built-in theme's id is never made
+    assert.equal((await duplicateNamed(call, 'Fawanees')).body.result?.id, 'fawanees-2');
+  });
+
+  it('the id is immutable: a draft cannot change it', async () => {
+    const { call } = setup();
+    const { body } = await duplicateNamed(call, 'Eid Lights');
+    const draft = (await (await call(`/api/themes/${body.result!.id}`)).json()) as { result: { theme: ThemePackage } };
+    const renamed = await call(`/api/themes/${body.result!.id}/draft`, { method: 'PUT', body: JSON.stringify({ ...draft.result.theme, id: 'other-id' }), headers: { 'content-type': 'application/json' } });
+    assert.equal(renamed.status, 400);
+  });
+
+  it('needs both names', async () => {
+    const { call } = setup();
+    const { res } = await duplicateNamed(call, '   ');
+    assert.equal(res.status, 422);
   });
 });

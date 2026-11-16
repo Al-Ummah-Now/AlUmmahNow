@@ -20,8 +20,9 @@ export const saveDraft = (id: string, theme: ThemePackage) => call<{ validation:
 export const publish = (id: string) => call<{ version: string; validation: Validation }>(`/${id}/publish`, { method: 'POST' });
 /** Soft delete (restorable for 30 days in Recently deleted). */
 export const removeTheme = (id: string, reason = '') => call<void>(`/${id}`, { method: 'DELETE', ...json({ reason }) });
-export const importZip = (zip: Uint8Array, rename?: string) =>
-  call<{ id: string; validation: Validation }>(`/import${rename ? `?id=${encodeURIComponent(rename)}` : ''}`, { method: 'POST', body: zip as BodyInit, headers: { 'Content-Type': 'application/zip' } });
+/** opts.newId: the server makes the theme's id from its English name (Duplicate; admins never type ids). */
+export const importZip = (zip: Uint8Array, opts: { newId?: boolean } = {}) =>
+  call<{ id: string; validation: Validation }>(`/import${opts.newId ? '?newId=1' : ''}`, { method: 'POST', body: zip as BodyInit, headers: { 'Content-Type': 'application/zip' } });
 export const uploadAsset = (id: string, path: string, file: Blob) =>
   call<{ path: string; size: number }>(`/${id}/draft/${path.split('/').map(encodeURIComponent).join('/')}`, { method: 'PUT', body: file, headers: { 'Content-Type': file.type || 'application/octet-stream' } });
 export const deleteAsset = (id: string, path: string) => call<void>(`/${id}/draft/${path.split('/').map(encodeURIComponent).join('/')}`, { method: 'DELETE' });
@@ -43,10 +44,12 @@ export async function loadBuiltIn(id: string): Promise<PackageFiles> {
 }
 
 /** Duplicates a built-in, or a custom theme's latest published version (else its draft), under a new id. */
-export async function duplicate(source: { id: string; builtIn: boolean; latestVersion: string | null }, id: string, name: Localized, author: string) {
+/** A copy of a theme under a new name; the server makes its id from the English name (#1479). */
+export async function duplicate(source: { id: string; builtIn: boolean; latestVersion: string | null }, name: Localized, author: string) {
   const files = source.builtIn
     ? await loadBuiltIn(source.id)
     : await zipToPackage(new Uint8Array(await (await fetch(exportUrl(source.id, source.latestVersion ?? 'draft'))).arrayBuffer()));
-  const theme = duplicatePackage(files.theme, id, name, author);
-  return importZip(packageToZip({ theme, assets: files.assets }));
+  // The source's id stands in until the server replaces it
+  const theme = duplicatePackage(files.theme, source.id, name, author);
+  return importZip(packageToZip({ theme, assets: files.assets }), { newId: true });
 }

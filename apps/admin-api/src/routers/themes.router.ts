@@ -8,7 +8,7 @@ import type { AdminBindings } from '../base/types';
 import type { AuthContext } from '../middleware/auth';
 import { hasAdminRole } from '../lib/roles';
 import { logger } from '../lib/logger';
-import { ThemeError, ThemeStore } from '../lib/themePackages';
+import { NEW_THEME_ID, ThemeError, ThemeStore } from '../lib/themePackages';
 import { writeTrashAudit } from '../lib/trash-audit';
 
 type Env = { Bindings: AdminBindings };
@@ -82,12 +82,15 @@ app.post('/', async (c) => {
   } catch (e) { return fail(c, e); }
 });
 
-/** Creates a custom theme from a .zip package (folder + theme.json + assets). ?id= renames it. */
+/**
+ * Creates a custom theme from a .zip package (folder + theme.json + assets). ?id= renames it;
+ * ?newId=1 makes the id from the package's English name (Duplicate: admins never type ids, #1479).
+ */
 app.post('/import', async (c) => {
   const denied = requireAdmin(c); if (denied) return denied;
   try {
     const bytes = await bodyBytes(c); if (bytes instanceof Response) return bytes;
-    const rename = c.req.query('id') || undefined;
+    const rename = c.req.query('newId') === '1' ? NEW_THEME_ID : c.req.query('id') || undefined;
     const result = await store(c).importZip(bytes, rename, actor(c), now());
     return c.json({ success: true, result }, 201);
   } catch (e) { return fail(c, e); }
