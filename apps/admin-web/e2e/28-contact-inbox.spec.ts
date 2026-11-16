@@ -72,7 +72,8 @@ test.describe('contact inbox', () => {
 
     // A click on the message text (not the sender's name) opens it: a real mouse click at that
     // spot, which the row-wide link takes (Playwright's locator click refuses a covered element)
-    const messageText = row(page, m1).getByText(`The player stops on my phone after a minute ${hex}`);
+    // The paragraph is clamped to two lines; its text box runs on below the clamp, so aim at the paragraph
+    const messageText = row(page, m1).locator('p', { hasText: `The player stops on my phone after a minute ${hex}` });
     await messageText.scrollIntoViewIfNeeded();
     const text = await messageText.boundingBox();
     expect(text, 'message text on screen').not.toBeNull();
