@@ -86,7 +86,7 @@ async function extremes(page: Page, png: Buffer, boxes: TextBox[]): Promise<{ mi
       const d = ctx.getImageData(x, y, w, h).data;
       let min = 1, max = 0;
       for (let i = 0; i < d.length; i += 4) {
-        const v = 0.2126 * L(d[i]) + 0.7152 * L(d[i + 1]) + 0.0722 * L(d[i + 2]);
+        const v = 0.2126 * L(d[i]!) + 0.7152 * L(d[i + 1]!) + 0.0722 * L(d[i + 2]!);
         if (v < min) min = v;
         if (v > max) max = v;
       }
@@ -134,7 +134,7 @@ export async function glassContrast(page: Page, box: Locator, label: string): Pr
     measured += boxes.length;
     boxes.forEach((b, k) => {
       const L = lum(b.rgb);
-      const worst = Math.min(ratio(L, ext[k].min), ratio(L, ext[k].max));
+      const worst = Math.min(ratio(L, ext[k]!.min), ratio(L, ext[k]!.max));
       const need = b.large ? 3 : 4.5;
       if (worst < need) problems.push(`${label} (${block}) "${b.text}": ${worst.toFixed(2)} < ${need}`);
     });
