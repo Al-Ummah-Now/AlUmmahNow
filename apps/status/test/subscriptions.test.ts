@@ -159,10 +159,22 @@ describe('subscription pages', () => {
     assert.match(renderUnsubscribePage(opts('en', '/unsubscribe'), false, ''), /You are unsubscribed/);
   });
 
-  it('the main page links to email updates (call to action and footer)', () => {
-    const page = renderStatusPage({ environment: 'production', generatedAt: NOW.toISOString(), overall: 'operational', lastCheckedAt: null, components: [], active: [], upcoming: [], history: [] }, opts('ar', ''));
+  const summary = { environment: 'production', generatedAt: NOW.toISOString(), overall: 'operational', lastCheckedAt: null, components: [], active: [], upcoming: [], history: [] } as unknown as Parameters<typeof renderStatusPage>[0];
+
+  it('the main page links to email updates (call to action and footer) while they are offered', () => {
+    const page = renderStatusPage(summary, { ...opts('ar', ''), subscribe: true });
     assert.match(page, /data-testid="subscribe-cta"[\s\S]*href="\/ar\/subscribe"/);
     assert.match(page, /data-testid="footer-subscribe"/);
+  });
+
+  it('hidden when off: without email updates the page has no call to action, no footer link, no /subscribe link', () => {
+    for (const locale of ['en', 'ar'] as const) {
+      const page = renderStatusPage(summary, opts(locale, ''));
+      assert.ok(!page.includes('subscribe-cta'), `${locale}: no call to action`);
+      assert.ok(!page.includes('footer-subscribe'), `${locale}: no footer link`);
+      assert.ok(!/href="(\/ar)?\/subscribe"/.test(page), `${locale}: no link to /subscribe`);
+      assert.match(page, /feed\.atom/, `${locale}: the feeds stay`);
+    }
   });
 });
 
@@ -186,6 +198,17 @@ describe('routes', () => {
     const sent = await call(e, '/ar/subscribe/sent');
     assert.equal(sent.status, 200);
     assert.match(await sent.text(), /تفقّد بريدك/);
+  });
+
+  it('hidden when off: without the notify queue /subscribe is not found, confirm and unsubscribe still work', async () => {
+    const { env: e, db } = env();
+    const off = { ...e, STATUS_NOTIFY_QUEUE: undefined };
+    for (const path of ['/subscribe', '/ar/subscribe', '/subscribe/sent']) assert.equal((await call(off, path)).status, 404, `GET ${path}`);
+    assert.equal((await call(off, '/subscribe', form({ email: 'off@example.com', locale: 'en', website: '' }))).status, 404, 'POST /subscribe');
+    assert.equal(await rowOf(db, 'off@example.com'), null, 'nothing stored');
+    assert.equal((await call(off, '/unsubscribe?t=unknown')).status, 200, 'unsubscribe stays');
+    const home = await (await call(off, '/')).text();
+    assert.ok(!home.includes('subscribe-cta') && !home.includes('footer-subscribe'), 'home page has no subscribe entry points');
   });
 
   it('a bad address re-renders the form with 400; a cross-site post is refused', async () => {

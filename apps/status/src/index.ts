@@ -84,6 +84,9 @@ async function formOf(request: Request): Promise<Record<string, string>> {
 async function subscriptions(request: Request, env: Env, url: URL, path: string, opts: PageOptions): Promise<Response | null> {
   const post = request.method === 'POST';
   const token = url.searchParams.get('t') ?? '';
+  // Signing up needs the notify queue; without it the pages do not exist. Confirm and unsubscribe
+  // stay, so existing subscribers can still finish or leave.
+  if (!opts.subscribe && (path === '/subscribe' || path === '/subscribe/sent')) return new Response('Not found', { status: 404, headers: { 'content-type': 'text/plain; charset=utf-8', ...SECURITY_HEADERS } });
   if (path === '/subscribe') {
     if (!post) return html(renderSubscribePage(opts));
     if (crossSite(request, url)) return new Response('Forbidden', { status: 403, headers: FORM_HEADERS });
@@ -157,7 +160,8 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
     }
   }
 
-  const pageOpts = { locale, path: path === '/' ? '' : path, assetVersion: (env.CF_VERSION_METADATA?.id ?? 'dev').slice(0, 8), environment: env.ENVIRONMENT };
+  // Email updates only while the notify queue is bound (hidden when off: no link, no page)
+  const pageOpts = { locale, path: path === '/' ? '' : path, assetVersion: (env.CF_VERSION_METADATA?.id ?? 'dev').slice(0, 8), environment: env.ENVIRONMENT, subscribe: !!env.STATUS_NOTIFY_QUEUE };
   const sub = await subscriptions(request, env, url, path, pageOpts);
   if (sub) return sub;
   if (request.method === 'POST') return new Response('Method not allowed', { status: 405, headers: { allow: 'GET, HEAD' } });
