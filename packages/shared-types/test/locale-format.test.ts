@@ -93,3 +93,14 @@ test('templates leave strings as written and unknown placeholders alone', () => 
   assert.equal(f.fillTemplate('ar', '{x}', {}), '{x}');
   assert.equal(f.fillTemplate('ar', '{x}', {}, ''), '');
 });
+
+test('numbers written in a message are formatter placeholders', () => {
+  assert.equal(f.fillTemplate('ar', 'خلال {#30} يومًا', {}), 'خلال ٣٠ يومًا');
+  assert.equal(f.fillTemplate('en', 'within {#30} days', {}), 'within 30 days');
+  assert.equal(f.fillTemplate('ar', 'من {#0.30} إلى {#0.95}'), 'من ٠٫٣٠ إلى ٠٫٩٥');
+  assert.equal(f.fillTemplate('en', '{#10000} free', {}), '10,000 free');
+  assert.equal(f.fillTemplate('ar', '{#50%}'), '٥٠٪؜');
+  assert.equal(f.fillTemplate('en', 'about {$0.011} per {#1000}'), 'about $0.011 per 1,000');
+  assert.doesNotMatch(f.fillTemplate('ar', 'نحو {$0.011} لكل {#1000}'), /[0-9$]/);
+  assert.equal(f.fillTemplate('en', 'R2 {name}', { name: 'x' }), 'R2 x');
+});
