@@ -127,6 +127,8 @@ export interface PaymentProviderAdapter {
 	refund(ctx: ProviderContext, paymentRef: string, amount: number | null, reason: string): Promise<{ refundRef: string | null }>;
 	/** A provider-hosted page where the customer manages their payment details; null when the provider has none */
 	customerPortal(ctx: ProviderContext, customerRef: string, subscriptionRef: string | null): Promise<string | null>;
+	/** A short-lived receipt / invoice link for one payment (providers with `receiptsOnRequest`) */
+	receiptUrl?(ctx: ProviderContext, paymentRef: string): Promise<string | null>;
 }
 
 // ---------------------------------------------------------------------------

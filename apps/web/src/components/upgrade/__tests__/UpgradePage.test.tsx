@@ -29,6 +29,8 @@ const refreshCreatorAccess = jest.fn();
 jest.mock('@/hooks/useCreatorAccess', () => ({ refreshCreatorAccess: () => refreshCreatorAccess() }));
 const ensureHuman = jest.fn();
 jest.mock('@/hooks/useHumanCheck', () => ({ useHumanCheck: () => ({ ensureHuman, checking: false }) }));
+const fetchBillingPlans = jest.fn(async () => ({ ok: false, status: 503 }));
+jest.mock('@/lib/api/billing-client', () => ({ ...jest.requireActual('@/lib/api/billing-client'), fetchBillingPlans: () => fetchBillingPlans() }));
 const fetchUpgradeOverview = jest.fn();
 const submitTierRequest = jest.fn();
 const withdrawTierRequest = jest.fn();
@@ -71,6 +73,18 @@ describe('Upgrade page', () => {
     expect(screen.getByTestId('upgrade-tiers').textContent).not.toMatch(/\$|€|£|\/mo/);
   });
 
+  it("request mode ignores plans: even with plans loaded, no Pay without a provider being on", async () => {
+    fetchUpgradeOverview.mockResolvedValue(overview({ mode: 'request' }));
+    fetchBillingPlans.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      result: { providers: [], offers: [{ tierId: 'creator', prices: [{ period: 'month', currency: 'USD', amount: 500, providers: ['fake'] }] }], pricesIncludeTax: false, taxRatePercent: null, paddle: null },
+    } as never);
+    render(<UpgradePage locale="en" />);
+    expect(await screen.findByTestId('tier-creator-request')).toBeEnabled();
+    expect(screen.queryByTestId('tier-creator-pay')).toBeNull();
+  });
+
   it("requests off and no provider ('closed'): the API answers 404 feature_off and the page is the site's 404 (an off feature vanishes, owner 2026-11-19); in en and ar", async () => {
     fetchUpgradeOverview.mockResolvedValue({ ok: false, status: 404, code: 'feature_off' });
     const { unmount } = render(<UpgradePage locale="en" />);
@@ -84,10 +98,16 @@ describe('Upgrade page', () => {
     expect(screen.queryByTestId('upgrade-page')).toBeNull();
   });
 
-  it("a provider enabled ('pay'): no request form and no beta notice", async () => {
+  it("a provider enabled ('pay'): prices and Pay on the tiers that sell; no request form and no beta notice", async () => {
     fetchUpgradeOverview.mockResolvedValue(overview({ mode: 'pay' }));
+    fetchBillingPlans.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      result: { providers: [{ id: 'fake', name: 'Test provider', mode: 'test' }], offers: [{ tierId: 'creator', prices: [{ period: 'month', currency: 'USD', amount: 500, providers: ['fake'] }] }], pricesIncludeTax: false, taxRatePercent: null, paddle: null },
+    } as never);
     render(<UpgradePage locale="en" />);
-    await screen.findByTestId('tier-card-creator');
+    expect(await screen.findByTestId('tier-creator-pay')).toBeInTheDocument();
+    expect(screen.getByTestId('upgrade-page')).toHaveAttribute('data-mode', 'pay');
     expect(screen.queryByTestId('tier-creator-request')).toBeNull();
     expect(screen.queryByTestId('upgrade-beta-notice')).toBeNull();
     expect(screen.queryByTestId('upgrade-unavailable')).toBeNull();

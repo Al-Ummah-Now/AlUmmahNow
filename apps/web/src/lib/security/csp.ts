@@ -107,7 +107,8 @@ export function buildContentSecurityPolicy({ isDevelopment, insecureOrigin = fal
   ].filter(Boolean);
 
   // challenges.cloudflare.com: Turnstile (lib/turnstile, docs/features/bot-protection.md)
-  const scriptHosts = ['https://vjs.zencdn.net', 'https://challenges.cloudflare.com'];
+  // cdn.paddle.com: Paddle.js, loaded on /upgrade only when Paddle sells a tier (lib/billing/paddle.ts)
+  const scriptHosts = ['https://vjs.zencdn.net', 'https://challenges.cloudflare.com', 'https://cdn.paddle.com'];
   const scriptSrc = isDevelopment
     ? ["'self'", "'unsafe-eval'", "'unsafe-inline'", ...scriptHosts]
     : nonce
@@ -119,12 +120,13 @@ export function buildContentSecurityPolicy({ isDevelopment, insecureOrigin = fal
     `script-src ${scriptSrc.join(' ')}`,
     // Inline event-handler attributes are never needed: React attaches handlers via addEventListener.
     "script-src-attr 'none'",
-    "style-src 'self' 'unsafe-inline' https://vjs.zencdn.net",
+    "style-src 'self' 'unsafe-inline' https://vjs.zencdn.net https://cdn.paddle.com",
     `media-src 'self' https://cdn.bunny.net https://bunny-cdn.b-cdn.net https://*.b-cdn.net ${mediaHosts.join(' ')} ${LIVE_EDGE_ORIGINS.join(' ')} blob:`,
     `connect-src ${Array.from(new Set(connectSrc)).join(' ')}`,
     "img-src 'self' data: https: blob:",
     "font-src 'self' data:",
-    "frame-src 'self' https://iframe.mediadelivery.net https://challenges.cloudflare.com",
+    // buy.paddle.com / sandbox-buy.paddle.com: the Paddle checkout overlay (wiki AUN-SUBS)
+    "frame-src 'self' https://iframe.mediadelivery.net https://challenges.cloudflare.com https://buy.paddle.com https://sandbox-buy.paddle.com",
     "worker-src 'self' blob:",
     "object-src 'none'",
     "base-uri 'self'",

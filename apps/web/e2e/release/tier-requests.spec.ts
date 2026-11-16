@@ -20,6 +20,7 @@ import { adminConfirm } from './in-app-confirm';
 import { workerAdminPage } from './admin-session';
 import { target } from './targets';
 import { apiFetch, gotoSettled, settleSignIn, submitPasswordSignIn, type Locale, type WebUser } from './web-session';
+import { lockUpgradeMode } from './upgrade-mode-lock';
 import { fetchRetry } from './net';
 
 // Signs users in through the auth server: the trace would hold the password and code
@@ -48,11 +49,20 @@ async function requestCreator(page: Page, user: WebUser, locale: Locale, about: 
   await gotoSettled(page, `${target().web}/${locale}/upgrade`);
   await expect(page.getByTestId('upgrade-page')).toBeVisible({ timeout: 30000 });
   await expect(page.locator('html')).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
-  await expect(page.getByTestId('upgrade-beta-notice')).toContainText(BETA[locale]);
+  // The beta notice ("paid subscriptions later") shows while nothing sells; billing-pay.spec.ts may turn
+  // payments on for its own tier on the same stack meanwhile, and then the notice is gone
+  const page$ = page.getByTestId('upgrade-page');
+  await expect(page$).toHaveAttribute('data-payments', /^(on|off)$/, { timeout: 30000 });
+  if ((await page$.getAttribute('data-payments')) === 'off') await expect(page.getByTestId('upgrade-beta-notice')).toContainText(BETA[locale]);
+  else await expect(page.getByTestId('upgrade-beta-notice')).toHaveCount(0);
   const member = page.getByTestId('tier-card-member');
   await expect(member, 'a new user holds Member').toHaveAttribute('data-state', 'current', { timeout: 30000 });
   await expect(member.getByTestId('tier-member-current')).toBeVisible();
-  await expect(page.getByTestId('upgrade-tiers'), 'the page never shows a price').not.toContainText(/\$|€|£|USD|\/mo\b/);
+  // Tiers without prices show none (billing-pay.spec.ts may sell its own tier on the same stack meanwhile)
+  for (const id of ['member', 'creator']) {
+    await expect(page.getByTestId(`tier-card-${id}`), `the ${id} card shows no price`).not.toContainText(/\$|€|£|USD|\/mo\b/);
+    await expect(page.getByTestId(`tier-${id}-pay`)).toHaveCount(0);
+  }
 
   await page.getByTestId('tier-creator-request').click();
   const dialog = page.getByTestId('tier-request-dialog');
@@ -105,6 +115,16 @@ async function decide(admin: Page, user: WebUser, decision: 'approve' | 'decline
 }
 
 test.describe('Release: tier requests', () => {
+  // Needs request mode: runs beside other readers, never while a spec changes the mode (upgrade-mode-lock.ts)
+  let release: (() => Promise<void>) | null = null;
+  test.beforeEach(async ({}, testInfo) => {
+    release = await lockUpgradeMode('r', testInfo);
+  });
+  test.afterEach(async () => {
+    await release?.();
+    release = null;
+  });
+
   test('a Member requests Creator, an admin approves, the user can upload at once and sees it (en)', async ({ page, context, ownData }) => {
     test.setTimeout(5 * 60_000);
     await answerConsent(context);

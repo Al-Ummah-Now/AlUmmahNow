@@ -64,11 +64,11 @@ function seed() {
   // Billing (wiki AUN-SUBS): bookkeeping stays under the marker; links, checkouts and payloads go
   for (const userId of [USER, OTHER]) {
     search.raw
-      .prepare(`INSERT INTO billing_subscriptions (id, user_id, tier_id, tier_name, provider, mode, provider_ref, status, comp_reason, created_at, updated_at) VALUES (?, ?, 'creator', 'Creator', 'paddle', 'test', ?, 'active', 'thanks', ?, ?)`)
-      .run(`bsub_${userId}`, userId, `sub_${userId}`, now, now);
+      .prepare(`INSERT INTO billing_subscriptions (id, user_id, tier_id, tier_name, provider, mode, provider_ref, customer_ref, status, comp_reason, created_at, updated_at) VALUES (?, ?, 'creator', 'Creator', 'paddle', 'test', ?, ?, 'active', 'thanks', ?, ?)`)
+      .run(`bsub_${userId}`, userId, `sub_${userId}`, `fake_cus_${userId}`, now, now);
     search.raw
-      .prepare(`INSERT INTO billing_payments (id, user_id, subscription_id, provider, mode, provider_ref, status, amount, currency, occurred_at) VALUES (?, ?, ?, 'paddle', 'test', ?, 'succeeded', 500, 'USD', ?)`)
-      .run(`bpay_${userId}`, userId, `bsub_${userId}`, `txn_${userId}`, now);
+      .prepare(`INSERT INTO billing_payments (id, user_id, subscription_id, provider, mode, provider_ref, status, amount, currency, receipt_url, occurred_at) VALUES (?, ?, ?, 'paddle', 'test', ?, 'succeeded', 500, 'USD', ?, ?)`)
+      .run(`bpay_${userId}`, userId, `bsub_${userId}`, `txn_${userId}`, `https://receipts.example/${userId}`, now);
     search.raw
       .prepare(`INSERT INTO billing_events (id, provider, mode, event_id, type, user_id, payload, status, received_at) VALUES (?, 'paddle', 'test', ?, 'subscription.created', ?, '{"email":"x@example.com"}', 'processed', ?)`)
       .run(`bev_${userId}`, `evt_${userId}`, userId, now);
@@ -108,13 +108,13 @@ describe('eraseUserTraces (#1059)', () => {
     }
     expect(search.raw.prepare("SELECT user_id FROM tier_requests WHERE id != 'tr_decided'").all()).toEqual([{ user_id: OTHER }]);
     expect(search.raw.prepare("SELECT status, decided_by FROM tier_requests WHERE id = 'tr_decided'").get()).toEqual({ status: 'approved', decided_by: ERASED });
-    expect(search.raw.prepare('SELECT user_id, comp_reason, comp_by FROM billing_subscriptions ORDER BY id').all()).toEqual([
-      { user_id: ERASED, comp_reason: null, comp_by: null },
-      { user_id: OTHER, comp_reason: 'thanks', comp_by: ERASED },
+    expect(search.raw.prepare('SELECT user_id, comp_reason, comp_by, customer_ref FROM billing_subscriptions ORDER BY id').all()).toEqual([
+      { user_id: ERASED, comp_reason: null, comp_by: null, customer_ref: null },
+      { user_id: OTHER, comp_reason: 'thanks', comp_by: ERASED, customer_ref: `fake_cus_${OTHER}` },
     ]);
-    expect(search.raw.prepare('SELECT user_id, amount FROM billing_payments ORDER BY id').all()).toEqual([
-      { user_id: ERASED, amount: 500 },
-      { user_id: OTHER, amount: 500 },
+    expect(search.raw.prepare('SELECT user_id, amount, receipt_url FROM billing_payments ORDER BY id').all()).toEqual([
+      { user_id: ERASED, amount: 500, receipt_url: null },
+      { user_id: OTHER, amount: 500, receipt_url: `https://receipts.example/${OTHER}` },
     ]);
     expect(search.raw.prepare("SELECT payload FROM billing_events WHERE user_id = ?").get(ERASED)).toEqual({ payload: '{}' });
     expect(search.raw.prepare('SELECT user_id FROM billing_customers').all()).toEqual([{ user_id: OTHER }]);

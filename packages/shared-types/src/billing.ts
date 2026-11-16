@@ -64,6 +64,8 @@ export interface PaymentProviderSpec {
   customerPortal: boolean;
   /** Refunds of part of a payment */
   partialRefunds: boolean;
+  /** Receipts are short-lived links fetched per request (GET /api/me/billing/payments/:id/receipt), not stored */
+  receiptsOnRequest: boolean;
   /** Cancel at the end of the paid period (otherwise cancel ends billing at once; the tier stays until the period ends) */
   cancelAtPeriodEnd: boolean;
   settings: readonly PaymentSettingSpec[];
@@ -84,6 +86,7 @@ export const PAYMENT_PROVIDERS: Readonly<Record<PaymentProviderId, PaymentProvid
     merchantOfRecord: true,
     customerPortal: true,
     partialRefunds: true,
+    receiptsOnRequest: true,
     cancelAtPeriodEnd: true,
     docsUrl: 'https://developer.paddle.com/api-reference/overview',
     settings: [
@@ -100,6 +103,7 @@ export const PAYMENT_PROVIDERS: Readonly<Record<PaymentProviderId, PaymentProvid
     merchantOfRecord: false,
     customerPortal: false,
     partialRefunds: true,
+    receiptsOnRequest: false,
     cancelAtPeriodEnd: false,
     docsUrl: 'https://docs.paygood.com/introduction',
     settings: [
@@ -113,6 +117,7 @@ export const PAYMENT_PROVIDERS: Readonly<Record<PaymentProviderId, PaymentProvid
     merchantOfRecord: false,
     customerPortal: false,
     partialRefunds: true,
+    receiptsOnRequest: false,
     cancelAtPeriodEnd: true,
     docsUrl: 'https://github.com/Al-Ummah-Now/AlUmmahNow/blob/main/docs/features/payments.md',
     settings: [],
@@ -261,6 +266,8 @@ export interface BillingPayment {
   refundedAmount: number;
   /** Provider receipt / invoice URL when it gives one */
   receiptUrl: string | null;
+  /** No stored link, but the provider makes one on request (GET /api/me/billing/payments/:id/receipt) */
+  receiptOnRequest: boolean;
   occurredAt: string;
 }
 
@@ -305,6 +312,16 @@ export interface BillingCheckout {
   checkoutId: string;
   url: string | null;
   paddleTransactionId: string | null;
+}
+
+/** GET /api/me/billing/checkouts/:id: what the return page polls after a checkout. */
+export interface MyCheckout {
+  checkoutId: string;
+  tierId: string;
+  /** open: not paid (yet); completed: the provider confirmed it; expired: the user left without paying */
+  status: 'open' | 'completed' | 'expired';
+  /** The subscription it started is active, so the tier is assigned */
+  active: boolean;
 }
 
 /** Error codes of the billing API (the web and admin map them to en/ar copy). */

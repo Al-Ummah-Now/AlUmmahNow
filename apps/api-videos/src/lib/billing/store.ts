@@ -15,6 +15,7 @@
  */
 import { recordTierChange } from '../tierChanges';
 import {
+	PAYMENT_PROVIDERS,
 	SUPER_ADMIN_TIER_ASSIGNER,
 	type BillingEventRow,
 	type BillingEventStatus,
@@ -127,6 +128,7 @@ export const toPayment = (r: PaymentRow): BillingPayment => ({
 	amount: Number(r.amount),
 	refundedAmount: Number(r.refunded_amount),
 	receiptUrl: r.receipt_url,
+	receiptOnRequest: !r.receipt_url && r.status !== 'failed' && PAYMENT_PROVIDERS[r.provider as PaymentProviderId]?.receiptsOnRequest === true,
 	occurredAt: r.occurred_at,
 });
 
@@ -300,6 +302,11 @@ export async function createCheckoutRow(env: BillingEnv, row: Omit<CheckoutRow, 
 		.run();
 }
 
+/** The user left the checkout without paying; a payment that arrives later still completes it. */
+export async function expireCheckout(env: BillingEnv, id: string): Promise<void> {
+	await db(env).prepare(`UPDATE billing_checkouts SET status = 'expired' WHERE id = ? AND status = 'open'`).bind(id).run();
+}
+
 export async function setCheckoutRef(env: BillingEnv, id: string, providerRef: string | null) {
 	await db(env).prepare('UPDATE billing_checkouts SET provider_ref = ? WHERE id = ?').bind(providerRef, id).run();
 }
@@ -379,7 +386,7 @@ async function applySubscription(env: BillingEnv, provider: PaymentProviderId, m
 	const owner = await resolveOwner(env, provider, mode, event, sub, existing, now);
 	const customerRef = event.customerRef ?? sub.customerRef ?? existing?.customer_ref ?? null;
 	if (customerRef) await saveCustomer(env, provider, mode, customerRef, owner.userId, at);
-	if (owner.checkoutId) await db(env).prepare(`UPDATE billing_checkouts SET status = 'completed', completed_at = ? WHERE id = ? AND status = 'open'`).bind(at, owner.checkoutId).run();
+	if (owner.checkoutId) await db(env).prepare(`UPDATE billing_checkouts SET status = 'completed', completed_at = ? WHERE id = ? AND status != 'completed'`).bind(at, owner.checkoutId).run();
 
 	// Out of order: an older event than the last applied one never moves the status back
 	const stale = !!existing?.last_event_at && event.occurredAt < existing.last_event_at;

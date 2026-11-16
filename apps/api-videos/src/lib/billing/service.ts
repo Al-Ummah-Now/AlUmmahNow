@@ -26,6 +26,7 @@ import {
 	type MyBilling,
 	type PaymentMode,
 	type PaymentProviderId,
+	type MyCheckout,
 } from '@al-ummah/shared-types';
 import { readTiers } from '../creatorTiers';
 import { logger } from '../logger';
@@ -73,6 +74,7 @@ import {
 	UnmatchedEventError,
 	userPayments,
 	userSubscriptions,
+	expireCheckout,
 } from './store';
 
 export type ServiceEnv = BillingEnv & JobEnv & ErrorReporterEnv;
@@ -238,6 +240,12 @@ export async function billingPlans(env: ServiceEnv): Promise<BillingPlans> {
 	};
 }
 
+/** Tiers with a price someone can pay now; empty (one read) while no provider is enabled. */
+export async function soldTierIds(env: ServiceEnv): Promise<Set<string>> {
+	if (!(await enabledProviders(env)).length) return new Set();
+	return new Set((await billingPlans(env)).offers.map((o) => o.tierId));
+}
+
 // ---------------------------------------------------------------------------
 // User: checkout, billing history, cancel, portal
 // ---------------------------------------------------------------------------
@@ -297,6 +305,44 @@ export async function myBilling(env: ServiceEnv, userId: string): Promise<MyBill
 	const [subs, payments] = await Promise.all([userSubscriptions(env, userId), userPayments(env, userId)]);
 	const portal = subs.some((s) => (s.status === 'active' || s.status === 'past_due') && s.provider !== 'manual' && PAYMENT_PROVIDERS[s.provider as PaymentProviderId]?.customerPortal && s.customer_ref);
 	return { subscriptions: subs.map(toSubscription), payments, portal };
+}
+
+/** The return page's poll: the user's own checkout and whether its subscription is active yet. */
+export async function myCheckout(env: ServiceEnv, userId: string, checkoutId: string): Promise<MyCheckout> {
+	const row = /^bco_[0-9a-f]{32}$/.test(checkoutId) ? await readCheckout(env, checkoutId) : null;
+	if (!row || row.user_id !== userId) throw new BillingError(404, BILLING_ERRORS.notFound);
+	const status = row.status === 'completed' || row.status === 'expired' ? row.status : 'open';
+	const active =
+		status === 'completed' &&
+		(await userSubscriptions(env, userId)).some((s) => s.tier_id === row.tier_id && s.provider === row.provider && (s.status === 'active' || s.status === 'past_due'));
+	return { checkoutId: row.id, tierId: row.tier_id, status, active };
+}
+
+/** A receipt link for the user's own payment: the stored one, or one the provider makes now. */
+export async function paymentReceipt(env: ServiceEnv, userId: string, paymentId: string): Promise<string> {
+	const payment = await readPayment(env, paymentId);
+	if (!payment || payment.userId !== userId) throw new BillingError(404, BILLING_ERRORS.notFound);
+	if (payment.receiptUrl) return payment.receiptUrl;
+	const provider = payment.provider as PaymentProviderId;
+	const adapter = payment.receiptOnRequest ? adapterFor(provider) : null;
+	if (!adapter?.receiptUrl) throw new BillingError(404, BILLING_ERRORS.notFound, 'This payment has no receipt');
+	const ctx = await providerContext(env, provider, { mode: payment.mode });
+	let url: string | null;
+	try {
+		url = await adapter.receiptUrl(ctx, payment.providerRef);
+	} catch (error) {
+		logger.warn('[Billing] Receipt link failed at the provider', { provider, paymentId, error: errorText(error) });
+		throw new BillingError(502, BILLING_ERRORS.providerError, 'The payment provider did not answer; try again shortly');
+	}
+	if (!url) throw new BillingError(404, BILLING_ERRORS.notFound, 'The provider has no receipt for this payment yet');
+	return url;
+}
+
+/** The user closed the checkout without paying (Paddle overlay closed, test page Cancel). */
+export async function abandonCheckout(env: ServiceEnv, userId: string | null, checkoutId: string): Promise<void> {
+	const row = /^bco_[0-9a-f]{32}$/.test(checkoutId) ? await readCheckout(env, checkoutId) : null;
+	if (!row || (userId !== null && row.user_id !== userId)) throw new BillingError(404, BILLING_ERRORS.notFound);
+	await expireCheckout(env, row.id);
 }
 
 /** The user cancels their own subscription: at period end where the provider can, otherwise billing stops and the paid period is kept. */

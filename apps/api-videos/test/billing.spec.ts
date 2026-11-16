@@ -26,8 +26,12 @@ import {
 	billingPlans,
 	cancelOwnSubscription,
 	completeFakeCheckout,
+	abandonCheckout,
 	myBilling,
+	myCheckout,
 	onBillingJobFailed,
+	paymentReceipt,
+	soldTierIds,
 	queueCancel,
 	queueRefund,
 	receiveWebhook,
@@ -36,6 +40,7 @@ import {
 	type ServiceEnv,
 } from '../src/lib/billing/service';
 import { createComp, entitles, readEvent, subscriptionByRef, sweepEntitlements, userPayments, userSubscriptions } from '../src/lib/billing/store';
+import { upgradeOverview } from '../src/lib/tierRequests';
 import { SqliteD1 } from './search-sqlite-d1';
 
 const USER = 'usr_buyer';
@@ -482,5 +487,82 @@ describe('checkout contact', () => {
 		assert.deepEqual(await checkoutContact(ctx({ firstName: 'Amina', lastName: 'Hassan' }, { email: 'login@example.org' }), 'usr_c'), { email: 'login@example.org', name: 'Amina Hassan' });
 		await bucket.delete('usr_c');
 		assert.deepEqual(await checkoutContact(ctx(null, { payload: { email: 'p@example.org', name: 'Login Name' } }), 'usr_c'), { email: 'p@example.org', name: 'Login Name' });
+describe('the return page, tiers on sale and receipts', () => {
+	it('the checkout poll goes open → completed + active; another user gets 404', async () => {
+		const ctx = setup();
+		await sellCreator(ctx);
+		const checkout = await startCheckout(ctx.env, { userId: USER, email: null, name: null }, { tierId: 'creator', period: 'month', currency: 'USD', provider: 'fake' });
+		assert.deepEqual(await myCheckout(ctx.env, USER, checkout.checkoutId), { checkoutId: checkout.checkoutId, tierId: 'creator', status: 'open', active: false });
+		await assert.rejects(myCheckout(ctx.env, 'usr_other', checkout.checkoutId), { code: 'billing_not_found' });
+		await assert.rejects(myCheckout(ctx.env, USER, 'not-an-id'), { code: 'billing_not_found' });
+		await completeFakeCheckout(ctx.env, checkout.checkoutId);
+		// Completed as soon as the event is stored and applied; active once the job has run
+		await ctx.drain();
+		assert.deepEqual(await myCheckout(ctx.env, USER, checkout.checkoutId), { checkoutId: checkout.checkoutId, tierId: 'creator', status: 'completed', active: true });
+	});
+
+	it('a checkout left unpaid reads expired; a payment that still arrives completes it', async () => {
+		const ctx = setup();
+		await sellCreator(ctx);
+		const checkout = await startCheckout(ctx.env, { userId: USER, email: null, name: null }, { tierId: 'creator', period: 'month', currency: 'USD', provider: 'fake' });
+		await assert.rejects(abandonCheckout(ctx.env, 'usr_other', checkout.checkoutId), { code: 'billing_not_found' });
+		await abandonCheckout(ctx.env, USER, checkout.checkoutId);
+		assert.equal((await myCheckout(ctx.env, USER, checkout.checkoutId)).status, 'expired');
+		// The test page refuses to pay an expired checkout; a real provider's late event still lands
+		await assert.rejects(completeFakeCheckout(ctx.env, checkout.checkoutId), { code: 'billing_not_found' });
+		const { fakePaymentEvents } = await import('../src/lib/billing/fake');
+		const price = (await readPrices(ctx.env)).find((p) => p.tierId === 'creator')!;
+		for (const event of fakePaymentEvents({ checkoutId: checkout.checkoutId, userId: USER, priceRef: price.links.find((l) => l.provider === 'fake')!.providerRef!, period: 'month', amount: 500, currency: 'USD' }, T0)) {
+			assert.equal((await deliver(ctx.env, event, T0)).status, 200);
+		}
+		await ctx.drain();
+		assert.deepEqual(await myCheckout(ctx.env, USER, checkout.checkoutId), { checkoutId: checkout.checkoutId, tierId: 'creator', status: 'completed', active: true });
+	});
+
+	it('/upgrade lists a tier on sale even when it cannot be requested', async () => {
+		const ctx = setup();
+		const db = ctx.env.SEARCH_DB as D1Database;
+		assert.equal((await soldTierIds(ctx.env)).size, 0);
+		assert.ok(!(await upgradeOverview(db, null, null, 'request', await soldTierIds(ctx.env))).tiers.some((t) => t.id === 'unlimited'));
+		await updateProvider(ctx.env, 'fake', { enabled: true }, 'admin-1');
+		await savePrice(ctx.env, { tierId: 'unlimited', period: 'year', currency: 'USD', amount: 9900, active: true }, 'admin-1', async () => true);
+		const { queuePriceSync } = await import('../src/lib/billing/service');
+		await queuePriceSync(ctx.env, 'fake', 'admin-1');
+		await ctx.drain();
+		const sold = await soldTierIds(ctx.env);
+		assert.deepEqual([...sold], ['unlimited']);
+		const tier = (await upgradeOverview(db, null, null, 'pay', sold)).tiers.find((t) => t.id === 'unlimited');
+		assert.equal(tier?.requestable, false);
+		// The provider off: nothing sells, and the tier is off the page again
+		await updateProvider(ctx.env, 'fake', { enabled: false }, 'admin-1');
+		assert.equal((await soldTierIds(ctx.env)).size, 0);
+	});
+
+	it('receipts: a stored link is returned, Paddle makes one on request, others have none', async () => {
+		const ctx = setup();
+		await sellCreator(ctx);
+		const checkout = await startCheckout(ctx.env, { userId: USER, email: null, name: null }, { tierId: 'creator', period: 'month', currency: 'USD', provider: 'fake' });
+		await completeFakeCheckout(ctx.env, checkout.checkoutId);
+		await ctx.drain();
+		const [payment] = await userPayments(ctx.env, USER);
+		assert.equal(payment.receiptOnRequest, false);
+		await assert.rejects(paymentReceipt(ctx.env, USER, payment.id), { code: 'billing_not_found' });
+		await ctx.sql.prepare('UPDATE billing_payments SET receipt_url = ? WHERE id = ?').bind('https://receipts.example/1', payment.id).run();
+		assert.equal(await paymentReceipt(ctx.env, USER, payment.id), 'https://receipts.example/1');
+		await assert.rejects(paymentReceipt(ctx.env, 'usr_other', payment.id), { code: 'billing_not_found' });
+		// A Paddle payment without a stored link is marked as on request (not when it failed)
+		await ctx.sql.prepare(`UPDATE billing_payments SET provider = 'paddle', receipt_url = NULL WHERE id = ?`).bind(payment.id).run();
+		assert.equal((await userPayments(ctx.env, USER))[0].receiptOnRequest, true);
+		await ctx.sql.prepare(`UPDATE billing_payments SET status = 'failed' WHERE id = ?`).bind(payment.id).run();
+		assert.equal((await userPayments(ctx.env, USER))[0].receiptOnRequest, false);
+
+		const calls: string[] = [];
+		const fetchImpl = (async (url: string) => {
+			calls.push(url);
+			return new Response(JSON.stringify({ data: { url: 'https://paddle-invoices.example/txn_01.pdf' } }), { status: 200 });
+		}) as unknown as typeof fetch;
+		const url = await paddleAdapter.receiptUrl!({ mode: 'test', apiKey: 'k', settings: {}, tax: { pricesIncludeTax: true }, fetch: fetchImpl }, 'txn_01');
+		assert.equal(calls[0], 'https://sandbox-api.paddle.com/transactions/txn_01/invoice');
+		assert.equal(url, 'https://paddle-invoices.example/txn_01.pdf');
 	});
 });

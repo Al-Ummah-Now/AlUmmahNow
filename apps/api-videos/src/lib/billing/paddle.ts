@@ -262,4 +262,10 @@ export const paddleAdapter: PaymentProviderAdapter = {
 		);
 		return res.data.urls?.general?.overview ?? null;
 	},
+
+	async receiptUrl(ctx, paymentRef) {
+		// The invoice PDF link expires after an hour, so it is fetched each time, never stored
+		const res = await providerJson<{ data: { url?: string } }>(ctx, `${paddleBase(ctx.mode)}/transactions/${encodeURIComponent(paymentRef)}/invoice`, { method: 'GET' }, 'Paddle invoice');
+		return res.data.url ?? null;
+	},
 };

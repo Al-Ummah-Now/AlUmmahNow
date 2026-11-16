@@ -19,7 +19,7 @@
  *   and "about you" they wrote. Deleted. Requests the user decided as staff keep the decision, with
  *   the decider scrubbed to the placeholder.
  * - SEARCH_DB billing_* (wiki AUN-SUBS): payment records are bookkeeping, so subscriptions and
- *   payments are kept with the user id replaced by the erased marker (comp reasons dropped, a comp
+ *   payments are kept with the user id replaced by the erased marker (comp reasons, provider customer ids and receipt links dropped, a comp
  *   the user granted as staff keeps the grant with the granter scrubbed). Webhook payloads (they can
  *   hold the email) are emptied; customer links and checkouts are deleted.
  * - SEARCH_DB admin_deletions / admin_jobs: kept as action records, the user scrubbed to
@@ -85,9 +85,9 @@ export async function eraseUserTraces(
     : [];
   const billing = search
     ? await search.batch([
-        search.prepare('UPDATE billing_subscriptions SET user_id = ?, comp_reason = NULL WHERE user_id = ? RETURNING id').bind(erasedMarker, userId),
+        search.prepare('UPDATE billing_subscriptions SET user_id = ?, comp_reason = NULL, customer_ref = NULL WHERE user_id = ? RETURNING id').bind(erasedMarker, userId),
         search.prepare('UPDATE billing_subscriptions SET comp_by = ? WHERE comp_by = ? RETURNING id').bind(erasedMarker, userId),
-        search.prepare('UPDATE billing_payments SET user_id = ? WHERE user_id = ? RETURNING id').bind(erasedMarker, userId),
+        search.prepare('UPDATE billing_payments SET user_id = ?, receipt_url = NULL WHERE user_id = ? RETURNING id').bind(erasedMarker, userId),
         search.prepare(`UPDATE billing_events SET user_id = ?, payload = '{}' WHERE user_id = ? RETURNING id`).bind(erasedMarker, userId),
         search.prepare('DELETE FROM billing_customers WHERE user_id = ? RETURNING provider_ref').bind(userId),
         search.prepare('DELETE FROM billing_checkouts WHERE user_id = ? RETURNING id').bind(userId),
