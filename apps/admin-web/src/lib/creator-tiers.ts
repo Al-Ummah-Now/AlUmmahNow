@@ -7,7 +7,6 @@
 import {
   ADMIN_USER_TIER_FILTERS,
   CREATOR_TIER_BOUNDS,
-  CREATOR_TIER_IDS,
   CREATOR_TIER_TEXT,
   DEFAULT_CREATOR_TIER,
   DEFAULT_TIER_ID,
@@ -107,16 +106,12 @@ export interface TierFormValues {
   liveMaxStreamMinutes: number;
 }
 
-export type TierField = 'id' | 'name' | 'nameAr' | 'description' | 'descriptionAr' | 'sortOrder' | 'perHour' | 'perDay' | 'maxConcurrent' | 'maxChannels' | 'captionMinutesMonth' | 'liveHoursMonth' | 'liveMaxConcurrent' | 'liveMaxStreamMinutes' | 'audioTracksPerVideo';
+export type TierField = 'name' | 'nameAr' | 'description' | 'descriptionAr' | 'sortOrder' | 'perHour' | 'perDay' | 'maxConcurrent' | 'maxChannels' | 'captionMinutesMonth' | 'liveHoursMonth' | 'liveMaxConcurrent' | 'liveMaxStreamMinutes' | 'audioTracksPerVideo';
 export type TierFormErrors = Partial<Record<TierField, { key: MessageKey; params?: Record<string, string | number> }>>;
 
-export const TIER_ID_PATTERN = /^[a-z0-9][a-z0-9-]{1,39}$/;
-
-/** Field errors for a tier form (empty: valid). Mirrors validateTier in api-videos. */
-export function validateTierForm(form: TierFormValues, opts: { create?: boolean } = {}): TierFormErrors {
+/** Field errors for a tier form (empty: valid). Mirrors validateTier in api-videos. No id: api-videos makes it from the name. */
+export function validateTierForm(form: TierFormValues, _opts: { create?: boolean } = {}): TierFormErrors {
   const errors: TierFormErrors = {};
-  if (opts.create && !TIER_ID_PATTERN.test(form.id ?? '')) errors.id = { key: 'creators.errorId' };
-  if (opts.create && Object.values(CREATOR_TIER_IDS).includes((form.id ?? '') as never)) errors.id = { key: 'creators.errorIdTaken' };
   const name = form.name.trim();
   if (!name || name.length > CREATOR_TIER_TEXT.name) errors.name = { key: 'creators.errorName' };
   // The English name is English: Arabic-only text belongs in the Arabic name (owner review 2026-11-16)
@@ -235,8 +230,7 @@ export function tierActionMessage(result: { status: number; code?: string }): Me
   if (result.code === 'tier_is_default') return 'creators.tierIsDefault';
   if (result.code === 'tier_has_invites') return 'creators.errorTierHasInvites';
   if (result.code === 'default_tier_deleted') return 'creators.errorDefaultDeleted';
-  if (result.code === 'tier_in_use' || (result.status === 409 && result.code !== 'tier_exists')) return 'creators.tierInUse';
-  if (result.code === 'tier_exists') return 'creators.errorIdTaken';
+  if (result.code === 'tier_in_use' || result.status === 409) return 'creators.tierInUse';
   if (result.code === 'tier_text_missing') return 'creators.errorTextMissing';
   if (result.code === 'tier_name_not_english') return 'creators.errorNameNotEnglish';
   if (result.code === 'invalid_tier') return 'creators.errorInvalid';

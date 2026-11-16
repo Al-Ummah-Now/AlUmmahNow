@@ -116,17 +116,15 @@ describe('tier form validation (same bounds and rules as api-videos)', () => {
     assert.deepEqual(validateTierForm(bad).liveMaxStreamMinutes, { key: 'creators.errorRange', params: { min: 10, max: 1440 } });
   });
 
-  it('flags each field outside CREATOR_TIER_BOUNDS, a daily limit under the hourly one, and bad ids or names', () => {
+  it('flags each field outside CREATOR_TIER_BOUNDS, a daily limit under the hourly one, and bad names; no id to type', () => {
     const errors = validateTierForm({ ...base, perHour: 0, perDay: CREATOR_TIER_BOUNDS.perDay.max + 1, maxConcurrent: 1.5, maxChannels: 0 });
     assert.deepEqual(Object.keys(errors).sort(), ['maxChannels', 'maxConcurrent', 'perDay', 'perHour']);
     assert.deepEqual(errors.perHour, { key: 'creators.errorRange', params: { min: 1, max: 100_000 } });
     assert.equal(validateTierForm({ ...base, perHour: 50, perDay: 20 }).perDay?.key, 'creators.errorPerDay');
     assert.equal(validateTierForm({ ...base, perHour: NaN }).perHour?.key, 'creators.errorRange', 'an emptied field is an error');
-    assert.equal(validateTierForm({ ...base, id: 'Gold Tier' }, { create: true }).id?.key, 'creators.errorId');
-    assert.equal(validateTierForm({ ...base, id: 'unlimited' }, { create: true }).id?.key, 'creators.errorIdTaken');
     assert.equal(validateTierForm({ ...base, name: '   ' }).name?.key, 'creators.errorName');
-    assert.equal(validateTierForm({ ...base, id: '' }).id, undefined, 'the id is checked only when creating');
-    assert.equal(validateTierForm({ ...base, id: 'member' }, { create: true }).id?.key, 'creators.errorIdTaken', 'Member is shipped');
+    // Admins never type ids (api-videos makes one from the name): a new tier with no id is valid
+    assert.deepEqual(validateTierForm({ ...base, id: '' }, { create: true }), {});
   });
 
   it('checks the Upgrade page text and order, even on an unlimited tier', () => {

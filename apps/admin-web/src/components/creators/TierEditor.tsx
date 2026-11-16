@@ -178,24 +178,6 @@ function TierCard({ tier, users, invites = 0, canManage, actions, create = false
         <p className="text-sm text-fg-muted" data-testid={`tier-${key}-effect`}>{tierEffect(saved, t, locale)}</p>
       )}
       <div className="grid gap-4 sm:grid-cols-2">
-        {create && (
-          <label className="flex flex-col gap-1 text-sm text-fg-muted">
-            <span className="text-fg font-medium">{t('creators.tierId')}</span>
-            <input
-              required
-              value={form.id}
-              disabled={!canManage}
-              aria-invalid={shown.id ? true : undefined}
-              aria-describedby={described('id')}
-              onChange={(e) => set('id', e.target.value.trim().toLowerCase())}
-              className={fieldClass}
-              dir="ltr"
-              data-testid="tier-new-id"
-            />
-            <span id={help('id')} className="text-xs">{t('creators.helpId')}</span>
-            {errorOf('id')}
-          </label>
-        )}
         <label className="flex flex-col gap-1 text-sm text-fg-muted">
           <span className="text-fg font-medium">{t('creators.tierName')}</span>
           <input

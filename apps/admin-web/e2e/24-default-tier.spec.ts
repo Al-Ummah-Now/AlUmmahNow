@@ -22,7 +22,8 @@ import { expectDirection, setPreferences } from './support/ui';
 interface Choices { items: { id: string; name: string }[]; defaultTierId?: string }
 interface UsersPage { items: { id: string; email: string | null; creator?: { assignment: { tierId: string } | null } }[] }
 
-const tierId = `e2e-dt-${RUN_TAG}-${Date.now().toString(36)}`.toLowerCase().slice(0, 40);
+// Admins never type ids: api-videos makes it from the name; read back from the create answer
+let tierId = '';
 const state: { previous?: string; userId?: string; userTier?: string } = {};
 
 const choices = async () => (await adminApi<Choices>('/api/content/creator-tiers?counts=0')).body.result;
@@ -39,11 +40,13 @@ test.describe('default creator tier', () => {
     const current = await choices();
     test.skip(!current?.defaultTierId, 'api-videos does not have the default tier yet');
     state.previous = current!.defaultTierId;
-    const created = await adminApi('/api/content/creator-tiers', {
+    const created = await adminApi<{ tier: { id: string } }>('/api/content/creator-tiers', {
       method: 'POST',
-      body: JSON.stringify({ id: tierId, name: `E2E default ${RUN_TAG}`, perHour: 1, perDay: 2, maxConcurrent: 1, maxChannels: 1 }),
+      body: JSON.stringify({ name: `E2E default ${RUN_TAG} ${Date.now().toString(36)}`, perHour: 1, perDay: 2, maxConcurrent: 1, maxChannels: 1 }),
     });
     expect(created.status).toBeLessThan(300);
+    tierId = created.body.result?.tier.id ?? '';
+    expect(tierId).toMatch(/^e2e-default-/);
     // A user: the moderator account (this run's own in run mode), with a videos profile (its sign-up wrote a tier)
     const email = accounts.moderator.email;
     const find = async () =>
@@ -62,8 +65,10 @@ test.describe('default creator tier', () => {
   test.afterAll(async () => {
     if (state.previous) await setDefault(state.previous);
     if (state.userId && state.userTier) await adminApi(`/api/content/users/${encodeURIComponent(state.userId)}/creator-tier`, { method: 'PUT', body: JSON.stringify({ tierId: state.userTier }) });
-    await adminApi(`/api/content/creator-tiers/${tierId}`, { method: 'DELETE', body: JSON.stringify({ reason: 'e2e cleanup' }) });
-    await adminApi(`/api/trash/creator-tier/${tierId}/purge`, { method: 'POST' });
+    if (tierId) {
+      await adminApi(`/api/content/creator-tiers/${tierId}`, { method: 'DELETE', body: JSON.stringify({ reason: 'e2e cleanup' }) });
+      await adminApi(`/api/trash/creator-tier/${tierId}/purge`, { method: 'POST' });
+    }
   });
 
   test('DT-01 Set as default acts at once with Undo and is audited; existing users keep their stored tier', async ({ page }) => {

@@ -96,6 +96,11 @@ export async function setAuditPrevious(db: AuditDb, id: string, previous: Record
   await db.prepare('UPDATE site_settings_log SET old_value = ? WHERE id = ?').bind(JSON.stringify(previous), id).run();
 }
 
+/** Points an audit row at its subject once it has an id (a tier made by Add tier). */
+export async function setAuditSubject(db: AuditDb, id: string, kind: AuditAction['kind'], subjectId: string): Promise<void> {
+  await db.prepare('UPDATE site_settings_log SET key = ? WHERE id = ?').bind(auditKey(kind, subjectId), id).run();
+}
+
 export async function dropAudit(db: AuditDb, id: string): Promise<void> {
   await db.prepare('DELETE FROM site_settings_log WHERE id = ?').bind(id).run();
 }

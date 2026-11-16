@@ -20,6 +20,9 @@ function fakeDb(reports: ReportRow[] = []) {
       if (sql.startsWith('INSERT INTO site_settings_log')) {
         const [id, key, old_value, new_value, actor_id, created_at] = args as string[];
         log.push({ id, key, old_value, new_value, actor_id, created_at });
+      } else if (sql.startsWith('UPDATE site_settings_log SET key')) {
+        const row = log.find((r) => r.id === args[1]);
+        if (row) row.key = args[0] as string;
       } else if (sql.startsWith('DELETE FROM site_settings_log')) {
         const index = log.findIndex((r) => r.id === args[0]);
         if (index >= 0) log.splice(index, 1);
@@ -666,6 +669,24 @@ describe('content endpoints: creator tiers', () => {
     const failed = await call('/api/content/creators/tier', { method: 'POST', roles: 'admin', json: { userIds, tierId: 'member' } });
     assert.equal(failed.status, 503);
     assert.equal(log.length, 2, 'the failed bulk change left no audit rows');
+  });
+
+  it('Add tier: no id is sent on; the audit row lands on the id api-videos made; a refused create leaves no row', async () => {
+    const { db, log } = fakeDb();
+    let refuse = false;
+    const { fetcher, calls } = fakeVideos({
+      'POST /creator-tiers': () => (refuse ? { status: 400, body: { success: false, code: 'invalid_tier', error: 'name' } } : { body: { success: true, result: { previous: null, tier: { id: 'gold-plus', name: 'Gold Plus' } } } }),
+    });
+    const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
+    const res = await call('/api/content/creator-tiers', { method: 'POST', roles: 'admin', json: { id: 'typed', name: 'Gold Plus', perHour: 1, perDay: 2, maxConcurrent: 1 } });
+    assert.equal(res.status, 200);
+    assert.equal((calls.at(-1)?.body as Record<string, unknown>).id, undefined, 'an id typed anywhere is never passed on');
+    assert.deepEqual(log.map((r) => r.key), ['content:creator-tier:gold-plus']);
+    assert.equal(JSON.parse(log[0].new_value).action, 'create');
+    refuse = true;
+    assert.equal((await call('/api/content/creator-tiers', { method: 'POST', roles: 'admin', json: { name: ' ' } })).status, 400);
+    assert.equal(log.length, 1);
+    assert.equal((await call('/api/content/creator-tiers', { method: 'POST', roles: 'moderator', json: { name: 'X' } })).status, 403);
   });
 
   it('every admin role reads the Creators list and the tiers; creators:manage is listed for admins only', async () => {

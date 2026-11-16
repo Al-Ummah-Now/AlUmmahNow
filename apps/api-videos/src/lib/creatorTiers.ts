@@ -474,6 +474,52 @@ export function validateTier(id: string, input: TierInput, current?: CreatorTier
 	};
 }
 
+/**
+ * Ids admins never type (owner rule): a new tier's id comes from its English
+ * name ("Gold Plus" -> gold-plus), or a random one when the name has no Latin
+ * letters or digits (an Arabic-only name). Never one a route or an audit key
+ * uses, unique among every tier ever stored (soft-deleted ones included), and
+ * immutable: renaming a tier never changes it.
+ */
+const RESERVED_TIER_IDS = new Set(['none', 'default', 'order', 'deleted', 'purge', 'audit', 'new']);
+
+export function tierIdBase(name: string): string | null {
+	const slug = name
+		.normalize('NFKD')
+		.replace(/[\u0300-\u036f]/g, '')
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, '-')
+		.replace(/^-+|-+$/g, '')
+		.slice(0, 32)
+		.replace(/-+$/, '');
+	return slug.length >= 2 && /^[a-z0-9]/.test(slug) ? slug : null;
+}
+
+const randomTierId = () => `tier-${crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`;
+
+export async function newTierId(db: D1Database, name: string): Promise<string> {
+	const taken = async (id: string) =>
+		RESERVED_TIER_IDS.has(id) || SHIPPED_TIERS.some((t) => t.id === id) || !!(await db.prepare('SELECT 1 AS n FROM creator_tiers WHERE id = ?').bind(id).first());
+	const base = tierIdBase(name);
+	if (base) {
+		for (let n = 1; n <= 20; n++) {
+			const id = n === 1 ? base : `${base}-${n}`;
+			if (!(await taken(id))) return id;
+		}
+	}
+	for (;;) {
+		const id = randomTierId();
+		if (!(await taken(id))) return id;
+	}
+}
+
+/** Add tier: the id is made here from the name (never sent by the admin). */
+export async function createTier(db: D1Database, input: TierInput, actorId: string, now = new Date().toISOString(), opts: { requireLocalized?: boolean } = {}): Promise<{ previous: CreatorTier | null; tier: CreatorTier }> {
+	const name = typeof input.name === 'string' ? input.name.trim() : '';
+	if (!name) throw new CreatorTierError(400, 'invalid_tier', `name must be 1 to ${CREATOR_TIER_TEXT.name} characters`);
+	return saveTier(db, await newTierId(db, name), input, actorId, { create: true, requireLocalized: opts.requireLocalized }, now);
+}
+
 /** Creates (new id) or replaces a tier definition. */
 export async function saveTier(
 	db: D1Database,
