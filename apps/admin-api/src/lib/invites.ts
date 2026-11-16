@@ -15,6 +15,7 @@
  * inside an admin's request.
  */
 import { logger } from './logger';
+import { resolveEmailCopy } from './email-templates';
 import type { D1Database } from './types';
 import { AuthApiError, AuthModerationClient, audit, cronSyncDue, isPermanentAuthError } from './authModeration';
 import { containsPattern } from '@al-ummah/shared-types';
@@ -435,6 +436,8 @@ export async function processInvite(env: InviteQueueEnv, msg: InviteMessage, att
         roles: parseJson<string[]>(row.auth_roles, []),
         details: { role: row.role, tierId: row.tier_id, channels: parseJson(row.channels, []) },
         actor: { id: row.created_by, email: row.created_by_email },
+        // The admin-edited copy (Settings › Emails) in the invite's language; Auth falls back to its built-in copy without it
+        emailCopy: await resolveEmailCopy(db, 'creator_invite', row.locale),
       });
       await markDelivery(db, row.id, 'sent', attempt, null);
       await applyAuthState(db, row, invite, { emailSent });
@@ -459,7 +462,9 @@ export async function processInvite(env: InviteQueueEnv, msg: InviteMessage, att
       await clearPending();
       return 'done';
     }
-    const result = await auth().inviteOp(row.id, msg.op as 'resend', args);
+    // A resend emails the invite again: it carries the current copy in the language it is sent in
+    const body = msg.op === 'resend' ? { ...args, emailCopy: await resolveEmailCopy(db, 'creator_invite', typeof args.locale === 'string' ? args.locale : row.locale) } : args;
+    const result = await auth().inviteOp(row.id, msg.op as 'resend', body);
     await clearPending();
     await applyAuthState(db, row, result.invite, { emailSent: result.emailSent });
     return 'done';
