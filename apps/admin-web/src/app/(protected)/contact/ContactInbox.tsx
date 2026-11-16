@@ -178,11 +178,13 @@ export function ContactInbox({ messages, filters, viewerId, canManage, counts }:
       header: t('contact.colMessage'),
       className: 'min-w-0',
       cell: (m) => (
-        <p className={`line-clamp-2 break-words text-sm ${isUnread(m) ? 'text-fg font-semibold' : 'text-fg-muted'}`}>
-          <span className="text-fg-subtle font-normal">{translateDynamic(t, 'contactTopic', m.topic)} · </span>
-          {/* Isolated: the sender's language never reorders the page's own label around it */}
-          <bdi dir="auto">{m.message}</bdi>
-        </p>
+        <div className="min-w-0">
+          <span className="block text-xs text-fg-subtle">{translateDynamic(t, 'contactTopic', m.topic)}</span>
+          {/* In the sender's own direction (an English message on an Arabic page clamps and ends correctly) */}
+          <p className={`line-clamp-2 break-words text-sm ${isUnread(m) ? 'text-fg font-semibold' : 'text-fg-muted'}`} dir="auto">
+            {m.message}
+          </p>
+        </div>
       ),
     },
     {
