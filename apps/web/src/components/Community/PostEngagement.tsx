@@ -107,7 +107,7 @@ export default function PostEngagement({
             onClick={handleShare}
             data-testid="post-share-button"
             className={cn(
-              'flex items-center gap-2 px-4 py-2 rounded-full transition-all group',
+              'flex items-center gap-1.5 px-3 py-2 sm:gap-2 sm:px-4 rounded-full transition-all group',
               'hover:bg-gray-100 dark:hover:bg-gray-700',
               'flex-row'
             )}
@@ -168,7 +168,7 @@ export default function PostEngagement({
 
         {/* Views (if available) */}
         {post.views > 0 && (
-          <div className="ms-auto flex items-center gap-2 px-4 py-2" data-testid="post-views">
+          <div className="ms-auto flex items-center gap-1.5 py-2 ps-2 pe-1 sm:gap-2 sm:px-4" data-testid="post-views">
             <svg
               className="w-5 h-5 text-[var(--fanous-color-text-secondary)]"
               aria-hidden="true"

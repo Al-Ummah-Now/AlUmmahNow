@@ -54,7 +54,7 @@ export default function CommentButton({
       className={cn(
         // Flat like its neighbours (Like, Save, Share): open is shown by colour, never a filled pill
         // (a tinted background here was themed into a glowing primary button)
-        'flex items-center gap-2 px-4 py-2 rounded-full transition-all group',
+        'flex items-center gap-1.5 px-3 py-2 sm:gap-2 sm:px-4 rounded-full transition-all group',
         'hover:bg-gray-100 dark:hover:bg-gray-700',
         'disabled:opacity-50 disabled:cursor-not-allowed',
         'flex-row'

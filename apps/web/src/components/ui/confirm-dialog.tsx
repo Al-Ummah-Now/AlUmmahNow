@@ -69,7 +69,9 @@ export function ConfirmDialog({
     <AlertDialogPrimitive.Root open={open} onOpenChange={(next) => !next && finish(false)}>
       <AlertDialogPrimitive.Portal>
         <AlertDialogPrimitive.Overlay
-          className="fixed inset-0 z-50 bg-[color-mix(in_srgb,var(--fanous-c-dialog-text)_45%,transparent)]"
+          // A scrim of the page's own background: dark over a dark page, light over a light one (the
+          // dialog text colour at 45% was a light wash over the dark page)
+          className="fixed inset-0 z-50 bg-[color-mix(in_srgb,var(--fanous-color-background)_75%,transparent)]"
           data-testid={`${testId}-backdrop`}
           onClick={() => finish(false)}
         />

@@ -67,7 +67,7 @@ export default function PostManageMenu({ post, onDeleted, onRestored }: PostMana
           className="text-[var(--fanous-color-error-text)] focus:text-[var(--fanous-color-error-text)]"
           data-testid="post-owner-delete"
         >
-          <Trash2 className="h-4 w-4 me-2" aria-hidden="true" />
+          <Trash2 className="h-4 w-4 me-2 text-[var(--fanous-color-error-text)]" aria-hidden="true" />
           {deleting ? texts.deleting : texts.deletePost}
         </DropdownMenuItem>
       </DropdownMenuContent>

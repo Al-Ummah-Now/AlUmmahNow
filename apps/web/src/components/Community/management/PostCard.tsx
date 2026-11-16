@@ -180,7 +180,7 @@ export function PostCard({ post, locale, onView, onEdit, onDelete, onPublishNow 
                   className="text-[var(--fanous-color-error-text)] focus:text-[var(--fanous-color-error-text)]"
                   data-testid="studio-post-delete"
                 >
-                  <Trash2 className="w-4 h-4 me-2" aria-hidden="true" />
+                  <Trash2 className="w-4 h-4 me-2 text-[var(--fanous-color-error-text)]" aria-hidden="true" />
                   {deleting ? t.community.deleting : t.community.deletePost}
                 </DropdownMenuItem>
               </DropdownMenuContent>
