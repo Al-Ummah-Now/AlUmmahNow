@@ -45,6 +45,7 @@ import { googleClientSecret, readYtSettings, type YtSettingsEnv } from '../youtu
 import { checkBulkScheduleAllowed } from '../studioLimits';
 import { readSettings as readSiteSettings, type SitesEnv } from '../sites/store';
 import { logger } from '../logger';
+import { readQuranCurrent } from '../quran/copy';
 
 export { featureOff } from './off';
 
@@ -162,6 +163,19 @@ export async function quranEditionsConfigured(env: FeaturesEnv): Promise<boolean
 	return !!id && !!secret;
 }
 
+/**
+ * The official Quran text: our Quran Foundation copy is synced and fresh. The pointer read is
+ * cached per isolate (lib/quran/copy.ts, 5 minutes).
+ */
+export async function quranTextAvailable(env: FeaturesEnv): Promise<boolean> {
+	try {
+		return !!(await readQuranCurrent(env.MEDIA_PRIVATE as never));
+	} catch (error) {
+		logger.warn('[Features] Quran copy pointer unreadable', { error: error instanceof Error ? error.message : String(error) });
+		return false;
+	}
+}
+
 /** Social auto-post: switched on, and at least one network configured and switched on. */
 export async function socialConfigured(env: FeaturesEnv): Promise<boolean> {
 	try {
@@ -257,10 +271,11 @@ const roleMay = (scope: ChannelScope | null, ...capabilities: ChannelCapability[
  */
 export async function computeFeatures(env: FeaturesEnv, who: FeaturesWho, channelId?: string | null): Promise<UserFeatures> {
 	const settings = await readCaptionSettings(env);
-	const [quran] = await Promise.all([quranEditionsConfigured(env)]);
+	const [quran, quranText] = await Promise.all([quranEditionsConfigured(env), quranTextAvailable(env)]);
 	const features: UserFeatures = {
 		...NO_FEATURES,
 		viewerTranslatedTitles: viewerTitlesConfigured(env, settings),
+		quranText,
 	};
 	const userId = who.userId ?? null;
 	const db = env.SEARCH_DB;

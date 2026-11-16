@@ -5,6 +5,10 @@ jest.mock('@/hooks/useLanguage', () => ({
   useLanguage: () => ({ t: jest.requireActual('@/lib/i18n/translations/en').EN_TRANSLATIONS, lang: 'en', isRTL: false }),
 }));
 jest.mock('@/lib/errors/reporter', () => ({ reportError: jest.fn(() => 'ref') }));
+let quranText = true;
+jest.mock('@/hooks/useFeatures', () => ({
+  useFeatures: () => ({ ready: true, features: { ...jest.requireActual('@al-ummah/shared-types').NO_FEATURES, quranText } }),
+}));
 
 const HEARD = 'قل هو الله احد';
 const draft = {
@@ -39,6 +43,7 @@ import CaptionDraftEditor from '../CaptionDraftEditor';
 
 beforeEach(() => {
   jest.clearAllMocks();
+  quranText = true;
   getCaptionDraft.mockResolvedValue({ ok: true, data: JSON.parse(JSON.stringify(draft)) });
   saveCaptionDraft.mockImplementation(async (_v: string, _l: string, base: number) => ({ ok: true, data: { ...draft, version: base + 1, cues: 3 } }));
   publishCaptionDraft.mockResolvedValue({ ok: true, data: { draft: { ...draft, version: 4, publishedVersion: 4, track: 'machine', cues: 3 } } });
@@ -83,6 +88,18 @@ describe('CaptionDraftEditor', () => {
     const saved = saveCaptionDraft.mock.calls[0]![3] as Array<{ segments: Array<{ status?: string }> }>;
     expect(saved[1].segments[0].status).toBe('accepted');
     expect(await screen.findByText('Published. Viewers now see these subtitles.')).toBeTruthy();
+  });
+
+  it('without our copy of the Quran text: reference and quran.com link only, no text, no note, no Different reference', async () => {
+    quranText = false;
+    renderEditor();
+    const spans = await screen.findAllByTestId('caption-quran-span');
+    expect(within(spans[0]!).queryByTestId('caption-quran-change')).toBeNull();
+    fireEvent.click(within(spans[0]!).getByTestId('caption-quran-accept'));
+    expect(screen.getAllByTestId('caption-quran-span')[0]!.getAttribute('data-status')).toBe('accepted');
+    expect(within(screen.getAllByTestId('caption-quran-span')[0]!).getByRole('link')).toHaveAttribute('href', 'https://quran.com/112/1');
+    expect(screen.queryByText('Quran text: Quran Foundation (quran.com)')).toBeNull();
+    expect(getQuranPassage).not.toHaveBeenCalled();
   });
 
   it('"Not Quran" turns a span back into editable speech', async () => {

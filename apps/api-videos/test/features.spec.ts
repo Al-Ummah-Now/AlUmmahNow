@@ -13,6 +13,7 @@ import { MemoryBucket, MemoryQueue, buildApp } from './helpers';
 import { assignTier, saveTier } from '../src/lib/creatorTiers';
 import { addGrant } from '../src/lib/captions/minutes';
 import { forgetLiveRouting, writeLiveRouting } from '../src/lib/live/store';
+import { clearQuranCopyCache } from '../src/lib/quran/copy';
 import { captionFeatureFor, computeFeatures, forgetFeatureCaches, liveConfigured, saasConfigured, type FeaturesEnv } from '../src/lib/features';
 import { handleUserFeatures } from '../src/endpoints/creator/features';
 import { TranslateCreate, TranslateUsageGet } from '../src/endpoints/translate/translate';
@@ -153,6 +154,23 @@ describe('feature answer', () => {
 		await addGrant(d1, 'bob', { minutes: 30, scope: 'until_used', reason: 'pilot' }, 'admin-1');
 		assert.equal(await captionFeatureFor(env, 'transcribe', { userId: 'bob' }), true);
 		assert.equal((await computeFeatures(env, { userId: 'bob', roles: ROLES_NONE })).captionsTranscribe, true);
+	});
+
+	it('the Quran text is shown only while our copy is synced and fresh, signed in or not', async () => {
+		const { env } = await setup();
+		clearQuranCopyCache();
+		assert.equal((await computeFeatures(env, { userId: null })).quranText, false, 'no bucket bound');
+		const bucket = new MemoryBucket();
+		env.MEDIA_PRIVATE = bucket;
+		clearQuranCopyCache();
+		assert.equal((await computeFeatures(env, { userId: 'alice', roles: ROLES_NONE })).quranText, false, 'no copy yet');
+		await bucket.put('quran/current.json', JSON.stringify({ v: 1, version: 'v1', syncedAt: new Date().toISOString(), builtAt: new Date().toISOString(), surahs: 114, words: 77429 }));
+		clearQuranCopyCache();
+		assert.equal((await computeFeatures(env, { userId: null })).quranText, true);
+		await bucket.put('quran/current.json', JSON.stringify({ v: 1, version: 'v1', syncedAt: new Date(Date.now() - 8 * 86400_000).toISOString(), builtAt: 'x', surahs: 114, words: 1 }));
+		clearQuranCopyCache();
+		assert.equal((await computeFeatures(env, { userId: 'alice', roles: ROLES_NONE })).quranText, false, 'older than 7 days');
+		clearQuranCopyCache();
 	});
 
 	it('Quran editions, social, YouTube import and AI categories follow their configuration', async () => {

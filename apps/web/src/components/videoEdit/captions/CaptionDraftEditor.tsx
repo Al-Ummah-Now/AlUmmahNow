@@ -9,6 +9,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CheckCheck, ChevronsLeft, ChevronsRight, Loader2, Merge, Play, Redo2, Replace, Scissors, Search, Trash2, Undo2 } from 'lucide-react';
 import { RTL_CAPTION_LANGUAGES, type CaptionCue } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useFeatures } from '@/hooks/useFeatures';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { reportError } from '@/lib/errors/reporter';
@@ -54,6 +55,8 @@ const AUTOSAVE_MS = 1200;
 
 export default function CaptionDraftEditor({ videoId, language, languageLabel, videoUrl, posterUrl, open, onClose, onChanged }: CaptionDraftEditorProps) {
   const { t, lang } = useLanguage();
+  // Our copy of the official Quran text (hidden until it is synced; fails closed while loading)
+  const quranText = useFeatures().features.quranText;
   const tc = t.captions;
   const { confirm, dialog } = useConfirm();
   const [history, setHistory] = useState<History | null>(null);
@@ -431,6 +434,7 @@ export default function CaptionDraftEditor({ videoId, language, languageLabel, v
                         onAccept={() => edit((c) => acceptSpan(c, cue.id, s))}
                         onReject={() => edit((c) => rejectSpan(c, cue.id, s))}
                         onRange={(range) => edit((c) => setSpanRange(c, cue.id, s, range))}
+                        textAvailable={quranText}
                       />
                     ),
                   )}

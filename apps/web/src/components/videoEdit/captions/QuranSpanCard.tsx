@@ -5,6 +5,9 @@
  * - accepted: shows the official text from our Quran Foundation copy (what viewers see);
  * - a suggestion: shows only the reference and a quran.com link, with Confirm / Not Quran /
  *   Different reference. What speech-to-text heard is never shown.
+ * While our copy of the official text is not available (GET /api/me/features `quranText`), the
+ * card shows the reference and the quran.com link only: no text, no "unavailable" note, and no
+ * Different reference (it is checked against the copy).
  */
 import React, { useEffect, useId, useState } from 'react';
 import { BookOpen, Check, ExternalLink, Loader2, X } from 'lucide-react';
@@ -34,14 +37,17 @@ export interface QuranSpanCardProps {
   onAccept: () => void;
   onReject: () => void;
   onRange: (range: string) => void;
+  /** Our copy of the official text is available (features `quranText`) */
+  textAvailable: boolean;
 }
 
-export default function QuranSpanCard({ segment, t, lang, onAccept, onReject, onRange }: QuranSpanCardProps) {
+export default function QuranSpanCard({ segment, t, lang, onAccept, onReject, onRange, textAvailable }: QuranSpanCardProps) {
   const range = parseQuranRange(segment.range);
   const label = range ? quranAyahLabel(range) : segment.range;
   const shownLabel = lang === 'ar' ? toArabicDigits(label) : label;
   const accepted = segment.status === 'accepted';
-  const [passage, setPassage] = useState<QuranPassage | null | 'loading'>(accepted ? 'loading' : null);
+  const showText = accepted && textAvailable;
+  const [passage, setPassage] = useState<QuranPassage | null | 'loading'>(showText ? 'loading' : null);
   const [picking, setPicking] = useState(false);
   const [refInput, setRefInput] = useState('');
   const [refError, setRefError] = useState<string | null>(null);
@@ -49,7 +55,7 @@ export default function QuranSpanCard({ segment, t, lang, onAccept, onReject, on
   const inputId = useId();
 
   useEffect(() => {
-    if (!accepted) {
+    if (!showText) {
       setPassage(null);
       return;
     }
@@ -59,7 +65,7 @@ export default function QuranSpanCard({ segment, t, lang, onAccept, onReject, on
     return () => {
       live = false;
     };
-  }, [accepted, segment.range]);
+  }, [showText, segment.range]);
 
   const status =
     segment.status === 'accepted' ? t.confirmed : segment.status === 'review' ? t.possible : segment.status === 'basmala' ? t.basmala : t.suggested;
@@ -118,7 +124,7 @@ export default function QuranSpanCard({ segment, t, lang, onAccept, onReject, on
       </div>
 
       {accepted ? (
-        passage === 'loading' ? (
+        !textAvailable ? null : passage === 'loading' ? (
           <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden />
         ) : passage ? (
           <figure className="space-y-1">
@@ -155,7 +161,7 @@ export default function QuranSpanCard({ segment, t, lang, onAccept, onReject, on
         </div>
       ) : null}
 
-      {picking ? (
+      {picking && textAvailable ? (
         <div className="flex flex-wrap items-end gap-2">
           <div className="flex flex-col gap-1">
             <label htmlFor={inputId} className="text-xs font-medium text-foreground">
@@ -217,13 +223,16 @@ export default function QuranSpanCard({ segment, t, lang, onAccept, onReject, on
             <X className="h-4 w-4" aria-hidden />
             {t.notQuran}
           </button>
-          <button
-            type="button"
-            onClick={() => setPicking(true)}
-            className="inline-flex h-9 items-center rounded-md border border-border bg-background px-3 text-sm text-foreground hover:bg-muted"
-          >
-            {t.changeRef}
-          </button>
+          {textAvailable && (
+            <button
+              type="button"
+              data-testid="caption-quran-change"
+              onClick={() => setPicking(true)}
+              className="inline-flex h-9 items-center rounded-md border border-border bg-background px-3 text-sm text-foreground hover:bg-muted"
+            >
+              {t.changeRef}
+            </button>
+          )}
         </div>
       )}
     </div>
