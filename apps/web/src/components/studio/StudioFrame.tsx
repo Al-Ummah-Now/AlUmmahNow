@@ -4,7 +4,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import Image from 'next/image';
 import Link from '@/components/common/AppLink';
 import { usePathname, useRouter } from 'next/navigation';
-import { Check, ChevronsUpDown, ExternalLink, FileText, LogOut, Menu, PenLine, Plus, Radio, UploadCloud } from 'lucide-react';
+import { Check, ChevronsUpDown, ExternalLink, FileText, LogOut, Menu, PenLine, Plus, Radio, UploadCloud, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { useOptionalAuth } from '@/components/AuthProvider/authContext';
@@ -93,21 +93,21 @@ function ChannelSwitcher({ locale, channel, segments, role }: { locale: string; 
 
   return (
     <>
+    <div className="flex min-w-0 flex-1 items-center gap-2" data-testid="studio-channel-header">
+      <Avatar url={channel.avatarUrl} name={channel.name} />
+      {/* dir keeps a name or handle in the other script in order; match-parent lines the block up
+          with the UI's start edge (a Latin name in the Arabic UI aligns right, like its neighbours) */}
+      <span className="min-w-0 flex-1 text-start">
+        <span dir="auto" className="block truncate text-sm font-medium text-foreground [text-align:match-parent]" data-testid="studio-channel-name">{channel.name}</span>
+        {channel.handle && <span dir="ltr" className="block truncate text-xs text-muted-foreground [text-align:match-parent]">{formatHandle(channel.handle)}</span>}
+      </span>
     <DropdownMenu>
-      {/* Named by its content (WCAG 2.5.3): an aria-label would replace the visible channel name.
-          The sr-only prefix still tells screen-reader users what the button does. */}
       <DropdownMenuTrigger
         data-testid="studio-switcher"
-        className="flex min-h-11 w-full items-center gap-2 rounded-md p-2 text-start hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label={`${t.studio.switcher.label}: ${channel.name}`}
+        className="grid h-11 w-11 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <span className="sr-only">{t.studio.switcher.label}: </span>
-        <Avatar url={channel.avatarUrl} name={channel.name} />
-        <span className="min-w-0 flex-1">
-          {/* Both lines keep their own direction but sit on the page's start side (a Latin @handle under an Arabic name) */}
-          <span className="block truncate text-sm font-medium text-foreground [unicode-bidi:plaintext] ltr:text-left rtl:text-right">{channel.name}</span>
-          {channel.handle && <span className="block truncate text-xs text-muted-foreground [unicode-bidi:plaintext] ltr:text-left rtl:text-right">{formatHandle(channel.handle)}</span>}
-        </span>
-        <ChevronsUpDown aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <ChevronsUpDown aria-hidden="true" className="h-4 w-4" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-64">
         {channels.map((item) => (
@@ -140,6 +140,7 @@ function ChannelSwitcher({ locale, channel, segments, role }: { locale: string; 
         )}
       </DropdownMenuContent>
     </DropdownMenu>
+    </div>
     {dialog}
     {leaveError && <p role="alert" className="text-xs text-destructive" data-testid="studio-leave-error">{leaveError}</p>}
     </>
@@ -198,12 +199,21 @@ function NavLinks({ locale, role, channelId, active, features, onNavigate, artic
   );
 }
 
-function Rail({ locale, role, channel, segments, features, onNavigate, className }: { locale: string; role: StudioRole; channel: StudioChannel; segments: string[]; features?: StudioFeatures; onNavigate?: () => void; className?: string }) {
+function Rail({ locale, role, channel, segments, features, onNavigate, onClose, className }: { locale: string; role: StudioRole; channel: StudioChannel; segments: string[]; features?: StudioFeatures; onNavigate?: () => void; onClose?: () => void; className?: string }) {
   const { t } = useLanguage();
   const articles = useScholarLinks(locale);
   return (
     <div className={cn('flex h-full flex-col gap-3 p-3', className)}>
-      <ChannelSwitcher locale={locale} channel={channel} segments={segments} role={role} />
+      {/* One header row: in the drawer the close button has its own space at the start edge,
+          then the channel (avatar, name, handle) and its switcher button. Flex mirrors it in RTL. */}
+      <div className="flex min-w-0 items-center gap-1" data-testid="studio-rail-header">
+        {onClose && (
+          <Button variant="ghost" size="icon" className="h-11 w-11 shrink-0" onClick={onClose} aria-label={t.studio.closeMenu} data-testid="studio-close-menu">
+            <X aria-hidden="true" className="h-5 w-5" />
+          </Button>
+        )}
+        <ChannelSwitcher locale={locale} channel={channel} segments={segments} role={role} />
+      </div>
       {can(role, 'video.upload') && features?.upload && (
         <Button asChild>
           <Link href={studioUploadHref(locale, channel.id)} onClick={onNavigate} data-testid="studio-upload">
@@ -263,10 +273,9 @@ export function StudioFrame({ locale, role, channel, features, children }: Props
         <span className="truncate text-sm font-medium">{title}</span>
       </div>
       <Dialog open={drawerOpen} onOpenChange={setDrawerOpen}>
-        <DialogContent data-slot="sheet-content" className="top-0 h-full max-w-xs translate-x-0 translate-y-0 rounded-none border-e p-0 ltr:left-0 rtl:left-auto rtl:right-0">
+        <DialogContent showClose={false} data-slot="sheet-content" className="top-0 h-full max-w-xs translate-x-0 translate-y-0 rounded-none border-e p-0 ltr:left-0 rtl:left-auto rtl:right-0">
           <DialogTitle className="sr-only">{t.studio.title}</DialogTitle>
-          {/* The drawer's close button sits in the top inline-end corner (44px at 8px): the rail starts below it */}
-          <Rail locale={locale} role={role} channel={channel} segments={segments} features={features} onNavigate={() => setDrawerOpen(false)} className="pt-14" />
+          <Rail locale={locale} role={role} channel={channel} segments={segments} features={features} onNavigate={() => setDrawerOpen(false)} onClose={() => setDrawerOpen(false)} />
         </DialogContent>
       </Dialog>
 

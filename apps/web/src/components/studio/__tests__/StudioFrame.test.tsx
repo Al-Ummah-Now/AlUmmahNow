@@ -52,11 +52,27 @@ describe('StudioFrame', () => {
     expect(document.querySelector('a[href*="/settings/channel/"]')).toBeNull();
   });
 
-  it('names the channel switcher by its visible channel name (WCAG 2.5.3 label in name)', () => {
+  it('names the icon-only channel switcher after the channel shown beside it', () => {
     frame('owner');
     const switcher = screen.getAllByTestId('studio-switcher')[0];
-    expect(switcher).not.toHaveAttribute('aria-label');
-    expect(switcher).toHaveAccessibleName(`${STUDIO_EN.switcher.label}: My channel @mine`);
+    expect(switcher).toHaveAccessibleName(`${STUDIO_EN.switcher.label}: My channel`);
+    expect(switcher.className).toMatch(/\bh-11\b/);
+    expect(switcher.className).toMatch(/\bw-11\b/);
+  });
+
+  it('drawer header: close at the start edge, then the channel, then the switcher, no overlap', async () => {
+    frame('owner');
+    await userEvent.click(screen.getByTestId('studio-open-menu'));
+    const close = await screen.findByTestId('studio-close-menu');
+    expect(close).toHaveAccessibleName(STUDIO_EN.closeMenu);
+    expect(close.className).toMatch(/\bh-11\b/);
+    // Only the drawer's own close button: the dialog's corner close is off
+    expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
+    const header = close.closest('[data-testid="studio-rail-header"]') as HTMLElement;
+    const order = Array.from(header.querySelectorAll('[data-testid]')).map((el) => el.getAttribute('data-testid'));
+    expect(order.indexOf('studio-close-menu')).toBeLessThan(order.indexOf('studio-channel-name'));
+    expect(order.indexOf('studio-channel-name')).toBeLessThan(order.indexOf('studio-switcher'));
+    expect(header.querySelector('[data-testid="studio-channel-name"]')).toHaveAttribute('dir', 'auto');
   });
 
   it('uploads to this channel', () => {
