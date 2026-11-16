@@ -153,8 +153,7 @@ export default function PollPost({ post, isRTL = false, locale = 'en', channelId
 
               {/* Option Content */}
               <div className={cn(
-                'relative p-4 flex items-center gap-3',
-                isRTL && 'flex-row-reverse'
+                'relative p-4 flex items-center gap-3'
               )}>
                 {/* Checkbox/Radio */}
                 <div className={cn(
@@ -240,8 +239,7 @@ export default function PollPost({ post, isRTL = false, locale = 'en', channelId
 
       {/* Poll Info */}
       <div className={cn(
-        'flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400',
-        isRTL && 'flex-row-reverse'
+        'flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400'
       )}>
         <span>
           {voteCountLabel}

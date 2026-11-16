@@ -66,7 +66,8 @@
   --aun-menu-item-h: 44px;
   --aun-menu-fg: var(--fanous-c-menu-text, var(--fanous-color-text-primary, #10222e));
   --aun-menu-muted: var(--fanous-c-menu-muted, var(--fanous-color-text-secondary, #3b5260));
-  --aun-menu-danger: var(--fanous-c-button-destructive-bg, #b3261e);
+  /* danger TEXT (AA on surfaces, light and dark), not the danger button fill */
+  --aun-menu-danger: var(--fanous-c-form-error, #b00020);
 }
 
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
