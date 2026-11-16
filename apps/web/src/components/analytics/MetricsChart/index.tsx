@@ -1,5 +1,6 @@
 'use client';
 
+import { formatDate, formatNumber } from '@al-ummah/shared-types';
 import React from 'react';
 import { AnalyticsMetrics } from '@/lib/api/types';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -17,8 +18,8 @@ const MetricsChart: React.FC<MetricsChartProps> = ({ data }) => {
   const { t, lang, isRTL } = useLanguage();
   const d = t.analytics.dashboard;
   const locale = lang === 'ar' ? 'ar' : 'en-US';
-  const fmt = (n: number) => n.toLocaleString(locale);
-  const dayLabel = (date: string) => new Date(date).toLocaleDateString(locale, { month: 'short', day: 'numeric' });
+  const fmt = (n: number) => formatNumber(locale, n);
+  const dayLabel = (date: string) => formatDate(locale, new Date(date), { month: 'short', day: 'numeric' });
 
   const totalViews = data?.reduce((sum, m) => sum + m.views, 0) ?? 0;
   const totalLikes = data?.reduce((sum, m) => sum + m.likes, 0) ?? 0;

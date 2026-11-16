@@ -11,6 +11,7 @@
  * counts every notification on its own subscription.
  */
 
+import { dateTimeFormat } from '@al-ummah/shared-types';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Link from '@/components/common/AppLink';
 import { usePathname } from 'next/navigation';
@@ -183,7 +184,7 @@ export function NotificationCenter() {
     setQueue((q) => dismissGroup(q, groupId));
   }, []);
 
-  const timeFormat = new Intl.DateTimeFormat(lang, { hour: 'numeric', minute: '2-digit' });
+  const timeFormat = dateTimeFormat(lang, { hour: 'numeric', minute: '2-digit' });
 
   return (
     <>

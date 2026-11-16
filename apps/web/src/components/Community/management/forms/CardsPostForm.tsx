@@ -1,7 +1,7 @@
 'use client';
 
 import type { PostMedia, SlidePosition } from '@al-ummah/shared-types';
-import { POST_LIMITS } from '@al-ummah/shared-types';
+import { POST_LIMITS, fillTemplate } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -35,11 +35,11 @@ interface CardsPostFormProps {
   postLocale: 'en' | 'ar';
 }
 
-const fill = (s: string, vars: Record<string, string | number>) => s.replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ''));
+const fill = (s: string, vars: Record<string, string | number>, lang = 'en') => fillTemplate(lang, s, vars, '');
 
 /** A cards post: a title and up to 40 cards, each an image with alt text and optional overlay text. */
 export function CardsPostForm({ channelId, data, onChange, postLocale }: CardsPostFormProps) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const dir = postLocale === 'ar' ? 'rtl' : 'ltr';
   const setCard = (i: number, card: CardFormData) => onChange({ ...data, cards: data.cards.map((c, j) => (j === i ? card : c)) });
   const move = (i: number, by: -1 | 1) => {
@@ -59,10 +59,10 @@ export function CardsPostForm({ channelId, data, onChange, postLocale }: CardsPo
         <Label htmlFor="cards-title" className="text-sm md:text-base">{t.community.title} *</Label>
         <Input id="cards-title" dir={dir} lang={postLocale} value={data.title} maxLength={POST_LIMITS.title} required aria-required onChange={(e) => onChange({ ...data, title: e.target.value })} />
       </div>
-      <p className="text-xs md:text-sm text-muted-foreground">{fill(t.community.cardsLimit, { max: POST_LIMITS.slides })}</p>
+      <p className="text-xs md:text-sm text-muted-foreground">{fill(t.community.cardsLimit, { max: POST_LIMITS.slides }, lang)}</p>
       <ol className="space-y-4">
         {data.cards.map((card, i) => {
-          const name = fill(t.community.cardNumber, { n: i + 1 });
+          const name = fill(t.community.cardNumber, { n: i + 1 }, lang);
           return (
             <li key={card.id}>
               <Card className="p-4 space-y-3" role="group" aria-label={name} data-testid="cards-post-card">

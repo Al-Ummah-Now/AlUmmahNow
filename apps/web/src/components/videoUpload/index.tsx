@@ -1,4 +1,5 @@
 'use client';
+import { formatBytes, formatPercent } from '@al-ummah/shared-types';
 import { logger } from '@/lib/logger-client';
 import { withoutErrorForwarding } from '@/lib/errors/reporter';
 import { reportUploadError, uploadErrorMessage, type UploadStep } from '@/lib/upload/report-upload-error';
@@ -262,13 +263,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
     }
   };
 
-  const formatBytes = (bytes: number): string => {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
-  };
+  const formatSize = (bytes: number): string => formatBytes(lang, bytes, { maximumFractionDigits: 2 });
 
   const formatTime = (seconds: number): string => {
     if (!isFinite(seconds) || seconds < 0) return '--:--';
@@ -424,7 +419,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
 
         if (!initiateResult.success || !initiateResult.result) {
           // A creator-tier refusal (no tier, upload limit) in the user's words; never the server's text
-          const refusal = creatorRefusalMessage(t, initiateResult);
+          const refusal = creatorRefusalMessage(t, initiateResult, lang);
           if (refusal) {
             logger.warn('[VideoUpload] Upload refused', { code: initiateResult.code, retryAfter: initiateResult.retryAfter });
             if (initiateResult.code === 'uploads_by_invitation') void refreshCreatorAccess();
@@ -551,7 +546,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
           );
 
           if (!completeResult.success) {
-            const refusal = creatorRefusalMessage(t, completeResult);
+            const refusal = creatorRefusalMessage(t, completeResult, lang);
             if (refusal) throw Object.assign(new Error(refusal), { refusal: true });
             throw Object.assign(new Error(completeResult.error || t.upload.completeFailed), { status: completeResult.status, serverRef: completeResult.serverRef });
           }
@@ -786,7 +781,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">{t.upload.selectFile}:</p>
           <p className="font-medium text-gray-900 dark:text-white" data-testid="upload-file-name">{selectedFile.name}</p>
           <p className="text-sm text-gray-500">
-            {formatBytes(selectedFile.size)}
+            {formatSize(selectedFile.size)}
           </p>
         </div>
 
@@ -800,7 +795,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
                 {uploadProgress.state === 'complete' && t.upload.uploadComplete}
                 {uploadProgress.state === 'error' && t.upload.uploadFailed}
               </span>
-              <span className="text-sm text-gray-500" data-testid="upload-progress-percent">{uploadProgress.percentage.toFixed(0)}%</span>
+              <span className="text-sm text-gray-500" data-testid="upload-progress-percent">{formatPercent(lang, Math.round(uploadProgress.percentage) / 100)}</span>
             </div>
 
             <div
@@ -829,11 +824,11 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
             {uploadProgress.state === 'uploading' && uploadProgress.bytesUploaded && uploadProgress.bytesTotal && (
               <div className="flex items-center justify-between text-xs text-gray-500">
                 <span>
-                  {t.upload.bytesUploaded}: {formatBytes(uploadProgress.bytesUploaded)} / {formatBytes(uploadProgress.bytesTotal)}
+                  {t.upload.bytesUploaded}: {formatSize(uploadProgress.bytesUploaded)} / {formatSize(uploadProgress.bytesTotal)}
                 </span>
                 {uploadProgress.speed && (
                   <span>
-                    {t.upload.speed}: {formatBytes(uploadProgress.speed)}/s
+                    {t.upload.speed}: {formatSize(uploadProgress.speed)}/s
                   </span>
                 )}
                 {uploadProgress.timeRemaining && (

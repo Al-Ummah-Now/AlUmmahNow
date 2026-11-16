@@ -161,9 +161,9 @@ export default function AddToPlaylistDialog({ open, onOpenChange, channelId, vid
   const sentIds = new Set(sent.map((s) => s.playlistId));
   const fromSelection = videos.length > 0;
   const dialogTitle = !creating
-    ? counted(videos.length, p.dialogTitleOne, p.dialogTitleOther)
+    ? counted(videos.length, p.dialogTitleOne, p.dialogTitleOther, {}, lang)
     : fromSelection
-      ? counted(createCount, p.newWithOne, p.newWithOther)
+      ? counted(createCount, p.newWithOne, p.newWithOther, {}, lang)
       : p.newPlaylistHeading;
   const dialogText = !creating ? p.dialogDescriptionSelected : fromSelection ? p.newPlaylistHelpSelected : p.newPlaylistHelp;
 
@@ -307,7 +307,7 @@ export default function AddToPlaylistDialog({ open, onOpenChange, channelId, vid
                       return (
                         <li key={playlist.id} className="pl-pill inline-flex max-w-full items-center gap-1 ps-3" data-playlist-id={playlist.id}>
                           <span className={`max-w-[16rem] truncate text-sm ${TEXT}`} dir="auto">{title}</span>
-                          <button type="button" className="pl-pill-x" onClick={() => toggle(playlist.id)} disabled={adding} aria-label={fill(p.removeChosen, { title })}>
+                          <button type="button" className="pl-pill-x" onClick={() => toggle(playlist.id)} disabled={adding} aria-label={fill(p.removeChosen, { title }, lang)}>
                             <X className="h-3.5 w-3.5" aria-hidden="true" />
                           </button>
                         </li>
@@ -319,7 +319,7 @@ export default function AddToPlaylistDialog({ open, onOpenChange, channelId, vid
 
               <button type="button" className="b b-secondary w-full justify-center" onClick={() => setCreating(true)} disabled={adding} data-testid="add-to-playlist-new">
                 <Plus className="h-4 w-4" aria-hidden="true" />
-                {counted(videos.length, p.newWithOne, p.newWithOther)}
+                {counted(videos.length, p.newWithOne, p.newWithOther, {}, lang)}
               </button>
             </div>
           )}
@@ -334,7 +334,7 @@ export default function AddToPlaylistDialog({ open, onOpenChange, channelId, vid
             </button>
             <button type="button" className="b b-primary" onClick={() => void addToChosen()} disabled={adding || videos.length === 0} data-testid="add-to-playlist-submit">
               <ListPlus className="h-4 w-4" aria-hidden="true" />
-              {adding ? p.adding : chosen.length > 0 ? counted(chosen.length, p.addToOne, p.addToOther) : p.addToPlaylist}
+              {adding ? p.adding : chosen.length > 0 ? counted(chosen.length, p.addToOne, p.addToOther, {}, lang) : p.addToPlaylist}
             </button>
           </div>
         )}

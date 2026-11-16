@@ -3,6 +3,7 @@
  * Handles date formatting for both Gregorian and Hijri calendars
  */
 
+import { formatDate as formatLocaleDate, formatNumber } from '@al-ummah/shared-types';
 import { formatHijriDate, gregorianToHijri } from './hijriConverter';
 
 export type CalendarType = 'gregorian' | 'hijri';
@@ -62,9 +63,7 @@ export function formatDate(
     dateOptions.hour12 = true;
   }
 
-  // For Arabic, use 'ar-u-nu-arab' to get Arabic-Indic numerals (٠-٩)
-  const localeCode = locale === 'ar' ? 'ar-u-nu-arab' : 'en-US';
-  return new Intl.DateTimeFormat(localeCode, dateOptions).format(date);
+  return formatLocaleDate(locale === 'ar' ? 'ar' : 'en-US', date, dateOptions);
 }
 
 /**
@@ -75,9 +74,6 @@ export function formatTime(
   locale: 'en' | 'ar' = 'en',
   timeZone?: string
 ): string {
-  // For Arabic, use 'ar-u-nu-arab' to get Arabic-Indic numerals (٠-٩)
-  const localeCode = locale === 'ar' ? 'ar-u-nu-arab' : 'en-US';
-
   const options: Intl.DateTimeFormatOptions = {
     hour: '2-digit',
     minute: '2-digit',
@@ -85,7 +81,7 @@ export function formatTime(
     timeZone: timeZone || undefined,
   };
 
-  return new Intl.DateTimeFormat(localeCode, options).format(date);
+  return formatLocaleDate(locale === 'ar' ? 'ar' : 'en-US', date, options);
 }
 
 /**
@@ -106,40 +102,41 @@ export function formatScheduledTime(
   const absDiffMinutes = Math.abs(diffMinutes);
   const absDiffHours = Math.abs(diffHours);
   const absDiffDays = Math.abs(diffDays);
+  const n = (value: number) => formatNumber(locale, value);
 
   // Less than 1 hour
   if (absDiffMinutes < 60) {
     if (locale === 'ar') {
       return isPast
-        ? `قبل ${absDiffMinutes} دقيقة`
-        : `خلال ${absDiffMinutes} دقيقة`;
+        ? `قبل ${n(absDiffMinutes)} دقيقة`
+        : `خلال ${n(absDiffMinutes)} دقيقة`;
     }
     return isPast
-      ? `${absDiffMinutes} minute${absDiffMinutes !== 1 ? 's' : ''} ago`
-      : `in ${absDiffMinutes} minute${absDiffMinutes !== 1 ? 's' : ''}`;
+      ? `${n(absDiffMinutes)} minute${absDiffMinutes !== 1 ? 's' : ''} ago`
+      : `in ${n(absDiffMinutes)} minute${absDiffMinutes !== 1 ? 's' : ''}`;
   }
 
   // Less than 24 hours
   if (absDiffHours < 24) {
     if (locale === 'ar') {
       return isPast
-        ? `قبل ${absDiffHours} ساعة`
-        : `خلال ${absDiffHours} ساعة`;
+        ? `قبل ${n(absDiffHours)} ساعة`
+        : `خلال ${n(absDiffHours)} ساعة`;
     }
     return isPast
-      ? `${absDiffHours} hour${absDiffHours !== 1 ? 's' : ''} ago`
-      : `in ${absDiffHours} hour${absDiffHours !== 1 ? 's' : ''}`;
+      ? `${n(absDiffHours)} hour${absDiffHours !== 1 ? 's' : ''} ago`
+      : `in ${n(absDiffHours)} hour${absDiffHours !== 1 ? 's' : ''}`;
   }
 
   // Days
   if (locale === 'ar') {
     return isPast
-      ? `قبل ${absDiffDays} يوم`
-      : `خلال ${absDiffDays} يوم`;
+      ? `قبل ${n(absDiffDays)} يوم`
+      : `خلال ${n(absDiffDays)} يوم`;
   }
   return isPast
-    ? `${absDiffDays} day${absDiffDays !== 1 ? 's' : ''} ago`
-    : `in ${absDiffDays} day${absDiffDays !== 1 ? 's' : ''}`;
+    ? `${n(absDiffDays)} day${absDiffDays !== 1 ? 's' : ''} ago`
+    : `in ${n(absDiffDays)} day${absDiffDays !== 1 ? 's' : ''}`;
 }
 
 /**
@@ -155,15 +152,12 @@ export function formatMonthYear(
     return formatHijriDate(hijriDate, locale, { includeYear: true, includeDay: false });
   }
 
-  // For Arabic, use 'ar-u-nu-arab' to get Arabic-Indic numerals (٠-٩)
-  const localeCode = locale === 'ar' ? 'ar-u-nu-arab' : 'en-US';
-
   const options: Intl.DateTimeFormatOptions = {
     year: 'numeric',
     month: 'long',
   };
 
-  return new Intl.DateTimeFormat(localeCode, options).format(date);
+  return formatLocaleDate(locale === 'ar' ? 'ar' : 'en-US', date, options);
 }
 
 /**
@@ -191,14 +185,11 @@ export function getWeekdayShort(
   date: Date,
   locale: 'en' | 'ar' = 'en'
 ): string {
-  // For Arabic, use 'ar-u-nu-arab' for consistency
-  const localeCode = locale === 'ar' ? 'ar-u-nu-arab' : 'en-US';
-
   const options: Intl.DateTimeFormatOptions = {
     weekday: 'short',
   };
 
-  return new Intl.DateTimeFormat(localeCode, options).format(date);
+  return formatLocaleDate(locale === 'ar' ? 'ar' : 'en-US', date, options);
 }
 
 /**

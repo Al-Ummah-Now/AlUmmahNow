@@ -3,7 +3,7 @@
 import { logger } from '@/lib/logger-client';
 
 import { useEffect, useState } from 'react';
-import { PostComment } from '@al-ummah/shared-types';
+import { PostComment, formatNumber } from '@al-ummah/shared-types';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
 import ReplyForm from './ReplyForm';
@@ -63,7 +63,7 @@ function getTimeAgo(date: Date, isRTL: boolean): string {
           hour: interval === 1 ? 'ساعة' : interval === 2 ? 'ساعتان' : 'ساعات',
           minute: interval === 1 ? 'دقيقة' : interval === 2 ? 'دقيقتان' : 'دقائق',
         };
-        return `منذ ${interval} ${units[unit]}`;
+        return `منذ ${formatNumber('ar', interval)} ${units[unit]}`;
       } else {
         return `${interval} ${unit}${interval > 1 ? 's' : ''} ago`;
       }
@@ -451,7 +451,7 @@ export default function Comment({
                 ? 'جارٍ التحميل...'
                 : 'Loading...'
               : isRTL
-              ? `عرض ${repliesCount} ${repliesCount === 1 ? 'رد' : 'ردود'}`
+              ? `عرض ${formatNumber('ar', repliesCount)} ${repliesCount === 1 ? 'رد' : 'ردود'}`
               : `Show ${repliesCount} ${repliesCount === 1 ? 'reply' : 'replies'}`}
           </button>
         )}

@@ -5,6 +5,7 @@
 
 'use client';
 
+import { formatNumber, formatTime as formatTimeOfDay } from '@al-ummah/shared-types';
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { FitImage } from '@/components/VideoThumbnail/FitImage';
 import { formatScheduledTime } from '@/utils/dateFormatters';
@@ -83,6 +84,7 @@ const statusConfig: Record<ScheduledPublishStatus, {
 function formatCountdown(ms: number, locale: 'en' | 'ar'): string {
   if (ms <= 0) return locale === 'ar' ? 'قريباً' : 'Soon';
 
+  const n = (v: number) => formatNumber(locale, v);
   const seconds = Math.floor(ms / 1000);
   const minutes = Math.floor(seconds / 60);
   const hours = Math.floor(minutes / 60);
@@ -91,24 +93,24 @@ function formatCountdown(ms: number, locale: 'en' | 'ar'): string {
   if (days > 0) {
     const h = hours % 24;
     return locale === 'ar'
-      ? `${days} يوم ${h > 0 ? `و ${h} ساعة` : ''}`
-      : `${days}d ${h > 0 ? `${h}h` : ''}`;
+      ? `${n(days)} يوم ${h > 0 ? `و ${n(h)} ساعة` : ''}`
+      : `${n(days)}d ${h > 0 ? `${n(h)}h` : ''}`;
   }
   if (hours > 0) {
     const m = minutes % 60;
     return locale === 'ar'
-      ? `${hours} ساعة ${m > 0 ? `و ${m} دقيقة` : ''}`
-      : `${hours}h ${m > 0 ? `${m}m` : ''}`;
+      ? `${n(hours)} ساعة ${m > 0 ? `و ${n(m)} دقيقة` : ''}`
+      : `${n(hours)}h ${m > 0 ? `${n(m)}m` : ''}`;
   }
   if (minutes > 0) {
-    return locale === 'ar' ? `${minutes} دقيقة` : `${minutes}m`;
+    return locale === 'ar' ? `${n(minutes)} دقيقة` : `${n(minutes)}m`;
   }
   return locale === 'ar' ? 'أقل من دقيقة' : '<1m';
 }
 
 // Format time for display (e.g., "11:10 PM")
 function formatTime(date: Date, locale: 'en' | 'ar'): string {
-  return date.toLocaleTimeString(locale === 'ar' ? 'ar-SA' : 'en-US', {
+  return formatTimeOfDay(locale === 'ar' ? 'ar' : 'en-US', date, {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true

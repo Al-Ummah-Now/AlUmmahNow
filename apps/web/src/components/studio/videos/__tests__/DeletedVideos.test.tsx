@@ -66,6 +66,6 @@ describe('DeletedVideos', () => {
   it('says when nothing was deleted', async () => {
     list.mockResolvedValue({ items: [], cursor: null });
     render(<DeletedVideos locale="en" channelId="c1" />);
-    expect(await screen.findByTestId('studio-deleted-empty')).toHaveTextContent(STUDIO_EN.videos.trash.empty);
+    expect(await screen.findByTestId('studio-deleted-empty')).toHaveTextContent(STUDIO_EN.videos.trash.empty.replace('{days}', '30'));
   });
 });

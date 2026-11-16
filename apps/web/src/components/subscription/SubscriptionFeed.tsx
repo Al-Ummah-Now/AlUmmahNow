@@ -1,4 +1,5 @@
 'use client';
+import { formatTime } from '@al-ummah/shared-types';
 import { HelpLink } from '@/components/help/HelpLink';
 import { logger } from '@/lib/logger-client';
 import React, { useState, useEffect, useCallback } from 'react';
@@ -108,7 +109,7 @@ export const SubscriptionFeed: React.FC<SubscriptionFeedProps> = ({
         <div className="flex items-center gap-4">
           {lastRefresh && (
             <span className="text-sm text-gray-500 dark:text-gray-400" data-testid="feed-last-updated">
-              {t.subscriptions.lastUpdated} {lastRefresh.toLocaleTimeString(lang === 'ar' ? 'ar' : 'en-US')}
+              {t.subscriptions.lastUpdated} {formatTime(lang === 'ar' ? 'ar' : 'en-US', lastRefresh, { timeStyle: 'medium' })}
             </span>
           )}
           <Button

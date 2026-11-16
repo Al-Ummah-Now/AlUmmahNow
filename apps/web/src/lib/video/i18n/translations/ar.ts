@@ -40,7 +40,7 @@ export const AR_TRANSLATIONS: VideoPlayerTranslations = {
       playing: 'يتم التشغيل',
       paused: 'متوقف مؤقتاً',
       muted: 'الصوت مكتوم',
-      volume: 'مستوى الصوت {volume}%',
+      volume: 'مستوى الصوت {volume}٪',
       fullscreenOn: 'وضع ملء الشاشة',
       fullscreenOff: 'خروج من ملء الشاشة',
       playbackError: 'حدث خطأ في تشغيل المرئي',

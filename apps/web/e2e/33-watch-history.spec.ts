@@ -67,7 +67,7 @@ test.describe('watch history - signed in', () => {
 
   for (const [locale, percent, removeLabel] of [
     ['en', /40% watched/, 'Remove from history'],
-    ['ar', /تمت مشاهدة 40%/, 'إزالة من السجل'],
+    ['ar', /تمت مشاهدة ٤٠٪/, 'إزالة من السجل'],
   ] as const) {
     test(`HIST-002 lists a watched video with progress, links to it, and removes it (${locale})`, async ({ page, request }) => {
       const video = videos[0];

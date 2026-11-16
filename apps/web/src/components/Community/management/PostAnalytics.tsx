@@ -1,5 +1,6 @@
 'use client';
 
+import { formatNumber, formatPercent } from '@al-ummah/shared-types';
 import { Card } from '@/components/ui/card';
 import { Eye, ThumbsUp, MessageSquare, Share2, TrendingUp } from 'lucide-react';
 
@@ -21,25 +22,25 @@ export function PostAnalytics({ views, likes, comments, shares, locale }: PostAn
   const metrics = [
     {
       label: isRTL ? 'المشاهدات' : 'Views',
-      value: views.toLocaleString(isRTL ? 'ar-SA' : 'en-US'),
+      value: formatNumber(isRTL ? 'ar' : 'en-US', views),
       icon: Eye,
       color: 'text-blue-500'
     },
     {
       label: isRTL ? 'الإعجابات' : 'Likes',
-      value: likes.toLocaleString(isRTL ? 'ar-SA' : 'en-US'),
+      value: formatNumber(isRTL ? 'ar' : 'en-US', likes),
       icon: ThumbsUp,
       color: 'text-green-500'
     },
     {
       label: isRTL ? 'التعليقات' : 'Comments',
-      value: comments.toLocaleString(isRTL ? 'ar-SA' : 'en-US'),
+      value: formatNumber(isRTL ? 'ar' : 'en-US', comments),
       icon: MessageSquare,
       color: 'text-orange-500'
     },
     {
       label: isRTL ? 'المشاركات' : 'Shares',
-      value: shares.toLocaleString(isRTL ? 'ar-SA' : 'en-US'),
+      value: formatNumber(isRTL ? 'ar' : 'en-US', shares),
       icon: Share2,
       color: 'text-purple-500'
     }
@@ -82,7 +83,7 @@ export function PostAnalytics({ views, likes, comments, shares, locale }: PostAn
             </span>
           </div>
           <p className="text-lg md:text-xl font-bold text-primary">
-            {engagementRate.toFixed(1)}%
+            {formatPercent(locale, engagementRate / 100, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
           </p>
         </div>
       </Card>

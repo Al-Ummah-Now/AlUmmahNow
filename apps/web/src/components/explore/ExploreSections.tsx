@@ -5,6 +5,7 @@
  * Rails scroll horizontally on small screens; spacing uses logical properties.
  */
 
+import { formatDate } from '@al-ummah/shared-types';
 import React from 'react';
 import Link from '@/components/common/AppLink';
 import {
@@ -229,7 +230,7 @@ export function SeasonalSection({ rail }: { rail: SeasonalRail }) {
   const ends = new Date(rail.endsAt);
   const until = Number.isNaN(ends.getTime())
     ? undefined
-    : t.explore.seasonalUntil.replace('{date}', ends.toLocaleDateString(lang === 'ar' ? 'ar' : 'en', { day: 'numeric', month: 'long' }));
+    : t.explore.seasonalUntil.replace('{date}', formatDate(lang === 'ar' ? 'ar' : 'en', ends, { day: 'numeric', month: 'long' }));
   if (rail.videos.length === 0) return null;
   return (
     <section aria-labelledby={`explore-seasonal-${rail.id}`} data-testid="explore-seasonal" data-rail-id={rail.id}>

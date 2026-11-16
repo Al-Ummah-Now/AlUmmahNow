@@ -7,7 +7,7 @@
  */
 import { useEffect, useState } from 'react';
 import Link from '@/components/common/AppLink';
-import { suggestSiteSlug, type SitePageSummary } from '@al-ummah/shared-types';
+import { suggestSiteSlug, type SitePageSummary, formatNumber } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -53,7 +53,7 @@ export function SitePages({ channelId, locale }: { channelId: string; locale: st
   return (
     <section aria-labelledby="site-pages-h" className="space-y-3" data-testid="studio-site-pages">
       <h2 id="site-pages-h" className="text-lg font-medium">{p.title}</h2>
-      <p className="text-muted-foreground text-sm">{p.hint.replace('{max}', String(limit))}</p>
+      <p className="text-muted-foreground text-sm">{p.hint.replace('{max}', formatNumber(lang, limit))}</p>
       {pages && pages.length === 0 && <p className="text-sm">{p.none}</p>}
       {pages && pages.length > 0 && (
         <ul className="divide-y divide-border rounded-md border border-border">

@@ -5,6 +5,7 @@
  * rule decide (≤ 3 min and vertical or square = Short, shared-types
  * video-format.ts); the other two always win over detection.
  */
+import { fillTemplate, SHORT_MAX_SECONDS } from '@al-ummah/shared-types';
 import React from 'react';
 import { OptionCard } from '@/components/ui/OptionCard';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -28,16 +29,17 @@ export function formatChoiceOf(video: { format?: unknown } | null | undefined): 
 }
 
 export function VideoFormatChoice({ value, onChange, name = 'videoFormat', testIdPrefix = 'video-format', disabled }: VideoFormatChoiceProps) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
+  const shortMinutes = { minutes: SHORT_MAX_SECONDS / 60 };
   const label = (option: VideoFormatChoiceValue) =>
     option === 'short' ? t.video.formatShort : option === 'video' ? t.video.formatVideo : t.video.formatAuto;
   const hint = (option: VideoFormatChoiceValue) =>
-    option === 'short' ? t.video.formatShortHint : option === 'video' ? t.video.formatVideoHint : t.video.formatAutoHint;
+    option === 'short' ? t.video.formatShortHint : option === 'video' ? t.video.formatVideoHint : fillTemplate(lang, t.video.formatAutoHint ?? '', shortMinutes);
 
   return (
     <fieldset data-testid={testIdPrefix} disabled={disabled}>
       <legend className="block text-sm font-medium mb-1 text-[var(--fanous-color-text-primary)]">{t.video.formatLabel}</legend>
-      <p className="text-sm text-[var(--fanous-color-text-secondary)] mb-2">{t.video.formatHelp}</p>
+      <p className="text-sm text-[var(--fanous-color-text-secondary)] mb-2">{fillTemplate(lang, t.video.formatHelp ?? '', shortMinutes)}</p>
       <div className="space-y-2">
         {OPTIONS.map((option) => (
           <OptionCard

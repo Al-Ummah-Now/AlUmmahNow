@@ -31,7 +31,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { ContactTopicKey } from '@al-ummah/shared-types';
-import { errorScreenStrings, parseErrorRef } from '@al-ummah/shared-types';
+import { errorScreenStrings, parseErrorRef, formatNumber } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { MAIN_CONTENT_ID } from '@/components/SkipLinks';
@@ -409,7 +409,7 @@ export function ContactPage() {
                     data-over={messageLength > CONTACT_LIMITS.messageMax || undefined}
                     data-testid="contact-counter"
                   >
-                    {fill(c.fields.counter, { count: messageLength.toLocaleString(lang), max: CONTACT_LIMITS.messageMax.toLocaleString(lang) })}
+                    {fill(c.fields.counter, { count: formatNumber(lang, messageLength), max: formatNumber(lang, CONTACT_LIMITS.messageMax) })}
                   </span>
                 </div>
                 <textarea

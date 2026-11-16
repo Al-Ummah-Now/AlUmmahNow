@@ -1,5 +1,6 @@
 'use client';
 
+import { formatNumber } from '@al-ummah/shared-types';
 import React from 'react';
 import { FitImage } from '@/components/VideoThumbnail/FitImage';
 import Link from '@/components/common/AppLink';
@@ -52,7 +53,7 @@ export function WatchHistoryEntry({ entry, lang, t, onRemove }: WatchHistoryEntr
         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
           <span title={watchedDate}>{t.watchHistory.lastWatched.replace('{date}', watchedOn)}</span>
           {' • '}
-          {entry.completed ? t.watchHistory.completed : t.watchHistory.percentWatched.replace('{percent}', String(percent))}
+          {entry.completed ? t.watchHistory.completed : t.watchHistory.percentWatched.replace('{percent}', formatNumber(lang, percent))}
         </p>
       </div>
       <button

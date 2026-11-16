@@ -1,5 +1,6 @@
 'use client';
 
+import { formatNumber } from '@al-ummah/shared-types';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -98,7 +99,7 @@ export function PollPostForm({ data, onChange, locale, error }: PollPostFormProp
                     value={option.text}
                     onChange={(e) => handleOptionChange(index, e.target.value)}
                     placeholder={isRTL
-                      ? `الخيار ${index + 1}`
+                      ? `الخيار ${formatNumber('ar', index + 1)}`
                       : `Option ${index + 1}`
                     }
                     dir={isRTL ? 'rtl' : 'ltr'}
@@ -158,10 +159,10 @@ export function PollPostForm({ data, onChange, locale, error }: PollPostFormProp
                 {isRTL ? 'يوم واحد' : '1 day'}
               </SelectItem>
               <SelectItem value="3">
-                {isRTL ? '٣ أيام' : '3 days'}
+                {isRTL ? `${formatNumber('ar', 3)} أيام` : '3 days'}
               </SelectItem>
               <SelectItem value="7">
-                {isRTL ? '٧ أيام' : '7 days'}
+                {isRTL ? `${formatNumber('ar', 7)} أيام` : '7 days'}
               </SelectItem>
             </SelectContent>
           </Select>

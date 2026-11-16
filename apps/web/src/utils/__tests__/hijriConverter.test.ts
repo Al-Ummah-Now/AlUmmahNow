@@ -177,9 +177,11 @@ describe('hijriConverter', () => {
       const formatted = formatHijriDate(testDate, 'ar');
 
       expect(formatted).toContain('رمضان');
-      expect(formatted).toContain('15');
-      expect(formatted).toContain('1446');
+      // Eastern Arabic (Hindi) numerals in Arabic (owner decision 2026-11-15)
+      expect(formatted).toContain('١٥');
+      expect(formatted).toContain('١٤٤٦');
       expect(formatted).toContain('هـ');
+      expect(formatted).not.toMatch(/[0-9]/);
     });
 
     it('should handle different date formats - no year', () => {

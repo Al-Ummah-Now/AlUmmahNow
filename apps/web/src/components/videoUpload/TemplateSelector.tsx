@@ -12,7 +12,7 @@ import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { FileText, ChevronDown, AlertCircle } from 'lucide-react';
-import { UploadTemplate } from '@al-ummah/shared-types';
+import { UploadTemplate, formatDate } from '@al-ummah/shared-types';
 import { listTemplates } from '@/lib/api/upload-defaults';
 import { parseTemplateListResponse } from '@/lib/upload/template-list';
 import { processTemplateVariables, type VariableContext, type ProcessedMetadata } from '@/lib/upload/template-variables';
@@ -70,7 +70,7 @@ export function TemplateSelector({
     const context: VariableContext = {
       channelName,
       uploaderName,
-      uploadDate: new Date().toLocaleDateString(),
+      uploadDate: formatDate('en-US', new Date(), {}),
     };
 
     const metadata = processTemplateVariables(template, context);
@@ -151,7 +151,7 @@ export function TemplateSelector({
     const context: VariableContext = {
       channelName,
       uploaderName,
-      uploadDate: new Date().toLocaleDateString(),
+      uploadDate: formatDate('en-US', new Date(), {}),
       ...variableContext,
     };
 

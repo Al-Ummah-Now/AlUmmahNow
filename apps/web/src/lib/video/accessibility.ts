@@ -27,6 +27,7 @@
  * ```
  */
 
+import { formatNumber } from '@al-ummah/shared-types';
 import type { ExtendedPlayer } from './videojs';
 import { plural } from './i18n/utils/plural';
 import { logger } from '@/lib/logger-client';
@@ -332,7 +333,7 @@ export function setupAccessibility(
         const volume = Math.round(player.volume() * 100);
         const message = player.muted()
           ? said.muted
-          : said.volume.replace('{volume}', String(volume));
+          : said.volume.replace('{volume}', formatNumber(lang, volume));
         announcementManager.announce(message);
       };
       eventHandlers.push({ event: 'volumechange', handler: volumeHandler });

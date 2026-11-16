@@ -107,7 +107,7 @@ export default function PlaylistManager({ channelId }: PlaylistManagerProps) {
           <AlertTriangle className="h-5 w-5 flex-none" aria-hidden="true" />
           <div className="min-w-0 flex-1 space-y-1">
             <p className="font-medium">{error.message}</p>
-            {error.ref && <p className="text-xs">{fill(p.errorRef, { ref: error.ref })}</p>}
+            {error.ref && <p className="text-xs">{fill(p.errorRef, { ref: error.ref }, lang)}</p>}
           </div>
           {error.retry && (
             <button type="button" className="b b-secondary b-sm flex-none" onClick={() => { setError(null); error.retry?.(); }}>{p.tryAgain}</button>

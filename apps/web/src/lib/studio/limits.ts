@@ -1,5 +1,6 @@
 /** Explains a plan limit the API refused an action for (HTTP 402 upgrade_required). */
 
+import { formatNumber } from '@al-ummah/shared-types';
 import type { StudioTranslations } from '@al-ummah/shared-types';
 
 export interface LimitRefusal {
@@ -27,10 +28,10 @@ export function isLimitRefusal(value: unknown): value is LimitRefusal {
   return typeof value === 'object' && value !== null && 'entitlement' in value;
 }
 
-export function limitRefusalMessage(text: StudioTranslations['limits'], refusal: LimitRefusal): string {
+export function limitRefusalMessage(text: StudioTranslations['limits'], refusal: LimitRefusal, lang = 'en'): string {
   switch (refusal.entitlement) {
     case 'studio.drafts.max':
-      return text.draftsMax.replace('{limit}', String(refusal.limit));
+      return text.draftsMax.replace('{limit}', typeof refusal.limit === 'number' ? formatNumber(lang, refusal.limit) : String(refusal.limit ?? ''));
     case 'studio.bulkSchedule':
       return text.bulkSchedule;
     default:

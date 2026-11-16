@@ -3,6 +3,7 @@
  * the sidebar is for browsing, the account menu for account and channel scope,
  * and the header for its own actions.
  */
+import { formatNumber } from '@al-ummah/shared-types';
 export const SIDEBAR_PATHS = {
   home: '/',
   explore: '/explore',
@@ -42,5 +43,5 @@ export function statusPageUrl(hostname: string, lang: string): string {
 
 /** Unread badge text: past 9 the exact number is noise. */
 export function unreadBadge(count: number, lang: string): string {
-  return count > 9 ? `${(9).toLocaleString(lang)}+` : count.toLocaleString(lang);
+  return count > 9 ? `${formatNumber(lang, 9)}+` : formatNumber(lang, count);
 }

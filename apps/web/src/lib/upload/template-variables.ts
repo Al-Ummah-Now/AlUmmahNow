@@ -5,7 +5,7 @@
  * This file contains synchronous, client-side functions.
  */
 
-import { UploadTemplate, VideoCategory } from '@al-ummah/shared-types';
+import { UploadTemplate, VideoCategory, formatDate, formatDateTime, formatTime } from '@al-ummah/shared-types';
 
 /**
  * Context for processing template variables
@@ -52,13 +52,14 @@ export function processTemplateVariables(
   // Variable replacement map
   const variables: Record<string, string> = {
     // Date/Time
-    '{{date}}': now.toLocaleDateString(),
-    '{{time}}': now.toLocaleTimeString(),
-    '{{datetime}}': now.toLocaleString(),
+    // English values with 0–9 (the template text is the creator's own); explicit, so every browser agrees
+    '{{date}}': formatDate('en-US', now, {}),
+    '{{time}}': formatTime('en-US', now, { timeStyle: 'medium' }),
+    '{{datetime}}': formatDateTime('en-US', now, { dateStyle: 'short', timeStyle: 'medium' }),
     '{{year}}': now.getFullYear().toString(),
     '{{month}}': (now.getMonth() + 1).toString().padStart(2, '0'),
     '{{day}}': now.getDate().toString().padStart(2, '0'),
-    '{{weekday}}': now.toLocaleDateString('en-US', { weekday: 'long' }),
+    '{{weekday}}': formatDate('en-US', now, { weekday: 'long' }),
 
     // Islamic dates (approximate - should use Hijri calendar library in production)
     '{{hijri_date}}': getHijriDate(now),
@@ -84,7 +85,7 @@ export function processTemplateVariables(
     // Video
     '{{video_title}}': context.videoTitle || '',
     '{{video_duration}}': context.videoDuration || '',
-    '{{upload_date}}': context.uploadDate || now.toLocaleDateString(),
+    '{{upload_date}}': context.uploadDate || formatDate('en-US', now, {}),
   };
 
   // Replace variables in text

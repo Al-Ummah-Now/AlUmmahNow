@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
-import { getLocalizedValue, type VideoObject } from '@al-ummah/shared-types';
+import { getLocalizedValue, type VideoObject, formatNumber } from '@al-ummah/shared-types';
 import { getChannelVideos } from '@/lib/api/channels';
 import { getVideoById } from '@/lib/api/videos';
 import { Input } from '@/components/ui/input';
@@ -111,7 +111,7 @@ export function VideoPicker({ channelId, value, onChange, max, anyChannel = fals
       <SelectedList items={value} onChange={onChange} testId={`${testId}-selected`} />
       {!single && (
         <p className="text-xs text-muted-foreground" aria-live="polite">
-          {full ? f.maxReached : f.selectedCount.replace('{count}', String(value.length)).replace('{max}', String(max))}
+          {full ? f.maxReached : f.selectedCount.replace('{count}', formatNumber(lang, value.length)).replace('{max}', formatNumber(lang, max))}
         </p>
       )}
 

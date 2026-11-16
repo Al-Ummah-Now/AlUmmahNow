@@ -53,7 +53,7 @@ afterEach(() => {
 describe('volume slider semantics', () => {
   it.each([
     ['en', 'Volume', 'Volume 70%'],
-    ['ar', 'التحكم بالصوت', 'مستوى الصوت 70%'],
+    ['ar', 'التحكم بالصوت', 'مستوى الصوت ٧٠٪'],
   ] as const)('is named and valued in the page language (%s)', (lang, name, valueText) => {
     const { player, bar } = makePlayer();
     setupKeyboardAccessibility(player, lang);

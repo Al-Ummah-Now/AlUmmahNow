@@ -16,6 +16,7 @@ import {
   type SiteNavKind,
   type SiteSettingsProblem,
   type SiteSettingsUpdate,
+  formatNumber,
 } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -231,7 +232,7 @@ export function SiteSettingsEditor({ locale, channelId, channelName, initial }: 
 
       <section aria-labelledby="site-nav-h" className="space-y-3">
         <h2 id="site-nav-h" className="text-lg font-medium">{s.navigation}</h2>
-        <p className="text-muted-foreground text-sm">{s.navigationHint.replace('{max}', String(max))}</p>
+        <p className="text-muted-foreground text-sm">{s.navigationHint.replace('{max}', formatNumber(locale, max))}</p>
         <ol className="space-y-3" data-testid="studio-site-nav">
           {draft.navigation.map((item, index) => (
             <li key={item.id} className="space-y-2 rounded-md border border-border p-3" data-testid="studio-site-nav-item">
@@ -319,7 +320,7 @@ export function SiteSettingsEditor({ locale, channelId, channelName, initial }: 
 
       <section aria-labelledby="site-redirects-h" className="space-y-3">
         <h2 id="site-redirects-h" className="text-lg font-medium">{s.redirects.title}</h2>
-        <p className="text-muted-foreground text-sm">{s.redirects.hint.replace('{max}', String(SITE_REDIRECTS_MAX))}</p>
+        <p className="text-muted-foreground text-sm">{s.redirects.hint.replace('{max}', formatNumber(locale, SITE_REDIRECTS_MAX))}</p>
         <ul className="space-y-2" data-testid="studio-site-redirects">
           {draft.redirects.map((r, i) => (
             <li key={i} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">

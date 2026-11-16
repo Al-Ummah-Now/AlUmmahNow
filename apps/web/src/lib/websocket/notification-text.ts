@@ -1,3 +1,4 @@
+import { fillTemplate } from '@al-ummah/shared-types';
 import type { NotificationEvent, RealtimeNotificationKey } from '@/interfaces/websocket';
 import type { AppTranslations } from '@/lib/i18n/types';
 
@@ -24,8 +25,9 @@ const KEY_TO_TEXT: Record<Exclude<RealtimeNotificationKey, 'accountWarning'>, { 
 
 const CHANNEL_TEAM_KEYS = new Set<string>(['channelInviteReceived', 'channelInviteAccepted', 'channelRoleChanged', 'channelMemberRemoved', 'channelMemberLeft']);
 
-function interpolate(template: string, params: Record<string, string | number> = {}): string {
-  return template.replace(/\{(\w+)\}/g, (_, name: string) => (params[name] !== undefined ? String(params[name]) : ''));
+/** Numbers in the viewer's digits (Arabic ٠–٩), strings as sent. */
+function interpolate(template: string, params: Record<string, string | number> = {}, lang = 'en'): string {
+  return fillTemplate(lang, template, params, '');
 }
 
 /**
@@ -53,6 +55,7 @@ export function resolveNotificationText(
   t: AppTranslations,
   lang?: string
 ): { title: string; message: string } {
+  const fill = (template: string, params?: Record<string, string | number>) => interpolate(template, params, lang);
   const event: NotificationEvent = { ...input, params: localizeParams(input.params as Record<string, string | number> | undefined, lang) as NotificationEvent['params'] };
   // Upload results read the current copy (uploadStatus.notification): stored
   // translation files keep older values for the realtime.* keys
@@ -60,8 +63,8 @@ export function resolveNotificationText(
   if (upload && (event.notificationKey === 'uploadReady' || event.notificationKey === 'uploadFailed')) {
     const ready = event.notificationKey === 'uploadReady';
     return {
-      title: interpolate(ready ? upload.readyTitle : upload.failedTitle, event.params),
-      message: interpolate(ready ? upload.readyMessage : upload.failedMessage, event.params),
+      title: fill(ready ? upload.readyTitle : upload.failedTitle, event.params),
+      message: fill(ready ? upload.readyMessage : upload.failedMessage, event.params),
     };
   }
 
@@ -71,7 +74,7 @@ export function resolveNotificationText(
     const code = String(event.params?.reason ?? 'other');
     const reasons = warning.reasons as Record<string, string>;
     const params = { ...event.params, reason: reasons[code] ?? reasons.other };
-    return { title: interpolate(warning.title, params), message: interpolate(warning.message, params) };
+    return { title: fill(warning.title, params), message: fill(warning.message, params) };
   }
 
   // Channel team notifications send the role as a code: it reads as the reader's role name
@@ -85,8 +88,8 @@ export function resolveNotificationText(
   if (mapping) {
     const texts = t.notifications.realtime;
     return {
-      title: interpolate(texts[mapping.title], event.params),
-      message: interpolate(texts[mapping.message], event.params),
+      title: fill(texts[mapping.title], event.params),
+      message: fill(texts[mapping.message], event.params),
     };
   }
 

@@ -44,7 +44,7 @@ interface Props {
 const ACTIVE = new Set(['queued', 'running', 'retrying']);
 
 export default function BulkAddNotice({ playlistId, playlistTitle, channelId, outcome: initial, videoIds, onChanged, justCreated, pollMs = 2500 }: Props) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const p = t.playlistTools;
   const [outcome, setOutcome] = useState<BulkAddOutcome>(initial);
   const [job, setJob] = useState<PlaylistAddJobStatus | null>(null);
@@ -120,41 +120,41 @@ export default function BulkAddNotice({ playlistId, playlistTitle, channelId, ou
   if (outcome.kind === 'request-failed') {
     tone = 'error';
     icon = <AlertTriangle className="h-5 w-5 flex-none" aria-hidden="true" />;
-    lines.push(outcome.status === 403 ? fill(p.addForbidden, { title }) : justCreated ? fill(p.createdAddFailed, { title }) : fill(p.addFailed, { title }));
+    lines.push(outcome.status === 403 ? fill(p.addForbidden, { title }, lang) : justCreated ? fill(p.createdAddFailed, { title }, lang) : fill(p.addFailed, { title }, lang));
     canRetry = outcome.status !== 403;
-    if (outcome.ref) lines.push(fill(p.errorRef, { ref: outcome.ref }));
+    if (outcome.ref) lines.push(fill(p.errorRef, { ref: outcome.ref }, lang));
   } else if (result) {
-    if (result.added > 0) lines.push(counted(result.added, p.addDoneOne, p.addDoneOther, { title }));
-    else if (result.pending === 0 && result.alreadyInPlaylist > 0 && result.notInChannel === 0) lines.push(fill(p.addNothingNew, { title }));
-    if (result.alreadyInPlaylist > 0 && result.added + result.pending > 0) lines.push(fill(p.skippedAlready, { count: result.alreadyInPlaylist }));
-    if (result.notInChannel > 0) lines.push(fill(p.skippedUnavailable, { count: result.notInChannel }));
+    if (result.added > 0) lines.push(counted(result.added, p.addDoneOne, p.addDoneOther, { title }, lang));
+    else if (result.pending === 0 && result.alreadyInPlaylist > 0 && result.notInChannel === 0) lines.push(fill(p.addNothingNew, { title }, lang));
+    if (result.alreadyInPlaylist > 0 && result.added + result.pending > 0) lines.push(fill(p.skippedAlready, { count: result.alreadyInPlaylist }, lang));
+    if (result.notInChannel > 0) lines.push(fill(p.skippedUnavailable, { count: result.notInChannel }, lang));
 
     if (result.status === 'failed' && (!job || job.status === 'failed')) {
       tone = 'error';
       icon = <AlertTriangle className="h-5 w-5 flex-none" aria-hidden="true" />;
-      lines.push(justCreated && result.added === 0 ? fill(p.createdAddFailed, { title }) : fill(p.addJobFailed, { title }));
+      lines.push(justCreated && result.added === 0 ? fill(p.createdAddFailed, { title }, lang) : fill(p.addJobFailed, { title }, lang));
       canRetry = true;
     } else if (result.status === 'queued' || job) {
       const status = job?.status ?? 'queued';
       if (ACTIVE.has(status)) {
         tone = 'info';
         icon = <Loader2 className="h-5 w-5 flex-none animate-spin motion-reduce:animate-none" aria-hidden="true" />;
-        lines.push(fill(p.addQueued, { count: job?.total ?? result.pending, title }));
+        lines.push(fill(p.addQueued, { count: job?.total ?? result.pending, title }, lang));
         progress = { done: job?.processed ?? 0, total: job?.total ?? result.pending };
       } else if (status === 'succeeded') {
-        lines.push(fill(p.addFinished, { title }));
-        if (job && job.notInChannel > 0) lines.push(fill(p.skippedUnavailable, { count: job.notInChannel }));
+        lines.push(fill(p.addFinished, { title }, lang));
+        if (job && job.notInChannel > 0) lines.push(fill(p.skippedUnavailable, { count: job.notInChannel }, lang));
       } else {
         tone = 'error';
         icon = <AlertTriangle className="h-5 w-5 flex-none" aria-hidden="true" />;
-        lines.push(fill(p.addJobFailed, { title }));
+        lines.push(fill(p.addJobFailed, { title }, lang));
         canRetry = true;
       }
     }
   }
 
   // A new playlist created without videos
-  if (lines.length === 0 && justCreated) lines.push(fill(p.createdPlaylist, { title }));
+  if (lines.length === 0 && justCreated) lines.push(fill(p.createdPlaylist, { title }, lang));
 
   return (
     <div
@@ -168,10 +168,10 @@ export default function BulkAddNotice({ playlistId, playlistTitle, channelId, ou
         {lines.map((line, i) => <p key={i} className={i === 0 ? 'font-medium' : ''}>{line}</p>)}
         {progress && (
           <div className="pt-1">
-            <div className="pl-progress" role="progressbar" aria-valuemin={0} aria-valuemax={progress.total} aria-valuenow={progress.done} aria-label={fill(p.addProgress, progress)}>
+            <div className="pl-progress" role="progressbar" aria-valuemin={0} aria-valuemax={progress.total} aria-valuenow={progress.done} aria-label={fill(p.addProgress, progress, lang)}>
               <span style={{ inlineSize: `${progress.total ? Math.round((progress.done / progress.total) * 100) : 0}%` }} />
             </div>
-            <p className="mt-1 text-xs">{fill(p.addProgress, progress)}</p>
+            <p className="mt-1 text-xs">{fill(p.addProgress, progress, lang)}</p>
           </div>
         )}
       </div>

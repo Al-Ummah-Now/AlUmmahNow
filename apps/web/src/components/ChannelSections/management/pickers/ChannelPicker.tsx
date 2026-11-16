@@ -1,5 +1,6 @@
 'use client';
 
+import { formatNumber } from '@al-ummah/shared-types';
 import { useCallback, useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Autocomplete, type AutocompleteOption, type AutocompletePage } from '@/components/ui/Autocomplete';
@@ -29,7 +30,7 @@ interface ChannelPickerProps {
  * listable channels; the API checks again on save.
  */
 export function ChannelPicker({ channelId, value, onChange, max, testId, label }: ChannelPickerProps) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const f = t.channelSections.form;
   const [query, setQuery] = useState('');
 
@@ -61,7 +62,7 @@ export function ChannelPicker({ channelId, value, onChange, max, testId, label }
     <div className="space-y-3">
       <SelectedList items={value} onChange={onChange} testId={`${testId}-selected`} />
       <p className="text-xs text-muted-foreground" aria-live="polite">
-        {full ? f.maxReached : f.selectedCount.replace('{count}', String(value.length)).replace('{max}', String(max))}
+        {full ? f.maxReached : f.selectedCount.replace('{count}', formatNumber(lang, value.length)).replace('{max}', formatNumber(lang, max))}
       </p>
       <Autocomplete
         mode="inline"

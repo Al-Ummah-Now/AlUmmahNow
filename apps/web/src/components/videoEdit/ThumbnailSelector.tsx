@@ -69,7 +69,7 @@ export default function ThumbnailSelector({
   videoHeight,
   className = '',
 }: ThumbnailSelectorProps) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedThumbnail, setSelectedThumbnail] = useState(currentThumbnailUrl);
   const [customThumbnail, setCustomThumbnail] = useState<string | null>(null);
@@ -164,7 +164,7 @@ export default function ThumbnailSelector({
         onThumbnailChange(uploadedUrl);
       } else {
         setCustomThumbnail(null);
-        setUploadError(thumbnailRefusalMessage(t, result));
+        setUploadError(thumbnailRefusalMessage(t, result, lang));
       }
     } catch (error) {
       logger.error('[ThumbnailSelector] Error uploading thumbnail', { videoId, error });

@@ -6,6 +6,7 @@
  * the raw error: the failures are reported to the admin Errors page by
  * api-videos (with Retry) and by the reporter.
  */
+import { formatNumber } from '@al-ummah/shared-types';
 import React from 'react';
 import { ListVideo } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -28,7 +29,7 @@ export function PlaylistAddNotices({ notices, playlists }: Props) {
   };
   const text = (n: PlaylistAddNotice) => {
     const template = n.kind === 'retrying' ? (n.count === 1 ? s.willRetryOne : s.willRetry) : n.count === 1 ? s.notAddedOne : s.notAdded;
-    return template.replace('{count}', String(n.count)).replace('{title}', titleOf(n.playlistId));
+    return template.replace('{count}', formatNumber(lang, n.count)).replace('{title}', titleOf(n.playlistId));
   };
   return (
     <div className="mb-6 space-y-2" data-testid="playlist-add-notices">

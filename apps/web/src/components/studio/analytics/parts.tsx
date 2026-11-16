@@ -1,19 +1,20 @@
 'use client';
 
 import { useLanguage } from '@/hooks/useLanguage';
-import { chartLocale } from '@al-ummah/shared-types';
+import { numberFormat, fillTemplate } from '@al-ummah/shared-types';
 import { trafficRows, type TrafficData } from '@/lib/studio/analytics';
 
 export function StatCard({ label, value, change, note, locale }: { label: string; value: string; change?: number | null; note?: string; locale?: string }) {
-  const { t } = useLanguage();
-  const signed = new Intl.NumberFormat(chartLocale(locale ?? 'en'), { signDisplay: 'exceptZero' });
+  const { t, lang } = useLanguage();
+  // A change in percent (12 = 12%): «+١٢٪» / "+12%"
+  const signed = numberFormat(locale ?? lang ?? 'en', { style: 'percent', signDisplay: 'exceptZero', maximumFractionDigits: 0 });
   return (
     <div className="rounded-md border border-border bg-card p-3" data-testid="studio-stat">
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className="text-xl font-semibold tabular-nums text-foreground">{value}</div>
       {change !== undefined && change !== null && (
         <div className="text-xs text-muted-foreground">
-          {t.studio.analytics.change.replace('{change}', signed.format(change))}
+          {t.studio.analytics.change.replace('{change}', signed.format(change / 100))}
         </div>
       )}
       {note && <div className="text-xs text-muted-foreground">{note}</div>}
@@ -26,9 +27,9 @@ export function TrafficSources({ traffic, locale }: { traffic: TrafficData; loca
   const { t } = useLanguage();
   const text = t.studio.analytics;
   const rows = trafficRows(traffic);
-  const number = new Intl.NumberFormat(chartLocale(locale));
-  const percent = new Intl.NumberFormat(chartLocale(locale), { style: 'percent', maximumFractionDigits: 0 });
-  const share = (value: number, views: number) => (views > 0 && value < 0.005 ? text.lessThanOnePercent : percent.format(value));
+  const number = numberFormat(locale);
+  const percent = numberFormat(locale, { style: 'percent', maximumFractionDigits: 0 });
+  const share = (value: number, views: number) => (views > 0 && value < 0.005 ? fillTemplate(locale, text.lessThanOnePercent, { percent: percent.format(0.01) }) : percent.format(value));
 
   return (
     <section aria-labelledby="studio-traffic" data-testid="studio-traffic">

@@ -2,7 +2,7 @@
 
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { getLocalizedValue } from '@al-ummah/shared-types';
+import { getLocalizedValue, formatNumber } from '@al-ummah/shared-types';
 import { EyeOff, GripVertical, Pencil, Pin, Star, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -21,14 +21,14 @@ interface SortableSectionItemProps {
 type SectionStrings = AppTranslations['channelManage']['sections'];
 
 /** Picked content of a section ("Videos: 3"), or "Automatic content" */
-export function getSectionContentSummary(section: PopulatedChannelSection, s: SectionStrings): string {
+export function getSectionContentSummary(section: PopulatedChannelSection, s: SectionStrings, locale = 'en'): string {
   const content = { ...section.content, ...pickFlat(section) };
   const spotlight = [content.trailerVideoId, content.returningVideoId].filter(Boolean).length;
-  if (content.videoIds?.length) return s.videosCount.replace('{count}', String(content.videoIds.length));
-  if (spotlight) return s.videosCount.replace('{count}', String(spotlight));
-  if (content.playlistIds?.length) return s.playlistsCount.replace('{count}', String(content.playlistIds.length));
-  if (content.playlistId) return s.playlistsCount.replace('{count}', '1');
-  if (content.channelIds?.length) return s.channelsCount.replace('{count}', String(content.channelIds.length));
+  if (content.videoIds?.length) return s.videosCount.replace('{count}', formatNumber(locale, content.videoIds.length));
+  if (spotlight) return s.videosCount.replace('{count}', formatNumber(locale, spotlight));
+  if (content.playlistIds?.length) return s.playlistsCount.replace('{count}', formatNumber(locale, content.playlistIds.length));
+  if (content.playlistId) return s.playlistsCount.replace('{count}', formatNumber(locale, 1));
+  if (content.channelIds?.length) return s.channelsCount.replace('{count}', formatNumber(locale, content.channelIds.length));
   return s.automaticContent;
 }
 
@@ -110,7 +110,7 @@ export function SortableSectionItem({ section, onDelete, onEdit, pinned = false 
               <span aria-hidden="true">{', '}</span>
             </>
           )}
-          {getSectionContentSummary(section, s)}
+          {getSectionContentSummary(section, s, locale)}
         </div>
         {hidden && <p className="sr-only">{cs.emptyHints[section.emptyHint ?? 'noContent']}</p>}
       </div>

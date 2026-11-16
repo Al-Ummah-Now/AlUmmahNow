@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { UploadQueueItem, UploadStatus } from '@al-ummah/shared-types';
+import { UploadQueueItem, UploadStatus, formatBytes, formatPercent } from '@al-ummah/shared-types';
 import {
   FileVideo,
   Pause,
@@ -59,16 +59,10 @@ export function FileQueueItem({
   const processed = useUploadResult(file.status === 'completed' ? file.videoId : null);
   const processingPhase: ProcessingPhase | undefined = processingPhaseProp ? processed ?? processingPhaseProp : undefined;
 
-  const formatBytes = (bytes: number): string => {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
-  };
+  const formatSize = (bytes: number): string => formatBytes(lang, bytes, { maximumFractionDigits: 2 });
 
   const formatSpeed = (bytesPerSecond: number): string => {
-    return `${formatBytes(bytesPerSecond)}/s`;
+    return `${formatSize(bytesPerSecond)}/s`;
   };
 
   const getStatusColor = (status: UploadStatus) => {
@@ -168,7 +162,7 @@ export function FileQueueItem({
                 <bdi>{displayTitle || file.metadata.title || file.file.name}</bdi>
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                {formatBytes(file.bytesTotal)}
+                {formatSize(file.bytesTotal)}
               </p>
             </div>
 
@@ -222,9 +216,9 @@ export function FileQueueItem({
               </div>
               <div className="flex items-center justify-between mt-1 text-xs text-gray-500 dark:text-gray-400">
                 <span>
-                  {formatBytes(file.bytesUploaded)} / {formatBytes(file.bytesTotal)}
+                  {formatSize(file.bytesUploaded)} / {formatSize(file.bytesTotal)}
                 </span>
-                <span>{file.progress.toFixed(0)}%</span>
+                <span>{formatPercent(lang, Math.round(file.progress) / 100)}</span>
               </div>
             </div>
           )}

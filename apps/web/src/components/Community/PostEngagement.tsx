@@ -2,7 +2,7 @@ import { logger } from '@/lib/logger-client';
 import { copyText } from '@/lib/share/copy';
 import { shareLink } from '@/lib/share/short-link';
 
-import { CommunityPost } from '@al-ummah/shared-types';
+import { CommunityPost, formatCompact } from '@al-ummah/shared-types';
 import { cn } from '@/lib/utils';
 import LikeButton from './LikeButton';
 import CommentButton from './CommentButton';
@@ -41,15 +41,7 @@ export default function PostEngagement({
       { locale },
     );
 
-  const formatCount = (count: number) => {
-    if (count >= 1000000) {
-      return `${(count / 1000000).toFixed(1)}M`;
-    }
-    if (count >= 1000) {
-      return `${(count / 1000).toFixed(1)}K`;
-    }
-    return count.toString();
-  };
+  const formatCount = (count: number) => formatCompact(isRTL ? 'ar' : 'en', count);
 
   const handleShare = async () => {
     const shareUrl = getShareUrl();

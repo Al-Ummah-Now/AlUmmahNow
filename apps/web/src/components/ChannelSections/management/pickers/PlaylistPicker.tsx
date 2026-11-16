@@ -1,5 +1,6 @@
 'use client';
 
+import { formatNumber } from '@al-ummah/shared-types';
 import { useCallback, useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import type { Playlist } from '@al-ummah/shared-types';
@@ -87,7 +88,7 @@ export function PlaylistPicker({ channelId, value, onChange, max, testId, label 
       {!single && <SelectedList items={value} onChange={onChange} testId={`${testId}-selected`} />}
       {!single && (
         <p className="text-xs text-muted-foreground" aria-live="polite">
-          {full ? f.maxReached : f.selectedCount.replace('{count}', String(value.length)).replace('{max}', String(max))}
+          {full ? f.maxReached : f.selectedCount.replace('{count}', formatNumber(locale, value.length)).replace('{max}', formatNumber(locale, max))}
         </p>
       )}
       <Autocomplete

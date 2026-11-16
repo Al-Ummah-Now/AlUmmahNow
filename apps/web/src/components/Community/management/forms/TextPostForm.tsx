@@ -1,5 +1,6 @@
 'use client';
 
+import { formatNumber } from '@al-ummah/shared-types';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 
@@ -59,11 +60,11 @@ export function TextPostForm({ content, onChange, locale, error }: TextPostFormP
         `}>
           {remaining >= 0
             ? (isRTL
-              ? `${remaining.toLocaleString('ar-SA')} حرف متبقي`
-              : `${remaining.toLocaleString()} characters remaining`)
+              ? `${formatNumber('ar', remaining)} حرف متبقي`
+              : `${formatNumber('en', remaining)} characters remaining`)
             : (isRTL
-              ? `${Math.abs(remaining).toLocaleString('ar-SA')} حرف زائد`
-              : `${Math.abs(remaining).toLocaleString()} characters over limit`)
+              ? `${formatNumber('ar', Math.abs(remaining))} حرف زائد`
+              : `${formatNumber('en', Math.abs(remaining))} characters over limit`)
           }
         </span>
 

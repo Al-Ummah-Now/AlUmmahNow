@@ -16,6 +16,7 @@
 
 'use client';
 
+import { formatNumber, numberFormat } from '@al-ummah/shared-types';
 import { useEffect, useState } from 'react';
 
 export interface ViewerCountProps {
@@ -31,11 +32,11 @@ export interface ViewerCountProps {
  * Format number with locale-specific formatting
  */
 function formatViewerCount(count: number, lang: 'en' | 'ar'): string {
-  const locale = lang === 'ar' ? 'ar-SA' : 'en-US';
+  const locale = lang === 'ar' ? 'ar' : 'en-US';
 
   // For large numbers, use compact notation
   if (count >= 1000) {
-    return new Intl.NumberFormat(locale, {
+    return numberFormat(locale, {
       notation: 'compact',
       compactDisplay: 'short',
       maximumFractionDigits: 1
@@ -43,7 +44,7 @@ function formatViewerCount(count: number, lang: 'en' | 'ar'): string {
   }
 
   // For smaller numbers, use standard formatting
-  return count.toLocaleString(locale);
+  return formatNumber(locale, count);
 }
 
 /**

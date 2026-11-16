@@ -6,6 +6,7 @@
 
 'use client';
 
+import { localizeDigits } from '@al-ummah/shared-types';
 import React, { useMemo, useCallback } from 'react';
 import { Calendar as BigCalendar, dateFnsLocalizer, View, NavigateAction } from 'react-big-calendar';
 import { format, parse, startOfWeek, getDay } from 'date-fns';
@@ -41,7 +42,8 @@ export function MonthView({
   const localizer = useMemo(() => {
     const dateFnsLocale = locale === 'ar' ? arSA : enUS;
     return dateFnsLocalizer({
-      format: (date: Date, formatStr: string) => format(date, formatStr, { locale: dateFnsLocale }),
+      // Arabic digits ٠–٩ (locale-format); date-fns writes 0–9 in every locale
+      format: (date: Date, formatStr: string) => localizeDigits(locale, format(date, formatStr, { locale: dateFnsLocale })),
       parse: (dateStr: string, formatStr: string) => parse(dateStr, formatStr, new Date(), { locale: dateFnsLocale }),
       startOfWeek: (date: Date) => startOfWeek(date, { locale: dateFnsLocale }),
       getDay: (date: Date) => getDay(date),

@@ -6,6 +6,7 @@
  * with support for compact notation (1.2K) and full display (1,234).
  */
 
+import { formatNumber } from '@al-ummah/shared-types';
 import type { NumberFormat } from '@/components/live-streaming/ViewerCount/types';
 
 /**
@@ -13,13 +14,13 @@ import type { NumberFormat } from '@/components/live-streaming/ViewerCount/types
  *
  * @param count - The number to format
  * @param format - Display format ('compact' or 'full')
- * @param locale - Locale string (e.g., 'en-US', 'ar-SA')
+ * @param locale - Locale string (e.g., 'en', 'ar'); digits follow locale-format (Arabic ٠–٩)
  * @returns Formatted number string
  *
  * @example
  * formatViewerCount(1234, 'compact', 'en-US') // "1.2K"
  * formatViewerCount(1234, 'full', 'en-US')    // "1,234"
- * formatViewerCount(1234, 'compact', 'ar-SA') // "١٫٢ ألف"
+ * formatViewerCount(1234, 'compact', 'ar') // "١٫٢ ألف"
  * formatViewerCount(1500000, 'compact', 'en-US') // "1.5M"
  */
 export function formatViewerCount(
@@ -31,18 +32,16 @@ export function formatViewerCount(
   const safeCount = Math.max(0, Number(count) || 0);
 
   // Create formatter with appropriate options
-  const formatter = new Intl.NumberFormat(locale, {
+  return formatNumber(locale, safeCount, {
     notation: format === 'compact' ? 'compact' : 'standard',
     maximumFractionDigits: format === 'compact' ? 1 : 0,
     compactDisplay: 'short',
   });
-
-  return formatter.format(safeCount);
 }
 
 /**
  * Format viewer count specifically for Arabic locale
- * Uses Eastern Arabic-Indic numerals (٠١٢٣٤٥٦٧٨٩)
+ * Uses Eastern Arabic (Hindi) numerals ٠–٩
  *
  * @param count - The number to format
  * @param format - Display format ('compact' or 'full')
@@ -56,7 +55,7 @@ export function formatViewerCountArabic(
   count: number,
   format: NumberFormat = 'compact'
 ): string {
-  return formatViewerCount(count, format, 'ar-SA');
+  return formatViewerCount(count, format, 'ar');
 }
 
 /**
@@ -101,6 +100,6 @@ export function getViewerCountLabel(count: number, locale: string = 'en-US'): st
 
   // English
   if (safeCount === 0) return 'No viewers watching now';
-  if (safeCount === 1) return '1 viewer watching now';
+  if (safeCount === 1) return `${formatNumber(locale, 1)} viewer watching now`;
   return `${formatViewerCount(safeCount, 'full', locale)} viewers watching now`;
 }

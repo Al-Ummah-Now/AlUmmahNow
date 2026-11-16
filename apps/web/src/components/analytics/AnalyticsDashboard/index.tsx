@@ -1,5 +1,6 @@
 'use client';
 
+import { formatDate, formatNumber, formatPercent } from '@al-ummah/shared-types';
 import React from 'react';
 import { AnalyticsSummary, ChannelAnalyticsData, AnalyticsMetrics } from '@/lib/api/types';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -56,7 +57,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
 }) => {
   const { t, lang, isRTL } = useLanguage();
   const d = t.analytics.dashboard;
-  const fmt = (n: number) => n.toLocaleString(lang === 'ar' ? 'ar' : 'en-US');
+  const fmt = (n: number) => formatNumber(lang === 'ar' ? 'ar' : 'en-US', n);
 
   if (!summary) {
     return (
@@ -117,7 +118,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6" data-testid="analytics-growth-cards">
         <CardComponent
           title={d.watchTimeHours}
-          value={d.hoursValue.replace('{hours}', toHours(seriesTotal(metrics, 'watchTime')).toLocaleString(lang === 'ar' ? 'ar' : 'en-US'))}
+          value={d.hoursValue.replace('{hours}', formatNumber(lang === 'ar' ? 'ar' : 'en-US', toHours(seriesTotal(metrics, 'watchTime'))))}
           subtitle={d.inLastDays.replace('{days}', fmt(metrics?.length ?? 0))}
           icon="clock"
           {...change('watchTime')}
@@ -140,7 +141,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
         <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">{d.engagementOverview}</h3>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{summary.engagementRate.toFixed(1)}%</p>
+            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{formatPercent(lang, summary.engagementRate / 100, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</p>
             <p className="text-sm text-gray-600 dark:text-gray-300">{d.overallEngagementRate}</p>
           </div>
           {summary.topVideo && (
@@ -172,7 +173,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                   <h4 className="font-medium text-gray-800 dark:text-white truncate">{video.title}</h4>
                   {video.dateCreated && (
                     <p className="text-sm text-gray-600 dark:text-gray-300">
-                      {new Date(video.dateCreated).toLocaleDateString(lang === 'ar' ? 'ar' : 'en-US')}
+                      {formatDate(lang === 'ar' ? 'ar' : 'en-US', new Date(video.dateCreated), {})}
                     </p>
                   )}
                 </div>

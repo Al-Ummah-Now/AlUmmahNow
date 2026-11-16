@@ -1,4 +1,5 @@
 'use client';
+import { formatNumber } from '@al-ummah/shared-types';
 import { logger } from '@/lib/logger-client';
 
 import React, { useState, useRef, useEffect } from "react";
@@ -83,7 +84,7 @@ const ChannelSwitcher: React.FC<ChannelSwitcherProps> = ({ channels }) => {
           </span>
           {channel.subscribersCount !== undefined && (
             <span className="text-xs text-gray-500 dark:text-gray-400">
-              {channel.subscribersCount.toLocaleString()} {t.channel.subscribers.toLowerCase()}
+              {formatNumber(lang, channel.subscribersCount)} {t.channel.subscribers.toLowerCase()}
             </span>
           )}
         </div>
@@ -120,7 +121,7 @@ const ChannelSwitcher: React.FC<ChannelSwitcherProps> = ({ channels }) => {
           </span>
           {currentChannel.subscribersCount !== undefined && (
             <span className="text-xs text-gray-500 dark:text-gray-400">
-              {currentChannel.subscribersCount.toLocaleString()} {t.channel.subscribers.toLowerCase()}
+              {formatNumber(lang, currentChannel.subscribersCount)} {t.channel.subscribers.toLowerCase()}
             </span>
           )}
         </div>
@@ -180,7 +181,7 @@ const ChannelSwitcher: React.FC<ChannelSwitcherProps> = ({ channels }) => {
                     </span>
                     {channel.subscribersCount !== undefined && (
                       <span className="text-xs text-gray-500 dark:text-gray-400">
-                        {channel.subscribersCount.toLocaleString()} {t.channel.subscribers.toLowerCase()}
+                        {formatNumber(lang, channel.subscribersCount)} {t.channel.subscribers.toLowerCase()}
                       </span>
                     )}
                   </div>

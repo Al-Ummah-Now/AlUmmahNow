@@ -1,5 +1,6 @@
 'use client';
 
+import { formatNumber } from '@al-ummah/shared-types';
 import React, { useCallback, useEffect, useState } from 'react';
 import Link from '@/components/common/AppLink';
 import { Bookmark, Clock, History, ListVideo, ThumbsUp, Library as LibraryIcon } from 'lucide-react';
@@ -223,7 +224,7 @@ export function LibraryHubView({ dir }: { dir: 'ltr' | 'rtl' }) {
           >
             <ListVideo className="mb-2 h-6 w-6 text-gray-500" aria-hidden="true" />
             <p className="line-clamp-2 text-sm font-medium text-gray-900 dark:text-white">{p.name || (p as { title?: string }).title}</p>
-            <p className="text-xs text-gray-500">{fillTemplate(texts.videosCount, { count: (p.videos?.length || 0).toLocaleString(lang) })}</p>
+            <p className="text-xs text-gray-500">{fillTemplate(texts.videosCount, { count: formatNumber(lang, p.videos?.length || 0) })}</p>
           </Link>
         )}
       />

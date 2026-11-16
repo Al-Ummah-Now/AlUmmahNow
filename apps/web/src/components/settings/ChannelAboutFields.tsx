@@ -6,6 +6,7 @@
  * direction-aware (handles and URLs are always LTR).
  */
 
+import { formatNumber } from '@al-ummah/shared-types';
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -154,7 +155,7 @@ export function ChannelAboutFields({ channelId, currentHandle, value, onChange, 
       {/* Links */}
       <fieldset>
         <legend className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{t.channel.links}</legend>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">{t.channel.linksHelp.replace('{max}', String(MAX_CHANNEL_LINKS))}</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">{t.channel.linksHelp.replace('{max}', formatNumber(lang, MAX_CHANNEL_LINKS))}</p>
         <ul className="space-y-2" id={ids.links}>
           {value.links.map((link, index) => {
             const invalid = (link.title.trim() !== '' || link.url.trim() !== '') && !isValidLink(link);
@@ -187,7 +188,7 @@ export function ChannelAboutFields({ channelId, currentHandle, value, onChange, 
                   type="button"
                   onClick={() => update({ links: value.links.filter((_, i) => i !== index) })}
                   disabled={disabled}
-                  aria-label={t.channel.removeLink.replace('{n}', String(index + 1))}
+                  aria-label={t.channel.removeLink.replace('{n}', formatNumber(lang, index + 1))}
                   className="inline-flex items-center justify-center min-h-10 min-w-10 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
                   <X className="w-4 h-4" aria-hidden="true" />

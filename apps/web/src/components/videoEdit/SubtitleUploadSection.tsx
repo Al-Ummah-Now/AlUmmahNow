@@ -1,3 +1,4 @@
+import { dateTimeFormat, formatBytes } from '@al-ummah/shared-types';
 import { logger } from '@/lib/logger-client';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -120,15 +121,11 @@ export default function SubtitleUploadSection({
     return langInfo || { code, name: code, nameAr: code, flag: '🌐', rtl: false };
   };
 
-  const formatFileSize = (bytes: number): string => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
+  const formatFileSize = (bytes: number): string => formatBytes(lang, bytes);
 
   const formatDate = (dateStr: string): string => {
     const date = new Date(dateStr);
-    return new Intl.DateTimeFormat(lang === 'ar' ? 'ar-SA' : 'en-US', {
+    return dateTimeFormat(lang === 'ar' ? 'ar' : 'en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',

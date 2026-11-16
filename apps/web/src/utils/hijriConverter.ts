@@ -2,6 +2,7 @@
  * Hijri Calendar Conversion Utilities
  * Converts between Gregorian and Hijri (Islamic) calendars
  */
+import { formatNumber } from '@al-ummah/shared-types';
 
 // Hijri month names
 export const HIJRI_MONTHS_AR = [
@@ -140,9 +141,9 @@ export function formatHijriDate(
 
   if (locale === 'ar') {
     const parts: string[] = [];
-    if (includeDay) parts.push(`${day}`);
+    if (includeDay) parts.push(formatNumber('ar', day, { useGrouping: false }));
     parts.push(monthName);
-    if (includeYear) parts.push(`${year}هـ`);
+    if (includeYear) parts.push(`${formatNumber('ar', year, { useGrouping: false })}هـ`);
     return parts.join(' ');
   } else {
     const parts: string[] = [];

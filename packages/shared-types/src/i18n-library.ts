@@ -233,7 +233,7 @@ export const LIBRARY_AR: LibraryTranslations = {
   seeAll: 'عرض الكل',
   emptyHistory: 'ستظهر هنا المرئيات التي تشاهدها',
   continueWatching: 'متابعة المشاهدة',
-  watchedPercent: 'تمت مشاهدة {percent}%',
+  watchedPercent: 'تمت مشاهدة {percent}٪',
   emptyWatchLater: 'احفظ المرئيات لمشاهدتها لاحقًا وستظهر هنا',
   emptyLiked: 'ستظهر هنا المرئيات التي تعجبك',
   emptyPlaylists: 'ستظهر هنا قوائم التشغيل التي تنشئها',

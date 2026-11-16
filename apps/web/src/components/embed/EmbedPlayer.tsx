@@ -18,6 +18,7 @@
  * - postMessage events and commands through useEmbedMessaging.
  */
 
+import { formatNumber } from '@al-ummah/shared-types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Player } from 'video.js';
 import { ExternalLink, ListVideo, Play, VolumeX, X } from 'lucide-react';
@@ -172,7 +173,7 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
             title: titleOf(nextVideo, lang),
             channel: removeUnwantedChars(channelLabel(nextVideo, lang)),
             thumbnail: nextVideo.poster,
-            badge: `${(index + 2).toLocaleString(lang)} / ${videos.length.toLocaleString(lang)}`,
+            badge: `${formatNumber(lang, index + 2)} / ${formatNumber(lang, videos.length)}`,
             go: goToNext,
           }
         : null,
@@ -304,7 +305,7 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
               lang={lang}
               audioTracks={video.audioTracks}
               className="w-full"
-              ariaLabel={fill(s.playVideo, { title })}
+              ariaLabel={fill(s.playVideo, { title }, lang)}
               onPlayerReady={delivery.handlePlayerReady}
               onPlaybackError={delivery.handlePlaybackError}
             />
@@ -314,7 +315,7 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
               onClick={() => setActivated(true)}
               className="group relative block w-full bg-transparent focus:outline-none focus-visible:ring-4 focus-visible:ring-emerald-400"
               style={FACADE_STYLE}
-              aria-label={fill(s.playVideo, { title })}
+              aria-label={fill(s.playVideo, { title }, lang)}
               data-testid="embed-facade"
             >
               {video.poster && (
@@ -410,7 +411,7 @@ export default function EmbedPlayer({ videos, params, playlist }: EmbedPlayerPro
               <div className="flex items-center justify-between gap-2 px-1 pb-2">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold">{removeUnwantedChars(playlist.title) || s.playlist}</p>
-                  <p className="text-xs text-gray-400">{fill(s.playlistCount, { count: videos.length })}</p>
+                  <p className="text-xs text-gray-400">{fill(s.playlistCount, { count: videos.length }, lang)}</p>
                 </div>
                 <button type="button" onClick={() => setListOpen(false)} className="rounded p-1 hover:bg-white/10" aria-label={s.close}>
                   <X className="w-4 h-4" aria-hidden="true" />

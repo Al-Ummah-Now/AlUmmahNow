@@ -5,6 +5,7 @@
  * "New live stream" form. Creating a stream assigns its provider (Bunny or
  * self-hosted, D3) on the server; nothing here depends on which one.
  */
+import { dateTimeFormat } from '@al-ummah/shared-types';
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import Link from '@/components/common/AppLink';
 import { useRouter } from 'next/navigation';
@@ -111,7 +112,7 @@ export function LiveTab({ locale, channelId, role }: Props) {
     }
   };
 
-  const dateFormat = new Intl.DateTimeFormat(locale === 'ar' ? 'ar' : 'en', { dateStyle: 'medium' });
+  const dateFormat = dateTimeFormat(locale === 'ar' ? 'ar' : 'en', { dateStyle: 'medium' });
 
   return (
     <div data-testid="studio-live">

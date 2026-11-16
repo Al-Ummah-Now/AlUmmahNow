@@ -1,3 +1,4 @@
+import { formatNumber } from '@al-ummah/shared-types';
 import { logger } from '@/lib/logger-client';
 import { PostComment } from "@al-ummah/shared-types";
 
@@ -67,7 +68,7 @@ export default function ReplyForm({
     if (content.length > MAX_COMMENT_LENGTH) {
       setError(
         isRTL
-          ? `الرد طويل جداً (${MAX_COMMENT_LENGTH} حرف كحد أقصى)`
+          ? `الرد طويل جداً (${formatNumber('ar', MAX_COMMENT_LENGTH)} حرف كحد أقصى)`
           : `Reply is too long (${MAX_COMMENT_LENGTH} characters max)`
       );
       return;
@@ -190,10 +191,10 @@ export default function ReplyForm({
             >
               {remainingChars < 0 ? (
                 <span className="font-semibold">
-                  {isRTL ? `${Math.abs(remainingChars)} حرف زيادة` : `${Math.abs(remainingChars)} characters over`}
+                  {isRTL ? `${formatNumber('ar', Math.abs(remainingChars))} حرف زيادة` : `${Math.abs(remainingChars)} characters over`}
                 </span>
               ) : (
-                `${remainingChars} ${isRTL ? 'حرف متبقي' : 'characters remaining'}`
+                `${formatNumber(isRTL ? 'ar' : 'en', remainingChars)} ${isRTL ? 'حرف متبقي' : 'characters remaining'}`
               )}
             </div>
           )}

@@ -4,6 +4,7 @@
  * renders without the translations fetch.
  */
 
+import { fillTemplate } from '@al-ummah/shared-types';
 import type { EmbedLang } from './params';
 
 export interface EmbedStrings {
@@ -125,6 +126,7 @@ export function embedStrings(lang: EmbedLang | string): EmbedStrings {
   return lang === 'ar' ? ar : en;
 }
 
-export function fill(template: string, values: Record<string, string | number>): string {
-  return template.replace(/\{(\w+)\}/g, (_, key: string) => (key in values ? String(values[key]) : `{${key}}`));
+/** `{name}` placeholders; numbers in the language's digits (Arabic ٠–٩). */
+export function fill(template: string, values: Record<string, string | number>, lang = 'en'): string {
+  return fillTemplate(lang, template, values);
 }

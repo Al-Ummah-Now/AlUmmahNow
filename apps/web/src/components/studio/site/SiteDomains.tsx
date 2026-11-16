@@ -8,7 +8,7 @@
  * available yet.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { SITE_TEST_DOMAIN_SUFFIX, type SiteDnsRecord, type SiteDomain, type SiteHost, type StudioTranslations } from '@al-ummah/shared-types';
+import { SITE_TEST_DOMAIN_SUFFIX, type SiteDnsRecord, type SiteDomain, type SiteHost, type StudioTranslations, formatDateTime, formatNumber } from '@al-ummah/shared-types';
 
 type DomainStrings = StudioTranslations['site']['domains'];
 import { Button } from '@/components/ui/button';
@@ -147,7 +147,7 @@ export function SiteDomains({ channelId, locale }: { channelId: string; locale: 
     }
   }
 
-  const time = (iso: string | null) => (iso ? new Date(iso).toLocaleString(locale === 'ar' ? 'ar' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '');
+  const time = (iso: string | null) => (iso ? formatDateTime(locale === 'ar' ? 'ar' : 'en-GB', new Date(iso), { dateStyle: 'medium', timeStyle: 'short' }) : '');
 
   return (
     <section aria-labelledby="site-domains-h" className="space-y-3" data-testid="site-domains">
@@ -189,7 +189,7 @@ export function SiteDomains({ channelId, locale }: { channelId: string; locale: 
                   {busy === 'add' ? d.adding : d.add}
                 </Button>
               </div>
-              <p id="site-domain-limit" className="text-xs text-[var(--fanous-color-text-muted)]">{d.limit.replace('{n}', String(view.limit))}</p>
+              <p id="site-domain-limit" className="text-xs text-[var(--fanous-color-text-muted)]">{d.limit.replace('{n}', formatNumber(locale, view.limit))}</p>
             </form>
           )}
 

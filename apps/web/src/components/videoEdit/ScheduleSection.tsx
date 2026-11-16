@@ -1,5 +1,6 @@
 'use client';
 
+import { formatDateTime } from '@al-ummah/shared-types';
 import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, Bell, BellOff, X, Check, AlertCircle, Loader2 } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -377,7 +378,7 @@ export default function ScheduleSection({
           <div className="text-sm text-gray-600 dark:text-gray-400 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg" data-testid="edit-schedule-summary">
             {s.scheduledFor}:{' '}
             <strong>
-              {new Date(`${scheduleDate}T${scheduleTime}`).toLocaleString(isRTL ? 'ar' : 'en', {
+              {formatDateTime(isRTL ? 'ar' : 'en', new Date(`${scheduleDate}T${scheduleTime}`), {
                 dateStyle: 'full',
                 timeStyle: 'short',
               })}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CommunityPost, PostType } from '@al-ummah/shared-types';
+import { CommunityPost, PostType, formatNumber } from '@al-ummah/shared-types';
 import { cn } from '@/lib/utils';
 import PostEngagement from './PostEngagement';
 import CommentsSection from './CommentsSection';
@@ -57,7 +57,7 @@ function getTimeAgo(date: Date, isRTL: boolean): string {
           hour: interval === 1 ? 'ساعة' : interval === 2 ? 'ساعتان' : 'ساعات',
           minute: interval === 1 ? 'دقيقة' : interval === 2 ? 'دقيقتان' : 'دقائق',
         };
-        return `منذ ${interval} ${units[unit]}`;
+        return `منذ ${formatNumber('ar', interval)} ${units[unit]}`;
       } else {
         return `${interval} ${unit}${interval > 1 ? 's' : ''} ago`;
       }

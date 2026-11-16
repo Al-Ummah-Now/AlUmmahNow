@@ -18,6 +18,7 @@ import {
   type SiteLocale,
   type SitePage,
   type SitePageUpdate,
+  formatDateTime,
 } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -307,7 +308,7 @@ export function SitePageEditor({ locale, channelId, siteLocales, initial }: Prop
           <ul className="space-y-1">
             {(page.revisions ?? []).map((r, i) => (
               <li key={`${r.savedAt}-${i}`} className="flex items-center gap-2 text-sm">
-                <span>{new Date(r.savedAt).toLocaleString(lang === 'ar' ? 'ar' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                <span>{formatDateTime(lang === 'ar' ? 'ar' : 'en-GB', new Date(r.savedAt), { dateStyle: 'medium', timeStyle: 'short' })}</span>
                 <Button type="button" variant="ghost" disabled={busy !== null} onClick={() => restore(i)}>{p.restore}</Button>
               </li>
             ))}

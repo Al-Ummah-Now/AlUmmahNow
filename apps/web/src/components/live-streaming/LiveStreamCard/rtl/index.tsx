@@ -9,6 +9,7 @@
 
 'use client';
 
+import { numberFormat } from '@al-ummah/shared-types';
 import React, { useState, useMemo, useCallback } from 'react';
 import Image from 'next/image';
 import { Play, ImageOff } from 'lucide-react';
@@ -33,7 +34,7 @@ function formatRelativeTimeArabic(date: Date | undefined, prefix: string = ''): 
   const days = Math.floor(hours / 24);
 
   // Format numbers in Arabic numerals
-  const formatNum = (n: number) => new Intl.NumberFormat('ar-SA').format(n);
+  const formatNum = (n: number) => numberFormat('ar').format(n);
 
   if (days > 0) {
     return `${prefix}منذ ${formatNum(days)} ${days === 1 ? 'يوم' : 'أيام'}`;
@@ -105,7 +106,7 @@ export const LiveStreamCardRTL = React.memo<LiveStreamCardProps>(
           const diff = scheduled.getTime() - now.getTime();
           const hours = Math.floor(diff / (1000 * 60 * 60));
           const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-          const formatNum = (n: number) => new Intl.NumberFormat('ar-SA').format(n);
+          const formatNum = (n: number) => numberFormat('ar').format(n);
           if (hours > 0) {
             return `يبدأ بعد ${formatNum(hours)} ${hours === 1 ? 'ساعة' : hours === 2 ? 'ساعتين' : 'ساعات'} و ${formatNum(minutes)} ${minutes === 1 ? 'دقيقة' : minutes === 2 ? 'دقيقتين' : 'دقائق'}`;
           }

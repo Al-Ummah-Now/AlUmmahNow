@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import { CommunityPost } from '@al-ummah/shared-types';
+import { CommunityPost, formatPercent } from '@al-ummah/shared-types';
 import { cn } from '@/lib/utils';
 
 interface QuizPostProps {
@@ -202,7 +202,7 @@ export default function QuizPost({ post, isRTL = false }: QuizPostProps) {
         isRTL && 'text-right'
       )}>
         {totalAttempts} {isRTL ? 'محاولة' : totalAttempts === 1 ? 'attempt' : 'attempts'} • {' '}
-        {successRate.toFixed(0)}% {isRTL ? 'نسبة النجاح' : 'success rate'}
+        {formatPercent(isRTL ? 'ar' : 'en', successRate / 100)} {isRTL ? 'نسبة النجاح' : 'success rate'}
       </div>
     </div>
   );

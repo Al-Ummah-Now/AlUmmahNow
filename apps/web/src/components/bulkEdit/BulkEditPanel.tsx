@@ -17,7 +17,7 @@ import { logger } from '@/lib/logger-client';
 import { reportError } from '@/lib/errors/reporter';
 import { bulkEditVideos, undoBulkEdit } from '@/lib/api/videos';
 import { getPlaylistById, reorderPlaylistVideos } from '@/lib/api/playlists';
-import { placeInOrder, type RenameSubject, type TitleLanguage } from '@al-ummah/shared-types';
+import { placeInOrder, type RenameSubject, type TitleLanguage, formatNumber } from '@al-ummah/shared-types';
 import {
   buildBulkRequest,
   emptyBulkForm,
@@ -97,7 +97,7 @@ export function BulkEditPanel({ open, onOpenChange, videos, playlists = null, kn
   const { t, lang } = useLanguage();
   const b = t.bulkEdit;
   const ui: TitleLanguage = lang === 'ar' ? 'ar' : 'en';
-  const fmt = (n: number) => n.toLocaleString(lang === 'ar' ? 'ar' : 'en-US');
+  const fmt = (n: number) => formatNumber(lang === 'ar' ? 'ar' : 'en-US', n);
   const [form, setForm] = useState<BulkFormState>(() => emptyBulkForm(ui));
   const [step, setStep] = useState<Step>('form');
   const [run, setRun] = useState<RunState | null>(null);
@@ -125,6 +125,7 @@ export function BulkEditPanel({ open, onOpenChange, videos, playlists = null, kn
   };
   const listFormat = (items: string[]) => {
     try {
+      // locale-format: machine (joins words, no numbers)
       return new Intl.ListFormat(lang === 'ar' ? 'ar' : 'en', { type: 'conjunction' }).format(items);
     } catch {
       return items.join(', ');

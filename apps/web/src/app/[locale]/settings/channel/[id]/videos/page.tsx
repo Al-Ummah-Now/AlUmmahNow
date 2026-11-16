@@ -428,7 +428,7 @@ export default function ChannelVideosPage() {
                     </h3>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <button type="button" className="b b-ghost b-icon -me-2 -mt-1 flex-none" aria-label={fill(t.playlistTools.moreActions, { title: video.title })} data-testid="managed-video-menu">
+                        <button type="button" className="b b-ghost b-icon -me-2 -mt-1 flex-none" aria-label={fill(t.playlistTools.moreActions, { title: video.title }, lang)} data-testid="managed-video-menu">
                           <MoreVertical className="h-4 w-4" aria-hidden="true" />
                         </button>
                       </DropdownMenuTrigger>

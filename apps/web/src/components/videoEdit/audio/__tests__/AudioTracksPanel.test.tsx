@@ -83,7 +83,7 @@ describe('audio track model', () => {
   it('refuses files that cannot be tracks', () => {
     expect(fileProblem({ name: 'dub.MP3', size: 10 }, AUDIO_TRACKS_EN)).toBeNull();
     expect(fileProblem({ name: 'notes.txt', size: 10 }, AUDIO_TRACKS_EN)).toBe(AUDIO_TRACKS_EN.form.fileType);
-    expect(fileProblem({ name: 'big.wav', size: 3 * 1024 ** 3 }, AUDIO_TRACKS_EN)).toBe(AUDIO_TRACKS_EN.form.fileTooBig);
+    expect(fileProblem({ name: 'big.wav', size: 3 * 1024 ** 3 }, AUDIO_TRACKS_EN)).toBe('This file is larger than 2 GB.');
   });
 
   it('names a detected stream by number, language and title', () => {

@@ -5,6 +5,7 @@
  * and the screen width. Clips never play by themselves: they show a still and the browser's own
  * controls, so nothing moves unless the viewer asks (WCAG 2.2.2, reduced motion).
  */
+import { formatNumber } from '@al-ummah/shared-types';
 import type { HelpBlock } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { helpClipSrc, helpPictureSrc, type HelpMode } from '@/lib/help/content';
@@ -55,7 +56,7 @@ function Clip({ block, lang }: { block: Extract<HelpBlock, { type: 'clip' }>; la
 
 export function HelpBlocks({ blocks }: { blocks: HelpBlock[] }) {
   const { t, lang } = useLanguage();
-  const digits = (n: number) => n.toLocaleString(lang === 'ar' ? 'ar-EG' : 'en');
+  const digits = (n: number) => formatNumber(lang === 'ar' ? 'ar' : 'en', n);
   return (
     <>
       {blocks.map((block, i) => {

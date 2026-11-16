@@ -17,7 +17,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { CHANNEL_SECTION_CONSTRAINTS, type ChannelSectionCreateInput } from '@al-ummah/shared-types';
+import { CHANNEL_SECTION_CONSTRAINTS, type ChannelSectionCreateInput, formatNumber } from '@al-ummah/shared-types';
 import type { PopulatedChannelSection } from '@/components/ChannelSections/sectionData';
 import { useAuth } from '@/components/AuthProvider/authContext';
 import { SortableSectionItem } from '@/components/ChannelSections/management/SortableSectionItem';
@@ -310,7 +310,7 @@ export default function ChannelSectionsManagement() {
             {s.title}
           </h1>
           <p className="text-sm md:text-base text-muted-foreground mt-1">
-            {s.description.replace('{max}', String(MAX_SECTIONS))}
+            {s.description.replace('{max}', formatNumber(locale, MAX_SECTIONS))}
           </p>
         </div>
 
@@ -338,7 +338,7 @@ export default function ChannelSectionsManagement() {
       )}
 
       <div className="text-sm text-muted-foreground" data-testid="sections-count">
-        {s.sectionsUsed.replace('{count}', String(sections.length)).replace('{max}', String(MAX_SECTIONS))}
+        {s.sectionsUsed.replace('{count}', formatNumber(locale, sections.length)).replace('{max}', formatNumber(locale, MAX_SECTIONS))}
         {hasChanges && (
           <span className="ms-2 font-medium text-foreground" data-testid="sections-unpublished">
             {s.unpublishedChanges}

@@ -3,17 +3,19 @@
  * so Arabic gets its zero, one, two, few and many forms.
  */
 
+import { formatCompact, formatDate, formatInteger, formatNumber, formatTimeAgo, pluralCategory } from '@al-ummah/shared-types';
+
 export type MetaLang = 'en' | 'ar';
 
-const compact = (count: number, lang: MetaLang) =>
-  new Intl.NumberFormat(lang, { notation: 'compact', maximumFractionDigits: 1 }).format(count);
+const compact = (count: number, lang: MetaLang) => formatCompact(lang, count);
+const one = (lang: MetaLang) => formatNumber(lang, 1);
 
 /** "No views", "1 view", "1.2K views", or the Arabic equivalent. */
 export function formatViews(count: number | string | null | undefined, lang: MetaLang): string {
   const n = Math.max(0, Math.floor(Number(count) || 0));
   if (lang === 'ar') {
     if (n === 0) return 'لا توجد مشاهدات';
-    switch (new Intl.PluralRules('ar').select(n)) {
+    switch (pluralCategory('ar', n)) {
       case 'one': return 'مشاهدة واحدة';
       case 'two': return 'مشاهدتان';
       case 'few': return `${compact(n, lang)} مشاهدات`;
@@ -21,19 +23,19 @@ export function formatViews(count: number | string | null | undefined, lang: Met
     }
   }
   if (n === 0) return 'No views';
-  return n === 1 ? '1 view' : `${compact(n, lang)} views`;
+  return n === 1 ? `${one(lang)} view` : `${compact(n, lang)} views`;
 }
 
 /**
- * The exact count, for tooltips and the expanded description: "1,234 views", «1,234 مشاهدة»
+ * The exact count, for tooltips and the expanded description: "1,234 views", «١٬٢٣٤ مشاهدة»
  * (cards show the compact "1.2K views").
  */
 export function formatViewsExact(count: number | string | null | undefined, lang: MetaLang): string {
   const n = Math.max(0, Math.floor(Number(count) || 0));
-  const full = new Intl.NumberFormat(lang).format(n);
+  const full = formatInteger(lang, n);
   if (lang === 'ar') {
     if (n === 0) return 'لا توجد مشاهدات';
-    switch (new Intl.PluralRules('ar').select(n)) {
+    switch (pluralCategory('ar', n)) {
       case 'one': return 'مشاهدة واحدة';
       case 'two': return 'مشاهدتان';
       case 'few': return `${full} مشاهدات`;
@@ -41,7 +43,7 @@ export function formatViewsExact(count: number | string | null | undefined, lang
     }
   }
   if (n === 0) return 'No views';
-  return n === 1 ? '1 view' : `${full} views`;
+  return n === 1 ? `${one(lang)} view` : `${full} views`;
 }
 
 /** "No subscribers", "1 subscriber", "1.2K subscribers", or the Arabic equivalent. */
@@ -49,7 +51,7 @@ export function formatSubscribers(count: number | string | null | undefined, lan
   const n = Math.max(0, Math.floor(Number(count) || 0));
   if (lang === 'ar') {
     if (n === 0) return 'لا يوجد مشتركون';
-    switch (new Intl.PluralRules('ar').select(n)) {
+    switch (pluralCategory('ar', n)) {
       case 'one': return 'مشترك واحد';
       case 'two': return 'مشتركان';
       case 'few': return `${compact(n, lang)} مشتركين`;
@@ -58,7 +60,7 @@ export function formatSubscribers(count: number | string | null | undefined, lan
     }
   }
   if (n === 0) return 'No subscribers';
-  return n === 1 ? '1 subscriber' : `${compact(n, lang)} subscribers`;
+  return n === 1 ? `${one(lang)} subscriber` : `${compact(n, lang)} subscribers`;
 }
 
 /**
@@ -70,12 +72,11 @@ export function formatSubscribers(count: number | string | null | undefined, lan
 export function formatVideoCount(count: number | string | null | undefined, lang: MetaLang | string, options: { compact?: boolean } = {}): string {
   const n = Math.max(0, Math.floor(Number(count) || 0));
   const ar = lang === 'ar';
-  // Arabic-Indic digits pinned (glossary «٣ مرئيات»): plain 'ar' prints Latin digits on newer ICU,
-  // so the server render and each browser could disagree
-  const num = new Intl.NumberFormat(ar ? 'ar-u-nu-arab' : 'en', options.compact ? { notation: 'compact', maximumFractionDigits: 1 } : {}).format(n);
+  // locale-format pins the digits (glossary «٣ مرئيات»), so the server render and each browser agree
+  const num = options.compact ? formatCompact(lang, n) : formatInteger(lang, n);
   if (ar) {
     if (n === 0) return 'لا توجد مرئيات';
-    switch (new Intl.PluralRules('ar').select(n)) {
+    switch (pluralCategory('ar', n)) {
       case 'one': return 'مرئي واحد';
       case 'two': return 'مرئيان';
       case 'few': return `${num} مرئيات`;
@@ -84,17 +85,8 @@ export function formatVideoCount(count: number | string | null | undefined, lang
     }
   }
   if (n === 0) return 'No videos';
-  return n === 1 ? '1 video' : `${num} videos`;
+  return n === 1 ? `${formatNumber(lang, 1)} video` : `${num} videos`;
 }
-
-const UNITS:[Intl.RelativeTimeFormatUnit, number][] = [
-  ['year', 31536000],
-  ['month', 2592000],
-  ['week', 604800],
-  ['day', 86400],
-  ['hour', 3600],
-  ['minute', 60],
-];
 
 const toDate = (value: Date | string | number | null | undefined): Date | null => {
   if (value === null || value === undefined || value === '') return null;
@@ -106,33 +98,27 @@ const toDate = (value: Date | string | number | null | undefined): Date | null =
 export function formatRelativeTime(value: Date | string | number | null | undefined, lang: MetaLang, now: number = Date.now()): string {
   const date = toDate(value);
   if (!date) return '';
-  const seconds = Math.round((date.getTime() - now) / 1000);
   // Always a number with its unit ("1 day ago", «قبل يوم واحد»), like "17 hours ago": 'auto'
   // switched to "yesterday"/«أمس» at one day, so cards and the watch page read differently
-  // within the same hour (owner, 2026-11-13)
-  const format = new Intl.RelativeTimeFormat(lang, { numeric: 'always' });
-  for (const [unit, size] of UNITS) {
-    if (Math.abs(seconds) >= size) return format.format(Math.trunc(seconds / size), unit);
-  }
-  // Under a minute: "now" / «الآن», not "0 seconds ago"
-  return new Intl.RelativeTimeFormat(lang, { numeric: 'auto' }).format(0, 'second');
+  // within the same hour (owner, 2026-11-13). Under a minute: "now" / «الآن».
+  return formatTimeAgo(lang, date, { now, numeric: 'always' });
 }
 
 /** The full date, for tooltips. */
 export function formatAbsoluteDate(value: Date | string | number | null | undefined, lang: MetaLang): string {
   const date = toDate(value);
-  return date ? new Intl.DateTimeFormat(lang, { dateStyle: 'long' }).format(date) : '';
+  return date ? formatDate(lang, date, { dateStyle: 'long' }) : '';
 }
 
 /**
- * The full date and time, in the viewer's time zone: «12 نوفمبر 2026، 06:32 م» /
+ * The full date and time, in the viewer's time zone: «١٢ نوفمبر ٢٠٢٦، ٠٦:٣٢ م» /
  * "November 12, 2026, 06:32 PM". For the relative time's tooltip and the watch page's description.
  */
 export function formatAbsoluteDateTime(value: Date | string | number | null | undefined, lang: MetaLang, timeZone?: string): string {
   const date = toDate(value);
   if (!date) return '';
-  const day = new Intl.DateTimeFormat(lang, { dateStyle: 'long', timeZone }).format(date);
-  const time = new Intl.DateTimeFormat(lang, { hour: '2-digit', minute: '2-digit', timeZone }).format(date);
+  const day = formatDate(lang, date, { dateStyle: 'long', timeZone });
+  const time = formatDate(lang, date, { hour: '2-digit', minute: '2-digit', timeZone });
   return `${day}${lang === 'ar' ? '، ' : ', '}${time}`;
 }
 

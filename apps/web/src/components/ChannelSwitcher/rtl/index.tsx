@@ -1,4 +1,5 @@
 'use client';
+import { formatNumber } from '@al-ummah/shared-types';
 import { logger } from '@/lib/logger-client';
 
 import React, { useState, useRef, useEffect } from "react";
@@ -80,7 +81,7 @@ const ChannelSwitcherRtl: React.FC<ChannelSwitcherProps> = ({ channels }) => {
           </span>
           {channel.subscribersCount !== undefined && (
             <span className="text-xs text-gray-500 dark:text-gray-400">
-              {channel.subscribersCount.toLocaleString()} مشترك
+              {formatNumber('ar', channel.subscribersCount)} مشترك
             </span>
           )}
         </div>
@@ -117,7 +118,7 @@ const ChannelSwitcherRtl: React.FC<ChannelSwitcherProps> = ({ channels }) => {
           </span>
           {currentChannel.subscribersCount !== undefined && (
             <span className="text-xs text-gray-500 dark:text-gray-400">
-              {currentChannel.subscribersCount.toLocaleString()} مشترك
+              {formatNumber('ar', currentChannel.subscribersCount)} مشترك
             </span>
           )}
         </div>
@@ -176,7 +177,7 @@ const ChannelSwitcherRtl: React.FC<ChannelSwitcherProps> = ({ channels }) => {
                     </span>
                     {channel.subscribersCount !== undefined && (
                       <span className="text-xs text-gray-500 dark:text-gray-400">
-                        {channel.subscribersCount.toLocaleString()} مشترك
+                        {formatNumber('ar', channel.subscribersCount)} مشترك
                       </span>
                     )}
                   </div>

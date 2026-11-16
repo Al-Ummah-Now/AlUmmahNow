@@ -4,7 +4,7 @@ import { logger } from '@/lib/logger-client';
 
 import { useState } from 'react';
 import Image from 'next/image';
-import { CommunityPost, PollOption } from '@al-ummah/shared-types';
+import { CommunityPost, PollOption, formatDate, formatNumber, formatPercent } from '@al-ummah/shared-types';
 import { cn } from '@/lib/utils';
 import { voteOnPoll } from '@/lib/api/community-posts';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -89,7 +89,7 @@ export default function PollPost({ post, isRTL = false, locale = 'en', channelId
 
   const voteCountLabel = totalVotes === 1
     ? t.community.voteCountOne
-    : t.community.voteCountMany.replace('{count}', totalVotes.toLocaleString(locale));
+    : t.community.voteCountMany.replace('{count}', formatNumber(locale, totalVotes));
 
   return (
     <div className="space-y-4">
@@ -125,7 +125,7 @@ export default function PollPost({ post, isRTL = false, locale = 'en', channelId
               onClick={() => handleOptionClick(option.id)}
               disabled={hasVoted || isVotingEnded || voting || !canVote}
               aria-pressed={isSelected}
-              aria-label={showResults ? `${optionLabel} ${percentage.toFixed(1)}%` : optionLabel}
+              aria-label={showResults ? `${optionLabel} ${formatPercent(locale, percentage / 100, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}` : optionLabel}
               className={cn(
                 'w-full relative rounded-lg border-2 transition-all text-left',
                 isRTL && 'text-right',
@@ -201,7 +201,7 @@ export default function PollPost({ post, isRTL = false, locale = 'en', channelId
                     'font-semibold text-gray-700 dark:text-gray-300',
                     isRTL ? 'mr-auto' : 'ml-auto'
                   )}>
-                    {percentage.toFixed(1)}%
+                    {formatPercent(locale, percentage / 100, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
                   </span>
                 )}
               </div>
@@ -250,7 +250,7 @@ export default function PollPost({ post, isRTL = false, locale = 'en', channelId
           <span>
             {isVotingEnded
               ? t.community.votingEnded
-              : t.community.votingEnds.replace('{date}', new Date(votingEndsAt).toLocaleDateString(locale))}
+              : t.community.votingEnds.replace('{date}', formatDate(locale, new Date(votingEndsAt), {}))}
           </span>
         )}
       </div>

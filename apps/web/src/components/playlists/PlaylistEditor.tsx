@@ -100,14 +100,14 @@ function queuedOutcome(jobId: string): BulkAddOutcome {
 }
 
 function StatusLine({ status }: { status: Status }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   if (!status) return null;
   return (
     <div role={status.tone === 'error' ? 'alert' : 'status'} className={`flex items-start gap-2 rounded-[var(--r-md)] px-3 py-2 text-sm ${NOTICE[status.tone]}`}>
       {status.tone === 'error' ? <AlertTriangle className="h-4 w-4 flex-none" aria-hidden="true" /> : <CheckCircle2 className="h-4 w-4 flex-none" aria-hidden="true" />}
       <span>
         {status.message}
-        {status.ref && <span className="block text-xs">{fill(t.playlistTools.errorRef, { ref: status.ref })}</span>}
+        {status.ref && <span className="block text-xs">{fill(t.playlistTools.errorRef, { ref: status.ref }, lang)}</span>}
       </span>
     </div>
   );
@@ -129,7 +129,7 @@ function PlaylistItemRow({ item, index, total, manual, busy, onMove, onRemove }:
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: item.id, disabled: !manual || busy });
   const video = item.video;
   const title = video ? localTitle(video, lang) : p.unavailable;
-  const duration = formatDuration(video?.duration);
+  const duration = formatDuration(video?.duration, lang);
   // Alt+↑ / Alt+↓ anywhere on the row moves it (the bulk-rename order's shortcut)
   const onKeyDown = (event: React.KeyboardEvent) => {
     if (!manual || busy || !event.altKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return;
@@ -155,7 +155,7 @@ function PlaylistItemRow({ item, index, total, manual, busy, onMove, onRemove }:
           type="button"
           ref={setActivatorNodeRef}
           className="pl-handle flex-none"
-          aria-label={fill(p.dragHandle, { title })}
+          aria-label={fill(p.dragHandle, { title }, lang)}
           disabled={busy}
           data-testid="playlist-item-handle"
           {...attributes}
@@ -190,15 +190,15 @@ function PlaylistItemRow({ item, index, total, manual, busy, onMove, onRemove }:
       <span className="flex w-full flex-none items-center justify-end sm:w-auto">
         {manual && (
           <>
-            <button type="button" className="b b-ghost b-icon" onClick={() => onMove(index, index - 1)} disabled={busy || index === 0} aria-label={fill(p.moveUpTitle, { title })} title={fill(p.moveUpTitle, { title })} data-testid="playlist-item-up">
+            <button type="button" className="b b-ghost b-icon" onClick={() => onMove(index, index - 1)} disabled={busy || index === 0} aria-label={fill(p.moveUpTitle, { title }, lang)} title={fill(p.moveUpTitle, { title }, lang)} data-testid="playlist-item-up">
               <ArrowUp className="h-4 w-4" aria-hidden="true" />
             </button>
-            <button type="button" className="b b-ghost b-icon" onClick={() => onMove(index, index + 1)} disabled={busy || index === total - 1} aria-label={fill(p.moveDownTitle, { title })} title={fill(p.moveDownTitle, { title })} data-testid="playlist-item-down">
+            <button type="button" className="b b-ghost b-icon" onClick={() => onMove(index, index + 1)} disabled={busy || index === total - 1} aria-label={fill(p.moveDownTitle, { title }, lang)} title={fill(p.moveDownTitle, { title }, lang)} data-testid="playlist-item-down">
               <ArrowDown className="h-4 w-4" aria-hidden="true" />
             </button>
           </>
         )}
-        <button type="button" className="b b-ghost b-icon text-[var(--fanous-color-error-text)]" onClick={() => onRemove(item)} disabled={busy} aria-label={fill(p.removeTitle, { title })} title={fill(p.removeTitle, { title })} data-testid="playlist-item-remove">
+        <button type="button" className="b b-ghost b-icon text-[var(--fanous-color-error-text)]" onClick={() => onRemove(item)} disabled={busy} aria-label={fill(p.removeTitle, { title }, lang)} title={fill(p.removeTitle, { title }, lang)} data-testid="playlist-item-remove">
           <Trash2 className="h-4 w-4" aria-hidden="true" />
         </button>
       </span>
@@ -304,7 +304,7 @@ export default function PlaylistEditor({ channelId, playlistId, initialJobId }: 
         setDetailsStatus({ tone: 'success', message: p.detailsSaved });
       } else {
         const ref = reportError(new Error('Saving playlist details failed'), { shown: true, status: answer.status ?? undefined, extra: { step: 'playlist-details-save', playlistId } });
-        setDetailsStatus({ tone: 'error', message: answer.status === 403 ? fill(p.addForbidden, { title: playlistTitle }) : t.playlist.updateFailed, ref });
+        setDetailsStatus({ tone: 'error', message: answer.status === 403 ? fill(p.addForbidden, { title: playlistTitle }, lang) : t.playlist.updateFailed, ref });
       }
     } catch (error) {
       setDetailsStatus({ tone: 'error', message: t.playlist.updateFailed, ref: reportError(error, { shown: true, extra: { step: 'playlist-details-save', playlistId } }) });
@@ -392,10 +392,10 @@ export default function PlaylistEditor({ channelId, playlistId, initialJobId }: 
     return item ? titleOf(item) : '';
   };
   const announcements: Announcements = {
-    onDragStart: ({ active }) => fill(p.dndPickedUp, { title: nameOf(active.id), position: positionOf(active.id), total: items.length }),
-    onDragOver: ({ active, over }) => (over ? fill(p.dndMoved, { title: nameOf(active.id), position: positionOf(over.id), total: items.length }) : undefined),
-    onDragEnd: ({ active, over }) => (over ? fill(p.dndDropped, { title: nameOf(active.id), position: positionOf(over.id), total: items.length }) : undefined),
-    onDragCancel: ({ active }) => fill(p.dndCancelled, { title: nameOf(active.id) }),
+    onDragStart: ({ active }) => fill(p.dndPickedUp, { title: nameOf(active.id), position: positionOf(active.id), total: items.length }, lang),
+    onDragOver: ({ active, over }) => (over ? fill(p.dndMoved, { title: nameOf(active.id), position: positionOf(over.id), total: items.length }, lang) : undefined),
+    onDragEnd: ({ active, over }) => (over ? fill(p.dndDropped, { title: nameOf(active.id), position: positionOf(over.id), total: items.length }, lang) : undefined),
+    onDragCancel: ({ active }) => fill(p.dndCancelled, { title: nameOf(active.id) }, lang),
   };
 
   // ── Remove ────────────────────────────────────────────────────────────
@@ -415,7 +415,7 @@ export default function PlaylistEditor({ channelId, playlistId, initialJobId }: 
       const answer = await removeVideosFromPlaylist(playlistId, [item.id], { channelId });
       if (answer.ok) {
         if (cover === item.id) setCover(null);
-        setListStatus({ tone: 'success', message: fill(p.removedOne, { title }) });
+        setListStatus({ tone: 'success', message: fill(p.removedOne, { title }, lang) });
         return;
       }
       setItems(previous);
@@ -467,7 +467,7 @@ export default function PlaylistEditor({ channelId, playlistId, initialJobId }: 
         <div role="alert" className={`flex flex-wrap items-center justify-between gap-3 rounded-[var(--r-md)] px-4 py-3 text-sm ${NOTICE.error}`} data-testid="playlist-editor-error">
           <span>
             {loadError.status === 404 ? t.playlist.loadFailed : p.loadItemsFailed}
-            {loadError.ref && <span className="block text-xs">{fill(p.errorRef, { ref: loadError.ref })}</span>}
+            {loadError.ref && <span className="block text-xs">{fill(p.errorRef, { ref: loadError.ref }, lang)}</span>}
           </span>
           <button type="button" className="b b-secondary b-sm" onClick={() => void load()}>{p.tryAgain}</button>
         </div>
@@ -525,8 +525,8 @@ export default function PlaylistEditor({ channelId, playlistId, initialJobId }: 
                 {coverChoices.map((item) => {
                   const title = titleOf(item);
                   return (
-                    <label key={item.id} className="pl-cover aspect-video" data-checked={cover === item.id || undefined} title={fill(p.coverUse, { title })}>
-                      <input type="radio" name="playlist-cover" className="pl-hit" checked={cover === item.id} onChange={() => setCover(item.id)} aria-label={fill(p.coverUse, { title })} disabled={savingDetails} />
+                    <label key={item.id} className="pl-cover aspect-video" data-checked={cover === item.id || undefined} title={fill(p.coverUse, { title }, lang)}>
+                      <input type="radio" name="playlist-cover" className="pl-hit" checked={cover === item.id} onChange={() => setCover(item.id)} aria-label={fill(p.coverUse, { title }, lang)} disabled={savingDetails} />
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={item.video!.thumbnailUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
                     </label>
@@ -590,7 +590,7 @@ export default function PlaylistEditor({ channelId, playlistId, initialJobId }: 
               <div className="flex flex-wrap justify-end gap-2">
                 <button type="button" className="b b-secondary" onClick={() => { setPicking(false); setPicked([]); }} disabled={adding}>{t.playlist.upload.cancel}</button>
                 <button type="button" className="b b-primary" onClick={() => void addPicked()} disabled={adding || picked.length === 0} data-testid="playlist-add-submit">
-                  {adding ? p.adding : picked.length > 0 ? counted(picked.length, p.addSelectedOne, p.addSelectedOther) : p.addVideos}
+                  {adding ? p.adding : picked.length > 0 ? counted(picked.length, p.addSelectedOne, p.addSelectedOther, {}, lang) : p.addVideos}
                 </button>
               </div>
             </div>

@@ -6,6 +6,7 @@
  * providers (D3): only the encoder help line follows the ingest protocol.
  * State is polled every 5 s (GET /api/live-streams/:id/state).
  */
+import { dateTimeFormat, numberFormat, formatNumber } from '@al-ummah/shared-types';
 import { useCallback, useEffect, useId, useState } from 'react';
 import Link from '@/components/common/AppLink';
 import { ArrowLeft, Eye } from 'lucide-react';
@@ -140,7 +141,7 @@ export function GoLive({ locale, channelId, streamId }: { locale: string; channe
     );
   };
 
-  const timeFormat = new Intl.DateTimeFormat(lang === 'ar' ? 'ar' : 'en', { dateStyle: 'medium', timeStyle: 'short' });
+  const timeFormat = dateTimeFormat(lang === 'ar' ? 'ar' : 'en', { dateStyle: 'medium', timeStyle: 'short' });
   const back = (
     <Link href={studioLiveHref(locale, channelId)} className="mb-4 inline-flex min-h-11 items-center gap-2 text-sm text-muted-foreground hover:underline" data-testid="studio-golive-back">
       <ArrowLeft className="h-4 w-4 rtl:rotate-180" aria-hidden="true" />
@@ -188,13 +189,13 @@ export function GoLive({ locale, channelId, streamId }: { locale: string; channe
           <p className="mt-1 text-sm text-muted-foreground" data-testid="studio-golive-details">
             {state?.startedAt ? text.startedAt.replace('{time}', timeFormat.format(new Date(state.startedAt))) : ''}
             {state?.startedAt && state?.bitrateKbps ? ' · ' : ''}
-            {state?.bitrateKbps ? text.bitrate.replace('{kbps}', String(Math.round(state.bitrateKbps))) : ''}
+            {state?.bitrateKbps ? text.bitrate.replace('{kbps}', formatNumber(lang, Math.round(state.bitrateKbps), { useGrouping: false })) : ''}
           </p>
         )}
         {phase === 'live' && typeof state?.viewers === 'number' && (
           <p className="mt-1 flex items-center gap-1 text-sm font-medium text-foreground" data-testid="studio-golive-viewers" data-count={state.viewers}>
             <Eye aria-hidden="true" className="h-4 w-4" />
-            {text.watching.replace('{count}', new Intl.NumberFormat(locale === 'ar' ? 'ar' : 'en').format(state.viewers))}
+            {text.watching.replace('{count}', numberFormat(locale === 'ar' ? 'ar' : 'en').format(state.viewers))}
           </p>
         )}
         {error && (

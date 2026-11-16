@@ -8,7 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getStudioVideoAnalytics, getVideoRetention, type RetentionCurve, type StudioVideoAnalytics } from '@/lib/api/studio-analytics';
 import { logger } from '@/lib/logger-client';
-import { chartLocale, formatDuration, formatWatchTime, watchTimeUnit } from '@al-ummah/shared-types';
+import { formatDuration, formatWatchTime, watchTimeUnit, dateTimeFormat, numberFormat, fillTemplate } from '@al-ummah/shared-types';
 import { RANGE_PRESETS, rangeDates, type RangePreset } from '@/lib/studio/analytics';
 import { LineChart } from './LineChart';
 import { StatCard, TrafficSources } from './parts';
@@ -59,9 +59,9 @@ export function VideoAnalytics({ locale, channelId, videoId, title, duration, ba
     void load();
   }, [load]);
 
-  const number = new Intl.NumberFormat(chartLocale(locale));
-  const percent = new Intl.NumberFormat(chartLocale(locale), { style: 'percent', maximumFractionDigits: 0 });
-  const date = new Intl.DateTimeFormat(chartLocale(locale), { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  const number = numberFormat(locale);
+  const percent = numberFormat(locale, { style: 'percent', maximumFractionDigits: 0 });
+  const date = dateTimeFormat(locale, { month: 'short', day: 'numeric', timeZone: 'UTC' });
   const clock = formatDuration(locale);
   const position = (bucket: number) => (duration ? clock((bucket / 20) * duration) : percent.format(bucket / 20));
   const lifetime = (count: number) => text.lifetimeViews.replace('{count}', number.format(count));
@@ -75,7 +75,7 @@ export function VideoAnalytics({ locale, channelId, videoId, title, duration, ba
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h1 dir="auto" className="truncate text-xl font-bold text-foreground">{title}</h1>
         <select aria-label={text.rangeLabel} value={range} onChange={(event) => setRange(event.target.value as RangePreset)} className="min-h-11 rounded-md border border-input bg-background px-2 text-sm text-foreground">
-          {RANGE_PRESETS.map((preset) => <option key={preset} value={preset}>{text.ranges[preset]}</option>)}
+          {RANGE_PRESETS.map((preset) => <option key={preset} value={preset}>{fillTemplate(locale, text.ranges[preset], { days: Number(preset) })}</option>)}
         </select>
       </div>
 

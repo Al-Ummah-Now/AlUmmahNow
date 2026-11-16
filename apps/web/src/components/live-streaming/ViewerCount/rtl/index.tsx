@@ -65,7 +65,7 @@ export const ViewerCountRTL = React.memo<ViewerCountProps>(
 
     // Generate accessible label for screen readers in Arabic
     const ariaLabel = useMemo(
-      () => (isLoading ? 'جارٍ تحميل عدد المشاهدين' : getViewerCountLabel(safeCount, 'ar-SA')),
+      () => (isLoading ? 'جارٍ تحميل عدد المشاهدين' : getViewerCountLabel(safeCount, 'ar')),
       [safeCount, isLoading]
     );
 

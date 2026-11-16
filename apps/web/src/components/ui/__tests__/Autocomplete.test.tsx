@@ -271,7 +271,7 @@ describe('Autocomplete initial results (pickers open with content)', () => {
     const added = options().find((o) => o.getAttribute('data-option-id') === 'p1')!;
     expect(added).toHaveAttribute('aria-checked', 'true');
     expect(added).toHaveAttribute('aria-disabled', 'true');
-    expect(screen.getByTestId('autocomplete-status')).toHaveTextContent(ar.autocomplete.resultsCount.replace('{count}', '2'));
+    expect(screen.getByTestId('autocomplete-status')).toHaveTextContent(ar.autocomplete.resultsCount.replace('{count}', '٢'));
   });
 
   it('starts again from the first page when loadKey changes (another channel)', async () => {

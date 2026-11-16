@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { naturalCompare, UploadQueueItem, VideoUploadMetadata } from '@al-ummah/shared-types';
+import { naturalCompare, UploadQueueItem, VideoUploadMetadata, formatNumber } from '@al-ummah/shared-types';
 import { BatchUploadManager } from '@/lib/upload/BatchUploadManager';
 import { UploadOptimizer } from '@/lib/upload/UploadOptimizer';
 import { buildBatchUploadEntries, getTusProxyEndpoint } from '@/lib/upload/batch-entries';
@@ -194,8 +194,8 @@ export function useBatchUpload({
       syncFiles();
       onError?.(
         t.batch.errors.queueFull
-          .replace('{max}', String(MAX_BATCH_FILES))
-          .replace('{left}', String(slots))
+          .replace('{max}', formatNumber(lang, MAX_BATCH_FILES))
+          .replace('{left}', formatNumber(lang, slots))
       );
       return;
     }
@@ -218,8 +218,8 @@ export function useBatchUpload({
         const recommendedBatchSize = optimizerRef.current.getRecommendedBatchSize();
         onError?.(
           t.batch.errors.deviceLimit
-            .replace('{count}', String(toAdd.length))
-            .replace('{recommended}', String(recommendedBatchSize))
+            .replace('{count}', formatNumber(lang, toAdd.length))
+            .replace('{recommended}', formatNumber(lang, recommendedBatchSize))
         );
         return;
       }
@@ -309,7 +309,7 @@ export function useBatchUpload({
 
         if (!initiateResult.success || !initiateResult.result) {
           // No tier or the upload limit: the user's words, not the server's (nothing for the Errors page)
-          const refusal = creatorRefusalMessage(t, initiateResult);
+          const refusal = creatorRefusalMessage(t, initiateResult, lang);
           if (refusal) {
             logger.warn('[useBatchUpload] Batch refused', { code: initiateResult.code, retryAfter: initiateResult.retryAfter, count: freshFiles.length });
             if (initiateResult.code === 'uploads_by_invitation') void refreshCreatorAccess();
@@ -330,10 +330,10 @@ export function useBatchUpload({
           logger.warn('[useBatchUpload] Batch partly deferred by the upload limit', { started: startedFiles.length, deferred: waiting.length, retryAfter: waitSeconds });
           onError?.(
             t.creator.batchPartial
-              .replace('{started}', String(startedFiles.length))
-              .replace('{total}', String(freshFiles.length))
-              .replace('{left}', String(waiting.length))
-              .replace('{time}', formatWait(t, waitSeconds)),
+              .replace('{started}', formatNumber(lang, startedFiles.length))
+              .replace('{total}', formatNumber(lang, freshFiles.length))
+              .replace('{left}', formatNumber(lang, waiting.length))
+              .replace('{time}', formatWait(t, waitSeconds, lang)),
           );
           if (deferredTimerRef.current) clearTimeout(deferredTimerRef.current);
           deferredTimerRef.current = setTimeout(() => {

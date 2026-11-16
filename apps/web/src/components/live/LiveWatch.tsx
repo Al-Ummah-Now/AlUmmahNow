@@ -7,6 +7,7 @@
  * until the stream is live, then every minute to notice the end. While live it
  * shows how many people are watching (useLiveViewers, AlUmmahNow#30).
  */
+import { dateTimeFormat, numberFormat } from '@al-ummah/shared-types';
 import { useCallback, useEffect, useState } from 'react';
 import Link from '@/components/common/AppLink';
 import { Eye } from 'lucide-react';
@@ -94,7 +95,7 @@ export function LiveWatch({ streamId }: { streamId: string }) {
 
   const viewers = useLiveViewers(streamId, view === 'ready' && mode === 'live', state?.viewers);
 
-  const timeFormat = new Intl.DateTimeFormat(lang === 'ar' ? 'ar' : 'en', { dateStyle: 'medium', timeStyle: 'short' });
+  const timeFormat = dateTimeFormat(lang === 'ar' ? 'ar' : 'en', { dateStyle: 'medium', timeStyle: 'short' });
   const fmt = (iso?: string | null) => (iso && Number.isFinite(Date.parse(iso)) ? timeFormat.format(new Date(iso)) : '');
 
   if (view === 'loading') {
@@ -150,7 +151,7 @@ export function LiveWatch({ streamId }: { streamId: string }) {
       {mode === 'live' && viewers !== null && (
         <p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground" data-testid="live-watch-viewers" data-count={viewers}>
           <Eye aria-hidden="true" className="h-4 w-4" />
-          {text.watching.replace('{count}', new Intl.NumberFormat(lang === 'ar' ? 'ar' : 'en').format(viewers))}
+          {text.watching.replace('{count}', numberFormat(lang === 'ar' ? 'ar' : 'en').format(viewers))}
         </p>
       )}
       {channel && channelName && (

@@ -7,6 +7,7 @@
  * parent (aun:v1:resize) so the widget can size the iframe.
  */
 
+import { dateTimeFormat } from '@al-ummah/shared-types';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MessageSquare, Pin, ThumbsUp } from 'lucide-react';
 import { logger } from '@/lib/logger-client';
@@ -30,7 +31,7 @@ interface RuntimeConfigWindow extends Window {
 function formatDate(iso: string, lang: EmbedLang): string {
   const date = new Date(iso);
   if (!Number.isFinite(date.getTime())) return '';
-  return new Intl.DateTimeFormat(lang === 'ar' ? 'ar' : 'en', { dateStyle: 'medium' }).format(date);
+  return dateTimeFormat(lang === 'ar' ? 'ar' : 'en', { dateStyle: 'medium' }).format(date);
 }
 
 export default function CommentsFrame({ videoId, videoTitle, lang, origin, initial }: CommentsFrameProps) {
@@ -134,7 +135,7 @@ export default function CommentsFrame({ videoId, videoTitle, lang, origin, initi
                   {comment.likesCount > 0 && (
                     <span className="inline-flex items-center gap-1"><ThumbsUp className="h-3 w-3" aria-hidden="true" />{comment.likesCount}</span>
                   )}
-                  {comment.repliesCount > 0 && <span>{fill(s.replies, { count: comment.repliesCount })}</span>}
+                  {comment.repliesCount > 0 && <span>{fill(s.replies, { count: comment.repliesCount }, lang)}</span>}
                 </p>
               </div>
             </li>

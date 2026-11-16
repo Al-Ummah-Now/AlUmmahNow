@@ -6,12 +6,12 @@
  * Editing: language, name and type. Not a <form>: the panel sits inside the video editor's form.
  */
 import React, { useId, useState } from 'react';
-import { AUDIO_TRACK_LANGUAGES, defaultAudioTrackLabel, detectedStreamLanguage, AUDIO_LABEL_MAX, type AudioTrackKind, type AudioTrackLanguage, type AudioTracksTranslations } from '@al-ummah/shared-types';
+import { AUDIO_TRACK_LANGUAGES, defaultAudioTrackLabel, detectedStreamLanguage, AUDIO_LABEL_MAX, type AudioTrackKind, type AudioTrackLanguage, type AudioTracksTranslations, fillTemplate } from '@al-ummah/shared-types';
 import { Loader2, Search } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { reportError } from '@/lib/errors/reporter';
 import { addAudioTrack, detectAudioStreams, updateAudioTrack, type AudioTracksView, type StudioAudioTrack } from '@/lib/api/audio-tracks';
-import { addLimitMessage, fileProblem, languageName, streamText } from './audio-track-model';
+import { addLimitMessage, fileProblem, languageName, maxFileSize, streamText } from './audio-track-model';
 
 export type AudioTrackDialogResult = { type: 'added'; track: StudioAudioTrack; file?: File } | { type: 'saved'; track: StudioAudioTrack };
 
@@ -73,7 +73,7 @@ export default function AudioTrackDialog({ videoId, track, view, t, lang, spoken
 
   const pickFile = (f: File | undefined) => {
     setFile(f ?? null);
-    setFileError(f ? fileProblem(f, t) : null);
+    setFileError(f ? fileProblem(f, t, lang) : null);
   };
 
   const look = async () => {
@@ -117,7 +117,7 @@ export default function AudioTrackDialog({ videoId, track, view, t, lang, spoken
     if (!res.ok) {
       if (res.status === 402) {
         const d = res.details as { limit?: number; used?: number } | undefined;
-        setError(addLimitMessage({ limit: { allowed: d?.limit ?? view.limit.allowed, used: d?.used ?? view.limit.used, unlimited: false } }, t) ?? t.saveFailed);
+        setError(addLimitMessage({ limit: { allowed: d?.limit ?? view.limit.allowed, used: d?.used ?? view.limit.used, unlimited: false } }, t, lang) ?? t.saveFailed);
       } else if (res.error === 'duplicate_track') setError(t.duplicate);
       else {
         setError(t.saveFailed);
@@ -181,7 +181,7 @@ export default function AudioTrackDialog({ videoId, track, view, t, lang, spoken
                 className="block w-full text-sm text-foreground file:me-3 file:h-10 file:cursor-pointer file:rounded-md file:border file:border-border file:bg-background file:px-3 file:text-sm file:text-foreground hover:file:bg-muted"
               />
               <p id={`${ids}-file-hint`} className={`text-xs ${fileError ? 'text-[var(--fanous-color-error-text)]' : 'text-muted-foreground'}`}>
-                {fileError ?? t.form.fileHint}
+                {fileError ?? fillTemplate(lang, t.form.fileHint, { size: maxFileSize(lang) })}
               </p>
             </div>
           )}

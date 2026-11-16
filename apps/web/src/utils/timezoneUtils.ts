@@ -30,9 +30,9 @@ export function isValidTimezone(timezone: string): boolean {
 export function getTimezoneOffset(timezone: string, date: Date = new Date()): number {
   try {
     // Get the UTC time
-    const utcDate = new Date(date.toLocaleString('en-US', { timeZone: 'UTC' }));
+    const utcDate = new Date(date.toLocaleString('en-US', { timeZone: 'UTC' })); // locale-format: machine (time-zone maths)
     // Get the time in the target timezone
-    const tzDate = new Date(date.toLocaleString('en-US', { timeZone: timezone }));
+    const tzDate = new Date(date.toLocaleString('en-US', { timeZone: timezone })); // locale-format: machine (time-zone maths)
     // Calculate difference in minutes
     return (tzDate.getTime() - utcDate.getTime()) / (1000 * 60);
   } catch (_error) {
@@ -228,7 +228,7 @@ export function convertUTCToTimezone(utcDateString: string, timezone: string): D
   const utcDate = new Date(utcDateString);
 
   // Convert to the target timezone
-  const tzDateString = utcDate.toLocaleString('en-US', { timeZone: timezone });
+  const tzDateString = utcDate.toLocaleString('en-US', { timeZone: timezone }); // locale-format: machine (time-zone maths)
   return new Date(tzDateString);
 }
 
@@ -238,7 +238,7 @@ export function convertUTCToTimezone(utcDateString: string, timezone: string): D
  */
 export function convertTimezoneToUTC(date: Date, timezone: string): string {
   // Get the date string in the specified timezone
-  const tzDateString = date.toLocaleString('en-US', { timeZone: timezone });
+  const tzDateString = date.toLocaleString('en-US', { timeZone: timezone }); // locale-format: machine (time-zone maths)
   const tzDate = new Date(tzDateString);
 
   // Calculate the offset
@@ -255,6 +255,7 @@ export function convertTimezoneToUTC(date: Date, timezone: string): string {
  */
 export function getTimezoneAbbreviation(timezone: string, date: Date = new Date()): string {
   try {
+    // locale-format: machine (a zone code such as 'EST' or 'GMT+3', kept as written)
     const formatter = new Intl.DateTimeFormat('en-US', {
       timeZone: timezone,
       timeZoneName: 'short',

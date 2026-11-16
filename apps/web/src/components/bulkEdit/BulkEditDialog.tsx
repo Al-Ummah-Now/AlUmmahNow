@@ -5,6 +5,7 @@
  */
 'use client';
 
+import { formatNumber } from '@al-ummah/shared-types';
 import { TagAutocomplete } from '@/components/ui/TagAutocomplete';
 import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import React, { useEffect, useState } from 'react';
@@ -81,7 +82,7 @@ export function BulkEditDialog({ open, count, onOpenChange, onApply, selectedTag
       <DialogContent dir={isRTL ? 'rtl' : 'ltr'} data-testid="bulk-edit-dialog">
         <form onSubmit={submit} noValidate>
           <DialogHeader>
-            <DialogTitle>{b.title.replace('{count}', count.toLocaleString(lang === 'ar' ? 'ar' : 'en-US'))}</DialogTitle>
+            <DialogTitle>{b.title.replace('{count}', formatNumber(lang === 'ar' ? 'ar' : 'en-US', count))}</DialogTitle>
             <DialogDescription>{b.description}</DialogDescription>
           </DialogHeader>
 

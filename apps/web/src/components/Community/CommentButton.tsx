@@ -1,5 +1,6 @@
 'use client';
 
+import { formatCompact } from '@al-ummah/shared-types';
 import { cn } from '@/lib/utils';
 import { getTranslations } from '@/lib/i18n';
 
@@ -20,15 +21,7 @@ export default function CommentButton({
   showComments = false,
   onToggle,
 }: CommentButtonProps) {
-  const formatCount = (count: number) => {
-    if (count >= 1000000) {
-      return `${(count / 1000000).toFixed(1)}M`;
-    }
-    if (count >= 1000) {
-      return `${(count / 1000).toFixed(1)}K`;
-    }
-    return count.toString();
-  };
+  const formatCount = (count: number) => formatCompact(isRTL ? 'ar' : 'en', count);
 
   const handleClick = () => {
     if (!commentsEnabled) return;

@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { UploadQueueItem } from '@al-ummah/shared-types';
+import { UploadQueueItem, formatPercent } from '@al-ummah/shared-types';
 import { FileQueueItem } from './FileQueueItem';
 import { Pause, Play, X, RotateCcw, Info, CheckCircle2 } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -57,7 +57,7 @@ export function BatchUploadQueue({
   titleOf,
   toolbar,
 }: BatchUploadQueueProps) {
-  const { t, isRTL: _isRTL } = useLanguage();
+  const { t, isRTL: _isRTL, lang } = useLanguage();
 
   const stats = React.useMemo(() => {
     const completed = files.filter(f => f.status === 'completed').length;
@@ -228,7 +228,7 @@ export function BatchUploadQueue({
             {t.batch.overallProgress}
           </span>
           <span className="text-sm text-gray-500 dark:text-gray-400" data-testid="batch-overall-percent">
-            {overallProgress.toFixed(0)}%
+            {formatPercent(lang, Math.round(overallProgress) / 100)}
           </span>
         </div>
         <div

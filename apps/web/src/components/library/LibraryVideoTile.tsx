@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from '@/components/common/AppLink';
 import VideoThumbnail, { THUMBNAIL_16_9 } from '@/components/VideoThumbnail';
-import { getLocalizedValue } from '@al-ummah/shared-types';
+import { getLocalizedValue, formatNumber } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { removeUnwantedChars } from '@/lib/utility';
 import { channelLabel } from '@/lib/channel-name';
@@ -26,8 +26,8 @@ function formatDuration(seconds: number | undefined, locale: string): string | n
   const s = Math.floor(seconds % 60);
   const m = Math.floor((seconds / 60) % 60);
   const h = Math.floor(seconds / 3600);
-  const pad = (n: number) => n.toLocaleString(locale, { minimumIntegerDigits: 2 });
-  return h > 0 ? `${h.toLocaleString(locale)}:${pad(m)}:${pad(s)}` : `${m.toLocaleString(locale)}:${pad(s)}`;
+  const pad = (n: number) => formatNumber(locale, n, { minimumIntegerDigits: 2 });
+  return h > 0 ? `${formatNumber(locale, h)}:${pad(m)}:${pad(s)}` : `${formatNumber(locale, m)}:${pad(s)}`;
 }
 
 /** Compact video tile used by the Library hub and lists. */
@@ -59,7 +59,7 @@ export function LibraryVideoTile({ video, subtitle, testId = 'library-video', hr
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={percent}
-            aria-label={t.library.watchedPercent.replace('{percent}', percent.toLocaleString(lang))}
+            aria-label={t.library.watchedPercent.replace('{percent}', formatNumber(lang, percent))}
             data-testid="library-video-progress"
             className="absolute inset-x-0 bottom-0 h-1 bg-gray-300/80"
           >

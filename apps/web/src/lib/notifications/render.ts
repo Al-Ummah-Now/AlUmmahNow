@@ -4,6 +4,7 @@
  * language, never on the server.
  */
 
+import { formatDate } from '@al-ummah/shared-types';
 import type { NotificationItem } from '@al-ummah/shared-types';
 import type { AppTranslations } from '@/lib/i18n/types';
 import type { NotificationEvent, RealtimeNotificationKey } from '@/interfaces/websocket';
@@ -57,7 +58,7 @@ export function relativeTime(iso: string, t: AppTranslations, locale: string, no
   if (hours < 24) return pluralText(texts.hoursAgo, hours, locale);
   const days = Math.floor(hours / 24);
   if (days < 30) return pluralText(texts.daysAgo, days, locale);
-  return new Date(time).toLocaleDateString(locale);
+  return formatDate(locale, time, {});
 }
 
 /** Server action URLs are locale-less ("/video/123"); prefix the viewer's locale. */
