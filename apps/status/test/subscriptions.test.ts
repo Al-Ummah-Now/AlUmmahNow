@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import type { StatusNotifyJob } from '@al-ummah/shared-types';
 import { CONFIRM_COOLDOWN_MINUTES, MAX_PER_IP_PER_HOUR, confirm, normalizeEmail, subscribe, tokenState, unsubscribe, type SubscribeEnv } from '../src/subscribe';
 import { prune } from '../src/store';
-import { renderConfirmPage, renderStatusPage, renderSubscribePage, renderUnsubscribePage } from '../src/render';
+import { renderConfirmPage, renderStatusPage, renderSubscribePage, renderUnsubscribedPage, renderUnsubscribePage } from '../src/render';
 import worker from '../src/index';
 import { sqliteD1 } from './d1-sqlite';
 
@@ -174,6 +174,19 @@ describe('subscription pages', () => {
       assert.ok(!page.includes('footer-subscribe'), `${locale}: no footer link`);
       assert.ok(!/href="(\/ar)?\/subscribe"/.test(page), `${locale}: no link to /subscribe`);
       assert.match(page, /feed\.atom/, `${locale}: the feeds stay`);
+    }
+  });
+
+  it('hidden when off: an expired link and the unsubscribed page offer no Subscribe again', () => {
+    const link = /href="(\/ar)?\/subscribe"/;
+    for (const locale of ['en', 'ar'] as const) {
+      const expired = renderConfirmPage(opts(locale, '/subscribe/confirm'), 'unknown', '');
+      assert.ok(!link.test(expired), `${locale}: expired page has no link to /subscribe`);
+      assert.ok(!expired.includes(locale === 'ar' ? 'اشترك مجددًا' : 'Subscribe again'), `${locale}: expired page does not invite subscribing again`);
+      assert.ok(!link.test(renderUnsubscribedPage(opts(locale, '/unsubscribe'))), `${locale}: unsubscribed page has no link to /subscribe`);
+      // While email updates are offered, both pages keep the way back
+      assert.match(renderConfirmPage({ ...opts(locale, '/subscribe/confirm'), subscribe: true }, 'unknown', ''), link);
+      assert.match(renderUnsubscribedPage({ ...opts(locale, '/unsubscribe'), subscribe: true }), link);
     }
   });
 });
