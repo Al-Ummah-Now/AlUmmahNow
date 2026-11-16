@@ -184,11 +184,13 @@ export function StudioDashboard({ locale, channelId, role, liveOn = false, uploa
               {held.items.map((comment) => (
                 <li key={comment.id} className="min-w-0">
                   <p dir="auto" className="line-clamp-2 text-foreground">{comment.text}</p>
-                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                    <span dir="auto">{comment.author.displayName}</span>
-                    {' · '}
-                    <Link href={`/${locale}${comment.targetUrlPath}`} dir="auto" className="hover:underline">{text.held.on.replace('{title}', comment.targetTitle)}</Link>
-                  </p>
+                  <p dir="auto" className="mt-0.5 truncate text-xs text-muted-foreground">{comment.author.displayName}</p>
+                  <Link href={`/${locale}${comment.targetUrlPath}`} className="block truncate text-xs text-muted-foreground hover:text-foreground hover:underline">
+                    {/* The title isolated in its own direction, so an English title in Arabic text keeps its order */}
+                    {text.held.on.split('{title}')[0]}
+                    <bdi>{comment.targetTitle}</bdi>
+                    {text.held.on.split('{title}')[1]}
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -265,7 +267,8 @@ export function StudioDashboard({ locale, channelId, role, liveOn = false, uploa
             ) : (
               <ul className="space-y-2 text-sm">
                 {recent.map((video) => (
-                  <li key={video.id} className="flex items-center justify-between gap-2">
+                  // A grid, not justify-between: the theme lets justify-between rows wrap (theme/system.css)
+                  <li key={video.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
                     <Link href={editHref(video)} dir="auto" className="min-w-0 truncate text-foreground hover:underline">{video.title}</Link>
                     <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground" data-status={video.studioStatus}>
                       {statuses[video.studioStatus] ?? video.studioStatus}
@@ -320,8 +323,8 @@ export function StudioDashboard({ locale, channelId, role, liveOn = false, uploa
                     <p className="mb-1 font-medium text-foreground">{text.next}</p>
                     <ul className="space-y-1">
                       {scheduled.map((video) => (
-                        <li key={video.id} className="flex justify-between gap-2">
-                          <Link href={editHref(video)} dir="auto" className="truncate text-muted-foreground hover:text-foreground hover:underline">{video.title}</Link>
+                        <li key={video.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-2">
+                          <Link href={editHref(video)} dir="auto" className="min-w-0 truncate text-muted-foreground hover:text-foreground hover:underline">{video.title}</Link>
                           <span className="shrink-0 text-muted-foreground">{video.scheduledPublishDate ? dateTime.format(new Date(video.scheduledPublishDate)) : ''}</span>
                         </li>
                       ))}
