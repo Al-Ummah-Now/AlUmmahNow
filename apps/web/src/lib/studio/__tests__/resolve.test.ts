@@ -32,7 +32,7 @@ describe('safeStudioReturn', () => {
 
 describe('studioLanding', () => {
   it('opens the dashboard', () => expect(studioLanding('en', 'c1')).toBe('/en/studio/c1/dashboard'));
-  it.each(['failed', 'youtube_denied', 'youtube_no_channel', 'youtube_import_off'])('takes the YouTube connection error %s to Move from YouTube', (code) => {
+  it.each(['failed', 'youtube_denied', 'youtube_no_channel'])('takes the YouTube connection error %s to Move from YouTube', (code) => {
     expect(studioLanding('ar', 'c1', code)).toBe(`/ar/studio/c1/content/youtube?error=${code}`);
   });
   it.each(['<script>', 'other', ['failed']])('ignores any other error (%p)', (code) => {

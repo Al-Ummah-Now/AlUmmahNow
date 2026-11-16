@@ -186,9 +186,9 @@ export function formatDuration(seconds: number | null | undefined): string {
 }
 
 /** The error code the Connect step shows for ?error= (unknown codes read as "failed"). */
-export function connectErrorKey(code: string | null): 'youtube_denied' | 'youtube_no_channel' | 'youtube_import_off' | 'failed' | null {
+export function connectErrorKey(code: string | null): 'youtube_denied' | 'youtube_no_channel' | 'failed' | null {
   if (!code) return null;
-  return code === 'youtube_denied' || code === 'youtube_no_channel' || code === 'youtube_import_off' ? code : 'failed';
+  return code === 'youtube_denied' || code === 'youtube_no_channel' ? code : 'failed';
 }
 
 /** The server's reason for a failed item (YtImportItem.error) as a key of t.studio.youtube.progress.errors. */
@@ -201,7 +201,7 @@ export function importErrorKey(code: string | null | undefined): 'import_disconn
   return code === 'youtube_not_connected' ? 'import_disconnected' : 'import_failed';
 }
 
-export type FinishErrorKey = 'connect_other_account' | 'connect_expired' | 'youtube_denied' | 'youtube_no_channel' | 'youtube_import_off';
+export type FinishErrorKey = 'connect_other_account' | 'connect_expired' | 'youtube_denied' | 'youtube_no_channel';
 
 /**
  * Why `POST oauth/finish` refused the connection, for the message beside "Connect again":
@@ -210,7 +210,9 @@ export type FinishErrorKey = 'connect_other_account' | 'connect_expired' | 'yout
  * Google's own refusals. null: not a refusal (502, network), shown as a reported failure.
  */
 export function finishErrorKey(status: number | undefined, code?: string | null): FinishErrorKey | null {
-  if (code === YT_IMPORT_ERRORS.denied || code === YT_IMPORT_ERRORS.noChannel || code === YT_IMPORT_ERRORS.notEnabled) return code;
+  // Switched off: not a refusal to explain (the page leaves for the dashboard)
+  if (code === YT_IMPORT_ERRORS.notEnabled) return null;
+  if (code === YT_IMPORT_ERRORS.denied || code === YT_IMPORT_ERRORS.noChannel) return code;
   if (status === 403) return 'connect_other_account';
   if (code === YT_IMPORT_ERRORS.connectExpired || status === 404 || status === 410) return 'connect_expired';
   return null;

@@ -55808,6 +55808,183 @@
         }
       }
     },
+    "/api/v1/youtube-import/available": {
+      "get": {
+        "tags": [
+          "YouTube import"
+        ],
+        "summary": "Move from YouTube: may this caller use it on this channel",
+        "description": "For Studio's navigation: 200 when the feature is on and configured and the caller may import into the channel (role and creator tier); otherwise 404 (code feature_off).",
+        "operationId": "get_YoutubeImportAvailable",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "channelId",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{ available: true }"
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed to upload to this channel, or no creator tier (code uploads_by_invitation)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such import (code youtube_import_not_found) or channel; code feature_off on every route while the feature is off or not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Not possible in this state (codes not_pickable, nothing_selected, not_failed, …)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The import store or queue is not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "default": false
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/youtube-import/oauth/finish": {
       "post": {
         "tags": [
@@ -55915,7 +56092,7 @@
             }
           },
           "404": {
-            "description": "No such import (code youtube_import_not_found) or channel",
+            "description": "No such import (code youtube_import_not_found) or channel; code feature_off on every route while the feature is off or not configured",
             "content": {
               "application/json": {
                 "schema": {
@@ -55940,7 +56117,7 @@
             }
           },
           "409": {
-            "description": "Not possible in this state (codes youtube_import_off, not_pickable, nothing_selected, not_failed, …)",
+            "description": "Not possible in this state (codes not_pickable, nothing_selected, not_failed, …)",
             "content": {
               "application/json": {
                 "schema": {
@@ -56136,7 +56313,7 @@
             }
           },
           "404": {
-            "description": "No such import (code youtube_import_not_found) or channel",
+            "description": "No such import (code youtube_import_not_found) or channel; code feature_off on every route while the feature is off or not configured",
             "content": {
               "application/json": {
                 "schema": {
@@ -56161,7 +56338,7 @@
             }
           },
           "409": {
-            "description": "Not possible in this state (codes youtube_import_off, not_pickable, nothing_selected, not_failed, …)",
+            "description": "Not possible in this state (codes not_pickable, nothing_selected, not_failed, …)",
             "content": {
               "application/json": {
                 "schema": {
@@ -56312,7 +56489,7 @@
             }
           },
           "404": {
-            "description": "No such import (code youtube_import_not_found) or channel",
+            "description": "No such import (code youtube_import_not_found) or channel; code feature_off on every route while the feature is off or not configured",
             "content": {
               "application/json": {
                 "schema": {
@@ -56337,7 +56514,7 @@
             }
           },
           "409": {
-            "description": "Not possible in this state (codes youtube_import_off, not_pickable, nothing_selected, not_failed, …)",
+            "description": "Not possible in this state (codes not_pickable, nothing_selected, not_failed, …)",
             "content": {
               "application/json": {
                 "schema": {
@@ -56488,7 +56665,7 @@
             }
           },
           "404": {
-            "description": "No such import (code youtube_import_not_found) or channel",
+            "description": "No such import (code youtube_import_not_found) or channel; code feature_off on every route while the feature is off or not configured",
             "content": {
               "application/json": {
                 "schema": {
@@ -56513,7 +56690,7 @@
             }
           },
           "409": {
-            "description": "Not possible in this state (codes youtube_import_off, not_pickable, nothing_selected, not_failed, …)",
+            "description": "Not possible in this state (codes not_pickable, nothing_selected, not_failed, …)",
             "content": {
               "application/json": {
                 "schema": {
@@ -56664,7 +56841,7 @@
             }
           },
           "404": {
-            "description": "No such import (code youtube_import_not_found) or channel",
+            "description": "No such import (code youtube_import_not_found) or channel; code feature_off on every route while the feature is off or not configured",
             "content": {
               "application/json": {
                 "schema": {
@@ -56689,7 +56866,7 @@
             }
           },
           "409": {
-            "description": "Not possible in this state (codes youtube_import_off, not_pickable, nothing_selected, not_failed, …)",
+            "description": "Not possible in this state (codes not_pickable, nothing_selected, not_failed, …)",
             "content": {
               "application/json": {
                 "schema": {
@@ -56850,7 +57027,7 @@
             }
           },
           "404": {
-            "description": "No such import (code youtube_import_not_found) or channel",
+            "description": "No such import (code youtube_import_not_found) or channel; code feature_off on every route while the feature is off or not configured",
             "content": {
               "application/json": {
                 "schema": {
@@ -56875,7 +57052,7 @@
             }
           },
           "409": {
-            "description": "Not possible in this state (codes youtube_import_off, not_pickable, nothing_selected, not_failed, …)",
+            "description": "Not possible in this state (codes not_pickable, nothing_selected, not_failed, …)",
             "content": {
               "application/json": {
                 "schema": {
@@ -57047,7 +57224,7 @@
             }
           },
           "404": {
-            "description": "No such import (code youtube_import_not_found) or channel",
+            "description": "No such import (code youtube_import_not_found) or channel; code feature_off on every route while the feature is off or not configured",
             "content": {
               "application/json": {
                 "schema": {
@@ -57072,7 +57249,7 @@
             }
           },
           "409": {
-            "description": "Not possible in this state (codes youtube_import_off, not_pickable, nothing_selected, not_failed, …)",
+            "description": "Not possible in this state (codes not_pickable, nothing_selected, not_failed, …)",
             "content": {
               "application/json": {
                 "schema": {
@@ -57296,7 +57473,7 @@
             }
           },
           "404": {
-            "description": "No such import (code youtube_import_not_found) or channel",
+            "description": "No such import (code youtube_import_not_found) or channel; code feature_off on every route while the feature is off or not configured",
             "content": {
               "application/json": {
                 "schema": {
@@ -57321,7 +57498,7 @@
             }
           },
           "409": {
-            "description": "Not possible in this state (codes youtube_import_off, not_pickable, nothing_selected, not_failed, …)",
+            "description": "Not possible in this state (codes not_pickable, nothing_selected, not_failed, …)",
             "content": {
               "application/json": {
                 "schema": {
@@ -57512,7 +57689,7 @@
             }
           },
           "404": {
-            "description": "No such import (code youtube_import_not_found) or channel",
+            "description": "No such import (code youtube_import_not_found) or channel; code feature_off on every route while the feature is off or not configured",
             "content": {
               "application/json": {
                 "schema": {
@@ -57537,7 +57714,7 @@
             }
           },
           "409": {
-            "description": "Not possible in this state (codes youtube_import_off, not_pickable, nothing_selected, not_failed, …)",
+            "description": "Not possible in this state (codes not_pickable, nothing_selected, not_failed, …)",
             "content": {
               "application/json": {
                 "schema": {
@@ -57688,7 +57865,7 @@
             }
           },
           "404": {
-            "description": "No such import (code youtube_import_not_found) or channel",
+            "description": "No such import (code youtube_import_not_found) or channel; code feature_off on every route while the feature is off or not configured",
             "content": {
               "application/json": {
                 "schema": {
@@ -57713,7 +57890,7 @@
             }
           },
           "409": {
-            "description": "Not possible in this state (codes youtube_import_off, not_pickable, nothing_selected, not_failed, …)",
+            "description": "Not possible in this state (codes not_pickable, nothing_selected, not_failed, …)",
             "content": {
               "application/json": {
                 "schema": {

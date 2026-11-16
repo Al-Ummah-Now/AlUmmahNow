@@ -3,7 +3,7 @@
  * wiki AUN-YT-IMPORT). Bearer auth like the other Studio calls; failures throw
  * YtImportApiError with the server's code (never shown as is).
  */
-import type { YtFileMatch, YtImport, YtImportItem, YtImportPlaylist, YtVisibilityMode } from '@al-ummah/shared-types';
+import { YT_IMPORT_ERRORS, type YtFileMatch, type YtImport, type YtImportItem, type YtImportPlaylist, type YtVisibilityMode } from '@al-ummah/shared-types';
 import { fetchClientAuthInfo } from '@/lib/auth/client-token';
 import { getApiUrl } from '@/lib/runtime-config';
 
@@ -32,9 +32,31 @@ async function request(path: string, init: RequestInit = {}): Promise<Response> 
   return res;
 }
 
+/** Switched off (or its configuration removed) while open: api-videos answers 404 feature_off. */
+export function isFeatureOff(error: unknown): boolean {
+  return error instanceof YtImportApiError && error.code === YT_IMPORT_ERRORS.notEnabled;
+}
+
+/** The Studio dashboard of the page we are on: where a switched-off feature quietly sends the user. */
+export function studioDashboardOf(pathname: string): string | null {
+  const m = /^\/(en|ar)\/studio\/([^/]+)/.exec(pathname);
+  return m ? `/${m[1]}/studio/${m[2]}/dashboard` : null;
+}
+
+/** Leaves a switched-off feature for this channel's Studio dashboard, without a word about it. */
+export function leaveToDashboard(): void {
+  const target = typeof window !== 'undefined' ? studioDashboardOf(window.location.pathname) : null;
+  if (target) window.location.replace(target);
+}
+
 async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
   const res = await request(path, init);
   const body = (await res.json().catch(() => null)) as ({ success?: boolean; code?: string; reference?: string; result?: T } & T) | null;
+  if (res.status === 404 && body?.code === YT_IMPORT_ERRORS.notEnabled) {
+    // Nothing to say about a feature that is off: leave for the dashboard without a message
+    leaveToDashboard();
+    throw new YtImportApiError(404, YT_IMPORT_ERRORS.notEnabled);
+  }
   if (!res.ok || !body || body.success === false) {
     throw new YtImportApiError(res.status, body?.code ?? null, res.headers.get('X-Error-Ref') || body?.reference || undefined);
   }

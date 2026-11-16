@@ -35,6 +35,8 @@ import {
 	cancelImport,
 	linkBack,
 	allPickedSettled,
+	requireYtEnabled,
+	importAvailable,
 } from '../src/lib/youtube-import/service';
 import { handleYtImportBatch, itemFieldsOf, runYtJob, captionStagingKey, retryYtJob, finalizeWaitS, FINALIZE_WAIT_S, FINALIZE_WAIT_SOON_S } from '../src/lib/youtube-import/jobs';
 import { sweepYoutubeImports } from '../src/lib/youtube-import/sweep';
@@ -325,7 +327,26 @@ describe('YouTube import: connecting', () => {
 		assert.equal(u.searchParams.get('redirect_uri'), `${API}/api/youtube-import/oauth/callback`);
 
 		const off = makeEnv({ GOOGLE_OAUTH_CLIENT_SECRET: 'unset' });
-		await assert.rejects(startOAuth(off.env as never, caller, { channelId: CHANNEL, captions: false, locale: 'en' }, NOW), (e: YtHttpError) => e.status === 409 && e.code === 'youtube_import_off');
+		await assert.rejects(startOAuth(off.env as never, caller, { channelId: CHANNEL, captions: false, locale: 'en' }, NOW), (e: YtHttpError) => e.status === 404 && e.code === 'feature_off');
+	});
+
+	it('while off or not configured, answers a quiet 404 and the callback goes back to Studio without a word about it', async () => {
+		for (const off of [makeEnv({ GOOGLE_OAUTH_CLIENT_SECRET: 'unset' }), makeEnv()]) {
+			if (off.env.GOOGLE_OAUTH_CLIENT_SECRET === SECRET) await off.env.global_settings.put(YT_SETTINGS_KEY, JSON.stringify({ enabled: false, clientId: CLIENT_ID, updatedAt: null, updatedBy: null }));
+			await assert.rejects(requireYtEnabled(off.env as never), (e: YtHttpError) => e.status === 404 && e.code === 'feature_off');
+			await assert.rejects(prepareImportUpload(off.env as never, caller, CHANNEL, { importId: 'x', itemId: 'y' }, NOW), (e: YtHttpError) => e.status === 404 && e.code === 'feature_off');
+		}
+		// On: only for whoever may import into the channel; anyone else gets the same quiet 404
+		const on = makeEnv();
+		assert.deepEqual(await importAvailable(on.env as never, caller, CHANNEL), { available: true });
+		await assert.rejects(importAvailable(on.env as never, { userId: 'stranger' }, CHANNEL), (e: YtHttpError) => e.status === 404 && e.code === 'feature_off');
+		await assert.rejects(importAvailable(on.env as never, { userId: OWNER, roles: [] }, CHANNEL), (e: YtHttpError) => e.status === 404 && e.code === 'feature_off');
+		// Switched off between the consent and Google's redirect
+		const { env } = makeEnv();
+		const { url } = await startOAuth(env as never, caller, { channelId: CHANNEL, captions: false, locale: 'ar' }, NOW);
+		await env.global_settings.put(YT_SETTINGS_KEY, JSON.stringify({ enabled: false, clientId: CLIENT_ID, updatedAt: null, updatedBy: null }));
+		const back = new URL(await oauthCallback(env as never, { code: 'c', state: new URL(url).searchParams.get('state')! }, NOW));
+		assert.equal(back.href, `${WEB}/ar/studio/${CHANNEL}/dashboard`);
 	});
 
 	it('refuses users who may not upload to the channel, or hold no creator tier', async () => {

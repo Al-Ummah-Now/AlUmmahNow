@@ -12,10 +12,6 @@ export const YT_IMPORT_EN = {
     import: 'Import',
     current: 'Step {n} of {total}: {name}',
   },
-  off: {
-    title: 'Moving from YouTube isn\'t available yet',
-    body: 'It opens once the site\'s Google connection is set up. Your videos stay where they are until then.',
-  },
   connect: {
     heading: 'Connect your YouTube channel',
     body: 'Sign in with the Google account that owns the channel. We only read your channel, videos and playlists; we never change anything on YouTube.',
@@ -23,7 +19,6 @@ export const YT_IMPORT_EN = {
     reads: ['Channel name and picture', 'Video titles, descriptions, tags, thumbnails and dates', 'Playlists and their order'],
     captionsLabel: 'Also import captions',
     captionsHelp: 'Google asks for wider access to let an app download caption tracks, even though we only download them. Leave this off to import without captions.',
-    captionsUnavailable: 'Captions can\'t be imported right now.',
     button: 'Connect YouTube',
     again: 'Connect again',
     connecting: 'Opening Google…',
@@ -125,7 +120,7 @@ export const YT_IMPORT_EN = {
     cancelled: 'Import cancelled',
     errors: {
       upload_limit: 'Your upload limit was reached. It continues when the limit resets.',
-      uploads_by_invitation: 'Uploading is by invitation for now.',
+      uploads_by_invitation: 'This channel can\'t take uploads, so this video wasn\'t imported.',
       youtube_item_taken: 'This video was already imported.',
       youtube_import_not_found: 'This import was stopped or changed in another tab. Reload the page to see where it stands.',
       video_removed: 'Its video was deleted here. Try again to upload it once more.',
@@ -151,9 +146,8 @@ export const YT_IMPORT_EN = {
   errors: {
     youtube_denied: 'Google didn\'t give access, so nothing was imported. Try again and allow access.',
     youtube_no_channel: 'That Google account has no YouTube channel. Sign in with the account that owns the channel.',
-    youtube_import_off: 'Moving from YouTube isn\'t available right now.',
     youtube_import_not_found: 'This import no longer exists.',
-    uploads_by_invitation: 'Uploading is by invitation for now, so videos can\'t be imported to this channel yet.',
+    uploads_by_invitation: 'This channel can\'t take uploads, so videos can\'t be imported to it.',
     failed: 'Connecting to YouTube didn\'t work. Try again.',
     connect_other_account: 'This connection was started from another account on Al Ummah Now. Connect again while signed in to the account that started it.',
     connect_expired: 'This connection link has expired or was already used. Connect again.',
@@ -187,10 +181,6 @@ export const YT_IMPORT_AR: YoutubeImportTranslations = {
     import: 'النقل',
     current: 'الخطوة {n} من {total}: {name}',
   },
-  off: {
-    title: 'الانتقال من يوتيوب غير متاح بعد',
-    body: 'يُتاح بعد إعداد ربط الموقع بحساب Google. تبقى مرئياتك في مكانها حتى ذلك الحين.',
-  },
   connect: {
     heading: 'اربط قناتك على يوتيوب',
     body: 'سجّل الدخول بحساب Google الذي يملك القناة. نقرأ قناتك ومرئياتك وقوائم التشغيل فقط، ولا نغيّر أي شيء على يوتيوب.',
@@ -198,7 +188,6 @@ export const YT_IMPORT_AR: YoutubeImportTranslations = {
     reads: ['اسم القناة وصورتها', 'عناوين المرئيات وأوصافها ووسومها وصورها المصغّرة وتواريخها', 'قوائم التشغيل وترتيبها'],
     captionsLabel: 'انقل الترجمات أيضًا',
     captionsHelp: 'تطلب Google صلاحية أوسع لتسمح لأي تطبيق بتنزيل مسارات الترجمة، مع أننا ننزّلها فقط. اترك هذا الخيار مغلقًا لتنقل دون ترجمات.',
-    captionsUnavailable: 'لا يمكن نقل الترجمات حاليًا.',
     button: 'اربط يوتيوب',
     again: 'اربط مرة أخرى',
     connecting: 'جارٍ فتح Google…',
@@ -300,7 +289,7 @@ export const YT_IMPORT_AR: YoutubeImportTranslations = {
     cancelled: 'أُلغي النقل',
     errors: {
       upload_limit: 'بلغت حد الرفع. يكمل النقل عند تجدد الحد.',
-      uploads_by_invitation: 'الرفع بدعوة فقط حاليًا.',
+      uploads_by_invitation: 'لا تقبل هذه القناة الرفع، لذا لم يُنقل هذا المرئي.',
       youtube_item_taken: 'نُقل هذا المرئي من قبل.',
       youtube_import_not_found: 'أُوقف هذا النقل أو تغيّر في نافذة أخرى. أعد تحميل الصفحة لترى ما وصل إليه.',
       video_removed: 'حُذف مرئيه هنا. أعد المحاولة لترفعه من جديد.',
@@ -326,9 +315,8 @@ export const YT_IMPORT_AR: YoutubeImportTranslations = {
   errors: {
     youtube_denied: 'لم تمنح Google الصلاحية، فلم يُنقل شيء. أعد المحاولة واسمح بالوصول.',
     youtube_no_channel: 'لا توجد قناة على يوتيوب لهذا الحساب. سجّل الدخول بالحساب الذي يملك القناة.',
-    youtube_import_off: 'الانتقال من يوتيوب غير متاح حاليًا.',
     youtube_import_not_found: 'لم يعد هذا النقل موجودًا.',
-    uploads_by_invitation: 'الرفع بدعوة فقط حاليًا، لذا لا يمكن نقل مرئيات إلى هذه القناة بعد.',
+    uploads_by_invitation: 'لا تقبل هذه القناة الرفع، لذا لا يمكن نقل مرئيات إليها.',
     failed: 'تعذّر الربط بيوتيوب. أعد المحاولة.',
     connect_other_account: 'بدأ هذا الربطَ حسابٌ آخر على الأمة الآن. اربط مرة أخرى وأنت مسجّل الدخول بالحساب الذي بدأه.',
     connect_expired: 'انتهت صلاحية رابط الربط هذا أو استُخدم من قبل. اربط مرة أخرى.',

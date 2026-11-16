@@ -177,7 +177,8 @@ export interface YoutubeImportInitiate {
 }
 
 export const YT_IMPORT_ERRORS = {
-  notEnabled: 'youtube_import_off',
+  /** Switched off or not configured: every user-facing route answers 404 with this code; Studio hides the feature */
+  notEnabled: 'feature_off',
   notConnected: 'youtube_not_connected',
   noChannel: 'youtube_no_channel',
   quota: 'youtube_quota',

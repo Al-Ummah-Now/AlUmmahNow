@@ -1,9 +1,9 @@
 import { checkPath, itemPath, legacyHref, STUDIO_NAV, studioHomePath, switchedPath, visibleNav, visibleTabs } from '../nav';
 import { can, roleForChannel, type StudioRole } from '../permissions';
 
-const LIVE = { live: true };
+const LIVE = { live: true, youtubeImport: true };
 const ids = (role: StudioRole) => visibleNav(role, LIVE).map((item) => item.id);
-const tabs = (role: StudioRole, id: string) => visibleTabs(role, STUDIO_NAV.find((item) => item.id === id)!, LIVE).map((tab) => tab.id);
+const tabs = (role: StudioRole, id: string, features = LIVE) => visibleTabs(role, STUDIO_NAV.find((item) => item.id === id)!, features).map((tab) => tab.id);
 
 describe('navigation per role', () => {
   it.each<[StudioRole, string[]]>([
@@ -23,6 +23,11 @@ describe('navigation per role', () => {
     ['moderator', ['live']],
   ])('%s sees exactly its Content tabs', (role, expected) => {
     expect(tabs(role, 'content')).toEqual(expected);
+  });
+
+  it('has no Move from YouTube tab while the feature is off or not configured', () => {
+    expect(tabs('owner', 'content', { youtubeImport: false })).toEqual(['videos', 'live', 'posts']);
+    expect(visibleTabs('editor', STUDIO_NAV.find((item) => item.id === 'content')!).map((tab) => tab.id)).toEqual(['videos', 'posts']);
   });
 
   it('shows the Permissions tab to roles that can see members', () => {
