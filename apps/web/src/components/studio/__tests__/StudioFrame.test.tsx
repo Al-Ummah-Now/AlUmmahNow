@@ -1,4 +1,5 @@
 import { render, screen, within } from '@testing-library/react';
+import type { StudioFeatures } from '@/lib/studio/nav';
 import { StudioFrame } from '../StudioFrame';
 import { STUDIO_EN } from '@al-ummah/shared-types';
 
@@ -15,8 +16,8 @@ jest.mock('@/hooks/useMultiAccount', () => ({ useMultiAccount: () => ({ user: { 
 const mockT = { studio: STUDIO_EN };
 const channel = { id: 'c1', name: 'My channel', handle: 'mine' };
 
-function frame(role: 'owner' | 'editor' | 'moderator', extra: Partial<typeof channel & { isHidden: boolean }> = {}) {
-  return render(<StudioFrame locale="en" role={role} channel={{ ...channel, ...extra }}><p>page body</p></StudioFrame>);
+function frame(role: 'owner' | 'editor' | 'moderator', extra: Partial<typeof channel & { isHidden: boolean }> = {}, features: StudioFeatures = {}) {
+  return render(<StudioFrame locale="en" role={role} channel={{ ...channel, ...extra }} features={features}><p>page body</p></StudioFrame>);
 }
 
 const rail = () => within(screen.getAllByRole('navigation', { name: STUDIO_EN.navLabel })[0]);
@@ -25,7 +26,7 @@ describe('StudioFrame', () => {
   beforeEach(() => { pathname = '/en/studio/c1/content/videos'; });
 
   it('shows the owner every item, linking to the first tab', () => {
-    frame('owner');
+    frame('owner', {}, { social: true });
     expect(rail().getAllByRole('link').map((a) => a.textContent)).toEqual(['Dashboard', 'Content', 'Analytics', 'Playlists', 'Customisation', 'Social', 'Settings']);
     expect(screen.getByTestId('studio-nav-social')).toHaveAttribute('href', '/en/studio/c1/social');
     expect(screen.getByTestId('studio-nav-content')).toHaveAttribute('href', '/en/studio/c1/content/videos');

@@ -6,8 +6,8 @@ const tabs = (role: StudioRole, id: string) => visibleTabs(role, STUDIO_NAV.find
 
 describe('navigation per role', () => {
   it.each<[StudioRole, string[]]>([
-    ['owner', ['dashboard', 'content', 'analytics', 'playlists', 'customisation', 'social', 'settings']],
-    ['admin', ['dashboard', 'content', 'analytics', 'playlists', 'customisation', 'social', 'settings']],
+    ['owner', ['dashboard', 'content', 'analytics', 'playlists', 'customisation', 'settings']],
+    ['admin', ['dashboard', 'content', 'analytics', 'playlists', 'customisation', 'settings']],
     ['editor', ['dashboard', 'content', 'playlists']],
     // Comments has no creator page yet; a moderator reaches Content → Live (live.moderate)
     ['moderator', ['dashboard', 'content']],
@@ -122,12 +122,19 @@ describe('permissions', () => {
 });
 
 describe('Social item (wiki AUN-SOCIAL)', () => {
+  const on = { social: true };
   it('is for owners and channel admins (channel.edit), with no tabs', () => {
-    expect(checkPath('owner', ['social'])).toEqual({ status: 'ok' });
-    expect(checkPath('admin', ['social'])).toEqual({ status: 'ok' });
-    expect(checkPath('editor', ['social'])).toEqual({ status: 'forbidden' });
-    expect(checkPath('moderator', ['social'])).toEqual({ status: 'forbidden' });
-    expect(checkPath('owner', ['social', 'x'])).toEqual({ status: 'unknown' });
+    expect(checkPath('owner', ['social'], on)).toEqual({ status: 'ok' });
+    expect(checkPath('admin', ['social'], on)).toEqual({ status: 'ok' });
+    expect(checkPath('editor', ['social'], on)).toEqual({ status: 'forbidden' });
+    expect(checkPath('moderator', ['social'], on)).toEqual({ status: 'forbidden' });
+    expect(checkPath('owner', ['social', 'x'], on)).toEqual({ status: 'unknown' });
+    expect(visibleNav('owner', on).map((item) => item.id)).toContain('social');
+  });
+
+  it('is hidden, and its path unknown, while social auto-post is off or no network is set up (socialAutopost)', () => {
+    expect(visibleNav('owner', { social: false }).map((item) => item.id)).not.toContain('social');
+    expect(checkPath('owner', ['social'], { social: false }).status).toBe('unknown');
   });
 });
 
