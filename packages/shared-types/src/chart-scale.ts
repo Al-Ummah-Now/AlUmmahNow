@@ -1,14 +1,16 @@
 /**
  * Value-axis maths and number formats shared by every chart (web Studio
- * analytics, admin-web). Pure: no DOM, no React.
+ * analytics, admin-web). Pure: no DOM, no React. Numbers go through
+ * locale-format, like every other number on the page.
  */
+import { formatClock, intlLocale, numberFormat } from './locale-format';
 
 /**
- * The locale for chart numbers and dates: Arabic always gets Arabic-Indic digits
- * (engines differ on the default for plain "ar"), like the calendar does.
+ * @deprecated Use `intlLocale` (or the formatters) from locale-format: charts and the text
+ * beside them use the same digits. Kept until every caller has moved.
  */
 export function chartLocale(locale: string): string {
-  return /^ar\b/.test(locale) && !locale.includes('-u-nu-') ? 'ar-u-nu-arab' : locale;
+  return intlLocale(locale);
 }
 
 const NICE_STEPS = [1, 2, 2.5, 5, 10];
@@ -48,7 +50,7 @@ function round(value: number): number {
 
 /** 1234 -> "1.2K" (en), "١٫٢ ألف" (ar). */
 export function compactNumber(locale: string): (value: number) => string {
-  const format = new Intl.NumberFormat(chartLocale(locale), { notation: 'compact', maximumFractionDigits: 1 });
+  const format = numberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 });
   return (value) => format.format(value);
 }
 
@@ -61,7 +63,7 @@ export function watchTimeUnit(largestSeconds: number): WatchTimeUnit {
 
 /** A value already in minutes or hours, with the unit: 3.1 -> "3.1 min", "٣٫١ د". */
 export function formatInUnit(locale: string, unit: WatchTimeUnit): (value: number) => string {
-  const format = new Intl.NumberFormat(chartLocale(locale), { style: 'unit', unit, unitDisplay: 'short', maximumFractionDigits: 1 });
+  const format = numberFormat(locale, { style: 'unit', unit, unitDisplay: 'short', maximumFractionDigits: 1 });
   return (value) => format.format(value || 0);
 }
 
@@ -78,15 +80,7 @@ export function formatWatchTime(locale: string, unit: WatchTimeUnit): (seconds: 
 
 /** 75 -> "1:15", 3725 -> "1:02:05", with the locale's digits. */
 export function formatDuration(locale: string): (seconds: number) => string {
-  const plain = new Intl.NumberFormat(chartLocale(locale), { useGrouping: false });
-  const two = new Intl.NumberFormat(chartLocale(locale), { minimumIntegerDigits: 2, useGrouping: false });
-  return (seconds) => {
-    const total = Math.max(0, Math.round(seconds || 0));
-    const h = Math.floor(total / 3600);
-    const m = Math.floor((total % 3600) / 60);
-    const s = total % 60;
-    return h > 0 ? `${plain.format(h)}:${two.format(m)}:${two.format(s)}` : `${plain.format(m)}:${two.format(s)}`;
-  };
+  return (seconds) => formatClock(locale, seconds);
 }
 
 /** Indices to label on a time axis: the first, the last and evenly spaced ones between (at most `count`). */

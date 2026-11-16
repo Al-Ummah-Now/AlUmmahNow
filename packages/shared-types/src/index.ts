@@ -47,6 +47,7 @@ export * from './api-requests';
 // Video analytics types
 export * from './video-analytics';
 export * from './chart-scale';
+export * from './locale-format';
 
 // WebSocket message types
 export * from './websocket-messages';

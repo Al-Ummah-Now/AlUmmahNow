@@ -80,6 +80,9 @@ jobs:
           pnpm test:themes
           pnpm themes:check
 
+      - name: Numbers and dates go through locale-format (Arabic ٠–٩)
+        run: pnpm check:locale-format
+
       - name: Wrangler config check
         run: pnpm check:config
 

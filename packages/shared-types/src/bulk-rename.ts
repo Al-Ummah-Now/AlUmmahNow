@@ -117,7 +117,7 @@ export function charCount(text: string): number {
   return Array.from(text).length;
 }
 
-/** Latin digits → Arabic-Indic (٠-٩). Other characters are kept. */
+/** Arabic numerals 0–9 → Eastern Arabic (Hindi) numerals ٠–٩. Other characters are kept. */
 export function toArabicIndicDigits(text: string): string {
   return text.replace(/[0-9]/g, (d) => ARABIC_INDIC[Number(d)]);
 }
@@ -129,7 +129,7 @@ export function stripExtension(filename: string): string {
 }
 
 /** {n} for the row at `index` among the included rows. */
-export function formatNumber(index: number, rule: Pick<PatternRule, 'start' | 'step' | 'pad'>, digits: DigitStyle = 'latin'): string {
+export function formatRenameNumber(index: number, rule: Pick<PatternRule, 'start' | 'step' | 'pad'>, digits: DigitStyle = 'latin'): string {
   const start = Number.isFinite(rule.start) ? Math.trunc(rule.start as number) : 1;
   const step = Number.isFinite(rule.step) ? Math.trunc(rule.step as number) : 1;
   const pad = Math.min(Math.max(Math.trunc(rule.pad ?? 1), 1), 9);
@@ -195,7 +195,7 @@ function tokenValue(token: string, rule: PatternRule, subject: RenameSubject, la
   {
     switch (token) {
       case 'n':
-        return formatNumber(index, rule, digits);
+        return formatRenameNumber(index, rule, digits);
       case 'filename':
         return subject.filename ? stripExtension(subject.filename) : '';
       case 'title':
