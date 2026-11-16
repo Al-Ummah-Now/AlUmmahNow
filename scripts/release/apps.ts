@@ -14,7 +14,7 @@ const VIDEOS_API = 'https://videos.api.alummahnow.net';
 
 /** Production must not carry test-only material or point at QA / stage / preview. */
 const PROD_GUARDS: Pick<EnvRule, 'forbiddenNames' | 'forbiddenValues' | 'allowedHosts'> = {
-	forbiddenNames: ['E2E_CODE_SINK_SECRET', 'TEST_PROMOTE_SECRET', /^E2E_/, /^TEST_/, /^MOCK_/, 'PAYMENTS_FAKE_PROVIDER'],
+	forbiddenNames: ['E2E_CODE_SINK_SECRET', 'TEST_PROMOTE_SECRET', /^E2E_/, /^TEST_/, /^MOCK_/, 'PAYMENTS_FAKE_PROVIDER', 'PAYMENTS_SECRETS_LOCAL_SHIM'],
 	forbiddenValues: [/\.(qa|stage|staging|preview)\.alummahnow\.net/],
 	allowedHosts: ['alummahnow.net', '*.alummahnow.net'],
 };
@@ -27,7 +27,9 @@ const PROD_GUARDS: Pick<EnvRule, 'forbiddenNames' | 'forbiddenValues' | 'allowed
 const STAGE_AUTH = 'https://auth.stage.alummahnow.net';
 const STAGE_API = 'https://videos.api.stage.alummahnow.net';
 const STAGE_REALTIME = 'https://realtime.stage.alummahnow.net';
-const STAGE_GUARDS: Pick<EnvRule, 'forbiddenValues' | 'allowedHosts'> = {
+const STAGE_GUARDS: Pick<EnvRule, 'forbiddenNames' | 'forbiddenValues' | 'allowedHosts'> = {
+	// The local stack's keyless Payments shim (admin-api lib/billing-secrets.ts) never ships
+	forbiddenNames: ['PAYMENTS_SECRETS_LOCAL_SHIM'],
 	forbiddenValues: [/\.qa\.alummahnow\.net/, /\/\/(auth|videos|videos\.api|realtime|admin|admin\.api)\.alummahnow\.net/],
 	allowedHosts: ['*.stage.alummahnow.net'],
 };

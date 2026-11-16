@@ -22,10 +22,11 @@ import {
   type TierPrice,
 } from '@al-ummah/shared-types';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { ActionFeedback, useConfirm } from '@/components/content/actions';
+import { ActionFeedback } from '@/components/content/actions';
 import { dangerButtonClass, primarySmallButtonClass, smallButtonClass, tableWrapClass } from '@/components/content/parts';
 import { cardClass, fieldClass } from '@/components/ui';
 import { billingRequest } from '@/lib/list/api-client';
+import { useUndoableAction } from '@/components/undo/UndoToast';
 import { LINK_TONE, linkFor, linkState, pricesByTier } from '@/lib/payments';
 import { ToneChip, hintClass, labelClass, providerName, sectionTitle, useBillingAction } from './shared';
 
@@ -50,7 +51,6 @@ const EXAMPLE: Record<number, string> = { 0: '1000', 2: '9.99', 3: '9.990' };
 export function PricesPanel({ prices, tiers, providers, canManage, canSync, onRefresh }: Props) {
   const { t, locale } = useLanguage();
   const ids = useId();
-  const { confirm, dialog } = useConfirm();
   const { busy, error, notice, run } = useBillingAction('payments-prices');
   const formRef = useRef<HTMLFormElement>(null);
   const [draft, setDraft] = useState<Draft>({ tierId: tiers[0]?.id ?? '', period: 'month', currency: 'USD', amount: '' });
@@ -68,11 +68,28 @@ export function PricesPanel({ prices, tiers, providers, canManage, canSync, onRe
   const exponentExample = (c: string) => EXAMPLE[currencyExponent(c)] ?? EXAMPLE[2];
   const unsupported = isCurrencyCode(currency) ? providers.filter((p) => p.enabled && PAYMENT_PROVIDERS[p.id].currencies && !PAYMENT_PROVIDERS[p.id].currencies!.includes(currency)) : [];
 
+  const { run: withUndo } = useUndoableAction();
+  type PriceRow = { id: string; tierId: string; period: BillingPeriod; currency: string; amount: number; active: boolean };
+  /** Puts a price back as it was (Undo of a save or a delete). */
+  const restore = async (p: PriceRow) => {
+    await billingRequest('PUT', 'prices', { body: { tierId: p.tierId, period: p.period, currency: p.currency, amount: p.amount, active: p.active, undo: true } });
+    await onRefresh();
+  };
   const save = (body: { tierId: string; period: BillingPeriod; currency: string; amount: number; active?: boolean }, key: string, message: string) =>
     run(key, async () => {
-      await billingRequest('PUT', 'prices', { body });
+      await withUndo({
+        action: () => billingRequest<{ previous: PriceRow | null; price: PriceRow }>('PUT', 'prices', { body }),
+        // A new price is removed again; a changed one gets its old amount and state back
+        undo: async (r) => {
+          if (r.previous) return restore(r.previous);
+          await billingRequest('DELETE', `prices/${encodeURIComponent(r.price.id)}`, { body: {} });
+          await onRefresh();
+        },
+        message,
+        undoneMessage: t('payments.undone'),
+      });
       await onRefresh();
-      return message;
+      return null;
     });
 
   const submit = async () => {
@@ -101,7 +118,6 @@ export function PricesPanel({ prices, tiers, providers, canManage, canSync, onRe
 
   return (
     <div className="space-y-6" data-testid="payments-prices">
-      {dialog}
       <p className="text-sm text-fg-muted max-w-prose">{t('payments.prices.hint')}</p>
       {!canManage && <p className="text-sm text-fg-muted">{t('payments.prices.readOnly')}</p>}
       <ActionFeedback error={error} message={notice} testId="payments-prices-feedback" />
@@ -310,12 +326,16 @@ export function PricesPanel({ prices, tiers, providers, canManage, canSync, onRe
                                 disabled={locked}
                                 aria-label={t('payments.prices.deleteLabel', labels)}
                                 onClick={async () => {
-                                  const ok = await confirm({ title: t('payments.prices.deleteTitle'), body: t('payments.prices.deleteBody', { ...labels, amount: amountText }), confirmLabel: t('payments.prices.deleteConfirm'), danger: true, testId: 'payments-price-delete' });
-                                  if (!ok) return;
+                                  // Acts at once with Undo (the price comes back as it was)
                                   await run(`delete-${price.id}`, async () => {
-                                    await billingRequest('DELETE', `prices/${encodeURIComponent(price.id)}`, { body: {} });
+                                    await withUndo({
+                                      action: () => billingRequest<{ previous: PriceRow | null }>('DELETE', `prices/${encodeURIComponent(price.id)}`, { body: {} }),
+                                      undo: async (r) => restore(r.previous ?? { id: price.id, tierId, period: price.period, currency: price.currency, amount: price.amount, active: price.active }),
+                                      message: t('payments.prices.deletedNotice'),
+                                      undoneMessage: t('payments.undone'),
+                                    });
                                     await onRefresh();
-                                    return t('payments.prices.deletedNotice');
+                                    return null;
                                   });
                                 }}
                                 data-testid="payments-price-delete"

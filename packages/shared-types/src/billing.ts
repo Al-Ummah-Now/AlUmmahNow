@@ -159,7 +159,12 @@ export const BILLING_TEXT_LIMITS = { sellerName: 200, sellerAddress: 500, taxId:
 export interface CredentialStatus {
   setAt: string;
   setBy: string;
+  /** The value's last 4 characters, to tell keys apart ("•••• 1a2b"); never more. Absent for short values. */
+  last4?: string | null;
 }
+
+/** Values shorter than this keep no last 4 (it would give away too much of them). */
+export const CREDENTIAL_LAST4_MIN_LENGTH = 16;
 
 /** A provider as the admin sees it. */
 export interface PaymentProviderConfig {

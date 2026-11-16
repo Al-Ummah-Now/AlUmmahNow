@@ -8,10 +8,11 @@
  * filled in).
  */
 import { useId, useState } from 'react';
+import { useUndoableAction } from '@/components/undo/UndoToast';
 import { BILLING_COMP_REASON_MAX } from '@al-ummah/shared-types';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { formatDate } from '@/i18n/translate';
-import { ActionFeedback, useConfirm } from '@/components/content/actions';
+import { ActionFeedback } from '@/components/content/actions';
 import { primarySmallButtonClass, smallButtonClass } from '@/components/content/parts';
 import { fieldClass } from '@/components/ui';
 import { Autocomplete } from '@/components/search/Autocomplete';
@@ -25,8 +26,8 @@ type Problem = 'invalidUser' | 'chooseTier' | 'invalidUntil' | 'reasonRequired';
 export function CompForm({ tiers, userId: fixedUser, onDone }: { tiers: TierOption[]; userId?: string; onDone?: () => void | Promise<void> }) {
   const { t, locale } = useLanguage();
   const ids = useId();
-  const { confirm, dialog } = useConfirm();
   const { busy, error, notice, run } = useBillingAction('payments-comp');
+  const { run: withUndo } = useUndoableAction();
   const [open, setOpen] = useState(false);
   const [userId, setUserId] = useState(fixedUser ?? '');
   // The picked user's name, for the confirmation (never the id)
@@ -44,16 +45,20 @@ export function CompForm({ tiers, userId: fixedUser, onDone }: { tiers: TierOpti
     setProblem(found);
     if (found || end === undefined) return;
     const tier = tiers.find((x) => x.id === tierId)?.name ?? tierId;
-    const ok = await confirm({
-      title: t('payments.comp.confirmTitle', { tier }),
-      body: t('payments.comp.confirmBody', { user: userLabel || t('payments.comp.thisUser'), tier, until: end ? t('payments.comp.untilDate', { date: formatDate(end, locale) }) : t('payments.comp.noEnd') }),
-      confirmLabel: t('payments.comp.submit'),
-      testId: 'payments-comp',
-    });
-    if (!ok) return;
+    // No confirm (admin UX rule): it acts at once and the toast says what was given, with Undo
+    const given = t('payments.comp.confirmBody', { user: userLabel || t('payments.comp.thisUser'), tier, until: end ? t('payments.comp.untilDate', { date: formatDate(end, locale) }) : t('payments.comp.noEnd') });
     const done = await run('comp', async () => {
-      await billingRequest('POST', 'comps', { body: { userId: user, tierId, until: end, reason: why } });
-      return t('payments.comp.done');
+      // Acts at once with Undo: Undo ends the comp it just gave
+      await withUndo({
+        action: () => billingRequest<{ subscription: { id: string } }>('POST', 'comps', { body: { userId: user, tierId, until: end, reason: why } }),
+        undo: async (r) => {
+          await billingRequest('POST', `subscriptions/${encodeURIComponent(r.subscription.id)}/cancel`, { body: { atPeriodEnd: false, undo: true } });
+          await onDone?.();
+        },
+        message: given,
+        undoneMessage: t('payments.undone'),
+      });
+      return null;
     });
     if (done) {
       setReason('');
@@ -69,7 +74,6 @@ export function CompForm({ tiers, userId: fixedUser, onDone }: { tiers: TierOpti
   const problemId = `${ids}-problem`;
   return (
     <div data-testid="payments-comp-form">
-      {dialog}
       <ActionFeedback error={error} message={notice} testId="payments-comp-feedback" />
       {!open ? (
         <button type="button" className={smallButtonClass} onClick={() => setOpen(true)} aria-expanded={false} data-testid="payments-comp-open">

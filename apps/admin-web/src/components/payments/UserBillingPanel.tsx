@@ -10,6 +10,7 @@ import { PAYMENT_TONE, SUBSCRIPTION_TONE } from '@/lib/payments';
 import { logger } from '@/lib/logger';
 import { providerName } from './provider-name';
 import { CompForm } from './CompForm';
+import { tierLabel } from '@/lib/creator-tiers';
 
 /**
  * The user page's payments (wiki AUN-SUBS, GET /api/billing/users/:id): their
@@ -23,7 +24,7 @@ export async function UserBillingPanel({ userId, canManage }: { userId: string; 
   try {
     const [billing, defs] = await Promise.all([getUserBilling(userId), canManage ? listCreatorTierDefinitions() : Promise.resolve([])]);
     data = billing;
-    tiers = defs.map((x) => ({ id: x.id, name: locale === 'ar' && x.nameAr ? x.nameAr : x.name }));
+    tiers = defs.map((x) => ({ id: x.id, name: tierLabel(x, locale) }));
   } catch (e) {
     logger.error('[payments] User billing failed to load', { userId, error: e instanceof Error ? e.message : String(e) });
   }
@@ -53,7 +54,7 @@ export async function UserBillingPanel({ userId, canManage }: { userId: string; 
                 {data.subscriptions.map((s) => (
                   <li key={s.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 text-sm" data-testid="user-billing-subscription" data-status={s.status}>
                     <Link href={`/payments/subscriptions/${encodeURIComponent(s.id)}`} className={`${linkClass} font-medium`} dir="auto">
-                      {s.tierName}
+                      {tiers.find((x) => x.id === s.tierId)?.name ?? s.tierName}
                     </Link>
                     <span className="text-fg-muted">{providerName(t, s.provider)}</span>
                     <Chip tone={SUBSCRIPTION_TONE[s.status]}>{t(`payments.status.${s.status}`)}</Chip>

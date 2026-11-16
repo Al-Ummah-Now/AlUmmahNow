@@ -232,13 +232,13 @@ export async function updateProvider(env: BillingEnv, id: PaymentProviderId, inp
 }
 
 /** Records that a credential was written to Secrets Store (admin-api did the write). Never receives the value. */
-export async function markCredential(env: BillingEnv, id: PaymentProviderId, field: PaymentCredentialField, mode: PaymentMode, actorId: string, cleared = false, now = new Date().toISOString()) {
+export async function markCredential(env: BillingEnv, id: PaymentProviderId, field: PaymentCredentialField, mode: PaymentMode, actorId: string, cleared = false, now = new Date().toISOString(), last4: string | null = null) {
 	if (!(PAYMENT_CREDENTIAL_FIELDS as readonly string[]).includes(field)) throw new BillingError(400, 'invalid_billing_request', 'Unknown credential');
 	if (!(PAYMENT_MODES as readonly string[]).includes(mode)) throw new BillingError(400, 'invalid_billing_request', 'mode must be test or live');
 	const previous = await readProvider(env, id);
 	const credentials: Credentials = { apiKey: { ...previous.credentials.apiKey }, webhookSecret: { ...previous.credentials.webhookSecret } };
 	if (cleared) delete credentials[field][mode];
-	else credentials[field][mode] = { setAt: now, setBy: actorId } satisfies CredentialStatus;
+	else credentials[field][mode] = { setAt: now, setBy: actorId, ...(last4 ? { last4 } : {}) } satisfies CredentialStatus;
 	// Clearing a credential the enabled mode needs turns the provider off (it could no longer verify or charge)
 	const enabled = previous.enabled && !(cleared && mode === previous.mode);
 	await writeProvider(env, { id, enabled, mode: previous.mode, settings: previous.settings, credentials }, actorId, now);

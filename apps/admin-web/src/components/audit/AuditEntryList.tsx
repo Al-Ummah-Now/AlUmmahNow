@@ -7,7 +7,7 @@ import type { AdminNames } from '@al-ummah/shared-types';
 import type { Locale } from '@/i18n/config';
 import { formatDate, type MessageKey, type Translator } from '@/i18n/translate';
 import { MonoId } from '@/components/content/parts';
-import { actionLabel, detailKeyLabel, detailText, detailViews, itemView, personView, settingLabel } from './audit-model';
+import { actionLabel, detailKeyLabel, detailText, detailViews, itemView, paymentsLine, personView, settingLabel, splitTemplate, type AuditTierNames } from './audit-model';
 import { ItemName, PersonName } from './Named';
 
 export interface AuditEntryLike {
@@ -60,9 +60,22 @@ function Details({ entry, names, t }: { entry: AuditEntryLike; names: AdminNames
 }
 
 /** One row's text parts, shared by the list and the table. */
-export function AuditWhat({ entry, names, t, showTarget }: { entry: AuditEntryLike; names: AdminNames | null; t: Translator; showTarget: boolean }) {
+export function AuditWhat({ entry, names, t, showTarget, locale, tiers }: { entry: AuditEntryLike; names: AdminNames | null; t: Translator; showTarget: boolean; locale?: Locale; tiers?: AuditTierNames }) {
+  // Payments rows read as one sentence (names, never codes); their stored values stay one click away
+  const pay = locale ? paymentsLine(entry, t, locale, tiers) : null;
   return (
     <div className="min-w-0">
+      {pay ? (
+        <p className="text-fg" data-testid="audit-payments-line">
+          <span className="font-medium" data-testid="audit-action-label">
+            {splitTemplate(pay.template, ['user']).map((part, i) =>
+              typeof part === 'string' ? <span key={i}>{part}</span> : <PersonName key={i} person={personView(pay.user ?? '', names, t)} showEmail={false} testId="audit-target" />,
+            )}
+          </span>
+          {pay.undone && <span className="ms-2 rounded bg-surface-2 px-1.5 py-0.5 text-xs text-fg-muted" data-testid="audit-undone">{t('auditLog.payments.undone')}</span>}
+        </p>
+      ) : (
+      <>
       <p className="text-fg">
         <span className="font-medium" data-testid="audit-action-label">
           {actionLabel(entry.action, t)}
@@ -76,6 +89,8 @@ export function AuditWhat({ entry, names, t, showTarget }: { entry: AuditEntryLi
         )}
       </p>
       <Details entry={entry} names={names} t={t} />
+      </>
+      )}
       <details className="mt-1 text-xs">
         <summary className="cursor-pointer min-h-6 py-0.5 text-fg-subtle hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-focus rounded w-fit">{t('auditLog.showRaw')}</summary>
         <pre className="mt-1 p-2 bg-surface-2 border border-border rounded overflow-x-auto font-mono text-fg-muted" dir="ltr">
@@ -95,12 +110,12 @@ export function kindLabel(kind: string, t: Translator): string {
   return text === key ? kind : text;
 }
 
-export function AuditEntryList({ entries, names, t, locale, showTarget = false }: { entries: AuditEntryLike[]; names: AdminNames | null; t: Translator; locale: Locale; showTarget?: boolean }) {
+export function AuditEntryList({ entries, names, t, locale, showTarget = false, tiers }: { entries: AuditEntryLike[]; names: AdminNames | null; t: Translator; locale: Locale; showTarget?: boolean; tiers?: AuditTierNames }) {
   return (
     <ol className="space-y-3">
       {entries.map((e) => (
         <li key={e.id} className="text-sm" data-testid="audit-entry" data-action={e.action}>
-          <AuditWhat entry={e} names={names} t={t} showTarget={showTarget} />
+          <AuditWhat entry={e} names={names} t={t} showTarget={showTarget} locale={locale} tiers={tiers} />
           <p className="text-fg-subtle text-xs mt-0.5 flex flex-wrap gap-x-1 items-baseline">
             <span>{t('auditLog.by')}</span>
             <PersonName person={personView(e.actorId, names, t, e.actorEmail ?? null)} testId="audit-actor" />

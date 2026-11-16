@@ -8,6 +8,8 @@ import { BackLink } from '@/components/content/parts';
 import { getBillingSubscription } from '@/lib/api/billing';
 import { AdminApiError } from '@/lib/api/errors';
 import { SubscriptionDetail } from '@/components/payments/SubscriptionDetail';
+import { listCreatorTierDefinitions } from '@/lib/api/creators';
+import { tierLabel } from '@/lib/creator-tiers';
 import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
@@ -15,7 +17,7 @@ export const dynamic = 'force-dynamic';
 /** One subscription (wiki AUN-SUBS): its details, payments with refunds, webhook events and cancel. */
 export default async function SubscriptionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { t } = await getI18n();
+  const { t, locale } = await getI18n();
   const role = (await getAdminSession())?.user.role;
   if (!canReadBilling(role)) redirect('/access-denied');
   const back = <BackLink href="/payments?tab=subscriptions" label={t('payments.detail.back')} />;
@@ -37,5 +39,8 @@ export default async function SubscriptionPage({ params }: { params: Promise<{ i
     );
   }
 
+  // The tier in the admin's language (Arabic name in Arabic; the stored name if the tier is gone)
+  const tier = (await listCreatorTierDefinitions().catch(() => [])).find((x) => x.id === detail!.subscription.tierId);
+  if (tier) detail = { ...detail, subscription: { ...detail.subscription, tierName: tierLabel(tier, locale) } };
   return <SubscriptionDetail detail={detail} back={back} can={{ manage: canManageBilling(role), refund: canRefund(role) }} />;
 }

@@ -163,9 +163,9 @@ test.describe('payments', () => {
     await page.getByTestId('payments-comp-tier').selectOption(tierId);
     await page.getByTestId('payments-comp-reason').fill('[e2e-admin] payments spec');
     await page.getByTestId('payments-comp-submit').click();
-    await expect(page.getByTestId('payments-comp-dialog')).toBeVisible();
-    await page.getByTestId('payments-comp-confirm').click();
-    await expect(page.getByTestId('payments-comp-feedback')).toContainText(/granted/i);
+    // No confirm: it acts at once; the toast names who got which tier, with Undo
+    await expect(page.getByTestId('undo-toast')).toContainText(tierName);
+    await expect(page.getByTestId('undo-toast-undo')).toBeVisible();
 
     await page.getByTestId('payments-subs-filter-comp').click();
     await expect(page.getByTestId('payments-subs-filter-comp')).toHaveAttribute('aria-pressed', 'true');

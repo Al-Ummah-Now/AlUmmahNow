@@ -3,7 +3,10 @@
  * language, the actor and items by name, and every id-valued detail as the thing it names. No
  * React here, so it is tested without a browser (test/audit-log.test.ts).
  */
-import { auditRefKind, isSystemActor, type AdminNames } from '@al-ummah/shared-types';
+import { auditRefKind, formatBillingAmount, isSystemActor, type AdminNames } from '@al-ummah/shared-types';
+import type { Locale } from '@/i18n/config';
+import { providerName } from '@/components/payments/provider-name';
+import { tierLabel } from '@/lib/creator-tiers';
 import type { MessageKey, Translator } from '@/i18n/translate';
 import en from '@/i18n/messages/en';
 
@@ -167,4 +170,63 @@ export function settingLabel(setting: string, t: Translator): string {
   if (full in SETTINGS) return t(`auditLog.settings.${full}` as MessageKey);
   const prefix = Object.keys(SETTINGS).find((k) => full.startsWith(`${k}_`));
   return prefix ? `${t(`auditLog.settings.${prefix}` as MessageKey)} (${setting.slice(setting.lastIndexOf(':') + 1)})` : setting;
+}
+
+/** A tier's two names, for the Payments lines. */
+export type AuditTierNames = Record<string, { name: string; nameAr?: string | null }>;
+
+const PAYMENT_PROVIDER_IDS = new Set(['paddle', 'paygood', 'fake', 'manual']);
+const money = (amount: unknown, currency: unknown, locale: Locale): string => {
+  if (typeof amount !== 'number' || typeof currency !== 'string') return '';
+  // The shared price formatter: ٠–٩ and the currency's Arabic name in Arabic (never «US$»)
+  return formatBillingAmount(amount, currency, locale === 'ar' ? 'ar' : 'en');
+};
+
+/**
+ * A Payments row (area payments: admin-api billing.router.ts) as one sentence in the admin's
+ * language: what happened and to which provider, price, subscription or user — never the raw
+ * codes. `user` is a slot for the person's name (the caller renders it). Null for other rows.
+ */
+export function paymentsLine(
+  entry: { action: string; target?: { kind: string; id: string } | null; details?: Record<string, unknown> | null },
+  t: Translator,
+  locale: Locale,
+  tiers: AuditTierNames = {},
+): { template: string; user: string | null; undone: boolean } | null {
+  const kind = entry.target?.kind ?? '';
+  const id = entry.target?.id ?? '';
+  const d = entry.details ?? {};
+  const undone = d.undo === true;
+  const provider = PAYMENT_PROVIDER_IDS.has(id) ? providerName(t, id as never) : id;
+  const tierName = (tierId: unknown) => {
+    const tier = typeof tierId === 'string' ? tiers[tierId] : undefined;
+    return tier ? tierLabel(tier, locale) : String(tierId ?? '');
+  };
+  const p = (key: string, params: Record<string, string> = {}) => t(`auditLog.payments.${key}` as MessageKey, params);
+  if (kind === 'billing-provider') {
+    if (entry.action === 'credential-set' || entry.action === 'credential-clear') {
+      const field = d.field === 'webhookSecret' ? p('fields.webhookSecret') : p('fields.apiKey');
+      const mode = d.mode === 'live' ? t('payments.modes.live') : t('payments.modes.test');
+      return { template: p(entry.action === 'credential-set' ? 'keySaved' : 'keyRemoved', { field, provider, mode }), user: null, undone };
+    }
+    if (entry.action === 'sync-prices') return { template: p('pricesSynced', { provider }), user: null, undone };
+    if (d.enabled === true) return { template: p('providerOn', { provider }), user: null, undone };
+    if (d.enabled === false) return { template: p('providerOff', { provider }), user: null, undone };
+    if (d.mode === 'test' || d.mode === 'live') return { template: p('providerMode', { provider, mode: t(`payments.modes.${d.mode}` as MessageKey) }), user: null, undone };
+    if (d.settings) return { template: p('providerSettings', { provider }), user: null, undone };
+    return { template: p('providerUpdated', { provider }), user: null, undone };
+  }
+  if (kind === 'billing-settings') return { template: p('taxSaved'), user: null, undone };
+  if (kind === 'billing-price') {
+    if (entry.action === 'delete') return { template: p('priceRemoved'), user: null, undone };
+    const period = d.period === 'year' ? t('payments.periods.year') : t('payments.periods.month');
+    return { template: p('priceSaved', { tier: tierName(d.tierId), period, amount: money(d.amount, d.currency, locale) }), user: null, undone };
+  }
+  if (kind === 'billing-subscription') return { template: p(entry.action === 'cancel-now' ? 'subscriptionEndedNow' : 'subscriptionEndsAtPeriodEnd'), user: null, undone };
+  if (kind === 'billing-payment') return { template: p('refund'), user: null, undone };
+  if (entry.action === 'billing-comp') {
+    // On the user's own page the row has no target: the user is the page
+    return kind === 'user' ? { template: p('comp', { tier: tierName(d.tierId), user: '{user}' }), user: id, undone } : { template: p('compHere', { tier: tierName(d.tierId) }), user: null, undone };
+  }
+  return null;
 }
