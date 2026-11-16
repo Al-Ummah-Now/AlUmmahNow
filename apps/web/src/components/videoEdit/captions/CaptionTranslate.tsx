@@ -12,7 +12,7 @@ import { BookOpen, Languages, Loader2, X } from 'lucide-react';
 import { FEATURE_OFF_CODE, captionMinutesCanStart, isCaptionJobActive, type CaptionMinutesUsage, type CaptionsTranslations, fillTemplate, type TemplateParams } from '@al-ummah/shared-types';
 import { reportError } from '@/lib/errors/reporter';
 import { SUPPORTED_LANGUAGES } from '@/lib/api/subtitles-types';
-import { cancelCaptionJob, startCaptionTranslation, type CaptionJobView } from '@/lib/api/caption-drafts';
+import { cancelCaptionJob, startCaptionTranslation, type CaptionJobView } from '@/lib/api/caption-drafts-client';
 import type { ConfirmOptions } from '@/components/ui/confirm-dialog';
 import { jobStepText, visibleJobs, type CaptionMinutes } from './CaptionTranscribe';
 
