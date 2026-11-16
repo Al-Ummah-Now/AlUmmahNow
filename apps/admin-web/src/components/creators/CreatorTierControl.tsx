@@ -12,6 +12,7 @@ import { Chip, smallButtonClass } from '@/components/content/parts';
 import { logger } from '@/lib/logger-client';
 import { reportError } from '@/lib/errors/reporter';
 import { TierChangeDialog } from './TierChangeDialog';
+import { UserName } from '@/components/audit/UserName';
 
 export interface CurrentTier {
   tierId: string;
@@ -122,7 +123,10 @@ export function CreatorTierControl({ userId, userName, current: serverCurrent, t
           {/* Who and when once: "Assigned by Amina Hassan, 16 November 2026" (an admin without a name: "Assigned by an
               admin, …"); names and dates isolated, so an English name in Arabic does not scramble the line */}
           {current.origin === 'admin'
-            ? withIsolated(t(current.assignedByName ? 'creators.assignedByActor' : 'creators.assignedByAdmin'), { actor: current.assignedByName ?? '', date: formatDate(current.assignedAt, locale) })
+            ? current.assignedByName || current.assignedBy
+              // The admin by name: the stored name, else looked up by id (the user page has only the id)
+              ? withIsolated(t('creators.assignedByActor'), { actor: current.assignedByName || <UserName id={current.assignedBy} showEmail={false} />, date: formatDate(current.assignedAt, locale) })
+              : withIsolated(t('creators.assignedByAdmin'), { actor: '', date: formatDate(current.assignedAt, locale) })
             : current.origin === 'super_admin'
               ? t(ORIGIN_LABEL[current.origin])
               : withIsolated(t('creators.originOn'), { origin: t(ORIGIN_LABEL[current.origin]), date: formatDate(current.assignedAt, locale) })}
