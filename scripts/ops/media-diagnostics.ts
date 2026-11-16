@@ -339,7 +339,7 @@ async function slowQueries(env: EnvName, since: Date, until: Date): Promise<void
 		const gql = await post('/graphql', {
 			query: `query($a: String!, $d: String!, $s: Time!, $u: Time!) { viewer { accounts(filter: {accountTag: $a}) {
 				d1QueriesAdaptiveGroups(limit: 12, filter: {databaseId: $d, datetime_geq: $s, datetime_leq: $u}, orderBy: [sum_queryDurationMs_DESC]) {
-					count dimensions { query } max { queryDurationMs } sum { queryDurationMs rowsRead rowsWritten } }
+					count dimensions { query } avg { queryDurationMs } sum { queryDurationMs rowsRead rowsWritten } }
 				d1AnalyticsAdaptiveGroups(limit: 300, filter: {databaseId: $d, datetime_geq: $s, datetime_leq: $u}, orderBy: [datetimeMinute_ASC]) {
 					dimensions { datetimeMinute } sum { readQueries writeQueries } quantiles { queryBatchTimeMsP90 queryBatchTimeMsP99 } }
 			} } }`,
@@ -352,7 +352,7 @@ async function slowQueries(env: EnvName, since: Date, until: Date): Promise<void
 			continue;
 		}
 		for (const q of acc.d1QueriesAdaptiveGroups ?? []) {
-			p(`- max ${Math.round(q.max?.queryDurationMs ?? 0)} ms, ${q.count}x, total ${Math.round(q.sum?.queryDurationMs ?? 0)} ms, rows read ${q.sum?.rowsRead ?? 0}: ${String(q.dimensions?.query ?? '').replace(/\s+/g, ' ').slice(0, 260)}`);
+			p(`- avg ${Math.round(q.avg?.queryDurationMs ?? 0)} ms, ${q.count}x, total ${Math.round(q.sum?.queryDurationMs ?? 0)} ms, rows read ${q.sum?.rowsRead ?? 0}: ${String(q.dimensions?.query ?? '').replace(/\s+/g, ' ').slice(0, 260)}`);
 		}
 		p('- minutes with p99 batch time over 1 s:');
 		for (const m of acc.d1AnalyticsAdaptiveGroups ?? []) {
