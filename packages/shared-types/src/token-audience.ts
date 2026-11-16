@@ -94,6 +94,18 @@ export const SERVICE_AUDIENCES = {
 } as const satisfies Record<string, readonly FirstPartyClient[]>;
 
 export type AudienceService = keyof typeof SERVICE_AUDIENCES;
+
+/**
+ * Extra clients a service takes on one route only (`METHOD /path`, exact). Kept narrow: the client
+ * gets that route and nothing else of the service.
+ */
+export const ROUTE_AUDIENCES: Partial<Record<AudienceService, Readonly<Record<string, readonly FirstPartyClient[]>>>> = {
+  'admin-api': {
+    /** Auth's admin site: the Translate buttons on its en/ar fields (client names, theme texts) send the
+     *  signed-in staff member's own token from its server; content:translate still decides (L10N). */
+    'POST /api/translate/fields': ['authAdmin'],
+  },
+};
 export type AudienceMode = 'off' | 'log' | 'enforce';
 
 /** AUD_MODE: "enforce" and "off" by name; anything else (unset, typos) is "log". */
@@ -122,6 +134,14 @@ export function allowedClientIds(service: AudienceService, issuer: string | unde
   const env = authEnvironmentOf(issuer);
   if (!env) return [];
   return SERVICE_AUDIENCES[service].map((name) => FIRST_PARTY_CLIENT_IDS[env][name]);
+}
+
+/** The extra client ids `service` takes on `route` (`METHOD /path`) on `issuer`; usually none. */
+export function routeClientIds(service: AudienceService, route: string | undefined, issuer: string | undefined | null): string[] {
+  const env = authEnvironmentOf(issuer);
+  const names = route ? ROUTE_AUDIENCES[service]?.[route] : undefined;
+  if (!env || !names) return [];
+  return names.map((name) => FIRST_PARTY_CLIENT_IDS[env][name]);
 }
 
 /** The first-party name of a client id (for logs), or null. */
@@ -155,7 +175,7 @@ export function checkAudience(input: {
 }): AudienceVerdict {
   if (input.mode === 'off') return { ok: true, mismatch: false };
   const auds = Array.isArray(input.aud) ? input.aud.filter((a): a is string => typeof a === 'string') : typeof input.aud === 'string' ? [input.aud] : [];
-  const allowed = allowedClientIds(input.service, input.issuer);
+  const allowed = [...allowedClientIds(input.service, input.issuer), ...routeClientIds(input.service, input.route, input.issuer)];
   if (auds.some((a) => allowed.includes(a))) return { ok: true, mismatch: false };
   const clientId = auds[0] ?? null;
   return {

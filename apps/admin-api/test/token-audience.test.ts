@@ -90,6 +90,23 @@ describe('authMiddleware audience check', () => {
 		assert.equal((mismatches()[0].fields as { route?: string }).route, 'POST /contact');
 	});
 
+	it('Auth admin tokens pass on POST /api/translate/fields only, in enforce mode', async () => {
+		const token = await sign(QA.authAdmin);
+		const app = new Hono();
+		app.use('/api/*', authMiddleware);
+		app.post('/api/translate/fields', (c) => c.json({ ok: true }));
+		app.get('/api/translate/fields', (c) => c.json({ ok: true }));
+		app.post('/api/categories', (c) => c.json({ ok: true }));
+		const env = { Issuer: QA_ISSUER, ClientId: QA.adminWeb, ENVIRONMENT: 'qa', AUD_MODE: 'enforce' };
+		const req = (method: string, path: string, t = token) => app.request(path, { method, headers: { Authorization: `Bearer ${t}` } }, env);
+		assert.equal((await req('POST', '/api/translate/fields')).status, 200);
+		assert.equal(mismatches().length, 0, 'no mismatch on its route');
+		assert.equal((await req('GET', '/api/translate/fields')).status, 401, 'another method');
+		assert.equal((await req('POST', '/api/categories')).status, 401, 'another route');
+		assert.equal((await req('POST', '/api/translate/fields', await sign(QA.authProfile))).status, 401, 'another client on the route');
+		assert.equal((await req('POST', '/api/translate/fields', await sign(PROD.authAdmin))).status, 401, "production's Auth admin on QA");
+	});
+
 	it('off: no check, no log', async () => {
 		assert.equal((await call(await sign(QA.cms), { AUD_MODE: 'off' })).status, 200);
 		assert.equal(mismatches().length, 0);

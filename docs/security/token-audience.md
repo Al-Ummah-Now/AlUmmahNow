@@ -22,6 +22,13 @@ every service. Each service now names the clients it takes tokens from.
 | web | web only (its own session) |
 | admin-web | admin-web only (its own session) |
 
+- `ROUTE_AUDIENCES`: an extra client a service takes on one route only (`METHOD /path`, exact).
+  Today: admin-api takes Auth's admin site (`authAdmin`) on `POST /api/translate/fields` alone.
+  The Auth admin's server sends the signed-in staff member's own token there for the Translate
+  buttons on its English/Arabic fields; `content:translate` (admin roles) still decides, and the
+  per-staff daily cap and audit row carry that person's id. Every other admin-api route refuses
+  that token in `enforce`.
+
 The CMS checks `aud` itself (`AlUmmahNowCMS/src/lib/oidc.ts`, `audience: clientId`). The media
 worker takes no access tokens (signed `/priv` URLs and the internal key only).
 
