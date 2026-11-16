@@ -47,3 +47,39 @@ describe('ShortsNav previous', () => {
     expect(back).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('ShortsNav over the comments', () => {
+  let callback: IntersectionObserverCallback | null = null;
+  beforeEach(() => {
+    pathname = '/en/shorts/a';
+    callback = null;
+    (globalThis as unknown as { IntersectionObserver: unknown }).IntersectionObserver = class {
+      constructor(cb: IntersectionObserverCallback) { callback = cb; }
+      observe() {}
+      disconnect() {}
+    };
+    document.body.innerHTML = '<section id="video-player"></section>';
+  });
+  afterEach(() => {
+    delete (globalThis as unknown as { IntersectionObserver?: unknown }).IntersectionObserver;
+  });
+
+  const ratio = (r: number) => act(() => callback?.([{ intersectionRatio: r } as IntersectionObserverEntry], {} as IntersectionObserver));
+
+  it('hides the ↑/↓ buttons once the player scrolls away (they would sit on the comment box) and shows them again', () => {
+    render(<ShortsNav />, { container: document.body.appendChild(document.createElement('div')) });
+    expect(screen.getByTestId('shorts-nav')).toBeInTheDocument();
+    ratio(0.1);
+    expect(screen.queryByTestId('shorts-nav')).toBeNull();
+    ratio(0.9);
+    expect(screen.getByTestId('shorts-nav')).toBeInTheDocument();
+  });
+
+  it('keys still move to the next Short while the buttons are hidden', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ items: [{ id: 'b' }] }) }) as unknown as typeof fetch;
+    render(<ShortsNav />, { container: document.body.appendChild(document.createElement('div')) });
+    ratio(0);
+    await act(async () => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown' })); });
+    expect(push).toHaveBeenCalledWith('/en/shorts/b');
+  });
+});

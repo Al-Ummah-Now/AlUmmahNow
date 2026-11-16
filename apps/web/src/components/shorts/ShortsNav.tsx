@@ -12,10 +12,13 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getApiUrl } from '@/lib/runtime-config';
 import { logger } from '@/lib/logger-client';
+import { VIDEO_PLAYER_ID } from '@/components/SkipLinks/SkipLinksBase';
 
 const SHORT_PATH = /^\/(en|ar)\/shorts\/([^/?#]+)\/?$/;
 const SWIPE_MIN_PX = 80;
 const SWIPE_MAX_MS = 700;
+/** The buttons show while at least this share of the player is on screen (never over the comments below) */
+const PLAYER_VISIBLE_RATIO = 0.35;
 
 /** The next Short after `id` in the public feed, or null at the end. */
 export async function nextShortId(api: string, id: string, fetcher: typeof fetch = fetch): Promise<string | null> {
@@ -38,6 +41,9 @@ export function ShortsNav() {
   const [trail, setTrail] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [atEnd, setAtEnd] = useState(false);
+  /** The buttons float at the screen's end edge: once the player scrolls away they would sit on the
+      comment box, so they show only while the player is on screen (keys and swipes always work). */
+  const [playerOnScreen, setPlayerOnScreen] = useState(true);
 
   useEffect(() => {
     if (!id) return;
@@ -106,7 +112,32 @@ export function ShortsNav() {
     };
   }, [id, next, previous]);
 
-  if (!id) return null;
+  useEffect(() => {
+    if (!id || typeof IntersectionObserver === 'undefined') return;
+    let observer: IntersectionObserver | null = null;
+    let frame = 0;
+    let tries = 0;
+    const attach = () => {
+      const player = document.getElementById(VIDEO_PLAYER_ID);
+      if (!player) {
+        if (tries++ < 60) frame = requestAnimationFrame(attach);
+        return;
+      }
+      observer = new IntersectionObserver(
+        ([entry]) => setPlayerOnScreen(!!entry && entry.intersectionRatio >= PLAYER_VISIBLE_RATIO),
+        { threshold: [0, PLAYER_VISIBLE_RATIO, 1] },
+      );
+      observer.observe(player);
+    };
+    attach();
+    return () => {
+      cancelAnimationFrame(frame);
+      observer?.disconnect();
+      setPlayerOnScreen(true);
+    };
+  }, [id]);
+
+  if (!id || !playerOnScreen) return null;
   const button =
     'inline-flex h-11 w-11 items-center justify-center rounded-full border border-[var(--fanous-color-border,currentColor)] bg-[var(--fanous-color-surface,transparent)] text-lg shadow disabled:opacity-40 focus-visible:outline focus-visible:outline-2';
   return (
