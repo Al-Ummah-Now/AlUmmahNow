@@ -106,23 +106,27 @@
 }
 
 /*
- * Frosted glass with a golden glow (owner, 2026-11-15): panels and the hero card are the theme's
- * own surface at ~62% over a blur of whatever is behind (the Fawanees lantern street), framed by a
- * thin line and a soft outer glow in the theme's primary (Fawanees gold; other themes their accent).
- * The blur sits on these static boxes only, never on a scrolling or animated layer (watch page: the
- * street is off there, #1233). Without backdrop-filter, or with reduced transparency, the surface is
- * nearly opaque so text never depends on the blur. Text contrast is checked over the street's
- * busiest part (e2e/80-page-blocks-glass).
+ * Frosted glass with a golden glow (owner, 2026-11-15): page-builder panels, the hero card, and any
+ * host box that opts in with class `pb-glass` (the videos site's About prose card and Community
+ * Guidelines sections) are the theme's own surface at ~62% over a blur of whatever is behind (the
+ * Fawanees lantern street), framed by a thin line and a soft outer glow in the theme's primary
+ * (Fawanees gold; other themes their own). One definition: hosts reuse the class, never copy it.
+ * The blur sits on these static boxes only, never on a scrolling or animated layer (the street is off
+ * on the watch page, #1233). Without backdrop-filter, or with reduced transparency, the surface is
+ * nearly opaque so text never depends on the blur. Text contrast over the street is measured in
+ * AlUmmahNowUI apps/www/e2e/page-blocks-glass.spec.ts (every theme, light and dark).
  */
-.pb {
+.pb,
+.pb-glass {
   --pb-glow-c: var(--fanous-color-primary, #e8b477);
   --pb-glass-a: 62%;
   --pb-glass-blur: blur(16px) saturate(1.2);
   --pb-glow: 0 0 32px -2px color-mix(in srgb, var(--pb-glow-c) 26%, transparent);
-  --pb-glass-line: color-mix(in srgb, var(--pb-glow-c) 55%, var(--pb-line));
+  --pb-glass-line: color-mix(in srgb, var(--pb-glow-c) 55%, var(--pb-line, var(--fanous-color-divider, #d3c0a0)));
 }
-.pb-t-soft { --pb-glass: color-mix(in srgb, var(--fanous-color-surface, #fbf5e9) var(--pb-glass-a), transparent); }
+.pb-glass,
 .pb-t-raised { --pb-glass: color-mix(in srgb, var(--fanous-color-surface-raised, #fff) var(--pb-glass-a), transparent); }
+.pb-t-soft { --pb-glass: color-mix(in srgb, var(--fanous-color-surface, #fbf5e9) var(--pb-glass-a), transparent); }
 .pb-t-accent {
   --pb-glass:
     radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--fanous-color-primary, #e8b477) 24%, transparent), transparent 60%),
@@ -132,30 +136,29 @@
 .pb-k-hero {
   --pb-glass:
     radial-gradient(70% 90% at 90% 0%, color-mix(in srgb, var(--fanous-color-primary, #e8b477) 18%, transparent), transparent 70%),
-    color-mix(in srgb, var(--fanous-c-nav-bg, #093041) calc(var(--pb-glass-a) + 10%), transparent);
+    color-mix(in srgb, var(--fanous-c-nav-bg, #093041) min(calc(var(--pb-glass-a) + 10%), 100%), transparent);
 }
+.pb-glass,
 .pb-w-content:not(.pb-t-none):not(.pb-k-hero) > .pb-in,
 .pb-w-wide:not(.pb-t-none):not(.pb-k-hero) > .pb-in,
-.pb-k-hero.pb-hero-plain.pb-w-content,
-.pb-k-hero.pb-hero-plain.pb-w-wide,
-.pb-k-hero.pb-hero-gradient.pb-w-content,
-.pb-k-hero.pb-hero-gradient.pb-w-wide {
+.pb-k-hero.pb-hero-plain:not(.pb-w-full),
+.pb-k-hero.pb-hero-gradient:not(.pb-w-full) {
   background: var(--pb-glass);
   -webkit-backdrop-filter: var(--pb-glass-blur);
   backdrop-filter: var(--pb-glass-blur);
   border: 1px solid var(--pb-glass-line);
-  box-shadow: var(--pb-glow), var(--pb-shadow);
+  box-shadow: var(--pb-glow), var(--pb-shadow, 0 1px 2px rgb(0 0 0 / 0.06), 0 8px 24px -12px rgb(0 0 0 / 0.28));
 }
-.pb-t-raised:not(.pb-w-full) > .pb-in { box-shadow: var(--pb-glow), var(--pb-shadow-hi); }
-.pb-k-hero.pb-hero-plain.pb-w-content,
-.pb-k-hero.pb-hero-plain.pb-w-wide,
-.pb-k-hero.pb-hero-gradient.pb-w-content,
-.pb-k-hero.pb-hero-gradient.pb-w-wide { box-shadow: var(--pb-glow), var(--pb-shadow-hi); }
+.pb-t-raised:not(.pb-w-full) > .pb-in,
+.pb-k-hero.pb-hero-plain:not(.pb-w-full),
+.pb-k-hero.pb-hero-gradient:not(.pb-w-full) { box-shadow: var(--pb-glow), var(--pb-shadow-hi); }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .pb { --pb-glass-a: 94%; }
+  .pb,
+  .pb-glass { --pb-glass-a: 94%; }
 }
 @media (prefers-reduced-transparency: reduce) {
-  .pb { --pb-glass-a: 94%; --pb-glass-blur: none; }
+  .pb,
+  .pb-glass { --pb-glass-a: 94%; --pb-glass-blur: none; }
 }
 
 /* ── Type ────────────────────────────────────────────────────────────────────────────────────── */
@@ -721,4 +724,6 @@ a.pb-more:hover { text-decoration: underline; text-underline-offset: 0.2em; }
   .pb-hero-glow,
   .pb-hero-pattern,
   .pb-hero-scrim { display: none; }
+  .pb { --pb-glass-a: 100%; --pb-glass-blur: none; --pb-glow: 0 0 0 transparent; }
+  .pb-glass { --pb-glass-a: 100%; --pb-glass-blur: none; --pb-glow: 0 0 0 transparent; }
 }
