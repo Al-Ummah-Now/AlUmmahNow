@@ -175,14 +175,15 @@ export function isSettled(items: readonly YtImportItem[], live: ReadonlyMap<stri
   });
 }
 
-/** "1:02:03" / "4:05". */
-export function formatDuration(seconds: number | null | undefined): string {
+/** "1:02:03" / "4:05", in the page's digits (٠–٩ in Arabic). */
+export function formatDuration(seconds: number | null | undefined, locale = 'en'): string {
   if (seconds === null || seconds === undefined || !Number.isFinite(seconds) || seconds < 0) return '';
   const s = Math.round(seconds);
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
   const sec = String(s % 60).padStart(2, '0');
-  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
+  const latin = h > 0 ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
+  return locale === 'ar' ? latin.replace(/[0-9]/g, (d) => '٠١٢٣٤٥٦٧٨٩'[Number(d)]!) : latin;
 }
 
 /** The error code the Connect step shows for ?error= (unknown codes read as "failed"). */

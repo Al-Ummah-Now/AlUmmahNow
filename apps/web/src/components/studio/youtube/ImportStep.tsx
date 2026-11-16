@@ -9,7 +9,7 @@ import { Progress } from '@/components/ui/progress';
 import { useLanguage } from '@/hooks/useLanguage';
 import { uploadErrorMessage } from '@/lib/upload/report-upload-error';
 import { itemErrorKey, rowPhase, type LiveState, type ProgressCounts } from '@/lib/youtube-import/wizard';
-import { fill, StepHeading, Thumb } from './parts';
+import { num, useFill, StepHeading, Thumb } from './parts';
 
 interface Props {
   locale: string;
@@ -33,7 +33,8 @@ interface Props {
 
 export const ImportStep = forwardRef<HTMLHeadingElement, Props>(function ImportStep(props, headingRef) {
   const { locale, current, items, live, counts, done, retrying, onRetry, onCancel, resume, channelHref, contentHref, shortUrl, onDownloadCsv, onNewImport, notice } = props;
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
+  const fill = useFill();
   const text = t.studio.youtube.progress;
   const doneText = t.studio.youtube.done;
   const lang = locale === 'ar' ? 'ar' : 'en';
@@ -66,9 +67,9 @@ export const ImportStep = forwardRef<HTMLHeadingElement, Props>(function ImportS
               <p className="text-sm font-medium text-foreground" data-testid="yt-progress-summary">
                 {fill(text.summary, { ready: counts.ready, active: counts.active, failed: counts.failed, waiting: counts.waiting })}
               </p>
-              <span className="text-sm tabular-nums text-muted-foreground">{counts.ready}/{counts.total}</span>
+              <span className="text-sm tabular-nums text-muted-foreground">{num(lang, counts.ready)}/{num(lang, counts.total)}</span>
             </div>
-            <Progress value={overall} aria-label={text.heading} aria-valuetext={`${counts.ready}/${counts.total}`} />
+            <Progress value={overall} aria-label={text.heading} aria-valuetext={`${num(lang, counts.ready)}/${num(lang, counts.total)}`} />
           </div>
         </>
       )}
@@ -122,6 +123,7 @@ function stepLabel(name: string, state: YtStepState, steps: Record<YtStepState, 
 
 function ProgressRow({ item, live, lang, retrying, onRetry }: { item: YtImportItem; live: LiveState | undefined; lang: string; retrying: boolean; onRetry: () => void }) {
   const { t } = useLanguage();
+  const fill = useFill();
   const text = t.studio.youtube.progress;
   const phase = rowPhase(item, live);
   // Bytes sent are not bytes stored: 100% only once the server has the whole file (then Processing)
@@ -199,6 +201,7 @@ function PhaseIcon({ phase }: { phase: ReturnType<typeof rowPhase> }) {
 
 function LinkBackRow({ title, line }: { title: string; line: string }) {
   const { t } = useLanguage();
+  const fill = useFill();
   const text = t.studio.youtube.done;
   const [copied, setCopied] = useState(false);
   const copy = async () => {

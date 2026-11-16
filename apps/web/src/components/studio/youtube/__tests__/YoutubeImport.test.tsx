@@ -217,7 +217,7 @@ describe('ImportStep', () => {
 
   it('shows the summary with the link-back kit when done', () => {
     render(<ImportStep {...props} done onRetry={jest.fn()} />);
-    expect(screen.getByTestId('yt-done-summary')).toHaveTextContent('1 videos imported, 1 failed.');
+    expect(screen.getByTestId('yt-done-summary')).toHaveTextContent('Imported: 1. Failed: 1.');
     expect(screen.getByTestId('yt-view-channel')).toHaveAttribute('href', '/en/@fajr');
     expect(screen.getAllByTestId('yt-link-back-row')).toHaveLength(1);
     expect(screen.getByTestId('yt-link-back-row')).toHaveTextContent('Also on Al Ummah Now: https://alummahnow.link/v/v3');

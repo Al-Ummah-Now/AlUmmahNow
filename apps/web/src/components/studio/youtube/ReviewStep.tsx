@@ -2,12 +2,12 @@
 
 import { forwardRef, useId } from 'react';
 import { CheckCircle2, CircleHelp, FileX2, Hand } from 'lucide-react';
-import type { TakeoutFile, YtFileMatch, YtImportItem } from '@al-ummah/shared-types';
+import { formatNumber, type TakeoutFile, type YtFileMatch, type YtImportItem } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/hooks/useLanguage';
 import { keyOfMatch, toFileMatch } from '@/lib/youtube-import/takeout';
 import { freeFiles, reviewGroup, type ReviewGroup } from '@/lib/youtube-import/wizard';
-import { fill, StepHeading, Thumb } from './parts';
+import { num, useFill, StepHeading, Thumb } from './parts';
 
 interface Props {
   items: YtImportItem[];
@@ -33,11 +33,12 @@ function formatSize(bytes: number, locale: string): string {
     v /= 1024;
     u++;
   }
-  return `${new Intl.NumberFormat(locale === 'ar' ? 'ar' : 'en', { maximumFractionDigits: v < 10 && u > 0 ? 1 : 0 }).format(v)} ${units[u]}`;
+  return `${formatNumber(locale === 'ar' ? 'ar' : 'en', v, { maximumFractionDigits: v < 10 && u > 0 ? 1 : 0 })} ${units[u]}`;
 }
 
 export const ReviewStep = forwardRef<HTMLHeadingElement, Props>(function ReviewStep({ items, files, matches, onMatch, starting, error, onBack, onStart }, headingRef) {
   const { t, locale } = useLanguage();
+  const fill = useFill();
   const text = t.studio.youtube.review;
   const ids = useId();
   const groups = new Map<ReviewGroup, YtImportItem[]>(ORDER.map((g) => [g, []]));
@@ -59,7 +60,7 @@ export const ReviewStep = forwardRef<HTMLHeadingElement, Props>(function ReviewS
               <summary className="yt-group-head">
                 <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
                 <span className="flex-1 font-medium">{text[group]}</span>
-                <span className="yt-count tabular-nums">{list.length}</span>
+                <span className="yt-count tabular-nums">{num(locale, list.length)}</span>
               </summary>
               <ul className="yt-list mt-2">
                 {list.map((item) => {
@@ -80,13 +81,13 @@ export const ReviewStep = forwardRef<HTMLHeadingElement, Props>(function ReviewS
                             const file = files.find((f) => f.key === e.target.value);
                             onMatch(item.id, file ? toFileMatch(file, 'manual') : null);
                           }}
-                          dir="auto"
                           data-testid="yt-review-select"
                         >
                           <option value={NONE}>{text.noFileOption}</option>
                           {options.map((f) => (
                             <option key={f.key} value={f.key}>
-                              {f.fileName} · {formatSize(f.size, locale)}{f.zipName ? ` · ${f.zipName}` : ''}
+                              {/* Each part isolated (FSI…PDI) so an Arabic file name and the Latin size/zip never reorder */}
+                              {`\u2068${f.fileName}\u2069 · \u2068${formatSize(f.size, locale)}\u2069${f.zipName ? ` · \u2068${f.zipName}\u2069` : ''}`}
                             </option>
                           ))}
                         </select>

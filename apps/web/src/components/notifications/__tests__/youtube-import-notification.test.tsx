@@ -50,7 +50,7 @@ describe('youtubeImportFinished notification', () => {
   });
 
   it('renders its own text with the counts in English and Arabic', () => {
-    expect(resolveNotificationText(event, EN_TRANSLATIONS, 'en')).toEqual({ title: 'Your YouTube import finished', message: '2 imported, 1 need another try' });
+    expect(resolveNotificationText(event, EN_TRANSLATIONS, 'en')).toEqual({ title: 'Your YouTube import finished', message: 'Imported: 2. Need another try: 1.' });
     const ar = resolveNotificationText(event, AR_TRANSLATIONS, 'ar');
     expect(ar.title).toBe('اكتمل نقل قناتك من يوتيوب');
     expect(ar.message).toBe('نُقل 2، ويحتاج 1 إلى محاولة أخرى');

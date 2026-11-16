@@ -5,7 +5,7 @@ import { AlertTriangle, ExternalLink, FileArchive, FileVideo, FolderOpen, Loader
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/hooks/useLanguage';
 import type { TakeoutSet } from '@/lib/youtube-import/takeout';
-import { fill, StepHeading } from './parts';
+import { num, useFill, StepHeading } from './parts';
 
 interface Props {
   takeout: TakeoutSet;
@@ -24,7 +24,8 @@ interface Props {
 const TAKEOUT_URL = 'https://takeout.google.com/';
 
 export const FilesStep = forwardRef<HTMLHeadingElement, Props>(function FilesStep({ takeout, reading, onAdd, onRemove, matched, selected, resume, onBack, onNext }, headingRef) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
+  const fill = useFill();
   const text = t.studio.youtube.files;
   const ids = useId();
   const input = useRef<HTMLInputElement>(null);
@@ -75,7 +76,7 @@ export const FilesStep = forwardRef<HTMLHeadingElement, Props>(function FilesSte
             <ol className="yt-how space-y-3">
               {text.how.map((line, i) => (
                 <li key={line} className="flex gap-3 text-sm leading-relaxed text-foreground">
-                  <span className="yt-how-n" aria-hidden="true">{i + 1}</span>
+                  <span className="yt-how-n" aria-hidden="true">{num(lang, i + 1)}</span>
                   <span>{line}</span>
                 </li>
               ))}
