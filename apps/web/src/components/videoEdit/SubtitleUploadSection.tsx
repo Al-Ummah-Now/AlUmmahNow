@@ -210,7 +210,7 @@ export default function SubtitleUploadSection({
       </div>
 
       {/* Caption drafts (AUN-CAPTIONS): machine captions to review and publish */}
-      <CaptionDraftsPanel videoId={videoId} videoUrl={videoUrl} posterUrl={posterUrl} onPublished={loadSubtitles} spokenLanguage={spokenLanguage} />
+      <CaptionDraftsPanel videoId={videoId} channelId={channelId} videoUrl={videoUrl} posterUrl={posterUrl} onPublished={loadSubtitles} spokenLanguage={spokenLanguage} />
 
       {/* Loading State */}
       {isLoading && (

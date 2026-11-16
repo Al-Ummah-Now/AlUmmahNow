@@ -105,14 +105,18 @@ describe('CaptionTranslate', () => {
     expect(screen.getByRole('status')).toHaveTextContent(CAPTIONS_EN.translate.noMinutes);
   });
 
-  it('says when translation is paused', async () => {
-    setup();
+  it('switched off meanwhile (404 feature_off): no message, the form closes and the features are read again', async () => {
+    const onClose = jest.fn();
+    const onFeatureOff = jest.fn();
+    setup({ onClose, onFeatureOff });
     fireEvent.click(screen.getByTestId('caption-translate-lang-fr'));
-    startCaptionTranslation.mockResolvedValueOnce({ ok: false, status: 503, error: 'translation_paused' });
+    startCaptionTranslation.mockResolvedValueOnce({ ok: false, status: 404, error: 'feature_off', details: { code: 'feature_off' } });
     await act(async () => {
       fireEvent.click(screen.getByTestId('caption-translate-action'));
     });
-    expect(screen.getByRole('status')).toHaveTextContent(CAPTIONS_EN.translate.paused);
+    expect(onFeatureOff).toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalled();
+    expect(screen.queryByRole('status')).toBeNull();
   });
 
   it('lists running and failed translations, with minutes given back', () => {
