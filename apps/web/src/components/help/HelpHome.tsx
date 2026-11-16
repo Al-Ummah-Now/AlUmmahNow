@@ -26,7 +26,7 @@ export function HelpHome() {
   const h = t.help;
   return (
     <main id={MAIN_CONTENT_ID} className="hp" dir={isRTL ? 'rtl' : 'ltr'} data-testid="help-home">
-      <header className="hp-head">
+      <header className="hp-head aun-glass aun-card-pad">
         <span className="hp-badge" aria-hidden="true"><BookOpen /></span>
         <div>
           <h1 className="hp-title">{h.title}</h1>

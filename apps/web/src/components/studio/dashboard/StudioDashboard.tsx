@@ -219,10 +219,12 @@ export function StudioDashboard({ locale, channelId, role, liveOn = false, uploa
     return (
       <div data-testid="studio-dashboard">
         {heading}
-        <div className="rounded-md border border-border bg-card p-6 text-center" data-testid="studio-dash-welcome">
+        <div className="rounded-md border border-border bg-card p-6" data-testid="studio-dash-welcome">
           <h2 className="mb-2 text-lg font-semibold text-foreground">{text.welcome.title}</h2>
-          <p className="mb-4 text-sm text-muted-foreground">{text.welcome.body}</p>
-          <Button asChild className="min-h-11"><Link href={studioUploadHref(locale, channelId)}>{text.welcome.upload}</Link></Button>
+          <p className="text-sm text-muted-foreground">{text.welcome.body}</p>
+          <div className="aun-actions">
+            <Button asChild className="min-h-11"><Link href={studioUploadHref(locale, channelId)}>{text.welcome.upload}</Link></Button>
+          </div>
         </div>
       </div>
     );

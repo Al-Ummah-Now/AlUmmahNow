@@ -67,7 +67,7 @@ test.describe('Channel header', () => {
     const header = page.getByTestId('channel-header');
     await expect(header.getByRole('heading', { level: 1 })).toHaveText(lectures.name);
     await expect(header).toContainText(DESCRIPTION);
-    await expect(header.getByTestId('channel-subscriber-count')).toHaveText(/^\d+(\.\d[KM])? subscribers$/);
+    await expect(header.getByTestId('channel-subscriber-count')).toHaveText(/^(No subscribers|1 subscriber|[\d.,]+[KM]? subscribers)$/);
     await expect(header.getByTestId('channel-subscribe-button')).toHaveText('Subscribe');
     await expect(header.getByTestId('channel-settings-link')).toHaveCount(0);
     await expect(page).toHaveTitle(/.+/);
@@ -81,7 +81,7 @@ test.describe('Channel header', () => {
     const title = header.getByRole('heading', { level: 1 });
     await expect(title).toHaveText(lectures.nameLocalized?.ar ?? lectures.name);
     await expect(header).toContainText(DESCRIPTION_AR);
-    await expect(header.getByTestId('channel-subscriber-count')).toContainText('المشتركون');
+    await expect(header.getByTestId('channel-subscriber-count')).toContainText(/مشترك/);
     // Static copy is 'اشترك'; the translations API currently serves 'اشتراك'
     await expect(header.getByTestId('channel-subscribe-button')).toHaveText(/^اشترا?ك$/);
 

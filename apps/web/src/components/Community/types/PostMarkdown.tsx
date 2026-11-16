@@ -82,7 +82,7 @@ export default function PostMarkdown({ source, locale = 'en', watchLabel = 'Watc
           return <blockquote key={key} className="border-s-4 border-[var(--fanous-color-divider)] ps-3 text-[var(--fanous-color-text-secondary)]">{inline(lines.map((l) => l.replace(/^>\s?/, '')).join(' '), key)}</blockquote>;
         }
         return (
-          <p key={key} className="whitespace-pre-wrap">
+          <p key={key} dir="auto" className="whitespace-pre-wrap">
             {lines.map((l, i) => <Fragment key={i}>{i > 0 ? <br /> : null}{inline(l, `${key}-${i}`)}</Fragment>)}
           </p>
         );

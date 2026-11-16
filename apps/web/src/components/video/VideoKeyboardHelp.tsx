@@ -218,7 +218,7 @@ export function VideoKeyboardHelp({ isOpen, onClose, language }: VideoKeyboardHe
 
   return (
     <BodyPortal><div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--aun-scrim)]"
       onClick={onClose}
       role="dialog"
       aria-modal="true"

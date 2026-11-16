@@ -2091,7 +2091,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
   },
 
   uploadDefaults: {
-    title: 'Upload Defaults',
+    title: 'Upload defaults',
     subtitle: 'Create templates to save time when uploading videos. Use variables to auto-fill metadata.',
     createTemplate: 'Create New Template',
     createFirstTemplate: 'Create First Template',
@@ -2303,11 +2303,11 @@ export const EN_TRANSLATIONS: AppTranslations = {
   },
 
   settings: {
-    uploadDefaults: 'Upload Defaults',
+    uploadDefaults: 'Upload defaults',
     uploadDefaultsDesc: 'Manage video upload templates and default settings',
     channelSettings: 'Channel Settings',
     channelSettingsDesc: 'Manage your channel settings and customization',
-    profileSettings: 'Profile Settings',
+    profileSettings: 'Profile settings',
     profileSettingsDesc: 'Update your profile information and preferences',
     settingsDescription: 'Manage your account and preferences',
     signInTitle: 'Sign in to manage your settings',

@@ -108,7 +108,7 @@ export function PrivacySettingsView({ dir, signedIn }: PrivacySettingsViewProps)
     <main id={MAIN_CONTENT_ID} dir={dir} className="min-h-screen">
       {confirmDialog}
       <div className="mx-auto max-w-3xl space-y-6 px-4 py-8 text-start">
-        <header>
+        <header className={card}>
           <h1 className="flex items-center gap-3 text-3xl font-bold text-[var(--fanous-color-text-primary)]">
             <Shield className="h-8 w-8 text-[var(--fanous-color-accent)]" aria-hidden="true" />
             {p.settingsTitle}
@@ -122,7 +122,7 @@ export function PrivacySettingsView({ dir, signedIn }: PrivacySettingsViewProps)
           <div className="mt-4">
             <ConsentPreferences value={choices} onChange={next => { setChoices(next); setConsentStatus({ kind: 'idle' }); }} idPrefix="settings-consent" />
           </div>
-          <div className="mt-4">
+          <div className="aun-actions mt-4">
             <button type="button" className={primaryButton} onClick={saveConsent}>{p.savePreferences}</button>
           </div>
           <StatusLine status={consentStatus} />
@@ -141,7 +141,7 @@ export function PrivacySettingsView({ dir, signedIn }: PrivacySettingsViewProps)
         <section className={card} aria-labelledby="privacy-device">
           <h2 id="privacy-device" className={heading}><Smartphone className="h-5 w-5" aria-hidden="true" />{p.deviceDataTitle}</h2>
           <p className={body}>{p.deviceDataDescription}</p>
-          <div className="mt-4">
+          <div className="aun-actions mt-4">
             <button type="button" className={secondaryButton} onClick={clearDevice}>{p.clearDeviceData}</button>
           </div>
           <StatusLine status={deviceStatus} />
@@ -154,7 +154,7 @@ export function PrivacySettingsView({ dir, signedIn }: PrivacySettingsViewProps)
             <section className={card} aria-labelledby="privacy-export">
               <h2 id="privacy-export" className={heading}><Download className="h-5 w-5" aria-hidden="true" />{p.exportTitle}</h2>
               <p className={body}>{p.exportDescription}</p>
-              <div className="mt-4">
+              <div className="aun-actions mt-4">
                 <button type="button" className={primaryButton} onClick={exportData} disabled={exportStatus.kind === 'busy'}>
                   {exportStatus.kind === 'busy' ? p.exporting : p.exportButton}
                 </button>
@@ -176,7 +176,7 @@ export function PrivacySettingsView({ dir, signedIn }: PrivacySettingsViewProps)
                 autoComplete="off"
                 className="mt-1 w-full max-w-xs rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
               />
-              <div className="mt-4">
+              <div className="aun-actions mt-4">
                 <button
                   type="button"
                   onClick={eraseData}
@@ -193,10 +193,12 @@ export function PrivacySettingsView({ dir, signedIn }: PrivacySettingsViewProps)
               <h2 id="privacy-account" className={heading}>{p.accountTitle}</h2>
               <p className={body}>{p.accountDescription}</p>
               {accountUrl && (
-                <a href={accountUrl} target="_blank" rel="noopener noreferrer" className={`${secondaryButton} mt-4`}>
-                  <ExternalLink className="h-4 w-4" aria-hidden="true" />
-                  {p.manageAccount}
-                </a>
+                <div className="aun-actions mt-4">
+                  <a href={accountUrl} target="_blank" rel="noopener noreferrer" className={secondaryButton}>
+                    <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                    {p.manageAccount}
+                  </a>
+                </div>
               )}
             </section>
           </>

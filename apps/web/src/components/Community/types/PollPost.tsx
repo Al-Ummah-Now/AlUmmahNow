@@ -95,7 +95,7 @@ export default function PollPost({ post, isRTL = false, locale = 'en', channelId
     <div className="space-y-4">
       {/* Text content */}
       {post.content && (
-        <p className={cn(
+        <p dir="auto" className={cn(
           'text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words',
           isRTL && 'text-right'
         )}>

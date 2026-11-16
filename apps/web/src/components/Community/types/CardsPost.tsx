@@ -42,7 +42,7 @@ export default function CardsPost({ post }: { post: CommunityPost }) {
                 <div className={`absolute inset-0 flex flex-col ${POSITION[s.position] ?? POSITION.bottom} p-4`}>
                   <div className="rounded-md p-3 bg-[var(--fanous-c-player-control-bg)] text-[var(--fanous-c-player-control)] space-y-1">
                     {s.heading ? <p className="font-semibold text-base">{s.heading}</p> : null}
-                    {s.body ? <p className="text-sm whitespace-pre-wrap">{s.body}</p> : null}
+                    {s.body ? <p dir="auto" className="text-sm whitespace-pre-wrap">{s.body}</p> : null}
                   </div>
                 </div>
               ) : null}

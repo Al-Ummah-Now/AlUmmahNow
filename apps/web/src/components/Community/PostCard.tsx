@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CommunityPost, PostType, formatNumber } from '@al-ummah/shared-types';
+import { CommunityPost, PostType, formatTimeAgo } from '@al-ummah/shared-types';
 import { cn } from '@/lib/utils';
 import PostEngagement from './PostEngagement';
 import CommentsSection from './CommentsSection';
@@ -32,39 +32,10 @@ interface PostCardProps {
   openPostLabel?: string;
 }
 
+/** "3 minutes ago" / «قبل ٣ دقائق» (Intl plural and dual forms, ٠–٩ digits); under a minute "just now" / «الآن». */
 function getTimeAgo(date: Date, isRTL: boolean): string {
-  const now = new Date();
-  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-  const intervals = {
-    year: 31536000,
-    month: 2592000,
-    week: 604800,
-    day: 86400,
-    hour: 3600,
-    minute: 60,
-  };
-
-  for (const [unit, secondsInUnit] of Object.entries(intervals)) {
-    const interval = Math.floor(seconds / secondsInUnit);
-    if (interval >= 1) {
-      if (isRTL) {
-        const units: Record<string, string> = {
-          year: interval === 1 ? 'سنة' : interval === 2 ? 'سنتان' : 'سنوات',
-          month: interval === 1 ? 'شهر' : interval === 2 ? 'شهران' : 'أشهر',
-          week: interval === 1 ? 'أسبوع' : interval === 2 ? 'أسبوعان' : 'أسابيع',
-          day: interval === 1 ? 'يوم' : interval === 2 ? 'يومان' : 'أيام',
-          hour: interval === 1 ? 'ساعة' : interval === 2 ? 'ساعتان' : 'ساعات',
-          minute: interval === 1 ? 'دقيقة' : interval === 2 ? 'دقيقتان' : 'دقائق',
-        };
-        return `منذ ${formatNumber('ar', interval)} ${units[unit]}`;
-      } else {
-        return `${interval} ${unit}${interval > 1 ? 's' : ''} ago`;
-      }
-    }
-  }
-
-  return isRTL ? 'الآن' : 'just now';
+  if (Date.now() - date.getTime() < 60_000) return isRTL ? 'الآن' : 'just now';
+  return formatTimeAgo(isRTL ? 'ar' : 'en', date, { numeric: 'always' });
 }
 
 export default function PostCard({

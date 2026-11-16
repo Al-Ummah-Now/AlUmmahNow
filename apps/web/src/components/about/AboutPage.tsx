@@ -75,7 +75,7 @@ export function AboutPage({ page, locale, source, wwwUrl }: { page: CmsPage; loc
     <main id={MAIN_CONTENT_ID} className={blocks ? 'ab ab-built' : 'ab'} dir={dir(locale)} data-testid="about-page" data-source={source}>
       <article className="ab-article" lang={page.locale} dir={dir(page.locale)}>
         {!blocks?.hero && (
-          <header className="ab-head">
+          <header className="ab-head aun-glass aun-card-pad">
             <span className="ab-badge" aria-hidden="true"><Info /></span>
             <div>
               <h1 className="ab-title">{page.title}</h1>

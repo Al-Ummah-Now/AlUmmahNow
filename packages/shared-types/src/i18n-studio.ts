@@ -21,7 +21,7 @@ export const STUDIO_EN = {
     analytics: 'Analytics',
     comments: 'Comments',
     playlists: 'Playlists',
-    customisation: 'Customisation',
+    customisation: 'Customization',
     social: 'Social',
     site: 'Site',
     settings: 'Settings',

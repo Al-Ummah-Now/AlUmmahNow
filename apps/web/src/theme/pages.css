@@ -13,7 +13,7 @@ html:not(.dark) .home-hero-t::after{content:none}.home-hero-b h2{text-wrap:balan
 #video-player,section[id*=player]{width:100%}main .max-w-4xl{max-width:none!important}
 main .max-w-4xl h1,main .max-w-4xl h2:first-child{font-size:clamp(19px,1.7vw,24px);font-weight:700}
 main .max-w-4xl.flex-wrap button,main .max-w-4xl.flex-wrap a{background:transparent!important;color:var(--fanous-c-button-secondary-text)!important;border:1px solid var(--aun-btn-outline)!important;box-shadow:none!important;border-radius:var(--aun-radius-button)!important;min-height:40px}@media(hover:hover){main .max-w-4xl.flex-wrap button:hover,main .max-w-4xl.flex-wrap a:hover{background:var(--m-hover)!important}}
-[id*=comments]{border-block-start:1px solid var(--fanous-c-divider-line);padding-block-start:var(--fanous-spacing-xl)}
+[id*=comments]:not(.pb-heading){border-block-start:1px solid var(--fanous-c-divider-line);padding-block-start:var(--fanous-spacing-xl)}
 .related-videos a{border-radius:var(--r-md);transition:background-color 140ms}@media(hover:hover){.related-videos a:hover{background:var(--m-hover)}}.related-videos img{border-radius:var(--r-md)}.related-videos :is(h3,h4,p){color:var(--fanous-color-text-primary)}
 /* Channel */
 [data-testid=channel-header]{background:var(--m-hero)!important;border:0!important;box-shadow:var(--m-card-edge)}[data-testid=channel-header]>div:first-child img{-webkit-mask:linear-gradient(#000 60%,transparent);mask:linear-gradient(#000 60%,transparent)}[data-testid=channel-header] .aspect-square{box-shadow:var(--m-thumb-edge)}[data-testid=channel-header] h1{color:var(--fanous-color-text-primary)!important}

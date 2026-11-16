@@ -47,13 +47,13 @@ export default function SettingsPage() {
   // Hidden when off: Upload Defaults only for accounts that can upload
   const settingsSections = [
     features.upload && {
-      title: t.settings?.uploadDefaults || 'Upload Defaults',
+      title: t.settings?.uploadDefaults || 'Upload defaults',
       description: t.settings?.uploadDefaultsDesc || 'Manage video upload templates and default settings',
       icon: Video,
       href: `/${lang}/settings/upload-defaults`,
     },
     {
-      title: t.settings?.profileSettings || 'Profile Settings',
+      title: t.settings?.profileSettings || 'Profile settings',
       description: t.settings?.profileSettingsDesc || 'Update your profile information and preferences',
       icon: User,
       href: `/${lang}/profile?from=settings`,

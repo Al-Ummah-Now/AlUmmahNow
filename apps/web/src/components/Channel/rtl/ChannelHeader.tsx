@@ -1,7 +1,7 @@
 'use client';
 
 import { VerifiedBadge } from '@/components/VerifiedBadge';
-import { Channel, type ChannelRole, formatCompact } from '@al-ummah/shared-types';
+import { Channel, type ChannelRole } from '@al-ummah/shared-types';
 import Image from 'next/image';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { useChannelSubscription } from '@/hooks/useChannelSubscription';
@@ -14,6 +14,7 @@ import { ShareLinkButton } from '@/components/share/ShareLinkButton';
 import { formatHandle } from '@/lib/channel-url';
 import { loginRoutePath } from '@/lib/auth/silent-sign-in';
 import { formatVideoCount } from '@/lib/format/videoMeta';
+import { formatSubscribers } from '@/lib/format/videoMeta';
 
 interface ChannelHeaderProps {
   channel: Channel;
@@ -145,7 +146,7 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
             <div className="flex flex-wrap gap-2 text-sm text-gray-600 dark:text-gray-400 mb-3">
               {subscriberCount !== undefined && (
                 <span data-testid="channel-subscriber-count">
-                  {formatSubscriberCount(subscriberCount)} {subscriberCount === 1 ? t.channel.subscriberSingular : t.channel.subscribers}
+                  {formatSubscribers(subscriberCount, 'ar')}
                 </span>
               )}
               {channel.videosCount !== undefined && channel.videosCount > 0 && (
@@ -197,6 +198,3 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
   );
 }
 
-function formatSubscriberCount(count: number): string {
-  return formatCompact('ar', count);
-}

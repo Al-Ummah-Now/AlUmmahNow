@@ -28,7 +28,7 @@ export function HelpTopicPage({ topic }: { topic: HelpTopicId }) {
       <nav aria-label={h.title} className="hp-crumb">
         <Link href={helpHref(lang)} data-testid="help-back"><ArrowLeft className="aun-flip" aria-hidden="true" />{h.backToHelp}</Link>
       </nav>
-      <header className="hp-head">
+      <header className="hp-head aun-glass aun-card-pad">
         <span className="hp-badge" aria-hidden="true"><Icon /></span>
         <div>
           <h1 className="hp-title">{page.title}</h1>
@@ -36,7 +36,7 @@ export function HelpTopicPage({ topic }: { topic: HelpTopicId }) {
         </div>
       </header>
       <div className="hp-layout">
-        <nav className="hp-toc" aria-labelledby="hp-toc-title">
+        <nav className="hp-toc aun-glass-lite aun-card-pad" aria-labelledby="hp-toc-title">
           <h2 id="hp-toc-title" className="hp-toc-title">{h.onThisPage}</h2>
           <ul>
             {sections.map((section) => (

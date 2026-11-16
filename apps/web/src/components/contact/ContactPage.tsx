@@ -250,7 +250,7 @@ export function ContactPage() {
     {/* Opened from Settings: "Settings › Contact us" with a way back */}
     <SettingsBreadcrumb />
     <main id={MAIN_CONTENT_ID} className="ct" dir={isRTL ? 'rtl' : 'ltr'} data-testid="contact-page">
-      <header className="ct-head">
+      <header className="ct-head aun-glass aun-card-pad">
         <span className="ct-badge" aria-hidden="true">
           <Mail />
         </span>
