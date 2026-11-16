@@ -59,7 +59,7 @@ export function FileQueueItem({
   const processed = useUploadResult(file.status === 'completed' ? file.videoId : null);
   const processingPhase: ProcessingPhase | undefined = processingPhaseProp ? processed ?? processingPhaseProp : undefined;
 
-  const formatSize = (bytes: number): string => formatBytes(lang, bytes, { maximumFractionDigits: 2 });
+  const formatSize = (bytes: number): string => formatBytes(lang, bytes, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const formatSpeed = (bytesPerSecond: number): string => {
     return `${formatSize(bytesPerSecond)}/s`;

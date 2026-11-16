@@ -403,7 +403,7 @@ test.describe('Section manager', () => {
     await openManager(page, 'ar');
     await expectRtl(page);
     await expect(page.getByRole('heading', { level: 1, name: 'أقسام القناة' })).toBeVisible();
-    await expect(page.getByTestId('sections-count')).toContainText(`من ${MAX_SECTIONS} أقسام`);
+    await expect(page.getByTestId('sections-count')).toContainText(`من ${new Intl.NumberFormat('ar-u-nu-arab').format(MAX_SECTIONS)} أقسام`);
     await expect(page.getByTestId('publish-sections')).toHaveText('نشر');
     await expect(page.getByTestId('channel-settings-breadcrumb')).toHaveAttribute('aria-label', 'مسار التنقل');
 

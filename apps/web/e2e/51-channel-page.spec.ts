@@ -173,7 +173,7 @@ test.describe('Subscribe button - signed in', () => {
       await expect(button).toHaveAttribute('aria-pressed', 'true');
       const subscribed = await subscriptionStatus('single', subscriber(), target());
       expect(subscribed.isSubscribed).toBe(true);
-      await expect(page.getByTestId('channel-subscriber-count')).toContainText(String(subscribed.subscriberCount));
+      await expect(page.getByTestId('channel-subscriber-count')).toContainText(new Intl.NumberFormat(locale === 'ar' ? 'ar-u-nu-arab' : 'en').format(subscribed.subscriberCount ?? 0));
 
       // Persisted across reloads
       await page.reload();
