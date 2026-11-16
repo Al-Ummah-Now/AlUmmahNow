@@ -56,11 +56,10 @@ is the same id.
 
 | Field | Notes |
 | --- | --- |
-| Email | Required. Normalised the same way as sign-in: trimmed, lower case. Gmail dots and `+tags` count as different addresses. The email is checked as soon as it is entered (`GET /api/invites/lookup`). If it already has an account, the form offers that user's page so the admin can assign the role or channel there. If it has an open invite, the form links to it. |
+| Email | Required. Normalised the same way as sign-in: trimmed, lower case. Gmail dots and `+tags` count as different addresses. The email is checked as soon as it is entered (`GET /api/invites/lookup`). If it already has an account, the form offers that user's page so the admin can give it a tier or channel there. If it has an open invite, the form links to it. |
 | Display name, invite language (en/ar), note | The email is sent in both languages, with the chosen one first. |
-| Role | Creator (default) or Viewer. |
-| Plan | A creator tier from the admin-managed tiers (`GET /creator-tiers`), never a hard-coded list. Needs `creators:manage`. |
-| Scholar | Optional. Adds the auth role "Scholar", from auth's allow-list. |
+| Tier | One of the admin-managed tiers (`GET /creator-tiers`), lowest rank first, names in the admin's language; it starts on the current default tier, and giving another needs `creators:manage`. There is no Creator/Viewer role: the tier alone decides what the account can do (uploads, channels, live …), and the account gets it as soon as the invite is made. Accepting the invite changes nothing else. |
+| Scholar | Optional. Adds the auth role "Scholar", from auth's allow-list (the only auth role an invite can add). |
 | Link expiry | 1–90 days, default 14. An expired or used link offers "Email me a new link" while the account has no password or passkey, else Sign in. |
 | Channels | New channels (name, optional @handle; needs `channels:manage`). Existing channels are chosen with the channel picker and moved with a transfer job (needs `channels:transfer`, super admins only). |
 
@@ -68,6 +67,9 @@ If a channel cannot be made (for example, the handle is taken), the invite is
 still created and the problem is listed under "Some parts were not done".
 
 ## Invites list (`/users/invites`)
+
+Each row shows the tier the invite gave (in the admin's language; an invite with no stored tier shows the current default tier), Scholar when added, and the channels.
+Viewer invites from before migration 0031 show the default tier.
 
 Statuses:
 

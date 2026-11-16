@@ -21,7 +21,6 @@ async function seed(db: ReturnType<typeof sqliteD1>, id: string, fields: Record<
     email: `${id}@example.com`,
     name: null,
     locale: 'en',
-    role: 'creator',
     delivery_status: 'sent',
     status: 'revoked',
     accepted_at: null,

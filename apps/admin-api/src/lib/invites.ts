@@ -20,7 +20,6 @@ import type { D1Database } from './types';
 import { AuthApiError, AuthModerationClient, audit, cronSyncDue, isPermanentAuthError } from './authModeration';
 import { containsPattern } from '@al-ummah/shared-types';
 
-export type InviteRole = 'creator' | 'viewer';
 export type InviteDelivery = 'sending' | 'sent' | 'failed';
 export type InviteAuthStatus = 'invited' | 'active' | 'expired' | 'revoked';
 export type InviteOp = 'create' | 'resend' | 'link' | 'revoke' | 'restore' | 'purge' | 'sync';
@@ -50,7 +49,9 @@ export interface InviteRow {
   name: string | null;
   locale: string;
   note: string | null;
-  role: InviteRole;
+  /** Unused since 2026-11-16 (the tier decides what an account may do; migration 0031): never read, never written */
+  role?: string;
+  /** The tier the invite gave; null = the default tier (viewer invites before 0031) */
   tier_id: string | null;
   auth_roles: string;
   channels: string;
@@ -89,7 +90,7 @@ export interface InviteView {
   name: string | null;
   locale: 'en' | 'ar';
   note: string | null;
-  role: InviteRole;
+  /** The tier the invite gave; null = the current default tier */
   tierId: string | null;
   authRoles: string[];
   channels: InviteChannel[];
@@ -159,7 +160,6 @@ export function toView(row: InviteRow, now = Date.now()): InviteView {
     name: row.name,
     locale: row.locale === 'ar' ? 'ar' : 'en',
     note: row.note,
-    role: row.role,
     tierId: row.tier_id,
     authRoles: parseJson<string[]>(row.auth_roles, []),
     channels: parseJson<InviteChannel[]>(row.channels, []),
@@ -283,7 +283,6 @@ export interface NewInvite {
   name: string | null;
   locale: 'en' | 'ar';
   note: string | null;
-  role: InviteRole;
   tierId: string | null;
   authRoles: string[];
   expiresInDays: number;
@@ -295,11 +294,11 @@ export interface NewInvite {
 export async function insertInvite(db: D1Database, input: NewInvite, now = new Date().toISOString()): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO creator_invites (id, user_id, email, name, locale, note, role, tier_id, auth_roles, channels, expires_in_days, continue_url,
+      `INSERT INTO creator_invites (id, user_id, email, name, locale, note, tier_id, auth_roles, channels, expires_in_days, continue_url,
          delivery_status, created_by, created_by_email, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, 'sending', ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, 'sending', ?, ?, ?, ?)`
     )
-    .bind(input.id, input.userId, input.email, input.name, input.locale, input.note, input.role, input.tierId, JSON.stringify(input.authRoles), input.expiresInDays, input.continueUrl, input.createdBy, input.createdByEmail, now, now)
+    .bind(input.id, input.userId, input.email, input.name, input.locale, input.note, input.tierId, JSON.stringify(input.authRoles), input.expiresInDays, input.continueUrl, input.createdBy, input.createdByEmail, now, now)
     .run();
 }
 
@@ -434,7 +433,7 @@ export async function processInvite(env: InviteQueueEnv, msg: InviteMessage, att
         expiresInDays: row.expires_in_days,
         continueUrl: row.continue_url,
         roles: parseJson<string[]>(row.auth_roles, []),
-        details: { role: row.role, tierId: row.tier_id, channels: parseJson(row.channels, []) },
+        details: { tierId: row.tier_id, channels: parseJson(row.channels, []) },
         actor: { id: row.created_by, email: row.created_by_email },
         // The admin-edited copy (Settings › Emails) in the invite's language; Auth falls back to its built-in copy without it
         emailCopy: await resolveEmailCopy(db, 'creator_invite', row.locale),
@@ -632,12 +631,12 @@ export function videosWebOrigin(env: { VIDEOS_WEB_URL?: string; ADMIN_WEB_URL?: 
  */
 /**
  * Where the invite's first sign-in lands (the "work"): the Studio of the
- * invited channel for a creator with channels (/studio/go picks their
+ * invited channel when the invite brings channels (/studio/go picks their
  * channel), else the account settings; with the first-run welcome
  * (web InviteWelcome, `?welcome=invite`).
  */
-export function inviteLandingPath(locale: 'en' | 'ar', opts: { role: string; hasChannels: boolean }): string {
-  const page = opts.role === 'creator' && opts.hasChannels ? 'studio/go/dashboard' : 'settings';
+export function inviteLandingPath(locale: 'en' | 'ar', opts: { hasChannels: boolean }): string {
+  const page = opts.hasChannels ? 'studio/go/dashboard' : 'settings';
   return `/${locale}/${page}?welcome=invite`;
 }
 

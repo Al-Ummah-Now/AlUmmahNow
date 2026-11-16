@@ -1,7 +1,7 @@
 'use client';
 /**
  * The "Invite creator" form (docs/admin/INVITES.md). Checks the email as soon
- * as it is entered: an existing account is offered instead (give it the plan
+ * as it is entered: an existing account is offered instead (give it the tier
  * or channel from its user page); an open invite links to the list. Channels:
  * new ones (name, optional @handle) and existing ones chosen with the channel
  * picker (moved to the invited user with a transfer job).
@@ -47,7 +47,6 @@ export function InviteForm({ tiers, defaultTierId, canPlan, canCreateChannels, c
   const { run, busy, error, message } = useContentAction();
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
-  const [role, setRole] = useState<'creator' | 'viewer'>('creator');
   const [tierId, setTierId] = useState(tiers.some((tier) => tier.id === defaultTierId) ? defaultTierId : tiers[0]?.id ?? '');
   const [scholar, setScholar] = useState(false);
   // The email's one language: picked next to Send, the admin UI's language until changed
@@ -108,7 +107,6 @@ export function InviteForm({ tiers, defaultTierId, canPlan, canCreateChannels, c
             createInvite({
               email: email.trim(),
               name: name.trim() || undefined,
-              role,
               // Every account has a tier: the picked one, else the server's default
               tierId: tierId || null,
               authRoles: scholar ? ['Scholar'] : [],
@@ -170,13 +168,6 @@ export function InviteForm({ tiers, defaultTierId, canPlan, canCreateChannels, c
           <div className="flex flex-col gap-1">
             <label htmlFor={`${ids}-name`} className="text-sm text-fg-muted">{t('invites.name')}</label>
             <input id={`${ids}-name`} value={name} onChange={(e) => setName(e.target.value)} dir="auto" maxLength={100} className={fieldClass} data-testid="invite-name" />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor={`${ids}-role`} className="text-sm text-fg-muted">{t('invites.role')}</label>
-            <select id={`${ids}-role`} value={role} onChange={(e) => setRole(e.target.value === 'viewer' ? 'viewer' : 'creator')} className={fieldClass} data-testid="invite-role">
-              <option value="creator">{t('invites.roleCreator')}</option>
-              <option value="viewer">{t('invites.roleViewer')}</option>
-            </select>
           </div>
           {tiers.length > 0 && (
             <div className="flex flex-col gap-1">

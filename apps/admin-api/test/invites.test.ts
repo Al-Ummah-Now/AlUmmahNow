@@ -161,7 +161,7 @@ function setup(opts: { authUsers?: Array<{ id: string; email: string; name: stri
   return { db, env, state, videos, auth, queue, call, drain };
 }
 
-const invite = (overrides: Record<string, unknown> = {}) => ({ email: '  New.Creator@Example.com ', name: 'New Creator', role: 'creator', tierId: 'creator', locale: 'ar', note: 'Welcome', ...overrides });
+const invite = (overrides: Record<string, unknown> = {}) => ({ email: '  New.Creator@Example.com ', name: 'New Creator', tierId: 'creator', locale: 'ar', note: 'Welcome', ...overrides });
 
 describe('POST /api/invites', () => {
   it('makes the user at once with a stable id: profile, plan and a new channel, then auth through the queue', async () => {
@@ -186,10 +186,24 @@ describe('POST /api/invites', () => {
     assert.equal(created.body.inviteId, inv.id);
     assert.equal(created.body.locale, 'ar');
     assert.deepEqual(created.body.roles, ['Scholar']);
+    // The tier only: no creator/viewer role travels with the invite (the tier decides what the account may do)
+    assert.equal(created.body.details.tierId, 'creator');
+    assert.equal('role' in created.body.details, false);
+    assert.equal('role' in inv, false);
     assert.equal(created.body.continueUrl, 'https://videos.qa.alummahnow.net/api/auth/login?locale=ar&return=%2Far%2Fstudio%2Fgo%2Fdashboard%3Fwelcome%3Dinvite');
     const after = await t.call('GET', `/api/invites/${inv.id}`);
     assert.equal(after.body.result.status, 'invited');
     assert.equal(after.body.result.emailSent, true);
+  });
+
+  it('ignores a creator/viewer role from an old client: the picked tier is the account\'s tier', async () => {
+    const t = setup();
+    const res = await t.call('POST', '/api/invites', invite({ email: 'viewer@example.com', role: 'viewer' }));
+    assert.equal(res.status, 201, JSON.stringify(res.body));
+    const inv = res.body.result.invite;
+    assert.equal(inv.tierId, 'creator');
+    assert.equal(t.state.profiles.get(inv.userId).tier, 'creator');
+    assert.equal('role' in inv, false);
   });
 
   it('assigns existing channels (transfer job) to the invited user before sign-in', async () => {
@@ -455,9 +469,8 @@ describe('signInUrl', () => {
 });
 
 describe('inviteLandingPath', () => {
-  it('lands a creator with channels in the Studio, everyone else on the account settings, with the welcome', () => {
-    assert.equal(inviteLandingPath('ar', { role: 'creator', hasChannels: true }), '/ar/studio/go/dashboard?welcome=invite');
-    assert.equal(inviteLandingPath('en', { role: 'creator', hasChannels: false }), '/en/settings?welcome=invite');
-    assert.equal(inviteLandingPath('en', { role: 'viewer', hasChannels: true }), '/en/settings?welcome=invite');
+  it('lands an invite that brings channels in the Studio, any other on the account settings, with the welcome', () => {
+    assert.equal(inviteLandingPath('ar', { hasChannels: true }), '/ar/studio/go/dashboard?welcome=invite');
+    assert.equal(inviteLandingPath('en', { hasChannels: false }), '/en/settings?welcome=invite');
   });
 });

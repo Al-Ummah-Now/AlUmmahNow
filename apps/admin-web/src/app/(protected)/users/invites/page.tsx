@@ -1,6 +1,8 @@
 import Link from '@/components/AppLink';
 import { listInvites } from '@/lib/api/invites';
 import { getContentPermissions } from '@/lib/api/content';
+import { listCreatorTierChoices } from '@/lib/api/creators';
+import { tierLabel } from '@/lib/creator-tiers';
 import { INVITE_STATUSES, type InviteListStatus, type InviteView } from '@/lib/api/invite-types';
 import { getI18n } from '@/i18n/server';
 import { formatDate } from '@/i18n/translate';
@@ -23,10 +25,19 @@ export default async function InvitesPage({ searchParams }: { searchParams: Prom
 
   let data: { items: InviteView[]; nextCursor: string | null } | null = null;
   let canManage = false;
+  // Each invite shows the tier it gave (no tier stored: the current default tier)
+  let tierName: (id: string | null) => string = (id) => id ?? '';
   try {
     const [list, permissions] = await Promise.all([listInvites({ status: params.status as InviteListStatus | undefined, q: params.q, cursor: params.cursor }), getContentPermissions()]);
     data = list;
     canManage = permissions.includes('users:manage');
+    const choices = await listCreatorTierChoices().catch(() => null);
+    if (choices) {
+      tierName = (id) => {
+        const tier = choices.items.find((item) => item.id === (id ?? choices.defaultTierId));
+        return tier ? tierLabel(tier, locale) : id ?? '';
+      };
+    }
   } catch (e) {
     logger.error('[invites] Failed to load', { error: e instanceof Error ? e.message : String(e) });
   }
@@ -90,7 +101,7 @@ export default async function InvitesPage({ searchParams }: { searchParams: Prom
                     </td>
                     <td className={`${tdClass} ${wideOnly} text-sm`}>
                       <div className="flex flex-col gap-1">
-                        <span className="text-fg-muted">{inv.role === 'creator' ? t('invites.roleCreator') : t('invites.roleViewer')}{inv.tierId ? ` · ${inv.tierId}` : ''}{inv.authRoles.includes('Scholar') ? ` · ${t('invites.scholar')}` : ''}</span>
+                        <span className="text-fg-muted" data-testid="invite-tier">{t('invites.tierLine', { tier: tierName(inv.tierId) })}{inv.authRoles.includes('Scholar') ? ` · ${t('invites.scholar')}` : ''}</span>
                         {inv.channels.map((ch) => (
                           <Link key={ch.id} href={`/channels/${encodeURIComponent(ch.id)}`} className={linkClass} dir="auto" data-testid="invite-channel">
                             {ch.name}{ch.handle ? ` (@${ch.handle})` : ''}
