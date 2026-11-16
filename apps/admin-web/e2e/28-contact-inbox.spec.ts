@@ -60,6 +60,18 @@ test.describe('contact inbox', () => {
   });
 
   test('INBOX-01 the whole row opens the message, which reads it; the badge counts unread only and clears without a reload', async ({ page }) => {
+    // The admin live socket's subscription replies, to publish only once the page follows contact changes
+    const subscriptions: string[] = [];
+    page.on('websocket', (ws) =>
+      ws.on('framereceived', (f) => {
+        try {
+          const msg = JSON.parse(String(f.payload)) as { type?: string; channel?: string };
+          if (msg.channel === 'admin:moderation' && (msg.type === 'subscribed' || msg.type === 'unsubscribed')) subscriptions.push(msg.type);
+        } catch {
+          // not JSON
+        }
+      }),
+    );
     await page.goto(inbox);
     await expect(page.getByTestId('contact-row')).toHaveCount(3);
     await expect(row(page, m1)).toHaveAttribute('data-read', 'false');
@@ -85,12 +97,12 @@ test.describe('contact inbox', () => {
     await expect.poll(() => badgeCount(page)).toBe(before - 1);
 
     // Another admin marks it unread: the badge follows on this page without a reload
-    let navigations = 0;
-    page.on('framenavigated', (f) => { if (f === page.mainFrame()) navigations++; });
+    await expect.poll(() => subscriptions.at(-1), { timeout: 15_000, message: 'the page follows admin:moderation' }).toBe('subscribed');
+    await page.evaluate(() => { (window as unknown as { __sameDocument?: boolean }).__sameDocument = true; });
     const res = await adminApi(`/api/contact/messages/${encodeURIComponent(m1)}`, { method: 'PATCH', body: JSON.stringify({ read: false }) });
     expect(res.status).toBe(200);
     await expect.poll(() => badgeCount(page), { timeout: 20_000 }).toBe(before);
-    expect(navigations, 'no full reload').toBe(0);
+    expect(await page.evaluate(() => (window as unknown as { __sameDocument?: boolean }).__sameDocument), 'no full reload').toBe(true);
   });
 
   test('INBOX-02 detail: read/unread, status in progress, assign through the live picker, spam verdict and reason', async ({ page }) => {
