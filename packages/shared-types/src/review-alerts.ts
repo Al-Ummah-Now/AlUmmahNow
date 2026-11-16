@@ -134,6 +134,7 @@ const HHMM = /^([01]\d|2[0-3]):[0-5]\d$|^24:00$/;
 export function isValidTimeZone(tz: unknown): tz is string {
   if (typeof tz !== 'string' || tz.length === 0 || tz.length > 64) return false;
   try {
+    // locale-format: machine (time-zone maths, never shown)
     new Intl.DateTimeFormat('en-US', { timeZone: tz });
     return true;
   } catch {
@@ -212,6 +213,7 @@ const WEEKDAY: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4
 
 /** The weekday and minute of the day at `at` in `timeZone`. */
 export function localTime(at: number, timeZone: string): { day: number; minute: number } {
+  // locale-format: machine (time-zone maths, never shown)
   const parts = new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(at));
   const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
   return { day: WEEKDAY[get('weekday')] ?? 0, minute: Number(get('hour')) * 60 + Number(get('minute')) };

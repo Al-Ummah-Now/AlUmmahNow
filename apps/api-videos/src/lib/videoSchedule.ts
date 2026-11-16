@@ -16,6 +16,7 @@ export function scheduleDateProblem(date: Date, now: Date): ScheduleDateProblem 
 /** Date as the viewer's zone shows it; falls back to UTC for an unknown zone. */
 export function formatLocalDate(date: Date, timezone: string): string {
   try {
+    // locale-format: machine (API field localScheduledDate, en-US in the video's zone; pages format scheduledAt themselves)
     return date.toLocaleString('en-US', { timeZone: timezone });
   } catch {
     return date.toISOString();

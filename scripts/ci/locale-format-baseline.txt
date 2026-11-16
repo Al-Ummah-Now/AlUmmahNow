@@ -1,9 +1,5 @@
 # Files not yet moved to locale-format, with their count of direct Intl/toLocale calls.
 # Counts may only shrink. Regenerate: node --experimental-strip-types scripts/ci/check-locale-format.ts --write
-apps/admin-api/src/lib/cost-alert-mail.ts 4
-apps/admin-api/src/lib/email/layout.ts 1
-apps/admin-api/src/lib/newsletter.ts 2
-apps/admin-api/src/lib/warning-mail.ts 1
 apps/admin-web/src/app/(protected)/abuse/page.tsx 1
 apps/admin-web/src/app/(protected)/backfill/useFormats.ts 3
 apps/admin-web/src/app/(protected)/costs/CostAlertForms.tsx 1
@@ -36,14 +32,6 @@ apps/admin-web/src/lib/list/relative-time.ts 2
 apps/admin-web/src/lib/live-streaming.ts 3
 apps/admin-web/src/lib/passkeys.ts 2
 apps/admin-web/src/lib/site-visits.ts 5
-apps/api-videos/src/endpoints/video/scheduleCreate.ts 1
-apps/api-videos/src/endpoints/video/scheduleFetch.ts 1
-apps/api-videos/src/endpoints/video/scheduleList.ts 1
-apps/api-videos/src/endpoints/video/scheduleUpdate.ts 1
-apps/api-videos/src/lib/templates/variables.ts 16
-apps/api-videos/src/lib/videoSchedule.ts 1
-apps/api-videos/src/lib/youtube-import/google.ts 1
-apps/status/src/i18n.ts 6
 apps/web/src/app/ar/live/LivePageClientRTL.tsx 2
 apps/web/src/components/analytics/AnalyticsDashboard/index.tsx 3
 apps/web/src/components/analytics/MetricsChart/index.tsx 2
@@ -119,6 +107,4 @@ apps/web/src/lib/utils/number-format.ts 2
 apps/web/src/lib/video/i18n/utils/plural.ts 3
 apps/web/src/utils/dateFormatters.ts 4
 apps/web/src/utils/timezoneUtils.ts 5
-packages/shared-types/src/bulk-rename.ts 3
 packages/shared-types/src/page-blocks.ts 1
-packages/shared-types/src/review-alerts.ts 2

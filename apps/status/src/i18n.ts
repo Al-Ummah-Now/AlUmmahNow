@@ -1,5 +1,18 @@
 /** Public status page text, en + ar. Status and component names come from @al-ummah/shared-types. */
-import { STATUS_COMPONENTS, STATUS_LABELS, type ComponentState, type IncidentStatus } from '@al-ummah/shared-types';
+import {
+  STATUS_COMPONENTS,
+  STATUS_CONFIRM_DAYS,
+  STATUS_LABELS,
+  fillTemplate,
+  formatDate,
+  formatDateTime,
+  formatPercent as sharedPercent,
+  type ComponentState,
+  type IncidentStatus,
+  type TemplateParams,
+} from '@al-ummah/shared-types';
+import { HISTORY_DAYS, UPTIME_DAYS } from './model';
+import { CONFIRM_COOLDOWN_MINUTES } from './subscribe';
 
 export type Locale = 'en' | 'ar';
 
@@ -16,20 +29,20 @@ const en = {
   lastChecked: 'Last checked {time}',
   noData: 'Waiting for the first checks',
   components: 'Components',
-  uptimeTitle: 'Uptime over the last 90 days',
-  uptimeValue: '{value}% uptime',
+  uptimeTitle: 'Uptime over the last {uptimeDays} days',
+  uptimeValue: '{value} uptime',
   uptimeNone: 'No data yet',
-  daysAgo: '90 days ago',
-  daysAgo30: '30 days ago',
+  daysAgo: '{uptimeDays} days ago',
+  daysAgo30: '{midDays} days ago',
   today: 'Today',
   dayNoData: '{day}: no data',
-  dayUptime: '{day}: {state}, {value}% uptime',
+  dayUptime: '{day}: {state}, {value} uptime',
   dayState: '{day}: {state}',
   active: 'Active incidents',
   maintenanceNow: 'Maintenance in progress',
   upcoming: 'Scheduled maintenance',
   history: 'Past incidents',
-  historyNone: 'No incidents in the last 14 days.',
+  historyNone: 'No incidents in the last {historyDays} days.',
   affected: 'Affected: {list}',
   window: '{from} to {to}',
   from: 'From {from}',
@@ -60,13 +73,13 @@ const en = {
   subscribeErrorTitle: 'There is a problem',
   honeypot: 'Leave this field empty',
   sentTitle: 'Check your inbox',
-  sentBody: 'We sent you a confirmation link. Your subscription starts once you open it and confirm. The link works for 7 days.',
-  sentSpam: 'Nothing arrived? Check your spam folder, or subscribe again in 10 minutes.',
+  sentBody: 'We sent you a confirmation link. Your subscription starts once you open it and confirm. The link works for {confirmDays} days.',
+  sentSpam: 'Nothing arrived? Check your spam folder, or subscribe again in {cooldownMinutes} minutes.',
   confirmTitle: 'Confirm your subscription',
   confirmBody: 'Confirm to get Al Ummah Now status updates by email.',
   confirmButton: 'Confirm subscription',
   expiredTitle: 'This link has expired',
-  expiredBody: 'Confirmation links work for 7 days and stop working once you unsubscribe. Subscribe again to get a new one.',
+  expiredBody: 'Confirmation links work for {confirmDays} days and stop working once you unsubscribe. Subscribe again to get a new one.',
   subscribeAgain: 'Subscribe again',
   subscribedTitle: 'You are subscribed',
   subscribedBody: 'We will email you when an incident or maintenance is posted, and with its updates. Every email has a link to unsubscribe.',
@@ -95,20 +108,20 @@ const ar: Messages = {
   lastChecked: 'آخر فحص {time}',
   noData: 'بانتظار أول فحص',
   components: 'الخدمات',
-  uptimeTitle: 'نسبة التشغيل خلال آخر ٩٠ يومًا',
-  uptimeValue: 'نسبة التشغيل {value}٪',
+  uptimeTitle: 'نسبة التشغيل خلال آخر {uptimeDays} يومًا',
+  uptimeValue: 'نسبة التشغيل {value}',
   uptimeNone: 'لا توجد بيانات بعد',
-  daysAgo: 'قبل ٩٠ يومًا',
-  daysAgo30: 'قبل ٣٠ يومًا',
+  daysAgo: 'قبل {uptimeDays} يومًا',
+  daysAgo30: 'قبل {midDays} يومًا',
   today: 'اليوم',
   dayNoData: '{day}: لا توجد بيانات',
-  dayUptime: '{day}: {state}، نسبة التشغيل {value}٪',
+  dayUptime: '{day}: {state}، نسبة التشغيل {value}',
   dayState: '{day}: {state}',
   active: 'حوادث جارية',
   maintenanceNow: 'صيانة جارية',
   upcoming: 'صيانة مجدولة',
   history: 'الحوادث السابقة',
-  historyNone: 'لا حوادث خلال آخر ١٤ يومًا.',
+  historyNone: 'لا حوادث خلال آخر {historyDays} يومًا.',
   affected: 'الخدمات المتأثرة: {list}',
   window: 'من {from} إلى {to}',
   from: 'ابتداءً من {from}',
@@ -139,13 +152,13 @@ const ar: Messages = {
   subscribeErrorTitle: 'هناك مشكلة',
   honeypot: 'اترك هذا الحقل فارغًا',
   sentTitle: 'تفقّد بريدك',
-  sentBody: 'أرسلنا إليك رابط تأكيد. يبدأ اشتراكك حين تفتحه وتؤكّده. يعمل الرابط ٧ أيام.',
-  sentSpam: 'لم تصلك الرسالة؟ تفقّد مجلد الرسائل غير المرغوب فيها، أو اشترك مجددًا بعد ١٠ دقائق.',
+  sentBody: 'أرسلنا إليك رابط تأكيد. يبدأ اشتراكك حين تفتحه وتؤكّده. يعمل الرابط {confirmDays} أيام.',
+  sentSpam: 'لم تصلك الرسالة؟ تفقّد مجلد الرسائل غير المرغوب فيها، أو اشترك مجددًا بعد {cooldownMinutes} دقائق.',
   confirmTitle: 'أكّد اشتراكك',
   confirmBody: 'أكّد لتصلك تحديثات حالة خدمات الأمة الآن بالبريد الإلكتروني.',
   confirmButton: 'تأكيد الاشتراك',
   expiredTitle: 'انتهت صلاحية هذا الرابط',
-  expiredBody: 'تعمل روابط التأكيد ٧ أيام، وتتوقف حين تلغي اشتراكك. اشترك مجددًا لتصلك رسالة جديدة.',
+  expiredBody: 'تعمل روابط التأكيد {confirmDays} أيام، وتتوقف حين تلغي اشتراكك. اشترك مجددًا لتصلك رسالة جديدة.',
   subscribeAgain: 'اشترك مجددًا',
   subscribedTitle: 'تم اشتراكك',
   subscribedBody: 'سنراسلك حين تُنشر حادثة أو صيانة، ومع تحديثاتها. وفي كل رسالة رابط لإلغاء الاشتراك.',
@@ -163,8 +176,17 @@ const MESSAGES: Record<Locale, Messages> = { en, ar };
 
 export type MessageKey = keyof typeof en;
 
-export function t(locale: Locale, key: MessageKey, vars: Record<string, string> = {}): string {
-  return MESSAGES[locale][key].replace(/\{(\w+)\}/g, (m, k: string) => vars[k] ?? m);
+/** Numbers the copy mentions, filled in the reader's digits (Arabic ٠–٩, English 0–9). */
+const COPY_NUMBERS = {
+  uptimeDays: UPTIME_DAYS,
+  midDays: 30,
+  historyDays: HISTORY_DAYS,
+  confirmDays: STATUS_CONFIRM_DAYS,
+  cooldownMinutes: CONFIRM_COOLDOWN_MINUTES,
+};
+
+export function t(locale: Locale, key: MessageKey, vars: TemplateParams = {}): string {
+  return fillTemplate(locale, MESSAGES[locale][key], { ...COPY_NUMBERS, ...vars });
 }
 
 export function stateLabel(locale: Locale, s: ComponentState | IncidentStatus | 'none'): string {
@@ -175,14 +197,20 @@ export function componentName(locale: Locale, id: string): string {
   return STATUS_COMPONENTS.find((c) => c.id === id)?.[locale] ?? id;
 }
 
+/** English dates read the British way («15 Nov 2026, 14:05»); Arabic in ٠–٩. */
+const dateLocale = (locale: Locale) => (locale === 'ar' ? 'ar' : 'en-GB');
+
 export function formatTime(locale: Locale, iso: string): string {
-  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG' : 'en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }).format(new Date(iso)) + (locale === 'ar' ? ' (ت.ع.م)' : ' UTC');
+  return formatDateTime(dateLocale(locale), iso, { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }) + (locale === 'ar' ? ' (ت.ع.م)' : ' UTC');
 }
 
 export function formatDay(locale: Locale, day: string): string {
-  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG' : 'en-GB', { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(`${day}T00:00:00Z`));
+  return formatDate(dateLocale(locale), `${day}T00:00:00Z`, { dateStyle: 'medium', timeZone: 'UTC' });
 }
 
+/** An uptime ("99.95", already rounded by the model) as a percentage: "99.95%" / «٩٩٫٩٥٪». */
 export function formatPercent(locale: Locale, value: string): string {
-  return locale === 'ar' ? Number(value).toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : value;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return value;
+  return locale === 'ar' ? sharedPercent(locale, n / 100, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : `${value}%`;
 }
