@@ -447,8 +447,12 @@ const SCENES: Scene[] = [
       const line = page.getByTestId('comment-identity').first();
       await line.scrollIntoViewIfNeeded();
       const box = page.getByTestId('comment-input').first();
+      // The whole composer card with its buttons, and the section's heading row above it in full: the
+      // crop never slices a heading or a button (owner audit 2026-11-16)
+      const composer = line.locator('xpath=ancestor::div[contains(concat(" ", normalize-space(@class), " "), " space-y-3 ")][1]');
+      const headingRow = page.getByTestId('comments-count').first().locator('xpath=..');
       // The avatar of whoever you act as (no 'Commenting as' text, no Switch: owner 2026-11-15), then the box
-      return [[line, box], [line, box]];
+      return [[line, box], [headingRow, composer]];
     },
   },
   {

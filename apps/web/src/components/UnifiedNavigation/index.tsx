@@ -321,10 +321,12 @@ export function UnifiedNavigation() {
         aria-haspopup="menu"
         data-testid="nav-menu-trigger"
       >
-        {/* The identity you act as (owner review): the active channel's logo or its own letter, never
-            your picture under a channel; yourself when no channel is active */}
+        {/* The identity you act as (owner rule 8): the active channel's logo (or its letter) and its
+            name, never your picture or name under a channel; your own picture and name when Personal */}
         {channel ? avatar(channel.avatarUrl, channelInitial) : avatar(getUserAvatar(), initial)}
-        <span className="aun-acct-name nav-trigger-name" dir="auto">{displayName}</span>
+        <span className="aun-acct-name nav-trigger-name" dir="auto" data-testid="nav-trigger-name" data-identity={channel ? 'channel' : 'personal'}>
+          {channel ? getChannelName(channel.name, channel.nameLocalized) : displayName}
+        </span>
         <span className="sr-only">{t.navigation.navigationMenu}</span>
         <ChevronDown className="aun-caret" aria-hidden="true" />
       </button>

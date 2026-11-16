@@ -4,7 +4,7 @@
  * Upload, the bell, language, light/dark and the account (Sign in when signed out);
  * desktop has a sidebar the menu button widens; phones have a drawer and a bottom tab bar that
  * also carries Upload and More (the drawer). Upload is a link for signed-out visitors
- * (the upload page asks them to sign in), disabled for a signed-in user with
+ * (the upload page asks them to sign in), hidden for a signed-in user with
  * no channel, and opens the upload form once they have one.
  */
 import { test, expect, type BrowserContext, type Page } from '@playwright/test';

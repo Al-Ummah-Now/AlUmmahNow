@@ -84,6 +84,8 @@ export interface HelpTopic {
 export interface HelpTourStep {
   title: string;
   body: string;
+  /** The body on phones, where the control sits elsewhere (Help is under More in the tab bar) */
+  phoneBody?: string;
 }
 
 export interface HelpTranslations {
@@ -256,7 +258,7 @@ export const HELP_EN: HelpTranslations = {
           id: 'see-who',
           heading: 'See who you are acting as',
           blocks: [
-            { type: 'p', text: 'Open the account menu. Your name is at the top. Under **Acting as** you see who you are acting as: a channel, tagged **Channel**, or your own picture and name, tagged **Personal**. When a channel is active, its picture also takes the place of yours on the account button.' },
+            { type: 'p', text: 'Open the account menu. Your name is at the top. Under **Acting as** you see who you are acting as: a channel, tagged **Channel**, or your own picture and name, tagged **Personal**. When a channel is active, its picture and name also take the place of yours on the account button.' },
             { type: 'figure', picture: 'identity-menu', alt: 'The account menu: your account at the top, then Acting as with the active channel and Switch channel', markers: ['Your account. Always you.', 'The identity you are acting as now.', 'Switch channel'] },
             { type: 'tour', text: 'Show me in the menu' },
           ],
@@ -267,7 +269,7 @@ export const HELP_EN: HelpTranslations = {
           blocks: [
             { type: 'steps', items: [
               'Open the account menu and select **Switch channel**.',
-              'Pick yourself (your name, tagged **Personal**) at the top, or one of **Your Channels** or **Channels you manage** (tagged **Channel**). A check mark shows the one in use.',
+              'Pick yourself (your name, tagged **Personal**) at the top, or one of **Your channels** or **Channels you manage** (tagged **Channel**). A check mark shows the one in use.',
             ] },
             { type: 'p', text: 'Who you act as is chosen only here, in the account menu. Next to the comment box you see the picture of whoever you are acting as: your photo, or the channel’s logo.' },
             { type: 'clip', clip: 'identity-switch', label: 'Clip: switching who you act as', caption: 'Switching from a channel to yourself in the account menu; the picture next to the comment box changes.' },
@@ -342,9 +344,9 @@ export const HELP_EN: HelpTranslations = {
           feature: 'upload',
           heading: 'Upload',
           blocks: [
-            { type: 'p', text: 'Uploading needs a channel. What you upload goes to the **channel you are acting as**, so check the account menu first.' },
+            { type: 'p', text: 'Uploading needs a channel. What you upload goes to the **channel you are acting as**, so check the account menu first. **Upload** shows while you act as a channel.' },
             { type: 'steps', items: [
-              'Select **+ Upload** in the header.',
+              'Select **Upload** in the header (on phones, in the middle of the tab bar).',
               'Drop one or more files, or choose them.',
               'Add a title and details while the files upload. You can keep browsing while they finish.',
             ] },
@@ -506,11 +508,11 @@ export const HELP_EN: HelpTranslations = {
     stepOf: 'Step {current} of {total}',
     closed: 'Tour closed',
     steps: {
-      account: { title: 'This is you', body: 'Your account menu. When a channel is active, its picture shows here instead of yours; your name stays.' },
+      account: { title: 'This is you', body: 'Your account menu. This button shows who you are acting as: the active channel, or you.' },
       actingAs: { title: 'Who you are acting as', body: 'Comments, likes and subscriptions you make now carry this name and picture: a channel, or yourself.' },
       switch: { title: 'Switch any time', body: 'Pick yourself (tagged “Personal”) or a channel you own or manage (tagged “Channel”). You stay in the same account.' },
       upload: { title: 'Uploads go to the active channel', body: 'As yourself (Personal) you can still watch, comment, like, subscribe and make playlists. Channels are by invitation.' },
-      help: { title: 'Find this again in Help', body: 'Help is in the side menu, with “Take the tour”. Enjoy watching.' },
+      help: { title: 'Find this again in Help', body: 'Help is in the side menu, with “Take the tour”. Enjoy watching.', phoneBody: 'Help is under “More” in the tab bar, with “Take the tour”. Enjoy watching.' },
     },
   },
 };
@@ -642,7 +644,7 @@ export const HELP_AR: HelpTranslations = {
           id: 'see-who',
           heading: 'اعرف باسم من تتصرّف',
           blocks: [
-            { type: 'p', text: 'افتح قائمة الحساب. في أعلاها اسمك، وتحت **تتصرّف باسم** يظهر من تتصرّف باسمه: قناة وعليها وسم **قناة**، أو صورتك واسمك وعليهما وسم **حساب شخصي**. وحين تكون قناة نشطة تحلّ صورتها محلّ صورتك على زر الحساب.' },
+            { type: 'p', text: 'افتح قائمة الحساب. في أعلاها اسمك، وتحت **تتصرّف باسم** يظهر من تتصرّف باسمه: قناة وعليها وسم **قناة**، أو صورتك واسمك وعليهما وسم **حساب شخصي**. وحين تكون قناة نشطة تحلّ صورتها واسمها محلّ صورتك واسمك على زر الحساب.' },
             { type: 'figure', picture: 'identity-menu', alt: 'قائمة الحساب: حسابك في أعلاها، ثم «تتصرّف باسم» والقناة النشطة و«تبديل القناة»', markers: ['حسابك، وهو أنت دائمًا.', 'الهوية التي تتصرّف بها الآن.', 'تبديل القناة'] },
             { type: 'tour', text: 'أرني في القائمة' },
           ],
@@ -728,9 +730,9 @@ export const HELP_AR: HelpTranslations = {
           feature: 'upload',
           heading: 'رفع مرئي',
           blocks: [
-            { type: 'p', text: 'الرفع يحتاج قناة. ما ترفعه يذهب إلى **القناة التي تتصرّف باسمها**، فتحقّق منها في قائمة الحساب أولًا.' },
+            { type: 'p', text: 'الرفع يحتاج قناة. ما ترفعه يذهب إلى **القناة التي تتصرّف باسمها**، فتحقّق منها في قائمة الحساب أولًا. ويظهر **رفع مرئي** حين تتصرّف باسم قناة.' },
             { type: 'steps', items: [
-              'اختر **+ رفع مرئي** في الشريط العلوي.',
+              'اختر **رفع مرئي** في الشريط العلوي (وفي الهاتف وسط شريط التبويبات).',
               'أفلت ملفًا أو أكثر، أو اخترها.',
               'أضف العنوان والتفاصيل أثناء الرفع، ويمكنك متابعة التصفّح حتى يكتمل.',
             ] },
@@ -892,11 +894,11 @@ export const HELP_AR: HelpTranslations = {
     stepOf: 'الخطوة {current} من {total}',
     closed: 'انتهت الجولة',
     steps: {
-      account: { title: 'هذا أنت', body: 'قائمة حسابك. حين تكون قناة نشطة تظهر صورتها هنا بدل صورتك، ويبقى اسمك.' },
+      account: { title: 'هذا أنت', body: 'قائمة حسابك. يُظهر هذا الزر من تتصرّف باسمه: القناة النشطة، أو أنت.' },
       actingAs: { title: 'باسم من تتصرّف', body: 'التعليقات والإعجابات والاشتراكات التي تقوم بها الآن تحمل هذا الاسم وهذه الصورة: قناة، أو اسمك أنت.' },
       switch: { title: 'بدّل متى شئت', body: 'اختر نفسك (بوسم «حساب شخصي») أو قناة تملكها أو تديرها (بوسم «قناة»). وتبقى في الحساب نفسه.' },
       upload: { title: 'الرفع يذهب إلى القناة النشطة', body: 'باسمك (حساب شخصي) يمكنك المشاهدة والتعليق والإعجاب والاشتراك وإنشاء قوائم التشغيل. وإنشاء القنوات بدعوة.' },
-      help: { title: 'تجد الجولة في المساعدة', body: 'المساعدة في القائمة الجانبية، ومنها «ابدأ الجولة». مشاهدة طيبة.' },
+      help: { title: 'تجد الجولة في المساعدة', body: 'المساعدة في القائمة الجانبية، ومنها «ابدأ الجولة». مشاهدة طيبة.', phoneBody: 'المساعدة تحت «المزيد» في شريط التبويبات، ومنها «ابدأ الجولة». مشاهدة طيبة.' },
     },
   },
 };

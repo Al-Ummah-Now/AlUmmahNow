@@ -54,25 +54,12 @@ export function UploadAction({ variant = 'header' }: { variant?: 'header' | 'tab
       </Link>
     );
   }
-  // Signed in without a channel and unable to make one: nowhere to upload to. One who may create a
-  // channel gets the normal Upload (the upload page offers "Create a channel"), never a greyed control
-  // right after their tier allows uploads (owner review 2026-11-16)
+  // No active channel (signed in, acting as yourself): someone who may create a channel gets the
+  // normal Upload, whose page offers "Create a channel" or a pick of their channels (owner review
+  // 2026-11-16); someone who may not has nowhere to upload to, so Upload is not shown at all, never
+  // a greyed-out control (owner rule 6)
   const tab = variant === 'tab';
-  if (user && !account?.channel && !mayCreateChannel(creator)) {
-    const why = t.upload.createChannelToUpload;
-    if (tab) {
-      return (
-        <span className="tb tb-phone" role="link" aria-disabled="true" aria-label={`${label}. ${why}`} title={why} data-testid="tab-upload" data-state="disabled">
-          <Icon /><span>{short}</span>
-        </span>
-      );
-    }
-    return (
-      <span className="upload-action" role="link" aria-disabled="true" aria-label={`${label}. ${why}`} title={why} data-testid="header-upload" data-state="disabled">
-        <Icon /><span className="upload-action-label">{short}</span>
-      </span>
-    );
-  }
+  if (user && !account?.channel && !mayCreateChannel(creator)) return null;
   // Studio's upload for the active channel (the page's picker preselects it);
   // signed out goes to the upload page too, which asks them to sign in first
   const href = account?.channel?.id ? studioUploadHref(lang, account.channel.id) : `/${lang}/upload`;
