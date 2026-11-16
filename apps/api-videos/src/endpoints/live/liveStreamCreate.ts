@@ -12,6 +12,7 @@ import { uploadIdentity } from "../../lib/channelAccess";
 import { LiveRefusedError } from "../../lib/live/service";
 import { liveTierGate } from "./liveSession";
 import { logger } from '../../lib/logger';
+import { featureOff } from '../../lib/features/off';
 import { PUBLIC_DISLIKES_COUNT } from "../../lib/reactions";
 
 export class LiveStreamCreate extends AuthenticatedRoute {
@@ -131,12 +132,9 @@ export class LiveStreamCreate extends AuthenticatedRoute {
 		} catch (error) {
 			await repository.deleteObject(`livestream:${liveStream.id}`).catch(() => undefined);
 			if (error instanceof LiveRefusedError) {
-				const message = error.code === 'live_budget'
-					? 'Live streaming has reached its budget for this month. Try again later.'
-					: error.code === 'live_capacity'
-						? 'Live streaming is at capacity right now. Try again in a few minutes.'
-						: 'Live streaming is not available right now.';
-				return c.json({ success: false, code: error.code, error: message }, 503);
+				// No provider may take streams (off, unconfigured or over budget): live is hidden
+				if (error.code !== 'live_capacity') return featureOff(c);
+				return c.json({ success: false, code: error.code, error: 'Live streaming is at capacity right now. Try again in a few minutes.' }, 503);
 			}
 			logger.error('[Live] Provisioning the first session failed', { streamId: liveStream.id, error: error instanceof Error ? error.message : String(error) });
 			return c.json({ success: false, code: 'live_provider_error', error: 'The live service could not be reached. Try again.' }, 502);

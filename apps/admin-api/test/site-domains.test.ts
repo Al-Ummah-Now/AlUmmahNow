@@ -7,8 +7,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { Hono } from 'hono';
-import { staffSiteDomainsRouter, studioSiteDomainsRouter } from '../src/routers/siteDomains.router';
-import { recordsOf, statusOf } from '../src/lib/sites/saas';
+import { siteDomainsStatusRouter, staffSiteDomainsRouter, studioSiteDomainsRouter } from '../src/routers/siteDomains.router';
+import { forgetSaasReadiness, recordsOf, saasReady, statusOf } from '../src/lib/sites/saas';
 import { runDomainChecks } from '../src/lib/sites/domains';
 import { sqliteD1 } from './d1-sqlite';
 import { SignJWT, exportJWK, generateKeyPair } from 'jose';
@@ -201,5 +201,65 @@ describe('site domains (admin-api)', () => {
       globalThis.fetch = saas;
       t.restore();
     }
+  });
+
+  it('hidden when off: Studio answers 404 feature_off while SaaS is not ready or the site allows no own domain', async () => {
+    for (const mode of ['saas-off', 'no-token', 'limit-0'] as const) {
+      forgetSaasReadiness();
+      const t = setup(fakeCloudflare({ saasOff: mode === 'saas-off' }));
+      if (mode === 'limit-0') t.videos.site.limits.customDomainsMax = 0;
+      const env = mode === 'no-token' ? { ...t.env, SITES_SAAS_TOKEN: '' } : t.env;
+      const ISSUER = 'https://auth.test';
+      const { publicKey, privateKey } = await generateKeyPair('ES256');
+      const jwk = { ...(await exportJWK(publicKey)), kid: 'k1', alg: 'ES256', use: 'sig' };
+      const saas = globalThis.fetch;
+      globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+        if (url.origin === ISSUER && url.pathname === '/.well-known/oauth-authorization-server') return json({ issuer: ISSUER, jwks_uri: `${ISSUER}/.well-known/jwks.json` });
+        if (url.origin === ISSUER && url.pathname === '/.well-known/jwks.json') return json({ keys: [jwk] });
+        return saas(input, init);
+      }) as typeof fetch;
+      __resetClientForTests();
+      try {
+        const app = new Hono();
+        app.route('/internal/site-domains', studioSiteDomainsRouter as never);
+        app.route('/internal/site-domains-status', siteDomainsStatusRouter as never);
+        const token = await new SignJWT({ mode: 'access', type: 'user', properties: { id: 'usr_owner', email: 'o@example.com' } })
+          .setProtectedHeader({ alg: 'ES256', kid: 'k1' })
+          .setIssuer(ISSUER)
+          .setAudience('client-1')
+          .setSubject('user:usr_owner')
+          .setIssuedAt()
+          .setExpirationTime('15m')
+          .sign(privateKey as CryptoKey);
+        const full = { ...env, Issuer: ISSUER, ClientId: 'client-1', ENVIRONMENT: 'production' } as never;
+        const res = await app.request('/internal/site-domains/ch_1/domains', { headers: { 'X-API-Key': 'k', Authorization: `Bearer ${token}` } }, full);
+        assert.equal(res.status, 404, mode);
+        assert.deepEqual(await res.json(), { success: false, code: 'feature_off' }, mode);
+        const status = await app.request('/internal/site-domains-status', { headers: { 'X-API-Key': 'k' } }, full);
+        assert.equal(((await status.json()) as any).result.available, mode === 'limit-0', mode);
+        assert.equal((await app.request('/internal/site-domains-status', {}, full)).status, 401);
+      } finally {
+        globalThis.fetch = saas;
+        t.restore();
+        forgetSaasReadiness();
+      }
+    }
+  });
+
+  it('SaaS readiness is one Cloudflare call per 10 minutes', async () => {
+    forgetSaasReadiness();
+    let calls = 0;
+    const cf = (async () => {
+      calls++;
+      return json({ success: true, result: [] });
+    }) as unknown as typeof fetch;
+    const now = Date.now();
+    assert.equal(await saasReady({ SITES_SAAS_TOKEN: 'saas-token' }, cf, now), true);
+    assert.equal(await saasReady({ SITES_SAAS_TOKEN: 'saas-token' }, cf, now + 60_000), true);
+    assert.equal(calls, 1);
+    assert.equal(await saasReady({ SITES_SAAS_TOKEN: 'saas-token' }, cf, now + 11 * 60_000), true);
+    assert.equal(calls, 2);
+    forgetSaasReadiness();
   });
 });

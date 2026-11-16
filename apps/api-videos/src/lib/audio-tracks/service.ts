@@ -49,6 +49,7 @@ import {
 	type ExecutionContextLike,
 	type VideoObject,
 	type VideoR2State,
+	FEATURE_OFF_CODE,
 } from '@al-ummah/shared-types';
 import R2Repository from '../r2Repo';
 import { logger } from '../logger';
@@ -240,7 +241,8 @@ export async function addTrack(
 	const originalLanguage = body.originalLanguage === undefined ? undefined : isAudioTrackLanguage(body.originalLanguage) ? body.originalLanguage : null;
 	if (originalLanguage === null) throw new AudioTrackError(400, 'invalid_track', 'originalLanguage must be a track language');
 	const allowance = await trackAllowance(env, video, userId, roles);
-	if (!env.TRANSCODE_QUEUE) throw new AudioTrackError(503, 'jobs_unavailable');
+	// No extra tracks in the owner's tier, or the jobs are not bound here: the feature is hidden (404 feature_off)
+	if (allowance.limit <= 0 || !env.TRANSCODE_QUEUE || !env.MEDIA_ORIGINALS) throw new AudioTrackError(404, FEATURE_OFF_CODE, 'Audio tracks are off for this video');
 
 	const at = now.toISOString();
 	const trackId = newAudioTrackId();
@@ -253,7 +255,7 @@ export async function addTrack(
 		const tracks = [...tracksOf(fresh)];
 		const used = countedAudioTracks(tracks);
 		if (used + 1 > allowance.limit) {
-			refusal = new AudioTrackError(402, 'upgrade_required', 'Your tier does not allow more audio tracks on this video', { limit: allowance.limit, used });
+			refusal = new AudioTrackError(402, 'upgrade_required', 'The limit of audio tracks on this video is reached', { limit: allowance.limit, used });
 			return false;
 		}
 		if (!tracks.some((t) => t.id === ORIGINAL_AUDIO_TRACK_ID)) tracks.unshift(originalTrack(fresh, at, originalLanguage));

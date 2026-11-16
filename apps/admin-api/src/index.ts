@@ -27,7 +27,7 @@ import { runWeeklyDigest } from './lib/costs';
 import costsRouter from './routers/costs.router';
 import invitesRouter from './routers/invites.router';
 import sitesRouter from './routers/sites.router';
-import { staffSiteDomainsRouter, studioSiteDomainsRouter } from './routers/siteDomains.router';
+import { siteDomainsStatusRouter, staffSiteDomainsRouter, studioSiteDomainsRouter } from './routers/siteDomains.router';
 import { runDomainChecks } from './lib/sites/domains';
 import { scheduleInviteSyncs } from './lib/invites';
 import processingRouter from './routers/processing.router';
@@ -186,6 +186,8 @@ app.post('/webhooks/cloudflare/notifications', async (c) => {
 });
 // Studio → Site → Domains from the videos site's server (X-API-Key + the user's token; channel.edit)
 app.route('/internal/site-domains', studioSiteDomainsRouter as never);
+// Whether own domains can be offered at all (api-videos /api/me/features → siteDomains)
+app.route('/internal/site-domains-status', siteDomainsStatusRouter as never);
 
 // Apply auth + admin middleware to all API routes
 app.use('/api/*', authMiddleware);

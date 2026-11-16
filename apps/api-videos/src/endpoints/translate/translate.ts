@@ -22,6 +22,8 @@ import R2Repository from '../../lib/r2Repo';
 import { readCaptionSettings } from '../../lib/captions/jobs';
 import { channelAllowsViewerTitles, readFairUse, setChannelViewerTitles, TranslateHttpError, translateInline, viewerTranslation } from '../../lib/translate/inline';
 import { logger } from '../../lib/logger';
+import { featureOff } from '../../lib/features/off';
+import { inlineTranslateConfigured, viewerTitlesConfigured } from '../../lib/features';
 import { editableVideo } from '../captions/captionDrafts';
 
 const Err = { 'application/json': { schema: z.object({ success: z.literal(false), error: z.string() }) } };
@@ -29,6 +31,8 @@ const FairUse = z.object({ used: z.number(), limit: z.number().describe('Texts p
 const QuranRef = z.object({ range: z.string(), label: z.string() });
 
 function failure(c: AppContext, error: unknown) {
+	// Switched off since the page loaded: the Translate button is hidden, answered quietly
+	if (error instanceof TranslateHttpError && error.code === 'translation_paused') return featureOff(c);
 	if (error instanceof TranslateHttpError) return c.json({ success: false, error: error.code, ...error.extra }, error.status as 400);
 	logger.error('[Translate] Request failed', { error: error instanceof Error ? error.message : String(error) });
 	return c.json({ success: false, error: 'internal_error' }, 500);
@@ -40,7 +44,7 @@ export class TranslateCreate extends AuthenticatedRoute {
 			tags: ['Translation'],
 			summary: 'Translate titles or descriptions',
 			description:
-				'A machine-translation suggestion for each text (the Translate button beside a title or description), to review before saving. Free with a daily fair-use limit per user (`429 fair_use_limit` with `limit`, `used` and `resetsAt`); answers served from the cache are not counted. Text inside {…} is a Quran quotation: it stays as written, followed by its reference when it is found in exactly one place. With `videoId` the caller must be able to edit that video. `503 translation_paused` while an admin has paused translation, `503 budget_spent` once the day\'s translation budget is spent.',
+				'A machine-translation suggestion for each text (the Translate button beside a title or description), to review before saving. Free with a daily fair-use limit per user (`429 fair_use_limit` with `limit`, `used` and `resetsAt`); answers served from the cache are not counted. Text inside {…} is a Quran quotation: it stays as written, followed by its reference when it is found in exactly one place. With `videoId` the caller must be able to edit that video. `404 feature_off` while an admin has it switched off, `503 budget_spent` once the day\'s translation budget is spent.',
 			request: {
 				body: {
 					content: {
@@ -88,6 +92,7 @@ export class TranslateCreate extends AuthenticatedRoute {
 	async handle(c: AppContext) {
 		const { body } = await this.getValidatedData<typeof this.schema>();
 		const userId = this.getUserId(c);
+		if (!inlineTranslateConfigured(c.env as never, await readCaptionSettings(c.env as never))) return featureOff(c);
 		let context: { title?: string } | undefined;
 		if (body.videoId) {
 			const access = await editableVideo(c, body.videoId, userId);
@@ -126,7 +131,7 @@ export class TranslateUsageGet extends AuthenticatedRoute {
 	async handle(c: AppContext) {
 		try {
 			const settings = await readCaptionSettings(c.env as never);
-			return c.json({ success: true, data: { enabled: settings.inline.enabled, fairUse: await readFairUse(c.env as never, this.getUserId(c), settings) } });
+			return c.json({ success: true, data: { enabled: inlineTranslateConfigured(c.env as never, settings), fairUse: await readFairUse(c.env as never, this.getUserId(c), settings) } });
 		} catch (error) {
 			return failure(c, error);
 		}
@@ -203,7 +208,7 @@ export class ChannelTranslationSettingsGet extends AuthenticatedRoute {
 		const denied = await channelEditor(c, params.channelId, this.getUserId(c));
 		if (denied) return denied;
 		const settings = await readCaptionSettings(c.env as never);
-		return c.json({ success: true, data: { viewerTitles: await channelAllowsViewerTitles(c.env as never, params.channelId), platformEnabled: settings.viewerTitles.enabled } });
+		return c.json({ success: true, data: { viewerTitles: await channelAllowsViewerTitles(c.env as never, params.channelId), platformEnabled: viewerTitlesConfigured(c.env as never, settings) } });
 	}
 }
 
@@ -227,8 +232,9 @@ export class ChannelTranslationSettingsSet extends AuthenticatedRoute {
 		const userId = this.getUserId(c);
 		const denied = await channelEditor(c, params.channelId, userId);
 		if (denied) return denied;
+		if (!viewerTitlesConfigured(c.env as never, await readCaptionSettings(c.env as never))) return featureOff(c);
 		await setChannelViewerTitles(c.env as never, params.channelId, body.viewerTitles, userId);
 		const settings = await readCaptionSettings(c.env as never);
-		return c.json({ success: true, data: { viewerTitles: body.viewerTitles, platformEnabled: settings.viewerTitles.enabled } });
+		return c.json({ success: true, data: { viewerTitles: body.viewerTitles, platformEnabled: viewerTitlesConfigured(c.env as never, settings) } });
 	}
 }

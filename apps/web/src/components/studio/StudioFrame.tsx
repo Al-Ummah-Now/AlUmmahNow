@@ -17,7 +17,7 @@ import {
 import { useLanguage } from '@/hooks/useLanguage';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { channelPath, formatHandle } from '@/lib/channel-url';
-import { itemPath, legacyHref, STUDIO_NAV, switchedPath, visibleNav, visibleTabs } from '@/lib/studio/nav';
+import { itemPath, legacyHref, STUDIO_NAV, switchedPath, visibleNav, visibleTabs, type StudioFeatures } from '@/lib/studio/nav';
 import { studioLiveHref, studioUploadHref } from '@/lib/studio/links';
 import { can, roleForChannel, type StudioRole } from '@/lib/studio/permissions';
 import { cn } from '@/lib/utils';
@@ -34,8 +34,8 @@ interface Props {
   locale: string;
   role: StudioRole;
   channel: StudioChannel;
-  /** Add-ons this channel has (the Site item shows only with a white-label site) */
-  features?: { site?: boolean };
+  /** Features on for this channel: the white-label site and GET /api/me/features (lib/studio/nav.ts) */
+  features?: StudioFeatures;
   children: ReactNode;
 }
 
@@ -103,7 +103,7 @@ function ChannelSwitcher({ locale, channel, segments }: { locale: string; channe
   );
 }
 
-function NavLinks({ locale, role, channelId, active, features, onNavigate }: { locale: string; role: StudioRole; channelId: string; active?: string; features?: { site?: boolean }; onNavigate?: () => void }) {
+function NavLinks({ locale, role, channelId, active, features, onNavigate }: { locale: string; role: StudioRole; channelId: string; active?: string; features?: StudioFeatures; onNavigate?: () => void }) {
   const { t } = useLanguage();
   const settings = visibleNav(role, features).filter((item) => item.id === 'settings');
   const main = visibleNav(role, features).filter((item) => item.id !== 'settings');
@@ -112,7 +112,7 @@ function NavLinks({ locale, role, channelId, active, features, onNavigate }: { l
     return (
       <Link
         key={item.id}
-        href={legacyHref(locale, channelId, itemPath(role, item)) ?? `/${locale}/studio/${encodeURIComponent(channelId)}/${itemPath(role, item)}`}
+        href={legacyHref(locale, channelId, itemPath(role, item, features)) ?? `/${locale}/studio/${encodeURIComponent(channelId)}/${itemPath(role, item, features)}`}
         aria-current={current ? 'page' : undefined}
         onClick={onNavigate}
         data-testid={`studio-nav-${item.id}`}
@@ -133,7 +133,7 @@ function NavLinks({ locale, role, channelId, active, features, onNavigate }: { l
   );
 }
 
-function Rail({ locale, role, channel, segments, features, onNavigate }: { locale: string; role: StudioRole; channel: StudioChannel; segments: string[]; features?: { site?: boolean }; onNavigate?: () => void }) {
+function Rail({ locale, role, channel, segments, features, onNavigate }: { locale: string; role: StudioRole; channel: StudioChannel; segments: string[]; features?: StudioFeatures; onNavigate?: () => void }) {
   const { t } = useLanguage();
   return (
     <div className="flex h-full flex-col gap-3 p-3">
@@ -171,7 +171,7 @@ export function StudioFrame({ locale, role, channel, features, children }: Props
   }, [pathname]);
 
   const item = STUDIO_NAV.find((candidate) => candidate.id === segments[0]);
-  const tabs = item ? visibleTabs(role, item) : [];
+  const tabs = item ? visibleTabs(role, item, features) : [];
   const base = `/${locale}/studio/${encodeURIComponent(channel.id)}`;
   const title = item ? t.studio.nav[item.id] : t.studio.title;
 

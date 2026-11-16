@@ -19,6 +19,8 @@ import { CAPTION_JOB_ERRORS, CAPTION_JOB_KINDS, CAPTION_JOB_STATUSES, CAPTION_MI
 import { AuthenticatedRoute, type AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { SubtitleService } from '../../lib/subtitles';
+import { featureOff } from '../../lib/features/off';
+import { captionFeatureFor } from '../../lib/features';
 import { CaptionJobHttpError, cancelJob, listJobs, minutesForVideo, requestCaptionJob, requestTranslationJob } from '../../lib/captions/jobs';
 import { CaptionMinutesError } from '../../lib/captions/minutes';
 import { logger } from '../../lib/logger';
@@ -67,6 +69,8 @@ const rolesOf = (c: AppContext) => (c.get('auth' as never) as RolesAuth)?.payloa
 const publicJob = ({ subjectId: _s, requestedBy: _r, channelId: _c, provider: _p, model: _m, ...job }: Awaited<ReturnType<typeof listJobs>>[number]) => job;
 
 function failure(c: AppContext, error: unknown) {
+	// Switched off since the page loaded: hidden, answered quietly
+	if (error instanceof CaptionJobHttpError && error.code === 'translation_paused') return featureOff(c);
 	if (error instanceof CaptionJobHttpError || error instanceof CaptionMinutesError) {
 		return c.json({ success: false, error: error instanceof CaptionJobHttpError ? error.code : error.message }, error.status as 400);
 	}
@@ -118,6 +122,8 @@ export class CaptionJobCreate extends AuthenticatedRoute {
 		const language = body.language.toLowerCase();
 		if (!new SubtitleService().validateLanguage(language)) return c.json({ success: false, error: 'unsupported_language' }, 400);
 		try {
+			// Off, unconfigured or no caption minutes in the owner's plan: hidden in Studio (404 feature_off)
+			if (!(await captionFeatureFor(c.env as never, 'transcribe', { userId, roles: rolesOf(c), channelOwnerId: access.video.userId }))) return featureOff(c);
 			const outcome = await requestCaptionJob(c.env as never, { video: access.video, userId, roles: rolesOf(c), language, replace: body.replace === true });
 			if ('refused' in outcome) {
 				return c.json({ success: false, error: 'upgrade_required', entitlement: CAPTION_MINUTES_ENTITLEMENT, minutesNeeded: outcome.minutes, usage: outcome.usage }, 402);
@@ -210,6 +216,7 @@ export class CaptionMinutesGet extends AuthenticatedRoute {
 		const access = await editableVideo(c, params.videoId, userId);
 		if ('response' in access) return access.response;
 		try {
+			if (!(await captionFeatureFor(c.env as never, 'translate', { userId, roles: rolesOf(c), channelOwnerId: access.video.userId }))) return featureOff(c);
 			const usage = await minutesForVideo(c.env as never, access.video, userId, rolesOf(c));
 			const duration = access.video.duration;
 			return c.json({ success: true, data: { usage, minutesNeeded: typeof duration === 'number' && duration > 0 ? captionMinutesFor(duration, 1) : null } });
@@ -270,6 +277,7 @@ export class CaptionTranslateCreate extends AuthenticatedRoute {
 		if (![sourceLanguage, ...languages].every((l) => service.validateLanguage(l))) return c.json({ success: false, error: 'unsupported_language' }, 400);
 		if (languages.includes(sourceLanguage)) return c.json({ success: false, error: 'same_language' }, 400);
 		try {
+			if (!(await captionFeatureFor(c.env as never, 'translate', { userId, roles: rolesOf(c), channelOwnerId: access.video.userId }))) return featureOff(c);
 			const usage = await minutesForVideo(c.env as never, access.video, userId, rolesOf(c));
 			const duration = access.video.duration;
 			const each = typeof duration === 'number' && duration > 0 ? captionMinutesFor(duration, 1) : 1;

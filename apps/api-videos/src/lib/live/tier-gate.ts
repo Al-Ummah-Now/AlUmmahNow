@@ -34,9 +34,10 @@ export type LiveTierResult =
 	| { ok: false; status: 402 | 403; code: LiveTierErrorCode; error: string; subjectId: string; details: Record<string, number | string | null> };
 
 export const LIVE_TIER_MESSAGES: Record<LiveTierErrorCode, string> = {
-	live_not_in_tier: 'Live streaming is not part of your creator tier. Request access to go live.',
+	// Never shown: a create, ingest or start refused for it answers 404 feature_off (live is hidden)
+	live_not_in_tier: 'Live streaming is off for this channel.',
 	live_hours_used: 'You have used this month\'s live streaming hours. They renew on the 1st.',
-	live_concurrent_limit: 'You already have the most streams live at once that your tier allows. End one to go live.',
+	live_concurrent_limit: 'You already have the most streams live at once. End one to go live.',
 };
 
 const monthStart = (now: number) => {

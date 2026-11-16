@@ -30727,7 +30727,7 @@
           "Translation"
         ],
         "summary": "Translate titles or descriptions",
-        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nA machine-translation suggestion for each text (the Translate button beside a title or description), to review before saving. Free with a daily fair-use limit per user (`429 fair_use_limit` with `limit`, `used` and `resetsAt`); answers served from the cache are not counted. Text inside {…} is a Quran quotation: it stays as written, followed by its reference when it is found in exactly one place. With `videoId` the caller must be able to edit that video. `503 translation_paused` while an admin has paused translation, `503 budget_spent` once the day's translation budget is spent.",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nA machine-translation suggestion for each text (the Translate button beside a title or description), to review before saving. Free with a daily fair-use limit per user (`429 fair_use_limit` with `limit`, `used` and `resetsAt`); answers served from the cache are not counted. Text inside {…} is a Quran quotation: it stays as written, followed by its reference when it is found in exactly one place. With `videoId` the caller must be able to edit that video. `404 feature_off` while an admin has it switched off, `503 budget_spent` once the day's translation budget is spent.",
         "operationId": "post_TranslateCreate",
         "requestBody": {
           "content": {
@@ -34604,23 +34604,29 @@
               }
             }
           },
-          "402": {
-            "description": "Not included in the plan",
+          "404": {
+            "description": "`feature_off`: bulk scheduling is off for this account",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
                     "success": {
-                      "type": "boolean"
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
                     },
-                    "error": {
-                      "type": "string"
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "feature_off"
+                      ]
                     }
                   },
                   "required": [
                     "success",
-                    "error"
+                    "code"
                   ]
                 }
               }
@@ -47875,7 +47881,7 @@
           "Audio tracks"
         ],
         "summary": "Add an audio track",
-        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nAn uploaded file (`source.type = upload`: then PUT its chunks to `/upload?offset=` and POST `/complete`) or an audio stream of the video file (`source.type = source_stream`, from `detected`). The track is checked like an upload before viewers hear it. 402 `upgrade_required` with entitlement `audio.tracksPerVideo` over the tier limit; 409 `duplicate_track` for a second track of the same language and kind.",
+        "description": "🔒 **Authentication Required**: This endpoint requires a valid JWT token in the Authorization header (Bearer <token>).\n\nAn uploaded file (`source.type = upload`: then PUT its chunks to `/upload?offset=` and POST `/complete`) or an audio stream of the video file (`source.type = source_stream`, from `detected`). The track is checked like an upload before viewers hear it. 402 `upgrade_required` with entitlement `audio.tracksPerVideo` once the per-video limit is reached; 404 `feature_off` when the tier allows no extra tracks; 409 `duplicate_track` for a second track of the same language and kind.",
         "operationId": "post_AudioTrackCreate",
         "parameters": [
           {

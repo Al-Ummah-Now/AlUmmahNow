@@ -1,0 +1,339 @@
+/**
+ * Hidden when off (shared-types features.ts, lib/features): GET /api/me/features answers each
+ * feature from its config (switched on and configured) and the tier that applies (the channel
+ * owner's, with the caller's role there), and the gated APIs answer 404 feature_off while their
+ * feature is off. Real SQL (node:sqlite with the search migrations), in-memory R2 and queues.
+ */
+import { afterEach, beforeEach, describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import { Hono } from 'hono';
+import { CATEGORIZE_VISIBILITY_KEY, NO_FEATURES, USER_FEATURE_KEYS, isFeatureOff, siteSettingsKey } from '@al-ummah/shared-types';
+import { SqliteD1 } from './search-sqlite-d1';
+import { MemoryBucket, MemoryQueue, buildApp } from './helpers';
+import { assignTier, saveTier } from '../src/lib/creatorTiers';
+import { addGrant } from '../src/lib/captions/minutes';
+import { forgetLiveRouting, writeLiveRouting } from '../src/lib/live/store';
+import { captionFeatureFor, computeFeatures, forgetFeatureCaches, liveConfigured, saasConfigured, type FeaturesEnv } from '../src/lib/features';
+import { handleUserFeatures } from '../src/endpoints/creator/features';
+import { TranslateCreate, TranslateUsageGet } from '../src/endpoints/translate/translate';
+import { QuranTranslationsList } from '../src/endpoints/quran/quranTranslations';
+import { socialRouter } from '../src/routers/social.router';
+import { YT_SETTINGS_KEY } from '../src/lib/youtube-import/settings';
+
+const KEK = `1:${Buffer.alloc(32, 5).toString('base64')}`;
+const CLIENT_ID = '123456789012-unittestclient.apps.googleusercontent.com';
+
+async function setup(over: Record<string, unknown> = {}) {
+	const d1 = new SqliteD1() as unknown as D1Database;
+	await saveTier(d1, 'full', { name: 'Full', perHour: 5, perDay: 10, maxConcurrent: 2, maxChannels: 2, live: true, liveHoursMonth: 2, liveMaxConcurrent: 1, liveMaxStreamMinutes: 30, captionMinutesMonth: 60, audioTracksPerVideo: 2 }, 'admin-1', { create: true });
+	await saveTier(d1, 'bare', { name: 'Bare', perHour: 5, perDay: 10, maxConcurrent: 2, maxChannels: 1 }, 'admin-1', { create: true });
+	await assignTier(d1, 'alice', 'full', 'admin-1');
+	await assignTier(d1, 'bob', 'bare', 'admin-1');
+	const global = new MemoryBucket();
+	const env: FeaturesEnv = {
+		SEARCH_DB: d1,
+		channels: new MemoryBucket({
+			ch1: { id: 'ch1', userId: 'alice', members: [{ userId: 'bob', role: 'editor' }] },
+			ch2: { id: 'ch2', userId: 'bob', members: [{ userId: 'alice', role: 'admin' }] },
+		}) as never,
+		channel_sections: new MemoryBucket(),
+		channel_tabs: new MemoryBucket(),
+		global_settings: global as never,
+		queue: new MemoryQueue() as never,
+		TRANSCODE_QUEUE: new MemoryQueue() as never,
+		PROCESSOR: { fetch: async () => new Response('{}') },
+		MEDIA_ORIGINALS: new MemoryBucket(),
+		LIVE_MEDIA: new MemoryBucket() as never,
+		LIVE_PUBLIC_HOST: 'live.test',
+		LIVE_INGEST_SECRET: 'secret',
+		BUNNY_LIVE_ENABLED: 'false',
+		ENVIRONMENT: 'test',
+		...over,
+	};
+	return { env, d1, global };
+}
+
+const ROLES_NONE: string[] = [];
+
+beforeEach(() => {
+	forgetFeatureCaches();
+	forgetLiveRouting();
+});
+afterEach(() => {
+	forgetFeatureCaches();
+	forgetLiveRouting();
+});
+
+describe('feature answer', () => {
+	it('signed out: only the viewer-facing switch, every creator feature hidden', async () => {
+		const { env } = await setup();
+		const f = await computeFeatures(env, { userId: null });
+		assert.deepEqual(Object.keys(f).sort(), [...USER_FEATURE_KEYS].sort());
+		assert.equal(f.viewerTranslatedTitles, true);
+		for (const key of USER_FEATURE_KEYS.filter((k) => k !== 'viewerTranslatedTitles')) assert.equal(f[key], false, key);
+	});
+
+	it('config on + tier on: the tier\'s features show', async () => {
+		const { env } = await setup();
+		const f = await computeFeatures(env, { userId: 'alice', roles: ROLES_NONE });
+		assert.equal(f.upload, true);
+		assert.equal(f.createChannel, true);
+		assert.equal(f.live, true);
+		assert.equal(f.captionsTranscribe, true);
+		assert.equal(f.captionsTranslate, true);
+		assert.equal(f.inlineTranslate, true);
+		assert.equal(f.audioTracks, true);
+		assert.equal(f.aiCategorySuggest, true);
+		assert.equal(f.bulkSchedule, true);
+	});
+
+	it('tier off: a tier without live, minutes or tracks hides them; no tier hides upload and channels', async () => {
+		const { env } = await setup();
+		const bob = await computeFeatures(env, { userId: 'bob', roles: ROLES_NONE });
+		assert.equal(bob.upload, true);
+		assert.equal(bob.live, false);
+		assert.equal(bob.captionsTranscribe, false);
+		assert.equal(bob.captionsTranslate, false);
+		assert.equal(bob.audioTracks, false);
+		const nobody = await computeFeatures(env, { userId: 'nobody', roles: ROLES_NONE });
+		assert.equal(nobody.upload, false);
+		assert.equal(nobody.createChannel, false);
+		assert.equal(nobody.live, false);
+		// Free, config-only features stay
+		assert.equal(nobody.inlineTranslate, true);
+	});
+
+	it('config off: the switch or a missing binding hides the feature even inside the tier', async () => {
+		const { env, d1, global } = await setup({ PROCESSOR: undefined, MEDIA_ORIGINALS: undefined, AI_CATEGORIZE_ENABLED: 'false' });
+		await writeLiveRouting(d1, { providers: { selfhosted: { enabled: false } } }, 'admin-1');
+		await global.put('captions/settings.json', JSON.stringify({ translation: { enabled: false } }));
+		forgetFeatureCaches();
+		const f = await computeFeatures(env, { userId: 'alice', roles: ROLES_NONE });
+		assert.equal(f.live, false);
+		assert.equal(f.captionsTranslate, false);
+		assert.equal(f.captionsTranscribe, true);
+		assert.equal(f.inlineTranslate, false);
+		assert.equal(f.viewerTranslatedTitles, false);
+		assert.equal(f.audioTracks, false);
+		assert.equal(f.aiCategorySuggest, false);
+	});
+
+	it('live: a provider over its budget hides live; one at its concurrency cap does not', async () => {
+		const { env, d1 } = await setup();
+		await writeLiveRouting(d1, { providers: { selfhosted: { monthlyBudgetUsd: 0 } } }, 'admin-1');
+		assert.equal(await liveConfigured(env), false);
+		forgetFeatureCaches();
+		await writeLiveRouting(d1, { providers: { selfhosted: { monthlyBudgetUsd: null, maxConcurrent: 0 } } }, 'admin-1');
+		assert.equal(await liveConfigured(env), true);
+	});
+
+	it('channel scope: the owner\'s tier and the caller\'s role there decide', async () => {
+		const { env } = await setup();
+		// bob (no live in his tier) is an editor on alice's channel: live follows alice's tier, but
+		// an editor cannot manage live
+		const bobOnAlice = await computeFeatures(env, { userId: 'bob', roles: ROLES_NONE }, 'ch1');
+		assert.equal(bobOnAlice.live, false);
+		assert.equal(bobOnAlice.upload, true);
+		assert.equal(bobOnAlice.captionsTranscribe, true);
+		assert.equal(bobOnAlice.audioTracks, true);
+		assert.equal(bobOnAlice.createChannel, false);
+		// alice is a channel admin on bob's channel: bob's tier has no live, no minutes, no tracks
+		const aliceOnBob = await computeFeatures(env, { userId: 'alice', roles: ROLES_NONE }, 'ch2');
+		assert.equal(aliceOnBob.live, false);
+		assert.equal(aliceOnBob.captionsTranscribe, false);
+		assert.equal(aliceOnBob.audioTracks, false);
+		// Not on the team: nothing of that channel's Studio
+		const stranger = await computeFeatures(env, { userId: 'carol', roles: ROLES_NONE }, 'ch1');
+		assert.deepEqual({ ...stranger, viewerTranslatedTitles: false }, NO_FEATURES);
+	});
+
+	it('caption minutes from an admin grant count as a plan', async () => {
+		const { env, d1 } = await setup();
+		assert.equal(await captionFeatureFor(env, 'transcribe', { userId: 'bob' }), false);
+		await addGrant(d1, 'bob', { minutes: 30, scope: 'until_used', reason: 'pilot' }, 'admin-1');
+		assert.equal(await captionFeatureFor(env, 'transcribe', { userId: 'bob' }), true);
+		assert.equal((await computeFeatures(env, { userId: 'bob', roles: ROLES_NONE })).captionsTranscribe, true);
+	});
+
+	it('Quran editions, social, YouTube import and AI categories follow their configuration', async () => {
+		const off = await setup();
+		let f = await computeFeatures(off.env, { userId: 'alice', roles: ROLES_NONE });
+		assert.equal(f.quranEditions, false);
+		assert.equal(f.socialAutopost, false);
+		assert.equal(f.youtubeImport, false);
+
+		const on = await setup({ QF_CLIENT_ID: 'id', QF_CLIENT_SECRET: 'secret', SOCIAL_TOKEN_KEK: KEK, GOOGLE_OAUTH_CLIENT_SECRET: 'google-secret' });
+		await on.global.put(YT_SETTINGS_KEY, JSON.stringify({ enabled: true, clientId: CLIENT_ID }));
+		f = await computeFeatures(on.env, { userId: 'alice', roles: ROLES_NONE });
+		assert.equal(f.quranEditions, true);
+		assert.equal(f.socialAutopost, true);
+		assert.equal(f.youtubeImport, true);
+
+		// The placeholder secret is no secret; the admin switch off hides AI categories
+		on.env.GOOGLE_OAUTH_CLIENT_SECRET = 'unset';
+		await on.global.put(CATEGORIZE_VISIBILITY_KEY, JSON.stringify({ enabled: false }));
+		f = await computeFeatures(on.env, { userId: 'alice', roles: ROLES_NONE });
+		assert.equal(f.youtubeImport, false);
+		assert.equal(f.aiCategorySuggest, false);
+	});
+
+	it('own domains: the channel\'s site must allow one and SaaS must be ready (admin-api, cached)', async () => {
+		const { env } = await setup({ SITES_SAAS_AVAILABLE: 'true' });
+		const sections = env.channel_sections as MemoryBucket;
+		assert.equal((await computeFeatures(env, { userId: 'alice', roles: ROLES_NONE }, 'ch1')).siteDomains, false);
+		await sections.put(siteSettingsKey('ch1'), JSON.stringify({ status: 'active', limits: { customDomainsMax: 0 } }));
+		assert.equal((await computeFeatures(env, { userId: 'alice', roles: ROLES_NONE }, 'ch1')).siteDomains, false);
+		await sections.put(siteSettingsKey('ch1'), JSON.stringify({ status: 'active', limits: { customDomainsMax: 2 } }));
+		assert.equal((await computeFeatures(env, { userId: 'alice', roles: ROLES_NONE }, 'ch1')).siteDomains, true);
+		// An editor cannot change the site
+		assert.equal((await computeFeatures(env, { userId: 'bob', roles: ROLES_NONE }, 'ch1')).siteDomains, false);
+
+		let calls = 0;
+		const probe = async (url: string | URL | Request, init?: RequestInit) => {
+			calls++;
+			assert.equal(String(url), 'https://admin.test/internal/site-domains-status');
+			assert.equal((init?.headers as Record<string, string>)['X-API-Key'], 'k');
+			return new Response(JSON.stringify({ success: true, result: { available: false } }));
+		};
+		const real = { ADMIN_API_URL: 'https://admin.test', INTERNAL_API_KEY: 'k' } as FeaturesEnv;
+		assert.equal(await saasConfigured(real, probe as typeof fetch), false);
+		assert.equal(await saasConfigured(real, probe as typeof fetch), false);
+		assert.equal(calls, 1);
+	});
+
+	it('GET /api/me/features: version 1, never cached, all hidden when the lookup fails', async () => {
+		const { env } = await setup();
+		const app = new Hono();
+		app.use('*', async (c, next) => {
+			c.set('userId' as never, 'alice' as never);
+			c.set('auth' as never, { payload: { roles: [] } } as never);
+			await next();
+		});
+		app.get('/api/me/features', handleUserFeatures);
+		const res = await app.request('/api/me/features', {}, env);
+		assert.equal(res.status, 200);
+		assert.match(res.headers.get('cache-control') ?? '', /no-store/);
+		const body = (await res.json()) as { version: number; features: Record<string, boolean> };
+		assert.equal(body.version, 1);
+		assert.equal(body.features.live, true);
+
+		const broken = await app.request('/api/me/features?channelId=ch1', {}, { ...env, channels: { get: async () => { throw new Error('R2 down'); } } });
+		assert.equal(broken.status, 200);
+		assert.deepEqual(((await broken.json()) as { features: unknown }).features, NO_FEATURES);
+	});
+});
+
+describe('gated APIs answer 404 feature_off', () => {
+	it('Translate button switched off: POST /api/translate', async () => {
+		const { env, global } = await setup();
+		await global.put('captions/settings.json', JSON.stringify({ inline: { enabled: false } }));
+		const app = buildApp((router) => {
+			router.post('/api/translate', TranslateCreate);
+			router.get('/api/translate/usage', TranslateUsageGet);
+		}, { userId: 'alice' });
+		const res = await app.request('/api/translate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: [{ id: 'a', text: 'one' }], from: 'en', to: 'ar', field: 'title' }) }, env);
+		assert.equal(res.status, 404);
+		assert.ok(isFeatureOff(res.status, await res.json()));
+		const usage = (await (await app.request('/api/translate/usage', {}, env)).json()) as { data: { enabled: boolean } };
+		assert.equal(usage.data.enabled, false);
+	});
+
+	it('Quran Foundation not configured: GET /api/quran/translations', async () => {
+		const { env } = await setup();
+		const app = buildApp((router) => router.get('/api/quran/translations', QuranTranslationsList), null);
+		const res = await app.request('/api/quran/translations?language=en', {}, env);
+		assert.equal(res.status, 404);
+		assert.ok(isFeatureOff(res.status, await res.json()));
+	});
+
+	it('social auto-post off: connecting and templates answer quietly; disconnecting still works', async () => {
+		const { env } = await setup();
+		const app = new Hono();
+		app.use('*', async (c, next) => {
+			c.set('userId' as never, 'alice' as never);
+			await next();
+		});
+		app.route('/api/social', socialRouter as never);
+		for (const [method, path] of [
+			['POST', '/api/social/channel/ch1/connect'],
+			['PUT', '/api/social/channel/ch1/templates'],
+			['PATCH', '/api/social/channel/ch1/accounts/a1'],
+		] as const) {
+			const res = await app.request(path, { method, headers: { 'Content-Type': 'application/json' }, body: '{}' }, env);
+			assert.equal(res.status, 404, `${method} ${path}`);
+			assert.ok(isFeatureOff(res.status, await res.json()), `${method} ${path}`);
+		}
+		const del = await app.request('/api/social/channel/ch1/accounts/a1', { method: 'DELETE' }, env);
+		assert.notEqual(((await del.json().catch(() => ({}))) as { code?: string }).code, 'feature_off');
+	});
+
+	it('social overview lists only the networks a creator can connect', async () => {
+		const { env } = await setup({ SOCIAL_TOKEN_KEK: KEK });
+		const app = new Hono();
+		app.use('*', async (c, next) => {
+			c.set('userId' as never, 'alice' as never);
+			await next();
+		});
+		app.route('/api/social', socialRouter as never);
+		const res = await app.request('/api/social/channel/ch1', {}, env);
+		assert.equal(res.status, 200);
+		const body = (await res.json()) as { networks: Record<string, { available: boolean }> };
+		// X has no app keys and Telegram no bot here: only Bluesky and Mastodon are listed
+		assert.deepEqual(Object.keys(body.networks).sort(), ['bluesky', 'mastodon']);
+	});
+});
+
+describe('gated APIs answer 404 feature_off: live, captions, audio tracks', () => {
+	async function studio(over: Record<string, unknown> = {}) {
+		const s = await setup(over);
+		const videos = new MemoryBucket({ v1: { id: 'v1', userId: 'bob', channelId: 'ch2', title: 'Talk', language: 'en', duration: 120, uploadStatus: 'ready', isPublic: true } });
+		const env = { ...s.env, videos, profiles: new MemoryBucket(), TUS_SESSIONS: { get: async () => null, put: async () => {}, delete: async () => {} } };
+		return { ...s, env };
+	}
+	const post = (app: Hono, env: unknown, path: string, body: unknown, channelId?: string) =>
+		app.request(path, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(channelId ? { channelId } : {}) }, body: JSON.stringify(body) }, env as never);
+
+	it('live: a channel owner whose tier has no live, and no provider that may take streams', async () => {
+		const { LiveStreamCreate } = await import('../src/endpoints/live/liveStreamCreate');
+		const s = await studio();
+		// bob's tier has no live: create on his own channel
+		const asBob = buildApp((router) => router.post('/api/live', LiveStreamCreate), { userId: 'bob' });
+		let res = await post(asBob, s.env, '/api/live', { title: 'Live' }, 'ch2');
+		assert.equal(res.status, 404);
+		assert.ok(isFeatureOff(res.status, await res.json()));
+		// alice's tier has live, but self-hosted is switched off and Bunny is off here
+		await writeLiveRouting(s.d1, { providers: { selfhosted: { enabled: false } } }, 'admin-1');
+		const asAlice = buildApp((router) => router.post('/api/live', LiveStreamCreate), { userId: 'alice' });
+		res = await post(asAlice, s.env, '/api/live', { title: 'Live' }, 'ch1');
+		assert.equal(res.status, 404);
+		assert.ok(isFeatureOff(res.status, await res.json()));
+		// Nothing was left behind
+		assert.equal([...(s.env.videos as MemoryBucket).store.keys()].filter((k) => k.startsWith('livestream:')).length, 0);
+	});
+
+	it('captions: transcribe and translate on a video whose owner has no caption minutes at all', async () => {
+		const { CaptionJobCreate, CaptionTranslateCreate } = await import('../src/endpoints/captions/captionJobs');
+		const s = await studio();
+		// bob owns the video; his tier has no caption minutes and no grant
+		const app = buildApp((router) => {
+			router.post('/api/videos/:videoId/captions/jobs', CaptionJobCreate);
+			router.post('/api/videos/:videoId/captions/translate', CaptionTranslateCreate);
+		}, { userId: 'bob' });
+		let res = await post(app, s.env, '/api/videos/v1/captions/jobs', { language: 'en' });
+		assert.equal(res.status, 404);
+		assert.ok(isFeatureOff(res.status, await res.json()));
+		res = await post(app, s.env, '/api/videos/v1/captions/translate', { sourceLanguage: 'en', languages: ['ar'] });
+		assert.equal(res.status, 404);
+		assert.ok(isFeatureOff(res.status, await res.json()));
+	});
+
+	it('audio tracks: a tier that allows none (the limit itself is a plain 402)', async () => {
+		const { addTrack, AudioTrackError } = await import('../src/lib/audio-tracks/service');
+		const s = await studio();
+		const video = (s.env.videos as MemoryBucket).read('v1');
+		await assert.rejects(
+			addTrack(s.env as never, undefined, { video, userId: 'bob', body: { language: 'ar', kind: 'dub', source: { type: 'upload', bytes: 10, fileName: 'a.mp3' } } as never }),
+			(e: InstanceType<typeof AudioTrackError>) => e.status === 404 && e.code === 'feature_off',
+		);
+	});
+});

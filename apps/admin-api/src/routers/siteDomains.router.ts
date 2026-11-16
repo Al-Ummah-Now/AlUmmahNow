@@ -14,13 +14,14 @@
  *   PUT    …/:channelId/primary                 { host } → { hosts }
  *
  * Errors: { success: false, code }. `saas_unavailable` (503) while Cloudflare for SaaS is not
- * enabled on the zone; the screens show a friendly "not available yet" for it.
+ * enabled on the zone (the admin shows its readiness). Studio never sees it: while SaaS is not ready
+ * or the site allows no own domain, the Studio routes answer 404 feature_off and Studio hides Domains.
  */
 import { Hono, type Context } from 'hono';
-import { hasContentPermission, type SiteSettings } from '@al-ummah/shared-types';
+import { FEATURE_OFF_BODY, hasContentPermission, type SiteSettings } from '@al-ummah/shared-types';
 import { writeAudit } from '../lib/content/audit';
 import { logger } from '../lib/logger';
-import { SaasError } from '../lib/sites/saas';
+import { SaasError, forgetSaasReadiness, saasReady } from '../lib/sites/saas';
 import { addDomain, findDomain, readSite, refreshDomain, removeDomain, setPrimary, type DomainsEnv } from '../lib/sites/domains';
 import { verifyAccessToken } from '../middleware/auth';
 import type { AdminBindings, AuthContext } from '../base/types';
@@ -34,6 +35,7 @@ function errorReply(c: C, error: unknown) {
   if (error instanceof SaasError) {
     const status = error.code === 'cloudflare_refused' ? 422 : 503;
     const code = error.code === 'not_configured' ? 'saas_unavailable' : error.code;
+    if (code === 'saas_unavailable') forgetSaasReadiness();
     if (error.code !== 'saas_unavailable') logger.warn('[SiteDomains] Cloudflare', { code: error.code, detail: error.detail });
     return c.json({ success: false, code }, status);
   }
@@ -178,6 +180,30 @@ register(studioSiteDomainsRouter, '', async (c) => {
   const payload = authorization.startsWith('Bearer ') ? await verifyAccessToken(authorization.slice(7), c.env as never, `${c.req.method} ${c.req.path}`) : null;
   const userId = (payload as { sub?: string } | null)?.sub;
   if (!userId) return c.json({ success: false, code: 'unauthorized' }, 401);
-  if (!(await canEdit(c.env, c.req.param('channelId') ?? '', userId))) return c.json({ success: false, code: 'forbidden' }, 403);
+  const channelId = c.req.param('channelId') ?? '';
+  if (!(await canEdit(c.env, channelId, userId))) return c.json({ success: false, code: 'forbidden' }, 403);
+  // Hidden in Studio while SaaS is not set up or the site allows no own domain (wiki "Hidden when off")
+  if (!(await studioDomainsOn(c.env, channelId))) return c.json(FEATURE_OFF_BODY, 404);
   return userId;
+});
+
+/** Own domains are on for this channel's site: SaaS is ready and the site's limit is above 0. */
+async function studioDomainsOn(env: DomainsEnv, channelId: string): Promise<boolean> {
+  if (!(await saasReady(env))) return false;
+  try {
+    return ((await readSite(env, channelId)).limits?.customDomainsMax ?? 0) > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * GET /internal/site-domains-status (X-API-Key): whether Cloudflare for SaaS is ready, for
+ * api-videos' feature answer. Says nothing about any channel.
+ */
+export const siteDomainsStatusRouter = new Hono<Env>();
+siteDomainsStatusRouter.get('/', async (c) => {
+  const expected = await internalKey(c.env);
+  if (!sameKey(c.req.header('X-API-Key') ?? '', expected)) return c.json({ success: false, code: 'unauthorized' }, 401);
+  return c.json({ success: true, result: { available: await saasReady(c.env) } }, 200, { 'Cache-Control': 'no-store' });
 });

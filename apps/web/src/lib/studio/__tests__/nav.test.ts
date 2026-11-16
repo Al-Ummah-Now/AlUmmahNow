@@ -132,9 +132,18 @@ describe('Site item (white-label scholar sites)', () => {
     expect(visibleNav('owner').map((i) => i.id)).not.toContain('site');
   });
 
-  it('opens for channel.edit roles only', () => {
-    expect(checkPath('owner', ['site'])).toEqual({ status: 'ok' });
-    expect(checkPath('admin', ['site'])).toEqual({ status: 'ok' });
+  it('opens for channel.edit roles only, and only on a channel that has a site', () => {
+    expect(checkPath('owner', ['site'], { site: true })).toEqual({ status: 'ok' });
+    expect(checkPath('admin', ['site'], { site: true })).toEqual({ status: 'ok' });
+    expect(checkPath('editor', ['site'], { site: true })).toEqual({ status: 'forbidden' });
+    // No site: the path is unknown (404), never "no access"
+    expect(checkPath('owner', ['site'])).toEqual({ status: 'unknown' });
+    // A role without access keeps "no access" either way
     expect(checkPath('editor', ['site'])).toEqual({ status: 'forbidden' });
+  });
+
+  it('switching channel never lands on a feature the next channel may not have', () => {
+    expect(switchedPath(['site'], 'owner')).toBe('dashboard');
+    expect(switchedPath(['site'], 'owner', { site: true })).toBe('site');
   });
 });
