@@ -4,7 +4,7 @@ import { getContentPermissions, getUser } from '@/lib/api/content';
 import type { AdminContentPermission, UserDetailView } from '@/lib/api/content-types';
 import { AdminApiError } from '@/lib/api/errors';
 import { getAdminSession } from '@/lib/auth';
-import { canManageCreators, normalizeRole } from '@/lib/roles';
+import { canManageBilling, canManageCreators, canReadBilling, normalizeRole } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
 import { formatDate, formatNumber } from '@/i18n/translate';
 import { ErrorAlert, linkClass } from '@/components/ui';
@@ -14,6 +14,7 @@ import { JobsPanel } from '@/components/content/jobs';
 import { UserAuthRequestsPanel } from '@/components/auth-requests/UserAuthRequestsPanel';
 import { UserCreatorTierPanel } from '@/components/creators/UserCreatorTierPanel';
 import { UserCaptionMinutesPanel } from '@/components/creators/UserCaptionMinutesPanel';
+import { UserBillingPanel } from '@/components/payments/UserBillingPanel';
 import { logger } from '@/lib/logger';
 import { UserActions } from './UserActions';
 import { InviteStatusChip } from '@/components/invites/InviteStatusChip';
@@ -91,6 +92,7 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
 
       <UserCreatorTierPanel userId={u.id} userName={adminUserName(u, t('auditLog.unknownUser'))} canManage={canManageCreators(role)} />
       <UserCaptionMinutesPanel userId={u.id} canManage={canManageCreators(role)} />
+      {canReadBilling(role) && <UserBillingPanel userId={u.id} canManage={canManageBilling(role)} />}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">

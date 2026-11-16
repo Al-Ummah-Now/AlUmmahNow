@@ -390,6 +390,7 @@ export interface AdminBillingOverview {
   providers: PaymentProviderConfig[];
   tax: BillingTaxSettings;
   prices: TierPrice[];
+  /** Per-tier sale mode; a tier missing here is 'auto' */
   /** Secrets Store writes are possible (the admin-api Cloudflare token is bound) */
   credentialStorage: boolean;
   /** Counts for the page header */
