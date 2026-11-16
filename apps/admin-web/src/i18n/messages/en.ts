@@ -1759,6 +1759,7 @@ const en = {
     },
   },
   channels: {
+    subscribersCount: '{count} subscribers',
     title: 'Channels',
     subtitle: 'Every channel on Al Ummah Now videos',
     ownerFilter: 'Owner',
@@ -2014,6 +2015,7 @@ const en = {
     deleteBody: 'The comment and its replies are removed.',
   },
   playlists: {
+    videoCount: '{count} videos',
     title: 'Playlists',
     subtitle: 'Playlists across all channels',
     searchLabel: 'Title or ID',
@@ -2034,6 +2036,9 @@ const en = {
     morePages: 'Next page',
   },
   community: {
+    likesCount: '{count} likes',
+    commentsCount: '{count} comments',
+    postTypes: { text: 'Text', image: 'Image', poll: 'Poll', quiz: 'Quiz', video: 'Video', gif: 'GIF', link: 'Link', article: 'Article', cards: 'Cards' },
     title: 'Community',
     subtitle: 'Community posts across all channels',
     searchLabel: 'Post text or ID',

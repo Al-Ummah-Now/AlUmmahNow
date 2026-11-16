@@ -2,11 +2,11 @@ import Link from '@/components/AppLink';
 import { deletePost, getContentPermissions, listPosts } from '@/lib/api/content';
 import type { AdminContentPermission, AdminPostRow, CursorPage } from '@/lib/api/content-types';
 import { getI18n } from '@/i18n/server';
-import { formatDate, formatNumber } from '@/i18n/translate';
+import { formatDate, translateDynamic } from '@/i18n/translate';
 import { ErrorAlert, linkClass } from '@/components/ui';
 import { FilterForm } from '@/components/content/FilterForm';
 import { DeleteRowButton } from '@/components/content/actions';
-import { Chip, CursorPager, EmptyState, PageHeader, tableWrapClass, tdClass, thClass, wideOnly } from '@/components/content/parts';
+import { Chip, CursorPager, EmptyState, MetaLine, PageHeader, cardTable, tdClass, thClass, wideOnly } from '@/components/content/parts';
 import { PAGE_SIZE, hrefWith, pickParams, type SearchParams } from '@/components/content/query';
 import { logger } from '@/lib/logger';
 import { getNames } from '@/lib/api/audit';
@@ -45,42 +45,55 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
       {!data && <ErrorAlert testId="community-error">{t('content.loadFailed')}</ErrorAlert>}
       {data && data.items.length === 0 && <EmptyState>{t('content.empty')}</EmptyState>}
       {data && data.items.length > 0 && (
-        <div className={tableWrapClass}>
-          <table className="w-full" data-testid="community-table">
+        <div className={cardTable.wrap}>
+          <table role="table" className={cardTable.table} data-testid="community-table">
             <caption className="sr-only">{t('community.tableCaption')}</caption>
-            <thead className="border-b border-border">
-              <tr>
-                <th className={thClass} scope="col">{t('community.colPost')}</th>
-                <th className={`${thClass} ${wideOnly}`} scope="col">{t('community.colChannel')}</th>
-                <th className={`${thClass} ${wideOnly} text-end`} scope="col">{t('community.colEngagement')}</th>
-                <th className={`${thClass} ${wideOnly}`} scope="col">{t('community.colCreated')}</th>
-                {canDelete && <th className={thClass} scope="col"><span className="sr-only">{t('content.actions')}</span></th>}
+            <thead role="rowgroup" className={`${cardTable.head} border-b border-border`}>
+              <tr role="row">
+                <th role="columnheader" className={thClass} scope="col">{t('community.colPost')}</th>
+                <th role="columnheader" className={`${thClass} ${wideOnly}`} scope="col">{t('community.colChannel')}</th>
+                <th role="columnheader" className={`${thClass} ${wideOnly}`} scope="col">{t('community.colEngagement')}</th>
+                <th role="columnheader" className={`${thClass} ${wideOnly}`} scope="col">{t('community.colCreated')}</th>
+                {canDelete && <th role="columnheader" className={thClass} scope="col"><span className="sr-only">{t('content.actions')}</span></th>}
               </tr>
             </thead>
-            <tbody>
-              {data.items.map((p) => (
-                <tr key={`${p.channelId}:${p.id}`} className="border-b border-border last:border-0" data-testid="post-row" data-post-id={p.id}>
-                  <td className={tdClass}>
-                    <p className="text-fg text-sm whitespace-pre-wrap break-words max-w-prose line-clamp-4" dir="auto">{p.text || <span className="italic text-fg-muted">{t('content.noText')}</span>}</p>
-                    <div className="mt-1 flex flex-wrap items-center gap-1">
-                      {p.type && <Chip tone="neutral">{p.type}</Chip>}
-                    </div>
-                    <span className="block md:hidden text-xs text-fg-muted mt-1">
-                      {formatNumber(p.likes, locale)} · {formatNumber(p.comments, locale)} · {p.createdAt ? formatDate(p.createdAt, locale) : ''}
-                    </span>
-                  </td>
-                  <td className={`${tdClass} ${wideOnly} text-sm`}>
-                    <Link href={`/channels/${encodeURIComponent(p.channelId)}`} className={`${linkClass} break-words`} dir="auto" data-testid="post-channel-link">{names.items[`channel:${p.channelId}`]?.title || t('content.unnamedChannel')}</Link>
-                  </td>
-                  <td className={`${tdClass} ${wideOnly} text-end tabular-nums text-sm`}>{formatNumber(p.likes, locale)} · {formatNumber(p.comments, locale)}</td>
-                  <td className={`${tdClass} ${wideOnly} text-sm text-fg-muted whitespace-nowrap`}>{p.createdAt ? <time dateTime={p.createdAt}>{formatDate(p.createdAt, locale, true)}</time> : t('content.none')}</td>
-                  {canDelete && (
-                    <td className={tdClass}>
-                      <DeleteRowButton title={t('community.deleteTitle')} body={t('community.deleteBody')} testId="post-delete" onDelete={deletePost.bind(null, p.channelId, p.id)} />
+            <tbody role="rowgroup" className={cardTable.body}>
+              {data.items.map((p) => {
+                const channelName = names.items[`channel:${p.channelId}`]?.title || t('content.unnamedChannel');
+                const channelHref = `/channels/${encodeURIComponent(p.channelId)}`;
+                const engagement = <MetaLine parts={[t('community.likesCount', { count: p.likes }), t('community.commentsCount', { count: p.comments })]} />;
+                return (
+                  <tr role="row" key={`${p.channelId}:${p.id}`} className={cardTable.row} data-testid="post-row" data-post-id={p.id}>
+                    <td role="cell" className={cardTable.cell}>
+                      <p className="text-fg text-sm whitespace-pre-wrap break-words max-w-prose line-clamp-4" dir="auto">{p.text || <span className="italic text-fg-muted">{t('content.noText')}</span>}</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-1">
+                        {p.type && <Chip tone="neutral">{translateDynamic(t, 'community.postTypes', p.type)}</Chip>}
+                      </div>
+                      {/* Phone: the channel, likes, comments and date (their columns are hidden) */}
+                      <MetaLine
+                        className="block md:hidden text-xs text-fg-muted mt-2"
+                        testId="post-meta"
+                        parts={[
+                          <Link key="c" href={channelHref} className={linkClass}>{channelName}</Link>,
+                          t('community.likesCount', { count: p.likes }),
+                          t('community.commentsCount', { count: p.comments }),
+                          p.createdAt ? <time key="d" dateTime={p.createdAt}>{formatDate(p.createdAt, locale)}</time> : null,
+                        ]}
+                      />
                     </td>
-                  )}
-                </tr>
-              ))}
+                    <td role="cell" className={`${tdClass} ${wideOnly} text-sm`}>
+                      <Link href={channelHref} className={`${linkClass} break-words`} dir="auto" data-testid="post-channel-link">{channelName}</Link>
+                    </td>
+                    <td role="cell" className={`${tdClass} ${wideOnly} text-sm whitespace-nowrap`}>{engagement}</td>
+                    <td role="cell" className={`${tdClass} ${wideOnly} text-sm text-fg-muted whitespace-nowrap`}>{p.createdAt ? <time dateTime={p.createdAt}>{formatDate(p.createdAt, locale, true)}</time> : t('content.none')}</td>
+                    {canDelete && (
+                      <td role="cell" className={cardTable.actions}>
+                        <DeleteRowButton title={t('community.deleteTitle')} body={t('community.deleteBody')} testId="post-delete" onDelete={deletePost.bind(null, p.channelId, p.id)} />
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

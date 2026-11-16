@@ -39,6 +39,8 @@ export interface DataColumn<T> {
    * fold what matters into the primary cell for the widths where they are hidden.
    */
   from?: ColumnFrom;
+  /** The row's actions: on a phone card they sit in its footer, end-aligned (owner rule). */
+  footer?: boolean;
 }
 
 /** Container widths a column can wait for (Tailwind's @container sizes: 2xl 42rem … 6xl 72rem). */
@@ -53,8 +55,9 @@ const FROM_CLASS: Record<ColumnFrom, string> = {
 };
 
 /** Display classes of a column's cells: always, from md (wide), or from a table width (from). */
-export function columnDisplayClass(c: { wide?: boolean; from?: ColumnFrom }, cell: boolean): string {
+export function columnDisplayClass(c: { wide?: boolean; from?: ColumnFrom; footer?: boolean }, cell: boolean): string {
   if (c.from) return FROM_CLASS[c.from];
+  if (c.footer && cell) return 'flex justify-end md:table-cell';
   if (c.wide) return 'hidden md:table-cell';
   return cell ? 'block md:table-cell' : '';
 }

@@ -38,6 +38,22 @@ export const tdClass = 'px-3 sm:px-4 py-3 align-top';
 /** Columns shown from the md breakpoint; on a phone their content folds into the first cell. */
 export const wideOnly = 'hidden md:table-cell';
 export const tableWrapClass = 'bg-surface border border-border rounded-lg overflow-x-auto';
+/**
+ * A list table that turns into cards on a phone (below md): each row is a card, the wideOnly
+ * columns fold into the first cell, and the actions cell becomes the card's footer, end-aligned.
+ * The same cells restyled (never a second copy), so test ids stay unique. Explicit roles keep
+ * the table semantics when the elements are laid out as blocks.
+ */
+export const cardTable = {
+  wrap: 'md:bg-surface md:border md:border-border md:rounded-lg md:overflow-x-auto',
+  table: 'w-full block md:table',
+  head: 'sr-only md:not-sr-only md:table-header-group',
+  body: 'block md:table-row-group space-y-3 md:space-y-0',
+  row: 'flex flex-col bg-surface border border-border rounded-lg md:table-row md:bg-transparent md:border-0 md:border-b md:rounded-none md:last:border-0',
+  cell: `${tdClass} block md:table-cell min-w-0`,
+  /** The actions cell: the card's footer on a phone (end-aligned), a normal cell from md */
+  actions: `${tdClass} flex justify-end pt-0 md:pt-3 md:table-cell`,
+} as const;
 export const smallButtonClass =
   'inline-flex items-center justify-center px-3 py-2 rounded border border-border bg-surface-2 hover:bg-surface-hover text-fg text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-60 disabled:cursor-not-allowed';
 export const dangerButtonClass =
@@ -228,5 +244,23 @@ export function BackLink({ href, label }: { href: string; label: string }) {
         {label}
       </Link>
     </div>
+  );
+}
+
+/**
+ * A short line of facts ("Channel · 12 views · 3 days ago"), each part isolated (<bdi>) so an
+ * Arabic name next to a number or a date never reorders them, with the separators between.
+ */
+export function MetaLine({ parts, className = '', testId }: { parts: React.ReactNode[]; className?: string; testId?: string }) {
+  const shown = parts.filter((p) => p !== null && p !== undefined && p !== false && p !== '');
+  return (
+    <span className={className} data-testid={testId}>
+      {shown.map((part, i) => (
+        <span key={i}>
+          {i > 0 && ' · '}
+          <bdi>{part}</bdi>
+        </span>
+      ))}
+    </span>
   );
 }
