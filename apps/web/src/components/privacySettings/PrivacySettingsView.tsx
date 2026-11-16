@@ -8,6 +8,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Download, ExternalLink, Shield, Smartphone, Trash2, Clock } from 'lucide-react';
+import { MAIN_CONTENT_ID } from '@/components/SkipLinks';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { ConsentManager, type ConsentChoices } from '@/lib/consent/ConsentManager';
@@ -104,7 +105,7 @@ export function PrivacySettingsView({ dir, signedIn }: PrivacySettingsViewProps)
   };
 
   return (
-    <div dir={dir} className="min-h-screen">
+    <main id={MAIN_CONTENT_ID} dir={dir} className="min-h-screen">
       {confirmDialog}
       <div className="mx-auto max-w-3xl space-y-6 px-4 py-8 text-start">
         <header>
@@ -201,7 +202,7 @@ export function PrivacySettingsView({ dir, signedIn }: PrivacySettingsViewProps)
           </>
         )}
       </div>
-    </div>
+    </main>
   );
 }
 
