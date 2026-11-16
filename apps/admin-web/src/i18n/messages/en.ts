@@ -4737,7 +4737,7 @@ const en = {
   },
   platformCredentials: {
     title: 'Credentials',
-    intro: 'Keys our services use to reach other providers. Replace one here when it is rotated or revoked: it is stored encrypted, takes effect within a minute everywhere, and is never shown again. Super Admins only; every change and test is in the audit log.',
+    intro: 'Keys our services use to reach other providers. Create, rotate or replace one here: it is stored encrypted, takes effect within a minute everywhere, and is never shown again. Super Admins only; every change and test is in the audit log.',
     cloudflareMediaTitle: 'Cloudflare media token',
     cloudflareMediaPurpose: 'Clears cached copies of a video when it goes private or is removed, and reads the traffic and storage figures for delivery costs, Web vitals and the abuse counters.',
     stateOk: 'Working',
