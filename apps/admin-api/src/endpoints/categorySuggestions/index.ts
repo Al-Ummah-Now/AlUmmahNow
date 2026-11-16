@@ -184,7 +184,7 @@ export class CategorizeConfigUpdate extends EditRoute {
   async handle(c: AppContext) {
     this.requireAdmin(c);
     const { body } = await this.getValidatedData<typeof this.schema>();
-    const error = await writeCategorizeConfig(reports(c), body, this.getUserId(c));
+    const error = await writeCategorizeConfig(reports(c), body, this.getUserId(c), Date.now(), c.env.global_settings);
     if (error) return c.json({ success: false, error }, 400);
     logger.info('[CategorySuggestions] Settings changed', { actorId: this.getUserId(c), keys: Object.keys(body) });
     return { success: true, result: await readCategorizeConfig(reports(c), envVars(c)) };

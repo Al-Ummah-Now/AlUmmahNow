@@ -77,7 +77,7 @@ export const UPLOAD_CONTINUE_PATHS = ['/api/videos/tus', '/api/videos/upload/com
 
 export const MAX_BATCH_SIZE = 15;
 
-export const UPLOADS_BY_INVITATION_MESSAGE = 'Uploading is by invitation for now';
+export const UPLOADS_BY_INVITATION_MESSAGE = 'Uploads are off for this account';
 
 /** Whether this env counts the tier limits ("off", development and preview do not). */
 export function uploadLimitsEnforced(env: { UPLOAD_RATE_LIMIT?: string; ENVIRONMENT?: string }): boolean {

@@ -115,3 +115,34 @@ export function errorOf(h: CfCustomHostname): string | null {
   const reason = h.verification_errors?.[0] ?? h.ssl?.validation_errors?.[0]?.message ?? null;
   return reason ? String(reason).slice(0, 300) : null;
 }
+
+let readiness: { at: number; ok: boolean } | null = null;
+const READINESS_TTL_MS = 10 * 60_000;
+
+/** Drops the cached readiness (tests, and after a call shows SaaS is off). */
+export function forgetSaasReadiness(): void {
+  readiness = null;
+}
+
+/**
+ * Own domains can be added here: the token is bound and Cloudflare for SaaS answers on the zone
+ * (one list call, cached 10 minutes). Creators see the Domains section only when this is true
+ * (api-videos GET /api/me/features → siteDomains); the admin keeps the readiness message.
+ */
+export async function saasReady(env: SaasEnv, fetchImpl: Fetch = fetch, now = Date.now()): Promise<boolean> {
+  if (readiness && now - readiness.at < READINESS_TTL_MS) return readiness.ok;
+  let ok = false;
+  try {
+    await call<unknown>(env, 'GET', '?per_page=1', undefined, fetchImpl);
+    ok = true;
+  } catch (error) {
+    ok = false;
+    if (error instanceof SaasError && error.code !== 'not_configured' && error.code !== 'saas_unavailable') {
+      // Unreachable or refused for another reason: look again soon rather than in 10 minutes
+      readiness = { at: now - READINESS_TTL_MS + 60_000, ok: false };
+      return false;
+    }
+  }
+  readiness = { at: now, ok };
+  return ok;
+}

@@ -16,7 +16,8 @@ import { loadChannelRecord } from '../../lib/channelAccess';
 import { SubtitleService } from '../../lib/subtitles';
 import { listTranslationEditions } from '../../lib/quran/translations';
 import { logger } from '../../lib/logger';
-
+import { featureOff } from '../../lib/features/off';
+import { quranEditionsConfigured } from '../../lib/features';
 const Edition = z.object({ id: z.number(), name: z.string(), author: z.string().optional(), language: z.string() });
 const Err = { 'application/json': { schema: z.object({ success: z.literal(false), error: z.string() }) } };
 const LANG = /^[a-z]{2,3}$/;
@@ -34,6 +35,8 @@ export class QuranTranslationsList extends PublicRoute {
 	};
 
 	async handle(c: AppContext) {
+		// Quran Foundation not configured here: the editions pickers are hidden (404 feature_off)
+		if (!(await quranEditionsConfigured(c.env as never))) return featureOff(c);
 		const { query } = await this.getValidatedData<typeof this.schema>();
 		const language = query.language?.toLowerCase();
 		if (language && !LANG.test(language)) return c.json({ success: false, error: 'invalid_language' }, 400);
@@ -100,6 +103,8 @@ export class ChannelQuranTranslationsGet extends AuthenticatedRoute {
 	);
 
 	async handle(c: AppContext) {
+		// Quran Foundation not configured here: the editions pickers are hidden (404 feature_off)
+		if (!(await quranEditionsConfigured(c.env as never))) return featureOff(c);
 		const { params } = await this.getValidatedData<typeof this.schema>();
 		const access = await channelAccess(c, params.channelId, this.getUserId(c));
 		if ('response' in access) return access.response;
@@ -129,6 +134,8 @@ export class ChannelQuranTranslationSet extends AuthenticatedRoute {
 	);
 
 	async handle(c: AppContext) {
+		// Quran Foundation not configured here: the editions pickers are hidden (404 feature_off)
+		if (!(await quranEditionsConfigured(c.env as never))) return featureOff(c);
 		const { params, body } = await this.getValidatedData<typeof this.schema>();
 		const userId = this.getUserId(c);
 		const access = await channelAccess(c, params.channelId, userId);
@@ -167,6 +174,8 @@ export class ChannelQuranTranslationReset extends AuthenticatedRoute {
 	);
 
 	async handle(c: AppContext) {
+		// Quran Foundation not configured here: the editions pickers are hidden (404 feature_off)
+		if (!(await quranEditionsConfigured(c.env as never))) return featureOff(c);
 		const { params } = await this.getValidatedData<typeof this.schema>();
 		const access = await channelAccess(c, params.channelId, this.getUserId(c));
 		if ('response' in access) return access.response;

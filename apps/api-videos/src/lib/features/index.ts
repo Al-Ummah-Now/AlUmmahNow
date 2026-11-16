@@ -1,0 +1,335 @@
+/**
+ * What the caller sees (GET /api/me/features; shared-types features.ts, wiki
+ * "Product rules → Hidden when off"). One server-computed answer per feature:
+ *
+ *   config  — the admin switch is on AND what it needs is bound/configured
+ *   tier    — the creator tier that applies includes it (the channel OWNER's
+ *             tier for channel work, like uploads), and the caller's role on
+ *             that channel may use it
+ *
+ * Quotas (live hours, caption minutes left, channel limit) never hide a
+ * feature: they are said plainly at the moment of the action.
+ *
+ * Cheap: settings reads are cached per isolate (live routing, Bunny
+ * availability, caption settings here, SaaS readiness), tier reads are
+ * indexed single-row lookups. No list or scan.
+ *
+ * The same `*Configured` readers gate the APIs (404 feature_off), so a hidden
+ * entry point and its API always agree.
+ */
+import {
+	NO_FEATURES,
+	CATEGORIZE_VISIBILITY_KEY,
+	SOCIAL_NETWORKS,
+	captionPeriod,
+	can,
+	channelRoleOf,
+	liveIneligibility,
+	tierAllowsLive,
+	type ChannelCapability,
+	type ChannelRole,
+	type CreatorTier,
+	type LiveProviderId,
+	type UserFeatures,
+} from '@al-ummah/shared-types';
+import { loadChannelRecord } from '../channelAccess';
+import { resolveCreator } from '../creatorTiers';
+import { cachedPendingUserDeletion } from '../admin/pendingUserDeletion';
+import { memberUploadChannelIds } from '../../endpoints/creator/creatorAccess';
+import { readCaptionSettings, type CaptionJobsEnv, type CaptionSettings } from '../captions/jobs';
+import { LIVE_ADAPTERS, type LiveEnv } from '../live/providers';
+import { readLiveRouting, readUsage } from '../live/store';
+import { networkReadiness, type SocialEnv } from '../social/platform';
+import { readPlatformSettings } from '../social/store';
+import { googleClientSecret, readYtSettings, type YtSettingsEnv } from '../youtube-import/settings';
+import { checkBulkScheduleAllowed } from '../studioLimits';
+import { readSettings as readSiteSettings, type SitesEnv } from '../sites/store';
+import { logger } from '../logger';
+
+export { featureOff } from './off';
+
+type SecretLike = string | { get(): Promise<string> } | undefined | unknown;
+
+export interface FeaturesEnv extends LiveEnv, CaptionJobsEnv, YtSettingsEnv {
+	SEARCH_DB?: D1Database;
+	channels?: R2Bucket;
+	channel_sections?: unknown;
+	channel_tabs?: unknown;
+	global_settings?: R2Bucket;
+	PROCESSOR?: unknown;
+	MEDIA_ORIGINALS?: unknown;
+	TRANSCODE_QUEUE?: CaptionJobsEnv['TRANSCODE_QUEUE'];
+	QF_CLIENT_ID?: SecretLike;
+	QF_CLIENT_SECRET?: SecretLike;
+	QURAN_PROVIDER?: string;
+	AI_CATEGORIZE_ENABLED?: string;
+	ADMIN_API_URL?: string;
+	INTERNAL_API_KEY?: unknown;
+	/** Tests: SaaS readiness without admin-api */
+	SITES_SAAS_AVAILABLE?: string;
+	[binding: string]: unknown;
+}
+
+async function secretValue(b: SecretLike): Promise<string> {
+	if (!b) return '';
+	if (typeof b === 'string') return b.trim();
+	const get = (b as { get?: () => Promise<string> }).get;
+	if (typeof get !== 'function') return '';
+	try {
+		return ((await get.call(b)) ?? '').trim();
+	} catch {
+		return '';
+	}
+}
+
+/** Per-isolate memo with a TTL, keyed by what the answer depends on. */
+function memo<T>(ttlMs: number) {
+	let entry: { key: unknown; at: number; value: Promise<T> } | null = null;
+	return {
+		get(key: unknown, load: () => Promise<T>, now = Date.now()): Promise<T> {
+			if (entry && entry.key === key && now - entry.at < ttlMs) return entry.value;
+			const value = load().catch((error) => {
+				entry = null;
+				throw error;
+			});
+			entry = { key, at: now, value };
+			return value;
+		},
+		forget() {
+			entry = null;
+		},
+	};
+}
+
+// ---------------------------------------------------------------------------
+// Config: switched on and configured
+// ---------------------------------------------------------------------------
+
+const liveMemo = memo<boolean>(60_000);
+
+/**
+ * A provider may take new streams: on, not draining, configured here, and not
+ * over its monthly budget. A provider at its concurrency cap still counts (a
+ * slot frees up within minutes; the create answers "at capacity").
+ */
+export function liveConfigured(env: FeaturesEnv, now = Date.now()): Promise<boolean> {
+	const db = env.SEARCH_DB;
+	if (!db) return Promise.resolve(false);
+	return liveMemo.get(db, async () => {
+		const settings = await readLiveRouting(db, now);
+		const candidates = (['selfhosted', 'bunny'] as LiveProviderId[]).filter((p) => settings.providers[p].enabled && !settings.providers[p].draining);
+		if (!candidates.length) return false;
+		const usage = await readUsage(db, settings, now);
+		for (const provider of candidates) {
+			const available = await LIVE_ADAPTERS[provider].available(env);
+			const why = liveIneligibility(settings.providers[provider], { ...usage[provider], available });
+			if (why === null || why === 'concurrency') return true;
+		}
+		return false;
+	}, now);
+}
+
+/** Tests and the admin settings write: the next read looks again. */
+export function forgetFeatureCaches(): void {
+	liveMemo.forget();
+	saasMemo.forget();
+}
+
+/** Transcription can run: its queues and database are bound and the month's budget is above 0. */
+export function transcribeConfigured(env: FeaturesEnv, settings: CaptionSettings): boolean {
+	return !!(env.SEARCH_DB && env.queue && env.TRANSCODE_QUEUE) && settings.monthlyBudgetUsd > 0;
+}
+
+/** Caption translation: switched on, its queue bound and the budget above 0. */
+export function captionTranslateConfigured(env: FeaturesEnv, settings: CaptionSettings): boolean {
+	return !!(env.SEARCH_DB && env.queue) && settings.translation.enabled && settings.monthlyBudgetUsd > 0;
+}
+
+/** The Translate button: switched on, the processor bound, a daily allowance and a budget. */
+export function inlineTranslateConfigured(env: FeaturesEnv, settings: CaptionSettings): boolean {
+	return !!env.PROCESSOR && settings.inline.enabled && settings.inline.dailyItems > 0 && settings.inline.monthlyBudgetUsd > 0;
+}
+
+/** Viewer-side translated titles: on site-wide, with the processor to translate them. */
+export function viewerTitlesConfigured(env: FeaturesEnv, settings: CaptionSettings): boolean {
+	return !!env.PROCESSOR && settings.viewerTitles.enabled && settings.inline.monthlyBudgetUsd > 0;
+}
+
+/** Quran Foundation editions: the credentials are bound (the local stack serves fixtures). */
+export async function quranEditionsConfigured(env: FeaturesEnv): Promise<boolean> {
+	if (env.QURAN_PROVIDER === 'fixture') return true;
+	const [id, secret] = await Promise.all([secretValue(env.QF_CLIENT_ID), secretValue(env.QF_CLIENT_SECRET)]);
+	return !!id && !!secret;
+}
+
+/** Social auto-post: switched on, and at least one network configured and switched on. */
+export async function socialConfigured(env: FeaturesEnv): Promise<boolean> {
+	try {
+		const [settings, readiness] = await Promise.all([readPlatformSettings(env as never), networkReadiness(env as unknown as SocialEnv)]);
+		return settings.enabled && SOCIAL_NETWORKS.some((n) => readiness[n].configured && settings.networks[n].enabled);
+	} catch (error) {
+		logger.warn('[Features] Social settings unreadable; hidden', { error: error instanceof Error ? error.message : String(error) });
+		return false;
+	}
+}
+
+/** Move from YouTube: switched on, with a Google client id and secret. */
+export async function youtubeImportConfigured(env: FeaturesEnv): Promise<boolean> {
+	const settings = await readYtSettings(env);
+	if (!settings.enabled || !settings.clientId) return false;
+	return !!(await googleClientSecret(env));
+}
+
+
+/** AI category suggestions: the admin switch (mirrored; no file = on, its default) and the env kill switch. */
+export async function aiCategoryConfigured(env: FeaturesEnv): Promise<boolean> {
+	if (env.AI_CATEGORIZE_ENABLED === 'false' || !env.queue) return false;
+	try {
+		const stored = await env.global_settings?.get(CATEGORIZE_VISIBILITY_KEY);
+		if (!stored) return true;
+		const value = (await stored.json()) as { enabled?: unknown };
+		return value?.enabled !== false;
+	} catch {
+		return false;
+	}
+}
+
+const saasMemo = memo<boolean>(10 * 60_000);
+
+/**
+ * Cloudflare for SaaS is set up for own domains: admin-api holds the token and
+ * probes the zone (GET /internal/site-domains-status), cached here 10 minutes.
+ */
+export function saasConfigured(env: FeaturesEnv, fetchImpl: typeof fetch = fetch): Promise<boolean> {
+	if (env.SITES_SAAS_AVAILABLE !== undefined) return Promise.resolve(env.SITES_SAAS_AVAILABLE === 'true');
+	const base = (env.ADMIN_API_URL ?? '').replace(/\/$/, '');
+	if (!base) return Promise.resolve(false);
+	return saasMemo.get(base, async () => {
+		try {
+			const key = await secretValue(env.INTERNAL_API_KEY);
+			if (!key) return false;
+			const res = await fetchImpl(`${base}/internal/site-domains-status`, { headers: { 'X-API-Key': key } });
+			if (!res.ok) return false;
+			const body = (await res.json().catch(() => null)) as { result?: { available?: unknown } } | null;
+			return body?.result?.available === true;
+		} catch (error) {
+			logger.warn('[Features] SaaS readiness unreachable; own domains hidden', { error: error instanceof Error ? error.message : String(error) });
+			return false;
+		}
+	});
+}
+
+// ---------------------------------------------------------------------------
+// Tier and role
+// ---------------------------------------------------------------------------
+
+export interface FeaturesWho {
+	userId?: string | null;
+	roles?: readonly string[] | null;
+}
+
+interface ChannelScope {
+	channelId: string;
+	ownerId: string | null;
+	role: ChannelRole | null;
+}
+
+/** Caption minutes in the plan of `subjectId`: the tier's, or an admin grant this month or until used. */
+async function hasCaptionMinutes(db: D1Database, subjectId: string, tier: CreatorTier | null, unlimited: boolean): Promise<boolean> {
+	if (unlimited) return true;
+	if (tier && tier.captionMinutesMonth > 0) return true;
+	const row = await db
+		.prepare(
+			`SELECT 1 AS ok FROM caption_minute_grants WHERE user_id = ? AND revoked_at IS NULL
+			 AND ((scope = 'month' AND period = ?) OR (scope = 'until_used' AND used < minutes)) LIMIT 1`,
+		)
+		.bind(subjectId, captionPeriod(new Date()))
+		.first<{ ok: number }>();
+	return !!row;
+}
+
+const roleMay = (scope: ChannelScope | null, ...capabilities: ChannelCapability[]) => !scope || capabilities.some((cap) => can(scope.role, cap));
+
+/**
+ * Every feature for `who` (signed out: only the viewer-facing config ones).
+ * With `channelId`, channel work is judged on that channel's owner's tier and
+ * the caller's role there; a caller without a role sees none of it.
+ */
+export async function computeFeatures(env: FeaturesEnv, who: FeaturesWho, channelId?: string | null): Promise<UserFeatures> {
+	const settings = await readCaptionSettings(env);
+	const [quran] = await Promise.all([quranEditionsConfigured(env)]);
+	const features: UserFeatures = {
+		...NO_FEATURES,
+		viewerTranslatedTitles: viewerTitlesConfigured(env, settings),
+	};
+	const userId = who.userId ?? null;
+	const db = env.SEARCH_DB;
+	if (!userId || !db) return features;
+
+	let scope: ChannelScope | null = null;
+	if (channelId) {
+		const channel = await loadChannelRecord(env as never, channelId);
+		if (!channel || (channel as { isDeleted?: boolean }).isDeleted) return features;
+		scope = { channelId, ownerId: channel.userId ?? null, role: channelRoleOf(channel, userId) };
+		// Not on this channel's team: none of its Studio features
+		if (!scope.role) return features;
+	}
+
+	const roles = who.roles ?? null;
+	const [creator, deletion] = await Promise.all([
+		resolveCreator(db, { userId, roles, channelOwnerId: scope?.ownerId ?? null }),
+		cachedPendingUserDeletion(db, userId),
+	]);
+	const tier = creator.tier;
+	const unlimited = creator.via === 'super_admin' || !!tier?.unlimited;
+	const pending = !!deletion;
+
+	const [live, minutes, translate, social, youtube, aiCategory, bulk, uploadElsewhere, siteDomains] = await Promise.all([
+		tierAllowsLive(tier) && roleMay(scope, 'live.manage', 'live.moderate') ? liveConfigured(env) : false,
+		roleMay(scope, 'video.edit') ? hasCaptionMinutes(db, creator.subjectId, tier, unlimited) : false,
+		Promise.resolve(captionTranslateConfigured(env, settings)),
+		socialConfigured(env),
+		youtubeImportConfigured(env).catch(() => false),
+		aiCategoryConfigured(env),
+		checkBulkScheduleAllowed(env, userId).then((refusal) => refusal === null),
+		// Without a channel: channels whose owner's tier lets this member upload
+		!scope && !tier ? memberUploadChannelIds(db, userId, roles).then((ids) => ids.length > 0) : Promise.resolve(false),
+		scope && can(scope.role, 'channel.edit') ? siteDomainsFor(env, scope.channelId) : Promise.resolve(false),
+	]);
+
+	features.upload = !pending && (scope ? !!tier && can(scope.role, 'video.upload') : !!tier || uploadElsewhere);
+	features.createChannel = !pending && !scope && !!tier;
+	features.live = !pending && live;
+	features.captionsTranscribe = transcribeConfigured(env, settings) && minutes;
+	features.captionsTranslate = translate && minutes;
+	features.inlineTranslate = inlineTranslateConfigured(env, settings);
+	features.quranEditions = quran;
+	features.audioTracks = !!env.MEDIA_ORIGINALS && !!env.TRANSCODE_QUEUE && roleMay(scope, 'video.edit') && (unlimited || (tier?.audioTracksPerVideo ?? 0) > 0);
+	features.siteDomains = siteDomains;
+	features.socialAutopost = social && roleMay(scope, 'channel.edit');
+	features.youtubeImport = youtube;
+	features.aiCategorySuggest = aiCategory;
+	features.bulkSchedule = bulk && roleMay(scope, 'video.schedule');
+	return features;
+}
+
+/** Own domains on a channel's site: the site allows at least one and SaaS is set up. */
+export async function siteDomainsFor(env: FeaturesEnv, channelId: string): Promise<boolean> {
+	if (!env.channel_sections) return false;
+	const site = await readSiteSettings(env as unknown as SitesEnv, channelId).catch(() => null);
+	if (!site || (site.settings.limits?.customDomainsMax ?? 0) <= 0 || site.settings.status === 'revoked') return false;
+	return saasConfigured(env);
+}
+
+/**
+ * Transcription or caption translation for work on a video owned by `channelOwnerId`: configured
+ * here, and the owner's plan has caption minutes at all (running out is a quota, answered 402).
+ */
+export async function captionFeatureFor(env: FeaturesEnv, kind: 'transcribe' | 'translate', who: { userId: string; roles?: readonly string[] | null; channelOwnerId?: string | null }): Promise<boolean> {
+	const db = env.SEARCH_DB;
+	if (!db) return false;
+	const settings = await readCaptionSettings(env);
+	if (kind === 'transcribe' ? !transcribeConfigured(env, settings) : !captionTranslateConfigured(env, settings)) return false;
+	const creator = await resolveCreator(db, who);
+	return hasCaptionMinutes(db, creator.subjectId, creator.tier, creator.via === 'super_admin' || !!creator.tier?.unlimited);
+}

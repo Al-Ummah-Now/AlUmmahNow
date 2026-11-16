@@ -5,17 +5,30 @@ import { can, type StudioCapability, type StudioRole } from './permissions';
 /** Empty means any role. Otherwise holding one of these is enough. */
 type Requires = readonly StudioCapability[];
 
+/**
+ * Features the Studio layout passes in: `site` (the channel has a white-label site) and the keys
+ * of GET /api/me/features for this channel. An item or tab with a feature that is not true is not
+ * shown, and its path is unknown (404), never "no access" (wiki "Hidden when off").
+ */
+export interface StudioFeatures {
+  site?: boolean;
+  live?: boolean;
+}
+export type StudioFeature = keyof StudioFeatures;
+
 export interface StudioTab {
   id: string;
   requires: Requires;
+  /** Shown only while this feature is on for the channel */
+  feature?: StudioFeature;
   /** Hidden until the work behind it ships */
   available?: boolean;
 }
 
 export interface StudioNavItem {
   id: 'dashboard' | 'content' | 'analytics' | 'comments' | 'playlists' | 'customisation' | 'site' | 'settings';
-  /** Shown only for a channel with this add-on (StudioFrame `features`) */
-  feature?: 'site';
+  /** Shown only while this feature is on for the channel (StudioFrame `features`) */
+  feature?: StudioFeature;
   requires: Requires;
   /** Hidden until the work behind it ships */
   available?: boolean;
@@ -83,20 +96,22 @@ function meets(role: StudioRole, requires: Requires): boolean {
   return requires.length === 0 || requires.some((capability) => can(role, capability));
 }
 
-export function visibleTabs(role: StudioRole, item: StudioNavItem): StudioTab[] {
-  return (item.tabs ?? []).filter((tab) => tab.available !== false && meets(role, tab.requires));
+const featureOn = (features: StudioFeatures, feature: StudioFeature | undefined) => !feature || features[feature] === true;
+
+export function visibleTabs(role: StudioRole, item: StudioNavItem, features: StudioFeatures = {}): StudioTab[] {
+  return (item.tabs ?? []).filter((tab) => tab.available !== false && featureOn(features, tab.feature) && meets(role, tab.requires));
 }
 
 /** The items this role sees. An item with tabs needs at least one tab it can open. */
-export function visibleNav(role: StudioRole, features: { site?: boolean } = {}): StudioNavItem[] {
+export function visibleNav(role: StudioRole, features: StudioFeatures = {}): StudioNavItem[] {
   return STUDIO_NAV.filter(
-    (item) => item.available !== false && (!item.feature || !!features[item.feature]) && meets(role, item.requires) && (!item.tabs || visibleTabs(role, item).length > 0),
+    (item) => item.available !== false && featureOn(features, item.feature) && meets(role, item.requires) && (!item.tabs || visibleTabs(role, item, features).length > 0),
   );
 }
 
 /** Path below the channel that opens this item: its first tab the role can use. */
-export function itemPath(role: StudioRole, item: StudioNavItem): string {
-  const [tab] = visibleTabs(role, item);
+export function itemPath(role: StudioRole, item: StudioNavItem, features: StudioFeatures = {}): string {
+  const [tab] = visibleTabs(role, item, features);
   return tab ? `${item.id}/${tab.id}` : item.id;
 }
 
@@ -106,23 +121,30 @@ export type PathAccess =
   | { status: 'forbidden' }
   | { status: 'unknown' };
 
-/** Whether this role can open a Studio path, given as segments below the channel. */
-export function checkPath(role: StudioRole, segments: readonly string[]): PathAccess {
+/**
+ * Whether this role can open a Studio path, given as segments below the channel. A path behind a
+ * feature that is off is unknown (404), so a hidden feature leaves no trace.
+ */
+export function checkPath(role: StudioRole, segments: readonly string[], features: StudioFeatures = {}): PathAccess {
   const [itemId, tabId, , action] = segments;
   const item = STUDIO_NAV.find((candidate) => candidate.id === itemId);
   if (!item || item.available === false) return { status: 'unknown' };
 
+  // A role without access still gets "no access"; for a role with access, a feature that is off is unknown
   if (!item.tabs) {
     if (segments.length > 1) return { status: 'unknown' };
-    return meets(role, item.requires) ? { status: 'ok' } : { status: 'forbidden' };
+    if (!meets(role, item.requires)) return { status: 'forbidden' };
+    return featureOn(features, item.feature) ? { status: 'ok' } : { status: 'unknown' };
   }
+  if (!featureOn(features, item.feature)) return { status: 'unknown' };
 
   if (!tabId) {
-    return visibleTabs(role, item).length > 0 ? { status: 'redirect', path: itemPath(role, item) } : { status: 'forbidden' };
+    return visibleTabs(role, item, features).length > 0 ? { status: 'redirect', path: itemPath(role, item, features) } : { status: 'forbidden' };
   }
   const tab = item.tabs.find((candidate) => candidate.id === tabId);
   if (!tab || tab.available === false) return { status: 'unknown' };
   if (!meets(role, tab.requires)) return { status: 'forbidden' };
+  if (!featureOn(features, tab.feature)) return { status: 'unknown' };
 
   // A stream's Go live page (content/live/{streamId}) shows encoder settings
   if (item.id === 'content' && tab.id === 'live' && segments.length > 2) {
@@ -140,9 +162,9 @@ export function checkPath(role: StudioRole, segments: readonly string[]): PathAc
 }
 
 /** The same page on another channel, without any nested id. Falls back to Dashboard. */
-export function switchedPath(segments: readonly string[], role: StudioRole): string {
+export function switchedPath(segments: readonly string[], role: StudioRole, features: StudioFeatures = {}): string {
   const top = segments.slice(0, 2);
-  const access = checkPath(role, top);
+  const access = checkPath(role, top, features);
   if (access.status === 'ok') return top.join('/');
   if (access.status === 'redirect') return access.path;
   return 'dashboard';

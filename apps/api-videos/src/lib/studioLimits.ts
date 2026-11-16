@@ -42,7 +42,7 @@ export async function checkDraftAllowed(
 	const value = await resolveValue(env, 'studio.drafts.max', [{ type: 'channel', id: input.channelId }, { type: 'user', id: input.userId }], resolver);
 	if (value === undefined) return null;
 	const decision = checkNumericLimit(value, input.drafts, 1);
-	return decision.allowed ? null : refused('studio.drafts.max', decision.limit, input.drafts, 'Your plan has reached its limit of drafts.');
+	return decision.allowed ? null : refused('studio.drafts.max', decision.limit, input.drafts, 'The limit of drafts is reached.');
 }
 
 /** Null when bulk scheduling is allowed. */
@@ -52,5 +52,5 @@ export async function checkBulkScheduleAllowed(
 	resolver: EntitlementResolver | null = projectResolver(),
 ): Promise<UpgradeRequiredError | null> {
 	const value = await resolveValue(env, 'studio.bulkSchedule', [{ type: 'user', id: userId }], resolver);
-	return value === false ? refused('studio.bulkSchedule', null, null, 'Your plan does not include bulk scheduling.') : null;
+	return value === false ? refused('studio.bulkSchedule', null, null, 'Bulk scheduling is off for this account.') : null;
 }

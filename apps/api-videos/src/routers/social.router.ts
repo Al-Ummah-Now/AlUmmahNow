@@ -96,6 +96,8 @@ import { attemptPost, attemptWebhook, enqueueDelivery, giveUpPost, giveUpWebhook
 import { loadSocialContent, webOrigin } from '../lib/social/content';
 import { loadPublicPlay, type PublicPlayEnv } from '../lib/media/public-play';
 import { constantTimeEqual } from '@al-ummah/shared-types';
+import { featureOff } from '../lib/features/off';
+import { socialConfigured } from '../lib/features';
 
 type Env = { Bindings: SocialEnv & { videos: R2Bucket; channels: R2Bucket }; Variables: { userId?: string } };
 
@@ -153,6 +155,17 @@ function parseHookEvents(v: unknown): SocialWebhookEvent[] {
 // =================================================================================================
 export const socialRouter = new Hono<Env>();
 
+// Auto-post to networks is hidden while it is off or no network is configured and on
+// (lib/features): connecting, account settings and templates answer 404 feature_off.
+// Removing an account already connected stays possible.
+const autopostOff = async (c: Context<Env>, next: () => Promise<void>) => {
+	if (c.req.method === 'DELETE' || (await socialConfigured(c.env as never))) return next();
+	return featureOff(c as never);
+};
+for (const path of ['/channel/:channelId/connect', '/channel/:channelId/connect/*', '/channel/:channelId/telegram/*', '/channel/:channelId/accounts/*', '/channel/:channelId/templates']) {
+	socialRouter.use(path, autopostOff);
+}
+
 socialRouter.get('/channel/:channelId', async (c) => {
 	const channelId = c.req.param('channelId');
 	try {
@@ -171,8 +184,11 @@ socialRouter.get('/channel/:channelId', async (c) => {
 			templates,
 			deliveries,
 			webhooks: webhooks.map(webhookView),
+			// Only the networks a creator can connect now (hidden otherwise; admin keeps readiness)
 			networks: Object.fromEntries(
-				(Object.keys(readiness) as Array<keyof typeof readiness>).map((n) => [n, { available: readiness[n].configured && settings.enabled && settings.networks[n].enabled, configured: readiness[n].configured }]),
+				(Object.keys(readiness) as Array<keyof typeof readiness>)
+					.filter((n) => readiness[n].configured && settings.enabled && settings.networks[n].enabled)
+					.map((n) => [n, { available: true, configured: true }]),
 			),
 			feeds: feedUrls(c.env, channelId),
 			limits: { webhooks: MAX_WEBHOOKS_PER_CHANNEL },
@@ -189,8 +205,7 @@ socialRouter.post('/channel/:channelId/connect', async (c) => {
 		const b = await body<{ network: string; language: string; handle: string; instance: string; returnLang: string }>(c);
 		if (!isSocialNetwork(b.network)) throw new SocialError(400, 'invalid_network');
 		const [readiness, settings] = await Promise.all([networkReadiness(c.env), readPlatformSettings(c.env)]);
-		if (!readiness[b.network].configured) throw new SocialError(503, 'network_not_configured');
-		if (!settings.enabled || !settings.networks[b.network].enabled) throw new SocialError(503, 'network_paused');
+		if (!readiness[b.network].configured || !settings.enabled || !settings.networks[b.network].enabled) return featureOff(c as never);
 		const result = await startConnect(c.env, { network: b.network, channelId, userId, language: lang(b.language), returnLang: lang(b.returnLang), handle: b.handle, instance: b.instance });
 		return c.json(result);
 	} catch (error) {
@@ -309,7 +324,7 @@ socialRouter.post('/channel/:channelId/webhooks', async (c) => {
 	const channelId = c.req.param('channelId');
 	try {
 		const userId = await requireRole(c, channelId, 'channel.edit');
-		if (!(await socialCryptoReady(c.env))) throw new SocialError(503, 'network_not_configured');
+		if (!(await socialCryptoReady(c.env))) return featureOff(c as never);
 		const b = await body<{ url: string; events: string[] }>(c);
 		const url = String(b.url ?? '').trim();
 		const problem = webhookUrlProblem(url, webhookHostsAllowed(c.env));

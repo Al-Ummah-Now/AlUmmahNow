@@ -517,6 +517,12 @@ export function draftSubjectId(userId: string, draftKey: string): string {
 
 /** Row key in moderation_config; value is JSON Partial<CategorizeConfig>. */
 export const CATEGORIZE_CONFIG_KEY = 'categorize';
+/**
+ * global_settings copy of the admin switch (`{ enabled }`), written by admin-api with every change:
+ * api-videos has no moderation DB and answers `aiCategorySuggest` in GET /api/me/features from it.
+ * No file = on (the config's default).
+ */
+export const CATEGORIZE_VISIBILITY_KEY = 'categorize/visibility.json';
 /** Default daily neuron cap for category suggestions (~$0.22/day; one suggestion is ~40 neurons). */
 export const DEFAULT_CATEGORIZE_DAILY_NEURON_CAP = 20_000;
 

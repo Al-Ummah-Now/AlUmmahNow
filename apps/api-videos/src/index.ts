@@ -83,6 +83,7 @@ import { handleInvalidateCategories, handleListCategories, videoCategoriesMiddle
 import scholarsInternalRouter from "./routers/scholars-internal.router";
 import postsInternalRouter from "./routers/posts-internal.router";
 import { sitesInternalRouter, sitesRouter } from "./routers/sites.router";
+import { handleUserFeatures } from "./endpoints/creator/features";
 import { socialInternalRouter, socialRouter } from "./routers/social.router";
 import { publishDuePosts } from "./lib/scheduled-posts";
 import { sweepStaging } from "./lib/media/prebuilt";
@@ -281,6 +282,8 @@ app.get('/api/categories', handleListCategories);
 app.post('/internal/categories/invalidate', handleInvalidateCategories);
 // What the signed-in user may do (Upload, Create channel) for the web UI
 app.get('/api/me/creator', authMiddleware, handleCreatorAccess);
+// Which user-facing features this caller sees (lib/features; auth optional): every client hides what is not true
+app.get('/api/me/features', handleUserFeatures);
 // Native app attestation: App Attest / Play Integrity → X-AUN-Native-Proof (lib/attestation, #1274)
 app.route('/api/apps/attestation', attestationRouter as never);
 // Whether the next comment/post/report needs a Turnstile token (middleware/bot-protection.ts)

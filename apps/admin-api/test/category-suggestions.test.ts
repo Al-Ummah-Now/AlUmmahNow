@@ -173,4 +173,19 @@ describe('category suggestion review', () => {
     const config = await readCategorizeConfig(reports);
     assert.deepEqual({ cap: config.dailyNeuronCap, threshold: config.threshold, by: config.updatedBy }, { cap: 5000, threshold: 0.7, by: 'admin-1' });
   });
+
+  it('settings: every change writes the switch for the upload form (api-videos reads it; hidden when off)', async () => {
+    const { reports } = await setup();
+    const puts = new Map<string, string>();
+    const mirror = { put: async (key: string, value: string) => void puts.set(key, value) };
+    assert.equal(await writeCategorizeConfig(reports, { enabled: false }, 'admin-1', Date.now(), mirror), null);
+    assert.equal(JSON.parse(puts.get('categorize/visibility.json')!).enabled, false);
+    assert.equal(await writeCategorizeConfig(reports, { threshold: 0.7 }, 'admin-1', Date.now(), mirror), null);
+    assert.equal(JSON.parse(puts.get('categorize/visibility.json')!).enabled, false, 'a later change keeps the switch');
+    assert.equal(await writeCategorizeConfig(reports, { enabled: true }, 'admin-1', Date.now(), mirror), null);
+    assert.equal(JSON.parse(puts.get('categorize/visibility.json')!).enabled, true);
+    const failing = { put: async () => { throw new Error('R2 down'); } };
+    assert.match((await writeCategorizeConfig(reports, { enabled: false }, 'admin-1', Date.now(), failing))!, /Save again/);
+  });
 });
+

@@ -11,8 +11,10 @@
  * moderation_actions with the admin's id; retries and the backfill only queue
  * jobs (the processor does the AI work, budget-capped).
  */
+import { logger } from './logger';
 import {
   CATEGORIZE_CONFIG_KEY,
+  CATEGORIZE_VISIBILITY_KEY,
   MessageType,
   getCategorySuggestion,
   isVideoCategory,
@@ -398,7 +400,9 @@ export async function readCategorizeConfig(reports: D1Like, env: { AI_CATEGORIZE
   return { enabled, dailyNeuronCap, threshold, updatedAt: row?.updated_at ?? null, updatedBy: row?.updated_by ?? null };
 }
 
-export async function writeCategorizeConfig(reports: D1Like, patch: Partial<CategorizeConfig>, actorId: string, now: number = Date.now()): Promise<string | null> {
+type MirrorBucket = { put(key: string, value: string, options?: unknown): Promise<unknown> };
+
+export async function writeCategorizeConfig(reports: D1Like, patch: Partial<CategorizeConfig>, actorId: string, now: number = Date.now(), mirror?: MirrorBucket): Promise<string | null> {
   const error = validateCategorizeConfigPatch(patch);
   if (error) return error;
   const current = await reports.prepare('SELECT value FROM moderation_config WHERE key = ?').bind(CATEGORIZE_CONFIG_KEY).first<{ value: string }>();
@@ -415,6 +419,15 @@ export async function writeCategorizeConfig(reports: D1Like, patch: Partial<Cate
     .bind(CATEGORIZE_CONFIG_KEY, JSON.stringify(next), actorId, iso)
     .run();
   await audit(reports, 'categorize_config_change', actorId, null, patch, now);
+  // The upload form shows the AI hint only while this is on (api-videos reads the copy)
+  if (mirror) {
+    try {
+      await mirror.put(CATEGORIZE_VISIBILITY_KEY, JSON.stringify({ enabled: next.enabled !== false, updatedAt: iso }), { httpMetadata: { contentType: 'application/json' } });
+    } catch (error) {
+      logger.error('[CategorySuggestions] Visibility copy not written', { error: error instanceof Error ? error.message : String(error) });
+      return 'Saved, but the upload form could not be updated. Save again.';
+    }
+  }
   return null;
 }
 

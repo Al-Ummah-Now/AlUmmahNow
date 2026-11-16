@@ -15,7 +15,8 @@
  */
 import { Str } from 'chanfana';
 import { z } from 'zod';
-import { AUDIO_TRACKS_ENTITLEMENT, AUDIO_TRACK_KINDS, AUDIO_TRACK_LANGUAGES, AUDIO_TRACK_STATES, type AudioTrack } from '@al-ummah/shared-types';
+import { featureOff } from '../../lib/features/off';
+import { FEATURE_OFF_CODE, AUDIO_TRACKS_ENTITLEMENT, AUDIO_TRACK_KINDS, AUDIO_TRACK_LANGUAGES, AUDIO_TRACK_STATES, type AudioTrack } from '@al-ummah/shared-types';
 import { AuthenticatedRoute, type AppContext } from '../../base';
 import { addAuthToSchema } from '../../lib/openapi-auth';
 import { logger } from '../../lib/logger';
@@ -110,7 +111,7 @@ export class AudioTrackCreate extends AuthenticatedRoute {
 			description:
 				'An uploaded file (`source.type = upload`: then PUT its chunks to `/upload?offset=` and POST `/complete`) or an audio stream of the video file ' +
 				'(`source.type = source_stream`, from `detected`). The track is checked like an upload before viewers hear it. ' +
-				'402 `upgrade_required` with entitlement `audio.tracksPerVideo` over the tier limit; 409 `duplicate_track` for a second track of the same language and kind.',
+				'402 `upgrade_required` with entitlement `audio.tracksPerVideo` once the per-video limit is reached; 404 `feature_off` when the tier allows no extra tracks; 409 `duplicate_track` for a second track of the same language and kind.',
 			request: {
 				params: videoParams,
 				body: {
@@ -154,6 +155,7 @@ export class AudioTrackCreate extends AuthenticatedRoute {
 			const uploadUrl = track.source.type === 'upload' ? `/api/videos/${encodeURIComponent(params.videoId)}/audio-tracks/${track.id}/upload` : undefined;
 			return c.json({ success: true, data: { track: studioTrack(track, track.source.type === 'upload' ? 0 : undefined), ...(uploadUrl ? { uploadUrl } : {}) } }, 201);
 		} catch (error) {
+			if (error instanceof AudioTrackError && error.code === FEATURE_OFF_CODE) return featureOff(c);
 			if (error instanceof AudioTrackError && error.status === 402) {
 				return c.json({ success: false, error: 'upgrade_required', entitlement: AUDIO_TRACKS_ENTITLEMENT, ...error.extra }, 402);
 			}

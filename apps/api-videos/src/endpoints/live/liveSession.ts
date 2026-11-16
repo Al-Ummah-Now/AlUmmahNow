@@ -28,6 +28,8 @@ import { beatLiveViewer, countLiveViewers, isViewerId, viewerNet } from '../../l
 import { isLiveVodWithheld } from '@al-ummah/shared-types';
 import { checkLiveTier, streamTierContext, type LiveTierOp } from '../../lib/live/tier-gate';
 import type { SessionTier } from '../../lib/live/service';
+import { featureOff } from '../../lib/features/off';
+import { LIVE_TIER_ERROR_CODES } from '@al-ummah/shared-types';
 
 const Params = z.object({ id: Str({ description: 'Live stream id' }) });
 const Ok = (schema: z.ZodTypeAny, description: string) => ({ description, content: { 'application/json': { schema: z.object({ success: z.boolean(), result: schema }) } } });
@@ -105,6 +107,8 @@ export async function liveTierGate(c: AppContext, stream: Pick<LiveStreamRecord,
 		const result = await checkLiveTier(db, { userId, roles: rolesOf(c), channelOwnerId: ownerId }, op, { sessionId: stream.sessionId ?? null });
 		if ('code' in result) {
 			logger.info('[Live] Refused by the creator tier', { streamId: stream.id, op, code: result.code, subjectId: result.subjectId });
+			// Not in the tier: live is hidden for this channel, so its API answers quietly
+			if (result.code === LIVE_TIER_ERROR_CODES.notInTier) return featureOff(c);
 			return c.json({ success: false, code: result.code, error: result.error, ...result.details }, result.status);
 		}
 		return { ownerId: result.subjectId, limitMinutes: result.limitMinutes };
@@ -116,12 +120,9 @@ export async function liveTierGate(c: AppContext, stream: Pick<LiveStreamRecord,
 
 function providerFailure(c: AppContext, error: unknown, where: string) {
 	if (error instanceof LiveRefusedError) {
-		const message = error.code === 'live_budget'
-			? 'Live streaming has reached its budget for this month. Try again later.'
-			: error.code === 'live_capacity'
-				? 'Live streaming is at capacity right now. Try again in a few minutes.'
-				: 'Live streaming is not available right now.';
-		return fail(c, 503, error.code, message);
+		// No provider may take streams (off, unconfigured or over budget): live is hidden
+		if (error.code !== 'live_capacity') return featureOff(c);
+		return fail(c, 503, error.code, 'Live streaming is at capacity right now. Try again in a few minutes.');
 	}
 	if (error instanceof LiveProviderError) {
 		logger.error(`[Live] ${where} failed at the provider`, { provider: error.provider, code: error.code });

@@ -3,6 +3,7 @@ import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { SessionManager } from '@/lib/auth/session-manager';
 import { logger } from '@/lib/logger';
 import { upstreamPath } from '@/lib/studio/site-domains';
+import { FEATURE_OFF_BODY } from '@al-ummah/shared-types';
 
 /**
  * Studio → Site → Domains (wiki AUN-SCHOLAR-SITES §4.2, #1212): this site's pages call here, and the
@@ -51,8 +52,9 @@ async function handle(req: NextRequest, ctx: { params: Promise<{ channelId: stri
   if (!session?.accessToken) return NextResponse.json({ code: 'unauthorized' }, { status: 401 });
   const { key, adminApi } = await bindings();
   if (!key || !adminApi) {
+    // Not wired here: own domains are hidden (wiki "Hidden when off"), answered quietly
     logger.error('[site-domains] ADMIN_API_URL or INTERNAL_API_KEY is not configured');
-    return NextResponse.json({ code: 'unavailable' }, { status: 503 });
+    return NextResponse.json(FEATURE_OFF_BODY, { status: 404 });
   }
   try {
     const upstream = await fetch(`${adminApi.replace(/\/$/, '')}${target}`, {

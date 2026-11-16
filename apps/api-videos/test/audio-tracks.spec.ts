@@ -153,9 +153,9 @@ describe('tier limit (MA9)', () => {
 		await assert.rejects(addTrack(t.asEnv, undefined, { video: t.read(), userId: 'alice', body: upload(10, { language: 'ur' }) }, NOW), (e: AudioTrackError) => e.status === 402 && e.code === 'upgrade_required' && e.extra.limit === 1 && e.extra.used === 1);
 	});
 
-	it('a user on no tier (limit 0) gets 402 on the first track; a super admin is unlimited', async () => {
+	it('a user on no tier (limit 0): the feature is off (404 feature_off, hidden in Studio); a super admin is unlimited', async () => {
 		const t = await setup();
-		await assert.rejects(addTrack(t.asEnv, undefined, { video: { ...t.read(), userId: 'bob' }, userId: 'bob', body: upload() }, NOW), (e: AudioTrackError) => e.status === 402);
+		await assert.rejects(addTrack(t.asEnv, undefined, { video: { ...t.read(), userId: 'bob' }, userId: 'bob', body: upload() }, NOW), (e: AudioTrackError) => e.status === 404 && e.code === 'feature_off');
 		const ok = await addTrack(t.asEnv, undefined, { video: { ...t.read(), userId: 'bob' }, userId: 'root', roles: ['super_admin'], body: upload() }, NOW);
 		assert.ok(ok.track.id.startsWith('t'));
 	});
