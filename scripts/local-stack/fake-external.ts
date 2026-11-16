@@ -15,8 +15,10 @@
  * - Resend (api.resend.com): emails are kept, never sent: GET /__fake/resend/emails.
  * - Google and YouTube (Move from YouTube): fake-google.ts.
  * - Cloudflare API (api.cloudflare.com): only the read calls of the transcode troubleshooting panel
- *   (admin-api lib/media-troubleshoot/cloudflare.ts), and only with a FAKE_CF_TOKEN_PREFIX token; any
- *   other token or call is refused. PUT /__fake/cloudflare { logVideo } names the video its log lines
+ *   (admin-api lib/media-troubleshoot/cloudflare.ts) and the checks of Platform settings → Credentials
+ *   (admin-api lib/platform-credentials.ts: token verify, account and zone analytics, cache purge),
+ *   and only with a FAKE_CF_TOKEN_PREFIX token; any other token or call is refused. A credentials
+ *   token says what it lacks in its name: -noacct, -nozone, -nopurge, or -expired. PUT /__fake/cloudflare { logVideo } names the video its log lines
  *   mention, DELETE /__fake/cloudflare forgets it.
  * - Webhook receiver (FAKE_WEBHOOK_HOST): status page webhook deliveries are kept and answered 200
  *   (a path containing /fail-<status>/ answers that status): GET /__fake/webhooks.
@@ -427,6 +429,12 @@ async function cloudflareApi(request: Request, url: URL): Promise<Response> {
     return json({ success: false, errors: [{ code: 10000, message: 'Authentication error' }] }, 403);
   }
   const path = url.pathname.replace(/^\/client\/v4/, '');
+  const token = (request.headers.get('authorization') ?? '').slice('Bearer '.length);
+  const lacks = (what: string) => token.includes(`-${what}`);
+  if (/^(\/user|\/accounts\/[^/]+)\/tokens\/verify$/.test(path)) return ok({ id: 'fake-token', status: lacks('expired') ? 'expired' : 'active' });
+  if (/^\/zones\/[^/]+\/purge_cache$/.test(path)) {
+    return lacks('nopurge') ? json({ success: false, errors: [{ code: 10000, message: 'Authentication error' }] }, 403) : ok({ id: 'fake-purge' });
+  }
   type CfBody = { query?: string; variables?: { q?: string }; parameters?: { filters?: { key?: string; value?: string }[] } };
   const body: CfBody = request.method === 'POST' ? ((await request.json().catch(() => ({}))) as CfBody) : {};
   if (/^\/accounts\/[^/]+\/containers\/applications$/.test(path)) {
@@ -440,6 +448,9 @@ async function cloudflareApi(request: Request, url: URL): Promise<Response> {
   }
   if (path === '/graphql') {
     const query = String(body.query ?? '');
+    const denied = { data: null, errors: [{ message: 'not authorized for that account' }] };
+    if (query.includes('r2StorageAdaptiveGroups')) return json(lacks('noacct') ? denied : { data: { viewer: { accounts: [{ r2StorageAdaptiveGroups: [] }] } }, errors: null });
+    if (query.includes('httpRequestsAdaptiveGroups')) return json(lacks('nozone') ? denied : { data: { viewer: { zones: [{ httpRequestsAdaptiveGroups: [] }] } }, errors: null });
     if (query.includes('workersInvocationsAdaptive')) return json({ data: { viewer: { accounts: [{ workersInvocationsAdaptive: [{ sum: { requests: 1 } }] }] } }, errors: null });
     const messages = body.variables?.q === 'fake-queue' ? 2 : 0;
     return json({ data: { viewer: { accounts: [{ queueBacklogAdaptiveGroups: [{ dimensions: { datetimeMinute: new Date().toISOString() }, avg: { messages } }] }] } }, errors: null });
