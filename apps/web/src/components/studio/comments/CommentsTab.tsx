@@ -1,5 +1,6 @@
 'use client';
 
+import { numberFormat as localeNumberFormat, formatInteger } from '@al-ummah/shared-types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Ban, Check, Heart, MessageSquareReply, MoreVertical, Pin, RotateCcw, ShieldAlert, Trash2, X } from 'lucide-react';
 import Link from '@/components/common/AppLink';
@@ -61,7 +62,7 @@ export function CommentsTab({ locale, channel, role, tab, target }: Props) {
   const text = t.studio.commentsPage;
   const lang = locale === 'ar' ? 'ar' : 'en';
   const base = `/${locale}/studio/${encodeURIComponent(channel.id)}/comments`;
-  const numberFormat = useMemo(() => new Intl.NumberFormat(locale), [locale]);
+  const numberFormat = useMemo(() => localeNumberFormat(locale), [locale]);
   const { confirm, dialog } = useConfirm();
 
   const [search, setSearch] = useState('');
@@ -397,7 +398,7 @@ function CommentRow({ locale, lang, comment, tab, base, channel, canSpeak, selec
   const heldByModeration = comment.heldBy === 'moderation';
   const isTopLevel = !comment.parentId;
   const time = formatRelativeTime(comment.createdAt, lang);
-  const replies = comment.repliesCount === 1 ? text.oneReply : text.replies.replace('{count}', new Intl.NumberFormat(locale).format(comment.repliesCount));
+  const replies = comment.repliesCount === 1 ? text.oneReply : text.replies.replace('{count}', formatInteger(locale, comment.repliesCount));
   const canReply = canSpeak && tab !== 'removed' && !heldByModeration;
   const targetKey = `${comment.kind}:${comment.targetId}`;
 

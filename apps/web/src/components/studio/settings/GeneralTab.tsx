@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from '@/components/common/AppLink';
-import { can, type ChannelRole } from '@al-ummah/shared-types';
+import { can, formatInteger, type ChannelRole } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
 import { DeleteChannelDialog, type DeletableChannel } from '@/components/channelManagement/DeleteChannelDialog';
 import { useCreatorAccess } from '@/hooks/useCreatorAccess';
@@ -59,8 +59,8 @@ export function GeneralTab({ locale, role, channel }: { locale: string; role: Ch
   else
     limits = text.limitsTier
       .replace('{tier}', creator.access.tier.name)
-      .replace('{perHour}', new Intl.NumberFormat(locale).format(creator.access.limits.perHour))
-      .replace('{perDay}', new Intl.NumberFormat(locale).format(creator.access.limits.perDay));
+      .replace('{perHour}', formatInteger(locale, creator.access.limits.perHour))
+      .replace('{perDay}', formatInteger(locale, creator.access.limits.perDay));
 
   return (
     <div className="max-w-3xl space-y-4" data-testid="studio-settings-general">

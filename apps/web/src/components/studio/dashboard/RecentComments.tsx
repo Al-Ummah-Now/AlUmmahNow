@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { formatInteger } from '@al-ummah/shared-types';
 import Link from '@/components/common/AppLink';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -44,7 +45,7 @@ export function RecentComments({ locale, channelId }: { locale: string; channelI
       {summary.held > 0 && (
         <p className="mb-2 text-sm">
           <Link href={`${base}?tab=held`} className="font-medium text-[var(--fanous-color-link)] underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" data-testid="studio-dash-comments-held">
-            {text.recentComments.held.replace('{count}', new Intl.NumberFormat(locale).format(summary.held))}
+            {text.recentComments.held.replace('{count}', formatInteger(locale, summary.held))}
           </Link>
         </p>
       )}
