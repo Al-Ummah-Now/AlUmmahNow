@@ -2,9 +2,10 @@
 
 /**
  * "Translate" beside English/Arabic field pairs (BilingualPair; AUN-CAPTIONS §5.8). Signed-in
- * visitors get a translator backed by POST /api/translate (InlineTranslatorRegistrar); every pair
+ * visitors get a translator backed by POST /api/translate (InlineTranslatorRegistrar) while the
+ * feature is on for them (GET /api/me/features `inlineTranslate`); every pair
  * (bulk edit, upload "Set values", the video editor, playlists) then shows a Translate button
- * (English → Arabic, or Arabic → English). Signed out, nothing is shown.
+ * (English → Arabic, or Arabic → English). Signed out or switched off, nothing is shown.
  */
 import { useSyncExternalStore } from 'react';
 import type { InlineTranslateField, TitleLanguage } from '@al-ummah/shared-types';
@@ -17,9 +18,10 @@ export interface TranslateContext {
 
 export type Translator = (text: string, from: TitleLanguage, to: TitleLanguage, context?: TranslateContext) => Promise<string>;
 
-export type TranslateFailureCode = 'fair_use_limit' | 'translation_paused' | 'budget_spent' | 'failed';
+/** `feature_off`: the Translate button was switched off meanwhile; it disappears, with no message */
+export type TranslateFailureCode = 'fair_use_limit' | 'feature_off' | 'budget_spent' | 'failed';
 
-/** A refusal the pair explains to the creator (the daily limit with its reset time, paused, budget spent). */
+/** A refusal the pair explains to the creator (the daily limit with its reset time, budget spent). */
 export class TranslateFailure extends Error {
   constructor(
     readonly code: TranslateFailureCode,

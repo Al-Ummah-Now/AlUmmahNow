@@ -5,13 +5,17 @@
  * where it came from, Quran suggestions left to check and whether it is published, with Edit,
  * Publish and Delete; while the video review's automatic transcript is available, the offer to use
  * it as a draft (#1296); and Transcribe on request with the caption minutes (CaptionTranscribe).
- * Renders nothing when there is none of these (no drafts, no transcript, minutes not readable).
+ * Transcribe shows only while it is on for the channel, and Translate only while caption
+ * translation is (GET /api/me/features `captionsTranscribe`, `captionsTranslate`): off, they are
+ * not there at all. Renders nothing when there is none of these (no drafts, no transcript,
+ * Transcribe off or its minutes not readable).
  */
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { isCaptionJobActive, formatNumber } from '@al-ummah/shared-types';
 import { AudioLines, BookOpen, FilePenLine, Languages, Loader2, Trash2, UploadCloud } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useConfirm } from '@/components/ui/confirm-dialog';
+import { refreshFeatures, useFeatures } from '@/hooks/useFeatures';
 import { reportError } from '@/lib/errors/reporter';
 import { SUPPORTED_LANGUAGES } from '@/lib/api/subtitles-types';
 import {
@@ -39,9 +43,11 @@ export interface CaptionDraftsPanelProps {
   refreshKey?: number;
   /** The video's language when it is one language: Transcribe's first choice */
   spokenLanguage?: string;
+  /** The video's channel: Transcribe and Translate follow its owner's plan and the caller's role */
+  channelId?: string;
 }
 
-export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPublished, refreshKey = 0, spokenLanguage }: CaptionDraftsPanelProps) {
+export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPublished, refreshKey = 0, spokenLanguage, channelId }: CaptionDraftsPanelProps) {
   const { t, lang } = useLanguage();
   const tc = t.captions;
   const { confirm, dialog } = useConfirm();
@@ -62,6 +68,11 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
   const runningJobs = useRef(new Set<string>());
   /** The language whose transcription just finished */
   const [readyLanguage, setReadyLanguage] = useState<string | null>(null);
+  const { features } = useFeatures(channelId);
+  /** Minutes for Transcribe / Translate, only while each is on (off: not rendered at all) */
+  const transcribeMinutes = features.captionsTranscribe ? minutes : null;
+  const translateMinutes = features.captionsTranslate ? minutes : null;
+  const featureOff = useCallback(() => void refreshFeatures(channelId), [channelId]);
 
   const load = useCallback(async () => {
     const [res, jobsRes, minutesRes] = await Promise.all([listCaptionDrafts(videoId), listCaptionJobs(videoId), getCaptionMinutes(videoId)]);
@@ -184,16 +195,16 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
   };
 
   if (failed) return <p className="text-sm text-[var(--fanous-color-error-text)]">{tc.loadFailed}</p>;
-  if (!drafts?.length && !transcript && !claims.length && !notice && !minutes) return <>{dialog}</>;
+  if (!drafts?.length && !transcript && !claims.length && !notice && !transcribeMinutes) return <>{dialog}</>;
 
   return (
     <section aria-label={tc.draftsTitle} data-testid="caption-drafts" className="space-y-3">
-      {minutes && (
+      {transcribeMinutes && (
         <CaptionTranscribe
           videoId={videoId}
           spokenLanguage={spokenLanguage}
           jobs={jobs}
-          minutes={minutes}
+          minutes={transcribeMinutes}
           draftLanguages={(drafts ?? []).map((d) => d.language)}
           t={tc.jobs}
           lang={lang}
@@ -201,6 +212,7 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
           confirm={confirm}
           label={label}
           reload={load}
+          onFeatureOff={featureOff}
         />
       )}
       {/* Translations whose source draft is gone; the others show in their source draft's row */}
@@ -344,7 +356,7 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
                     <FilePenLine className="h-4 w-4" aria-hidden />
                     {tc.edit}
                   </button>
-                  {d.kind === 'source' && minutes && (
+                  {d.kind === 'source' && translateMinutes && (
                     <button
                       type="button"
                       data-testid="caption-draft-translate"
@@ -384,12 +396,12 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
                   <TranslationJobs videoId={videoId} lang={lang} jobs={jobs.filter((j) => j.sourceLanguage === d.language)} t={tc} label={label} confirm={confirm} reload={load} />
                 </div>
               )}
-              {translating === d.language && minutes && (
+              {translating === d.language && translateMinutes && (
                 <CaptionTranslate
                   videoId={videoId}
                   sourceLanguage={d.language}
                   jobs={jobs}
-                  minutes={minutes}
+                  minutes={translateMinutes}
                   draftLanguages={(drafts ?? []).map((x) => x.language)}
                   t={tc}
                   lang={lang}
@@ -397,6 +409,7 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
                   label={label}
                   reload={load}
                   onClose={() => setTranslating(null)}
+                  onFeatureOff={featureOff}
                 />
               )}
             </li>
