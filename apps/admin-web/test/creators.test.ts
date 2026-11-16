@@ -327,7 +327,7 @@ describe('rendered components', () => {
     assert.match(html, /href="\/users\?tier=pro"/);
     assert.match(html, /2 pending invites carry this tier\. Change or revoke them first\./);
     const one = render(el(TierEditor, { tiers: [pro], counts: { pro: 1 }, canManage: true, actions: tierActions }));
-    assert.match(one, /1 user is on this tier\. Move them first\./);
+    assert.match(one, /One user is on this tier\. Move them first\./);
     const free = render(el(TierEditor, { tiers: [pro], counts: {}, defaultTierId: 'pro', canManage: true, actions: tierActions }));
     assert.match(free, /This tier is the default/);
     const empty = render(el(TierEditor, { tiers: [pro], counts: {}, defaultTierId: 'member', canManage: true, actions: tierActions }));
