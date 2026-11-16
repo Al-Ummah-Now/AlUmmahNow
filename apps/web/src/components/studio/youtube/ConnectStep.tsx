@@ -67,25 +67,25 @@ export const ConnectStep = forwardRef<HTMLHeadingElement, Props>(function Connec
             </ul>
           </div>
 
-          <div className="rounded-lg border border-border bg-background/60 p-4">
-            <div className="flex items-start gap-3">
-              <Switch
-                id={`${ids}-captions`}
-                checked={captions && captionsAvailable}
-                onCheckedChange={onCaptions}
-                disabled={!captionsAvailable}
-                aria-labelledby={`${ids}-captions-label`}
-                aria-describedby={`${ids}-captions-help`}
-                data-testid="yt-captions"
-              />
-              <div>
-                <span id={`${ids}-captions-label`} className="text-sm font-medium text-foreground">{text.captionsLabel}</span>
-                <p id={`${ids}-captions-help`} className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                  {captionsAvailable ? text.captionsHelp : text.captionsUnavailable}
-                </p>
+          {/* Only offered when the captions scope can be used; otherwise there is simply no option */}
+          {captionsAvailable && (
+            <div className="rounded-lg border border-border bg-background/60 p-4">
+              <div className="flex items-start gap-3">
+                <Switch
+                  id={`${ids}-captions`}
+                  checked={captions}
+                  onCheckedChange={onCaptions}
+                  aria-labelledby={`${ids}-captions-label`}
+                  aria-describedby={`${ids}-captions-help`}
+                  data-testid="yt-captions"
+                />
+                <div>
+                  <span id={`${ids}-captions-label`} className="text-sm font-medium text-foreground">{text.captionsLabel}</span>
+                  <p id={`${ids}-captions-help`} className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{text.captionsHelp}</p>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {error && <p role="alert" className="yt-error text-sm" data-testid="yt-connect-error">{error}</p>}
 

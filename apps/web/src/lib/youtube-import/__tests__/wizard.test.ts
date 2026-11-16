@@ -58,7 +58,7 @@ describe('where the wizard opens', () => {
     expect(connectErrorKey(null)).toBeNull();
     expect(connectErrorKey('youtube_denied')).toBe('youtube_denied');
     expect(connectErrorKey('youtube_no_channel')).toBe('youtube_no_channel');
-    expect(connectErrorKey('youtube_import_off')).toBe('youtube_import_off');
+    expect(connectErrorKey('youtube_import_off')).toBe('failed');
     expect(connectErrorKey('<script>')).toBe('failed');
   });
 
@@ -78,7 +78,7 @@ describe('where the wizard opens', () => {
     expect(finishErrorKey(404, null)).toBe('connect_expired');
     expect(finishErrorKey(400, 'youtube_denied')).toBe('youtube_denied');
     expect(finishErrorKey(409, 'youtube_no_channel')).toBe('youtube_no_channel');
-    expect(finishErrorKey(409, 'youtube_import_off')).toBe('youtube_import_off');
+    expect(finishErrorKey(404, 'feature_off')).toBeNull();
     expect(finishErrorKey(502, 'failed')).toBeNull();
     expect(finishErrorKey(401, null)).toBeNull();
     expect(finishErrorKey(undefined)).toBeNull();

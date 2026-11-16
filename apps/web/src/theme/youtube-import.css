@@ -9,8 +9,7 @@
 .yt-hero-from,.yt-hero-to{display:grid;place-items:center;width:48px;height:48px;border-radius:var(--r-lg,14px)}
 .yt-hero-from{background:var(--m-control);box-shadow:var(--m-control-edge);color:var(--fanous-color-text-secondary);--yt-mark-play:var(--m-control)}
 .yt-hero-from svg{color:var(--fanous-color-text-secondary)}
-.yt-hero-to{background:var(--m-primary);box-shadow:var(--m-primary-edge);color:var(--fanous-color-on-primary)}
-.yt-hero-dot{width:18px;height:18px;border-radius:50%;border:3px solid currentColor;box-shadow:0 0 0 4px color-mix(in srgb,currentColor 22%,transparent)}
+.yt-hero-to{object-fit:cover;box-shadow:var(--m-control-edge)}
 .yt-hero-arrow{color:var(--fanous-color-link)}
 @media (max-width:480px){.yt-hero{flex-direction:column;align-items:flex-start}.yt-hero-from,.yt-hero-to{width:40px;height:40px}}
 
@@ -25,7 +24,6 @@
 /* Panels and cards */
 .yt-panel{position:relative;border:1px solid transparent;border-radius:var(--r-xl,20px);background:var(--m-card) padding-box,var(--m-border) border-box;box-shadow:var(--m-card-edge);backdrop-filter:var(--m-blur);-webkit-backdrop-filter:var(--m-blur);padding:clamp(16px,3vw,28px)}
 .yt-card{border-radius:var(--r-lg,14px);background:var(--m-raised);box-shadow:var(--m-raised-edge)}
-.yt-off{border-inline-start:4px solid var(--fanous-color-primary)}
 
 /* Rows: video lists, picked files, review and progress */
 .yt-list{list-style:none;margin:0;padding:0;display:grid;gap:8px}

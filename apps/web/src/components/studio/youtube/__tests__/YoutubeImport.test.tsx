@@ -1,5 +1,5 @@
 /**
- * Studio → Move from YouTube (wiki AUN-YT-IMPORT): the feature-off state,
+ * Studio → Move from YouTube (wiki AUN-YT-IMPORT): nothing at all while the feature is off,
  * Google's ?error= codes, finishing ?connect=<state>, choosing videos (the selection payload), and how the
  * Import step shows each item's state.
  */
@@ -15,6 +15,7 @@ const getImport = jest.fn();
 const saveSelection = jest.fn();
 const startOAuth = jest.fn();
 const finishOAuth = jest.fn();
+const leaveToDashboard = jest.fn();
 
 jest.mock('@/hooks/useLanguage', () => ({
   useLanguage: () => ({ t: { studio: mockStudio, confirmDialog: { typeToConfirm: 'Type {value}' }, common: { cancel: 'Cancel' } }, lang: 'en', locale: 'en', isRTL: false }),
@@ -28,6 +29,7 @@ jest.mock('@/lib/youtube-import/api', () => {
     saveSelection: (...a: unknown[]) => saveSelection(...a),
     startOAuth: (...a: unknown[]) => startOAuth(...a),
     finishOAuth: (...a: unknown[]) => finishOAuth(...a),
+    leaveToDashboard: () => leaveToDashboard(),
   };
 });
 jest.mock('@/components/common/AppLink', () => ({ __esModule: true, default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => <a href={href} {...rest}>{children}</a> }));
@@ -50,11 +52,22 @@ beforeEach(() => {
 });
 
 describe('YoutubeImportTab', () => {
-  it('says the feature is off when the site has no Google connection', async () => {
+  it('says nothing about a feature that is off: no wizard, no message, back to the dashboard', async () => {
     getImportStatus.mockResolvedValue({ ready: false, captionsAvailable: false, import: null });
     render(<YoutubeImportTab locale="en" channelId="c1" channelHandle={null} />);
-    expect(await screen.findByTestId('yt-off')).toHaveTextContent(text.off.title);
+    await waitFor(() => expect(leaveToDashboard).toHaveBeenCalled());
     expect(screen.queryByTestId('yt-connect-button')).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByTestId('yt-load-failed')).toBeNull();
+  });
+
+  it('a feature_off answer (switched off while open) is not an error to show', async () => {
+    const { YtImportApiError } = jest.requireActual('@/lib/youtube-import/api');
+    getImportStatus.mockRejectedValue(new YtImportApiError(404, 'feature_off'));
+    render(<YoutubeImportTab locale="en" channelId="c1" channelHandle={null} />);
+    await act(async () => undefined);
+    expect(screen.queryByTestId('yt-load-failed')).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it("shows Google's refusal from ?error= on the Connect step, and connects with captions when opted in (off by default)", async () => {

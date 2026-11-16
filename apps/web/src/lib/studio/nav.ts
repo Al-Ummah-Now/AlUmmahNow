@@ -18,6 +18,8 @@ export interface StudioFeatures {
   upload?: boolean;
   bulkSchedule?: boolean;
   siteDomains?: boolean;
+  /** Move from YouTube (wiki AUN-YT-IMPORT): on, configured, and this account may import here */
+  youtubeImport?: boolean;
 }
 export type StudioFeature = keyof StudioFeatures;
 
@@ -74,7 +76,7 @@ export const STUDIO_NAV: readonly StudioNavItem[] = [
       // Live streams (either provider, D3); a stream's Go live page needs live.manage
       { id: 'live', requires: ['live.manage', 'live.moderate'], feature: 'live' },
       // Move from YouTube (wiki AUN-YT-IMPORT): whoever can upload to the channel
-      { id: 'youtube', requires: ['video.upload'] },
+      { id: 'youtube', requires: ['video.upload'], feature: 'youtubeImport' },
       { id: 'posts', requires: ['post.manage'] },
     ],
   },

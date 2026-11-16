@@ -2,7 +2,10 @@
  * Move from YouTube (wiki AUN-YT-IMPORT, docs/features/youtube-import.md): the
  * Studio wizard's API. Bearer auth; the rules live in lib/youtube-import/service.ts.
  *
- * GET  /api/youtube-import/status?channelId=           feature ready? the latest import
+ * Off or not configured (admin → Platform settings → YouTube import): every route answers 404 feature_off.
+ *
+ * GET  /api/youtube-import/available?channelId=        200 when on and the caller may import here (Studio shows the tab), else 404
+ * GET  /api/youtube-import/status?channelId=           the latest import
  * POST /api/youtube-import/oauth/start                 { channelId, captions, locale } → { url } (Google consent)
  * GET  /api/youtube-import/oauth/callback              Google's redirect (plain route, index.ts): keeps the code → 302 to the wizard ?connect=<token>
  * POST /api/youtube-import/oauth/finish                { state: <connect token> } → { import } (only the user who started the consent)
@@ -29,6 +32,8 @@ import {
 	cancelImport,
 	finishOAuth,
 	importStatus,
+	importAvailable,
+	requireYtEnabled,
 	linkBack,
 	readImport,
 	retryItem,
@@ -44,8 +49,8 @@ const errors = {
 	'400': { description: 'Invalid request', content: { 'application/json': { schema: ResponseError } } },
 	'401': { description: 'Sign in first', content: { 'application/json': { schema: ResponseError } } },
 	'403': { description: 'Not allowed to upload to this channel, or no creator tier (code uploads_by_invitation)', content: { 'application/json': { schema: ResponseError } } },
-	'404': { description: 'No such import (code youtube_import_not_found) or channel', content: { 'application/json': { schema: ResponseError } } },
-	'409': { description: 'Not possible in this state (codes youtube_import_off, not_pickable, nothing_selected, not_failed, …)', content: { 'application/json': { schema: ResponseError } } },
+	'404': { description: 'No such import (code youtube_import_not_found) or channel; code feature_off on every route while the feature is off or not configured', content: { 'application/json': { schema: ResponseError } } },
+	'409': { description: 'Not possible in this state (codes not_pickable, nothing_selected, not_failed, …)', content: { 'application/json': { schema: ResponseError } } },
 	'503': { description: 'The import store or queue is not configured', content: { 'application/json': { schema: ResponseError } } },
 };
 
@@ -73,11 +78,28 @@ abstract class YtRoute extends AuthenticatedRoute {
 	/** Runs the action; a YtHttpError is the answer, anything else a 500 (logged). */
 	protected async answer(c: AppContext, action: () => Promise<Record<string, unknown>>) {
 		try {
+			// Off or not configured: a quiet 404 on every route (Studio hides the feature)
+			await requireYtEnabled(this.env(c));
 			return c.json({ success: true, ...(await action()) });
 		} catch (error) {
 			if (error instanceof YtHttpError) return c.json({ success: false, code: error.code, error: error.message }, error.status as 400);
 			throw error;
 		}
+	}
+}
+
+export class YoutubeImportAvailable extends YtRoute {
+	schema = {
+		tags: ['YouTube import'],
+		summary: 'Move from YouTube: may this caller use it on this channel',
+		description: 'For Studio\'s navigation: 200 when the feature is on and configured and the caller may import into the channel (role and creator tier); otherwise 404 (code feature_off).',
+		request: { query: z.object({ channelId: z.string().min(1).max(64) }) },
+		responses: { '200': { description: '{ available: true }' }, ...errors },
+	};
+
+	async handle(c: AppContext) {
+		const { query } = await this.getValidatedData<typeof this.schema>();
+		return this.answer(c, () => importAvailable(this.env(c), this.caller(c), query.channelId));
 	}
 }
 
@@ -251,6 +273,7 @@ export class YoutubeImportLinkBack extends YtRoute {
 	async handle(c: AppContext) {
 		const { params, query } = await this.getValidatedData<typeof this.schema>();
 		try {
+			await requireYtEnabled(this.env(c));
 			const csv = await linkBack(this.env(c), this.caller(c), params.importId, query.locale);
 			return new Response(csv, {
 				headers: {

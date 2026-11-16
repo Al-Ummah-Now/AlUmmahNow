@@ -5,6 +5,7 @@
 import { Hono } from 'hono';
 import { fromHono } from 'chanfana';
 import {
+	YoutubeImportAvailable,
 	YoutubeImportCancel,
 	YoutubeImportGet,
 	YoutubeImportLinkBack,
@@ -18,6 +19,7 @@ import {
 } from '../endpoints/youtube-import/youtubeImport';
 
 export const youtubeImportRouter = fromHono(new Hono(), { base: '/api/youtube-import' });
+youtubeImportRouter.get('/available', YoutubeImportAvailable);
 youtubeImportRouter.get('/status', YoutubeImportStatus);
 youtubeImportRouter.post('/oauth/start', YoutubeImportOAuthStart);
 youtubeImportRouter.post('/oauth/finish', YoutubeImportOAuthFinish);

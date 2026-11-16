@@ -143,6 +143,30 @@ export async function requireOwnImport(env: YtEnv, who: YtCaller, importId: stri
 // Status and connection
 // ---------------------------------------------------------------------------
 
+/** The answer while the feature is off or not configured: a quiet 404, as if it did not exist. */
+export function featureOff(): YtHttpError {
+	return new YtHttpError(404, YT_IMPORT_ERRORS.notEnabled, 'Not found');
+}
+
+/** Throws featureOff() unless an admin switched the feature on and it is fully configured. */
+export async function requireYtEnabled(env: YtEnv): Promise<void> {
+	if (!(await ytReadyConfig(env))) throw featureOff();
+}
+
+/**
+ * Studio's nav: on and configured, and this caller may import into the channel (its role and a
+ * creator tier). Anything else is a quiet 404, so the tab and page simply do not exist.
+ */
+export async function importAvailable(env: YtEnv, who: YtCaller, channelId: string): Promise<{ available: true }> {
+	try {
+		await requireImporter(env, who, channelId);
+	} catch (error) {
+		if (error instanceof YtHttpError && (error.status === 403 || error.status === 404)) throw featureOff();
+		throw error;
+	}
+	return { available: true };
+}
+
 export async function importStatus(env: YtEnv, who: YtCaller, channelId: string): Promise<{ ready: boolean; captionsAvailable: boolean; import: YtImport | null }> {
 	await requireImporter(env, who, channelId);
 	const ready = !!(await ytReadyConfig(env));
@@ -153,7 +177,7 @@ export async function importStatus(env: YtEnv, who: YtCaller, channelId: string)
 export async function startOAuth(env: YtEnv, who: YtCaller, input: { channelId: string; captions: boolean; locale: 'en' | 'ar' }, now = new Date()): Promise<{ url: string }> {
 	const { ownerId } = await requireImporter(env, who, input.channelId);
 	const cfg = await ytReadyConfig(env);
-	if (!cfg) throw new YtHttpError(409, YT_IMPORT_ERRORS.notEnabled, 'Moving from YouTube is not available yet');
+	if (!cfg) throw featureOff();
 	const db = ytDb(env);
 	const state = randomToken(32);
 	const { verifier, challenge } = await pkcePair();
@@ -215,6 +239,11 @@ export async function oauthCallback(env: YtEnv, query: { code?: string; state?: 
 		return `${(env.VIDEOS_WEB_URL ?? '').replace(/\/$/, '')}/en/studio?${new URLSearchParams({ error: 'failed' })}`;
 	}
 	const back = (q: Record<string, string>) => studioUrl(env, row.locale, row.channel_id, q);
+	// Switched off meanwhile: back to Studio, with nothing about the feature
+	if (!(await ytReadyConfig(env))) {
+		await db.prepare('DELETE FROM yt_oauth_states WHERE state = ?').bind(state).run();
+		return `${(env.VIDEOS_WEB_URL ?? '').replace(/\/$/, '')}/${row.locale === 'ar' ? 'ar' : 'en'}/studio/${encodeURIComponent(row.channel_id)}/dashboard`;
+	}
 	if (query.error || !query.code || query.code.length > 2048) {
 		await db.prepare('DELETE FROM yt_oauth_states WHERE state = ?').bind(state).run();
 		return back({ error: YT_IMPORT_ERRORS.denied });
@@ -249,7 +278,7 @@ export async function finishOAuth(env: YtEnv, who: YtCaller, connect: string, no
 	}
 	const { ownerId } = await requireImporter(env, who, row.channel_id);
 	const cfg = await ytReadyConfig(env);
-	if (!cfg) throw new YtHttpError(409, YT_IMPORT_ERRORS.notEnabled, 'Moving from YouTube is not available yet');
+	if (!cfg) throw featureOff();
 	let tokens: Awaited<ReturnType<typeof exchangeCode>>;
 	try {
 		tokens = await exchangeCode(cfg, row.code, row.verifier);
@@ -620,6 +649,7 @@ const TITLE_MAX = 200;
  * is already here.
  */
 export async function prepareImportUpload(env: YtEnv, who: YtCaller, channelId: string, ref: { importId: string; itemId: string }, now = new Date()): Promise<ImportUpload> {
+	await requireYtEnabled(env);
 	const db = ytDb(env);
 	const importRow = await readImportRow(db, ref.importId);
 	if (!importRow || importRow.user_id !== who.userId || importRow.channel_id !== channelId || importRow.status !== 'importing') {

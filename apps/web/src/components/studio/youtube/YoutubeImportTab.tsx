@@ -31,6 +31,8 @@ import {
   saveSelection,
   startImport,
   startOAuth,
+  isFeatureOff,
+  leaveToDashboard,
   YtImportApiError,
   type YtImportStatusView,
 } from '@/lib/youtube-import/api';
@@ -112,6 +114,8 @@ export function YoutubeImportTab({ locale, channelId, channelHandle }: Props) {
   /** A failure the user sees: reported (admin Errors page), shown with its reference. */
   const shown = useCallback(
     (message: string, error: unknown, where: string) => {
+      // A switched-off feature is not a failure: the page is already leaving for the dashboard
+      if (isFeatureOff(error)) return '';
       const status = error instanceof YtImportApiError ? error.status : undefined;
       const ref = reportError(error, { shown: true, ...(status ? { status } : {}), extra: { feature: 'youtube-import', where, channelId } });
       return uploadErrorMessage(message, ref, lang);
@@ -140,6 +144,11 @@ export function YoutubeImportTab({ locale, channelId, channelHandle }: Props) {
     void (async () => {
       try {
         const status = await getImportStatus(channelId, controller.signal);
+        // The server only answers while the feature is on; never show a half-ready wizard
+        if (!status.ready) {
+          leaveToDashboard();
+          return;
+        }
         setView(status);
         let errorKey: string | null = connectErrorKey(queryError);
         if (errorKey) setConnectError(text.errors[errorKey as keyof typeof text.errors]);
@@ -148,7 +157,7 @@ export function YoutubeImportTab({ locale, channelId, channelHandle }: Props) {
           try {
             connected = (await finishOAuth(queryConnect)).id;
           } catch (error) {
-            if (controller.signal.aborted) return;
+            if (controller.signal.aborted || isFeatureOff(error)) return;
             const refused = error instanceof YtImportApiError ? finishErrorKey(error.status, error.code) : null;
             errorKey = refused ?? 'failed';
             if (refused) {
@@ -175,7 +184,8 @@ export function YoutubeImportTab({ locale, channelId, channelHandle }: Props) {
         setStep(errorKey ? 'connect' : initialStep(imp && imp.status !== 'cancelled' ? imp : null));
         setLoad('ready');
       } catch (error) {
-        if (controller.signal.aborted) return;
+        // Switched off meanwhile: api.ts is already taking the user to the dashboard
+        if (controller.signal.aborted || isFeatureOff(error)) return;
         const code = errorCodeOf(error);
         if (code === 'uploads_by_invitation' || code === 'youtube_import_not_found') {
           setLoadError(text.errors[code]);
@@ -287,8 +297,9 @@ export function YoutubeImportTab({ locale, channelId, channelHandle }: Props) {
       const url = await startOAuth(channelId, captions && !!view?.captionsAvailable, lang);
       window.location.assign(url);
     } catch (error) {
+      if (isFeatureOff(error)) return;
       const code = errorCodeOf(error);
-      setConnectError(code === 'youtube_import_off' || code === 'uploads_by_invitation' ? text.errors[code] : shown(text.errors.failed, error, 'oauth-start'));
+      setConnectError(code === 'uploads_by_invitation' ? text.errors[code] : shown(text.errors.failed, error, 'oauth-start'));
       setConnecting(false);
     }
   };
@@ -443,7 +454,9 @@ export function YoutubeImportTab({ locale, channelId, channelHandle }: Props) {
         <div className="yt-hero-marks" aria-hidden="true">
           <span className="yt-hero-from"><YoutubeMark className="h-6 w-6" /></span>
           <ArrowRight className="yt-hero-arrow h-5 w-5 rtl:-scale-x-100" />
-          <span className="yt-hero-to"><span className="yt-hero-dot" /></span>
+          {/* The owner's app icon as it is (resized only; wiki "App favicons") */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="yt-hero-to" src="/icon-192.png" alt="" width={48} height={48} data-testid="yt-hero-app-icon" />
         </div>
         <div className="min-w-0">
           <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl" data-testid="yt-title">{text.title}</h1>
@@ -462,13 +475,6 @@ export function YoutubeImportTab({ locale, channelId, channelHandle }: Props) {
         <div className="yt-panel text-center" data-testid="yt-load-failed">
           <p role="alert" className="mb-4 text-foreground">{loadError}</p>
           <Button className="min-h-11" onClick={() => window.location.reload()}>{text.errors.retry}</Button>
-        </div>
-      )}
-
-      {load === 'ready' && view && !view.ready && (
-        <div className="yt-panel yt-off" data-testid="yt-off">
-          <h2 className="text-lg font-semibold text-foreground">{text.off.title}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{text.off.body}</p>
         </div>
       )}
 

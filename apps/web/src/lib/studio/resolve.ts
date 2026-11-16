@@ -19,7 +19,7 @@ export function safeStudioReturn(value: unknown): string | null {
 }
 
 /** Codes the YouTube connection's callback may send (wiki AUN-YT-IMPORT). */
-const YOUTUBE_CONNECT_ERRORS = new Set(['failed', 'youtube_denied', 'youtube_no_channel', 'youtube_import_off']);
+const YOUTUBE_CONNECT_ERRORS = new Set(['failed', 'youtube_denied', 'youtube_no_channel']);
 
 /**
  * Where /studio opens a channel. The YouTube callback lands on /studio?error=<code> when it can't

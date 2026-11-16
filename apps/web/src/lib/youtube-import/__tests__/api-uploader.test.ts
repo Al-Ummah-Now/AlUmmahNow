@@ -4,7 +4,7 @@
  * own tus reader, completes, and maps refusals to their messages.
  */
 import type { YtFileMatch } from '@al-ummah/shared-types';
-import { saveMatches, getImportStatus, YtImportApiError } from '../api';
+import { saveMatches, getImportStatus, isFeatureOff, studioDashboardOf, YtImportApiError } from '../api';
 import { emptyTakeoutSet, type TakeoutSet } from '../takeout';
 import { ImportUploader, initiateErrorCode } from '../uploader';
 import type { LiveState } from '../wizard';
@@ -50,6 +50,15 @@ describe('api', () => {
     (global.fetch as jest.Mock).mockImplementation((async () => json({ success: false, code: 'uploads_by_invitation', error: 'raw' }, 403)) as never);
     await expect(getImportStatus('c1')).rejects.toEqual(expect.objectContaining({ status: 403, code: 'uploads_by_invitation' }));
     await expect(getImportStatus('c1')).rejects.toBeInstanceOf(YtImportApiError);
+  });
+
+  it('a feature switched off is a quiet 404 feature_off: recognised, and Studio\'s dashboard is the way out', async () => {
+    (global.fetch as jest.Mock).mockImplementation((async () => json({ success: false, code: 'feature_off', error: 'Not found' }, 404)) as never);
+    const error = await getImportStatus('c1').catch((e: unknown) => e);
+    expect(isFeatureOff(error)).toBe(true);
+    expect(isFeatureOff(new YtImportApiError(404, 'youtube_import_not_found'))).toBe(false);
+    expect(studioDashboardOf('/ar/studio/c%201/content/youtube')).toBe('/ar/studio/c%201/dashboard');
+    expect(studioDashboardOf('/en/watch/x')).toBeNull();
   });
 });
 
