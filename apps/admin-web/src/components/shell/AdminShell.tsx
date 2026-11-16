@@ -106,7 +106,7 @@ export function AdminShell({ userEmail, userName, userRoles, authIssuer, environ
   const navLink = (item: NavItem) => {
     const active = item === current;
     const count = item.badge ? badges[item.badge] : null;
-    const text = badgeText(count);
+    const text = badgeText(count, locale);
     return (
       <li key={item.href}>
         <Link
