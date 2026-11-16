@@ -6,7 +6,7 @@ import type { AdminContentPermission, AdminDeletion, AdminDeletionKind, AdminDel
 import { getI18n } from '@/i18n/server';
 import { formatDate, type MessageKey } from '@/i18n/translate';
 import { ErrorAlert, linkClass } from '@/components/ui';
-import { Chip, CursorPager, EmptyState, MonoId, PageHeader, tableWrapClass, tdClass, thClass, wideOnly } from '@/components/content/parts';
+import { Chip, CursorPager, EmptyState, PageHeader, tableWrapClass, tdClass, thClass, wideOnly } from '@/components/content/parts';
 import { hrefWith, PAGE_SIZE, pickParams, type SearchParams } from '@/components/content/query';
 import { logger } from '@/lib/logger';
 import { DeletionActions } from './DeletionActions';
@@ -112,9 +112,8 @@ export default async function DeletedPage({ searchParams }: { searchParams: Prom
                     <td className={tdClass}>
                       <Chip tone="neutral">{t(KIND_LABEL[d.kind])}</Chip>
                       <span className="block font-medium text-fg break-words mt-1" dir="auto">
-                        {href ? <Link href={href} className={linkClass}>{d.title || d.id}</Link> : d.title || d.id}
+                        {href ? <Link href={href} className={linkClass}>{d.title || t('content.untitled')}</Link> : d.title || t('content.untitled')}
                       </span>
-                      <span className="block"><MonoId value={d.id} max={32} /></span>
                       {d.reason && <span className="block text-sm text-fg-muted mt-1" dir="auto">{t('deleted.reason', { reason: d.reason })}</span>}
                       <span className="md:hidden block text-xs text-fg-muted mt-1">
                         {fillNodes(t('deleted.byOn', { when: formatDate(d.deletedAt, locale, true) }), { who: <UserName id={d.deletedBy} showEmail={false} /> })}

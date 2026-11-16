@@ -6,7 +6,7 @@ import { getI18n } from '@/i18n/server';
 import { formatDate, formatNumber } from '@/i18n/translate';
 import { ErrorAlert, linkClass } from '@/components/ui';
 import { FilterForm } from '@/components/content/FilterForm';
-import { Chip, EmptyState, MonoId, Notice, PageHeader, Pager, tableWrapClass, tdClass, thClass, wideOnly } from '@/components/content/parts';
+import { Chip, EmptyState, Notice, PageHeader, Pager, tableWrapClass, tdClass, thClass, wideOnly } from '@/components/content/parts';
 import { PAGE_SIZE, hrefWith, pickParams, type SearchParams } from '@/components/content/query';
 import { logger } from '@/lib/logger';
 
@@ -119,13 +119,12 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
                     </td>
                     <td className={`${tdClass} ${wideOnly}`}>
                       {ch.ownerId ? (
-                        <Link href={`/users/${encodeURIComponent(ch.ownerId)}`} className={`${linkClass} text-sm break-all`} dir="ltr">
-                          {ch.ownerEmail ?? ch.ownerId}
+                        <Link href={`/users/${encodeURIComponent(ch.ownerId)}`} className={`${linkClass} text-sm break-words`} dir="ltr">
+                          {ch.ownerEmail ?? t('content.unnamedAccount')}
                         </Link>
                       ) : (
                         <span className="text-fg-subtle">{t('content.none')}</span>
                       )}
-                      {ch.ownerId && <span className="block"><MonoId value={ch.ownerId} /></span>}
                     </td>
                     <td className={tdClass}>
                       <div className="flex flex-wrap gap-1">

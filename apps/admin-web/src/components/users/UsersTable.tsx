@@ -9,7 +9,7 @@ import { isUnexpectedFailure, tierActionMessage, tierChangeMessage, tiersHref } 
 import { useLanguage } from '@/i18n/I18nProvider';
 import { formatDate, formatNumber, type Translator } from '@/i18n/translate';
 import { ErrorAlert, fieldClass, linkClass } from '@/components/ui';
-import { Chip, MonoId, smallButtonClass, tableWrapClass, tdClass, thClass, wideOnly } from '@/components/content/parts';
+import { Chip, smallButtonClass, tableWrapClass, tdClass, thClass, wideOnly } from '@/components/content/parts';
 import { InviteStatusChip } from '@/components/invites/InviteStatusChip';
 import { CreatorTierControl, type SetTierAction } from '@/components/creators/CreatorTierControl';
 import { TierChangeDialog } from '@/components/creators/TierChangeDialog';
@@ -201,8 +201,7 @@ export function UsersTable({ items, tiers, canManage, setTier, bulkSetTier }: Us
                           {name}
                         </Link>
                         {u.userName && <span className="block text-sm text-fg-muted" dir="ltr">@{u.userName}</span>}
-                        <span className="block"><MonoId value={u.id} max={24} /></span>
-                        {u.email && <span className="block md:hidden text-xs text-fg-muted break-all" dir="ltr">{u.email}</span>}
+                        {u.email && <span className="block md:hidden text-xs text-fg-muted break-words" dir="ltr">{u.email}</span>}
                         {/* Phones: the status column is hidden, so its chips sit under the name */}
                         <div className="md:hidden mt-1"><StatusChips user={u} t={t} /></div>
                       </div>

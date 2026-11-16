@@ -1646,6 +1646,10 @@ const en = {
     },
   },
   content: {
+    untitled: 'Untitled',
+    noText: 'No text',
+    unnamedChannel: 'Unnamed channel',
+    unnamedAccount: 'Unnamed account',
     search: 'Search',
     apply: 'Apply',
     clear: 'Clear filters',
@@ -1878,6 +1882,7 @@ const en = {
     failedRef: 'Could not undo. Make the change again from the item (reference {ref}).',
   },
   videos: {
+    untitled: 'Untitled video',
     title: 'Videos',
     subtitle: 'Every video across all channels',
     searchLabel: 'Title or ID',

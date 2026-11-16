@@ -6,9 +6,10 @@ import { formatDate } from '@/i18n/translate';
 import { ErrorAlert, linkClass } from '@/components/ui';
 import { FilterForm } from '@/components/content/FilterForm';
 import { DeleteRowButton } from '@/components/content/actions';
-import { Chip, EmptyState, MonoId, PageHeader, Pager, tableWrapClass, tdClass, thClass, wideOnly } from '@/components/content/parts';
+import { Chip, EmptyState, PageHeader, Pager, tableWrapClass, tdClass, thClass, wideOnly } from '@/components/content/parts';
 import { PAGE_SIZE, hrefWith, pickParams, type SearchParams } from '@/components/content/query';
 import { logger } from '@/lib/logger';
+import { getNames } from '@/lib/api/audit';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,6 +26,9 @@ export default async function CommentsPage({ searchParams }: { searchParams: Pro
     logger.error('[comments] Failed to load', { error: e instanceof Error ? e.message : String(e) });
   }
   const canDelete = permissions.includes('content:delete');
+  // Commenters by name, never by id (one lookup for the page)
+  const names = data ? await getNames({ users: data.items.map((c) => c.userId), items: [] }) : { users: {}, items: {} };
+  const userName = (id: string) => names.users[id]?.name || names.users[id]?.userName || t('content.unnamedAccount');
 
   return (
     <div>
@@ -66,14 +70,14 @@ export default async function CommentsPage({ searchParams }: { searchParams: Pro
                         {c.isHidden && <Chip tone="bad">{t('comments.hidden')}</Chip>}
                       </div>
                       <span className="block md:hidden text-xs text-fg-muted mt-1" dir="auto">
-                        {c.videoTitle} · {formatDate(c.createdAt, locale)}
+                        {c.videoTitle || t('videos.untitled')} · {formatDate(c.createdAt, locale)}
                       </span>
                     </td>
                     <td className={`${tdClass} ${wideOnly} text-sm`}>
-                      <Link href={`/videos/${encodeURIComponent(c.videoId)}`} className={`${linkClass} break-words`} dir="auto">{c.videoTitle || c.videoId}</Link>
+                      <Link href={`/videos/${encodeURIComponent(c.videoId)}`} className={`${linkClass} break-words`} dir="auto">{c.videoTitle || t('videos.untitled')}</Link>
                     </td>
                     <td className={`${tdClass} ${wideOnly} text-sm`}>
-                      <Link href={`/users/${encodeURIComponent(c.userId)}`} className={linkClass}><MonoId value={c.userId} max={24} /></Link>
+                      <Link href={`/users/${encodeURIComponent(c.userId)}`} className={`${linkClass} break-words`} dir="auto" data-testid="comment-user-link">{userName(c.userId)}</Link>
                     </td>
                     <td className={`${tdClass} ${wideOnly} text-sm text-fg-muted whitespace-nowrap`}><time dateTime={c.createdAt}>{formatDate(c.createdAt, locale, true)}</time></td>
                     {canDelete && (
