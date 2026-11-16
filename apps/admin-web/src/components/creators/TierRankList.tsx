@@ -6,6 +6,7 @@ import type { CreatorTier } from '@al-ummah/shared-types';
 import type { ActionResult } from '@/lib/api/errors';
 import { arabicMissing, isUnexpectedFailure, tierActionMessage, tierLabel } from '@/lib/creator-tiers';
 import { useLanguage } from '@/i18n/I18nProvider';
+import { formatNumber } from '@/i18n/translate';
 import { cardClass } from '@/components/ui';
 import { Chip, smallButtonClass } from '@/components/content/parts';
 import { useUndoableAction } from '@/components/undo/UndoToast';
@@ -50,7 +51,9 @@ export function TierRankList({ tiers, defaultTierId, canManage, reorder }: { tie
     setOrder(next);
     setBusy(true);
     setError(null);
-    const name = byId.get(moved)?.name ?? moved;
+    // The tier's name in the admin's language, and the rank in its digits («صارت «عالِم» رقم ٤»)
+    const movedTier = byId.get(moved);
+    const name = movedTier ? tierLabel(movedTier, locale) : moved;
     try {
       await run({
         action: () => call(next),
@@ -59,7 +62,7 @@ export function TierRankList({ tiers, defaultTierId, canManage, reorder }: { tie
           setOrder(res.previous);
           router.refresh();
         },
-        message: t('creators.rankSaved', { tier: name, rank: String(next.indexOf(moved) + 1) }),
+        message: t('creators.rankSaved', { tier: name, rank: formatNumber(next.indexOf(moved) + 1, locale) }),
         undoneMessage: t('creators.rankUndone'),
       });
       setAnnounce(t('creators.rankSaved', { tier: name, rank: String(next.indexOf(moved) + 1) }));

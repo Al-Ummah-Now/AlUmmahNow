@@ -244,7 +244,8 @@ describe('rendered components', () => {
         setTier,
       }),
     );
-    assert.match(assigned, /Assigned by an admin · <bdi>Admin Name<\/bdi>, <bdi>Nov 8, 2026<\/bdi>/);
+    // Who and when once (no "an admin · Admin" doubling)
+    assert.match(assigned, /Assigned by <bdi>Admin Name<\/bdi>, <bdi>Nov 8, 2026<\/bdi>/);
     assert.doesNotMatch(assigned, /<select/, 'read-only for moderators');
   });
 

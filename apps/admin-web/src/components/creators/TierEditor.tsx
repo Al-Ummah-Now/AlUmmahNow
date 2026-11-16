@@ -2,11 +2,11 @@
 
 import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CREATOR_TIER_BOUNDS, CREATOR_TIER_IDS, CREATOR_TIER_TEXT, parseDigits, type CreatorTier } from '@al-ummah/shared-types';
+import { CREATOR_TIER_BOUNDS, CREATOR_TIER_IDS, CREATOR_TIER_TEXT, localizeDigits, parseDigits, type CreatorTier } from '@al-ummah/shared-types';
 import type { ActionResult } from '@/lib/api/errors';
 import { isUnexpectedFailure, tierActionMessage, tierEffect, tierFormPayload, tierToForm, validateTierForm, type TierField, type TierFormValues, type TierPayload, tierLabel, arabicMissing } from '@/lib/creator-tiers';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatNumber, type MessageKey } from '@/i18n/translate';
+import { formatCount, formatNumber, type MessageKey } from '@/i18n/translate';
 import Link from '@/components/AppLink';
 import { cardClass, fieldClass, linkClass } from '@/components/ui';
 import { Chip, dangerButtonClass } from '@/components/content/parts';
@@ -102,17 +102,15 @@ function TierCard({ tier, users, invites = 0, canManage, actions, create = false
       <label className="flex flex-col gap-1 text-sm text-fg-muted">
         <span className="text-fg font-medium">{label}</span>
         <input
-          type="number"
+          type="text"
           inputMode="numeric"
-          min={min}
-          max={max}
-          step={1}
+          autoComplete="off"
           required
-          value={Number.isFinite(form[field]) ? form[field] : ''}
+          value={Number.isFinite(form[field]) ? localizeDigits(locale, form[field]) : ''}
           disabled={!canManage}
           aria-invalid={shown[field] ? true : undefined}
           aria-describedby={described(field)}
-          onChange={(e) => set(field, e.target.value === '' ? NaN : Number(parseDigits(e.target.value)))}
+          onChange={(e) => set(field, e.target.value.trim() === '' ? NaN : Number(parseDigits(e.target.value.trim())))}
           className={fieldClass}
           dir="ltr"
           data-testid={`tier-${key}-${field}`}
@@ -247,17 +245,15 @@ function TierCard({ tier, users, invites = 0, canManage, actions, create = false
           <label className="flex flex-col gap-1 text-sm text-fg-muted">
             <span className="text-fg font-medium">{t('creators.tierChannels')}</span>
             <input
-              type="number"
+              type="text"
               inputMode="numeric"
-              min={CREATOR_TIER_BOUNDS.maxChannels.min}
-              max={CREATOR_TIER_BOUNDS.maxChannels.max}
-              step={1}
-              value={form.maxChannels ?? ''}
+              autoComplete="off"
+              value={form.maxChannels == null ? '' : localizeDigits(locale, form.maxChannels)}
               placeholder={t('creators.tierChannelsHint')}
               disabled={!canManage}
               aria-invalid={shown.maxChannels ? true : undefined}
               aria-describedby={described('maxChannels')}
-              onChange={(e) => set('maxChannels', e.target.value === '' ? null : Number(parseDigits(e.target.value)))}
+              onChange={(e) => set('maxChannels', e.target.value.trim() === '' ? null : Number(parseDigits(e.target.value.trim())))}
               className={fieldClass}
               dir="ltr"
               data-testid={`tier-${key}-maxChannels`}
@@ -303,8 +299,9 @@ function TierCard({ tier, users, invites = 0, canManage, actions, create = false
         )}
       </fieldset>
       {canManage && (
-        <div className="flex flex-wrap items-center gap-2">
-          <button type="submit" className={confirmButtonClass} disabled={busy} data-testid={`tier-${key}-save`}>
+        // Footer: Save / Create tier at the end edge; Delete and why it is blocked before it
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button type="submit" className={`${confirmButtonClass} order-last`} disabled={busy} data-testid={`tier-${key}-save`}>
             {busy ? t('creators.saving') : create ? t('creators.tierCreate') : t('creators.tierSave')}
           </button>
           {!create && tier && !SHIPPED.has(tier.id) && (
@@ -349,7 +346,7 @@ function TierCard({ tier, users, invites = 0, canManage, actions, create = false
       {!create && tier && (
         <TierChangeDialog
           open={pending !== null}
-          title={pending === 'delete' ? t('creators.tierDeleteTitle', { name: tierLabel(tier, locale) }) : t('creators.tierSaveTitle', { name: form.name.trim() || tier.name })}
+          title={pending === 'delete' ? t('creators.tierDeleteTitle', { name: tierLabel(tier, locale) }) : t('creators.tierSaveTitle', { name: tierLabel(tier, locale) })}
           body={pending === 'delete' ? t('creators.tierDeleteBody') : `${(users === 1 ? t('creators.tierSaveBodyOne') : t('creators.tierSaveBody', { count: n(users) }))} ${tierEffect(form, t, locale)}`}
           confirmLabel={pending === 'delete' ? t('creators.tierDelete') : t('creators.tierSave')}
           danger={pending === 'delete'}
@@ -380,7 +377,7 @@ export function TierEditor({ tiers, counts, invites = {}, defaultTierId, canMana
               </Chip>
             )}
             <Chip tone={tier.unlimited ? 'info' : 'good'} testId={`tier-${tier.id}-users`}>
-              {(counts[tier.id] ?? 0) === 1 ? t('creators.tierUsersOne') : t('creators.tierUsers', { count: formatNumber(counts[tier.id] ?? 0, locale) })}
+              {formatCount(counts[tier.id] ?? 0, 'user', locale)}
             </Chip>
             {tier.id === defaultTierId ? (
               <Chip tone="info" testId={`tier-${tier.id}-default`}>{t('creators.tierDefaultChip')}</Chip>

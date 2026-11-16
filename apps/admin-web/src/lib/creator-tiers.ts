@@ -37,7 +37,8 @@ export function tierEffect(tier: TierLimits | null, t: Translator, locale: Local
   const n = (value: number) => formatNumber(value, locale);
   const uploads = tier.uploads !== false;
   const channels = tier.channels !== false;
-  const channelText = tier.maxChannels === null ? t('creators.effectChannelsAny') : t('creators.effectChannels', { count: n(tier.maxChannels) });
+  // Plural: one channel / two (Arabic dual) / more
+  const channelText = tier.maxChannels === null ? t('creators.effectChannelsAny') : tier.maxChannels === 1 ? t('creators.effectChannelsOne') : tier.maxChannels === 2 ? t('creators.effectChannelsTwo', { count: n(2) }) : t('creators.effectChannels', { count: n(tier.maxChannels) });
   const limits = { perHour: n(tier.perHour), perDay: n(tier.perDay), concurrent: n(tier.maxConcurrent), channels: channelText };
   const parts = [
     uploads && channels
