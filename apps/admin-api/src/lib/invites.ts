@@ -18,7 +18,8 @@ import { logger } from './logger';
 import { resolveEmailCopy } from './email-templates';
 import type { D1Database } from './types';
 import { AuthApiError, AuthModerationClient, audit, cronSyncDue, isPermanentAuthError } from './authModeration';
-import { containsPattern } from '@al-ummah/shared-types';
+import { containsPattern, shortLinkOriginFor, shortLinkUrl, type AdminVideoDetail } from '@al-ummah/shared-types';
+import { callVideos, VideosError, type VideosClientEnv } from './content/videosClient';
 
 export type InviteDelivery = 'sending' | 'sent' | 'failed';
 export type InviteAuthStatus = 'invited' | 'active' | 'expired' | 'revoked';
@@ -49,10 +50,13 @@ export interface InviteRow {
   name: string | null;
   locale: string;
   note: string | null;
-  /** Unused since 2026-11-16 (the tier decides what an account may do; migration 0031): never read, never written */
+  /** Unused since 2026-11-16 (the tier decides what an account may do; migration 0035): never read, never written */
   role?: string;
   /** The tier the invite gave; null = the default tier (viewer invites before 0031) */
   tier_id: string | null;
+  /** The video for an English / Arabic email (migration 0035); resolved again at every send */
+  video_en_id?: string | null;
+  video_ar_id?: string | null;
   auth_roles: string;
   channels: string;
   expires_in_days: number;
@@ -92,6 +96,8 @@ export interface InviteView {
   note: string | null;
   /** The tier the invite gave; null = the current default tier */
   tierId: string | null;
+  /** The video per email language (ids; title, channel and picture are read at each send). An email never uses the other language's. */
+  videos: InviteVideoIds;
   authRoles: string[];
   channels: InviteChannel[];
   status: InviteListStatus;
@@ -161,6 +167,7 @@ export function toView(row: InviteRow, now = Date.now()): InviteView {
     locale: row.locale === 'ar' ? 'ar' : 'en',
     note: row.note,
     tierId: row.tier_id,
+    videos: { en: row.video_en_id ?? null, ar: row.video_ar_id ?? null },
     authRoles: parseJson<string[]>(row.auth_roles, []),
     channels: parseJson<InviteChannel[]>(row.channels, []),
     status: statusOf(row, now),
@@ -284,6 +291,7 @@ export interface NewInvite {
   locale: 'en' | 'ar';
   note: string | null;
   tierId: string | null;
+  videos?: InviteVideoIds;
   authRoles: string[];
   expiresInDays: number;
   continueUrl: string | null;
@@ -294,11 +302,11 @@ export interface NewInvite {
 export async function insertInvite(db: D1Database, input: NewInvite, now = new Date().toISOString()): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO creator_invites (id, user_id, email, name, locale, note, tier_id, auth_roles, channels, expires_in_days, continue_url,
+      `INSERT INTO creator_invites (id, user_id, email, name, locale, note, tier_id, video_en_id, video_ar_id, auth_roles, channels, expires_in_days, continue_url,
          delivery_status, created_by, created_by_email, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, 'sending', ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, 'sending', ?, ?, ?, ?)`
     )
-    .bind(input.id, input.userId, input.email, input.name, input.locale, input.note, input.tierId, JSON.stringify(input.authRoles), input.expiresInDays, input.continueUrl, input.createdBy, input.createdByEmail, now, now)
+    .bind(input.id, input.userId, input.email, input.name, input.locale, input.note, input.tierId, input.videos?.en ?? null, input.videos?.ar ?? null, JSON.stringify(input.authRoles), input.expiresInDays, input.continueUrl, input.createdBy, input.createdByEmail, now, now)
     .run();
 }
 
@@ -399,8 +407,10 @@ export class AuthInviteClient extends AuthModerationClient {
   }
 }
 
-export interface InviteQueueEnv {
+export interface InviteQueueEnv extends VideosClientEnv {
   REPORTS_DB: D1Database;
+  VIDEOS_WEB_URL?: string;
+  ADMIN_WEB_URL?: string;
   AUTH_REQUESTS_QUEUE?: { send(body: unknown, options?: unknown): Promise<void>; sendBatch(batch: unknown[]): Promise<void> };
   Issuer?: string;
   AUTH_MODERATION_CLIENT_ID?: string;
@@ -423,6 +433,8 @@ export async function processInvite(env: InviteQueueEnv, msg: InviteMessage, att
         await markDelivery(db, row.id, 'failed', attempt, 'Revoked before the account was created');
         return 'done';
       }
+      // The email's own language's video as it is at send time: a later title change shows, an unpublished one is left out
+      const video = await videoForLocale(env, row, row.locale);
       const { invite, emailSent } = await auth().createInvite({
         inviteId: row.id,
         userId: row.user_id,
@@ -433,7 +445,7 @@ export async function processInvite(env: InviteQueueEnv, msg: InviteMessage, att
         expiresInDays: row.expires_in_days,
         continueUrl: row.continue_url,
         roles: parseJson<string[]>(row.auth_roles, []),
-        details: { tierId: row.tier_id, channels: parseJson(row.channels, []) },
+        details: { tierId: row.tier_id, channels: parseJson(row.channels, []), ...(video ? { video } : {}) },
         actor: { id: row.created_by, email: row.created_by_email },
         // The admin-edited copy (Settings › Emails) in the invite's language; Auth falls back to its built-in copy without it
         emailCopy: await resolveEmailCopy(db, 'creator_invite', row.locale),
@@ -461,8 +473,14 @@ export async function processInvite(env: InviteQueueEnv, msg: InviteMessage, att
       await clearPending();
       return 'done';
     }
-    // A resend emails the invite again: it carries the current copy in the language it is sent in
-    const body = msg.op === 'resend' ? { ...args, emailCopy: await resolveEmailCopy(db, 'creator_invite', typeof args.locale === 'string' ? args.locale : row.locale) } : args;
+    // A resend emails the invite again in the language it is sent in: the current copy, and that language's
+    // video as it is now (null: none for that language, or no longer public: no card; never the other
+    // language's). The video is always sent when the invite has any, so Auth never reuses the create-time one.
+    const sendLocale = typeof args.locale === 'string' ? args.locale : row.locale;
+    const hasVideo = !!(row.video_en_id || row.video_ar_id);
+    const body = msg.op === 'resend'
+      ? { ...args, emailCopy: await resolveEmailCopy(db, 'creator_invite', sendLocale), ...(hasVideo ? { video: await videoForLocale(env, row, sendLocale) } : {}) }
+      : args;
     const result = await auth().inviteOp(row.id, msg.op as 'resend', body);
     await clearPending();
     await applyAuthState(db, row, result.invite, { emailSent: result.emailSent });
@@ -674,3 +692,69 @@ export async function pendingInvitesByTier(db: D1Database): Promise<Record<strin
     .all<{ tier_id: string; n: number }>();
   return Object.fromEntries((results ?? []).map((r) => [r.tier_id, Number(r.n) || 0]));
 }
+
+/**
+ * The video an invite email shows (Auth renders it as a picture card linking to the watch page;
+ * emails cannot play video). Read at every send, so the email has the current title and channel;
+ * null when the video is gone, private, hidden or not ready, so the email leaves the card out.
+ * The picture is the web app's stable large preview (/og/v/<id>.jpg, never a signed URL).
+ */
+export interface InviteVideo {
+  id: string;
+  title: string;
+  channel: string | null;
+  imageUrl: string;
+  /** Where the card goes per email language: the short link (alummahnow.link/v/<id>, ?lang=ar), else the watch page */
+  urls: { en: string; ar: string };
+}
+
+export async function resolveInviteVideo(env: VideosClientEnv & { VIDEOS_WEB_URL?: string; ADMIN_WEB_URL?: string }, id: string): Promise<InviteVideo | null> {
+  const base = videosWebOrigin(env);
+  if (!base) return null;
+  let video: AdminVideoDetail;
+  try {
+    video = await callVideos<AdminVideoDetail>(env, `/videos/${encodeURIComponent(id)}`);
+  } catch (error) {
+    if (error instanceof VideosError && (error.status === 404 || error.status === 410)) return null;
+    throw error;
+  }
+  if (!isShareableVideo(video)) return null;
+  const path = encodeURIComponent(video.id);
+  const short = shortLinkOriginFor(base);
+  return {
+    id: video.id,
+    title: video.title.trim().slice(0, 200),
+    channel: video.channelName?.trim() || null,
+    imageUrl: `${base}/og/v/${path}.jpg`,
+    // The short link (owner, 2026-11-16: alummahnow.link/v/<id>, ?lang=ar for Arabic invites); hosts without one link the watch page
+    urls: {
+      en: shortLinkUrl(short, { kind: 'video', id: video.id }) ?? `${base}/en/video/${path}`,
+      ar: shortLinkUrl(short, { kind: 'video', id: video.id }, { lang: 'ar' }) ?? `${base}/ar/video/${path}`,
+    },
+  };
+}
+
+/** Public, listed, not deleted and done processing: what anyone can watch. */
+export const isShareableVideo = (v: Pick<AdminVideoDetail, 'isPublic' | 'isHidden' | 'isDeleted' | 'status' | 'title'>): boolean =>
+  v.isPublic && !v.isHidden && !v.isDeleted && (v.status === null || v.status === 'ready') && !!v.title?.trim();
+
+/** The video id per email language. */
+export interface InviteVideoIds {
+  en: string | null;
+  ar: string | null;
+}
+
+/** The video of one email language, resolved now; null when that language has none (the other's is never used). */
+async function videoForLocale(env: VideosClientEnv & { VIDEOS_WEB_URL?: string; ADMIN_WEB_URL?: string }, row: InviteRow, locale: string): Promise<InviteVideo | null> {
+  const id = locale === 'ar' ? row.video_ar_id : row.video_en_id;
+  return id ? resolveInviteVideo(env, id) : null;
+}
+
+/** The video ids of a request body ({ en, ar }); anything that is not an id is null. */
+const cleanIds = (value: unknown): InviteVideoIds => {
+  const v = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
+  const id = (x: unknown) => (typeof x === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(x) ? x : null);
+  return { en: id(v.en), ar: id(v.ar) };
+};
+
+export { cleanIds as inviteVideoIds };

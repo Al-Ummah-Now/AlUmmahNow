@@ -12,7 +12,7 @@
  * the auth account is created through the queue (lib/invites.ts).
  */
 import { Hono, type Context } from 'hono';
-import { hasContentPermission, type AdminContentPermission } from '@al-ummah/shared-types';
+import { ADMIN_SUGGEST_INITIAL_LIMIT, ADMIN_SUGGEST_LIMIT, hasContentPermission, type AdminContentPermission, type AdminVideoRow } from '@al-ummah/shared-types';
 import { callVideos, VideosError, type VideosCall, type VideosClientEnv } from '../lib/content/videosClient';
 import { writeAudit } from '../lib/content/audit';
 import { audit } from '../lib/authModeration';
@@ -27,6 +27,9 @@ import {
   enqueue,
   getInvite,
   insertInvite,
+  isShareableVideo,
+  inviteVideoIds,
+  resolveInviteVideo,
   listInvites,
   liveInviteForEmail,
   newInviteId,
@@ -124,6 +127,30 @@ app.get('/', async (c) => {
   return ok(c, page);
 });
 
+/**
+ * The invite form's video picker: public, ready, listed videos by title (either language, as written),
+ * newest first when nothing is typed, a page at a time. Each item: picture, title, channel and length.
+ */
+app.get('/videos', async (c) => {
+  need(c, 'users:manage');
+  const q = (c.req.query('q') ?? '').trim().slice(0, 200);
+  const page = Math.max(1, Math.floor(Number(c.req.query('cursor')) || 1));
+  const limit = q ? ADMIN_SUGGEST_LIMIT : ADMIN_SUGGEST_INITIAL_LIMIT;
+  const result = await videos<{ items: AdminVideoRow[] }>(c, '/videos', {
+    query: { ...(q ? { q } : {}), visibility: 'public', status: 'ready', hidden: 'no', sort: 'newest', pageSize: limit, page, noTotal: '1' },
+  });
+  const items = result.items.filter(isShareableVideo).map((v) => ({
+    kind: 'video' as const,
+    id: v.id,
+    label: v.title,
+    secondary: v.channelName,
+    imageUrl: v.thumbnailUrl,
+    parentId: v.channelId,
+    duration: v.duration,
+  }));
+  return ok(c, { items, next: result.items.length >= limit ? String(page + 1) : null });
+});
+
 app.get('/lookup', async (c) => {
   const email = normalizeEmail(c.req.query('email') ?? '');
   if (!isEmailAddress(email)) throw new HttpError(400, 'invalid_email', 'A valid email is required');
@@ -175,6 +202,11 @@ app.post('/', async (c) => {
   if (plan.transfer.length) need(c, 'channels:transfer');
   await limit(c);
 
+  // A video per email language, each optional: one anyone can watch now (checked again at every send)
+  const chosen = inviteVideoIds(input.videos);
+  for (const lang of ['en', 'ar'] as const) {
+    if (chosen[lang] && !(await resolveInviteVideo(c.env, chosen[lang]!))) throw new HttpError(400, 'video_not_public', 'This video is not public', { language: lang });
+  }
   const tiers = await videos<{ items?: Array<{ id: string }>; defaultTierId?: string }>(c, '/creator-tiers', { query: { counts: '0' } });
   const list = tiers.items ?? [];
   const tierId = picked ?? tiers.defaultTierId ?? 'member';
@@ -194,6 +226,7 @@ app.post('/', async (c) => {
     locale: locale as 'en' | 'ar',
     note: str(input.note, 1000),
     tierId,
+    videos: chosen,
     authRoles: authRoles as string[],
     expiresInDays: days,
     continueUrl: signInUrl(c.env, locale, inviteLandingPath(locale as 'en' | 'ar', { hasChannels: plan.create.length + plan.transfer.length > 0 })),
@@ -209,7 +242,7 @@ app.post('/', async (c) => {
     await c.env.REPORTS_DB.prepare('DELETE FROM creator_invites WHERE id = ?').bind(row.id).run();
     throw error;
   }
-  await record(c, 'created', ref, { email, tierId, locale, authRoles });
+  await record(c, 'created', ref, { email, tierId, locale, authRoles, ...(chosen.en || chosen.ar ? { videos: chosen } : {}) });
 
   const warnings: Array<{ step: string; code: string; message: string }> = [];
   {
@@ -265,6 +298,8 @@ app.post('/:id/resend', async (c) => {
   requireOpen(row);
   const input = await body(c);
   const locale = input.locale === 'ar' || input.locale === 'en' ? input.locale : undefined;
+  // The invite's language follows the resend, so the next send (and its video) uses it too
+  if (locale && locale !== row.locale) await c.env.REPORTS_DB.prepare('UPDATE creator_invites SET locale = ?, updated_at = ? WHERE id = ?').bind(locale, new Date().toISOString(), row.id).run();
   await queueOp(c, row, 'resend', locale ? { locale } : {});
   await record(c, 'resent', row, locale ? { locale } : {});
   return ok(c, toView((await getInvite(c.env.REPORTS_DB, row.id))!));
