@@ -39,8 +39,8 @@
   /* dark: the page's own background lifted toward white (neutral, never the gold), translucent; light
      text stays AA over the blurred street (measured in apps/www/e2e/page-blocks-glass.spec.ts and
      apps/web/e2e/release/static-pages-glass.spec.ts) */
-  --aun-glass-base-dark: color-mix(in srgb, var(--fanous-color-background, #0b1c26) 80%, white);
-  --aun-glass-surface-dark: color-mix(in srgb, var(--aun-glass-base-dark) calc(var(--aun-glass-alpha) - 5%), transparent);
+  --aun-glass-base-dark: color-mix(in srgb, var(--fanous-color-background, #0b1c26) 86%, white);
+  --aun-glass-surface-dark: color-mix(in srgb, var(--aun-glass-base-dark) min(calc(var(--aun-glass-alpha) + 5%), 100%), transparent);
   --aun-glass-lite-surface-dark: color-mix(in srgb, var(--aun-glass-base-dark) min(calc(var(--aun-glass-alpha) + 30%), 100%), transparent);
   --aun-glass-panel-surface-dark: color-mix(in srgb, var(--aun-glass-base-dark) min(calc(var(--aun-glass-alpha) + 37%), 100%), transparent);
   --aun-glass-edge-dark: color-mix(in srgb, var(--aun-glass-c) 45%, color-mix(in srgb, white 30%, transparent));
