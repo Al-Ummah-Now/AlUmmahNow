@@ -367,9 +367,9 @@ main:has(.demo-gfx){min-height:calc(100dvh - 140px)}
 html:not(.dark) main:has(.demo-gfx) input{background:color-mix(in srgb,#fff 86%,var(--m-control,#fff))!important}
 
 /* Upload */
-main:has(input[type=file]) button[aria-pressed=false]{background:transparent!important;color:var(--fanous-color-text-secondary)!important;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--fanous-color-text-primary) 24%,transparent)!important}
-main:has(input[type=file]) :has(>button[aria-pressed]){gap:8px}
-main:has(input[type=file]) [class*="rounded"]:has(>[class*="border-dashed"]){background:transparent!important;border:0!important;box-shadow:none!important;padding:0!important}
+main:has(input[type=file]):not(:has([data-testid=video-edit-form])) button[aria-pressed=false]{background:transparent!important;color:var(--fanous-color-text-secondary)!important;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--fanous-color-text-primary) 24%,transparent)!important}
+main:has(input[type=file]):not(:has([data-testid=video-edit-form])) :has(>button[aria-pressed]){gap:8px}
+main:has(input[type=file]):not(:has([data-testid=video-edit-form])) [class*="rounded"]:has(>[class*="border-dashed"]){background:transparent!important;border:0!important;box-shadow:none!important;padding:0!important}
 
 /* Comments */
 :has(>[data-testid=comments-count]){justify-content:flex-start;gap:16px}
@@ -404,8 +404,8 @@ main li:has(>a[href*="/video"]),main li:has(a[href*="vid="]):has(h2){background:
 main li h2[class*="group-hover"]{color:var(--fanous-color-text-primary)!important;font-weight:600}
 @media(hover:hover){main li:has(h2[class*="group-hover"]):hover{background:var(--m-hover)!important}}
 /* Upload: one frame */
-main:has(input[type=file]) [class*="border-dashed"]{border-radius:var(--r-lg)}
-main:has(input[type=file]) :has(>*>[class*="border-dashed"]),main:has(input[type=file]) :has(>[class*="border-dashed"]){background:transparent!important;box-shadow:none!important;padding:0!important;border-color:transparent!important}
+main:has(input[type=file]):not(:has([data-testid=video-edit-form])) [class*="border-dashed"]{border-radius:var(--r-lg)}
+main:has(input[type=file]):not(:has([data-testid=video-edit-form])) :has(>*>[class*="border-dashed"]),main:has(input[type=file]):not(:has([data-testid=video-edit-form])) :has(>[class*="border-dashed"]){background:transparent!important;box-shadow:none!important;padding:0!important;border-color:transparent!important}
 /* Channel cards: slim identity band, quiet actions */
 main [class*="h-32"]:is([class^="bg-gradient-to-br"],[class*=" bg-gradient-to-br"]){height:72px!important;background:linear-gradient(135deg,color-mix(in srgb,var(--fanous-color-primary) 28%,var(--fanous-color-surface-raised)),var(--fanous-color-surface-raised))!important}
 main [class*="h-32"]:is([class^="bg-gradient-to-br"],[class*=" bg-gradient-to-br"])>:not(img){width:44px!important;height:44px!important;font-size:18px!important}
