@@ -46,7 +46,7 @@ import { readCaptionSettings, writeCaptionSettings } from '../lib/captions/jobs'
 import { listTranslationEditions } from '../lib/quran/translations';
 import { platformEditions } from '../endpoints/quran/quranTranslations';
 import { addGrant, CaptionMinutesError, listGrants, listLedger, readUsage, revokeGrant, subjectOfUser } from '../lib/captions/minutes';
-import { assignTier, CreatorTierError, deleteTier, purgeTiers, readAssignment, readDefaultTierId, readDeletedTiers, readTier, readTiers, reorderTiers, requestTierPurge, restoreTier, saveTier, setDefaultTier } from '../lib/creatorTiers';
+import { assignTier, createTier, CreatorTierError, deleteTier, purgeTiers, readAssignment, readDefaultTierId, readDeletedTiers, readTier, readTiers, reorderTiers, requestTierPurge, restoreTier, saveTier, setDefaultTier } from '../lib/creatorTiers';
 import { shortLinkClicksReport, siteVisitsReport } from '../lib/site-visits';
 import { decideTierRequest, decisionNotificationPayload, listTierRequests, readRequestRow, readTierRequestForAdmin, recordDelivery, TierRequestError, type TierRequestsEnv } from '../lib/tierRequests';
 import { enqueueNotification, type NotificationsEnv } from '../lib/notifications';
@@ -411,9 +411,9 @@ app.post('/creators/tier', async (c) => {
 	return ok(c, result);
 });
 app.post('/creator-tiers', async (c) => {
-	const input = parse(TierBody, await body(c));
-	if (!input.id) throw new admin.AdminError(400, 'invalid_request', 'id: Required');
-	return ok(c, await saveTier(searchDb(c), input.id, input, actor(c), { create: true, requireLocalized: true }));
+	// Admins never type ids: any id sent is ignored and one is made from the name (lib/creatorTiers newTierId)
+	const { id: _ignored, ...input } = parse(TierBody, await body(c));
+	return ok(c, await createTier(searchDb(c), input, actor(c), undefined, { requireLocalized: true }));
 });
 app.put('/creator-tiers/:id', async (c) => ok(c, await saveTier(searchDb(c), c.req.param('id'), parse(TierBody, await body(c)), actor(c), { requireLocalized: true })));
 // Soft delete (restorable for 30 days); the admin-api cleanup purges through POST /creator-tiers/purge

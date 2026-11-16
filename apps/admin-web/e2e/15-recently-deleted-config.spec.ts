@@ -12,9 +12,14 @@ import { test, expect } from './support/fixtures';
 import { adminApi } from './support/api';
 import { RUN_TAG, storageStatePath } from './support/env';
 
-const tierId = `e2e-trash-${RUN_TAG}-${Date.now().toString(36)}`;
-const create = () =>
-  adminApi('/api/content/creator-tiers', { method: 'POST', body: JSON.stringify({ id: tierId, name: `E2E trash ${tierId}`, nameAr: 'فئة اختبار', description: 'E2E tier', descriptionAr: 'فئة للاختبار', perHour: 1, perDay: 2, maxConcurrent: 1, maxChannels: 1 }) });
+// Admins never type ids: api-videos makes it from the name (e2e-trash-<tag>-<time>), read back from the answer
+const tierName = `E2E trash ${RUN_TAG} ${Date.now().toString(36)}`;
+let tierId = '';
+const create = async () => {
+  const res = await adminApi<{ tier: { id: string } }>('/api/content/creator-tiers', { method: 'POST', body: JSON.stringify({ name: tierName, nameAr: 'فئة اختبار', description: 'E2E tier', descriptionAr: 'فئة للاختبار', perHour: 1, perDay: 2, maxConcurrent: 1, maxChannels: 1 }) });
+  tierId = res.body.result?.tier.id ?? '';
+  return res;
+};
 const remove = (reason: string) => adminApi(`/api/content/creator-tiers/${tierId}`, { method: 'DELETE', body: JSON.stringify({ reason }) });
 
 test.describe.configure({ mode: 'serial' });
@@ -31,6 +36,7 @@ test.describe('recently deleted (contact messages, themes, creator tiers)', () =
   });
 
   test.afterAll(async () => {
+    if (!tierId) return;
     // Whatever state the run stopped in, the tier ends up queued for the next cleanup
     await remove('e2e cleanup');
     await adminApi(`/api/trash/creator-tier/${tierId}/purge`, { method: 'POST' });

@@ -69,7 +69,7 @@ import {
 import { enqueueWarningMail, flagWarningMailFailure } from '../lib/warning-mail';
 import { enqueueTierRequestMail, flagTierRequestFailure, tierRequestMailJob } from '../lib/tier-request-mail';
 import { callVideos, VideosError, type VideosCall, type VideosClientEnv } from '../lib/content/videosClient';
-import { dropAudit, readAudit, setAuditPrevious, writeAudit, type AuditAction, type ContentKind } from '../lib/content/audit';
+import { dropAudit, readAudit, setAuditPrevious, setAuditSubject, writeAudit, type AuditAction, type ContentKind } from '../lib/content/audit';
 import { banVideosUser } from '../lib/content/userBan';
 import { openReportCounts, recentReports, reportedIds, type ReportEntity } from '../lib/content/reports';
 import { logger } from '../lib/logger';
@@ -649,12 +649,22 @@ app.get('/creator-tiers/audit', async (c) => {
   return ok(c, { items: entries.flat().sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 50) });
 });
 
+// Add tier: admins never type ids; api-videos makes it from the name. The audit row is written
+// first (no unaudited change) and moved to the new tier's id once api-videos has made it
 app.post('/creator-tiers', async (c) => {
   need(c, 'creators:manage');
-  const input = await body(c);
-  const id = typeof input.id === 'string' ? input.id : '';
-  return ok(c, await audited(c, { kind: 'creator-tier', id, action: 'create', details: input }, () =>
-    videos(c, '/creator-tiers', { method: 'POST', json: input })));
+  const { id: _ignored, ...input } = await body(c);
+  const db = c.env.REPORTS_DB;
+  const auditId = await writeAudit(db, { kind: 'creator-tier', id: 'new', action: 'create', details: input, actorId: actorOf(c) });
+  try {
+    const result = await videos<{ tier: { id: string } }>(c, '/creator-tiers', { method: 'POST', json: input });
+    await setAuditSubject(db, auditId, 'creator-tier', result.tier.id);
+    logger.info('[Content] Action', { kind: 'creator-tier', id: result.tier.id, action: 'create', actorId: actorOf(c) });
+    return ok(c, result);
+  } catch (error) {
+    await dropAudit(db, auditId).catch((e) => logger.error('[Content] Could not drop the audit row of a failed action', { auditId, error: String(e) }));
+    throw error;
+  }
 });
 
 /**
