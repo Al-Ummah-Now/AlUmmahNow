@@ -18,6 +18,8 @@ import type { CostTestResult } from '@/lib/api/costs-types';
 import { opsFormats } from '../operations/model';
 import { credentialState, keyProblem, missingListings, testCodeOf, type CredentialState, type KeyProblem } from './model';
 import { FeedbackLine, useCostAction } from './useCostAction';
+import { UserName } from '@/components/audit/UserName';
+import { fillNodes } from '@/components/audit/fill';
 
 const PROVIDERS: CostProvider[] = ['cloudflare', 'bunny', 'resend'];
 const STATE_TONE: Record<CredentialState, 'good' | 'warn' | 'bad'> = { set: 'good', unset: 'warn', unreadable: 'bad' };
@@ -78,7 +80,8 @@ function ConnectionCard({ view }: { view: CostCredentialView }) {
 
   const statusText =
     state === 'unset' ? t('costs.connections.status.unset') : state === 'unreadable' ? t('costs.connections.status.unreadable') : view.last4 ? t('costs.connections.status.set', { last4: view.last4 }) : t('costs.connections.status.setPlain');
-  const who = view.updatedByName || view.updatedBy;
+  // Who set it, by name (never the raw id): the stored name, else the names lookup
+  const who: React.ReactNode = view.updatedByName || (view.updatedBy ? <UserName id={view.updatedBy} showEmail={false} /> : null);
 
   return (
     <article className="cost-panel flex min-w-0 flex-col p-5" aria-labelledby={`${ids}-title`} data-testid={`costs-connection-${p}`} data-state={state}>
@@ -102,7 +105,7 @@ function ConnectionCard({ view }: { view: CostCredentialView }) {
         <div className="cost-tile mt-3 space-y-1.5 p-3 text-xs">
           {view.updatedAt && (
             <p className="text-fg-muted" data-testid={`costs-connection-${p}-set-by`}>
-              {who ? t('costs.connections.setBy', { name: who, time: f.time(view.updatedAt) }) : t('costs.connections.setAt', { time: f.time(view.updatedAt) })}
+              {who ? fillNodes(t('costs.connections.setBy', { time: f.time(view.updatedAt) }), { name: who }) : t('costs.connections.setAt', { time: f.time(view.updatedAt) })}
             </p>
           )}
           {testLine && (

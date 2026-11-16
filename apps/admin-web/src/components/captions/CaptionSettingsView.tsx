@@ -7,6 +7,8 @@ import { useLanguage } from '@/i18n/I18nProvider';
 import { formatDate, formatNumber } from '@/i18n/translate';
 import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
+import { UserName } from '@/components/audit/UserName';
+import { fillNodes } from '@/components/audit/fill';
 
 const MODELS = [
   { id: '@cf/deepseek-ai/deepseek-v4.1-flash-1017', name: 'DeepSeek V4.1 Flash' },
@@ -221,7 +223,7 @@ export function CaptionSettingsView({ view, canManage }: { view: View; canManage
         ) : (
           <ul className="space-y-1 text-sm text-fg-muted" data-testid="caption-settings-history">
             {view.audit.map((a) => (
-              <li key={a.id}>{t('captionSettings.historyEntry', { date: formatDate(a.createdAt, locale, true), actor: a.actorId })}</li>
+              <li key={a.id}>{fillNodes(t('captionSettings.historyEntry', { date: formatDate(a.createdAt, locale, true) }), { actor: <UserName id={a.actorId} showEmail={false} /> })}</li>
             ))}
           </ul>
         )}

@@ -162,7 +162,7 @@ export function UsersTable({ items, tiers, canManage, setTier, bulkSetTier }: Us
           </thead>
           <tbody>
             {items.map((u) => {
-              const name = adminUserName(u);
+              const name = adminUserName(u, t('auditLog.unknownUser'));
               const creator = u.creator;
               const tier = creator?.assignment ? tierById.get(creator.assignment.tierId) ?? null : null;
               const limited = tier && !tier.unlimited ? tier : null;

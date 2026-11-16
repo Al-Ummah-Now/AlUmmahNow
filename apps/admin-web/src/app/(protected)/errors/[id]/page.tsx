@@ -14,6 +14,8 @@ import { ErrorStatusChip, HourlyChart, TestChip, errorTitle } from '../ui';
 import { groupActionsFor, itemActionsFor, itemHref } from '../permissions';
 import { ErrorGroupActions } from './ErrorGroupActions';
 import { NeedsActionItemButtons } from './NeedsActionItemButtons';
+import { UserName } from '@/components/audit/UserName';
+import { fillNodes } from '@/components/audit/fill';
 
 export const dynamic = 'force-dynamic';
 
@@ -96,7 +98,7 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
         {group.resolved_release && <Fact label={t('errorsPage.resolvedIn')} value={group.resolved_release} mono />}
         <Fact
           label={t('errorsPage.assignee')}
-          value={group.assignee_id ? (group.assignee_id === viewerId ? t('errorsPage.you') : group.assignee_email ?? group.assignee_id) : t('errorsPage.unassigned')}
+          value={group.assignee_id ? (group.assignee_id === viewerId ? t('errorsPage.you') : <UserName id={group.assignee_id} email={group.assignee_email} showEmail={false} />) : t('errorsPage.unassigned')}
         />
       </dl>
 
@@ -244,7 +246,7 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
   );
 }
 
-function Fact({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+function Fact({ label, value, mono = false }: { label: string; value: React.ReactNode; mono?: boolean }) {
   return (
     <div className="min-w-0">
       <dt className="text-fg-muted">{label}</dt>
@@ -308,7 +310,11 @@ function ActivityEntry({ entry: a, t, locale }: { entry: ErrorActivity; t: Trans
       <span aria-hidden="true" className="absolute -start-[5px] top-1.5 h-2.5 w-2.5 rounded-full bg-accent" />
       <p className="text-sm text-fg">
         <span className="font-medium">{title}</span>{' '}
-        <span className="text-fg-muted">{t('errorsPage.by', { actor: a.actor_email ?? a.actor_id ?? t('errorsPage.system') })}</span>
+        <span className="text-fg-muted">
+          {a.actor_id
+            ? fillNodes(t('errorsPage.by'), { actor: <UserName id={a.actor_id} email={a.actor_email} showEmail={false} /> })
+            : t('errorsPage.by', { actor: a.actor_email ?? t('errorsPage.system') })}
+        </span>
       </p>
       <time dateTime={a.created_at} className="text-xs text-fg-subtle">
         {formatDate(a.created_at, locale, true)}

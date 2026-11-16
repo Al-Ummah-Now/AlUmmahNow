@@ -11,6 +11,10 @@ import { actionKey, actionLabel, auditHref, splitTemplate, detailViews, itemHref
 import { createTranslator } from '../src/i18n/translate';
 import en from '../src/i18n/messages/en';
 import ar from '../src/i18n/messages/ar';
+import * as React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { I18nProvider } from '../src/i18n/I18nProvider';
+import { PersonName } from '../src/components/audit/Named';
 
 const ARABIC = /[؀-ۿ]/;
 const t = createTranslator('en');
@@ -57,16 +61,24 @@ describe('audit log', () => {
   });
 
   it('shows people by name with the email beside it, and system actors as System', () => {
-    assert.deepEqual(personView('usr_1', names, t), { id: 'usr_1', label: 'Aisha Rahman', email: 'aisha@example.com', href: '/users/usr_1', system: false, found: true });
-    assert.equal(personView('usr_2', names, t).label, '@omar');
-    // Unknown: the email the row carries, else the id
+    assert.deepEqual(personView('usr_1', names, t), { id: 'usr_1', label: 'Aisha Rahman', email: 'aisha@example.com', href: '/users/usr_1', system: false, found: true, unknown: false });
+    // No @handle (handles belong to channels): a user without a name or an email is unknown
+    assert.equal(personView('usr_2', names, t).label, 'Unknown user');
+    assert.equal(personView('usr_2', names, t).unknown, true);
+    // Display name, then the email (the lookup's, else the one the row stored), then "Unknown user": never the id
     assert.equal(personView('usr_9', names, t, 'x@example.com').label, 'x@example.com');
-    assert.equal(personView('usr_9', null, t).label, 'usr_9');
-    assert.deepEqual(personView('system:trash-cleanup', names, tAr), { id: 'system:trash-cleanup', label: 'النظام', email: null, href: null, system: true, found: true });
+    assert.equal(personView('usr_9', names, t, 'x@example.com').unknown, false);
+    assert.equal(personView('usr_9', names, t, '  ').label, 'Unknown user');
+    assert.equal(personView('usr_9', null, t).label, 'Unknown user');
+    assert.equal(personView('usr_9', null, tAr).label, 'مستخدم غير معروف');
+    assert.equal(personView('usr_9', null, t).href, '/users/usr_9');
+    assert.equal(itemView('user', 'usr_9', null, t).unknown, true);
+    assert.deepEqual(personView('system:trash-cleanup', names, tAr), { id: 'system:trash-cleanup', label: 'النظام', email: null, href: null, system: true, found: true, unknown: false });
   });
 
   it('shows items by title, and their id when they have none', () => {
     assert.deepEqual(itemView('channel', 'ch_1', names, t), { kind: 'channel', id: 'ch_1', label: 'Daily reminders', href: '/channels/ch_1', found: true });
+    assert.equal(itemView('channel', 'ch_1', names, t).unknown, undefined);
     assert.equal(itemView('video', 'vid_1', names, t).label, 'vid_1');
     assert.equal(itemHref('post', 'p1'), null);
   });
@@ -95,5 +107,37 @@ describe('audit log', () => {
     assert.deepEqual(splitTemplate('by {actor}', ['actor']), ['by ', { slot: 'actor' }]);
     assert.deepEqual(splitTemplate(tAr('creators.historyBy', { date: '١ نوفمبر' }), ['actor']).filter((p) => typeof p !== 'string'), [{ slot: 'actor' }]);
     assert.deepEqual(splitTemplate('{a} and {b}', ['a']), [{ slot: 'a' }, ' and ', '{b}']);
+  });
+});
+
+describe('an unknown user in a history line', () => {
+  const Provider = I18nProvider as unknown as React.FC<{ locale: string; theme: string; children?: React.ReactNode }>;
+  const render = (element: React.ReactElement, locale: 'en' | 'ar' = 'en') =>
+    renderToStaticMarkup(React.createElement(Provider, { locale, theme: 'light' }, element) as never);
+  (globalThis as unknown as { React: unknown }).React = React;
+
+  // Without the /users link: next/link does not render in this plain-Node test (the label and detail are the same)
+  const plain = (p: ReturnType<typeof personView>) => ({ ...p, href: null });
+  // Two @types/react meet here: the component as a plain function component
+  const Person = PersonName as unknown as React.FC<{ person: ReturnType<typeof personView> }>;
+
+  it('reads "Unknown user" with the id only in a copyable detail', () => {
+    const html = render(React.createElement(Person, { person: plain(personView('usr_unknown_1', null, t)) }));
+    assert.match(html, />Unknown user</);
+    // The id is in the disclosure (and the link's title), never as the line's text
+    assert.match(html, /data-testid="unknown-user-id"/);
+    assert.match(html, /data-testid="unknown-user-id-value"[^>]*>usr_unknown_1</);
+    assert.match(html, /aria-label="Copy the user id"/);
+    const visibleLine = html.replace(/<details[\s\S]*<\/details>/, '').replace(/\s(title|data-[a-z-]+)="[^"]*"/g, '');
+    assert.doesNotMatch(visibleLine, /usr_/);
+  });
+
+  it('reads in Arabic and shows no copy detail for a named user', () => {
+    const ar = render(React.createElement(Person, { person: plain(personView('usr_unknown_1', null, tAr)) }), 'ar');
+    assert.match(ar, /مستخدم غير معروف/);
+    assert.match(ar, /aria-label="نسخ معرّف المستخدم"/);
+    const named = render(React.createElement(Person, { person: plain(personView('usr_1', names, t)) }));
+    assert.doesNotMatch(named, /unknown-user-id/);
+    assert.match(named, /Aisha Rahman/);
   });
 });

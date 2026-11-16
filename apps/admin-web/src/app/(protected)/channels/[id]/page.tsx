@@ -107,7 +107,7 @@ export default async function ChannelPage({ params }: { params: Promise<{ id: st
                 <dd>
                   {ch.ownerId ? (
                     <Link href={`/users/${encodeURIComponent(ch.ownerId)}`} className={`${linkClass} break-all`} data-testid="channel-owner-link">
-                      {adminUserName({ ...ch.owner, email: ch.owner?.email || ch.ownerEmail, id: ch.ownerId })}
+                      {adminUserName({ ...ch.owner, email: ch.owner?.email || ch.ownerEmail, id: ch.ownerId }, t('auditLog.unknownUser'))}
                     </Link>
                   ) : (
                     t('content.none')
