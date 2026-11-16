@@ -11,7 +11,7 @@ import { getCsamCaseLogSafe, getCsamCaseSafe } from '../load';
 import { CSAM_STATUS_TONE, CSAM_TONE_CLASS, caseActions, csamDownloadHref, csamFactRows } from '../model';
 import { AccessLog } from '../AccessLog';
 import { HoldForm, MapForm, ReportChecklist, ReportedForm, RetryButton } from './CaseActions';
-import { intlLocale } from '@/i18n/intl-locale';
+import { numberFormat } from '@al-ummah/shared-types';
 
 export const dynamic = 'force-dynamic';
 
@@ -168,7 +168,7 @@ function bytes(n: number, locale: Locale): string {
     v /= 1024;
     i++;
   }
-  return `${new Intl.NumberFormat(intlLocale(locale), { maximumFractionDigits: i ? 1 : 0 }).format(v)} ${units[i]}`;
+  return `${numberFormat(locale, { maximumFractionDigits: i ? 1 : 0 }).format(v)} ${units[i]}`;
 }
 
 function Evidence({ c, t, locale }: { c: CsamCaseDetail; t: Translator; locale: Locale }) {

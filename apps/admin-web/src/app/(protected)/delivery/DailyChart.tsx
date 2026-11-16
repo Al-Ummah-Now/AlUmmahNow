@@ -6,7 +6,7 @@
  * no plays is a gap. Hover shows each point; a <details> table is the text
  * alternative.
  */
-import { chartLocale, labelIndices, niceScale } from '@al-ummah/shared-types';
+import { labelIndices, niceScale, numberFormat } from '@al-ummah/shared-types';
 import { deliveryFormats } from './format';
 
 export type ChartUnit = 'seconds' | 'ratio' | 'count' | 'kbps';
@@ -63,7 +63,7 @@ export function DailyChart({ title, days, bunny, r2, unit, xKind = 'day', locale
   const toAxis = (v: number) => (unit === 'ratio' ? v * 100 : v);
   const present = [...bunny, ...r2].filter((v): v is number => v !== null && Number.isFinite(v));
   const scale = niceScale(present.map(toAxis), { target: 4 });
-  const tickNumber = new Intl.NumberFormat(chartLocale(locale), { maximumFractionDigits: 2 });
+  const tickNumber = numberFormat(locale, { maximumFractionDigits: 2 });
   const plain = (v: number) => (unit === 'count' ? f.integer(v) : unit === 'kbps' ? f.kbps(v) : f.seconds(v));
   const tickText = (v: number) => (unit === 'ratio' ? f.percent(v / 100) : plain(v));
   const valueText = (v: number | null) => (v === null ? labels.noValue : unit === 'ratio' ? f.percent(v) : plain(v));

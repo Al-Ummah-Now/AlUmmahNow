@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { LLAMA_GUARD_CATEGORIES, MODERATION_EXTENSION_CATEGORIES, AI_HIDEABLE_CATEGORIES, type ModerationCategoryPolicy } from '@al-ummah/shared-types';
+import { AI_HIDEABLE_CATEGORIES, LLAMA_GUARD_CATEGORIES, MODERATION_EXTENSION_CATEGORIES, parseDigits, type ModerationCategoryPolicy } from '@al-ummah/shared-types';
 import { updateAiConfig } from '@/lib/api/admin';
 import type { AiConfigView } from '@/lib/api/types';
 import { useLanguage } from '@/i18n/I18nProvider';
@@ -36,7 +36,7 @@ export function SettingsForm({ initial }: { initial: AiConfigView }) {
     setBusy(true);
     setError(null);
     setSaved(false);
-    const capNumber = Number(cap);
+    const capNumber = Number(parseDigits(cap));
     try {
       const result = await updateAiConfig({
         enabled,

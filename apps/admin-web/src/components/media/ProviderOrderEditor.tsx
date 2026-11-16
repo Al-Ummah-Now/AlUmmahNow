@@ -1,5 +1,6 @@
 'use client';
 
+import { formatNumber } from '@/i18n/translate';
 import type { MediaProviderId, PlaybackStrategy } from '@al-ummah/shared-types';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { fieldClass } from '@/components/ui';
@@ -34,7 +35,7 @@ export function ProviderOrderEditor({
   enabled: MediaProviderId[];
   testId: string;
 }) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const numeric: Partial<Record<MediaProviderId, number>> = {};
   for (const p of order) numeric[p] = parseWhole(weights[p] ?? '', 0, 100) ?? 0;
   const shares = weightShares(order.filter((p) => enabled.includes(p)), numeric);
@@ -56,11 +57,11 @@ export function ProviderOrderEditor({
               <input type="checkbox" checked={listed} onChange={(e) => onOrder(toggleProvider(order, p, e.target.checked))} className={checkClass} aria-label={t('mediaProviders.inPlayback', { provider: name })} data-testid={`${testId}-${p}-on`} />
               <span className="min-w-0">
                 <span className="block font-medium text-fg">
-                  {listed && <span className="me-2 tabular-nums text-fg-muted" aria-hidden="true">{index + 1}.</span>}
+                  {listed && <span className="me-2 tabular-nums text-fg-muted" aria-hidden="true">{formatNumber(index + 1, locale)}.</span>}
                   {name}
                 </span>
                 {!enabled.includes(p) && <span className="block text-sm text-fg-muted">{t('mediaProviders.disabled')}</span>}
-                {strategy === 'weighted' && listed && enabled.includes(p) && <span className="block text-sm text-fg-muted" data-testid={`${testId}-${p}-share`}>{t('mediaProviders.weightShare', { share: String(shares[p] ?? 0) })}</span>}
+                {strategy === 'weighted' && listed && enabled.includes(p) && <span className="block text-sm text-fg-muted" data-testid={`${testId}-${p}-share`}>{t('mediaProviders.weightShare', { share: shares[p] ?? 0 })}</span>}
               </span>
             </label>
             {strategy === 'weighted' && listed && (

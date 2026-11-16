@@ -85,7 +85,7 @@ export default async function DeletedPage({ searchParams }: { searchParams: Prom
       </p>
       {data?.lastRun && (
         <p className="text-xs text-fg-subtle mb-4" data-testid="deleted-last-run">
-          {t('deleted.lastRun', { when: formatDate(data.lastRun.at, locale, true), purged: String(data.lastRun.purged), failed: String(data.lastRun.failed) })}
+          {t('deleted.lastRun', { when: formatDate(data.lastRun.at, locale, true), purged: data.lastRun.purged, failed: data.lastRun.failed })}
         </p>
       )}
       {!data && <ErrorAlert testId="deleted-error">{t('content.loadFailed')}</ErrorAlert>}
@@ -127,10 +127,10 @@ export default async function DeletedPage({ searchParams }: { searchParams: Prom
                       <time dateTime={d.deletedAt}>{formatDate(d.deletedAt, locale, true)}</time>
                     </td>
                     <td className={`${tdClass} text-sm`}>
-                      {d.status === 'deleted' && <Chip tone="info" testId="deleted-days-left">{t('deleted.daysLeft', { count: String(daysLeft) })}</Chip>}
+                      {d.status === 'deleted' && <Chip tone="info" testId="deleted-days-left">{t('deleted.daysLeft', { count: daysLeft })}</Chip>}
                       {d.status === 'queued' && <Chip tone="warn" testId="deleted-queued">{t('deleted.queued')}</Chip>}
                       {d.status === 'purging' && <Chip tone="bad" testId="deleted-purging">{t('deleted.purging')}</Chip>}
-                      {d.lastError && d.attempts > 0 && <span className="block text-xs text-danger-fg mt-1">{t('deleted.retrying', { count: String(d.attempts) })}</span>}
+                      {d.lastError && d.attempts > 0 && <span className="block text-xs text-danger-fg mt-1">{t('deleted.retrying', { count: d.attempts })}</span>}
                     </td>
                     <td className={tdClass}>
                       <DeletionActions

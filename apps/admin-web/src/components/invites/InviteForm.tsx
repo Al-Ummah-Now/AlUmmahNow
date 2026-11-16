@@ -18,6 +18,7 @@ import { Autocomplete } from '@/components/search/Autocomplete';
 import { ActionFeedback, useContentAction } from '@/components/content/actions';
 import { Notice, SectionCard, smallButtonClass } from '@/components/content/parts';
 import { EmailLanguageChoice, type EmailLanguage } from '@/components/EmailLanguageChoice';
+import { parseDigits } from '@al-ummah/shared-types';
 
 /** One @, something before it, a dotted domain after it, no spaces; linear time (no backtracking regex). */
 function isEmailAddress(value: string): boolean {
@@ -190,7 +191,7 @@ export function InviteForm({ tiers, canPlan, canCreateChannels, canTransfer }: P
           </div>
           <div className="flex flex-col gap-1">
             <label htmlFor={`${ids}-days`} className="text-sm text-fg-muted">{t('invites.expires')}</label>
-            <input id={`${ids}-days`} type="number" min={1} max={90} value={days} onChange={(e) => setDays(Math.min(90, Math.max(1, Number(e.target.value) || 14)))} className={fieldClass} aria-describedby={`${ids}-days-hint`} data-testid="invite-days" />
+            <input id={`${ids}-days`} type="number" min={1} max={90} value={days} onChange={(e) => setDays(Math.min(90, Math.max(1, Number(parseDigits(e.target.value)) || 14)))} className={fieldClass} aria-describedby={`${ids}-days-hint`} data-testid="invite-days" />
             <span id={`${ids}-days-hint`} className="text-xs text-fg-subtle">{t('invites.expiresHint')}</span>
           </div>
           <div className="flex flex-col gap-1 md:col-span-2">

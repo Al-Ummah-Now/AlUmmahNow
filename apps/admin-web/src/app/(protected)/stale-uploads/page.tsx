@@ -4,7 +4,7 @@ import type { StaleUploadsResponse } from '@/lib/api/types';
 import { getAdminSession } from '@/lib/auth';
 import { canUseStaleUploads } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
-import { formatDate } from '@/i18n/translate';
+import { formatDate, formatNumber } from '@/i18n/translate';
 import { ErrorAlert, cardClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { FILTER_LABEL, STALE_FILTERS, parseStaleFilter, statusQuery, TYPE_LABEL } from './labels';
@@ -75,7 +75,7 @@ export default async function StaleUploadsPage({ searchParams }: PageProps) {
                       }`}
                     >
                       {t(FILTER_LABEL[f])}
-                      {count !== undefined && <span className="tabular-nums opacity-80">{count}</span>}
+                      {count !== undefined && <span className="tabular-nums opacity-80">{formatNumber(count, locale)}</span>}
                     </Link>
                   </li>
                 );
@@ -148,7 +148,7 @@ export default async function StaleUploadsPage({ searchParams }: PageProps) {
                       <td className={tdClass}>{formatDate(d.receivedAt, locale, true)}</td>
                       <td className={tdClass} dir="ltr">{d.videoId ?? '—'}</td>
                       <td className={tdClass}>{d.failureReason || '—'}</td>
-                      <td className={tdClass}>{d.attempts}</td>
+                      <td className={tdClass}>{formatNumber(d.attempts, locale)}</td>
                     </tr>
                   ))}
                 </tbody>

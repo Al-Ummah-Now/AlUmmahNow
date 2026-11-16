@@ -5,7 +5,7 @@
  * between segments so neighbouring colours stay apart, a legend with each series' total, hover
  * titles per segment, and a <details> table as the text alternative. No hooks.
  */
-import { chartLocale, labelIndices, niceScale } from '@al-ummah/shared-types';
+import { labelIndices, niceScale, numberFormat } from '@al-ummah/shared-types';
 
 export interface StackedSeries {
   key: string;
@@ -41,7 +41,7 @@ export function StackedBarChart({ title, days, series, locale, format, dayLabel,
   const totals = days.map((_, i) => series.reduce((s, x) => s + (x.values[i] ?? 0), 0));
   const top = Math.max(0, ...totals, reference?.value ?? 0);
   const scale = niceScale(top > 0 ? [top] : [], { target: 4 });
-  const tickNumber = new Intl.NumberFormat(chartLocale(locale), { maximumFractionDigits: 2 });
+  const tickNumber = numberFormat(locale, { maximumFractionDigits: 2 });
   const plotStart = rtl ? PAD : AXIS;
   const plotEnd = rtl ? W - AXIS : W - PAD;
   const n = days.length;

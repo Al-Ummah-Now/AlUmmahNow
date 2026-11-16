@@ -1,9 +1,8 @@
 /**
- * Number formats of the Delivery comparison page, with the locale's digits
- * (Arabic-Indic in Arabic, like the charts). Server and client safe.
+ * Number formats of the Delivery comparison page, through locale-format: Eastern Arabic
+ * (Hindi) numerals ٠–٩ in Arabic, Arabic numerals 0–9 in English. Server and client safe.
  */
-import { chartLocale, formatDuration } from '@al-ummah/shared-types';
-import { intlLocale } from '@/i18n/intl-locale';
+import { dateTimeFormat, formatDuration, moneyFormat, numberFormat } from '@al-ummah/shared-types';
 
 export interface DeliveryFormats {
   integer: (v: number) => string;
@@ -22,19 +21,19 @@ export interface DeliveryFormats {
 }
 
 export function deliveryFormats(locale: string): DeliveryFormats {
-  const loc = chartLocale(locale);
-  const integer = new Intl.NumberFormat(intlLocale(loc), { maximumFractionDigits: 0 });
-  const decimal = new Intl.NumberFormat(intlLocale(loc), { maximumFractionDigits: 2 });
-  const seconds = new Intl.NumberFormat(intlLocale(loc), { style: 'unit', unit: 'second', unitDisplay: 'short', maximumFractionDigits: 1 });
-  const percent = new Intl.NumberFormat(intlLocale(loc), { style: 'percent', maximumFractionDigits: 2 });
-  const kbps = new Intl.NumberFormat(intlLocale(loc), { style: 'unit', unit: 'kilobit-per-second', unitDisplay: 'short', maximumFractionDigits: 0 });
-  const hours = new Intl.NumberFormat(intlLocale(loc), { style: 'unit', unit: 'hour', unitDisplay: 'short', maximumFractionDigits: 1 });
-  const gb = new Intl.NumberFormat(intlLocale(loc), { style: 'unit', unit: 'gigabyte', unitDisplay: 'short', maximumFractionDigits: 2 });
-  const usdWhole = new Intl.NumberFormat(intlLocale(loc), { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
-  const usdCents = new Intl.NumberFormat(intlLocale(loc), { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const usdFine = new Intl.NumberFormat(intlLocale(loc), { style: 'currency', currency: 'USD', maximumSignificantDigits: 2 });
-  const day = new Intl.DateTimeFormat(intlLocale(loc), { day: 'numeric', month: 'short', timeZone: 'UTC' });
-  const time = new Intl.DateTimeFormat(intlLocale(loc), { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'UTC' });
+  const loc = locale;
+  const integer = numberFormat(loc, { maximumFractionDigits: 0 });
+  const decimal = numberFormat(loc, { maximumFractionDigits: 2 });
+  const seconds = numberFormat(loc, { style: 'unit', unit: 'second', unitDisplay: 'short', maximumFractionDigits: 1 });
+  const percent = numberFormat(loc, { style: 'percent', maximumFractionDigits: 2 });
+  const kbps = numberFormat(loc, { style: 'unit', unit: 'kilobit-per-second', unitDisplay: 'short', maximumFractionDigits: 0 });
+  const hours = numberFormat(loc, { style: 'unit', unit: 'hour', unitDisplay: 'short', maximumFractionDigits: 1 });
+  const gb = numberFormat(loc, { style: 'unit', unit: 'gigabyte', unitDisplay: 'short', maximumFractionDigits: 2 });
+  const usdWhole = moneyFormat(loc, 'USD', { maximumFractionDigits: 0 });
+  const usdCents = moneyFormat(loc, 'USD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const usdFine = moneyFormat(loc, 'USD', { maximumSignificantDigits: 2 });
+  const day = dateTimeFormat(loc, { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  const time = dateTimeFormat(loc, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'UTC' });
   return {
     integer: (v) => integer.format(v),
     decimal: (v) => decimal.format(v),

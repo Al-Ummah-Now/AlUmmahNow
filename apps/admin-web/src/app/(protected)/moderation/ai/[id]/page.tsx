@@ -9,6 +9,7 @@ import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { SignalActions } from './actions';
 import { UserName } from '@/components/audit/UserName';
+import { formatFixed } from '@al-ummah/shared-types';
 
 export const dynamic = 'force-dynamic';
 
@@ -85,7 +86,7 @@ export default async function AiSignalPage({ params }: PageProps) {
                   {scores.map(([category, score]) => (
                     <li key={category} className="flex justify-between gap-4">
                       <span className="text-fg">{translateDynamic(t, 'aiCategory', category)}</span>
-                      <span className="text-fg-muted" dir="ltr">{score.toFixed(2)}</span>
+                      <span className="text-fg-muted" dir="ltr">{formatFixed(locale, score, 2)}</span>
                     </li>
                   ))}
                 </ul>
@@ -124,7 +125,7 @@ export default async function AiSignalPage({ params }: PageProps) {
                       <span className="text-fg-muted">
                         {a.actor_type === 'ai' ? t('ai.actorAi') : t('ai.actorUser', { id: (a.actor_id ?? '').slice(0, 8) })}
                       </span>
-                      {a.category && <span className="text-fg-muted">{translateDynamic(t, 'aiCategory', a.category)}{a.score !== null ? ` (${a.score.toFixed(2)})` : ''}</span>}
+                      {a.category && <span className="text-fg-muted">{translateDynamic(t, 'aiCategory', a.category)}{a.score !== null ? ` (${formatFixed(locale, a.score, 2)})` : ''}</span>}
                       {a.reason && <span className="text-fg-subtle" dir="auto">{a.reason}</span>}
                     </li>
                   ))}

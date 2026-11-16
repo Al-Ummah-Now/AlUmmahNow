@@ -1,10 +1,14 @@
 /**
  * Framework-agnostic translation helpers used by both server and client code.
+ *
+ * Numbers and dates go through locale-format (@al-ummah/shared-types): Arabic gets Eastern
+ * Arabic (Hindi) numerals ٠–٩, English Arabic numerals 0–9, pinned so the server and every
+ * browser agree (#1488). A number passed as a `t()` param is formatted the same way.
  */
 import en, { type Messages } from './messages/en';
 import ar from './messages/ar';
 import type { Locale } from './config';
-import { intlLocale } from './intl-locale';
+import { dateTimeFormat, fillTemplate, numberFormat } from '@al-ummah/shared-types';
 
 export type { Messages };
 
@@ -38,15 +42,9 @@ function lookup(messages: Messages, key: string): string | undefined {
 
 export function createTranslator(locale: Locale): Translator {
   const messages = getMessages(locale);
-  const numberFormat = new Intl.NumberFormat(intlLocale(locale));
   return (key, params) => {
     const template = lookup(messages, key) ?? lookup(en, key) ?? key;
-    if (!params) return template;
-    return template.replace(/\{(\w+)\}/g, (match, name: string) => {
-      const value = params[name];
-      if (value === undefined) return match;
-      return typeof value === 'number' ? numberFormat.format(value) : value;
-    });
+    return fillTemplate(locale, template, params ?? {});
   };
 }
 
@@ -60,7 +58,7 @@ export function translateDynamic(t: Translator, prefix: string, value: string): 
 export function formatDate(value: string | number | Date, locale: Locale, withTime = false): string {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
-  return new Intl.DateTimeFormat(intlLocale(locale), {
+  return dateTimeFormat(locale, {
     dateStyle: 'medium',
     ...(withTime ? { timeStyle: 'short' } : {}),
     timeZone: 'UTC',
@@ -76,9 +74,9 @@ export function hourDate(hour: string): Date {
 export function formatHour(hour: string, locale: Locale): string {
   const date = hourDate(hour);
   if (Number.isNaN(date.getTime())) return hour;
-  return new Intl.DateTimeFormat(intlLocale(locale), { day: 'numeric', month: 'short', hour: 'numeric', timeZone: 'UTC' }).format(date);
+  return dateTimeFormat(locale, { day: 'numeric', month: 'short', hour: 'numeric', timeZone: 'UTC' }).format(date);
 }
 
 export function formatNumber(value: number, locale: Locale): string {
-  return new Intl.NumberFormat(intlLocale(locale)).format(value);
+  return numberFormat(locale).format(value);
 }

@@ -2,7 +2,7 @@
 
 import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CREATOR_TIER_BOUNDS, CREATOR_TIER_IDS, DEFAULT_CREATOR_TIER, type CreatorTier } from '@al-ummah/shared-types';
+import { CREATOR_TIER_BOUNDS, CREATOR_TIER_IDS, DEFAULT_CREATOR_TIER, parseDigits, type CreatorTier } from '@al-ummah/shared-types';
 import type { ActionResult } from '@/lib/api/errors';
 import { isUnexpectedFailure, tierActionMessage, tierEffect, validateTierForm, type TierField, type TierFormValues } from '@/lib/creator-tiers';
 import { useLanguage } from '@/i18n/I18nProvider';
@@ -124,7 +124,7 @@ function TierCard({ tier, users, canManage, actions, create = false }: { tier?: 
           disabled={!canManage}
           aria-invalid={shown[field] ? true : undefined}
           aria-describedby={described(field)}
-          onChange={(e) => set(field, e.target.value === '' ? NaN : Number(e.target.value))}
+          onChange={(e) => set(field, e.target.value === '' ? NaN : Number(parseDigits(e.target.value)))}
           className={fieldClass}
           dir="ltr"
           data-testid={`tier-${key}-${field}`}
@@ -226,7 +226,7 @@ function TierCard({ tier, users, canManage, actions, create = false }: { tier?: 
               disabled={!canManage}
               aria-invalid={shown.maxChannels ? true : undefined}
               aria-describedby={described('maxChannels')}
-              onChange={(e) => set('maxChannels', e.target.value === '' ? null : Number(e.target.value))}
+              onChange={(e) => set('maxChannels', e.target.value === '' ? null : Number(parseDigits(e.target.value)))}
               className={fieldClass}
               dir="ltr"
               data-testid={`tier-${key}-maxChannels`}

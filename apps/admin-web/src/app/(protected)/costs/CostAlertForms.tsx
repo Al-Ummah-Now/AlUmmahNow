@@ -6,7 +6,7 @@
  * here against the same limits admin-api applies (model.ts validateSettingsForm).
  */
 import { useId, useState } from 'react';
-import { COST_ALERT_KINDS, RESEND_PLANS, type CostAlertKind, type CostAlertSettings, type ResendPlan } from '@al-ummah/shared-types';
+import { COST_ALERT_KINDS, numberFormat, RESEND_PLANS, type CostAlertKind, type CostAlertSettings, type ResendPlan } from '@al-ummah/shared-types';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { EmailLanguageChoice, type EmailLanguage } from '@/components/EmailLanguageChoice';
 import { fieldClass } from '@/components/ui';
@@ -127,7 +127,7 @@ export function CostThresholds({ settings }: { settings: CostAlertSettings }) {
   const err = (k: SettingsField) => (shown[k] ? t(shown[k]!.key, shown[k]!.params) : undefined);
   const f = opsFormats(locale);
   const days = weekdayNames(locale);
-  const count = new Intl.NumberFormat(locale === 'ar' ? 'ar-u-nu-arab' : 'en-US');
+  const count = numberFormat(locale);
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();

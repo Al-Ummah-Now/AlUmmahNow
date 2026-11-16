@@ -6,7 +6,9 @@ import type { MediaSummary } from '@/lib/api/types';
 import type { Translator } from '@/i18n/translate';
 import { cardClass } from '@/components/ui';
 import { DailyChart, SeriesSwatch } from './DailyChart';
+import { formatDate } from '@al-ummah/shared-types';
 import { deliveryFormats } from './format';
+
 import {
   PROVIDERS,
   SCALES,
@@ -20,6 +22,9 @@ import {
   type Projection,
   type Provider,
 } from './metrics';
+
+/** When the plan's list prices (the unit-cost fallback) were taken. */
+const PLAN_PRICES_AS_OF = '2026-11-01T00:00:00Z';
 
 interface SectionProps {
   summary: MediaSummary;
@@ -192,7 +197,7 @@ export function CostSection({ summary, t, locale, budgetUsd }: SectionProps & { 
       </dl>
 
       <h3 className="font-semibold text-fg mb-1">{t('mediaDelivery.projectionTitle', { cap: f.usd(budgetUsd) })}</h3>
-      <p className="text-fg-muted text-sm mb-3">{t('mediaDelivery.projectionIntro')}</p>
+      <p className="text-fg-muted text-sm mb-3">{t('mediaDelivery.projectionIntro', { asOf: formatDate(locale, PLAN_PRICES_AS_OF, { month: 'long', year: 'numeric', timeZone: 'UTC' }) })}</p>
       <div className="relative overflow-x-auto mb-4 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-focus" tabIndex={0} role="region" aria-labelledby="delivery-cost-title">
         <table className="w-full text-sm" data-testid="delivery-projection">
           <caption className="sr-only">{t('mediaDelivery.projectionCaption')}</caption>

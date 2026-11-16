@@ -144,7 +144,7 @@ describe('live transcoder figures', () => {
     assert.match(render(null), /delivery-live-unavailable/);
   });
 
-  it('renders in Arabic with Arabic-Indic digits', () => {
+  it('renders in Arabic with Eastern Arabic (Hindi) numerals', () => {
     const html = render(live, { t: ar, locale: 'ar' });
     assert.equal(figure(html, 'delivery-live-transcoding'), '١');
     assert.equal(figure(html, 'delivery-live-summary'), '١ قيد التحويل · ٣ في الانتظار · المدى من ٢ إلى ٤');

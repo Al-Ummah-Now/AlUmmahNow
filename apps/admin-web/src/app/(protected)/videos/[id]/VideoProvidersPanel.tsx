@@ -12,6 +12,7 @@ import { ErrorAlert, primaryButtonClass, secondaryButtonClass } from '@/componen
 import { OverrideEditor } from '@/components/media/ProviderOrderEditor';
 import { OVERRIDE_PROBLEM_LABEL, PROVIDER_LABEL, draftOf, overrideOf, type OverrideDraft } from '@/lib/media/providers-form';
 import { logger } from '@/lib/logger-client';
+import { formatPercent } from '@al-ummah/shared-types';
 
 const STATUS_LABEL: Record<ProviderMediaStatus, MessageKey> = {
   pending: 'mediaProviders.video.status.pending',
@@ -46,7 +47,7 @@ export function VideoProvidersPanel({ videoId, media, canManage }: { videoId: st
   const effectiveText = t('mediaProviders.video.effective', {
     strategy: t(view.effective.strategy === 'weighted' ? 'mediaProviders.strategyWeighted' : 'mediaProviders.strategyPriority'),
     order: playing
-      .map((p) => (view.effective.strategy === 'weighted' ? t('mediaProviders.video.weightedOrder', { provider: name(p), weight: `${view.effective.weights[p] ?? 0}%` }) : name(p)))
+      .map((p) => (view.effective.strategy === 'weighted' ? t('mediaProviders.video.weightedOrder', { provider: name(p), weight: formatPercent(locale, (view.effective.weights[p] ?? 0) / 100) }) : name(p)))
       .join(' → ') || t('mediaProviders.none'),
   });
 

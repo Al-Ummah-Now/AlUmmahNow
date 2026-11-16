@@ -2,7 +2,7 @@
 
 import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CAPTION_GRANT_BOUNDS, type CaptionGrantScope, type CaptionLedgerEntry, type CaptionMinuteGrant, type CaptionMinutesUsage } from '@al-ummah/shared-types';
+import { CAPTION_MINUTES_WARNING_RATIO, CAPTION_GRANT_BOUNDS, formatPercent, parseDigits, type CaptionGrantScope, type CaptionLedgerEntry, type CaptionMinuteGrant, type CaptionMinutesUsage } from '@al-ummah/shared-types';
 import type { ActionResult } from '@/lib/api/errors';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { formatDate, formatNumber, type MessageKey } from '@/i18n/translate';
@@ -94,7 +94,7 @@ export function CaptionGrantControls({ userId, usage, grants, ledger = [], canMa
             <p className="text-fg">{t('captionMinutes.tierLine', { minutes: n(usage.tierMinutes) })}</p>
             <p className="text-fg">
               {t('captionMinutes.monthLine', { used: n(usage.monthUsed), limit: n(usage.monthLimit ?? 0), date: formatDate(usage.resetsAt, locale) })}{' '}
-              {usage.warning && <Chip tone="warn">80%</Chip>}
+              {usage.warning && <Chip tone="warn">{formatPercent(locale, CAPTION_MINUTES_WARNING_RATIO)}</Chip>}
             </p>
             {usage.packsRemaining > 0 && <p className="text-fg">{t('captionMinutes.packsLine', { count: n(usage.packsRemaining) })}</p>}
             {usage.held > 0 && <p className="text-fg-muted">{t('captionMinutes.heldLine', { count: n(usage.held) })}</p>}
@@ -120,7 +120,7 @@ export function CaptionGrantControls({ userId, usage, grants, ledger = [], canMa
                 max={max}
                 step={1}
                 value={Number.isFinite(minutes) ? minutes : ''}
-                onChange={(e) => setMinutes(e.target.value === '' ? NaN : Number(e.target.value))}
+                onChange={(e) => setMinutes(e.target.value === '' ? NaN : Number(parseDigits(e.target.value)))}
                 aria-invalid={touched && minutesError ? true : undefined}
                 aria-describedby={touched && minutesError ? `${ids}-minutes-error` : undefined}
                 className={fieldClass}

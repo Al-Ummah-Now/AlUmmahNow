@@ -2,7 +2,7 @@
  * The concurrent transcodes range fields (R2Settings.tsx): what the typed values mean. Pure, so it is
  * unit tested; admin-api and api-videos check the same rules again (1 ≤ min ≤ max ≤ ceiling).
  */
-import { TRANSCODE_LIMIT_FLOOR, type TranscodeRange } from '@al-ummah/shared-types';
+import { parseDigits, TRANSCODE_LIMIT_FLOOR, type TranscodeRange } from '@al-ummah/shared-types';
 
 /** The Cloudflare R2 settings section's anchor (R2Settings.tsx); Delivery's live figure links to it. */
 export const R2_SETTINGS_ID = 'r2-settings';
@@ -10,13 +10,9 @@ export const R2_SETTINGS_ID = 'r2-settings';
 export type RangeInputError = 'min_range' | 'max_range' | 'min_above_max' | 'unchanged';
 export type RangeInput = { ok: true; value: TranscodeRange } | { ok: false; error: RangeInputError; field: 'min' | 'max' | null };
 
-/** Arabic-Indic and Persian digits typed on an Arabic keyboard read as their numbers. */
-function asciiDigits(text: string): string {
-  return text.replace(/[٠-٩۰-۹]/g, (d) => String((d.charCodeAt(0) & 0xf) % 10));
-}
-
 function whole(text: string, ceiling: number | null): number | null {
-  const trimmed = asciiDigits(text.trim());
+  // Eastern Arabic (Hindi) and Persian numerals typed on an Arabic keyboard read as their numbers
+  const trimmed = parseDigits(text.trim());
   if (!/^\d{1,4}$/.test(trimmed)) return null;
   const value = Number(trimmed);
   return value < TRANSCODE_LIMIT_FLOOR || (ceiling !== null && value > ceiling) ? null : value;

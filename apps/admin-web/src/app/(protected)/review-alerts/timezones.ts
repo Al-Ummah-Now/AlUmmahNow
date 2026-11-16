@@ -1,3 +1,4 @@
+import { dateTimeFormat, localizeDigits } from '@al-ummah/shared-types';
 /**
  * Time zones for the rota's type-to-search picker: every IANA zone with its current UTC offset,
  * a name in the admin's language and the words it can be found by (the id, its city, the zone's
@@ -5,7 +6,6 @@
  * for the zones staff most often use: Intl names countries and zones but not cities).
  * Pure apart from Intl; the list is built once per language and kept.
  */
-import { intlLocale } from '@/i18n/intl-locale';
 
 export interface ZoneOption {
   id: string;
@@ -102,7 +102,7 @@ export function cityFromId(id: string): string {
 
 function zonePart(locale: string, timeZone: string, timeZoneName: Intl.DateTimeFormatOptions['timeZoneName'], at: Date): string {
   try {
-    return new Intl.DateTimeFormat(intlLocale(locale), { timeZone, timeZoneName }).formatToParts(at).find((p) => p.type === 'timeZoneName')?.value ?? '';
+    return dateTimeFormat(locale, { timeZone, timeZoneName }).formatToParts(at).find((p) => p.type === 'timeZoneName')?.value ?? '';
   } catch {
     return '';
   }
@@ -164,7 +164,7 @@ export function zoneOption(locale: string, id: string, at: Date = new Date(), re
     id,
     city: (ar && cityAr) || cityEn,
     name: name && !/^(GMT|UTC|غرينتش)/.test(name) ? name : '',
-    offset: offset.label,
+    offset: localizeDigits(locale, offset.label),
     offsetMinutes: offset.minutes,
     terms: normalizeSearch([id, cityEn, cityAr ?? '', name, nameEn, regionName(locale, region), ar ? regionName('en', region) : ''].join(' ')),
   };

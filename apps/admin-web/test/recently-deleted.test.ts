@@ -76,7 +76,7 @@ describe('Recently deleted labels', () => {
   it('no longer says a delete cannot be undone', () => {
     for (const text of [en.contact.deleteConfirm, en.themeBuilder.confirmDelete, en.creators.tierDeleteBody]) {
       assert.doesNotMatch(text, /cannot be undone/);
-      assert.match(text, /30 days/);
+      assert.match(text, /\{#30\} days/);
     }
   });
 });

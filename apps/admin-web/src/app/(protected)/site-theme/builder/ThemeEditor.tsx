@@ -17,6 +17,7 @@ import { ThemeApiError, deleteAsset, draftAssetUrl, exportUrl, publish, saveDraf
 import { partContrast, roleContrast, traceIssues } from './contrast';
 import { ColorField, CssValueField, IssueText, LengthInput } from './fields';
 import { Preview } from './Preview';
+import { formatUnit } from '@al-ummah/shared-types';
 
 type Section = 'general' | 'colours' | 'components' | 'materials' | 'typography' | 'imagery' | 'assets';
 const SECTIONS: [Section, MessageKey][] = [
@@ -400,7 +401,7 @@ export function ThemeEditor({ initial, assets: initialAssets, latestVersion: ini
               <ul className="mt-3 space-y-1" data-testid="asset-list">
                 {assets.map((a) => (
                   <li key={a.path} className="flex items-center gap-2 text-xs" dir="ltr" data-testid="asset-row" data-path={a.path}>
-                    <code className="flex-1 truncate">{a.path}</code><span className="text-fg-muted">{(a.size / 1024).toFixed(1)} KB</span>
+                    <code className="flex-1 truncate">{a.path}</code><span className="text-fg-muted">{formatUnit(locale, a.size / 1024, 'kilobyte', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
                     {!JSON.stringify(theme).includes(a.path) && <span className="text-fg-muted">{t('themeBuilder.unused')}</span>}
                     {canEdit && <button type="button" className="underline" onClick={() => removeFile(a.path)}>{t('themeBuilder.delete')}</button>}
                   </li>

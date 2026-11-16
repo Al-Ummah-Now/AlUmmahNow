@@ -35,6 +35,7 @@ import {
   toggleDay,
   updateReviewer,
 } from './model';
+import { parseDigits } from '@al-ummah/shared-types';
 
 const check = 'mt-1 h-4 w-4 shrink-0 accent-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-focus';
 // A checkbox row tall enough to tap (44 px)
@@ -326,7 +327,7 @@ function MinutesField({ id, label, hint, seconds, onChange, testId }: { id: stri
         step={0.5}
         className={`${fieldClass} min-h-11`}
         value={toMinutes(seconds)}
-        onChange={(e) => onChange(toSeconds(Number(e.target.value) || 0))}
+        onChange={(e) => onChange(toSeconds(Number(parseDigits(e.target.value)) || 0))}
         aria-describedby={`${id}-hint`}
         data-testid={testId}
       />

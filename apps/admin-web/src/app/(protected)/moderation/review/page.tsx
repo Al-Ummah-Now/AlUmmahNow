@@ -5,6 +5,7 @@ import { formatDate, translateDynamic } from '@/i18n/translate';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { AlertsToggle } from './AlertsToggle';
+import { formatMoney } from '@al-ummah/shared-types';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,10 +55,10 @@ export default async function VideoReviewQueuePage({ searchParams }: PageProps) 
 
       {stats && (
         <p className="text-sm text-fg-muted flex flex-wrap gap-x-4 gap-y-1" data-testid="review-stats">
-          <span>{t('review.statsOpen', { count: String(waiting) })}</span>
-          {stats.queueMinutes !== null && <span>{t('review.statsQueue', { minutes: String(stats.queueMinutes) })}</span>}
-          <span>{t('review.statsCost', { usd: stats.todayCostUsd.toFixed(2) })}</span>
-          {stats.shadow14d.checked > 0 && <span>{t('review.statsShadow', { checked: String(stats.shadow14d.checked), held: String(stats.shadow14d.wouldHold), nsfw: String(stats.shadow14d.nsfw) })}</span>}
+          <span>{t('review.statsOpen', { count: waiting })}</span>
+          {stats.queueMinutes !== null && <span>{t('review.statsQueue', { minutes: stats.queueMinutes })}</span>}
+          <span>{t('review.statsCost', { usd: formatMoney(locale, stats.todayCostUsd) })}</span>
+          {stats.shadow14d.checked > 0 && <span>{t('review.statsShadow', { checked: stats.shadow14d.checked, held: stats.shadow14d.wouldHold, nsfw: stats.shadow14d.nsfw })}</span>}
         </p>
       )}
 

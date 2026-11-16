@@ -6,6 +6,7 @@ import { BASE, BRAND_NAMES, resolveColor, type Mode, type ThemePackage } from '@
 import { useLanguage } from '@/i18n/I18nProvider';
 import { fieldClass } from '@/components/ui';
 import type { ContrastCheck } from './contrast';
+import { formatFixed } from '@al-ummah/shared-types';
 
 const ROLE_REFS = BASE.roles.map((r) => `{color.${r.name}}`);
 const BRAND_REFS = BRAND_NAMES.map((n) => `{brand.${n}}`);
@@ -19,13 +20,13 @@ export function IssueText({ messages, testId }: { messages: string[]; testId?: s
 }
 
 function ContrastBadge({ checks }: { checks: ContrastCheck[] }) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   if (!checks.length) return null;
   const worst = checks[0];
   const pass = worst.ratio >= worst.min;
   const label = pass
-    ? t('themeBuilder.contrastOk', { ratio: worst.ratio.toFixed(2), against: worst.against })
-    : t('themeBuilder.contrastFail', { ratio: worst.ratio.toFixed(2), against: worst.against, min: worst.min });
+    ? t('themeBuilder.contrastOk', { ratio: formatFixed(locale, worst.ratio, 2), against: worst.against })
+    : t('themeBuilder.contrastFail', { ratio: formatFixed(locale, worst.ratio, 2), against: worst.against, min: worst.min });
   return (
     <span data-testid="contrast-badge" data-pass={pass} className={`text-[11px] px-1.5 py-0.5 rounded ${pass ? 'bg-chip-resolved-bg text-chip-resolved-fg' : 'bg-danger-bg text-danger-fg'}`} dir="ltr">
       {pass ? 'AA ✓ ' : 'AA ✗ '}{label}

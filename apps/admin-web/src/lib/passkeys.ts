@@ -10,16 +10,7 @@
  *
  * Edge-safe and free of Next.js imports so it is unit tested directly.
  */
-import {
-  PASSKEY_REQUIRED_ERROR,
-  STEP_UP_MAX_AGE_S,
-  STEP_UP_REQUIRED_ERROR,
-  decodeJwtPayload,
-  passkeyClaimsFromPayload,
-  passkeyGate,
-  passkeySetupUrl,
-  type PasskeyGate,
-} from '@al-ummah/shared-types';
+import { decodeJwtPayload, formatDateTime, PASSKEY_REQUIRED_ERROR, passkeyClaimsFromPayload, passkeyGate, passkeySetupUrl, STEP_UP_MAX_AGE_S, STEP_UP_REQUIRED_ERROR, type PasskeyGate } from '@al-ummah/shared-types';
 import { DEFAULT_RETURN_PATH, loginPath, safeReturnPath } from './login-flow';
 
 export type { PasskeyGate };
@@ -87,7 +78,7 @@ export function passkeyRedirectFor(error: { status?: number; code?: string } | n
 
 /** "Add a passkey by <date>" in the admin's language (Gregorian, the platform's dates). */
 export function formatPasskeyDeadline(deadlineS: number, locale: string): string {
-  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-EG' : 'en-GB', { dateStyle: 'long', timeStyle: 'short' }).format(new Date(deadlineS * 1000));
+  return formatDateTime(locale === 'ar' ? 'ar' : 'en-GB', deadlineS * 1000, { dateStyle: 'long', timeStyle: 'short' });
 }
 
 /** sessionStorage key of a dismissed banner (per deadline: a new deadline shows it again). */

@@ -13,7 +13,7 @@
  */
 import { useCallback, useEffect, useId, useState } from 'react';
 import type { LiveComparison, LiveProviderId, LiveRoutingMode, LiveRoutingPatch, LiveRoutingSettings } from '@al-ummah/shared-types';
-import { LIVE_ROUTING_MODES } from '@al-ummah/shared-types';
+import { dateTimeFormat, LIVE_ROUTING_MODES } from '@al-ummah/shared-types';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { formatDate, type MessageKey } from '@/i18n/translate';
 import { useConfirm } from '@/components/content/actions';
@@ -867,7 +867,7 @@ function ComparisonSection({ initial, range, providerName }: { initial: LiveComp
   const bunny = statsFor(comparison, 'bunny');
   const selfhosted = statsFor(comparison, 'selfhosted');
   const empty = !comparison || comparison.providers.every((p) => p.sessions === 0);
-  const dayLabel = (day: string) => new Intl.DateTimeFormat(/^ar\b/.test(locale) ? 'ar-u-nu-arab' : locale, { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(`${day}T00:00:00Z`));
+  const dayLabel = (day: string) => dateTimeFormat(locale, { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(`${day}T00:00:00Z`));
 
   return (
     <section className={cardClass} aria-labelledby={`${id}-heading`} data-testid="live-compare" aria-busy={loading}>

@@ -6,7 +6,7 @@
  * errors, Retry, and "Play R2 first" for verified ones. docs/media-delivery/BACKFILL.md.
  */
 import { useCallback, useEffect, useId, useState } from 'react';
-import { BACKFILL_LIMITS, type BackfillItem, type BackfillItemState, type BackfillRun } from '@al-ummah/shared-types';
+import { BACKFILL_LIMITS, parseDigits, type BackfillItem, type BackfillItemState, type BackfillRun } from '@al-ummah/shared-types';
 import {
   backfillRunAction,
   flipBackfill,
@@ -107,9 +107,9 @@ export function RunPanel({ initial }: { initial: BackfillRun }) {
 
   const saveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    const concurrency = Number(settings.concurrency);
-    const spacingSeconds = Number(settings.spacing);
-    const budgetUsd = Math.round(Number(settings.budget) * 100) / 100;
+    const concurrency = Number(parseDigits(settings.concurrency));
+    const spacingSeconds = Number(parseDigits(settings.spacing));
+    const budgetUsd = Math.round(Number(parseDigits(settings.budget)) * 100) / 100;
     if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > BACKFILL_LIMITS.maxConcurrency || !Number.isInteger(spacingSeconds) || spacingSeconds < 0 || spacingSeconds > BACKFILL_LIMITS.maxSpacingSeconds || !(budgetUsd >= 0) || budgetUsd > BACKFILL_LIMITS.maxBudgetUsd) {
       setError(t('mediaBackfill.settingsInvalid', { maxConcurrency: f.integer(BACKFILL_LIMITS.maxConcurrency), maxSpacing: f.integer(BACKFILL_LIMITS.maxSpacingSeconds), maxBudget: f.integer(BACKFILL_LIMITS.maxBudgetUsd) }));
       return;

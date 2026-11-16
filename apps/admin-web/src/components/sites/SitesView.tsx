@@ -8,17 +8,7 @@
  */
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  SITE_TIER_SEEDS,
-  suggestSiteSlug,
-  validateSiteSlug,
-  type AdminSuggestion,
-  type SiteLimits,
-  type SiteLocale,
-  type SiteSettings,
-  type SiteStatus,
-  type SiteTier,
-} from '@al-ummah/shared-types';
+import { formatDateTime, parseDigits, SITE_TIER_SEEDS, suggestSiteSlug, validateSiteSlug, type AdminSuggestion, type SiteLimits, type SiteLocale, type SiteSettings, type SiteStatus, type SiteTier } from '@al-ummah/shared-types';
 import { useLanguage } from '@/i18n/I18nProvider';
 import type { MessageKey } from '@/i18n/translate';
 import { Autocomplete } from '@/components/search/Autocomplete';
@@ -29,7 +19,6 @@ import { fieldClass, primaryButtonClass } from '@/components/ui';
 import { checkSiteSlug, getSite, grantSite, restoreSite, revokeSite, updateSite, type SiteDetail, type SiteListItem } from '@/lib/api/sites';
 import { UserName } from '@/components/audit/UserName';
 import { actionLabel } from '@/components/audit/audit-model';
-import { intlLocale } from '@/i18n/intl-locale';
 
 const STATUS_KEY: Record<SiteStatus, MessageKey> = {
   setup: 'scholarSites.statusSetup',
@@ -75,7 +64,7 @@ function LimitsFields({ value, onChange, idPrefix }: { value: SiteLimits; onChan
   const num = (key: 'customDomainsMax' | 'pagesMax' | 'navigationMax', label: MessageKey) => (
     <label className="flex flex-col gap-1 text-sm">
       <span>{t(label)}</span>
-      <input type="number" min={0} max={key === 'navigationMax' ? 30 : 1000} className={fieldClass} value={value[key]} data-testid={`${idPrefix}-${key}`} onChange={(e) => onChange({ ...value, [key]: Math.max(0, Number(e.target.value) || 0) })} />
+      <input type="number" min={0} max={key === 'navigationMax' ? 30 : 1000} className={fieldClass} value={value[key]} data-testid={`${idPrefix}-${key}`} onChange={(e) => onChange({ ...value, [key]: Math.max(0, Number(parseDigits(e.target.value)) || 0) })} />
     </label>
   );
   return (
@@ -315,7 +304,7 @@ function SitePanel({ channelId, canManage, onChanged }: { channelId: string; can
         <ul className="text-sm space-y-1" data-testid="site-history">
           {detail?.history.map((h) => (
             <li key={h.id} className="text-fg-muted">
-              <span title={h.action}>{actionLabel(h.action, t)}</span> · {new Date(h.createdAt).toLocaleString(intlLocale(locale))} · <UserName id={h.actorId} showEmail={false} />
+              <span title={h.action}>{actionLabel(h.action, t)}</span> · {formatDateTime(locale, h.createdAt)} · <UserName id={h.actorId} showEmail={false} />
             </li>
           ))}
         </ul>

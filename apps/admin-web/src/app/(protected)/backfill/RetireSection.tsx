@@ -8,7 +8,7 @@
  */
 import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { BACKFILL_LIMITS, type BunnyRemoval } from '@al-ummah/shared-types';
+import { BACKFILL_LIMITS, parseDigits, type BunnyRemoval } from '@al-ummah/shared-types';
 import { cancelBunnyRemovals, listBunnyRemovals, retryBunnyRemoval, scheduleBunnyRemovals, type BunnyLibraryView } from '@/lib/api/admin';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { formatDate } from '@/i18n/translate';
@@ -50,7 +50,7 @@ function Library({ lib }: { lib: BunnyLibraryView }) {
   const id = String(lib.libraryId);
 
   const schedule = async () => {
-    const days = Number(grace);
+    const days = Number(parseDigits(grace));
     if (!Number.isInteger(days) || days < BACKFILL_LIMITS.minGraceDays || days > BACKFILL_LIMITS.maxGraceDays) {
       setError(t('mediaBackfill.graceInvalid', { min: f.integer(BACKFILL_LIMITS.minGraceDays), max: f.integer(BACKFILL_LIMITS.maxGraceDays) }));
       return;

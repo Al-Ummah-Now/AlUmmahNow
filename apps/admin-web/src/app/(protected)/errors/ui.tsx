@@ -2,7 +2,7 @@
  * Presentational pieces of the Errors pages (server and client safe).
  */
 
-import { chartLocale, compactNumber, labelIndices, niceScale } from '@al-ummah/shared-types';
+import { compactNumber, labelIndices, niceScale, numberFormat } from '@al-ummah/shared-types';
 
 /** "TypeError: message", without repeating a name the message already starts with. */
 export function errorTitle(g: { name: string | null; message: string }): string {
@@ -83,7 +83,7 @@ export function HourlyChart({
 }) {
   const scale = niceScale(hours.map((h) => h.occurrences), { integer: true, target: 3 });
   const tick = compactNumber(locale);
-  const number = new Intl.NumberFormat(chartLocale(locale));
+  const number = numberFormat(locale);
   const empty = hours.every((h) => !h.occurrences);
   const y = (value: number) => 100 - (value / scale.top) * 100;
   const ticksAt = labelIndices(hours.length, 4);

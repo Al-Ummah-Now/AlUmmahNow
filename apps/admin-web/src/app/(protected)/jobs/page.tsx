@@ -1,3 +1,4 @@
+import { formatNumber } from '@/i18n/translate';
 import Link from '@/components/AppLink';
 import { ADMIN_JOB_STATUSES } from '@al-ummah/shared-types';
 import { getContentPermissions, getJobCounts, listJobs } from '@/lib/api/content';
@@ -31,7 +32,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
   const params = pickParams(raw, { status: [...ADMIN_JOB_STATUSES, 'all'] });
   // Failed first: that is what needs an admin
   const status = params.status === 'all' ? undefined : (params.status ?? 'failed');
-  const { t } = await getI18n();
+  const { t, locale } = await getI18n();
 
   let jobs: AdminJob[] | null = null;
   let counts: JobCounts | null = null;
@@ -59,7 +60,7 @@ export default async function JobsPage({ searchParams }: { searchParams: Promise
               className={`px-3 py-1.5 rounded border text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-focus ${active ? 'bg-surface-hover border-border text-fg font-medium' : 'border-border text-fg-muted hover:text-fg hover:bg-surface-hover'}`}
             >
               {t(f.label)}
-              {count !== undefined && count > 0 && <span className="ms-2 tabular-nums" data-testid={`jobs-count-${f.status}`}>{count}</span>}
+              {count !== undefined && count > 0 && <span className="ms-2 tabular-nums" data-testid={`jobs-count-${f.status}`}>{formatNumber(count, locale)}</span>}
             </Link>
           );
         })}

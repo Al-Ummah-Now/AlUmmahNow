@@ -4,7 +4,7 @@
  * alert settings form with the same limits as admin-api (shared-types mergeCostAlertSettings).
  * Pure: server and client safe.
  */
-import { chartLocale, COST_ALERT_KINDS, COST_ALERT_RANGES, RESEND_PLANS, type CostAlertKind, type CostAlertSettings, type CostCredentialView, type CostProvider, type ResendPlan } from '@al-ummah/shared-types';
+import { COST_ALERT_KINDS, COST_ALERT_RANGES, dateTimeFormat, parseDigits, RESEND_PLANS, type CostAlertKind, type CostAlertSettings, type CostCredentialView, type CostProvider, type ResendPlan } from '@al-ummah/shared-types';
 import type { MessageKey, TranslateParams } from '@/i18n/translate';
 import type { CostCollectorState } from '@/lib/api/costs-types';
 
@@ -186,15 +186,11 @@ export interface FieldError {
   params?: TranslateParams;
 }
 
-/** Reads a number typed with Latin or Arabic-Indic digits (and an Arabic decimal comma). */
+/** Reads a number typed with Arabic numerals 0–9 or Eastern Arabic (Hindi) numerals ٠–٩ (and «٫»). */
 export function readNumber(text: string): number | null {
-  const latin = text
-    .trim()
-    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660))
-    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
-    .replace('٫', '.');
-  if (!/^-?\d+(\.\d+)?$/.test(latin)) return null;
-  const n = Number(latin);
+  const plain = parseDigits(text.trim());
+  if (!/^-?\d+(\.\d+)?$/.test(plain)) return null;
+  const n = Number(plain);
   return Number.isFinite(n) ? n : null;
 }
 
@@ -249,12 +245,12 @@ export function validateSettingsForm(form: SettingsForm): { errors: Partial<Reco
 
 /** Weekday names (0 = Sunday) in the locale. */
 export function weekdayNames(locale: string): string[] {
-  const f = new Intl.DateTimeFormat(chartLocale(locale), { weekday: 'long', timeZone: 'UTC' });
+  const f = dateTimeFormat(locale, { weekday: 'long', timeZone: 'UTC' });
   // 2026-11-01 is a Sunday
   return Array.from({ length: 7 }, (_, i) => f.format(new Date(Date.UTC(2026, 10, 1 + i, 12))));
 }
 
 /** An hour of the day (0..23) as the locale writes it ("9 AM", "٩ ص"). */
 export function hourName(hour: number, locale: string): string {
-  return new Intl.DateTimeFormat(chartLocale(locale), { hour: 'numeric', timeZone: 'UTC' }).format(new Date(Date.UTC(2026, 10, 1, hour)));
+  return dateTimeFormat(locale, { hour: 'numeric', timeZone: 'UTC' }).format(new Date(Date.UTC(2026, 10, 1, hour)));
 }

@@ -2,18 +2,7 @@
 
 import { useId, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  MEDIA_PROVIDER_IDS,
-  normaliseMediaSettings,
-  settingsProblems,
-  type MediaHealthSnapshot,
-  type MediaOverride,
-  type MediaProviderId,
-  type MediaSettings,
-  type PlaybackAssign,
-  type PlaybackStrategy,
-  type ProviderHealthSettings,
-} from '@al-ummah/shared-types';
+import { MEDIA_PROVIDER_IDS, normaliseMediaSettings, settingsProblems, type MediaHealthSnapshot, type MediaOverride, type MediaProviderId, type MediaSettings, type PlaybackAssign, type PlaybackStrategy, type ProviderHealthSettings } from '@al-ummah/shared-types';
 import { checkMediaProviderHealth, saveMediaProviders } from '@/lib/api/admin';
 import type { MediaProvidersView } from '@/lib/api/types';
 import { useLanguage } from '@/i18n/I18nProvider';
@@ -281,8 +270,8 @@ export function ProviderSettings({ view, labelledBy }: { view: MediaProvidersVie
                       {h.state === 'unhealthy' && (
                         <p className="text-danger-fg" data-testid={`providers-${p}-reason`}>
                           {h.consecutiveProbeFailures >= saved.health.probeFailures
-                            ? t('mediaProviders.healthReasonProbes', { count: String(h.consecutiveProbeFailures) })
-                            : t('mediaProviders.healthReasonFallbacks', { count: String(h.recentFailures), minutes: String(saved.health.windowMinutes) })}
+                            ? t('mediaProviders.healthReasonProbes', { count: h.consecutiveProbeFailures })
+                            : t('mediaProviders.healthReasonFallbacks', { count: h.recentFailures, minutes: saved.health.windowMinutes })}
                         </p>
                       )}
                       {h.state === 'unhealthy' && h.until && <p>{t('mediaProviders.healthUntil', { time: formatDate(h.until, locale, true) })}</p>}
@@ -290,7 +279,7 @@ export function ProviderSettings({ view, labelledBy }: { view: MediaProvidersVie
                         <p>
                           {t('mediaProviders.healthProbe', {
                             time: formatDate(h.lastProbeAt, locale, true),
-                            result: h.lastProbeOk ? t('mediaProviders.healthProbeOk', { ms: String(h.lastProbeMs ?? 0) }) : t('mediaProviders.healthProbeFailed'),
+                            result: h.lastProbeOk ? t('mediaProviders.healthProbeOk', { ms: h.lastProbeMs ?? 0 }) : t('mediaProviders.healthProbeFailed'),
                           })}
                         </p>
                       )}
@@ -389,7 +378,7 @@ export function ProviderSettings({ view, labelledBy }: { view: MediaProvidersVie
                     />
                     <span id={`${ids}-${f.key}-hint`} className={`text-sm ${invalid ? 'text-danger-fg' : 'text-fg-muted'}`}>
                       {f.hint ? `${t(f.hint)}. ` : ''}
-                      {t('mediaProviders.numberHint', { min: String(f.min), max: String(f.max) })}
+                      {t('mediaProviders.numberHint', { min: f.min, max: f.max })}
                     </span>
                   </div>
                 );

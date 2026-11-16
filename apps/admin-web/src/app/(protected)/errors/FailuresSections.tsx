@@ -3,7 +3,7 @@ import { getProcessingErrors, listContactMessages, listFlaggedVideoFormats } fro
 import type { ContactListResponse, FlaggedVideoList, ProcessingErrorsResponse } from '@/lib/api/types';
 import { canUseContactInbox, canUseProcessing } from '@/lib/roles';
 import type { getI18n } from '@/i18n/server';
-import { formatDate, translateDynamic } from '@/i18n/translate';
+import { formatDate, formatNumber, translateDynamic } from '@/i18n/translate';
 import { ErrorAlert, cardClass, linkClass } from '@/components/ui';
 import { getContentPermissions, listJobs } from '@/lib/api/content';
 import type { AdminContentPermission, AdminJob } from '@/lib/api/content-types';
@@ -233,7 +233,7 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
                       <td className={tdClass}>{formatDate(d.receivedAt, locale, true)}</td>
                       <td className={tdClass} dir="ltr">{d.videoId ?? '—'}</td>
                       <td className={tdClass}>{d.failureReason || t('errorsPage.noReason')}</td>
-                      <td className={tdClass}>{d.attempts}</td>
+                      <td className={tdClass}>{formatNumber(d.attempts, locale)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -275,7 +275,7 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
                       </td>
                       <td className={tdClass}>{t(d.step === 'ContactDataErase' ? 'errorsPage.stepContact' : 'errorsPage.stepAccount')}</td>
                       <td className={`${tdClass} break-words`}>{d.failureReason || t('errorsPage.noReason')}</td>
-                      <td className={tdClass}>{d.attempts}</td>
+                      <td className={tdClass}>{formatNumber(d.attempts, locale)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -314,7 +314,7 @@ export function FailuresSections({ failures, t, locale }: { failures: Failures; 
                         <div className="text-fg-muted text-xs" dir="ltr">{r.id}</div>
                       </td>
                       <td className={tdClass}>{r.lastError || t('errorsPage.noReason')}</td>
-                      <td className={tdClass}>{r.attempts}</td>
+                      <td className={tdClass}>{formatNumber(r.attempts, locale)}</td>
                     </tr>
                   ))}
                 </tbody>

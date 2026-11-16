@@ -6,6 +6,7 @@
  * edits key, on/off, platforms, apps, version range, languages, rollout, value and note, with each
  * problem under its field. Rules move up and down with buttons (announced), never by dragging only.
  */
+import { formatNumber } from '@/i18n/translate';
 import { useId, useState } from 'react';
 import { APP_CONFIG_APPS, APP_CONFIG_PLATFORMS } from '@al-ummah/shared-types';
 import { useLanguage } from '@/i18n/I18nProvider';
@@ -115,7 +116,7 @@ function RuleCard({
   problems: Problem[];
   disabled?: boolean;
 }) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const ids = useId();
   const n = index + 1;
   const scope = ruleScope(d);
@@ -203,7 +204,7 @@ function RuleCard({
                 </bdi>
               )}
               {!d.enabled && <span className="rounded-full border border-border bg-surface-2 px-2 text-xs text-fg-muted">{t('appConfig.ruleOff')}</span>}
-              {problems.length > 0 && <span className="rounded-full border border-danger-border bg-danger-bg px-2 text-xs text-danger-fg">{problems.length}</span>}
+              {problems.length > 0 && <span className="rounded-full border border-danger-border bg-danger-bg px-2 text-xs text-danger-fg">{formatNumber(problems.length, locale)}</span>}
             </span>
             <span className="text-xs text-fg-muted [overflow-wrap:anywhere]">{facts.length ? facts.join(' · ') : t('appConfig.everywhere')}</span>
           </span>

@@ -9,6 +9,7 @@ import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonC
 import { logger } from '@/lib/logger-client';
 import { UserName } from '@/components/audit/UserName';
 import { fillNodes } from '@/components/audit/fill';
+import { parseDigits } from '@al-ummah/shared-types';
 
 const MODELS = [
   { id: '@cf/deepseek-ai/deepseek-v4.1-flash-1017', name: 'DeepSeek V4.1 Flash' },
@@ -82,7 +83,7 @@ export function CaptionSettingsView({ view, canManage }: { view: View; canManage
               inputMode="decimal"
               className={`${fieldClass} mt-1 w-40`}
               value={form.monthlyBudgetUsd}
-              onChange={(e) => setForm((f) => ({ ...f, monthlyBudgetUsd: Number(e.target.value) }))}
+              onChange={(e) => setForm((f) => ({ ...f, monthlyBudgetUsd: Number(parseDigits(e.target.value)) }))}
               data-testid="caption-budget"
             />
           </section>
@@ -152,7 +153,7 @@ export function CaptionSettingsView({ view, canManage }: { view: View; canManage
               </div>
               <div>
                 <label className="block text-sm font-medium text-fg" htmlFor={`${ids}-inline-budget`}>{t('captionSettings.inlineBudget')}</label>
-                <input id={`${ids}-inline-budget`} type="number" min={0} max={200} step={1} className={`${fieldClass} mt-1 w-40`} value={form.inline.monthlyBudgetUsd} onChange={(e) => setInline({ monthlyBudgetUsd: Number(e.target.value) })} data-testid="inline-budget" />
+                <input id={`${ids}-inline-budget`} type="number" min={0} max={200} step={1} className={`${fieldClass} mt-1 w-40`} value={form.inline.monthlyBudgetUsd} onChange={(e) => setInline({ monthlyBudgetUsd: Number(parseDigits(e.target.value)) })} data-testid="inline-budget" />
               </div>
             </div>
             <div className="mt-6 border-t border-border pt-4">
