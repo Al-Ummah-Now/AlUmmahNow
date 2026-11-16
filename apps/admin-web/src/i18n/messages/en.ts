@@ -4985,7 +4985,6 @@ const en = {
       noteLabel: 'Shown only when the inviting admin writes a note.',
     },
     insert: 'Insert placeholder',
-    insertInto: 'Insert {placeholder} into {field}',
     placeholders: {
       name: 'Name',
       email: 'Email',

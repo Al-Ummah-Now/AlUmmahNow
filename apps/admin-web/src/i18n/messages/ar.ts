@@ -4984,7 +4984,6 @@ const ar: Messages = {
       noteLabel: 'يظهر فقط حين يكتب المشرف الداعي ملاحظة.',
     },
     insert: 'إدراج عنصر نائب',
-    insertInto: 'إدراج {placeholder} في {field}',
     placeholders: {
       name: 'الاسم',
       email: 'البريد',

@@ -231,7 +231,7 @@ export function EmailTemplateEditor({ initial, initialUpdatedByName, adminEmail 
               </h2>
               <p className="text-sm text-fg-muted">{t('emailTemplates.videosIntro')}</p>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-4">
               {LANGS.map((lang) => (
                 <div key={`${lang}-${saved.version}`} className="flex flex-col gap-1 min-w-0">
                   <Autocomplete
@@ -262,7 +262,7 @@ export function EmailTemplateEditor({ initial, initialUpdatedByName, adminEmail 
           </section>
         ) : null}
 
-        <div className={`${cardClass} sticky bottom-0 z-10 flex flex-col sm:flex-row sm:items-center gap-3`} data-testid="email-template-savebar">
+        <div className={`${cardClass} md:sticky md:bottom-0 z-10 flex flex-col sm:flex-row sm:items-center gap-3`} data-testid="email-template-savebar">
           <div className="flex-1 min-w-0 text-sm" role="status" aria-live="polite">
             {message ? (
               <span className={message.tone === 'error' ? 'text-danger-fg' : 'text-success-fg'} data-testid="email-template-message">
@@ -353,11 +353,12 @@ function CopyField({ field, value, errors, onChange, templateKey }: { field: Ema
               className="inline-flex items-center gap-1 min-h-9 px-2 rounded-full border border-border bg-surface-2 hover:bg-surface-hover text-fg text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => insert(p)}
-              aria-label={t('emailTemplates.insertInto', { placeholder: t(`emailTemplates.placeholders.${p}` as MessageKey), field: label })}
               data-testid={`email-field-${field.id}-chip-${p}`}
             >
               <span dir="ltr" className="font-mono">{`{${p}}`}</span>
               <span>{t(`emailTemplates.placeholders.${p}` as MessageKey)}</span>
+              {/* The field's name for screen readers; the visible words stay first in the name (WCAG 2.5.3) */}
+              <span className="sr-only"> ({label})</span>
             </button>
           ))}
         </div>
@@ -572,9 +573,9 @@ function History({ templateKey, current, refresh, dirty, onRestore }: { template
                 {actionText(v)}
                 {v.version === current ? <span className="ms-2 inline-block rounded-full border border-border px-2 text-xs text-fg-muted">{t('emailTemplates.historyCurrent')}</span> : null}
               </p>
-              <p className="text-fg-muted">
-                {v.createdBy === 'system' ? t('emailTemplates.savedBySystem') : t('emailTemplates.savedBy', { date: formatDate(v.createdAt, locale, true), name: names[v.createdBy] || t('emailTemplates.unknownPerson') })}
-              </p>
+              {v.createdBy === 'system' ? null : (
+                <p className="text-fg-muted">{t('emailTemplates.savedBy', { date: formatDate(v.createdAt, locale, true), name: names[v.createdBy] || t('emailTemplates.unknownPerson') })}</p>
+              )}
             </div>
             {v.version !== current ? (
               <div className="flex justify-end">
