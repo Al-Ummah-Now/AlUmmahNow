@@ -140,7 +140,11 @@ test.describe('Release: seamless next', () => {
       const pinnedOnScreen = async (what: string) => {
         await expect(frame, `${what}: pinned`).toHaveAttribute('data-pinned', 'true', { timeout: 10_000 });
         const box = (await page.locator('.video-js').first().boundingBox())!;
-        expect(box.y, `${what}: at the top`).toBeLessThanOrEqual(1);
+        // Right under the top bar, which stays at the top while the page scrolls (#1544; the pin reads
+        // its bottom through stickyTopInset)
+        const barBottom = await page.evaluate(() => Math.max(0, document.querySelector('header')!.getBoundingClientRect().bottom));
+        expect(barBottom, `${what}: the top bar stays`).toBeGreaterThan(0);
+        expect(Math.abs(box.y - barBottom), `${what}: right under the top bar`).toBeLessThanOrEqual(1);
         expect(box.height, `${what}: with a size`).toBeGreaterThan(100);
         expect(box.y + box.height, `${what}: on screen`).toBeLessThanOrEqual(844);
       };
