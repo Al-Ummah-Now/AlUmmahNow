@@ -28,6 +28,7 @@
 --   apps/admin-api/migrations/0027_csam_cases.sql
 --   apps/admin-api/migrations/0028_newsletter.sql
 --   apps/admin-api/migrations/0029_audit_feed_indexes.sql
+--   apps/admin-api/migrations/0036_email_templates.sql
 
 CREATE TABLE admin_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, actor_email TEXT, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, metadata TEXT, created_at TEXT NOT NULL);
 CREATE TABLE ai_budget_daily (day TEXT NOT NULL, feature TEXT NOT NULL, reserved REAL NOT NULL DEFAULT 0, PRIMARY KEY (day, feature));
@@ -42,6 +43,8 @@ CREATE TABLE creator_invites (id TEXT PRIMARY KEY, user_id TEXT NOT NULL UNIQUE,
 CREATE TABLE csam_access_log (id TEXT PRIMARY KEY, case_id TEXT, actor_id TEXT NOT NULL, action TEXT NOT NULL, detail TEXT, created_at TEXT NOT NULL);
 CREATE TABLE csam_cases (id TEXT PRIMARY KEY, matched_url TEXT NOT NULL, url_key TEXT NOT NULL, source TEXT NOT NULL CHECK (source IN ('paste', 'webhook')), status TEXT NOT NULL CHECK (status IN ('unmapped', 'containing', 'contained', 'containment_failed', 'reported', 'closed')), item_kind TEXT, resolution TEXT, uploader_id TEXT, job_id TEXT, freeze TEXT, facts TEXT, detected_at TEXT NOT NULL, created_by TEXT NOT NULL, report_id TEXT, reported_at TEXT, reported_by TEXT, legal_hold INTEGER NOT NULL DEFAULT 0, legal_hold_reason TEXT, evidence_deleted_at TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE csam_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE TABLE email_template_versions (key TEXT NOT NULL, version INTEGER NOT NULL, content TEXT NOT NULL, action TEXT NOT NULL, source_version INTEGER, created_at TEXT NOT NULL, created_by TEXT NOT NULL, PRIMARY KEY (key, version));
+CREATE TABLE email_templates (key TEXT PRIMARY KEY, version INTEGER NOT NULL, content TEXT NOT NULL, updated_at TEXT NOT NULL, updated_by TEXT NOT NULL);
 CREATE TABLE entitlement_overrides (id TEXT PRIMARY KEY, subject_type TEXT NOT NULL CHECK (subject_type IN ('channel', 'organisation', 'user')), subject_id TEXT NOT NULL, key TEXT NOT NULL, value_json TEXT NOT NULL, expires_at TEXT, reason TEXT NOT NULL, created_by TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), UNIQUE (subject_type, subject_id, key));
 CREATE TABLE erased_users (user_key TEXT PRIMARY KEY, erased_at INTEGER NOT NULL) WITHOUT ROWID;
 CREATE TABLE error_actions (id TEXT PRIMARY KEY, group_id TEXT NOT NULL REFERENCES error_groups(id) ON DELETE CASCADE, environment TEXT NOT NULL, item_key TEXT NOT NULL, app TEXT NOT NULL, source TEXT NOT NULL, title TEXT NOT NULL, detail TEXT, item_type TEXT, item_id TEXT, item_url TEXT, retry_json TEXT, retry_label TEXT, status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'retrying', 'resolved', 'dismissed')), occurrences INTEGER NOT NULL DEFAULT 1, attempts INTEGER NOT NULL DEFAULT 0, last_attempt_at TEXT, last_attempt_result TEXT, last_attempt_by TEXT, last_ref TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, resolved_at TEXT, UNIQUE (environment, item_key));

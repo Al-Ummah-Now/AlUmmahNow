@@ -74,6 +74,8 @@ export const PERMISSIONS = {
   'staff_devices:manage': ADMIN_ROLE_IDS,
   /** Audit log page (/audit): every admin action across the videos admin, filtered by person, item, area, action and date. */
   'audit:read': ADMIN_ROLE_IDS,
+  /** Settings › Emails: edit, restore and test-send the system emails (the creator invite today). */
+  'emails:manage': ADMIN_ROLE_IDS,
 } as const satisfies Record<string, readonly string[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

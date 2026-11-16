@@ -37,6 +37,7 @@ import notificationSettingsRouter from './routers/notificationSettings.router';
 import socialRouter from './routers/social.router';
 import videoCategoriesRouter from './routers/videoCategories.router';
 import translateRouter from './routers/translate.router';
+import emailTemplatesRouter from './routers/emailTemplates.router';
 import appConfigRouter from './routers/appConfig.router';
 import opsRouter from './routers/ops.router';
 import abuseRouter from './routers/abuse.router';
@@ -270,6 +271,8 @@ app.route('/api/social', socialRouter);
 app.route('/api/video-categories', videoCategoriesRouter);
 // Translate for staff-set en/ar fields (L10N rule; routers/translate.router.ts)
 app.route('/api/translate', translateRouter);
+// Settings › Emails: admin-edited system emails, versions, preview and test send (emails:manage; routers/emailTemplates.router.ts)
+app.route('/api/email-templates', emailTemplatesRouter);
 app.route('/api/app-config', appConfigRouter);
 
 // Platform analytics (Operations page, docs/admin/LIVE_OPS.md): reads apps/cost-monitor's rollups; ops:read / ops:manage

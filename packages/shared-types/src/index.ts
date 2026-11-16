@@ -158,3 +158,5 @@ export * from './cost-credentials';
 export * from './transcode-limit';
 export * from './page-blocks';
 export * from './page-blocks.sample';
+// Admin-editable system emails (Settings › Emails): fields, placeholders, versions
+export * from './email-templates';
