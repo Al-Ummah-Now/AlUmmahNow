@@ -306,7 +306,8 @@ const againLink = (locale: Locale) => `<p><a class="button button-quiet" href="$
 
 export function renderConfirmPage(o: PageOptions, state: 'pending' | 'active' | 'unknown', token: string): string {
   const { locale } = o;
-  if (state === 'unknown') return shell(o, t(locale, 'expiredTitle'), panel(locale, { title: t(locale, 'expiredTitle'), body: [t(locale, 'expiredBody')], action: againLink(locale), testId: 'subscribe-expired' }));
+  // Without email notifications there is nowhere to subscribe again: no link and no invitation to (hidden when off)
+  if (state === 'unknown') return shell(o, t(locale, 'expiredTitle'), panel(locale, { title: t(locale, 'expiredTitle'), body: [t(locale, o.subscribe ? 'expiredBody' : 'expiredBodyOff')], action: o.subscribe ? againLink(locale) : undefined, testId: 'subscribe-expired' }));
   if (state === 'active') return renderSubscribedPage(o);
   return shell(o, t(locale, 'confirmTitle'), panel(locale, { title: t(locale, 'confirmTitle'), body: [t(locale, 'confirmBody')], action: tokenForm(locale, '/subscribe/confirm', token, t(locale, 'confirmButton'), 'confirm-form'), testId: 'subscribe-confirm' }));
 }
@@ -324,5 +325,5 @@ export function renderUnsubscribePage(o: PageOptions, known: boolean, token: str
 
 export function renderUnsubscribedPage(o: PageOptions): string {
   const { locale } = o;
-  return shell(o, t(locale, 'unsubscribedTitle'), panel(locale, { title: t(locale, 'unsubscribedTitle'), body: [t(locale, 'unsubscribedBody')], action: againLink(locale), tone: 'ok', testId: 'unsubscribe-done' }));
+  return shell(o, t(locale, 'unsubscribedTitle'), panel(locale, { title: t(locale, 'unsubscribedTitle'), body: [t(locale, 'unsubscribedBody')], action: o.subscribe ? againLink(locale) : undefined, tone: 'ok', testId: 'unsubscribe-done' }));
 }
