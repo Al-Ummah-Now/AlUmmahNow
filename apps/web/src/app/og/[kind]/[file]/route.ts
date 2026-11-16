@@ -22,8 +22,9 @@ import { stableSourceKey } from '@/lib/share-card/source-key';
 const EDGE_SECONDS = 3600;
 const MAX_SOURCE_BYTES = 8 * 1024 * 1024;
 const IMAGE_TYPE = /^image\/(jpeg|png|webp|gif|avif)$/;
-// v2 (2026-11-15): the channel card changed (banner whole, logo at its corner); every stored card is rebuilt
-const R2_PREFIX = 'share-cards/v2';
+// v3 (2026-11-15): the channel card is the owner's pick (banner covers the card, logo at its corner);
+// every stored card is rebuilt
+const R2_PREFIX = 'share-cards/v3';
 
 type EdgeCache = { match(req: Request): Promise<Response | undefined>; put(req: Request, res: Response): Promise<void> };
 type R2Like = {

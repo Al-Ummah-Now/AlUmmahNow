@@ -50,62 +50,32 @@ export function cardLayout(width: number, height: number): CardLayout {
 }
 
 /**
- * A channel with a banner (owner, 2026-11-15, reference image: "something like this"): the banner runs
- * edge to edge across the card and fills most of its height, with thin bands of the page colour; a
- * LARGE round logo (about 37% of the card height) sits at the bottom-start corner (left in English,
- * right in Arabic) with most of it over the banner's lower edge. Rules kept from the owner: the banner
- * keeps its shape (cropped, never stretched), the logo is never clipped (an even CHANNEL_MARGIN from
- * the card edges), nothing collides.
- *
- * Banner: full card width, `bannerHeight` tall. A narrower banner (16:9, square, portrait) is
- * cropped to fill that box (cover). A very wide one (6:1) is cropped by at most
- * MAX_BANNER_SIDE_CROP of its width: below that it is shown shorter, with thicker bands.
- *
- * Variants (owner picks one; the review page renders all three):
- * - v1: the reference: banner box 87% of the card height, logo 37% (232 px), 80% of it over the banner
- * - v2: the logo a little smaller and higher: 32% (200 px), 90% over the banner
- * - v3: the banner covers the whole card, the logo (232 px) on it at the bottom-start corner
+ * A channel with a banner (owner's pick, V3, 2026-11-15): the banner covers the whole card, cropped
+ * around its centre to fill it (never stretched), with the round logo (232 px, about 37% of the card
+ * height) on top of it at the bottom-start corner: left in English, right in Arabic, an even
+ * CHANNEL_MARGIN from the side and bottom edges so it is never clipped. Without a banner the logo
+ * sits centred on the page colour (avatarLayout).
  */
-export type ChannelVariant = 'v1' | 'v2' | 'v3';
-export const CHANNEL_VARIANT: ChannelVariant = 'v1';
-export const CHANNEL_MARGIN = 24;
-/** The most of a very wide banner's width a card crops away (both sides together) */
-const MAX_BANNER_SIDE_CROP = 0.45;
-const VARIANTS: Record<ChannelVariant, { bannerHeight: number; logo: number; inside: number; startInset: number }> = {
-  v1: { bannerHeight: 548, logo: 232, inside: 0.8, startInset: 60 },
-  v2: { bannerHeight: 548, logo: 200, inside: 0.9, startInset: 64 },
-  v3: { bannerHeight: CARD_HEIGHT, logo: 232, inside: 1, startInset: 48 },
-};
+export const CHANNEL_MARGIN = 40;
+export const CHANNEL_LOGO_SIZE = 232;
 
 export interface Box { left: number; top: number; width: number; height: number }
 /** `source`: the part of the banner shown (a centred crop), in the banner's own pixels */
 export interface ChannelLayout { banner: Box; source: Box; logo: Box }
 
-export function channelLayout(bannerWidth: number, bannerHeight: number, rtl: boolean, variant: ChannelVariant = CHANNEL_VARIANT): ChannelLayout {
-  const v = VARIANTS[variant];
-  const w = bannerWidth > 0 ? bannerWidth : 4;
-  const h = bannerHeight > 0 ? bannerHeight : 1;
-  const aspect = w / h;
-  // Full width; as tall as the variant's box, but a very wide banner keeps (1 - MAX_BANNER_SIDE_CROP) of its width
-  const natural = CARD_WIDTH / aspect;
-  const leastCropped = CARD_WIDTH / (aspect * (1 - MAX_BANNER_SIDE_CROP));
-  // v3 always covers the whole card; the others cap how much of a very wide banner is cut away
-  const height = variant === 'v3' ? CARD_HEIGHT : Math.round(Math.min(v.bannerHeight, Math.max(natural, Math.min(leastCropped, v.bannerHeight))));
-  // The crop of the banner that fills CARD_WIDTH x height (cover, centred)
-  const boxAspect = CARD_WIDTH / height;
-  const source = aspect > boxAspect
-    ? { width: Math.round(h * boxAspect), height: h, left: Math.round((w - h * boxAspect) / 2), top: 0 }
-    : { width: w, height: Math.round(w / boxAspect), left: 0, top: Math.round((h - w / boxAspect) / 2) };
-  // Banner + the part of the logo below it, centred vertically; the logo never closer than the margin to an edge
-  const below = Math.round(v.logo * (1 - v.inside));
-  const groupTop = Math.round((CARD_HEIGHT - (height + below)) / 2);
-  const logoTop = Math.min(groupTop + height - (v.logo - below), CARD_HEIGHT - CHANNEL_MARGIN - v.logo);
-  const startX = Math.max(CHANNEL_MARGIN, v.startInset);
-  const logoLeft = rtl ? CARD_WIDTH - startX - v.logo : startX;
+export function channelLayout(bannerWidth: number, bannerHeight: number, rtl: boolean): ChannelLayout {
+  const w = bannerWidth > 0 ? bannerWidth : CARD_WIDTH;
+  const h = bannerHeight > 0 ? bannerHeight : CARD_HEIGHT;
+  const cardAspect = CARD_WIDTH / CARD_HEIGHT;
+  // The centred crop of the banner with the card's shape (cover)
+  const source = w / h > cardAspect
+    ? { width: Math.round(h * cardAspect), height: h, left: Math.round((w - h * cardAspect) / 2), top: 0 }
+    : { width: w, height: Math.round(w / cardAspect), left: 0, top: Math.round((h - w / cardAspect) / 2) };
+  const logoLeft = rtl ? CARD_WIDTH - CHANNEL_MARGIN - CHANNEL_LOGO_SIZE : CHANNEL_MARGIN;
   return {
-    banner: { left: 0, top: Math.max(0, groupTop), width: CARD_WIDTH, height },
+    banner: { left: 0, top: 0, width: CARD_WIDTH, height: CARD_HEIGHT },
     source,
-    logo: { left: logoLeft, top: logoTop, width: v.logo, height: v.logo },
+    logo: { left: logoLeft, top: CARD_HEIGHT - CHANNEL_MARGIN - CHANNEL_LOGO_SIZE, width: CHANNEL_LOGO_SIZE, height: CHANNEL_LOGO_SIZE },
   };
 }
 

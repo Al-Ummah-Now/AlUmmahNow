@@ -62,7 +62,7 @@ describe('GET /og/<kind>/<id>.jpg', () => {
     expect(first.headers.get('cache-control')).toBe('public, max-age=3600, s-maxage=3600');
     expect(new Uint8Array(await first.arrayBuffer())).toEqual(CARD);
     expect(store.size).toBe(1);
-    expect([...store.keys()][0]).toMatch(/^share-cards\/v2\/v\/[0-9a-f]{24}\/[0-9a-f]{24}\.jpg$/);
+    expect([...store.keys()][0]).toMatch(/^share-cards\/v3\/v\/[0-9a-f]{24}\/[0-9a-f]{24}\.jpg$/);
 
     // a fresh signature for the same picture: same stored card, no new transform
     video.mockResolvedValue({ id: ID, thumbnailSource: `https://vz-215a1ffd-a5a.b-cdn.net/${ID}/thumbnail.jpg?token=b&expires=2` });
