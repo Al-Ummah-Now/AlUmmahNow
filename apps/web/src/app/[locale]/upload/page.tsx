@@ -7,7 +7,8 @@ import React, { useState, useCallback, useRef, useMemo, useEffect } from "react"
 import { VideoObject } from "@/interfaces";
 import VideoUpload from "@/components/videoUpload";
 import { BatchUploadQueue } from "@/components/videoUpload/BatchUploadQueue";
-import { notFound, useParams, useSearchParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
+import NotFoundPage from "@/components/NotFoundPage";
 import { AlertCircle, Upload, FileStack, ShieldAlert } from "lucide-react";
 import { UploadModeTabs, UPLOAD_MODE_PANEL_ID, UPLOAD_MODE_TAB_ID, type UploadMode } from "@/components/videoUpload/UploadModeTabs";
 import { VIDEO_UPLOAD_CONFIG } from "@/lib/constants/uploadConfig";
@@ -453,7 +454,8 @@ const UploadPage: React.FC = () => {
   }
 
   // Without uploads (no creator tier here) the page does not exist (hidden when off)
-  if (creator.status === 'ready' && !creator.access.canUpload) notFound();
+  // Hidden when off: the not-found page, rendered here (a client notFound() after hydration breaks Next's router)
+  if (creator.status === 'ready' && !creator.access.canUpload) return <NotFoundPage />;
 
   // Wait for the session's channels before deciding the user has none
   if (!uploadChannelId && (sessionLoading || (uploadChannels.length > 0 && !rememberedReady))) {
