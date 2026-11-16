@@ -181,7 +181,7 @@ export function LiveTab({ locale, channelId, role }: Props) {
               <Badge variant={row.status === 'live' ? 'destructive' : 'secondary'} data-testid="studio-live-status">{text.status[row.status] ?? row.status}</Badge>
               {canManage && (
                 <Button asChild variant="outline" className="min-h-11">
-                  <Link href={studioLiveHref(locale, channelId, row.id)} data-testid="studio-live-manage">{text.manage}</Link>
+                  <Link href={studioLiveHref(locale, channelId, row.id)} data-testid="studio-live-manage">{row.status === 'live' ? text.manageLive : row.status === 'ended' || row.status === 'cancelled' ? text.details : text.manage}</Link>
                 </Button>
               )}
               <Button asChild variant="ghost" className="min-h-11">

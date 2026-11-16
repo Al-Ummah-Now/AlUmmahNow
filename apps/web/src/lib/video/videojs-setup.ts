@@ -86,6 +86,14 @@ export const VIDEO_JS_OPTIONS: Partial<PlayerOptions> = {
       'Exit Fullscreen': 'الخروج من ملء الشاشة',
       'Captions': 'إظهار التسميات التوضيحية',
       'Subtitles': 'إظهار الترجمة',
+      // The pack says «فيديو»; the site's word is «مرئي» (glossary)
+      'You aborted the media playback': 'لقد ألغيت تشغيل المرئي',
+      'A network error caused the media download to fail part-way.': 'تسبب خطأ في الشبكة في توقف تحميل المرئي قبل اكتماله.',
+      'The media could not be loaded, either because the server or network failed or because the format is not supported.': 'تعذّر تحميل المرئي بسبب خطأ في الخادم أو الشبكة، أو لأن تنسيقه غير مدعوم.',
+      'The media playback was aborted due to a corruption problem or because the media used features your browser did not support.': 'توقف تشغيل المرئي لأن ملفه تالف أو لأنه يستخدم ميزات لا يدعمها متصفحك.',
+      'No compatible source was found for this media.': 'لم يُعثر على مصدر متوافق لهذا المرئي.',
+      'Play Video': 'تشغيل المرئي',
+      'Video Player': 'مشغل المرئيات',
       // videojs-hls-quality-selector localizes these; the Arabic pack has neither
       'Auto': 'تلقائي',
       'Quality': 'الجودة'

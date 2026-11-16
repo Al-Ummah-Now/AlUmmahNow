@@ -15,6 +15,7 @@ import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { acceptInvite, daysUntil, declineInvite, loadMyInvites } from '@/lib/channels/team';
 import { teamErrorMessage } from '@/lib/channels/team-errors';
 import { CHANNEL_INVITES_CHANGED } from '@/lib/channels/invites-count';
+import { pluralText } from '@/lib/notifications/toast-queue';
 
 const CARD = 'c p-4 sm:p-6';
 const BUTTON = 'inline-flex min-h-10 items-center justify-center rounded-lg px-4 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60';
@@ -122,7 +123,7 @@ export default function ChannelInvites() {
                       </p>
                       <p className="mt-1 text-sm text-[var(--fanous-color-text-secondary)]">{tr.roleHelp[invite.role]}</p>
                       <p className="mt-1 text-xs text-[var(--fanous-color-text-muted)]">
-                        {days > 0 ? tr.expiresIn.replace('{days}', days.toLocaleString(lang)) : tr.expiresToday}
+                        {days > 0 ? pluralText(tr.expiresIn, days, lang) : tr.expiresToday}
                       </p>
                     </div>
                   </div>

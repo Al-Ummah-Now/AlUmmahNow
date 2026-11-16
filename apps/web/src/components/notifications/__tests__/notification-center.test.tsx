@@ -69,7 +69,20 @@ describe('notification rendering', () => {
     expect(relativeTime('2026-11-07T11:59:40Z', EN_TRANSLATIONS, 'en', now)).toBe('Just now');
     expect(relativeTime('2026-11-07T11:55:00Z', EN_TRANSLATIONS, 'en', now)).toBe('5 min ago');
     expect(relativeTime('2026-11-07T09:00:00Z', EN_TRANSLATIONS, 'en', now)).toBe('3 h ago');
-    expect(relativeTime('2026-11-05T12:00:00Z', AR_TRANSLATIONS, 'ar', now)).toContain('يوم');
+    expect(relativeTime('2026-11-05T12:00:00Z', AR_TRANSLATIONS, 'ar', now)).toBe('منذ يومين');
+  });
+
+  it('uses the Arabic plural forms (never «منذ 2 يوم»)', () => {
+    const now = Date.parse('2026-11-30T12:00:00Z');
+    const ar = (iso: string) => relativeTime(iso, AR_TRANSLATIONS, 'ar', now).replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660));
+    expect(ar('2026-11-30T11:59:00Z')).toBe('منذ دقيقة');
+    expect(ar('2026-11-30T11:58:00Z')).toBe('منذ دقيقتين');
+    expect(ar('2026-11-30T11:55:00Z')).toBe('منذ 5 دقائق');
+    expect(ar('2026-11-30T11:45:00Z')).toBe('منذ 15 دقيقة');
+    expect(ar('2026-11-30T10:00:00Z')).toBe('منذ ساعتين');
+    expect(ar('2026-11-29T12:00:00Z')).toBe('منذ يوم');
+    expect(ar('2026-11-25T12:00:00Z')).toBe('منذ 5 أيام');
+    expect(ar('2026-11-19T12:00:00Z')).toBe('منذ 11 يومًا');
   });
 
   it('turns realtime events into unread list items and ignores unknown keys', () => {
