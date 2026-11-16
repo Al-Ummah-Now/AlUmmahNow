@@ -16,6 +16,7 @@ import { test, expect } from './support/fixtures';
 import { adminApi, readTokens } from './support/api';
 import { LOCAL_STACK, RUN_TAG, adminProject } from './support/env';
 import { stackSql } from './support/local-stack';
+import { parseShownNumber } from './support/digits';
 
 const DB = 'al-ummah-now-notifications';
 const SEEDED = 3;
@@ -78,7 +79,7 @@ test.describe('site visits', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Site visits' })).toBeVisible();
     await expect(page.getByTestId('site-visits-period-7')).toHaveAttribute('aria-current', 'page');
     await expect(page.getByTestId('site-visits-panel')).toHaveAttribute('data-days', '7');
-    const total = Number((await page.getByTestId('site-visits-total').textContent())?.replace(/\D/g, ''));
+    const total = parseShownNumber(await page.getByTestId('site-visits-total').textContent());
     expect(total).toBeGreaterThanOrEqual(SEEDED);
     await expect(page.getByTestId('site-visits-chart')).toBeVisible();
     await expect(page.getByTestId('site-visits-source-site')).toBeVisible();
