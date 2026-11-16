@@ -66,7 +66,7 @@ describe('DataTable column widths', () => {
 describe('phone card meta lines and numbers', () => {
   it('isolates every part so an Arabic name never reorders a number or a date, and skips empty parts', () => {
     const html = renderToStaticMarkup(React.createElement(MetaLine as never, { parts: ['قناة الدروس', null, '١٢٬٨٤٠ مشاهدة', '', false] } as never));
-    assert.equal(html, '<span class=""><span><bdi>قناة الدروس</bdi></span><span> · <bdi>١٢٬٨٤٠ مشاهدة</bdi></span></span>');
+    assert.equal(html, '<span class="[&amp;_a]:underline [&amp;_a]:underline-offset-2"><span><bdi>قناة الدروس</bdi></span><span> · <bdi>١٢٬٨٤٠ مشاهدة</bdi></span></span>');
   });
   it('durations are ٠–٩ in Arabic through the shared formatter', () => {
     assert.equal(formatClock('ar', 3725), '١:٠٢:٠٥');

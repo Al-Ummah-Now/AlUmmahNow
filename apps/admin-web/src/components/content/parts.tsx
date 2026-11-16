@@ -254,7 +254,8 @@ export function BackLink({ href, label }: { href: string; label: string }) {
 export function MetaLine({ parts, className = '', testId }: { parts: React.ReactNode[]; className?: string; testId?: string }) {
   const shown = parts.filter((p) => p !== null && p !== undefined && p !== false && p !== '');
   return (
-    <span className={className} data-testid={testId}>
+    // Links inside a line of text are underlined, so they never rely on colour alone (WCAG 1.4.1)
+    <span className={`${className} [&_a]:underline [&_a]:underline-offset-2`.trim()} data-testid={testId}>
       {shown.map((part, i) => (
         <span key={i}>
           {i > 0 && ' · '}
