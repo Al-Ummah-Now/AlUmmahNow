@@ -10,7 +10,7 @@
  * - Failures worth retrying back off like contact mail; a final failure marks the row failed and
  *   is flagged on the Errors page with Retry ("cost-alert-email" in lib/errors-actions.ts).
  */
-import { COST_DIGEST_TIME_ZONE, newErrorRef, scrubEvent, type CostAlertKind } from '@al-ummah/shared-types';
+import { COST_DIGEST_TIME_ZONE, formatDate, formatInteger, formatMoney, formatNumber, formatPercent, newErrorRef, scrubEvent, type CostAlertKind } from '@al-ummah/shared-types';
 import type { AdminBindings } from '../base/types';
 import { envTag, sendContactEmail, type RenderedEmail } from './contact-email';
 import { renderEmail, type EmailDoc } from './email/layout';
@@ -64,8 +64,8 @@ const ENV_NAMES: Record<'en' | 'ar', Record<string, string>> = {
 
 const COPY = {
   en: {
-    budgetSubject: (pct: number) => `Costs: ${pct}% of the monthly budget used`,
-    budgetHeading: (pct: number) => `${pct}% of this month's budget is used`,
+    budgetSubject: (pct: string) => `Costs: ${pct} of the monthly budget used`,
+    budgetHeading: (pct: string) => `${pct} of this month's budget is used`,
     projectedSubject: 'Costs: projected to go over the monthly budget',
     projectedHeading: 'This month is projected to go over budget',
     spikeSubject: (name: string) => `Costs: spending jumped on ${name}`,
@@ -81,12 +81,12 @@ const COPY = {
     day: 'Day',
     cost: 'Cost that day',
     baseline: `Average day before`,
-    lastWeek: 'Last 7 days',
-    weekBefore: 'The 7 days before',
+    lastWeek: (n: string) => `Last ${n} days`,
+    weekBefore: (n: string) => `The ${n} days before`,
     openAlerts: 'Open cost alerts',
     byProduct: 'Biggest products this month',
     byEnv: 'By environment this month',
-    movers: 'Biggest changes over the last 7 days',
+    movers: (n: string) => `Biggest changes over the last ${n} days`,
     envTotal: (env: string) => `${env} total`,
     estimate: 'Estimates at list prices; your bill may differ.',
     cta: 'Open Costs',
@@ -96,8 +96,8 @@ const COPY = {
     sign: 'Al Ummah Now',
   },
   ar: {
-    budgetSubject: (pct: number) => `التكاليف: استُخدم ${pct}٪ من ميزانية الشهر`,
-    budgetHeading: (pct: number) => `استُخدم ${pct}٪ من ميزانية هذا الشهر`,
+    budgetSubject: (pct: string) => `التكاليف: استُخدم ${pct} من ميزانية الشهر`,
+    budgetHeading: (pct: string) => `استُخدم ${pct} من ميزانية هذا الشهر`,
     projectedSubject: 'التكاليف: يُتوقع تجاوز ميزانية الشهر',
     projectedHeading: 'يُتوقع أن يتجاوز هذا الشهر الميزانية',
     spikeSubject: (name: string) => `التكاليف: قفزة في الإنفاق على ${name}`,
@@ -113,12 +113,12 @@ const COPY = {
     day: 'اليوم',
     cost: 'تكلفة ذلك اليوم',
     baseline: 'متوسط اليوم قبلها',
-    lastWeek: 'آخر ٧ أيام',
-    weekBefore: 'الأيام السبعة التي قبلها',
+    lastWeek: (n: string) => `آخر ${n} أيام`,
+    weekBefore: (_n: string) => 'الأيام السبعة التي قبلها',
     openAlerts: 'تنبيهات التكلفة المفتوحة',
     byProduct: 'أكبر المنتجات هذا الشهر',
     byEnv: 'حسب البيئة هذا الشهر',
-    movers: 'أكبر التغيّرات في آخر ٧ أيام',
+    movers: (n: string) => `أكبر التغيّرات في آخر ${n} أيام`,
     envTotal: (env: string) => `إجمالي ${env}`,
     estimate: 'تقديرات بأسعار القائمة؛ وقد تختلف فاتورتك.',
     cta: 'افتح صفحة التكاليف',
@@ -129,9 +129,24 @@ const COPY = {
   },
 } as const;
 
+/** Dollars: "$12.69" / «١٢٫٦٩ دولار أمريكي». */
 export function money(v: number, locale: 'en' | 'ar'): string {
-  return new Intl.NumberFormat(locale === 'ar' ? 'ar' : 'en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
+  return formatMoney(locale === 'ar' ? 'ar' : 'en-US', v, 'USD');
 }
+
+/**
+ * A month ("2026-11") or day ("2026-11-14") from the alert: as written in English, a written-out
+ * date in Arabic («نوفمبر ٢٠٢٦», «١٤ نوفمبر ٢٠٢٦»).
+ */
+function isoLabel(iso: string, locale: 'en' | 'ar'): string {
+  if (locale !== 'ar') return iso;
+  if (/^\d{4}-\d{2}$/.test(iso)) return formatDate('ar', `${iso}-01T00:00:00Z`, { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return formatDate('ar', `${iso}T00:00:00Z`, { dateStyle: 'long', timeZone: 'UTC' });
+  return formatDate('ar', iso, { dateStyle: 'long', timeZone: 'UTC' });
+}
+
+/** The digest compares two windows of this many days. */
+const WEEK_DAYS = 7;
 
 const signed = (v: number, locale: 'en' | 'ar') => `${v > 0 ? '+' : v < 0 ? '−' : ''}${money(Math.abs(v), locale)}`;
 
@@ -154,24 +169,25 @@ export function renderCostEmail(input: CostEmailInput): RenderedEmail {
   let heading: string;
   const blocks: EmailDoc['blocks'] = [];
   if (p.type === 'budget') {
-    const pct = Math.round(p.level * 100);
+    const pct = formatPercent(l, p.level);
     subject = s.budgetSubject(pct);
     heading = s.budgetHeading(pct);
-    blocks.push({ kind: 'facts', rows: [[s.month, p.month], [s.spent, money(p.mtd, l)], [s.budget, money(p.cap, l)], [s.projected, money(p.projected, l)]] });
+    blocks.push({ kind: 'facts', rows: [[s.month, isoLabel(p.month, l)], [s.spent, money(p.mtd, l)], [s.budget, money(p.cap, l)], [s.projected, money(p.projected, l)]] });
   } else if (p.type === 'projected') {
     subject = s.projectedSubject;
     heading = s.projectedHeading;
-    blocks.push({ kind: 'facts', rows: [[s.month, p.month], [s.projected, money(p.projected, l)], [s.budget, money(p.cap, l)], [s.spent, money(p.mtd, l)]] });
+    blocks.push({ kind: 'facts', rows: [[s.month, isoLabel(p.month, l)], [s.projected, money(p.projected, l)], [s.budget, money(p.cap, l)], [s.spent, money(p.mtd, l)]] });
     blocks.push({ kind: 'notice', text: s.projectedHeading, tone: 'warning' });
   } else if (p.type === 'spike') {
     const what = p.resource ? p.name : s.envTotal(env(p.env));
     subject = s.spikeSubject(what);
     heading = s.spikeHeading;
-    blocks.push({ kind: 'facts', rows: [[s.what, what], [s.environment, env(p.env)], [s.day, p.day], [s.cost, money(p.cost, l)], [s.baseline, money(p.baseline, l)]] });
+    blocks.push({ kind: 'facts', rows: [[s.what, what], [s.environment, env(p.env)], [s.day, isoLabel(p.day, l)], [s.cost, money(p.cost, l)], [s.baseline, money(p.baseline, l)]] });
   } else {
-    subject = s.digestSubject(p.week);
+    const days = formatNumber(l, WEEK_DAYS);
+    subject = s.digestSubject(isoLabel(p.week, l));
     heading = s.digestHeading;
-    blocks.push({ kind: 'facts', rows: [[s.spent, money(p.mtd, l)], [s.budget, money(p.cap, l)], [s.projected, money(p.projected, l)], [s.lastWeek, money(p.lastWeek, l)], [s.weekBefore, money(p.weekBefore, l)], [s.openAlerts, p.openAlerts.toLocaleString(l === 'ar' ? 'ar' : 'en')]] });
+    blocks.push({ kind: 'facts', rows: [[s.spent, money(p.mtd, l)], [s.budget, money(p.cap, l)], [s.projected, money(p.projected, l)], [s.lastWeek(days), money(p.lastWeek, l)], [s.weekBefore(days), money(p.weekBefore, l)], [s.openAlerts, formatInteger(l, p.openAlerts)]] });
     if (p.products.length) {
       blocks.push({ kind: 'p', text: s.byProduct });
       blocks.push({ kind: 'facts', rows: p.products.slice(0, 5).map((x) => [product(x.product), money(x.mtd, l)] as [string, string]) });
@@ -179,7 +195,7 @@ export function renderCostEmail(input: CostEmailInput): RenderedEmail {
     blocks.push({ kind: 'p', text: s.byEnv });
     blocks.push({ kind: 'facts', rows: Object.entries(p.envs).filter(([, v]) => v > 0).map(([k, v]) => [env(k), money(v, l)] as [string, string]) });
     if (p.movers.length) {
-      blocks.push({ kind: 'p', text: s.movers });
+      blocks.push({ kind: 'p', text: s.movers(days) });
       blocks.push({ kind: 'facts', rows: p.movers.slice(0, 5).map((m) => [`${product(m.label)} · ${env(m.env)}`, signed(m.change, l)] as [string, string]) });
     }
   }
@@ -249,6 +265,7 @@ export function costAlertNotifier(env: QueueEnv): (fresh: CostAlert[]) => Promis
 /** Local weekday (0 = Sunday), hour and date in the digest time zone. */
 export function localTime(at: Date, timeZone = COST_DIGEST_TIME_ZONE): { weekday: number; hour: number; date: string } {
   const parts = Object.fromEntries(
+    // locale-format: machine (time-zone maths, never shown)
     new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short', hour: 'numeric', hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit' })
       .formatToParts(at)
       .map((x) => [x.type, x.value]),

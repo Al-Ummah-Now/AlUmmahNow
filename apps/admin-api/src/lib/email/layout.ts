@@ -20,6 +20,8 @@
  * package, so keep the two copies identical (same tokens, same blocks).
  */
 
+import { formatDate } from '@al-ummah/shared-types';
+
 export type EmailLocale = 'en' | 'ar';
 
 /** One piece of an email body. Strings are plain text: the layout escapes them. */
@@ -143,15 +145,15 @@ const safeValue = (v: string | undefined) => (v && SAFE_VALUE.test(v) ? v : unde
 
 export const dirOf = (locale: EmailLocale) => (locale === 'ar' ? 'rtl' : 'ltr');
 
-/** A date in the email's one language (UTC, so every reader sees the same day). */
+/** A date in the email's one language (UTC, so every reader sees the same day); Arabic in ٠–٩. */
 export function formatEmailDate(at: number | string | Date, locale: EmailLocale, withTime = false): string {
   const date = at instanceof Date ? at : new Date(at);
   if (Number.isNaN(date.getTime())) return String(at);
-  const text = new Intl.DateTimeFormat(locale === 'ar' ? 'ar' : 'en-GB', {
+  const text = formatDate(locale === 'ar' ? 'ar' : 'en-GB', date, {
     dateStyle: 'long',
     ...(withTime ? { timeStyle: 'short' } : {}),
     timeZone: 'UTC',
-  }).format(date);
+  });
   return withTime ? `${text} UTC` : text;
 }
 

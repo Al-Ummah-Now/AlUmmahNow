@@ -242,6 +242,7 @@ export async function downloadCaption(accessToken: string, captionId: string): P
 /** Seconds until YouTube's quota resets (midnight America/Los_Angeles), at least 60. */
 export function secondsUntilQuotaReset(now = new Date()): number {
 	const parts = Object.fromEntries(
+		// locale-format: machine (quota-reset maths)
 		new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
 			.formatToParts(now)
 			.filter((p) => p.type !== 'literal')
