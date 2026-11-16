@@ -152,6 +152,12 @@
 .pb-t-raised:not(.pb-w-full) > .pb-in,
 .pb-k-hero.pb-hero-plain:not(.pb-w-full),
 .pb-k-hero.pb-hero-gradient:not(.pb-w-full) { box-shadow: var(--pb-glow), var(--pb-shadow-hi); }
+/* Text pages split into glass sections (AlUmmahNowUI packages/render/src/glass-sections.ts): the boxes'
+   shape and the space between them. */
+.pb-glass-stack { display: flex; flex-direction: column; gap: clamp(1rem, 3vw, 1.75rem); }
+.pb-glass-box { border-radius: var(--pb-radius, 20px); padding: clamp(1.25rem, 3.5vw, 2.5rem); }
+.pb-glass-box > :first-child { margin-block-start: 0; }
+.pb-glass-box > :last-child { margin-block-end: 0; }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .pb,
   .pb-glass { --pb-glass-a: 94%; }
