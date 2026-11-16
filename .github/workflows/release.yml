@@ -275,6 +275,17 @@ jobs:
           name: release-admin-web
           path: apps/admin-web/.open-next/
 
+      # Before anything deploys: the media containers this release plans (production, stage, QA) must fit
+      # the account's container vCPU quota with every other application on it. v2026.11.15.3 learned it
+      # at "Deploy media (production)", after every other worker was promoted (scripts/release/container-quota.ts).
+      - name: Container quota (production, stage, QA media)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -o pipefail
+          node --experimental-strip-types --no-warnings scripts/release/container-quota.ts | tee -a "$GITHUB_STEP_SUMMARY"
+
       # Queues and buckets new bindings need (scripts/release/ensure-resources.ts), then the web
       # apps' browser source maps: uploaded to the private bucket and removed from the assets
       # (scripts/release/upload-sourcemaps.ts; the Errors page symbolicates with them)

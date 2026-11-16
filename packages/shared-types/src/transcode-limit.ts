@@ -3,7 +3,7 @@
  *
  * - Ceiling ("Cloudflare limit" in the admin): the transcoder container's max_instances, set to what
  *   Cloudflare allows. Containers have no per-application cap, only account-wide concurrency (15,000 vCPU,
- *   60 TiB memory, 300 TB disk), so production is 15,000 / 4 vCPU = 3,750 standard-4 instances; stage and
+ *   60 TiB memory, 300 TB disk), so production gets what stage and QA leave: (15,000 - 16) / 4 vCPU = 3,746 standard-4 instances; stage and
  *   QA stay at 2 because the account limit is shared. Given to the Workers as MEDIA_TRANSCODE_CEILING.
  *   Unused instances cost nothing.
  * - Setting: { min, max } at global_settings/ops/media-transcode-limit.json, written by api-videos

@@ -16,7 +16,7 @@
       "image": "./container/Dockerfile",
       "image_build_context": "./container",
       "instance_type": "standard-4",
-      // Kept small: Cloudflare's account-wide Containers limit (15,000 vCPU = 3,750 standard-4) is shared
+      // Kept small: Cloudflare's account-wide Containers limit (15,000 vCPU; production takes 3,746 standard-4) is shared
       // with production (apps/media/wrangler.jsonc). The admin's range is enforced by TranscodeSlots.
       "max_instances": 2,
       // A deploy lets running transcodes finish (up to 1 h) before their instance is replaced;
