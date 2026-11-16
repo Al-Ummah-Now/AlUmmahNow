@@ -3,7 +3,7 @@ const FAMILIES = 'slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|gre
 const UTILITIES = 'bg|text|border|ring|from|via|to|fill|stroke|divide|outline|decoration|shadow|accent|caret|placeholder';
 
 const RULES: { name: string; pattern: RegExp }[] = [
-  { name: 'hex', pattern: /(?<![&\w/])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3})(?![0-9a-zA-Z_-])/g },
+  { name: 'hex', pattern: /(?<![&\w/{])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3})(?![0-9a-zA-Z_-])/g },
   { name: 'color function', pattern: /\b(?:rgba?|hsla?|oklch|oklab|hwb)\(\s*(?!var\()[0-9.]/g },
   { name: 'palette utility', pattern: new RegExp(`(?<![\\w-])(?:${UTILITIES})-(?:(?:${FAMILIES})-\\d{2,3}|white|black)(?![\\w-])`, 'g') },
 ];
