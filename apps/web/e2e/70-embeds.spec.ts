@@ -248,7 +248,10 @@ test.describe('oEmbed and social previews', () => {
     const video = await ownLecture();
     const html = await (await request.get(`${origin}${watchUrl(video.id)}`)).text();
     expect(html).toMatch(/<link[^>]+rel="alternate"[^>]+type="application\/json\+oembed"/);
-    expect(html).toContain(`<meta property="og:video" content="${origin}/embed/v/${video.id}"`);
+    // No og:video (#1450): chat apps can't play our HTML player and show a small video-link preview
+    // when it is there; the large 1200x630 card is the share image. X still plays it via twitter:player.
+    expect(html).not.toContain('property="og:video');
+    expect(html).toContain(`<meta property="og:image" content="${origin}/og/v/${video.id}.jpg"`);
     expect(html).toContain('<meta name="twitter:card" content="player"');
     expect(html).toContain(`<meta name="twitter:player" content="${origin}/embed/v/${video.id}"`);
   });
