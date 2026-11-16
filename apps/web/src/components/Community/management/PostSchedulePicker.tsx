@@ -10,6 +10,7 @@ import { useEffect, useId, useState } from 'react';
 import { Calendar, Clock } from 'lucide-react';
 import { OptionCard } from '@/components/ui/OptionCard';
 import { useLanguage } from '@/hooks/useLanguage';
+import { formatDateTime } from '@al-ummah/shared-types';
 
 export const SCHEDULE_MIN_LEAD_MS = 5 * 60 * 1000;
 export const SCHEDULE_MAX_LEAD_MS = 365 * 24 * 60 * 60 * 1000;
@@ -36,7 +37,8 @@ export function toLocalInput(date: Date): string {
 export function formatScheduledAt(iso: string, locale: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleString(locale === 'ar' ? 'ar' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' });
+  // The shared formatter: Arabic ٠–٩, English 0–9, the same on the server and in every browser
+  return formatDateTime(locale, date, { dateStyle: 'medium', timeStyle: 'short' });
 }
 
 export interface ScheduleState {
