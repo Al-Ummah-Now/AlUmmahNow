@@ -13,6 +13,8 @@ test('ignores tokens, anchors, entities and comments', () => {
   assert.equal(countViolations('color: var(--fanous-color-primary); rgb(var(--x));'), 0);
   assert.equal(countViolations('className="bg-fanous-primary text-primary-foreground"'), 0);
   assert.equal(countViolations('href="#top" &#128274; href="/a#abc"'), 0);
+  // locale-format numeral placeholders in messages: «آخر {#100} يوم», "{#24} hours"
+  assert.equal(countViolations("'Last {#100} days, {#24} hours'"), 0);
   assert.equal(countViolations('// was #ffffff'), 0);
 });
 
