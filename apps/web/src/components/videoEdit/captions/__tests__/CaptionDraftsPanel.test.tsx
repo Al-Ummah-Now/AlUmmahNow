@@ -92,3 +92,38 @@ describe('CaptionDraftsPanel: using the review transcript (#1296)', () => {
     expect(screen.queryByTestId('caption-claim-action')).toBeNull();
   });
 });
+
+describe('CaptionDraftsPanel: the claim spinner always ends (owner review 2026-11-16)', () => {
+  const claimSpinner = () => screen.getByTestId('caption-claim-action').querySelector('.animate-spin');
+
+  it.each([
+    ['a server error', () => claimReviewTranscript.mockResolvedValue({ ok: false, status: 500, error: 'internal' })],
+    ['404', () => claimReviewTranscript.mockResolvedValue({ ok: false, status: 404, error: 'not_found' })],
+    ['a call that never completed (rejected)', () => claimReviewTranscript.mockRejectedValue(new TypeError('Failed to fetch'))],
+    ['a cancelled call', () => claimReviewTranscript.mockRejectedValue(new DOMException('aborted', 'AbortError'))],
+  ])('on %s: the button is free again and the panel says it could not ask', async (_name, arrange) => {
+    arrange();
+    listCaptionDrafts.mockResolvedValue(listed({ transcriptAvailable: true }));
+    render(<CaptionDraftsPanel videoId="v1" />);
+    fireEvent.click(await screen.findByTestId('caption-claim-action'));
+    expect(await screen.findByRole('status')).toBeInTheDocument();
+    await waitFor(() => expect(claimSpinner()).toBeNull());
+    expect(screen.getByTestId('caption-claim-action')).not.toBeDisabled();
+  });
+
+  it('on feature_off: the spinner ends, the offer goes and the features are read again', async () => {
+    claimReviewTranscript.mockResolvedValue({ ok: false, status: 404, error: 'feature_off' });
+    listCaptionDrafts.mockResolvedValue(listed({ transcriptAvailable: true }));
+    render(<CaptionDraftsPanel videoId="v1" />);
+    fireEvent.click(await screen.findByTestId('caption-claim-action'));
+    await waitFor(() => expect(screen.queryByTestId('caption-claim-action')).toBeNull());
+    expect(document.querySelector('.animate-spin')).toBeNull();
+    expect(mockRefreshFeatures).toHaveBeenCalled();
+  });
+
+  it('a list call that never completes ends in the load-failed note, not a void', async () => {
+    listCaptionDrafts.mockRejectedValue(new TypeError('Failed to fetch'));
+    render(<CaptionDraftsPanel videoId="v1" />);
+    expect(await screen.findByText(jest.requireActual('@/lib/i18n/translations/en').EN_TRANSLATIONS.captions.loadFailed)).toBeInTheDocument();
+  });
+});

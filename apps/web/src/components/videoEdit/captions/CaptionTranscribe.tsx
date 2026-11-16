@@ -15,7 +15,7 @@ import { AlertTriangle, AudioLines, Loader2, X } from 'lucide-react';
 import { captionMinutesCanStart, FEATURE_OFF_CODE, isCaptionJobActive, type CaptionMinutesUsage, type CaptionsTranslations, dateTimeFormat, formatNumber, fillTemplate, type TemplateParams } from '@al-ummah/shared-types';
 import { reportError } from '@/lib/errors/reporter';
 import { SUPPORTED_LANGUAGES } from '@/lib/api/subtitles-types';
-import { cancelCaptionJob, startCaptionJob, type CaptionJobView } from '@/lib/api/caption-drafts';
+import { cancelCaptionJob, startCaptionJob, type CaptionJobView } from '@/lib/api/caption-drafts-client';
 import type { ConfirmOptions } from '@/components/ui/confirm-dialog';
 
 export interface CaptionMinutes {

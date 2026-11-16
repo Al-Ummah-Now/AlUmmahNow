@@ -13,7 +13,7 @@ import React, { useEffect, useId, useState } from 'react';
 import { BookOpen, Check, ExternalLink, Loader2, X } from 'lucide-react';
 import { parseQuranRange, quranAyahLabel, quranComUrl, type CaptionQuranSegment } from '@al-ummah/shared-types';
 import type { CaptionsTranslations } from '@al-ummah/shared-types';
-import { getQuranPassage, type QuranPassage } from '@/lib/api/caption-drafts';
+import { getQuranPassage, type QuranPassage } from '@/lib/api/caption-drafts-client';
 import { parseShortReference } from './editor-state';
 
 const passages = new Map<string, Promise<QuranPassage | null>>();

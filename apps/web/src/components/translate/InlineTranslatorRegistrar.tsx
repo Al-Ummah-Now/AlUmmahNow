@@ -9,7 +9,7 @@
 import { useEffect } from 'react';
 import { useOptionalAuth } from '@/components/AuthProvider/authContext';
 import { registerTranslator, TranslateFailure, type Translator } from '@/lib/i18n/translate-text';
-import { translateTexts } from '@/lib/api/translate';
+import { translateTexts } from '@/lib/api/translate-client';
 import { reportError } from '@/lib/errors/reporter';
 import { refreshFeatures, useFeatures } from '@/hooks/useFeatures';
 import { FEATURE_OFF_CODE } from '@al-ummah/shared-types';

@@ -26,7 +26,7 @@ import {
   type ChannelQuranEdition,
   type ChannelTranslationSettings as Settings,
   type QuranEdition,
-} from '@/lib/api/translate';
+} from '@/lib/api/translate-client';
 
 const CARD = 'rounded-lg border border-[var(--fanous-color-outline)] bg-[var(--fanous-color-surface)] p-4 sm:p-6 space-y-4';
 const MUTED = 'text-sm text-[var(--fanous-color-text-secondary)]';
