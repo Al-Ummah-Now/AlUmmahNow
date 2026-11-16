@@ -142,7 +142,8 @@ function ProviderCard({ provider, credentialStorage, canManage, onRefresh }: { p
             ) : (
               <p className="text-sm text-fg-muted">{t('payments.provider.noLiveMode')}</p>
             )}
-            <p className={hintClass}>{t('payments.provider.modeHint')}</p>
+            {/* The sandbox note only where there is a Test/Live choice (the test provider says it already) */}
+            {hasLiveMode(provider.id) && <p className={hintClass}>{t('payments.provider.modeHint')}</p>}
           </fieldset>
 
           <Missing provider={provider} name={name} />
@@ -208,6 +209,8 @@ function Missing({ provider, name }: { provider: PaymentProviderConfig; name: st
   const { t } = useLanguage();
   const mode = t(`payments.modes.${provider.mode}`);
   if (provider.missing.length === 0) {
+    // Already on: the switch says so; "ready to be on" is for a provider that is still off
+    if (provider.enabled) return null;
     return (
       <p className="text-sm text-success-fg" data-testid={`payments-ready-${provider.id}`}>
         {t('payments.provider.ready', { mode })}

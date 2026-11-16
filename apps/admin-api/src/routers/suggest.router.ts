@@ -76,7 +76,8 @@ const fromUser = (r: AdminUserRow): AdminSuggestion => ({
   kind: 'user',
   id: r.id,
   label: clip(r.displayName) ?? r.userName ?? r.id,
-  secondary: [r.userName ? `@${r.userName}` : null, r.email].filter(Boolean).join(' · ') || null,
+  // People by name and email only: @handles belong to channels (owner rule)
+  secondary: r.email || null,
   imageUrl: r.avatarUrl,
 });
 

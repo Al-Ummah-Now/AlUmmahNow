@@ -27,7 +27,7 @@ export function CancelSubscription({ subscription: s }: { subscription: AdminBil
   const { busy, error, notice, run } = useBillingAction('payments-cancel');
   const endAllowed = canCancelAtPeriodEnd(s);
   const [atPeriodEnd, setAtPeriodEnd] = useState(endAllowed);
-  const user = s.displayName || s.userName || s.userId;
+  const user = s.displayName || t('payments.subs.unknownUser');
   const open = canCancelSubscription(s);
   // Nothing to cancel and nothing to report (a cancel that just went through keeps its message)
   if (!open && !notice && !error) return null;

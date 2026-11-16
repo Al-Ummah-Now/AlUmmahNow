@@ -9,6 +9,7 @@
 import { useCallback, useState } from 'react';
 import { ADMIN_BILLING_FILTERS, formatBillingAmount, type AdminBillingFilter, type AdminBillingSubscriptionRow, type AdminBillingSubscriptionsPage } from '@al-ummah/shared-types';
 import Link from '@/components/AppLink';
+import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { formatDate } from '@/i18n/translate';
 import { secondaryButtonClass, linkClass, cardClass } from '@/components/ui';
@@ -22,6 +23,7 @@ import type { TierOption } from './PricesPanel';
 const PAGE_SIZE = 25;
 
 export function SubscriptionsPanel({ initial, initialFilter, tiers, canManage }: { initial: AdminBillingSubscriptionsPage | null; initialFilter: AdminBillingFilter; tiers: TierOption[]; canManage: boolean }) {
+  const router = useRouter();
   const { t, locale } = useLanguage();
   const [filter, setFilter] = useState<AdminBillingFilter>(initialFilter);
   const [items, setItems] = useState<AdminBillingSubscriptionRow[]>(initial?.items ?? []);
@@ -55,7 +57,8 @@ export function SubscriptionsPanel({ initial, initialFilter, tiers, canManage }:
 
   return (
     <div className="space-y-4" data-testid="payments-subscriptions">
-      {canManage && <CompForm tiers={tiers} onDone={() => load(filter, null)} />}
+      {/* After a grant: the list and the page's counts (Active subscriptions) both read again */}
+      {canManage && <CompForm tiers={tiers} onDone={async () => { router.refresh(); await load(filter, null); }} />}
 
       <div role="group" aria-label={t('payments.subs.filterLabel')} className="flex flex-wrap gap-2">
         {ADMIN_BILLING_FILTERS.map((f) => (
@@ -86,7 +89,8 @@ export function SubscriptionsPanel({ initial, initialFilter, tiers, canManage }:
       {items.length > 0 && (
         <ul className={`${cardClass} !p-0 divide-y divide-border`} data-testid="payments-subs-list" aria-busy={busy === 'load'}>
           {items.map((s) => {
-            const name = s.displayName || s.userName || t('payments.subs.unknownUser');
+            // A person by name, never an @handle (handles are channels)
+            const name = s.displayName || t('payments.subs.unknownUser');
             const end = s.accessUntil ?? s.currentPeriodEnd;
             return (
               <li key={s.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center" data-testid="payments-sub-row" data-subscription-id={s.id} data-status={s.status}>
@@ -103,14 +107,10 @@ export function SubscriptionsPanel({ initial, initialFilter, tiers, canManage }:
                     <Link href={`/payments/subscriptions/${encodeURIComponent(s.id)}`} className={`${linkClass} font-medium break-words`} dir="auto" aria-label={t('payments.subs.openLabel', { user: name })} data-testid="payments-sub-open">
                       {name}
                     </Link>
-                    {s.userName && (
-                      <p className="text-xs text-fg-muted" dir="ltr">
-                        <span className="inline-block">@{s.userName}</span>
-                      </p>
-                    )}
                   </div>
                 </div>
-                <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:flex sm:flex-wrap sm:items-center sm:justify-end sm:gap-x-6">
+                {/* Fixed columns from sm up, so tier, provider, status and date line up from row to row */}
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:w-[34rem] sm:shrink-0 sm:grid-cols-[1fr_1fr_1fr_1fr] sm:items-center sm:gap-x-4">
                   <div>
                     <dt className="sr-only">{t('payments.subs.tier')}</dt>
                     <dd className="font-medium text-fg">

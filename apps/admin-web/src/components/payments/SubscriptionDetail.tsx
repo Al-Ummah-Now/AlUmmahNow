@@ -1,3 +1,4 @@
+import { UserName } from '@/components/audit/UserName';
 import { formatBillingAmount, type AdminBillingSubscriptionDetail } from '@al-ummah/shared-types';
 import Link from '@/components/AppLink';
 import { getI18n } from '@/i18n/server';
@@ -18,7 +19,7 @@ const EVENT_TONE = { queued: 'info', processed: 'good', ignored: 'neutral', fail
 export async function SubscriptionDetail({ detail, back, can }: { detail: AdminBillingSubscriptionDetail; back: React.ReactNode; can: { manage: boolean; refund: boolean } }) {
   const { t, locale } = await getI18n();
   const { subscription: s, payments, events } = detail;
-  const name = s.displayName || s.userName || t('payments.subs.unknownUser');
+  const name = s.displayName || t('payments.subs.unknownUser');
   const date = (v: string | null) => (v ? formatDate(v, locale, true) : t('payments.detail.none'));
   const money = (amount: number, currency: string) => (
     <span dir="ltr">
@@ -39,7 +40,7 @@ export async function SubscriptionDetail({ detail, back, can }: { detail: AdminB
     [t('payments.detail.endedAt'), date(s.endedAt)],
     [t('payments.detail.providerRef'), s.providerRef ? <MonoId key="ref" value={s.providerRef} /> : t('payments.detail.none')],
   ];
-  if (s.compBy) rows.push([t('payments.detail.compBy'), <MonoId key="by" value={s.compBy} />]);
+  if (s.compBy) rows.push([t('payments.detail.compBy'), <UserName key="by" id={s.compBy} showEmail={false} />]);
   if (s.compReason) rows.push([t('payments.detail.compReason'), <span key="why" dir="auto">{s.compReason}</span>]);
 
   return (
@@ -60,7 +61,6 @@ export async function SubscriptionDetail({ detail, back, can }: { detail: AdminB
             <bdi>{name}</bdi>
           </h1>
           <p className="text-sm text-fg-muted flex flex-wrap gap-x-3">
-            {s.userName && <span dir="ltr">@{s.userName}</span>}
             <Link href={`/users/${encodeURIComponent(s.userId)}`} className={linkClass}>
               {t('payments.detail.userPage')}
             </Link>

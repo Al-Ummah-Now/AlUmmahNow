@@ -246,8 +246,9 @@ export function PricesPanel({ prices, tiers, providers, canManage, canSync, onRe
             <p className="text-sm text-fg-muted mt-3">{t('payments.prices.none')}</p>
           ) : (
             <div className={`${tableWrapClass} relative mt-4`}>
-              <table className="w-full text-sm" data-testid={`payments-prices-table-${tierId}`}>
-                <thead className="bg-surface-2 text-fg-muted text-start">
+              {/* Phones: each price is a stack of label/value rows (the header row is hidden and each cell names itself) */}
+              <table className="w-full text-sm max-sm:block" data-testid={`payments-prices-table-${tierId}`}>
+                <thead className="bg-surface-2 text-fg-muted text-start max-sm:sr-only">
                   <tr>
                     <th scope="col" className="px-3 py-2 text-start font-medium">{t('payments.prices.period')}</th>
                     <th scope="col" className="px-3 py-2 text-start font-medium">{t('payments.prices.amount')}</th>
@@ -256,19 +257,19 @@ export function PricesPanel({ prices, tiers, providers, canManage, canSync, onRe
                     <th scope="col" className="px-3 py-2 text-start font-medium">{t('payments.prices.actions')}</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="max-sm:block">
                   {rows.map((price) => {
                     const labels = { period: periodName(price.period), currency: price.currency, tier: tierName(tierId) };
                     const amountText = formatBillingAmount(price.amount, price.currency, locale);
                     return (
-                      <tr key={price.id} className="border-t border-border align-top" data-testid="payments-price-row" data-price-id={price.id} data-currency={price.currency} data-period={price.period}>
-                        <td className="px-3 py-2 whitespace-nowrap">{periodName(price.period)}</td>
-                        <td className="px-3 py-2 whitespace-nowrap font-medium" dir="ltr">
+                      <tr key={price.id} className="border-t border-border align-top max-sm:block max-sm:py-2" data-testid="payments-price-row" data-price-id={price.id} data-currency={price.currency} data-period={price.period}>
+                        <td className="px-3 py-2 whitespace-nowrap max-sm:flex max-sm:items-start max-sm:justify-between max-sm:gap-3 max-sm:before:content-[attr(data-label)] max-sm:before:text-fg-muted max-sm:before:font-medium max-sm:before:shrink-0" data-label={t('payments.prices.period')}>{periodName(price.period)}</td>
+                        <td className="px-3 py-2 whitespace-nowrap font-medium max-sm:flex max-sm:items-start max-sm:justify-between max-sm:gap-3 max-sm:before:content-[attr(data-label)] max-sm:before:text-fg-muted max-sm:before:font-medium max-sm:before:shrink-0" data-label={t('payments.prices.amount')}>
                           <span className="inline-block" dir="auto">
                             {amountText}
                           </span>
                         </td>
-                        <td className="px-3 py-2">
+                        <td className="px-3 py-2 max-sm:flex max-sm:items-start max-sm:justify-between max-sm:gap-3 max-sm:before:content-[attr(data-label)] max-sm:before:text-fg-muted max-sm:before:font-medium max-sm:before:shrink-0" data-label={t('payments.prices.active')}>
                           <input
                             type="checkbox"
                             role="switch"
@@ -283,7 +284,7 @@ export function PricesPanel({ prices, tiers, providers, canManage, canSync, onRe
                             data-testid="payments-price-active"
                           />
                         </td>
-                        <td className="px-3 py-2">
+                        <td className="px-3 py-2 max-sm:flex max-sm:items-start max-sm:justify-between max-sm:gap-3 max-sm:before:content-[attr(data-label)] max-sm:before:text-fg-muted max-sm:before:font-medium max-sm:before:shrink-0" data-label={t('payments.prices.sync')}>
                           <ul className="flex flex-wrap gap-1">
                             {syncProviders.map((p) => {
                               const link = linkFor(price, p.id, p.mode);
@@ -303,7 +304,7 @@ export function PricesPanel({ prices, tiers, providers, canManage, canSync, onRe
                             })}
                           </ul>
                         </td>
-                        <td className="px-3 py-2">
+                        <td className="px-3 py-2 max-sm:flex max-sm:items-start max-sm:justify-between max-sm:gap-3 max-sm:before:content-[attr(data-label)] max-sm:before:text-fg-muted max-sm:before:font-medium max-sm:before:shrink-0" data-label={t('payments.prices.actions')}>
                           {canManage && (
                             <div className="flex flex-wrap gap-2">
                               <button
