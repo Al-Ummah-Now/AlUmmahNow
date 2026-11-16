@@ -14,6 +14,8 @@ import { editionFor } from '../src/lib/quran/translations';
 import { channelEditions, platformEditions } from '../src/endpoints/quran/quranTranslations';
 import { channelAllowsViewerTitles, deleteViewerTranslations, readFairUse, saveViewerTranslation, setChannelViewerTitles, translateInline, viewerTranslation } from '../src/lib/translate/inline';
 import { readCaptionSettings } from '../src/lib/captions/jobs';
+import { readStaffUsage, translateAdminFields } from '../src/lib/translate/admin-fields';
+import { createTranslateInternalRouter } from '../src/endpoints/translate/translateInternal';
 import { SqliteD1 } from './search-sqlite-d1';
 
 const NOV = new Date('2026-11-14T12:00:00.000Z');
@@ -276,6 +278,76 @@ describe('inline translation (O5)', () => {
 		await assert.rejects(translateInline(asEnv as never, { userId: 'a', items: [{ id: 'a', text: 'x' }], from: 'en', to: 'en', field: 'title' }), /same_language/);
 		await assert.rejects(translateInline(asEnv as never, { userId: 'a', items: [{ id: 'a', text: 'x'.repeat(5001) }], from: 'en', to: 'ar', field: 'title' }), /text_too_long/);
 		await assert.rejects(translateInline(asEnv as never, { userId: 'a', items: [{ id: 'a', text: 'x' }, { id: 'a', text: 'y' }], from: 'en', to: 'ar', field: 'title' }), /invalid_id/);
+	});
+});
+
+describe('staff-set field translation (L10N rule)', () => {
+	const input = (over: Partial<{ userId: string; from: string; to: string; texts: string[]; field: string }> = {}) => ({ userId: 'staff-1', from: 'en', to: 'ar', texts: ['Lectures'], field: 'categories.label', ...over });
+
+	it('runs the processor in admin_field mode on Workers AI only, with its own staff cap (viewers’ fair use untouched)', async () => {
+		const { env, asEnv, processorCalls } = await setup();
+		env.global_settings.objects['captions/settings.json'] = JSON.stringify({ translation: { deepl: true } });
+		const out = await translateAdminFields(asEnv as never, input({ texts: ['Lectures', '', 'Lectures', 'News'] }), NOV);
+		assert.equal(processorCalls.length, 1);
+		assert.equal(processorCalls[0]!.mode, 'admin_field');
+		assert.equal(processorCalls[0]!.provider, 'workers-ai', 'never DeepL for staff fields');
+		assert.deepEqual((processorCalls[0]!.items as Array<{ text: string }>).map((i) => i.text), ['Lectures', 'News'], 'empty and repeated texts are not sent twice');
+		assert.deepEqual(out.items.map((i) => i.text), ['ترجمة 8', '', 'ترجمة 8', 'ترجمة 4']);
+		assert.equal(out.machineTranslation, true);
+		assert.deepEqual(out.usage, { used: 2, limit: 500, resetsAt: '2026-11-15T00:00:00.000Z' });
+		assert.equal((await readFairUse(asEnv as never, 'staff-1', await readCaptionSettings(asEnv), NOV)).used, 0);
+		delete env.global_settings.objects['captions/settings.json'];
+	});
+
+	it('refuses mushaf text before any model, and passes on the processor’s Quran refusal with its reference', async () => {
+		const { asEnv, processorCalls, answer } = await setup();
+		answer((body) => Response.json({ items: body.items.map((i) => ({ id: i.id, text: '', refused: 'quran', quran: [{ range: '1:1-1:7', label: '1:1–7' }] })), provider: 'workers-ai', model: 'm', usd: 0 }));
+		const out = await translateAdminFields(asEnv as never, input({ from: 'ar', to: 'en', texts: ['﴿الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ﴾', 'الحمد لله رب العالمين الرحمن الرحيم'] }), NOV);
+		assert.deepEqual(out.items[0], { text: '', refused: 'quran', cached: false });
+		assert.equal((processorCalls[0]!.items as unknown[]).length, 1, 'the ornate-bracket text never reached the processor');
+		assert.equal(out.items[1]!.refused, 'quran');
+		assert.deepEqual(out.items[1]!.quran, [{ range: '1:1-1:7', label: '1:1–7' }]);
+		assert.equal(out.items[1]!.text, '');
+	});
+
+	it('the staff cap is 429 daily_limit; a failed call gives the texts back; the kill switch pauses it', async () => {
+		const { env, d1, asEnv, answer } = await setup();
+		await d1.prepare('INSERT INTO inline_translation_usage (user_id, day, items) VALUES (?, ?, ?)').bind('staff:staff-1', '2026-11-14', 499).run();
+		await assert.rejects(translateAdminFields(asEnv as never, input({ texts: ['a', 'b'] }), NOV), (e: { code: string; status: number; extra: { used: number } }) => e.code === 'daily_limit' && e.status === 429 && e.extra.used === 499);
+		answer(() => new Response('boom', { status: 500 }));
+		await assert.rejects(translateAdminFields(asEnv as never, input({ texts: ['a'] }), NOV), /translation_failed/);
+		assert.equal((await readStaffUsage(asEnv as never, 'staff-1', NOV)).used, 499);
+		env.global_settings.objects['captions/settings.json'] = JSON.stringify({ inline: { enabled: false } });
+		await assert.rejects(translateAdminFields(asEnv as never, input(), NOV), /translation_paused/);
+		delete env.global_settings.objects['captions/settings.json'];
+	});
+
+	it('audits who, which field and how much, never the text; rejects other languages and bad fields', async () => {
+		const { d1, asEnv } = await setup();
+		await translateAdminFields(asEnv as never, input({ texts: ['Secret label'] }), NOV);
+		const row = (await d1.prepare('SELECT * FROM translation_audit').all<Record<string, unknown>>()).results[0]!;
+		assert.equal(row.user_id, 'staff-1');
+		assert.equal(row.kind, 'inline');
+		assert.equal(row.field, 'admin:categories.label');
+		assert.equal(row.chars, 12);
+		assert.ok(!JSON.stringify(row).includes('Secret'));
+		await assert.rejects(translateAdminFields(asEnv as never, input({ to: 'fr' }), NOV), /invalid_language/);
+		await assert.rejects(translateAdminFields(asEnv as never, input({ to: 'en' }), NOV), /same_language/);
+		await assert.rejects(translateAdminFields(asEnv as never, input({ field: 'DROP TABLE' }), NOV), /invalid_field/);
+		await assert.rejects(translateAdminFields(asEnv as never, input({ texts: Array(51).fill('x') }), NOV), /too_many_texts/);
+	});
+
+	it('the internal route answers { success, data } and maps refusals to their status', async () => {
+		const { env } = await setup();
+		const app = createTranslateInternalRouter();
+		const ok = await app.request('/admin-fields', { method: 'POST', body: JSON.stringify(input()) }, env as never);
+		assert.equal(ok.status, 200);
+		const body = (await ok.json()) as { success: boolean; data: { items: Array<{ text: string }> } };
+		assert.equal(body.success, true);
+		assert.equal(body.data.items.length, 1);
+		const bad = await app.request('/admin-fields', { method: 'POST', body: JSON.stringify(input({ from: 'xx' })) }, env as never);
+		assert.equal(bad.status, 400);
+		assert.equal(((await bad.json()) as { error: string }).error, 'invalid_language');
 	});
 });
 

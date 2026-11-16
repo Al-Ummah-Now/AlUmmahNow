@@ -43,13 +43,13 @@ export const VIEWER_TITLE_LANGUAGES = new Set(['en', 'ar']);
 const CACHE_VERSION = 'v1';
 const CACHE_SECONDS = 30 * 24 * 3600;
 
-const db = (env: CaptionJobsEnv) => {
+export const db = (env: CaptionJobsEnv) => {
 	if (!env.SEARCH_DB) throw new TranslateHttpError(503, 'unavailable');
 	return env.SEARCH_DB as D1Database;
 };
 
 export const utcDay = (now: Date) => now.toISOString().slice(0, 10);
-const nextUtcMidnight = (now: Date) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)).toISOString();
+export const nextUtcMidnight = (now: Date) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)).toISOString();
 
 export async function sha256Hex(text: string): Promise<string> {
 	const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
@@ -81,10 +81,10 @@ const edgeCache = (): EdgeCache | null => {
  * Everything that shapes the prompt is in the key (field and context, e.g. the video's title), so an
  * answer made with one creator's context is never served to another request.
  */
-const cacheKey = async (from: string, to: string, provider: string, field: string, context: string, text: string) =>
+export const cacheKey = async (from: string, to: string, provider: string, field: string, context: string, text: string) =>
 	`https://translate.cache.internal/${CACHE_VERSION}/${from}/${to}/${provider}/${field}/${await sha256Hex(context)}/${await sha256Hex(text)}`;
 
-async function cached(keys: string[]): Promise<Array<{ text: string; quran?: Array<{ range: string; label: string }> } | null>> {
+export async function cached(keys: string[]): Promise<Array<{ text: string; quran?: Array<{ range: string; label: string }> } | null>> {
 	const cache = edgeCache();
 	if (!cache) return keys.map(() => null);
 	return Promise.all(
@@ -99,7 +99,7 @@ async function cached(keys: string[]): Promise<Array<{ text: string; quran?: Arr
 	);
 }
 
-async function remember(key: string, value: { text: string; quran?: Array<{ range: string; label: string }> }): Promise<void> {
+export async function remember(key: string, value: { text: string; quran?: Array<{ range: string; label: string }> }): Promise<void> {
 	const cache = edgeCache();
 	if (!cache) return;
 	try {
@@ -125,7 +125,7 @@ export async function readFairUse(env: CaptionJobsEnv, userId: string, settings:
 }
 
 /** Takes `n` texts from today's allowance, all or nothing; false when they don't fit. */
-async function takeFairUse(env: CaptionJobsEnv, userId: string, n: number, limit: number, now: Date): Promise<boolean> {
+export async function takeFairUse(env: CaptionJobsEnv, userId: string, n: number, limit: number, now: Date): Promise<boolean> {
 	if (n > limit) return false;
 	const day = utcDay(now);
 	const d1 = db(env);
@@ -141,7 +141,7 @@ async function takeFairUse(env: CaptionJobsEnv, userId: string, n: number, limit
 	return (result.meta?.changes ?? 0) > 0;
 }
 
-async function giveBackFairUse(env: CaptionJobsEnv, userId: string, n: number, now: Date): Promise<void> {
+export async function giveBackFairUse(env: CaptionJobsEnv, userId: string, n: number, now: Date): Promise<void> {
 	await db(env).prepare('UPDATE inline_translation_usage SET items = MAX(0, items - ?) WHERE user_id = ? AND day = ?').bind(n, userId, utcDay(now)).run();
 }
 
@@ -171,9 +171,9 @@ async function apiKey(env: CaptionJobsEnv): Promise<string> {
 	return typeof v === 'string' ? v : ((await v?.get()) ?? '');
 }
 
-async function callProcessor(
+export async function callProcessor(
 	env: InlineTranslateEnv,
-	body: { items: InlineTranslateItem[]; from: string; to: string; field: InlineTranslateField; provider: 'workers-ai' | 'deepl'; dailyBudgetUsd: number; context?: { title?: string; channel?: string } },
+	body: { items: InlineTranslateItem[]; from: string; to: string; field: InlineTranslateField; provider: 'workers-ai' | 'deepl'; dailyBudgetUsd: number; context?: { title?: string; channel?: string }; mode?: 'admin_field' },
 ): Promise<InternalTranslateResponse> {
 	if (!env.PROCESSOR) throw new TranslateHttpError(503, 'unavailable');
 	const res = await env.PROCESSOR.fetch('https://processor.internal/internal/translate', {
