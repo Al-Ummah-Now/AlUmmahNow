@@ -28,7 +28,7 @@ export function ChannelTile({ channel, variant = 'card', className = '' }: Chann
 
   const name = getLocalizedValue(channel.nameLocalized, channel.name, lang) || channel.name;
   const description = getLocalizedValue(channel.descriptionLocalized, channel.description, lang);
-  const numberLocale = isRTL ? 'ar-SA' : 'en-US';
+  const numberLocale = isRTL ? 'ar' : 'en-US';
   const subscribers = t.discovery.subscribersCount.replace(
     '{count}',
     formatViewerCount(channel.subscribersCount || 0, 'compact', numberLocale)

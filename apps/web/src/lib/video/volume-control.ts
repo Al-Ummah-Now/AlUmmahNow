@@ -10,6 +10,7 @@
  * - Mobile-optimized touch controls
  */
 
+import { formatNumber } from '@al-ummah/shared-types';
 import type { Player } from 'video.js';
 import type { ExtendedPlayer } from './videojs';
 import { logger } from '@/lib/logger-client';
@@ -24,9 +25,9 @@ const INDICATOR_DURATION = 800;
 /** Pending hide per indicator, so a rapid series of changes keeps it visible once. */
 const indicatorHideTimers = new WeakMap<HTMLElement, ReturnType<typeof setTimeout>>();
 
-function volumeText(translations: VideoPlayerTranslations, percentage: number, muted: boolean): string {
+function volumeText(translations: VideoPlayerTranslations, percentage: number, muted: boolean, lang = 'en'): string {
   const { muted: mutedText, volume } = translations.accessibility.announcements;
-  return muted ? mutedText : volume.replace('{volume}', String(percentage));
+  return muted ? mutedText : volume.replace('{volume}', formatNumber(lang, percentage));
 }
 
 export interface VolumeState {
@@ -307,7 +308,7 @@ export function setupKeyboardAccessibility(
     const percentage = Math.round(volume * 100);
     
     volumeBar.setAttribute('aria-valuenow', muted ? '0' : percentage.toString());
-    volumeBar.setAttribute('aria-valuetext', volumeText(translations, percentage, muted));
+    volumeBar.setAttribute('aria-valuetext', volumeText(translations, percentage, muted, lang));
   };
 
   // Initial ARIA setup

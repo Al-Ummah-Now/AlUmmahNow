@@ -8,6 +8,7 @@ import {
   CHANNEL_MEMBER_ROLES,
   type ChannelMemberRole,
   type ChannelRole,
+  formatNumber,
 } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
@@ -216,7 +217,7 @@ export default function ChannelTeam({ channelId, role, locale }: ChannelTeamProp
                     </button>
                   </div>
                   <p className="mt-3 text-sm text-[var(--fanous-color-text-secondary)] dark:text-[var(--fanous-color-text-muted)]">{tr.roleHelp[newRole]}</p>
-                  {team && <p className="mt-1 text-xs text-[var(--fanous-color-text-muted)]">{tr.limit.replace('{count}', String(team.maxMembers))}</p>}
+                  {team && <p className="mt-1 text-xs text-[var(--fanous-color-text-muted)]">{tr.limit.replace('{count}', formatNumber(locale, team.maxMembers))}</p>}
                 </form>
               )}
 

@@ -148,7 +148,7 @@ describe('toast copy', () => {
 
   it('uses CLDR plural forms in Arabic with the locale\'s digits', () => {
     const table = ar.grouped.uploadReady;
-    const n = (v: number) => new Intl.NumberFormat('ar').format(v);
+    const n = (v: number) => new Intl.NumberFormat('ar-u-nu-arab').format(v);
     expect(pluralText(table, 1, 'ar')).toBe('اكتملت معالجة مرئي واحد');
     expect(pluralText(table, 2, 'ar')).toBe('اكتملت معالجة مرئيين');
     expect(pluralText(table, 3, 'ar')).toBe(`اكتملت معالجة ${n(3)} مرئيات`);

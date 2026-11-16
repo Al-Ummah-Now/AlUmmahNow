@@ -37,7 +37,7 @@ export interface CaptionTranslateProps {
 const fill = (template: string, values: Record<string, string | number>) => Object.entries(values).reduce((text, [key, value]) => text.split(`{${key}}`).join(String(value)), template);
 
 /** Running and failed translations, newest per target language. */
-export function TranslationJobs({ videoId, jobs, t, label, confirm, reload }: Pick<CaptionTranslateProps, 'videoId' | 'jobs' | 't' | 'label' | 'confirm' | 'reload'>) {
+export function TranslationJobs({ videoId, jobs, t, lang = 'en', label, confirm, reload }: Pick<CaptionTranslateProps, 'videoId' | 'jobs' | 't' | 'label' | 'confirm' | 'reload'> & { lang?: string }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const shown = visibleJobs(jobs.filter((j) => j.kind === 'translate'));
@@ -79,7 +79,7 @@ export function TranslationJobs({ videoId, jobs, t, label, confirm, reload }: Pi
               <div className="flex flex-wrap items-center gap-2">
                 <span role="status" className="inline-flex items-center gap-1.5 rounded-full bg-brand-soft px-2.5 py-1 text-xs font-medium text-brand-ink">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                  {fill(t.jobs.chip, { language: label(job.language), step: jobStepText(t.jobs, job) })}
+                  {fill(t.jobs.chip, { language: label(job.language), step: jobStepText(t.jobs, job, lang) })}
                 </span>
                 <button
                   type="button"

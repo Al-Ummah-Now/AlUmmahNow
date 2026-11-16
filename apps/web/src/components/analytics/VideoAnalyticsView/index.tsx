@@ -6,6 +6,7 @@
  * (with retry); the API answers null for a missing or someone else's video.
  */
 
+import { formatDate, formatNumber, formatPercent } from '@al-ummah/shared-types';
 import React, { useCallback, useEffect, useState } from 'react';
 import Link from '@/components/common/AppLink';
 import { getVideoAnalytics } from '@/lib/api/analytics';
@@ -31,7 +32,7 @@ export function VideoAnalyticsView({ videoId }: { videoId: string }) {
   const { t, lang, isRTL } = useLanguage();
   const d = t.analytics.dashboard;
   const locale = lang === 'ar' ? 'ar' : 'en-US';
-  const fmt = (n: number) => (Number.isFinite(n) ? n : 0).toLocaleString(locale);
+  const fmt = (n: number) => formatNumber(locale, Number.isFinite(n) ? n : 0);
   const Card = isRTL ? AnalyticsCardRTL : AnalyticsCard;
   const [state, setState] = useState<State>({ status: 'loading' });
 
@@ -80,17 +81,17 @@ export function VideoAnalyticsView({ videoId }: { videoId: string }) {
             <h1 className="text-3xl font-bold text-gray-800 dark:text-white">{state.data.title}</h1>
             {state.data.dateCreated && (
               <p className="text-sm text-gray-600 dark:text-gray-300">
-                {d.published.replace('{date}', new Date(state.data.dateCreated).toLocaleDateString(locale))}
+                {d.published.replace('{date}', formatDate(locale, new Date(state.data.dateCreated), {}))}
               </p>
             )}
           </header>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <Card title={t.analytics.views} value={fmt(state.data.views)} icon="eye" />
-            <Card title={d.watchTimeTotal} value={d.hoursValue.replace('{hours}', (Math.round((state.data.watchTime / 3600) * 10) / 10).toLocaleString(locale))} icon="clock" />
+            <Card title={d.watchTimeTotal} value={d.hoursValue.replace('{hours}', formatNumber(locale, Math.round((state.data.watchTime / 3600) * 10) / 10))} icon="clock" />
             <Card title={d.avgViewDuration} value={formatDuration(state.data.avgViewDuration)} icon="clock" />
             <Card title={d.likes} value={fmt(state.data.likes)} icon="heart" />
             <Card title={d.comments} value={fmt(state.data.comments)} icon="message" />
-            <Card title={d.overallEngagementRate} value={`${(state.data.engagementRate || 0).toFixed(1)}%`} icon="trending" />
+            <Card title={d.overallEngagementRate} value={formatPercent(locale, (state.data.engagementRate || 0) / 100, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} icon="trending" />
           </div>
           <p className="mt-8 text-sm text-gray-500 dark:text-gray-400">{d.retentionComingSoon}</p>
         </>

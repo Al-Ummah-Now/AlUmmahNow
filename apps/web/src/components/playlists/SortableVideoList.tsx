@@ -65,7 +65,7 @@ export default function SortableVideoList({ videos, onChange, manual, removable,
     if (next === videos) return;
     onChange(next);
     const video = videos[index];
-    setStatus(fill(p.dndMoved, { title: titleOf(video), position: next.indexOf(video) + 1, total }));
+    setStatus(fill(p.dndMoved, { title: titleOf(video), position: next.indexOf(video) + 1, total }, lang));
   };
 
   const sensors = useSensors(
@@ -84,10 +84,10 @@ export default function SortableVideoList({ videos, onChange, manual, removable,
     if (from >= 0 && to >= 0) onChange(arrayMove(videos, from, to));
   };
   const announcements: Announcements = {
-    onDragStart: ({ active }) => fill(p.dndPickedUp, { title: nameOf(active.id), position: indexOf(active.id) + 1, total }),
-    onDragOver: ({ active, over }) => (over ? fill(p.dndMoved, { title: nameOf(active.id), position: indexOf(over.id) + 1, total }) : undefined),
-    onDragEnd: ({ active, over }) => (over ? fill(p.dndDropped, { title: nameOf(active.id), position: indexOf(over.id) + 1, total }) : undefined),
-    onDragCancel: ({ active }) => fill(p.dndCancelled, { title: nameOf(active.id) }),
+    onDragStart: ({ active }) => fill(p.dndPickedUp, { title: nameOf(active.id), position: indexOf(active.id) + 1, total }, lang),
+    onDragOver: ({ active, over }) => (over ? fill(p.dndMoved, { title: nameOf(active.id), position: indexOf(over.id) + 1, total }, lang) : undefined),
+    onDragEnd: ({ active, over }) => (over ? fill(p.dndDropped, { title: nameOf(active.id), position: indexOf(over.id) + 1, total }, lang) : undefined),
+    onDragCancel: ({ active }) => fill(p.dndCancelled, { title: nameOf(active.id) }, lang),
   };
 
   const list = (
@@ -171,7 +171,7 @@ function Row({ video, index, total, manual, removable, disabled, testId, onMove,
           className="pl-handle flex-none"
           {...attributes}
           {...listeners}
-          aria-label={fill(p.dragHandle, { title })}
+          aria-label={fill(p.dragHandle, { title }, lang)}
           aria-describedby={`${testId}-hint`}
           disabled={disabled}
           data-testid={`${testId}-handle`}
@@ -193,16 +193,16 @@ function Row({ video, index, total, manual, removable, disabled, testId, onMove,
       <span className="flex flex-none items-center">
         {manual && (
           <>
-            <button type="button" className="b b-ghost b-icon" onClick={() => onMove(-1)} disabled={disabled || index === 0} aria-label={fill(p.moveUpTitle, { title })} title={fill(p.moveUpTitle, { title })} data-testid={`${testId}-up`}>
+            <button type="button" className="b b-ghost b-icon" onClick={() => onMove(-1)} disabled={disabled || index === 0} aria-label={fill(p.moveUpTitle, { title }, lang)} title={fill(p.moveUpTitle, { title }, lang)} data-testid={`${testId}-up`}>
               <ArrowUp className="h-4 w-4" aria-hidden="true" />
             </button>
-            <button type="button" className="b b-ghost b-icon" onClick={() => onMove(1)} disabled={disabled || index === total - 1} aria-label={fill(p.moveDownTitle, { title })} title={fill(p.moveDownTitle, { title })} data-testid={`${testId}-down`}>
+            <button type="button" className="b b-ghost b-icon" onClick={() => onMove(1)} disabled={disabled || index === total - 1} aria-label={fill(p.moveDownTitle, { title }, lang)} title={fill(p.moveDownTitle, { title }, lang)} data-testid={`${testId}-down`}>
               <ArrowDown className="h-4 w-4" aria-hidden="true" />
             </button>
           </>
         )}
         {removable && (
-          <button type="button" className="b b-ghost b-icon" onClick={onRemove} disabled={disabled} aria-label={fill(p.unselect, { title })} title={fill(p.unselect, { title })} data-testid={`${testId}-remove`}>
+          <button type="button" className="b b-ghost b-icon" onClick={onRemove} disabled={disabled} aria-label={fill(p.unselect, { title }, lang)} title={fill(p.unselect, { title }, lang)} data-testid={`${testId}-remove`}>
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
         )}

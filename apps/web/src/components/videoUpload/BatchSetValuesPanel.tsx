@@ -7,6 +7,7 @@
  */
 'use client';
 
+import { formatNumber } from '@al-ummah/shared-types';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLanguage } from '@/hooks/useLanguage';
 import type { OrderKey, RenameSubject, TitleLanguage } from '@al-ummah/shared-types';
@@ -41,7 +42,7 @@ export function BatchSetValuesPanel({ open, onOpenChange, all, selected, initial
   const { t, lang } = useLanguage();
   const b = t.bulkEdit;
   const ui: TitleLanguage = lang === 'ar' ? 'ar' : 'en';
-  const fmt = (n: number) => n.toLocaleString(lang === 'ar' ? 'ar' : 'en-US');
+  const fmt = (n: number) => formatNumber(lang === 'ar' ? 'ar' : 'en-US', n);
   const [form, setForm] = useState<BulkFormState>(() => initial ?? emptyBulkForm(ui));
   const [scope, setScope] = useState<SetScope>(selected.length ? 'selected' : 'all');
   const [overwrite, setOverwrite] = useState(false);

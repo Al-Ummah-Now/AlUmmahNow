@@ -1,16 +1,16 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { CommunityPost } from '@al-ummah/shared-types';
+import { CommunityPost, fillTemplate } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-const fill = (s: string, vars: Record<string, string | number>) => s.replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ''));
+const fill = (s: string, vars: Record<string, string | number>, lang = 'en') => fillTemplate(lang, s, vars, '');
 const POSITION = { top: 'justify-start', middle: 'justify-center', bottom: 'justify-end' } as const;
 
 /** A cards post: its title and its cards in a swipeable strip, text drawn over each image (never burned in). */
 export default function CardsPost({ post }: { post: CommunityPost }) {
-  const { t } = useLanguage();
+  const { t, lang: pageLang } = useLanguage();
   const strip = useRef<HTMLOListElement>(null);
   const [current, setCurrent] = useState(0);
   const slides = post.slides ?? [];
@@ -35,7 +35,7 @@ export default function CardsPost({ post }: { post: CommunityPost }) {
       <div className="relative">
         <ol ref={strip} onScroll={onScroll} className="flex overflow-x-auto snap-x snap-mandatory rounded-lg" style={{ scrollbarWidth: 'none' }}>
           {slides.map((s, i) => (
-            <li key={s.id} className="relative shrink-0 w-full snap-start aspect-[4/5] bg-[var(--fanous-color-surface-raised)]" aria-label={fill(t.community.cardOf, { n: i + 1, total: slides.length })}>
+            <li key={s.id} className="relative shrink-0 w-full snap-start aspect-[4/5] bg-[var(--fanous-color-surface-raised)]" aria-label={fill(t.community.cardOf, { n: i + 1, total: slides.length }, pageLang)}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={s.image.url} alt={s.image.alt ?? ''} loading={i === 0 ? 'eager' : 'lazy'} decoding="async" className="absolute inset-0 w-full h-full object-cover" />
               {s.heading || s.body ? (
@@ -54,7 +54,7 @@ export default function CardsPost({ post }: { post: CommunityPost }) {
             <button type="button" onClick={() => go(current - 1)} disabled={current === 0} aria-label={t.community.previousCard} className="w-11 h-11 inline-flex items-center justify-center rounded-full border border-[var(--fanous-color-divider)] disabled:opacity-40">
               <ChevronLeft className="w-5 h-5 rtl:-scale-x-100" aria-hidden="true" />
             </button>
-            <span className="text-sm text-[var(--fanous-color-text-secondary)]" aria-live="polite">{fill(t.community.cardOf, { n: current + 1, total: slides.length })}</span>
+            <span className="text-sm text-[var(--fanous-color-text-secondary)]" aria-live="polite">{fill(t.community.cardOf, { n: current + 1, total: slides.length }, pageLang)}</span>
             <button type="button" onClick={() => go(current + 1)} disabled={current === slides.length - 1} aria-label={t.community.nextCard} className="w-11 h-11 inline-flex items-center justify-center rounded-full border border-[var(--fanous-color-divider)] disabled:opacity-40">
               <ChevronRight className="w-5 h-5 rtl:-scale-x-100" aria-hidden="true" />
             </button>

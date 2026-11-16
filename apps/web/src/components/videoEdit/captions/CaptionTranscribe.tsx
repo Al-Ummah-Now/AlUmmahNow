@@ -10,7 +10,7 @@
  */
 import React, { useId, useState } from 'react';
 import { AlertTriangle, AudioLines, Loader2, X } from 'lucide-react';
-import { captionMinutesCanStart, isCaptionJobActive, type CaptionMinutesUsage, type CaptionsTranslations } from '@al-ummah/shared-types';
+import { captionMinutesCanStart, isCaptionJobActive, type CaptionMinutesUsage, type CaptionsTranslations, dateTimeFormat, formatNumber } from '@al-ummah/shared-types';
 import { reportError } from '@/lib/errors/reporter';
 import { SUPPORTED_LANGUAGES } from '@/lib/api/subtitles-types';
 import { cancelCaptionJob, startCaptionJob, type CaptionJobView } from '@/lib/api/caption-drafts';
@@ -49,12 +49,12 @@ export function visibleJobs(jobs: CaptionJobView[]): CaptionJobView[] {
   return out;
 }
 
-export function jobStepText(t: CaptionsTranslations['jobs'], job: CaptionJobView): string {
+export function jobStepText(t: CaptionsTranslations['jobs'], job: CaptionJobView, lang = 'en'): string {
   switch (job.status) {
     case 'transcribing':
-      return job.progress && job.progress.total > 0 ? t.step.transcribing.replace('{done}', String(job.progress.done)).replace('{total}', String(job.progress.total)) : t.step.transcribingStart;
+      return job.progress && job.progress.total > 0 ? t.step.transcribing.replace('{done}', formatNumber(lang, job.progress.done)).replace('{total}', formatNumber(lang, job.progress.total)) : t.step.transcribingStart;
     case 'translating':
-      return job.progress && job.progress.total > 0 ? t.step.translating.replace('{done}', String(job.progress.done)).replace('{total}', String(job.progress.total)) : t.step.translatingStart;
+      return job.progress && job.progress.total > 0 ? t.step.translating.replace('{done}', formatNumber(lang, job.progress.done)).replace('{total}', formatNumber(lang, job.progress.total)) : t.step.translatingStart;
     case 'queued':
     case 'waiting_budget':
     case 'extracting':
@@ -76,7 +76,7 @@ export default function CaptionTranscribe({ videoId, spokenLanguage, jobs, minut
   const [refusal, setRefusal] = useState<CaptionMinutes | null>(null);
 
   const { usage, minutesNeeded } = refusal ?? minutes;
-  const resets = new Intl.DateTimeFormat(lang === 'ar' ? 'ar' : 'en', { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(usage.resetsAt));
+  const resets = dateTimeFormat(lang === 'ar' ? 'ar' : 'en', { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(usage.resetsAt));
   // Translations show with their source draft (CaptionTranslate); a running one doesn't block this form
   const shown = visibleJobs(jobs.filter((j) => j.kind !== 'translate'));
   /** One job at a time: while one runs, its chip replaces the form */
@@ -213,7 +213,7 @@ export default function CaptionTranscribe({ videoId, spokenLanguage, jobs, minut
                 <div className="flex flex-wrap items-center gap-2">
                   <span role="status" className="inline-flex items-center gap-1.5 rounded-full bg-brand-soft px-2.5 py-1 text-xs font-medium text-brand-ink">
                     <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                    {fill(t.chip, { language: label(job.language), step: jobStepText(t, job) })}
+                    {fill(t.chip, { language: label(job.language), step: jobStepText(t, job, lang) })}
                   </span>
                   <button
                     type="button"

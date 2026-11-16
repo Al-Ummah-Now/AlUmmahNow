@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import Image from 'next/image';
 import Link from '@/components/common/AppLink';
-import { formatWatchTime, watchTimeUnit, type StudioVideoStatus } from '@al-ummah/shared-types';
+import { formatWatchTime, watchTimeUnit, type StudioVideoStatus, dateTimeFormat, numberFormat, fillTemplate, formatPercent } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -14,6 +14,9 @@ import { changePercent, rangeDates, sumMetrics } from '@/lib/studio/analytics';
 import { can, type StudioRole } from '@/lib/studio/permissions';
 import { legacyHref } from '@/lib/studio/nav';
 import { studioLiveHref, studioUploadHref } from '@/lib/studio/links';
+
+/** The dashboard's recent window («آخر ٢٨ يومًا» / "last 28 days"). */
+const RECENT_DAYS = 28;
 
 interface Props {
   locale: string;
@@ -58,7 +61,7 @@ export function StudioDashboard({ locale, channelId, role }: Props) {
       logger.error('[Studio] Dashboard card failed', { channelId, error });
       return null;
     });
-    const windows = rangeDates('28', new Date());
+    const windows = rangeDates(String(RECENT_DAYS) as '28', new Date());
     const [counts, published, scheduled, overview, previous] = await Promise.all([
       canSeeVideos ? safe(getChannelContentCounts(channelId)) : Promise.resolve(null),
       canSeeVideos ? safe(listChannelContent(channelId, { status: 'published', sort: 'newest', limit: 1 })) : Promise.resolve(null),
@@ -84,7 +87,7 @@ export function StudioDashboard({ locale, channelId, role }: Props) {
   }, [load]);
 
   const base = `/${locale}/studio/${encodeURIComponent(channelId)}`;
-  const number = new Intl.NumberFormat(locale);
+  const number = numberFormat(locale);
   const quickLinks = [
     can(role, 'video.upload') && { label: text.quick.upload, href: studioUploadHref(locale, channelId) },
     can(role, 'live.manage') && { label: text.quick.goLive, href: studioLiveHref(locale, channelId) },
@@ -147,7 +150,7 @@ export function StudioDashboard({ locale, channelId, role }: Props) {
       <Button variant="outline" onClick={() => void load()}>{text.retry}</Button>
     </div>
   );
-  const dateTime = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' });
+  const dateTime = dateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' });
   const task = (status: StudioVideoStatus, label: string, count: number) => (
     <li key={status}>
       <Link href={`${base}/content/videos?status=${status}`} className="flex min-h-11 items-center justify-between text-sm text-foreground hover:underline">
@@ -185,7 +188,7 @@ export function StudioDashboard({ locale, channelId, role }: Props) {
                 <p className="mt-1 text-muted-foreground">
                   {text.counts.replace('{views}', number.format(latest.views ?? 0)).replace('{likes}', number.format(latest.likesCount ?? 0)).replace('{comments}', number.format(latest.commentsCount ?? 0))}
                 </p>
-                {latestWatchTime !== null && <p className="text-muted-foreground">{text.watchTime.replace('{time}', formatWatchTime(locale, watchTimeUnit(latestWatchTime))(latestWatchTime))}</p>}
+                {latestWatchTime !== null && <p className="text-muted-foreground">{fillTemplate(locale, text.watchTime, { days: RECENT_DAYS, time: formatWatchTime(locale, watchTimeUnit(latestWatchTime))(latestWatchTime) })}</p>}
               </div>
             </div>
           </Card>
@@ -199,9 +202,9 @@ export function StudioDashboard({ locale, channelId, role }: Props) {
                 <div><dt className="text-muted-foreground">{text.totals.subscribers}</dt><dd className="text-lg font-semibold tabular-nums text-foreground">{number.format(overview.totalSubscribers)}</dd></div>
                 <div><dt className="text-muted-foreground">{text.totals.videos}</dt><dd className="text-lg font-semibold tabular-nums text-foreground">{totalVideos === null ? '–' : number.format(totalVideos)}</dd></div>
                 <div>
-                  <dt className="text-muted-foreground">{text.totals.last28}</dt>
+                  <dt className="text-muted-foreground">{fillTemplate(locale, text.totals.last28, { days: RECENT_DAYS })}</dt>
                   <dd className="text-lg font-semibold tabular-nums text-foreground">{number.format(totals.views)}</dd>
-                  {change !== null && <dd className="text-xs text-muted-foreground">{t.studio.analytics.change.replace('{change}', `${change > 0 ? '+' : ''}${change}`)}</dd>}
+                  {change !== null && <dd className="text-xs text-muted-foreground">{t.studio.analytics.change.replace('{change}', formatPercent(locale, change / 100, { signDisplay: 'exceptZero' }))}</dd>}
                 </div>
               </dl>
             ) : failedCard}

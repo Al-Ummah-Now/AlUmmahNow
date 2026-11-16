@@ -6,6 +6,7 @@
  */
 
 'use client';
+import { formatDateTime } from '@al-ummah/shared-types';
 import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import { logger } from '@/lib/logger-client';
 
@@ -291,7 +292,7 @@ export function ScheduledVideosList({
                           <div className="flex items-center gap-2">
                             <Calendar size={16} />
                             <span data-testid="scheduled-video-date">
-                              {t.schedule?.scheduledFor || 'Scheduled for'}: {new Date(scheduledPublishDate).toLocaleString(locale)}
+                              {t.schedule?.scheduledFor || 'Scheduled for'}: {formatDateTime(locale, new Date(scheduledPublishDate), { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' })}
                             </span>
                           </div>
                           {scheduleStatus === 'scheduled' && (

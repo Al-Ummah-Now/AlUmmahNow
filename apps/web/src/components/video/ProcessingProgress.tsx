@@ -1,5 +1,6 @@
 'use client';
 
+import { formatNumber } from '@al-ummah/shared-types';
 import { useEffect, useState } from 'react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getVideoUploadStatusApi } from '@/lib/api/videos';
@@ -21,7 +22,7 @@ export function ProcessingProgress({
   channelId: string;
   onSettled?: (status: 'ready' | 'failed') => void;
 }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [progress, setProgress] = useState<number | null>(null);
 
   useEffect(() => {
@@ -55,7 +56,7 @@ export function ProcessingProgress({
       data-progress={progress}
       className="inline-block px-2 py-1 rounded text-xs font-medium bg-muted text-muted-foreground"
     >
-      {t.video.processingProgress.replace('{progress}', String(progress))}
+      {t.video.processingProgress.replace('{progress}', formatNumber(lang, progress))}
     </span>
   );
 }

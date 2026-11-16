@@ -285,7 +285,7 @@ export const CHANNEL_ROLES_AR: ChannelRolesTranslations = {
     alreadyInvited: 'لهذا الشخص دعوة معلّقة بالفعل.',
     pendingLimit: 'لدى هذه القناة دعوات معلّقة كثيرة. ألغِ بعضها أولًا.',
     rateLimited: 'أُرسلت دعوات كثيرة. حاول لاحقًا.',
-    sharedLimit: 'أنت تساعد بالفعل في إدارة الحد الأقصى من القنوات (50).',
+    sharedLimit: 'أنت تساعد بالفعل في إدارة الحد الأقصى من القنوات (٥٠).',
     inviteNotFound: 'هذه الدعوة لم تعد متاحة.',
     invalidEmail: 'أدخل بريدًا إلكترونيًا صحيحًا أو معرّفًا @.',
     loadFailed: 'تعذّر تحميل الفريق. حاول مرة أخرى.',

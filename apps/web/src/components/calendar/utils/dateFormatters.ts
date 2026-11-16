@@ -5,6 +5,7 @@
  * and locale (en/ar) for the calendar view.
  */
 
+import { dateTimeFormat, numberFormat } from '@al-ummah/shared-types';
 import { format, addDays, addMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek } from 'date-fns';
 import { enUS, ar as arSA } from 'date-fns/locale';
 import { gregorianToHijri, formatHijriDate, getHijriMonthName } from './hijriConverter';
@@ -19,10 +20,9 @@ export type ViewType = 'month' | 'week' | 'day';
  * @returns Formatted number string
  */
 export function formatNumber(num: number, locale: 'en' | 'ar'): string {
-  // For Arabic, use 'ar-u-nu-arab' to get Arabic-Indic numerals (٠-٩)
-  const localeCode = locale === 'ar' ? 'ar-u-nu-arab' : 'en-US';
+  const localeCode = locale === 'ar' ? 'ar' : 'en-US';
   // Disable grouping to prevent commas in years (e.g., 2024 not 2,024)
-  return new Intl.NumberFormat(localeCode, { useGrouping: false }).format(num);
+  return numberFormat(localeCode, { useGrouping: false }).format(num);
 }
 
 /**
@@ -198,8 +198,7 @@ export function formatCalendarHeader(
  * @returns Formatted time string
  */
 export function formatTime(date: Date, locale: 'en' | 'ar', use24Hour = false, compact = false): string {
-  // For Arabic, use 'ar-u-nu-arab' to get Arabic-Indic numerals
-  const localeCode = locale === 'ar' ? 'ar-u-nu-arab' : 'en-US';
+  const localeCode = locale === 'ar' ? 'ar' : 'en-US';
 
   // Compact format: show just the hour (e.g., "11 AM" instead of "11:00 AM")
   if (compact) {
@@ -207,7 +206,7 @@ export function formatTime(date: Date, locale: 'en' | 'ar', use24Hour = false, c
       hour: 'numeric',
       hour12: !use24Hour,
     };
-    return new Intl.DateTimeFormat(localeCode, options).format(date);
+    return dateTimeFormat(localeCode, options).format(date);
   }
 
   const options: Intl.DateTimeFormatOptions = {
@@ -216,7 +215,7 @@ export function formatTime(date: Date, locale: 'en' | 'ar', use24Hour = false, c
     hour12: !use24Hour,
   };
 
-  return new Intl.DateTimeFormat(localeCode, options).format(date);
+  return dateTimeFormat(localeCode, options).format(date);
 }
 
 /**

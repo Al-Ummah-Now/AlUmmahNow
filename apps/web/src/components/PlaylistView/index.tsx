@@ -12,7 +12,7 @@ import Link from '@/components/common/AppLink';
 import { managePlaylistsHref } from '@/components/PlaylistManager';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowDown, ArrowUp, ListVideo, Lock, Play, Trash2 } from 'lucide-react';
-import { getLocalizedValue } from '@al-ummah/shared-types';
+import { getLocalizedValue, formatDate } from '@al-ummah/shared-types';
 import { ShareLinkButton } from '@/components/share/ShareLinkButton';
 import { formatVideoCount } from '@/lib/format/videoMeta';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -224,7 +224,7 @@ export default function PlaylistView({ playlistId, initialPlaylist, initialParti
               </div>
               {playlist.dateModified && (
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {t.playlist.updatedOn.replace('{date}', new Date(playlist.dateModified).toLocaleDateString(lang, { timeZone: dateZone }))}
+                  {t.playlist.updatedOn.replace('{date}', formatDate(lang, new Date(playlist.dateModified), { timeZone: dateZone }))}
                 </p>
               )}
               {playlist.description && (

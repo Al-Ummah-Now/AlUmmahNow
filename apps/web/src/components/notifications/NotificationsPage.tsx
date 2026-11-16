@@ -1,5 +1,6 @@
 'use client';
 
+import { formatNumber } from '@al-ummah/shared-types';
 import React, { useCallback, useEffect, useState } from 'react';
 import Link from '@/components/common/AppLink';
 import { Bell, Settings } from 'lucide-react';
@@ -174,7 +175,7 @@ export function NotificationsPageView({ dir }: NotificationsPageProps) {
             className="tab-item"
           >
             {value === 'all' ? texts.all : texts.unread}
-            {value === 'unread' && unreadCount > 0 && <span className="ms-1">({unreadCount.toLocaleString(lang)})</span>}
+            {value === 'unread' && unreadCount > 0 && <span className="ms-1">({formatNumber(lang, unreadCount)})</span>}
           </button>
         ))}
       </div>

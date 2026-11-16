@@ -10,7 +10,7 @@
 import React, { useEffect, useRef, type KeyboardEvent, type MouseEvent } from 'react';
 import Link from '@/components/common/AppLink';
 import { ChevronDown, ChevronUp, ListVideo, Lock, Play, Repeat, Shuffle, SkipBack, SkipForward } from 'lucide-react';
-import { getLocalizedValue } from '@al-ummah/shared-types';
+import { getLocalizedValue, formatNumber } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { pickLanguage } from '@/lib/format/pick-language';
 import { removeUnwantedChars } from '@/lib/utility';
@@ -79,9 +79,9 @@ export function PlaylistPane(props: PlaylistPaneProps) {
   const ownerHref = summary?.kind === 'playlist' && summary.channelId
     ? (summary.channelHandle ? `/${lang}/@${encodeURIComponent(summary.channelHandle)}` : `/${lang}/channels/${encodeURIComponent(summary.channelId)}`)
     : null;
-  const total = queue.total.toLocaleString(lang);
+  const total = formatNumber(lang, queue.total);
   const positionText = tp.position
-    .replace('{position}', queue.position === null ? '–' : (queue.position + 1).toLocaleString(lang))
+    .replace('{position}', queue.position === null ? '–' : formatNumber(lang, queue.position + 1))
     .replace('{total}', total);
 
   // Arrow keys move between items (roving through the links)
@@ -211,7 +211,7 @@ export function PlaylistPane(props: PlaylistPaneProps) {
                       }`}
                     >
                       <span className="w-6 shrink-0 text-center text-xs tabular-nums text-[var(--fanous-color-text-muted)]" aria-hidden="true">
-                        {current ? <Play className="mx-auto h-3.5 w-3.5 fill-current text-[var(--fanous-color-accent)]" /> : (item.position + 1).toLocaleString(lang)}
+                        {current ? <Play className="mx-auto h-3.5 w-3.5 fill-current text-[var(--fanous-color-accent)]" /> : formatNumber(lang, item.position + 1)}
                       </span>
                       <span className="relative block aspect-video w-24 shrink-0 overflow-hidden rounded-md bg-[var(--fanous-color-surface-raised)]">
                         {item.thumbnailUrl && (

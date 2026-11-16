@@ -31,8 +31,14 @@ function localizeParams(params, lang) {
   return out;
 }
 
-const fill = (template, params) =>
-  String(template || '').replace(/\{(\w+)\}/g, (_, name) => (params[name] !== undefined && params[name] !== null ? String(params[name]) : ''));
+// Numbers like locale-format: Arabic ٠–٩ (ar-u-nu-arab), English 0–9, pinned in every browser
+const NUMBER = { ar: new Intl.NumberFormat('ar-u-nu-arab'), en: new Intl.NumberFormat('en-u-nu-latn') }; // locale-format: machine (worker script, no imports)
+const fill = (template, params, lang) =>
+  String(template || '').replace(/\{(\w+)\}/g, (_, name) => {
+    const value = params[name];
+    if (value === undefined || value === null) return '';
+    return typeof value === 'number' ? NUMBER[lang === 'ar' ? 'ar' : 'en'].format(value) : String(value);
+  });
 
 function renderNotification(data) {
   const lang = pickLang(data.lang);
@@ -44,7 +50,7 @@ function renderNotification(data) {
     const code = String(params.reason || 'other');
     params = Object.assign({}, params, { reason: template.reasons[code] || template.reasons.other || '' });
   }
-  return { lang, title: fill(template.title, params), body: fill(template.message, params) };
+  return { lang, title: fill(template.title, params, lang), body: fill(template.message, params, lang) };
 }
 
 // Server action URLs are locale-less ("/video/123"): same rule as localizeActionUrl

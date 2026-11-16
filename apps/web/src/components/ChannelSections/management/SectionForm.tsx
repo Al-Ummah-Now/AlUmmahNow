@@ -10,6 +10,7 @@ import {
   type LiveFilter,
   type PostMode,
   type SectionSort,
+  formatNumber,
 } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -252,7 +253,7 @@ export function SectionForm({
             data-testid="section-item-count"
           >
             {[...new Set([...countChoices, itemCount])].sort((a, b) => a - b).map((n) => (
-              <option key={n} value={n}>{n.toLocaleString(lang)}</option>
+              <option key={n} value={n}>{formatNumber(lang, n)}</option>
             ))}
           </select>
         </Field>

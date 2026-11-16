@@ -12,6 +12,7 @@
  * Pure functions over plain data, so they are unit tested without React.
  */
 
+import { formatNumber, pluralCategory } from '@al-ummah/shared-types';
 import type { NotificationToastTranslations, PluralTexts } from '@al-ummah/shared-types';
 
 /** Same-kind notifications arriving within this long of the group's latest one join it. */
@@ -110,9 +111,9 @@ export function visibleToasts(queue: ToastQueue, cap = MAX_VISIBLE_GROUPS): Visi
 
 /** CLDR plural form of `table` for `count`, with `{count}` as a localized number. */
 export function pluralText(table: PluralTexts, count: number, lang: string): string {
-  const form = new Intl.PluralRules(lang).select(count);
+  const form = pluralCategory(lang, count);
   const template = (count === 0 && table.zero) || table[form] || table.other;
-  return template.replace(/\{count\}/g, new Intl.NumberFormat(lang).format(count));
+  return template.replace(/\{count\}/g, formatNumber(lang, count));
 }
 
 const GROUPED_KINDS = ['uploadReady', 'uploadFailed', 'newComment', 'newSubscriber', 'newVideo', 'liveStarted', 'commentReply'] as const;

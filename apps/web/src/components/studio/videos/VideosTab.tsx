@@ -11,7 +11,7 @@ import Link from '@/components/common/AppLink';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { MoreVertical, UploadCloud } from 'lucide-react';
 import type { View } from 'react-big-calendar';
-import { type CreatorReviewView, type StudioVideoStatus } from '@al-ummah/shared-types';
+import { type CreatorReviewView, type StudioVideoStatus, dateTimeFormat, numberFormat, fillTemplate, SOFT_DELETE_RETENTION_DAYS, DURATION_FILTER_MINUTES, formatNumber } from '@al-ummah/shared-types';
 import { BulkEditPanel, type BulkPanelVideo } from '@/components/bulkEdit/BulkEditPanel';
 import { useChannelPlaylists } from '@/hooks/useChannelPlaylists';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
@@ -228,8 +228,8 @@ export function VideosTab({ locale, channelId, role }: Props) {
       const succeeded = result?.summary.succeeded ?? 0;
       const failedCount = result ? result.summary.failed : ids.length;
       if (succeeded === 0) setNotice(text.bulk.failed);
-      else if (failedCount > 0) setNotice(text.bulk.partial.replace('{succeeded}', String(succeeded)).replace('{failed}', String(failedCount)));
-      else setNotice(text.bulk.deleted.replace('{count}', String(succeeded)));
+      else if (failedCount > 0) setNotice(text.bulk.partial.replace('{succeeded}', formatNumber(locale, succeeded)).replace('{failed}', formatNumber(locale, failedCount)));
+      else setNotice(text.bulk.deleted.replace('{count}', formatNumber(locale, succeeded)));
     } catch (error) {
       logger.error('[Studio] Delete failed', { channelId, error });
       setNotice(text.bulk.failed);
@@ -241,12 +241,12 @@ export function VideosTab({ locale, channelId, role }: Props) {
   const finishBulk = async (summary: BulkSummary | LimitRefusal | null) => {
     setBulkDialog(null);
     if (isLimitRefusal(summary)) {
-      setNotice(limitRefusalMessage(t.studio.limits, summary));
+      setNotice(limitRefusalMessage(t.studio.limits, summary, locale));
       return;
     }
     if (!summary) setNotice(text.actionFailed);
-    else if (summary.failed > 0) setNotice(text.bulk.partialDone.replace('{succeeded}', String(summary.succeeded)).replace('{failed}', String(summary.failed)));
-    else setNotice(text.bulk.done.replace('{count}', String(summary.succeeded)));
+    else if (summary.failed > 0) setNotice(text.bulk.partialDone.replace('{succeeded}', formatNumber(locale, summary.succeeded)).replace('{failed}', formatNumber(locale, summary.failed)));
+    else setNotice(text.bulk.done.replace('{count}', formatNumber(locale, summary.succeeded)));
     setSelected(new Set());
     await load();
   };
@@ -298,8 +298,8 @@ export function VideosTab({ locale, channelId, role }: Props) {
     setSearch('');
     update({ q: '', category: '', language: '', visibility: 'all', type: 'all', duration: 'all' });
   };
-  const dateFormat = new Intl.DateTimeFormat(locale, { dateStyle: 'medium' });
-  const numberFormat = new Intl.NumberFormat(locale);
+  const dateFormat = dateTimeFormat(locale, { dateStyle: 'medium' });
+  const numberFmt = numberFormat(locale);
 
   const canBulkEdit = can(role, 'video.edit');
   const canBulkDelete = can(role, 'video.delete');
@@ -320,7 +320,7 @@ export function VideosTab({ locale, channelId, role }: Props) {
             data-testid={`studio-status-${status}`}
             className="min-h-11 whitespace-nowrap"
           >
-            {text.statuses[status]}{counts ? ` (${numberFormat.format(counts[status])})` : ''}
+            {text.statuses[status]}{counts ? ` (${numberFmt.format(counts[status])})` : ''}
           </Button>
         ))}
         {canBulkDelete && (
@@ -363,9 +363,9 @@ export function VideosTab({ locale, channelId, role }: Props) {
         </select>
         <select aria-label={text.filters.duration} className={selectClass} value={query.duration} onChange={(e) => update({ duration: e.target.value as VideosQuery['duration'] })}>
           <option value="all">{text.filters.duration}: {text.filters.any}</option>
-          <option value="short">{text.filters.short}</option>
-          <option value="medium">{text.filters.medium}</option>
-          <option value="long">{text.filters.long}</option>
+          <option value="short">{fillTemplate(locale, text.filters.short, { max: DURATION_FILTER_MINUTES.medium })}</option>
+          <option value="medium">{fillTemplate(locale, text.filters.medium, { min: DURATION_FILTER_MINUTES.medium, max: DURATION_FILTER_MINUTES.long })}</option>
+          <option value="long">{fillTemplate(locale, text.filters.long, { min: DURATION_FILTER_MINUTES.long })}</option>
         </select>
         <select aria-label={text.filters.category} className={selectClass} value={query.category} onChange={(e) => update({ category: e.target.value })}>
           <option value="">{text.filters.category}: {text.filters.any}</option>
@@ -406,19 +406,19 @@ export function VideosTab({ locale, channelId, role }: Props) {
 
       {selected.size > 0 && (
         <div className="sticky bottom-0 z-10 mb-3 flex flex-wrap items-center gap-2 rounded-md border border-border bg-card p-2 md:static" data-testid="studio-bulk-bar">
-          <span className="text-sm font-medium">{text.bulk.selected.replace('{count}', numberFormat.format(selected.size))}</span>
+          <span className="text-sm font-medium">{text.bulk.selected.replace('{count}', numberFmt.format(selected.size))}</span>
           {canBulkEdit && <Button variant="outline" onClick={() => setBulkEditOpen(true)} className="min-h-11" data-testid="studio-bulk-edit">{text.bulk.edit}</Button>}
           {can(role, 'playlist.manage') && <Button variant="outline" onClick={() => setBulkDialog('playlist')} disabled={overOtherLimit} className="min-h-11" data-testid="studio-bulk-playlist">{text.bulk.addToPlaylist}</Button>}
           {can(role, 'video.schedule') && <Button variant="outline" onClick={() => setBulkDialog('schedule')} disabled={overOtherLimit} className="min-h-11">{text.bulk.schedule}</Button>}
           {canBulkDelete && <Button variant="outline" onClick={() => setPendingDelete({ ids: [...selected] })} disabled={overOtherLimit} className="min-h-11" data-testid="studio-bulk-delete">{text.bulk.delete}</Button>}
           {allSelected && cursor && canBulkEdit && selected.size < MAX_BULK_EDIT_SELECTION && (
             <Button variant="ghost" onClick={() => void selectAllMatching()} disabled={selectingAll} className="min-h-11" data-testid="studio-select-all-matching">
-              {selectingAll ? t.bulkEdit.loadingMatching : t.bulkEdit.selectAllMatching.replace('{count}', counts ? numberFormat.format(Math.min(counts[query.status as StudioVideoStatus] ?? 0, MAX_BULK_EDIT_SELECTION)) : '…')}
+              {selectingAll ? t.bulkEdit.loadingMatching : t.bulkEdit.selectAllMatching.replace('{count}', counts ? numberFmt.format(Math.min(counts[query.status as StudioVideoStatus] ?? 0, MAX_BULK_EDIT_SELECTION)) : '…')}
             </Button>
           )}
           <Button variant="ghost" onClick={() => setSelected(new Set())} className="min-h-11">{text.bulk.clear}</Button>
-          {overOtherLimit && <span className="text-sm text-muted-foreground" data-testid="studio-bulk-other-limit">{t.bulkEdit.otherActionsLimit.replace('{max}', String(MAX_BULK_SELECTION))}</span>}
-          {selected.size >= MAX_BULK_EDIT_SELECTION && <span className="text-sm text-muted-foreground">{text.bulk.limit.replace('{max}', String(MAX_BULK_EDIT_SELECTION))}</span>}
+          {overOtherLimit && <span className="text-sm text-muted-foreground" data-testid="studio-bulk-other-limit">{t.bulkEdit.otherActionsLimit.replace('{max}', formatNumber(locale, MAX_BULK_SELECTION))}</span>}
+          {selected.size >= MAX_BULK_EDIT_SELECTION && <span className="text-sm text-muted-foreground">{text.bulk.limit.replace('{max}', formatNumber(locale, MAX_BULK_EDIT_SELECTION))}</span>}
         </div>
       )}
 
@@ -507,10 +507,10 @@ export function VideosTab({ locale, channelId, role }: Props) {
                         </div>
                       </div>
                     </td>
-                    <td className="block text-sm text-muted-foreground md:table-cell md:p-2">{video.scheduledPublishDate && query.status === 'scheduled' ? new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(shown)) : dateFormat.format(new Date(shown))}</td>
-                    <td className="inline-block pe-3 text-sm md:table-cell md:p-2 md:text-end"><span className="md:sr-only">{text.columns.views}: </span>{numberFormat.format(video.views ?? 0)}</td>
-                    <td className="inline-block pe-3 text-sm md:table-cell md:p-2 md:text-end"><span className="md:sr-only">{text.columns.comments}: </span>{numberFormat.format(video.commentsCount ?? 0)}</td>
-                    <td className="inline-block pe-3 text-sm md:table-cell md:p-2 md:text-end"><span className="md:sr-only">{text.columns.likes}: </span>{numberFormat.format(video.likesCount ?? 0)}</td>
+                    <td className="block text-sm text-muted-foreground md:table-cell md:p-2">{video.scheduledPublishDate && query.status === 'scheduled' ? dateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(shown)) : dateFormat.format(new Date(shown))}</td>
+                    <td className="inline-block pe-3 text-sm md:table-cell md:p-2 md:text-end"><span className="md:sr-only">{text.columns.views}: </span>{numberFmt.format(video.views ?? 0)}</td>
+                    <td className="inline-block pe-3 text-sm md:table-cell md:p-2 md:text-end"><span className="md:sr-only">{text.columns.comments}: </span>{numberFmt.format(video.commentsCount ?? 0)}</td>
+                    <td className="inline-block pe-3 text-sm md:table-cell md:p-2 md:text-end"><span className="md:sr-only">{text.columns.likes}: </span>{numberFmt.format(video.likesCount ?? 0)}</td>
                     <td className="inline-block align-middle md:table-cell md:p-2 md:text-end">
                       {actions.length > 0 && (
                         <DropdownMenu>
@@ -572,8 +572,8 @@ export function VideosTab({ locale, channelId, role }: Props) {
       <ConfirmDialog
         open={pendingDelete !== null}
         onResult={(confirmed) => { if (confirmed) void deleteConfirmed(); else setPendingDelete(null); }}
-        title={pendingDelete && pendingDelete.ids.length > 1 ? text.confirmDelete.bulkTitle.replace('{count}', String(pendingDelete.ids.length)) : text.confirmDelete.title}
-        description={text.confirmDelete.body}
+        title={pendingDelete && pendingDelete.ids.length > 1 ? fillTemplate(locale, text.confirmDelete.bulkTitle, { count: pendingDelete.ids.length }) : text.confirmDelete.title}
+        description={fillTemplate(locale, text.confirmDelete.body, { days: SOFT_DELETE_RETENTION_DAYS })}
         confirmLabel={text.confirmDelete.confirm}
         cancelLabel={text.confirmDelete.cancel}
         testId="studio-confirm-delete"

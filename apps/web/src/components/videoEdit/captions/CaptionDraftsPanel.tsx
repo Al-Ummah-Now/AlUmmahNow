@@ -8,7 +8,7 @@
  * Renders nothing when there is none of these (no drafts, no transcript, minutes not readable).
  */
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { isCaptionJobActive } from '@al-ummah/shared-types';
+import { isCaptionJobActive, formatNumber } from '@al-ummah/shared-types';
 import { AudioLines, BookOpen, FilePenLine, Languages, Loader2, Trash2, UploadCloud } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useConfirm } from '@/components/ui/confirm-dialog';
@@ -204,7 +204,7 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
         />
       )}
       {/* Translations whose source draft is gone; the others show in their source draft's row */}
-      {minutes && <TranslationJobs videoId={videoId} jobs={jobs.filter((j) => !(drafts ?? []).some((d) => d.language === j.sourceLanguage))} t={tc} label={label} confirm={confirm} reload={load} />}
+      {minutes && <TranslationJobs videoId={videoId} lang={lang} jobs={jobs.filter((j) => !(drafts ?? []).some((d) => d.language === j.sourceLanguage))} t={tc} label={label} confirm={confirm} reload={load} />}
 
       {(!!drafts?.length || transcript || claims.length > 0) && (
         <div>
@@ -330,7 +330,7 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
                   {d.pendingQuran > 0 && (
                     <p className="inline-flex items-center gap-1 text-xs font-medium text-brand-ink">
                       <BookOpen className="h-3.5 w-3.5" aria-hidden />
-                      {tc.quranPending.replace('{count}', String(d.pendingQuran))}
+                      {tc.quranPending.replace('{count}', formatNumber(lang, d.pendingQuran))}
                     </p>
                   )}
                 </div>
@@ -381,7 +381,7 @@ export default function CaptionDraftsPanel({ videoId, videoUrl, posterUrl, onPub
               </div>
               {d.kind === 'source' && visibleJobs(jobs.filter((j) => j.kind === 'translate' && j.sourceLanguage === d.language)).length > 0 && (
                 <div className="mt-3 border-t border-border pt-3">
-                  <TranslationJobs videoId={videoId} jobs={jobs.filter((j) => j.sourceLanguage === d.language)} t={tc} label={label} confirm={confirm} reload={load} />
+                  <TranslationJobs videoId={videoId} lang={lang} jobs={jobs.filter((j) => j.sourceLanguage === d.language)} t={tc} label={label} confirm={confirm} reload={load} />
                 </div>
               )}
               {translating === d.language && minutes && (

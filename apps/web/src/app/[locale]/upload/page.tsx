@@ -1,5 +1,6 @@
 'use client';
 
+import { formatNumber } from '@al-ummah/shared-types';
 import { HelpLink } from '@/components/help/HelpLink';
 import { logger } from '@/lib/logger-client';
 import React, { useState, useCallback, useRef, useMemo, useEffect } from "react";
@@ -654,7 +655,7 @@ const UploadPage: React.FC = () => {
                       ></div>
                     </div>
                     <p className="text-sm text-blue-600 dark:text-blue-400 mt-2">
-                      {uploadProgress.toFixed(0)}{t.upload.percentComplete || '% complete'}
+                      {formatNumber(lang, Math.round(uploadProgress))}{t.upload.percentComplete || '% complete'}
                     </p>
                   </div>
                 </div>

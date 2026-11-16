@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { getLocalizedValue } from '@al-ummah/shared-types';
+import { getLocalizedValue, formatNumber } from '@al-ummah/shared-types';
 import type { QueueItem } from '@/lib/api/playlist-queue';
 import { usePlaylistQueue, type PlaylistQueueState } from '@/hooks/usePlaylistQueue';
 import {
@@ -140,7 +140,7 @@ export function usePlaylistPlayback(videoId: string, lang: string, options: Play
       title: removeUnwantedChars(getLocalizedValue(nextItem.titleLocalized, nextItem.title, lang)),
       channel: channelLabel(nextItem, lang),
       thumbnail: nextItem.thumbnailUrl,
-      badge: `${(nextItem.position + 1).toLocaleString(lang)} / ${total.toLocaleString(lang)}`,
+      badge: `${formatNumber(lang, nextItem.position + 1)} / ${formatNumber(lang, total)}`,
       go: (opts) => play(nextItem, opts),
     };
   }, [nextItem, lang, total, play]);

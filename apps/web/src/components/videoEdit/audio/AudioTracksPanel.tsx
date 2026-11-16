@@ -6,7 +6,7 @@
  * a file or pick a track found in the video's file) and the tier's limit.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AUDIO_TRACK_LANGUAGES, type AudioTracksTranslations } from '@al-ummah/shared-types';
+import { AUDIO_TRACK_LANGUAGES, type AudioTracksTranslations, formatNumber } from '@al-ummah/shared-types';
 import { AlertTriangle, AudioLines, Loader2, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useConfirm } from '@/components/ui/confirm-dialog';
@@ -171,7 +171,7 @@ export default function AudioTracksPanel({ videoId, spokenLanguage }: AudioTrack
     await load();
   };
 
-  const limitText = useMemo(() => (view ? addLimitMessage(view, ta) : null), [view, ta]);
+  const limitText = useMemo(() => (view ? addLimitMessage(view, ta, lang) : null), [view, ta, lang]);
 
   if (failed) {
     return (
@@ -184,8 +184,8 @@ export default function AudioTracksPanel({ videoId, spokenLanguage }: AudioTrack
 
   const canAdd = view.ready && !limitText;
   const usage = view.limit.unlimited
-    ? ta.usedUnlimited.replace('{used}', String(view.limit.used))
-    : ta.used.replace('{used}', String(view.limit.used)).replace('{allowed}', String(view.limit.allowed));
+    ? ta.usedUnlimited.replace('{used}', formatNumber(lang, view.limit.used))
+    : ta.used.replace('{used}', formatNumber(lang, view.limit.used)).replace('{allowed}', formatNumber(lang, view.limit.allowed));
 
   return (
     <section aria-labelledby={`audio-tracks-${videoId}`} data-testid="audio-tracks" className="space-y-4">
@@ -246,7 +246,7 @@ export default function AudioTracksPanel({ videoId, spokenLanguage }: AudioTrack
         {view.tracks.map((track) => {
           const local = uploads[track.id];
           const percent = uploadPercent(track, local);
-          const status = trackStatusText(track, ta, reasons, percent, t.studio?.videos?.review?.rejected);
+          const status = trackStatusText(track, ta, reasons, percent, t.studio?.videos?.review?.rejected, lang);
           const stalled = track.state === 'uploading' && (!local || local.failed);
           const meta = AUDIO_TRACK_LANGUAGES.find((l) => l.code === track.language);
           return (

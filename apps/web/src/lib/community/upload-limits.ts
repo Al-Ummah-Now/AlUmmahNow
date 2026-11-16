@@ -3,12 +3,7 @@
  * values the API enforces); every check takes a `limits` argument so they can later be read from
  * settings. Messages name the file, its size and the limit, sized in the UI language.
  */
-import {
-  COMMUNITY_UPLOAD_LIMITS,
-  communityUploadLimit,
-  type CommunityUploadKind,
-  type CommunityUploadLimits,
-} from '@al-ummah/shared-types';
+import { COMMUNITY_UPLOAD_LIMITS, communityUploadLimit, type CommunityUploadKind, type CommunityUploadLimits, formatUnit } from '@al-ummah/shared-types';
 
 const MB = 1024 * 1024;
 
@@ -28,12 +23,7 @@ export function formatUploadSize(bytes: number, lang: string): string {
   const ar = lang === 'ar';
   const unit = bytes < MB ? 'kilobyte' : 'megabyte';
   const value = bytes < MB ? bytes / 1024 : bytes / MB;
-  return new Intl.NumberFormat(ar ? 'ar' : 'en', {
-    style: 'unit',
-    unit,
-    unitDisplay: ar ? 'long' : 'short',
-    maximumFractionDigits: 1,
-  }).format(value);
+  return formatUnit(lang, value, unit, { unitDisplay: ar ? 'long' : 'short' });
 }
 
 /** "photo.jpg is 12.4 MB. Images can be up to 5 MB." in the UI language. */

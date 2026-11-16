@@ -1,5 +1,6 @@
 'use client';
 
+import { formatNumber } from '@al-ummah/shared-types';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -110,7 +111,7 @@ export function QuizPostForm({ data, onChange, locale, error }: QuizPostFormProp
                     value={option.text}
                     onChange={(e) => handleOptionChange(index, e.target.value)}
                     placeholder={isRTL
-                      ? `الخيار ${index + 1}`
+                      ? `الخيار ${formatNumber('ar', index + 1)}`
                       : `Option ${index + 1}`
                     }
                     dir={isRTL ? 'rtl' : 'ltr'}

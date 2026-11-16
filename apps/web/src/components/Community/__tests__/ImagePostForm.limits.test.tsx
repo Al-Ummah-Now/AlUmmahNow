@@ -68,7 +68,7 @@ describe('ImagePostForm size limit', () => {
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain('صورة.jpg');
     expect(alert.textContent).toContain('ميغابايت');
-    expect(alert.textContent).toMatch(/5 ميغابايت/);
+    expect(alert.textContent).toMatch(/٥ ميغابايت/);
   });
 
   it('shows the real limit in the hint', () => {

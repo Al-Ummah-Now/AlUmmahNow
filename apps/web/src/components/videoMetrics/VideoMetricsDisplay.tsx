@@ -1,3 +1,4 @@
+import { formatNumber, formatCompact } from '@al-ummah/shared-types';
 import { logger } from '@/lib/logger-client';
 
 import React, { useEffect, useState } from 'react';
@@ -59,15 +60,7 @@ export function VideoMetricsDisplay({
 
   const { viewerCount, isConnected: presenceConnected } = useRealTimePresence(channelId || videoId);
 
-  const formatNumber = (num: number): string => {
-    if (num >= 1000000) {
-      return (num / 1000000).toFixed(1) + 'M';
-    }
-    if (num >= 1000) {
-      return (num / 1000).toFixed(1) + 'K';
-    }
-    return num.toString();
-  };
+  const formatCount = (num: number): string => formatCompact(lang, num);
 
   /**
    * Toggle the viewer's like. Updates optimistically, then calls the API and
@@ -134,13 +127,13 @@ export function VideoMetricsDisplay({
         className={!user ? 'cursor-not-allowed' : 'cursor-pointer'}
         title={!user ? t.a11y.signInToReact : isLiked ? t.a11y.unlikeVideo : t.a11y.likeVideo}
         // Name includes the visible count (WCAG 2.5.3 Label in Name)
-        aria-label={`${isLiked ? t.a11y.unlikeVideo : t.a11y.likeVideo} ${formatNumber(metrics.likesCount)}`}
+        aria-label={`${isLiked ? t.a11y.unlikeVideo : t.a11y.likeVideo} ${formatCount(metrics.likesCount)}`}
         aria-pressed={isLiked}
         aria-describedby={!user ? `metrics-signin-hint-${videoId}` : undefined}
         data-testid="video-like-button"
       >
         <ThumbsUp className={isLiked ? 'fill-current' : undefined} aria-hidden="true" data-icon="thumbs-up" />
-        <span>{formatNumber(metrics.likesCount)}</span>
+        <span>{formatCount(metrics.likesCount)}</span>
       </button>
 
       {/* Comments: a pill like the other actions, jumping to the comments section */}
@@ -148,10 +141,10 @@ export function VideoMetricsDisplay({
         href={`#${COMMENTS_ID}`}
         className="wa-comments"
         data-testid="video-comments-count"
-        aria-label={t.a11y.commentsCount.replace('{count}', String(metrics.commentsCount))}
+        aria-label={t.a11y.commentsCount.replace('{count}', formatNumber(lang, metrics.commentsCount))}
       >
         <MessageCircle aria-hidden="true" />
-        <span>{formatNumber(metrics.commentsCount)}</span>
+        <span>{formatCount(metrics.commentsCount)}</span>
       </a>
 
       {/* Live viewers (if available) */}
@@ -159,7 +152,7 @@ export function VideoMetricsDisplay({
         <div className="flex items-center gap-1">
           <Users className="w-4 h-4" aria-hidden="true" />
           <span className="text-red-600 dark:text-red-400 font-medium">
-            {t.a11y.watchingNow.replace('{count}', formatNumber(viewerCount))}
+            {t.a11y.watchingNow.replace('{count}', formatCount(viewerCount))}
           </span>
           <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" aria-hidden="true" />
         </div>

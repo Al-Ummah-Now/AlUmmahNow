@@ -1,3 +1,4 @@
+import { formatNumber, formatClock, parseDigits, formatBytes } from '@al-ummah/shared-types';
 import { logger } from '@/lib/logger-client';
 
 import React, { useState, useRef } from 'react';
@@ -55,8 +56,11 @@ function parseChapterFile(
   const errors: ParseError[] = [];
 
   lines.forEach((line, index) => {
-    const trimmed = line.trim();
-    if (!trimmed) return;
+    // Timestamps typed with ٠–٩ count like 0–9 (the title keeps its digits as typed)
+    const raw = line.trim();
+    if (!raw) return;
+    const lead = raw.match(/^[0-9٠-٩۰-۹:]+/)?.[0] ?? '';
+    const trimmed = parseDigits(lead) + raw.slice(lead.length);
 
     // Match "MM:SS Title" or "HH:MM:SS Title"
     const match = trimmed.match(/^(\d{1,2}:\d{2}(?::\d{2})?)\s+(.+)$/);
@@ -134,7 +138,7 @@ export default function ChapterUpload({
   onCancel,
   className = '',
 }: ChapterUploadProps) {
-  const { t, isRTL } = useLanguage();
+  const { t, isRTL, lang } = useLanguage();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -251,7 +255,7 @@ export default function ChapterUpload({
               <div>
                 <p className="font-medium dark:text-white">{selectedFile.name}</p>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {(selectedFile.size / 1024).toFixed(2)} KB
+                  {formatBytes(lang, selectedFile.size)}
                 </p>
               </div>
             </div>
@@ -283,12 +287,12 @@ export default function ChapterUpload({
               <AlertCircle size={20} className="text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
                 <p className="font-medium text-red-700 dark:text-red-400">
-                  {(t.video.chapterErrorsFound ?? '{count} error(s) found').replace('{count}', String(parseErrors.length))}
+                  {(t.video.chapterErrorsFound ?? '{count} error(s) found').replace('{count}', formatNumber(lang, parseErrors.length))}
                 </p>
                 <ul className="mt-2 space-y-1">
                   {parseErrors.map((error, index) => (
                     <li key={index} className="text-sm text-red-600 dark:text-red-400">
-                      {error.line > 0 && (t.video.chapterErrorLine ?? 'Line {line}: ').replace('{line}', String(error.line))}
+                      {error.line > 0 && (t.video.chapterErrorLine ?? 'Line {line}: ').replace('{line}', formatNumber(lang, error.line))}
                       {error.message}
                     </li>
                   ))}
@@ -304,7 +308,7 @@ export default function ChapterUpload({
             <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
               <Check size={20} className="text-green-600 dark:text-green-400" />
               <p className="text-sm text-green-700 dark:text-green-400">
-                {parsedChapters.length} {t.video.chaptersDetected}
+                {formatNumber(lang, parsedChapters.length)} {t.video.chaptersDetected}
               </p>
             </div>
 
@@ -323,7 +327,7 @@ export default function ChapterUpload({
                   >
                     <div className="flex items-start gap-3">
                       <span className="text-sm font-mono text-gray-600 dark:text-gray-400 flex-shrink-0 w-16">
-                        {Math.floor(chapter.startTime / 60)}:{(chapter.startTime % 60).toString().padStart(2, '0')}
+                        {formatClock(lang, chapter.startTime)}
                       </span>
                       <p className="text-sm dark:text-white flex-1">{chapter.title}</p>
                     </div>

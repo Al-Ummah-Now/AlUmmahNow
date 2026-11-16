@@ -3,7 +3,7 @@
  * the server's raw text. Creator tiers answer with a `code` (and `retryAfter`
  * for a limit); everything else falls back to the caller's generic message.
  */
-import { CREATOR_ERROR_CODES, VIDEOS_ACCOUNT_PENDING_DELETION_CODE } from '@al-ummah/shared-types';
+import { CREATOR_ERROR_CODES, VIDEOS_ACCOUNT_PENDING_DELETION_CODE, formatNumber } from '@al-ummah/shared-types';
 import type { AppTranslations } from '@al-ummah/shared-types';
 
 export interface RefusedCall {
@@ -13,24 +13,24 @@ export interface RefusedCall {
 }
 
 /** "23 minutes", "1 hour", "2 hours" (rounded up to whole minutes, then hours from 90 minutes). */
-export function formatWait(t: Pick<AppTranslations, 'creator'>, seconds: number): string {
+export function formatWait(t: Pick<AppTranslations, 'creator'>, seconds: number, lang = 'en'): string {
   const minutes = Math.max(1, Math.ceil(seconds / 60));
-  if (minutes < 90) return minutes === 1 ? t.creator.minute : t.creator.minutes.replace('{count}', String(minutes));
+  if (minutes < 90) return minutes === 1 ? t.creator.minute : t.creator.minutes.replace('{count}', formatNumber(lang, minutes));
   const hours = Math.ceil(minutes / 60);
-  return hours === 1 ? t.creator.hour : t.creator.hours.replace('{count}', String(hours));
+  return hours === 1 ? t.creator.hour : t.creator.hours.replace('{count}', formatNumber(lang, hours));
 }
 
 /** The friendly message for a refused call, or null when it is not a creator-tier refusal. */
-export function creatorRefusalMessage(t: Pick<AppTranslations, 'creator'>, call: RefusedCall | null | undefined): string | null {
+export function creatorRefusalMessage(t: Pick<AppTranslations, 'creator'>, call: RefusedCall | null | undefined, lang = 'en'): string | null {
   switch (call?.code) {
     case CREATOR_ERROR_CODES.uploadsByInvitation:
       return t.creator.invitationShort;
     case CREATOR_ERROR_CODES.uploadLimit:
       return call.retryAfter && call.retryAfter > 0
-        ? t.creator.limitReached.replace('{time}', formatWait(t, call.retryAfter))
+        ? t.creator.limitReached.replace('{time}', formatWait(t, call.retryAfter, lang))
         : t.creator.limitReachedSoon;
     case CREATOR_ERROR_CODES.channelLimit:
-      return t.creator.channelLimit.replace('{max}', String(call.maxChannels ?? ''));
+      return t.creator.channelLimit.replace('{max}', call.maxChannels === undefined ? '' : formatNumber(lang, call.maxChannels));
     case VIDEOS_ACCOUNT_PENDING_DELETION_CODE:
       return t.creator.accountPendingDeletion;
     case 'upload_limits_unavailable':

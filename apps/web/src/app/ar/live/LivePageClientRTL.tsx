@@ -14,6 +14,7 @@
 
 'use client';
 
+import { numberFormat } from '@al-ummah/shared-types';
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLiveStreams } from '@/hooks/useLiveStreams';
@@ -139,7 +140,7 @@ function PageHeader({ t }: { t: ReturnType<typeof useLanguage>['t'] }) {
  * grammatical case changes that can't be handled by simple interpolation.
  */
 function formatStreamCount(count: number): string {
-  const formattedCount = new Intl.NumberFormat('ar-SA').format(count);
+  const formattedCount = numberFormat('ar').format(count);
 
   if (count === 0) return 'لا توجد بثوث';
   if (count === 1) return 'بث واحد مباشر';
@@ -158,7 +159,7 @@ function formatStreamCount(count: number): string {
  * - dir="rtl" on all containers
  * - text-right alignment
  * - Arabic translations for all UI text
- * - Arabic numerals via Intl.NumberFormat('ar-SA')
+ * - Eastern Arabic (Hindi) numerals ٠–٩ via locale-format
  * - RTL LiveStreamCard variant
  * - Mirrored loading indicators
  */

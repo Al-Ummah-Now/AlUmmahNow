@@ -40,7 +40,7 @@ import { ACCOUNT_MENU_PATHS } from '@/lib/navigation/destinations';
 import { ACCOUNT_MENU_EVENT, type AccountMenuRequest } from '@/lib/navigation/account-menu-events';
 import { useOptionalAuth } from '@/components/AuthProvider/authContext';
 import { getAuthProfileUrl, getAuthUrl, getCmsUrl, getWwwUrl } from '@/lib/runtime-config';
-import { appLinks, type AppLinkId } from '@al-ummah/shared-types';
+import { appLinks, type AppLinkId, formatNumber } from '@al-ummah/shared-types';
 import { cmsLinks, isScholar } from '@/lib/scholars/sites';
 import { buildChannelMenu } from '@/lib/channels/menu';
 import { useChannelInviteCount } from '@/lib/channels/invites-count';
@@ -388,7 +388,7 @@ export function UnifiedNavigation() {
               {inviteCount > 0 && (
                 <Link href={`/${lang}${ACCOUNT_MENU_PATHS.channelInvites}`} onClick={() => setIsOpen(false)} data-testid="nav-menu-channel-invites" data-count={inviteCount} className="aun-menu-item" role="menuitem">
                   <UserPlus className="aun-menu-icon" aria-hidden="true" />
-                  <span className="aun-menu-text">{t.channelRoles.invitationsCount.replace('{count}', inviteCount.toLocaleString(lang))}</span>
+                  <span className="aun-menu-text">{t.channelRoles.invitationsCount.replace('{count}', formatNumber(lang, inviteCount))}</span>
                 </Link>
               )}
               {/* No channel yet: creating one is right here (with channels it sits in the switcher) */}
@@ -532,7 +532,7 @@ export function UnifiedNavigation() {
                 {/* Create Channel - Only for Active Account, and only with a creator tier that allows another channel */}
                 {channelLimit !== null ? (
                   <p data-testid="nav-channel-limit" className="aun-menu-note" role="note">
-                    {t.creator.channelLimit.replace('{max}', String(channelLimit))}
+                    {t.creator.channelLimit.replace('{max}', formatNumber(lang, channelLimit))}
                   </p>
                 ) : !canCreateChannel ? null : !isCreatingChannel ? (
                   <button
@@ -604,7 +604,7 @@ export function UnifiedNavigation() {
       <ConfirmDialog
         open={showLogoutAllConfirm}
         title={`${t.navigation.signOutOfAll}?`}
-        description={t.navigation.signOutOfAllDescription.replace('{count}', String(accounts.length))}
+        description={t.navigation.signOutOfAllDescription.replace('{count}', formatNumber(lang, accounts.length))}
         confirmLabel={t.navigation.signOutOfAll}
         cancelLabel={t.common.cancel}
         danger

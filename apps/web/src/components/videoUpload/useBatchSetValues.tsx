@@ -17,7 +17,7 @@ import { editableRow, useBatchRowValues } from '@/hooks/useBatchRowValues';
 import type { BulkFormState } from '@/lib/bulk-edit/form';
 import { defaultsForNewFiles, initiateFields, reorderWithin, subjectOf, type QueueRowRef, type RowValues } from '@/lib/upload/set-values';
 import { loadChannelTitles } from '@/lib/bulk-edit/channel-titles';
-import { orderedSubjects } from '@al-ummah/shared-types';
+import { orderedSubjects, formatNumber } from '@al-ummah/shared-types';
 import { inputClass } from '@/components/bulkEdit/RenameFields';
 import type { PlaylistSource } from '@/components/bulkEdit/BulkFieldsForm';
 import { BatchSetValuesPanel, type SetScope } from './BatchSetValuesPanel';
@@ -66,7 +66,7 @@ interface UseBatchSetValuesInput {
 export function useBatchSetValues({ seed, files, channelId, channelName, playlists, batchPlaylists, setBatchCategory, setRowCategories, reorderQueue, disabled }: UseBatchSetValuesInput) {
   const { t, lang } = useLanguage();
   const b = t.bulkEdit;
-  const fmt = (n: number) => n.toLocaleString(lang === 'ar' ? 'ar' : 'en-US');
+  const fmt = (n: number) => formatNumber(lang === 'ar' ? 'ar' : 'en-US', n);
   const { rows, save, edit, setValues } = useBatchRowValues(files, channelId, seed.seeded);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [open, setOpen] = useState(false);

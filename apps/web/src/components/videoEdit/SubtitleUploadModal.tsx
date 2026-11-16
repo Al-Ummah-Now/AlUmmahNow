@@ -1,5 +1,6 @@
 'use client';
 
+import { formatBytes } from '@al-ummah/shared-types';
 import React, { useState, useRef, useCallback } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -369,7 +370,7 @@ export default function SubtitleUploadModal({
                       text-gray-600
                       dark:text-gray-400
                     ">
-                      {(selectedFile.size / 1024).toFixed(1)} KB
+                      {formatBytes(lang, selectedFile.size)}
                     </p>
                   </div>
                 </div>

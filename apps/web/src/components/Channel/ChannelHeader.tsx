@@ -1,7 +1,7 @@
 'use client';
 
 import { VerifiedBadge } from '@/components/VerifiedBadge';
-import { Channel, type ChannelRole } from '@al-ummah/shared-types';
+import { Channel, type ChannelRole, formatCompact } from '@al-ummah/shared-types';
 import Image from 'next/image';
 import { useMultiAccount } from '@/hooks/useMultiAccount';
 import { useChannelSubscription } from '@/hooks/useChannelSubscription';
@@ -198,11 +198,5 @@ export function ChannelHeader({ channel, locale, isOwner = false }: ChannelHeade
 }
 
 function formatSubscriberCount(count: number): string {
-  if (count >= 1000000) {
-    return `${(count / 1000000).toFixed(1)}M`;
-  }
-  if (count >= 1000) {
-    return `${(count / 1000).toFixed(1)}K`;
-  }
-  return count.toString();
+  return formatCompact('en', count);
 }

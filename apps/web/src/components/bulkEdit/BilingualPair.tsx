@@ -9,6 +9,7 @@
  */
 'use client';
 
+import { dateTimeFormat } from '@al-ummah/shared-types';
 import React, { useState } from 'react';
 import { Languages } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -44,7 +45,7 @@ interface BilingualPairProps {
 export function resetTime(resetsAt: string | undefined, lang: string): string {
   const at = resetsAt ? new Date(resetsAt) : null;
   if (!at || Number.isNaN(at.getTime())) return '';
-  return new Intl.DateTimeFormat(lang === 'ar' ? 'ar' : 'en', { hour: 'numeric', minute: '2-digit' }).format(at);
+  return dateTimeFormat(lang === 'ar' ? 'ar' : 'en', { hour: 'numeric', minute: '2-digit' }).format(at);
 }
 
 export function BilingualPair({ legend, labels, children, ticked, onTick, tickLabel, tickTestId, textOf, onTranslated, field, videoId, idPrefix, testId }: BilingualPairProps) {

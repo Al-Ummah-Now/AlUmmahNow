@@ -5,6 +5,7 @@
  * why the owner can't go live (no tier, a tier without live, the month's hours used) with
  * "Request access" to /{lang}/upgrade, or, when they can, how much of the month is left.
  */
+import { numberFormat } from '@al-ummah/shared-types';
 import Link from '@/components/common/AppLink';
 import { Button } from '@/components/ui/button';
 import type { LiveAccess } from '@al-ummah/shared-types';
@@ -13,13 +14,13 @@ import { useLanguage } from '@/hooks/useLanguage';
 export const upgradeHref = (locale: string) => `/${locale === 'ar' ? 'ar' : 'en'}/upgrade`;
 
 const hours = (minutes: number, locale: string) =>
-  new Intl.NumberFormat(locale === 'ar' ? 'ar' : 'en', { maximumFractionDigits: 1 }).format(Math.round((minutes / 60) * 10) / 10);
+  numberFormat(locale === 'ar' ? 'ar' : 'en', { maximumFractionDigits: 1 }).format(Math.round((minutes / 60) * 10) / 10);
 
 /** Shown above the stream list instead of the form when the tier does not allow going live. */
 export function LiveTierNotice({ locale, live }: { locale: string; live: LiveAccess }) {
   const { t } = useLanguage();
   const text = t.studio.live.gate;
-  const num = (n: number) => new Intl.NumberFormat(locale === 'ar' ? 'ar' : 'en').format(n);
+  const num = (n: number) => numberFormat(locale === 'ar' ? 'ar' : 'en').format(n);
 
   if (live.allowed) {
     if (live.unlimited || live.hoursMonth === null) return null;

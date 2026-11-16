@@ -7,7 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getStudioChannelAnalytics, getTopContent, type StudioChannelAnalytics, type TopContentItem } from '@/lib/api/studio-analytics';
 import { logger } from '@/lib/logger-client';
-import { chartLocale, formatDuration, formatInUnit, formatWatchTime, watchTimeInUnit, watchTimeUnit } from '@al-ummah/shared-types';
+import { formatDuration, formatInUnit, formatWatchTime, watchTimeInUnit, watchTimeUnit, dateTimeFormat, numberFormat, fillTemplate } from '@al-ummah/shared-types';
 import { changePercent, RANGE_PRESETS, rangeDates, sumMetrics, type DailyMetric, type RangePreset } from '@/lib/studio/analytics';
 import { LineChart } from './LineChart';
 import { StatCard, TrafficSources } from './parts';
@@ -100,8 +100,8 @@ export function ChannelAnalytics({ locale, channelId, channelCreated }: Props) {
     setTopCursor(content.cursor);
   };
 
-  const number = new Intl.NumberFormat(chartLocale(locale));
-  const date = new Intl.DateTimeFormat(chartLocale(locale), { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  const number = numberFormat(locale);
+  const date = dateTimeFormat(locale, { month: 'short', day: 'numeric', timeZone: 'UTC' });
   const duration = formatDuration(locale);
   const series: DailyMetric[] = overview?.recentMetrics ?? [];
   const totals = sumMetrics(series);
@@ -126,7 +126,7 @@ export function ChannelAnalytics({ locale, channelId, channelCreated }: Props) {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-bold text-foreground">{t.studio.nav.analytics}</h1>
         <select aria-label={text.rangeLabel} value={range} onChange={(event) => setRange(event.target.value as RangePreset)} data-testid="studio-analytics-range" className="min-h-11 rounded-md border border-input bg-background px-2 text-sm text-foreground">
-          {RANGE_PRESETS.map((preset) => <option key={preset} value={preset}>{text.ranges[preset]}</option>)}
+          {RANGE_PRESETS.map((preset) => <option key={preset} value={preset}>{fillTemplate(locale, text.ranges[preset], { days: Number(preset) })}</option>)}
         </select>
       </div>
 

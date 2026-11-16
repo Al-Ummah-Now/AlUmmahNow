@@ -1,4 +1,5 @@
 'use client';
+import { formatNumber } from '@al-ummah/shared-types';
 import { ListFilter } from 'lucide-react';
 import { ThemedSelect } from '@/components/ui/ThemedSelect';
 import { logger } from '@/lib/logger-client';
@@ -228,7 +229,7 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
             className="mt-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
             data-testid="comment-replies-toggle"
           >
-            {thread?.open ? t.comments.hideReplies : t.comments.showReplies.replace('{count}', String(Math.max(count, thread?.items.length ?? 0)))}
+            {thread?.open ? t.comments.hideReplies : t.comments.showReplies.replace('{count}', formatNumber(lang, Math.max(count, thread?.items.length ?? 0)))}
           </button>
         )}
         {thread?.open && (

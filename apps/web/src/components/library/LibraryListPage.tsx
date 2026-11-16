@@ -1,5 +1,6 @@
 'use client';
 
+import { formatDate, formatNumber } from '@al-ummah/shared-types';
 import React, { useCallback, useEffect, useState } from 'react';
 import Link from '@/components/common/AppLink';
 import { ArrowDown, ArrowUp, Bookmark, Clock, Play, ThumbsUp, Trash2 } from 'lucide-react';
@@ -149,7 +150,7 @@ export function LibraryListPage({ kind, dir }: Props) {
         <meta.Icon className="h-7 w-7 text-[var(--fanous-color-accent)]" aria-hidden="true" />
         {meta.title}
         {total > 0 && kind !== 'saved-posts' && (
-          <span className="text-base font-normal text-gray-500">{fillTemplate(texts.videosCount, { count: total.toLocaleString(lang) })}</span>
+          <span className="text-base font-normal text-gray-500">{fillTemplate(texts.videosCount, { count: formatNumber(lang, total) })}</span>
         )}
       </h1>
 
@@ -198,7 +199,7 @@ export function LibraryListPage({ kind, dir }: Props) {
               <LibraryVideoTile
                 video={video as unknown as LibraryTileVideo}
                 href={listAlias ? watchHref(lang, video.id, { list: listAlias, index: storedIndexOf(storedIds, video.id, index) }) : undefined}
-                subtitle={video.likedAt ? fillTemplate(texts.likedOn, { date: new Date(video.likedAt).toLocaleDateString(lang) }) : undefined}
+                subtitle={video.likedAt ? fillTemplate(texts.likedOn, { date: formatDate(lang, new Date(video.likedAt), {}) }) : undefined}
               />
               {kind === 'watch-later' && (
                 <div className="flex items-center gap-1">

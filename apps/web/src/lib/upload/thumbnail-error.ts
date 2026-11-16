@@ -11,10 +11,10 @@ export interface ThumbnailRefusal {
   retryAfter?: number;
 }
 
-export function thumbnailRefusalMessage(t: Pick<AppTranslations, 'creator' | 'video'>, refusal: ThumbnailRefusal): string {
+export function thumbnailRefusalMessage(t: Pick<AppTranslations, 'creator' | 'video'>, refusal: ThumbnailRefusal, lang = 'en'): string {
   if (refusal.code === 'thumbnail_shape') return t.video.thumbnailWrongShape;
   // Upload limit (with the wait), uploads paused, account pending deletion, ...
-  const creator = creatorRefusalMessage(t, refusal);
+  const creator = creatorRefusalMessage(t, refusal, lang);
   if (creator) return creator;
   // The server checks the image again: not a JPEG, PNG or WebP it can read
   if (refusal.status === 400 || refusal.status === 415) return t.video.thumbnailInvalidType;

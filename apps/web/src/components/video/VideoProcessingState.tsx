@@ -1,5 +1,6 @@
 'use client';
 
+import { formatNumber } from '@al-ummah/shared-types';
 import { useEffect, useState } from 'react';
 import Link from '@/components/common/AppLink';
 import { Loader2, VideoOff } from 'lucide-react';
@@ -98,7 +99,7 @@ export function VideoProcessingState({ video, isOwner, onReady }: Props) {
         <p className="max-w-md text-sm text-muted-foreground">{description}</p>
         {!failed && progress !== null && progress > 0 && progress < 100 && (
           <p className="text-sm font-medium" data-testid="video-processing-progress" data-progress={progress}>
-            {t.video.processingProgress.replace('{progress}', String(progress))}
+            {t.video.processingProgress.replace('{progress}', formatNumber(lang, progress))}
           </p>
         )}
         {failed && isOwner && (

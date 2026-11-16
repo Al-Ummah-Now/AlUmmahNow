@@ -10,6 +10,7 @@
  * upload flows can use it too.
  */
 
+import { formatNumber } from '@al-ummah/shared-types';
 import { Autocomplete, Highlight, type AutocompleteOption } from '@/components/ui/Autocomplete';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Search, X, Film, Check } from 'lucide-react';
@@ -141,7 +142,7 @@ export default function VideoPicker({ channelId, selected, onChange, excludeIds,
     return (result.data || []).map((video) => ({
       id: video.id,
       label: localTitle(video, lang),
-      subtitle: [video.isShort ? p.shortBadge : null, formatDuration(video.duration) || null].filter(Boolean).join(' · ') || undefined,
+      subtitle: [video.isShort ? p.shortBadge : null, formatDuration(video.duration, lang) || null].filter(Boolean).join(' · ') || undefined,
       thumbnailUrl: video.thumbnailUrl,
       thumbnailShape: 'wide' as const,
       value: video,
@@ -238,10 +239,10 @@ export default function VideoPicker({ channelId, selected, onChange, excludeIds,
         </label>
         {/* The grid's match count is announced (the autocomplete announces its own suggestions) */}
         <span className="sr-only" role="status" aria-live="polite" data-testid="picker-match-count">
-          {debounced && !loading && page ? (selectable.length === 1 ? t.search.foundOneResult : t.search.foundResults.replace('{count}', String(selectable.length))) : ''}
+          {debounced && !loading && page ? (selectable.length === 1 ? t.search.foundOneResult : t.search.foundResults.replace('{count}', formatNumber(lang, selectable.length))) : ''}
         </span>
         <span className={`text-sm ${MUTED}`} aria-live="polite" data-testid="picker-selected-count">
-          {counted(selected.length, p.selectedOne, p.selectedOther)}
+          {counted(selected.length, p.selectedOne, p.selectedOther, {}, lang)}
         </span>
       </div>
 
@@ -268,7 +269,7 @@ export default function VideoPicker({ channelId, selected, onChange, excludeIds,
             const inPlaylist = excludeIds?.has(video.id) ?? false;
             const checked = selectedIds.has(video.id);
             const position = checked ? selected.findIndex((v) => v.id === video.id) + 1 : 0;
-            const duration = formatDuration(video.duration);
+            const duration = formatDuration(video.duration, lang);
             return (
               <li key={video.id}>
                 <label
@@ -283,7 +284,7 @@ export default function VideoPicker({ channelId, selected, onChange, excludeIds,
                     checked={checked || inPlaylist}
                     disabled={inPlaylist}
                     onChange={() => toggle(video)}
-                    aria-label={fill(p.selectVideo, { title })}
+                    aria-label={fill(p.selectVideo, { title }, lang)}
                   />
                   <span className="ck pl-ck flex-none" data-on={checked || inPlaylist || undefined} aria-hidden="true">
                     {position > 0 ? <span className="pl-ck-num">{position}</span> : inPlaylist ? <Check /> : null}
@@ -318,7 +319,7 @@ export default function VideoPicker({ channelId, selected, onChange, excludeIds,
           <Prev aria-hidden="true" />
           {p.previousPage}
         </button>
-        <span className={`text-sm ${MUTED}`} aria-live="polite" data-testid="picker-page">{fill(p.pageLabel, { page: pageIndex + 1 })}</span>
+        <span className={`text-sm ${MUTED}`} aria-live="polite" data-testid="picker-page">{fill(p.pageLabel, { page: pageIndex + 1 }, lang)}</span>
         <button type="button" className="b b-secondary b-sm" onClick={goNext} disabled={!page?.next || loading} data-testid="picker-next">
           {p.nextPage}
           <Next aria-hidden="true" />
@@ -338,7 +339,7 @@ export default function VideoPicker({ channelId, selected, onChange, excludeIds,
                 <li key={video.id} className="pl-pill inline-flex max-w-full items-center gap-1.5 ps-2.5" data-testid="picker-tray-item">
                   <span className={`text-xs font-semibold ${MUTED}`}>{i + 1}</span>
                   <span className={`max-w-[14rem] truncate text-sm ${TEXT}`}>{title}</span>
-                  <button type="button" className="pl-pill-x" onClick={() => onChange(selected.filter((v) => v.id !== video.id))} aria-label={fill(p.unselect, { title })}>
+                  <button type="button" className="pl-pill-x" onClick={() => onChange(selected.filter((v) => v.id !== video.id))} aria-label={fill(p.unselect, { title }, lang)}>
                     <X className="h-3.5 w-3.5" aria-hidden="true" />
                   </button>
                 </li>

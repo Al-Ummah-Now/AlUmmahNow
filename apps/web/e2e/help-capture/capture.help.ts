@@ -287,7 +287,7 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       placed.push({ x, y, w: S, h: S });
       const m = document.createElement('span');
       m.dataset.helpMarker = '';
-      m.textContent = Number(target.dataset.helpTarget).toLocaleString(rtl ? 'ar-EG' : 'en');
+      m.textContent = Number(target.dataset.helpTarget).toLocaleString(rtl ? 'ar-u-nu-arab' : 'en');
       Object.assign(m.style, {
         position: 'fixed', left: `${Math.min(window.innerWidth - S - 2, Math.max(2, x))}px`, top: `${Math.max(2, y)}px`, zIndex: '2147483647',
         width: `${S}px`, height: `${S}px`, borderRadius: '50%', display: 'grid', placeItems: 'center',

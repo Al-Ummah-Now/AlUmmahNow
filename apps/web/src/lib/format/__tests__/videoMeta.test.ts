@@ -44,7 +44,7 @@ describe('formatRelativeTime', () => {
 
   it('localizes to Arabic', () => {
     expect(formatRelativeTime(ago(7200), 'ar', now)).toContain('ساعتين');
-    expect(formatRelativeTime(ago(3600 * 17), 'ar', now)).toBe('قبل 17 ساعة');
+    expect(formatRelativeTime(ago(3600 * 17), 'ar', now)).toBe('قبل ١٧ ساعة');
     // «قبل يوم واحد», never «أمس» (owner, 2026-11-13)
     expect(formatRelativeTime(ago(86400), 'ar', now)).toBe('قبل يوم واحد');
     expect(formatRelativeTime(ago(10), 'ar', now)).toBe('الآن');
@@ -67,8 +67,8 @@ describe('formatAbsoluteDate', () => {
 describe('formatViewsExact', () => {
   it('writes the full count with its plural', () => {
     expect(formatViewsExact(1234, 'en')).toBe('1,234 views');
-    expect(formatViewsExact(1234, 'ar')).toBe('1,234 مشاهدة');
-    expect(formatViewsExact(6, 'ar')).toBe('6 مشاهدات');
+    expect(formatViewsExact(1234, 'ar')).toBe('١٬٢٣٤ مشاهدة');
+    expect(formatViewsExact(6, 'ar')).toBe('٦ مشاهدات');
     expect(formatViewsExact(1, 'en')).toBe('1 view');
   });
 });
@@ -77,7 +77,7 @@ describe('formatAbsoluteDateTime', () => {
   const date = new Date('2026-11-12T18:32:00Z');
 
   it('writes the date and the time, in each language', () => {
-    expect(formatAbsoluteDateTime(date, 'ar', 'UTC')).toBe('12 نوفمبر 2026، 06:32 م');
+    expect(formatAbsoluteDateTime(date, 'ar', 'UTC')).toBe('١٢ نوفمبر ٢٠٢٦، ٠٦:٣٢ م');
     expect(formatAbsoluteDateTime(date, 'en', 'UTC')).toBe('November 12, 2026, 06:32 PM');
     expect(formatAbsoluteDateTime('nope', 'en')).toBe('');
   });

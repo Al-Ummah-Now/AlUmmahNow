@@ -1,5 +1,6 @@
 'use client';
 
+import { formatDate, numberFormat } from '@al-ummah/shared-types';
 import React, { useEffect, useState } from 'react';
 import { Calendar, Eye, Link2, Mail, MapPin, Users, Video } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -45,7 +46,7 @@ export function AboutTabContent({ channelId }: AboutTabContentProps) {
     };
   }, [channelId]);
 
-  const numberFormat = new Intl.NumberFormat(lang === 'ar' ? 'ar' : 'en');
+  const numberFmt = numberFormat(lang === 'ar' ? 'ar' : 'en');
   const description = about ? (about.descriptionLocalized?.[lang] || about.description) : '';
 
   return (
@@ -137,23 +138,23 @@ export function AboutTabContent({ channelId }: AboutTabContentProps) {
               )}
               <p className="flex items-center gap-2" data-testid="about-joined">
                 <Calendar className="w-4 h-4 text-gray-500" aria-hidden="true" />
-                {t.channel.joinedOn.replace('{date}', new Date(about.joinedDate).toLocaleDateString(lang === 'ar' ? 'ar' : 'en', { year: 'numeric', month: 'long', day: 'numeric' }))}
+                {t.channel.joinedOn.replace('{date}', formatDate(lang === 'ar' ? 'ar' : 'en', new Date(about.joinedDate), { year: 'numeric', month: 'long', day: 'numeric' }))}
               </p>
               <dl className="space-y-2">
                 <div className="flex items-center gap-2">
                   <Eye className="w-4 h-4 text-gray-500" aria-hidden="true" />
                   <dt>{t.channel.statsViews}</dt>
-                  <dd className="font-semibold ms-auto" data-testid="about-views">{numberFormat.format(about.totalViews)}</dd>
+                  <dd className="font-semibold ms-auto" data-testid="about-views">{numberFmt.format(about.totalViews)}</dd>
                 </div>
                 <div className="flex items-center gap-2">
                   <Video className="w-4 h-4 text-gray-500" aria-hidden="true" />
                   <dt>{t.channel.statsVideos}</dt>
-                  <dd className="font-semibold ms-auto" data-testid="about-videos">{numberFormat.format(about.videosCount)}</dd>
+                  <dd className="font-semibold ms-auto" data-testid="about-videos">{numberFmt.format(about.videosCount)}</dd>
                 </div>
                 <div className="flex items-center gap-2">
                   <Users className="w-4 h-4 text-gray-500" aria-hidden="true" />
                   <dt>{t.channel.statsSubscribers}</dt>
-                  <dd className="font-semibold ms-auto" data-testid="about-subscribers">{numberFormat.format(about.subscribersCount)}</dd>
+                  <dd className="font-semibold ms-auto" data-testid="about-subscribers">{numberFmt.format(about.subscribersCount)}</dd>
                 </div>
               </dl>
             </aside>

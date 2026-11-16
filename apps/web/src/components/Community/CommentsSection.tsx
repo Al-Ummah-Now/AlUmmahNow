@@ -4,7 +4,7 @@ import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import { logger } from '@/lib/logger-client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { PostComment } from '@al-ummah/shared-types';
+import { PostComment, formatNumber } from '@al-ummah/shared-types';
 import { cn } from '@/lib/utils';
 import CommentForm from './CommentForm';
 import Comment from './Comment';
@@ -136,7 +136,7 @@ export default function CommentsSection({
         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
           {totalComments > 0
             ? isRTL
-              ? `${totalComments} ${totalComments === 1 ? 'تعليق' : 'تعليقات'}`
+              ? `${formatNumber('ar', totalComments)} ${totalComments === 1 ? 'تعليق' : 'تعليقات'}`
               : `${totalComments} ${totalComments === 1 ? 'Comment' : 'Comments'}`
             : isRTL
             ? 'التعليقات'

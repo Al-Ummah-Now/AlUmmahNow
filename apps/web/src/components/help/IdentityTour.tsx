@@ -16,6 +16,7 @@
  *   is described by the step text, focus returns to the account button at the end; logical
  *   positions mirror in Arabic; phones dock the card to the bottom; reduced motion stops the glide.
  */
+import { formatNumber } from '@al-ummah/shared-types';
 import '@/theme/help.css';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -168,7 +169,7 @@ export function IdentityTour() {
     }
     requestAccountMenu(target.menu ? { open: true, view: target.menu } : { open: false });
     const step = tour.steps[stepKey];
-    setAnnouncement(`${tour.stepOf.replace('{current}', String(phase.index + 1)).replace('{total}', String(phase.steps.length))}. ${step.title}`);
+    setAnnouncement(`${tour.stepOf.replace('{current}', formatNumber(lang, phase.index + 1)).replace('{total}', formatNumber(lang, phase.steps.length))}. ${step.title}`);
   }, [phase, stepKey, tour]);
 
   // Follow the highlighted control (menus open a frame later; pages scroll and resize)
@@ -318,8 +319,8 @@ export function IdentityTour() {
               <h2 id="tour-title" ref={headingRef} tabIndex={-1} className="tour-title">{step.title}</h2>
               <span className="tour-step" data-testid="tour-step-count">
                 {tour.stepOf
-                  .replace('{current}', (phase.index + 1).toLocaleString(rtl ? 'ar-EG' : 'en'))
-                  .replace('{total}', total.toLocaleString(rtl ? 'ar-EG' : 'en'))}
+                  .replace('{current}', formatNumber(rtl ? 'ar' : 'en', phase.index + 1))
+                  .replace('{total}', formatNumber(rtl ? 'ar' : 'en', total))}
               </span>
             </div>
             <p id="tour-body" className="tour-body">{step.body}</p>

@@ -9,6 +9,7 @@
  * uploader can change, and offers the top options when the AI is not sure.
  */
 
+import { formatNumber } from '@al-ummah/shared-types';
 import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import { useLanguage } from '@/hooks/useLanguage';
 import { Folder, ChevronDown, Sparkles, Loader2 } from 'lucide-react';
@@ -132,7 +133,7 @@ export function CategorySelector({
           {isRTL ? 'اقترحه الذكاء الاصطناعي، ويمكنك تغييره' : 'Suggested by AI. You can change it'}
           {confidence !== null && (
             <span className="font-normal text-muted-foreground">
-              {isRTL ? `(ثقة ${confidence}٪)` : `(${confidence}% confident)`}
+              {isRTL ? `(ثقة ${formatNumber('ar', confidence)}٪)` : `(${confidence}% confident)`}
             </span>
           )}
           {onConfirm && (

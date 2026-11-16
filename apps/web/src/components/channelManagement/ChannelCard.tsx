@@ -3,7 +3,7 @@ import { DeleteChannelDialog } from '@/components/channelManagement/DeleteChanne
 import { ChannelCardProps } from './types';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/hooks/useLanguage';
-import { getLocalizedValue } from '@al-ummah/shared-types';
+import { getLocalizedValue, formatNumber } from '@al-ummah/shared-types';
 import { AvatarImage, CoverImage } from '@/components/media/ProfileImages';
 
 /**
@@ -100,13 +100,13 @@ export const ChannelCard: React.FC<ChannelCardProps> = ({
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
               <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
             </svg>
-            <span>{channel.subscribersCount?.toLocaleString() || 0}</span>
+            <span>{formatNumber(lang, channel.subscribersCount ?? 0)}</span>
           </div>
           <div className="flex items-center gap-1">
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
               <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
             </svg>
-            <span>{channel.videosCount?.toLocaleString() || 0}</span>
+            <span>{formatNumber(lang, channel.videosCount ?? 0)}</span>
           </div>
         </div>
 

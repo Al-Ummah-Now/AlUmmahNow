@@ -1,4 +1,5 @@
 "use client";
+import { formatNumber } from '@al-ummah/shared-types';
 import { BodyPortal } from '@/components/ui/BodyPortal';
 import { ThemedSelectField } from '@/components/ui/ThemedSelectField';
 import React, { useState } from "react";
@@ -40,7 +41,7 @@ const ReportContentButton: React.FC<ReportContentButtonProps> = ({
   onOpenChange,
   hideTrigger = false,
 }) => {
-  const { t, isRTL } = useLanguage();
+  const { t, isRTL, lang } = useLanguage();
   const { ensureHuman } = useHumanCheck();
   const [openState, setOpenState] = useState(false);
   const isOpen = open ?? openState;
@@ -262,7 +263,7 @@ const ReportContentButton: React.FC<ReportContentButtonProps> = ({
                       maxLength={500}
                     />
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      {t.reportContent.charactersCount.replace('{count}', String(reportForm.description.length))}
+                      {t.reportContent.charactersCount.replace('{count}', formatNumber(lang, reportForm.description.length))}
                     </p>
                   </div>
 

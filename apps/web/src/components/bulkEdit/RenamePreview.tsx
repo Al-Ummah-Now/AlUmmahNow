@@ -38,6 +38,7 @@ import {
   type RenameRow,
   type RenameSubject,
   type TitleLanguage,
+  formatNumber,
 } from '@al-ummah/shared-types';
 import { numberedPatterns, type RenameState } from '@/lib/bulk-edit/form';
 
@@ -66,7 +67,7 @@ export function RenamePreview({ rows, subjects, rename, onRenameChange, orderKey
   const [announcement, setAnnouncement] = useState('');
   const [found, setFound] = useState<{ state: 'idle' | 'loading' | 'done'; n: number | null }>({ state: 'idle', n: null });
   const summary = useMemo(() => renameSummary(rows), [rows]);
-  const fmt = (n: number) => n.toLocaleString(lang === 'ar' ? 'ar' : 'en-US');
+  const fmt = (n: number) => formatNumber(lang === 'ar' ? 'ar' : 'en-US', n);
   const Arrow = isRTL ? ArrowLeft : ArrowRight;
   const sortLanguage: TitleLanguage = rename.languages[0] ?? (lang === 'ar' ? 'ar' : 'en');
 

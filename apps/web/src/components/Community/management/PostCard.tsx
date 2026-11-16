@@ -2,7 +2,7 @@ import { logger } from '@/lib/logger-client';
 import { useLanguage } from '@/hooks/useLanguage';
 
 import { useState } from 'react';
-import { CommunityPost, PostType, PostStatus } from '@al-ummah/shared-types';
+import { CommunityPost, PostType, PostStatus, formatNumber, formatTimeAgo } from '@al-ummah/shared-types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -32,8 +32,6 @@ import {
   ThumbsUp,
   MessageSquare
 } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
-import { ar, enUS } from 'date-fns/locale';
 
 interface PostCardProps {
   post: CommunityPost;
@@ -96,10 +94,7 @@ export function PostCard({ post, locale, onView, onEdit, onDelete }: PostCardPro
     }
   };
 
-  const timeAgo = formatDistanceToNow(new Date(post.createdAt), {
-    addSuffix: true,
-    locale: isRTL ? ar : enUS
-  });
+  const timeAgo = formatTimeAgo(isRTL ? 'ar' : 'en', post.createdAt, { numeric: 'always' });
 
   return (
     <>
@@ -133,15 +128,15 @@ export function PostCard({ post, locale, onView, onEdit, onDelete }: PostCardPro
                 </span>
                 <span className="flex items-center gap-1">
                   <Eye className="w-3 h-3 md:w-4 md:h-4" />
-                  {post.views.toLocaleString(isRTL ? 'ar-SA' : 'en-US')}
+                  {formatNumber(isRTL ? 'ar' : 'en-US', post.views)}
                 </span>
                 <span className="flex items-center gap-1">
                   <ThumbsUp className="w-3 h-3 md:w-4 md:h-4" />
-                  {post.likes.toLocaleString(isRTL ? 'ar-SA' : 'en-US')}
+                  {formatNumber(isRTL ? 'ar' : 'en-US', post.likes)}
                 </span>
                 <span className="flex items-center gap-1">
                   <MessageSquare className="w-3 h-3 md:w-4 md:h-4" />
-                  {post.comments.toLocaleString(isRTL ? 'ar-SA' : 'en-US')}
+                  {formatNumber(isRTL ? 'ar' : 'en-US', post.comments)}
                 </span>
               </div>
             </div>

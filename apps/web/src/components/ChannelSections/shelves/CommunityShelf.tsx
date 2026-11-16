@@ -1,5 +1,6 @@
 'use client';
 
+import { formatNumber } from '@al-ummah/shared-types';
 import Link from '@/components/common/AppLink';
 import { BarChart3, Heart, MessageCircle, Pin } from 'lucide-react';
 import { RelativeDate } from '@/components/RelativeDate';
@@ -14,7 +15,7 @@ import type { SectionPostSummary } from '../sectionData';
 export function CommunityShelf({ posts, channelId }: { posts: SectionPostSummary[]; channelId: string }) {
   const { t, lang, locale } = useLanguage();
   const r = t.channelSections.render;
-  const fill = (template: string, count: number) => template.replace('{count}', count.toLocaleString(locale));
+  const fill = (template: string, count: number) => template.replace('{count}', formatNumber(locale, count));
   const href = `/${locale}/channels/${channelId}?tab=community`;
 
   return (
@@ -63,12 +64,12 @@ export function CommunityShelf({ posts, channelId }: { posts: SectionPostSummary
               <div className="mt-auto flex items-center gap-4 pt-1 text-xs text-muted-foreground">
                 <span className="inline-flex items-center gap-1">
                   <Heart className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span aria-hidden="true">{post.likes.toLocaleString(locale)}</span>
+                  <span aria-hidden="true">{formatNumber(locale, post.likes)}</span>
                   <span className="sr-only">{fill(r.likes, post.likes)}</span>
                 </span>
                 <span className="inline-flex items-center gap-1">
                   <MessageCircle className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span aria-hidden="true">{post.comments.toLocaleString(locale)}</span>
+                  <span aria-hidden="true">{formatNumber(locale, post.comments)}</span>
                   <span className="sr-only">{fill(r.comments, post.comments)}</span>
                 </span>
               </div>

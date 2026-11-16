@@ -6,15 +6,13 @@
  * applies in English so "no videos" can be written.
  */
 
+import { formatNumber, pluralCategory } from '@al-ummah/shared-types';
 import type { PluralForms, PluralKey, SupportedLanguage } from '../types';
 import { getTranslations } from './getTranslations';
 
-/** Representative locale per language, as the rest of the player uses. */
-const LOCALES: Record<SupportedLanguage, string> = { en: 'en-US', ar: 'ar-SA' };
-
 function selectTemplate(table: PluralForms, lang: SupportedLanguage, count: number): string {
   if (count === 0 && table.zero) return table.zero;
-  const form = new Intl.PluralRules(LOCALES[lang]).select(count);
+  const form = pluralCategory(lang, count);
   return table[form] ?? table.other;
 }
 
@@ -28,6 +26,6 @@ function selectTemplate(table: PluralForms, lang: SupportedLanguage, count: numb
  */
 export function plural(lang: SupportedLanguage, key: PluralKey, count: number): string {
   const table = getTranslations(lang).pluralization[key];
-  const formatted = new Intl.NumberFormat(LOCALES[lang]).format(count);
+  const formatted = formatNumber(lang, count);
   return selectTemplate(table, lang, count).replace('{{count}}', formatted);
 }

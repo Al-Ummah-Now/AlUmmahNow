@@ -7,6 +7,7 @@
 
 'use client';
 
+import { formatDateTime } from '@al-ummah/shared-types';
 import React, { useState } from 'react';
 import { VideoError } from '@/lib/video/error-handler';
 import { useVideoPlayerI18n, mapErrorTypeToI18n } from '@/lib/video/i18n';
@@ -20,7 +21,7 @@ export interface ErrorDisplayProps {
   className?: string;
   /** Opens the page's report flow; the button is hidden without it */
   onReport?: () => void;
-  /** Regional format for dates, e.g. 'ar-EG' or 'en-GB'. Defaults to ar-SA / en-US. */
+  /** Locale for dates, e.g. 'en-GB'. Defaults to the page language; Arabic always uses ٠–٩ (locale-format). */
   locale?: string;
 }
 
@@ -196,18 +197,8 @@ export function ErrorDisplay({
                 <span className="font-semibold text-gray-200">
                   {t.errors.detailLabels.time}
                 </span>{' '}
-                {/*
-                  Design Decision: Using ar-SA for Arabic and en-US for English as representative locales.
-                  This provides consistent date/time formatting across the platform.
-
-                  Rationale:
-                  - ar-SA chosen as the most widely recognized Arabic locale format
-                  - en-US provides 12-hour format familiar to English speakers
-                  - Browser's toLocaleString() handles proper formatting for each locale
-
-                  Callers needing a regional variant pass the `locale` prop.
-                */}
-                {new Date(error.timestamp).toLocaleString(locale ?? (lang === 'ar' ? 'ar-SA' : 'en-US'))}
+                {/* locale-format: Arabic ٠–٩ (owner decision 2026-11-15), English 0–9 with en-US's 12-hour clock */}
+                {formatDateTime(locale ?? (lang === 'ar' ? 'ar' : 'en-US'), new Date(error.timestamp), { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' })}
               </div>
 
               <div className="pt-2 mt-2 border-t border-gray-700">

@@ -151,6 +151,7 @@ export const SPEC_PLACEMENT: Record<string, SpecPlacement> = {
   'apps/web/e2e/release-prod/signed-in.check.ts': { placement: 'deployed', reason: 'shared-env: prod post-promote sign-up via Resend, profile, admin refusal' },
   'apps/web/e2e/release/admin-content.spec.ts': { placement: 'local', reason: 'admin-web/admin-api content moderation; queued cascades run on local queues' },
   'apps/web/e2e/release/admin-signin.spec.ts': { placement: 'local', reason: 'admin-web OAuth client on the real issuer (local): refusal, promote, redirect loop check' },
+  'apps/web/e2e/release/arabic-hydration.spec.ts': { placement: 'local', reason: 'Arabic pages hydrate with pinned ٠–٩ in Chrome, Firefox and WebKit (React #418/#423/#425); own videos and a Studio owner' },
   'apps/web/e2e/release/anonymous-console.spec.ts': { placement: 'local', reason: 'signed-out console cleanliness; mock issuer must answer /session/accounts 200' },
   'apps/web/e2e/release/brand-logo.spec.ts': { placement: 'local', reason: 'header logo first-paint layout' },
   'apps/web/e2e/release/bulk-rename-edit.spec.ts': { placement: 'local', reason: 'bulk upload UI + Studio bulk PATCH; encode only gates listing' },

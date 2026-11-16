@@ -1,4 +1,5 @@
 'use client';
+import { formatDateTime } from '@al-ummah/shared-types';
 import { logger } from '@/lib/logger-client';
 
 import React, { useState, useEffect } from 'react';
@@ -160,7 +161,7 @@ export const ScheduleDateTimeSelector: React.FC<ScheduleDateTimeSelectorProps> =
     if (!dateTimeValue) return '';
     try {
       const date = new Date(dateTimeValue);
-      return date.toLocaleString(lang === 'ar' ? 'ar' : 'en-US', {
+      return formatDateTime(lang === 'ar' ? 'ar' : 'en-US', date, {
         weekday: 'long',
         year: 'numeric',
         month: 'long',

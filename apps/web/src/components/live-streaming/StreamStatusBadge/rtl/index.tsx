@@ -7,6 +7,7 @@
 
 'use client';
 
+import { formatDateTime } from '@al-ummah/shared-types';
 import React from 'react';
 import { Circle, Clock, CheckCircle, CircleOff, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -91,10 +92,10 @@ export const StreamStatusBadgeRTL = React.memo<StreamStatusBadgeProps>(
         {/* Screen reader only - additional context */}
         <span className="sr-only">
           {safeStatus === 'scheduled' && scheduledTime && (
-            ` - مجدول في ${scheduledTime.toLocaleString('ar-SA')}`
+            ` - مجدول في ${formatDateTime('ar', scheduledTime, { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' })}`
           )}
           {safeStatus === 'ended' && endedTime && (
-            ` - انتهى في ${endedTime.toLocaleString('ar-SA')}`
+            ` - انتهى في ${formatDateTime('ar', endedTime, { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' })}`
           )}
         </span>
       </div>

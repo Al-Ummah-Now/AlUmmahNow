@@ -116,7 +116,7 @@ describe('VideosTab', () => {
     fireEvent.click(within(rows[0]).getByRole('checkbox'));
     expect(screen.getByTestId('studio-bulk-bar')).toHaveTextContent('1 selected');
     fireEvent.click(within(screen.getByTestId('studio-bulk-bar')).getByRole('button', { name: STUDIO_EN.videos.bulk.delete }));
-    expect(await screen.findByTestId('studio-confirm-delete')).toHaveTextContent(STUDIO_EN.videos.confirmDelete.body);
+    expect(await screen.findByTestId('studio-confirm-delete')).toHaveTextContent(STUDIO_EN.videos.confirmDelete.body.replace('{days}', '30'));
     fireEvent.click(screen.getByTestId('studio-confirm-delete-confirm'));
     await waitFor(() => expect(bulkDelete).toHaveBeenCalledWith(['a'], { channelId: 'c1' }));
     expect(await screen.findByRole('status')).toHaveTextContent('1 moved to Recently deleted.');

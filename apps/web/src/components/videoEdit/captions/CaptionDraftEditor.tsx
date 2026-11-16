@@ -7,7 +7,7 @@
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCheck, ChevronsLeft, ChevronsRight, Loader2, Merge, Play, Redo2, Replace, Scissors, Search, Trash2, Undo2 } from 'lucide-react';
-import { RTL_CAPTION_LANGUAGES, type CaptionCue } from '@al-ummah/shared-types';
+import { RTL_CAPTION_LANGUAGES, type CaptionCue, fillTemplate, formatNumber } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useFeatures } from '@/hooks/useFeatures';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
@@ -58,6 +58,7 @@ export default function CaptionDraftEditor({ videoId, language, languageLabel, v
   // Our copy of the official Quran text (hidden until it is synced; fails closed while loading)
   const quranText = useFeatures().features.quranText;
   const tc = t.captions;
+  const step = { step: formatNumber(lang, 0.1) };
   const { confirm, dialog } = useConfirm();
   const [history, setHistory] = useState<History | null>(null);
   const [loadError, setLoadError] = useState(false);
@@ -199,7 +200,7 @@ export default function CaptionDraftEditor({ videoId, language, languageLabel, v
     const { count } = replaceAll(cues, find, replaceWith);
     if (!count) return;
     edit((c) => replaceAll(c, find, replaceWith).cues);
-    setNotice(tc.editor.replaced.replace('{count}', String(count)));
+    setNotice(tc.editor.replaced.replace('{count}', formatNumber(lang, count)));
   };
 
   const publish = async () => {
@@ -290,7 +291,7 @@ export default function CaptionDraftEditor({ videoId, language, languageLabel, v
               disabled={!confident}
             >
               <CheckCheck className="h-4 w-4" aria-hidden />
-              {tc.editor.confirmAll.replace('{count}', String(confident))}
+              {tc.editor.confirmAll.replace('{count}', formatNumber(lang, confident))}
             </button>
             <button
               type="button"
@@ -370,19 +371,19 @@ export default function CaptionDraftEditor({ videoId, language, languageLabel, v
                     </button>
                     <span className="inline-flex items-center gap-0.5">
                       <span className="px-1 text-[11px] font-medium text-muted-foreground">{tc.editor.start}</span>
-                      <button type="button" className={iconBtn} aria-label={tc.editor.startEarlier} title={tc.editor.startEarlier} onClick={() => edit((c) => nudge(c, cue.id, 'start', -NUDGE_MS))}>
+                      <button type="button" className={iconBtn} aria-label={fillTemplate(lang, tc.editor.startEarlier, step)} title={fillTemplate(lang, tc.editor.startEarlier, step)} onClick={() => edit((c) => nudge(c, cue.id, 'start', -NUDGE_MS))}>
                         <ChevronsLeft className="h-3.5 w-3.5 rtl:-scale-x-100" aria-hidden />
                       </button>
-                      <button type="button" className={iconBtn} aria-label={tc.editor.startLater} title={tc.editor.startLater} onClick={() => edit((c) => nudge(c, cue.id, 'start', NUDGE_MS))}>
+                      <button type="button" className={iconBtn} aria-label={fillTemplate(lang, tc.editor.startLater, step)} title={fillTemplate(lang, tc.editor.startLater, step)} onClick={() => edit((c) => nudge(c, cue.id, 'start', NUDGE_MS))}>
                         <ChevronsRight className="h-3.5 w-3.5 rtl:-scale-x-100" aria-hidden />
                       </button>
                     </span>
                     <span className="inline-flex items-center gap-0.5">
                       <span className="px-1 text-[11px] font-medium text-muted-foreground">{tc.editor.end}</span>
-                      <button type="button" className={iconBtn} aria-label={tc.editor.endEarlier} title={tc.editor.endEarlier} onClick={() => edit((c) => nudge(c, cue.id, 'end', -NUDGE_MS))}>
+                      <button type="button" className={iconBtn} aria-label={fillTemplate(lang, tc.editor.endEarlier, step)} title={fillTemplate(lang, tc.editor.endEarlier, step)} onClick={() => edit((c) => nudge(c, cue.id, 'end', -NUDGE_MS))}>
                         <ChevronsLeft className="h-3.5 w-3.5 rtl:-scale-x-100" aria-hidden />
                       </button>
-                      <button type="button" className={iconBtn} aria-label={tc.editor.endLater} title={tc.editor.endLater} onClick={() => edit((c) => nudge(c, cue.id, 'end', NUDGE_MS))}>
+                      <button type="button" className={iconBtn} aria-label={fillTemplate(lang, tc.editor.endLater, step)} title={fillTemplate(lang, tc.editor.endLater, step)} onClick={() => edit((c) => nudge(c, cue.id, 'end', NUDGE_MS))}>
                         <ChevronsRight className="h-3.5 w-3.5 rtl:-scale-x-100" aria-hidden />
                       </button>
                     </span>

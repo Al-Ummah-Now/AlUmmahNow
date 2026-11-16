@@ -33,7 +33,7 @@ import React, { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef,
 import { fitToViewport } from '../../../../../packages/fanous-tokens/nav/menu-fit.js';
 import { createPortal } from 'react-dom';
 import { Check } from 'lucide-react';
-import { rankSuggestions, splitHighlight } from '@al-ummah/shared-types';
+import { rankSuggestions, splitHighlight, formatNumber } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { logger } from '@/lib/logger-client';
 
@@ -191,7 +191,7 @@ export function Autocomplete(props: AutocompleteProps) {
     testId, popupTestId, optionTestId, removeTestId, inputRef, inputProps, children, renderTrailing, popupHost,
   } = props;
   const minChars = props.minChars ?? (load ? 2 : 1);
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const a = t.autocomplete;
   const baseId = useId().replace(/:/g, '');
   const listId = `${baseId}-list`;
@@ -347,7 +347,7 @@ export function Autocomplete(props: AutocompleteProps) {
   useEffect(() => {
     if (!expanded || !settled) return;
     const count = ordered.length;
-    setStatus(count === 0 ? (query ? a.noResults : '') : count === 1 ? a.oneResult : a.resultsCount.replace('{count}', String(count)));
+    setStatus(count === 0 ? (query ? a.noResults : '') : count === 1 ? a.oneResult : a.resultsCount.replace('{count}', formatNumber(lang, count)));
   }, [expanded, settled, ordered.length, query, a]);
 
   useEffect(() => {

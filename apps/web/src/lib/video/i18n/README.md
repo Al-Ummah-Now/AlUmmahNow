@@ -21,4 +21,4 @@ const lang = isValidLanguage(saved) ? saved : 'en';
 
 ## Regional date formats
 
-`ErrorDisplay` takes an optional `locale` (`ar-EG`, `en-GB`, ...). Without it, dates use `ar-SA` or `en-US`.
+`ErrorDisplay` takes an optional `locale` (`en-GB`, ...). Without it, dates use the page language through locale-format: Arabic always gets Eastern Arabic (Hindi) numerals ٠–٩.

@@ -85,7 +85,7 @@ describe('LiveWatch', () => {
       render(<LiveWatch streamId="s1" />);
       const viewers = await screen.findByTestId('live-watch-viewers');
       await waitFor(() => expect(viewers).toHaveAttribute('data-count', '12'));
-      expect(viewers).toHaveTextContent(`Watching now: ${new Intl.NumberFormat('ar').format(12)}`);
+      expect(viewers).toHaveTextContent('Watching now: ١٢');
       expect(beatViewer).toHaveBeenCalledWith('s1', expect.stringMatching(/^[A-Za-z0-9_-]{8,64}$/), expect.anything());
     });
 

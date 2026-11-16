@@ -60,7 +60,7 @@ interface Props {
 }
 
 export default function CreatePlaylistForm({ channelId, initialVideos, fixedVideos, onVideosChange, cancelLabel, compact, onCreated, onCancel, idPrefix = 'new-playlist' }: Props) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const p = t.playlistTools;
   const [details, setDetails] = useState<PlaylistDetailsValue>(EMPTY_PLAYLIST_DETAILS);
   const [videos, setVideosState] = useState<PickedVideo[]>(initialVideos ?? []);
@@ -107,7 +107,7 @@ export default function CreatePlaylistForm({ channelId, initialVideos, fixedVide
         return;
       }
       const ref = reportError(new Error('Creating a playlist failed'), { shown: true, status: answer.status ?? undefined, extra: { step: 'playlist-create', channelId, count: videoIds.length } });
-      setError({ message: answer.status === 403 ? fill(p.addForbidden, { title }) : t.playlist.createFailed, ref });
+      setError({ message: answer.status === 403 ? fill(p.addForbidden, { title }, lang) : t.playlist.createFailed, ref });
     } catch (caught) {
       const ref = reportError(caught, { shown: true, extra: { step: 'playlist-create', channelId, count: videoIds.length } });
       setError({ message: t.playlist.createFailed, ref });
@@ -119,7 +119,7 @@ export default function CreatePlaylistForm({ channelId, initialVideos, fixedVide
   const submitLabel = saving
     ? p.creating
     : videos.length > 0
-      ? counted(videos.length, p.createWithOne, p.createWithOther)
+      ? counted(videos.length, p.createWithOne, p.createWithOther, {}, lang)
       : t.playlist.createPlaylist;
 
   return (
@@ -157,7 +157,7 @@ export default function CreatePlaylistForm({ channelId, initialVideos, fixedVide
           <AlertTriangle className="h-5 w-5 flex-none" aria-hidden="true" />
           <div className="space-y-1">
             <p className="font-medium">{error.message}</p>
-            {error.ref && <p className="text-xs">{fill(p.errorRef, { ref: error.ref })}</p>}
+            {error.ref && <p className="text-xs">{fill(p.errorRef, { ref: error.ref }, lang)}</p>}
           </div>
         </div>
       )}

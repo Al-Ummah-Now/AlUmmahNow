@@ -1,5 +1,6 @@
 'use client';
 
+import { formatCompact } from '@al-ummah/shared-types';
 import { logger } from '@/lib/logger-client';
 
 import { useEffect, useState } from 'react';
@@ -25,7 +26,7 @@ export default function LikeButton({
   channelId,
   userId,
 }: LikeButtonProps) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [liked, setLiked] = useState(initialLiked);
   const [likes, setLikes] = useState(initialLikes);
   const [loading, setLoading] = useState(false);
@@ -68,15 +69,7 @@ export default function LikeButton({
     }
   };
 
-  const formatCount = (count: number) => {
-    if (count >= 1000000) {
-      return `${(count / 1000000).toFixed(1)}M`;
-    }
-    if (count >= 1000) {
-      return `${(count / 1000).toFixed(1)}K`;
-    }
-    return count.toString();
-  };
+  const formatCount = (count: number) => formatCompact(lang, count);
 
   return (
     <button
