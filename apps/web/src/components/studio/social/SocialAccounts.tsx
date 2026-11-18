@@ -213,9 +213,10 @@ export function SocialAccounts({ channelId, locale, accounts, networks, onAccoun
           <article key={account.id} className="rounded-lg border border-border p-4" data-testid={`social-account-${account.network}`} data-status={account.status} aria-labelledby={`acc-${account.id}`}>
             <header className="flex flex-wrap items-center gap-3">
               <NetworkMark network={account.network} />
-              <div className="min-w-0 flex-1">
+              {/* At least 10rem for the name, so on a phone the status pill goes under it rather than cutting it */}
+              <div className="min-w-[10rem] flex-1">
                 {/* Name and handle line up at the start of the card in either language; bdi keeps each one's own direction */}
-                <h3 id={`acc-${account.id}`} className="truncate text-start font-medium"><bdi>{account.displayName || account.handle}</bdi></h3>
+                <h3 id={`acc-${account.id}`} className="break-words text-start font-medium"><bdi>{account.displayName || account.handle}</bdi></h3>
                 <p className="truncate text-start text-sm text-[var(--fanous-color-text-secondary)]">
                   {account.profileUrl ? (
                     <a href={account.profileUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 underline-offset-4 hover:underline">
@@ -257,7 +258,7 @@ export function SocialAccounts({ channelId, locale, accounts, networks, onAccoun
                         <input
                           id={id}
                           type="checkbox"
-                          className="h-5 w-5 accent-[var(--fanous-color-text-primary)]"
+                          className="h-5 w-5 shrink-0 accent-[var(--fanous-color-text-primary)]"
                           checked={!!rule?.enabled}
                           disabled={busy === account.id || account.status !== 'active'}
                           onChange={(e) => setRule(account, event, { enabled: e.target.checked })}
@@ -276,7 +277,7 @@ export function SocialAccounts({ channelId, locale, accounts, networks, onAccoun
                       ) : null}
                       {account.network === 'x' && rule?.enabled && rule.format === 'video' ? (
                         <label className="flex min-h-11 w-full items-center gap-2 text-sm sm:min-h-9">
-                          <input type="checkbox" className="h-5 w-5" checked={rule.includeLink} onChange={(e) => setRule(account, event, { includeLink: e.target.checked })} />
+                          <input type="checkbox" className="h-5 w-5 shrink-0" checked={rule.includeLink} onChange={(e) => setRule(account, event, { includeLink: e.target.checked })} />
                           {a.includeLink}
                         </label>
                       ) : null}
