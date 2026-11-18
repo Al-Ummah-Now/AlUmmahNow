@@ -23,6 +23,22 @@ describe('getSiteTheme', () => {
     process.env.ADMIN_API_URL = 'https://admin.test';
     resetSiteThemeCache();
     global.fetch = global.fetch ?? jest.fn();
+    // Each read is a new 30 s window unless a test holds the clock (the setting is kept 30 s)
+    let clock = Date.now();
+    jest.spyOn(Date, 'now').mockImplementation(() => (clock += 31_000));
+  });
+
+  it('reads the setting at most once per 30 s per isolate (prod: per-page reads timed out)', async () => {
+    const t0 = 1_800_000_000_000;
+    jest.spyOn(Date, 'now').mockReturnValue(t0);
+    const spy = answer({ theme: 'nahas' });
+    await expect(getSiteTheme()).resolves.toEqual({ id: 'nahas', css: null });
+    jest.spyOn(Date, 'now').mockReturnValue(t0 + 29_000);
+    await expect(getSiteTheme()).resolves.toEqual({ id: 'nahas', css: null });
+    expect(spy).toHaveBeenCalledTimes(1);
+    answer({ theme: 'zujaj' });
+    jest.spyOn(Date, 'now').mockReturnValue(t0 + 31_000);
+    await expect(getSiteTheme()).resolves.toEqual({ id: 'zujaj', css: null });
   });
 
   it('is fawanees when the setting cannot be read', async () => {

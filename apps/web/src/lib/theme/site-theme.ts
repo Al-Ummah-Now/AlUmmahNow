@@ -82,6 +82,10 @@ export async function getSiteTheme(): Promise<ActiveSiteTheme> {
   if (pinned) return { id: resolveSiteTheme(pinned), css: null };
   const adminApi = process.env.ADMIN_API_URL;
   if (!adminApi) return fallback;
+  // The theme this isolate read in the last TTL_SECONDS is the answer (a change may take that long
+  // anyway): one read per isolate per 30 s instead of one per page, which timed out under load
+  // (prod 2026-11-16..18: 30 "[site-theme] read failed" in 72 h). A settled value, never a promise.
+  if (lastGood && Date.now() - lastGood.at < TTL_SECONDS * 1000) return lastGood.theme;
   let answer: Partial<PublicSiteTheme>;
   try {
     const response = await fetch(`${adminApi}/public/site-theme`, {
