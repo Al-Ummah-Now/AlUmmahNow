@@ -10,16 +10,24 @@ export type MetaLang = 'en' | 'ar';
 const compact = (count: number, lang: MetaLang) => formatCompact(lang, count);
 const one = (lang: MetaLang) => formatNumber(lang, 1);
 
+/**
+ * True when the compact form carries a scale word («٤٨٫٢ ألف», «١٫٢ مليون»). Arabic then
+ * takes the singular noun after it («ألف مشاهدة»), whatever the raw count's plural category.
+ */
+const hasScaleWord = (shown: string) => /[^\d\u0660-\u0669\u066B\u066C.,\s\u200f\u061c]/.test(shown);
+
 /** "No views", "1 view", "1.2K views", or the Arabic equivalent. */
 export function formatViews(count: number | string | null | undefined, lang: MetaLang): string {
   const n = Math.max(0, Math.floor(Number(count) || 0));
   if (lang === 'ar') {
     if (n === 0) return 'لا توجد مشاهدات';
+    const shown = compact(n, lang);
+    if (hasScaleWord(shown)) return `${shown} مشاهدة`;
     switch (pluralCategory('ar', n)) {
       case 'one': return 'مشاهدة واحدة';
       case 'two': return 'مشاهدتان';
-      case 'few': return `${compact(n, lang)} مشاهدات`;
-      default: return `${compact(n, lang)} مشاهدة`;
+      case 'few': return `${shown} مشاهدات`;
+      default: return `${shown} مشاهدة`;
     }
   }
   if (n === 0) return 'No views';
@@ -51,12 +59,14 @@ export function formatSubscribers(count: number | string | null | undefined, lan
   const n = Math.max(0, Math.floor(Number(count) || 0));
   if (lang === 'ar') {
     if (n === 0) return 'لا يوجد مشتركون';
+    const shown = compact(n, lang);
+    if (hasScaleWord(shown)) return `${shown} مشترك`;
     switch (pluralCategory('ar', n)) {
       case 'one': return 'مشترك واحد';
       case 'two': return 'مشتركان';
-      case 'few': return `${compact(n, lang)} مشتركين`;
-      case 'many': return `${compact(n, lang)} مشتركًا`;
-      default: return `${compact(n, lang)} مشترك`;
+      case 'few': return `${shown} مشتركين`;
+      case 'many': return `${shown} مشتركًا`;
+      default: return `${shown} مشترك`;
     }
   }
   if (n === 0) return 'No subscribers';

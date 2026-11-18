@@ -22,6 +22,18 @@ describe('formatViews', () => {
     expect(formatViews(11, 'ar')).toMatch(/مشاهدة$/);
     expect(formatViews(100, 'ar')).toMatch(/مشاهدة$/);
   });
+
+  it('takes the singular after «ألف/مليون», pluralising on the shown number otherwise', () => {
+    // Intl puts a no-break space inside the compact form
+    const sp = (s: string) => s.replace(/\s/gu, ' ');
+    expect(sp(formatViews(48203, 'ar'))).toBe('٤٨٫٢ ألف مشاهدة');
+    expect(sp(formatViews(1200, 'ar'))).toBe('١٫٢ ألف مشاهدة');
+    expect(formatViews(1_500_000, 'ar')).toMatch(/مليون مشاهدة$/);
+    expect(formatViews(3, 'ar')).toBe('٣ مشاهدات');
+    expect(formatViews(11, 'ar')).toBe('١١ مشاهدة');
+    expect(sp(formatSubscribers(48203, 'ar'))).toBe('٤٨٫٢ ألف مشترك');
+    expect(formatSubscribers(3, 'ar')).toBe('٣ مشتركين');
+  });
 });
 
 describe('formatRelativeTime', () => {
