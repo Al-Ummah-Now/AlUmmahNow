@@ -38,6 +38,7 @@ export const StudioCommentSchema = z.object({
 	kind: z.enum(['video', 'post']),
 	targetId: z.string(),
 	targetTitle: z.string(),
+	targetTitleLocalized: z.record(z.string(), z.string()).optional(),
 	targetUrlPath: z.string(),
 	parentId: z.string().nullable(),
 	text: z.string(),

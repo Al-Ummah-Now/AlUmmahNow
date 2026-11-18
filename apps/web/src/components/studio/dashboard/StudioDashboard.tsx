@@ -185,7 +185,7 @@ export function StudioDashboard({ locale, channelId, role, liveOn = false, uploa
                   <Link href={`/${locale}${comment.targetUrlPath}`} className="block truncate text-xs text-muted-foreground hover:text-foreground hover:underline">
                     {/* The title isolated in its own direction, so an English title in Arabic text keeps its order */}
                     {text.held.on.split('{title}')[0]}
-                    <bdi>{comment.targetTitle}</bdi>
+                    <bdi>{comment.targetTitleLocalized?.[locale]?.trim() || comment.targetTitle}</bdi>
                     {text.held.on.split('{title}')[1]}
                   </Link>
                 </li>
