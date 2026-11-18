@@ -249,19 +249,23 @@ export function BackLink({ href, label }: { href: string; label: string }) {
 
 /**
  * A short line of facts ("Channel · 12 views · 3 days ago"), each part isolated (<bdi>) so an
- * Arabic name next to a number or a date never reorders them, with the separators between.
+ * Arabic name next to a number or a date never reorders them. Every part carries its separator in
+ * a gutter at its start, and the line is shifted back by one gutter and clipped, so when the line
+ * wraps the separator that would start (or end) a line is cut off instead of dangling.
  */
 export function MetaLine({ parts, className = '', testId }: { parts: React.ReactNode[]; className?: string; testId?: string }) {
   const shown = parts.filter((p) => p !== null && p !== undefined && p !== false && p !== '');
   return (
     // Links inside a line of text are underlined, so they never rely on colour alone (WCAG 1.4.1)
-    <span className={`${className} [&_a]:underline [&_a]:underline-offset-2`.trim()} data-testid={testId}>
-      {shown.map((part, i) => (
-        <span key={i}>
-          {i > 0 && ' · '}
-          <bdi>{part}</bdi>
-        </span>
-      ))}
+    <span className={`${className} overflow-hidden [&_a]:underline [&_a]:underline-offset-2`.trim()} data-testid={testId}>
+      <span className="flex flex-wrap -ms-[1em]">
+        {shown.map((part, i) => (
+          <span key={i} className="relative min-w-0 ps-[1em]">
+            <span aria-hidden="true" className="absolute start-0 w-[1em] text-center">·</span>
+            <bdi>{part}</bdi>
+          </span>
+        ))}
+      </span>
     </span>
   );
 }
