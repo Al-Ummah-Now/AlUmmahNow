@@ -111,14 +111,18 @@ test.describe('Account menu - two accounts', () => {
     // open the menu again until the active channel row is there
     const upload = page.getByRole('banner').getByRole('link', { name: /Upload Video/ });
     await expect(upload).toHaveAttribute('href', `/en/upload?channel=${encodeURIComponent(single.channels[0].id)}`, { timeout: 30_000 });
+    // The row is read inside the retry too: a late header re-render can close the menu between
+    // seeing the row and reading its link, so both happen on the same open menu (#1260)
+    const channelHref = `/en/channels/${single.channels[0].id}`;
     await expect(async () => {
-      if (await menu.getByTestId('nav-active-channel').isVisible()) return;
-      await page.keyboard.press('Escape');
-      menu = await openAccountMenu(page);
-      await showMenuView(menu, 'main');
-      await expect(menu.getByTestId('nav-active-channel')).toBeVisible({ timeout: 3_000 });
+      const row = menu.getByTestId('nav-active-channel');
+      if (!(await row.isVisible())) {
+        await page.keyboard.press('Escape');
+        menu = await openAccountMenu(page);
+        await showMenuView(menu, 'main');
+      }
+      await expect(menu.getByTestId('nav-active-channel')).toHaveAttribute('href', channelHref, { timeout: 3_000 });
     }).toPass({ timeout: 30_000 });
-    await expect(menu.getByTestId('nav-active-channel')).toHaveAttribute('href', `/en/channels/${single.channels[0].id}`);
     await page.keyboard.press('Escape');
     // Upload opens on the active channel (3883fa94: the upload page's picker reads ?channel=)
     await expect(upload).toHaveAttribute('href', `/en/upload?channel=${encodeURIComponent(single.channels[0].id)}`);
