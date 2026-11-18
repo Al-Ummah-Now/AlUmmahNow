@@ -57,6 +57,17 @@ describe('POST /api/errors', () => {
     expect(init.body).toBe(body);
   });
 
+  it('an ADMIN_API_URL process override wins over the wrangler vars (local dev never reaches the configured host)', async () => {
+    process.env.ADMIN_API_URL = 'http://localhost:3399';
+    try {
+      await POST(request(JSON.stringify({ events: [{ app: 'web', kind: 'upload', ref: 'ERR-AAAA-CCCC', message: 'x' }] })));
+      const [url] = fetchMock.mock.calls[0] as unknown as [string];
+      expect(url).toBe('http://localhost:3399/internal/errors');
+    } finally {
+      delete process.env.ADMIN_API_URL;
+    }
+  });
+
   it('vouches for the signed-in account its verified token proves, never the page', async () => {
     sessionUser = 'usr_session1';
     tokenUser = 'usr_session1';

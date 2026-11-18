@@ -33,7 +33,7 @@ async function bindings(): Promise<{ key: string; adminApi: string }> {
   } catch {
     // Not running on Workers (next dev): process.env below
   }
-  return { key: key || process.env.INTERNAL_API_KEY || '', adminApi: adminApi || process.env.ADMIN_API_URL || '' };
+  return { key: key || process.env.INTERNAL_API_KEY || '', adminApi: process.env.ADMIN_API_URL || adminApi || '' };
 }
 
 async function handle(req: NextRequest, ctx: { params: Promise<{ channelId: string; path?: string[] }> }) {

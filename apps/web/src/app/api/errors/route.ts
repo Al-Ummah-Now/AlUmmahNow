@@ -74,7 +74,8 @@ export async function POST(req: NextRequest) {
   }
 
   const cf = await cloudflare();
-  const adminApi = (cf?.env.ADMIN_API_URL as string | undefined) || process.env.ADMIN_API_URL;
+  // An explicit process override (local dev, the screenshot harness) wins over the wrangler vars
+  const adminApi = process.env.ADMIN_API_URL || (cf?.env.ADMIN_API_URL as string | undefined);
   const key = await internalApiKey(cf);
   if (!adminApi || !key) return new NextResponse(null, { status: 204 });
 
