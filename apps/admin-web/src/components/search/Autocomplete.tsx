@@ -702,7 +702,7 @@ function PickedChip({
       {item ? <Thumb suggestion={item} /> : <span aria-hidden="true" className="h-9 w-1" />}
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-sm text-fg" dir="auto">
+          <span className="line-clamp-2 text-sm text-fg [overflow-wrap:anywhere]" dir="auto">
             {name}
           </span>
           {item && <InvitedBadge suggestion={item} />}
