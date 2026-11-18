@@ -506,15 +506,16 @@ function Preview({ templateKey, content, adminEmail, hasIssues }: { templateKey:
         />
       </div>
       <div className="flex flex-col gap-2 border-t border-border pt-4">
-        <p className="text-sm text-fg-muted">{t('emailTemplates.testHelp', { lang: langName(lang), email: adminEmail })}</p>
-        <div className="flex flex-wrap items-center gap-3 justify-end">
-          <span className="flex-1 min-w-0 text-sm" role="status" aria-live="polite" data-testid="email-test-status">
-            {test.text ? <span className={test.tone === 'error' ? 'text-danger-fg' : 'text-success-fg'}>{test.text}</span> : null}
-          </span>
+        <p className="text-sm text-fg-muted [overflow-wrap:anywhere]">{t('emailTemplates.testHelp', { lang: langName(lang), email: adminEmail })}</p>
+        {/* The result has a line of its own: a long address wraps anywhere instead of running under the button */}
+        <div className="flex justify-end">
           <button type="button" className={`${secondaryButtonClass} disabled:opacity-50 disabled:cursor-not-allowed`} onClick={() => void sendTest()} disabled={test.busy || hasIssues(lang) || !adminEmail} data-testid="email-test-send">
             {test.busy ? t('emailTemplates.testSending') : t('emailTemplates.testSend')}
           </button>
         </div>
+        <p className="text-sm [overflow-wrap:anywhere]" role="status" aria-live="polite" data-testid="email-test-status">
+          {test.text ? <span className={test.tone === 'error' ? 'text-danger-fg' : 'text-success-fg'}>{test.text}</span> : null}
+        </p>
       </div>
     </section>
   );
