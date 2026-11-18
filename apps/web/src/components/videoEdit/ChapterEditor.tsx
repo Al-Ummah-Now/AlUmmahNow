@@ -1,5 +1,6 @@
 import { logger } from '@/lib/logger-client';
 
+import { formatNumber } from '@al-ummah/shared-types';
 import React, { useState, useEffect } from 'react';
 import { Plus, X, MoveUp, MoveDown, Save, AlertCircle } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -376,7 +377,7 @@ export default function ChapterEditor({
                     className="w-full px-3 py-2 text-sm border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
                   />
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {chapter.title.length}/200 {t.channel.charactersRemaining}
+                    {formatNumber(lang, chapter.title.length)}/{formatNumber(lang, 200)} {t.channel.charactersRemaining}
                   </p>
                 </div>
 
