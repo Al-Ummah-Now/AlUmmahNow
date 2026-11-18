@@ -513,6 +513,11 @@ export class WebSocketDurableObject extends DurableObject {
       ws.send(payload);
       return true;
     } catch (error) {
+      // The client went away between our check and the send (a normal disconnect race): not an error
+      if (ws.readyState !== 1 /* OPEN */ || /after close/i.test(String((error as Error)?.message ?? error))) {
+        logger.debug('WebSocket closed before the send', { readyState: ws.readyState });
+        return false;
+      }
       logger.error('Error sending WebSocket message:', error);
       return false;
     }
