@@ -216,7 +216,8 @@ function PostPreview({ event, lang, locale, template, accounts, preview, sampleT
       <p
         dir={lang === 'ar' ? 'rtl' : 'ltr'}
         lang={lang}
-        className="whitespace-pre-wrap break-words text-start text-sm"
+        // Each paragraph takes its own direction (an English post in the Arabic column still reads left to right)
+        className="whitespace-pre-wrap break-words text-start text-sm [unicode-bidi:plaintext]"
         aria-labelledby={`${id}-h`}
         aria-live="polite"
         data-testid={`social-preview-text-${event}-${lang}`}
