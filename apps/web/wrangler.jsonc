@@ -28,14 +28,16 @@
   },
   "upload_source_maps": true,
   "vars": {
+    // Local development (next dev) talks to QA, never production: the routes that forward with the
+    // internal key would otherwise call production (2026-11-18). apps/web/src/__tests__/dev-config.test.ts
     // Logging policy (docs/operations/logging.md): warn on production, stage and QA (only warnings, errors, slow requests); debug locally
     "LOG_LEVEL": "debug",
-    "Issuer": "https://auth.alummahnow.net",
-    "OPENAUTH_ISSUER": "https://auth.alummahnow.net",
+    "Issuer": "https://auth.qa.alummahnow.net",
+    "OPENAUTH_ISSUER": "https://auth.qa.alummahnow.net",
     "NEXTJS_ENV": "development",
-    "API_URL": "https://videos.api.alummahnow.net",
-    "ADMIN_API_URL": "https://admin.api.alummahnow.net",
-    "ClientId": "f0de3c30-0304-4ac4-86d6-1e185dec0439"
+    "API_URL": "https://videos.api.qa.alummahnow.net",
+    "ADMIN_API_URL": "https://admin.api.qa.alummahnow.net",
+    "ClientId": "e0de3c30-0304-4ac4-86d6-1e185dec0439"
   },
   "images": { "binding": "IMAGES" },
   "r2_buckets": [
