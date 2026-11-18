@@ -51,7 +51,7 @@ test.describe('social posting', () => {
     await bot.getByTestId('social-telegram-token').fill(BOT_TOKEN);
     await bot.getByTestId('social-telegram-save').click();
     await expect(page.getByTestId('social-posting-saved')).toHaveText('Saved.');
-    await expect(bot.getByText('Set up', { exact: true })).toBeVisible();
+    await expect(bot.getByText('Configured', { exact: true })).toBeVisible();
     // The token is never shown back
     await expect(bot.getByTestId('social-telegram-token')).toHaveValue('');
 

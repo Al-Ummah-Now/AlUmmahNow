@@ -4706,7 +4706,7 @@ const en = {
     telegramBotHint: 'Create a bot with BotFather in Telegram and enter its token.',
     botToken: 'Bot token',
     botName: 'Bot: @{name}',
-    configured: 'Set up',
+    configured: 'Configured',
     notConfigured: 'Not set up',
     tokenKeyMissing: 'The token encryption key is missing on this environment, so no network can be connected.',
     saveCredentials: 'Save',
