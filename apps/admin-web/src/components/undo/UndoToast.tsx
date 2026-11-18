@@ -113,9 +113,10 @@ export function UndoToastProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo(() => ({ show }), [show]);
 
   const toastsRegion = (
+      // Phone: below the header (never over it); wider screens: the bottom corner
       <section
         aria-label={t('undo.region')}
-        className="fixed z-50 inset-x-4 top-4 sm:top-auto sm:bottom-4 sm:inset-x-auto sm:end-4 sm:w-96 flex flex-col gap-2 pointer-events-none"
+        className="fixed z-50 inset-x-4 top-[calc(env(safe-area-inset-top,0px)+4.25rem)] sm:top-auto sm:bottom-4 sm:inset-x-auto sm:end-4 sm:w-96 flex flex-col gap-2 pointer-events-none"
         onMouseEnter={pause}
         onMouseLeave={() => resume()}
         onFocus={pause}

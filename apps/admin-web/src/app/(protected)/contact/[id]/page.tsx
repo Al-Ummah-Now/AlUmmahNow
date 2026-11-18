@@ -88,8 +88,9 @@ export default async function ContactMessagePage({ params }: PageProps) {
           <article className={`${cardClass} min-w-0`} data-testid="contact-message" data-message-id={m.id} data-status={m.status} data-read={m.read_at ? 'true' : 'false'}>
             <div className="flex flex-wrap justify-between items-start gap-3 mb-4">
               <div className="min-w-0">
-                <h1 className="text-2xl font-bold text-fg break-words" dir="auto">
-                  {m.name}
+                {/* The block keeps the page's direction, so a name in the other script lines up with the line below; <bdi> isolates the name itself */}
+                <h1 className="text-2xl font-bold text-fg break-words">
+                  <bdi>{m.name}</bdi>
                 </h1>
                 <p className="text-fg-muted text-sm">
                   <a href={`mailto:${m.email}`} className={`${linkClass} underline`} dir="ltr" data-testid="contact-sender-email">
@@ -228,8 +229,8 @@ export default async function ContactMessagePage({ params }: PageProps) {
               {m.page_url && (
                 <div>
                   <dt className={dt}>{t('contact.page')}</dt>
-                  <dd className="text-fg text-sm break-all" dir="ltr">
-                    <a href={m.page_url} className={linkClass} rel="noreferrer noopener" target="_blank" data-testid="contact-page-url">
+                  <dd className="text-fg text-sm break-all">
+                    <a href={m.page_url} className={linkClass} dir="ltr" rel="noreferrer noopener" target="_blank" data-testid="contact-page-url">
                       {m.page_url}
                     </a>
                   </dd>
@@ -263,15 +264,15 @@ export default async function ContactMessagePage({ params }: PageProps) {
               {m.user_agent && (
                 <div>
                   <dt className={dt}>{t('contact.userAgent')}</dt>
-                  <dd className="text-fg-muted text-xs break-all" dir="ltr">
-                    {m.user_agent}
+                  <dd className="text-fg-muted text-xs break-all">
+                    <bdi dir="ltr">{m.user_agent}</bdi>
                   </dd>
                 </div>
               )}
               <div>
                 <dt className={dt}>{t('contact.messageId')}</dt>
-                <dd className="text-fg-muted text-xs font-mono break-all" dir="ltr">
-                  {m.id}
+                <dd className="text-fg-muted text-xs font-mono break-all">
+                  <bdi dir="ltr">{m.id}</bdi>
                 </dd>
               </div>
             </dl>

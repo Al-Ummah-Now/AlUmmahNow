@@ -4,6 +4,7 @@ import type { ContactCounts, ContactListResponse } from '@/lib/api/types';
 import { getAdminSession } from '@/lib/auth';
 import { canUseContactInbox } from '@/lib/roles';
 import { getI18n } from '@/i18n/server';
+import { formatCount } from '@/i18n/translate';
 import { ErrorAlert, linkClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { trashHref } from '@/lib/trash';
@@ -36,7 +37,7 @@ function viewCounts(c: ContactCounts | null): Partial<Record<ContactViewId, numb
 
 export default async function ContactInboxPage({ searchParams }: PageProps) {
   const filters = parseContactFilters(await searchParams);
-  const { t } = await getI18n();
+  const { t, locale } = await getI18n();
   const session = await getAdminSession();
 
   if (!canUseContactInbox(session?.user.role)) {
@@ -77,7 +78,7 @@ export default async function ContactInboxPage({ searchParams }: PageProps) {
           {data && (
             <span data-testid="contact-total" data-total={data.total}>
               {' · '}
-              {t('contact.totalCount', { count: data.total })}
+              {formatCount(data.total, 'message', locale)}
             </span>
           )}
         </p>

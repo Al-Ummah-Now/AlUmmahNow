@@ -165,7 +165,7 @@ export function DataTable<T extends { id: string }>({ rows, columns, caption, te
                     role="cell"
                     className={`${td} p-0 ${columnWidthClass(c)} ${c.primary ? 'basis-[calc(100%-2.5rem)] md:basis-auto min-w-0' : 'basis-full md:basis-auto'} ${columnDisplayClass(c, true)} ${c.align === 'end' ? 'md:text-end tabular-nums' : ''} ${c.className ?? ''}`}
                   >
-                    {c.cardLabel && <span className="md:hidden me-2 text-xs text-fg-muted">{c.cardLabel}</span>}
+                    {c.cardLabel && <span className="md:hidden me-2 text-xs text-fg-muted whitespace-nowrap">{c.cardLabel}</span>}
                     {c.cell(row)}
                   </td>
                 ))}
