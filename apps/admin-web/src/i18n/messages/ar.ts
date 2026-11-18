@@ -2326,7 +2326,6 @@ const ar: Messages = {
     user: 'المستخدم',
     anonymous: 'غير مسجّل الدخول',
     statusCode: 'رمز HTTP',
-    environment: 'البيئة',
     worker: 'العامل',
     routeTemplate: 'قالب المسار',
     video: 'المرئي',
