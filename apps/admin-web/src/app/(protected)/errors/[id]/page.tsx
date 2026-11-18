@@ -16,6 +16,7 @@ import { ErrorGroupActions } from './ErrorGroupActions';
 import { NeedsActionItemButtons } from './NeedsActionItemButtons';
 import { UserName } from '@/components/audit/UserName';
 import { fillNodes } from '@/components/audit/fill';
+import { dateTimeFormat, normalizeRoute, scrubContext, type ErrorContext } from '@al-ummah/shared-types';
 
 export const dynamic = 'force-dynamic';
 
@@ -257,17 +258,51 @@ function Fact({ label, value, mono = false }: { label: string; value: React.Reac
   );
 }
 
+/** The stored context (scrubbed again here: the page renders only what passes the schema). */
+function parseContext(json: string | null | undefined): ErrorContext | undefined {
+  if (!json) return undefined;
+  try {
+    return scrubContext(JSON.parse(json));
+  } catch {
+    return undefined;
+  }
+}
+
+/** extra_json as key → scalar pairs (anything else dropped). */
+function parseExtra(json: string | null | undefined): [string, string][] {
+  if (!json) return [];
+  try {
+    const o = JSON.parse(json) as Record<string, unknown>;
+    if (!o || typeof o !== 'object') return [];
+    return Object.entries(o)
+      .filter(([, v]) => ['string', 'number', 'boolean'].includes(typeof v) || v === null)
+      .slice(0, 12)
+      .map(([k, v]) => [k, v === null ? '—' : String(v)]);
+  } catch {
+    return [];
+  }
+}
+
+const ID_SAFE = /^[A-Za-z0-9_-]{1,64}$/;
+
 function Sample({ event: e, t, locale, highlighted }: { event: ErrorEvent; t: Translator; locale: Locale; highlighted: boolean }) {
   const user = e.user_id && USER_ID.test(e.user_id) ? e.user_id : null;
+  const ctx = parseContext(e.context_json);
+  const extra = parseExtra(e.extra_json);
+  const template = e.route ? normalizeRoute(e.route) : '';
+  const code = (v: string) => <code dir="ltr">{v}</code>;
   const facts: [string, React.ReactNode][] = [
     [t('errorsPage.occurredAt'), formatDate(e.occurred_at, locale, true)],
-    [t('errorsPage.route'), e.route ? <code dir="ltr">{e.method ? `${e.method} ` : ''}{e.route}</code> : '—'],
-    [t('errorsPage.browser'), [e.browser, e.os].filter(Boolean).join(' · ') || '—'],
-    [t('errorsPage.release'), e.release ? <code dir="ltr">{e.release}</code> : '—'],
-    [t('errorsPage.workerVersion'), e.worker_version ? <code dir="ltr">{e.worker_version}</code> : '—'],
-    [t('errorsPage.requestId'), e.request_id ? <code dir="ltr">{e.request_id}</code> : '—'],
-    [t('errorsPage.locale'), e.locale ?? '—'],
-    [t('errorsPage.theme'), e.theme ?? '—'],
+    [t('errorsPage.route'), e.route ? code(`${e.method ? `${e.method} ` : ''}${e.route}`) : '—'],
+  ];
+  if (template && template !== e.route) facts.push([t('errorsPage.routeTemplate'), code(template)]);
+  if (e.status) facts.push([t('errorsPage.statusCode'), formatNumber(e.status, locale)]);
+  facts.push(
+    [t('errorsPage.environment'), e.environment ? code(e.environment) : '—'],
+    [t('errorsPage.worker'), ctx?.worker ? code(ctx.worker) : '—'],
+    [t('errorsPage.release'), e.release ? code(e.release) : '—'],
+    [t('errorsPage.workerVersion'), e.worker_version ? code(e.worker_version) : '—'],
+    [t('errorsPage.requestId'), e.request_id ? code(e.request_id) : '—'],
     [
       t('errorsPage.user'),
       user ? (
@@ -278,8 +313,50 @@ function Sample({ event: e, t, locale, highlighted }: { event: ErrorEvent; t: Tr
         t('errorsPage.anonymous')
       ),
     ],
-  ];
-  if (e.status) facts.push([t('errorsPage.statusCode'), String(e.status)]);
+  );
+  if (ctx?.videoId && ID_SAFE.test(ctx.videoId)) {
+    facts.push([
+      t('errorsPage.video'),
+      <Link key="v" href={`/videos/${encodeURIComponent(ctx.videoId)}`} className={linkClass} dir="ltr" data-testid="error-sample-video">
+        {ctx.videoId}
+      </Link>,
+    ]);
+  }
+  if (ctx?.channelId && ID_SAFE.test(ctx.channelId)) {
+    facts.push([
+      t('errorsPage.channel'),
+      <Link key="c" href={`/channels/${encodeURIComponent(ctx.channelId)}`} className={linkClass} dir="ltr" data-testid="error-sample-channel">
+        {ctx.channelId}
+      </Link>,
+    ]);
+  }
+  if (ctx?.upstream) {
+    const u = ctx.upstream;
+    facts.push([
+      t('errorsPage.upstream'),
+      <span key="u" data-testid="error-sample-upstream">
+        <code dir="ltr">{`${u.service}${u.route ? ` ${u.route}` : ''}`}</code>
+        {' → '}
+        {u.status !== undefined ? formatNumber(u.status, locale) : t('errorsPage.upstreamFailed')}
+      </span>,
+    ]);
+  }
+  if (ctx?.job) {
+    const j = ctx.job;
+    facts.push([
+      t('errorsPage.job'),
+      <span key="j" data-testid="error-sample-job">
+        {[j.queue, j.id].filter(Boolean).map((v) => (
+          <code key={v} dir="ltr" className="me-2">
+            {v}
+          </code>
+        ))}
+        {j.attempt !== undefined && t('errorsPage.jobAttempt', { n: j.attempt })}
+      </span>,
+    ]);
+  }
+  facts.push([t('errorsPage.browser'), [e.browser, e.os].filter(Boolean).join(' · ') || '—'], [t('errorsPage.locale'), e.locale ?? '—'], [t('errorsPage.theme'), e.theme ?? '—']);
+  const time = dateTimeFormat(locale, { timeStyle: 'medium', timeZone: 'UTC' });
   return (
     <li className={`border rounded p-4 ${highlighted ? 'border-accent ring-1 ring-accent' : 'border-border'}`} data-testid="error-sample" data-ref={e.ref}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-3">
@@ -288,7 +365,7 @@ function Sample({ event: e, t, locale, highlighted }: { event: ErrorEvent; t: Tr
         {e.count > 1 && <span className="text-xs text-fg-subtle">{t('errorsPage.repeated', { count: e.count })}</span>}
         {e.shown === 1 && <span className="text-xs text-fg-subtle">{t('errorsPage.shownToUser')}</span>}
       </div>
-      <dl className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+      <dl className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-sm">
         {facts.map(([label, value]) => (
           <div key={label} className="min-w-0">
             <dt className="text-fg-muted">{label}</dt>
@@ -296,6 +373,37 @@ function Sample({ event: e, t, locale, highlighted }: { event: ErrorEvent; t: Tr
           </div>
         ))}
       </dl>
+      {ctx?.breadcrumbs && ctx.breadcrumbs.length > 0 && (
+        <div className="mt-4">
+          <h3 className="text-sm font-medium text-fg mb-2">{t('errorsPage.breadcrumbs')}</h3>
+          <ol className="space-y-1 text-xs" data-testid="error-sample-breadcrumbs">
+            {ctx.breadcrumbs.map((b, i) => (
+              <li key={i} className="flex flex-wrap gap-x-2 min-w-0">
+                <time dateTime={b.at} className="text-fg-subtle tabular-nums whitespace-nowrap">
+                  {time.format(new Date(b.at))}
+                </time>
+                <span className="text-fg-muted">{b.kind}</span>
+                <code dir="ltr" className="text-fg break-all" style={{ textAlign: 'start' }}>
+                  {b.message}
+                </code>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+      {extra.length > 0 && (
+        <div className="mt-4">
+          <h3 className="text-sm font-medium text-fg mb-2">{t('errorsPage.extra')}</h3>
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs" data-testid="error-sample-extra">
+            {extra.map(([k, v]) => (
+              <div key={k} className="flex gap-2 min-w-0">
+                <dt className="text-fg-muted font-mono" dir="ltr">{k}</dt>
+                <dd className="text-fg break-all font-mono" dir="ltr">{v}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      )}
     </li>
   );
 }
