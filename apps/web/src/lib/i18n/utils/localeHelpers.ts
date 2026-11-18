@@ -267,8 +267,11 @@ export function getStartEnd<T>(
 export function parseLocaleFromPath(pathname: string): string {
   // Match locale at start of path, with optional trailing slash or end of string
   // Handles: /ar, /ar/, /ar/page, /en, /en/, /en/page
-  const match = pathname.match(/^\/(ar|en|[a-z]{2})(?:\/|$)/);
-  return match ? match[1] : DEFAULT_LOCALE;
+  const match = pathname.match(/^\/([a-z]{2})(?:\/|$)/);
+  // Only a supported locale counts: any other two letters (/qa/phpinfo.php, /js/...) is an unknown
+  // URL whose 404 page renders in the default locale. Returning "qa" crashed that 404 page with a
+  // 500 (LANGUAGE_CONFIG.qa is undefined; prod 2026-11-12..18, 21 times).
+  return match && isLocaleSupported(match[1]) ? match[1] : DEFAULT_LOCALE;
 }
 
 /**
