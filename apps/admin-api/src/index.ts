@@ -1,4 +1,6 @@
 import { fromHono } from "chanfana";
+import { batchJob, idsFromRoute } from '@al-ummah/shared-types';
+import { runWithErrorTrail } from '@al-ummah/shared-types/error-trail';
 import { Hono } from "hono";
 import { cors } from 'hono/cors';
 import { authMiddleware, adminMiddleware } from "./middleware/auth";
@@ -385,7 +387,11 @@ async function scheduled(controller: ScheduledController, env: AdminBindings, ct
  *   - requests to auth: auth-moderation-requests[-env] and its DLQ (lib/authModerationQueue.ts)
  *   - error ingest and its DLQ: al-ummah-now-errors[-dlq][-env] (endpoints/errors/ErrorsIngest.ts)
  */
-async function queue(batch: { queue: string; messages: readonly QueueMessageLike<ContactMailJob>[] }, env: AdminBindings): Promise<void> {
+function queue(batch: { queue: string; messages: readonly QueueMessageLike<ContactMailJob>[] }, env: AdminBindings): Promise<void> {
+  return runWithErrorTrail({ job: batchJob(batch as never) }, () => handleQueueBatch(batch, env));
+}
+
+async function handleQueueBatch(batch: { queue: string; messages: readonly QueueMessageLike<ContactMailJob>[] }, env: AdminBindings): Promise<void> {
   if (/(^|-)contact-mail(-|$)/.test(batch.queue)) return contactMailConsumer(batch, env);
   if (/(^|-)status-notify(-|$)/.test(batch.queue)) return statusNotifyConsumer(batch, env);
   if (/^auth-moderation-requests(-|$)/.test(batch.queue)) return handleAuthRequestBatch(batch as unknown as MessageBatch<AuthRequestMessage>, env);
@@ -395,8 +401,9 @@ async function queue(batch: { queue: string; messages: readonly QueueMessageLike
 }
 
 /** Nothing on the admin API host is for search engines (lib/crawlers.ts) */
-const fetchHandler: typeof app.fetch = async (request, env, ctx) =>
-  robotsTxtResponse(request) ?? withNoIndex(await app.fetch(request, env, ctx));
+// One error trail per request / queue batch: errors reported meanwhile carry the ids, failed upstream calls and steps
+const fetchHandler: typeof app.fetch = (request, env, ctx) =>
+  runWithErrorTrail(idsFromRoute(new URL(request.url).pathname), async () => robotsTxtResponse(request) ?? withNoIndex(await app.fetch(request, env, ctx)));
 
 export default withLogging({ fetch: fetchHandler, scheduled, queue });
 export { app };

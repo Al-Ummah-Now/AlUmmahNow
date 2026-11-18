@@ -10,7 +10,10 @@ import {
   culprit as culpritOf,
   fingerprint as fingerprintOf,
   hash64,
+  idsFromRoute,
   normalizeRoute,
+  workerNameFor,
+  type ErrorContext,
   parseStack,
   type ErrorEventInput,
   type ErrorStatus,
@@ -97,6 +100,8 @@ export interface ErrorEventRow {
   symbolicated_stack: string | null;
   shown: number;
   extra_json: string | null;
+  /** eventContext() as JSON (migration 0037); null on events stored before it */
+  context_json: string | null;
 }
 
 export interface ErrorActivityRow {
@@ -184,6 +189,28 @@ async function isNewerRelease(db: D1Database, env: string, app: string, release:
   if (theirs) return mine > theirs;
   // Resolved without a known release: newer means first seen after the resolution
   return !!resolvedAt && mine > resolvedAt;
+}
+
+/**
+ * What the detail page shows to act on the event (context_json): the reporter's context
+ * (ids, failed upstream call, breadcrumbs, queue job) plus what ingest knows itself: the
+ * Worker script of the app in this environment and the video/channel ids in the route.
+ */
+export function eventContext(e: Pick<ErrorEventInput, 'app' | 'route' | 'context'>, environment: string): ErrorContext | undefined {
+  const c: ErrorContext = { ...(e.context ?? {}) };
+  if (!c.worker) {
+    const worker = workerNameFor(e.app, environment);
+    if (worker) c.worker = worker;
+  }
+  const ids = idsFromRoute(e.route);
+  if (!c.videoId && ids.videoId) c.videoId = ids.videoId;
+  if (!c.channelId && ids.channelId) c.channelId = ids.channelId;
+  return Object.keys(c).length ? c : undefined;
+}
+
+function contextJson(e: ErrorEventInput, environment: string): string | null {
+  const c = eventContext(e, environment);
+  return c ? JSON.stringify(c).slice(0, 6000) : null;
 }
 
 /** extra keys that identify a person; dropped from an erased user's events (as the processor's erasure does). */
@@ -347,13 +374,13 @@ export async function ingestErrorEvents(db: D1Database, events: ErrorEventInput[
         db
           .prepare(
             `INSERT INTO error_events (id, group_id, ref, kind, occurred_at, received_at, count, release, worker_version, environment, route, method, status,
-                                       locale, theme, browser, os, user_id, request_id, name, message, stack, symbolicated_stack, shown, extra_json)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                                       locale, theme, browser, os, user_id, request_id, name, message, stack, symbolicated_stack, shown, extra_json, context_json)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .bind(
             eventId, gid, e.ref, e.kind, occurredAt, nowIso, count, e.release ?? null, e.workerVersion ?? null, environment, e.route ?? null, e.method ?? null, e.status ?? null,
             e.locale ?? null, e.theme ?? null, ctx.browser || null, ctx.os || null, e.userId ?? null, e.requestId ?? null, e.name ?? null, e.message, e.stack ?? null,
-            symbolicated, e.shown ? 1 : 0, e.extra ? JSON.stringify(e.extra) : null,
+            symbolicated, e.shown ? 1 : 0, e.extra ? JSON.stringify(e.extra) : null, contextJson(e, environment),
           ),
         db.prepare('UPDATE error_refs SET event_id = ? WHERE ref = ? AND group_id = ?').bind(eventId, e.ref, gid),
         db.prepare('UPDATE error_groups SET samples = samples + 1 WHERE id = ?').bind(gid),

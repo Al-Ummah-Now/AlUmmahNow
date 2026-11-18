@@ -16,7 +16,9 @@ import { purgeExpiredTombstones } from './erasure/tombstones';
 import { isDeadLetterQueue, processDeadLetterBatch } from './dlq/consumer';
 import { listDeadLetters, purgeExpiredDeadLetters, replayDeadLetter } from './dlq/store';
 import { getApiKey } from './lib/websocket-notify';
-import { reportServerError, resolveNeedsAction, withErrorReporting, type ExecutionContextLike } from '@al-ummah/shared-types';
+import { batchJob, reportServerError, resolveNeedsAction, withErrorReporting, type ExecutionContextLike } from '@al-ummah/shared-types';
+// Request/job trail for error context (ids, failed upstream calls, breadcrumbs); registers itself with the reporter
+import { runWithErrorTrail } from '@al-ummah/shared-types/error-trail';
 import { importLegacyRollups } from './lib/analytics-rollup';
 import { resumeStalledImports } from './lib/post-counters';
 import { isCategorizeMessage, processCategorizeMessages, sweepCategorySuggestions, type CategorizeQueueMessage } from './categorize/queue';
@@ -366,11 +368,12 @@ export default {
   },
 
   async queue(batch: MessageBatch<AlUmmahMessage>, env: QueueEnvironment, ctx?: ExecutionContextLike): Promise<void> {
+    const job = batchJob(batch);
     try {
-      await handleQueue(batch, env, ctx);
+      await runWithErrorTrail({ job }, () => handleQueue(batch, env, ctx));
     } catch (error) {
       // The whole batch failed (it is retried by the queue): flag it on the Errors page
-      reportServerError('processor', env, ctx, error, { kind: 'unhandled', route: `queue:${batch.queue ?? 'unknown'}`, extra: { messages: batch.messages.length } });
+      reportServerError('processor', env, ctx, error, { kind: 'unhandled', route: `queue:${batch.queue ?? 'unknown'}`, extra: { messages: batch.messages.length }, context: { job } });
       throw error;
     }
   },

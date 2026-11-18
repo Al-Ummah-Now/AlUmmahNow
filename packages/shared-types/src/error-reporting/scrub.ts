@@ -4,6 +4,7 @@
  * tokens, JWTs, long secrets and sensitive query parameters become
  * placeholders; URLs lose their fragment and keep only harmless parameters.
  */
+import { finishContext, scrubContext } from './context';
 import { ERROR_APPS, ERROR_KINDS, ERROR_LIMITS, NEEDS_ACTION_SOURCES, type ErrorEventInput, type NeedsActionInput, type NeedsActionRetry } from './types';
 
 const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
@@ -132,6 +133,7 @@ export function scrubEvent(raw: unknown): ErrorEventInput | null {
     test: e.test === true,
     extra: Object.keys(extra).length ? extra : undefined,
     action: action ?? undefined,
+    context: finishContext(scrubContext(e.context)),
   };
 }
 

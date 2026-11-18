@@ -6,6 +6,7 @@
  * Users never see raw errors: they see a friendly page with a short reference
  * (ERR-XXXX-XXXX) that is stored with the event, so support can find it.
  */
+import type { ErrorContext } from './context';
 
 /** Apps that report errors (admin "App" filter). */
 export const ERROR_APPS = ['web', 'admin-web', 'api-videos', 'admin-api', 'processor', 'scheduler', 'websocket', 'cost-monitor', 'short-links', 'auth', 'status'] as const;
@@ -69,6 +70,8 @@ export interface ErrorEventInput {
   extra?: Record<string, string | number | boolean | null>;
   /** Set for kind "action": the item that needs an admin. */
   action?: NeedsActionInput;
+  /** Ids, failed upstream call, breadcrumbs, queue job (./context.ts). */
+  context?: ErrorContext;
 }
 
 /** Where a needs-action item comes from (Errors page "Source" column). */
