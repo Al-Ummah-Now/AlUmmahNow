@@ -344,7 +344,15 @@ describe('/internal/media/summary live figures', () => {
 		const { env } = setup();
 		const full = { ...env, SEARCH_DB: jobsDb(rows), MEDIA_TRANSCODE_CEILING: '2' };
 		const app = createMediaInternalRouter();
-		const res = (await (await app.request('/summary?days=7', {}, full as never)).json()) as { result: Record<string, any> };
+		// The summary's window is counted back from now; pin now to the fixture's day so the test never ages out
+		const realNow = Date.now;
+		Date.now = () => Date.parse('2026-11-11T12:00:00Z');
+		let res: { result: Record<string, any> };
+		try {
+			res = (await (await app.request('/summary?days=7', {}, full as never)).json()) as { result: Record<string, any> };
+		} finally {
+			Date.now = realNow;
+		}
 		assert.equal(res.result.days, 7);
 		assert.equal(res.result.jobs.jobs, 6);
 		assert.deepEqual([res.result.live.transcoding, res.result.live.queued, res.result.live.rangeMin, res.result.live.rangeMax], [1, 3, 2, 2]);
