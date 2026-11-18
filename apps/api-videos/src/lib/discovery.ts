@@ -379,10 +379,16 @@ export function rankRecommendations(
 
 /**
  * Load discoverable videos from the videos bucket.
- * The bucket also holds pre-computed index objects (`index:*`, `metadata:*`) and
- * live streams (`livestream:*`), which are skipped by key prefix.
+ * The bucket also holds pre-computed index objects (`index:*`, `metadata:*`), live streams
+ * (`livestream:*`) and files under a path, such as web's share card images
+ * (`share-cards/v3/...jpg`); a video is a top-level JSON object, so those are skipped by key
+ * without being read (prod 2026-11-17: a share card JPEG was parsed as a video).
  */
 const NON_VIDEO_KEY_PREFIXES = ['index:', 'metadata:', 'livestream:'];
+
+export function isVideoObjectKey(key: string): boolean {
+  return !!key && !key.includes('/') && !NON_VIDEO_KEY_PREFIXES.some((prefix) => key.startsWith(prefix));
+}
 
 export async function loadDiscoverableVideos(bucket: R2Bucket, maxVideos = 500): Promise<DiscoveryVideo[]> {
   const videos: DiscoveryVideo[] = [];
@@ -392,7 +398,7 @@ export async function loadDiscoverableVideos(bucket: R2Bucket, maxVideos = 500):
     const page = await bucket.list({ limit: 100, cursor });
     const keys = page.objects
       .map(object => object.key)
-      .filter(key => key && !NON_VIDEO_KEY_PREFIXES.some(prefix => key.startsWith(prefix)));
+      .filter(isVideoObjectKey);
     scanned += keys.length;
     const objects = await Promise.all(keys.map(async key => {
       try {
