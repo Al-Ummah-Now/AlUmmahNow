@@ -203,6 +203,15 @@ describe('two-part words (QF writes بَعْدَ مَا and إِلْ يَاسِ�
     expect(built.surahs[0]!.ayat[0]!.words).toEqual(['حُكْمًا', 'عَرَبِيًّۭا ۚ', 'وَلَئِنِ', 'ٱتَّبَعْتَ', 'بَعْدَ مَا', 'جَآءَكَ']);
   });
 
+  it('a two-part Imla\'i row that the Uthmani text writes as one word is one token (2:21 يَٰٓأَيُّهَا)', () => {
+    // prod 2026-11-14..18: 363 verses failed with "11 Uthmani words, 11 word rows"
+    const built = collect('يَٰٓأَيُّهَا ٱلنَّاسُ ٱعْبُدُوا۟ رَبَّكُمُ', ['يا أيها', 'النَّاسُ', 'اعْبُدُوا', 'رَبَّكُمُ']);
+    expect(built.surahs[0]!.ayat[0]!.words).toEqual(['يَٰٓأَيُّهَا', 'ٱلنَّاسُ', 'ٱعْبُدُوا۟', 'رَبَّكُمُ']);
+    // Both parts are still in the index at word 1, as a reciter says them
+    const index = new QuranIndex(built.index);
+    expect(index.locs.filter((l) => l.word === 1)).toHaveLength(2);
+  });
+
   it('tokens that still do not add up fail the build, never guessed', () => {
     expect(() => collect('سَلَٰمٌ عَلَىٰٓ إِلْ يَاسِينَ زائد', ['سَلَامٌ', 'عَلَى', 'إِلْ يَاسِينَ'])).toThrow('1 verse(s) failed the check');
   });
