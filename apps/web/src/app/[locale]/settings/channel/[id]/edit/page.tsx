@@ -15,7 +15,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
 import { logger } from '@/lib/logger-client';
-import { can } from '@al-ummah/shared-types';
+import { can, formatNumber } from '@al-ummah/shared-types';
 import ChannelTranslationSettings from '@/components/settings/ChannelTranslationSettings';
 
 interface ChannelData {
@@ -33,7 +33,7 @@ interface ChannelData {
 }
 
 function ChannelEditPage() {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const { confirm, dialog: confirmDialog } = useConfirm();
   const params = useParams();
   const locale = params.locale as string;
@@ -419,7 +419,7 @@ function ChannelEditPage() {
                     id="channel-description-en"
                   />
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    {formData.descriptionEn.length}/500 {t.channel.charactersRemaining}
+                    {formatNumber(lang, formData.descriptionEn.length)}/{formatNumber(lang, 500)} {t.channel.charactersRemaining}
                   </p>
                 </>
               )}
@@ -436,7 +436,7 @@ function ChannelEditPage() {
                     dir="rtl"
                   />
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    {formData.descriptionAr.length}/500 {t.channel.charactersRemaining}
+                    {formatNumber(lang, formData.descriptionAr.length)}/{formatNumber(lang, 500)} {t.channel.charactersRemaining}
                   </p>
                 </>
               )}
