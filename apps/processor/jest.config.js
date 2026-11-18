@@ -12,6 +12,7 @@ module.exports = {
   coverageReporters: ['text', 'lcov', 'html'],
   moduleNameMapper: {
     '^@al-ummah/shared-types$': '<rootDir>/../../packages/shared-types/src/index.ts',
+    '^@al-ummah/shared-types/error-trail$': '<rootDir>/../../packages/shared-types/src/error-reporting/trail.ts',
     '^@al-ummah/logger$': '<rootDir>/../../packages/logger/src/index.ts',
     // the logger's sources import siblings as './x.js' (ESM output); jest loads the .ts
     '^(\\.{1,2}/.*)\\.js$': '$1',

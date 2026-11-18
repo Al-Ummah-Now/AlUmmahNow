@@ -1,6 +1,8 @@
 import { edgeRateLimit, humanCheckStatus, requireHuman, scriptedClientBlock } from './middleware/bot-protection';
 import attestationRouter from './routers/attestation.router';
-import { constantTimeEqual, reportServerError, withErrorReporting, type ErrorReporterEnv } from '@al-ummah/shared-types';
+import { batchJob, constantTimeEqual, reportServerError, withErrorReporting, type ErrorReporterEnv } from '@al-ummah/shared-types';
+// Request/job trail for error context (ids, failed upstream calls, breadcrumbs); registers itself with the reporter
+import { runWithErrorTrail } from '@al-ummah/shared-types/error-trail';
 import { SUBSCRIPTION_IMPORT_CRON, importPendingSubscriptions } from './lib/subscription-import';
 import { handleProcessingCheckBatch, sweepProcessingVideos } from './lib/processing/loop';
 import { handleReaperBatch, isReaperMessage, sweepStaleUploads } from './lib/uploads/reaper';
@@ -853,7 +855,12 @@ async function handleFetch(request: Request, env: AppBindings, ctx: ExecutionCon
  * R2 writes go through the search-sync wrapper so changes reach the search
  * index and ownership rows like any API write.
  */
-async function queue(batch: MessageBatch<unknown>, env: AppBindings, ctx: ExecutionContext): Promise<void> {
+/** Each batch runs in its own error trail (queue, message id, attempt; calls made while handling it). */
+function queue(batch: MessageBatch<unknown>, env: AppBindings, ctx: ExecutionContext): Promise<void> {
+	return runWithErrorTrail({ job: batchJob(batch) }, () => handleQueueBatch(batch, env, ctx));
+}
+
+async function handleQueueBatch(batch: MessageBatch<unknown>, env: AppBindings, ctx: ExecutionContext): Promise<void> {
 	try {
 		// Run-account erasures (#887) are admin jobs on their own capped queue
 		if (batch.queue.startsWith('al-ummah-now-admin-jobs') || batch.queue.startsWith('al-ummah-now-run-erase')) {
@@ -908,14 +915,14 @@ async function queue(batch: MessageBatch<unknown>, env: AppBindings, ctx: Execut
 		if (playlistAdds.length) await handlePlaylistAddBatch({ messages: playlistAdds }, synced, ctx);
 	} catch (error) {
 		// The batch is retried by the queue; the failure is flagged on the admin Errors page
-		reportServerError('api-videos', env as never, ctx, error, { route: `queue:${batch.queue}`, extra: { messages: batch.messages.length } });
+		reportServerError('api-videos', env as never, ctx, error, { route: `queue:${batch.queue}`, extra: { messages: batch.messages.length }, context: { job: batchJob(batch) } });
 		throw error;
 	}
 }
 
 /** A daily job that failed: reported to the admin Errors page (it runs again tomorrow). */
 function reportJobFailure(env: AppBindings, ctx: ExecutionContext, job: string, error: unknown): void {
-	reportServerError('api-videos', env as never, ctx, error, { route: `cron:${job}` });
+	reportServerError('api-videos', env as never, ctx, error, { route: `cron:${job}`, context: { job: { id: `cron:${job}` } } });
 }
 
 // Uncaught exceptions and 5xx answers are reported to the admin Errors page (docs/features/error-reporting.md)

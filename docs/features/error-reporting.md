@@ -120,6 +120,31 @@ resolveNeedsAction(env, ctx, `dlq:${messageId}`);
 Queue consumers: report in the branch where a message is given up
 (`attempts >= max_retries`, or the DLQ consumer), not on every retry.
 
+### Error context (what an admin needs to act)
+
+Every event can carry a `context` (`ErrorContext`, `error-reporting/context.ts`), stored per
+sample in `error_events.context_json` (admin-api migration `0037`) and shown on the error detail
+page. Ids only; it is scrubbed by the reporter and again on ingest.
+
+| Field | Filled by |
+|---|---|
+| `worker` | ingest: the app's Worker script in that environment (`workerNameFor`), unless the reporter sent one |
+| `videoId`, `channelId` | ingest: from the route (`idsFromRoute`); the code: `noteIds()` or `context` |
+| `upstream` `{ service, status, route }` | the trail: the last fetch that answered 5xx or failed; the code: `noteUpstream('REPORTS_DB', 500)` for bindings |
+| `breadcrumbs` (last 12) | the trail: every fetch (`GET host/templated/path → status`); the code: `breadcrumb('step', '…')` |
+| `job` `{ queue, id, attempt }` | queue consumers: `runWithErrorTrail({ job: batchJob(batch) }, …)`; crons: `{ id: 'cron:<name>' }` |
+
+The request trail is server only (`node:async_hooks`), imported separately:
+
+```ts
+import { runWithErrorTrail, breadcrumb, noteIds, noteUpstream } from '@al-ummah/shared-types/error-trail';
+```
+
+Importing it registers it with the reporter: `withErrorReporting` then opens one trail per
+request, and every `reportServerError` / `reportNeedsAction` inside it carries the trail. Never
+put names, emails, titles or bodies in a breadcrumb. api-videos, processor and admin-api load it
+(requests and queue batches); other apps get `worker` and the route ids from ingest.
+
 ### In the browser (web, admin-web)
 
 **Every client-side error path reports.** Each app has one reporter, created

@@ -9,6 +9,10 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./error-trail": {
+      "types": "./dist/error-reporting/trail.d.ts",
+      "default": "./dist/error-reporting/trail.js"
+    },
     "./page-blocks.css": "./src/page-blocks.css"
   },
   "scripts": {

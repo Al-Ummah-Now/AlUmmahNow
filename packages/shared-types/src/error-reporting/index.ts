@@ -1,5 +1,6 @@
 export * from './types';
 export * from './scrub';
+export * from './context';
 export * from './fingerprint';
 export * from './reference';
 export * from './classify';

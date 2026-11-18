@@ -12,6 +12,8 @@
 import { scrubEvent } from './scrub';
 import { fingerprint } from './fingerprint';
 import { newErrorRef } from './reference';
+import { idsFromRoute } from './context';
+import type { ErrorContext } from './context';
 import type { ErrorApp, ErrorEventInput, ErrorKind, ErrorReportBatch, NeedsActionInput } from './types';
 
 type SecretBinding = string | { get(): Promise<string> } | undefined;
@@ -39,6 +41,32 @@ export interface ServerErrorDetails {
   release?: string;
   test?: boolean;
   extra?: ErrorEventInput['extra'];
+  /** Ids, upstream, job; merged over the open request trail. */
+  context?: ErrorContext;
+}
+
+/**
+ * The request trail (./trail.ts, server only) registers itself here when an app
+ * imports `@al-ummah/shared-types/error-trail`; without it events carry only
+ * the context the caller passes.
+ */
+let trailHooks: { current(): ErrorContext | undefined; run<T>(init: { videoId?: string; channelId?: string }, fn: () => T): T } | null = null;
+
+export function setErrorTrailHooks(hooks: typeof trailHooks): void {
+  trailHooks = hooks;
+}
+
+/** The caller's context over the open trail's (caller wins per field; breadcrumbs from the trail). */
+export function mergeContext(given: ErrorContext | undefined): ErrorContext | undefined {
+  let fromTrail: ErrorContext | undefined;
+  try {
+    fromTrail = trailHooks?.current();
+  } catch {
+    fromTrail = undefined;
+  }
+  if (!fromTrail) return given;
+  if (!given) return fromTrail;
+  return { ...fromTrail, ...given, breadcrumbs: given.breadcrumbs ?? fromTrail.breadcrumbs };
 }
 
 async function resolveKey(binding: SecretBinding): Promise<string> {
@@ -80,6 +108,7 @@ export function buildServerEvent(app: ErrorApp, error: unknown, d: ServerErrorDe
     occurredAt: new Date().toISOString(),
     test: d.test,
     extra: d.extra,
+    context: mergeContext(d.context),
   });
 }
 
@@ -162,6 +191,7 @@ export interface NeedsActionDetails extends NeedsActionInput {
   release?: string;
   test?: boolean;
   extra?: ErrorEventInput['extra'];
+  context?: ErrorContext;
 }
 
 /**
@@ -187,7 +217,7 @@ export function reportNeedsAction(app: ErrorApp, env: ErrorReporterEnv, ctx: Exe
 
 function reportNeedsActionOrThrow(app: ErrorApp, env: ErrorReporterEnv, ctx: ExecutionContextLike | undefined, d: NeedsActionDetails, fetchImpl: typeof fetch): string {
   const err = d.error instanceof Error ? d.error : null;
-  const { message, error, route, userId, requestId, release, test, extra, ...action } = d;
+  const { message, error, route, userId, requestId, release, test, extra, context, ...action } = d;
   const event = scrubEvent({
     app,
     kind: 'action',
@@ -205,6 +235,7 @@ function reportNeedsActionOrThrow(app: ErrorApp, env: ErrorReporterEnv, ctx: Exe
     test,
     extra,
     action,
+    context: mergeContext(context),
   });
   if (!event) return '';
   postReport(env, ctx, { events: [event] }, fetchImpl);
@@ -232,7 +263,7 @@ export function withErrorReporting<E extends ErrorReporterEnv, C extends Executi
   app: ErrorApp,
   handler: (req: Request, env: E, ctx: C) => Response | Promise<Response>,
 ): (req: Request, env: E, ctx: C) => Promise<Response> {
-  return async (req, env, ctx) => {
+  const inner = async (req: Request, env: E, ctx: C): Promise<Response> => {
     const url = new URL(req.url);
     const base = { route: url.pathname, method: req.method, requestId: requestIdOf(req) };
     try {
@@ -255,5 +286,16 @@ export function withErrorReporting<E extends ErrorReporterEnv, C extends Executi
         headers: { 'Content-Type': 'application/json', 'X-Error-Ref': ref },
       });
     }
+  };
+  // One request trail per request when the app loaded it (ids from the path to start with)
+  return (req, env, ctx) => {
+    if (!trailHooks) return inner(req, env, ctx);
+    let ids = {};
+    try {
+      ids = idsFromRoute(new URL(req.url).pathname);
+    } catch {
+      ids = {};
+    }
+    return trailHooks.run(ids, () => inner(req, env, ctx));
   };
 }
