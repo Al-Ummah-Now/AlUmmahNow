@@ -5002,7 +5002,7 @@ const en = {
       invalid_video: 'Pick a public video.',
     },
     issueCount: '{count} things to fix before saving',
-    issueCountOne: '1 thing to fix before saving',
+    issueCountOne: 'One thing to fix before saving',
     videosHeading: 'Default invite video',
     videosIntro: 'Shown as a card in an invite that has no video of its own for its language. Leave empty for none.',
     videoEn: 'English invites',

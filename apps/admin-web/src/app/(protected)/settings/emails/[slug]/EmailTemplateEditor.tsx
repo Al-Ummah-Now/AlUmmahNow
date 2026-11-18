@@ -497,7 +497,7 @@ function Preview({ templateKey, content, adminEmail, hasIssues }: { templateKey:
           srcDoc={doc}
           sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
           onLoad={fit}
-          className="block mx-auto bg-white border-0"
+          className="block mx-auto bg-surface border-0"
           style={{ width: width === 'phone' ? 375 : '100%', maxWidth: '100%', height }}
           data-testid="email-preview-frame"
           data-mode={mode}
