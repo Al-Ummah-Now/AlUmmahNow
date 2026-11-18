@@ -46,7 +46,12 @@ export function isCostJob(body: unknown): body is CostJob {
 }
 
 /** Errors page key of a job (one item per job and day, so Retry re-runs exactly that one). */
-export const jobKey = (j: Pick<CostJob, 'job' | 'day' | 'at'>) => `cost-job:${j.job}:${j.day ?? j.at.slice(0, 13)}`;
+/**
+ * The needs-action item of a job. The hourly collection is one standing item (each failed hour
+ * updates it and counts up; the next good hour resolves it), not one item per hour: production
+ * had 66 open "Cost collection failed" items for one cause (2026-11-18). Day jobs keep one per day.
+ */
+export const jobKey = (j: Pick<CostJob, 'job' | 'day' | 'at'>) => (j.job === 'hourly' ? 'cost-job:hourly' : `cost-job:${j.job}:${j.day ?? j.at.slice(0, 13)}`);
 
 const dayOf = (d: Date) => d.toISOString().slice(0, 10);
 const daysBefore = (d: Date, n: number) => dayOf(new Date(d.getTime() - n * 86_400_000));
@@ -82,7 +87,16 @@ export async function runProductJob(job: CostJob, env: JobsEnv, fetchImpl: typeo
     if (job.job === 'containers') {
       const { token, source } = await cloudflareToken(env);
       if (!token || !env.CLOUDFLARE_ACCOUNT_ID) return { status: 'skipped', detail: 'no Cloudflare token' };
-      const rows = await fetchContainers(token, env.CLOUDFLARE_ACCOUNT_ID, day, parseEnvs(env.COLLECT_ENVS), fetchImpl);
+      let rows;
+      try {
+        rows = await fetchContainers(token, env.CLOUDFLARE_ACCOUNT_ID, day, parseEnvs(env.COLLECT_ENVS), fetchImpl);
+      } catch (error) {
+        // Today's running total is refreshed every hour and yesterday's final pass runs daily: a
+        // rate-limited hour is skipped, not retried into the same limit and flagged (prod
+        // 2026-11-18: 23 flags for one day). The daily pass still retries and flags.
+        if (error instanceof ProductFetchError && error.status === 429 && day === dayOf(now)) return { status: 'skipped', detail: 'Containers API rate-limited; next hour' };
+        throw error;
+      }
       await upsertProductRows(env.COSTS_DB, rows, now);
       return { status: 'ok', rows: rows.length, detail: `token ${source}` };
     }
@@ -177,7 +191,8 @@ export async function handleJob(
       const { source } = await cloudflareToken(env).catch(() => ({ source: 'none' as const }));
       await recordCollectorState(env.COSTS_DB, { tokenSource: source, job: job.job, status: outcome.status }, new Date());
     }
-    if (attempts > 1) resolveNeedsAction(env, ctx, jobKey(job), fetchImpl);
+    // The standing hourly item is closed by the next good hour, whatever attempt it took
+    if (attempts > 1 || job.job === 'hourly') resolveNeedsAction(env, ctx, jobKey(job), fetchImpl);
     return 'ack';
   }
   if (!outcome.permanent && attempts < MAX_ATTEMPTS) {
