@@ -86,12 +86,19 @@ test.describe('email templates', () => {
     await expect(frame.getByText(BUTTON_AR)).toBeVisible();
     await expect(frame.locator('html')).toHaveAttribute('dir', 'rtl');
     await expect(page.getByTestId('email-preview-frame')).toHaveAttribute('data-mode', 'dark');
-    await expect(page.getByTestId('email-preview-frame')).toHaveCSS('width', '375px');
+    // Phone width is 375px, or the whole preview box on a screen narrower than that
+    const fit = await page.getByTestId('email-preview-frame').evaluate((el) => {
+      const wrap = el.parentElement!;
+      const style = getComputedStyle(wrap);
+      const inner = wrap.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+      return { width: Math.round(el.getBoundingClientRect().width), expected: Math.round(Math.min(375, inner)) };
+    });
+    expect(fit.width).toBe(fit.expected);
 
     // Send test to me: the Arabic version, marked as a test, audited
     await page.getByTestId('email-test-send').click();
     await expect(page.getByTestId('email-test-status')).toContainText('Test sent to');
-    await expectNoAxeViolations(page, 'creator invite editor (en)');
+    await expectNoAxeViolations(page, 'creator invite editor (en)', { skipFrames: ['[data-testid="email-preview-frame"]'] });
 
     // Save: a new version, then Undo goes back to the version before
     const before = (await adminApi<{ version: number }>('/api/email-templates/creator_invite')).body.result!.version;
@@ -124,7 +131,7 @@ test.describe('email templates', () => {
     await page.getByTestId(`email-history-restore-${current.version}`).click();
     await expect(page.getByTestId('email-field-button-ar')).toHaveValue(current.content.copy.ar.button!);
     await expect(page.getByTestId(`email-history-${current.version + 2}`)).toBeVisible();
-    await expectNoAxeViolations(page, 'creator invite editor (ar)');
+    await expectNoAxeViolations(page, 'creator invite editor (ar)', { skipFrames: ['[data-testid="email-preview-frame"]'] });
     const after = (await adminApi<{ version: number; content: typeof current.content }>('/api/email-templates/creator_invite')).body.result!;
     expect(after.version).toBe(current.version + 2);
     expect(after.content.copy.ar.button).toBe(current.content.copy.ar.button);

@@ -143,8 +143,11 @@ export async function expectDirection(page: Page, locale: Locale) {
 /**
  * Run axe (WCAG 2.1 A/AA) and fail with a readable summary of violations.
  */
-export async function expectNoAxeViolations(page: Page, context: string) {
-  const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+export async function expectNoAxeViolations(page: Page, context: string, options: { skipFrames?: string[] } = {}) {
+  let builder = new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']);
+  // A sandboxed srcdoc frame (the email preview) hangs axe's frame runner in WebKit; skip its inside
+  for (const selector of options.skipFrames ?? []) builder = builder.disableFrame(selector);
+  const results = await builder.analyze();
   const summary = results.violations.map((v) => ({
     id: v.id,
     impact: v.impact,
