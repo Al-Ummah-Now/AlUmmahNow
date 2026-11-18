@@ -37,7 +37,7 @@
     "NEXTJS_ENV": "development",
     "API_URL": "https://videos.api.qa.alummahnow.net",
     "ADMIN_API_URL": "https://admin.api.qa.alummahnow.net",
-    "ClientId": "e0de3c30-0304-4ac4-86d6-1e185dec0439"
+    "ClientId": "f0de3c30-0304-4ac4-86d6-1e185dec0439"
   },
   "images": { "binding": "IMAGES" },
   "r2_buckets": [
