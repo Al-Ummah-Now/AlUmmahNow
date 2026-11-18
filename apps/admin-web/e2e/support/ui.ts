@@ -145,8 +145,12 @@ export async function expectDirection(page: Page, locale: Locale) {
  */
 export async function expectNoAxeViolations(page: Page, context: string, options: { skipFrames?: string[] } = {}) {
   let builder = new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']);
-  // A sandboxed srcdoc frame (the email preview) hangs axe's frame runner in WebKit; skip its inside
-  for (const selector of options.skipFrames ?? []) builder = builder.disableFrame(selector);
+  // A sandboxed srcdoc frame (the email preview) breaks axe's helper page in WebKit: leave the frame out and
+  // run frame by frame in the page itself (legacy mode opens no helper page)
+  if (options.skipFrames?.length) {
+    for (const selector of options.skipFrames) builder = builder.exclude(selector);
+    builder = builder.setLegacyMode(true);
+  }
   const results = await builder.analyze();
   const summary = results.violations.map((v) => ({
     id: v.id,
