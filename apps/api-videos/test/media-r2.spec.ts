@@ -342,7 +342,10 @@ describe('/internal/media/summary live figures', () => {
 
 	it('returns live with the summary, and alone with ?only=live', async () => {
 		const { env } = setup();
-		const full = { ...env, SEARCH_DB: jobsDb(rows), MEDIA_TRANSCODE_CEILING: '2' };
+		// The route reads the last N days from the real clock, so move the fixed rows to "now".
+		const shift = Date.now() - Date.parse('2026-11-11T12:00:00.000Z');
+		const recent = rows.map((r) => ({ ...r, queuedAt: new Date(Date.parse(r.queuedAt) + shift).toISOString() }));
+		const full = { ...env, SEARCH_DB: jobsDb(recent), MEDIA_TRANSCODE_CEILING: '2' };
 		const app = createMediaInternalRouter();
 		const res = (await (await app.request('/summary?days=7', {}, full as never)).json()) as { result: Record<string, any> };
 		assert.equal(res.result.days, 7);
