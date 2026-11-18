@@ -7,7 +7,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { SqliteD1 } from './search-sqlite-d1';
 import { MemoryBucket, videoFixture } from './helpers';
-import { buildRss, feedItems, xml, FEED_ITEMS } from '../src/lib/social/feed';
+import { buildRss, feedItems, previewItems, xml, FEED_ITEMS } from '../src/lib/social/feed';
 
 const WEB = 'https://videos.example.test';
 
@@ -91,6 +91,18 @@ describe('channel feeds', () => {
 		assert.deepEqual((await feedItems(env, 'ch1', 'posts'))!.items.map((i) => i.content.entityId), ['p1']);
 		assert.equal(await feedItems(env, 'gone', 'all'), null);
 		assert.equal(await feedItems(env, 'missing', 'all'), null);
+	});
+
+	it("gives Studio's post preview the newest public item of each kind, skipping ones made private", async () => {
+		const { env } = setup();
+		const p = (await previewItems(env, 'ch1'))!;
+		assert.deepEqual(p.channel, { en: 'Noor & Friends', ar: 'نور وأصحابه' });
+		assert.deepEqual(p.channelUrl, { en: `${WEB}/en/@noor`, ar: `${WEB}/ar/@noor` });
+		assert.equal(p.items.video?.title.en, 'Second');
+		assert.equal(p.items.short?.title.en, 'A Short');
+		assert.equal(p.items.post?.text, 'Jumuah reminder\nsecond line');
+		assert.equal(p.items.live, undefined);
+		assert.equal(await previewItems(env, 'gone'), null);
 	});
 
 	it('builds a valid RSS 2.0 document, in English and Arabic', async () => {

@@ -245,6 +245,59 @@ export function fitText(rules: Pick<SocialNetworkRules, 'count'>, text: string, 
   return (link ?? graphemes(text).slice(0, max).join('')).slice(0, Math.max(0, max * 4));
 }
 
+/** What Studio's Post text preview fills a template with: the channel's newest public item of each kind. */
+export interface SocialPreviewItem {
+  title: Record<SocialLanguage, string>;
+  text?: string;
+  url: Record<SocialLanguage, string>;
+}
+
+export interface SocialPreview {
+  channel: Record<SocialLanguage, string>;
+  /** The channel's page: the link in the sample used for a kind the channel has nothing of yet */
+  channelUrl: Record<SocialLanguage, string>;
+  items: Partial<Record<SocialEvent, SocialPreviewItem>>;
+}
+
+/** What fills a template's placeholders. */
+export type SocialTemplateValues = Record<SocialTemplateField, string>;
+
+export interface SocialPostText {
+  /** The text the network receives: filled in, then cut to the network's limit */
+  text: string;
+  /** Its length the way the network counts it */
+  length: number;
+  /** The network's limit for this kind of post (a video's caption or a text post) */
+  limit: number;
+  /** The filled-in text's length before cutting */
+  fullLength: number;
+  /** The text was longer than the limit and has been cut */
+  cut: boolean;
+}
+
+/**
+ * The text of a social post, exactly as the sender composes it (api-videos lib/social/deliver.ts composePost) and
+ * as Studio previews it: the template filled in, the watch link dropped from an X video post unless the rule adds
+ * it (X bills a post with a URL at the link price), the title when nothing is left, then cut to the limit.
+ */
+export function composePostText(input: {
+  template: string;
+  values: SocialTemplateValues;
+  network: SocialNetwork;
+  event: SocialEvent;
+  format: SocialFormat;
+  includeLink: boolean;
+}): SocialPostText {
+  const rules = SOCIAL_NETWORK_RULES[input.network];
+  let text = renderTemplate(input.template, input.values);
+  const asVideo = input.format === 'video' && (input.event === 'video' || input.event === 'short');
+  if (asVideo && input.network === 'x' && !input.includeLink) text = stripUrls(text);
+  if (!text.trim()) text = input.values.title;
+  const limit = asVideo ? rules.maxCaption : rules.maxText;
+  const fitted = fitText(rules, text, limit);
+  return { text: fitted, length: measureText(rules, fitted), limit, fullLength: measureText(rules, text), cut: fitted !== text };
+}
+
 /** Drops URLs from a text (X video posts without the watch link). */
 export function stripUrls(text: string): string {
   return text.replace(URL_RE, '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();

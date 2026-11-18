@@ -61,7 +61,7 @@ export function SocialStudio({ channelId, locale, initial, outcome }: Props) {
       {connectedName ? <Notice tone="ok">{fill(s.accounts.connected, { network: connectedName })}</Notice> : null}
       {error ? <Notice tone="error">{(s.errors as Record<string, string>)[error] ?? s.errors.generic}</Notice> : null}
       <SocialAccounts channelId={channelId} locale={locale} accounts={view.accounts} networks={view.networks} onAccounts={(accounts) => setView((v) => ({ ...v, accounts }))} />
-      <SocialTemplates channelId={channelId} templates={view.templates} onTemplates={(templates) => setView((v) => ({ ...v, templates }))} />
+      <SocialTemplates channelId={channelId} locale={locale} templates={view.templates} accounts={view.accounts} preview={view.preview} onTemplates={(templates) => setView((v) => ({ ...v, templates }))} />
       <SocialDeliveries channelId={channelId} locale={locale} deliveries={view.deliveries} onDeliveries={(deliveries) => setView((v) => ({ ...v, deliveries }))} />
       <SocialFeeds locale={locale} feeds={view.feeds} />
       <SocialWebhooks channelId={channelId} locale={locale} webhooks={view.webhooks} limit={view.limits.webhooks} onWebhooks={(webhooks) => setView((v) => ({ ...v, webhooks }))} />
