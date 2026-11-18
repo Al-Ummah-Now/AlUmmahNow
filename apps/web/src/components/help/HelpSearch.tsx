@@ -8,21 +8,22 @@ import { HELP_AR, HELP_EN } from '@al-ummah/shared-types';
 import { Autocomplete, type AutocompleteOption } from '@/components/ui/Autocomplete';
 import { useLanguage } from '@/hooks/useLanguage';
 import { helpHref, helpSearchEntries } from '@/lib/help/content';
+import { useHelp } from './HelpNetworks';
 
 export function HelpSearch() {
   const { t, lang } = useLanguage();
   const router = useRouter();
   const [value, setValue] = useState('');
+  const { help, other } = useHelp(lang === 'ar' ? HELP_EN : HELP_AR);
   const options = useMemo<AutocompleteOption[]>(() => {
-    const other = lang === 'ar' ? HELP_EN : HELP_AR;
-    return helpSearchEntries(t.help, other).map((entry) => ({
+    return helpSearchEntries(help, other).map((entry) => ({
       id: entry.id,
       label: entry.label,
       subtitle: entry.subtitle,
       keywords: entry.keywords,
       value: entry,
     }));
-  }, [t.help, lang]);
+  }, [help, other]);
   const topics = useMemo(() => options.filter((o) => !o.id.includes('#')), [options]);
 
   return (

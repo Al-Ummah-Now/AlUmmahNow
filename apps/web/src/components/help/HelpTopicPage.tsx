@@ -9,11 +9,13 @@ import { MAIN_CONTENT_ID } from '@/components/SkipLinks';
 import { helpHref } from '@/lib/help/content';
 import { requestIdentityTour } from '@/lib/help/tour-events';
 import { HelpBlocks } from './HelpBlocks';
+import { useHelp } from './HelpNetworks';
 import { HELP_TOPIC_ICONS } from './HelpHome';
 
 export function HelpTopicPage({ topic }: { topic: HelpTopicId }) {
-  const { t, lang, isRTL } = useLanguage();
-  const h = t.help;
+  const { lang, isRTL } = useLanguage();
+  // The Social topic names only the networks that are on (owner rule: off or not set up leaves no trace)
+  const { help: h } = useHelp();
   const page = h.topics[topic];
   const Icon = HELP_TOPIC_ICONS[topic];
   const related = HELP_TOPIC_IDS.filter((id) => id !== topic);
