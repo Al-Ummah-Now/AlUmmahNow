@@ -66,6 +66,38 @@ describe('video categories: seed and loader', () => {
 		assert.equal(videoCategoryLabel('fiqh', 'en'), 'Fiqh rulings');
 	});
 
+	it('a request never awaits another request\'s read (Workers refuse cross-request promises)', async () => {
+		// prod 2026-11-18: concurrent requests shared one pending D1 read; when its request ended
+		// the others failed with "This promise was created by a request that has since ended"
+		const sqlite = new SqliteD1();
+		await loadVideoCategories(sqlite as unknown as SearchDb, { now: 1_000 });
+		let release!: () => void;
+		let reads = 0;
+		const slow = {
+			prepare: (sql: string) => {
+				reads++;
+				const stmt = (sqlite as unknown as SearchDb).prepare(sql);
+				return { all: async () => { await new Promise<void>((r) => (release = r)); return stmt.all(); } };
+			},
+			batch: async () => [],
+		} as unknown as SearchDb;
+		const first = loadVideoCategories(slow, { now: 70_000 });
+		// A second request while the first one refreshes gets the list this isolate has, at once
+		const second = await loadVideoCategories(slow, { now: 70_001 });
+		assert.equal(second.length, VIDEO_CATEGORIES.length);
+		assert.equal(reads, 1);
+		release();
+		await first;
+	});
+
+	it('cold isolate: concurrent first loads each read D1 (no shared pending promise)', async () => {
+		const sqlite = new SqliteD1();
+		let reads = 0;
+		const counting = { prepare: (sql: string) => { reads++; return (sqlite as unknown as SearchDb).prepare(sql); }, batch: async () => [] } as unknown as SearchDb;
+		await Promise.all([loadVideoCategories(counting, { now: 1_000 }), loadVideoCategories(counting, { now: 1_000 })]);
+		assert.equal(reads, 2);
+	});
+
 	it('an empty table falls back to the built-in list', async () => {
 		const sqlite = new SqliteD1();
 		sqlite.db.exec('DELETE FROM video_categories');

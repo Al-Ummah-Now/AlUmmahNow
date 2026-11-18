@@ -89,7 +89,13 @@ export function rowToEntry(row: VideoCategoryRow): VideoCategoryEntry {
 let registry: VideoCategoryEntry[] = DEFAULT_VIDEO_CATEGORY_ENTRIES;
 let byValue = new Map(registry.map((c) => [c.value, c]));
 let loadedAt = 0;
-let inflight: Promise<VideoCategoryEntry[]> | null = null;
+/**
+ * A refresh is running in this isolate. Only a flag: Workers refuse to settle a
+ * promise in a request other than the one that created it
+ * (handle_cross_request_promise_resolution), so a request never awaits another
+ * request's read (prod 2026-11-18: 500s on /api/videos/:id, /api/profile, ...).
+ */
+let refreshing = false;
 
 /** Replace the in-memory list (the loader, an admin write in this isolate, tests). */
 export function setVideoCategories(list: VideoCategoryEntry[], now = Date.now()): void {
@@ -101,7 +107,7 @@ export function setVideoCategories(list: VideoCategoryEntry[], now = Date.now())
 /** Forget the cached list: the next `loadVideoCategories` reads D1 (after an admin change; tests). */
 export function invalidateVideoCategories(): void {
   loadedAt = 0;
-  inflight = null;
+  refreshing = false;
 }
 
 /** Back to the built-in list (tests). */
@@ -155,23 +161,22 @@ export async function loadVideoCategories(
   const now = options.now ?? Date.now();
   if (!db) return registry;
   if (!options.force && loadedAt && now - loadedAt < VIDEO_CATEGORY_CACHE_TTL_MS) return registry;
-  if (inflight && !options.force) return inflight;
-  inflight = (async () => {
-    try {
-      const { results } = await db
-        .prepare('SELECT value, label_en, label_ar, hint, position, retired FROM video_categories ORDER BY position, value')
-        .all<VideoCategoryRow>();
-      const rows = results ?? [];
-      setVideoCategories(rows.length ? rows.map(rowToEntry) : DEFAULT_VIDEO_CATEGORY_ENTRIES, now);
-    } catch {
-      // Keep the last good list; try again in 10 s rather than on every request
-      loadedAt = now - VIDEO_CATEGORY_CACHE_TTL_MS + 10_000;
-    } finally {
-      inflight = null;
-    }
-    return registry;
-  })();
-  return inflight;
+  // Another request is refreshing a list this isolate already has: use that list now
+  if (refreshing && loadedAt && !options.force) return registry;
+  refreshing = true;
+  try {
+    const { results } = await db
+      .prepare('SELECT value, label_en, label_ar, hint, position, retired FROM video_categories ORDER BY position, value')
+      .all<VideoCategoryRow>();
+    const rows = results ?? [];
+    setVideoCategories(rows.length ? rows.map(rowToEntry) : DEFAULT_VIDEO_CATEGORY_ENTRIES, now);
+  } catch {
+    // Keep the last good list; try again in 10 s rather than on every request
+    loadedAt = now - VIDEO_CATEGORY_CACHE_TTL_MS + 10_000;
+  } finally {
+    refreshing = false;
+  }
+  return registry;
 }
 
 /**

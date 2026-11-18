@@ -43,19 +43,18 @@ async function secret(b: SecretBinding): Promise<string> {
 
 const under = (e: Pick<QfTranslationEnv, 'NODE_ENV' | 'CI' | 'E2E_ENV'>) => e.NODE_ENV === 'test' || e.CI === 'true' || !!e.E2E_ENV;
 
+// Only the settled token is shared: a pending fetch belongs to the request that started it
+// (Workers' handle_cross_request_promise_resolution), so concurrent requests each fetch one.
 let token: { value: string; until: number } | null = null;
-let inflight: Promise<string> | null = null;
 
 /** Drops the cached token (tests). */
 export function resetQfToken(): void {
 	token = null;
-	inflight = null;
 }
 
 async function getToken(env: QfTranslationEnv, f: typeof fetch, force: boolean): Promise<string> {
 	if (!force && token && token.until > Date.now()) return token.value;
-	if (!force && inflight) return inflight;
-	inflight = (async () => {
+	return (async () => {
 		const id = await secret(env.QF_CLIENT_ID);
 		const key = await secret(env.QF_CLIENT_SECRET);
 		if (!id || !key) throw new Error('QF credentials are not bound');
@@ -73,11 +72,6 @@ async function getToken(env: QfTranslationEnv, f: typeof fetch, force: boolean):
 		token = { value: body.access_token, until: Date.now() + life };
 		return token.value;
 	})();
-	try {
-		return await inflight;
-	} finally {
-		inflight = null;
-	}
 }
 
 /** GET a Content API path; JSON or null when QF can't answer (logged once per call). */
