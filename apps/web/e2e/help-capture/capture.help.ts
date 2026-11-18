@@ -443,8 +443,8 @@ const SCENES: Scene[] = [
     id: 'creating-studio',
     run: async (page, lang) => {
       await settle(page, `/studio/${channelId}/content/videos`, lang);
-      // Studio lists the title as uploaded (English), in both languages
-      const row = page.getByRole('row').filter({ hasText: NAMES.video.en }).first();
+      // Studio lists the title in the page language when the creator wrote one
+      const row = page.getByRole('row').filter({ hasText: NAMES.video[lang] }).first();
       const edit = row.getByRole('link').or(row.getByRole('button')).first();
       return [[row, edit], []];
     },
