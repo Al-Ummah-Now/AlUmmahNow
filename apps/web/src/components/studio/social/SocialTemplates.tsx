@@ -8,6 +8,8 @@
 import { useRef, useState } from 'react';
 import {
   SOCIAL_EVENTS,
+  STUDIO_AR,
+  STUDIO_EN,
   defaultTemplate,
   renderTemplate,
   templateProblems,
@@ -138,7 +140,8 @@ export function SocialTemplates({ channelId, locale, templates, accounts, previe
                     />
                     {problems.length ? <p id={`${id}-err`} className="text-xs text-[var(--fanous-color-error-text)]">{problemText(problems)}</p> : null}
                     {problems.length ? null : (
-                      <PostPreview event={event} lang={lang} locale={locale} template={value} accounts={accounts} preview={preview} sampleTitle={p.sample[event]} />
+                      // The sample is in the template's language, whatever the page's language
+                      <PostPreview event={event} lang={lang} locale={locale} template={value} accounts={accounts} preview={preview} sampleTitle={(lang === 'ar' ? STUDIO_AR : STUDIO_EN).social.templates.sample[event]} />
                     )}
                   </div>
                 );
