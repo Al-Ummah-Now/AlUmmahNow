@@ -83,16 +83,18 @@ async function secretValue(b: SecretLike): Promise<string> {
 	}
 }
 
-/** Per-isolate memo with a TTL, keyed by what the answer depends on. */
+/**
+ * Per-isolate memo with a TTL, keyed by what the answer depends on. It keeps
+ * settled values only: a pending load belongs to the request that started it,
+ * and Workers refuse to settle it for another request
+ * (handle_cross_request_promise_resolution), so concurrent requests each load.
+ */
 function memo<T>(ttlMs: number) {
-	let entry: { key: unknown; at: number; value: Promise<T> } | null = null;
+	let entry: { key: unknown; at: number; value: T } | null = null;
 	return {
-		get(key: unknown, load: () => Promise<T>, now = Date.now()): Promise<T> {
+		async get(key: unknown, load: () => Promise<T>, now = Date.now()): Promise<T> {
 			if (entry && entry.key === key && now - entry.at < ttlMs) return entry.value;
-			const value = load().catch((error) => {
-				entry = null;
-				throw error;
-			});
+			const value = await load();
 			entry = { key, at: now, value };
 			return value;
 		},
