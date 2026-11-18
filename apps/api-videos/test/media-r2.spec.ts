@@ -1,7 +1,7 @@
 /**
  * R2 delivery beside Bunny (epic #687): dual write, job events, visibility moves, purge.
  */
-import { beforeEach, describe, it } from 'node:test';
+import { beforeEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { MessageType, VIDEO_REVIEW_SETTINGS_KEY, clearVideoReviewSettingsCache, transcodeCeilingOf, type TranscodeJobEvent, type TranscodeJobMessage, type TranscodeResult } from '@al-ummah/shared-types';
 import {
@@ -340,7 +340,10 @@ describe('/internal/media/summary live figures', () => {
 		for (const bad of [undefined, '', '0', '-1', '2.5', 'two']) assert.equal(transcodeCeilingOf(bad), null, String(bad));
 	});
 
-	it('returns live with the summary, and alone with ?only=live', async () => {
+	it('returns live with the summary, and alone with ?only=live', async (t) => {
+		// The fixture jobs are dated 2026-11-11: read "the last 7 days" from then, not from the real clock
+		mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-11-11T12:00:00.000Z') });
+		t.after(() => mock.timers.reset());
 		const { env } = setup();
 		const full = { ...env, SEARCH_DB: jobsDb(rows), MEDIA_TRANSCODE_CEILING: '2' };
 		const app = createMediaInternalRouter();
