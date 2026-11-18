@@ -126,10 +126,17 @@ export class QuranCoreCollector {
           continue;
         }
         const split = splitUthmaniWords(verse.text);
-        const spans = words.map((w) => Math.max(1, imlaeiParts(w.imlaei).length));
-        const total = spans.reduce((a, b) => a + b, 0);
+        // A row whose Imla'i text has two parts spans two Uthmani tokens when the Uthmani text
+        // writes them apart (37:130 إِلْ يَاسِينَ), and one when it writes them as one word
+        // (2:21 يَٰٓأَيُّهَا, Imla'i "يا أيها"): one token per row then.
+        let spans = words.map((w) => Math.max(1, imlaeiParts(w.imlaei).length));
+        let total = spans.reduce((a, b) => a + b, 0);
+        if (split.length !== total && split.length === words.length) {
+          spans = words.map(() => 1);
+          total = words.length;
+        }
         if (split.length !== total) {
-          bad.push(`${key}: ${split.length} Uthmani words, ${words.length} word rows`);
+          bad.push(`${key}: ${split.length} Uthmani words, ${words.length} word rows (${total} Imla'i parts)`);
           continue;
         }
         const ayahWords: string[] = [];
