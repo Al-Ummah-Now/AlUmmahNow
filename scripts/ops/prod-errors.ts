@@ -1,0 +1,202 @@
+/**
+ * Read-only report of the errors one environment recorded (production or stage).
+ *
+ *   CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=… node --experimental-strip-types scripts/ops/prod-errors.ts \
+ *     --env production [--hours 72]
+ *
+ * Prints, as markdown (stdout, also the job summary):
+ *  - the error groups (admin Errors page) seen in the window: app, kind, route/culprit, message, status,
+ *    occurrences, first/last seen, first/last release, and the latest sample's method, status, release,
+ *    worker version, request id and top stack frames
+ *  - the open "needs action" items (failed jobs, dead letters) updated in the window
+ *  - warn/error log lines from Workers Observability for web, api-videos, admin-api, media, processor,
+ *    websocket and Auth (auth, auth admin, profile)
+ *
+ * D1 is read through the Cloudflare API with SELECT-only statements on indexed columns
+ * (error_groups.last_seen, error_events (group_id, occurred_at), error_actions (status, updated_at)),
+ * each bounded by LIMIT. No app endpoint is called and nothing is changed. The token is never printed;
+ * emails, URL query strings and credential-looking values are scrubbed from every printed line.
+ * User ids are printed at most as a count.
+ */
+
+import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
+
+const API = 'https://api.cloudflare.com/client/v4';
+
+export type EnvName = 'production' | 'stage';
+
+/** admin-api's reports D1 (error tables), from apps/admin-api/wrangler.jsonc. */
+export const REPORTS_D1: Record<EnvName, string> = {
+	production: '7bee932d-c6b1-47c2-ab70-7dba349104af',
+	stage: '2b2c07fc-2823-46e0-958f-acfc401544ff',
+};
+
+/** Worker script names per environment (apps/* wrangler configs and AlUmmahNowAuth apps/*). */
+export function scriptsFor(env: EnvName): Record<string, string[]> {
+	const s = env === 'stage' ? '-stage' : '';
+	return {
+		web: env === 'stage' ? ['al-ummah-now-stage', 'al-ummah-now-staging'] : ['al-ummah-now-production'],
+		'admin-web': [`al-ummah-admin-web${s}`],
+		'api-videos': [`videos${s}`],
+		'admin-api': [`al-ummah-admin-api${s}`],
+		media: [`al-ummah-now-media${s}`],
+		processor: [`al-ummah-now-processor${s}`],
+		websocket: [`al-ummah-now-comms${s}`],
+		scheduler: [`al-ummah-scheduler${s}`],
+		auth: [`al-ummah-now-auth${s}`, `al-ummah-now-auth-admin${s}`, `al-ummah-now-profile${s}`],
+	};
+}
+
+/** SELECT-only, indexed (idx_error_groups_last_seen), bounded. */
+export const GROUPS_SQL = `SELECT id, app, kind, name, message, culprit, route, status, occurrences, users, first_seen, last_seen,
+ first_release, last_release, test FROM error_groups WHERE last_seen >= ?1 AND environment = ?2 ORDER BY last_seen DESC LIMIT 200`;
+
+/** The latest sample of one group (idx_error_events_group). */
+export const LATEST_EVENT_SQL = `SELECT occurred_at, release, worker_version, route, method, status, request_id, name, message,
+ substr(coalesce(symbolicated_stack, stack), 1, 1500) AS stack, substr(extra_json, 1, 800) AS extra FROM error_events
+ WHERE group_id = ?1 ORDER BY occurred_at DESC LIMIT 1`;
+
+/** Open needs-action items (idx_error_actions_status). */
+export const ACTIONS_SQL = `SELECT app, source, title, detail, item_type, item_id, status, occurrences, attempts, updated_at
+ FROM error_actions WHERE status = 'open' AND updated_at >= ?1 AND environment = ?2 ORDER BY updated_at DESC LIMIT 100`;
+
+/** Every statement this script sends: SELECT only. */
+export const ALL_SQL = [GROUPS_SQL, LATEST_EVENT_SQL, ACTIONS_SQL];
+
+function arg(name: string, fallback: string): string {
+	const i = process.argv.indexOf(`--${name}`);
+	return i > 0 && process.argv[i + 1] ? process.argv[i + 1]! : fallback;
+}
+
+const token = process.env.CLOUDFLARE_API_TOKEN ?? '';
+const account = process.env.CLOUDFLARE_ACCOUNT_ID ?? '';
+const headers = { authorization: `Bearer ${token}`, 'content-type': 'application/json' };
+
+async function post(path: string, payload: unknown): Promise<{ ok: boolean; status: number; body: any }> {
+	const res = await fetch(`${API}${path}`, { method: 'POST', headers, body: JSON.stringify(payload) });
+	const body = await res.json().catch(() => null);
+	return { ok: res.ok && body?.success !== false, status: res.status, body };
+}
+
+function errs(r: { status: number; body: any }): string {
+	const b = r.body ?? {};
+	return `HTTP ${r.status} ${JSON.stringify(b.errors?.length ? b.errors : b).slice(0, 600)}`;
+}
+
+/** Drops URL query strings, credentials, JWTs and email addresses from printed text. */
+export function scrub(text: string): string {
+	return text
+		.replace(/(https?:\/\/[^\s"'?]+)\?[^\s"']*/g, '$1?…')
+		.replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer …')
+		.replace(/eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+/g, '…jwt…')
+		.replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '…@…')
+		.replace(/("?(?:[a-z_-]*(?:token|secret|password|signature|api[_-]?key|authorization|cookie|x-amz-[a-z-]+))"?\s*[:=]\s*)("[^"]*"|[^\s,}&]+)/gi, '$1"…"');
+}
+
+/** The first `n` stack frames (lines starting with "at "), app frames first. */
+export function topFrames(stack: string | null | undefined, n = 4): string[] {
+	if (!stack) return [];
+	const frames = stack.split('\n').map((l) => l.trim()).filter((l) => l.startsWith('at '));
+	const app = frames.filter((f) => !/node_modules|node:internal|<anonymous>/.test(f));
+	return (app.length ? app : frames).slice(0, n);
+}
+
+const out: string[] = [];
+const p = (s = '') => out.push(scrub(s));
+
+async function d1(env: EnvName, sql: string, params: unknown[]): Promise<{ ok: boolean; rows: any[]; error?: string }> {
+	if (!/^\s*SELECT\b/i.test(sql)) throw new Error('SELECT only');
+	const r = await post(`/accounts/${account}/d1/database/${REPORTS_D1[env]}/query`, { sql, params });
+	if (!r.ok) return { ok: false, rows: [], error: errs(r) };
+	return { ok: true, rows: r.body?.result?.[0]?.results ?? [] };
+}
+
+async function groups(env: EnvName, since: Date): Promise<void> {
+	p('## Error groups seen in the window');
+	const g = await d1(env, GROUPS_SQL, [since.toISOString(), env]);
+	if (!g.ok) return p(`- not readable: ${g.error}`), p();
+	p(`${g.rows.length} groups (test = only release-E2E controlled errors)`);
+	p();
+	for (const row of g.rows) {
+		p(`### [${row.app}] ${row.kind} ${row.name ?? ''}: ${String(row.message).slice(0, 300)}`);
+		p(`- group ${row.id}, status ${row.status}${row.test ? ', test' : ''}, ×${row.occurrences}, users ${row.users}`);
+		p(`- route ${row.route ?? '–'}, culprit ${row.culprit ?? '–'}`);
+		p(`- first ${row.first_seen} (${row.first_release ?? '–'}), last ${row.last_seen} (${row.last_release ?? '–'})`);
+		const e = await d1(env, LATEST_EVENT_SQL, [row.id]);
+		const ev = e.rows[0];
+		if (ev) {
+			p(`- latest: ${ev.occurred_at} ${ev.method ?? ''} ${ev.route ?? ''} → ${ev.status ?? '–'}, release ${ev.release ?? '–'}, version ${ev.worker_version ?? '–'}, request ${ev.request_id ?? '–'}`);
+			if (ev.message && ev.message !== row.message) p(`- latest message: ${String(ev.message).slice(0, 400)}`);
+			for (const f of topFrames(ev.stack)) p(`  - ${f.slice(0, 240)}`);
+			if (ev.extra) p(`- extra: ${String(ev.extra).replace(/"user_?id"\s*:\s*"[^"]*"/gi, '"userId":"…"')}`);
+		} else if (!e.ok) p(`- latest sample not readable: ${e.error}`);
+		p();
+	}
+}
+
+async function actions(env: EnvName, since: Date): Promise<void> {
+	p('## Open needs-action items');
+	const a = await d1(env, ACTIONS_SQL, [since.toISOString(), env]);
+	if (!a.ok) return p(`- not readable: ${a.error}`), p();
+	p(`${a.rows.length} open`);
+	for (const r of a.rows) p(`- ${r.updated_at} [${r.app}/${r.source}] ${r.title}: ${String(r.detail ?? '').slice(0, 300)} (${r.item_type ?? ''} ${r.item_id ?? ''}, ×${r.occurrences}, attempts ${r.attempts})`);
+	p();
+}
+
+async function logs(app: string, script: string, since: Date, until: Date): Promise<void> {
+	p(`## Logs: ${app} (${script})`);
+	const r = await post(`/accounts/${account}/workers/observability/telemetry/query`, {
+		queryId: `prod-errors-${script}`,
+		timeframe: { from: since.getTime(), to: until.getTime() },
+		view: 'events',
+		limit: 1000,
+		parameters: { datasets: ['cloudflare-workers'], filters: [{ key: '$workers.scriptName', operation: 'eq', type: 'string', value: script }], filterCombination: 'and' },
+	});
+	if (!r.ok) return p(`unavailable: ${errs(r)}`), p();
+	const all = r.body.result?.events?.events ?? [];
+	const events = all.filter((e: any) => /warn|error/i.test(String(e.$metadata?.level ?? e.source?.level ?? '')) || e.$workers?.outcome === 'exception');
+	p(`${events.length} warn/error events (of ${all.length} read)`);
+	// Collapse repeats: same level + message → one line with a count and the latest time
+	const seen = new Map<string, { n: number; last: string; sample: string }>();
+	for (const e of events) {
+		const t = new Date(e.timestamp ?? e.$metadata?.timestamp ?? 0).toISOString();
+		const level = e.$metadata?.level ?? e.source?.level ?? e.$workers?.outcome ?? '';
+		const msg = String(e.$metadata?.message ?? e.source?.message ?? e.$metadata?.error ?? '').slice(0, 300);
+		const req = e.$workers?.event?.request;
+		const where = req ? `${req.method ?? ''} ${String(req.url ?? req.path ?? '').replace(/^https?:\/\/[^/]+/, '').split('?')[0]}` : e.$workers?.eventType ?? '';
+		const key = `${level}|${msg.replace(/[0-9a-f]{8,}|\d+/g, '#')}`;
+		const sample = typeof e.source === 'object' ? JSON.stringify(e.source).slice(0, 600) : String(e.source ?? '').slice(0, 600);
+		const cur = seen.get(key);
+		if (cur) {
+			cur.n++;
+			if (t > cur.last) cur.last = t;
+		} else seen.set(key, { n: 1, last: `${t}`, sample: `[${level}] ${where} ${msg} ${sample}` });
+	}
+	for (const v of [...seen.values()].sort((a, b) => b.n - a.n).slice(0, 60)) p(`- ×${v.n} last ${v.last} ${v.sample}`);
+	p();
+}
+
+async function main(): Promise<void> {
+	if (!token || !account) throw new Error('CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are required');
+	const env = arg('env', 'production') as EnvName;
+	if (!['production', 'stage'].includes(env)) throw new Error('--env must be production or stage');
+	const hours = Math.min(168, Math.max(1, Number(arg('hours', '72')) || 72));
+	const until = new Date();
+	const since = new Date(until.getTime() - hours * 3600_000);
+	p(`# Errors: ${env}, ${since.toISOString()} → ${until.toISOString()}`);
+	p();
+	await groups(env, since);
+	await actions(env, since);
+	// Observability keeps 7 days at most; the query window is capped at 72 h to bound the read
+	const logSince = new Date(Math.max(since.getTime(), until.getTime() - 72 * 3600_000));
+	for (const [app, scripts] of Object.entries(scriptsFor(env))) for (const s of scripts) await logs(app, s, logSince, until);
+	process.stdout.write(out.join('\n') + '\n');
+}
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
+	main().catch((error) => {
+		process.stderr.write(`prod-errors failed: ${error instanceof Error ? error.message : String(error)}\n`);
+		process.exit(1);
+	});
+}

@@ -1,0 +1,60 @@
+name: Prod errors
+
+# Read-only: the errors one environment recorded (scripts/ops/prod-errors.ts): admin Errors page
+# groups and their latest sample, open needs-action items, and warn/error lines from Workers
+# Observability for web, admin-web, api-videos, admin-api, media, processor, websocket, scheduler and
+# Auth. D1 is read with bounded SELECTs on indexed columns through the Cloudflare API; the
+# Observability query only reads. No app endpoint is called and nothing is changed. Prints no
+# secrets, emails or user ids.
+on:
+  workflow_dispatch:
+    inputs:
+      env:
+        description: Environment
+        type: choice
+        options: [production, stage]
+        default: production
+      hours:
+        description: Hours back (1-168; logs at most 72)
+        type: string
+        default: '72'
+  pull_request:
+    paths:
+      - scripts/ops/prod-errors.ts
+      - .github/workflows/prod-errors.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prod-errors
+  cancel-in-progress: false
+
+jobs:
+  report:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Tests
+        run: node --experimental-strip-types --no-warnings --test scripts/ops/__tests__/prod-errors.test.ts
+      - name: Report
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # A PR run reads stage only
+          ENV_NAME: ${{ inputs.env || 'stage' }}
+          HOURS: ${{ inputs.hours || '24' }}
+        run: |
+          set -o pipefail
+          node --experimental-strip-types --no-warnings scripts/ops/prod-errors.ts --env "$ENV_NAME" --hours "$HOURS" | tee report.md
+          head -c 900000 report.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prod-errors-${{ inputs.env || 'stage' }}
+          path: report.md
+          retention-days: 7
