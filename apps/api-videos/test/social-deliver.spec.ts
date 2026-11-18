@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import {
 	X_LINK_POST_COST_MICROS,
 	X_POST_COST_MICROS,
+	composePostText,
 	normalizeSocialSettings,
 	verifyWebhookSignature,
 	spendMonth,
@@ -364,6 +365,35 @@ describe('composing a post', () => {
 		const r = await composePost(longTitle, d({ network: 'bluesky', format: 'link' }), 'en', '{title}\n\n{url}', async () => null);
 		assert.ok([...new Intl.Segmenter().segment(r.request.text)].length <= 300);
 		assert.ok(r.request.text.endsWith(content.url.en));
+	});
+
+	it("Studio's preview (composePostText) is exactly what the sender posts, cut the same way", async () => {
+		const long = { ...content, title: { en: 'A long title '.repeat(40), ar: 'عنوان طويل جدًا '.repeat(40) } };
+		const templates = ['{title}\n\n{url}', '{channel}: {title}\n{url}', '{title}', '{url}'];
+		for (const network of ['x', 'telegram', 'bluesky', 'mastodon'] as const) {
+			for (const format of ['video', 'link'] as const) {
+				for (const include_link of [0, 1]) {
+					for (const language of ['en', 'ar'] as const) {
+						for (const template of templates) {
+							for (const c of [content, long]) {
+								const sent = await composePost(c, d({ network, format, include_link }), language, template, async () => 1000);
+								const preview = composePostText({
+									template,
+									values: { title: c.title[language], channel: c.channel.name[language], url: c.url[language], text: '' },
+									network,
+									event: 'video',
+									format,
+									includeLink: !!include_link,
+								});
+								assert.equal(preview.text, sent.request.text, `${network} ${format} ${include_link} ${language} ${template}`);
+								assert.ok(preview.length <= preview.limit);
+								assert.equal(preview.cut, preview.fullLength > preview.limit);
+							}
+						}
+					}
+				}
+			}
+		}
 	});
 
 	it('live and post events are always link posts', async () => {

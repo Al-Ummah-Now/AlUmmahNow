@@ -7,7 +7,7 @@
  * Items come from the search index (public rows of the channel, one indexed query) and are then read like a
  * post would be (loadSocialContent), so anything made private since it was indexed is left out.
  */
-import { type SocialEvent, type SocialFeedKind, type SocialLanguage } from '@al-ummah/shared-types';
+import { type SocialEvent, type SocialFeedKind, type SocialLanguage, type SocialPreview } from '@al-ummah/shared-types';
 import R2Repository from '../r2Repo';
 import { loadSocialContent, webOrigin, type SocialContent, type SocialContentEnv } from './content';
 
@@ -139,4 +139,45 @@ export function buildRss(feed: { channel: SocialContent['channel']; items: FeedI
   </channel>
 </rss>
 `;
+}
+
+const PREVIEW_ROWS = 3;
+
+/**
+ * The newest public video, Short, live recording and community post of a channel (a few rows each, the first that is
+ * still public wins). Null when the channel isn't public. Live recordings are listed as videos (search_videos is_live).
+ */
+export async function previewItems(env: FeedEnv, channelId: string): Promise<SocialPreview | null> {
+	const channel = await new R2Repository<{ name?: string; nameLocalized?: Record<string, string>; handle?: string; isDeleted?: boolean; isHidden?: boolean; isPrivate?: boolean; isSuspended?: boolean }>(env.channels).getObject(channelId);
+	if (!channel || channel.isDeleted || channel.isHidden || channel.isPrivate || channel.isSuspended) return null;
+	const origin = webOrigin(env);
+	const names = channel.nameLocalized ?? {};
+	const name = channel.name?.trim() || names.en || '';
+	const page = (lang: SocialLanguage) => (channel.handle ? `${origin}/${lang}/@${channel.handle}` : `${origin}/${lang}/channels/${encodeURIComponent(channelId)}`);
+	const preview: SocialPreview = { channel: { en: names.en || name, ar: names.ar || name }, channelUrl: { en: page('en'), ar: page('ar') }, items: {} };
+	const db = env.SEARCH_DB as D1Database | undefined;
+	if (!db) return preview;
+	const filters: Array<[SocialEvent, string]> = [
+		['video', 'AND is_short = 0 AND is_live = 0'],
+		['short', 'AND is_short = 1'],
+		['live', 'AND is_live = 1'],
+	];
+	const lists = await Promise.all([
+		...filters.map(([, filter]) =>
+			db.prepare(`SELECT id FROM search_videos WHERE channel_id = ? AND visible = 1 ${filter} ORDER BY created_at DESC LIMIT ?`).bind(channelId, PREVIEW_ROWS).all<{ id: string }>(),
+		),
+		db.prepare('SELECT id FROM search_posts WHERE channel_id = ? AND visible = 1 ORDER BY created_at DESC LIMIT ?').bind(channelId, PREVIEW_ROWS).all<{ id: string }>(),
+	]);
+	const events: SocialEvent[] = ['video', 'short', 'live', 'post'];
+	await Promise.all(
+		events.map(async (event, i) => {
+			for (const { id } of lists[i]!.results ?? []) {
+				const content = await loadSocialContent(env, channelId, event === 'post' ? 'post' : event === 'short' ? 'short' : 'video', id, { playable: false });
+				if (!content) continue;
+				preview.items[event] = { title: content.title, url: content.url, ...(content.text ? { text: content.text } : {}) };
+				return;
+			}
+		}),
+	);
+	return preview;
 }

@@ -12,6 +12,7 @@ import type {
   SocialNetwork,
   SocialTemplate,
   SocialWebhookView,
+  SocialPreview,
 } from '@al-ummah/shared-types';
 import { apiRequestServerResult, buildApiUrl } from '@/lib/api/api-client';
 import { getServerAuthContext } from '@/lib/api/server-auth';
@@ -24,6 +25,8 @@ export interface SocialOverview {
   networks: Record<SocialNetwork, { available: boolean; configured: boolean }>;
   feeds: Record<SocialFeedKind, Record<SocialLanguage, string>>;
   limits: { webhooks: number };
+  /** Sample content for the Post text preview; null when it couldn't be read */
+  preview?: SocialPreview | null;
 }
 
 export interface ShareKit {

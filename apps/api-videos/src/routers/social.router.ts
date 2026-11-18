@@ -64,7 +64,7 @@ import {
 	type VideoObject,
 	type NamedChannel,
 } from '@al-ummah/shared-types';
-import { buildRss, feedItems, FEED_CACHE_SECONDS } from '../lib/social/feed';
+import { buildRss, feedItems, previewItems, FEED_CACHE_SECONDS } from '../lib/social/feed';
 import { logger } from '../lib/logger';
 import { roleOnChannel } from '../lib/channelAccess';
 import R2Repository from '../lib/r2Repo';
@@ -174,17 +174,23 @@ socialRouter.get('/channel/:channelId', async (c) => {
 	const channelId = c.req.param('channelId');
 	try {
 		await requireRole(c, channelId, 'channel.edit');
-		const [accounts, templates, deliveries, webhooks, readiness, settings] = await Promise.all([
+		const [accounts, templates, deliveries, webhooks, readiness, settings, preview] = await Promise.all([
 			channelAccountViews(c.env, channelId),
 			listTemplates(c.env, channelId),
 			listDeliveries(c.env, channelId, 30),
 			listWebhooks(c.env, channelId),
 			networkReadiness(c.env),
 			readPlatformSettings(c.env),
+			// The Post text preview's sample content; without it Studio uses its own sample
+			previewItems(c.env as never, channelId).catch((error) => {
+				logger.warn('[Social] Preview items unavailable', { channelId, error: error instanceof Error ? error.message : String(error) });
+				return null;
+			}),
 		]);
 		c.header('Cache-Control', 'private, no-store');
 		return c.json({
 			accounts,
+			preview,
 			templates,
 			deliveries,
 			webhooks: webhooks.map(webhookView),

@@ -10,10 +10,8 @@ import {
 	MessageType,
 	SOCIAL_NETWORK_RULES,
 	X_LINK_POST_COST_MICROS,
-	fitText,
-	renderTemplate,
+	composePostText,
 	signWebhook,
-	stripUrls,
 	webhookEventFor,
 	xPostCostMicros,
 	type SocialAttemptResult,
@@ -120,16 +118,16 @@ export async function composePost(
 ): Promise<ComposedPost> {
 	const rules = SOCIAL_NETWORK_RULES[delivery.network];
 	const url = content.url[language];
-	let text = renderTemplate(templateBody, {
-		title: content.title[language],
-		channel: content.channel.name[language],
-		url,
-		text: content.text ?? '',
-	});
 	const asVideo = delivery.format === 'video' && (delivery.event === 'video' || delivery.event === 'short');
-	// X bills a post with a URL at the link price: a video post leaves the link out unless the rule adds it
-	if (asVideo && delivery.network === 'x' && !delivery.include_link) text = stripUrls(text);
-	if (!text.trim()) text = content.title[language];
+	// The same composition Studio previews (shared-types composePostText)
+	const { text } = composePostText({
+		template: templateBody,
+		values: { title: content.title[language], channel: content.channel.name[language], url, text: content.text ?? '' },
+		network: delivery.network,
+		event: delivery.event,
+		format: delivery.format,
+		includeLink: !!delivery.include_link,
+	});
 
 	let video: PostRequest['video'];
 	if (asVideo) {
@@ -144,7 +142,6 @@ export async function composePost(
 		}
 		video = { url: content.video.url, bytes, durationSeconds: seconds, width: content.video.width, height: content.video.height };
 	}
-	text = fitText(rules, text, asVideo ? rules.maxCaption : rules.maxText);
 	const hasUrl = /https?:\/\//.test(text);
 	return {
 		hasUrl,

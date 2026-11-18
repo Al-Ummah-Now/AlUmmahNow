@@ -28,6 +28,8 @@ const BOT_TOKEN = '7000001:LocalStackFakeBotTokenForE2EOnly_abcdefgh';
 const data = useOwnData(fixturesTest);
 let owner: Creator;
 let channelId: string;
+/** What SOC-01 sent to the fake Mastodon instance (SOC-06 compares the preview with it) */
+let sentToMastodon = '';
 
 /**
  * The creator is made in a worker fixture, not beforeAll: Playwright resolves storageState (a context option)
@@ -109,10 +111,46 @@ test('SOC-01 connect Mastodon, turn on community posts, a new post goes out and 
   await expect
     .poll(async () => (await control<FakePost[]>('/__fake/social/posts?network=mastodon')).find((p) => p.account === instance && p.text.includes(text)), { timeout: 90_000, message: 'the post reached the fake instance' })
     .toBeTruthy();
+  sentToMastodon = (await control<FakePost[]>('/__fake/social/posts?network=mastodon')).find((p) => p.account === instance && p.text.includes(text))!.text;
 
   await page.reload();
   const sent = page.getByTestId('social-delivery').filter({ hasText: text.slice(0, 30) });
   await expect(sent).toHaveAttribute('data-status', 'sent', { timeout: 30_000 });
+});
+
+test('SOC-06 Post text: chips insert placeholders, and the preview shows exactly what the network gets', async ({ page }) => {
+  expect(sentToMastodon, 'SOC-01 sent a post').not.toBe('');
+  await openSocial(page);
+  await expect(page.getByTestId('social-templates-hint')).toContainText('{title}');
+  // The community post preview is filled in from the newest post (SOC-01's) and is what Mastodon received
+  const postPreview = page.getByTestId('social-preview-post-en');
+  await expect
+    .poll(async () => {
+      await page.reload();
+      return (await page.getByTestId('social-preview-text-post-en').innerText()).trim();
+    }, { timeout: 60_000, message: 'the preview uses the newest post once it is indexed' })
+    .toBe(sentToMastodon.trim());
+  await expect(postPreview).toHaveAttribute('data-network', 'mastodon');
+  await expect(page.getByTestId('social-preview-count-post-en')).toHaveText(new RegExp(`^\\d+/500$`));
+
+  // A chip puts {title} where the cursor is, and the preview follows as they type
+  const area = page.getByTestId('social-template-video-en');
+  await area.fill('Watch: ');
+  await area.press('End');
+  await page.getByTestId('social-chip-video-en-title').click();
+  await expect(area).toHaveValue('Watch: {title}');
+  await expect(area).toBeFocused();
+  await expect(page.getByTestId('social-preview-text-video-en')).not.toContainText('{title}');
+  // Too long for Mastodon: cut with an ellipsis and a note
+  await area.fill(`${'long text '.repeat(80)}{url}`);
+  await expect(page.getByTestId('social-preview-cut-video-en')).toBeVisible();
+  await expect(page.getByTestId('social-preview-count-video-en')).toHaveText(/^(4\d\d|500)\/500$/);
+  await expect(page.getByTestId('social-preview-text-video-en')).toContainText('…');
+
+  // Arabic: right to left, Arabic digits in the count
+  await openSocial(page, 'ar');
+  await expect(page.getByTestId('social-preview-text-post-ar')).toHaveAttribute('dir', 'rtl');
+  await expect(page.getByTestId('social-preview-count-post-ar')).toHaveText(/^[٠-٩]+\/٥٠٠$/);
 });
 
 test('SOC-02 connect a Telegram channel with the code, then disconnect it in the in-app dialog', async ({ page }) => {
