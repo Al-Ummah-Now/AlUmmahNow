@@ -2,8 +2,10 @@
 
 import React from 'react';
 import Link from '@/components/common/AppLink';
-import { useRouter } from 'next/navigation';
-import { useLanguage } from '@/hooks/useLanguage';
+import { usePathname, useRouter } from 'next/navigation';
+import { useI18n } from '@/lib/i18n';
+import { parseLocaleFromPath } from '@/lib/i18n/utils';
+import type { SupportedLanguage } from '@/lib/i18n';
 import { MAIN_CONTENT_ID } from '@/components/SkipLinks';
 
 /**
@@ -20,7 +22,11 @@ import { MAIN_CONTENT_ID } from '@/components/SkipLinks';
  * - Two navigation options: Go Home and Go Back
  */
 export default function NotFoundPage() {
-  const { t, isRTL, locale } = useLanguage();
+  // Static translations, no React Query: Next can render the not-found page outside the root
+  // layout (an unmatched server action POST, e.g. a stale page after a deploy), where no
+  // QueryClientProvider exists (prod 2026-11-17/18: "No QueryClient set" on POST /).
+  const locale = parseLocaleFromPath(usePathname() ?? '/') as SupportedLanguage;
+  const { t, isRTL } = useI18n(locale);
   const router = useRouter();
 
   const handleGoBack = () => {
