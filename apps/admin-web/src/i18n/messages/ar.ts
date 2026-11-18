@@ -1048,7 +1048,6 @@ const ar: Messages = {
     },
     title: 'رسائل التواصل',
     subtitle: 'الرسائل المرسلة من صفحة اتصل بنا',
-    totalCount: '{count} رسالة',
     newCount: '{count} جديدة',
     navBadge: 'رسائل غير مقروءة: {count}',
     filtersLabel: 'تصفية رسائل التواصل',

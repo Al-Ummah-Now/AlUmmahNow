@@ -167,8 +167,10 @@ export function ContactInbox({ messages, filters, viewerId, canManage, counts }:
               {m.name}
             </span>
           </Link>
-          <span className="block text-xs text-fg-subtle rtl:text-right" dir="ltr">
-            <EmailText email={m.email} />
+          <span className="block text-xs text-fg-subtle">
+            <bdi dir="ltr">
+              <EmailText email={m.email} />
+            </bdi>
           </span>
         </div>
       ),
@@ -205,7 +207,8 @@ export function ContactInbox({ messages, filters, viewerId, canManage, counts }:
     {
       id: 'assignee',
       header: t('contact.colAssignee'),
-      wide: true,
+      // Shown on phone cards too: a phone admin sees who owns a message
+      cardLabel: t('contact.colAssignee'),
       className: 'text-sm text-fg-muted min-w-0 md:max-w-48',
       cell: (m) =>
         m.assignee_id ? (
