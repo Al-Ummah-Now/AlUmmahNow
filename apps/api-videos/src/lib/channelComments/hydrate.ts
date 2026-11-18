@@ -43,6 +43,7 @@ interface Loaded {
 	fresh: ChannelCommentRow | null;
 	text: string;
 	title: string;
+	titleLocalized?: Record<string, string>;
 	urlPath: string;
 	isPinned: boolean;
 	isHearted: boolean;
@@ -54,7 +55,7 @@ interface Loaded {
 
 async function loadVideoTarget(env: HydrateEnv, videoId: string, rows: ChannelCommentRow[]): Promise<Loaded[]> {
 	const object = await env.videos.get(videoId);
-	const video = object ? ((await object.json()) as { title?: string; channelId?: string; isDeleted?: boolean; comments?: StoredComment[] }) : null;
+	const video = object ? ((await object.json()) as { title?: string; titleLocalized?: Record<string, string>; channelId?: string; isDeleted?: boolean; comments?: StoredComment[] }) : null;
 	const freshRows = new Map(projectVideoComments(videoId, video).map((r) => [r.commentId, r]));
 	const out: Loaded[] = [];
 	for (const row of rows) {
@@ -65,6 +66,7 @@ async function loadVideoTarget(env: HydrateEnv, videoId: string, rows: ChannelCo
 			fresh: freshRows.get(row.commentId) ?? null,
 			text: typeof comment?.text === 'string' ? comment.text : '',
 			title: video?.title ?? '',
+			...(video?.titleLocalized && typeof video.titleLocalized === 'object' ? { titleLocalized: video.titleLocalized } : {}),
 			urlPath: `/video/${videoId}`,
 			isPinned: comment?.isPinned === true,
 			isHearted: comment?.isHearted === true,
@@ -138,6 +140,7 @@ export async function hydrateRows(env: HydrateEnv, rows: ChannelCommentRow[], ta
 				kind: fresh.targetKind,
 				targetId: fresh.targetId,
 				targetTitle: l.title,
+				...(l.titleLocalized ? { targetTitleLocalized: l.titleLocalized } : {}),
 				targetUrlPath: l.urlPath,
 				parentId: fresh.parentId,
 				text: l.text,

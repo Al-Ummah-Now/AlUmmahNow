@@ -34,6 +34,8 @@ export interface StudioComment {
   kind: StudioCommentKind;
   targetId: string;
   targetTitle: string;
+  /** The video's title per language when the creator wrote one (posts have none) */
+  targetTitleLocalized?: Record<string, string>;
   /** '/video/<id>' or '/post/<id>' (no locale prefix) */
   targetUrlPath: string;
   parentId: string | null;
