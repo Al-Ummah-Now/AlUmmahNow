@@ -66,7 +66,7 @@ export default async function CommentsPage({ searchParams }: { searchParams: Pro
                 {data.items.map((c) => (
                   <tr role="row" key={`${c.videoId}:${c.id}`} className={cardTable.row} data-testid="comment-row" data-comment-id={c.id}>
                     <td role="cell" className={cardTable.cell}>
-                      <p className="text-fg text-sm whitespace-pre-wrap break-words max-w-prose" dir="auto">{c.text}</p>
+                      <p className="text-fg text-sm whitespace-pre-wrap break-words max-w-prose"><bdi>{c.text}</bdi></p>
                       <div className="mt-1 flex flex-wrap gap-1">
                         {c.parentId && <Chip tone="neutral">{t('comments.reply')}</Chip>}
                         {c.isHidden && <Chip tone="bad">{t('comments.hidden')}</Chip>}
@@ -82,11 +82,11 @@ export default async function CommentsPage({ searchParams }: { searchParams: Pro
                         ]}
                       />
                     </td>
-                    <td role="cell" className={`${tdClass} ${wideOnly} text-sm`}>
-                      <Link href={`/videos/${encodeURIComponent(c.videoId)}`} className={`${linkClass} break-words`} dir="auto">{c.videoTitle || t('videos.untitled')}</Link>
+                    <td role="cell" className={`${tdClass} ${wideOnly} text-sm md:min-w-[12rem]`}>
+                      <Link href={`/videos/${encodeURIComponent(c.videoId)}`} className={`${linkClass} [overflow-wrap:anywhere]`} dir="auto">{c.videoTitle || t('videos.untitled')}</Link>
                     </td>
-                    <td role="cell" className={`${tdClass} ${wideOnly} text-sm`}>
-                      <Link href={`/users/${encodeURIComponent(c.userId)}`} className={`${linkClass} break-words`} dir="auto" data-testid="comment-user-link">{userName(c.userId)}</Link>
+                    <td role="cell" className={`${tdClass} ${wideOnly} text-sm md:min-w-[9rem]`}>
+                      <Link href={`/users/${encodeURIComponent(c.userId)}`} className={`${linkClass} [overflow-wrap:anywhere]`} dir="auto" data-testid="comment-user-link">{userName(c.userId)}</Link>
                     </td>
                     <td role="cell" className={`${tdClass} ${wideOnly} text-sm text-fg-muted whitespace-nowrap`}><time dateTime={c.createdAt}>{formatDate(c.createdAt, locale, true)}</time></td>
                     {canDelete && (

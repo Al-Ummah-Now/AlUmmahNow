@@ -14,7 +14,7 @@ import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import type { AdminContentPermission, AdminVideoRow } from '@/lib/api/content-types';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatNumber, type MessageKey } from '@/i18n/translate';
+import { formatCount, formatNumber, type MessageKey } from '@/i18n/translate';
 import { formatClock } from '@al-ummah/shared-types';
 import { linkClass } from '@/components/ui';
 import { ActionFeedback, ConfirmButton } from '@/components/content/actions';
@@ -236,17 +236,18 @@ export function VideosList() {
             </div>
             <div className="min-w-0 flex-1">
               <Link href={detailHref(v.id)} className={`${linkClass} block font-medium`} data-testid="video-link" data-row-primary title={titleOf(v)}>
-                <span className={`clamp-fade-2 ${adminVideoTitle(v, locale) ? '' : 'italic text-fg-muted'}`} dir="auto" data-testid="video-title">
-                  {titleOf(v)}
+                <span className={`clamp-fade-2 ${adminVideoTitle(v, locale) ? '' : 'italic text-fg-muted'}`} data-testid="video-title">
+                  {/* The block keeps the page's direction (a title in the other script lines up with the lines below); <bdi> isolates the title */}
+                  <bdi>{titleOf(v)}</bdi>
                 </span>
               </Link>
               {/* The channel and views, while their columns are hidden (phone, or a narrow table beside the sidebar) */}
               {/* The channel and the views on their own lines while their columns are hidden: no separator
                   left dangling when a long channel name wraps, and each isolated from the other's direction */}
-              <span className="block @3xl:hidden text-xs text-fg-muted mt-1 break-words" dir="auto">
-                {v.channelName || (v.channelId ? t('content.unnamedChannel') : t('content.noChannel'))}
+              <span className="block @3xl:hidden text-xs text-fg-muted mt-1 break-words">
+                <bdi>{v.channelName || (v.channelId ? t('content.unnamedChannel') : t('content.noChannel'))}</bdi>
               </span>
-              <span className="block @6xl:hidden text-xs text-fg-muted">{t('videos.viewsCount', { count: v.views })}</span>
+              <span className="block @6xl:hidden text-xs text-fg-muted">{formatCount(v.views, 'view', locale)}</span>
             </div>
           </div>
         );
@@ -255,12 +256,12 @@ export function VideosList() {
     {
       id: 'channel',
       from: '3xl',
-      minWidth: 'md:min-w-[8rem]',
+      minWidth: 'md:min-w-[9rem]',
       header: t('videos.colChannel'),
       className: 'text-sm',
       cell: (v) =>
         v.channelId ? (
-          <Link href={`/channels/${enc(v.channelId)}`} className={`${linkClass} break-words`} dir="auto" data-testid="video-channel-link">
+          <Link href={`/channels/${enc(v.channelId)}`} className={`${linkClass} [overflow-wrap:anywhere]`} dir="auto" data-testid="video-channel-link">
             {v.channelName || t('content.unnamedChannel')}
           </Link>
         ) : (
@@ -270,12 +271,12 @@ export function VideosList() {
     {
       id: 'uploader',
       from: '5xl',
-      minWidth: 'md:min-w-[8rem]',
+      minWidth: 'md:min-w-[9rem]',
       header: t('videos.colUploader'),
       className: 'text-sm',
       cell: (v) =>
         v.ownerId ? (
-          <Link href={`/users/${enc(v.ownerId)}`} className={`${linkClass} break-words`} dir="auto" data-testid="video-owner-link">
+          <Link href={`/users/${enc(v.ownerId)}`} className={`${linkClass} [overflow-wrap:anywhere]`} dir="auto" data-testid="video-owner-link">
             {v.ownerName || t('content.unnamedAccount')}
           </Link>
         ) : (

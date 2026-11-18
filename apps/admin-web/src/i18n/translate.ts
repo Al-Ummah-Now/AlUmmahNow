@@ -8,7 +8,7 @@
 import en, { type Messages } from './messages/en';
 import ar from './messages/ar';
 import type { Locale } from './config';
-import { dateTimeFormat, fillTemplate, numberFormat } from '@al-ummah/shared-types';
+import { dateTimeFormat, fillTemplate, formatCountNoun, numberFormat, type CountNoun } from '@al-ummah/shared-types';
 
 export type { Messages };
 
@@ -75,6 +75,14 @@ export function formatHour(hour: string, locale: Locale): string {
   const date = hourDate(hour);
   if (Number.isNaN(date.getTime())) return hour;
   return dateTimeFormat(locale, { day: 'numeric', month: 'short', hour: 'numeric', timeZone: 'UTC' }).format(date);
+}
+
+/**
+ * A count with its noun ("12 comments", «٣ تعليقات», «تعليقان»): the shared formatter, so Arabic
+ * number agreement is the same as on the site. A no-break space keeps the number with its noun.
+ */
+export function formatCount(count: number, noun: CountNoun, locale: Locale): string {
+  return formatCountNoun(locale, count, noun, { joiner: '\u00a0' });
 }
 
 export function formatNumber(value: number, locale: Locale): string {

@@ -29,4 +29,15 @@ describe('admin video titles', () => {
 		assert.deepEqual(out[0]!.titleLocalized, { ar: 'مخزّن' });
 		assert.equal('titleLocalized' in out[1]!, false);
 	});
+
+	it("the uploader is the account's name, else its email, else nothing (never the id)", async () => {
+		const base = { is_public: 1, is_hidden: 0, is_deleted: 0, views: 0, owner_id: 'u' };
+		const rows = [
+			{ ...base, id: 'a', owner_name: 'Aisha Rahman', owner_email: 'aisha@example.com' },
+			{ ...base, id: 'b', owner_name: null, owner_email: 'nameless@example.com' },
+			{ ...base, id: 'c', owner_name: '', owner_email: null },
+		];
+		const out = await hydrateVideos({ videos: new MemoryBucket() } as never, rows as never);
+		assert.deepEqual(out.map((v) => v.ownerName), ['Aisha Rahman', 'nameless@example.com', null]);
+	});
 });

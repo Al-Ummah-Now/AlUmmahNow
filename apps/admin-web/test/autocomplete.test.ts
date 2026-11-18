@@ -278,7 +278,7 @@ describe('autocomplete: markup', () => {
     const html = box({ kind: 'channel', mode: 'pick', name: 'channelId', label: 'Channel' });
     assert.match(html, /<input type="hidden" name="channelId" value=""\/>/);
     assert.equal((html.match(/name="/g) ?? []).length, 1, 'only the hidden input is submitted');
-    assert.match(html, /placeholder="Name, @handle, email or ID"/);
+    assert.match(html, /placeholder="Name, @handle or email"/);
   });
 
   it('a chosen id shows as a chip with its name, the id left-to-right, Change and Remove', () => {
