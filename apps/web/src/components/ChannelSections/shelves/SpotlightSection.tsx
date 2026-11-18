@@ -10,6 +10,7 @@ import { removeUnwantedChars } from '@/lib/utility';
 import { useLanguage } from '@/hooks/useLanguage';
 import { logger } from '@/lib/logger-client';
 import { HeroThumb } from '@/components/ThemeDemo/HomeHero';
+import { glueDashes } from '@/lib/format/glueDashes';
 
 interface SpotlightProps {
   channelId: string;
@@ -80,7 +81,7 @@ export function SpotlightSection({ channelId, trailer, returning }: SpotlightPro
         </HeroThumb>
         <div className="home-hero-b">
           <span className="home-hero-tag">{kind === 'trailer' ? r.trailer : r.forSubscribers}</span>
-          <h2 dir="auto">{title}</h2>
+          <h2 dir="auto">{glueDashes(title)}</h2>
           {description && (
             <p className="spotlight-desc" dir="auto">
               {description}

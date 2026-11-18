@@ -11,6 +11,7 @@ import { aspectOf } from '@/lib/video/aspect';
 import { heroSrcSet, heroThumbFit, type HeroThumbnailSizes, type HeroVideo } from '@/lib/video/hero';
 import { channelLabel } from '@/lib/channel-name';
 import { thumbSrcSet } from '@/lib/embed/share-image';
+import { glueDashes } from '@/lib/format/glueDashes';
 
 const heroCopy = (lang: string) => (lang === 'ar' ? { tag: 'مختارات', watch: 'شاهد الآن' } : { tag: 'Featured', watch: 'Watch now' });
 
@@ -105,7 +106,7 @@ export function HomeHero({ video }: { video: VideoObject }) {
       <HeroThumb video={video} href={href} alt={title} />
       <div className="home-hero-b">
         <span className="home-hero-tag">{copy.tag}</span>
-        <h2>{title}</h2>
+        <h2>{glueDashes(title)}</h2>
         <p>{channelLabel(video, lang)}</p>
         <Link href={href} className="b b-primary"><Play aria-hidden="true" />{copy.watch}</Link>
       </div>

@@ -58,6 +58,11 @@ describe('home featured hero', () => {
 
   beforeEach(() => jest.clearAllMocks());
 
+  it('should never start a title line with a dash (it is glued to the word before it)', () => {
+    const { container } = render(<VideosPage initialPage={{ data: [video('v1', 'Surah Al-Kahf — full recitation')], cursor: '' } as never} />);
+    expect(container.querySelector('section.home-hero h2')!.textContent).toBe('Surah Al-Kahf\u00A0— full recitation');
+  });
+
   it('holds the hero frame while the first page loads, then swaps in the hero in its place', async () => {
     let resolve!: (v: unknown) => void;
     mockFetchVideos.mockReturnValueOnce(new Promise((r) => { resolve = r; }) as never);
