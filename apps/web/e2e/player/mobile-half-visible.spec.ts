@@ -68,7 +68,7 @@ async function showShare(page: Page, share: number): Promise<number> {
 const settle = (page: Page) => page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
 
 /** What a viewer can tap: below the top bar and above the bottom tab bar */
-async function expectInTappableArea(page: Page, target: Locator, what: string): Promise<void> {
+async function expectInTappableArea(target: Locator, what: string): Promise<void> {
   const { top, bottom, min, max } = await target.evaluate((el) => {
     const r = el.getBoundingClientRect();
     const header = document.querySelector('header');
@@ -91,7 +91,7 @@ async function tapControl(page: Page, player: Locator, selector: string): Promis
   const control = player.locator(selector).first();
   await settle(page);
   // A tap meant for the player must never land on the top bar or the tab bar
-  await expectInTappableArea(page, control, selector);
+  await expectInTappableArea(control, selector);
   if (await player.evaluate((el) => el.classList.contains('vjs-user-inactive') && el.classList.contains('vjs-playing'))) {
     const before = await counts(page);
     const p = await centre(control);
