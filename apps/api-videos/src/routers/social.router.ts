@@ -42,6 +42,7 @@ import {
 	SOCIAL_EVENTS,
 	SOCIAL_FEED_KINDS,
 	SOCIAL_LANGUAGES,
+	SOCIAL_NETWORKS,
 	SOCIAL_WEBHOOK_EVENTS,
 	can,
 	channelNameFields,
@@ -484,6 +485,23 @@ socialRouter.get('/channel/:channelId/share-kit/:videoId/clip-source', async (c)
 // =================================================================================================
 // Public
 // =================================================================================================
+/**
+ * The networks a creator can connect on this site (switched on and set up). Help names only these, and none when
+ * the list is empty (owner rule: a feature that is off or not set up leaves no trace). Public, cached 5 minutes.
+ */
+socialRouter.get('/networks', async (c) => {
+	try {
+		const [settings, readiness] = await Promise.all([readPlatformSettings(c.env), networkReadiness(c.env)]);
+		const networks = settings.enabled ? SOCIAL_NETWORKS.filter((n) => readiness[n].configured && settings.networks[n].enabled) : [];
+		c.header('Cache-Control', 'public, max-age=300');
+		return c.json({ networks });
+	} catch (error) {
+		logger.warn('[Social] Network list unavailable', { error: error instanceof Error ? error.message : String(error) });
+		c.header('Cache-Control', 'no-store');
+		return c.json({ networks: [] });
+	}
+});
+
 socialRouter.get('/feeds/:channelId/:file', async (c) => {
 	try {
 		const channelId = c.req.param('channelId');

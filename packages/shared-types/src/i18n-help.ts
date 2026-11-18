@@ -6,6 +6,10 @@
  * `/{lang}/settings/privacy`). Pictures and clips are named by id; the capture script
  * (apps/web/e2e/help-capture) makes one file per id, language, device and light/dark.
  *
+ * Social auto-post text follows the site's setup (owner rule: off or not set up leaves no trace): `{networks}` is
+ * filled with the networks a creator can connect, a block with `network` shows only while that network is on, and a
+ * section with `requires: 'socialNetworks'` is left out when none is (apps/web/src/lib/help/social.ts).
+ *
  * Wording rules: names match what is on screen in each language; «مرئي / مرئيات» for video,
  * «المقاطع القصيرة» for Shorts (CLAUDE.md, wiki glossary).
  */
@@ -35,11 +39,13 @@ export type HelpPictureId = (typeof HELP_PICTURE_IDS)[number];
 export const HELP_CLIP_IDS = ['identity-switch', 'creating-upload', 'watching-mini-player'] as const;
 export type HelpClipId = (typeof HELP_CLIP_IDS)[number];
 
+import type { SocialNetwork } from './social';
+
 export type HelpBlock =
-  | { type: 'p'; text: string }
+  | { type: 'p'; text: string; network?: SocialNetwork }
   | { type: 'steps'; items: string[] }
   | { type: 'list'; items: string[] }
-  | { type: 'tip'; text: string }
+  | { type: 'tip'; text: string; network?: SocialNetwork }
   /** `markers` explains the numbered markers drawn on the picture, in order */
   | { type: 'figure'; picture: HelpPictureId; alt: string; markers?: string[] }
   | { type: 'clip'; clip: HelpClipId; label: string; caption: string }
@@ -52,6 +58,8 @@ export interface HelpSection {
   id: string;
   heading: string;
   blocks: HelpBlock[];
+  /** Left out while no social network can be connected on the site */
+  requires?: 'socialNetworks';
 }
 
 export interface HelpTopic {
@@ -356,14 +364,16 @@ export const HELP_EN: HelpTranslations = {
     },
     social: {
       title: 'Social accounts and scheduler tools',
-      summary: 'Post new uploads to X, Telegram, Bluesky and Mastodon, or use your channel feed in Hootsuite, Zapier, Make or IFTTT.',
+      summary: 'Post new uploads to your social accounts, or use your channel feed in Hootsuite, Zapier, Make or IFTTT.',
       sections: [
         {
           id: 'auto-post',
           heading: 'Post automatically',
+          requires: 'socialNetworks',
           blocks: [
-            { type: 'p', text: 'In **Studio → Social**, connect X, Telegram, Bluesky or Mastodon. For each account, choose the language it posts in and what it posts: new videos, Shorts, live streams and community posts, as the video itself or as a link.' },
-            { type: 'steps', items: ['Open **Studio → Social** and select **Connect** next to the network.', 'Sign in to the network and allow posting. For Telegram, add the bot named on the page to your channel as an administrator and post the code it shows.', 'Tick what the account should post. Edit the **Post text** if you like.'] },
+            { type: 'p', text: 'In **Studio → Social**, connect {networks}. For each account, choose the language it posts in and what it posts: new videos, Shorts, live streams and community posts, as the video itself or as a link.' },
+            { type: 'steps', items: ['Open **Studio → Social** and select **Connect** next to the network.', 'Sign in to the network and allow posting.', 'Tick what the account should post. Edit the **Post text** if you like.'] },
+            { type: 'p', network: 'telegram', text: 'For Telegram, add the bot named on the page to your channel as an administrator and post the code it shows.' },
             { type: 'tip', text: 'If a post fails, **Recent posts** says why and offers **Try again**. A video that is too long or too large for a network can be posted as a link instead.' },
           ],
         },
@@ -393,7 +403,7 @@ export const HELP_EN: HelpTranslations = {
           id: 'previews',
           heading: 'Link previews',
           blocks: [
-            { type: 'p', text: 'Links to videos, Shorts, posts and channels show a preview card with the title and thumbnail when you paste them into X, Facebook, WhatsApp, Telegram, LinkedIn, Slack or Discord. In **Studio → Content**, a video’s **Share kit** has its post text in English and Arabic, its link and its thumbnail.' },
+            { type: 'p', text: 'Links to videos, Shorts, posts and channels show a preview card with the title and thumbnail when you paste them into Facebook, WhatsApp, Telegram, LinkedIn, Slack or Discord. In **Studio → Content**, a video’s **Share kit** has its post text in English and Arabic, its link and its thumbnail.' },
           ],
         },
       ],
@@ -737,14 +747,16 @@ export const HELP_AR: HelpTranslations = {
     },
     social: {
       title: 'حسابات التواصل وأدوات الجدولة',
-      summary: 'انشر ما ترفعه في X وتيليجرام وBluesky وماستودون، أو استخدم خلاصة قناتك في Hootsuite أو Zapier أو Make أو IFTTT.',
+      summary: 'انشر ما ترفعه في حساباتك على مواقع التواصل، أو استخدم خلاصة قناتك في Hootsuite أو Zapier أو Make أو IFTTT.',
       sections: [
         {
           id: 'auto-post',
           heading: 'النشر التلقائي',
+          requires: 'socialNetworks',
           blocks: [
-            { type: 'p', text: 'في **الاستوديو ← التواصل الاجتماعي** اربط X أو تيليجرام أو Bluesky أو ماستودون. اختر لكل حساب لغة النشر وما يُنشر: المرئيات والمقاطع القصيرة والبث المباشر ومنشورات المجتمع الجديدة، بالمرئي نفسه أو برابط.' },
-            { type: 'steps', items: ['افتح **الاستوديو ← التواصل الاجتماعي** واختر **ربط** بجانب الشبكة.', 'سجّل الدخول إلى الشبكة واسمح بالنشر. في تيليجرام، أضف البوت المذكور في الصفحة إلى قناتك مشرفًا وانشر الرمز الذي يظهر.', 'حدّد ما ينشره الحساب، وعدّل **نص المنشور** إن شئت.'] },
+            { type: 'p', text: 'في **الاستوديو ← التواصل الاجتماعي** اربط {networks}. اختر لكل حساب لغة النشر وما يُنشر: المرئيات والمقاطع القصيرة والبث المباشر ومنشورات المجتمع الجديدة، بالمرئي نفسه أو برابط.' },
+            { type: 'steps', items: ['افتح **الاستوديو ← التواصل الاجتماعي** واختر **ربط** بجانب الشبكة.', 'سجّل الدخول إلى الشبكة واسمح بالنشر.', 'حدّد ما ينشره الحساب، وعدّل **نص المنشور** إن شئت.'] },
+            { type: 'p', network: 'telegram', text: 'في تيليجرام، أضف البوت المذكور في الصفحة إلى قناتك مشرفًا وانشر الرمز الذي يظهر.' },
             { type: 'tip', text: 'إذا فشل منشور، توضّح **المنشورات الأخيرة** السبب وتعرض **إعادة المحاولة**. ويمكن نشر المرئي الأطول أو الأكبر مما تقبله الشبكة رابطًا بدلًا من ذلك.' },
           ],
         },
@@ -774,7 +786,7 @@ export const HELP_AR: HelpTranslations = {
           id: 'previews',
           heading: 'معاينات الروابط',
           blocks: [
-            { type: 'p', text: 'تظهر روابط المرئيات والمقاطع القصيرة والمنشورات والقنوات ببطاقة معاينة فيها العنوان والصورة المصغّرة عند لصقها في X وفيسبوك وواتساب وتيليجرام ولينكدإن وSlack وDiscord. وفي **الاستوديو ← المحتوى** تضم **حزمة المشاركة** لكل مرئي نص المنشور بالعربية والإنجليزية ورابطه وصورته المصغّرة.' },
+            { type: 'p', text: 'تظهر روابط المرئيات والمقاطع القصيرة والمنشورات والقنوات ببطاقة معاينة فيها العنوان والصورة المصغّرة عند لصقها في فيسبوك وواتساب وتيليجرام ولينكدإن وSlack وDiscord. وفي **الاستوديو ← المحتوى** تضم **حزمة المشاركة** لكل مرئي نص المنشور بالعربية والإنجليزية ورابطه وصورته المصغّرة.' },
           ],
         },
       ],

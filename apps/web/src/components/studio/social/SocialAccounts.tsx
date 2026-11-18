@@ -286,7 +286,7 @@ export function SocialAccounts({ channelId, locale, accounts, networks, onAccoun
               </fieldset>
             </div>
 
-            <footer className="mt-4 flex flex-wrap gap-2">
+            <footer className="mt-4 flex flex-wrap justify-end gap-2">
               {account.status !== 'active' && networks[account.network]?.available ? (
                 <Button type="button" variant="secondary" className="min-h-11" onClick={() => onConnect(account.network)} data-testid="social-reconnect">{a.reconnect}</Button>
               ) : null}

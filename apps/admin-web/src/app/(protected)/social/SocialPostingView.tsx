@@ -143,11 +143,25 @@ export function SocialPostingView({ view, history, canEdit }: { view: SocialAdmi
 
   const historyText = (h: SocialHistoryEntry) => {
     const date = formatDate(h.createdAt, locale, true);
-    const actor = h.actorName || t('socialPosting.someAdmin');
-    if (h.key === 'social:settings') return t('socialPosting.historySettings', { date, actor });
-    const network = net(h.key.split(':')[2] ?? '');
-    const action = h.newValue.includes('cleared') ? t('socialPosting.actionCleared') : t('socialPosting.actionSet');
-    return t('socialPosting.historyCredentials', { date, network, action, actor });
+    // The sentence is built with a marker for the name, which is then kept on one line (bdi + nowrap): the line
+    // wraps before a person's name, never inside it
+    const marker = '\u2063';
+    const sentence = h.key === 'social:settings'
+      ? t('socialPosting.historySettings', { date, actor: marker })
+      : t('socialPosting.historyCredentials', {
+          date,
+          network: net(h.key.split(':')[2] ?? ''),
+          action: h.newValue.includes('cleared') ? t('socialPosting.actionCleared') : t('socialPosting.actionSet'),
+          actor: marker,
+        });
+    const [before, after = ''] = sentence.split(marker);
+    return (
+      <>
+        {before}
+        <bdi className="whitespace-nowrap" data-testid="social-history-actor">{h.actorName || t('socialPosting.someAdmin')}</bdi>
+        {after}
+      </>
+    );
   };
 
   return (

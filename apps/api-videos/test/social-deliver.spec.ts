@@ -21,7 +21,7 @@ import { attemptPost, attemptWebhook, composePost, giveUpPost, planEvent, requeu
 import { tokenBound } from '../src/lib/social/connect';
 import { writeCredentials, type SocialEnv } from '../src/lib/social/platform';
 import type { SocialContent } from '../src/lib/social/content';
-import { socialInternalRouter } from '../src/routers/social.router';
+import { socialInternalRouter, socialRouter } from '../src/routers/social.router';
 
 const KEK = `1:${Buffer.alloc(32, 7).toString('base64')}`;
 const WEB = 'https://videos.example.test';
@@ -445,5 +445,16 @@ describe('outgoing webhooks', () => {
 		assert.equal(redirect, 'manual');
 		assert.equal(r.outcome, 'retry');
 		assert.match(r.error!, /connection reset/);
+	});
+});
+
+describe('the networks Help may name (public)', () => {
+	it('lists only networks that are switched on and set up, and none when posting is off', async () => {
+		const { env } = makeEnv();
+		const list = async () => ((await (await socialRouter.request('/networks', {}, env as never)).json()) as { networks: string[] }).networks;
+		// Defaults: X off; Bluesky and Mastodon need no site credentials; Telegram needs the bot
+		assert.deepEqual(await list(), ['bluesky', 'mastodon']);
+		await writeSetting(env, 'platform', JSON.stringify(normalizeSocialSettings({ enabled: false })), 'test');
+		assert.deepEqual(await list(), []);
 	});
 });
