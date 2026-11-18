@@ -32,6 +32,8 @@ export class ProductFetchError extends Error {
   constructor(
     message: string,
     readonly retryable: boolean,
+    /** HTTP status of the refused call, when there was one */
+    readonly status?: number,
   ) {
     super(message);
   }
@@ -42,7 +44,7 @@ const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0
 const dayEnd = (day: string) => new Date(Date.parse(`${day}T00:00:00Z`) + 86_400_000).toISOString().replace('.000Z', 'Z');
 
 function httpError(what: string, status: number): ProductFetchError {
-  return new ProductFetchError(`${what} answered HTTP ${status}`, status === 429 || status >= 500);
+  return new ProductFetchError(`${what} answered HTTP ${status}`, status === 429 || status >= 500, status);
 }
 
 // ---------------------------------------------------------------------------------------------

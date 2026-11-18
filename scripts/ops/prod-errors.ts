@@ -32,6 +32,20 @@ export const REPORTS_D1: Record<EnvName, string> = {
 	stage: '2b2c07fc-2823-46e0-958f-acfc401544ff',
 };
 
+/** cost-monitor's D1 (collector runs, cost jobs), from apps/cost-monitor/wrangler.jsonc. */
+export const COSTS_D1: Record<EnvName, string> = {
+  production: 'af54e39e-6faa-4923-bba3-8dd7b3e58cf7',
+  stage: 'd4c4d007-c691-4f92-a728-b2ecd706a3ae',
+};
+
+/** Failed or partial collector runs (idx_collector_runs_started); detail holds counts and error text only. */
+export const COLLECTOR_RUNS_SQL = `SELECT kind, started_at, status, queries, rows_written, substr(detail, 1, 700) AS detail FROM collector_runs
+ WHERE started_at >= ?1 AND status IN ('failed', 'partial') ORDER BY started_at DESC LIMIT 12`;
+
+/** Failed cost jobs (idx_cost_job_runs_started). */
+export const COST_JOB_RUNS_SQL = `SELECT job, started_at, status, attempts, substr(detail, 1, 400) AS detail FROM cost_job_runs
+ WHERE started_at >= ?1 AND status = 'failed' ORDER BY started_at DESC LIMIT 20`;
+
 /** Worker script names per environment (apps/* wrangler configs and AlUmmahNowAuth apps/*). */
 export function scriptsFor(env: EnvName): Record<string, string[]> {
 	const s = env === 'stage' ? '-stage' : '';
@@ -62,7 +76,7 @@ export const ACTIONS_SQL = `SELECT app, source, title, detail, item_type, item_i
  FROM error_actions WHERE status = 'open' AND updated_at >= ?1 AND environment = ?2 ORDER BY updated_at DESC LIMIT 100`;
 
 /** Every statement this script sends: SELECT only. */
-export const ALL_SQL = [GROUPS_SQL, LATEST_EVENT_SQL, ACTIONS_SQL];
+export const ALL_SQL = [GROUPS_SQL, LATEST_EVENT_SQL, ACTIONS_SQL, COLLECTOR_RUNS_SQL, COST_JOB_RUNS_SQL];
 
 function arg(name: string, fallback: string): string {
 	const i = process.argv.indexOf(`--${name}`);
@@ -105,9 +119,9 @@ export function topFrames(stack: string | null | undefined, n = 4): string[] {
 const out: string[] = [];
 const p = (s = '') => out.push(scrub(s));
 
-async function d1(env: EnvName, sql: string, params: unknown[]): Promise<{ ok: boolean; rows: any[]; error?: string }> {
+async function d1(env: EnvName, sql: string, params: unknown[], db = REPORTS_D1[env]): Promise<{ ok: boolean; rows: any[]; error?: string }> {
 	if (!/^\s*SELECT\b/i.test(sql)) throw new Error('SELECT only');
-	const r = await post(`/accounts/${account}/d1/database/${REPORTS_D1[env]}/query`, { sql, params });
+	const r = await post(`/accounts/${account}/d1/database/${db}/query`, { sql, params });
 	if (!r.ok) return { ok: false, rows: [], error: errs(r) };
 	return { ok: true, rows: r.body?.result?.[0]?.results ?? [] };
 }
@@ -141,6 +155,21 @@ async function actions(env: EnvName, since: Date): Promise<void> {
 	if (!a.ok) return p(`- not readable: ${a.error}`), p();
 	p(`${a.rows.length} open`);
 	for (const r of a.rows) p(`- ${r.updated_at} [${r.app}/${r.source}] ${r.title}: ${String(r.detail ?? '').slice(0, 300)} (${r.item_type ?? ''} ${r.item_id ?? ''}, ×${r.occurrences}, attempts ${r.attempts})`);
+	p();
+}
+
+async function costRuns(env: EnvName, since: Date): Promise<void> {
+	p('## Cost collector: failed runs');
+	for (const [name, sql] of [['collector_runs', COLLECTOR_RUNS_SQL], ['cost_job_runs', COST_JOB_RUNS_SQL]] as const) {
+		const r = await d1(env, sql, [since.toISOString()], COSTS_D1[env]);
+		p(`### ${name}`);
+		if (!r.ok) {
+			p(`- not readable: ${r.error}`);
+			continue;
+		}
+		p(`${r.rows.length} rows`);
+		for (const row of r.rows) p(`- ${JSON.stringify(row)}`);
+	}
 	p();
 }
 
@@ -188,6 +217,7 @@ async function main(): Promise<void> {
 	p();
 	await groups(env, since);
 	await actions(env, since);
+	await costRuns(env, since);
 	// Observability keeps 7 days at most; the query window is capped at 72 h to bound the read
 	const logSince = new Date(Math.max(since.getTime(), until.getTime() - 72 * 3600_000));
 	for (const [app, scripts] of Object.entries(scriptsFor(env))) for (const s of scripts) await logs(app, s, logSince, until);

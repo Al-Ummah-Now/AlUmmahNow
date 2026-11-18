@@ -95,6 +95,8 @@ export interface HourlyOutcome {
   rows: number;
   dropped: number;
   changes: number;
+  /** Why a failed run failed (scrubbed message), for the admin item */
+  error?: string;
 }
 
 export async function runHourly(env: CollectorEnv, ctx: ExecutionContextLike | undefined, now = new Date(), fetchImpl: typeof fetch = fetch): Promise<HourlyOutcome> {
@@ -141,6 +143,7 @@ export async function runHourly(env: CollectorEnv, ctx: ExecutionContextLike | u
   } catch (error) {
     outcome.status = 'failed';
     detail.error = error instanceof Error ? error.message.slice(0, 300) : String(error).slice(0, 300);
+    outcome.error = String(detail.error);
     logger.error('[ops] Hourly collection failed', { error: detail.error });
   }
   await finishRun(env.COSTS_DB, runId, { status: outcome.status === 'skipped' ? 'ok' : outcome.status, queries: outcome.queries, rowsWritten: outcome.rows, detail: { ...detail, dropped: outcome.dropped, changes: outcome.changes } }, new Date());

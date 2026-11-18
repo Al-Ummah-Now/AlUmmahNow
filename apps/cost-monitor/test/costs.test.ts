@@ -195,6 +195,26 @@ describe('jobs', () => {
     assert.equal(action.itemUrl, '/costs');
   });
 
+  it('a rate-limited Containers list skips today\'s hourly pass; yesterday\'s daily pass still fails and retries', async () => {
+    const env = jobsEnv();
+    await store(env.COSTS_DB, 'cloudflare', 'cf-admin-token-abcdefghijklmnop');
+    const now = new Date('2026-11-18T22:10:00Z');
+    const f = apiFetch(env, { containersStatus: 429 });
+    const today = await runProductJob({ v: 1, job: 'containers', at: now.toISOString(), day: '2026-11-18' }, env, f, now);
+    assert.equal(today.status, 'skipped');
+    const yesterday = await runProductJob({ v: 1, job: 'containers', at: now.toISOString(), day: '2026-11-17' }, env, f, now);
+    assert.equal(yesterday.status, 'failed');
+    assert.equal(yesterday.permanent, false);
+  });
+
+  it('the hourly collection is one standing item: every hour updates it, the next good hour resolves it', () => {
+    const a: CostJob = { v: 1, job: 'hourly', at: '2026-11-18T21:10:00Z' };
+    const b: CostJob = { v: 1, job: 'hourly', at: '2026-11-18T22:10:00Z' };
+    assert.equal(jobKey(a), 'cost-job:hourly');
+    assert.equal(jobKey(a), jobKey(b));
+    assert.equal(jobKey({ v: 1, job: 'containers', at: a.at, day: '2026-11-18' }), 'cost-job:containers:2026-11-18');
+  });
+
   it('a refused key fails for good at once (no pointless retries)', async () => {
     const env = jobsEnv();
     await store(env.COSTS_DB, 'bunny', 'bunny-account-key-0123456789abcdef');

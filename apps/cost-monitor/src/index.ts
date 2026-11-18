@@ -23,7 +23,7 @@ export const runJob: JobRunner = async (job, env, ctx, fetchImpl): Promise<JobOu
   const e = env as CollectorEnv;
   if (job.job === 'hourly') {
     const o = await runHourly(e, ctx, at, fetchImpl);
-    if (o.status === 'failed') return { status: 'failed', detail: 'hourly collection failed (collector_runs has the detail)' };
+    if (o.status === 'failed') return { status: 'failed', detail: `hourly collection failed: ${o.error ?? 'no reason recorded'}` };
     return { status: o.status === 'skipped' ? 'skipped' : 'ok', rows: o.rows, detail: o.status === 'partial' ? 'some datasets failed' : undefined };
   }
   if (job.job === 'daily') {
