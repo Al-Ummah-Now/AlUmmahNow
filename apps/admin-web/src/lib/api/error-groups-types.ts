@@ -75,6 +75,10 @@ export interface ErrorEvent {
   stack: string | null;
   symbolicated_stack: string | null;
   shown: number;
+  /** Small non-personal context from the reporter (JSON object of scalars) */
+  extra_json?: string | null;
+  /** ErrorContext JSON (admin-api migration 0037): worker, ids, failed upstream call, breadcrumbs, queue job */
+  context_json?: string | null;
 }
 
 export interface ErrorActivity {
