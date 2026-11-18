@@ -319,7 +319,7 @@ export function VideosTab({ locale, channelId, role }: Props) {
       <h1 className="sr-only">{t.studio.tabs.videos}</h1>
       <p role="status" aria-live="polite" className={notice ? 'mb-3 text-sm text-foreground' : 'sr-only'}>{notice}</p>
 
-      <div role="group" aria-label={text.statusLabel} className="mb-4 flex gap-2 overflow-x-auto">
+      <div role="group" aria-label={text.statusLabel} className="mb-4 flex flex-wrap gap-2">
         {STATUSES.map((status) => (
           <Button
             key={status}
