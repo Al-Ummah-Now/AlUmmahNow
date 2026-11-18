@@ -3,7 +3,7 @@ import { ADMIN_CHANNEL_SORTS } from '@al-ummah/shared-types';
 import { listChannels } from '@/lib/api/content';
 import type { AdminChannelRow, AdminPage } from '@/lib/api/content-types';
 import { getI18n } from '@/i18n/server';
-import { formatDate, formatNumber } from '@/i18n/translate';
+import { formatCount, formatDate, formatNumber } from '@/i18n/translate';
 import { ErrorAlert, linkClass } from '@/components/ui';
 import { FilterForm } from '@/components/content/FilterForm';
 import { Chip, EmptyState, MetaLine, Notice, PageHeader, Pager, cardTable, tdClass, thClass, wideOnly } from '@/components/content/parts';
@@ -114,8 +114,8 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
                             {ch.name || t('content.unnamedChannel')}
                           </Link>
                           {ch.handle && (
-                            <span className="block text-sm text-fg-muted" dir="ltr">
-                              @{ch.handle}
+                            <span className="block text-sm text-fg-muted">
+                              <bdi dir="ltr">@{ch.handle}</bdi>
                             </span>
                           )}
                           {/* Phone: the owner, subscribers and views (their columns are hidden) */}
@@ -124,8 +124,8 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
                             testId="channel-meta"
                             parts={[
                               ch.ownerId ? <Link key="o" href={`/users/${encodeURIComponent(ch.ownerId)}`} className={linkClass}>{ownerName(ch)}</Link> : null,
-                              t('channels.subscribersCount', { count: ch.subscribers }),
-                              t('videos.viewsCount', { count: ch.views }),
+                              formatCount(ch.subscribers, 'subscriber', locale),
+                              formatCount(ch.views, 'view', locale),
                             ]}
                           />
                         </div>

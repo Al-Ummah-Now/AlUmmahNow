@@ -3,7 +3,7 @@ import { localizedPlaylistText } from '@al-ummah/shared-types';
 import { deletePlaylist, getContentPermissions, listPlaylists } from '@/lib/api/content';
 import type { AdminContentPermission, AdminPlaylistRow, CursorPage } from '@/lib/api/content-types';
 import { getI18n } from '@/i18n/server';
-import { formatDate, formatNumber } from '@/i18n/translate';
+import { formatCount, formatDate, formatNumber } from '@/i18n/translate';
 import { ErrorAlert, linkClass } from '@/components/ui';
 import { FilterForm } from '@/components/content/FilterForm';
 import { DeleteRowButton } from '@/components/content/actions';
@@ -75,7 +75,7 @@ export default async function PlaylistsPage({ searchParams }: { searchParams: Pr
                 return (
                   <tr role="row" key={p.id} className={cardTable.row} data-testid="playlist-row" data-playlist-id={p.id}>
                     <td role="cell" className={cardTable.cell}>
-                      <span className="block font-medium text-fg break-words" dir="auto">{title || <span className="italic text-fg-muted">{t('content.untitled')}</span>}</span>
+                      <span className="block font-medium text-fg break-words">{title ? <bdi>{title}</bdi> : <span className="italic text-fg-muted">{t('content.untitled')}</span>}</span>
                       <div className="mt-1 flex flex-wrap gap-1">
                         <Chip tone="neutral">{p.isPublic ? t('videos.public') : p.isUnlisted ? t('playlists.unlisted') : t('videos.private')}</Chip>
                         {!p.channelId && <Chip tone="neutral">{t('playlists.personal')}</Chip>}
@@ -87,16 +87,16 @@ export default async function PlaylistsPage({ searchParams }: { searchParams: Pr
                         parts={[
                           channelName && p.channelId ? <Link key="c" href={`/channels/${encodeURIComponent(p.channelId)}`} className={linkClass}>{channelName}</Link> : null,
                           ownerName && p.ownerId ? <Link key="o" href={`/users/${encodeURIComponent(p.ownerId)}`} className={linkClass}>{ownerName}</Link> : null,
-                          t('playlists.videoCount', { count: p.videoCount }),
+                          formatCount(p.videoCount, 'video', locale),
                           p.createdAt ? <time key="d" dateTime={p.createdAt}>{formatDate(p.createdAt, locale)}</time> : null,
                         ]}
                       />
                     </td>
-                    <td role="cell" className={`${tdClass} ${wideOnly} text-sm`}>
-                      {channelName && p.channelId ? <Link href={`/channels/${encodeURIComponent(p.channelId)}`} className={`${linkClass} break-words`} dir="auto" data-testid="playlist-channel-link">{channelName}</Link> : <span className="text-fg-subtle">{t('content.none')}</span>}
+                    <td role="cell" className={`${tdClass} ${wideOnly} text-sm md:min-w-[11rem]`}>
+                      {channelName && p.channelId ? <Link href={`/channels/${encodeURIComponent(p.channelId)}`} className={`${linkClass} [overflow-wrap:anywhere]`} dir="auto" data-testid="playlist-channel-link">{channelName}</Link> : <span className="text-fg-subtle">{t('content.none')}</span>}
                     </td>
-                    <td role="cell" className={`${tdClass} ${wideOnly} text-sm`}>
-                      {ownerName && p.ownerId ? <Link href={`/users/${encodeURIComponent(p.ownerId)}`} className={`${linkClass} break-words`} dir="auto" data-testid="playlist-owner-link">{ownerName}</Link> : <span className="text-fg-subtle">{t('content.none')}</span>}
+                    <td role="cell" className={`${tdClass} ${wideOnly} text-sm md:min-w-[11rem]`}>
+                      {ownerName && p.ownerId ? <Link href={`/users/${encodeURIComponent(p.ownerId)}`} className={`${linkClass} [overflow-wrap:anywhere]`} dir="auto" data-testid="playlist-owner-link">{ownerName}</Link> : <span className="text-fg-subtle">{t('content.none')}</span>}
                     </td>
                     <td role="cell" className={`${tdClass} ${wideOnly} text-end tabular-nums`}>{formatNumber(p.videoCount, locale)}</td>
                     <td role="cell" className={`${tdClass} ${wideOnly} text-sm text-fg-muted whitespace-nowrap`}>{p.createdAt ? <time dateTime={p.createdAt}>{formatDate(p.createdAt, locale)}</time> : t('content.none')}</td>

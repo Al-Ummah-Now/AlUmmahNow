@@ -64,25 +64,23 @@ export function PageHeader({ title, subtitle, total, t, children, deletedKind }:
     <div className="flex flex-wrap justify-between items-end gap-4 mb-6">
       <div>
         <h1 className="text-3xl font-bold text-fg">{title}</h1>
-        <p className="text-fg-muted mt-1">
-          {subtitle}
-          {total !== undefined && (
-            <>
-              {' · '}
-              <span data-testid="content-total" data-total={total}>
+        {/* One line of facts: the separators are clipped at a line edge, so a wrap never leaves one dangling */}
+        <MetaLine
+          className="block text-fg-muted mt-1"
+          parts={[
+            subtitle,
+            total !== undefined ? (
+              <span key="t" data-testid="content-total" data-total={total}>
                 {t('content.total', { count: total })}
               </span>
-            </>
-          )}
-          {deletedKind && (
-            <>
-              {' · '}
-              <Link href={`/deleted?kind=${encodeURIComponent(deletedKind)}`} className={`${linkClass} underline`} data-testid="view-deleted">
+            ) : null,
+            deletedKind ? (
+              <Link key="d" href={`/deleted?kind=${encodeURIComponent(deletedKind)}`} className={linkClass} data-testid="view-deleted">
                 {t('deleted.viewDeleted')}
               </Link>
-            </>
-          )}
-        </p>
+            ) : null,
+          ]}
+        />
       </div>
       {children}
     </div>

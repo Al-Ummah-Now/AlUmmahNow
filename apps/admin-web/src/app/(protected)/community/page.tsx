@@ -2,7 +2,7 @@ import Link from '@/components/AppLink';
 import { deletePost, getContentPermissions, listPosts } from '@/lib/api/content';
 import type { AdminContentPermission, AdminPostRow, CursorPage } from '@/lib/api/content-types';
 import { getI18n } from '@/i18n/server';
-import { formatDate, translateDynamic } from '@/i18n/translate';
+import { formatCount, formatDate, translateDynamic } from '@/i18n/translate';
 import { ErrorAlert, linkClass } from '@/components/ui';
 import { FilterForm } from '@/components/content/FilterForm';
 import { DeleteRowButton } from '@/components/content/actions';
@@ -61,11 +61,11 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
               {data.items.map((p) => {
                 const channelName = names.items[`channel:${p.channelId}`]?.title || t('content.unnamedChannel');
                 const channelHref = `/channels/${encodeURIComponent(p.channelId)}`;
-                const engagement = <MetaLine parts={[t('community.likesCount', { count: p.likes }), t('community.commentsCount', { count: p.comments })]} />;
+                const engagement = <MetaLine className="block" parts={[formatCount(p.likes, 'like', locale), formatCount(p.comments, 'comment', locale)]} />;
                 return (
                   <tr role="row" key={`${p.channelId}:${p.id}`} className={cardTable.row} data-testid="post-row" data-post-id={p.id}>
                     <td role="cell" className={cardTable.cell}>
-                      <p className="text-fg text-sm whitespace-pre-wrap break-words max-w-prose line-clamp-4" dir="auto">{p.text || <span className="italic text-fg-muted">{t('content.noText')}</span>}</p>
+                      <p className="text-fg text-sm whitespace-pre-wrap break-words max-w-prose line-clamp-4">{p.text ? <bdi>{p.text}</bdi> : <span className="italic text-fg-muted">{t('content.noText')}</span>}</p>
                       <div className="mt-1 flex flex-wrap items-center gap-1">
                         {p.type && <Chip tone="neutral">{translateDynamic(t, 'community.postTypes', p.type)}</Chip>}
                       </div>
@@ -75,14 +75,14 @@ export default async function CommunityPage({ searchParams }: { searchParams: Pr
                         testId="post-meta"
                         parts={[
                           <Link key="c" href={channelHref} className={linkClass}>{channelName}</Link>,
-                          t('community.likesCount', { count: p.likes }),
-                          t('community.commentsCount', { count: p.comments }),
+                          formatCount(p.likes, 'like', locale),
+                          formatCount(p.comments, 'comment', locale),
                           p.createdAt ? <time key="d" dateTime={p.createdAt}>{formatDate(p.createdAt, locale)}</time> : null,
                         ]}
                       />
                     </td>
                     <td role="cell" className={`${tdClass} ${wideOnly} text-sm`}>
-                      <Link href={channelHref} className={`${linkClass} break-words`} dir="auto" data-testid="post-channel-link">{channelName}</Link>
+                      <Link href={channelHref} className={`${linkClass} [overflow-wrap:anywhere]`} dir="auto" data-testid="post-channel-link">{channelName}</Link>
                     </td>
                     <td role="cell" className={`${tdClass} ${wideOnly} text-sm whitespace-nowrap`}>{engagement}</td>
                     <td role="cell" className={`${tdClass} ${wideOnly} text-sm text-fg-muted whitespace-nowrap`}>{p.createdAt ? <time dateTime={p.createdAt}>{formatDate(p.createdAt, locale, true)}</time> : t('content.none')}</td>
