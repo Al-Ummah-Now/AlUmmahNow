@@ -6,7 +6,9 @@
  * touchstart with `touch-action: none`, so with half the player scrolled off (most of what shows is
  * the bar) a finger put down to scroll paused the video and jumped it (lib/video/touch-seek-gate.ts).
  *
- * With the player 30%, 50% and 70% visible, in en and ar: each tap on play/pause, mute and
+ * With the player 30%, 50% and 70% visible below the top bar, in en and ar (on a portrait phone the
+ * player then pins under the top bar, as on the watch page, and its controls stay between the top bar
+ * and the tab bar): each tap on play/pause, mute and
  * fullscreen acts exactly once, a tap on the hidden bar only shows it, a tap on the progress bar
  * seeks there once, the page never jumps and the mini player never flips. Runs in the mobile
  * projects (Pixel 7 Chrome, iPhone 15 Safari).
@@ -42,14 +44,41 @@ const counts = (page: Page) => page.evaluate(() => ({ ...(window as unknown as {
 const resetCounts = (page: Page) => page.evaluate(() => { const c = (window as unknown as { counts: Record<string, number> }).counts; for (const k of Object.keys(c)) c[k] = 0; });
 const media = (page: Page) => page.evaluate(() => { const v = document.querySelector<HTMLVideoElement>('.video-js video')!; return { paused: v.paused, time: v.currentTime, muted: v.muted, rate: v.playbackRate }; });
 
-/** Scrolls so `share` of the player shows at the bottom of what is left on screen */
+/**
+ * Scrolls so `share` of the player shows below the page's top bar (sticky since #1544, so the top
+ * 56px of the screen are the bar, not the page), then lets the layout settle: on a portrait phone the
+ * watch page pins the player under the top bar on the next frame (nextPinned, lib/video/mini-player.ts),
+ * so a control measured before that frame is where the player was, not where it is. Returns the scroll.
+ */
 async function showShare(page: Page, share: number): Promise<number> {
-  return page.evaluate((s) => {
+  const scroll = await page.evaluate((s) => {
     window.scrollTo(0, 0);
+    const header = document.querySelector('header');
+    const sticky = header && /^(sticky|fixed)$/.test(getComputedStyle(header).position);
+    const inset = sticky ? Math.max(0, header.getBoundingClientRect().bottom) : 0;
     const r = document.querySelector('.video-js')!.getBoundingClientRect();
-    window.scrollTo({ top: Math.round(r.top + r.height * (1 - s)), behavior: 'instant' as ScrollBehavior });
+    window.scrollTo({ top: Math.round(r.top - inset + r.height * (1 - s)), behavior: 'instant' as ScrollBehavior });
     return window.scrollY;
   }, share);
+  await settle(page);
+  return scroll;
+}
+
+/** Two animation frames: scroll-driven layout (the pin) has been applied */
+const settle = (page: Page) => page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
+
+/** What a viewer can tap: below the top bar and above the bottom tab bar */
+async function expectInTappableArea(page: Page, target: Locator, what: string): Promise<void> {
+  const { top, bottom, min, max } = await target.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    const header = document.querySelector('header');
+    const bar = document.querySelector('.tabbar');
+    const fixedTop = header && /^(sticky|fixed)$/.test(getComputedStyle(header).position) ? header.getBoundingClientRect().bottom : 0;
+    const fixedBottom = bar && getComputedStyle(bar).display !== 'none' ? bar.getBoundingClientRect().top : innerHeight;
+    return { top: r.top, bottom: r.bottom, min: Math.max(0, fixedTop), max: fixedBottom };
+  });
+  expect(top, `${what} is below the top bar`).toBeGreaterThanOrEqual(min - 1);
+  expect(bottom, `${what} is above the tab bar`).toBeLessThanOrEqual(max + 1);
 }
 
 async function centre(target: Locator) {
@@ -60,6 +89,9 @@ async function centre(target: Locator) {
 /** Taps a bar control the way a viewer does: a first tap shows a hidden bar, the next one acts */
 async function tapControl(page: Page, player: Locator, selector: string): Promise<void> {
   const control = player.locator(selector).first();
+  await settle(page);
+  // A tap meant for the player must never land on the top bar or the tab bar
+  await expectInTappableArea(page, control, selector);
   if (await player.evaluate((el) => el.classList.contains('vjs-user-inactive') && el.classList.contains('vjs-playing'))) {
     const before = await counts(page);
     const p = await centre(control);
