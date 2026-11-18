@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { __setJwksForTests } from '../src/auth.ts';
 import { clearRevocationCache } from '../src/token-revocation.ts';
 import { WebSocketDurableObject } from '../src/websocket.ts';
+import { logger } from '../src/lib/logger.ts';
 import { ISSUER, WEB_CLIENT, makeSigner, unsignedToken, type Signer } from './helpers.ts';
 import { FakeCtx, FakeSocket, installWorkerGlobals, restoreWorkerGlobals } from './fakes.ts';
 
@@ -199,4 +200,20 @@ test('a failed re-auth after expiry leaves the socket signed out', async () => {
   await durable.webSocketMessage(ws, JSON.stringify({ type: 'authenticate', token: await forger.sign() }));
   assert.equal(conn.authenticated, false);
   assert.equal(durable.subscriberCount('user:user-123'), 0);
+});
+
+test('a send to a socket the client already closed is not logged as an error (prod: disconnect race)', async () => {
+  const { durable } = makeDO();
+  const errors: unknown[] = [];
+  const original = logger.error;
+  (logger as any).error = (...args: unknown[]) => errors.push(args);
+  try {
+    const closed = { readyState: 3, send: () => { throw new TypeError("Can't call WebSocket send() after close()."); } };
+    assert.equal(durable.sendRaw(closed, '{}'), false);
+    const broken = { readyState: 1, send: () => { throw new Error('boom'); } };
+    assert.equal(durable.sendRaw(broken, '{}'), false);
+  } finally {
+    (logger as any).error = original;
+  }
+  assert.equal(errors.length, 1, 'only the real failure is an error');
 });
