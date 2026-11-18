@@ -152,7 +152,7 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
         )}
       </section>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <section className={`${cardClass} lg:col-span-2`} aria-labelledby="timeline-heading">
           <h2 id="timeline-heading" className="text-lg font-semibold text-fg mb-4">
             {t('errorsPage.timeline')}
@@ -176,6 +176,7 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
           {releases.length === 0 ? (
             <p className="text-fg-muted">{t('errorsPage.noReleases')}</p>
           ) : (
+            <div className="overflow-x-auto">
             <table className="w-full text-sm" data-testid="error-releases">
               <thead>
                 <tr>
@@ -194,6 +195,7 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </section>
       </div>
@@ -334,10 +336,9 @@ function Sample({ event: e, t, locale, highlighted }: { event: ErrorEvent; t: Tr
     const u = ctx.upstream;
     facts.push([
       t('errorsPage.upstream'),
-      <span key="u" data-testid="error-sample-upstream">
+      <span key="u" data-testid="error-sample-upstream" className="inline-flex flex-wrap items-baseline gap-x-2">
         <code dir="ltr">{`${u.service}${u.route ? ` ${u.route}` : ''}`}</code>
-        {' → '}
-        {u.status !== undefined ? formatNumber(u.status, locale) : t('errorsPage.upstreamFailed')}
+        <span>{u.status !== undefined ? formatNumber(u.status, locale) : t('errorsPage.upstreamFailed')}</span>
       </span>,
     ]);
   }
@@ -345,13 +346,13 @@ function Sample({ event: e, t, locale, highlighted }: { event: ErrorEvent; t: Tr
     const j = ctx.job;
     facts.push([
       t('errorsPage.job'),
-      <span key="j" data-testid="error-sample-job">
+      <span key="j" data-testid="error-sample-job" className="inline-flex flex-wrap items-baseline gap-x-2">
         {[j.queue, j.id].filter(Boolean).map((v) => (
-          <code key={v} dir="ltr" className="me-2">
+          <code key={v} dir="ltr">
             {v}
           </code>
         ))}
-        {j.attempt !== undefined && t('errorsPage.jobAttempt', { n: j.attempt })}
+        {j.attempt !== undefined && <span>{t('errorsPage.jobAttempt', { n: j.attempt })}</span>}
       </span>,
     ]);
   }
@@ -369,7 +370,7 @@ function Sample({ event: e, t, locale, highlighted }: { event: ErrorEvent; t: Tr
         {facts.map(([label, value]) => (
           <div key={label} className="min-w-0">
             <dt className="text-fg-muted">{label}</dt>
-            <dd className="text-fg break-words">{value}</dd>
+            <dd className="text-fg break-words [overflow-wrap:anywhere]">{value}</dd>
           </div>
         ))}
       </dl>
@@ -383,7 +384,7 @@ function Sample({ event: e, t, locale, highlighted }: { event: ErrorEvent; t: Tr
                   {time.format(new Date(b.at))}
                 </time>
                 <span className="text-fg-muted">{b.kind}</span>
-                <code dir="ltr" className="text-fg break-all" style={{ textAlign: 'start' }}>
+                <code dir="ltr" className="text-fg break-words [overflow-wrap:anywhere] min-w-0" style={{ textAlign: 'start' }}>
                   {b.message}
                 </code>
               </li>

@@ -2334,7 +2334,6 @@ const en = {
     user: 'User',
     anonymous: 'Signed out',
     statusCode: 'HTTP status',
-    environment: 'Environment',
     worker: 'Worker',
     routeTemplate: 'Route template',
     video: 'Video',

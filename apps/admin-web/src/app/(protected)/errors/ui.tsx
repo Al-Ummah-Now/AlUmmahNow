@@ -121,9 +121,13 @@ export function HourlyChart({
           <div className="relative mt-1 h-4 text-xs text-fg-muted" aria-hidden="true">
             {ticksAt.map((index, order) => {
               const at = ((index + 0.5) / hours.length) * 100;
-              const shift = order === 0 ? '0' : order === ticksAt.length - 1 ? '-100%' : '-50%';
+              // First and last labels hug the inline edges; the others centre on their bar. Logical
+              // insets only: a physical translateX pushed the last label off the page in Arabic.
+              const first = order === 0;
+              const last = order === ticksAt.length - 1;
+              const place = first ? { insetInlineStart: 0 } : last ? { insetInlineEnd: 0 } : { insetInlineStart: `${at}%` };
               return (
-                <span key={index} className="absolute whitespace-nowrap" style={{ insetInlineStart: `${order === 0 ? 0 : order === ticksAt.length - 1 ? 100 : at}%`, transform: `translateX(${shift})` }} data-testid="error-hourly-x-tick">
+                <span key={index} className={`absolute whitespace-nowrap ${first || last ? '' : '-translate-x-1/2 rtl:translate-x-1/2'}`} style={place} data-testid="error-hourly-x-tick">
                   {hourLabel(hours[index].hour)}
                 </span>
               );
