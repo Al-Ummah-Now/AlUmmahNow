@@ -19,6 +19,7 @@ import {
   getTextDirection,
   getRTLLocales,
   getLTRLocales,
+  parseLocaleFromPath,
 } from '../utils/localeHelpers';
 import { isRTL, getDirection } from '../utils/isRTL';
 
@@ -221,5 +222,18 @@ describe('Type Safety', () => {
     const ar: SupportedLocale = 'ar';
     expect(en).toBe('en');
     expect(ar).toBe('ar');
+  });
+});
+
+describe('parseLocaleFromPath', () => {
+  it('reads a supported locale from the first segment', () => {
+    expect(parseLocaleFromPath('/ar/profile/edit')).toBe('ar');
+    expect(parseLocaleFromPath('/en')).toBe('en');
+  });
+
+  it('any other two letters fall back to the default (prod: /qa/phpinfo.php crashed the 404 page)', () => {
+    expect(parseLocaleFromPath('/qa/phpinfo.php')).toBe(DEFAULT_LOCALE);
+    expect(parseLocaleFromPath('/js/app.js')).toBe(DEFAULT_LOCALE);
+    expect(parseLocaleFromPath('/invalid')).toBe(DEFAULT_LOCALE);
   });
 });
