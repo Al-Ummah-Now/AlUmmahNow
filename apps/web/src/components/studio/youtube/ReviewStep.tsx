@@ -5,6 +5,7 @@ import { CheckCircle2, CircleHelp, FileX2, Hand } from 'lucide-react';
 import { formatBytes, type TakeoutFile, type YtFileMatch, type YtImportItem } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { keyOfMatch, toFileMatch } from '@/lib/youtube-import/takeout';
 import { freeFiles, reviewGroup, shortFileName, type ReviewGroup } from '@/lib/youtube-import/wizard';
 import { num, useFill, StepHeading, Thumb } from './parts';
@@ -32,6 +33,9 @@ function formatSize(bytes: number, locale: string): string {
 
 export const ReviewStep = forwardRef<HTMLHeadingElement, Props>(function ReviewStep({ items, files, matches, onMatch, starting, error, onBack, onStart }, headingRef) {
   const { t, locale } = useLanguage();
+  // Phones shorten long file names in the middle (a select cannot wrap); wider screens show them whole
+  const wide = useMediaQuery('(min-width: 640px)');
+  const fitName = (name: string, max?: number) => (wide ? name : shortFileName(name, max));
   const fill = useFill();
   const text = t.studio.youtube.review;
   const ids = useId();
@@ -80,17 +84,17 @@ export const ReviewStep = forwardRef<HTMLHeadingElement, Props>(function ReviewS
                         >
                           <option value={NONE}>{text.noFileOption}</option>
                           {options.map((f) => (
-                            // The name only, shortened in the middle so a phone's select never clips its start; the full
-                            // name is the option's title, and the chosen file's size and zip show under the select
+                            // The name only (shortened in the middle on a phone, so the select never clips its start); the
+                            // full name is the option's title, and the chosen file's size and zip show under the select
                             <option key={f.key} value={f.key} title={f.fileName}>
-                              {`\u2068${shortFileName(f.fileName)}\u2069`}
+                              {`\u2068${fitName(f.fileName)}\u2069`}
                             </option>
                           ))}
                         </select>
                         {chosen && (
                           <p className="mt-1 text-xs text-muted-foreground" data-testid="yt-review-file-meta">
                             <bdi>{formatSize(chosen.size, locale)}</bdi>
-                            {chosen.zipName ? <> · <bdi className="break-all">{chosen.zipName}</bdi></> : null}
+                            {chosen.zipName ? <> · <bdi title={chosen.zipName}>{fitName(chosen.zipName, 30)}</bdi></> : null}
                           </p>
                         )}
                       </div>
