@@ -175,6 +175,17 @@ export function isSettled(items: readonly YtImportItem[], live: ReadonlyMap<stri
   });
 }
 
+/**
+ * A file name short enough for a phone's select (Review step): the start and the end
+ * ("…[videoId].mp4") stay, the middle becomes "…". Counted in characters, not UTF-16 units.
+ */
+export function shortFileName(name: string, max = 26): string {
+  const chars = Array.from(name);
+  if (chars.length <= max) return name;
+  const tail = Math.min(12, Math.floor((max - 1) / 2));
+  return `${chars.slice(0, max - 1 - tail).join('').trimEnd()}…${chars.slice(chars.length - tail).join('')}`;
+}
+
 /** "1:02:03" / "4:05", in the page's digits (٠–٩ in Arabic). */
 export function formatDuration(seconds: number | null | undefined, locale = 'en'): string {
   if (seconds === null || seconds === undefined || !Number.isFinite(seconds) || seconds < 0) return '';
