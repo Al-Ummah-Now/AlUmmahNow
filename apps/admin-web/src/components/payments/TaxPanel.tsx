@@ -126,7 +126,7 @@ export function TaxPanel({ tax, canManage, onRefresh }: { tax: BillingTaxSetting
             {t('payments.tax.pricesIncludeTax')}
           </label>
           {canManage && (
-            <div className="md:col-span-2">
+            <div className="md:col-span-2 flex justify-end">
               <button type="submit" className={primarySmallButtonClass} disabled={busy !== null} data-testid="payments-tax-save">
                 {t('payments.tax.save')}
               </button>

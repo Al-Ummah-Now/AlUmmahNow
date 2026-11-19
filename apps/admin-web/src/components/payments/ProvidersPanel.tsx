@@ -292,9 +292,11 @@ function SettingsForm({ provider, mode, locked, canManage, onSave }: { provider:
         </p>
       )}
       {canManage && (
-        <button type="submit" className={primarySmallButtonClass} disabled={locked} data-testid={`payments-settings-save-${provider.id}`}>
-          {t('payments.provider.saveSettings')}
-        </button>
+        <div className="flex justify-end">
+          <button type="submit" className={primarySmallButtonClass} disabled={locked} data-testid={`payments-settings-save-${provider.id}`}>
+            {t('payments.provider.saveSettings')}
+          </button>
+        </div>
       )}
     </form>
   );
