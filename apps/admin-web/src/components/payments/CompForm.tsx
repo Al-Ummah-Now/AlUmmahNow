@@ -18,6 +18,7 @@ import { fieldClass } from '@/components/ui';
 import { Autocomplete } from '@/components/search/Autocomplete';
 import { billingRequest } from '@/lib/list/api-client';
 import { compUntil } from '@/lib/payments';
+import { DateField } from '@/components/DateField';
 import { hintClass, labelClass, useBillingAction } from './shared';
 import type { TierOption } from './PricesPanel';
 
@@ -133,7 +134,8 @@ export function CompForm({ tiers, userId: fixedUser, onDone }: { tiers: TierOpti
               <label htmlFor={`${ids}-until`} className={labelClass}>
                 {t('payments.comp.until')}
               </label>
-              <input id={`${ids}-until`} type="date" className={`${fieldClass} w-full`} value={until} onChange={(e) => setUntil(e.target.value)} aria-describedby={`${ids}-until-hint`} aria-invalid={problem === 'invalidUntil' || undefined} data-testid="payments-comp-until" />
+              {/* The shared admin date field (#1605): the admin's language and digits, Saturday first in Arabic; ISO day out */}
+              <DateField id={`${ids}-until`} className="w-full" value={until} onChange={(iso) => setUntil(iso ?? '')} aria-describedby={`${ids}-until-hint`} testId="payments-comp-until" />
               <p id={`${ids}-until-hint`} className={hintClass}>
                 {t('payments.comp.untilHint')}
               </p>
