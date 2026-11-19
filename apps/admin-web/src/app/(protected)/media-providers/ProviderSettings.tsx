@@ -29,6 +29,7 @@ import { itemView } from '@/components/audit/audit-model';
 import { useNames } from '@/components/audit/useNames';
 import { Autocomplete } from '@/components/search/Autocomplete';
 import { fillNodes } from '@/components/audit/fill';
+import { NumberField } from '@/components/forms/NumberField';
 
 type HealthKey = Exclude<keyof ProviderHealthSettings, 'enabled'>;
 const HEALTH_FIELDS: { key: HealthKey; label: MessageKey; hint?: MessageKey; min: number; max: number }[] = [
@@ -372,10 +373,8 @@ export function ProviderSettings({ view, labelledBy }: { view: MediaProvidersVie
                 return (
                   <div key={f.key} className="flex flex-col gap-1">
                     <label htmlFor={`${ids}-${f.key}`} className="text-sm font-medium text-fg">{t(f.label)}</label>
-                    <input
+                    <NumberField
                       id={`${ids}-${f.key}`}
-                      type="number"
-                      inputMode="numeric"
                       min={f.min}
                       max={f.max}
                       step={1}

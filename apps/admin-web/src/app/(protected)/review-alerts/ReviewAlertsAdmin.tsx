@@ -36,6 +36,7 @@ import {
   updateReviewer,
 } from './model';
 import { parseDigits } from '@al-ummah/shared-types';
+import { NumberField } from '@/components/forms/NumberField';
 
 const check = 'mt-1 h-4 w-4 shrink-0 accent-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-focus';
 // A checkbox row tall enough to tap (44 px)
@@ -318,10 +319,8 @@ function MinutesField({ id, label, hint, seconds, onChange, testId }: { id: stri
   return (
     <label htmlFor={id} className="flex flex-col text-sm">
       <span className="text-fg font-medium mb-1">{label}</span>
-      <input
+      <NumberField decimal
         id={id}
-        type="number"
-        inputMode="decimal"
         min={0.5}
         max={60}
         step={0.5}

@@ -25,6 +25,7 @@ import { deliveryFormats } from '../delivery/format';
 import { ITEM_STATES, ITEM_STATE_LABEL, ITEM_TONE, RUN_STATUS_LABEL, RUN_TONE, SKIP_LABEL, STEP_LABEL, isLive, scopeChannelRefs, scopeText, dangerLargeButtonClass } from './labels';
 import { useFormats } from './useFormats';
 import { useNames } from '@/components/audit/useNames';
+import { NumberField } from '@/components/forms/NumberField';
 
 const POLL_MS = 5000;
 
@@ -241,13 +242,13 @@ export function RunPanel({ initial }: { initial: BackfillRun }) {
           <h3 id="backfill-settings-title" className="font-semibold text-fg mb-3">{t('mediaBackfill.settingsTitle')}</h3>
           <div className="grid gap-4 sm:grid-cols-3">
             <Field id={ids.concurrency} label={t('mediaBackfill.concurrency')} hint={t('mediaBackfill.concurrencyHint')}>
-              <input id={ids.concurrency} type="number" inputMode="numeric" min={1} max={BACKFILL_LIMITS.maxConcurrency} value={settings.concurrency} onChange={(e) => setSettings({ ...settings, concurrency: e.target.value })} className={fieldClass} />
+              <NumberField id={ids.concurrency} min={1} max={BACKFILL_LIMITS.maxConcurrency} value={settings.concurrency} onChange={(e) => setSettings({ ...settings, concurrency: e.target.value })} className={fieldClass} />
             </Field>
             <Field id={ids.spacing} label={t('mediaBackfill.spacing')} hint={t('mediaBackfill.spacingHint')}>
-              <input id={ids.spacing} type="number" inputMode="numeric" min={0} max={BACKFILL_LIMITS.maxSpacingSeconds} value={settings.spacing} onChange={(e) => setSettings({ ...settings, spacing: e.target.value })} className={fieldClass} />
+              <NumberField id={ids.spacing} min={0} max={BACKFILL_LIMITS.maxSpacingSeconds} value={settings.spacing} onChange={(e) => setSettings({ ...settings, spacing: e.target.value })} className={fieldClass} />
             </Field>
             <Field id={ids.budget} label={t('mediaBackfill.budget')} hint={t('mediaBackfill.budgetHint')}>
-              <input id={ids.budget} type="number" inputMode="decimal" min={0} step="0.01" max={BACKFILL_LIMITS.maxBudgetUsd} value={settings.budget} onChange={(e) => setSettings({ ...settings, budget: e.target.value })} className={fieldClass} data-testid="backfill-budget" />
+              <NumberField decimal id={ids.budget} min={0} step="0.01" max={BACKFILL_LIMITS.maxBudgetUsd} value={settings.budget} onChange={(e) => setSettings({ ...settings, budget: e.target.value })} className={fieldClass} data-testid="backfill-budget" />
             </Field>
           </div>
           <button type="submit" disabled={busy} className={`${secondaryButtonClass} mt-4`}>{t('mediaBackfill.saveSettings')}</button>

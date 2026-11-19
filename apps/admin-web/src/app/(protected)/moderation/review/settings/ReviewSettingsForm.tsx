@@ -8,6 +8,7 @@ import { useLanguage } from '@/i18n/I18nProvider';
 import { translateDynamic } from '@/i18n/translate';
 import { ErrorAlert, cardClass, fieldClass, primaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
+import { NumberField } from '@/components/forms/NumberField';
 
 const THRESHOLDS: Array<keyof VideoReviewThresholds> = ['autoApproveRisk', 'nsfwClear', 'nsfwScreen', 'nsfwHit', 'escalate', 'textFlag'];
 
@@ -52,15 +53,15 @@ export function ReviewSettingsForm({ initial, canEdit }: { initial: VideoReviewS
       <div className="grid gap-4 sm:grid-cols-3">
         <label className="space-y-1 text-sm text-fg">
           <span className="block">{t('review.settings.eta')}</span>
-          <input type="number" min={1} max={1440} value={s.etaMinutes} onChange={(e) => setS({ ...s, etaMinutes: num(e.target.value) })} className={`${fieldClass} w-full`} />
+          <NumberField min={1} max={1440} value={s.etaMinutes} onChange={(e) => setS({ ...s, etaMinutes: num(e.target.value) })} className={`${fieldClass} w-full`} />
         </label>
         <label className="space-y-1 text-sm text-fg">
           <span className="block">{t('review.settings.budget')}</span>
-          <input type="number" min={0} step={0.5} value={s.dailyBudgetUsd} onChange={(e) => setS({ ...s, dailyBudgetUsd: num(e.target.value) })} className={`${fieldClass} w-full`} />
+          <NumberField min={0} step={0.5} value={s.dailyBudgetUsd} onChange={(e) => setS({ ...s, dailyBudgetUsd: num(e.target.value) })} className={`${fieldClass} w-full`} />
         </label>
         <label className="space-y-1 text-sm text-fg">
           <span className="block">{t('review.settings.retention')}</span>
-          <input type="number" min={1} max={365} value={s.mediaRetentionDays} onChange={(e) => setS({ ...s, mediaRetentionDays: num(e.target.value) })} className={`${fieldClass} w-full`} />
+          <NumberField min={1} max={365} value={s.mediaRetentionDays} onChange={(e) => setS({ ...s, mediaRetentionDays: num(e.target.value) })} className={`${fieldClass} w-full`} />
         </label>
       </div>
       <fieldset className="space-y-2">
@@ -69,7 +70,7 @@ export function ReviewSettingsForm({ initial, canEdit }: { initial: VideoReviewS
           {THRESHOLDS.map((key) => (
             <label key={key} className="space-y-1 text-sm text-fg">
               <span className="block">{translateDynamic(t, 'review.settings.threshold', key)}</span>
-              <input type="number" min={0} max={1} step={0.01} value={s.thresholds[key]} onChange={(e) => setS({ ...s, thresholds: { ...s.thresholds, [key]: num(e.target.value) } })} className={`${fieldClass} w-full`} data-testid={`review-threshold-${key}`} />
+              <NumberField min={0} max={1} step={0.01} value={s.thresholds[key]} onChange={(e) => setS({ ...s, thresholds: { ...s.thresholds, [key]: num(e.target.value) } })} className={`${fieldClass} w-full`} data-testid={`review-threshold-${key}`} />
             </label>
           ))}
         </div>

@@ -19,6 +19,7 @@ import { fieldClass, primaryButtonClass } from '@/components/ui';
 import { checkSiteSlug, getSite, grantSite, restoreSite, revokeSite, updateSite, type SiteDetail, type SiteListItem } from '@/lib/api/sites';
 import { UserName } from '@/components/audit/UserName';
 import { actionLabel } from '@/components/audit/audit-model';
+import { NumberField } from '@/components/forms/NumberField';
 
 const STATUS_KEY: Record<SiteStatus, MessageKey> = {
   setup: 'scholarSites.statusSetup',
@@ -64,7 +65,7 @@ function LimitsFields({ value, onChange, idPrefix }: { value: SiteLimits; onChan
   const num = (key: 'customDomainsMax' | 'pagesMax' | 'navigationMax', label: MessageKey) => (
     <label className="flex flex-col gap-1 text-sm">
       <span>{t(label)}</span>
-      <input type="number" min={0} max={key === 'navigationMax' ? 30 : 1000} className={fieldClass} value={value[key]} data-testid={`${idPrefix}-${key}`} onChange={(e) => onChange({ ...value, [key]: Math.max(0, Number(parseDigits(e.target.value)) || 0) })} />
+      <NumberField min={0} max={key === 'navigationMax' ? 30 : 1000} className={fieldClass} value={value[key]} data-testid={`${idPrefix}-${key}`} onChange={(e) => onChange({ ...value, [key]: Math.max(0, Number(parseDigits(e.target.value)) || 0) })} />
     </label>
   );
   return (

@@ -9,6 +9,7 @@ import { useLanguage } from '@/i18n/I18nProvider';
 import { translateDynamic } from '@/i18n/translate';
 import { ErrorAlert, cardClass, fieldClass, primaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
+import { NumberField } from '@/components/forms/NumberField';
 
 const CATEGORIES = [...Object.keys(LLAMA_GUARD_CATEGORIES), ...MODERATION_EXTENSION_CATEGORIES];
 type Policy = Partial<ModerationCategoryPolicy>;
@@ -80,7 +81,7 @@ export function SettingsForm({ initial }: { initial: AiConfigView }) {
         {toggle('ai-extensions-toggle', t('ai.extensions'), t('ai.extensionsHint'), extensions, setExtensions)}
         <label className="block">
           <span className="block font-medium text-fg">{t('ai.dailyCap')}</span>
-          <input type="number" min={0} max={10000000} step={1000} value={cap} disabled={readOnly} onChange={(e) => { setCap(e.target.value); setSaved(false); }} className={`${fieldClass} mt-1 w-48`} dir="ltr" data-testid="ai-cap" />
+          <NumberField min={0} max={10000000} step={1000} value={cap} disabled={readOnly} onChange={(e) => { setCap(e.target.value); setSaved(false); }} className={`${fieldClass} mt-1 w-48`} dir="ltr" data-testid="ai-cap" />
           <span className="block text-sm text-fg-muted mt-1">{t('ai.dailyCapHint')}</span>
         </label>
       </section>
@@ -117,7 +118,7 @@ export function SettingsForm({ initial }: { initial: AiConfigView }) {
                       </select>
                     </td>
                     <td className="py-2 pe-4">
-                      <input type="number" aria-label={`${label}: ${t('ai.colThreshold')}`} min={0} max={1} step={0.05} value={p.threshold ?? ''} placeholder="—" disabled={readOnly} onChange={(e) => setPolicy(category, { threshold: Number(e.target.value) })} className={`${fieldClass} w-24`} dir="ltr" />
+                      <NumberField aria-label={`${label}: ${t('ai.colThreshold')}`} min={0} max={1} step={0.05} value={p.threshold ?? ''} placeholder="—" disabled={readOnly} onChange={(e) => setPolicy(category, { threshold: Number(e.target.value) })} className={`${fieldClass} w-24`} dir="ltr" />
                     </td>
                     <td className="py-2">
                       <select aria-label={`${label}: ${t('ai.colAction')}`} value={p.action ?? (canHide ? 'hide' : 'flag')} disabled={readOnly} onChange={(e) => setPolicy(category, { action: e.target.value as 'none' | 'flag' | 'hide' })} className={fieldClass}>

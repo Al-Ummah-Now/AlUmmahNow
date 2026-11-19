@@ -15,6 +15,7 @@ import type { CostSubscription } from '@/lib/api/costs-types';
 import { opsFormats } from '../operations/model';
 import { hourName, settingsToForm, toggleKind, validateSettingsForm, weekdayNames, type SettingsField, type SettingsForm } from './model';
 import { FeedbackLine, useCostAction } from './useCostAction';
+import { NumberField } from '@/components/forms/NumberField';
 
 const labelClass = 'block text-sm font-medium text-fg';
 const helpClass = 'mt-1 block text-xs text-fg-muted';
@@ -89,16 +90,14 @@ export function MyCostAlerts({ me, accountEmail, digest }: { me: CostSubscriptio
   );
 }
 
-function NumberField({ field, label, help, value, error, onChange, step, ids }: { field: SettingsField; label: string; help?: string; value: string; error?: string; onChange: (v: string) => void; step: string; ids: string }) {
+function ThresholdField({ field, label, help, value, error, onChange, step, ids }: { field: SettingsField; label: string; help?: string; value: string; error?: string; onChange: (v: string) => void; step: string; ids: string }) {
   const id = `${ids}-${field}`;
   const describedBy = [help ? `${id}-help` : null, error ? `${id}-error` : null].filter(Boolean).join(' ') || undefined;
   return (
     <div>
       <label htmlFor={id} className={labelClass}>{label}</label>
-      <input
+      <NumberField decimal
         id={id}
-        type="text"
-        inputMode="decimal"
         dir="ltr"
         autoComplete="off"
         value={value}
@@ -161,8 +160,8 @@ export function CostThresholds({ settings }: { settings: CostAlertSettings }) {
           <legend className="sr-only">{t('costs.thresholds.budgetTitle')}</legend>
           <p aria-hidden="true" className={groupTitle}>{t('costs.thresholds.budgetTitle')}</p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <NumberField ids={ids} field="budgetUsd" label={t('costs.thresholds.budgetUsd')} value={form.budgetUsd} error={err('budgetUsd')} onChange={(v) => set('budgetUsd', v)} step="1" />
-            <NumberField ids={ids} field="budgetLevels" label={t('costs.thresholds.budgetLevels')} help={t('costs.thresholds.budgetLevelsHelp')} value={form.budgetLevels} error={err('budgetLevels')} onChange={(v) => set('budgetLevels', v)} step="1" />
+            <ThresholdField ids={ids} field="budgetUsd" label={t('costs.thresholds.budgetUsd')} value={form.budgetUsd} error={err('budgetUsd')} onChange={(v) => set('budgetUsd', v)} step="1" />
+            <ThresholdField ids={ids} field="budgetLevels" label={t('costs.thresholds.budgetLevels')} help={t('costs.thresholds.budgetLevelsHelp')} value={form.budgetLevels} error={err('budgetLevels')} onChange={(v) => set('budgetLevels', v)} step="1" />
           </div>
           <label className="flex items-start gap-3 text-sm text-fg">
             <input type="checkbox" className={checkClass} checked={form.projectedAlert} onChange={(e) => set('projectedAlert', e.target.checked)} data-testid="costs-threshold-projectedAlert" />
@@ -174,9 +173,9 @@ export function CostThresholds({ settings }: { settings: CostAlertSettings }) {
           <legend className="sr-only">{t('costs.thresholds.spikeTitle')}</legend>
           <p aria-hidden="true" className={groupTitle}>{t('costs.thresholds.spikeTitle')}</p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <NumberField ids={ids} field="spikeFactor" label={t('costs.thresholds.spikeFactor')} help={t('costs.thresholds.spikeFactorHelp')} value={form.spikeFactor} error={err('spikeFactor')} onChange={(v) => set('spikeFactor', v)} step="0.1" />
-            <NumberField ids={ids} field="spikeMinUsd" label={t('costs.thresholds.spikeMinUsd')} help={t('costs.thresholds.spikeMinUsdHelp')} value={form.spikeMinUsd} error={err('spikeMinUsd')} onChange={(v) => set('spikeMinUsd', v)} step="0.1" />
-            <NumberField ids={ids} field="spikeTotalMinUsd" label={t('costs.thresholds.spikeTotalMinUsd')} help={t('costs.thresholds.spikeTotalMinUsdHelp')} value={form.spikeTotalMinUsd} error={err('spikeTotalMinUsd')} onChange={(v) => set('spikeTotalMinUsd', v)} step="0.1" />
+            <ThresholdField ids={ids} field="spikeFactor" label={t('costs.thresholds.spikeFactor')} help={t('costs.thresholds.spikeFactorHelp')} value={form.spikeFactor} error={err('spikeFactor')} onChange={(v) => set('spikeFactor', v)} step="0.1" />
+            <ThresholdField ids={ids} field="spikeMinUsd" label={t('costs.thresholds.spikeMinUsd')} help={t('costs.thresholds.spikeMinUsdHelp')} value={form.spikeMinUsd} error={err('spikeMinUsd')} onChange={(v) => set('spikeMinUsd', v)} step="0.1" />
+            <ThresholdField ids={ids} field="spikeTotalMinUsd" label={t('costs.thresholds.spikeTotalMinUsd')} help={t('costs.thresholds.spikeTotalMinUsdHelp')} value={form.spikeTotalMinUsd} error={err('spikeTotalMinUsd')} onChange={(v) => set('spikeTotalMinUsd', v)} step="0.1" />
           </div>
         </fieldset>
 

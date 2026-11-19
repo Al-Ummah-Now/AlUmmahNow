@@ -10,6 +10,7 @@ import { formatNumber } from '@/i18n/translate';
 import { ErrorAlert, cardClass, fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
 import { parseDigits } from '@al-ummah/shared-types';
+import { NumberField } from '@/components/forms/NumberField';
 
 export function CategorizeSettings({ initial }: { initial: CategorizeConfigView }) {
   const router = useRouter();
@@ -62,12 +63,12 @@ export function CategorizeSettings({ initial }: { initial: CategorizeConfigView 
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="flex flex-col gap-1 text-sm">
           <span className="font-medium text-fg">{t('categorySuggestions.cap')}</span>
-          <input type="number" min={0} step={1000} value={cap} onChange={(e) => { setCap(e.target.value); setSaved(false); }} className={fieldClass} data-testid="categorize-cap" />
+          <NumberField min={0} step={1000} value={cap} onChange={(e) => { setCap(e.target.value); setSaved(false); }} className={fieldClass} data-testid="categorize-cap" />
           <span className="text-fg-muted">{t('categorySuggestions.capHint')}</span>
         </label>
         <label className="flex flex-col gap-1 text-sm">
           <span className="font-medium text-fg">{t('categorySuggestions.threshold')}</span>
-          <input type="number" min={0.3} max={0.95} step={0.05} value={threshold} onChange={(e) => { setThreshold(e.target.value); setSaved(false); }} className={fieldClass} data-testid="categorize-threshold" />
+          <NumberField min={0.3} max={0.95} step={0.05} value={threshold} onChange={(e) => { setThreshold(e.target.value); setSaved(false); }} className={fieldClass} data-testid="categorize-threshold" />
           <span className="text-fg-muted">{t('categorySuggestions.thresholdHint')}</span>
         </label>
       </div>

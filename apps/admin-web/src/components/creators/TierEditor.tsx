@@ -16,6 +16,7 @@ import { reportError } from '@/lib/errors/reporter';
 import { TierChangeDialog, confirmButtonClass } from './TierChangeDialog';
 import { DefaultTierButton, type SetDefaultTierAction } from './DefaultTierButton';
 import { useUndoableAction } from '@/components/undo/UndoToast';
+import { NumberField } from '@/components/forms/NumberField';
 
 type Message = { kind: 'ok' | 'error'; text: string } | null;
 
