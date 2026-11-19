@@ -5044,6 +5044,7 @@ const en = {
     historyCredentials: '{date}: {network} setup {action} by {actor}',
     actionSet: 'saved',
     actionCleared: 'removed',
+  },
   youtubeImport: {
     title: 'YouTube import',
     intro: 'Creators move their own YouTube channel here from Studio → Content → Move from YouTube: they connect YouTube (read only) for titles, descriptions, playlists and captions, and upload the video files from their Google Takeout export. Nothing is downloaded from youtube.com.',

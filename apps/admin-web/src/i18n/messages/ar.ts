@@ -5043,6 +5043,7 @@ const ar: Messages = {
     historyCredentials: '{date}: {action} إعداد {network} بواسطة {actor}',
     actionSet: 'حُفظ',
     actionCleared: 'أُزيل',
+  },
   youtubeImport: {
     title: 'النقل من يوتيوب',
     intro: 'ينقل صنّاع المحتوى قناتهم على يوتيوب إلى هنا من الاستوديو ← المحتوى ← الانتقال من يوتيوب: يربطون يوتيوب (قراءة فقط) لنقل العناوين والأوصاف وقوائم التشغيل والترجمات، ويرفعون ملفات المرئيات من تصدير Google Takeout. لا يُنزَّل شيء من youtube.com.',
