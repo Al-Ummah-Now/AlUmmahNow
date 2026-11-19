@@ -326,9 +326,15 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       // circle, touching it, above or below (design audit 2026-11-19: '1' covered the composer avatar)
       const centreX = o.x + o.w / 2 - S / 2;
       const outside: Array<[number, number]> = round && o.w <= 64 ? [[centreX, o.y - S + 2], [centreX, o.y + o.h - 2]] : [];
+      // Last resorts, still touching the outline: just outside its start or end edge, or above/below
+      // its start corner
+      const beyond: Array<[number, number]> = [
+        [rtl ? o.x + o.w - 2 : o.x - S + 2, midY], [rtl ? o.x - S + 2 : o.x + o.w - 2, midY],
+        [rtl ? o.x + o.w - S : o.x, o.y - S + 2], [rtl ? o.x + o.w - S : o.x, o.y + o.h - 2],
+      ];
       const candidates: Array<[number, number]> = above
-        ? [...outside, [cornerStartX, topY + k], [cornerEndX, topY + k], [cornerStartX, bottomY - k], [cornerEndX, bottomY - k]]
-        : [...outside, [startX, midY], [endX, midY], [cornerStartX, topY + k], [cornerStartX, bottomY - k]];
+        ? [...outside, [cornerStartX, topY + k], [cornerEndX, topY + k], [cornerStartX, bottomY - k], [cornerEndX, bottomY - k], ...beyond]
+        : [...outside, [startX, midY], [endX, midY], [cornerStartX, topY + k], [cornerStartX, bottomY - k], ...beyond];
       // The target's own avatar or logo stays clear too: a number on it hides who the row is
       // (design audit 2026-11-19: '١' over «أ» in the phone picker)
       const ownPictures = [...target.querySelectorAll<HTMLElement>('img, svg, span, div')]
@@ -339,9 +345,20 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
           return b.width >= 16 && b.width <= 64 && Math.abs(b.width - b.height) < 2 && (el.tagName === 'IMG' || rr >= b.width / 2 - 0.5);
         })
         .map((el) => el.getBoundingClientRect());
+      // ...and so does the target's own text: a number never covers a letter (the Studio title read
+      // "②te tour", 2026-11-19)
+      const ownText: DOMRect[] = [];
+      const words = document.createTreeWalker(target, NodeFilter.SHOW_TEXT);
+      for (let node = words.nextNode(); node; node = words.nextNode()) {
+        if (!node.textContent?.trim()) continue;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        ownText.push(...[...range.getClientRects()].filter((b) => b.width > 0 && b.height > 0));
+      }
       const others = [
         ...controls.filter((c) => c.el !== target && !c.el.contains(target) && !target.contains(c.el)).map((c) => c.r),
         ...ownPictures,
+        ...ownText,
       ].map((r) => ({ x: r.x + 2, y: r.y + 2, w: Math.max(0, r.width - 4), h: Math.max(0, r.height - 4) }));
       const fits = ([x, y]: [number, number]) => {
         const box = { x, y, w: S, h: S };
