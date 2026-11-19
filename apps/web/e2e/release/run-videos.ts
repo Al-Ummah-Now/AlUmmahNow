@@ -14,11 +14,11 @@
  * theirs, trackRunUploads(page) for uploads a spec makes through the upload page. The workflow's
  * upload cap counts that file.
  */
-import { chromium, type Page } from '@playwright/test';
+import { chromium, test, type Page } from '@playwright/test';
 import { existsSync, mkdirSync, readFileSync, renameSync, rmdirSync, statSync, writeFileSync } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { DataScope, recordResource, refreshUser, type CreatedVideo } from './builders';
+import { DataScope, ProviderUploadError, recordResource, refreshUser, type CreatedVideo } from './builders';
 import { releaseEnv } from './targets';
 import type { WebUser } from './web-session';
 
@@ -34,6 +34,11 @@ export interface RunVideos {
    * the latest. The file lives in the runner's temp directory, never in an artifact.
    */
   owner?: RunOwner;
+  /**
+   * Set instead of the videos when Bunny failed the clips' upload twice in the global setup
+   * (builders.ts ProviderUploadError): the specs that need them skip with this reason (#929).
+   */
+  unavailable?: string;
 }
 
 interface RunOwner {
@@ -132,6 +137,8 @@ let allReady: Promise<void> | null = null;
 export async function runVideosReady(): Promise<RunVideos> {
   const set = runVideos();
   if (!set) throw new Error('runVideosReady: this run has no shared videos (E2E_SHARED_RUN_VIDEOS is not 1)');
+  // Bunny could not take the clips (a provider slowdown, #929): nothing to wait for or play
+  if (set.unavailable) test.skip(true, `the run's shared videos could not be uploaded: ${set.unavailable}`);
   allReady ??= Promise.all(RUN_VIDEO_CLIPS.map((clip) => new DataScope().waitReady(set.videos[clip].id, set.videos[clip].title, runOwner))).then(() => undefined);
   try {
     await allReady;
@@ -172,7 +179,11 @@ export default async function globalSetup(): Promise<void | (() => Promise<void>
     owner = creator.user;
   } catch (error) {
     await scope.cleanup();
-    throw error;
+    if (!(error instanceof ProviderUploadError)) throw error;
+    // Bunny failed the upload twice: the run goes on, and the specs that need these clips skip (#929)
+    console.warn(`[run-videos] ${error.message}`);
+    writeRunVideos({ channelId: '', videos: {} as Record<RunVideoClip, CreatedVideo>, unavailable: error.message });
+    return;
   } finally {
     await browser.close();
   }
