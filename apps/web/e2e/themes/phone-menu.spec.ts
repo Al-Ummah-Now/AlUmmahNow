@@ -31,10 +31,18 @@ for (const theme of THEMES) {
       await expect(toast, 'toasts stay up while the menu is open').toBeVisible();
       await page.screenshot({ path: info.outputPath(`phone-menu-${theme}-${mode}.png`) });
 
-      // An opaque surface: a solid colour, or a gradient (the popover fill), never transparent glass
-      const surface = await menu.evaluate((m) => { const s = getComputedStyle(m); return { color: s.backgroundColor, image: s.backgroundImage }; });
-      const solid = /^rgb\(/.test(surface.color) || /^rgba\(.*,\s*1\)$/.test(surface.color);
-      expect(solid || /gradient\(rgb\(/.test(surface.image), `menu surface ${JSON.stringify(surface)}`).toBe(true);
+      // Never see-through (#898): frosted glass since O36 (2026-11-16), so the fill layers together cover at
+      // least 85% (a Canvas layer that always resolves plus the menu colour) and the page behind is blurred
+      const surface = await menu.evaluate((m) => { const s = getComputedStyle(m); return { color: s.backgroundColor, image: s.backgroundImage, blur: s.backdropFilter || (s as unknown as Record<string, string>).webkitBackdropFilter || '' }; });
+      const alphaOf = (c: string): number => {
+        if (/^rgb\(/.test(c)) return 1;
+        const m = /\/\s*([\d.]+)\s*\)$/.exec(c) ?? /^rgba\([^)]*,\s*([\d.]+)\)$/.exec(c);
+        return m ? Number(m[1]) : c.startsWith('color(') ? 1 : 0;
+      };
+      const layers = [surface.color, ...(surface.image.match(/(?:rgba?|color)\([^()]*\)/g) ?? []).slice(0, 1)];
+      const cover = 1 - layers.reduce((clear, c) => clear * (1 - alphaOf(c)), 1);
+      expect(cover, `menu surface ${JSON.stringify(surface)}`).toBeGreaterThanOrEqual(0.85);
+      if (cover < 1) expect(surface.blur, `a translucent menu blurs the page behind it ${JSON.stringify(surface)}`).toMatch(/blur\(/);
 
       const covered = await menu.locator('[role^="menuitem"], a, button').evaluateAll((els) => els
         .filter((el) => el.getClientRects().length)
