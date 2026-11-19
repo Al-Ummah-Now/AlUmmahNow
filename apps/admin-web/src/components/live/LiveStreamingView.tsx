@@ -55,6 +55,7 @@ import {
   type OverrideUndo,
 } from '@/lib/live-streaming';
 import { UserName } from '@/components/audit/UserName';
+import { DateField } from '@/components/DateField';
 
 interface Initial {
   view: LiveSettingsView | null;
@@ -882,11 +883,11 @@ function ComparisonSection({ initial, range, providerName }: { initial: LiveComp
       >
         <div className="flex flex-col gap-1">
           <label htmlFor={`${id}-from`} className="text-sm text-fg-muted">{t('live.compare.from')}</label>
-          <input id={`${id}-from`} type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} className={fieldClass} data-testid="live-compare-from" />
+          <DateField id={`${id}-from`} value={from} max={to || undefined} onChange={(iso) => setFrom(iso ?? '')} testId="live-compare-from" />
         </div>
         <div className="flex flex-col gap-1">
           <label htmlFor={`${id}-to`} className="text-sm text-fg-muted">{t('live.compare.to')}</label>
-          <input id={`${id}-to`} type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} className={fieldClass} data-testid="live-compare-to" />
+          <DateField id={`${id}-to`} value={to} min={from || undefined} onChange={(iso) => setTo(iso ?? '')} testId="live-compare-to" />
         </div>
         <label className="flex items-center gap-2 py-2 text-sm text-fg">
           <input

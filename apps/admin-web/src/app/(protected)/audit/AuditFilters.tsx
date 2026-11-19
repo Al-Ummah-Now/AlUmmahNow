@@ -13,6 +13,7 @@ import { useLanguage } from '@/i18n/I18nProvider';
 import type { MessageKey } from '@/i18n/translate';
 import { fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { actionLabel } from '@/components/audit/audit-model';
+import { DateField } from '@/components/DateField';
 
 export interface AuditFilterValues {
   actorId?: string;
@@ -116,13 +117,13 @@ export function AuditFilters({ values, actions, actorItem, targetItem }: { value
           <label htmlFor="audit-from" className={labelClass}>
             {t('auditLog.from')}
           </label>
-          <input id="audit-from" type="date" name="from" defaultValue={values.from ?? ''} className={`${fieldClass} w-full`} data-testid="audit-from" />
+          <DateField id="audit-from" name="from" defaultValue={values.from ?? ''} className="w-full" testId="audit-from" />
         </div>
         <div>
           <label htmlFor="audit-to" className={labelClass}>
             {t('auditLog.to')}
           </label>
-          <input id="audit-to" type="date" name="to" defaultValue={values.to ?? ''} className={`${fieldClass} w-full`} data-testid="audit-to" />
+          <DateField id="audit-to" name="to" defaultValue={values.to ?? ''} className="w-full" testId="audit-to" />
         </div>
       </div>
       <div className="mt-4 flex flex-wrap gap-3">
