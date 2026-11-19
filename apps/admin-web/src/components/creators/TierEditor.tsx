@@ -68,6 +68,8 @@ function HiddenSwitch({ tier, canManage, isDefault, save, describedBy }: { tier:
     return value;
   };
   async function toggle(next: boolean) {
+    // The switch moves at once (it is a switch, not a form field) and goes back if the save fails
+    setHidden(next);
     setBusy(true);
     setError(null);
     try {
@@ -81,6 +83,7 @@ function HiddenSwitch({ tier, canManage, isDefault, save, describedBy }: { tier:
       const result: ActionFailure | { ok: false; status: number } = e instanceof HiddenFailure ? e.result : { ok: false, status: 0 };
       logger.warn('[creators] Tier hidden switch failed', { id: tier.id, status: result.status, code: 'code' in result ? result.code : undefined });
       if (isUnexpectedFailure(result)) reportError(e instanceof Error ? e : new Error(String(e)), { kind: 'fetch', status: result.status, shown: true });
+      setHidden(!next);
       setError(t(tierActionMessage(result)));
     } finally {
       setBusy(false);
