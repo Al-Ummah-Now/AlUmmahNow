@@ -12,7 +12,7 @@
 
 import Link from '@/components/common/AppLink';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { ArrowLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useLanguage } from '@/hooks/useLanguage';
 import type { AppTranslations } from '@al-ummah/shared-types';
 
@@ -84,7 +84,8 @@ export function BreadcrumbTrail({ trail, label, testId = 'settings-breadcrumb', 
               ) : (
                 <span className="sb-text">{c.label}</span>
               )}
-              {!last && <ChevronRight className="sb-sep" aria-hidden="true" />}
+              {/* The separator points along the reading direction: › in English, ‹ in Arabic (chosen here, not by a CSS flip) */}
+              {!last && (dir === 'rtl' ? <ChevronLeft className="sb-sep" aria-hidden="true" /> : <ChevronRight className="sb-sep" aria-hidden="true" />)}
             </li>
           );
         })}

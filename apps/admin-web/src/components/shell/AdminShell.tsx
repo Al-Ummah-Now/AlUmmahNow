@@ -187,7 +187,8 @@ export function AdminShell({ userEmail, userName, userRoles, authIssuer, environ
                           {t(crumb.label)}
                         </span>
                       )}
-                      {!last && <Icon name="chevron" className="size-3.5 text-nav-search-placeholder rtl:-scale-x-100" />}
+                      {/* Points along the reading direction (‹ in Arabic), set here rather than by a CSS flip */}
+                      {!last && <span className="inline-flex" style={locale === 'ar' ? { transform: 'scaleX(-1)' } : undefined}><Icon name="chevron" className="size-3.5 text-nav-search-placeholder" /></span>}
                     </li>
                   );
                 })}
