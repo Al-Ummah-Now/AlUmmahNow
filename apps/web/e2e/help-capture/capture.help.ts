@@ -459,7 +459,33 @@ async function shoot(page: Page, file: string, region: Locator[] = []): Promise<
       if (node.textContent && /@E2E[\w-]+/i.test(node.textContent)) node.textContent = node.textContent.replace(/@E2E[\w-]+/gi, '@communitycorner');
     }
     document.querySelectorAll<HTMLElement>('[title*="e2e.alummahnow.net"]').forEach((el) => { el.title = 'amina@example.com'; });
+    // A handle rendered as two text nodes ("@" + "E2Ehelp<run>…", e.g. <bdi>@{handle}</bdi>) slips past
+    // the per-node pass: rewrite the smallest element whose whole text is a run handle
+    document.querySelectorAll<HTMLElement>('body *').forEach((el) => {
+      if (el.children.length === 0 && /^\s*E2E[\w-]+\s*$/i.test(el.textContent ?? '')) el.textContent = 'communitycorner';
+      else if (el.childElementCount === 0 && /@\s*E2E[\w-]+/i.test(el.textContent ?? '')) el.textContent = (el.textContent ?? '').replace(/@\s*E2E[\w-]+/gi, '@communitycorner');
+    });
+    // Field values are not text nodes: the profile's (read-only) email field showed the run address
+    document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea').forEach((el) => {
+      if (/e2e\+|e2e\.alummahnow\.net/.test(el.value)) el.value = 'amina@example.com';
+      else if (/@?E2E[\w-]+/i.test(el.value)) el.value = el.value.replace(/@?E2E[\w-]+/gi, (m) => (m.startsWith('@') ? '@communitycorner' : 'communitycorner'));
+    });
   });
+  // Checked, not hoped: no run account, run handle or run address anywhere a reader can see
+  const leaks = await page.evaluate(() => {
+    const bad = /e2e\+|e2e\.alummahnow\.net|@\s*E2E[\w-]|\bE2E[a-z]+\d{6,}/i;
+    const out: string[] = [];
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const el = node.parentElement;
+      if (!el || !bad.test(node.textContent ?? '') || el.closest('script,style')) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < innerHeight) out.push((node.textContent ?? '').trim().slice(0, 60));
+    }
+    document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea').forEach((el) => { if (bad.test(el.value)) out.push(`field: ${el.value.slice(0, 60)}`); });
+    return out;
+  });
+  if (leaks.length) throw new Error(`test data shows: ${leaks.join(' | ')}`);
   const viewport = page.viewportSize()!;
   let clip: { x: number; y: number; width: number; height: number } | undefined;
   if (region.length) {
