@@ -1,4 +1,5 @@
-import { can, channelRoleOf, type Channel, type CommunityPost, type PostComment } from '@al-ummah/shared-types';
+import { can, channelRoleOf, localizedDisplayNames, resolveDisplayName, type Channel, type CommunityPost, type NameFields, type PostComment } from '@al-ummah/shared-types';
+import R2Repository from '../../lib/r2Repo';
 import { channelNamesByIds } from '../../lib/channelNames';
 
 /**
@@ -183,16 +184,37 @@ export function presentComment(comment: PostComment, viewerUserId?: string): Pos
 }
 
 /**
- * The channel's current names on comments posted as a channel (#1610): `userDisplayName` is the
- * default name and `userDisplayNameLocalized` the name per language, so an Arabic page shows the
- * Arabic name. Stored comments keep the name from when they were written; a deleted comment, or
- * one posted as a person (its channelId is the user id), keeps what it has.
+ * The author's current names on post comments, per language (#1610, #1618). `userDisplayName` is the
+ * stored copy from when the comment was written; this replaces it with the current default name and
+ * adds `userDisplayNameLocalized` (en, ar) so an Arabic page shows the Arabic name:
+ * - posted as a channel: the channel's names;
+ * - posted as a person (channelId is the user id, or none): their names by the display-name rule.
+ * A deleted comment keeps what it has, and so does an author that can't be read.
  */
-export async function withAuthorChannelNames(channels: R2Bucket | undefined, comments: PostComment[]): Promise<PostComment[]> {
-  const live = comments.filter((comment) => !comment.isDeleted && !comment.deletedAt && comment.channelId && comment.channelId !== comment.userId);
-  const names = await channelNamesByIds(channels, live.map((comment) => comment.channelId));
+export async function withAuthorNames(
+  env: { channels?: R2Bucket; profiles?: R2Bucket },
+  comments: PostComment[],
+): Promise<PostComment[]> {
+  const live = comments.filter((comment) => !comment.isDeleted && !comment.deletedAt);
+  const asPerson = (comment: PostComment) => !comment.channelId || comment.channelId === comment.userId;
+  const channelNames = await channelNamesByIds(env.channels, live.filter((comment) => !asPerson(comment)).map((comment) => comment.channelId));
+  const people = new Map<string, NameFields | null>();
+  if (env.profiles) {
+    const repo = new R2Repository<NameFields>(env.profiles);
+    await Promise.all([...new Set(live.filter(asPerson).map((comment) => comment.userId))].map(async (userId) => {
+      people.set(userId, await repo.getObject(userId).catch(() => null));
+    }));
+  }
   return comments.map((comment) => {
-    const named = live.includes(comment) ? names.get(comment.channelId!) : undefined;
+    if (!live.includes(comment)) return comment;
+    if (asPerson(comment)) {
+      const profile = people.get(comment.userId);
+      const name = profile ? resolveDisplayName(profile) : '';
+      if (!name) return comment;
+      const localized = localizedDisplayNames(profile);
+      return { ...comment, userDisplayName: name, ...(Object.keys(localized).length ? { userDisplayNameLocalized: localized } : {}) };
+    }
+    const named = channelNames.get(comment.channelId!);
     if (!named) return comment;
     return {
       ...comment,

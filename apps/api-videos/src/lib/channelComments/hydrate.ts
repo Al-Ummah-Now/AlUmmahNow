@@ -122,20 +122,26 @@ export async function hydrateRows(env: HydrateEnv, rows: ChannelCommentRow[], ta
 	await repairRows(env, loaded);
 
 	const kept = loaded.filter((l) => l.fresh && rowInTab(l.fresh, tab));
+	// Post comments posted as a person: their current names, per language (#1618)
+	const postAsPerson = (l: Loaded) => !!l.storedAuthor && (!l.author.channelId || l.author.channelId === l.author.userId);
 	const authorOf = await resolveCommentAuthors(env, [
 		...kept.filter((l) => !l.storedAuthor).map((l) => l.author),
+		...kept.filter(postAsPerson).map((l) => ({ userId: l.author.userId, channelId: null })),
 		// Who removed a comment: their own name (never a channel)
 		...kept.filter((l) => l.fresh?.removedByUserId).map((l) => ({ userId: l.fresh!.removedByUserId!, channelId: null })),
 	]);
 	// Post comments carry the name stored when written: the channel's current names win, per language (#1610)
-	const postChannelNames = await channelNamesByIds(env.channels, kept.filter((l) => l.storedAuthor).map((l) => l.author.channelId));
+	const postChannelNames = await channelNamesByIds(env.channels, kept.filter((l) => l.storedAuthor && !postAsPerson(l)).map((l) => l.author.channelId));
 	const order = new Map(rows.map((r, i) => [r.commentId, i]));
 	return kept
 		.sort((a, b) => (order.get(a.row.commentId) ?? 0) - (order.get(b.row.commentId) ?? 0))
 		.map((l) => {
 			const fresh = l.fresh!;
 			const resolved = l.storedAuthor ? null : authorOf(l.author);
-			const named = l.storedAuthor && l.author.channelId ? postChannelNames.get(l.author.channelId) : undefined;
+			const person = postAsPerson(l) ? authorOf({ userId: l.author.userId, channelId: null }) : null;
+			const named = person?.displayName
+				? { channelName: person.displayName, channelNameLocalized: person.displayNameLocalized }
+				: l.storedAuthor && l.author.channelId ? postChannelNames.get(l.author.channelId) : undefined;
 			const author = l.storedAuthor
 				? {
 					userId: l.author.userId,

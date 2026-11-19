@@ -13,7 +13,7 @@ import {
   presentComment,
   topLevelCommentKey,
   withViewerLikes,
-  withAuthorChannelNames,
+  withAuthorNames,
 } from './post-comment-helpers';
 
 const listCommentsSchema = {
@@ -169,7 +169,7 @@ export class ListPostComments extends OptionalAuthRoute {
 
     const response: PostCommentListResponse = {
       success: true,
-      comments: await withViewerLikes(bucket, postId, await withAuthorChannelNames(c.env.channels, comments), viewerUserId),
+      comments: await withViewerLikes(bucket, postId, await withAuthorNames(c.env, comments), viewerUserId),
       pagination: {
         limit,
         cursor: paginatedIds.length > 0 ? paginatedIds[paginatedIds.length - 1] : undefined,

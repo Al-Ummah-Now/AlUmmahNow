@@ -9,7 +9,7 @@ import {
   repliesIndexKey,
   topLevelCommentKey,
   withViewerLikes,
-  withAuthorChannelNames,
+  withAuthorNames,
 } from './post-comment-helpers';
 
 const MAX_REPLIES_LIMIT = 50;
@@ -108,7 +108,7 @@ export class ListPostCommentReplies extends OptionalAuthRoute {
 
     const response: PostCommentListResponse = {
       success: true,
-      comments: await withViewerLikes(bucket, postId, await withAuthorChannelNames(c.env.channels, replies), viewerUserId),
+      comments: await withViewerLikes(bucket, postId, await withAuthorNames(c.env, replies), viewerUserId),
       pagination: {
         limit,
         cursor: pageIds.length > 0 ? pageIds[pageIds.length - 1] : undefined,
