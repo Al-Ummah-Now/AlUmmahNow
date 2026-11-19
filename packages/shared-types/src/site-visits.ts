@@ -89,10 +89,20 @@ export interface SiteVisitEvent {
   landing: LandingKind;
   source: string;
   referrerHost?: string;
+  /** Request origin (request-origin.ts): client surface, device class, country, utm_source */
+  surface?: string;
+  device?: string;
+  country?: string;
+  campaign?: string;
 }
 
 // One letter is a real name: X (social:x)
-const SOURCE_PATTERN = /^(direct|site|platform|search:[a-z]{1,20}|social:[a-z]{1,20})$/;
+const SOURCE_PATTERN = /^(direct|site|platform|short_link|embed|email|push|campaign|search:[a-z]{1,20}|social:[a-z]{1,20})$/;
+const SURFACE_PATTERN = /^[a-z_]{2,12}$/;
+const DEVICE_PATTERN = /^(phone|tablet|desktop|tv|unknown)$/;
+const COUNTRY_PATTERN = /^[A-Z]{2}$/;
+const CAMPAIGN_PATTERN = /^[a-z0-9._-]{1,40}$/;
+const optional = (v: unknown, re: RegExp) => v === undefined || (typeof v === 'string' && re.test(v));
 
 export function isSiteVisitEvent(value: unknown): value is SiteVisitEvent {
   if (!value || typeof value !== 'object') return false;
@@ -100,6 +110,10 @@ export function isSiteVisitEvent(value: unknown): value is SiteVisitEvent {
   return (
     (LANDING_KINDS as readonly string[]).includes(String(v.landing)) &&
     typeof v.source === 'string' && SOURCE_PATTERN.test(v.source) &&
-    (v.referrerHost === undefined || (typeof v.referrerHost === 'string' && v.referrerHost.length <= 253))
+    (v.referrerHost === undefined || (typeof v.referrerHost === 'string' && v.referrerHost.length <= 253)) &&
+    optional(v.surface, SURFACE_PATTERN) &&
+    optional(v.device, DEVICE_PATTERN) &&
+    optional(v.country, COUNTRY_PATTERN) &&
+    optional(v.campaign, CAMPAIGN_PATTERN)
   );
 }
