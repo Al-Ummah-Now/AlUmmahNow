@@ -289,8 +289,24 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
     const controls = [...document.querySelectorAll('a[href], button, input, select, textarea, [role="menuitem"], [role="menuitemradio"], [role="button"], [role="tab"], [role="switch"]')]
       .filter(visible)
       .map((el) => ({ el, r: el.getBoundingClientRect() }));
+    // Every visible letter on screen is an obstacle, not only the target's own: a number never covers
+    // text, a section label included (#1654: ② sat on «قنواتك» in the glass menu)
+    const allText: DOMRect[] = [];
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (!node.textContent?.trim() || node.parentElement?.closest('[data-help-marker],script,style')) continue;
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      for (const b of range.getClientRects()) {
+        if (!(b.width > 0 && b.height > 0 && b.bottom > 0 && b.top < window.innerHeight && b.right > 0 && b.left < window.innerWidth)) continue;
+        // Only text a reader can see: not text hidden behind a menu or dialog on top of it
+        const top = document.elementFromPoint(Math.min(window.innerWidth - 1, Math.max(0, b.x + b.width / 2)), Math.min(window.innerHeight - 1, Math.max(0, b.y + b.height / 2)));
+        if (top && (top === node.parentElement || top.contains(node.parentElement) || node.parentElement?.contains(top))) allText.push(b);
+      }
+    }
     const placed: Box[] = [];
     let missed = 0;
+    const faults: string[] = [];
     for (const target of targets) {
       const r = target.getBoundingClientRect();
       // The outline: the control's own shape (round around an avatar), GAP px outside it
@@ -332,9 +348,15 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
         [rtl ? o.x + o.w - 2 : o.x - S + 2, midY], [rtl ? o.x - S + 2 : o.x + o.w - 2, midY],
         [rtl ? o.x + o.w - S : o.x, o.y - S + 2], [rtl ? o.x + o.w - S : o.x, o.y + o.h - 2],
       ];
+      // Inside the outline, at its inline-start or inline-end side: full-width rows of a phone menu
+      // have no free edge (the start edge is off screen, the corners touch the next row), but their
+      // ends are empty (#1654)
+      const inside: Array<[number, number]> = round ? [] : [
+        [rtl ? o.x + o.w - S - 4 : o.x + 4, midY], [rtl ? o.x + 4 : o.x + o.w - S - 4, midY],
+      ];
       const candidates: Array<[number, number]> = above
-        ? [...outside, [cornerStartX, topY + k], [cornerEndX, topY + k], [cornerStartX, bottomY - k], [cornerEndX, bottomY - k], ...beyond]
-        : [...outside, [startX, midY], [endX, midY], [cornerStartX, topY + k], [cornerStartX, bottomY - k], ...beyond];
+        ? [...outside, [cornerStartX, topY + k], [cornerEndX, topY + k], [cornerStartX, bottomY - k], [cornerEndX, bottomY - k], ...inside, ...beyond]
+        : [...outside, [startX, midY], [endX, midY], [cornerStartX, topY + k], [cornerStartX, bottomY - k], ...inside, ...beyond];
       // The target's own avatar or logo stays clear too: a number on it hides who the row is
       // (design audit 2026-11-19: '١' over «أ» in the phone picker)
       const ownPictures = [...target.querySelectorAll<HTMLElement>('img, svg, span, div')]
@@ -342,6 +364,8 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
           if (!visible(el)) return false;
           const b = el.getBoundingClientRect();
           const rr = parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0;
+          // Icons too (the ✓ on the active row), any shape
+          if (el.tagName.toLowerCase() === 'svg') return b.width >= 8 && b.width <= 40;
           return b.width >= 16 && b.width <= 64 && Math.abs(b.width - b.height) < 2 && (el.tagName === 'IMG' || rr >= b.width / 2 - 0.5);
         })
         .map((el) => el.getBoundingClientRect());
@@ -355,11 +379,13 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
         range.selectNodeContents(node);
         ownText.push(...[...range.getClientRects()].filter((b) => b.width > 0 && b.height > 0));
       }
+      const shrink = (b: DOMRect) => ({ x: b.x + 2, y: b.y + 2, w: Math.max(0, b.width - 4), h: Math.max(0, b.height - 4) });
+      const texts = [...ownText, ...allText].map(shrink);
       const others = [
-        ...controls.filter((c) => c.el !== target && !c.el.contains(target) && !target.contains(c.el)).map((c) => c.r),
-        ...ownPictures,
-        ...ownText,
-      ].map((r) => ({ x: r.x + 2, y: r.y + 2, w: Math.max(0, r.width - 4), h: Math.max(0, r.height - 4) }));
+        ...controls.filter((c) => c.el !== target && !c.el.contains(target) && !target.contains(c.el)).map((c) => shrink(c.r)),
+        ...ownPictures.map(shrink),
+        ...texts,
+      ];
       const fits = ([x, y]: [number, number]) => {
         const box = { x, y, w: S, h: S };
         return x >= 2 && y >= 2 && x + S <= window.innerWidth - 2 && y + S <= window.innerHeight - 2
@@ -367,8 +393,21 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       };
       const spot = candidates.find(fits);
       if (!spot) missed++;
-      const [x, y] = spot ?? candidates.find(([cx, cy]) => cx >= 2 && cy >= 2 && cx + S <= window.innerWidth - 2) ?? candidates[0];
+      // No clean spot: the on-screen spot that covers the least, and never another number (#1654: the
+      // old fallback put ① and ② on the same corner, so ① vanished under ②)
+      const area = (a: Box, b: Box) => Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+      const cost = ([cx, cy]: [number, number]) => {
+        const box = { x: cx, y: cy, w: S, h: S };
+        if (cx < 2 || cy < 2 || cx + S > window.innerWidth - 2 || cy + S > window.innerHeight - 2) return Infinity;
+        if (placed.some((q) => hit(box, q))) return Infinity;
+        return texts.reduce((n, t) => n + area(box, t) * 10, 0) + others.reduce((n, t) => n + area(box, t), 0);
+      };
+      const [x, y] = spot ?? [...candidates].sort((a, b) => cost(a) - cost(b))[0];
       placed.push({ x, y, w: S, h: S });
+      // Checked, not hoped: a number on text or on another number fails the picture
+      const box = { x, y, w: S, h: S };
+      if (texts.some((t) => hit(box, t))) faults.push(`number ${target.dataset.helpTarget} covers text`);
+      if (cost([x, y]) === Infinity) faults.push(`number ${target.dataset.helpTarget} has no spot on screen clear of the other numbers`);
       const m = document.createElement('span');
       m.dataset.helpMarker = '';
       m.textContent = Number(target.dataset.helpTarget).toLocaleString(rtl ? 'ar-u-nu-arab' : 'en');
@@ -380,10 +419,11 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
       });
       document.body.append(ring, m);
     }
-    return missed;
+    return { missed, faults };
   }, { rtl: lang === 'ar', above: place === 'above' });
   // Not silent: the run lists every picture whose number had to sit on another control
-  if (unplaced) note(`${unplaced} marker(s) found no spot clear of other controls`);
+  if (unplaced.missed) note(`${unplaced.missed} marker(s) found no spot clear of other controls`);
+  if (unplaced.faults.length) throw new Error(`markers: ${unplaced.faults.join('; ')}`);
 }
 
 /** A screenshot of the area around `region` (the whole viewport when empty), saved as WebP */
