@@ -49,6 +49,7 @@ async function expectUploadHidden(page: Page, channelId: string, locale: 'en' | 
   await expect(page.locator('[data-testid="studio-frame"] a[href*="/upload"]')).toHaveCount(0);
   await expect(page.locator('[data-testid="studio-frame"] a[href*="/upgrade"]')).toHaveCount(0);
   await expect(page.getByTestId('header-upload')).toHaveCount(0);
+  await expect(page.getByTestId('tab-upload')).toHaveCount(0);
 
   await page.goto(`${web}/settings`);
   await expect(page.getByTestId('settings-section').first()).toBeVisible({ timeout: 30000 });

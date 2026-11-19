@@ -113,25 +113,17 @@ test.describe('Header', () => {
     expect(direction).toBe('rtl');
   });
 
-  test('NAV-003 signed-out visitors see Sign in and Upload once, after the search, in both directions', async ({ page }) => {
-    for (const [lang, rtl] of [['en', false], ['ar', true]] as const) {
+  test('NAV-003 signed-out visitors see Sign in and no Upload anywhere, in both directions', async ({ page }) => {
+    for (const lang of ['en', 'ar'] as const) {
       await page.goto(`/${lang}`);
       // Signed out the account control is the solid Sign in
       await expect(page.getByTestId('header-sign-in')).toBeVisible();
       await expect(page.getByTestId('header-sign-in')).toHaveText(lang === 'ar' ? 'تسجيل الدخول' : 'Sign in');
       await expect(page.getByTestId('nav-menu-trigger')).toHaveCount(0);
-      // One Upload in the header, one in the phone tab bar; only one is shown at any width
-      await expect(page.getByTestId('header-upload')).toHaveCount(1);
-      await expect(page.getByTestId('tab-upload')).toHaveCount(1);
-      if (isPhoneLayout(page)) {
-        await expectUploadInTabBar(page, `/${lang}/upload`, 'signed-out');
-      } else {
-        const upload = page.getByRole('banner').getByTestId('header-upload');
-        await expect(upload).toHaveAttribute('href', `/${lang}/upload`);
-        await expect(upload).toHaveAttribute('data-state', 'signed-out');
-        await expect(page.getByTestId('tab-upload')).toBeHidden();
-        await expectUploadAfterSearch(page, rtl);
-      }
+      // Uploading is by invitation (creator tiers): no Upload in the header or the phone tab bar
+      await expect(page.getByTestId('header-upload')).toHaveCount(0);
+      await expect(page.getByTestId('tab-upload')).toHaveCount(0);
+      await expect(page.locator('header, nav.tabbar').locator('a[href*="/upload"]')).toHaveCount(0);
     }
   });
 });
