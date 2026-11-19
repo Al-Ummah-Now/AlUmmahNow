@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { renderToStaticMarkup } from 'react-dom/server';
 import * as React from 'react';
 import { YT_SCOPE_CAPTIONS, YT_SCOPE_READONLY, type YoutubeImportSettingsView } from '@al-ummah/shared-types';
-import { clientIdError, clientSecretError, formOf, readiness, saveErrorMessage, scopePurpose, secretNameFor, secretSaveErrorMessage, settingsPatch } from '../src/lib/youtube-import';
+import { clientIdError, clientSecretError, formOf, readiness, saveErrorMessage, scopePurpose, secretChecksOnBlur, secretNameFor, secretSaveErrorMessage, settingsPatch } from '../src/lib/youtube-import';
 import { I18nProvider } from '../src/i18n/I18nProvider';
 import { YoutubeImportSetting } from '../src/app/(protected)/platform-settings/YoutubeImportSetting';
 import en from '../src/i18n/messages/en';
@@ -90,6 +90,12 @@ describe('YouTube import settings: form rules', () => {
     assert.equal(secretSaveErrorMessage({ status: 400 }), 'youtubeImport.errorSecret');
     assert.equal(secretSaveErrorMessage({ status: 403 }), 'youtubeImport.errorForbidden');
     assert.equal(secretSaveErrorMessage({ status: 502 }), 'youtubeImport.secretSaveFailed');
+  });
+
+  it('leaving an empty secret field says nothing (Cancel stays where the pointer is); a typed value is checked', () => {
+    assert.equal(secretChecksOnBlur(''), false);
+    assert.equal(secretChecksOnBlur('   '), false);
+    assert.equal(secretChecksOnBlur('short'), true);
   });
 
   it('never tells the admin to paste the secret in Cloudflare', () => {
