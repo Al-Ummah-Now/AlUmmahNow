@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import { runId } from './test-utils/run-users';
 import { webRunUserAddress } from './test-utils/web-run-users';
 import { test, expect } from './fixtures';
-import { ANONYMOUS_STATE } from './test-utils/auth-state';
+import { ANONYMOUS_STATE, AUTH_STATE } from './test-utils/auth-state';
 import { SINK_DOMAIN } from './test-utils/code-sink';
 import { e2eUserPassword } from './test-utils/user-password';
 import { fillSecret } from './release/secret-fill';
@@ -81,5 +81,27 @@ test.describe('Real sign-in', () => {
 
     await signIn(page);
     await expectToken(page, true);
+  });
+});
+
+// 2026-11-19 prod (iOS Safari): the auth server's after-sign-in passkey card opened the
+// app's callback twice; the first signed the browser in, the second failed its state check
+// and showed the sign-in error page. A repeated callback in a signed-in browser goes on as
+// signed in; in a signed-out browser it is still refused (login CSRF).
+test.describe('Repeated sign-in callback', () => {
+  test.describe('signed in', () => {
+    test.use({ storageState: AUTH_STATE.single });
+    test('goes on signed in, no error page', async ({ page }) => {
+      await page.goto('/api/callback?code=repeated&state=not-this-browser&locale=en');
+      await expect(page).not.toHaveURL(/\/auth\/error/);
+      await expect(page).toHaveURL(/\/en(\/|$|\?)/);
+    });
+  });
+  test.describe('signed out', () => {
+    test.use({ storageState: ANONYMOUS_STATE });
+    test('is refused with the error page', async ({ page }) => {
+      await page.goto('/api/callback?code=repeated&state=not-this-browser&locale=en');
+      await expect(page).toHaveURL(/\/en\/auth\/error/);
+    });
   });
 });

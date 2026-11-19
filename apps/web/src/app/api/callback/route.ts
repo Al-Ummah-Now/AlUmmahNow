@@ -102,6 +102,16 @@ async function validate(code: string | null, url: URL, verifier?: string): Promi
   return { success: false, error: exchanged.err };
 }
 
+/** Whether this browser already has an active session (a repeated callback after a good one). */
+async function alreadySignedIn(): Promise<boolean> {
+  try {
+    const { SessionManager } = await import("@/lib/auth/session-manager");
+    return !!(await SessionManager.getActiveSession())?.accessToken;
+  } catch {
+    return false;
+  }
+}
+
 export async function GET(req: NextRequest) {
 
   const url = new URL(req.url);
@@ -119,6 +129,15 @@ export async function GET(req: NextRequest) {
   // Only a sign-in this browser started (state = its state cookie) may
   // continue: otherwise no code exchange and no session change (login CSRF)
   if (!stateMatches(url.searchParams.get("state"), req.cookies.get(STATE_COOKIE)?.value)) {
+    // The same callback a second time (a page that opened it twice: 2026-11-19, the
+    // after-sign-in passkey card's timer + Continue on a slow phone). The first one
+    // already signed this browser in, so there is nothing wrong to show: go on as
+    // signed in. Nothing is exchanged and no session changes, so login CSRF stays out.
+    if (await alreadySignedIn()) {
+      logger.info("[OAuth Callback] Repeated callback, browser already signed in", { hasState: url.searchParams.has("state") });
+      await clearSignInCookies();
+      return NextResponse.redirect(sameOriginUrl(successDestination(returnPath, locale), url.origin));
+    }
     logger.warn("[OAuth Callback] Refused: state does not match this browser", {
       hasState: url.searchParams.has("state"),
       silent,
