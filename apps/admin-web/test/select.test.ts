@@ -16,8 +16,10 @@ import { firstEnabled, lastEnabled, nextEnabled, readOptions, selectKey, textOf,
 // The components compile to React.createElement under tsx (classic JSX), as in the other render tests
 (globalThis as unknown as { React: unknown }).React = React;
 const h = React.createElement;
+// Children built here are plain React elements; the cast keeps the test free of @types/react copies
+const opts = (children: unknown) => readOptions(children as never);
 
-const options = readOptions([
+const options = opts([
   h('option', { key: 'a', value: '' }, 'All statuses'),
   h('option', { key: 'b', value: 'pending' }, 'Pending'),
   h('option', { key: 'c', value: 'reviewing', disabled: true }, 'Reviewing'),
@@ -37,12 +39,12 @@ describe('readOptions', () => {
         ['dismissed', 'Dismissed', false],
       ],
     );
-    assert.equal(readOptions(h('option', null, 'Plain'))[0].value, 'Plain');
-    assert.equal(readOptions(h('option', { value: 24 }, '24 h'))[0].value, '24', 'numbers become strings, as in the DOM');
+    assert.equal(opts(h('option', null, 'Plain'))[0].value, 'Plain');
+    assert.equal(opts(h('option', { value: 24 }, '24 h'))[0].value, '24', 'numbers become strings, as in the DOM');
   });
 
   it('flattens fragments, arrays and optgroups (a disabled group disables its options)', () => {
-    const read = readOptions([
+    const read = opts([
       h(React.Fragment, { key: 'f' }, [h('option', { key: 1, value: 'x' }, 'X')]),
       h('optgroup', { key: 'g', label: 'Group', disabled: true }, h('option', { value: 'y' }, 'Y')),
       false,
@@ -105,7 +107,7 @@ describe('typeahead', () => {
   });
 
   it('matches Arabic labels as typed', () => {
-    const ar = readOptions([h('option', { key: 1, value: 'a' }, 'كل الحالات'), h('option', { key: 2, value: 'b' }, 'قيد الانتظار')]);
+    const ar = opts([h('option', { key: 1, value: 'a' }, 'كل الحالات'), h('option', { key: 2, value: 'b' }, 'قيد الانتظار')]);
     assert.equal(typeahead(ar, 0, 'ق'), 1);
   });
 });
@@ -122,7 +124,7 @@ describe('splitClasses', () => {
 describe('rendered markup', () => {
   const render = (props: Record<string, unknown>, dir: 'ltr' | 'rtl' = 'ltr') =>
     renderToStaticMarkup(
-      h('div', { dir }, h(Select, { id: 'status', name: 'status', 'data-testid': 'status-filter', ...props } as never, [
+      h('div', { dir }, h(Select as never, { id: 'status', name: 'status', 'data-testid': 'status-filter', ...props } as never, [
         h('option', { key: 1, value: '' }, dir === 'rtl' ? 'كل الحالات' : 'All statuses'),
         h('option', { key: 2, value: 'pending' }, dir === 'rtl' ? 'قيد الانتظار' : 'Pending'),
       ])),

@@ -90,14 +90,14 @@ export function ErrorFilterBar({ filters, facets, active }: { filters: ErrorList
         <label htmlFor="errors-origin" className="text-sm text-fg-muted">
           {t('errorsPage.originFilter')}
         </label>
-        <select id="errors-origin" name="origin" defaultValue={filters.origin ?? ''} onChange={submitOnChange} className={fieldClass} data-testid="errors-origin-filter">
+        <Select id="errors-origin" name="origin" defaultValue={filters.origin ?? ''} onChange={submitOnChange} className={fieldClass} data-testid="errors-origin-filter">
           <option value="">{t('errorsPage.allOrigins')}</option>
           {CLIENT_SURFACES.map((s) => (
             <option key={s} value={s}>
               {translateDynamic(t, 'originSurface', s)}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="errors-from" className="text-sm text-fg-muted">
