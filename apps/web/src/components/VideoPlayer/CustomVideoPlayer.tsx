@@ -80,6 +80,9 @@ import { ProgressTooltip } from './ProgressTooltip';
 import { AUTO_ADVANCE_SECONDS, EndScreen, MiniPlayerButtons } from './PlayerOverlays';
 import { getPlayerUi, subscribePlayerUi } from '@/lib/video/player-ui';
 import { keepFrameInView, stickyTopInset } from '@/lib/video/theatre-scroll';
+
+/** The phone tab bar (56px) and a small gap: a portrait frame stays above it (#1513) */
+const PHONE_TAB_BAR_ROOM = 56 + 16;
 import { MINI_ENTER_BELOW, MINI_LEAVE_ABOVE, PIN_MEDIA_QUERY, nextMini, nextPinned } from '@/lib/video/mini-player';
 import { applyBuiltInIcons } from '@/lib/video/components';
 import { ViewerCount } from './ViewerCount';
@@ -1113,13 +1116,36 @@ export default function CustomVideoPlayer({
     const frame = frameRef.current;
     if (!frame || typeof ResizeObserver === 'undefined') return undefined;
     const fit = () => {
-      const width = frame.getBoundingClientRect().width;
-      if (width > 0) frame.style.height = `${Math.round(width * (portrait ? 16 / 9 : 9 / 16))}px`;
+      const phonePortrait = portrait && typeof window.matchMedia === 'function' && window.matchMedia(PIN_MEDIA_QUERY).matches;
+      // On phones a portrait frame may be narrower than its column (below), so it is measured on
+      // the column there; everywhere else on the frame itself, as before
+      const width = (phonePortrait ? frame.parentElement ?? frame : frame).getBoundingClientRect().width;
+      if (width <= 0) return;
+      let height = Math.round(width * (portrait ? 16 / 9 : 9 / 16));
+      frame.style.width = '';
+      frame.style.marginInline = '';
+      // Phones: a portrait video fills the width at 9:16, but never taller than the space between
+      // the sticky header and the tab bar; then the frame narrows (centred) instead of showing the
+      // video in black side bars (#1513)
+      if (phonePortrait) {
+        const room = Math.round(window.innerHeight - stickyTopInset(document) - PHONE_TAB_BAR_ROOM);
+        if (room > 0 && height > room) {
+          height = room;
+          frame.style.width = `${Math.round((room * 9) / 16)}px`;
+          frame.style.marginInline = 'auto';
+        }
+      }
+      frame.style.height = `${height}px`;
     };
     fit();
     const ro = new ResizeObserver(fit);
     ro.observe(frame);
-    return () => ro.disconnect();
+    if (frame.parentElement) ro.observe(frame.parentElement);
+    window.addEventListener('resize', fit);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', fit);
+    };
   }, [portrait, currentError]);
 
   /**
@@ -1181,7 +1207,9 @@ export default function CustomVideoPlayer({
    */
   useEffect(() => {
     const frame = frameRef.current;
-    if (!frame || !playerUi.miniPlayerAvailable || typeof window.matchMedia !== 'function') {
+    // A Short is never pinned: on a phone it scrolls away with the page, so the details and
+    // comments are never underneath a pinned portrait player (#1513)
+    if (!frame || isShort || !playerUi.miniPlayerAvailable || typeof window.matchMedia !== 'function') {
       setPinned(false);
       return undefined;
     }
@@ -1214,7 +1242,7 @@ export default function CustomVideoPlayer({
       phone.removeEventListener?.('change', schedule);
       for (const name of ['fullscreenchange', 'webkitfullscreenchange']) document.removeEventListener(name, schedule);
     };
-  }, [playerUi.miniPlayerAvailable]);
+  }, [playerUi.miniPlayerAvailable, isShort]);
 
   /**
    * Theatre on or off keeps the frame's top in view (lib/video/theatre-scroll.ts). It runs in the
