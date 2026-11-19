@@ -150,12 +150,9 @@ test.describe('Release: Contact us', () => {
       await page.goto(`${inbox}&status=spam`);
       await expect(rows).toHaveCount(1);
     } finally {
-      for (const id of ids) {
-        await deleteMessage(page, id);
-      }
-      // A delete keeps the message restorable for 30 days: these are test messages, so delete them
-      // permanently (Recently deleted), which queues them for the next hourly cleanup
-      await purgeDeleted(page, ids);
+      // Every message is deleted even when one delete fails: a throw on the first used to skip the
+      // rest, and the failed attempt's messages outlived the run (#1635). The first error is rethrown.
+      await cleanUpMessages(page, ids);
     }
     await page.goto(inbox);
     await expect(page.getByTestId('contact-empty')).toBeVisible();
@@ -168,11 +165,49 @@ test.describe('Release: Contact us', () => {
  * left the message behind (flaky run 43836619972).
  */
 async function deleteMessage(page: Page, id: string): Promise<void> {
-  await page.goto(`${target().adminWeb}/contact/${id}`);
-  const button = page.getByTestId('contact-delete');
-  await expectHydrated(button);
-  await button.click();
-  await expect(page).toHaveURL(new RegExp(`${target().adminWeb}/contact(\\?|$)`), { timeout: 30000 });
+  const backToInbox = new RegExp(`${target().adminWeb}/contact(\\?|$)`);
+  for (let attempt = 1; ; attempt++) {
+    await page.goto(`${target().adminWeb}/contact/${id}`);
+    const button = page.getByTestId('contact-delete');
+    // Already deleted (an earlier try that went through without leaving the page): nothing to delete
+    if (!(await button.isVisible({ timeout: 10000 }).catch(() => false))) {
+      await expect(page.getByTestId('contact-message'), `message ${id} is still shown but has no Delete`).toHaveCount(0);
+      return;
+    }
+    await expectHydrated(button);
+    await button.click();
+    try {
+      await expect(page).toHaveURL(backToInbox, { timeout: 30000 });
+      return;
+    } catch (error) {
+      if (attempt >= 2) throw error;
+    }
+  }
+}
+
+/**
+ * Deletes, then purges, each of `ids`, all of them even when one fails (the first error is thrown
+ * after the rest are done). Purged messages leave with the next hourly cleanup (the run's
+ * teardown runs it on the local stack).
+ */
+async function cleanUpMessages(page: Page, ids: string[]): Promise<void> {
+  let first: unknown;
+  const deleted: string[] = [];
+  for (const id of ids) {
+    try {
+      await deleteMessage(page, id);
+      deleted.push(id);
+    } catch (error) {
+      first ??= error;
+    }
+  }
+  // Also the ones whose delete reported a failure: it may have gone through (purgeDeleted waits for each row)
+  try {
+    await purgeDeleted(page, first ? ids : deleted);
+  } catch (error) {
+    first ??= error;
+  }
+  if (first) throw first;
 }
 
 /** "Delete permanently now" on each deleted message (Recently deleted → Contact messages). */
@@ -189,31 +224,49 @@ async function purgeDeleted(page: Page, ids: string[]): Promise<void> {
   }
 }
 
-/** Deletes old "Release rc…" messages from E2E sink senders (at most 20 per run). */
+/**
+ * Deletes old "Release rc…" messages from E2E sink senders (at most 20 per run), and this CI run's
+ * messages from an earlier attempt of this group, from the inbox and from Recently deleted.
+ *
+ * A retry runs the whole serial group again with a new RUN marker; the failed attempt's signed-out
+ * messages, sent from sink addresses no run account owns, were left for the leftover check to fail
+ * the job (#1635). Never the current attempt's (they carry RUN) and never another run's (its own
+ * id). Rows are matched on their text (the email is in it), not on the cell markup: a markup change
+ * (span → bdi) once made this sweep silently match nothing.
+ */
 async function sweepLeftovers(page: Page): Promise<void> {
+  const id = runId();
+  const pick = { before: Date.now() - 3600_000, ownRun: id ? `e2e+${id}-` : '', current: RUN };
   await page.goto(`${target().adminWeb}/contact?q=${encodeURIComponent('Release rc')}`);
   await expect(page.getByTestId('contact-total')).toBeVisible();
-  // Also this CI run's messages from an earlier attempt of this group (a retry runs the whole serial
-  // group again with a new RUN marker; the failed attempt's signed-out messages, sent from sink
-  // addresses no run account owns, were left for the leftover check to fail the job). Never the
-  // current attempt's (they carry RUN) and never another run's (its own id).
-  const id = runId();
   const stale = await page.getByTestId('contact-row').evaluateAll(
     (rows, { before, ownRun, current }) =>
       rows
         .filter((row) => {
-          const email = row.querySelector('td span[dir="ltr"]')?.textContent?.trim() ?? '';
-          if (!/@e2e\.alummahnow\.net$/.test(email)) return false;
-          if (ownRun && email.startsWith(ownRun) && !(row.textContent ?? '').includes(current)) return true;
+          const text = row.textContent ?? '';
+          if (!/@e2e\.alummahnow\.net/.test(text) || text.includes(current)) return false;
+          if (ownRun && text.includes(ownRun)) return true;
           return Date.parse(row.querySelector('time')?.getAttribute('datetime') ?? '') < before;
         })
         .map((row) => row.getAttribute('data-message-id') as string),
-    { before: Date.now() - 3600_000, ownRun: id ? `e2e+${id}-` : '', current: RUN },
+    pick,
   );
-  for (const id of stale.slice(0, 20)) {
-    await deleteMessage(page, id);
-  }
-  if (stale.length) await purgeDeleted(page, stale.slice(0, 20));
+  // An earlier attempt's messages it deleted but did not purge: only in Recently deleted
+  await page.goto(`${target().adminWeb}/recently-deleted/contact-message`);
+  const trashed = await page.locator('[data-testid="trash-row"][data-queued="false"]').evaluateAll(
+    (rows, { ownRun, current }) =>
+      rows
+        .filter((row) => {
+          const text = row.textContent ?? '';
+          return !!ownRun && text.includes(ownRun) && text.includes('Release rc') && !text.includes(current);
+        })
+        .map((row) => row.getAttribute('data-id') as string),
+    pick,
+  );
+  const live = stale.slice(0, 20);
+  if (live.length) await cleanUpMessages(page, live);
+  const left = trashed.filter((t) => !live.includes(t));
+  if (left.length) await purgeDeleted(page, left);
 }
 
 async function signInAsAdmin(page: Page, context: import('@playwright/test').BrowserContext): Promise<void> {
