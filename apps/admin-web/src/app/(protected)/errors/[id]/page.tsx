@@ -29,7 +29,7 @@ const GROUP_ID = /^eg_[0-9a-f]{16}$/;
 const USER_ID = /^usr_[A-Za-z0-9_-]{1,64}$/;
 /** Public videos site, for items that point at a video (same config as the access-denied page). */
 const WEB_ORIGIN = process.env.NEXT_PUBLIC_MAIN_SITE_URL || 'https://alummahnow.net';
-const thClass = 'text-start px-3 py-2 text-fg-muted font-medium sm:whitespace-nowrap';
+const thClass = 'text-start px-3 py-2 text-fg-muted font-medium';
 
 export default async function ErrorGroupPage({ params, searchParams }: PageProps) {
   const { id } = await params;
@@ -190,7 +190,7 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
                   <tr key={r.release}>
                     <td className="px-3 py-2 font-mono" dir="ltr">{r.release}</td>
                     <td className="px-3 py-2 text-end tabular-nums">{formatNumber(r.occurrences, locale)}</td>
-                    <td className="px-3 py-2 text-fg-muted sm:whitespace-nowrap">{formatDate(r.last_seen, locale)}</td>
+                    <td className="px-3 py-2 text-fg-muted">{formatDate(r.last_seen, locale)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -207,7 +207,7 @@ export default async function ErrorGroupPage({ params, searchParams }: PageProps
         {stack ? (
           <>
             <p className="text-sm text-fg-muted mb-3">{latest?.symbolicated_stack ? t('errorsPage.stackSymbolicated') : t('errorsPage.stackRaw')}</p>
-            <pre className="bg-surface-2 border border-border rounded p-4 text-xs overflow-x-auto font-mono text-fg" dir="ltr" data-testid="error-stack">
+            <pre className="bg-surface-2 border border-border rounded p-4 text-xs font-mono text-fg whitespace-pre-wrap break-words [overflow-wrap:anywhere]" dir="ltr" data-testid="error-stack">
               {stack}
             </pre>
           </>
