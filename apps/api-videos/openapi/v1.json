@@ -7310,6 +7310,12 @@
                           "targetTitle": {
                             "type": "string"
                           },
+                          "targetTitleLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
                           "targetUrlPath": {
                             "type": "string"
                           },
@@ -7847,6 +7853,12 @@
                           },
                           "targetTitle": {
                             "type": "string"
+                          },
+                          "targetTitleLocalized": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
                           },
                           "targetUrlPath": {
                             "type": "string"
