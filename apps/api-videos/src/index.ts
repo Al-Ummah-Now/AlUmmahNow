@@ -64,7 +64,7 @@ import { pruneRateLimits, rateLimitMiddleware } from "./middleware/rate-limit";
 import { UPLOAD_CONTINUE_PATHS, UPLOAD_SESSION_PATHS, uploadContinueLimitMiddleware, uploadSessionLimitMiddleware } from "./middleware/upload-limits";
 import { pruneLimitHits } from "./lib/creatorTiers";
 import { channelCreateGate, handleCreatorAccess } from "./endpoints/creator/creatorAccess";
-import { handleCreateTierRequest, handleMyTierRequests, handleUpgradeOverview, handleWithdrawTierRequest } from "./endpoints/creator/tierRequests";
+import { handleCreateTierRequest, handleMyTier, handleMyTierRequests, handleUpgradeOverview, handleWithdrawTierRequest } from "./endpoints/creator/tierRequests";
 import { handleBillingPlans, handleCancelOwn, handleCheckout, handleFakeCheckoutPage, handleFakePay, handleMyBilling, handlePortal, handleWebhook } from "./endpoints/billing/billing";
 import billingInternalRouter from "./routers/billing.router";
 import { onBillingJobFailed, queueReconciles } from "./lib/billing/service";
@@ -298,6 +298,8 @@ app.get('/api/me/features', handleUserFeatures);
 app.route('/api/apps/attestation', attestationRouter as never);
 // Tier requests (/upgrade): the tiers, the user's request, filing and withdrawing one
 app.get('/api/tiers/upgrade', handleUpgradeOverview);
+// Settings › Tier: the user's own tier in every mode (/upgrade itself is 404 feature_off while closed)
+app.get('/api/me/tier', authMiddleware, handleMyTier);
 // Payments for creator tiers (wiki AUN-SUBS, lib/billing/*): off until an admin enables a provider
 app.get('/api/billing/plans', handleBillingPlans);
 app.get('/api/me/billing', authMiddleware, handleMyBilling);

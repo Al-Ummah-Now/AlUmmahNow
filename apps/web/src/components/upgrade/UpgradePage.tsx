@@ -29,6 +29,7 @@ import { refreshCreatorAccess } from '@/hooks/useCreatorAccess';
 import { login } from '@/lib/actions';
 import { upgradePath } from '@/lib/auth/sign-in-return';
 import { fetchUpgradeOverview, submitTierRequest, withdrawTierRequest } from '@/lib/api/tier-requests-client';
+import NotFoundPage from '@/components/NotFoundPage';
 import { cardState, fillCopy, requestErrorMessage, tierDescription, tierFeatures, tierName, validateRequestForm, type FormErrors, type Lang } from '@/lib/upgrade/tiers';
 import { formatAbsoluteDate } from '@/lib/format/videoMeta';
 import { TierRequestHistory } from './TierRequestHistory';
@@ -38,7 +39,7 @@ import { reportError } from '@/lib/errors/reporter';
 const FILLED_WIDE = `${FILLED} w-full`;
 const QUIET_WIDE = `${QUIET} w-full`;
 
-type Load = { status: 'loading' } | { status: 'error' } | { status: 'ready'; overview: UpgradeOverview };
+type Load = { status: 'loading' } | { status: 'error' } | { status: 'off' } | { status: 'ready'; overview: UpgradeOverview };
 
 /** A fanous: the beta notice's mark (the site's lantern motif, stroke icon set). */
 function LanternMark() {
@@ -79,6 +80,12 @@ export function UpgradePage({ locale }: { locale: string }) {
       if (res.result.request?.status === 'approved') void refreshCreatorAccess();
       return;
     }
+    // Requests closed and no provider since the page was served: /upgrade is an off feature, so it becomes the
+    // site's 404 like any other (owner decision 2026-11-19), never an error with Retry
+    if (res.status === 404 && res.code === 'feature_off') {
+      setLoad({ status: 'off' });
+      return;
+    }
     logger.warn('[upgrade] Overview not loaded', { status: res.status, code: res.code });
     if (res.status === 0 || res.status >= 500) reportError(new Error(`Upgrade overview failed: ${res.status} ${res.code ?? ''}`.trim()), { kind: 'fetch', status: res.status, shown: true });
     setLoad({ status: 'error' });
@@ -108,6 +115,8 @@ export function UpgradePage({ locale }: { locale: string }) {
 
   const overview = load.status === 'ready' ? load.overview : null;
   const tierOf = (id: string) => overview?.tiers.find((x) => x.id === id) ?? null;
+
+  if (load.status === 'off') return <NotFoundPage />;
 
   return (
     <main id={MAIN_CONTENT_ID} className="upg" data-testid="upgrade-page" data-mode={overview?.mode}>

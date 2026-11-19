@@ -28,6 +28,8 @@ const fetchUpgradeOverview = jest.fn();
 jest.mock('@/lib/api/tier-requests-client', () => ({
   fetchMyTierRequests: (...a: unknown[]) => fetchMyTierRequests(...a),
   fetchUpgradeOverview: () => fetchUpgradeOverview(),
+  // Settings › Tier reads /api/me/tier (same shape, every mode)
+  fetchMyTier: () => fetchUpgradeOverview(),
 }));
 
 const base = { description: null, descriptionAr: null, unlimited: false, pages: false, maxChannels: 1, captionMinutesMonth: 0, uploadsPerDay: 50, requestable: true };
@@ -135,6 +137,16 @@ describe('Settings › Tier', () => {
     render(<SettingsTierPage />);
     expect(await screen.findByTestId('settings-tier-name')).toHaveTextContent('فئتك: مجاني');
     expect(screen.queryByTestId('settings-tier-since')).toBeNull();
+  });
+
+  it("requests off and no provider ('closed'): the tier still shows, with no link to /upgrade and no request history (an off feature leaves no trace)", async () => {
+    fetchUpgradeOverview.mockResolvedValue(overview({ mode: 'closed' }));
+    render(<SettingsTierPage />);
+    expect(await screen.findByTestId('settings-tier-name')).toHaveTextContent('Your tier: Creator');
+    expect(screen.getByTestId('settings-tier-current')).toHaveTextContent('Upload up to 2,000 videos a day');
+    expect(screen.queryByTestId('settings-tier-see-all')).toBeNull();
+    expect(screen.queryByTestId('tier-request-history')).toBeNull();
+    expect(fetchMyTierRequests).not.toHaveBeenCalled();
   });
 
   it('signed out: the sign-in prompt, no calls', () => {

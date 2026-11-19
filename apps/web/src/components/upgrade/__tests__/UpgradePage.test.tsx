@@ -24,6 +24,7 @@ jest.mock('@/lib/logger-client', () => ({ logger: { debug: jest.fn(), warn: jest
 jest.mock('@/lib/errors/reporter', () => ({ reportError: jest.fn() }));
 jest.mock('@/lib/actions', () => ({ login: jest.fn() }));
 jest.mock('@/theme/upgrade.css', () => ({}), { virtual: true });
+jest.mock('@/components/NotFoundPage', () => ({ __esModule: true, default: () => <div data-testid="not-found-page" /> }));
 const refreshCreatorAccess = jest.fn();
 jest.mock('@/hooks/useCreatorAccess', () => ({ refreshCreatorAccess: () => refreshCreatorAccess() }));
 const ensureHuman = jest.fn();
@@ -70,24 +71,17 @@ describe('Upgrade page', () => {
     expect(screen.getByTestId('upgrade-tiers').textContent).not.toMatch(/\$|€|£|\/mo/);
   });
 
-  it("requests off and no provider ('closed'): the tiers with the current one lit, no request or sign-in, and no word about it (an off feature leaves no trace); in en and ar", async () => {
-    fetchUpgradeOverview.mockResolvedValue(overview({ mode: 'closed' }));
+  it("requests off and no provider ('closed'): the API answers 404 feature_off and the page is the site's 404 (an off feature vanishes, owner 2026-11-19); in en and ar", async () => {
+    fetchUpgradeOverview.mockResolvedValue({ ok: false, status: 404, code: 'feature_off' });
     const { unmount } = render(<UpgradePage locale="en" />);
-    await screen.findByTestId('tier-card-member');
-    expect(screen.queryByTestId('upgrade-unavailable')).toBeNull();
-    expect(screen.getByTestId('upgrade-page')).not.toHaveTextContent(/not available|aren't available/i);
-    expect(screen.getByTestId('upgrade-page')).toHaveAttribute('data-mode', 'closed');
-    expect(screen.getByTestId('tier-card-member')).toHaveAttribute('data-state', 'current');
-    expect(screen.getByTestId('tier-card-creator')).toHaveAttribute('data-state', 'none');
-    expect(screen.queryByTestId('tier-creator-request')).toBeNull();
-    expect(screen.queryByTestId('upgrade-beta-notice')).toBeNull();
+    expect(await screen.findByTestId('not-found-page')).toBeInTheDocument();
+    expect(screen.queryByTestId('upgrade-page')).toBeNull();
+    expect(screen.queryByTestId('upgrade-error')).toBeNull();
     unmount();
     mockLang = 'ar';
-    mockUser = null;
     render(<UpgradePage locale="ar" />);
-    await screen.findByTestId('tier-card-member');
-    expect(screen.getByTestId('upgrade-page')).not.toHaveTextContent('غير متاحة');
-    expect(screen.queryByTestId('tier-creator-sign-in')).toBeNull();
+    expect(await screen.findByTestId('not-found-page')).toBeInTheDocument();
+    expect(screen.queryByTestId('upgrade-page')).toBeNull();
   });
 
   it("a provider enabled ('pay'): no request form and no beta notice", async () => {

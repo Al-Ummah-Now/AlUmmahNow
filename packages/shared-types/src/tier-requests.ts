@@ -106,10 +106,13 @@ export interface TierRequest {
  * "Allow tier requests":
  * - 'pay': a provider is enabled. Prices and Pay/Subscribe; no request form.
  * - 'request': no provider enabled and requests allowed. The request form.
- * - 'closed': no provider and requests not allowed. The tiers only, the
- *   current one highlighted, and "Upgrades aren't available right now".
+ * - 'closed': no provider and requests not allowed. /upgrade is an off feature
+ *   (owner decision 2026-11-19): GET /api/tiers/upgrade and a request answer 404
+ *   feature_off, the page is the site's 404, and nothing links to it (header pill,
+ *   account menu, Settings › Tier). The user's tier still shows in Settings › Tier
+ *   (GET /api/me/tier, every mode).
  * No per-tier, env or feature-flag switch decides it. The server enforces it:
- * a request outside 'request' is refused (403 tier_requests_off).
+ * a request in 'pay' is refused (403 tier_requests_off).
  */
 export const UPGRADE_MODES = ['pay', 'request', 'closed'] as const;
 export type UpgradeMode = (typeof UPGRADE_MODES)[number];

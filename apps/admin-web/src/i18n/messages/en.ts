@@ -1313,7 +1313,7 @@ const en = {
     allowLabel: 'Allow tier requests',
     modePay: 'A payment provider is on: the Upgrade page sells tiers, and requests are off.',
     modeRequest: 'No payment provider is on: the Upgrade page shows the request form.',
-    modeClosed: 'No payment provider is on and requests are off: the Upgrade page shows the tiers and says upgrades aren\'t available right now.',
+    modeClosed: 'No payment provider is on and requests are off: users don\'t see the Upgrade page or any link to it. Their tier still shows in Settings.',
     allowOnDone: 'Tier requests are on.',
     allowOffDone: 'Tier requests are off.',
     allowUndone: 'Tier requests are back as they were.',
