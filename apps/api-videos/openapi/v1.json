@@ -569,12 +569,44 @@
                               "views"
                             ]
                           }
+                        },
+                        "surfaces": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "number"
+                          },
+                          "description": "Views per client surface (web, ios, android, embed, …)"
+                        },
+                        "devices": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "number"
+                          },
+                          "description": "Views per device class (phone, tablet, desktop, tv)"
+                        },
+                        "countries": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "number"
+                          },
+                          "description": "Views per country (ISO code; top 50 plus other)"
+                        },
+                        "campaigns": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "number"
+                          },
+                          "description": "Views per utm_source"
                         }
                       },
                       "required": [
                         "totalViews",
                         "sources",
-                        "externalHosts"
+                        "externalHosts",
+                        "surfaces",
+                        "devices",
+                        "countries",
+                        "campaigns"
                       ]
                     }
                   },
@@ -1446,12 +1478,44 @@
                               "views"
                             ]
                           }
+                        },
+                        "surfaces": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "number"
+                          },
+                          "description": "Views per client surface (web, ios, android, embed, …)"
+                        },
+                        "devices": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "number"
+                          },
+                          "description": "Views per device class (phone, tablet, desktop, tv)"
+                        },
+                        "countries": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "number"
+                          },
+                          "description": "Views per country (ISO code; top 50 plus other)"
+                        },
+                        "campaigns": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "number"
+                          },
+                          "description": "Views per utm_source"
                         }
                       },
                       "required": [
                         "totalViews",
                         "sources",
-                        "externalHosts"
+                        "externalHosts",
+                        "surfaces",
+                        "devices",
+                        "countries",
+                        "campaigns"
                       ]
                     }
                   },
