@@ -17,7 +17,7 @@ import { test, expect } from './support/fixtures';
 import { adminApi, readTokens } from './support/api';
 import { RUN_ID, accounts } from './support/env';
 import { createVideosProfile } from './support/profiles';
-import { expectDirection, expectNoAxeViolations, setPreferences } from './support/ui';
+import { expectDirection, expectNoAxeViolations, setPreferences, waitForHydration } from './support/ui';
 
 interface Assignment { tierId: string; source: string; assignedBy: string }
 interface UsersPage { items: { id: string; email: string | null; creator?: { assignment: Assignment | null } }[] }
@@ -192,11 +192,18 @@ test.describe('creator tiers on Users and Tiers', () => {
     const panel = page.getByTestId('user-caption-minutes');
     await expect(panel).toBeVisible();
     const form = panel.getByTestId('caption-grant-form');
-    await form.getByTestId('caption-grant-minutes').fill('45');
+    // The form starts at 60 minutes: a value filled before React hydrated the field is reset to it
+    // (the grant was 60, "60 minutes available"), so wait for hydration and check the value holds
+    const minutes = form.getByTestId('caption-grant-minutes');
+    await waitForHydration(minutes);
+    await minutes.fill('45');
+    await expect(minutes).toHaveValue('45');
     await form.getByTestId('caption-grant-scope-until_used').check();
+    await expect(form.getByTestId('caption-grant-scope-until_used')).toBeChecked();
     await form.getByTestId('caption-grant-submit').click();
     await expect(form.getByText('Enter a reason of up to 500 characters.')).toBeVisible();
     await form.getByTestId('caption-grant-reason').fill('E2E invoice 1');
+    await expect(minutes).toHaveValue('45');
     await form.getByTestId('caption-grant-submit').click();
     await expect(panel.getByTestId('caption-grant-status')).toHaveText('Minutes granted. They can be used now.');
     await expect(panel.getByTestId('caption-minutes-remaining')).toContainText('45 minutes available now');
