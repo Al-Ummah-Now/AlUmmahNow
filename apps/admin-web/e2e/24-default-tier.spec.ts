@@ -124,7 +124,7 @@ test.describe('default creator tier', () => {
     try {
       await page.goto('/tiers');
       await expect(page.getByTestId(`tier-${tierId}-delete`)).toBeDisabled();
-      await expect(page.getByTestId(`tier-${tierId}-in-use`)).toContainText('1 user is on this tier. Move them first.');
+      await expect(page.getByTestId(`tier-${tierId}-in-use`)).toContainText('One user is on this tier. Move them first.');
       await expect(page.getByTestId(`tier-${tierId}-users-link`)).toHaveAttribute('href', `/users?tier=${tierId}`);
       const refused = await adminApi<unknown>(`/api/content/creator-tiers/${tierId}`, { method: 'DELETE', body: JSON.stringify({ reason: 'e2e' }) });
       expect(refused.status).toBe(409);

@@ -247,6 +247,19 @@ describe('rendered components', () => {
     // Who and when once (no "an admin · Admin" doubling)
     assert.match(assigned, /Assigned by <bdi>Admin Name<\/bdi>, <bdi>Nov 8, 2026<\/bdi>/);
     assert.doesNotMatch(assigned, /<select/, 'read-only for moderators');
+    // Only the admin's id stored and no name known (yet): "an admin", never the raw id
+    const byId = render(
+      el(CreatorTierControl, {
+        userId: 'usr_3',
+        userName: 'Sara',
+        current: { tierId: 'creator', origin: 'admin', assignedBy: 'usr_a5ce024dc7f546b5', assignedAt: '2026-11-08T00:00:00Z' },
+        tiers: TIERS,
+        canManage: false,
+        setTier,
+      }),
+    );
+    assert.match(byId, /Assigned by an admin/);
+    assert.doesNotMatch(byId, /usr_a5ce|Unknown user/);
   });
 
   it('the Users table shows each tier, disables selecting super admins, and links a limit hit to the tier on the Tiers page', () => {
