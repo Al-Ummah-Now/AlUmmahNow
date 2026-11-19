@@ -2357,11 +2357,7 @@ private fun fawaneesLight() = FanousModeTokens(
     parts = fawaneesLightParts(),
     material = FanousMaterial(
         glow = listOf(FanousFill.Solid(rgba(0xF4AE3A, 0.46f))),
-        page = listOf(
-            FanousFill.Radial(false, FanousExtent.RADII, 0.38f, 0.36f, 0.16f, 0.08f, false, listOf(FanousStop(rgba(0xF4AE3A, 0.22f), 0f), FanousStop(rgba(0xF4AE3A, 0f), 0.72f))),
-            FanousFill.Radial(false, FanousExtent.RADII, 0.38f, 0.36f, 0.84f, 0.14f, false, listOf(FanousStop(rgba(0xF4AE3A, 0.18f), 0f), FanousStop(rgba(0xF4AE3A, 0f), 0.72f))),
-            FanousFill.Linear(180f, false, listOf(FanousStop(rgba(0xEBE4D6), 0f), FanousStop(rgba(0xF3EEE5), 0.46f))),
-        ),
+        page = listOf(FanousFill.Solid(rgba(0xF3EEE5))),
         header = listOf(
             FanousFill.Linear(90f, false, listOf(
                 FanousStop(rgba(0x0E2B3D), 0f),
@@ -2620,11 +2616,7 @@ private fun fawaneesDark() = FanousModeTokens(
     parts = fawaneesDarkParts(),
     material = FanousMaterial(
         glow = listOf(FanousFill.Solid(rgba(0xF4AE3A, 0.46f))),
-        page = listOf(
-            FanousFill.Radial(false, FanousExtent.RADII, 0.38f, 0.36f, 0.16f, 0.08f, false, listOf(FanousStop(rgba(0xF4AE3A, 0.22f), 0f), FanousStop(rgba(0xF4AE3A, 0f), 0.72f))),
-            FanousFill.Radial(false, FanousExtent.RADII, 0.38f, 0.36f, 0.84f, 0.14f, false, listOf(FanousStop(rgba(0xF4AE3A, 0.18f), 0f), FanousStop(rgba(0xF4AE3A, 0f), 0.72f))),
-            FanousFill.Linear(180f, false, listOf(FanousStop(rgba(0x0B1D2A), 0f), FanousStop(rgba(0x09151E), 0.46f))),
-        ),
+        page = listOf(FanousFill.Solid(rgba(0x09151E))),
         header = listOf(
             FanousFill.Linear(90f, false, listOf(
                 FanousStop(rgba(0x0B1D2A), 0f),

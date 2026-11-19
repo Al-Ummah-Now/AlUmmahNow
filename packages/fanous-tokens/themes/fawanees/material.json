@@ -10,7 +10,7 @@
   "blur": "none",
   "material": {
     "glow": "color-mix(in srgb,var(--fanous-color-primary) 46%,transparent)",
-    "page": "radial-gradient(38% 36% at 16% 8%,color-mix(in srgb,var(--fanous-color-primary) 22%,transparent),transparent 72%),radial-gradient(38% 36% at 84% 14%,color-mix(in srgb,var(--fanous-color-primary) 18%,transparent),transparent 72%),linear-gradient(180deg,var(--fanous-color-hero-start),var(--fanous-color-background) 46%)",
+    "page": "var(--fanous-color-background)",
     "header": "linear-gradient(90deg,var(--fanous-c-nav-bg),color-mix(in srgb,var(--fanous-c-nav-bg) 84%,var(--fanous-color-primary)) 50%,var(--fanous-c-nav-bg))",
     "headerEdge": "0 1px 0 color-mix(in srgb,var(--fanous-color-primary) 66%,transparent)",
     "rail": "linear-gradient(180deg,var(--fanous-color-surface),var(--fanous-color-background))",

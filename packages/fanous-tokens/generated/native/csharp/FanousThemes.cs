@@ -2999,18 +2999,7 @@ namespace AlUmmahNow.Fanous
                     FanousFill.Solid(C(0xF4AE3A, 0.46)),
                 },
                 Page = new[] {
-                    FanousFill.Radial(false, FanousExtent.Radii, 0.38, 0.36, 0.16, 0.08, false, new[] {
-                        new FanousStop(C(0xF4AE3A, 0.22), 0),
-                        new FanousStop(C(0xF4AE3A, 0), 0.72),
-                    }),
-                    FanousFill.Radial(false, FanousExtent.Radii, 0.38, 0.36, 0.84, 0.14, false, new[] {
-                        new FanousStop(C(0xF4AE3A, 0.18), 0),
-                        new FanousStop(C(0xF4AE3A, 0), 0.72),
-                    }),
-                    FanousFill.Linear(180, false, new[] {
-                        new FanousStop(C(0xEBE4D6), 0),
-                        new FanousStop(C(0xF3EEE5), 0.46),
-                    }),
+                    FanousFill.Solid(C(0xF3EEE5)),
                 },
                 Header = new[] {
                     FanousFill.Linear(90, false, new[] {
@@ -3319,18 +3308,7 @@ namespace AlUmmahNow.Fanous
                     FanousFill.Solid(C(0xF4AE3A, 0.46)),
                 },
                 Page = new[] {
-                    FanousFill.Radial(false, FanousExtent.Radii, 0.38, 0.36, 0.16, 0.08, false, new[] {
-                        new FanousStop(C(0xF4AE3A, 0.22), 0),
-                        new FanousStop(C(0xF4AE3A, 0), 0.72),
-                    }),
-                    FanousFill.Radial(false, FanousExtent.Radii, 0.38, 0.36, 0.84, 0.14, false, new[] {
-                        new FanousStop(C(0xF4AE3A, 0.18), 0),
-                        new FanousStop(C(0xF4AE3A, 0), 0.72),
-                    }),
-                    FanousFill.Linear(180, false, new[] {
-                        new FanousStop(C(0x0B1D2A), 0),
-                        new FanousStop(C(0x09151E), 0.46),
-                    }),
+                    FanousFill.Solid(C(0x09151E)),
                 },
                 Header = new[] {
                     FanousFill.Linear(90, false, new[] {
