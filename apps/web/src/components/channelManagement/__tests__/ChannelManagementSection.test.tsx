@@ -21,7 +21,7 @@ jest.mock('@/hooks/useChannels', () => ({
   useChannels: () => ({ channels: mockChannels, isLoading: false, error: null, createChannel: jest.fn(), refetch: jest.fn() }),
 }));
 
-type Access = { tier: { id: string } | null; canCreateChannel: boolean; maxChannels: number | null; pendingDeletion: boolean };
+type Access = { tier: { id: string; channels?: boolean; unlimited?: boolean } | null; canCreateChannel: boolean; maxChannels: number | null; pendingDeletion: boolean };
 let mockAccess: Access;
 jest.mock('@/hooks/useCreatorAccess', () => ({
   useCreatorAccess: () => ({ status: 'ready', access: mockAccess }),
@@ -51,13 +51,20 @@ describe('ChannelManagementSection, hidden when off', () => {
 
   it('a tier at its channel limit: the limit as a plain fact', () => {
     mockChannels = [{ id: 'c1', name: 'Noor', userId: 'u1' }];
-    mockAccess = { tier: { id: 'creator' }, canCreateChannel: false, maxChannels: 1, pendingDeletion: false };
+    mockAccess = { tier: { id: 'creator', channels: true }, canCreateChannel: false, maxChannels: 1, pendingDeletion: false };
     render(<ChannelManagementSection initialChannels={[]} />);
     expect(screen.getByTestId('channel-limit-reached')).toHaveTextContent('1');
   });
 
+  it('Free (a tier without channels): no limit line and no notice (hidden when off)', () => {
+    mockChannels = [{ id: 'c1', name: 'Noor', userId: 'u1' }];
+    mockAccess = { tier: { id: 'member', channels: false }, canCreateChannel: false, maxChannels: null, pendingDeletion: false };
+    render(<ChannelManagementSection initialChannels={[]} />);
+    expect(screen.queryByTestId('channel-limit-reached')).toBeNull();
+  });
+
   it('a tier that may create: offers Create Channel', () => {
-    mockAccess = { tier: { id: 'creator' }, canCreateChannel: true, maxChannels: 3, pendingDeletion: false };
+    mockAccess = { tier: { id: 'creator', channels: true }, canCreateChannel: true, maxChannels: 3, pendingDeletion: false };
     render(<ChannelManagementSection initialChannels={[]} />);
     expect(screen.getByRole('button', { name: /create channel/i })).toBeInTheDocument();
   });
