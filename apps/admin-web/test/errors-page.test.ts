@@ -111,12 +111,14 @@ describe('needs-action item links', () => {
 describe('errors labels', () => {
   it('every errors string exists in Arabic, translated', () => {
     for (const ns of ['errorsPage', 'errorStatus', 'itemStatus', 'itemSource', 'errorActivity'] as const) {
-      const enNs = en[ns] as Record<string, string>;
-      const arNs = ar[ns] as Record<string, string>;
+      const enNs = en[ns] as unknown as Record<string, unknown>;
+      const arNs = ar[ns] as unknown as Record<string, unknown>;
       assert.deepEqual(Object.keys(arNs).sort(), Object.keys(enNs).sort(), ns);
       for (const [key, value] of Object.entries(arNs)) {
         if (key === 'timelineHour') continue;
-        assert.match(value, ARABIC, `${ns}.${key}`);
+        // Plural forms (repeated.one, .few, ...) are a nested object: every form is checked
+        const forms: [string, unknown][] = typeof value === 'object' && value ? Object.entries(value) : [['', value]];
+        for (const [form, text] of forms) assert.match(String(text), ARABIC, `${ns}.${key}${form ? `.${form}` : ''}`);
       }
     }
     assert.equal(en.nav.errors, 'Errors');

@@ -16,10 +16,11 @@ describe('processing health', () => {
   it('every processing and errors string exists in English and Arabic', () => {
     for (const group of ['processing', 'errorsPage'] as const) {
       for (const key of Object.keys(en[group])) {
-        const value = (ar[group] as Record<string, string>)[key];
+        const value = (ar[group] as unknown as Record<string, string | Record<string, string>>)[key];
         assert.ok(value, `${group}.${key} missing in Arabic`);
-        // colBunny is a brand name; timelineHour is placeholders only
-        if (!/^(colBunny|timelineHour)$/.test(key)) assert.match(value, ARABIC, `${group}.${key} is not Arabic`);
+        // colBunny is a brand name; timelineHour is placeholders only; plural forms are a nested object
+        if (/^(colBunny|timelineHour)$/.test(key)) continue;
+        for (const text of typeof value === 'object' ? Object.values(value) : [value]) assert.match(text, ARABIC, `${group}.${key} is not Arabic`);
       }
     }
   });
