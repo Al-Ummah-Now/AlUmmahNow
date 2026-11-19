@@ -167,59 +167,62 @@ export function DateField({ id, name, value, defaultValue, onChange, submitOnCha
   };
 
   return (
-    <div className={`relative ${className}`} data-testid={testId}>
+    <div className={className} data-testid={testId}>
       {name !== undefined && <input ref={hidden} type="hidden" name={name} defaultValue={iso} data-testid={testId ? `${testId}-value` : undefined} />}
-      <input
-        id={fieldId}
-        type="text"
-        dir="ltr"
-        autoComplete="off"
-        spellCheck={false}
-        value={text}
-        data-date-field={withTime ? 'datetime' : 'date'}
-        placeholder={t(withTime ? 'dateField.placeholderTime' : 'dateField.placeholder')}
-        onChange={(e) => {
-          setText(e.currentTarget.value);
-          if (invalid) setInvalid(false);
-        }}
-        onBlur={commitText}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            commitText();
-          }
-        }}
-        required={required}
-        aria-invalid={invalid || undefined}
-        aria-describedby={[invalid ? errorId : null, rest['aria-describedby'] ?? null].filter(Boolean).join(' ') || undefined}
-        // The text runs left to right (digits); the calendar button sits at the page's end, so the room
-        // for it is on the right in English and on the left in Arabic
-        className={`${fieldClass} w-full pr-11 rtl:pr-3 rtl:pl-11 rtl:text-right tabular-nums`}
-        data-testid={testId ? `${testId}-input` : undefined}
-      />
-      <button
-        type="button"
-        onClick={openPicker}
-        aria-label={t('dateField.choose')}
-        className="absolute inset-y-0 end-0 grid w-10 place-items-center rounded-e text-fg-muted hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
-        data-testid={testId ? `${testId}-calendar` : undefined}
-      >
-        <svg aria-hidden="true" viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="3.5" y="5" width="17" height="15.5" rx="2" />
-          <path d="M3.5 9.5h17M8 3v4M16 3v4" />
-        </svg>
-      </button>
-      {/* The browser's calendar, opened by the button; never shown or focused itself */}
-      <input
-        ref={picker}
-        type={withTime ? 'datetime-local' : 'date'}
-        tabIndex={-1}
-        aria-hidden="true"
-        min={min}
-        max={max}
-        className="pointer-events-none absolute bottom-0 end-0 h-px w-px opacity-0"
-        onChange={(e) => commit(e.currentTarget.value)}
-      />
+      {/* The text field and its calendar button; the error line sits below, outside it */}
+      <div className="relative">
+        <input
+          id={fieldId}
+          type="text"
+          dir="ltr"
+          autoComplete="off"
+          spellCheck={false}
+          value={text}
+          data-date-field={withTime ? 'datetime' : 'date'}
+          placeholder={t(withTime ? 'dateField.placeholderTime' : 'dateField.placeholder')}
+          onChange={(e) => {
+            setText(e.currentTarget.value);
+            if (invalid) setInvalid(false);
+          }}
+          onBlur={commitText}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              commitText();
+            }
+          }}
+          required={required}
+          aria-invalid={invalid || undefined}
+          aria-describedby={[invalid ? errorId : null, rest['aria-describedby'] ?? null].filter(Boolean).join(' ') || undefined}
+          // The text runs left to right (digits); the calendar button sits at the page's end, so the room
+          // for it is on the right in English and on the left in Arabic
+          className={`${fieldClass} w-full pr-11 rtl:pr-3 rtl:pl-11 rtl:text-right tabular-nums`}
+          data-testid={testId ? `${testId}-input` : undefined}
+        />
+        <button
+          type="button"
+          onClick={openPicker}
+          aria-label={t('dateField.choose')}
+          className="absolute inset-y-0 end-0 grid w-10 place-items-center rounded-e text-fg-muted hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+          data-testid={testId ? `${testId}-calendar` : undefined}
+        >
+          <svg aria-hidden="true" viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3.5" y="5" width="17" height="15.5" rx="2" />
+            <path d="M3.5 9.5h17M8 3v4M16 3v4" />
+          </svg>
+        </button>
+        {/* The browser's calendar, opened by the button; never shown or focused itself */}
+        <input
+          ref={picker}
+          type={withTime ? 'datetime-local' : 'date'}
+          tabIndex={-1}
+          aria-hidden="true"
+          min={min}
+          max={max}
+          className="pointer-events-none absolute bottom-0 end-0 h-px w-px opacity-0"
+          onChange={(e) => commit(e.currentTarget.value)}
+        />
+      </div>
       {invalid && (
         <p id={errorId} className="mt-1 text-xs text-danger-fg" role="alert">
           {t(withTime ? 'dateField.invalidTime' : 'dateField.invalid')}
