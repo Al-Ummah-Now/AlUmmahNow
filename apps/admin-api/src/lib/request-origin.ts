@@ -13,7 +13,11 @@ export function adminRequestOrigin(request: Request, env: unknown): RequestOrigi
   const h = request.headers;
   if (h.get('X-Client-User-Agent') && !h.get('X-API-Key')) {
     const viaAdminWeb = browserOrigin((name) => (name === 'X-Report-App' ? 'admin-web' : h.get(name) ?? undefined));
-    if (viaAdminWeb) return { ...viaAdminWeb, entry: undefined } as RequestOrigin;
+    if (viaAdminWeb) {
+      // admin-web's page path is not where the admin started; leave it out
+      const { entry: _entry, ...origin } = viaAdminWeb;
+      return origin as RequestOrigin;
+    }
   }
   return requestOriginFor('admin-api', request, env as never);
 }
