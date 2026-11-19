@@ -139,11 +139,30 @@ function findRefreshToken(value: unknown): string | undefined {
   return undefined;
 }
 
+/** The refresh token of the web session in this browser context (undefined: cleanup keeps the original access token). */
+async function sessionRefreshToken(context: BrowserContext): Promise<string | undefined> {
+  const cookie = (await context.cookies(target().web)).find((c) => c.name === 'al_ummah_session');
+  try {
+    return findRefreshToken(JSON.parse(decodeURIComponent(cookie?.value ?? '{}')));
+  } catch {
+    return undefined; // not JSON
+  }
+}
+
+/** A video's upload status as its owner sees it (undefined when the owner is unknown or the call fails). */
+export async function ownerUploadStatus(id: string, owner: Pick<WebUser, 'accessToken'> | null): Promise<string | undefined> {
+  if (!owner) return undefined;
+  const res = await apiFetch(owner, `/api/videos/${id}`, { cache: 'no-store', signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }).catch(() => null);
+  if (!res?.ok) return undefined;
+  const body = (await res.json().catch(() => ({}))) as { uploadStatus?: string; result?: { uploadStatus?: string } };
+  return body.result?.uploadStatus ?? body.uploadStatus;
+}
+
 /**
  * A fresh access token for cleanup: access tokens live 15 minutes on QA, longer than many specs
  * run, and an expired token would fail every delete (and leak the data). Refresh tokens rotate.
  */
-async function refreshUser(user: WebUser, refreshToken: string | undefined): Promise<string | undefined> {
+export async function refreshUser(user: Pick<WebUser, 'accessToken'>, refreshToken: string | undefined): Promise<string | undefined> {
   if (!refreshToken) return undefined;
   try {
     const res = await fetch(`${target().auth}/token`, {
@@ -278,18 +297,13 @@ export class DataScope {
   };
   /** Users this scope created or acts for, with their refresh tokens (cleanup refreshes first). */
   private sessions = new Map<WebUser, string | undefined>();
+  /** Who uploaded each video this scope created (waitReady asks them whether it is still encoding). */
+  private uploader = new Map<string, WebUser>();
 
   /** A new user signed up through the real issuer (code sink), with a videos profile. */
   async createUser(page: Page, prefix: string, locale: Locale = 'en'): Promise<WebUser> {
     const user = await signUpOnWeb(page, prefix, locale);
-    const cookie = (await page.context().cookies(target().web)).find((c) => c.name === 'al_ummah_session');
-    let refreshToken: string | undefined;
-    try {
-      refreshToken = findRefreshToken(JSON.parse(decodeURIComponent(cookie?.value ?? '{}')));
-    } catch {
-      /* not JSON: cleanup keeps the original token */
-    }
-    this.sessions.set(user, refreshToken);
+    this.sessions.set(user, await sessionRefreshToken(page.context()));
     // (signUpOnWeb records the id for the end-of-job teardown and leftover check)
     // Runs last (cleanup is newest first): the user's data, then the account and its sessions
     this.undo.push({ what: `user ${user.email}`, run: () => eraseUser(user, this.ctx) });
@@ -358,6 +372,7 @@ export class DataScope {
     const tusSessionId = initiate.result?.tusSessionId as string;
     expect(id && tusSessionId, 'upload initiate returned no videoId/tusSessionId').toBeTruthy();
     recordResource('video', id);
+    this.uploader.set(id, user);
     // Cleanup deletes for good (record, media, the Bunny video, search/ownership rows), even mid-encode
     // or after an interrupted upload: trash first (the owner's delete), then the permanent delete
     this.undo.push({
@@ -413,8 +428,15 @@ export class DataScope {
     return { id, title, channelId, clip };
   }
 
-  /** Waits until the video is ready (encoded). QA/stage: a slow third-party encode skips with #929. */
-  async waitReady(id: string, title = id): Promise<void> {
+  /**
+   * Waits until the video is ready (encoded). QA/stage: a slow third-party encode skips with #929.
+   *
+   * Ready is what an anonymous visitor sees. Whether a timed-out video is still encoding is asked
+   * as its owner (`owner`, or the user this scope uploaded it as): since #1241 a video that is not
+   * ready yet is 404 to anyone else, so the anonymous status was never "processing" and a slow
+   * encode failed the run instead of skipping (v2026.11.19.2: stage's Bunny took ~30 min).
+   */
+  async waitReady(id: string, title = id, owner?: () => Promise<Pick<WebUser, 'accessToken'> | null>): Promise<void> {
     // A reset socket (Node reusing a keep-alive connection the server already closed) is "not known yet":
     // the poll asks again; only a video that never becomes ready fails
     const status = async () => {
@@ -422,8 +444,29 @@ export class DataScope {
       return ((await res?.json().catch(() => ({}))) as { uploadStatus?: string } | undefined)?.uploadStatus;
     };
     const ready = () => expect.poll(status, { message: `"${title}" never became ready`, timeout: onLocalStack() ? 60000 : 9 * 60000, intervals: [1000, 2000, 5000] }).toBe('ready');
-    if (onLocalStack()) await ready();
-    else await untilEncoded(`"${title}"`, ready, async () => encoding(await status()));
+    if (onLocalStack()) return ready();
+    const asOwner = owner ?? (this.uploader.has(id) ? () => this.freshSession(this.uploader.get(id)!) : undefined);
+    await untilEncoded(`"${title}"`, ready, async () => encoding((await status()) ?? (asOwner ? await ownerUploadStatus(id, await asOwner()) : undefined)));
+  }
+
+  /** The user with a fresh access token (refreshed with the session this scope keeps for them, if any). */
+  private async freshSession(user: WebUser): Promise<WebUser> {
+    if (this.sessions.has(user)) this.sessions.set(user, await refreshUser(user, this.sessions.get(user)));
+    return user;
+  }
+
+  /**
+   * Replaces the session this scope refreshes a user with (another process rotated its refresh
+   * token: the run videos' owner, run-videos.ts). Cleanup then refreshes from the latest one.
+   */
+  adoptSession(user: WebUser, accessToken: string, refreshToken: string | undefined): void {
+    user.accessToken = accessToken;
+    this.sessions.set(user, refreshToken);
+  }
+
+  /** The refresh token this scope holds for a user (run-videos.ts hands it to the workers). */
+  refreshTokenOf(user: WebUser): string | undefined {
+    return this.sessions.get(user);
   }
 
   async createPlaylist(user: WebUser, channelId: string, opts: { title?: string; videoIds?: string[]; isPublic?: boolean } = {}): Promise<string> {
@@ -476,6 +519,10 @@ export class DataScope {
         channelIds.push(await this.createChannel(first, { name: `E2E ${prefix} ${i + 1} ${ns()} ${Date.now().toString(36)}`, isMain: i === 0 }));
       }
       const user = await signInAgain(page, first.email, opts.locale);
+      // Cleanup refreshes this session too: what the creator makes later (videos) is deleted with
+      // `user`, whose access token has long expired by then (v2026.11.19.2: the run videos' deletes
+      // answered 401 and were left to the run teardown)
+      this.sessions.set(user, await sessionRefreshToken(context));
       return { user, channelIds, state: await context.storageState() };
     } finally {
       await context.close();

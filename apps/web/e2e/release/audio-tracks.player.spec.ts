@@ -20,7 +20,8 @@ import { test, expect, type Page } from '@playwright/test';
 import { encoding, untilEncoded } from './encode';
 import { trackRunUploads } from './run-videos';
 import { releaseEnv, target } from './targets';
-import { apiFetch, createProfile, signUpOnWeb, type WebUser } from './web-session';
+import { apiFetch, contextAccessToken, createProfile, signUpOnWeb, type WebUser } from './web-session';
+import { ownerUploadStatus } from './builders';
 import { setCreatorTier } from './creator-tier';
 import { submitNewChannelInMenu } from './account-menu';
 import { watchUrl } from './videos';
@@ -116,7 +117,8 @@ test.describe('Release: multiple audio tracks', () => {
       // The rendition first (Bunny encode, then the R2 transcode): tracks can be added once it is ready
       await untilEncoded('the video and its R2 rendition',
         () => expect.poll(async () => (await studio(user, videoId, channelId)).view?.ready ?? false, { message: 'the video never became ready for tracks', timeout: R2_READY_TIMEOUT_MS, intervals: [10_000] }).toBe(true),
-        async () => encoding((await publicView(videoId)).uploadStatus),
+        // Not ready yet is 404 to anyone but the owner (#1241): ask as the owner, with a fresh token
+        async () => encoding((await publicView(videoId)).uploadStatus ?? (await ownerUploadStatus(videoId, { accessToken: (await contextAccessToken(page.context())) ?? user.accessToken }))),
         'the encode and R2 transcode');
 
       // Add the English dub and send its file (one chunk) the way Studio does

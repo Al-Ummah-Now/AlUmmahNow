@@ -15,17 +15,98 @@
  * upload cap counts that file.
  */
 import { chromium, type Page } from '@playwright/test';
-import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, rmdirSync, statSync, writeFileSync } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { DataScope, recordResource, type CreatedVideo } from './builders';
+import { DataScope, recordResource, refreshUser, type CreatedVideo } from './builders';
 import { releaseEnv } from './targets';
+import type { WebUser } from './web-session';
 
 export const RUN_VIDEO_CLIPS = ['landscape40', 'vertical', 'square'] as const;
 export type RunVideoClip = (typeof RUN_VIDEO_CLIPS)[number];
 export interface RunVideos {
   channelId: string;
   videos: Record<RunVideoClip, CreatedVideo>;
+  /**
+   * The clips' owner session: a worker whose wait timed out asks, as the owner, whether a clip is
+   * still encoding (a video that is not ready is 404 to anyone else). Refresh tokens rotate, so
+   * whoever refreshes writes the new pair back under a lock (runOwner); the teardown deletes with
+   * the latest. The file lives in the runner's temp directory, never in an artifact.
+   */
+  owner?: RunOwner;
+}
+
+interface RunOwner {
+  accessToken: string;
+  refreshToken?: string;
+  /** When accessToken was issued (ms) */
+  at: number;
+}
+
+/** Refreshed well inside the access token's lifetime (15 minutes on QA). */
+const OWNER_REFRESH_AFTER_MS = 5 * 60_000;
+/** A lock older than this was left by a crashed worker. */
+const LOCK_STALE_MS = 60_000;
+
+function writeRunVideos(set: RunVideos): void {
+  const file = runVideosFile();
+  writeFileSync(`${file}.tmp`, JSON.stringify(set satisfies RunVideos));
+  renameSync(`${file}.tmp`, file);
+}
+
+async function withFileLock<T>(fn: () => Promise<T>): Promise<T> {
+  const lock = `${runVideosFile()}.lock`;
+  const deadline = Date.now() + 2 * LOCK_STALE_MS;
+  for (;;) {
+    try {
+      mkdirSync(lock);
+      break;
+    } catch {
+      const age = (() => {
+        try {
+          return Date.now() - statSync(lock).mtimeMs;
+        } catch {
+          return 0;
+        }
+      })();
+      if (age > LOCK_STALE_MS || Date.now() > deadline) {
+        try {
+          rmdirSync(lock);
+        } catch {
+          /* another worker took it over */
+        }
+        continue;
+      }
+      await new Promise((r) => setTimeout(r, 200));
+    }
+  }
+  try {
+    return await fn();
+  } finally {
+    try {
+      rmdirSync(lock);
+    } catch {
+      /* already gone */
+    }
+  }
+}
+
+/** The run videos' owner with a fresh access token, or null (no shared videos, or no owner session recorded). */
+export async function runOwner(): Promise<{ accessToken: string } | null> {
+  if (!sharedRunVideosOn() || !runVideos()?.owner) return null;
+  return withFileLock(async () => {
+    const set = runVideos()!;
+    const owner = set.owner!;
+    if (Date.now() - owner.at > OWNER_REFRESH_AFTER_MS && owner.refreshToken) {
+      const user = { accessToken: owner.accessToken };
+      const refreshToken = await refreshUser(user, owner.refreshToken);
+      if (user.accessToken !== owner.accessToken) {
+        set.owner = { accessToken: user.accessToken, refreshToken, at: Date.now() };
+        writeRunVideos(set);
+      }
+    }
+    return { accessToken: set.owner!.accessToken };
+  });
 }
 
 const runVideosFile = () => process.env.E2E_RUN_VIDEOS_FILE || path.join(os.tmpdir(), `aun-run-videos-${process.env.E2E_RUN_ID || 'local'}.json`);
@@ -51,7 +132,7 @@ let allReady: Promise<void> | null = null;
 export async function runVideosReady(): Promise<RunVideos> {
   const set = runVideos();
   if (!set) throw new Error('runVideosReady: this run has no shared videos (E2E_SHARED_RUN_VIDEOS is not 1)');
-  allReady ??= Promise.all(RUN_VIDEO_CLIPS.map((clip) => new DataScope().waitReady(set.videos[clip].id, set.videos[clip].title))).then(() => undefined);
+  allReady ??= Promise.all(RUN_VIDEO_CLIPS.map((clip) => new DataScope().waitReady(set.videos[clip].id, set.videos[clip].title, runOwner))).then(() => undefined);
   try {
     await allReady;
   } catch (error) {
@@ -79,6 +160,7 @@ export function trackRunUploads(page: Page): void {
 export default async function globalSetup(): Promise<void | (() => Promise<void>)> {
   if (!sharedRunVideosOn()) return;
   const scope = new DataScope();
+  let owner: WebUser | undefined;
   const browser = await chromium.launch();
   try {
     const creator = await scope.createCreator(browser, 'run-videos');
@@ -86,12 +168,24 @@ export default async function globalSetup(): Promise<void | (() => Promise<void>
     const videos = {} as Record<RunVideoClip, CreatedVideo>;
     // Uploaded, not awaited: the encodes run while the first tests start; runVideo() waits
     for (const clip of RUN_VIDEO_CLIPS) videos[clip] = await scope.createVideo(creator.user, channelId, { clip, waitReady: false });
-    writeFileSync(runVideosFile(), JSON.stringify({ channelId, videos } satisfies RunVideos));
+    writeRunVideos({ channelId, videos, owner: { accessToken: creator.user.accessToken, refreshToken: scope.refreshTokenOf(creator.user), at: Date.now() } });
+    owner = creator.user;
   } catch (error) {
     await scope.cleanup();
     throw error;
   } finally {
     await browser.close();
   }
-  return async () => scope.cleanup();
+  return async () => {
+    // The workers may have rotated the owner's refresh token: delete with the latest session
+    const latest = (() => {
+      try {
+        return runVideos()?.owner;
+      } catch {
+        return undefined;
+      }
+    })();
+    if (owner && latest) scope.adoptSession(owner, latest.accessToken, latest.refreshToken);
+    await scope.cleanup();
+  };
 }
