@@ -6,7 +6,7 @@ import { formatNumber, type TakeoutFile, type YtFileMatch, type YtImportItem } f
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/hooks/useLanguage';
 import { keyOfMatch, toFileMatch } from '@/lib/youtube-import/takeout';
-import { freeFiles, reviewGroup, type ReviewGroup } from '@/lib/youtube-import/wizard';
+import { freeFiles, reviewGroup, shortFileName, type ReviewGroup } from '@/lib/youtube-import/wizard';
 import { num, useFill, StepHeading, Thumb } from './parts';
 
 interface Props {
@@ -67,6 +67,7 @@ export const ReviewStep = forwardRef<HTMLHeadingElement, Props>(function ReviewS
                   const match = matches.get(item.id) ?? null;
                   const options = freeFiles(files, matches, item.id);
                   const selectId = `${ids}-${item.id}`;
+                  const chosen = match ? files.find((f) => f.key === keyOfMatch(match)) : undefined;
                   return (
                     <li key={item.id} className="yt-row yt-review-row" data-testid="yt-review-row" data-item-id={item.id}>
                       <Thumb item={item} className="hidden w-24 sm:block" />
@@ -85,12 +86,19 @@ export const ReviewStep = forwardRef<HTMLHeadingElement, Props>(function ReviewS
                         >
                           <option value={NONE}>{text.noFileOption}</option>
                           {options.map((f) => (
-                            <option key={f.key} value={f.key}>
-                              {/* Each part isolated (FSI…PDI) so an Arabic file name and the Latin size/zip never reorder */}
-                              {`\u2068${f.fileName}\u2069 · \u2068${formatSize(f.size, locale)}\u2069${f.zipName ? ` · \u2068${f.zipName}\u2069` : ''}`}
+                            // The name only, shortened in the middle so a phone's select never clips its start; the full
+                            // name is the option's title, and the chosen file's size and zip show under the select
+                            <option key={f.key} value={f.key} title={f.fileName}>
+                              {`\u2068${shortFileName(f.fileName)}\u2069`}
                             </option>
                           ))}
                         </select>
+                        {chosen && (
+                          <p className="mt-1 text-xs text-muted-foreground" data-testid="yt-review-file-meta">
+                            <bdi>{formatSize(chosen.size, locale)}</bdi>
+                            {chosen.zipName ? <> · <bdi className="break-all">{chosen.zipName}</bdi></> : null}
+                          </p>
+                        )}
                       </div>
                     </li>
                   );

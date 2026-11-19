@@ -14,6 +14,7 @@ import {
   filterItems,
   formatDuration,
   freeFiles,
+  shortFileName,
   importItems,
   initialStep,
   isSettled,
@@ -187,5 +188,15 @@ describe('progress', () => {
     expect(formatDuration(61)).toBe('1:01');
     expect(formatDuration(3723)).toBe('1:02:03');
     expect(formatDuration(null)).toBe('');
+  });
+
+  it('shortens long file names in the middle, keeping the start and the id', () => {
+    expect(shortFileName('Short name.mp4')).toBe('Short name.mp4');
+    const long = shortFileName('Ramadan Reminders, Day 1 [AUNytPRV003].mp4');
+    expect(Array.from(long)).toHaveLength(26);
+    expect(long.startsWith('Ramadan Rem')).toBe(true);
+    expect(long.endsWith('PRV003].mp4')).toBe(true);
+    expect(long).toContain('…');
+    expect(Array.from(shortFileName('قصص الأنبياء للأطفال، الحلقة الأولى كاملة.mp4')).length).toBeLessThanOrEqual(26);
   });
 });
