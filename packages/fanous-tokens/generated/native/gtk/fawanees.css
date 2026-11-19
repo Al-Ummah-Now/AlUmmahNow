@@ -52,7 +52,7 @@
 @define-color dialog_fg_color #16232b;
 
 .aun-page {
-  background-image: radial-gradient(ellipse 38% 36% at 16% 8%, rgba(244,174,58,0.22) 0%, rgba(244,174,58,0) 72%), radial-gradient(ellipse 38% 36% at 84% 14%, rgba(244,174,58,0.18) 0%, rgba(244,174,58,0) 72%), linear-gradient(180deg, #ebe4d6 0%, #f3eee5 46%);
+  background-image: linear-gradient(#f3eee5, #f3eee5);
   background-color: transparent;
   color: #16232b;
 }
