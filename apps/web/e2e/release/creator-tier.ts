@@ -75,7 +75,7 @@ export async function grantCreatorTier(user: WebUser): Promise<void> {
 }
 
 /**
- * Switches the user's tier (null: none) for a hidden-when-off toggle: Creator leaves out live
+ * Switches the user's tier (null: the stored row removed, so it works as Free) for a hidden-when-off toggle: Creator leaves out live
  * extras like caption minutes and audio tracks, Unlimited has them all, none hides creator
  * features. On the local stack it is written straight to the stack's database, elsewhere through
  * the admin UI.
@@ -94,10 +94,11 @@ export async function switchCreatorTier(user: WebUser, tierId: 'creator' | 'unli
   }
   await expect
     .poll(async () => ((await (await apiFetch(user, '/api/me/creator')).json().catch(() => ({}))) as { result?: { tier?: { id?: string } | null } }).result?.tier?.id ?? null, {
-      message: `GET /api/me/creator does not show tier ${tierId}`,
+      message: `GET /api/me/creator does not show tier ${tierId ?? 'member'}`,
       timeout: 20000,
     })
-    .toBe(tierId);
+    // Every account has a tier (#1443): with its row gone it works as Free ('member'), which hides creator features
+    .toBe(tierId ?? 'member');
 }
 
 /** Takes the tier away again (the "off" half of a hidden-when-off toggle). */
