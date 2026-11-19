@@ -10,6 +10,8 @@ import { target } from './e2e/release/targets';
 
 export default defineConfig({
   testDir: './e2e/help-capture',
+  // Review shots (integration branch only) run alone, with REVIEW_SHOTS=1
+  testIgnore: process.env.REVIEW_SHOTS ? /capture\.help\.ts$/ : /review-shots\.help\.ts$/,
   testMatch: /\.help\.ts$/,
   fullyParallel: false,
   workers: 1,
