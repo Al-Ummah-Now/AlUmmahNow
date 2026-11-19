@@ -48,6 +48,7 @@ export * from './api-requests';
 export * from './video-analytics';
 export * from './chart-scale';
 export * from './locale-format';
+export * from './count-nouns';
 
 // WebSocket message types
 export * from './websocket-messages';
