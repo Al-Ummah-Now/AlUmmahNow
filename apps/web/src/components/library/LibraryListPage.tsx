@@ -1,6 +1,7 @@
 'use client';
 
-import { formatDate, formatNumber } from '@al-ummah/shared-types';
+import { formatDate } from '@al-ummah/shared-types';
+import { formatVideoCount } from '@/lib/format/videoMeta';
 import React, { useCallback, useEffect, useState } from 'react';
 import Link from '@/components/common/AppLink';
 import { ArrowDown, ArrowUp, Bookmark, Clock, Play, ThumbsUp, Trash2 } from 'lucide-react';
@@ -150,7 +151,7 @@ export function LibraryListPage({ kind, dir }: Props) {
         <meta.Icon className="h-7 w-7 text-[var(--fanous-color-accent)]" aria-hidden="true" />
         {meta.title}
         {total > 0 && kind !== 'saved-posts' && (
-          <span className="text-base font-normal text-gray-500">{fillTemplate(texts.videosCount, { count: formatNumber(lang, total) })}</span>
+          <span className="text-base font-normal text-gray-500">{formatVideoCount(total, lang)}</span>
         )}
       </h1>
 
