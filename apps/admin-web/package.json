@@ -10,7 +10,7 @@
     "preview": "opennextjs-cloudflare build && wrangler dev",
     "deploy:production": "opennextjs-cloudflare build && wrangler deploy --config wrangler.production.jsonc",
     "deploy:qa": "opennextjs-cloudflare build && CI=true wrangler deploy --config wrangler.qa.jsonc",
-    "lint": "eslint src test",
+    "lint": "eslint src test e2e",
     "type-check": "tsc --noEmit",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
