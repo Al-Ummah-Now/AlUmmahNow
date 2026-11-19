@@ -1066,10 +1066,14 @@ export async function fetchVideos(cursor: string | null = null): Promise<VideoIn
         return result.data.map((video) => ({
             id: video.id,
             title: video.title,
+            // Every language, so an Arabic page shows Arabic titles and channel names (the related
+            // shelf tops up from this list; those rows read in English, #1513)
+            ...(video.titleLocalized ? { titleLocalized: video.titleLocalized } : {}),
             description: video.description,
             channel: video.channel,
             channelId: video.channelId,
             channelName: video.channelName,
+            ...(video.channelNameLocalized ? { channelNameLocalized: video.channelNameLocalized } : {}),
             thumbnail: video.thumbnailUrl,
             duration: video.duration,
             video: video.videoUrl,
