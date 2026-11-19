@@ -8,9 +8,10 @@
  *
  * The fixture channel "Al-Fajr Channel" (UCaunFixtureChannel0001) has (realistic titles: review shots use them):
  *   AUNytPUB001  public, captions ar + en (and an automatic track that is never imported),
- *                a maxres custom thumbnail, tags, en/ar localizations
+ *                tags, en/ar localizations
  *   AUNytUNL002  unlisted, made for kids
  *   AUNytPRV003  private, scheduled 30 days after the request (publishAt)
+ * Every video has a maxres custom thumbnail: its title card (test-fixtures/youtube-thumbnails).
  *   playlist PLaunFixture0001 "Tafsir and stories": AUNytPUB001, AUNytUNL002
  * Takeout file names for E2E: "Tafsir Surat Al-Kahf, Part 1 [AUNytPUB001].mp4" etc. (FIXTURE_VIDEOS[].takeoutName).
  *
@@ -21,12 +22,14 @@
  *   POST /__fake/google/quota?on=1|0         captions.list/download answer quotaExceeded
  *   POST /__fake/google/reset
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { ROOT } from './stack.ts';
 
 const THUMBNAIL = join(ROOT, 'apps/web/e2e/test-fixtures/e2e-thumbnail.jpg');
+/** The fixture channel's own art: a 1280×720 title card per video (<id>.jpg) and the channel avatar (channel.jpg) */
+const CHANNEL_ART = join(ROOT, 'apps/web/e2e/test-fixtures/youtube-thumbnails');
 const SCOPE_READONLY = 'https://www.googleapis.com/auth/youtube.readonly';
 const SCOPE_CAPTIONS = 'https://www.googleapis.com/auth/youtube.force-ssl';
 
@@ -61,7 +64,7 @@ export const FIXTURE_VIDEOS = [
     tags: [],
     localizations: {},
     captions: [],
-    thumbnail: false,
+    thumbnail: true,
   },
   {
     id: 'AUNytPRV003',
@@ -76,7 +79,7 @@ export const FIXTURE_VIDEOS = [
     tags: [],
     localizations: {},
     captions: [],
-    thumbnail: false,
+    thumbnail: true,
   },
 ] as const;
 
@@ -233,10 +236,15 @@ export function youtubeApi(request: Request, url: URL): Response {
   return apiError(404, 'notFound');
 }
 
-/** i.ytimg.com: every thumbnail is the E2E fixture image. */
+/**
+ * i.ytimg.com: a fixture video's thumbnails are its title card (every size), the channel's is its
+ * avatar; any other id gets the E2E fixture image.
+ */
 export function ytimg(request: Request, url: URL): Response {
-  if (!/^\/(vi|ch)\//.test(url.pathname)) return new Response('not found', { status: 404 });
-  return new Response(readFileSync(THUMBNAIL), { headers: { 'content-type': 'image/jpeg' } });
+  const match = /^\/(vi|ch)\/([\w-]+)\//.exec(url.pathname);
+  if (!match) return new Response('not found', { status: 404 });
+  const art = join(CHANNEL_ART, match[1] === 'ch' ? 'channel.jpg' : `${match[2]}.jpg`);
+  return new Response(readFileSync(existsSync(art) ? art : THUMBNAIL), { headers: { 'content-type': 'image/jpeg' } });
 }
 
 /** Control: GET state, POST consent/quota/reset. */
