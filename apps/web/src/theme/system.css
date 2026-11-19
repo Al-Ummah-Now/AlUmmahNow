@@ -14,7 +14,11 @@ h1,h2,h3{letter-spacing:-.01em}html[lang=ar] h1,html[lang=ar] h2,html[lang=ar] h
 .ic{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border:0;border-radius:var(--r-pill);background:transparent;color:var(--fanous-c-nav-icon);cursor:pointer;transition:background-color 140ms,color 140ms}.ic svg{width:22px;height:22px;stroke-width:1.75}@media(hover:hover){.ic:hover{background:var(--fanous-c-nav-hover)}}
 /* Header */
 /* The bar is the shared header (packages/fanous-tokens/nav/aun-nav.css .aun-header, docs/design/NAV.md "Header"); here only the theme material, and it stays above the rail */
-.ah.aun-header{z-index:50;--aun-header-bg:var(--m-header);box-shadow:var(--m-header-edge);-webkit-backdrop-filter:var(--m-blur);backdrop-filter:var(--m-blur)}
+.ah.aun-header{z-index:50;--aun-header-bg:var(--m-header);box-shadow:var(--m-header-edge)}
+/* The header's frost sits on a layer behind its content, not on the header: an element with backdrop-filter
+   is a backdrop root, so the account and notification menus inside it could not blur the page (a large
+   title behind the account menu read through it sharp) */
+.ah.aun-header::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;-webkit-backdrop-filter:var(--m-blur);backdrop-filter:var(--m-blur)}
 .ah-primary{justify-content:center}
 .ah-search{display:flex;align-items:stretch;height:40px;border-radius:var(--r-pill);background:var(--fanous-c-nav-search-bg);box-shadow:inset 0 0 0 1px var(--fanous-c-nav-search-border);overflow:hidden;transition:box-shadow 140ms}.ah-search:focus-within{box-shadow:inset 0 0 0 2px var(--fanous-c-upload-focus)}
 .ah-search input{flex:1;min-width:0;padding-inline:var(--fanous-spacing-lg);border:0!important;outline:0!important;background:transparent!important;color:var(--fanous-c-nav-search-text)!important;box-shadow:none!important}.ah-search input::placeholder{color:var(--fanous-c-nav-search-placeholder)!important}
