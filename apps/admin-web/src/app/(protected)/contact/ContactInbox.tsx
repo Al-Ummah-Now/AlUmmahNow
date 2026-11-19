@@ -213,7 +213,7 @@ export function ContactInbox({ messages, filters, viewerId, canManage, counts }:
       cell: (m) =>
         m.assignee_id ? (
           // Above the row-wide link: the person's own link stays clickable
-          <span dir="auto" className="relative z-[1]" data-testid="contact-row-assignee">
+          <span dir="auto" className="relative z-[1] min-w-0 [overflow-wrap:anywhere]" data-testid="contact-row-assignee">
             {m.assignee_id === viewerId ? t('contact.you') : <UserName id={m.assignee_id} email={m.assignee_email} showEmail={false} />}
           </span>
         ) : (
