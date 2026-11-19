@@ -344,7 +344,7 @@ export const HELP_EN: HelpTranslations = {
           feature: 'upload',
           heading: 'Upload',
           blocks: [
-            { type: 'p', text: 'Uploading needs a channel. What you upload goes to the **channel you are acting as**, so check the account menu first. **Upload** shows while you act as a channel.' },
+            { type: 'p', text: 'Uploading needs a channel. What you upload goes to the **channel you are acting as**, so check the account menu first. Acting as yourself, the upload page asks which channel, or offers to create one.' },
             { type: 'steps', items: [
               'Select **Upload** in the header (on phones, in the middle of the tab bar).',
               'Drop one or more files, or choose them.',
@@ -730,7 +730,7 @@ export const HELP_AR: HelpTranslations = {
           feature: 'upload',
           heading: 'رفع مرئي',
           blocks: [
-            { type: 'p', text: 'الرفع يحتاج قناة. ما ترفعه يذهب إلى **القناة التي تتصرّف باسمها**، فتحقّق منها في قائمة الحساب أولًا. ويظهر **رفع مرئي** حين تتصرّف باسم قناة.' },
+            { type: 'p', text: 'الرفع يحتاج قناة. ما ترفعه يذهب إلى **القناة التي تتصرّف باسمها**، فتحقّق منها في قائمة الحساب أولًا. وإن كنت تتصرّف باسمك، تسألك صفحة الرفع عن القناة أو تعرض إنشاء واحدة.' },
             { type: 'steps', items: [
               'اختر **رفع مرئي** في الشريط العلوي (وفي الهاتف وسط شريط التبويبات).',
               'أفلت ملفًا أو أكثر، أو اخترها.',
