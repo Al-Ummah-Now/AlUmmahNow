@@ -131,7 +131,7 @@ export function PricesPanel({ prices, tiers, providers, canManage, canSync, onRe
           {providers.length === 0 ? (
             <p className="text-sm text-fg-muted">{t('payments.prices.noProviders')}</p>
           ) : (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
               {providers.map((p) => (
                 <button
                   key={p.id}

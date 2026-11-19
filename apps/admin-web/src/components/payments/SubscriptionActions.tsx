@@ -183,8 +183,9 @@ export function RefundPayment({ payment }: { payment: BillingPayment }) {
               {problem}
             </p>
           )}
-          <div className="flex flex-wrap gap-2">
-            <button type="submit" className={primarySmallButtonClass} disabled={busy !== null} data-testid="payments-refund-submit">
+          {/* Card footer: actions at the end edge, the main one last (owner rule) */}
+          <div className="flex flex-wrap justify-end gap-2">
+            <button type="submit" className={`${primarySmallButtonClass} order-last`} disabled={busy !== null} data-testid="payments-refund-submit">
               {t('payments.refund.confirm')}
             </button>
             <button type="button" className={smallButtonClass} onClick={() => setOpen(false)}>
