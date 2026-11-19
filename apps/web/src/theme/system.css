@@ -63,7 +63,7 @@ html[data-rail=open] .nv-panel{width:264px}html[data-rail=open] .nv{flex-directi
 .sb{display:flex;align-items:center;gap:var(--fanous-spacing-xs,4px);min-width:0;color:var(--fanous-color-text-secondary)}.sb-page{max-width:72rem;margin-inline:auto;padding:var(--fanous-spacing-sm,8px) var(--fanous-spacing-md,16px) 0}.sb-text{color:var(--fanous-color-text-secondary)}.sb-back{display:inline-flex;flex:none;align-items:center;justify-content:center;width:44px;height:44px;border-radius:var(--r-pill,999px);color:var(--fanous-color-text-primary);transition:background-color 140ms}.sb-arrow{width:20px;height:20px}[dir=rtl] .sb-arrow{transform:scaleX(-1)}.sb-list{display:flex;flex-wrap:wrap;align-items:center;gap:2px var(--fanous-spacing-xs,4px);min-width:0;margin:0;padding:0;list-style:none;font-size:14px;line-height:1.4}.sb-item{display:inline-flex;align-items:center;gap:var(--fanous-spacing-xs,4px);min-width:0}.sb-link{display:inline-flex;align-items:center;min-height:44px;color:var(--fanous-color-link,var(--fanous-color-accent));text-decoration:none;border-radius:4px}.sb-current{color:var(--fanous-color-text-primary);font-weight:600;overflow-wrap:anywhere}.sb-sep{width:16px;height:16px;flex:none;color:var(--fanous-color-text-muted)}@media(hover:hover){.sb-back:hover{background:var(--m-hover)}.sb-link:hover{text-decoration:underline}}
 .ck{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:var(--r-sm);box-shadow:var(--m-control-edge);background:var(--m-control);border:1px solid var(--fanous-c-form-input-border)}.ck[data-on]{background:var(--m-primary);border-color:var(--fanous-c-button-primary-border)}.ck svg{width:14px;height:14px;color:var(--fanous-c-button-primary-text)}.rd{display:inline-block;width:22px;height:22px;border-radius:50%;background:var(--m-control);border:1px solid var(--fanous-c-form-input-border);box-shadow:var(--m-control-edge)}.rd[data-on]{border:7px solid var(--fanous-c-form-check-on)}
 /* Surfaces */
-.c,[data-slot=card],:is([class^="bg-card"],[class*=" bg-card"],[class*="bg-[var(--fanous-color-surface"])[class*="rounded"]:not(button):not(a):not(.sw):not(:is([role=menu],[role=listbox],[data-popover])),:is([class^="bg-white"],[class*=" bg-white"])[class*="rounded"]:not(.video-card):not(button):not(a):not(.sw):not(:is([role=menu],[role=dialog],[role=listbox],[data-popover])),:is([class^="bg-gray-50"],[class*=" bg-gray-50"])[class*="rounded"]:not(button):not(a){border:1px solid var(--aun-glass-edge)!important;background:var(--aun-glass-surface)!important;box-shadow:var(--aun-glass-glow)!important;border-radius:var(--aun-radius-card)!important;-webkit-backdrop-filter:var(--aun-glass-blur);backdrop-filter:var(--aun-glass-blur)}
+.c,[data-slot=card],:is([class^="bg-card"],[class*=" bg-card"],[class^="bg-[var(--fanous-color-surface"],[class*=" bg-[var(--fanous-color-surface"])[class*="rounded"]:not(button):not(a):not(.sw):not(:is([role=menu],[role=listbox],[data-popover])),:is([class^="bg-white"],[class*=" bg-white"])[class*="rounded"]:not(.video-card):not(button):not(a):not(.sw):not(:is([role=menu],[role=dialog],[role=listbox],[data-popover])),:is([class^="bg-gray-50"],[class*=" bg-gray-50"])[class*="rounded"]:not(button):not(a){border:1px solid var(--aun-glass-edge)!important;background:var(--aun-glass-surface)!important;box-shadow:var(--aun-glass-glow)!important;border-radius:var(--aun-radius-card)!important;-webkit-backdrop-filter:var(--aun-glass-blur);backdrop-filter:var(--aun-glass-blur)}
 .c{padding:var(--fanous-spacing-xl)}
 /* Popovers and hand-made dropdowns (data-popover): the panel glass, more opaque than a card, so their text never fights the page behind */
 [data-popover]{background:var(--aun-glass-panel-surface)!important;box-shadow:var(--aun-glass-glow),var(--aun-float-shadow)!important;border:1px solid var(--aun-glass-edge)!important;border-radius:var(--aun-radius-menu)!important;-webkit-backdrop-filter:var(--aun-glass-blur);backdrop-filter:var(--aun-glass-blur)}
@@ -508,6 +508,17 @@ button.group:hover span.rounded-full{filter:brightness(1.12)}
 /* Tailwind's grey buttons (bg-gray-100/200) are secondary buttons: the secondary part, not the primary gold. On hover their own hover: class (mapped to tokens above) shows. */
 button:is([class~="bg-gray-100"],[class~="bg-gray-200"]):not([role=switch]):not(:disabled):not(:hover){background:var(--fanous-c-button-secondary-bg)!important;color:var(--fanous-c-button-secondary-text)!important;box-shadow:inset 0 0 0 1px var(--fanous-c-button-secondary-border)}
 
+/* Cards that layered `var(--m-card) padding-box, var(--m-border) border-box` (Settings link tiles, community
+   cards, the playlist tray, the upload card): with a translucent card the border-box layer showed through
+   as a gold-olive fill (owner, 2026-11-16: "this is frosted glass?"). --m-border is now transparent; the
+   edge is a real border, with the blur and the golden glow at rest. */
+a:is([class^="bg-white"],[class*=" bg-white"])[class*="rounded"],section[data-section=community] .community-card,.pl-tray,.ups-card{border:1px solid var(--aun-glass-edge)!important;box-shadow:var(--aun-glass-glow)!important;-webkit-backdrop-filter:var(--aun-glass-blur);backdrop-filter:var(--aun-glass-blur)}
+[dir=rtl] .nv-panel{box-shadow:inset 1px 0 0 var(--aun-glass-edge)}
+/* Studio's own nav column: the same rail glass as the site rail (no glass on any ancestor of a fixed element) */
+.studio-rail{background:var(--m-rail);box-shadow:var(--m-rail-edge);-webkit-backdrop-filter:var(--m-blur);backdrop-filter:var(--m-blur)}
+/* User-written post, card and comment bodies carry dir="auto": they start at their own text's start edge
+   (an English post on the Arabic page reads left to right from the left), over any RTL text-right helper */
+:where(article) [dir=auto]:not(input,textarea){text-align:start}
 /* Option cards: pick-one choices in a dialog (Add channel section). A raised card on the dialog
    surface: dialog text and muted text on a fill lifted from dialog.bg; the icon lights up as the
    primary button on hover. Groups have small headings; an odd last card spans the row. */
@@ -583,14 +594,3 @@ html[data-rail=open] .nv-hub .nv-chev,.nv-panel[data-open=true] .nv-hub .nv-chev
 .tabbar .tb{padding-inline:2px}.tabbar .tb>span{text-align:center;line-height:1.2;overflow-wrap:normal;word-break:keep-all;hyphens:none}
 .tabbar .tb[aria-disabled=true]{opacity:.6;cursor:not-allowed}
 @media(max-width:639px){.ah .ah-menu,.ah-end .upload-action{display:none}.tabbar .tb-phone{display:flex}}
-/* Cards that layered `var(--m-card) padding-box, var(--m-border) border-box` (Settings link tiles, community
-   cards, the playlist tray, the upload card): with a translucent card the border-box layer showed through
-   as a gold-olive fill (owner, 2026-11-16: "this is frosted glass?"). --m-border is now transparent; the
-   edge is a real border, with the blur and the golden glow at rest. */
-a:is([class^="bg-white"],[class*=" bg-white"])[class*="rounded"],section[data-section=community] .community-card,.pl-tray,.ups-card{border:1px solid var(--aun-glass-edge)!important;box-shadow:var(--aun-glass-glow)!important;-webkit-backdrop-filter:var(--aun-glass-blur);backdrop-filter:var(--aun-glass-blur)}
-[dir=rtl] .nv-panel{box-shadow:inset 1px 0 0 var(--aun-glass-edge)}
-/* Studio's own nav column: the same rail glass as the site rail (no glass on any ancestor of a fixed element) */
-.studio-rail{background:var(--m-rail);box-shadow:var(--m-rail-edge);-webkit-backdrop-filter:var(--m-blur);backdrop-filter:var(--m-blur)}
-/* User-written post, card and comment bodies carry dir="auto": they start at their own text's start edge
-   (an English post on the Arabic page reads left to right from the left), over any RTL text-right helper */
-:where(article) [dir=auto]:not(input,textarea){text-align:start}
