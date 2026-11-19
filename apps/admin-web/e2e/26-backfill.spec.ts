@@ -37,7 +37,7 @@ test.describe('R2 backfill page', () => {
     });
   }
 
-  test('a bad video list is refused before anything is sent', async ({ page }) => {
+  test('the video list is a search picker (no pasted ids); an empty list is refused before anything is sent', async ({ page }) => {
     await setPreferences(page, { locale: 'en', theme: 'dark' });
     await page.goto('/backfill');
     const posts: string[] = [];
@@ -45,7 +45,9 @@ test.describe('R2 backfill page', () => {
       if (req.method() === 'POST' && req.url().includes('/backfill')) posts.push(req.url());
     });
     await page.getByTestId('backfill-scope-videos').check();
-    await page.getByTestId('backfill-video-ids').fill('not a video id!');
+    // #1609: videos are chosen by title through the picker, never pasted as ids
+    await expect(page.getByRole('combobox', { name: 'Videos' })).toBeVisible();
+    await expect(page.locator('textarea')).toHaveCount(0);
     await page.getByTestId('backfill-estimate-button').click();
     await expect(page.getByTestId('backfill-new-error')).toBeVisible();
     expect(posts, 'no server action ran').toEqual([]);

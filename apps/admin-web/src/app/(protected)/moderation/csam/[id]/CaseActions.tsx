@@ -15,6 +15,8 @@ import { smallButtonClass } from '@/components/content/parts';
 import { cardClass, fieldClass, linkClass, primaryButtonClass } from '@/components/ui';
 import { mapCsamCase, markCsamReported, retryCsamCase, setCsamLegalHold, type CsamHandMapping } from '@/lib/api/csam';
 import { CopyButton } from '../CsamAdmin';
+import { Autocomplete } from '@/components/search/Autocomplete';
+import type { AdminSuggestKind } from '@al-ummah/shared-types';
 import { NCMEC_CYBERTIPLINE_URL, csamDownloadHref, csamFactsText, validReportId, type CsamFactId, type CsamFactRow } from '../model';
 import { DateTimeField } from '@/components/DateField';
 
@@ -210,12 +212,26 @@ export function MapForm({ caseId }: { caseId: string }) {
   const { run, busy, error, message } = useContentAction();
   const [kind, setKind] = useState<MapKind>('video');
   const { confirm, dialog } = useConfirm();
+  // A picked post brings its channel (the suggestion's parent), which the mapping also needs
+  const [postChannel, setPostChannel] = useState('');
+  const [missing, setMissing] = useState(false);
 
-  const input = (name: string, labelKey: MessageKey) => (
-    <div>
-      <label htmlFor={`${id}-${name}`} className={labelClass}>{t(labelKey)}</label>
-      <input id={`${id}-${name}`} name={name} required dir="ltr" maxLength={80} className={`${fieldClass} w-full`} data-testid={`csam-map-${name}`} />
-    </div>
+  // The item is chosen by searching its name or title (initial results, pictures), never by typing an id
+  const pick = (name: string, suggest: AdminSuggestKind, labelKey: MessageKey) => (
+    <Autocomplete
+      key={`${kind}-${name}`}
+      kind={suggest}
+      mode="pick"
+      name={name}
+      label={t(labelKey)}
+      initialResults
+      onChange={(_, item) => {
+        setMissing(false);
+        if (suggest === 'post') setPostChannel(item?.parentId ?? '');
+      }}
+      className="w-full"
+      testId={`csam-map-${name}`}
+    />
   );
 
   return (
@@ -226,7 +242,10 @@ export function MapForm({ caseId }: { caseId: string }) {
         onSubmit={async (e) => {
           e.preventDefault();
           const mapping = mappingOf(kind, new FormData(e.currentTarget));
-          if (!mapping) return;
+          if (!mapping) {
+            setMissing(true);
+            return;
+          }
           // The mapping takes an item down and freezes an account: one more explicit confirmation
           const ok = await confirm({ title: t('csamPage.map.confirmTitle'), body: t('csamPage.map.confirm'), confirmLabel: t('csamPage.map.confirmYes'), danger: true, testId: 'csam-map-confirm' });
           if (ok) await run('map', () => mapCsamCase(caseId, mapping), { success: t('csamPage.map.done') });
@@ -238,22 +257,33 @@ export function MapForm({ caseId }: { caseId: string }) {
           <div className="flex flex-wrap gap-4">
             {MAP_KINDS.map((k) => (
               <label key={k} className="inline-flex items-center gap-2 text-sm text-fg">
-                <input type="radio" name="kind" value={k} checked={kind === k} onChange={() => setKind(k)} data-testid={`csam-map-kind-${k}`} />
+                <input
+                  type="radio"
+                  name="kind"
+                  value={k}
+                  checked={kind === k}
+                  onChange={() => {
+                    setKind(k);
+                    setMissing(false);
+                    setPostChannel('');
+                  }}
+                  data-testid={`csam-map-kind-${k}`}
+                />
                 {t(`csamPage.map.kinds.${k}` as MessageKey)}
               </label>
             ))}
           </div>
         </fieldset>
-        {kind === 'video' && input('videoId', 'csamPage.map.videoId')}
+        {kind === 'video' && pick('videoId', 'video', 'csamPage.map.videoId')}
         {kind === 'post' && (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {input('channelId', 'csamPage.map.channelId')}
-            {input('postId', 'csamPage.map.postId')}
-          </div>
+          <>
+            {pick('postId', 'post', 'csamPage.map.postId')}
+            <input type="hidden" name="channelId" value={postChannel} data-testid="csam-map-channelId" />
+          </>
         )}
         {(kind === 'profile_image' || kind === 'channel_image') && (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {input('ownerId', kind === 'profile_image' ? 'csamPage.map.userId' : 'csamPage.map.channelId')}
+            {kind === 'profile_image' ? pick('ownerId', 'user', 'csamPage.map.userId') : pick('ownerId', 'channel', 'csamPage.map.channelId')}
             <div>
               <label htmlFor={`${id}-field`} className={labelClass}>{t('csamPage.map.field')}</label>
               <select id={`${id}-field`} name="field" className={`${fieldClass} w-full`} data-testid="csam-map-field">
@@ -262,6 +292,9 @@ export function MapForm({ caseId }: { caseId: string }) {
               </select>
             </div>
           </div>
+        )}
+        {missing && (
+          <p role="alert" className="text-sm text-danger-fg" data-testid="csam-map-missing">{t('csamPage.map.pickFirst')}</p>
         )}
         <ActionFeedback error={error} message={message} testId="csam-map-feedback" />
         <button type="submit" className={primaryButtonClass} disabled={busy !== null} data-testid="csam-map-submit">
