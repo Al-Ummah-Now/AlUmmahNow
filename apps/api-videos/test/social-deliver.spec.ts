@@ -17,7 +17,8 @@ import {
 import { SqliteD1 } from './search-sqlite-d1';
 import { MemoryBucket, MemoryQueue, videoFixture } from './helpers';
 import { sealJson, sealText } from '../src/lib/social/crypto';
-import { readDelivery, readAccount, readSpend, saveRule, saveTemplate, upsertAccount, writeSetting, readWebhook } from '../src/lib/social/store';
+import { readDelivery, readAccount, readSpend, saveRule, saveTemplate, upsertAccount, writeSetting, readWebhook, readMastodonLimits, MASTODON_LIMIT_TTL_MS } from '../src/lib/social/store';
+import { mastodonCharLimit } from '../src/lib/social/limits';
 import { attemptPost, attemptWebhook, composePost, giveUpPost, planEvent, requeueWebhookDelivery, webhookSecretBound } from '../src/lib/social/deliver';
 import { tokenBound } from '../src/lib/social/connect';
 import { writeCredentials, type SocialEnv } from '../src/lib/social/platform';
@@ -152,13 +153,50 @@ describe('posting', () => {
 		assert.deepEqual(await attemptPost(t.env, deliveryId, net.f), { outcome: 'skipped' });
 	});
 
+	it("Mastodon: the post is cut to the instance's own limit, read once and cached (#1593)", async () => {
+		const { deliveryId } = await planned('mastodon');
+		await saveTemplate(t.env, 'ch1', { event: 'video', lang: 'en', body: `${'long text '.repeat(70)}{url}` }, 'owner');
+		const net = fakeFetch([
+			['https://masto.example/api/v2/instance', () => json({ configuration: { statuses: { max_characters: 1000 } } })],
+			['https://masto.example/api/v1/statuses', () => json({ id: '1' })],
+		]);
+		assert.deepEqual(await attemptPost(t.env, deliveryId, net.f), { outcome: 'sent' });
+		const status = JSON.parse(net.calls.find((c) => c.url.endsWith('/statuses'))!.body).status as string;
+		// 700 characters of text + the link: over the default 500, within this instance's 1,000, so nothing is cut
+		assert.ok(!status.includes('…'), 'not cut at 500');
+		assert.ok(status.length > 500);
+		assert.equal((await readMastodonLimits(t.env, ['masto.example'])).get('masto.example')?.maxChars, 1000);
+		// Cached: the next post doesn't ask the instance again
+		const again = fakeFetch([['https://masto.example/api/v1/statuses', () => json({ id: '2' })]]);
+		assert.equal(await mastodonCharLimit(t.env, 'masto.example', again.f), 1000);
+		assert.equal(again.calls.length, 0);
+	});
+
+	it('Mastodon: a smaller instance limit cuts the post to it; an unknown limit keeps the default 500', async () => {
+		const small = fakeFetch([['https://small.example/api/v2/instance', () => json({ configuration: { statuses: { max_characters: 300 } } })]]);
+		assert.equal(await mastodonCharLimit(t.env, 'small.example', small.f), 300);
+		const silent = fakeFetch([['https://silent.example/api/v2/instance', () => json({}, 503)]]);
+		assert.equal(await mastodonCharLimit(t.env, 'silent.example', silent.f), null);
+		const values = { title: 'word '.repeat(150).trim(), channel: 'Noor', url: 'https://s.example/v/v1', text: '' };
+		const base = { template: '{title}\n\n{url}', values, network: 'mastodon' as const, event: 'video' as const, format: 'link' as const, includeLink: false };
+		const cut300 = composePostText({ ...base, limit: 300 });
+		assert.equal(cut300.limit, 300);
+		assert.ok(cut300.cut && cut300.length <= 300);
+		assert.equal(composePostText({ ...base, limit: null }).limit, 500);
+		// A stale cache is read again; if the instance can't be reached, the last known limit stays
+		const later = Date.now() + MASTODON_LIMIT_TTL_MS + 1;
+		const down = fakeFetch([]);
+		assert.equal(await mastodonCharLimit(t.env, 'small.example', down.f, later), 300);
+		assert.equal(down.calls.length, 1);
+	});
+
 	it('Arabic accounts post the Arabic title and the Arabic template', async () => {
 		const { account, deliveryId } = await planned('mastodon');
 		await t.env.SEARCH_DB!.prepare("UPDATE social_accounts SET language = 'ar' WHERE id = ?").bind(account.id).run();
 		await saveTemplate(t.env, 'ch1', { event: 'video', lang: 'ar', body: 'جديد: {title}\n{url}' }, 'owner');
 		const net = fakeFetch([['https://masto.example/api/v1/statuses', () => json({ id: '1' })]]);
 		await attemptPost(t.env, deliveryId, net.f);
-		const body = JSON.parse(net.calls[0].body);
+		const body = JSON.parse(net.calls.find((c) => c.url.endsWith('/statuses'))!.body);
 		assert.match(body.status, /^جديد: تذكير الجمعة\n/);
 		assert.equal(body.language, 'ar');
 	});
@@ -376,7 +414,8 @@ describe('composing a post', () => {
 					for (const language of ['en', 'ar'] as const) {
 						for (const template of templates) {
 							for (const c of [content, long]) {
-								const sent = await composePost(c, d({ network, format, include_link }), language, template, async () => 1000);
+								const limit = network === 'mastodon' ? 1000 : null;
+								const sent = await composePost(c, d({ network, format, include_link }), language, template, async () => 1000, limit);
 								const preview = composePostText({
 									template,
 									values: { title: c.title[language], channel: c.channel.name[language], url: c.url[language], text: '' },
@@ -384,6 +423,7 @@ describe('composing a post', () => {
 									event: 'video',
 									format,
 									includeLink: !!include_link,
+									limit,
 								});
 								assert.equal(preview.text, sent.request.text, `${network} ${format} ${include_link} ${language} ${template}`);
 								assert.ok(preview.length <= preview.limit);

@@ -62,14 +62,16 @@ export async function mastodonVerify(f: typeof fetch, instance: string, token: s
 	return (await res.json()) as { id: string; username: string; acct: string; display_name: string };
 }
 
-async function instanceLimits(f: typeof fetch, instance: string): Promise<{ maxChars: number; videoBytes: number }> {
-	const fallback = { maxChars: SOCIAL_NETWORK_RULES.mastodon.maxText, videoBytes: SOCIAL_NETWORK_RULES.mastodon.maxVideoBytes };
+/** The instance's own limits (GET /api/v2/instance); maxChars is null when the instance doesn't say or can't be read. */
+export async function mastodonInstanceLimits(f: typeof fetch, instance: string): Promise<{ maxChars: number | null; videoBytes: number }> {
+	const fallback = { maxChars: null, videoBytes: SOCIAL_NETWORK_RULES.mastodon.maxVideoBytes };
 	try {
 		const res = await f(`https://${instance}/api/v2/instance`, { headers: { Accept: 'application/json' } });
 		if (!res.ok) return fallback;
 		const j = (await res.json()) as { configuration?: { statuses?: { max_characters?: number }; media_attachments?: { video_size_limit?: number } } };
+		const max = Number(j.configuration?.statuses?.max_characters);
 		return {
-			maxChars: j.configuration?.statuses?.max_characters || fallback.maxChars,
+			maxChars: Number.isFinite(max) && max > 0 ? Math.floor(max) : null,
 			videoBytes: j.configuration?.media_attachments?.video_size_limit || fallback.videoBytes,
 		};
 	} catch {
@@ -88,7 +90,7 @@ export const mastodonAdapter: Adapter = {
 		const auth = { Authorization: `Bearer ${token}` };
 		const mediaIds: string[] = [];
 		if (post.video) {
-			const limits = await instanceLimits(ctx.fetch, instance);
+			const limits = await mastodonInstanceLimits(ctx.fetch, instance);
 			const file = await download(ctx.fetch, post.video.url, limits.videoBytes, 'Mastodon');
 			const form = new FormData();
 			form.append('file', new Blob([file.bytes], { type: 'video/mp4' }), 'video.mp4');

@@ -12,6 +12,7 @@ import { apiOrigin, blueskyClient, callbackPath, readCredentials, writeCredentia
 import { webOrigin } from './content';
 import { NetworkError, type TokenSet } from './adapters/types';
 import { xAuthorizeUrl, xExchangeCode, xMe, xRevoke } from './adapters/x';
+import { mastodonCharLimit } from './limits';
 import { mastodonAuthorizeUrl, mastodonExchange, mastodonRegisterApp, mastodonRevoke, mastodonVerify, normalizeInstance } from './adapters/mastodon';
 import { blueskyFinish, blueskyRevoke, blueskyStart, normalizeHandle, resolveBluesky, type BlueskyPending } from './adapters/bluesky';
 import { tgCall, tgGetMe, tgSetWebhook } from './adapters/telegram';
@@ -209,6 +210,8 @@ export async function finishOAuth(
 			tokens = await mastodonExchange(fetchImpl, data.instance!, app, code, data.verifier!, data.redirectUri);
 			const me = await mastodonVerify(fetchImpl, data.instance!, tokens.accessToken!);
 			identity = { remoteId: me.id, handle: `${me.username}@${data.instance}`, displayName: me.display_name || me.username, instance: data.instance };
+			// The instance's own character limit, for posts and Studio's preview (#1593); never blocks connecting
+			await mastodonCharLimit(env, data.instance, fetchImpl).catch(() => null);
 		} else if (network === 'bluesky') {
 			const client = await blueskyClient(env);
 			const b = data.bluesky!;

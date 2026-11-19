@@ -53,6 +53,19 @@ describe('Studio post preview', () => {
     expect(previewText('{title}', 'video', { network: 'telegram', format: 'video', includeLink: false }, values).limit).toBe(1024);
   });
 
+  it("a Mastodon account with its instance's own limit is previewed and cut to it (#1593)", () => {
+    const a = { ...account('mastodon', 'link'), maxChars: 1000 };
+    const [target] = previewTargets([a], 'video');
+    expect(target).toEqual({ network: 'mastodon', format: 'link', includeLink: false, limit: 1000 });
+    const values = { title: 'word '.repeat(150).trim(), channel: 'Noor', url: 'https://s.example/v/1', text: '' };
+    const r = previewText('{title}\n\n{url}', 'video', target!, values);
+    expect(r.limit).toBe(1000);
+    expect(r.cut).toBe(false);
+    expect(r).toEqual(composePostText({ template: '{title}\n\n{url}', values, network: 'mastodon', event: 'video', format: 'link', includeLink: false, limit: 1000 }));
+    // Without a known limit: the network default
+    expect(previewText('{title}\n\n{url}', 'video', previewTargets([account('mastodon', 'link')], 'video')[0]!, values).limit).toBe(500);
+  });
+
   it('counts in Arabic digits in Arabic', () => {
     const r = previewText('{title}', 'video', { network: 'bluesky', format: 'link', includeLink: false }, { title: 'x'.repeat(280), channel: '', url: '', text: '' });
     expect(`${formatNumber('ar', r.length)}/${formatNumber('ar', r.limit)}`).toBe('٢٨٠/٣٠٠');

@@ -179,8 +179,16 @@ export async function listRules(env: SocialDbEnv, accountIds: string[]): Promise
 
 export async function channelAccountViews(env: SocialDbEnv, channelId: string): Promise<SocialAccountView[]> {
 	const accounts = await listAccounts(env, channelId);
-	const rules = await listRules(env, accounts.map((a) => a.id));
-	return accounts.map((a) => accountView(a, rules));
+	const [rules, limits] = await Promise.all([
+		listRules(env, accounts.map((a) => a.id)),
+		// Cached only: the overview never calls an instance (the sender and connect keep the cache fresh)
+		readMastodonLimits(env, accounts.filter((a) => a.network === 'mastodon' && a.instance).map((a) => a.instance!)),
+	]);
+	return accounts.map((a) => {
+		const view = accountView(a, rules);
+		const limit = a.network === 'mastodon' && a.instance ? limits.get(a.instance) : undefined;
+		return limit ? { ...view, maxChars: limit.maxChars } : view;
+	});
 }
 
 export async function readAccount(env: SocialDbEnv, id: string): Promise<AccountRow | null> {
@@ -442,6 +450,39 @@ export async function writeSetting(env: SocialDbEnv, key: string, value: string,
 
 export async function deleteSetting(env: SocialDbEnv, key: string): Promise<void> {
 	await socialDb(env).prepare('DELETE FROM social_settings WHERE key = ?').bind(key).run();
+}
+
+/** A Mastodon instance's character limit, cached in social_settings (`mastodon_limit:<instance>`). */
+const MASTODON_LIMIT_PREFIX = 'mastodon_limit:';
+/** Re-read from the instance after this long (admins change it rarely) */
+export const MASTODON_LIMIT_TTL_MS = 7 * 24 * 3600_000;
+
+export interface CachedInstanceLimit {
+	maxChars: number;
+	at: number;
+}
+
+export async function readMastodonLimits(env: SocialDbEnv, instances: readonly string[]): Promise<Map<string, CachedInstanceLimit>> {
+	const out = new Map<string, CachedInstanceLimit>();
+	const unique = [...new Set(instances.filter(Boolean))];
+	if (!unique.length) return out;
+	const { results } = await socialDb(env)
+		.prepare(`SELECT key, value FROM social_settings WHERE key IN (${unique.map(() => '?').join(', ')})`)
+		.bind(...unique.map((i) => MASTODON_LIMIT_PREFIX + i))
+		.all<{ key: string; value: string }>();
+	for (const row of results ?? []) {
+		try {
+			const v = JSON.parse(row.value) as Partial<CachedInstanceLimit>;
+			if (typeof v.maxChars === 'number' && v.maxChars > 0 && typeof v.at === 'number') out.set(row.key.slice(MASTODON_LIMIT_PREFIX.length), { maxChars: v.maxChars, at: v.at });
+		} catch {
+			// A malformed value is read again from the instance
+		}
+	}
+	return out;
+}
+
+export async function writeMastodonLimit(env: SocialDbEnv, instance: string, maxChars: number, now = Date.now()): Promise<void> {
+	await writeSetting(env, MASTODON_LIMIT_PREFIX + instance, JSON.stringify({ maxChars, at: now }), 'system', now);
 }
 
 export async function readPlatformSettings(env: SocialDbEnv): Promise<SocialPlatformSettings> {
