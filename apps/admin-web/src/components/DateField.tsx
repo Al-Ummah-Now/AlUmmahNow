@@ -8,7 +8,8 @@
  * - the value in the admin's digits: "2026-11-18" / «٢٠٢٦/١١/١٨» (locale-format, nu-arab in ar);
  * - the placeholder in the admin's language: "YYYY-MM-DD" / «سنة/شهر/يوم»;
  * - typing in either digit set (٠–٩ or 0–9), as year-month-day, day/month/year or 8 digits;
- * - a calendar button that opens the browser's own picker (keyboard and screen reader friendly);
+ * - a calendar button that opens our own calendar (CalendarPanel: the admin's language and digits,
+ *   keyboard and screen reader friendly; the browser's picker followed the browser's language);
  * - a hidden `name` input carrying the ISO day, so GET filter forms and URLs stay as they were.
  *
  * DateTimeField (below) is the same field with a 24-hour time: "2026-11-18 14:30" / «٢٠٢٦/١١/١٨ ١٤:٣٠»,
@@ -21,6 +22,8 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { dateTimeFormat, numberFormat } from '@al-ummah/shared-types';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { fieldClass } from '@/components/ui';
+import { CalendarPanel } from '@/components/date/CalendarPanel';
+import { todayIso } from '@/components/date/calendar';
 
 const ISO_DAY = /^(\d{4})-(\d{2})-(\d{2})$/;
 const ISO_LOCAL = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})$/;
@@ -123,7 +126,10 @@ export function DateField({ id, name, value, defaultValue, onChange, submitOnCha
   const [text, setText] = useState(() => show(iso, locale));
   const [invalid, setInvalid] = useState(false);
   const hidden = useRef<HTMLInputElement>(null);
-  const picker = useRef<HTMLInputElement>(null);
+  const [open, setOpen] = useState(false);
+  const button = useRef<HTMLButtonElement>(null);
+  const box = useRef<HTMLDivElement>(null);
+  const panelId = `${fieldId}-calendar`;
 
   // A new controlled value, or a language switch, redraws the text
   useEffect(() => {
@@ -155,24 +161,30 @@ export function DateField({ id, name, value, defaultValue, onChange, submitOnCha
     else commit(next);
   };
 
-  const openPicker = () => {
-    const el = picker.current;
-    if (!el) return;
-    el.value = iso;
-    try {
-      el.showPicker();
-    } catch {
-      // Older browsers: focusing the date input opens its picker on most of them
-      el.focus();
-      el.click();
-    }
+  // Our calendar: a press outside it closes it; closing gives focus back to the calendar button
+  useEffect(() => {
+    if (!open) return;
+    const outside = (e: PointerEvent) => {
+      if (box.current && !box.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', outside);
+    return () => document.removeEventListener('pointerdown', outside);
+  }, [open]);
+  const close = () => {
+    setOpen(false);
+    button.current?.focus();
   };
+  const day = iso.slice(0, 10);
+  const timeOf = (v: string) => (/T(\d{2}):(\d{2})$/.exec(v) ? { h: Number(v.slice(11, 13)), m: Number(v.slice(14, 16)) } : { h: 0, m: 0 });
+  // The machine value (never shown), so zero-padded ASCII digits
+  const two = (n: number) => (n < 10 ? `0${n}` : `${n}`);
+  const withClock = (d: string, h: number, m: number) => `${d}T${two(h)}:${two(m)}`;
 
   return (
     <div className={className} data-testid={testId}>
       {name !== undefined && <input ref={hidden} type="hidden" name={name} defaultValue={iso} data-testid={testId ? `${testId}-value` : undefined} />}
       {/* The text field and its calendar button; the error line sits below, outside it */}
-      <div className="relative">
+      <div ref={box} className="relative">
         <input
           id={fieldId}
           type="text"
@@ -203,8 +215,12 @@ export function DateField({ id, name, value, defaultValue, onChange, submitOnCha
         />
         <button
           type="button"
-          onClick={openPicker}
+          ref={button}
+          onClick={() => setOpen((o) => !o)}
           aria-label={t('dateField.choose')}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          aria-controls={open ? panelId : undefined}
           className="absolute inset-y-0 end-0 grid w-10 place-items-center rounded-e text-fg-muted hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
           data-testid={testId ? `${testId}-calendar` : undefined}
         >
@@ -213,17 +229,33 @@ export function DateField({ id, name, value, defaultValue, onChange, submitOnCha
             <path d="M3.5 9.5h17M8 3v4M16 3v4" />
           </svg>
         </button>
-        {/* The browser's calendar, opened by the button; never shown or focused itself */}
-        <input
-          ref={picker}
-          type={withTime ? 'datetime-local' : 'date'}
-          tabIndex={-1}
-          aria-hidden="true"
-          min={min}
-          max={max}
-          className="pointer-events-none absolute bottom-0 end-0 h-px w-px opacity-0"
-          onChange={(e) => commit(e.currentTarget.value)}
-        />
+        {open && (
+          <CalendarPanel
+            id={panelId}
+            locale={locale}
+            t={t}
+            value={day}
+            time={withTime ? timeOf(iso) : null}
+            min={min}
+            max={max}
+            required={required}
+            onPickDay={(d) => {
+              if (!withTime) {
+                commit(d);
+                close();
+                return;
+              }
+              const { h, m } = timeOf(iso);
+              commit(withClock(d, h, m));
+            }}
+            onTime={(h, m) => commit(withClock(day || todayIso(), h, m))}
+            onClear={() => {
+              commit('');
+              close();
+            }}
+            onClose={close}
+          />
+        )}
       </div>
       {invalid && (
         <p id={errorId} className="mt-1 text-xs text-danger-fg" role="alert">
