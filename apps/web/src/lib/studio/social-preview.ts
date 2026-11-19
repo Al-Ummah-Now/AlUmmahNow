@@ -21,6 +21,8 @@ export interface PreviewTarget {
   network: SocialNetwork;
   format: SocialFormat;
   includeLink: boolean;
+  /** The account's own text limit (a Mastodon instance's), when known; else the network default */
+  limit?: number;
 }
 
 /** The connected networks (one tab each, site order); the first account of a network decides its format. */
@@ -29,7 +31,7 @@ export function previewTargets(accounts: readonly SocialAccountView[], event: So
     const account = accounts.find((a) => a.network === network);
     if (!account) return [];
     const rule = account.rules.find((r) => r.event === event);
-    return [{ network, format: rule?.format ?? defaultFormat(event), includeLink: !!rule?.includeLink }];
+    return [{ network, format: rule?.format ?? defaultFormat(event), includeLink: !!rule?.includeLink, ...(account.maxChars ? { limit: account.maxChars } : {}) }];
   });
 }
 
@@ -45,5 +47,5 @@ export function previewValues(event: SocialEvent, lang: SocialLanguage, preview:
 
 /** The post text a target receives (the sender's composition, unchanged). */
 export function previewText(template: string, event: SocialEvent, target: PreviewTarget, values: SocialTemplateValues): SocialPostText {
-  return composePostText({ template, values, network: target.network, event, format: target.format, includeLink: target.includeLink });
+  return composePostText({ template, values, network: target.network, event, format: target.format, includeLink: target.includeLink, limit: target.limit ?? null });
 }

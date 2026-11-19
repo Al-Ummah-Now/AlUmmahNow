@@ -43,6 +43,7 @@ import {
 	type WebhookDeliveryRow,
 } from './store';
 import { loadSocialContent, webhookData, type SocialContent } from './content';
+import { mastodonCharLimit } from './limits';
 import { blueskyClient, readCredentials, type SocialEnv } from './platform';
 import { tokenBound } from './connect';
 import { mediaSize, NetworkError, type Adapter, type PostRequest, type TokenSet } from './adapters/types';
@@ -115,6 +116,8 @@ export async function composePost(
 	language: 'en' | 'ar',
 	templateBody: string,
 	sizeOf: (url: string) => Promise<number | null>,
+	/** The account's own text limit (a Mastodon instance's), when known */
+	limit: number | null = null,
 ): Promise<ComposedPost> {
 	const rules = SOCIAL_NETWORK_RULES[delivery.network];
 	const url = content.url[language];
@@ -127,6 +130,7 @@ export async function composePost(
 		event: delivery.event,
 		format: delivery.format,
 		includeLink: !!delivery.include_link,
+		limit,
 	});
 
 	let video: PostRequest['video'];
@@ -227,7 +231,8 @@ export async function attemptPost(env: SocialEnv, deliveryId: string, f: typeof 
 		const templates = await listTemplates(env, d.channel_id);
 		const lang = account.language === 'ar' ? 'ar' : 'en';
 		const template = templates.find((t) => t.event === d.event && t.lang === lang)!.body;
-		const composed = await composePost(content, d, lang, template, (u) => mediaSize(f, u));
+		const limit = d.network === 'mastodon' ? await mastodonCharLimit(env, account.instance, f) : null;
+		const composed = await composePost(content, d, lang, template, (u) => mediaSize(f, u), limit);
 
 		if (d.network === 'x') {
 			if (!(await readCredentials(env, 'x'))) throw new NetworkError('network_not_configured', 'fatal');

@@ -64,6 +64,8 @@ export interface SocialAccountView {
   statusReason?: string;
   connectedAt: string;
   rules: SocialRuleView[];
+  /** Mastodon: the instance's own character limit, when known (posts and Studio's preview are cut to it) */
+  maxChars?: number;
 }
 
 export interface SocialRuleView {
@@ -287,13 +289,19 @@ export function composePostText(input: {
   event: SocialEvent;
   format: SocialFormat;
   includeLink: boolean;
+  /**
+   * The account's own limit when the network has one per server (a Mastodon instance's max_characters, read from
+   * the instance). Replaces the network default for the text and the caption; unknown → the default.
+   */
+  limit?: number | null;
 }): SocialPostText {
   const rules = SOCIAL_NETWORK_RULES[input.network];
   let text = renderTemplate(input.template, input.values);
   const asVideo = input.format === 'video' && (input.event === 'video' || input.event === 'short');
   if (asVideo && input.network === 'x' && !input.includeLink) text = stripUrls(text);
   if (!text.trim()) text = input.values.title;
-  const limit = asVideo ? rules.maxCaption : rules.maxText;
+  const own = input.limit && Number.isFinite(input.limit) && input.limit > 0 ? Math.floor(input.limit) : null;
+  const limit = own ?? (asVideo ? rules.maxCaption : rules.maxText);
   const fitted = fitText(rules, text, limit);
   return { text: fitted, length: measureText(rules, fitted), limit, fullLength: measureText(rules, text), cut: fitted !== text };
 }

@@ -8,6 +8,8 @@ import assert from 'node:assert/strict';
 import { SqliteD1 } from './search-sqlite-d1';
 import { MemoryBucket, videoFixture } from './helpers';
 import { buildRss, feedItems, previewItems, xml, FEED_ITEMS } from '../src/lib/social/feed';
+import { loadSocialContent } from '../src/lib/social/content';
+import { composePostText } from '@al-ummah/shared-types';
 
 const WEB = 'https://videos.example.test';
 
@@ -56,7 +58,7 @@ function assertValidRss(doc: string) {
 function setup() {
 	const db = new SqliteD1();
 	const channels = new MemoryBucket({
-		ch1: { id: 'ch1', name: 'Noor & Friends', nameLocalized: { ar: 'نور وأصحابه' }, handle: 'noor' },
+		ch1: { id: 'ch1', name: 'Noor & Friends', nameLocalized: { ar: 'نور وأصحابه' }, handle: 'noor', userId: 'u-owner' },
 		gone: { id: 'gone', name: 'Gone', isSuspended: true },
 	});
 	const videos = new MemoryBucket({
@@ -64,6 +66,9 @@ function setup() {
 		v2: videoFixture({ id: 'v2', channelId: 'ch1', title: 'Second', publishedAt: '2026-11-12T10:00:00.000Z' }),
 		s1: videoFixture({ id: 's1', channelId: 'ch1', title: 'A Short', isShort: true, width: 1080, height: 1920, duration: 30, publishedAt: '2026-11-11T10:00:00.000Z' }),
 		hidden: videoFixture({ id: 'hidden', channelId: 'ch1', title: 'Made private', isPublic: false }),
+		'livestream:l1': { id: 'l1', channelId: 'ch1', title: 'Friday majlis', status: 'ended', actualStartTime: '2026-11-12T18:00:00.000Z' },
+		'livestream:l2': { id: 'l2', channelId: 'ch1', title: 'A private rehearsal', status: 'ended', isPrivate: true },
+		'livestream:t1': { id: 't1', channelId: 'ch1', title: 'Encoder test', status: 'ended', isTest: true },
 	});
 	const posts = new MemoryBucket({
 		'posts/ch1/p1.json': { id: 'p1', channelId: 'ch1', content: 'Jumuah reminder\nsecond line', status: 'published', visibility: 'public', createdAt: '2026-11-13T09:00:00.000Z' },
@@ -76,6 +81,15 @@ function setup() {
 	// Indexed while public, private since: left out at read time
 	row('search_videos', 'hidden', '2026-11-13T10:00:00Z');
 	row('search_posts', 'p1', '2026-11-13T09:00:00Z');
+	// Live sessions: l1 aired; l2 is newer but private; t1 is a test stream; x9 is another channel's
+	const session = (id: string, streamId: string, at: string, opts: { channel?: string; isTest?: number; status?: string } = {}) =>
+		db.db
+			.prepare("INSERT INTO live_sessions (id, stream_id, channel_id, provider, reason, status, is_test, created_at, owner_id) VALUES (?, ?, ?, 'selfhosted', 'start', ?, ?, ?, 'u-owner')")
+			.run(id, streamId, opts.channel ?? 'ch1', opts.status ?? 'ended', opts.isTest ?? 0, Date.parse(at));
+	session('s-l1', 'l1', '2026-11-12T18:00:00Z');
+	session('s-l2', 'l2', '2026-11-13T18:00:00Z');
+	session('s-t1', 't1', '2026-11-14T18:00:00Z', { isTest: 1 });
+	session('s-x9', 'x9', '2026-11-15T18:00:00Z', { channel: 'other' });
 	const env = { SEARCH_DB: db, channels, videos, community_posts: posts, VIDEOS_WEB_URL: WEB } as never;
 	return { env };
 }
@@ -101,8 +115,25 @@ describe('channel feeds', () => {
 		assert.equal(p.items.video?.title.en, 'Second');
 		assert.equal(p.items.short?.title.en, 'A Short');
 		assert.equal(p.items.post?.text, 'Jumuah reminder\nsecond line');
-		assert.equal(p.items.live, undefined);
+		// Live: the newest public stream that aired, linked to the live page as a live post is (#1594)
+		assert.equal(p.items.live?.title.en, 'Friday majlis');
+		assert.deepEqual(p.items.live?.url, { en: `${WEB}/en/live/l1`, ar: `${WEB}/ar/live/l1` });
 		assert.equal(await previewItems(env, 'gone'), null);
+	});
+
+	it("the live preview's link and text are exactly what a live post would send (#1594)", async () => {
+		const { env } = setup();
+		const p = (await previewItems(env, 'ch1'))!;
+		const sent = (await loadSocialContent(env, 'ch1', 'live', 'l1'))!;
+		assert.deepEqual(p.items.live?.url, sent.url);
+		for (const network of ['telegram', 'bluesky', 'mastodon'] as const) {
+			for (const lang of ['en', 'ar'] as const) {
+				const values = { title: p.items.live!.title[lang], channel: p.channel[lang], url: p.items.live!.url[lang], text: '' };
+				const preview = composePostText({ template: '{title}\n\n{url}', values, network, event: 'live', format: 'link', includeLink: false });
+				const real = composePostText({ template: '{title}\n\n{url}', values: { title: sent.title[lang], channel: sent.channel.name[lang], url: sent.url[lang], text: '' }, network, event: 'live', format: 'link', includeLink: false });
+				assert.equal(preview.text, real.text);
+			}
+		}
 	});
 
 	it('builds a valid RSS 2.0 document, in English and Arabic', async () => {

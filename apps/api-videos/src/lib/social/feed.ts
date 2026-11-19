@@ -9,6 +9,7 @@
  */
 import { type SocialEvent, type SocialFeedKind, type SocialLanguage, type SocialPreview } from '@al-ummah/shared-types';
 import R2Repository from '../r2Repo';
+import { logger } from '../logger';
 import { loadSocialContent, webOrigin, type SocialContent, type SocialContentEnv } from './content';
 
 export const FEED_ITEMS = 30;
@@ -148,7 +149,7 @@ const PREVIEW_ROWS = 3;
  * still public wins). Null when the channel isn't public. Live recordings are listed as videos (search_videos is_live).
  */
 export async function previewItems(env: FeedEnv, channelId: string): Promise<SocialPreview | null> {
-	const channel = await new R2Repository<{ name?: string; nameLocalized?: Record<string, string>; handle?: string; isDeleted?: boolean; isHidden?: boolean; isPrivate?: boolean; isSuspended?: boolean }>(env.channels).getObject(channelId);
+	const channel = await new R2Repository<{ name?: string; nameLocalized?: Record<string, string>; handle?: string; userId?: string; isDeleted?: boolean; isHidden?: boolean; isPrivate?: boolean; isSuspended?: boolean }>(env.channels).getObject(channelId);
 	if (!channel || channel.isDeleted || channel.isHidden || channel.isPrivate || channel.isSuspended) return null;
 	const origin = webOrigin(env);
 	const names = channel.nameLocalized ?? {};
@@ -157,22 +158,38 @@ export async function previewItems(env: FeedEnv, channelId: string): Promise<Soc
 	const preview: SocialPreview = { channel: { en: names.en || name, ar: names.ar || name }, channelUrl: { en: page('en'), ar: page('ar') }, items: {} };
 	const db = env.SEARCH_DB as D1Database | undefined;
 	if (!db) return preview;
-	const filters: Array<[SocialEvent, string]> = [
-		['video', 'AND is_short = 0 AND is_live = 0'],
-		['short', 'AND is_short = 1'],
-		['live', 'AND is_live = 1'],
-	];
-	const lists = await Promise.all([
-		...filters.map(([, filter]) =>
-			db.prepare(`SELECT id FROM search_videos WHERE channel_id = ? AND visible = 1 ${filter} ORDER BY created_at DESC LIMIT ?`).bind(channelId, PREVIEW_ROWS).all<{ id: string }>(),
-		),
+	const videoIds = (filter: string) =>
+		db.prepare(`SELECT id FROM search_videos WHERE channel_id = ? AND visible = 1 ${filter} ORDER BY created_at DESC LIMIT ?`).bind(channelId, PREVIEW_ROWS).all<{ id: string }>();
+	// Live: the channel's newest streams that aired (live_sessions, through the owner index; owner_id is the channel
+	// owner), loaded the way the sender loads a live event, so the preview links to the live page as the post does
+	const ownerId = channel.userId;
+	const liveIds = ownerId
+		? db
+				.prepare(
+					"SELECT stream_id AS id, MAX(created_at) AS at FROM live_sessions WHERE owner_id = ? AND channel_id = ? AND is_test = 0 AND status IN ('live', 'ended') GROUP BY stream_id ORDER BY at DESC LIMIT ?",
+				)
+				.bind(ownerId, channelId, PREVIEW_ROWS)
+				.all<{ id: string }>()
+		: Promise.resolve({ results: [] as { id: string }[] });
+	const [videos, shorts, lives, posts] = await Promise.all([
+		videoIds('AND is_short = 0 AND is_live = 0'),
+		videoIds('AND is_short = 1'),
+		liveIds.catch((error: unknown) => {
+			logger.warn('[Social] Live preview lookup failed', { channelId, error: error instanceof Error ? error.message : String(error) });
+			return { results: [] as { id: string }[] };
+		}),
 		db.prepare('SELECT id FROM search_posts WHERE channel_id = ? AND visible = 1 ORDER BY created_at DESC LIMIT ?').bind(channelId, PREVIEW_ROWS).all<{ id: string }>(),
 	]);
-	const events: SocialEvent[] = ['video', 'short', 'live', 'post'];
+	const lists: Array<[SocialEvent, { id: string }[]]> = [
+		['video', videos.results ?? []],
+		['short', shorts.results ?? []],
+		['live', lives.results ?? []],
+		['post', posts.results ?? []],
+	];
 	await Promise.all(
-		events.map(async (event, i) => {
-			for (const { id } of lists[i]!.results ?? []) {
-				const content = await loadSocialContent(env, channelId, event === 'post' ? 'post' : event === 'short' ? 'short' : 'video', id, { playable: false });
+		lists.map(async ([event, rows]) => {
+			for (const { id } of rows) {
+				const content = await loadSocialContent(env, channelId, event, id, { playable: false });
 				if (!content) continue;
 				preview.items[event] = { title: content.title, url: content.url, ...(content.text ? { text: content.text } : {}) };
 				return;
