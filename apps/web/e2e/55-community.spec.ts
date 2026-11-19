@@ -171,7 +171,7 @@ test.describe('Post manager', () => {
     const marker = tempName('Text');
     try {
       await openNewPost(page);
-      await expect(page.getByRole('heading', { level: 2, name: 'New Post' })).toBeVisible();
+      await expect(page.getByRole('heading', { level: 2, name: 'New post' })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Publish' })).toBeDisabled();
       await expect(page.getByRole('button', { name: 'Save Draft' })).toHaveCount(0);
 

@@ -503,15 +503,15 @@ export default function PostForm({ locale, channelId, post }: PostFormProps) {
 
                 {/* The site's on/off switch (a toggle, not an Enabled/Disabled button) */}
                 <div className="flex items-center justify-between gap-3">
-                  <Label id="community-post-comments-label" htmlFor="community-post-comments" className="text-sm md:text-base">
+                  <Label id="community-post-allow-label" htmlFor="community-post-allow" className="text-sm md:text-base">
                     {t.studio.postForm.allowComments}
                   </Label>
                   <Switch
-                    id="community-post-comments"
-                    aria-labelledby="community-post-comments-label"
+                    id="community-post-allow"
+                    aria-labelledby="community-post-allow-label"
                     checked={commentsEnabled}
                     onCheckedChange={setCommentsEnabled}
-                    data-testid="community-post-comments"
+                    data-testid="community-post-allow"
                   />
                 </div>
               </div>

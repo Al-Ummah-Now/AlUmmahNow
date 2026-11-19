@@ -13,7 +13,7 @@ import { target } from './targets';
 test.use({ trace: 'off', video: 'off' });
 
 const UI = {
-  en: { content: 'Content', edit: 'Edit', del: 'Delete', saved: 'Saved.', general: 'General', owned: 'You own this channel.', team: 'Team', permissions: 'Permissions', newPost: 'New Post', editPost: 'Edit post' },
+  en: { content: 'Content', edit: 'Edit', del: 'Delete', saved: 'Saved.', general: 'General', owned: 'You own this channel.', team: 'Team', permissions: 'Permissions', newPost: 'New post', editPost: 'Edit post' },
   ar: { content: 'المحتوى', edit: 'تعديل', del: 'حذف', saved: 'تم الحفظ.', general: 'عام', owned: 'أنت مالك هذه القناة.', team: 'الفريق', permissions: 'الأذونات', newPost: 'منشور جديد', editPost: 'تعديل المنشور' },
 } as const;
 

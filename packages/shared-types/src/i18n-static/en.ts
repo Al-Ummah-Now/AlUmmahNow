@@ -1421,7 +1421,7 @@ export const EN_TRANSLATIONS: AppTranslations = {
     articleManagedInCms: 'This article is edited in the CMS.',
     community: 'Community',
     managePosts: 'Manage Posts',
-    newPost: 'New Post',
+    newPost: 'New post',
     searchPosts: 'Search posts...',
     allTypes: 'All Types',
     filterByType: 'Filter by type',

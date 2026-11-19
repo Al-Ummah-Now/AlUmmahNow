@@ -35,7 +35,11 @@ function sameState(a: ChannelCommentRow | null, b: ChannelCommentRow): boolean {
 export function postTitle(post: Partial<CommunityPost> & { title?: unknown }): string {
 	if (typeof post.title === 'string' && post.title.trim()) return post.title.trim();
 	const text = (typeof post.content === 'string' ? post.content : '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-	return text.length > 80 ? `${text.slice(0, 79)}…` : text;
+	if (text.length <= 80) return text;
+	// An excerpt ends on a whole word (never "…the new ser…"), unless the first word is longer than the excerpt
+	const cut = text.slice(0, 80);
+	const space = cut.lastIndexOf(' ');
+	return `${(space > 40 ? cut.slice(0, space) : cut.slice(0, 79)).replace(/[\s,.;:!?،؛]+$/u, '')}…`;
 }
 
 interface Loaded {

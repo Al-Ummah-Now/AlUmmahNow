@@ -80,7 +80,7 @@ export const STUDIO_EN = {
     saveFailed: 'The post could not be saved. Try again.',
     notFound: 'This post was not found.',
     lockedFields: 'A post\'s type, poll or quiz options and media can\'t be changed after it\'s published. You can change its text, visibility and comments.',
-    back: 'Back to Posts',
+    back: 'Back to posts',
     statusLabel: 'Post status',
     deleted: 'Post deleted.',
   },
