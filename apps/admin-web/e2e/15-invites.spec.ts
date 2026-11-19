@@ -22,7 +22,7 @@ import type { Page, TestInfo } from '@playwright/test';
 import { test, expect } from './support/fixtures';
 import { adminApi } from './support/api';
 import { OPENAUTH_URL, RUN_ID, RUN_TAG, VIDEOS_API_URL, WEB_APP_URL, runAccountName, runPassword, runUserEmail } from './support/env';
-import { purgeChannel, recordRunAccount } from './support/cleanup';
+import { eraseVideosDataWithToken, purgeChannel, recordRunAccount } from './support/cleanup';
 import { fillSecret } from './support/secret-fill';
 
 const SINK_SECRET = process.env.E2E_CODE_SINK_SECRET ?? '';
@@ -34,7 +34,8 @@ const CHANNEL = `e2e-admin-invite ${RUN_TAG} ${stamp}`;
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-const state: { userId?: string; inviteId?: string; channelId?: string; link?: string } = {};
+/** `token`: the invited account's access token while it is signed in (it has no password for the teardown to sign in with) */
+const state: { userId?: string; inviteId?: string; channelId?: string; link?: string; token?: string } = {};
 
 async function sinkCode(email: string, timeoutMs = 30_000): Promise<string> {
   const deadline = Date.now() + timeoutMs;
@@ -59,14 +60,17 @@ async function shot(page: Page, testInfo: TestInfo, name: string) {
 }
 
 test.describe('invite creators', () => {
-  // Pass or fail: the channel deleted and purged, the invite revoked and purged; the account itself
-  // is erased and deleted by the global teardown (recorded above)
+  // Pass or fail: the channel deleted and purged, the invite revoked and purged. The account is
+  // deleted by the global teardown (recorded above). Its videos data is erased here while we still
+  // hold its token: an invited account signs in straight from the link with no password, so the
+  // teardown's password sign-in cannot reach it (#1611)
   test.afterAll(async () => {
     if (state.channelId) await purgeChannel(state.channelId);
     if (state.inviteId) {
       await adminApi(`/api/invites/${state.inviteId}/revoke`, { method: 'POST', body: '{}' });
       await adminApi(`/api/invites/${state.inviteId}/purge`, { method: 'POST', body: JSON.stringify({ confirm: EMAIL }) });
     }
+    if (state.token) await eraseVideosDataWithToken(state.token, EMAIL);
   });
 
   test.beforeAll(async ({}, testInfo) => {
@@ -175,6 +179,7 @@ test.describe('invite creators', () => {
 
       const token = await page.evaluate(async () => (await (await fetch('/api/auth/token', { credentials: 'same-origin' })).json()) as { accessToken?: string; userId?: string });
       expect(token.userId, 'signed in to the pre-provisioned account').toBe(state.userId);
+      state.token = token.accessToken;
       const channel = await fetch(`${VIDEOS_API_URL}/api/channels/${state.channelId}`, { headers: { Authorization: `Bearer ${token.accessToken}` } });
       expect(channel.status).toBe(200);
       // GET /api/channels/:id answers the channel view itself
