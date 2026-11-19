@@ -9,6 +9,7 @@
 import { test, expect } from './support/fixtures';
 import { adminApi } from './support/api';
 import { RUN_TAG, storageStatePath } from './support/env';
+import { selectOption } from './support/ui';
 
 interface Choices { items: { id: string; hidden?: boolean }[]; defaultTierId?: string }
 const choices = async () => (await adminApi<Choices>('/api/content/creator-tiers?counts=0')).body.result;
@@ -70,7 +71,7 @@ test.describe('hidden tiers', () => {
     expect(hide.status).toBeLessThan(300);
     expect((await choices())?.items.some((t) => t.id === tierId && t.hidden)).toBe(true);
     await page.goto('/users/invites/new');
-    await expect(page.getByTestId('invite-plan').locator(`option[value="${tierId}"]`)).toContainText('(Hidden)');
+    await expect(selectOption(page.getByTestId('invite-plan'), tierId)).toContainText('(Hidden)');
     // The link's days are a text field in the page's digits (Arabic: ١٤), typed in either digit set
     await expect(page.getByTestId('invite-days')).toHaveValue('14');
     await page.getByTestId('invite-days').fill('٣٠');

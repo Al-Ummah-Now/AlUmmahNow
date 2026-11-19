@@ -17,7 +17,7 @@ import { test, expect } from './support/fixtures';
 import { adminApi, readTokens } from './support/api';
 import { RUN_TAG, SHARED_STATE_PROJECT, accounts, storageStatePath } from './support/env';
 import { createVideosProfile } from './support/profiles';
-import { expectDirection, setPreferences } from './support/ui';
+import { expectDirection, setPreferences, selectOption, selectOptions } from './support/ui';
 
 interface Choices { items: { id: string; name: string }[]; defaultTierId?: string }
 interface UsersPage { items: { id: string; email: string | null; creator?: { assignment: { tierId: string } | null } }[] }
@@ -88,7 +88,7 @@ test.describe('default creator tier', () => {
     await page.goto(`/users/${encodeURIComponent(state.userId!)}`);
     const control = page.getByTestId('user-creator-tier-control');
     await expect(control).toHaveAttribute('data-tier', state.userTier!);
-    await expect(control.getByTestId('user-creator-tier-control-select').locator('option[value=""]')).toHaveCount(0); // no "Use default tier": every account has a tier
+    await expect(selectOption(control.getByTestId('user-creator-tier-control-select'), '')).toHaveCount(0); // no "Use default tier": every account has a tier
     await expect(control.getByTestId('user-creator-tier-control-chip')).not.toHaveText('Creator');
 
     // Undo puts the previous default back
@@ -153,8 +153,8 @@ test.describe('default creator tier', () => {
     await expect.poll(order).toEqual(moved);
     // The user page's picker follows the rank
     await page.goto(`/users/${encodeURIComponent(state.userId!)}`);
-    await expect(page.getByTestId('user-creator-tier-control-select').locator('option')).toHaveText(moved.map(() => /.+/));
-    expect(await page.getByTestId('user-creator-tier-control-select').locator('option').evaluateAll((els) => els.map((e) => (e as HTMLOptionElement).value))).toEqual(moved);
+    await expect(selectOptions(page.getByTestId('user-creator-tier-control-select'))).toHaveText(moved.map(() => /.+/));
+    expect(await selectOptions(page.getByTestId('user-creator-tier-control-select')).evaluateAll((els) => els.map((e) => e.getAttribute('data-value') ?? ''))).toEqual(moved);
     await page.goto('/tiers');
     await page.getByTestId('tiers-rank-creator-up').click();
     await page.getByTestId('undo-toast-undo').click();
