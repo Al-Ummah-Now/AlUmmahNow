@@ -11,6 +11,7 @@ import { UserName } from '@/components/audit/UserName';
 import { fillNodes } from '@/components/audit/fill';
 import { parseDigits } from '@al-ummah/shared-types';
 import { NumberField } from '@/components/forms/NumberField';
+import { Select } from '@/components/select/Select';
 
 const MODELS = [
   { id: '@cf/deepseek-ai/deepseek-v4.1-flash-1017', name: 'DeepSeek V4.1 Flash' },
@@ -98,11 +99,11 @@ export function CaptionSettingsView({ view, canManage }: { view: View; canManage
               {(['model', 'fallbackModel'] as const).map((key) => (
                 <div key={key}>
                   <label className="block text-sm font-medium text-fg" htmlFor={`${ids}-${key}`}>{t(key === 'model' ? 'captionSettings.model' : 'captionSettings.fallbackModel')}</label>
-                  <select id={`${ids}-${key}`} className={`${fieldClass} mt-1 w-full`} value={form.translation[key]} onChange={(e) => setTranslation({ [key]: e.target.value })} data-testid={`translation-${key}`}>
+                  <Select id={`${ids}-${key}`} className={`${fieldClass} mt-1 w-full`} value={form.translation[key]} onChange={(e) => setTranslation({ [key]: e.target.value })} data-testid={`translation-${key}`}>
                     {MODELS.map((m) => (
                       <option key={m.id} value={m.id}>{m.name}</option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
               ))}
             </div>
@@ -319,11 +320,11 @@ function QuranEditions({ editions, canManage }: { editions: View['editions']; ca
             <>
               <div className="min-w-60">
                 <label className="block text-sm font-medium text-fg" htmlFor={`${ids}-edition`}>{t('captionSettings.quranEdition')}</label>
-                <select id={`${ids}-edition`} className={`${fieldClass} mt-1 w-full`} value={choice ?? ''} onChange={(e) => setChoice(Number(e.target.value))} data-testid="quran-edition-select">
+                <Select id={`${ids}-edition`} className={`${fieldClass} mt-1 w-full`} value={choice ?? ''} onChange={(e) => setChoice(Number(e.target.value))} data-testid="quran-edition-select">
                   {choices.map((c) => (
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
-                </select>
+                </Select>
               </div>
               <button type="button" className={primaryButtonClass} disabled={busy || choice === null} onClick={() => choice !== null && run(() => setQuranEdition(language, choice))} data-testid="quran-save">
                 {t('captionSettings.quranSave')}

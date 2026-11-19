@@ -18,6 +18,7 @@ import { ErrorAlert, cardClass, fieldClass, linkClass, primaryButtonClass, secon
 import { logger } from '@/lib/logger-client';
 import { UserName } from '@/components/audit/UserName';
 import { fillNodes } from '@/components/audit/fill';
+import { Select } from '@/components/select/Select';
 
 const ROLE_LABEL: Record<MobileAppRole, MessageKey> = {
   viewer: 'mobileApps.roleViewer',
@@ -187,7 +188,7 @@ export function MobileAppsForm({ state, history, canEdit, siteUrl }: { state: Mo
             <ul className="space-y-2" aria-labelledby={`${ids}-bundles`} data-testid="mobile-apps-bundle-list">
               {draft.apple.map((app, i) => (
                 <li key={i} className="flex flex-wrap items-start gap-2">
-                  <select
+                  <Select
                     className={`${fieldClass} min-w-0 flex-1 sm:flex-none sm:w-40`}
                     value={app.role}
                     aria-label={t('mobileApps.appRole')}
@@ -196,7 +197,7 @@ export function MobileAppsForm({ state, history, canEdit, siteUrl }: { state: Mo
                     {MOBILE_APP_ROLES.map((r) => (
                       <option key={r} value={r}>{t(ROLE_LABEL[r])}</option>
                     ))}
-                  </select>
+                  </Select>
                   <div className="min-w-0 basis-full order-last sm:order-none sm:basis-0 sm:flex-1">
                     <input
                       className={`${fieldClass} w-full font-mono`}
@@ -255,7 +256,7 @@ export function MobileAppsForm({ state, history, canEdit, siteUrl }: { state: Mo
             {draft.android.map((app, i) => (
               <li key={i} className="rounded border border-border p-4">
                 <div className="flex flex-wrap items-start gap-2">
-                  <select
+                  <Select
                     className={`${fieldClass} min-w-0 flex-1 sm:flex-none sm:w-40`}
                     value={app.role}
                     aria-label={t('mobileApps.appRole')}
@@ -264,7 +265,7 @@ export function MobileAppsForm({ state, history, canEdit, siteUrl }: { state: Mo
                     {MOBILE_APP_ROLES.map((r) => (
                       <option key={r} value={r}>{t(ROLE_LABEL[r])}</option>
                     ))}
-                  </select>
+                  </Select>
                   <input
                     className={`${fieldClass} min-w-0 basis-full order-last sm:order-none sm:basis-0 sm:flex-1 font-mono`}
                     value={app.packageName}

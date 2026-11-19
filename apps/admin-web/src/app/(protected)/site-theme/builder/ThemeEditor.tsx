@@ -18,6 +18,7 @@ import { partContrast, roleContrast, traceIssues } from './contrast';
 import { ColorField, CssValueField, IssueText, LengthInput } from './fields';
 import { Preview } from './Preview';
 import { formatUnit } from '@al-ummah/shared-types';
+import { Select } from '@/components/select/Select';
 
 type Section = 'general' | 'colours' | 'components' | 'materials' | 'typography' | 'imagery' | 'assets';
 const SECTIONS: [Section, MessageKey][] = [
@@ -267,9 +268,9 @@ export function ThemeEditor({ initial, assets: initialAssets, latestVersion: ini
           {section === 'components' && (
             <div>
               <label className="block text-sm text-fg mb-2">{t('themeBuilder.component')}
-                <select className={`${fieldClass} w-full mt-1`} value={component} onChange={(e) => setComponent(e.target.value)} data-testid="component-select">
+                <Select className={`${fieldClass} w-full mt-1`} value={component} onChange={(e) => setComponent(e.target.value)} data-testid="component-select">
                   {componentNames.map((c) => <option key={c} value={c}>{t(`themeBuilder.components.${c}` as MessageKey)}</option>)}
-                </select>
+                </Select>
               </label>
               {COMPONENT_PARTS[component] && (
                 <>
@@ -357,7 +358,7 @@ export function ThemeEditor({ initial, assets: initialAssets, latestVersion: ini
               {(theme.typography.faces ?? []).map((f, i) => (
                 <div key={i} className="flex flex-wrap items-center gap-2 text-xs" dir="ltr">
                   <input className={`${fieldClass} !py-1 w-36`} readOnly={readOnly} value={f.family} onChange={(e) => update(['typography', 'faces', i, 'family'], e.target.value)} aria-label={t('themeBuilder.family')} />
-                  <select className={`${fieldClass} !py-1`} disabled={readOnly} value={f.weight} onChange={(e) => update(['typography', 'faces', i, 'weight'], Number(e.target.value))} aria-label={t('themeBuilder.weight')}>{[300, 400, 500, 600, 700, 800].map((w) => <option key={w}>{w}</option>)}</select>
+                  <Select className={`${fieldClass} !py-1`} disabled={readOnly} value={f.weight} onChange={(e) => update(['typography', 'faces', i, 'weight'], Number(e.target.value))} aria-label={t('themeBuilder.weight')}>{[300, 400, 500, 600, 700, 800].map((w) => <option key={w}>{w}</option>)}</Select>
                   <code>{f.src}</code>
                   {canEdit && <button type="button" className="underline" onClick={() => update(['typography', 'faces'], (theme.typography.faces ?? []).filter((_, j) => j !== i))}>{t('themeBuilder.remove')}</button>}
                 </div>
@@ -381,11 +382,11 @@ export function ThemeEditor({ initial, assets: initialAssets, latestVersion: ini
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-mono text-fg" dir="ltr">{key}</p>
-                      <select className={`${fieldClass} !py-1 w-full text-xs`} disabled={readOnly} value={raw ?? ''} onChange={(e) => update(path, e.target.value || undefined)} dir="ltr">
+                      <Select className={`${fieldClass} !py-1 w-full text-xs`} disabled={readOnly} value={raw ?? ''} onChange={(e) => update(path, e.target.value || undefined)} dir="ltr">
                         <option value="">{t('themeBuilder.noFile')}</option>
                         {slot === 'pattern' && <option value="none">none</option>}
                         {assets.map((a) => <option key={a.path} value={a.path}>{a.path}</option>)}
-                      </select>
+                      </Select>
                       <IssueText messages={errorsAt(`imagery.${key}`)} />
                     </div>
                     {canEdit && <button type="button" className="text-xs underline text-fg" disabled={pending} onClick={() => chooseFile(accept, (p) => update(path, p))} data-testid={`image-upload-${key}`}>{t('themeBuilder.upload')}</button>}
@@ -422,9 +423,9 @@ function FontSelect({ value, faces, onChange, readOnly, testId }: { value: strin
   const primary = value[0] ?? 'system-ui';
   return (
     <div className="flex gap-2 mt-1">
-      <select className={`${fieldClass} flex-1`} disabled={readOnly} value={primary} onChange={(e) => onChange([e.target.value, ...value.slice(1).filter((f) => f !== e.target.value)])} data-testid={testId} dir="ltr" style={{ fontFamily: primary }}>
+      <Select className={`${fieldClass} flex-1`} disabled={readOnly} value={primary} onChange={(e) => onChange([e.target.value, ...value.slice(1).filter((f) => f !== e.target.value)])} data-testid={testId} dir="ltr" style={{ fontFamily: primary }}>
         {families.map((f) => <option key={f} value={f} style={{ fontFamily: f }}>{f}</option>)}
-      </select>
+      </Select>
       <input className={`${fieldClass} flex-1 text-xs font-mono`} dir="ltr" readOnly={readOnly} value={value.join(', ')} onChange={(e) => onChange(e.target.value.split(',').map((s) => s.trim()).filter(Boolean))} aria-label={testId} />
     </div>
   );

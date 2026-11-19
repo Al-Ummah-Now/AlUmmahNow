@@ -25,6 +25,7 @@ import { AssigneePicker } from './AssigneePicker';
 import { UserName } from '@/components/audit/UserName';
 import { EmailText } from '@/components/EmailText';
 import { CONTACT_STATUSES, CONTACT_VIEWS, activeContactView, contactHref, type ContactInboxFilters, type ContactViewId } from './filters';
+import { Select } from '@/components/select/Select';
 
 const smallButton =
   'px-3 py-2 rounded border border-border bg-surface-2 hover:bg-surface-hover text-fg text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-60';
@@ -312,13 +313,13 @@ export function ContactInbox({ messages, filters, viewerId, canManage, counts }:
             <label htmlFor="contact-bulk-status" className="sr-only">
               {t('contact.changeStatus')}
             </label>
-            <select id="contact-bulk-status" value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value as ContactStatus)} className={fieldClass} data-testid="contact-bulk-status">
+            <Select id="contact-bulk-status" value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value as ContactStatus)} className={fieldClass} data-testid="contact-bulk-status">
               {CONTACT_STATUSES.map((s) => (
                 <option key={s} value={s}>
                   {statusLabel(s)}
                 </option>
               ))}
-            </select>
+            </Select>
             <button type="button" className={smallButton} disabled={!!busy} onClick={() => apply('status', { status: bulkStatus })} data-testid="contact-bulk-status-apply">
               {t('contact.setStatus')}
             </button>

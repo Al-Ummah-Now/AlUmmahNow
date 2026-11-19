@@ -21,6 +21,7 @@ import { getI18n } from '@/i18n/server';
 import { formatDate, type MessageKey, type Translator } from '@/i18n/translate';
 import { ErrorAlert, cardClass, fieldClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
+import { Select } from '@/components/select/Select';
 
 export const dynamic = 'force-dynamic';
 
@@ -97,27 +98,27 @@ export default async function WebVitalsPage({ searchParams }: PageProps) {
       <form method="get" className="mb-6 flex flex-wrap items-end gap-3" data-testid="vitals-filters">
         <label className="flex flex-col gap-1 text-sm text-fg">
           {t('vitalsPage.environment')}
-          <select name="env" defaultValue={env} className={fieldClass} data-testid="vitals-env">
+          <Select name="env" defaultValue={env} className={fieldClass} data-testid="vitals-env">
             {VITALS_ENVS.map((e) => (
               <option key={e} value={e}>{e}</option>
             ))}
-          </select>
+          </Select>
         </label>
         <label className="flex flex-col gap-1 text-sm text-fg">
           {t('vitalsPage.window')}
-          <select name="days" defaultValue={String(days)} className={fieldClass} data-testid="vitals-days">
+          <Select name="days" defaultValue={String(days)} className={fieldClass} data-testid="vitals-days">
             {VITALS_DAYS.map((d) => (
               <option key={d} value={d}>{t(`vitalsPage.days${d}` as MessageKey)}</option>
             ))}
-          </select>
+          </Select>
         </label>
         <label className="flex flex-col gap-1 text-sm text-fg">
           {t('vitalsPage.language')}
-          <select name="locale" defaultValue={siteLocale} className={fieldClass} data-testid="vitals-locale">
+          <Select name="locale" defaultValue={siteLocale} className={fieldClass} data-testid="vitals-locale">
             {VITALS_LOCALES.map((l) => (
               <option key={l} value={l}>{t(`vitalsPage.locales.${l}` as MessageKey)}</option>
             ))}
-          </select>
+          </Select>
         </label>
         <button type="submit" className={secondaryButtonClass}>{t('vitalsPage.show')}</button>
       </form>

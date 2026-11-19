@@ -26,6 +26,7 @@ import { ITEM_STATES, ITEM_STATE_LABEL, ITEM_TONE, RUN_STATUS_LABEL, RUN_TONE, S
 import { useFormats } from './useFormats';
 import { useNames } from '@/components/audit/useNames';
 import { NumberField } from '@/components/forms/NumberField';
+import { Select } from '@/components/select/Select';
 
 const POLL_MS = 5000;
 
@@ -279,10 +280,10 @@ export function RunPanel({ initial }: { initial: BackfillRun }) {
             )}
             <label htmlFor={ids.filter} className="flex flex-col gap-1 text-sm text-fg-muted">
               {t('mediaBackfill.filter')}
-              <select id={ids.filter} value={filter} onChange={(e) => setFilter(e.target.value as BackfillItemState | '')} className={fieldClass} data-testid="backfill-filter">
+              <Select id={ids.filter} value={filter} onChange={(e) => setFilter(e.target.value as BackfillItemState | '')} className={fieldClass} data-testid="backfill-filter">
                 <option value="">{t('mediaBackfill.filterAll')}</option>
                 {ITEM_STATES.map((s) => <option key={s} value={s}>{t(ITEM_STATE_LABEL[s])}</option>)}
-              </select>
+              </Select>
             </label>
           </div>
         </div>

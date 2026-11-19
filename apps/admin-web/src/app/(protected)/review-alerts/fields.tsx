@@ -9,6 +9,7 @@ import { useId, useMemo, useRef, useState } from 'react';
 import { useLanguage } from '@/i18n/I18nProvider';
 import { fieldClass } from '@/components/ui';
 import { matchZones, zoneOption, zoneOptions } from './timezones';
+import { Select } from '@/components/select/Select';
 
 /** Shown at once; typing narrows the rest. */
 const MAX_SHOWN = 60;
@@ -158,23 +159,23 @@ export function TimeField({ label, value, onChange }: { label: string; value: st
       </span>
       {/* Hours then minutes, left to right in both languages, as times are written */}
       <div role="group" aria-labelledby={`${ids}-label`} dir="ltr" className="flex items-center gap-1">
-        <select className={select} aria-label={`${label}: ${t('reviewAlerts.hour')}`} value={h} onChange={(e) => onChange(`${e.target.value}:${m}`)}>
+        <Select className={select} aria-label={`${label}: ${t('reviewAlerts.hour')}`} value={h} onChange={(e) => onChange(`${e.target.value}:${m}`)}>
           {HOURS.map((v) => (
             <option key={v} value={v}>
               {v}
             </option>
           ))}
-        </select>
+        </Select>
         <span aria-hidden="true" className="text-fg-muted">
           :
         </span>
-        <select className={select} aria-label={`${label}: ${t('reviewAlerts.minute')}`} value={m} onChange={(e) => onChange(`${h}:${e.target.value}`)}>
+        <Select className={select} aria-label={`${label}: ${t('reviewAlerts.minute')}`} value={m} onChange={(e) => onChange(`${h}:${e.target.value}`)}>
           {minutes.map((v) => (
             <option key={v} value={v}>
               {v}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ import { formatDate, formatNumber, translateDynamic } from '@/i18n/translate';
 import { ErrorAlert, cardClass, fieldClass, linkClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger';
 import { formatFixed, formatMoney } from '@al-ummah/shared-types';
+import { Select } from '@/components/select/Select';
 
 export const dynamic = 'force-dynamic';
 
@@ -64,14 +65,14 @@ export default async function AiModerationPage({ searchParams }: PageProps) {
   const select = (name: string, label: string, value: string | undefined, options: readonly string[], prefix: string, anyValue = '') => (
     <label className="flex flex-col gap-1 text-sm text-fg-muted">
       {label}
-      <select name={name} defaultValue={value ?? anyValue} className={fieldClass}>
+      <Select name={name} defaultValue={value ?? anyValue} className={fieldClass}>
         <option value={anyValue}>{t('ai.any')}</option>
         {options.map((o) => (
           <option key={o} value={o}>
             {translateDynamic(t, prefix, o)}
           </option>
         ))}
-      </select>
+      </Select>
     </label>
   );
 

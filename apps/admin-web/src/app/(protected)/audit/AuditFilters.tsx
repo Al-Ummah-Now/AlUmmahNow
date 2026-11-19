@@ -14,6 +14,7 @@ import type { MessageKey } from '@/i18n/translate';
 import { fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { actionLabel } from '@/components/audit/audit-model';
 import { DateField } from '@/components/DateField';
+import { Select } from '@/components/select/Select';
 
 export interface AuditFilterValues {
   actorId?: string;
@@ -55,14 +56,14 @@ export function AuditFilters({ values, actions, actorItem, targetItem }: { value
           <label htmlFor="audit-item-kind" className={labelClass}>
             {t('auditLog.itemKind')}
           </label>
-          <select id="audit-item-kind" name={kind ? 'itemKind' : undefined} value={kind} onChange={(e) => setKind(e.target.value as AdminAuditItemKind | '')} className={`${fieldClass} w-full`} data-testid="audit-item-kind">
+          <Select id="audit-item-kind" name={kind ? 'itemKind' : undefined} value={kind} onChange={(e) => setKind(e.target.value as AdminAuditItemKind | '')} className={`${fieldClass} w-full`} data-testid="audit-item-kind">
             <option value="">{t('auditLog.itemAny')}</option>
             {ADMIN_AUDIT_ITEM_KINDS.map((k) => (
               <option key={k} value={k}>
                 {t(`auditLog.kinds.${k}` as MessageKey)}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
         <div>
           {kind ? (
@@ -91,27 +92,27 @@ export function AuditFilters({ values, actions, actorItem, targetItem }: { value
           <label htmlFor="audit-area" className={labelClass}>
             {t('auditLog.area')}
           </label>
-          <select id="audit-area" name={area ? 'area' : undefined} value={area} onChange={(e) => setArea(e.target.value as AdminAuditArea | '')} className={`${fieldClass} w-full`} data-testid="audit-area">
+          <Select id="audit-area" name={area ? 'area' : undefined} value={area} onChange={(e) => setArea(e.target.value as AdminAuditArea | '')} className={`${fieldClass} w-full`} data-testid="audit-area">
             <option value="">{t('auditLog.areaAny')}</option>
             {ADMIN_AUDIT_AREAS.map((a) => (
               <option key={a} value={a}>
                 {t(`auditLog.areas.${a}` as MessageKey)}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
         <div>
           <label htmlFor="audit-action" className={labelClass}>
             {t('auditLog.action')}
           </label>
-          <select id="audit-action" name="action" defaultValue={values.action ?? ''} className={`${fieldClass} w-full`} data-testid="audit-action">
+          <Select id="audit-action" name="action" defaultValue={values.action ?? ''} className={`${fieldClass} w-full`} data-testid="audit-action">
             <option value="">{t('auditLog.actionAny')}</option>
             {options.map((a) => (
               <option key={a.action} value={a.action}>
                 {actionLabel(a.action, t)}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
         <div>
           <label htmlFor="audit-from" className={labelClass}>

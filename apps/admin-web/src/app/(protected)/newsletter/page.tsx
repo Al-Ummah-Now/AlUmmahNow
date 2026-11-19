@@ -10,6 +10,7 @@ import { getNewsletterIssue, listNewsletterIssues, listNewsletterSubscribers } f
 import type { IssueList, NewsletterIssue, SubscriberCounts, SubscriberList, SubscriberStatus } from '@/lib/api/newsletter-types';
 import { EraseSubscriberButton, IssueEditor } from './NewsletterAdmin';
 import { numberFormat } from '@al-ummah/shared-types';
+import { Select } from '@/components/select/Select';
 
 export const dynamic = 'force-dynamic';
 
@@ -192,10 +193,10 @@ export default async function NewsletterPage({ searchParams }: PageProps) {
             </div>
             <div>
               <label htmlFor="newsletter-status" className="block text-sm font-medium text-fg mb-1">{t('newsletter.cols.status')}</label>
-              <select id="newsletter-status" name="status" defaultValue={status ?? ''} className={fieldClass} data-testid="newsletter-status">
+              <Select id="newsletter-status" name="status" defaultValue={status ?? ''} className={fieldClass} data-testid="newsletter-status">
                 <option value="">{t('newsletter.allStatuses')}</option>
                 {STATUSES.map((s) => <option key={s} value={s}>{t(`newsletter.statuses.${s}`)}</option>)}
-              </select>
+              </Select>
             </div>
             <button type="submit" className={`${secondaryButtonClass} !py-2`}>{t('newsletter.apply')}</button>
           </form>

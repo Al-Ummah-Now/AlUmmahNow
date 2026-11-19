@@ -16,6 +16,7 @@ import { translateDynamic, type Translator } from '@/i18n/translate';
 import { categoryLabel, type CategoryOption } from '@/lib/category-label';
 import { ErrorAlert, fieldClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
+import { Select } from '@/components/select/Select';
 
 const pct = (confidence: number | null) => (confidence === null ? null : Math.round(confidence * 100));
 
@@ -112,14 +113,14 @@ export function CategorySuggestionsReview({
           )}
           <label className="flex flex-col gap-1 text-sm text-fg-muted">
             {t('categorySuggestions.changeTo')}
-            <select value={target} onChange={(e) => setTarget(e.target.value)} className={fieldClass} data-testid="category-change-select">
+            <Select value={target} onChange={(e) => setTarget(e.target.value)} className={fieldClass} data-testid="category-change-select">
               <option value="">—</option>
               {categories.filter((c) => !c.retired).map((c) => (
                 <option key={c.value} value={c.value}>
                   {c.label[locale] ?? c.label.en}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <button
             type="button"

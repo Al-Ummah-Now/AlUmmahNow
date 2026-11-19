@@ -14,6 +14,7 @@
 import { test, expect } from './support/fixtures';
 import { adminApi, readTokens } from './support/api';
 import { ADMIN_WEB_URL, RUN_TAG, storageStatePath } from './support/env';
+import { pickOption } from './support/ui';
 
 /** Local stack only (placement.ts): on a deployed target this would change what every app build gets. */
 const LOCAL_STACK = /^https?:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/.test(ADMIN_WEB_URL);
@@ -82,11 +83,11 @@ test.describe('remote config', () => {
 
     // Try it before saving: the drafts decide, not what is stored
     const dry = page.getByTestId('app-config-dry-run');
-    await dry.getByTestId('app-config-dry-platform').selectOption('ios');
+    await pickOption(dry.getByTestId('app-config-dry-platform'), 'ios');
     await dry.getByTestId('app-config-dry-version').fill('2.1.0');
     await dry.getByTestId('app-config-dry-run-submit').click();
     await expect(dry.locator(`[data-testid="app-config-dry-flags"] [data-key="${flagKey}"] dd`)).toHaveAttribute('data-value', 'true');
-    await dry.getByTestId('app-config-dry-platform').selectOption('android');
+    await pickOption(dry.getByTestId('app-config-dry-platform'), 'android');
     await dry.getByTestId('app-config-dry-run-submit').click();
     await expect(dry.locator(`[data-testid="app-config-dry-flags"] [data-key="${flagKey}"] dd`)).toHaveAttribute('data-value', 'false');
 

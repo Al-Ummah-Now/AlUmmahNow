@@ -7,6 +7,7 @@ import { useLanguage } from '@/i18n/I18nProvider';
 import { fieldClass } from '@/components/ui';
 import type { ContrastCheck } from './contrast';
 import { formatFixed } from '@al-ummah/shared-types';
+import { Select } from '@/components/select/Select';
 
 const ROLE_REFS = BASE.roles.map((r) => `{color.${r.name}}`);
 const BRAND_REFS = BRAND_NAMES.map((n) => `{brand.${n}}`);
@@ -52,10 +53,10 @@ export function ColorField({ label, value, onChange, theme, mode, checks = [], e
           : <span aria-hidden="true" className="h-8 w-10 rounded border border-dashed border-danger-border" />}
         <label htmlFor={id} className="text-sm text-fg min-w-[9rem] font-mono" dir="ltr">{label}</label>
         <input id={id} dir="ltr" value={value} readOnly={readOnly} onChange={(e) => onChange(e.target.value.trim())} className={`${fieldClass} !py-1 text-sm font-mono w-44`} data-testid={testId ? `${testId}-text` : undefined} />
-        <select aria-label={allowRoleRefs ? t('themeBuilder.linkTo') : t('themeBuilder.linkToBrand')} disabled={readOnly} value={isRef ? value : ''} onChange={(e) => e.target.value && onChange(e.target.value)} className={`${fieldClass} !py-1 text-xs w-40`} dir="ltr">
+        <Select aria-label={allowRoleRefs ? t('themeBuilder.linkTo') : t('themeBuilder.linkToBrand')} disabled={readOnly} value={isRef ? value : ''} onChange={(e) => e.target.value && onChange(e.target.value)} className={`${fieldClass} !py-1 text-xs w-40`} dir="ltr">
           <option value="">{allowRoleRefs ? t('themeBuilder.linkTo') : t('themeBuilder.linkToBrand')}</option>
           {(allowRoleRefs ? [...ROLE_REFS, ...BRAND_REFS] : BRAND_REFS).map((r) => <option key={r} value={r}>{r}</option>)}
-        </select>
+        </Select>
         <ContrastBadge checks={checks} />
         {note && <span className="text-[11px] text-fg-muted" data-testid={testId ? `${testId}-note` : undefined}>{note}</span>}
       </div>
@@ -119,9 +120,9 @@ function TokenColor({ value, onChange }: { value: { ref: string; alpha: number }
   const { t } = useLanguage();
   return (
     <span className="inline-flex items-center gap-1">
-      <select value={value.ref} onChange={(e) => onChange({ ...value, ref: e.target.value })} className={`${fieldClass} !py-0.5 text-xs w-44`} dir="ltr">
+      <Select value={value.ref} onChange={(e) => onChange({ ...value, ref: e.target.value })} className={`${fieldClass} !py-0.5 text-xs w-44`} dir="ltr">
         {[...ROLE_REFS, ...BRAND_REFS, 'transparent', 'black', 'white'].map((r) => <option key={r} value={r}>{r}</option>)}
-      </select>
+      </Select>
       <input type="range" min={0} max={100} value={value.alpha} onChange={(e) => onChange({ ...value, alpha: Number(e.target.value) })} aria-label={t('themeBuilder.opacity')} className="w-20" />
       <span className={small}>{value.alpha}%</span>
     </span>

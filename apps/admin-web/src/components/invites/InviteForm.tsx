@@ -21,6 +21,7 @@ import { Notice, SectionCard, smallButtonClass } from '@/components/content/part
 import { EmailLanguageChoice, type EmailLanguage } from '@/components/EmailLanguageChoice';
 import { localizeDigits, parseDigits } from '@al-ummah/shared-types';
 import { tierLabel } from '@/lib/creator-tiers';
+import { Select } from '@/components/select/Select';
 
 /** One @, something before it, a dotted domain after it, no spaces; linear time (no backtracking regex). */
 function isEmailAddress(value: string): boolean {
@@ -185,11 +186,11 @@ export function InviteForm({ tiers, defaultTierId, canPlan, canCreateChannels, c
             <div className="flex flex-col gap-1">
               <label htmlFor={`${ids}-plan`} className="text-sm text-fg-muted">{t('invites.plan')}</label>
               {/* Without creators:manage only the default can be given: shown, not changeable */}
-              <select id={`${ids}-plan`} value={tierId} onChange={(e) => setTierId(e.target.value)} disabled={!canPlan} aria-describedby={`${ids}-plan-hint`} className={fieldClass} data-testid="invite-plan">
+              <Select id={`${ids}-plan`} value={tierId} onChange={(e) => setTierId(e.target.value)} disabled={!canPlan} aria-describedby={`${ids}-plan-hint`} className={fieldClass} data-testid="invite-plan">
                 {tiers.map((tier) => (
                   <option key={tier.id} value={tier.id}>{tier.hidden ? `${tierLabel(tier, uiLocale)} (${t('creators.hiddenChip')})` : tierLabel(tier, uiLocale)}</option>
                 ))}
-              </select>
+              </Select>
               <span id={`${ids}-plan-hint`} className="text-xs text-fg-subtle">{t('invites.planHint')}</span>
             </div>
           )}

@@ -20,6 +20,7 @@ import { checkSiteSlug, getSite, grantSite, restoreSite, revokeSite, updateSite,
 import { UserName } from '@/components/audit/UserName';
 import { actionLabel } from '@/components/audit/audit-model';
 import { NumberField } from '@/components/forms/NumberField';
+import { Select } from '@/components/select/Select';
 
 const STATUS_KEY: Record<SiteStatus, MessageKey> = {
   setup: 'scholarSites.statusSetup',
@@ -76,11 +77,11 @@ function LimitsFields({ value, onChange, idPrefix }: { value: SiteLimits; onChan
       {num('navigationMax', 'scholarSites.navigationMax')}
       <label className="flex flex-col gap-1 text-sm">
         <span>{t('scholarSites.platformMark')}</span>
-        <select className={fieldClass} value={value.platformMark} data-testid={`${idPrefix}-platformMark`} onChange={(e) => onChange({ ...value, platformMark: e.target.value as SiteLimits['platformMark'] })}>
+        <Select className={fieldClass} value={value.platformMark} data-testid={`${idPrefix}-platformMark`} onChange={(e) => onChange({ ...value, platformMark: e.target.value as SiteLimits['platformMark'] })}>
           <option value="required">{t('scholarSites.platformMarkRequired')}</option>
           <option value="minimal">{t('scholarSites.platformMarkMinimal')}</option>
           <option value="none">{t('scholarSites.platformMarkNone')}</option>
-        </select>
+        </Select>
       </label>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" checked={value.analytics} onChange={(e) => onChange({ ...value, analytics: e.target.checked })} />
@@ -154,7 +155,7 @@ function GrantForm({ onDone }: { onDone: (message: string) => void }) {
       <div className="grid gap-3 sm:grid-cols-3">
         <label className="flex flex-col gap-1 text-sm">
           <span>{t('scholarSites.tier')}</span>
-          <select
+          <Select
             className={fieldClass}
             value={tier}
             data-testid="site-grant-tier"
@@ -166,7 +167,7 @@ function GrantForm({ onDone }: { onDone: (message: string) => void }) {
           >
             <option value="white-label">{t('scholarSites.tierWhiteLabel')}</option>
             <option value="white-label-domain">{t('scholarSites.tierWhiteLabelDomain')}</option>
-          </select>
+          </Select>
         </label>
         <label className="flex flex-col gap-1 text-sm">
           <span>{t('scholarSites.slug')}</span>
@@ -175,12 +176,12 @@ function GrantForm({ onDone }: { onDone: (message: string) => void }) {
         </label>
         <label className="flex flex-col gap-1 text-sm">
           <span>{t('scholarSites.languages')}</span>
-          <select className={fieldClass} value={locales.join(',')} data-testid="site-grant-locales" onChange={(e) => setLocales(e.target.value.split(',') as SiteLocale[])}>
+          <Select className={fieldClass} value={locales.join(',')} data-testid="site-grant-locales" onChange={(e) => setLocales(e.target.value.split(',') as SiteLocale[])}>
             <option value="en,ar">{t('scholarSites.languagesBoth')}</option>
             <option value="ar,en">{t('scholarSites.languagesBothArFirst')}</option>
             <option value="en">{t('scholarSites.languagesEn')}</option>
             <option value="ar">{t('scholarSites.languagesAr')}</option>
-          </select>
+          </Select>
         </label>
       </div>
       <LimitsFields value={limits} onChange={setLimits} idPrefix="site-grant" />

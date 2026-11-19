@@ -12,6 +12,7 @@ import { fieldClass } from '@/components/ui';
 import { dangerButtonClass, smallButtonClass } from '@/components/content/parts';
 import { newVersion, problemsFor, type Problem, type VersionDraft } from './app-config-model';
 import { FieldProblems } from './RuleList';
+import { Select } from '@/components/select/Select';
 
 interface Props {
   drafts: VersionDraft[];
@@ -88,17 +89,17 @@ function VersionCard({ draft: d, n, onChange, onRemove, problems, disabled }: { 
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="flex min-w-0 flex-col gap-1 text-sm">
             <span className="text-fg-muted">{t('appConfig.app')}</span>
-            <select id={`${d.id}-app`} value={d.app} disabled={disabled} onChange={(e) => onChange({ app: e.target.value })} className={`${fieldClass} w-full`} data-testid="app-config-version-app">
+            <Select id={`${d.id}-app`} value={d.app} disabled={disabled} onChange={(e) => onChange({ app: e.target.value })} className={`${fieldClass} w-full`} data-testid="app-config-version-app">
               {APP_CONFIG_APPS.map((a) => (
                 <option key={a} value={a}>
                   {t(`appConfig.appNames.${a}` as MessageKey)}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <label className="flex min-w-0 flex-col gap-1 text-sm">
             <span className="text-fg-muted">{t('appConfig.platform')}</span>
-            <select
+            <Select
               value={d.platform}
               disabled={disabled}
               onChange={(e) => onChange({ platform: e.target.value })}
@@ -113,7 +114,7 @@ function VersionCard({ draft: d, n, onChange, onRemove, problems, disabled }: { 
                   {t(`appConfig.platformNames.${p}` as MessageKey)}
                 </option>
               ))}
-            </select>
+            </Select>
             <FieldProblems problems={platformProblems} id={`${ids}-platform-problem`} />
           </label>
         </div>

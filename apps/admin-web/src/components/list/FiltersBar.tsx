@@ -18,6 +18,7 @@ import { Autocomplete } from '@/components/search/Autocomplete';
 import { fieldClass, linkClass } from '@/components/ui';
 import type { ListChanges, ListValues } from '@/lib/list/params';
 import { DateField, formatDateInput } from '@/components/DateField';
+import { Select } from '@/components/select/Select';
 
 export type { FilterField };
 
@@ -117,14 +118,14 @@ export function FiltersBar({ label, fields, values, onChange, onText, onClear, r
                 {field.label}
               </label>
               {field.kind === 'select' ? (
-                <select id={fieldId} name={field.name} defaultValue={values[field.name] ?? ''} onChange={(e) => onChange({ [field.name]: e.currentTarget.value || undefined })} className={fieldClass} data-testid={`${testId}-${field.name}`}>
+                <Select id={fieldId} name={field.name} defaultValue={values[field.name] ?? ''} onChange={(e) => onChange({ [field.name]: e.currentTarget.value || undefined })} className={fieldClass} data-testid={`${testId}-${field.name}`}>
                   <option value="">{field.allLabel ?? t('content.all')}</option>
                   {field.options.map((o) => (
                     <option key={o.value} value={o.value}>
                       {o.label}
                     </option>
                   ))}
-                </select>
+                </Select>
               ) : (
                 <DateField id={fieldId} name={field.name} defaultValue={values[field.name] ?? ''} onChange={(iso) => onChange({ [field.name]: iso })} />
               )}

@@ -1,5 +1,6 @@
 import { test, expect } from './support/fixtures';
 import { listReports } from './support/api';
+import { pickOption, optionTexts } from './support/ui';
 
 test.describe('moderation queue', () => {
   test('MOD-01 lists a newly filed report with its details and a View link', async ({ page, makeReport }) => {
@@ -20,7 +21,7 @@ test.describe('moderation queue', () => {
     // Own a pending report so the filtered list is never empty (teardowns dismiss e2e reports)
     await makeReport({ label: 'status-filter' });
     await page.goto('/moderation');
-    await page.getByLabel('Status').selectOption('pending');
+    await pickOption(page.getByLabel('Status'), 'pending');
     await expect(page).toHaveURL(/status=pending/);
     await expect(page.getByTestId('report-row').first()).toBeVisible();
     const chips = page.getByTestId('status-chip');
@@ -29,13 +30,13 @@ test.describe('moderation queue', () => {
       await expect(chips.nth(i)).toHaveAttribute('data-status', 'pending');
     }
     // The select keeps showing the active filter after navigation
-    await expect(page.getByLabel('Status')).toHaveValue('pending');
+    await expect(page.getByLabel('Status')).toHaveAttribute('data-value', 'pending');
   });
 
   test('MOD-03 content type filter narrows the list', async ({ page, makeReport }) => {
     await makeReport({ label: 'type', entityType: 'channel' });
     await page.goto('/moderation');
-    await page.getByLabel('Content type').selectOption('channel');
+    await pickOption(page.getByLabel('Content type'), 'channel');
     await expect(page).toHaveURL(/entity_type=channel/);
     const rows = page.getByTestId('report-row');
     await expect(rows.first()).toBeVisible();
@@ -61,12 +62,12 @@ test.describe('moderation queue', () => {
         return inRange ? 'in range' : `page ${shown}, admin-api ${before} before and ${after} after`;
       }, { timeout: 60_000, intervals: [2_000, 5_000] })
       .toBe('in range');
-    await expect(page.getByLabel('Status')).toHaveValue('pending');
-    await expect(page.getByLabel('Content type')).toHaveValue('comment');
+    await expect(page.getByLabel('Status')).toHaveAttribute('data-value', 'pending');
+    await expect(page.getByLabel('Content type')).toHaveAttribute('data-value', 'comment');
     await page.getByRole('link', { name: 'Clear filters' }).click();
     await expect(page).toHaveURL(/\/moderation$/);
-    await expect(page.getByLabel('Status')).toHaveValue('');
-    await expect(page.getByLabel('Content type')).toHaveValue('');
+    await expect(page.getByLabel('Status')).toHaveAttribute('data-value', '');
+    await expect(page.getByLabel('Content type')).toHaveAttribute('data-value', '');
   });
 
   test('MOD-05 filters work from the keyboard via the Apply button', async ({ page, browserName, isMobile }) => {
@@ -117,7 +118,7 @@ test.describe('moderation queue', () => {
     await page.goto('/moderation?status=bogus&entity_type=nope&page=abc');
     await expect(page.getByTestId('reports-error')).toHaveCount(0);
     await expect(page.getByRole('heading', { level: 1, name: 'Moderation Queue' })).toBeVisible();
-    await expect(page.getByLabel('Status')).toHaveValue('');
+    await expect(page.getByLabel('Status')).toHaveAttribute('data-value', '');
     await expect(page.getByTestId('reports-total')).toBeVisible();
   });
 
@@ -129,9 +130,9 @@ test.describe('moderation queue', () => {
 
   test('MOD-09 type filter offers every reportable entity type', async ({ page }) => {
     await page.goto('/moderation');
-    const options = await page.getByLabel('Content type').locator('option').allTextContents();
+    const options = await optionTexts(page.getByLabel('Content type'));
     expect(options).toEqual(['All types', 'Video', 'Comment', 'Channel', 'Live stream', 'Playlist', 'Post']);
-    const statuses = await page.getByLabel('Status').locator('option').allTextContents();
+    const statuses = await optionTexts(page.getByLabel('Status'));
     expect(statuses).toEqual(['All statuses', 'Pending', 'Reviewing', 'Resolved', 'Dismissed']);
   });
 });

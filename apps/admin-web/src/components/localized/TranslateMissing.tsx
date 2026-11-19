@@ -16,6 +16,7 @@ import { cardClass, fieldClass, primaryButtonClass, secondaryButtonClass } from 
 import { reportError } from '@/lib/errors/reporter';
 import { suggestionOf, translateBatches, translateErrorCode, type MissingFilter, type MissingItem } from '@/lib/localized';
 import { smallTranslateButton, translateErrorMessage, translateFields, type TranslateFn } from './LocalizedFieldPair';
+import { Select } from '@/components/select/Select';
 
 export type ReviewedItem = MissingItem & { text: string };
 
@@ -186,12 +187,12 @@ export function MissingFilterSelect({ value, onChange, id = 'missing-language-fi
   return (
     <label htmlFor={id} className="inline-flex items-center gap-2 text-sm text-fg">
       {t('localized.filterLabel')}
-      <select id={id} className={fieldClass} value={value} onChange={(e) => onChange(e.target.value as MissingFilter)} data-testid="missing-filter">
+      <Select id={id} className={fieldClass} value={value} onChange={(e) => onChange(e.target.value as MissingFilter)} data-testid="missing-filter">
         <option value="all">{t('localized.filterAll')}</option>
         <option value="missing">{t('localized.filterMissing')}</option>
         <option value="ar">{t('localized.filterMissingAr')}</option>
         <option value="en">{t('localized.filterMissingEn')}</option>
-      </select>
+      </Select>
     </label>
   );
 }

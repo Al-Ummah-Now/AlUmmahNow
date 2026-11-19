@@ -22,6 +22,7 @@ import { smallButtonClass } from '@/components/content/parts';
 import { logger } from '@/lib/logger-client';
 import { deliveryFormats } from './format';
 import { API_ERROR_LABEL, REASON_LABEL, STATE_CHIP, STATE_LABEL, TROUBLESHOOT_REFRESH_MS, filterProblem, jobActions, orderJobs, statusNote } from './troubleshoot-view';
+import { Select } from '@/components/select/Select';
 
 const subTitle = 'text-base font-semibold text-fg';
 
@@ -394,18 +395,18 @@ function LogsViewer({ formRef, filter, setFilter, tokenState, t, locale }: { for
         </label>
         <label className="flex flex-col gap-1 text-sm text-fg-muted">
           {t('transcodeTroubleshoot.logsHours')}
-          <select value={hours} onChange={(e) => setHours(Number(e.target.value))} className={fieldClass} data-testid="troubleshoot-logs-hours">
+          <Select value={hours} onChange={(e) => setHours(Number(e.target.value))} className={fieldClass} data-testid="troubleshoot-logs-hours">
             {TROUBLESHOOT_LOG_HOURS.map((h) => <option key={h} value={h}>{t('transcodeTroubleshoot.logsHoursOption', { n: h })}</option>)}
-          </select>
+          </Select>
           <span className="text-xs">&nbsp;</span>
         </label>
         <label className="flex flex-col gap-1 text-sm text-fg-muted">
           {t('transcodeTroubleshoot.logsSource')}
-          <select value={source} onChange={(e) => setSource(e.target.value as Source)} className={fieldClass} data-testid="troubleshoot-logs-source">
+          <Select value={source} onChange={(e) => setSource(e.target.value as Source)} className={fieldClass} data-testid="troubleshoot-logs-source">
             <option value="all">{t('transcodeTroubleshoot.logsSourceAll')}</option>
             <option value="worker">{t('transcodeTroubleshoot.logsSourceWorker')}</option>
             <option value="container">{t('transcodeTroubleshoot.logsSourceContainer')}</option>
-          </select>
+          </Select>
           <span className="text-xs">&nbsp;</span>
         </label>
         <div className="flex flex-col gap-1">

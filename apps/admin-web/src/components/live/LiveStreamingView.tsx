@@ -57,6 +57,7 @@ import {
 import { UserName } from '@/components/audit/UserName';
 import { DateField } from '@/components/DateField';
 import { NumberField } from '@/components/forms/NumberField';
+import { Select } from '@/components/select/Select';
 
 interface Initial {
   view: LiveSettingsView | null;
@@ -641,11 +642,11 @@ function OverridesSection({
           />
           <div className="flex flex-col gap-1">
             <label htmlFor={`${id}-provider`} className="text-sm text-fg-muted">{t('live.overrides.provider')}</label>
-            <select id={`${id}-provider`} value={provider} onChange={(e) => setProvider(e.target.value as LiveProviderId)} disabled={locked} className={fieldClass} data-testid="live-override-provider">
+            <Select id={`${id}-provider`} value={provider} onChange={(e) => setProvider(e.target.value as LiveProviderId)} disabled={locked} className={fieldClass} data-testid="live-override-provider">
               {LIVE_PROVIDERS.map((p) => (
                 <option key={p} value={p}>{providerName(p)}</option>
               ))}
-            </select>
+            </Select>
           </div>
           <div className="flex flex-col gap-1">
             <label htmlFor={`${id}-note`} className="text-sm text-fg-muted">{t('live.overrides.note')}</label>

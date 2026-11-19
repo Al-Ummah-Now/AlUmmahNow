@@ -1,5 +1,5 @@
 import { test, expect } from './support/fixtures';
-import { accountControl, chooseLanguage, expectDirection, horizontalOverflow, openMainNav, setPreferences } from './support/ui';
+import { accountControl, chooseLanguage, expectDirection, horizontalOverflow, openMainNav, setPreferences, optionTexts } from './support/ui';
 import { storageStatePath } from './support/env';
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
@@ -103,7 +103,7 @@ test.describe('language and direction', () => {
     await page.goto('/moderation');
     await expect(page.getByLabel('الحالة')).toBeVisible();
     await expect(page.getByLabel('نوع المحتوى')).toBeVisible();
-    const statuses = await page.getByLabel('الحالة').locator('option').allTextContents();
+    const statuses = await optionTexts(page.getByLabel('الحالة'));
     expect(statuses).toEqual(['كل الحالات', 'قيد الانتظار', 'قيد المراجعة', 'تمت المعالجة', 'مرفوض']);
     const headers = await page.getByRole('columnheader').allTextContents();
     if (headers.length) expect(headers).toEqual(['النوع', 'السبب', 'الحالة', 'التاريخ', 'الإجراءات']);

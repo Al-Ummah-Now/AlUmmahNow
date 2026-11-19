@@ -20,6 +20,7 @@ import { test, expect } from './support/fixtures';
 import { adminApi, readTokens } from './support/api';
 import { RUN_ID, VIDEOS_API_URL, ADMIN_WEB_URL, accounts } from './support/env';
 import { createVideosProfile } from './support/profiles';
+import { pickOption } from './support/ui';
 
 interface LiveSettings {
   /** null while the environment runs on the shipped defaults (no settings saved yet) */
@@ -136,7 +137,7 @@ test.describe('live streaming', () => {
     await input.fill(channelName);
     await page.getByTestId('live-override-channel-option').filter({ hasText: channelName }).first().click();
     await expect(page.getByTestId('live-override-channel-chip')).toHaveAttribute('data-id', channelId);
-    await page.getByTestId('live-override-provider').selectOption('selfhosted');
+    await pickOption(page.getByTestId('live-override-provider'), 'selfhosted');
     await page.getByTestId('live-override-add').click();
 
     const row = page.locator(`[data-testid="live-override-row"][data-channel-id="${channelId}"]`);

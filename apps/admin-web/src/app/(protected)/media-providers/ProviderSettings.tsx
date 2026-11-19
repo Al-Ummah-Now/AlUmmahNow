@@ -30,6 +30,7 @@ import { useNames } from '@/components/audit/useNames';
 import { Autocomplete } from '@/components/search/Autocomplete';
 import { fillNodes } from '@/components/audit/fill';
 import { NumberField } from '@/components/forms/NumberField';
+import { Select } from '@/components/select/Select';
 
 type HealthKey = Exclude<keyof ProviderHealthSettings, 'enabled'>;
 const HEALTH_FIELDS: { key: HealthKey; label: MessageKey; hint?: MessageKey; min: number; max: number }[] = [
@@ -400,11 +401,11 @@ export function ProviderSettings({ view, labelledBy }: { view: MediaProvidersVie
         <div className="flex flex-col gap-1">
           <label htmlFor={`${ids}-thumbs`} className="text-base font-semibold text-fg">{t('mediaProviders.thumbnailsLegend')}</label>
           <span id={`${ids}-thumbs-hint`} className="text-sm text-fg-muted">{t('mediaProviders.thumbnailsHint')}</span>
-          <select id={`${ids}-thumbs`} value={form.thumbnails} onChange={(e) => update({ thumbnails: e.target.value as MediaProviderId })} aria-describedby={`${ids}-thumbs-hint`} className={`${fieldClass} mt-1 w-full sm:w-64`} data-testid="providers-thumbnails">
+          <Select id={`${ids}-thumbs`} value={form.thumbnails} onChange={(e) => update({ thumbnails: e.target.value as MediaProviderId })} aria-describedby={`${ids}-thumbs-hint`} className={`${fieldClass} mt-1 w-full sm:w-64`} data-testid="providers-thumbnails">
             {MEDIA_PROVIDER_IDS.map((p) => (
               <option key={p} value={p}>{name(p)}</option>
             ))}
-          </select>
+          </Select>
         </div>
 
         {/* Channel overrides */}

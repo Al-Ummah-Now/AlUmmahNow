@@ -22,6 +22,7 @@ import {
 } from '@/lib/api/auth-request-types';
 import { ErrorAlert, cardClass, fieldClass, linkClass, primaryButtonClass, secondaryButtonClass } from '@/components/ui';
 import { AuthRequestStatusChip, DeliveryChip } from './AuthRequestStatusChip';
+import { Select } from '@/components/select/Select';
 
 /** While a request is being sent or is open in auth, refresh this often (admin-api queues the status reads). */
 const POLL_MS = 10_000;
@@ -201,19 +202,19 @@ function RequestDialog({ subjectUserId, onClose, onSent }: { subjectUserId: stri
         {error && <ErrorAlert testId="auth-request-error">{error}</ErrorAlert>}
         <label className="block">
           <span className="block text-sm font-medium mb-1">{t('authRequests.action')}</span>
-          <select className={`${fieldClass} w-full`} value={action} onChange={(e) => setAction(e.target.value as AuthRequestAction)} name="action" data-testid="auth-request-action">
+          <Select className={`${fieldClass} w-full`} value={action} onChange={(e) => setAction(e.target.value as AuthRequestAction)} name="action" data-testid="auth-request-action">
             {AUTH_REQUEST_ACTIONS.map((a) => (
               <option key={a} value={a}>{t(`authRequests.actions.${a}` as MessageKey)}</option>
             ))}
-          </select>
+          </Select>
         </label>
         <label className="block">
           <span className="block text-sm font-medium mb-1">{t('authRequests.reason')}</span>
-          <select className={`${fieldClass} w-full`} value={reasonCategory} onChange={(e) => setReasonCategory(e.target.value as AuthRequestReason)} name="reason_category" data-testid="auth-request-reason-category">
+          <Select className={`${fieldClass} w-full`} value={reasonCategory} onChange={(e) => setReasonCategory(e.target.value as AuthRequestReason)} name="reason_category" data-testid="auth-request-reason-category">
             {AUTH_REQUEST_REASONS.map((r) => (
               <option key={r} value={r}>{t(`authRequests.reasons.${r}` as MessageKey)}</option>
             ))}
-          </select>
+          </Select>
         </label>
         <label className="block">
           <span className="block text-sm font-medium mb-1">{t('authRequests.reasonText')}</span>

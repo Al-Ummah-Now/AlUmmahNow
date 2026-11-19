@@ -17,7 +17,7 @@ import { test, expect } from './support/fixtures';
 import { adminApi, readTokens } from './support/api';
 import { RUN_ID, accounts } from './support/env';
 import { createVideosProfile } from './support/profiles';
-import { expectDirection, expectNoAxeViolations, setPreferences, waitForHydration } from './support/ui';
+import { expectDirection, expectNoAxeViolations, setPreferences, waitForHydration, pickOption } from './support/ui';
 
 interface Assignment { tierId: string; source: string; assignedBy: string }
 interface UsersPage { items: { id: string; email: string | null; creator?: { assignment: Assignment | null } }[] }
@@ -84,7 +84,7 @@ test.describe('creator tiers on Users and Tiers', () => {
     await page.goto(`/users?q=${encodeURIComponent(searchTerm())}`);
     const row = page.locator(`[data-testid="user-row"][data-user-id="${state.userId}"]`);
     await expect(row).toBeVisible();
-    await row.getByTestId('creator-tier-select').selectOption('creator');
+    await pickOption(row.getByTestId('creator-tier-select'), 'creator');
     const dialog = row.getByTestId('creator-tier-change-dialog');
     await expect(dialog).toBeVisible();
     await expect(dialog.getByTestId('creator-tier-change-effect')).toContainText(/They can upload up to [\d,]+ videos per hour/);
@@ -110,14 +110,14 @@ test.describe('creator tiers on Users and Tiers', () => {
     const row = page.locator(`[data-testid="user-row"][data-user-id="${state.userId}"]`);
     const select = row.getByTestId('creator-tier-select');
     // Every account has a tier: no "remove" or "default" choice
-    await expect(select.locator('option[value=""]')).toHaveCount(0);
-    await select.selectOption('member');
+    await expect(select.page().locator(`[id="${await select.getAttribute('aria-controls')}"] [role="option"][data-value=""]`)).toHaveCount(0);
+    await pickOption(select, 'member');
     const dialog = row.getByTestId('creator-tier-change-dialog');
     await expect(dialog).toBeVisible();
     await dialog.getByTestId('creator-tier-change-cancel').click();
-    await expect(select).toHaveValue('creator');
+    await expect(select).toHaveAttribute('data-value', 'creator');
 
-    await select.selectOption('member');
+    await pickOption(select, 'member');
     await dialog.getByTestId('creator-tier-change-confirm').click();
     await expect(row.getByTestId('creator-tier-status')).toHaveAttribute('data-state', 'saved');
     await expect(row.getByTestId('creator-tier')).toHaveAttribute('data-tier', 'member');
@@ -131,7 +131,7 @@ test.describe('creator tiers on Users and Tiers', () => {
     await expect(apply).toBeDisabled();
     await row.getByTestId('user-select').check();
     await expect(page.getByTestId('users-selected')).toHaveText('1 selected');
-    await page.getByTestId('users-bulk-tier').selectOption('creator');
+    await pickOption(page.getByTestId('users-bulk-tier'), 'creator');
     await apply.click();
     const dialog = page.getByTestId('users-bulk-change-dialog');
     await expect(dialog.getByTestId('users-bulk-change-effect')).toContainText(/Give 1 selected users the .+ tier\? They can upload up to/);

@@ -12,6 +12,7 @@ import { test, expect } from './support/fixtures';
 import { ADMIN_API_URL, AUTH_ADMIN_URL, OPENAUTH_URL, RUN_ID, accounts, runAccountName, runPassword, runUserEmail } from './support/env';
 import { fillSecret } from './support/secret-fill';
 import { registerSinkUser } from './support/run-accounts';
+import { pickOption } from './support/ui';
 
 // Types passwords and test secrets: no traces for this file
 test.use({ trace: 'off' });
@@ -60,8 +61,8 @@ async function sendRequest(page: Page, userId: string, action: string, reason: s
   await page.getByTestId('auth-request-open').click();
   const dialog = page.getByTestId('auth-request-dialog');
   await expect(dialog).toBeVisible();
-  await dialog.getByTestId('auth-request-action').selectOption(action);
-  await dialog.getByTestId('auth-request-reason-category').selectOption('spam');
+  await pickOption(dialog.getByTestId('auth-request-action'), action);
+  await pickOption(dialog.getByTestId('auth-request-reason-category'), 'spam');
   await dialog.getByTestId('auth-request-reason').fill(reason);
   // The user's videos admin page is always attached as evidence
   await expect(dialog.getByTestId('auth-request-evidence')).toContainText('user page');

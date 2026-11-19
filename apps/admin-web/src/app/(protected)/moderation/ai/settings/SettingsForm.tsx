@@ -10,6 +10,7 @@ import { translateDynamic } from '@/i18n/translate';
 import { ErrorAlert, cardClass, fieldClass, primaryButtonClass } from '@/components/ui';
 import { logger } from '@/lib/logger-client';
 import { NumberField } from '@/components/forms/NumberField';
+import { Select } from '@/components/select/Select';
 
 const CATEGORIES = [...Object.keys(LLAMA_GUARD_CATEGORIES), ...MODERATION_EXTENSION_CATEGORIES];
 type Policy = Partial<ModerationCategoryPolicy>;
@@ -112,20 +113,20 @@ export function SettingsForm({ initial }: { initial: AiConfigView }) {
                       <input type="checkbox" aria-label={`${label}: ${t('ai.colEnabled')}`} checked={p.enabled ?? category !== 'religious_authenticity'} disabled={readOnly} onChange={(e) => setPolicy(category, { enabled: e.target.checked })} />
                     </td>
                     <td className="py-2 pe-4">
-                      <select aria-label={`${label}: ${t('ai.colMode')}`} value={p.mode ?? 'shadow'} disabled={readOnly} onChange={(e) => setPolicy(category, { mode: e.target.value as 'shadow' | 'enforce' })} className={fieldClass}>
+                      <Select aria-label={`${label}: ${t('ai.colMode')}`} value={p.mode ?? 'shadow'} disabled={readOnly} onChange={(e) => setPolicy(category, { mode: e.target.value as 'shadow' | 'enforce' })} className={fieldClass}>
                         <option value="shadow">{t('aiMode.shadow')}</option>
                         <option value="enforce">{t('aiMode.enforce')}</option>
-                      </select>
+                      </Select>
                     </td>
                     <td className="py-2 pe-4">
                       <NumberField aria-label={`${label}: ${t('ai.colThreshold')}`} min={0} max={1} step={0.05} value={p.threshold ?? ''} placeholder="—" disabled={readOnly} onChange={(e) => setPolicy(category, { threshold: Number(e.target.value) })} className={`${fieldClass} w-24`} dir="ltr" />
                     </td>
                     <td className="py-2">
-                      <select aria-label={`${label}: ${t('ai.colAction')}`} value={p.action ?? (canHide ? 'hide' : 'flag')} disabled={readOnly} onChange={(e) => setPolicy(category, { action: e.target.value as 'none' | 'flag' | 'hide' })} className={fieldClass}>
+                      <Select aria-label={`${label}: ${t('ai.colAction')}`} value={p.action ?? (canHide ? 'hide' : 'flag')} disabled={readOnly} onChange={(e) => setPolicy(category, { action: e.target.value as 'none' | 'flag' | 'hide' })} className={fieldClass}>
                         <option value="none">{t('aiAction.none')}</option>
                         <option value="flag">{t('aiAction.flag')}</option>
                         {canHide && <option value="hide">{t('aiAction.hide')}</option>}
-                      </select>
+                      </Select>
                     </td>
                   </tr>
                 );

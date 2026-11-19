@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { ADMIN_WEB_URL, OPENAUTH_URL, type Account } from './env';
 import { fillSecret } from './secret-fill';
@@ -192,4 +192,22 @@ export async function waitForHydration(locator: import('@playwright/test').Locat
       timeout: 30_000,
     })
     .toBe(true);
+}
+
+/**
+ * Picks an option in the admin Select (components/select; there is no native <select> in admin, so
+ * Playwright's selectOption does not apply): opens the combobox, clicks the option with that value
+ * and waits for the button to show it.
+ */
+export async function pickOption(select: Locator, value: string) {
+  const list = select.page().locator(`[id="${await select.getAttribute('aria-controls')}"]`);
+  await select.click();
+  await list.locator(`[role="option"][data-value="${value}"]`).click();
+  await expect(select).toHaveAttribute('data-value', value);
+}
+
+/** The option labels of an admin Select, in order (read from its listbox, open or not). */
+export async function optionTexts(select: Locator): Promise<string[]> {
+  const list = select.page().locator(`[id="${await select.getAttribute('aria-controls')}"]`);
+  return (await list.locator('[role="option"]').allTextContents()).map((s) => s.trim());
 }

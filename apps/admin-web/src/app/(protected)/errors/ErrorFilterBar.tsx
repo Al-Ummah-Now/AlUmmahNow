@@ -10,11 +10,12 @@ import { Autocomplete } from '@/components/search/Autocomplete';
 import type { ErrorFacets } from '@/lib/api/error-groups-types';
 import { errorsHref, type ErrorListFilters } from './filters';
 import { DateField } from '@/components/DateField';
+import { Select, type SelectChangeEvent } from '@/components/select/Select';
 
 /** GET form: filters live in the URL. Selects submit on change; text and dates on Apply. */
 export function ErrorFilterBar({ filters, facets, active }: { filters: ErrorListFilters; facets: ErrorFacets | null; active: boolean }) {
   const { t } = useLanguage();
-  const submitOnChange = (e: React.ChangeEvent<HTMLSelectElement>) => e.currentTarget.form?.requestSubmit();
+  const submitOnChange = (e: SelectChangeEvent) => e.currentTarget.form?.requestSubmit();
   const key = JSON.stringify(filters);
   const apps = facets?.apps ?? [];
   const environments = facets?.environments ?? [];
@@ -37,53 +38,53 @@ export function ErrorFilterBar({ filters, facets, active }: { filters: ErrorList
         <label htmlFor="errors-app" className="text-sm text-fg-muted">
           {t('errorsPage.appFilter')}
         </label>
-        <select id="errors-app" name="app" defaultValue={filters.app ?? ''} onChange={submitOnChange} className={fieldClass} data-testid="errors-app-filter">
+        <Select id="errors-app" name="app" defaultValue={filters.app ?? ''} onChange={submitOnChange} className={fieldClass} data-testid="errors-app-filter">
           <option value="">{t('errorsPage.allApps')}</option>
           {apps.map((a) => (
             <option key={a} value={a}>
               {a}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="errors-environment" className="text-sm text-fg-muted">
           {t('errorsPage.environmentFilter')}
         </label>
-        <select id="errors-environment" name="environment" defaultValue={filters.environment ?? ''} onChange={submitOnChange} className={fieldClass}>
+        <Select id="errors-environment" name="environment" defaultValue={filters.environment ?? ''} onChange={submitOnChange} className={fieldClass}>
           <option value="">{t('errorsPage.allEnvironments')}</option>
           {environments.map((e) => (
             <option key={e} value={e}>
               {e}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="errors-release" className="text-sm text-fg-muted">
           {t('errorsPage.releaseFilter')}
         </label>
-        <select id="errors-release" name="release" defaultValue={filters.release ?? ''} onChange={submitOnChange} className={`${fieldClass} font-mono`} dir="ltr">
+        <Select id="errors-release" name="release" defaultValue={filters.release ?? ''} onChange={submitOnChange} className={`${fieldClass} font-mono`} dir="ltr">
           <option value="">{t('errorsPage.allReleases')}</option>
           {releases.map((r) => (
             <option key={r} value={r}>
               {r}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="errors-status" className="text-sm text-fg-muted">
           {t('errorsPage.statusFilter')}
         </label>
-        <select id="errors-status" name="status" defaultValue={filters.status ?? ''} onChange={submitOnChange} className={fieldClass} data-testid="errors-status-filter">
+        <Select id="errors-status" name="status" defaultValue={filters.status ?? ''} onChange={submitOnChange} className={fieldClass} data-testid="errors-status-filter">
           <option value="">{t('errorsPage.allStatuses')}</option>
           {ERROR_STATUSES.map((s) => (
             <option key={s} value={s}>
               {translateDynamic(t, 'errorStatus', s)}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor="errors-origin" className="text-sm text-fg-muted">
@@ -114,11 +115,11 @@ export function ErrorFilterBar({ filters, facets, active }: { filters: ErrorList
         <label htmlFor="errors-sort" className="text-sm text-fg-muted">
           {t('errorsPage.sortBy')}
         </label>
-        <select id="errors-sort" name="sort" defaultValue={filters.sort} onChange={submitOnChange} className={fieldClass} data-testid="errors-sort">
+        <Select id="errors-sort" name="sort" defaultValue={filters.sort} onChange={submitOnChange} className={fieldClass} data-testid="errors-sort">
           <option value="last_seen">{t('errorsPage.sortLastSeen')}</option>
           <option value="count">{t('errorsPage.sortCount')}</option>
           <option value="users">{t('errorsPage.sortUsers')}</option>
-        </select>
+        </Select>
       </div>
       <button
         type="submit"
