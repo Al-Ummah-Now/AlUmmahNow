@@ -89,7 +89,7 @@ describe('billing permissions', () => {
     const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
     assert.equal((await call('/api/billing/overview', { roles: 'moderator' })).status, 403);
     assert.equal((await call('/api/billing/payments/bpay_1/refund', { method: 'POST', roles: 'admin', json: { amount: null, reason: 'x' } })).status, 403);
-    assert.equal((await call('/api/billing/providers/paddle', { method: 'PUT', roles: 'admin', json: { enabled: true } })).status, 403);
+    assert.equal((await call('/api/billing/providers/paygood', { method: 'PUT', roles: 'admin', json: { enabled: true } })).status, 403);
     assert.equal(calls.length, 0);
     assert.deepEqual(await auditRows(db), []);
   });
@@ -139,8 +139,8 @@ describe('credentials', () => {
   it('go to Secrets Store under the environment name; api-videos and the audit log only learn that one is set', async () => {
     const db = sqliteD1();
     const cf = fakeCloudflare();
-    const { fetcher, calls } = fakeVideos({ 'POST /providers/paddle/credentials': () => ({ result: { provider: { id: 'paddle' } } }) });
-    const res = await appFor({ REPORTS_DB: db, VIDEOS: fetcher, ...STORAGE })('/api/billing/providers/paddle/credentials', {
+    const { fetcher, calls } = fakeVideos({ 'POST /providers/paygood/credentials': () => ({ result: { provider: { id: 'paygood' } } }) });
+    const res = await appFor({ REPORTS_DB: db, VIDEOS: fetcher, ...STORAGE })('/api/billing/providers/paygood/credentials', {
       method: 'PUT',
       roles: 'super_admin',
       json: { field: 'apiKey', mode: 'test', value: SECRET_VALUE },
@@ -148,11 +148,11 @@ describe('credentials', () => {
     assert.equal(res.status, 200);
     const text = await res.text();
     assert.equal(text.includes(SECRET_VALUE), false, 'the value is never returned');
-    assert.equal(JSON.parse(text).result.secretName, 'pay-paddle-api-key-test-qa');
+    assert.equal(JSON.parse(text).result.secretName, 'pay-paygood-api-key-test-qa');
     // GET (find by name), then POST (create) with scopes workers
     assert.deepEqual(cf.map((r) => r.method), ['GET', 'POST']);
     assert.match(cf[1].url, /\/accounts\/acct_1\/secrets_store\/stores\/store_1\/secrets$/);
-    assert.deepEqual(JSON.parse(cf[1].body!), [{ name: 'pay-paddle-api-key-test-qa', value: SECRET_VALUE, scopes: ['workers'], comment: 'Payments credential, written from the videos admin (wiki AUN-SUBS)' }]);
+    assert.deepEqual(JSON.parse(cf[1].body!), [{ name: 'pay-paygood-api-key-test-qa', value: SECRET_VALUE, scopes: ['workers'], comment: 'Payments credential, written from the videos admin (wiki AUN-SUBS)' }]);
     assert.equal(cf[1].auth, 'Bearer cf-token');
     // The last 4 tell keys apart on the page (the value is long enough to keep them)
     assert.deepEqual(calls.map((c) => c.body), [{ field: 'apiKey', mode: 'test', cleared: false, last4: SECRET_VALUE.slice(-4) }]);
@@ -173,9 +173,9 @@ describe('credentials', () => {
   });
 
   it('names differ per environment so one store serves all of them', () => {
-    assert.equal(paymentSecretName('paddle', 'apiKey', 'live', 'production'), 'pay-paddle-api-key-live');
-    assert.equal(paymentSecretName('paddle', 'apiKey', 'live', 'stage'), 'pay-paddle-api-key-live-stage');
-    assert.equal(paymentSecretName('paddle', 'webhookSecret', 'test', 'qa'), 'pay-paddle-webhook-secret-test-qa');
+    assert.equal(paymentSecretName('paygood', 'apiKey', 'live', 'production'), 'pay-paygood-api-key-live');
+    assert.equal(paymentSecretName('paygood', 'apiKey', 'live', 'stage'), 'pay-paygood-api-key-live-stage');
+    assert.equal(paymentSecretName('paygood', 'webhookSecret', 'test', 'qa'), 'pay-paygood-webhook-secret-test-qa');
   });
 
   it('without the token the page says so and nothing is written', async () => {
@@ -185,7 +185,7 @@ describe('credentials', () => {
     const call = appFor({ REPORTS_DB: db, VIDEOS: fetcher });
     const overview = await (await call('/api/billing/overview', { roles: 'admin' })).json();
     assert.equal(overview.result.credentialStorage, false);
-    const res = await call('/api/billing/providers/paddle/credentials', { method: 'PUT', roles: 'super_admin', json: { field: 'apiKey', mode: 'test', value: SECRET_VALUE } });
+    const res = await call('/api/billing/providers/paygood/credentials', { method: 'PUT', roles: 'super_admin', json: { field: 'apiKey', mode: 'test', value: SECRET_VALUE } });
     assert.equal(res.status, 409);
     assert.equal((await res.json()).code, 'credential_storage_unavailable');
     assert.equal(cf.length, 0);
@@ -197,7 +197,7 @@ describe('credentials', () => {
     const call = appFor({ REPORTS_DB: sqliteD1(), VIDEOS: fakeVideos().fetcher, ...STORAGE });
     fakeCloudflare();
     for (const json of [{ field: 'apiKey', mode: 'test', value: '' }, { field: 'apiKey', mode: 'test', value: 'has space' }, { field: 'password', mode: 'test', value: 'x' }, { field: 'apiKey', mode: 'prod', value: 'x' }]) {
-      assert.equal((await call('/api/billing/providers/paddle/credentials', { method: 'PUT', roles: 'super_admin', json })).status, 400, JSON.stringify(json));
+      assert.equal((await call('/api/billing/providers/paygood/credentials', { method: 'PUT', roles: 'super_admin', json })).status, 400, JSON.stringify(json));
     }
     assert.equal((await call('/api/billing/providers/fake/credentials', { method: 'PUT', roles: 'super_admin', json: { field: 'apiKey', mode: 'test', value: 'x' } })).status, 400);
     assert.equal((await call('/api/billing/providers/stripe', { method: 'PUT', roles: 'super_admin', json: {} })).status, 400);
@@ -231,18 +231,18 @@ describe('payments: local stack shim, short keys, Undo, the Payments audit area'
     assert.equal(await credentialStorageReady({ PAYMENTS_SECRETS_LOCAL_SHIM: '1' }), true);
     assert.equal(await credentialStorageReady({ PAYMENTS_SECRETS_LOCAL_SHIM: 'true' }), false, 'only the exact flag');
     let fetched = 0;
-    const out = await writeCredential({ PAYMENTS_SECRETS_LOCAL_SHIM: '1', ENVIRONMENT: 'qa' }, { provider: 'paddle', field: 'apiKey', mode: 'test', value: SECRET_VALUE }, (async () => {
+    const out = await writeCredential({ PAYMENTS_SECRETS_LOCAL_SHIM: '1', ENVIRONMENT: 'qa' }, { provider: 'paygood', field: 'apiKey', mode: 'test', value: SECRET_VALUE }, (async () => {
       fetched++;
       return new Response('{}');
     }) as unknown as typeof fetch);
     assert.equal(fetched, 0, 'no Cloudflare call');
-    assert.equal(out.name, 'pay-paddle-api-key-test-qa');
+    assert.equal(out.name, 'pay-paygood-api-key-test-qa');
   });
 
   it('a short value keeps no last 4', async () => {
-    const { fetcher, calls } = fakeVideos({ 'POST /providers/paddle/credentials': () => ({ result: { provider: { id: 'paddle' } } }) });
+    const { fetcher, calls } = fakeVideos({ 'POST /providers/paygood/credentials': () => ({ result: { provider: { id: 'paygood' } } }) });
     fakeCloudflare();
-    const res = await appFor({ REPORTS_DB: sqliteD1(), VIDEOS: fetcher, ...STORAGE })('/api/billing/providers/paddle/credentials', { method: 'PUT', roles: 'super_admin', json: { field: 'apiKey', mode: 'test', value: 'short_key_12' } });
+    const res = await appFor({ REPORTS_DB: sqliteD1(), VIDEOS: fetcher, ...STORAGE })('/api/billing/providers/paygood/credentials', { method: 'PUT', roles: 'super_admin', json: { field: 'apiKey', mode: 'test', value: 'short_key_12' } });
     assert.equal(res.status, 200);
     assert.deepEqual(calls.map((c) => c.body), [{ field: 'apiKey', mode: 'test', cleared: false, last4: null }]);
   });

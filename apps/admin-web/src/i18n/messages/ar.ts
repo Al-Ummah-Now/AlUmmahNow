@@ -5577,11 +5577,8 @@ const ar: Messages = {
       modeNotice: '{provider} في وضع {mode}.',
       viewMode: 'الإعدادات والمفاتيح لوضع',
       settingsTitle: 'الإعدادات',
-      settings: { clientToken: 'رمز الواجهة', taxCategory: 'فئة الضريبة', taxMode: 'طريقة الضريبة', merchantId: 'معرّف التاجر' },
+      settings: { merchantId: 'معرّف التاجر' },
       settingHints: {
-        clientToken: 'من Paddle ← أدوات المطوّرين ← المصادقة. يبدأ بـ test_ أو live_.',
-        taxCategory: 'فئة الضريبة في Paddle لمنتجات الفئات.',
-        taxMode: 'كيف يعامل Paddle الضريبة على هذه الأسعار.',
         merchantId: 'معرّف التاجر في PayGood. يبدأ بـ mer_.',
       },
       perMode: 'يُحفظ منفصلًا للاختبار وللمباشر.',

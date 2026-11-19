@@ -5578,11 +5578,8 @@ const en = {
       modeNotice: '{provider} is in {mode} mode.',
       viewMode: 'Settings and keys for',
       settingsTitle: 'Settings',
-      settings: { clientToken: 'Client-side token', taxCategory: 'Tax category', taxMode: 'Tax mode', merchantId: 'Merchant ID' },
+      settings: { merchantId: 'Merchant ID' },
       settingHints: {
-        clientToken: 'From Paddle → Developer tools → Authentication. Starts with test_ or live_.',
-        taxCategory: 'The Paddle tax category of the tier products.',
-        taxMode: 'How Paddle treats tax on these prices.',
         merchantId: 'Your PayGood merchant ID. Starts with mer_.',
       },
       perMode: 'Kept separately for test and live.',

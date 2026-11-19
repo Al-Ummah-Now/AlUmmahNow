@@ -4,7 +4,7 @@
  * calls, and its webhooks into NormalizedEvents, so the rest of billing
  * (store.ts, service.ts) never knows which provider it is talking to.
  *
- * Adapters: paddle.ts, paygood.ts, fake.ts (the test double, never in production).
+ * Adapters: paygood.ts, fake.ts (the test double, never in production).
  * 'manual' (admin comps) has no adapter: it never talks to anyone.
  */
 import type { BillingPeriod, PaymentMode, PaymentProviderId } from '@al-ummah/shared-types';
@@ -37,10 +37,8 @@ export interface CheckoutRequest {
 }
 
 export interface CheckoutResult {
-	/** Where to send the browser (hosted checkout); null when the provider opens an overlay instead */
+	/** Where to send the browser (hosted checkout); null when the price has no checkout link */
 	url: string | null;
-	/** Paddle: the transaction the overlay opens */
-	paddleTransactionId?: string | null;
 	/** The provider's reference for this checkout (transaction id, offering id) */
 	providerRef: string | null;
 	/** A customer created for this checkout (stored so webhooks map back to the user) */
@@ -59,7 +57,7 @@ export interface ProviderSubscription {
 	amount: number | null;
 	currency: string | null;
 	period: BillingPeriod | null;
-	/** Our ids the provider echoes back (Paddle custom_data) */
+	/** Our ids the provider echoes back (the test provider) */
 	userId?: string | null;
 	checkoutId?: string | null;
 }

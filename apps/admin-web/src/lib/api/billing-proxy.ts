@@ -14,7 +14,7 @@ interface Rule {
 }
 
 const ID = '[^/]{1,200}';
-const PROVIDER = '(paddle|paygood|fake)';
+const PROVIDER = '(paygood|fake)';
 
 export const BILLING_PROXY_RULES: readonly Rule[] = [
   // billing:read

@@ -1,7 +1,7 @@
 /**
  * The /upgrade pay mode (wiki AUN-SUBS): a sellable tier's price block with
  * its period, currency and provider choices and the Subscribe button, the
- * subscribe flow (checkout redirect or Paddle's overlay) and the banner
+ * subscribe flow (a redirect to the provider's checkout) and the banner
  * shown after checkout returns (confirming → active, or still processing).
  * While payments are off none of this renders and /upgrade is request-only.
  */
@@ -16,7 +16,6 @@ import { login } from '@/lib/actions';
 import { upgradePath } from '@/lib/auth/sign-in-return';
 import { abandonBillingCheckout, fetchMyBilling, fetchMyCheckout, startBillingCheckout } from '@/lib/api/billing-client';
 import type { BillingTranslations as BillingCopy } from '@al-ummah/shared-types';
-import { openPaddleCheckout } from '@/lib/billing/paddle';
 import {
   CHECKOUT_PARAM,
   CONFIRM_POLL_MS,
@@ -162,12 +161,8 @@ export interface SubscribeRequest {
   provider: PaymentProviderId;
 }
 
-/**
- * Starts a checkout: Paddle's overlay when the API made a Paddle transaction
- * and the plans carry Paddle's client token, otherwise a redirect to the
- * provider's (or the test provider's) checkout page.
- */
-export function useSubscribe({ plans, locale, copy, onCompleted, onClosed }: { plans: BillingPlans | null; locale: string; copy: BillingCopy; onCompleted: (checkoutId: string) => void; onClosed: () => void }) {
+/** Starts a checkout: a redirect to the provider's (or the test provider's) checkout page. */
+export function useSubscribe({ locale, copy }: { locale: string; copy: BillingCopy }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<{ tierId: string; message: string } | null>(null);
 
@@ -185,35 +180,12 @@ export function useSubscribe({ plans, locale, copy, onCompleted, onClosed }: { p
       if (res.status === 0 || res.status >= 500) reportError(new Error(`Billing checkout failed: ${res.status} ${res.code ?? ''}`.trim()), { kind: 'fetch', status: res.status, shown: true, extra: { tierId, provider } });
       return fail(billingErrorMessage(res.code, copy));
     }
-    const { checkoutId, url, paddleTransactionId } = res.result;
-    if (paddleTransactionId && plans?.paddle) {
-      let completed = false;
-      try {
-        await openPaddleCheckout(plans.paddle, paddleTransactionId, {
-          locale,
-          onEvent: (event) => {
-            if (event.name === 'checkout.completed' && !completed) {
-              completed = true;
-              onCompleted(checkoutId);
-            } else if (event.name === 'checkout.closed' && !completed) {
-              void abandonBillingCheckout(checkoutId);
-              onClosed();
-            }
-          },
-        });
-        setBusy(null);
-      } catch (error) {
-        reportError(error, { kind: 'caught', shown: true, extra: { tierId, step: 'paddle' } });
-        void abandonBillingCheckout(checkoutId);
-        fail(copy.errors.providerError);
-      }
-      return;
-    }
+    const { checkoutId, url } = res.result;
     if (url) {
       window.location.assign(url);
       return;
     }
-    reportError(new Error('Billing checkout returned neither a URL nor a Paddle transaction'), { kind: 'caught', shown: true, extra: { tierId, provider } });
+    reportError(new Error('Billing checkout returned no URL'), { kind: 'caught', shown: true, extra: { tierId, provider } });
     void abandonBillingCheckout(checkoutId);
     fail(copy.errors.failed);
   };

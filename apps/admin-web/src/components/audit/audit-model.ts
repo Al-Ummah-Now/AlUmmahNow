@@ -175,7 +175,7 @@ export function settingLabel(setting: string, t: Translator): string {
 /** A tier's two names, for the Payments lines. */
 export type AuditTierNames = Record<string, { name: string; nameAr?: string | null }>;
 
-const PAYMENT_PROVIDER_IDS = new Set(['paddle', 'paygood', 'fake', 'manual']);
+const PAYMENT_PROVIDER_IDS = new Set(['paygood', 'fake', 'manual']);
 const money = (amount: unknown, currency: unknown, locale: Locale): string => {
   if (typeof amount !== 'number' || typeof currency !== 'string') return '';
   // The shared price formatter: ٠–٩ and the currency's Arabic name in Arabic (never «US$»)

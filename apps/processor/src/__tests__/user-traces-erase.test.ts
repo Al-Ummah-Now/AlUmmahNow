@@ -64,17 +64,17 @@ function seed() {
   // Billing (wiki AUN-SUBS): bookkeeping stays under the marker; links, checkouts and payloads go
   for (const userId of [USER, OTHER]) {
     search.raw
-      .prepare(`INSERT INTO billing_subscriptions (id, user_id, tier_id, tier_name, provider, mode, provider_ref, customer_ref, status, comp_reason, created_at, updated_at) VALUES (?, ?, 'creator', 'Creator', 'paddle', 'test', ?, ?, 'active', 'thanks', ?, ?)`)
+      .prepare(`INSERT INTO billing_subscriptions (id, user_id, tier_id, tier_name, provider, mode, provider_ref, customer_ref, status, comp_reason, created_at, updated_at) VALUES (?, ?, 'creator', 'Creator', 'paygood', 'test', ?, ?, 'active', 'thanks', ?, ?)`)
       .run(`bsub_${userId}`, userId, `sub_${userId}`, `fake_cus_${userId}`, now, now);
     search.raw
-      .prepare(`INSERT INTO billing_payments (id, user_id, subscription_id, provider, mode, provider_ref, status, amount, currency, receipt_url, occurred_at) VALUES (?, ?, ?, 'paddle', 'test', ?, 'succeeded', 500, 'USD', ?, ?)`)
+      .prepare(`INSERT INTO billing_payments (id, user_id, subscription_id, provider, mode, provider_ref, status, amount, currency, receipt_url, occurred_at) VALUES (?, ?, ?, 'paygood', 'test', ?, 'succeeded', 500, 'USD', ?, ?)`)
       .run(`bpay_${userId}`, userId, `bsub_${userId}`, `txn_${userId}`, `https://receipts.example/${userId}`, now);
     search.raw
-      .prepare(`INSERT INTO billing_events (id, provider, mode, event_id, type, user_id, payload, status, received_at) VALUES (?, 'paddle', 'test', ?, 'subscription.created', ?, '{"email":"x@example.com"}', 'processed', ?)`)
+      .prepare(`INSERT INTO billing_events (id, provider, mode, event_id, type, user_id, payload, status, received_at) VALUES (?, 'paygood', 'test', ?, 'subscription.created', ?, '{"email":"x@example.com"}', 'processed', ?)`)
       .run(`bev_${userId}`, `evt_${userId}`, userId, now);
-    search.raw.prepare(`INSERT INTO billing_customers (provider, mode, user_id, provider_ref, created_at) VALUES ('paddle', 'test', ?, ?, ?)`).run(userId, `ctm_${userId}`, now);
+    search.raw.prepare(`INSERT INTO billing_customers (provider, mode, user_id, provider_ref, created_at) VALUES ('paygood', 'test', ?, ?, ?)`).run(userId, `ctm_${userId}`, now);
     search.raw
-      .prepare(`INSERT INTO billing_checkouts (id, user_id, tier_id, price_id, provider, mode, created_at) VALUES (?, ?, 'creator', 'bpr_1', 'paddle', 'test', ?)`)
+      .prepare(`INSERT INTO billing_checkouts (id, user_id, tier_id, price_id, provider, mode, created_at) VALUES (?, ?, 'creator', 'bpr_1', 'paygood', 'test', ?)`)
       .run(`bco_${userId}`, userId, now);
   }
   // A comp the erased user granted as staff: the grant stays, the granter becomes the placeholder

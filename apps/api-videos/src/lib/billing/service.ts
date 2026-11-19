@@ -50,7 +50,6 @@ import {
 	writeLink,
 } from './config';
 import { fakeAdapter, fakePaymentEvents, signFake } from './fake';
-import { paddleAdapter } from './paddle';
 import { paygoodAdapter } from './paygood';
 import { type NormalizedEvent, type PaymentProviderAdapter, type ProviderContext, ProviderError } from './provider';
 import {
@@ -79,7 +78,7 @@ import {
 
 export type ServiceEnv = BillingEnv & JobEnv & ErrorReporterEnv;
 
-const ADAPTERS: Record<PaymentProviderId, PaymentProviderAdapter> = { paddle: paddleAdapter, paygood: paygoodAdapter, fake: fakeAdapter };
+const ADAPTERS: Record<PaymentProviderId, PaymentProviderAdapter> = { paygood: paygoodAdapter, fake: fakeAdapter };
 
 export function adapterFor(id: PaymentProviderId): PaymentProviderAdapter {
 	return ADAPTERS[id];
@@ -165,7 +164,7 @@ export async function receiveWebhook(env: ServiceEnv, providerId: string, rawBod
 	return { status: 401, error: 'Invalid signature' };
 }
 
-/** A context for normalizing: credentials when there are some (PayGood needs them, Paddle and the test provider do not). */
+/** A context for normalizing: credentials when there are some (PayGood needs them, the test provider does not). */
 async function normalizeContext(env: ServiceEnv, provider: PaymentProviderId, mode: PaymentMode): Promise<ProviderContext> {
 	try {
 		return await providerContext(env, provider, { mode });
@@ -231,14 +230,11 @@ export async function billingPlans(env: ServiceEnv): Promise<BillingPlans> {
 			if (sellable.length) offers.push({ tierId: tier.id, prices: sellable });
 		}
 	}
-	const paddle = providers.find((p) => p.id === 'paddle');
-	const clientToken = paddle?.settings[`clientToken.${paddle.mode}`];
 	return {
 		providers: providers.map((p) => ({ id: p.id, name: PAYMENT_PROVIDERS[p.id].name, mode: p.mode })),
 		offers,
 		pricesIncludeTax: tax.pricesIncludeTax,
 		taxRatePercent: tax.taxRatePercent,
-		paddle: paddle && clientToken ? { clientToken, environment: paddle.mode === 'live' ? 'production' : 'sandbox' } : null,
 	};
 }
 
@@ -306,7 +302,7 @@ export async function startCheckout(env: ServiceEnv, user: { userId: string; ema
 	if (result.customerRef) await saveCustomer(env, provider, cfg.mode, result.customerRef, user.userId, at);
 	await setCheckoutRef(env, checkoutId, result.providerRef);
 	logger.info('[Billing] Checkout started', { provider, userId: user.userId, tierId: price.tierId, checkoutId });
-	return { checkoutId, url: result.url, paddleTransactionId: result.paddleTransactionId ?? null };
+	return { checkoutId, url: result.url };
 }
 
 export async function myBilling(env: ServiceEnv, userId: string): Promise<MyBilling> {
@@ -346,7 +342,7 @@ export async function paymentReceipt(env: ServiceEnv, userId: string, paymentId:
 	return url;
 }
 
-/** The user closed the checkout without paying (Paddle overlay closed, test page Cancel). */
+/** The user closed the checkout without paying (the provider's or the test page's Cancel). */
 export async function abandonCheckout(env: ServiceEnv, userId: string | null, checkoutId: string): Promise<void> {
 	const row = /^bco_[0-9a-f]{32}$/.test(checkoutId) ? await readCheckout(env, checkoutId) : null;
 	if (!row || (userId !== null && row.user_id !== userId)) throw new BillingError(404, BILLING_ERRORS.notFound);

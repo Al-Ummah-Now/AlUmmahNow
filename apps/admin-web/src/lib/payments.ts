@@ -37,7 +37,7 @@ export const hasCredentials = (id: PaymentProviderId) => id !== 'fake';
 
 export type MissingKind = 'setting' | 'credential' | 'binding' | 'other';
 
-/** One `missing[]` item ("setting:clientToken", "credential:apiKey", "binding:webhookSecret"). */
+/** One `missing[]` item ("setting:merchantId", "credential:apiKey", "binding:webhookSecret"). */
 export function parseMissing(item: string): { kind: MissingKind; name: string } {
   const [kind, ...rest] = item.split(':');
   const name = rest.join(':');

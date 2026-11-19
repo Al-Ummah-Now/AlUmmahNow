@@ -38,7 +38,6 @@ const plans = (over: Partial<BillingPlans> = {}): BillingPlans => ({
   ],
   pricesIncludeTax: false,
   taxRatePercent: null,
-  paddle: null,
   ...over,
 });
 
@@ -64,7 +63,7 @@ describe('which tiers sell', () => {
   });
 
   it('drops prices no enabled provider can take, and the offer when none is left', () => {
-    const p = plans({ offers: [{ tierId: 'creator', prices: [{ period: 'month', currency: 'USD', amount: 999, providers: ['paddle'] }] }] });
+    const p = plans({ offers: [{ tierId: 'creator', prices: [{ period: 'month', currency: 'USD', amount: 999, providers: ['paygood'] }] }] });
     expect(offerFor(p, 'creator')).toBeNull();
   });
 });
@@ -112,11 +111,11 @@ describe('price display', () => {
 describe('provider choice', () => {
   const two = plans({
     providers: [
-      { id: 'paddle', name: 'Paddle', mode: 'test' },
       { id: 'paygood', name: 'PayGood', mode: 'test' },
+      { id: 'fake', name: 'Test provider', mode: 'test' },
     ],
   });
-  const both = { period: 'month' as const, currency: 'USD', amount: 999, providers: ['paddle', 'paygood'] as ('paddle' | 'paygood')[] };
+  const both = { period: 'month' as const, currency: 'USD', amount: 999, providers: ['paygood', 'fake'] as ('paygood' | 'fake')[] };
 
   it('picks the only provider that can take the price, without asking', () => {
     expect(chooseProvider(plans(), plans().offers[0].prices[0])).toBe('fake');
@@ -126,8 +125,8 @@ describe('provider choice', () => {
   it('waits for the viewer when several can, and keeps a valid pick only', () => {
     expect(chooseProvider(two, both)).toBeNull();
     expect(chooseProvider(two, both, 'paygood')).toBe('paygood');
-    expect(chooseProvider(two, { ...both, providers: ['paddle'] }, 'paygood')).toBe('paddle');
-    expect(chooseProvider(two, both, 'fake')).toBeNull();
+    expect(chooseProvider(two, { ...both, providers: ['fake'] }, 'paygood')).toBe('fake');
+    expect(chooseProvider(two, both, 'stripe' as never)).toBeNull();
   });
 });
 

@@ -6,7 +6,7 @@
 
 export interface BillingTranslations {
   /** Provider names as shown to users (ids from PAYMENT_PROVIDERS) */
-  providers: Record<'paddle' | 'paygood' | 'fake' | 'manual', string>;
+  providers: Record<'paygood' | 'fake' | 'manual', string>;
   pay: {
     lead: string;
     perMonth: string;
@@ -76,7 +76,7 @@ export interface BillingTranslations {
 }
 
 export const BILLING_EN: BillingTranslations = {
-  providers: { paddle: 'Paddle', paygood: 'PayGood', fake: 'Test provider', manual: 'Complimentary' },
+  providers: { paygood: 'PayGood', fake: 'Test provider', manual: 'Complimentary' },
   pay: {
     lead: 'Pick the tier that fits what you want to do on Al Ummah Now, and subscribe to it.',
     perMonth: '{price} / month',
@@ -146,7 +146,7 @@ export const BILLING_EN: BillingTranslations = {
 };
 
 export const BILLING_AR: BillingTranslations = {
-  providers: { paddle: 'Paddle', paygood: 'PayGood', fake: 'جهة دفع تجريبية', manual: 'مجاني' },
+  providers: { paygood: 'PayGood', fake: 'جهة دفع تجريبية', manual: 'مجاني' },
   pay: {
     lead: 'اختر الفئة التي تناسب ما تريد فعله في الأمة الآن، واشترك فيها.',
     perMonth: '{price} / شهريًا',

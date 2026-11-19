@@ -167,7 +167,7 @@ describe('the Payments area', () => {
     const at2 = (m: number) => `2026-11-10T10:${String(m).padStart(2, '0')}:00.000Z`;
     const row = (id: string, key: string, value: unknown, m: number) =>
       db.prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?)').bind(id, key, null, JSON.stringify(value), 'usr_a', at2(m)).run();
-    await row('p1', 'content:billing-provider:paddle', { action: 'update', details: { enabled: true } }, 1);
+    await row('p1', 'content:billing-provider:paygood', { action: 'update', details: { enabled: true } }, 1);
     await row('p2', 'content:user:usr_c', { action: 'billing-comp', details: { tierId: 'creator' } }, 2);
     await row('p3', 'content:billing-price:creator:month:USD', { action: 'save', details: {} }, 3);
     await row('c1', 'content:video:vid_1', { action: 'hide' }, 4);
@@ -176,6 +176,6 @@ describe('the Payments area', () => {
     assert.deepEqual(await ids('content'), ['content:c1']);
     const comp = (await readAuditFeed(db, cleanAuditQuery({}))).items.find((e) => e.id === 'content:p2')!;
     assert.deepEqual([comp.area, comp.target], ['payments', { kind: 'user', id: 'usr_c' }]);
-    assert.equal(describeKey('content:billing-provider:paddle').area, 'payments');
+    assert.equal(describeKey('content:billing-provider:paygood').area, 'payments');
   });
 });

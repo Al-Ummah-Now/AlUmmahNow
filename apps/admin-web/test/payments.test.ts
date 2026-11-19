@@ -42,7 +42,7 @@ function routerRoutes(): { method: string; segments: string[] }[] {
     const segments = m[2]
       .replace(/^\//, '')
       .split('/')
-      .map((s) => (s === ':id' ? (m[2].startsWith('/providers') ? 'paddle' : 'abc-123') : s));
+      .map((s) => (s === ':id' ? (m[2].startsWith('/providers') ? 'paygood' : 'abc-123') : s));
     out.push({ method: m[1].toUpperCase(), segments });
   }
   return out;
@@ -60,7 +60,9 @@ describe('billing pass-through allowlist', () => {
     assert.equal(isAllowedBillingPath('DELETE', ['overview']), false);
     assert.equal(isAllowedBillingPath('GET', ['tax']), false);
     assert.equal(isAllowedBillingPath('PUT', ['providers', 'stripe']), false);
-    assert.equal(isAllowedBillingPath('POST', ['providers', 'paddle', 'credentials']), false);
+    assert.equal(isAllowedBillingPath('POST', ['providers', 'paygood', 'credentials']), false);
+    // Paddle was removed (P1: PayGood only)
+    assert.equal(isAllowedBillingPath('PUT', ['providers', 'paddle']), false);
     assert.equal(isAllowedBillingPath('GET', ['subscriptions', '..']), false);
     assert.equal(isAllowedBillingPath('GET', ['subscriptions', 'a', 'b']), false);
     assert.equal(isAllowedBillingPath('GET', ['users', 'a/b']), false);
@@ -131,17 +133,17 @@ describe('billing roles and nav', () => {
 
 describe('provider settings and missing items', () => {
   it('stores per-mode settings as <key>.<mode>', () => {
-    assert.equal(settingStorageKey({ key: 'clientToken', perMode: true }, 'live'), 'clientToken.live');
-    assert.equal(settingStorageKey({ key: 'taxMode', perMode: false }, 'live'), 'taxMode');
+    assert.equal(settingStorageKey({ key: 'merchantId', perMode: true }, 'live'), 'merchantId.live');
+    assert.equal(settingStorageKey({ key: 'region', perMode: false }, 'live'), 'region');
     assert.deepEqual(
-      providerSettings('paddle', 'test').map((s) => s.storageKey),
-      ['clientToken.test', 'taxCategory', 'taxMode'],
+      providerSettings('paygood', 'test').map((s) => s.storageKey),
+      ['merchantId.test'],
     );
     assert.deepEqual(providerSettings('fake', 'test'), []);
   });
 
   it('parses missing[] items', () => {
-    assert.deepEqual(parseMissing('setting:clientToken'), { kind: 'setting', name: 'clientToken' });
+    assert.deepEqual(parseMissing('setting:merchantId'), { kind: 'setting', name: 'merchantId' });
     assert.deepEqual(parseMissing('credential:apiKey'), { kind: 'credential', name: 'apiKey' });
     assert.deepEqual(parseMissing('binding:webhookSecret'), { kind: 'binding', name: 'webhookSecret' });
     assert.deepEqual(parseMissing('something'), { kind: 'other', name: 'something' });
@@ -150,16 +152,17 @@ describe('provider settings and missing items', () => {
   it('sends only changed settings, empty as null', () => {
     assert.deepEqual(settingsChanges({ 'merchantId.test': 'mer_abc123' }, { 'merchantId.test': ' mer_abc123 ', 'merchantId.live': '' }), {});
     assert.deepEqual(settingsChanges({ 'merchantId.test': 'mer_abc123' }, { 'merchantId.test': '' }), { 'merchantId.test': null });
-    assert.deepEqual(settingsChanges({}, { taxMode: 'internal' }), { taxMode: 'internal' });
+    assert.deepEqual(settingsChanges({}, { region: 'ca' }), { region: 'ca' });
   });
 
   it('checks a setting against its pattern or choices', () => {
-    const [token, category] = providerSettings('paddle', 'test');
-    assert.equal(settingValid(token.spec, 'test_abcdefghij12'), true);
-    assert.equal(settingValid(token.spec, 'nope'), false);
-    assert.equal(settingValid(token.spec, ''), true);
-    assert.equal(settingValid(category.spec, 'saas'), true);
-    assert.equal(settingValid(category.spec, 'food'), false);
+    const [merchant] = providerSettings('paygood', 'test');
+    assert.equal(settingValid(merchant.spec, 'mer_abc123'), true);
+    assert.equal(settingValid(merchant.spec, 'nope'), false);
+    assert.equal(settingValid(merchant.spec, ''), true);
+    const choice = { key: 'region', perMode: false, kind: 'choice' as const, options: ['us', 'ca'], required: true };
+    assert.equal(settingValid(choice, 'ca'), true);
+    assert.equal(settingValid(choice, 'eu'), false);
   });
 });
 
@@ -178,7 +181,7 @@ describe('prices', () => {
   it('finds the link for the provider mode in use', () => {
     const p = price({ links: [link({ mode: 'live' }), link({ mode: 'test', providerRef: 'x' })] });
     assert.equal(linkFor(p, 'fake', 'test')?.providerRef, 'x');
-    assert.equal(linkFor(p, 'paddle', 'test'), undefined);
+    assert.equal(linkFor(p, 'paygood', 'test'), undefined);
   });
 
   it('groups prices by tier in tier order, month first then currency', () => {
@@ -202,10 +205,10 @@ describe('subscriptions, refunds, comps', () => {
 
   it('offers cancel at period end only where the provider supports it', () => {
     const end = '2026-12-01T00:00:00Z';
-    assert.equal(canCancelAtPeriodEnd({ provider: 'paddle', cancelAtPeriodEnd: false, currentPeriodEnd: end }), true);
+    assert.equal(canCancelAtPeriodEnd({ provider: 'fake', cancelAtPeriodEnd: false, currentPeriodEnd: end }), true);
     assert.equal(canCancelAtPeriodEnd({ provider: 'paygood', cancelAtPeriodEnd: false, currentPeriodEnd: end }), false);
     assert.equal(canCancelAtPeriodEnd({ provider: 'manual', cancelAtPeriodEnd: false, currentPeriodEnd: end }), false);
-    assert.equal(canCancelAtPeriodEnd({ provider: 'paddle', cancelAtPeriodEnd: true, currentPeriodEnd: end }), false);
+    assert.equal(canCancelAtPeriodEnd({ provider: 'fake', cancelAtPeriodEnd: true, currentPeriodEnd: end }), false);
     assert.equal(canCancelAtPeriodEnd({ provider: 'fake', cancelAtPeriodEnd: false, currentPeriodEnd: null }), false);
   });
 
@@ -215,7 +218,7 @@ describe('subscriptions, refunds, comps', () => {
     assert.equal(refundableAmount({ provider: 'fake', status: 'refunded', amount: 999, refundedAmount: 999 }), 0);
     assert.equal(refundableAmount({ provider: 'fake', status: 'failed', amount: 999, refundedAmount: 0 }), 0);
     assert.equal(refundableAmount({ provider: 'manual', status: 'succeeded', amount: 0, refundedAmount: 0 }), 0);
-    assert.equal(partialRefundAllowed({ provider: 'paddle' }), true);
+    assert.equal(partialRefundAllowed({ provider: 'paygood' }), true);
     assert.equal(partialRefundAllowed({ provider: 'manual' }), false);
   });
 

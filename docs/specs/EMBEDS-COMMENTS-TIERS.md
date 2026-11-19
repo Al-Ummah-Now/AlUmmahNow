@@ -287,7 +287,7 @@ local payment methods matter).
 
 ```ts
 interface PaymentProvider {
-  id: string;                                   // e.g. "manual", "paddle", "paypal", "tap", "apple", "google"
+  id: string;                                   // e.g. "manual", "paygood"
   capabilities: { subscriptions: boolean; oneTime: boolean; refunds: boolean; currencies: string[]; regions: string[] };
   createCheckout(input: CheckoutInput): Promise<{ redirectUrl?: string; clientToken?: string }>;
   getSubscription(ref: string): Promise<ProviderSubscription>;
@@ -305,7 +305,7 @@ interface PaymentProvider {
 - A **manual provider** always exists: admin-assigned plans, bank transfer, invoices, sponsored/waqf accounts.
 - **App stores:** App Store and Google Play adapters for in-app purchases where store rules require
   them (viewer Premium, native Epic 24), with server-side receipt validation.
-- Candidate providers (decision P1): merchant-of-record options (e.g. Paddle, Lemon Squeezy) to
+- Providers (decision P1, owner 2026-11-19: PayGood only, off until the owner enables it). Earlier candidates: merchant-of-record options (e.g. Paddle, Lemon Squeezy) to
   offload global tax/VAT, PayPal, and regional gateways (e.g. Tap, Checkout.com, HyperPay, PayTabs,
   Moyasar) chosen per market. Criteria: MENA card coverage (mada, KNET, local wallets), recurring
   billing, payouts for creator support (Epic 24), fees, PCI scope staying with the provider (card data

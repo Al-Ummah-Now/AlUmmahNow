@@ -356,7 +356,7 @@ async function resolveOwner(env: BillingEnv, provider: PaymentProviderId, mode: 
 	const checkoutId = event.checkoutId ?? sub.checkoutId ?? null;
 	const checkout = checkoutId ? await readCheckout(env, checkoutId) : null;
 	let userId = existing?.user_id ?? null;
-	// Our own ids echoed back (Paddle custom_data, the test provider): only when the checkout agrees
+	// Our own ids echoed back (the test provider): only when the checkout agrees
 	if (!userId && checkout && checkout.provider === provider && (!event.userId || event.userId === checkout.user_id)) userId = checkout.user_id;
 	const customerRef = event.customerRef ?? sub.customerRef ?? null;
 	if (!userId && customerRef) userId = await userOfCustomer(env, provider, mode, customerRef);
