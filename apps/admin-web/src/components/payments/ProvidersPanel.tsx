@@ -19,6 +19,7 @@ import { cardClass, fieldClass, linkClass } from '@/components/ui';
 import { billingRequest } from '@/lib/list/api-client';
 import { hasCredentials, hasLiveMode, parseMissing, providerSettings, settingValid, settingsChanges } from '@/lib/payments';
 import { CopyButton, ToneChip, hintClass, labelClass, providerName, sectionTitle, useBillingAction } from './shared';
+import { Select } from '@/components/select/Select';
 
 interface Props {
   providers: PaymentProviderConfig[];
@@ -268,14 +269,14 @@ function SettingsForm({ provider, mode, locked, canManage, onSave }: { provider:
               {label}
             </label>
             {spec.kind === 'choice' ? (
-              <select id={id} className={`${fieldClass} w-full`} value={draft[storageKey] ?? ''} disabled={!canManage} onChange={(e) => setDraft((d) => ({ ...d, [storageKey]: e.target.value }))} aria-describedby={`${id}-hint`}>
+              <Select id={id} className={`${fieldClass} w-full`} value={draft[storageKey] ?? ''} disabled={!canManage} onChange={(e) => setDraft((d) => ({ ...d, [storageKey]: e.target.value }))} aria-describedby={`${id}-hint`}>
                 <option value="">{t('payments.provider.choose')}</option>
                 {(spec.options ?? []).map((o) => (
                   <option key={o} value={o}>
                     {o}
                   </option>
                 ))}
-              </select>
+              </Select>
             ) : (
               <input id={id} name={storageKey} dir="ltr" className={`${fieldClass} w-full`} value={draft[storageKey] ?? ''} maxLength={spec.maxLength} readOnly={!canManage} autoComplete="off" data-1p-ignore="" data-bwignore="true" data-lpignore="true" spellCheck={false} onChange={(e) => setDraft((d) => ({ ...d, [storageKey]: e.target.value }))} aria-describedby={`${id}-hint`} data-testid={`payments-setting-${provider.id}-${spec.key}`} />
             )}

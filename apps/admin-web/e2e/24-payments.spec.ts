@@ -20,6 +20,7 @@ import { adminApi, readTokens } from './support/api';
 import { LOCAL_STACK, accounts, storageStatePath } from './support/env';
 import { eraseRowsMentioning } from './support/local-stack';
 import { createVideosProfile } from './support/profiles';
+import { pickOption } from './support/ui';
 
 interface Link {
   provider: string;
@@ -134,8 +135,8 @@ test.describe('payments', () => {
     noBrowserDialogs(page);
     await page.goto('/payments?tab=prices');
     const form = page.getByTestId('payments-price-form');
-    await form.getByTestId('payments-price-tier').selectOption(tierId);
-    await form.getByTestId('payments-price-period').selectOption('month');
+    await pickOption(form.getByTestId('payments-price-tier'), tierId);
+    await pickOption(form.getByTestId('payments-price-period'), 'month');
     await form.getByTestId('payments-price-currency').fill(CURRENCY);
     await form.getByTestId('payments-price-amount').fill('4.99');
     await form.getByTestId('payments-price-save').click();
@@ -160,7 +161,7 @@ test.describe('payments', () => {
     // Admins never type ids: search the user by name and pick them
     await page.getByTestId('payments-comp-user-input').fill(compName);
     await page.getByTestId('payments-comp-user-option').first().click();
-    await page.getByTestId('payments-comp-tier').selectOption(tierId);
+    await pickOption(page.getByTestId('payments-comp-tier'), tierId);
     await page.getByTestId('payments-comp-reason').fill('[e2e-admin] payments spec');
     await page.getByTestId('payments-comp-submit').click();
     // No confirm: it acts at once; the toast names who got which tier, with Undo

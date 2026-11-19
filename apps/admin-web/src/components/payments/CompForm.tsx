@@ -21,6 +21,7 @@ import { compUntil } from '@/lib/payments';
 import { DateField } from '@/components/DateField';
 import { hintClass, labelClass, useBillingAction } from './shared';
 import type { TierOption } from './PricesPanel';
+import { Select } from '@/components/select/Select';
 
 type Problem = 'invalidUser' | 'chooseTier' | 'invalidUntil' | 'reasonRequired';
 
@@ -121,14 +122,14 @@ export function CompForm({ tiers, userId: fixedUser, onDone }: { tiers: TierOpti
               <label htmlFor={`${ids}-tier`} className={labelClass}>
                 {t('payments.comp.tier')}
               </label>
-              <select id={`${ids}-tier`} className={`${fieldClass} w-full`} value={tierId} onChange={(e) => setTierId(e.target.value)} aria-invalid={problem === 'chooseTier' || undefined} data-testid="payments-comp-tier">
+              <Select id={`${ids}-tier`} className={`${fieldClass} w-full`} value={tierId} onChange={(e) => setTierId(e.target.value)} aria-invalid={problem === 'chooseTier' || undefined} data-testid="payments-comp-tier">
                 <option value="">{t('payments.provider.choose')}</option>
                 {tiers.map((x) => (
                   <option key={x.id} value={x.id}>
                     {x.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
             <div>
               <label htmlFor={`${ids}-until`} className={labelClass}>
