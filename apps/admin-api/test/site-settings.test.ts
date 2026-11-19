@@ -36,7 +36,8 @@ describe('site theme setting', () => {
     const { db, log } = fakeDb();
     assert.equal(await writeSiteTheme(db, 'nahas', 'admin1', 'log1', 'now'), true);
     assert.equal((await readSiteTheme(db)).theme, 'nahas');
-    assert.deepEqual(log, [['log1', 'site.theme', null, 'nahas', 'admin1', 'now']]);
+    // The last value is the acting request's origin (null outside a request, as here)
+    assert.deepEqual(log, [['log1', 'site.theme', null, 'nahas', 'admin1', 'now', null]]);
   });
 
   it('writes no audit row when nothing changes', async () => {
