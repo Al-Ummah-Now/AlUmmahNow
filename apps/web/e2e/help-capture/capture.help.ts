@@ -403,11 +403,12 @@ async function mark(page: Page, lang: Lang, targets: Locator[], note: (msg: stri
         return texts.reduce((n, t) => n + area(box, t) * 10, 0) + others.reduce((n, t) => n + area(box, t), 0);
       };
       const [x, y] = spot ?? [...candidates].sort((a, b) => cost(a) - cost(b))[0];
-      placed.push({ x, y, w: S, h: S });
-      // Checked, not hoped: a number on text or on another number fails the picture
+      // Checked, not hoped: a number on text or on another number fails the picture (checked before
+      // this number joins the placed ones, so it is never compared with itself)
       const box = { x, y, w: S, h: S };
       if (texts.some((t) => hit(box, t))) faults.push(`number ${target.dataset.helpTarget} covers text`);
       if (cost([x, y]) === Infinity) faults.push(`number ${target.dataset.helpTarget} has no spot on screen clear of the other numbers`);
+      placed.push({ x, y, w: S, h: S });
       const m = document.createElement('span');
       m.dataset.helpMarker = '';
       m.textContent = Number(target.dataset.helpTarget).toLocaleString(rtl ? 'ar-u-nu-arab' : 'en');
