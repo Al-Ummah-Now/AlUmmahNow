@@ -254,7 +254,9 @@ export const WORKERS: StackWorker[] = [
     requires: '.open-next/worker.js',
     vars: {
       LOG_LEVEL: 'info',
-      NEXTJS_ENV: 'qa',
+      // The header's environment badge: 'qa' for tests; owner-facing pictures boot with
+      // LOCAL_STACK_NEXTJS_ENV=production so no QA pill shows (help-pictures.yml)
+      NEXTJS_ENV: process.env.LOCAL_STACK_NEXTJS_ENV || 'qa',
       Issuer: url('auth'),
       OPENAUTH_ISSUER: url('auth'),
       API_URL: url('api-videos'),
@@ -294,7 +296,9 @@ export const WORKERS: StackWorker[] = [
     requires: '.open-next/worker.js',
     vars: {
       LOG_LEVEL: 'info',
-      NEXTJS_ENV: 'qa',
+      // The header's environment badge: 'qa' for tests; owner-facing pictures boot with
+      // LOCAL_STACK_NEXTJS_ENV=production so no QA pill shows (help-pictures.yml)
+      NEXTJS_ENV: process.env.LOCAL_STACK_NEXTJS_ENV || 'qa',
       Issuer: url('auth'),
       API_URL: url('api-videos'),
       NEXT_PUBLIC_API_URL: url('api-videos'),

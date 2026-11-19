@@ -170,6 +170,10 @@ node --experimental-strip-types --no-warnings scripts/local-stack/smoke.ts      
 `LOCAL_STACK_AUTH_DIR` points at another Auth checkout, and `LOCAL_STACK_DIR` moves the state dir
 (`.local-stack/`).
 
+`LOCAL_STACK_NEXTJS_ENV` sets web's and admin-web's `NEXTJS_ENV` (default `qa`, which shows the header's QA badge).
+Pictures people see boot with `production` (the Help pictures and owner review shots, `help-pictures.yml`), so no
+QA pill shows in them.
+
 **The CMS or www from a branch or a local checkout.** To try a cross-app change before the sibling
 repo releases it, build that repo's bundle yourself instead of fetching the released one, then boot:
 
