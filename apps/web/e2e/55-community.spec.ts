@@ -410,7 +410,9 @@ test.describe('Post manager', () => {
     await expectRtl(page);
     await expect(page.getByRole('heading', { level: 1, name: 'تعديل المنشور' })).toBeVisible();
     await expect(page.getByTestId('edit-post-save')).toHaveText('حفظ التغييرات');
-    await expect(page.getByTestId('edit-post-back')).toHaveAccessibleName('العودة إلى المنشورات');
+    // One way back: the breadcrumb's arrow to the post list (no second arrow in the bar)
+    await expect(page.getByTestId('settings-back')).toHaveAccessibleName('العودة إلى منشورات المجتمع');
+    await expect(page.getByTestId('edit-post-back')).toHaveCount(0);
     await openNewPost(page, 'ar');
     await expect(page.getByText('وقت النشر')).toBeVisible();
     await page.getByTestId('post-schedule-later').check();
@@ -430,8 +432,9 @@ test.describe('Post manager', () => {
     await expectRtl(page);
     await expect(page.getByRole('heading', { level: 1, name: 'منشور جديد' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'اختر نوع المنشور' })).toBeVisible();
-    // The way back is a link to the post list, named for it (00bb5d05), not a "رجوع" button
-    const back = page.getByTestId('new-post-back');
+    // The way back is the breadcrumb's link to the post list, named for it (00bb5d05); no second arrow in the bar
+    await expect(page.getByTestId('new-post-back')).toHaveCount(0);
+    const back = page.getByTestId('settings-back');
     await expect(back).toHaveAccessibleName('العودة إلى منشورات المجتمع');
     await expect(back).toHaveAttribute('href', `/ar/settings/channel/${channelId()}/community`);
     await selectType(page, 'text');

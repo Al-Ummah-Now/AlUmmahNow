@@ -4,7 +4,6 @@ import { logger } from '@/lib/logger-client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PostType, PostVisibility, CreateCommunityPostRequest } from '@al-ummah/shared-types';
-import Link from '@/components/common/AppLink';
 import { Button } from '@/components/ui/button';
 import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -28,7 +27,7 @@ import { uploadPostImage } from '@/components/Community/management/forms/PostIma
 import { tooLargeMessage } from '@/lib/community/upload-limits';
 import { PostSchedulePicker, scheduleProblem, scheduledIso, type ScheduleProblem, type ScheduleState } from '@/components/Community/management/PostSchedulePicker';
 import { createCommunityPost } from '@/lib/api/community-posts';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 interface NewPostFormProps {
   locale: string;
@@ -291,20 +290,7 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
         <div className="container mx-auto max-w-7xl px-4 md:px-6">
         <div className="flex items-center justify-between gap-3 border-b border-[var(--fanous-color-divider)] py-3 md:py-4">
           <div className="flex items-center gap-2 md:gap-3">
-            <Button
-              asChild
-              variant="ghost"
-              size="icon"
-              className="w-11 h-11"
-            >
-              <Link
-                href={`/${locale}/settings/channel/${id}/community`}
-                aria-label={t.common.backTo ? t.common.backTo.replace('{page}', t.channel.communitySettings || t.community.community) : t.common.back}
-                data-testid="new-post-back"
-              >
-                <ArrowLeft className="w-5 h-5 rtl:-scale-x-100" aria-hidden="true" />
-              </Link>
-            </Button>
+            {/* The way back is the breadcrumb's arrow above (one back link per page, owner review) */}
             <ComposerAvatar src={postChannel?.avatarUrl} name={postChannelName} as="channel" testId="post-identity" />
             <h1 className="text-lg md:text-2xl font-bold">
               {isRTL ? 'منشور جديد' : 'New post'}
@@ -343,7 +329,7 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
           <div className="lg:col-span-2 space-y-6">
             <section className={PANEL}>
               <h2 className="text-base md:text-lg font-semibold mb-4">
-                {isRTL ? 'اختر نوع المنشور' : 'Select Post Type'}
+                {isRTL ? 'اختر نوع المنشور' : 'Select post type'}
               </h2>
               <PostTypeSelector
                 selected={selectedType}
@@ -358,7 +344,7 @@ export default function NewPostForm({ locale, id, channelName, channelHandle }: 
             {selectedType && (
               <section className={PANEL}>
                 <h2 className="text-base md:text-lg font-semibold mb-4">
-                  {isRTL ? 'محتوى المنشور' : 'Post Content'}
+                  {isRTL ? 'محتوى المنشور' : 'Post content'}
                 </h2>
 
                 {selectedType === PostType.TEXT && (

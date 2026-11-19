@@ -10,9 +10,8 @@
 import { useEffect, useState } from 'react';
 import { Switch } from '@/components/common/Switch';
 import { useRouter } from 'next/navigation';
-import { Loader2, ArrowLeft } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { PostStatus, PostType, PostVisibility, type CommunityPost, type UpdateCommunityPostRequest } from '@al-ummah/shared-types';
-import Link from '@/components/common/AppLink';
 import ChannelSettingsBreadcrumb from '@/components/ChannelSettingsBreadcrumb';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -194,11 +193,7 @@ export default function EditPostForm({ locale, channelId, post, channelName, cha
         <div className="container mx-auto max-w-7xl px-4 md:px-6">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--fanous-color-divider)] py-3 md:py-4">
           <div className="flex items-center gap-2 md:gap-3">
-            <Button asChild variant="ghost" size="icon" className="w-11 h-11">
-              <Link href={listHref} aria-label={texts.backToPosts} data-testid="edit-post-back">
-                <ArrowLeft className="w-5 h-5 rtl:-scale-x-100" aria-hidden="true" />
-              </Link>
-            </Button>
+            {/* The way back is the breadcrumb's arrow above (one back link per page, owner review) */}
             <h1 className="text-lg md:text-2xl font-bold">{texts.editPostTitle}</h1>
             <Badge variant="secondary">{typeLabel[post.type] ?? post.type}</Badge>
           </div>
