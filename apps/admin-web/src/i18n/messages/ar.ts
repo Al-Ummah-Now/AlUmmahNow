@@ -5527,6 +5527,23 @@ const ar: Messages = {
       },
       perMode: 'يُحفظ منفصلًا للاختبار وللمباشر.',
       choose: 'اختر…',
+      settingOptions: {
+        taxCategory: {
+          standard: 'قياسية',
+          'digital-goods': 'سلع رقمية',
+          saas: 'برمجيات كخدمة',
+          ebooks: 'كتب إلكترونية',
+          'implementation-services': 'خدمات التنفيذ',
+          'professional-services': 'خدمات مهنية',
+          'training-services': 'خدمات التدريب',
+          'website-hosting': 'استضافة المواقع',
+        },
+        taxMode: {
+          account_setting: 'حسب إعداد حساب Paddle',
+          internal: 'الأسعار شاملة الضريبة',
+          external: 'تُضاف الضريبة عند الدفع',
+        },
+      },
       saveSettings: 'حفظ الإعدادات',
       invalidSetting: '{name} ليس بالصيغة المتوقعة.',
       credentialsTitle: 'المفاتيح ({mode})',

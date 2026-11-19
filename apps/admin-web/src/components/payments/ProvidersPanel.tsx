@@ -12,7 +12,7 @@ import { useId, useState } from 'react';
 import { useUndoableAction } from '@/components/undo/UndoToast';
 import { PAYMENT_CREDENTIAL_FIELDS, PAYMENT_MODES, PAYMENT_PROVIDERS, type PaymentCredentialField, type PaymentMode, type PaymentProviderConfig } from '@al-ummah/shared-types';
 import { useLanguage } from '@/i18n/I18nProvider';
-import { formatDate, type MessageKey } from '@/i18n/translate';
+import { formatDate, translateDynamic, type MessageKey } from '@/i18n/translate';
 import { ActionFeedback, useConfirm } from '@/components/content/actions';
 import { primarySmallButtonClass, smallButtonClass, dangerButtonClass } from '@/components/content/parts';
 import { cardClass, fieldClass, linkClass } from '@/components/ui';
@@ -273,7 +273,8 @@ function SettingsForm({ provider, mode, locked, canManage, onSave }: { provider:
                 <option value="">{t('payments.provider.choose')}</option>
                 {(spec.options ?? []).map((o) => (
                   <option key={o} value={o}>
-                    {o}
+                    {/* The provider's code stays the value; the admin reads a label in their language (#1649) */}
+                    {translateDynamic(t, `payments.provider.settingOptions.${spec.key}`, o)}
                   </option>
                 ))}
               </Select>

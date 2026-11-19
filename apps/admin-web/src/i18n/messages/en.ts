@@ -5528,6 +5528,23 @@ const en = {
       },
       perMode: 'Kept separately for test and live.',
       choose: 'Choose…',
+      settingOptions: {
+        taxCategory: {
+          standard: 'Standard',
+          'digital-goods': 'Digital goods',
+          saas: 'Software as a service',
+          ebooks: 'E-books',
+          'implementation-services': 'Implementation services',
+          'professional-services': 'Professional services',
+          'training-services': 'Training services',
+          'website-hosting': 'Website hosting',
+        },
+        taxMode: {
+          account_setting: 'As set in your Paddle account',
+          internal: 'Prices include tax',
+          external: 'Tax added at checkout',
+        },
+      },
       saveSettings: 'Save settings',
       invalidSetting: '{name} is not in the expected format.',
       credentialsTitle: 'Keys ({mode})',
