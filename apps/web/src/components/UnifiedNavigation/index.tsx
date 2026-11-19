@@ -252,8 +252,11 @@ export function UnifiedNavigation() {
       { label: t.navigation.writeArticle, icon: PenLine, href: cms.write },
       { label: t.navigation.myArticles, icon: FileText, href: cms.articles },
     ] : []),
-    // Every signed-in user: their tier, the other tiers and a request (wiki AUN-TIER-REQUESTS)
-    { label: t.navigation.upgrade, icon: CircleArrowUp, href: `/${lang}${ACCOUNT_MENU_PATHS.upgrade}`, testId: 'nav-menu-upgrade' },
+    // The tiers and a request or a subscription (wiki AUN-TIER-REQUESTS, AUN-SUBS), only while /upgrade exists:
+    // requests off and no provider ('closed') make it an off feature, so no entry point (owner decision 2026-11-19)
+    ...(creatorAccess.status === 'ready' && (creatorAccess.access.upgradeMode === 'request' || creatorAccess.access.upgradeMode === 'pay')
+      ? [{ label: t.navigation.upgrade, icon: CircleArrowUp, href: `/${lang}${ACCOUNT_MENU_PATHS.upgrade}`, testId: 'nav-menu-upgrade' }]
+      : []),
     { label: t.header.settings, icon: Settings, href: `/${lang}${ACCOUNT_MENU_PATHS.settings}` },
   ] as { label: string; icon: typeof Settings; href: string; testId?: string }[];
   // The other Al Ummah Now apps this account may open (docs/design/NAV.md), same order everywhere

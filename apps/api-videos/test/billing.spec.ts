@@ -218,13 +218,16 @@ describe('test provider: checkout → pay → webhook → tier', () => {
 		assert.equal((await upgradeMode(ctx.env)).mode, 'request');
 		assert.equal((await overview()).mode, 'request');
 		assert.equal(await headerMode(), 'request', 'the header pill reads the mode from /api/me/creator');
-		// 2. No provider, requests off: closed; a request is refused (403)
+		// 2. No provider, requests off: closed. /upgrade is an off feature (owner 2026-11-19): the overview and a
+		// request answer 404 feature_off, and the header shows no pill
 		assert.deepEqual(await setRequestsAllowed(ctx.env.SEARCH_DB as D1Database, false, 'admin-1'), { previous: true, allowed: false });
-		assert.equal((await overview()).mode, 'closed');
+		const hidden = await app.request('/api/tiers/upgrade', {}, ctx.env);
+		assert.equal(hidden.status, 404);
+		assert.equal(((await hidden.json()) as { code: string }).code, 'feature_off');
 		assert.equal(await headerMode(), 'closed');
 		const closed = await ask();
-		assert.equal(closed.status, 403);
-		assert.equal(((await closed.json()) as { code: string }).code, 'tier_requests_off');
+		assert.equal(closed.status, 404);
+		assert.equal(((await closed.json()) as { code: string }).code, 'feature_off');
 		// 3. A provider enabled: pay, whatever the setting (on again here); a request is refused
 		await setRequestsAllowed(ctx.env.SEARCH_DB as D1Database, true, 'admin-1');
 		await sellCreator(ctx);

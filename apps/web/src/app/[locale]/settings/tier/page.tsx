@@ -17,7 +17,7 @@ import { MAIN_CONTENT_ID } from '@/components/SkipLinks';
 import { SignInPrompt } from '@/components/common/SignInPrompt';
 import { TierRequestHistory } from '@/components/upgrade/TierRequestHistory';
 import { QUIET } from '@/components/upgrade/buttons';
-import { fetchUpgradeOverview } from '@/lib/api/tier-requests-client';
+import { fetchMyTier } from '@/lib/api/tier-requests-client';
 import { fillCopy, tierFeatures, tierName, type Lang } from '@/lib/upgrade/tiers';
 import { formatAbsoluteDate } from '@/lib/format/videoMeta';
 import { logger } from '@/lib/logger-client';
@@ -35,7 +35,7 @@ export default function SettingsTierPage() {
   useEffect(() => {
     if (!user) return;
     let live = true;
-    void fetchUpgradeOverview().then((res) => {
+    void fetchMyTier().then((res) => {
       if (!live) return;
       if (res.ok && res.result) return setLoad({ status: 'ready', overview: res.result });
       logger.warn('[settings-tier] Overview not loaded', { status: res.status, code: res.code });
@@ -81,14 +81,18 @@ export default function SettingsTierPage() {
               ))}
             </ul>
           )}
-          {/* The card's action, at its end edge like other card actions (owner kept it, 2026-11-16) */}
-          <div className="upg-current-foot">
-            <Link href={`/${lang}/upgrade`} className={QUIET} data-slot="button" data-testid="settings-tier-see-all">{copy.seeTiers}</Link>
-          </div>
+          {/* The card's action, at its end edge like other card actions (owner kept it, 2026-11-16). Requests off and
+              no provider: /upgrade is an off feature, so no link to it (owner decision 2026-11-19) */}
+          {overview.mode !== 'closed' && (
+            <div className="upg-current-foot">
+              <Link href={`/${lang}/upgrade`} className={QUIET} data-slot="button" data-testid="settings-tier-see-all">{copy.seeTiers}</Link>
+            </div>
+          )}
         </section>
       )}
 
-      {overview && <TierRequestHistory tiers={overview.tiers} />}
+      {/* The request history belongs to /upgrade's requests: gone with it while closed */}
+      {overview && overview.mode !== 'closed' && <TierRequestHistory tiers={overview.tiers} />}
     </main>
   );
 }

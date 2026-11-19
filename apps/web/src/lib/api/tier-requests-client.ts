@@ -38,6 +38,8 @@ async function call<T>(path: string, init: RequestInit & { auth?: 'required' | '
 }
 
 export const fetchUpgradeOverview = () => call<UpgradeOverview>('/api/tiers/upgrade', { auth: 'optional' });
+/** Settings › Tier: the user's own tier in every mode; `mode` 'closed' means /upgrade does not exist (no link, no request history). */
+export const fetchMyTier = () => call<UpgradeOverview>('/api/me/tier');
 
 export const submitTierRequest = (input: Omit<TierRequestInput, 'turnstileToken'>, turnstileToken?: string) =>
   call<{ request: TierRequest }>('/api/me/tier-requests', {

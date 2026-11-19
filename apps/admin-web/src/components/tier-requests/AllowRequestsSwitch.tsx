@@ -15,7 +15,8 @@ class SettingFailure extends Error {}
 /**
  * "Allow tier requests" (owner rule 2026-11-15, shared-types UPGRADE_MODES).
  * With no payment provider enabled it decides the Upgrade page: the request
- * form, or the tiers with "Upgrades aren't available right now". With a
+ * form, or (off) no Upgrade page at all: 404 feature_off, no links to it
+ * (owner decision 2026-11-19). With a
  * provider enabled the page sells and requests are off whatever this says.
  * Acts at once, audited, with Undo.
  */

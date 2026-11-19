@@ -3,7 +3,13 @@
  *
  *   GET  /api/tiers/upgrade                  what /upgrade shows: requestable tiers
  *                                            (never prices); signed in, also the
- *                                            user's tier and latest request
+ *                                            user's tier and latest request. With
+ *                                            requests off and no provider ('closed')
+ *                                            /upgrade is an off feature: 404 feature_off
+ *                                            (owner decision 2026-11-19)
+ *   GET  /api/me/tier                        the signed-in user's tier for Settings › Tier, in
+ *                                            every mode (closed included; mode says whether
+ *                                            /upgrade exists)
  *   POST /api/me/tier-requests               file a request (Turnstile via
  *                                            requireHuman('videos.tier_request'))
  *   POST /api/me/tier-requests/:id/withdraw  withdraw a pending request
@@ -17,6 +23,7 @@ import { enqueueNotification, type NotificationsEnv } from '../../lib/notificati
 import { logger } from '../../lib/logger';
 import { turnstileMode } from '../../lib/bot-guard';
 import { upgradeMode } from '../../lib/upgradeMode';
+import { featureOff } from '../../lib/features/off';
 
 type RolesAuth = { payload?: { roles?: string[] } } | undefined;
 const rolesOf = (c: Context) => (c.get('auth') as RolesAuth)?.payload?.roles;
@@ -32,11 +39,26 @@ export async function handleUpgradeOverview(c: Context) {
 	try {
 		const siteKey = turnstileMode(c.env) === 'off' ? null : (c.env.TURNSTILE_SITE_KEY as string | undefined) || null;
 		const { mode } = await upgradeMode(c.env);
+		// Closed (requests off, no provider): the page vanishes like any off feature (owner 2026-11-19)
+		if (mode === 'closed') return featureOff(c);
 		const result = await upgradeOverview(c.env.SEARCH_DB, userId ? { userId, roles: rolesOf(c) } : null, siteKey, mode);
 		// Per viewer when signed in; the tier list alone is the same for everyone
 		return c.json({ success: true, result }, 200, { 'Cache-Control': userId ? 'private, no-store' : 'public, max-age=60' });
 	} catch (error) {
 		return failure(c, error, 'Upgrade overview');
+	}
+}
+
+/** GET /api/me/tier: Settings › Tier's data in every mode. The user's tier always shows; `mode` tells the page whether /upgrade (and its request history) exists. */
+export async function handleMyTier(c: Context) {
+	const userId = c.get('userId') as string | undefined;
+	if (!userId) return c.json({ success: false, error: 'Authentication required' }, 401);
+	try {
+		const { mode } = await upgradeMode(c.env);
+		const result = await upgradeOverview(c.env.SEARCH_DB, { userId, roles: rolesOf(c) }, null, mode);
+		return c.json({ success: true, result }, 200, { 'Cache-Control': 'private, no-store' });
+	} catch (error) {
+		return failure(c, error, 'My tier');
 	}
 }
 
@@ -48,6 +70,7 @@ export async function handleCreateTierRequest(c: Context) {
 	try {
 		// Only in request mode: no provider enabled and the admin allows requests (owner rule 2026-11-15)
 		const { mode } = await upgradeMode(c.env);
+		if (mode === 'closed') return featureOff(c);
 		if (mode !== 'request') {
 			logger.info('[TierRequests] Request refused: requests are off', { userId, mode });
 			return c.json({ success: false, code: TIER_REQUEST_ERRORS.requestsOff, error: mode === 'pay' ? 'Tiers are sold on the Upgrade page; requests are off' : 'Upgrades are not available right now', mode }, 403);
