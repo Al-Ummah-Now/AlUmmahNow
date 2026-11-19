@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import Image from 'next/image';
 import Link from '@/components/common/AppLink';
-import { formatWatchTime, watchTimeUnit, type StudioVideoStatus, dateTimeFormat, numberFormat, fillTemplate, formatPercent } from '@al-ummah/shared-types';
+import { formatWatchTime, watchTimeUnit, type StudioVideoStatus, dateTimeFormat, numberFormat, fillTemplate, formatPercent, formatCountNoun } from '@al-ummah/shared-types';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -188,7 +188,7 @@ export function StudioDashboard({ locale, channelId, role, liveOn = false }: Pro
               <div className="min-w-0 text-sm">
                 <Link href={`${base}/content/videos/${encodeURIComponent(latest.id)}/edit`} dir="auto" className="block truncate font-medium text-foreground hover:underline">{latest.title}</Link>
                 <p className="mt-1 text-muted-foreground">
-                  {text.counts.replace('{views}', number.format(latest.views ?? 0)).replace('{likes}', number.format(latest.likesCount ?? 0)).replace('{comments}', number.format(latest.commentsCount ?? 0))}
+                  {fillTemplate(locale, text.counts, { views: formatCountNoun(locale, latest.views, 'view'), likes: formatCountNoun(locale, latest.likesCount, 'like'), comments: formatCountNoun(locale, latest.commentsCount, 'comment') })}
                 </p>
                 {latestWatchTime !== null && <p className="text-muted-foreground">{fillTemplate(locale, text.watchTime, { days: RECENT_DAYS, time: formatWatchTime(locale, watchTimeUnit(latestWatchTime))(latestWatchTime) })}</p>}
               </div>
