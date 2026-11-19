@@ -17,6 +17,7 @@ import { billingRequest } from '@/lib/list/api-client';
 import { useUndoableAction } from '@/components/undo/UndoToast';
 import { taxBody, taxDraft, type TaxDraft } from '@/lib/payments';
 import { hintClass, labelClass, useBillingAction } from './shared';
+import { NumberField } from '@/components/forms/NumberField';
 
 export function TaxPanel({ tax, canManage, onRefresh }: { tax: BillingTaxSettings; canManage: boolean; onRefresh: () => Promise<void> }) {
   const { t, locale } = useLanguage();
@@ -106,11 +107,10 @@ export function TaxPanel({ tax, canManage, onRefresh }: { tax: BillingTaxSetting
             <label htmlFor={field('taxRatePercent')} className={labelClass}>
               {t('payments.tax.taxRatePercent')}
             </label>
-            <input
+            <NumberField decimal
               id={field('taxRatePercent')}
               name="tax-rate"
               dir="ltr"
-              inputMode="decimal"
               className={`${fieldClass} w-28`}
               value={draft.taxRatePercent}
               onChange={(e) => set({ taxRatePercent: e.target.value })}

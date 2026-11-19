@@ -18,6 +18,7 @@ import { cardClass, fieldClass } from '@/components/ui';
 import { billingRequest } from '@/lib/list/api-client';
 import { canCancelAtPeriodEnd, canCancelSubscription, partialRefundAllowed, refundableAmount } from '@/lib/payments';
 import { hintClass, labelClass, providerName, useBillingAction } from './shared';
+import { NumberField } from '@/components/forms/NumberField';
 
 export function CancelSubscription({ subscription: s }: { subscription: AdminBillingSubscriptionRow }) {
   const { t, locale } = useLanguage();
@@ -163,7 +164,7 @@ export function RefundPayment({ payment }: { payment: BillingPayment }) {
               <label htmlFor={`${ids}-amount`} className={labelClass}>
                 {t('payments.refund.amount')}
               </label>
-              <input id={`${ids}-amount`} dir="ltr" inputMode="decimal" className={`${fieldClass} w-40`} value={amount} onChange={(e) => setAmount(e.target.value)} aria-describedby={`${ids}-amount-hint`} data-testid="payments-refund-amount" />
+              <NumberField decimal id={`${ids}-amount`} dir="ltr" className={`${fieldClass} w-40`} value={amount} onChange={(e) => setAmount(e.target.value)} aria-describedby={`${ids}-amount-hint`} data-testid="payments-refund-amount" />
               <p id={`${ids}-amount-hint`} className={hintClass}>
                 {t('payments.refund.amountHint', { max })}
               </p>
