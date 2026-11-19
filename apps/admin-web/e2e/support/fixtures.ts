@@ -10,6 +10,8 @@ interface Fixtures {
 export const test = base.extend<Fixtures>({
   makeReport: async ({}, use) => {
     const created: string[] = [];
+    // Playwright's fixture callback is named `use`; it is not a React hook
+    // eslint-disable-next-line react-hooks/rules-of-hooks
     await use(async (options) => {
       const report = await createReport(options);
       created.push(report.id);

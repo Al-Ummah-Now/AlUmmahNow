@@ -22,14 +22,22 @@ const CODE = 'videos_account_pending_deletion';
 
 const subject: { id?: string; token?: string; deleted?: boolean } = {};
 
-async function asUser(method: string, path: string, body?: unknown): Promise<{ status: number; body: any }> {
+/** The fields these checks read from an api-videos JSON reply. */
+interface ApiBody {
+  code?: string;
+  error?: string;
+  deletion?: { purgeAfter?: string };
+  result?: { pendingDeletion?: boolean; [key: string]: unknown };
+}
+
+async function asUser(method: string, path: string, body?: unknown): Promise<{ status: number; body: ApiBody }> {
   const res = await fetch(`${VIDEOS_API_URL}${path}`, {
     method,
     headers: { 'content-type': 'application/json', authorization: `Bearer ${subject.token}` },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
   const text = await res.text();
-  let parsed: any = {};
+  let parsed: ApiBody = {};
   try {
     parsed = text ? JSON.parse(text) : {};
   } catch {
@@ -94,7 +102,7 @@ test.describe('pending deletion of a user\'s videos data', () => {
     expect(refused.status).toBe(403);
     expect(refused.body.code).toBe(CODE);
     expect(refused.body.error).toBe('Your videos account is scheduled for deletion. Contact support.');
-    expect(Date.parse(refused.body.deletion.purgeAfter)).toBeGreaterThan(Date.now());
+    expect(Date.parse(refused.body.deletion?.purgeAfter ?? '')).toBeGreaterThan(Date.now());
     for (const [method, path, body] of [
       ['POST', '/api/videos/upload/initiate', { title: 'x', fileName: 'x.mp4', fileSize: 1, contentType: 'video/mp4' }],
       ['POST', '/api/profiles', { email: 'x@e2e.alummahnow.net', userName: 'x', displayName: 'x', timezone: 'UTC' }],
@@ -120,6 +128,6 @@ test.describe('pending deletion of a user\'s videos data', () => {
     // No polling: a "pending" answer is never cached
     expect((await asUser('PUT', '/api/profile', { bio: 'after' })).status).toBe(200);
     expect((await asUser('GET', '/api/profile')).status).toBe(200);
-    expect((await asUser('GET', '/api/me/creator')).body.result.pendingDeletion).toBeUndefined();
+    expect((await asUser('GET', '/api/me/creator')).body.result?.pendingDeletion).toBeUndefined();
   });
 });
