@@ -38,6 +38,7 @@ import { releaseEnv, target } from './targets';
 import { apiFetch, createProfile, signInAgain, signUpOnWeb, type Locale, type WebUser } from './web-session';
 import { grantCreatorTier, setCreatorTier } from './creator-tier';
 import { encoding, untilEncoded } from './encode';
+import { isProviderUploadFailure } from './provider-rules';
 import { isRunUserEmail, runId } from '../test-utils/run-users';
 
 const FIXTURES = path.join(__dirname, '..', 'test-fixtures');
@@ -279,9 +280,25 @@ async function deleteAccount(email: string, signal?: AbortSignal): Promise<Respo
  * end-of-job leftover checks look for its Bunny video, collection and R2 objects even after the
  * D1 rows are gone (scripts/e2e/run-leftovers.ts).
  */
-export function recordResource(kind: 'video' | 'channel', id: string): void {
+export function recordResource(kind: 'video' | 'channel' | 'provider-retry', id: string): void {
   if (process.env.E2E_RUN_RESOURCES_FILE) appendFileSync(process.env.E2E_RUN_RESOURCES_FILE, `${kind} ${id}\n`);
 }
+
+const SLOW_ENCODE_ISSUE = 'https://github.com/Al-Ummah-Now/AlUmmahNow/issues/929';
+
+/** Bunny failed an upload twice (createVideo): a provider slowdown, not a product failure. */
+export class ProviderUploadError extends Error {
+  override name = 'ProviderUploadError';
+}
+
+const inTest = (): boolean => {
+  try {
+    base.info();
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 /** Everything one spec (or worker) created, deleted again by cleanup(). */
 export class DataScope {
@@ -381,45 +398,34 @@ export class DataScope {
     const clip = opts.clip ?? 'landscape90';
     const bytes = readFileSync(path.join(FIXTURES, CLIPS[clip].file));
     const title = opts.title ?? `E2E ${clip} ${ns()} ${Date.now().toString(36)}`;
-    const initiate = (await ok(
-      await apiFetch(user, '/api/videos/upload/initiate', json({ title, description: `Created by ${ns()}`, fileSize: bytes.length, mimeType: 'video/mp4', isPublic: opts.isPublic ?? true }, channelId)),
-      'POST /api/videos/upload/initiate',
-    )) as { result?: { videoId?: string; tusSessionId?: string } };
-    const id = initiate.result?.videoId as string;
-    const tusSessionId = initiate.result?.tusSessionId as string;
-    expect(id && tusSessionId, 'upload initiate returned no videoId/tusSessionId').toBeTruthy();
-    recordResource('video', id);
-    this.uploader.set(id, user);
-    // Cleanup deletes for good (record, media, the Bunny video, search/ownership rows), even mid-encode
-    // or after an interrupted upload: trash first (the owner's delete), then the permanent delete
-    this.undo.push({
-      what: `video ${id}`,
-      run: async () => {
-        await apiFetch(user, `/api/videos/${id}`, { method: 'DELETE', headers: { channelId } });
-        return apiFetch(user, `/api/videos/${id}/permanent`, { method: 'DELETE', headers: { channelId } });
-      },
-    });
-
-    const b64 = (v: string) => Buffer.from(v, 'utf8').toString('base64');
-    const create = await apiFetch(user, '/api/videos/tus', {
-      method: 'POST',
-      headers: {
-        'Tus-Resumable': '1.0.0',
-        'Upload-Length': String(bytes.length),
-        'Upload-Metadata': [`tusSessionId ${b64(tusSessionId)}`, `videoId ${b64(id)}`, `filename ${b64(CLIPS[clip].file)}`, `filetype ${b64('video/mp4')}`].join(','),
-      },
-    });
-    if (create.status >= 300) throw new Error(`TUS create answered ${create.status}: ${(await create.text()).slice(0, 400)}`);
-    const location = create.headers.get('Location');
-    expect(location, 'TUS create returned no Location').toBeTruthy();
-    const patch = await fetch(new URL(location as string, target().api), {
-      method: 'PATCH',
-      headers: { Authorization: `Bearer ${user.accessToken}`, 'Tus-Resumable': '1.0.0', 'Upload-Offset': '0', 'Content-Type': 'application/offset+octet-stream' },
-      body: new Uint8Array(bytes),
-    });
-    // Thrown, not expect(...): the matcher's message did not show in the logs (#1957). The answer's body says nothing
-    // more than "Upload not found" on purpose; the cf-ray finds the request in the Worker's logs, which say why
-    if (patch.status >= 300) throw new Error(`TUS PATCH answered ${patch.status} (cf-ray ${patch.headers.get('cf-ray') ?? 'none'}): ${(await patch.text()).slice(0, 200)}`);
+    // Bunny trouble on the upload (its 503s, a fresh upload it says is gone) gets one more try with a
+    // new video; the first is deleted. A second one is a provider slowdown (#929); our errors fail.
+    let id = '';
+    for (let attempt = 1; ; attempt++) {
+      const upload = await this.initiateVideo(user, channelId, { title, size: bytes.length, isPublic: opts.isPublic ?? true });
+      id = upload.id;
+      const failure = await this.sendFile(user, upload, bytes, CLIPS[clip].file);
+      if (!failure) break;
+      // Keep the PATCH ray from #1957 to locate the matching Worker log when the body is generic.
+      const ray = failure.step === 'TUS PATCH' ? ` (cf-ray ${failure.ray ?? 'none'})` : '';
+      const answer = `${failure.step} answered ${failure.status}${ray}`;
+      if (!isProviderUploadFailure(failure.status, failure.body)) {
+        const bodyLimit = failure.step === 'TUS create' ? 400 : 200;
+        throw new Error(`${answer}: ${failure.body.slice(0, bodyLimit)}`);
+      }
+      for (const path of [`/api/videos/${id}`, `/api/videos/${id}/permanent`]) {
+        await apiFetch(user, path, { method: 'DELETE', headers: { channelId }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }).catch(() => undefined);
+      }
+      if (attempt === 2) {
+        const reason = `Bunny upload failed twice. ${answer}: ${failure.body.slice(0, 200)} (${SLOW_ENCODE_ISSUE})`;
+        // In a test or hook: skip it, like a slow encode. In the global setup: the caller decides (run-videos.ts)
+        if (inTest()) base.skip(true, reason);
+        throw new ProviderUploadError(reason);
+      }
+      console.warn(`[builders] ${answer} (${failure.body.slice(0, 120)}): uploading "${title}" again as a new video`);
+      // The workflow's Bunny upload cap allows one more upload per recorded retry (release-e2e.yml)
+      recordResource('provider-retry', `${ns()}-${id}`);
+    }
     await ok(await apiFetch(user, '/api/videos/upload/complete', json({ videoId: id, fileSize: bytes.length, duration: CLIPS[clip].duration }, channelId)), 'POST /api/videos/upload/complete');
 
     if (opts.chapters) {
@@ -445,6 +451,61 @@ export class DataScope {
     }
     if (opts.waitReady ?? true) await this.waitReady(id, title);
     return { id, title, channelId, clip };
+  }
+
+  /** POST /api/videos/upload/initiate: a new video record (recorded, deleted by cleanup). */
+  private async initiateVideo(
+    user: WebUser,
+    channelId: string,
+    v: { title: string; size: number; isPublic: boolean },
+  ): Promise<{ id: string; tusSessionId: string }> {
+    const initiate = (await ok(
+      await apiFetch(user, '/api/videos/upload/initiate', json({ title: v.title, description: `Created by ${ns()}`, fileSize: v.size, mimeType: 'video/mp4', isPublic: v.isPublic }, channelId)),
+      'POST /api/videos/upload/initiate',
+    )) as { result?: { videoId?: string; tusSessionId?: string } };
+    const id = initiate.result?.videoId as string;
+    const tusSessionId = initiate.result?.tusSessionId as string;
+    expect(id && tusSessionId, 'upload initiate returned no videoId/tusSessionId').toBeTruthy();
+    recordResource('video', id);
+    this.uploader.set(id, user);
+    // Cleanup deletes for good (record, media, the Bunny video, search/ownership rows), even mid-encode
+    // or after an interrupted upload: trash first (the owner's delete), then the permanent delete
+    this.undo.push({
+      what: `video ${id}`,
+      run: async () => {
+        await apiFetch(user, `/api/videos/${id}`, { method: 'DELETE', headers: { channelId } });
+        return apiFetch(user, `/api/videos/${id}/permanent`, { method: 'DELETE', headers: { channelId } });
+      },
+    });
+    return { id, tusSessionId };
+  }
+
+  /** Uploads through the TUS proxy and returns the failed step and its response, or null on success. */
+  private async sendFile(
+    user: WebUser,
+    { id, tusSessionId }: { id: string; tusSessionId: string },
+    bytes: Buffer,
+    filename: string,
+  ): Promise<{ step: 'TUS create' | 'TUS PATCH'; status: number; body: string; ray?: string | null } | null> {
+    const b64 = (v: string) => Buffer.from(v, 'utf8').toString('base64');
+    const create = await apiFetch(user, '/api/videos/tus', {
+      method: 'POST',
+      headers: {
+        'Tus-Resumable': '1.0.0',
+        'Upload-Length': String(bytes.length),
+        'Upload-Metadata': [`tusSessionId ${b64(tusSessionId)}`, `videoId ${b64(id)}`, `filename ${b64(filename)}`, `filetype ${b64('video/mp4')}`].join(','),
+      },
+    });
+    if (create.status >= 300) return { step: 'TUS create', status: create.status, body: await create.text() };
+    const location = create.headers.get('Location');
+    expect(location, 'TUS create returned no Location').toBeTruthy();
+    const patch = await fetch(new URL(location as string, target().api), {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${user.accessToken}`, 'Tus-Resumable': '1.0.0', 'Upload-Offset': '0', 'Content-Type': 'application/offset+octet-stream' },
+      body: new Uint8Array(bytes),
+    });
+    if (patch.status >= 300) return { step: 'TUS PATCH', status: patch.status, body: await patch.text(), ray: patch.headers.get('cf-ray') };
+    return null;
   }
 
   /**

@@ -10,6 +10,8 @@ import { chromium, expect, type Browser, type BrowserContext, type Page } from '
 import { promoteToAdmin } from './sink';
 import { sinkEmail, target } from './targets';
 import { completeRegistration, submitPasswordSignIn } from './web-session';
+import { watchProviderHealth } from './provider-retry';
+import { isTimeout } from './provider-rules';
 
 export async function signInAsAdmin(page: Page, prefix = 'rel-admin'): Promise<void> {
   if (process.env.E2E_ADMIN_EMAIL && process.env.E2E_ADMIN_PASSWORD) {
@@ -44,10 +46,25 @@ export function workerAdminPage(): Promise<Page> {
   if (!admin) {
     admin = (async () => {
       const browser = await chromium.launch();
-      const context = await browser.newContext();
-      const page = await context.newPage();
-      await signInAsAdmin(page, 'rel-tier-admin');
-      return { browser, context, page };
+      // A sign-in that times out (the auth or admin-web pages slow, #1655) is tried once more with a
+      // fresh account: the tier admin is a fixture here, admin-signin.spec.ts tests the sign-in itself
+      for (let attempt = 1; ; attempt++) {
+        const context = await browser.newContext();
+        // Its slow pages count as provider trouble for the no-retry upload specs (provider-retry.ts)
+        watchProviderHealth(context);
+        const page = await context.newPage();
+        try {
+          await signInAsAdmin(page, 'rel-tier-admin');
+          return { browser, context, page };
+        } catch (error) {
+          await context.close().catch(() => undefined);
+          if (attempt === 2 || !isTimeout(error)) {
+            await browser.close().catch(() => undefined);
+            throw error;
+          }
+          console.warn(`[admin-session] the tier admin's sign-in timed out (${(error as Error).message.split('\n')[0]}); trying once more`);
+        }
+      }
     })();
     // A failed sign-in is not cached: the next caller tries again
     admin.catch(() => {
