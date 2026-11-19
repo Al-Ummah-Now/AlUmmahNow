@@ -7,7 +7,7 @@
  */
 import { forwardRef, type ReactNode } from 'react';
 import { Check, Clock, Globe, Link2, Lock } from 'lucide-react';
-import { formatInteger, type VideoVisibility, type YtImportItem } from '@al-ummah/shared-types';
+import { formatDate as formatLocaleDate, formatInteger, type VideoVisibility, type YtImportItem } from '@al-ummah/shared-types';
 import { useLanguage } from '@/hooks/useLanguage';
 import { formatDuration, WIZARD_STEPS, type WizardStep } from '@/lib/youtube-import/wizard';
 
@@ -87,10 +87,9 @@ export function VisibilityBadge({ visibility, scheduled }: { visibility: VideoVi
 
 export function formatDate(value: string | null | undefined, locale: string): string {
   if (!value) return '';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '';
+  if (Number.isNaN(new Date(value).getTime())) return '';
   // The page's digits: ٠–٩ in Arabic
-  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-u-nu-arab' : 'en', { dateStyle: 'medium' }).format(d);
+  return formatLocaleDate(locale === 'ar' ? 'ar' : 'en', value);
 }
 
 /** Fills {name} placeholders; numbers are written in the page's digits (٠–٩ in Arabic). */
