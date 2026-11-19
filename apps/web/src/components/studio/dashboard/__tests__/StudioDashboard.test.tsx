@@ -129,7 +129,7 @@ describe('StudioDashboard', () => {
   it('keeps Recent comments on the welcome view (a channel with only posts has comments)', async () => {
     counts.mockResolvedValue(ZERO);
     list.mockResolvedValue({ items: [], cursor: null });
-    show();
+    show('owner', { uploadOn: true });
     expect(await screen.findByTestId('studio-dash-welcome')).toBeInTheDocument();
     expect(await screen.findByTestId('studio-dash-comments-body')).toBeInTheDocument();
   });
