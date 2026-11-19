@@ -20,6 +20,7 @@ import { callVideosInternal, ProcessingApiError, type ProcessingClientEnv } from
 import { lookupMany } from '../lib/moderation/reportMeta';
 import { logger } from '../lib/logger';
 import type { AdminBindings, AuthContext } from '../base/types';
+import { auditOriginJson } from '../lib/request-origin';
 
 type Env = { Bindings: AdminBindings & ProcessingClientEnv; Variables: { auth?: AuthContext } };
 type C = Context<Env>;
@@ -111,8 +112,8 @@ app.put('/:key', async (c) => {
   const db = c.env.REPORTS_DB;
   const id = crypto.randomUUID();
   await db
-    .prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-    .bind(id, appConfigAuditKey(key), current === null ? null : JSON.stringify(current), JSON.stringify(body.value), actorOf(c), new Date().toISOString())
+    .prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at, origin) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(id, appConfigAuditKey(key), current === null ? null : JSON.stringify(current), JSON.stringify(body.value), actorOf(c), new Date().toISOString(), auditOriginJson())
     .run();
   try {
     const value = await callVideosInternal<unknown>(c.env, `${INTERNAL}/${key}`, { method: 'PUT', json: body.value });

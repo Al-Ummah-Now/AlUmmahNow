@@ -19,6 +19,7 @@ import { logger } from '../lib/logger';
 import type { ProcessingClientEnv } from '../lib/processing/videosProcessing';
 import { lookupMany } from '../lib/moderation/reportMeta';
 import type { AdminBindings, AuthContext } from '../base/types';
+import { auditOriginJson } from '../lib/request-origin';
 
 type Env = { Bindings: AdminBindings & ProcessingClientEnv; Variables: { auth?: AuthContext } };
 type C = Context<Env>;
@@ -74,8 +75,8 @@ async function audited<T>(c: C, key: string, oldValue: unknown, newValue: unknow
   const db = c.env.REPORTS_DB;
   const id = crypto.randomUUID();
   await db
-    .prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-    .bind(id, key, oldValue === undefined ? null : JSON.stringify(oldValue), JSON.stringify(newValue), actorOf(c), new Date().toISOString())
+    .prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at, origin) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(id, key, oldValue === undefined ? null : JSON.stringify(oldValue), JSON.stringify(newValue), actorOf(c), new Date().toISOString(), auditOriginJson())
     .run();
   try {
     return await change();

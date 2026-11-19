@@ -8,6 +8,7 @@
  * the recent-actions feed (a range over the `content:` prefix).
  */
 import type { AdminAuditEntry } from '@al-ummah/shared-types';
+import { auditOriginJson } from '../request-origin';
 
 export type ContentKind =
   | 'channel'
@@ -63,14 +64,14 @@ export interface AuditAction {
 /** Inserts the audit row; returns its id so a failed action can drop it again. */
 export async function writeAudit(db: AuditDb, entry: AuditAction, now = new Date().toISOString(), id: string = crypto.randomUUID()): Promise<string> {
   await db
-    .prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+    .prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at, origin) VALUES (?, ?, ?, ?, ?, ?, ?)')
     .bind(
       id,
       auditKey(entry.kind, entry.id),
       entry.previous ? JSON.stringify(entry.previous) : null,
       JSON.stringify({ action: entry.action, ...(entry.details ? { details: entry.details } : {}) }),
       entry.actorId,
-      now,
+      now,auditOriginJson()
     )
     .run();
   return id;

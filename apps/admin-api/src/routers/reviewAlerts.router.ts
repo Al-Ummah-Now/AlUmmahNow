@@ -25,6 +25,7 @@ import { hasPermission } from '../lib/roles';
 import { logger } from '../lib/logger';
 import { enqueueDeviceRevocation } from '../lib/deviceTokenRevocation';
 import type { AdminBindings, AuthContext } from '../base/types';
+import { auditOriginJson } from '../lib/request-origin';
 
 type Env = { Bindings: AdminBindings; Variables: { auth?: AuthContext } };
 type C = Context<Env>;
@@ -82,8 +83,8 @@ app.put('/settings', async (c) => {
   const now = new Date().toISOString();
   const db = c.env.REPORTS_DB;
   await db.batch([
-    db.prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-      .bind(crypto.randomUUID(), REVIEW_ALERT_SETTINGS_KEY, current.stored, next, actorOf(c), now),
+    db.prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at, origin) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .bind(crypto.randomUUID(), REVIEW_ALERT_SETTINGS_KEY, current.stored, next, actorOf(c), now, auditOriginJson()),
     db.prepare(
       `INSERT INTO site_settings (key, value, updated_by, updated_at) VALUES (?, ?, ?, ?)
        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
@@ -123,8 +124,8 @@ app.delete('/devices/:installId', async (c) => {
   if (!USER_ID.test(userId) || !INSTALL_ID.test(installId)) return c.json({ success: false, code: 'bad_request', error: 'userId and installId are required' }, 400);
   const { status } = await callProcessor(c.env, `/internal/push-devices/${encodeURIComponent(installId)}?userId=${encodeURIComponent(userId)}`, 'DELETE');
   if (status === 404) return c.json({ success: false, code: 'not_found', error: 'No such device for this user' }, 404);
-  await c.env.REPORTS_DB.prepare('INSERT INTO admin_audit_log (id, actor_id, actor_email, action, target_type, target_id, metadata, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-    .bind(crypto.randomUUID(), actorOf(c), null, 'staff_device_signed_out', 'user', userId, JSON.stringify({ installId }), new Date().toISOString())
+  await c.env.REPORTS_DB.prepare('INSERT INTO admin_audit_log (id, actor_id, actor_email, action, target_type, target_id, metadata, created_at, origin) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .bind(crypto.randomUUID(), actorOf(c), null, 'staff_device_signed_out', 'user', userId, JSON.stringify({ installId }), new Date().toISOString(), auditOriginJson())
     .run();
   // Its tokens too (#442): a lost device must not stay signed in. Retried on the queue; a final failure is flagged
   const queued = await enqueueDeviceRevocation(c.env, { userId, installId, actorId: actorOf(c) });

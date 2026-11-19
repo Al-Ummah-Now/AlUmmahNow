@@ -15,6 +15,7 @@ import { hasPermission } from '../lib/roles';
 import { callVideosInternal, ProcessingApiError, type ProcessingClientEnv } from '../lib/processing/videosProcessing';
 import { logger } from '../lib/logger';
 import type { AdminBindings, AuthContext } from '../base/types';
+import { auditOriginJson } from '../lib/request-origin';
 
 type Env = { Bindings: AdminBindings & ProcessingClientEnv; Variables: { auth?: AuthContext } };
 type C = Context<Env>;
@@ -61,8 +62,8 @@ app.put('/', async (c) => {
   const db = c.env.REPORTS_DB;
   const id = crypto.randomUUID();
   await db
-    .prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-    .bind(id, NOTIFICATION_MENU_AUDIT_KEY, current.menuOpen, body.menuOpen, actorOf(c), new Date().toISOString())
+    .prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at, origin) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(id, NOTIFICATION_MENU_AUDIT_KEY, current.menuOpen, body.menuOpen, actorOf(c), new Date().toISOString(), auditOriginJson())
     .run();
   try {
     const result = await callVideosInternal(c.env, INTERNAL_PATH, { method: 'PUT', json: { menuOpen: body.menuOpen, actorId: actorOf(c) } });

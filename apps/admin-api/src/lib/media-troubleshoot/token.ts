@@ -12,6 +12,7 @@
  */
 import type { TroubleshootTokenCheck, TroubleshootTokenView } from '@al-ummah/shared-types';
 import type { D1Database } from '../types';
+import { auditOriginJson } from '../request-origin';
 
 export const SETTING_KEY = 'ops:cloudflare-troubleshoot-token';
 export const AUDIT_KEY = 'media:troubleshoot-token';
@@ -120,8 +121,8 @@ async function writeRow(db: D1Database, stored: Stored, actorId: string, updated
       .prepare('INSERT INTO site_settings (key, value, updated_by, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = excluded.updated_at')
       .bind(SETTING_KEY, JSON.stringify(stored), updatedBy, now),
     db
-      .prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-      .bind(crypto.randomUUID(), AUDIT_KEY, oldAudit ? JSON.stringify(oldAudit) : null, JSON.stringify(audit), actorId, now),
+      .prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at, origin) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .bind(crypto.randomUUID(), AUDIT_KEY, oldAudit ? JSON.stringify(oldAudit) : null, JSON.stringify(audit), actorId, now, auditOriginJson()),
   ]);
 }
 
@@ -154,8 +155,8 @@ export async function storeTest(db: D1Database, actorId: string, test: { ok: boo
   await db.batch([
     db.prepare('UPDATE site_settings SET value = ? WHERE key = ?').bind(JSON.stringify(stored), SETTING_KEY),
     db
-      .prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-      .bind(crypto.randomUUID(), AUDIT_KEY, null, JSON.stringify({ action: 'tested', last4: row.last4, ok: test.ok }), actorId, at),
+      .prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at, origin) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .bind(crypto.randomUUID(), AUDIT_KEY, null, JSON.stringify({ action: 'tested', last4: row.last4, ok: test.ok }), actorId, at, auditOriginJson()),
   ]);
 }
 
@@ -167,8 +168,8 @@ export async function removeToken(db: D1Database, actorId: string, now = new Dat
   await db.batch([
     db.prepare('DELETE FROM site_settings WHERE key = ?').bind(SETTING_KEY),
     db
-      .prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-      .bind(crypto.randomUUID(), AUDIT_KEY, JSON.stringify({ last4: row.last4 }), JSON.stringify({ action: 'removed' }), actorId, at),
+      .prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at, origin) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .bind(crypto.randomUUID(), AUDIT_KEY, JSON.stringify({ last4: row.last4 }), JSON.stringify({ action: 'removed' }), actorId, at, auditOriginJson()),
   ]);
   return true;
 }

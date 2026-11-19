@@ -33,8 +33,9 @@
 --   apps/admin-api/migrations/0038_contact_inbox_read_spam.sql
 --   apps/admin-api/migrations/0039_admin_staff.sql
 --   apps/admin-api/migrations/0040_error_event_origin.sql
+--   apps/admin-api/migrations/0041_audit_origin.sql
 
-CREATE TABLE admin_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, actor_email TEXT, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, metadata TEXT, created_at TEXT NOT NULL);
+CREATE TABLE admin_audit_log (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, actor_email TEXT, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, metadata TEXT, created_at TEXT NOT NULL, origin TEXT);
 CREATE TABLE admin_staff (user_id TEXT PRIMARY KEY, role TEXT NOT NULL CHECK (role IN ('super_admin', 'admin', 'moderator')), name TEXT, email TEXT, active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)), inactive_reason TEXT, last_seen_at TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE ai_budget_daily (day TEXT NOT NULL, feature TEXT NOT NULL, reserved REAL NOT NULL DEFAULT 0, PRIMARY KEY (day, feature));
 CREATE TABLE ai_usage_daily (day TEXT NOT NULL, model TEXT NOT NULL, feature TEXT NOT NULL DEFAULT 'moderation', calls INTEGER NOT NULL DEFAULT 0, input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0, neurons REAL NOT NULL DEFAULT 0, usd REAL NOT NULL DEFAULT 0, PRIMARY KEY (day, model, feature));
@@ -76,7 +77,7 @@ CREATE TABLE "reports" (id TEXT PRIMARY KEY, entity_type TEXT NOT NULL CHECK (en
 CREATE TABLE review_alert_subscribers (user_id TEXT PRIMARY KEY, senior INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE site_domain_checks (host TEXT PRIMARY KEY, channel_id TEXT NOT NULL, cf_id TEXT, added_at TEXT NOT NULL, next_check_at INTEGER NOT NULL);
 CREATE TABLE site_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_by TEXT NOT NULL, updated_at TEXT NOT NULL);
-CREATE TABLE site_settings_log (id TEXT PRIMARY KEY, key TEXT NOT NULL, old_value TEXT, new_value TEXT NOT NULL, actor_id TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE TABLE site_settings_log (id TEXT PRIMARY KEY, key TEXT NOT NULL, old_value TEXT, new_value TEXT NOT NULL, actor_id TEXT NOT NULL, created_at TEXT NOT NULL, origin TEXT);
 CREATE TABLE subscriptions (id TEXT PRIMARY KEY, subject_type TEXT NOT NULL CHECK (subject_type IN ('channel', 'organisation', 'user')), subject_id TEXT NOT NULL, plan_id TEXT NOT NULL REFERENCES plans(id), plan_version INTEGER NOT NULL, status TEXT NOT NULL CHECK (status IN ('trialing', 'active', 'past_due', 'canceled', 'expired')), current_period_start TEXT, current_period_end TEXT, provider TEXT NOT NULL DEFAULT 'manual', provider_subscription_ref TEXT, assigned_by TEXT NOT NULL, reason TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')));
 CREATE TABLE theme_package_versions (theme_id TEXT NOT NULL, version TEXT NOT NULL, size_bytes INTEGER NOT NULL, published_by TEXT NOT NULL, published_at TEXT NOT NULL, PRIMARY KEY (theme_id, version));
 CREATE TABLE theme_packages (id TEXT PRIMARY KEY, name_en TEXT NOT NULL, name_ar TEXT NOT NULL, based_on TEXT, latest_version TEXT, draft_updated_by TEXT NOT NULL, draft_updated_at TEXT NOT NULL, created_by TEXT NOT NULL, created_at TEXT NOT NULL, deleted_at TEXT, deleted_by TEXT, delete_reason TEXT, purge_requested_at TEXT, purge_requested_by TEXT, purge_started_at TEXT);

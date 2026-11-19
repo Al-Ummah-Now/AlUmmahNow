@@ -20,6 +20,7 @@ import { hasPermission, normalizeRoles } from '../lib/roles';
 import { callUploads, UploadsApiError, type UploadsClientEnv } from '../lib/uploads/videosUploads';
 import { logger } from '../lib/logger';
 import type { AdminBindings, AuthContext } from '../base/types';
+import { auditOriginJson } from '../lib/request-origin';
 
 type Env = { Bindings: AdminBindings & UploadsClientEnv; Variables: { auth?: AuthContext } };
 type C = Context<Env>;
@@ -66,8 +67,8 @@ async function writeAudit(c: C, keys: string[], action: string, details: Record<
   await db.batch(
     rows.map(({ rowId, key }) =>
       db
-        .prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-        .bind(rowId, key, null, JSON.stringify({ action, details }), actorOf(c), now),
+        .prepare('INSERT INTO site_settings_log (id, key, old_value, new_value, actor_id, created_at, origin) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .bind(rowId, key, null, JSON.stringify({ action, details }), actorOf(c), now, auditOriginJson()),
     ),
   );
   return rows.map((r) => r.rowId);

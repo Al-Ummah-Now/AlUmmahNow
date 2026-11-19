@@ -1,6 +1,7 @@
 import { fromHono } from "chanfana";
 import { batchJob, idsFromRoute } from '@al-ummah/shared-types';
 import { runWithErrorTrail } from '@al-ummah/shared-types/error-trail';
+import { adminRequestOrigin } from './lib/request-origin';
 import { Hono } from "hono";
 import { cors } from 'hono/cors';
 import { authMiddleware, adminMiddleware } from "./middleware/auth";
@@ -403,7 +404,7 @@ async function handleQueueBatch(batch: { queue: string; messages: readonly Queue
 /** Nothing on the admin API host is for search engines (lib/crawlers.ts) */
 // One error trail per request / queue batch: errors reported meanwhile carry the ids, failed upstream calls and steps
 const fetchHandler: typeof app.fetch = (request, env, ctx) =>
-  runWithErrorTrail(idsFromRoute(new URL(request.url).pathname), async () => robotsTxtResponse(request) ?? withNoIndex(await app.fetch(request, env, ctx)));
+  runWithErrorTrail({ ...idsFromRoute(new URL(request.url).pathname), origin: adminRequestOrigin(request, env) }, async () => robotsTxtResponse(request) ?? withNoIndex(await app.fetch(request, env, ctx)));
 
 export default withLogging({ fetch: fetchHandler, scheduled, queue });
 export { app };

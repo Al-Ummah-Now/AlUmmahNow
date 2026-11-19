@@ -16,7 +16,7 @@ import { purgeExpiredTombstones } from './erasure/tombstones';
 import { isDeadLetterQueue, processDeadLetterBatch } from './dlq/consumer';
 import { listDeadLetters, purgeExpiredDeadLetters, replayDeadLetter } from './dlq/store';
 import { getApiKey } from './lib/websocket-notify';
-import { batchJob, reportServerError, resolveNeedsAction, withErrorReporting, type ExecutionContextLike } from '@al-ummah/shared-types';
+import { batchJob, scrubOrigin, reportServerError, resolveNeedsAction, withErrorReporting, type ExecutionContextLike } from '@al-ummah/shared-types';
 // Request/job trail for error context (ids, failed upstream calls, breadcrumbs); registers itself with the reporter
 import { runWithErrorTrail } from '@al-ummah/shared-types/error-trail';
 import { importLegacyRollups } from './lib/analytics-rollup';
@@ -369,8 +369,10 @@ export default {
 
   async queue(batch: MessageBatch<AlUmmahMessage>, env: QueueEnvironment, ctx?: ExecutionContextLike): Promise<void> {
     const job = batchJob(batch);
+    // The request that queued the (first) message: a failed job's Errors entry says where it started
+    const origin = scrubOrigin((batch.messages[0]?.body as { origin?: unknown } | undefined)?.origin);
     try {
-      await runWithErrorTrail({ job }, () => handleQueue(batch, env, ctx));
+      await runWithErrorTrail({ job, ...(origin ? { origin } : {}) }, () => handleQueue(batch, env, ctx));
     } catch (error) {
       // The whole batch failed (it is retried by the queue): flag it on the Errors page
       reportServerError('processor', env, ctx, error, { kind: 'unhandled', route: `queue:${batch.queue ?? 'unknown'}`, extra: { messages: batch.messages.length }, context: { job } });
