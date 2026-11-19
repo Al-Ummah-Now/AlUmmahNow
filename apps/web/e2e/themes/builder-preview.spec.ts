@@ -54,7 +54,8 @@ async function setCss(page: Page, theme: ThemePackage) {
 }
 
 const headerVar = (page: Page) => page.locator('.ah').evaluate((el) => getComputedStyle(el).getPropertyValue('--fanous-c-nav-bg').trim());
-const headerBackground = (page: Page) => page.locator('.ah').evaluate((el) => getComputedStyle(el).backgroundImage);
+// The header's colour is painted on its frost layer (::before, apps/web/src/theme/system.css), over the blurred page
+const headerBackground = (page: Page) => page.locator('.ah').evaluate((el) => getComputedStyle(el, '::before').backgroundImage);
 
 test.describe('theme builder preview', () => {
   test.skip(({ isMobile }) => isMobile, 'one viewport is enough: this checks colours, not layout');
